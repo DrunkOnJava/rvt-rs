@@ -889,7 +889,7 @@ pub const SKETCH_MIN_CURVES: usize = 3;
 /// where the sketch was edited, so the list is the sketch's membership. An
 /// element whose copies disagree, or a line two sketches list, is dropped.
 /// Empty for a release this layout is not measured on: Revit 2024, and 2025
-/// (RE-170, the edited roof sketches of #356's `R2025_Models.zip`).
+/// (RE-199, the edited roof sketches of #356's `R2025_Models.zip`).
 pub fn scan_sketch_curve_lists(
     rf: &mut crate::RevitFile,
     revit_version: u32,

@@ -28,7 +28,7 @@
 //! export all the same: a roof's slope can be set some other way, which is
 //! not read, so a roof with no defining edge is not known to be flat.
 //!
-//! Revit 2025 writes the same block (RE-170), but +0x3b is not the
+//! Revit 2025 writes the same block (RE-199), but +0x3b is not the
 //! rise/run there: it is how far the edge's plane is raised at the edge. On
 //! the roofs of `R2025_Models.zip` (#356: sheds, a gable, hips, L-shaped hips)
 //! every defining edge and its angle match Revit's own IFC export.
@@ -50,7 +50,7 @@ pub struct EdgeSlope {
     /// The edge's slope angle from horizontal, radians.
     pub angle_radians: f64,
     /// How far the edge's plane is raised at the edge, feet: the f64 at
-    /// +0x3b on 2025 (RE-170), 0 on 2024, where that f64 is −rise/run.
+    /// +0x3b on 2025 (RE-199), 0 on 2024, where that f64 is −rise/run.
     pub plate_offset_feet: f64,
 }
 
@@ -73,7 +73,7 @@ pub fn edge_slope(data: &[u8]) -> Option<EdgeSlope> {
 
 /// [`edge_slope`] as `revit_version` writes the block. On 2025 the f64 at
 /// +0x3b is not the rise over run but how far the edge's plane is raised
-/// (RE-170): 0.0 on most edges; 0.17713 ft (54 mm) on `03_2Slope_Rafter2SquareCut`
+/// (RE-199): 0.0 on most edges; 0.17713 ft (54 mm) on `03_2Slope_Rafter2SquareCut`
 /// (#356's `R2025_Models.zip`), whose off-centre ridge it reproduces, with
 /// 0.10827 ft (the edge's 33 mm offset from its wall) at +0x47; 0.98425 ft
 /// on `09_LShapedHipRoof_1Edge300Offset`'s 300 mm edge.
@@ -176,7 +176,7 @@ pub fn scan_edge_slopes(
         .collect())
 }
 
-/// A slope arrow's heights (RE-170): the `SlopeCurveData` an arrow sketch
+/// A slope arrow's heights (RE-199): the `SlopeCurveData` an arrow sketch
 /// line carries, in its members' order.
 ///
 /// ```text
@@ -304,10 +304,10 @@ pub fn scan_arrow_heights(
 }
 
 /// The parameter id the roof's fascia depth precedes in its element data
-/// (RE-170).
+/// (RE-199).
 pub const FASCIA_DEPTH_NEXT_ID: i64 = -1_001_711;
 
-/// A footprint roof's fascia depth, feet (RE-170): in the roof's own
+/// A footprint roof's fascia depth, feet (RE-199): in the roof's own
 /// element data, the f64 just before the first `i64` [`FASCIA_DEPTH_NEXT_ID`].
 /// On the roofs of #356's `R2025_Models.zip` it is 0.0 on every roof but
 /// `07_1Slope_ArrowDefined_2Cut50mmFascia`, where it is 0.164042 ft
@@ -373,7 +373,7 @@ pub fn scan_fascia_depths(
         .collect())
 }
 
-/// A footprint roof's "Rafter Cut" (RE-170).
+/// A footprint roof's "Rafter Cut" (RE-199).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RafterCut {
     /// "Plumb Cut", the default.
@@ -404,7 +404,7 @@ impl RafterCut {
 }
 
 /// The parameter in a `ProfileRoof`'s `m_paramSet` that holds its rafter
-/// cut (RE-170).
+/// cut (RE-199).
 pub const RAFTER_CUT_PARAMETER: i64 = -1_001_710;
 
 /// The rafter cut a [`RAFTER_CUT_PARAMETER`] value names. On the 13

@@ -656,7 +656,7 @@ fn clip_convex(poly: &[Point2], line: PlanPlane, keep_positive: bool) -> Vec<Poi
 /// A slab over the plan area inside `outer` and outside `holes` whose top
 /// is the lowest of the `tops` planes at each point and whose underside is
 /// the lowest of the `undersides` planes, each never below its own floor
-/// height, with upright sides (RE-170): a gable or hip roof, each plane
+/// height, with upright sides (RE-199): a gable or hip roof, each plane
 /// rising from its own edge and cut level at its floor. Plane `i` counts
 /// only where every half-plane in `domains[i]` is not negative: its edge's
 /// side, and the wedge between the lines where it meets its neighbouring

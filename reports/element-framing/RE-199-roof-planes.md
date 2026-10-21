@@ -1,4 +1,4 @@
-# RE-170 — Gable, hip and L-shaped hip roofs, rafter cuts, slope arrows, and roof slopes on Revit 2025
+# RE-199 — Gable, hip and L-shaped hip roofs, rafter cuts, slope arrows, and roof slopes on Revit 2025
 
 **Date:** 2026-10-05
 **Result:**
@@ -20,7 +20,7 @@
   - Set by "Slope" (1), it rises at the angle from the tail's height.
 - rvt-rs now draws all of these, each only where the result reproduces the roof's record box height (as RE-56 does for sheds).
 
-**Oracle:** `R2025_Models.zip`, attached to #356 under Apache-2.0: 23 purpose-made Revit 2025 projects, all but `07_…` with Revit 25.0.2's IFC4 Reference View export. They share four walls; the roof type is 152.4 mm thick (T = 0.5 ft). The probe is `examples/probe_re170_roof_edge_slopes.rs`.
+**Oracle:** `R2025_Models.zip`, attached to #356 under Apache-2.0: 23 purpose-made Revit 2025 projects, all but `07_…` with Revit 25.0.2's IFC4 Reference View export. They share four walls; the roof type is 152.4 mm thick (T = 0.5 ft). The probe is `examples/probe_re199_roof_edge_slopes.rs`.
 
 | file | roof | defining edges, or arrow | rafter cut |
 |---|---|---|---|

@@ -354,7 +354,7 @@ pub fn scan_bounded_lines(
 }
 
 /// Releases where a sketch line's own data is measured to hold its segment
-/// as a bounded line: 2024 (RE-50) and 2025 (RE-170, the roof sketches of
+/// as a bounded line: 2024 (RE-50) and 2025 (RE-199, the roof sketches of
 /// #356's `R2025_Models.zip`, each line's ends on Revit's exported outline).
 pub const SKETCH_LINE_SUPPORTED_REVIT_VERSIONS: &[u32] = &[2024, 2025];
 

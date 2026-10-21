@@ -2805,7 +2805,7 @@ fn point_in_ring((px, py): (f64, f64), ring: &[(f64, f64)]) -> bool {
     inside
 }
 
-/// A gable or hip roof's body (RE-170): each defining edge's plane rises
+/// A gable or hip roof's body (RE-199): each defining edge's plane rises
 /// from it into the roof at its angle (raised by the edge's plate offset).
 /// A plane counts within its edge's straight-skeleton wedge: on the edge's
 /// side, between the lines where it meets its neighbouring defining edges'
@@ -3662,7 +3662,7 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
             .and_then(|axis| turned_box(axis, width, depth))
     };
     // RE-56: a shed roof whose slope reproduces its record box rises along
-    // it. RE-170: a gable or hip roof, its planes' lowest envelope, and
+    // it. RE-199: a gable or hip roof, its planes' lowest envelope, and
     // either cut level at its base when that is what its box records.
     let roof_slope = if class == "Roof" {
         profile.as_ref().and_then(|profile| {
@@ -3693,7 +3693,7 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
                     })
                     .flatten()
             };
-            // RE-170: the roof's own rafter cut where it is read; elsewhere
+            // RE-199: the roof's own rafter cut where it is read; elsewhere
             // the plain body, else the two-cut one its record box singles out.
             match crate::partition_schema_mvp::roof_rafter_cut_from_fields(&decoded.fields) {
                 Some(RafterCut::Plumb) => plain(),

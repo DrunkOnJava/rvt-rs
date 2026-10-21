@@ -1,4 +1,4 @@
-//! RE-170 (probe, #356): every roof sketch line's slope block (RE-56), on any
+//! RE-199 (probe, #356): every roof sketch line's slope block (RE-56), on any
 //! release whose element data header is known.
 //!
 //! For each placed roof the probe lists the sketch lines it owns, and for each
@@ -8,7 +8,7 @@
 //! `partition_roof_slopes::edge_slope_in` makes of the block. It also prints the
 //! line's bounded line record (RE-49) when one is found.
 //!
-//! Usage: probe_re170_roof_edge_slopes <model.rvt>
+//! Usage: probe_re199_roof_edge_slopes <model.rvt>
 
 use rvt::RevitFile;
 use rvt::partition_element_records::{OST_SKETCH_LINES, scan_category_records_multi};

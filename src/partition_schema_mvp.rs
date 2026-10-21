@@ -7282,7 +7282,7 @@ fn attach_roof_profiles(rf: &mut RevitFile, revit_version: u32, products: &mut [
     else {
         return;
     };
-    // RE-170: a slope arrow is one of its roof's sketch lines but no part of
+    // RE-199: a slope arrow is one of its roof's sketch lines but no part of
     // the outline.
     let line_ids: BTreeSet<u32> = sketch_lines.iter().map(|line| line.element_id).collect();
     let arrows: BTreeSet<u32> =
@@ -7510,7 +7510,7 @@ fn shaft_outlines(
 
 /// Fields holding the plan start and end of the (first) roof edge that
 /// defines the roof's slope, model feet (RE-56). Further edges of a gable or
-/// hip use [`roof_slope_edge_fields`] (RE-170).
+/// hip use [`roof_slope_edge_fields`] (RE-199).
 pub const ROOF_SLOPE_EDGE_FIELDS: [&str; 4] = [
     "m_roof_slope_edge_start_x",
     "m_roof_slope_edge_start_y",
@@ -7522,7 +7522,7 @@ pub const ROOF_SLOPE_ANGLE_FIELD: &str = "m_roof_slope_angle";
 /// Field holding the roof's type thickness, its layers summed (RE-56).
 pub const ROOF_TYPE_THICKNESS_FIELD: &str = "m_roof_type_thickness";
 /// Field holding how far the first defining edge's plane is raised at the
-/// edge, feet, written only when not 0 (RE-170); further edges add
+/// edge, feet, written only when not 0 (RE-199); further edges add
 /// `_<index>` ([`roof_slope_plate_offset_field`]).
 pub const ROOF_SLOPE_PLATE_OFFSET_FIELD: &str = "m_roof_slope_plate_offset";
 
@@ -7546,14 +7546,14 @@ pub struct RoofSlope {
     pub angle_radians: f64,
     /// The roof type's layers summed, feet.
     pub thickness_feet: f64,
-    /// How far the edge's plane is raised at the edge, feet (RE-170).
+    /// How far the edge's plane is raised at the edge, feet (RE-199).
     pub plate_offset_feet: f64,
 }
 
 /// The names of the start, end and angle fields of a roof's `index`th
 /// defining edge: [`ROOF_SLOPE_EDGE_FIELDS`] and [`ROOF_SLOPE_ANGLE_FIELD`]
 /// for the first, the same names with `_<index>` after `edge` or `angle`
-/// for each further one (RE-170).
+/// for each further one (RE-199).
 pub fn roof_slope_edge_fields(index: usize) -> [String; 5] {
     let names = [
         ROOF_SLOPE_EDGE_FIELDS[0],
@@ -7642,7 +7642,7 @@ fn attach_roof_slopes(rf: &mut RevitFile, revit_version: u32, products: &mut [De
     };
     // RE-97: where a roof's Sketch lists its curves, that list is its
     // membership; once the sketch is edited a line's owner reference names
-    // another element (RE-170, on 2025).
+    // another element (RE-199, on 2025).
     let all_lines: BTreeSet<u32> = sketch_lines.iter().map(|line| line.element_id).collect();
     let lists =
         crate::element_record_plan_profiles::scan_sketch_curve_lists(rf, revit_version, &all_lines);
@@ -7674,8 +7674,8 @@ fn attach_roof_slopes(rf: &mut RevitFile, revit_version: u32, products: &mut [De
         return;
     };
     // Every defining edge of a roof whose edges all carry a block: one is a
-    // shed (RE-56), more a gable or hip (RE-170). A roof whose edges define
-    // none, with one slope arrow, rises along the arrow (RE-170).
+    // shed (RE-56), more a gable or hip (RE-199). A roof whose edges define
+    // none, with one slope arrow, rises along the arrow (RE-199).
     let mut defining: std::collections::BTreeMap<u32, Vec<(u32, f64, f64)>> = Default::default();
     let mut sloped_by_arrow: std::collections::BTreeMap<u32, (u32, prs::ArrowHeights)> =
         Default::default();
@@ -7836,7 +7836,7 @@ fn attach_roof_slopes(rf: &mut RevitFile, revit_version: u32, products: &mut [De
 }
 
 /// Field holding a roof's rafter cut, a [`crate::partition_roof_slopes::RafterCut`]
-/// name, where it is read (RE-170).
+/// name, where it is read (RE-199).
 pub const ROOF_RAFTER_CUT_FIELD: &str = "m_roof_rafter_cut";
 
 /// The [`ROOF_RAFTER_CUT_FIELD`] a roof's fields record.
@@ -7851,7 +7851,7 @@ pub fn roof_rafter_cut_from_fields(
     })
 }
 
-/// Field holding a roof's fascia depth, feet, where it is read (RE-170).
+/// Field holding a roof's fascia depth, feet, where it is read (RE-199).
 pub const ROOF_FASCIA_DEPTH_FIELD: &str = "m_roof_fascia_depth";
 
 /// The [`ROOF_FASCIA_DEPTH_FIELD`] a roof's fields record.
@@ -7863,7 +7863,7 @@ pub fn roof_fascia_depth_from_fields(fields: &[(String, InstanceField)]) -> Opti
 }
 
 /// A roof edge's start and end, its slope angle, and how far its plane is
-/// raised at the edge (RE-170).
+/// raised at the edge (RE-199).
 type RoofEdgeSlope = ([f64; 3], [f64; 3], f64, f64);
 
 /// Classes whose type's layers stack from the top down (RE-57).
