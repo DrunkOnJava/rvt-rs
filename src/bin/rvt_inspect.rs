@@ -88,6 +88,8 @@ struct FileHealth {
     original_path: Option<String>,
     stream_count: usize,
     schema_parsed: bool,
+    /// How the file's release is read (#871), as the export diagnostics give it.
+    release_support: Option<rvt::capability::ReleaseSupport>,
 }
 
 #[derive(Debug, Serialize)]
@@ -197,6 +199,7 @@ fn build_report(
             original_path: summary.original_path,
             stream_count: summary.streams.len(),
             schema_parsed,
+            release_support: diagnostics.input.release_support.clone(),
         },
         decoded,
         export,
@@ -265,6 +268,26 @@ fn classify_failure_mode(
             title: "Incomplete model".into(),
             summary: format!(
                 "Model elements were recovered, but {unexported} model element record(s) use a layout whose ElementId this release cannot locate and are not exported."
+            ),
+            severity: "warning".into(),
+        };
+    }
+
+    if let Some(support) = diagnostics
+        .input
+        .release_support
+        .as_ref()
+        .filter(|support| support.status == "experimental")
+    {
+        return FailureMode {
+            kind: "experimental_release".into(),
+            title: "Experimental Revit release".into(),
+            summary: format!(
+                "Model elements were recovered, but this file's Revit release is read experimentally ({}): too few files of it are measured against Revit's own export to rely on its elements.",
+                support
+                    .capability
+                    .as_deref()
+                    .unwrap_or("no support-matrix row")
             ),
             severity: "warning".into(),
         };
@@ -379,6 +402,17 @@ fn next_steps(diagnostics: &ExportDiagnostics, schema_parsed: bool) -> Vec<Strin
             "{unexported} element record(s) are missing from the export (RE-30). Do not use its element counts as a takeoff."
         ));
     }
+    if diagnostics
+        .input
+        .release_support
+        .as_ref()
+        .is_some_and(|support| support.status == "experimental")
+    {
+        steps.push(
+            "This Revit release is read experimentally. Check its elements against Revit before relying on them."
+                .into(),
+        );
+    }
     if diagnostics.confidence.warning_count > 0 {
         steps
             .push("Review warnings before sending this file through an automated workflow.".into());
@@ -387,6 +421,16 @@ fn next_steps(diagnostics: &ExportDiagnostics, schema_parsed: bool) -> Vec<Strin
         steps.push("This file meets the currently decoded export profile.".into());
     }
     steps
+}
+
+/// What a support-matrix status means for a reader of this file.
+fn release_status_note(status: &str) -> &'static str {
+    match status {
+        "verified" => "measured element for element against Revit",
+        "partial" => "measured against Revit, not everything read",
+        "experimental" => "too few files measured to rely on",
+        _ => "element records not read",
+    }
 }
 
 fn print_human_report(report: &InspectReport) {
@@ -398,10 +442,17 @@ fn print_human_report(report: &InspectReport) {
             .revit_version
             .map(|v| v.to_string())
             .unwrap_or_else(|| "unknown".into()),
-        if report.file.supported_revit_version {
-            " (supported)"
-        } else {
-            " (outside verified range)"
+        match (
+            &report.file.release_support,
+            report.file.supported_revit_version
+        ) {
+            (Some(support), true) => format!(
+                " ({}, {})",
+                support.status,
+                release_status_note(&support.status)
+            ),
+            (None, true) => " (supported)".to_string(),
+            (_, false) => " (outside the releases rvt-rs reads)".to_string(),
         },
         report.file.stream_count,
         if report.file.schema_parsed {

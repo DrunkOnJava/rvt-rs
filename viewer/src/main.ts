@@ -649,6 +649,8 @@ interface ExportDiagnostics {
     has_part_atom?: boolean;
     has_formats_latest?: boolean;
     has_global_latest?: boolean;
+    /** How the file's release is read (#871): its support-matrix row and that row's status. */
+    release_support?: { status: string; capability: string | null } | null;
   };
   decoded?: {
     production_walker_elements?: number;
@@ -2525,6 +2527,13 @@ function classifyFailureMode(diagnostics: ExportDiagnostics): FailureModeStatus 
       kind: 'warn',
       title: 'Incomplete model',
       summary: `${unexported} model element records could not be exported (RE-30)`,
+    };
+  }
+  if (input.release_support?.status === 'experimental') {
+    return {
+      kind: 'warn',
+      title: 'Experimental Revit release',
+      summary: `Revit ${revitVersion} is read experimentally: too few files of it are measured against Revit's own export to rely on its elements`,
     };
   }
   if (unsupported.length > 0 || warnings.length > 0 || geometryElements === 0) {
