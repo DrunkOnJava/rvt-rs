@@ -61,6 +61,16 @@ Every `vX.Y.Z` release:
 - Updates `CITATION.cff` (`version:` + `date-released:`) so academic
   citations resolve to the right archival state.
 
+## The 1.0 gate
+
+1.0.0 is tagged only when every requirement in
+[`docs/release-1.0-criteria.md`](docs/release-1.0-criteria.md) has passed,
+each with its evidence linked. It supports every Revit release from 2015 to
+2027 and ships with no limitations. The stability commitment covers the
+surfaces that page names (its S1, #873), and each of them has a check that
+fails on an unannounced breaking change (S2). A milestone's completion
+percentage is not part of the gate.
+
 ## Release checklist (for maintainers)
 
 Run in order. Don't skip steps — the audit-driven culture for this

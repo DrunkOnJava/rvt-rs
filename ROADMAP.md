@@ -1,6 +1,6 @@
 # Roadmap
 
-Last reviewed: 2026-10-19
+Last reviewed: 2026-10-21
 
 This roadmap is the public, contributor-facing view of where rvt-rs is headed.
 The support boundary lives in [`docs/status.md`](docs/status.md) and the
@@ -123,12 +123,18 @@ itself is open.
 ### 1.0.0: first-class utility
 
 A dependable open-source Revit data reader: a new user installs it, opens a
-supported model, gets correct elements, geometry and properties with every
-approximation visible, and can reproduce the measurements. Held-out licensed
-models are measured before fixes (#408), a reference pack and a
-privacy-preserving contribution path exist (#407), and the Rust and Python APIs
-are documented with runnable examples. Breadth (more releases, more categories)
-never lowers measured correctness.
+model, gets correct elements, geometry and properties, and can reproduce the
+measurements. 1.0 supports every Revit release from 2015 to 2027 and ships with
+no gaps or limitations: every body is Revit's own shape, every property
+Revit's export writes is written, and no release is experimental. The
+requirements, each with its bar, measured value and evidence, are in
+[`docs/release-1.0-criteria.md`](docs/release-1.0-criteria.md), which is the
+release decision; the milestone's completion percentage is not. They include
+held-out models measured before fixes (#408), every release with a Revit
+export of its own (#421), the surfaces the stability commitment covers (#873),
+APIs documented with examples CI runs (#872), and practitioners' reports
+(#874). Breadth (more releases, more categories) never lowers measured
+correctness.
 
 ## Contribution Priorities
 
