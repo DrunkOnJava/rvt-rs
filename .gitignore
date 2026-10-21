@@ -17,12 +17,10 @@
 *.prof
 *.heapdump
 
-# ---- Claude Code context files (NEVER commit) ----
-# CLAUDE.md provides cross-session context to the Claude agent. It lives
-# at the PARENT of this repo (rvt-recon-2026-04-19/CLAUDE.md), not
-# inside the repo. This entry is a defensive guard in case anyone
-# copies or symlinks it here.
+# ---- Claude Code context files ----
+# The root adapter imports the public AGENTS.md; personal context stays local.
 CLAUDE.md
+!/CLAUDE.md
 .claude/*.local.md
 .claude/*.local.json
 # Claude Code spawns isolated git worktrees here when agents run —

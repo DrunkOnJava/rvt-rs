@@ -1,0 +1,42 @@
+{
+  "name": "rvt-rs",
+  "build": { "dockerfile": "Dockerfile" },
+  "features": {
+    "ghcr.io/devcontainers/features/rust:1": {
+      "version": "stable",
+      "profile": "minimal"
+    },
+    "ghcr.io/devcontainers/features/node:1": { "version": "24" },
+    "ghcr.io/devcontainers/features/github-cli:1": {},
+    "ghcr.io/devcontainers/features/sshd:1": { "version": "latest" }
+  },
+  "remoteUser": "vscode",
+  "hostRequirements": { "cpus": 2, "memory": "8gb", "storage": "32gb" },
+  "containerEnv": {
+    "CARGO_BUILD_JOBS": "2",
+    "RAYON_NUM_THREADS": "2",
+    "RVT_BUILD_PROFILE": "ci",
+    "RVT_WASM_PROFILE": "dev"
+  },
+  "onCreateCommand": "bash .devcontainer/provision.sh",
+  "postCreateCommand": "bash .devcontainer/first-create.sh",
+  "postStartCommand": "bash .devcontainer/resume.sh",
+  "waitFor": "postCreateCommand",
+  "forwardPorts": [5173],
+  "portsAttributes": {
+    "5173": { "label": "rvt viewer", "onAutoForward": "notify", "visibility": "private" },
+    "4173": { "label": "rvt browser checks", "onAutoForward": "silent", "visibility": "private" }
+  },
+  "otherPortsAttributes": { "onAutoForward": "ignore" },
+  "customizations": {
+    "vscode": {
+      "extensions": ["rust-lang.rust-analyzer", "ms-python.python", "anthropic.claude-code"],
+      "settings": {
+        "python.defaultInterpreterPath": "${workspaceFolder}/.venv/bin/python",
+        "rust-analyzer.check.command": "clippy",
+        "rust-analyzer.cargo.buildScripts.enable": false,
+        "rust-analyzer.checkOnSave": false
+      }
+    }
+  }
+}
