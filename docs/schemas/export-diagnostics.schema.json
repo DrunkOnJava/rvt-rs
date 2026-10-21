@@ -39,7 +39,8 @@
         "has_basic_file_info",
         "has_part_atom",
         "has_formats_latest",
-        "has_global_latest"
+        "has_global_latest",
+        "release_support"
       ],
       "properties": {
         "revit_version": {
@@ -82,6 +83,34 @@
         },
         "has_global_latest": {
           "type": "boolean"
+        },
+        "release_support": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "description": "How the file's release is read (#871): the docs/support-matrix.json row of its element records and that row's status. Null when the file has no BasicFileInfo to give its release.",
+          "required": [
+            "status",
+            "capability"
+          ],
+          "properties": {
+            "status": {
+              "type": "string",
+              "enum": [
+                "verified",
+                "partial",
+                "experimental",
+                "unsupported"
+              ]
+            },
+            "capability": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
         }
       }
     },

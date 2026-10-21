@@ -8,6 +8,17 @@ All notable changes will be documented here. This project follows
 
 ### Added
 
+- **Every output says when a file's release is read experimentally (#871).**
+  The export diagnostics carry `input.release_support`: the
+  `docs/support-matrix.json` row that rates the release's element records,
+  and that row's status (`verified`, `partial`, `experimental`, or
+  `unsupported` where none are read). An experimental release (Revit 2015 to
+  2022, 2026 and 2027) adds a warning. `rvt-inspect` reports the same in
+  `file.release_support`, prints it beside the version, and classifies an
+  experimental release's export as `experimental_release`. The viewer's file
+  status shows "Experimental Revit release". Before, nothing but `rvt-doc`
+  told a Revit 2021 export apart from a Revit 2024 one.
+
 - **A pipe's ports are placed (#847).** Each `IfcDistributionPort` of a
   pipe is placed at the end of the pipe its connector entry keys name: the
   pipe itself with that connector's index, or the element and connector it
