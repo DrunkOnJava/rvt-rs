@@ -2481,8 +2481,11 @@ fn set_type_materials(element: &mut DecodedElement, names: Vec<String>) {
 /// exterior layer where the column stands out past both of the wall's faces
 /// or its box centre is on the wall's exterior side, the interior layer
 /// otherwise. Revit's export gives all 108 of Snowdon Towers' off-centre
-/// columns that layer. A column whose wall is not straight, or whose layer
-/// on that side has no named material, is left alone.
+/// columns that layer. The rule for a column past both faces rests on one
+/// column whose wall's two faces differ (1366814): the other 50 such columns
+/// are in walls with the same material on both faces. A column whose wall is
+/// not straight, or whose layer on that side has no named material, is left
+/// alone.
 ///
 /// [`COLUMN_JOINED_WALL_FIELD`]: crate::element_record_column_cuts::COLUMN_JOINED_WALL_FIELD
 fn attach_first_join_materials(
