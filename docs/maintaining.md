@@ -213,4 +213,5 @@ line names what to fix (its rulesets check needs an admin token). The list:
 7. The rulesets and settings still match their files.
 8. [`release-1.0-criteria.md`](release-1.0-criteria.md) agrees with the
    1.0.0 milestone: every open issue under it serves a requirement on the
-   page, and every status links evidence that is still current.
+   page (the audit checks this, and that no pull request sits in the
+   milestone), and every status links evidence that is still current.
