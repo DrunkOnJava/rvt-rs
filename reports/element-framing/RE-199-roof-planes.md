@@ -20,7 +20,7 @@
   - Set by "Slope" (1), it rises at the angle from the tail's height.
 - rvt-rs now draws all of these, each only where the result reproduces the roof's record box height (as RE-56 does for sheds).
 
-**Oracle:** `R2025_Models.zip`, attached to #356 under Apache-2.0: 23 purpose-made Revit 2025 projects, all but `07_…` with Revit 25.0.2's IFC4 Reference View export. They share four walls; the roof type is 152.4 mm thick (T = 0.5 ft). The probe is `examples/probe_re199_roof_edge_slopes.rs`.
+**Oracle:** `R2025_Models.zip`, attached to #356 under Apache-2.0 (sha256 `8673d803fb0b9b6aa20d08448eeed16eb34222566bfaf7a2dc761c064dc30d6a`, 25,563,111 bytes, pinned in `research/r2025-models.tsv` and fetched by Measure with `-f r2025=true`): 23 purpose-made Revit 2025 projects, all but `07_…` with Revit 25.0.2's IFC4 Reference View export. They share four walls; the roof type is 152.4 mm thick (T = 0.5 ft). The probe is `examples/probe_re199_roof_edge_slopes.rs`.
 
 | file | roof | defining edges, or arrow | rafter cut |
 |---|---|---|---|
@@ -153,11 +153,13 @@ An arrow is a sketch line (record tag `1f 0f`, where boundary lines have `cf 0c`
 
 `07_1Slope_ArrowDefined_2Cut50mmFascia` has no export. Its body reproduces its record box, 12.096 ft.
 
+Measure reproduces this table on GitHub's runners (run 39602093604, head `cf0ab157`, base `main`, `-f r2025=true`) with `tools/re/roof_bodies_vs_ifc.py`, which meshes each `IfcRoof` of both exports with IfcOpenShell: the same volumes to the sixth decimal, every vertex of Revit's body within 3.74e-6 ft of one of rvt-rs's. `12_Rooms_Door_Windows` and the stairs files `13` to `17` hold `02_1Slope`'s roof and match the same way, so 18 of the 19 roofs in Revit's exports match (every vertex within 0.001 ft, volume within 1e-4), where `main`'s level blocks match none (1,806 to 7,836 ft³ against Revit's 305 to 363). The 19th is `11_RoofByExtrusion` (§8, #883). The probe's output in the same run reads every rafter cut in §4's table and `07`'s fascia depth, 0.164042 ft.
+
 Before the change, each of these roofs was a level block as tall as its record box.
 
 `export_content::roof_planes_solid` builds the bodies. `body_geometry::envelope_slab_mesh` cuts the plan triangulation along every line where two tops, two undersides, or an underside and a cut level meet, or a wedge ends, then lifts each piece. The result is an `IfcFacetedBrep`.
 
-The same results hold on seven earlier imperial models of mine, not attached: a shed, a two-cut plumb shed, a 10:12 gable, and 10:12/9:12 hips both ways round, against their own exports or record boxes, with a 0 → 10 ft height arrow.
+The same results hold on seven earlier imperial models of mine. They are not attached, so this sentence cannot be checked from the repository: a shed, a two-cut plumb shed, a 10:12 gable, and 10:12/9:12 hips both ways round, against their own exports or record boxes, with a 0 → 10 ft height arrow.
 
 ## 7. Elsewhere in the 2024 and 2025 corpus
 
@@ -169,10 +171,19 @@ The same results hold on seven earlier imperial models of mine, not attached: a 
 
 Reading the rafter cut walks the native records of roofs that get slope edges. Snowdon Facades exports in 11 s instead of 7; the other models' times are unchanged.
 
+The models above are local. On GitHub's runners (Measure run 39602093604, base `main`; run 39600694074 for the BIM4LCA office):
+- **Unchanged, byte for byte:** Core Interior, Einhoven, the four RE1 models (RE1 Architecture is a 2025 save), both BIM4LCA office models, the family corpus, and every 2024 sample project but rac_advanced.
+- **rac_advanced, 2024 and 2025 saves:** roof 201262 is drawn along its slope arrow, line 201283 (tail 0, head 1.5 ft, by height), reproducing its record box in both saves. Its other roofs stay level. On 2024, the four defining 15° edges of each of hips 165755, 167036 and 167158 carry 0.0 at +0x3b, not −rise/run, so RE-56's 2024 rule rejects their blocks. On 2025 the same edges, also 0.0 there, are read, but the hips fail the record-box check: each is a plumb cut whose record box is exactly its rise, 1.34775 ft over its 10.06 ft span (1.36137 over 10.16 for 167158), with no thickness added. Roof 142430's two defining edges have −15° angles and are not read (#885).
+- **The 2025 samples:** 29 more elements of rac_advanced, 4 of rac_basic and 1 of rst_basic are drawn from their sketches rather than as their boxes (`bounding_box_bodies` in the diagnostics). These samples have no Revit export.
+- **IFC4 schema check:** nothing new; each sloped roof is one fewer swept solid.
+- **Time, base and head on one runner, three rounds a file:** rac_advanced 2025 1.08x `main` (3,437 to 3,715 ms) and rac_basic 2025 1.06x (3,214 to 3,421 ms) once the rafter cut is read through `native_document::extract_graphs`, which skips the parameter-definition pass (it was 1.24x through `extract`, run 39600160617); every other file within 4% of `main`.
+
 ## 8. What this does not do
 
 - **An arrow whose head stops short of the far edge.** Revit puts an arrow's tail on a boundary line, but its head may stop early, and the plane then runs on past the head. rvt-rs draws it that way, but no measured model has such an arrow.
 - **A square two-cut with a fascia depth.** No measured model has one, so it stays a level block.
 - **Footprints whose skeleton has split events** (an edge's wedge cut by a non-neighbouring edge's), such as a T or U with long arms. The wedges are each edge's first ones, which an L does not outgrow. The record box guards the rest.
 - **Roofs by extrusion** (`11_RoofByExtrusion`: a curved profile, 1,187 vertices in Revit's export).
-- **The 2024 tutorial house** (RE-56's oracle) is not on this machine. Its shed takes the unchanged single-edge path.
+- **The 2024 tutorial house** (RE-56's oracle) is not on this machine, and is local only on the maintainer's, where local-only files are not measured. Its shed is drawn by RE-56's single-edge path as before, but its edges now come from its Sketch's curve list where it has one (§2), so that file is not known to export unchanged. No 2024 roof with several defining edges is measured (#885).
+
+Follow-ups: roofs by extrusion #883, T and U footprints #884, the cases with no oracle #885.

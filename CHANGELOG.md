@@ -8,6 +8,37 @@ All notable changes will be documented here. This project follows
 
 ### Added
 
+- **Gable, hip and slope-arrow roofs are drawn as their planes, and Revit
+  2025 roofs slope (#356, RE-199).** A footprint roof with more than one
+  edge that defines a slope is drawn as its edges' planes, each rising from
+  its edge at its angle and raised by the edge's plate offset, and each held
+  to its edge's wedge, so hips and the valley of an L-shaped hip come out as
+  Revit draws them; the eave is set by the shallowest edge. A roof sloped by
+  a slope arrow rises along the arrow, set by "Height at Tail" or by
+  "Slope". A Revit 2025 roof's rafter cut (plumb, two-cut plumb or two-cut
+  square) and fascia depth are read, and a two-cut is cut level at its eave.
+  On Revit 2025 the edge slope block, each sketch line's segment and a
+  Sketch's curve list are now read: those readers refused 2025, so every
+  2025 roof was a level block and edited sketches lost their outline. As for
+  sheds since RE-56, a body is drawn only where it reproduces the roof's
+  record box height, and a roof stays a level block otherwise. On puzzbobb's
+  Revit 2025 models (`R2025_Models.zip`, Measure `-f r2025=true`, run
+  39602093604), 18 of the 19 roofs Revit's exports hold now have Revit's
+  body, every vertex within 0.001 ft of Revit's and the volume within 1e-4
+  of it, where main had none; the 19th is a roof by extrusion. Measure
+  scores every roof body against Revit's export with
+  `tools/re/roof_bodies_vs_ifc.py`. On Autodesk's sample projects, which
+  have no Revit export, one roof of rac_advanced is drawn along its slope
+  arrow in both its 2024 and 2025 saves, and the 2025 readers draw 29 more
+  elements of rac_advanced 2025, 4 of rac_basic 2025 and 1 of rst_basic 2025
+  from their sketches rather than as their boxes. Every other 2024 sample,
+  the reference models and the BIM4LCA office export as before; on one
+  runner, rac_advanced 2025 exports in 1.08 times main's time and rac_basic
+  2025 in 1.06. Not drawn: roofs by extrusion (#883), hip roofs over a T or
+  U footprint (#884), and a square two-cut with a fascia; a Revit 2024 roof
+  with several defining edges takes the same path, but none is measured
+  (#885). By puzzbobb (#870).
+
 - **Every output says when a file's release is read experimentally (#871).**
   The export diagnostics carry `input.release_support`: the
   `docs/support-matrix.json` row that rates the release's element records,
