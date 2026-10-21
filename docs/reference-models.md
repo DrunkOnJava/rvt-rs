@@ -33,6 +33,7 @@ lists the local-only files with their source and hash, and never fetches them.
 | MIT 4.567 tutorial house, 2024 and 2025 saves | 2024, 2025 | copyright reserved, local only | none | the same model and ElementIds in two releases; the one shed roof |
 | 255ribeiro Projeto1, `teste_export_2025` | 2025 | none declared, local only | IFC4X3 CoordinationView; IFC4 DesignTransferView 1.0, Revit 25.4 (PTB) | metric projects; IFC export overrides; files saved in `PTB` (RE-123) |
 | 255ribeiro `Exemplo_data`, `modelo_bim` | 2023 | none declared, local only | IFC4 ReferenceView 1.2, Revit 23.1 (`Exemplo_data`); IFC4 DesignTransferView 1.0, Revit 26.2 PTB (`modelo_bim`, exported from the 2023 file by a later Revit) | Revit 2023 element records (RE-81 to RE-122): 37 of 37 and 37 of 45 elements, storeys, types, layers, materials, wall joins, beams; files saved in `PTB` |
+| BIMcollab example, structural model (`02_BIMcollab_Example_STR`) | 2015 | none stated, local only; BIMcollab's public example project (`research/bimcollab-models.tsv`, fetched by Measure with `-f bimcollab=true`, STE1200's pointer) | IFC2X3 CoordinationView 2.0, Revit Architecture 2015, 2014-10-08, rewritten by Solibri's IFC Optimizer; the model was renamed after it | **held out**, measured once before any fix (RE-198): all 241 exported elements by ElementId and class, 3 more written, GlobalIds not rebuilt (#878), 16 footings on no storey (#879); wall faces and layer sets as Revit's |
 
 ## Candidates, not yet measured here
 
@@ -44,13 +45,13 @@ their source by whoever runs the measurement, never committed.
 | Model | Revit | Source | sha256 | Why |
 |---|---|---|---|---|
 | AA-SingleDwellingHouse-RVT-CIADD, with its IFC | 2026 | [flowbim.ee](https://flowbim.ee/files/content/cci/ENG/AA-SingleDwellingHouse-RVT-CIADD.rvt) | `eeff78f3…0a654` (IFC `c9e2986c…67342`) | the first 2026 project with Revit's export: the 2026 element-record gate (#421); measured in RE-124 (88 placed instances, all in Revit's export) |
-| 02_BIMcollab_Example_STR, with its IFC2X3 | 2015 | the public BIMcollab example project package | `8cd1f122…e193` | the pre-2024 record envelope (#421) |
 | rac_basic_sample_project | 2017 | Autodesk sample | `a1d3d077…5fefb` | the same, with no export; now fetched and measured with the other sample projects (below, RE-140) |
 | Geberit VariForm washbasin PRO_1833290, two variants | 2018 family | Geberit | `28b9d111…e5e4`, `0d48b22c…fbb9` | DirectShape meshes in a family |
 | Pucciplast Cassetta Eco 9/4 l (EN) | 2022 family | Pucciplast | `a610ffcc…ae00` | sketch forms and voids in a family |
 
-STE1200's test vectors for the first three (record bytes, offsets and the
-values read) are the cross-check for any reader of them.
+STE1200's test vectors for the 2026 house, the BIMcollab model (now measured,
+RE-198) and the 2017 sample (record bytes, offsets and the values read) are the
+cross-check for any reader of them.
 
 ## Autodesk's sample projects, fetched for a run
 
