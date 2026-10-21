@@ -6998,7 +6998,8 @@ pub fn slabs_from_partition_category_records(
             .entry(record.element_id)
             .or_insert([b[0], b[1], b[3], b[4]]);
     }
-    let profiles = sketch_plan_profiles(rf, revit_version, &sketch_lines, &plates);
+    let profiles =
+        sketch_plan_profiles(rf, revit_version, &sketch_lines, &plates, &BTreeSet::new());
 
     let mut out = Vec::new();
     for (category, class) in [
@@ -7046,6 +7047,7 @@ fn sketch_plan_profiles(
     revit_version: u32,
     sketch_lines: &[crate::partition_element_records::PartitionElementRecord],
     owners: &std::collections::BTreeMap<u32, [f64; 4]>,
+    skip: &BTreeSet<u32>,
 ) -> std::collections::BTreeMap<u32, crate::element_record_plan_profiles::PlanProfile> {
     use crate::element_record_plan_profiles as erpp;
     use std::collections::BTreeMap;
@@ -7057,6 +7059,10 @@ fn sketch_plan_profiles(
         erpp::scan_sketch_curve_lists(rf, revit_version, &line_ids)
             .into_iter()
             .filter(|(owner, _)| owners.contains_key(owner))
+            .map(|(owner, mut curves)| {
+                curves.retain(|id| !skip.contains(id));
+                (owner, curves)
+            })
             .collect();
     let listed: BTreeMap<u32, u32> = lists
         .iter()
@@ -7064,6 +7070,7 @@ fn sketch_plan_profiles(
         .collect();
     let remapped: Vec<crate::partition_element_records::PartitionElementRecord> = sketch_lines
         .iter()
+        .filter(|record| !skip.contains(&record.element_id))
         .filter_map(|record| {
             let owner = match listed.get(&record.element_id) {
                 Some(owner) => Some(*owner),
@@ -7079,7 +7086,10 @@ fn sketch_plan_profiles(
     // An element whose list differs from the lines naming it keeps an outline
     // only where it spans its record box, as an arc outline does (RE-96).
     let mut named: BTreeMap<u32, BTreeSet<u32>> = BTreeMap::new();
-    for record in sketch_lines {
+    for record in sketch_lines
+        .iter()
+        .filter(|record| !skip.contains(&record.element_id))
+    {
         if let Some(owner) = record.owner_reference {
             named.entry(owner).or_default().insert(record.element_id);
         }
@@ -7126,7 +7136,7 @@ fn sketch_plan_profiles(
         .flat_map(|lines| lines.keys().copied())
         .collect();
     let (Ok(lines), Ok(curves)) = (
-        crate::partition_beam_axes::scan_bounded_lines(rf, revit_version, &ids),
+        crate::partition_beam_axes::scan_sketch_bounded_lines(rf, revit_version, &ids),
         crate::partition_beam_axes::scan_sketch_curves(rf, revit_version, &ids),
     ) else {
         return profiles;
@@ -7272,7 +7282,14 @@ fn attach_roof_profiles(rf: &mut RevitFile, revit_version: u32, products: &mut [
     else {
         return;
     };
-    let profiles = sketch_plan_profiles(rf, revit_version, &sketch_lines, &roofs);
+    // RE-199: a slope arrow is one of its roof's sketch lines but no part of
+    // the outline.
+    let line_ids: BTreeSet<u32> = sketch_lines.iter().map(|line| line.element_id).collect();
+    let arrows: BTreeSet<u32> =
+        crate::partition_roof_slopes::scan_arrow_heights(rf, revit_version, &line_ids)
+            .map(|found| found.into_keys().collect())
+            .unwrap_or_default();
+    let profiles = sketch_plan_profiles(rf, revit_version, &sketch_lines, &roofs, &arrows);
     for roof in products
         .iter_mut()
         .filter(|element| SKETCHED_PRODUCT_CLASSES.contains(&element.class.as_str()))
@@ -7491,8 +7508,9 @@ fn shaft_outlines(
     out
 }
 
-/// Fields holding the plan start and end of the one roof edge that defines
-/// the roof's slope, model feet (RE-56).
+/// Fields holding the plan start and end of the (first) roof edge that
+/// defines the roof's slope, model feet (RE-56). Further edges of a gable or
+/// hip use [`roof_slope_edge_fields`] (RE-199).
 pub const ROOF_SLOPE_EDGE_FIELDS: [&str; 4] = [
     "m_roof_slope_edge_start_x",
     "m_roof_slope_edge_start_y",
@@ -7503,9 +7521,21 @@ pub const ROOF_SLOPE_EDGE_FIELDS: [&str; 4] = [
 pub const ROOF_SLOPE_ANGLE_FIELD: &str = "m_roof_slope_angle";
 /// Field holding the roof's type thickness, its layers summed (RE-56).
 pub const ROOF_TYPE_THICKNESS_FIELD: &str = "m_roof_type_thickness";
+/// Field holding how far the first defining edge's plane is raised at the
+/// edge, feet, written only when not 0 (RE-199); further edges add
+/// `_<index>` ([`roof_slope_plate_offset_field`]).
+pub const ROOF_SLOPE_PLATE_OFFSET_FIELD: &str = "m_roof_slope_plate_offset";
 
-/// A shed roof's slope: the one edge that defines it, its angle, and the
-/// roof's thickness measured square to the slope (RE-56).
+/// [`ROOF_SLOPE_PLATE_OFFSET_FIELD`] for the `index`th defining edge.
+pub fn roof_slope_plate_offset_field(index: usize) -> String {
+    match index {
+        0 => ROOF_SLOPE_PLATE_OFFSET_FIELD.to_string(),
+        _ => format!("{ROOF_SLOPE_PLATE_OFFSET_FIELD}_{index}"),
+    }
+}
+
+/// A roof edge's slope: the edge that defines it, its angle, and the roof's
+/// thickness measured square to the slope (RE-56).
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct RoofSlope {
     /// Plan start of the defining edge, model feet.
@@ -7516,24 +7546,61 @@ pub struct RoofSlope {
     pub angle_radians: f64,
     /// The roof type's layers summed, feet.
     pub thickness_feet: f64,
+    /// How far the edge's plane is raised at the edge, feet (RE-199).
+    pub plate_offset_feet: f64,
+}
+
+/// The names of the start, end and angle fields of a roof's `index`th
+/// defining edge: [`ROOF_SLOPE_EDGE_FIELDS`] and [`ROOF_SLOPE_ANGLE_FIELD`]
+/// for the first, the same names with `_<index>` after `edge` or `angle`
+/// for each further one (RE-199).
+pub fn roof_slope_edge_fields(index: usize) -> [String; 5] {
+    let names = [
+        ROOF_SLOPE_EDGE_FIELDS[0],
+        ROOF_SLOPE_EDGE_FIELDS[1],
+        ROOF_SLOPE_EDGE_FIELDS[2],
+        ROOF_SLOPE_EDGE_FIELDS[3],
+        ROOF_SLOPE_ANGLE_FIELD,
+    ];
+    names.map(|name| match index {
+        0 => name.to_string(),
+        _ => match name.find("_edge_") {
+            Some(at) => format!("{}_edge_{index}_{}", &name[..at], &name[at + 6..]),
+            None => format!("{name}_{index}"),
+        },
+    })
 }
 
 /// The slope [`ROOF_SLOPE_EDGE_FIELDS`], [`ROOF_SLOPE_ANGLE_FIELD`] and
-/// [`ROOF_TYPE_THICKNESS_FIELD`] record.
+/// [`ROOF_TYPE_THICKNESS_FIELD`] record: the first defining edge.
 pub fn roof_slope_from_fields(fields: &[(String, InstanceField)]) -> Option<RoofSlope> {
+    roof_slopes_from_fields(fields).into_iter().next()
+}
+
+/// Every defining edge a roof's fields record, in order
+/// ([`roof_slope_edge_fields`]); empty when none is.
+pub fn roof_slopes_from_fields(fields: &[(String, InstanceField)]) -> Vec<RoofSlope> {
     let float = |wanted: &str| {
         fields.iter().find_map(|(name, value)| match value {
             InstanceField::Float { value, .. } if name == wanted => Some(*value),
             _ => None,
         })
     };
-    let [sx, sy, ex, ey] = ROOF_SLOPE_EDGE_FIELDS.map(float);
-    Some(RoofSlope {
-        edge_start: [sx?, sy?],
-        edge_end: [ex?, ey?],
-        angle_radians: float(ROOF_SLOPE_ANGLE_FIELD)?,
-        thickness_feet: float(ROOF_TYPE_THICKNESS_FIELD)?,
-    })
+    let Some(thickness_feet) = float(ROOF_TYPE_THICKNESS_FIELD) else {
+        return Vec::new();
+    };
+    (0..)
+        .map_while(|index| {
+            let [sx, sy, ex, ey, angle] = roof_slope_edge_fields(index).map(|name| float(&name));
+            Some(RoofSlope {
+                edge_start: [sx?, sy?],
+                edge_end: [ex?, ey?],
+                angle_radians: angle?,
+                thickness_feet,
+                plate_offset_feet: float(&roof_slope_plate_offset_field(index)).unwrap_or(0.0),
+            })
+        })
+        .collect()
 }
 
 /// Give each roof whose sketch lines all carry a slope block, exactly one
@@ -7573,36 +7640,84 @@ fn attach_roof_slopes(rf: &mut RevitFile, revit_version: u32, products: &mut [De
     else {
         return;
     };
+    // RE-97: where a roof's Sketch lists its curves, that list is its
+    // membership; once the sketch is edited a line's owner reference names
+    // another element (RE-199, on 2025).
+    let all_lines: BTreeSet<u32> = sketch_lines.iter().map(|line| line.element_id).collect();
+    let lists =
+        crate::element_record_plan_profiles::scan_sketch_curve_lists(rf, revit_version, &all_lines);
     let mut edges: std::collections::BTreeMap<u32, BTreeSet<u32>> = Default::default();
     for line in &sketch_lines {
-        if let Some(owner) = line.owner_reference.filter(|owner| roofs.contains(owner)) {
+        if let Some(owner) = line
+            .owner_reference
+            .filter(|owner| roofs.contains(owner) && !lists.contains_key(owner))
+        {
             edges.entry(owner).or_default().insert(line.element_id);
         }
+    }
+    for (owner, curves) in lists.iter().filter(|(owner, _)| roofs.contains(owner)) {
+        edges
+            .entry(*owner)
+            .or_default()
+            .extend(curves.iter().copied());
     }
     let line_ids: BTreeSet<u32> = edges.values().flatten().copied().collect();
     let Ok(slopes) = prs::scan_edge_slopes(rf, revit_version, &line_ids) else {
         return;
     };
-    let mut defining: std::collections::BTreeMap<u32, (u32, f64)> = Default::default();
+    let unblocked: BTreeSet<u32> = line_ids
+        .iter()
+        .filter(|line| !slopes.contains_key(line))
+        .copied()
+        .collect();
+    let Ok(arrows) = prs::scan_arrow_heights(rf, revit_version, &unblocked) else {
+        return;
+    };
+    // Every defining edge of a roof whose edges all carry a block: one is a
+    // shed (RE-56), more a gable or hip (RE-199). A roof whose edges define
+    // none, with one slope arrow, rises along the arrow (RE-199).
+    let mut defining: std::collections::BTreeMap<u32, Vec<(u32, f64, f64)>> = Default::default();
+    let mut sloped_by_arrow: std::collections::BTreeMap<u32, (u32, prs::ArrowHeights)> =
+        Default::default();
     for (&roof, lines) in &edges {
-        if !lines.iter().all(|line| slopes.contains_key(line)) {
+        let (blocked, rest): (Vec<u32>, Vec<u32>) =
+            lines.iter().partition(|line| slopes.contains_key(line));
+        if let [arrow] = rest.as_slice() {
+            let flat = blocked.iter().all(|line| !slopes[line].defines_slope);
+            if let (true, Some(heights)) = (flat, arrows.get(arrow)) {
+                sloped_by_arrow.insert(roof, (*arrow, *heights));
+            }
             continue;
         }
-        let mut sloped = lines
+        if !rest.is_empty() {
+            continue;
+        }
+        let sloped: Vec<(u32, f64, f64)> = lines
             .iter()
             .filter_map(|line| slopes.get(line).map(|slope| (*line, slope)))
-            .filter(|(_, slope)| slope.defines_slope);
-        if let (Some((line, slope)), None) = (sloped.next(), sloped.next()) {
-            defining.insert(roof, (line, slope.angle_radians));
+            .filter(|(_, slope)| slope.defines_slope)
+            .map(|(line, slope)| (line, slope.angle_radians, slope.plate_offset_feet))
+            .collect();
+        if !sloped.is_empty() {
+            defining.insert(roof, sloped);
         }
     }
-    if defining.is_empty() {
+    if defining.is_empty() && sloped_by_arrow.is_empty() {
         return;
     }
-    let defining_lines: BTreeSet<u32> = defining.values().map(|(line, _)| *line).collect();
+    let defining_lines: BTreeSet<u32> = defining
+        .values()
+        .flatten()
+        .map(|(line, _, _)| *line)
+        .chain(sloped_by_arrow.values().map(|(line, _)| *line))
+        .collect();
     let types: BTreeSet<u32> = products
         .iter()
-        .filter(|element| element.id.is_some_and(|id| defining.contains_key(&id)))
+        .filter(|element| {
+            element
+                .id
+                .is_some_and(|id| defining.contains_key(&id) || sloped_by_arrow.contains_key(&id))
+        })
         .filter_map(type_of)
         .collect();
     let materials: BTreeSet<u32> = crate::partition_type_records::scan_type_records(
@@ -7615,8 +7730,15 @@ fn attach_roof_slopes(rf: &mut RevitFile, revit_version: u32, products: &mut [De
     .iter()
     .map(|record| record.element_id)
     .collect();
+    let sloped_roofs: BTreeSet<u32> = defining
+        .keys()
+        .chain(sloped_by_arrow.keys())
+        .copied()
+        .collect();
+    let fascia = prs::scan_fascia_depths(rf, revit_version, &sloped_roofs).unwrap_or_default();
+    let cuts = prs::scan_rafter_cuts(rf, revit_version, &sloped_roofs);
     let (Ok(lines), Ok(layers)) = (
-        crate::partition_beam_axes::scan_bounded_lines(rf, revit_version, &defining_lines),
+        crate::partition_beam_axes::scan_sketch_bounded_lines(rf, revit_version, &defining_lines),
         crate::partition_compound_structure::scan_type_layers(
             rf,
             revit_version,
@@ -7634,31 +7756,60 @@ fn attach_roof_slopes(rf: &mut RevitFile, revit_version: u32, products: &mut [De
         let (Some(id), Some(type_id)) = (roof.id, type_of(roof)) else {
             continue;
         };
-        let Some(&(line_id, angle)) = defining.get(&id) else {
+        let Some(type_layers) = layers.get(&type_id) else {
             continue;
         };
-        let (Some(line), Some(type_layers)) = (lines.get(&line_id), layers.get(&type_id)) else {
+        // An arrow is a shed whose edge runs through the arrow's tail square
+        // to it, rising from the tail's height to the head's along it.
+        let edges: Option<Vec<RoofEdgeSlope>> =
+            if let Some((line_id, heights)) = sloped_by_arrow.get(&id) {
+                lines.get(line_id).and_then(|line| {
+                    let (tail, head) = (line.start(), line.end());
+                    let run = (head[0] - tail[0]).hypot(head[1] - tail[1]);
+                    let slope = heights.rise_over_run(run);
+                    (run > 1e-9 && slope > 0.0 && slope.is_finite()).then(|| {
+                        let (ux, uy) = ((head[0] - tail[0]) / run, (head[1] - tail[1]) / run);
+                        let across = [tail[0] - uy, tail[1] + ux, tail[2]];
+                        vec![(tail, across, slope.atan(), 0.0)]
+                    })
+                })
+            } else {
+                defining.get(&id).and_then(|sloped| {
+                    sloped
+                        .iter()
+                        .map(|(line_id, angle, offset)| {
+                            lines
+                                .get(line_id)
+                                .map(|line| (line.start(), line.end(), *angle, *offset))
+                        })
+                        .collect()
+                })
+            };
+        let Some(edges) = edges else {
             continue;
         };
         let thickness: f64 = type_layers.iter().map(|layer| layer.width_feet).sum();
         if !(thickness.is_finite() && thickness > 0.0) {
             continue;
         }
-        let (start, end) = (line.start(), line.end());
-        for (name, value) in ROOF_SLOPE_EDGE_FIELDS
-            .iter()
-            .zip([start[0], start[1], end[0], end[1]])
-        {
-            roof.fields
-                .push(((*name).into(), InstanceField::Float { value, size: 8 }));
+        for (index, (start, end, angle, offset)) in edges.into_iter().enumerate() {
+            for (name, value) in roof_slope_edge_fields(index)
+                .into_iter()
+                .zip([start[0], start[1], end[0], end[1], angle])
+            {
+                roof.fields
+                    .push((name, InstanceField::Float { value, size: 8 }));
+            }
+            if offset != 0.0 {
+                roof.fields.push((
+                    roof_slope_plate_offset_field(index),
+                    InstanceField::Float {
+                        value: offset,
+                        size: 8,
+                    },
+                ));
+            }
         }
-        roof.fields.push((
-            ROOF_SLOPE_ANGLE_FIELD.into(),
-            InstanceField::Float {
-                value: angle,
-                size: 8,
-            },
-        ));
         roof.fields.push((
             ROOF_TYPE_THICKNESS_FIELD.into(),
             InstanceField::Float {
@@ -7666,8 +7817,54 @@ fn attach_roof_slopes(rf: &mut RevitFile, revit_version: u32, products: &mut [De
                 size: 8,
             },
         ));
+        if let Some(&depth) = fascia.get(&id) {
+            roof.fields.push((
+                ROOF_FASCIA_DEPTH_FIELD.into(),
+                InstanceField::Float {
+                    value: depth,
+                    size: 8,
+                },
+            ));
+        }
+        if let Some(cut) = cuts.get(&id) {
+            roof.fields.push((
+                ROOF_RAFTER_CUT_FIELD.into(),
+                InstanceField::String(cut.name().into()),
+            ));
+        }
     }
 }
+
+/// Field holding a roof's rafter cut, a [`crate::partition_roof_slopes::RafterCut`]
+/// name, where it is read (RE-199).
+pub const ROOF_RAFTER_CUT_FIELD: &str = "m_roof_rafter_cut";
+
+/// The [`ROOF_RAFTER_CUT_FIELD`] a roof's fields record.
+pub fn roof_rafter_cut_from_fields(
+    fields: &[(String, InstanceField)],
+) -> Option<crate::partition_roof_slopes::RafterCut> {
+    fields.iter().find_map(|(name, value)| match value {
+        InstanceField::String(cut) if name == ROOF_RAFTER_CUT_FIELD => {
+            crate::partition_roof_slopes::RafterCut::from_name(cut)
+        }
+        _ => None,
+    })
+}
+
+/// Field holding a roof's fascia depth, feet, where it is read (RE-199).
+pub const ROOF_FASCIA_DEPTH_FIELD: &str = "m_roof_fascia_depth";
+
+/// The [`ROOF_FASCIA_DEPTH_FIELD`] a roof's fields record.
+pub fn roof_fascia_depth_from_fields(fields: &[(String, InstanceField)]) -> Option<f64> {
+    fields.iter().find_map(|(name, value)| match value {
+        InstanceField::Float { value, .. } if name == ROOF_FASCIA_DEPTH_FIELD => Some(*value),
+        _ => None,
+    })
+}
+
+/// A roof edge's start and end, its slope angle, and how far its plane is
+/// raised at the edge (RE-199).
+type RoofEdgeSlope = ([f64; 3], [f64; 3], f64, f64);
 
 /// Classes whose type's layers stack from the top down (RE-57).
 pub const STACKED_LAYER_CLASSES: &[&str] = &["Floor", "BuildingPad", "Roof", "Ceiling"];

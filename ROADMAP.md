@@ -32,7 +32,7 @@ IFC export of the same model wherever one is measured, and for 2015 to 2018,
 sample projects saved by Revit
 2019, 2023 and 2026 (but 2015's `rst_basic`, another model than its 2019 copy).
 What is not decoded
-(most parameters, family geometry, hip and gable roofs, opening profiles,
+(most parameters, family geometry, roofs by extrusion, opening profiles,
 phase filtering) is listed in [`docs/status.md`](docs/status.md), and
 the four levels a file can reach are in the
 [supported profile](docs/supported-profile.md).
@@ -99,7 +99,7 @@ improvement and a residual against Revit's own exports on the reference pack
 (#407), approximations stay labelled (#409), and a slice ships in the next
 release that contains it. Open now: wall bodies thicker or thinner
 than their type's layers (#358), stair flights (#357) and aggregates (#323),
-sloped roofs (#356, needs a pitched-roof oracle), element materials (#355),
+roofs by extrusion and over T or U footprints (#883, #884), element materials (#355),
 the opening cut from the wall location curve (#227), room boundaries whose
 solid does not close (#90), beams (#94), MEP equipment and routes (#96), the
 sketch-to-solid pipeline (#156), and the Snowdon slabs that are not in Revit's

@@ -2793,6 +2793,163 @@ fn roof_slope_solid(
     })
 }
 
+/// Whether `p` lies inside the ring `ring` (even-odd rule).
+fn point_in_ring((px, py): (f64, f64), ring: &[(f64, f64)]) -> bool {
+    let mut inside = false;
+    for i in 0..ring.len() {
+        let ((ax, ay), (bx, by)) = (ring[i], ring[(i + 1) % ring.len()]);
+        if (ay > py) != (by > py) && px < ax + (py - ay) * (bx - ax) / (by - ay) {
+            inside = !inside;
+        }
+    }
+    inside
+}
+
+/// A gable or hip roof's body (RE-199): each defining edge's plane rises
+/// from it into the roof at its angle (raised by the edge's plate offset).
+/// A plane counts within its edge's straight-skeleton wedge: on the edge's
+/// side, between the lines where it meets its neighbouring defining edges'
+/// planes, which converge at a hip and part at a valley. The roof's top is
+/// the lowest counting plane at each point, so hips and valleys both come
+/// out right over convex and L-shaped footprints. The planes' tops meet the
+/// outline at one eave height, `T / cos θ` of the shallowest edge; each
+/// plane's underside lies its own `T / cos θ` below its top, never below
+/// the record box's base.
+///
+/// With `rafter_cut`, a two-cut rafter's fascia depth `F`, the eave height
+/// is `F` instead, and each plane is cut level at the base raised by its
+/// plate offset: `F = 0` (the default) sets the plain roof down by the
+/// thickness's vertical extent, `F = T / cos θ` is the plain roof. The
+/// plumb and square two-cuts coincide at `F = 0`.
+///
+/// Revit's export of the roofs of #356's `R2025_Models.zip` has this shape:
+/// sheds, a gable, hips at 30° and at 15° and 35°, two-cuts with plate
+/// offsets, and L-shaped hips with a raised edge and a hole. `None` unless the
+/// highest point of the top reproduces `height` within
+/// [`ROOF_SLOPE_CLOSURE_FEET`].
+fn roof_planes_solid(
+    slopes: &[crate::partition_schema_mvp::RoofSlope],
+    [x, y]: [f64; 2],
+    outer: &[(f64, f64)],
+    inner: &[Vec<(f64, f64)>],
+    height: f64,
+    rafter_cut: Option<f64>,
+) -> Option<entities::SolidShape> {
+    if outer.len() < 3 {
+        return None;
+    }
+    let mut planes: Vec<(super::body_geometry::PlanPlane, f64)> = Vec::new();
+    let mut domains: Vec<Vec<super::body_geometry::PlanPlane>> = Vec::new();
+    // Each edge's ends and a point just inside its middle, local feet.
+    let mut ends: Vec<[(f64, f64); 2]> = Vec::new();
+    let mut probes: Vec<(f64, f64)> = Vec::new();
+    for slope in slopes {
+        let [sx, sy] = slope.edge_start;
+        let [ex, ey] = slope.edge_end;
+        let length = (ex - sx).hypot(ey - sy);
+        let angle = slope.angle_radians;
+        if !(length > 1e-9
+            && angle.is_finite()
+            && angle > 0.0
+            && angle < std::f64::consts::FRAC_PI_2
+            && slope.thickness_feet > 0.0)
+        {
+            return None;
+        }
+        let (ux, uy) = ((ex - sx) / length, (ey - sy) / length);
+        // Distance from the edge in local coordinates: -uy·px + ux·py + c.
+        let c = (x - sx) * -uy + (y - sy) * ux;
+        // The plane rises into the roof: the side of the edge that a point
+        // just inside its midpoint lies on. Over a non-convex footprint the
+        // outline crosses the edge's line, and the plane's domain ends there.
+        let mid = ((sx + ex) / 2.0 - x, (sy + ey) / 2.0 - y);
+        let probe = (mid.0 - uy * 1e-3, mid.1 + ux * 1e-3);
+        let sign = if point_in_ring(probe, outer) {
+            1.0
+        } else {
+            -1.0
+        };
+        let rise = sign * angle.tan();
+        domains.push(vec![[-uy * sign, ux * sign, c * sign]]);
+        ends.push([(sx - x, sy - y), (ex - x, ey - y)]);
+        probes.push((mid.0 - uy * sign * 1e-3, mid.1 + ux * sign * 1e-3));
+        planes.push((
+            [-uy * rise, ux * rise, c * rise + slope.plate_offset_feet],
+            slope.thickness_feet / angle.cos(),
+        ));
+    }
+    // The wedge of each edge: at each end it shares with another defining
+    // edge, the side of the line where their planes meet that holds the
+    // edge's own middle.
+    let at = |[a, b, c]: super::body_geometry::PlanPlane, (px, py): (f64, f64)| a * px + b * py + c;
+    for i in 0..planes.len() {
+        for j in 0..planes.len() {
+            let shared = i != j
+                && ends[i].iter().any(|&(px, py)| {
+                    ends[j]
+                        .iter()
+                        .any(|&(qx, qy)| (px - qx).abs() < 1e-6 && (py - qy).abs() < 1e-6)
+                });
+            if !shared {
+                continue;
+            }
+            let (pi, pj) = (planes[i].0, planes[j].0);
+            let mut line = [pi[0] - pj[0], pi[1] - pj[1], pi[2] - pj[2]];
+            if line[0].hypot(line[1]) < 1e-12 {
+                continue;
+            }
+            if at(line, probes[i]) < 0.0 {
+                line = line.map(|v| -v);
+            }
+            domains[i].push(line);
+        }
+    }
+    let eave = if let Some(fascia) = rafter_cut {
+        fascia
+    } else {
+        planes
+            .iter()
+            .map(|(_, vertical)| *vertical)
+            .fold(f64::INFINITY, f64::min)
+    };
+    let tops: Vec<_> = planes
+        .iter()
+        .map(|([a, b, c], _)| [*a, *b, c + eave])
+        .collect();
+    // A two-cut plane is cut level at its own eave's top, the base raised by
+    // its plate offset; otherwise at the base.
+    let undersides: Vec<_> = planes
+        .iter()
+        .zip(slopes)
+        .map(|(([a, b, c], vertical), slope)| {
+            let floor = if rafter_cut.is_some() {
+                slope.plate_offset_feet
+            } else {
+                0.0
+            };
+            ([*a, *b, c + eave - vertical], floor)
+        })
+        .collect();
+    let mesh =
+        super::body_geometry::envelope_slab_mesh(outer, inner, &tops, &undersides, &domains)?;
+    let highest = mesh
+        .vertices
+        .iter()
+        .map(|v| v[2])
+        .fold(f64::NEG_INFINITY, f64::max);
+    if (highest - height).abs() > ROOF_SLOPE_CLOSURE_FEET {
+        return None;
+    }
+    Some(entities::SolidShape::FacetedBrep {
+        vertices_feet: mesh.vertices,
+        triangles: mesh
+            .triangles
+            .into_iter()
+            .map(|[a, b, c]| entities::BrepTriangle(a, b, c))
+            .collect(),
+    })
+}
+
 /// `BodySource` of a wall drawn its type's thickness either side of its
 /// centreline (RE-54).
 pub const WALL_CENTRELINE_BODY_SOURCE: &str = "partition_wall_centreline";
@@ -3505,10 +3662,14 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
             .and_then(|axis| turned_box(axis, width, depth))
     };
     // RE-56: a shed roof whose slope reproduces its record box rises along
-    // it.
+    // it. RE-199: a gable or hip roof, its planes' lowest envelope, and
+    // either cut level at its base when that is what its box records.
     let roof_slope = if class == "Roof" {
         profile.as_ref().and_then(|profile| {
-            let slope = crate::partition_schema_mvp::roof_slope_from_fields(&decoded.fields)?;
+            let slopes = crate::partition_schema_mvp::roof_slopes_from_fields(&decoded.fields);
+            let fascia =
+                crate::partition_schema_mvp::roof_fascia_depth_from_fields(&decoded.fields)
+                    .unwrap_or(0.0);
             let outer: Vec<(f64, f64)> = profile
                 .outer_xy
                 .iter()
@@ -3519,7 +3680,28 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
                 .iter()
                 .map(|ring| ring.iter().map(|(px, py)| (px - x, py - y)).collect())
                 .collect();
-            roof_slope_solid(slope, [x, y], &outer, &inner, height)
+            use crate::partition_roof_slopes::RafterCut;
+            let plain = || match slopes.as_slice() {
+                [] => None,
+                [slope] => roof_slope_solid(*slope, [x, y], &outer, &inner, height),
+                _ => roof_planes_solid(&slopes, [x, y], &outer, &inner, height, None),
+            };
+            let two_cut = || {
+                (!slopes.is_empty())
+                    .then(|| {
+                        roof_planes_solid(&slopes, [x, y], &outer, &inner, height, Some(fascia))
+                    })
+                    .flatten()
+            };
+            // RE-199: the roof's own rafter cut where it is read; elsewhere
+            // the plain body, else the two-cut one its record box singles out.
+            match crate::partition_schema_mvp::roof_rafter_cut_from_fields(&decoded.fields) {
+                Some(RafterCut::Plumb) => plain(),
+                Some(RafterCut::TwoCutPlumb) => two_cut(),
+                // A square two-cut with a fascia is not measured.
+                Some(RafterCut::TwoCutSquare) => (fascia == 0.0).then(two_cut).flatten(),
+                None => plain().or_else(two_cut),
+            }
         })
     } else {
         None

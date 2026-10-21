@@ -603,6 +603,215 @@ pub fn sloped_slab_mesh(
         .then_some(mesh)
 }
 
+/// A plane `z = a·x + b·y + c` over the plan, as `[a, b, c]`.
+pub type PlanPlane = [f64; 3];
+
+fn plane_at([a, b, c]: PlanPlane, (x, y): Point2) -> f64 {
+    a * x + b * y + c
+}
+
+/// How close to a splitting line a point counts as on it, feet.
+const ENVELOPE_SPLIT_EPS: f64 = 1e-9;
+
+/// Most planes [`envelope_slab_mesh`] takes; a roof sketch has far fewer
+/// defining edges.
+pub const MAX_ENVELOPE_PLANES: usize = 32;
+
+/// Most pieces [`envelope_slab_mesh`] cuts the plan into, and most side
+/// segments it draws: past either it draws nothing, which bounds the work
+/// and memory a hostile sketch can ask for.
+pub const MAX_ENVELOPE_PIECES: usize = 1 << 16;
+
+/// The point where the segment `p`–`q` crosses the line `f = 0`, from the
+/// values `fp` and `fq` of `f` at its ends. The ends are taken in a fixed
+/// order, so two triangles sharing the segment get the same point.
+fn crossing(p: Point2, fp: f64, q: Point2, fq: f64) -> Point2 {
+    let ((p, fp), (q, fq)) = if p <= q {
+        ((p, fp), (q, fq))
+    } else {
+        ((q, fq), (p, fp))
+    };
+    let t = fp / (fp - fq);
+    (p.0 + t * (q.0 - p.0), p.1 + t * (q.1 - p.1))
+}
+
+/// The part of the convex polygon `poly` where `f >= 0` (`keep_positive`)
+/// or `f <= 0`.
+fn clip_convex(poly: &[Point2], line: PlanPlane, keep_positive: bool) -> Vec<Point2> {
+    let side = |p: Point2| {
+        let f = plane_at(line, p);
+        if keep_positive { f } else { -f }
+    };
+    let mut out = Vec::with_capacity(poly.len() + 1);
+    for i in 0..poly.len() {
+        let (p, q) = (poly[i], poly[(i + 1) % poly.len()]);
+        let (fp, fq) = (side(p), side(q));
+        if fp >= -ENVELOPE_SPLIT_EPS {
+            out.push(p);
+        }
+        if (fp > ENVELOPE_SPLIT_EPS && fq < -ENVELOPE_SPLIT_EPS)
+            || (fp < -ENVELOPE_SPLIT_EPS && fq > ENVELOPE_SPLIT_EPS)
+        {
+            out.push(crossing(p, plane_at(line, p), q, plane_at(line, q)));
+        }
+    }
+    out
+}
+
+/// A slab over the plan area inside `outer` and outside `holes` whose top
+/// is the lowest of the `tops` planes at each point and whose underside is
+/// the lowest of the `undersides` planes, each never below its own floor
+/// height, with upright sides (RE-199): a gable or hip roof, each plane
+/// rising from its own edge and cut level at its floor. Plane `i` counts
+/// only where every half-plane in `domains[i]` is not negative: its edge's
+/// side, and the wedge between the lines where it meets its neighbouring
+/// edges' planes, which converge at a hip and part at a valley. The plan is
+/// cut along every line where two of the planes it compares meet, or a
+/// domain ends, so top and underside are flat on each piece. `None` for no
+/// plane, more than [`MAX_ENVELOPE_PLANES`], more than
+/// [`MAX_ENVELOPE_PIECES`] pieces or sides, a point no plane covers, or a top
+/// below the underside anywhere.
+pub fn envelope_slab_mesh(
+    outer: &[Point2],
+    holes: &[Ring],
+    tops: &[PlanPlane],
+    undersides: &[(PlanPlane, f64)],
+    domains: &[Vec<PlanPlane>],
+) -> Option<Mesh> {
+    if tops.is_empty()
+        || tops.len() != undersides.len()
+        || tops.len() != domains.len()
+        || tops.len() > MAX_ENVELOPE_PLANES
+    {
+        return None;
+    }
+    let section = section(outer, holes)?;
+    let difference = |p: PlanPlane, q: PlanPlane| [p[0] - q[0], p[1] - q[1], p[2] - q[2]];
+    let mut lines: Vec<PlanPlane> = Vec::new();
+    for (i, &p) in tops.iter().enumerate() {
+        lines.extend(tops[i + 1..].iter().map(|&q| difference(p, q)));
+    }
+    for (i, &(p, _)) in undersides.iter().enumerate() {
+        lines.extend(undersides[i + 1..].iter().map(|&(q, _)| difference(p, q)));
+        lines.extend(
+            undersides
+                .iter()
+                .map(|&(_, floor)| difference(p, [0.0, 0.0, floor])),
+        );
+    }
+    lines.extend(domains.iter().flatten().copied());
+    lines.retain(|l| l[0].hypot(l[1]) > ENVELOPE_SPLIT_EPS);
+    let covers = |i: usize, p: Point2| domains[i].iter().all(|&d| plane_at(d, p) >= -1e-7);
+    let top = |p: Point2| {
+        (0..tops.len())
+            .filter(|&i| covers(i, p))
+            .map(|i| plane_at(tops[i], p))
+            .fold(f64::INFINITY, f64::min)
+    };
+    let bottom = |p: Point2| {
+        (0..undersides.len())
+            .filter(|&i| covers(i, p))
+            .map(|i| plane_at(undersides[i].0, p).max(undersides[i].1))
+            .fold(f64::INFINITY, f64::min)
+    };
+    // The cap's triangles, counter-clockwise, cut by every line.
+    let mut pieces: Vec<Vec<Point2>> = section
+        .cap_triangles
+        .iter()
+        .map(|&[a, b, c]| {
+            let tri = [a, b, c].map(|i| section.cap_points[i as usize]);
+            let mut tri = tri.to_vec();
+            if signed_area(&tri) < 0.0 {
+                tri.reverse();
+            }
+            tri
+        })
+        .collect();
+    for &line in &lines {
+        pieces = pieces
+            .into_iter()
+            .flat_map(|poly| {
+                let values: Vec<f64> = poly.iter().map(|&p| plane_at(line, p)).collect();
+                let above = values.iter().any(|&f| f > ENVELOPE_SPLIT_EPS);
+                let below = values.iter().any(|&f| f < -ENVELOPE_SPLIT_EPS);
+                if above && below {
+                    vec![
+                        clip_convex(&poly, line, true),
+                        clip_convex(&poly, line, false),
+                    ]
+                } else {
+                    vec![poly]
+                }
+            })
+            .filter(|poly| poly.len() >= 3 && signed_area(poly).abs() > 1e-12)
+            .collect();
+        if pieces.len() > MAX_ENVELOPE_PIECES {
+            return None;
+        }
+    }
+    let mut mesh = Mesh::default();
+    let push = |mesh: &mut Mesh, points: [[f64; 3]; 3]| {
+        let base = mesh.vertices.len() as u32;
+        mesh.vertices.extend(points);
+        mesh.triangles.push([base, base + 1, base + 2]);
+    };
+    for poly in &pieces {
+        for i in 1..poly.len() - 1 {
+            let [a, b, c] = [poly[0], poly[i], poly[i + 1]];
+            let lift = |p: Point2, z: f64| [p.0, p.1, z];
+            push(
+                &mut mesh,
+                [lift(a, top(a)), lift(b, top(b)), lift(c, top(c))],
+            );
+            push(
+                &mut mesh,
+                [lift(a, bottom(a)), lift(c, bottom(c)), lift(b, bottom(b))],
+            );
+        }
+    }
+    // The sides, each ring edge cut where a line crosses it.
+    let mut sides = 0usize;
+    for ring in &section.rings {
+        for i in 0..ring.len() {
+            let (a, b) = (ring[i], ring[(i + 1) % ring.len()]);
+            let mut cuts: Vec<f64> = vec![0.0, 1.0];
+            for &line in &lines {
+                let (fa, fb) = (plane_at(line, a), plane_at(line, b));
+                if (fa > ENVELOPE_SPLIT_EPS && fb < -ENVELOPE_SPLIT_EPS)
+                    || (fa < -ENVELOPE_SPLIT_EPS && fb > ENVELOPE_SPLIT_EPS)
+                {
+                    cuts.push(fa / (fa - fb));
+                }
+            }
+            cuts.sort_by(f64::total_cmp);
+            cuts.dedup_by(|x, y| (*x - *y).abs() <= 1e-12);
+            sides += cuts.len() - 1;
+            if sides > MAX_ENVELOPE_PIECES {
+                return None;
+            }
+            let at = |t: f64| (a.0 + t * (b.0 - a.0), a.1 + t * (b.1 - a.1));
+            for pair in cuts.windows(2) {
+                let (p, q) = (at(pair[0]), at(pair[1]));
+                let base = mesh.vertices.len() as u32;
+                mesh.vertices.extend([
+                    [p.0, p.1, bottom(p)],
+                    [q.0, q.1, bottom(q)],
+                    [q.0, q.1, top(q)],
+                    [p.0, p.1, top(p)],
+                ]);
+                mesh.triangles.push([base, base + 1, base + 2]);
+                mesh.triangles.push([base, base + 2, base + 3]);
+            }
+        }
+    }
+    let thick_enough = pieces
+        .iter()
+        .flatten()
+        .chain(section.rings.iter().flatten())
+        .all(|&p| top(p).is_finite() && top(p) >= bottom(p) - 1e-9);
+    (thick_enough && mesh.vertices.iter().flatten().all(|v| v.is_finite())).then_some(mesh)
+}
+
 /// An extruded body cut into layers stacked from its top down (RE-57): for
 /// each layer width, top first, the prism of the body's plan outline over
 /// that layer's heights. `None` unless the widths add up to the body's
