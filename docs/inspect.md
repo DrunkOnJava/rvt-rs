@@ -18,8 +18,8 @@ The report answers:
 
 | Section | Meaning |
 |---|---|
-| `failure_mode` | Stable user-facing classification such as `unsupported_revit_version`, `unsupported_model_layout`, `incomplete_model`, `partial_decode`, or `scaffold_only_export`. |
-| `file` | File opened, Revit version/build, verified version range, stream count, schema parse status. |
+| `failure_mode` | Stable user-facing classification such as `unsupported_revit_version`, `unsupported_model_layout`, `incomplete_model`, `experimental_release`, `partial_decode`, or `scaffold_only_export`. |
+| `file` | File opened, Revit version/build, whether the release is one rvt-rs reads, `release_support` (how its element records are read: the status of their `docs/support-matrix.json` row, #871), stream count, schema parse status. |
 | `decoded` | Class count, validated elements, diagnostic candidates, ArcWall records, geometry count. |
 | `export` | IFC readiness level, score, building element counts, unsupported features. |
 | `warnings` | User-facing caveats from the export diagnostics sidecar. |
@@ -38,6 +38,7 @@ geometry were decoded.
 | `failure_mode.kind` is `unsupported_revit_version` | The file opened, but its Revit version is outside the 2015 to 2027 releases rvt-rs reads. |
 | `failure_mode.kind` is `unsupported_model_layout` | The file is in a supported container/version range, but decoded records did not meet the production model confidence bar. |
 | `failure_mode.kind` is `incomplete_model` | Model elements were exported, but `export_diagnostics.confidence.unexported_element_records` records use an element-record layout whose ElementId this release cannot locate (RE-30), so the IFC is missing them. The readiness score is scaled down by the exported share. |
+| `failure_mode.kind` is `experimental_release` | Model elements were exported, but `file.release_support.status` is `experimental`: too few files of this Revit release are measured against Revit's own export to rely on its elements (#871). |
 | File/schema fields present, no export warnings | Inspection succeeded and no obvious export caveat was reported. |
 | `export.level` is `scaffold` | The IFC path can write a valid framework, but no validated building elements were decoded. |
 | `decoded.diagnostic_candidates` is greater than zero | Research scans found low-confidence candidates that are not production model elements. |

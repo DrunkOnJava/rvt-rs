@@ -17,6 +17,54 @@ use serde::{Deserialize, Serialize};
 /// it, and `tests/support_matrix.rs` keeps it honest.
 pub const SUPPORT_MATRIX_JSON: &str = include_str!("../docs/support-matrix.json");
 
+/// How rvt-rs reads a Revit release's element records (#871): the
+/// [`SUPPORT_MATRIX_JSON`] row that holds them and that row's status.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ReleaseSupport {
+    /// The row's status: `verified`, `partial` or `experimental`, or
+    /// `unsupported` where no element records of the release are read.
+    pub status: String,
+    /// The row's id, or `None` where no element records of the release are
+    /// read.
+    pub capability: Option<String>,
+}
+
+/// The [`SUPPORT_MATRIX_JSON`] row that holds a release's element records,
+/// or `None` for a release whose element records are not read.
+pub fn release_capability_id(revit_version: u32) -> Option<&'static str> {
+    match revit_version {
+        2015..=2018 => Some("element-records-revit-2015-2018"),
+        2019..=2022 => Some("element-records-revit-2019-2022"),
+        2023 => Some("element-records-revit-2023"),
+        2024 => Some("typed-project-elements"),
+        2025 => Some("element-records-revit-2025"),
+        2026 => Some("element-records-revit-2026"),
+        2027 => Some("element-records-revit-2027"),
+        _ => None,
+    }
+}
+
+/// How a release's element records are read, from the support matrix built
+/// into this crate, so it cannot disagree with the matrix.
+pub fn release_support(revit_version: u32) -> ReleaseSupport {
+    let capability = release_capability_id(revit_version);
+    let status = capability
+        .and_then(|id| {
+            let matrix: serde_json::Value = serde_json::from_str(SUPPORT_MATRIX_JSON).ok()?;
+            matrix["capabilities"]
+                .as_array()?
+                .iter()
+                .find(|row| row["id"] == id)?["status"]
+                .as_str()
+                .map(str::to_string)
+        })
+        .unwrap_or_else(|| "unsupported".to_string());
+    ReleaseSupport {
+        status,
+        capability: capability.map(str::to_string),
+    }
+}
+
 /// Manifest status vocabulary (subset of support-matrix + ES schema).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]

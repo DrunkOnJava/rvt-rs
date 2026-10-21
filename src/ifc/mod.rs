@@ -498,6 +498,11 @@ pub struct ExportInputDiagnostics {
     pub has_part_atom: bool,
     pub has_formats_latest: bool,
     pub has_global_latest: bool,
+    /// How this file's release is read (#871): the support-matrix row of its
+    /// element records and that row's status, `experimental` where too few
+    /// files of the release are measured to rely on its elements.
+    #[serde(default)]
+    pub release_support: Option<crate::capability::ReleaseSupport>,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -3241,6 +3246,22 @@ pub fn build_export_diagnostics_with_limits(
              nested in doors and windows are left out."
         ));
     }
+    let release_support = bfi
+        .as_ref()
+        .map(|b| crate::capability::release_support(b.version));
+    if let Some((version, support)) = bfi
+        .as_ref()
+        .map(|b| b.version)
+        .zip(release_support.as_ref())
+        .filter(|(_, support)| support.status == "experimental")
+    {
+        warnings.push(format!(
+            "Revit {version} is read experimentally ({} in docs/support-matrix.json): too few \
+             files of this release are measured against Revit's own export to rely on its \
+             elements, which may be missing, extra or of another class.",
+            support.capability.as_deref().unwrap_or("no row")
+        ));
+    }
     append_geometry_gap_warnings(&mut warnings, &exported, &geometry_gaps);
     if model.units.is_empty() {
         warnings
@@ -3428,6 +3449,7 @@ pub fn build_export_diagnostics_with_limits(
             has_global_latest: stream_names
                 .iter()
                 .any(|name| name == crate::streams::GLOBAL_LATEST),
+            release_support,
         },
         decoded: DecodedExportDiagnostics {
             production_walker_elements,
