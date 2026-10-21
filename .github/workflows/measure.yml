@@ -34,6 +34,13 @@
 #
 #   gh workflow run measure.yml -f ref=my-branch -f base=main -f r2025=true
 #
+# BIMcollab's example structural model, a Revit 2015 project, with Revit 2015's
+# own IFC2X3 export of it (research/bimcollab-models.tsv, no redistribution
+# licence, RE-198) is scored the same way when `bimcollab` is set: the one
+# Revit release from 2015 to 2022 with its own export measured (#421).
+#
+#   gh workflow run measure.yml -f ref=my-branch -f base=main -f bimcollab=true
+#
 # `sample_years` narrows the samples to a range of releases, and
 # `probe_pair_release` also runs a two-file probe on each sample and the same
 # project saved by that release, the sample first, for the cross-release
@@ -101,6 +108,11 @@ on:
         default: false
       r2025:
         description: Also score puzzbobb's 23 purpose-made Revit 2025 models against Revit's exports of them (research/r2025-models.tsv, Apache-2.0, fetched for the run and never stored)
+        type: boolean
+        required: false
+        default: false
+      bimcollab:
+        description: Also score BIMcollab's example structural model (Revit 2015) against Revit 2015's export of it (research/bimcollab-models.tsv, no licence stated, fetched for the run and never stored)
         type: boolean
         required: false
         default: false
@@ -202,6 +214,21 @@ jobs:
             0) ;;
             2) echo "::warning::R2025 models NOT MEASURED: the archive could not be downloaded" ;;
             *) echo "::error::R2025_Models.zip no longer matches research/r2025-models.tsv"; exit 1 ;;
+          esac
+      # BIMcollab's host being unreachable is NOT MEASURED; a file that no
+      # longer matches its pin fails the run.
+      - name: Fetch the BIMcollab example model
+        if: inputs.bimcollab
+        shell: bash
+        run: |
+          set +e
+          tools/ci/fetch-bimcollab.sh research/bimcollab-models.tsv models
+          status=$?
+          set -e
+          case "$status" in
+            0) ;;
+            2) echo "::warning::BIMcollab example model NOT MEASURED: an archive could not be downloaded" ;;
+            *) echo "::error::the BIMcollab example model no longer matches research/bimcollab-models.tsv"; exit 1 ;;
           esac
       - name: Fetch the family corpus
         if: inputs.families || github.event_name == 'pull_request'
