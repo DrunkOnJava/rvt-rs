@@ -78,6 +78,13 @@ All notable changes will be documented here. This project follows
 
 ### Changed
 
+- **What 1.0 requires is written down.** `docs/release-1.0-criteria.md`
+  lists each requirement with its bar, the value measured now, and a status
+  of passed, failed or not measured, linked to its evidence. 1.0 supports
+  every Revit release from 2015 to 2027 and ships with no limitations.
+  `RELEASE.md` does not tag it while any requirement has not passed. It
+  replaces the milestone's completion percentage as the release decision.
+
 - **`from_decoded`'s property set builders write a standard set's name
   only for the properties IFC4 declares in it (#827).** `wall_property_set`
   put Revit's base and top offsets, unconnected height, structural usage
