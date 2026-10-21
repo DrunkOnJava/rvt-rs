@@ -529,10 +529,70 @@ pub const CATEGORY_MATERIAL_FRAME: [u8; 20] = [
 /// own export writes for their layers that take their category's material
 /// (RE-115).
 ///
-/// `None` on a release outside [`CATEGORY_MATERIAL_SUPPORTED_REVIT_VERSIONS`],
-/// without the entry, where it is unset (0 or all ones), or where copies
-/// disagree.
+/// Where the entry is not read, the category's material is the one its
+/// graphics styles name ([`native_category_material`], RE-206).
+///
+/// `None` without the entry or a graphics style naming one, where the entry
+/// is unset (0 or all ones), or where copies disagree.
 pub fn scan_category_material(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    category: i64,
+) -> Result<Option<u32>> {
+    let entry = scan_category_material_entry(rf, revit_version, category)?;
+    if entry.is_some() {
+        return Ok(entry);
+    }
+    Ok(native_category_material(rf, category).unwrap_or(None))
+}
+
+/// The material a category's graphics styles name (RE-206): the
+/// `GStyle.m_materialElemId` of each `GStyleElem` whose `m_categoryId` is
+/// `category`, where they name exactly one. On Snowdon Towers (2025), whose
+/// object-styles Walls entry holds 0 (RE-91), the Walls styles name
+/// "Default Wall", the material Revit's IFC4 export writes for the layers
+/// that take their category's material. Errs where the native record path
+/// does not read the file's release.
+pub fn native_category_material(rf: &mut RevitFile, category: i64) -> anyhow::Result<Option<u32>> {
+    let options = crate::native_document::Options {
+        selected_classes: BTreeSet::from(["GStyleElem".to_string()]),
+        ..crate::native_document::Options::default()
+    };
+    let mut found: BTreeSet<u32> = BTreeSet::new();
+    crate::native_document::extract_graphs(rf, &options, |record| {
+        let Some(graph) = record.graph.as_ref() else {
+            return Ok(());
+        };
+        let id = |value: Option<&serde_json::Value>| {
+            value
+                .and_then(|v| v.pointer("/m_id/m_id64"))
+                .and_then(serde_json::Value::as_i64)
+        };
+        let Some(root) = graph.objects.first() else {
+            return Ok(());
+        };
+        if id(root.fields.get("m_categoryId")) != Some(category) {
+            return Ok(());
+        }
+        for object in graph.objects.iter().filter(|o| o.class_name == "GStyle") {
+            if let Some(material) =
+                id(object.fields.get("m_materialElemId")).and_then(|m| u32::try_from(m).ok())
+            {
+                found.insert(material);
+            }
+        }
+        Ok(())
+    })?;
+    let mut values = found.into_iter();
+    Ok(match (values.next(), values.next()) {
+        (Some(material), None) => Some(material),
+        _ => None,
+    })
+}
+
+/// [`scan_category_material`]'s object-styles entry alone. `None` on a
+/// release outside [`CATEGORY_MATERIAL_SUPPORTED_REVIT_VERSIONS`].
+fn scan_category_material_entry(
     rf: &mut RevitFile,
     revit_version: u32,
     category: i64,

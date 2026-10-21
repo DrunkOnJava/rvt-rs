@@ -2229,7 +2229,16 @@ fn refine_type_materials(
             .copied()
             .filter(|id| !family.is_some_and(|family| family.hidden_only.contains(id)))
             .collect();
+        let shown = family.and_then(|family| family.shows_unset).unwrap_or(true);
         if ids.is_empty() {
+            // Only hidden forms had materials: what is shown is the
+            // geometry with none (RE-206).
+            if found.unset && shown {
+                type_materials.insert(
+                    type_id,
+                    vec![crate::partition_type_materials::UNNAMED_MATERIAL.to_string()],
+                );
+            }
             continue;
         }
         let resolved: Vec<String> = ids.iter().filter_map(|id| names.get(id).cloned()).collect();
@@ -2238,7 +2247,6 @@ fn refine_type_materials(
         }
         let scanned = type_materials.entry(type_id).or_default();
         let same: BTreeSet<&String> = scanned.iter().collect();
-        let shown = family.and_then(|family| family.shows_unset).unwrap_or(true);
         if found.unset && shown {
             partly_unset.insert(type_id);
         }
