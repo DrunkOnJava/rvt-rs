@@ -1,5 +1,5 @@
 {
-  "python.defaultInterpreterPath": "${workspaceFolder}/.venv",
+  "python.defaultInterpreterPath": "${workspaceFolder}/.venv/bin/python",
   "python.testing.pytestEnabled": false,
   "python.testing.unittestEnabled": false,
   "rust-analyzer.check.command": "clippy",
@@ -28,3 +28,4 @@
     "viewer/dist": true
   }
 }
+
