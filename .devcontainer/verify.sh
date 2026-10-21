@@ -13,6 +13,13 @@ bash tools/ci/verify-real-files.sh --check-only
 bin="${CARGO_TARGET_DIR:-$root/target}/${RVT_BUILD_PROFILE:-ci}"
 "$bin/gen-fixture" codespace --classes Wall,Level,Project,Column,Door \
   --element-count 25 --year 2024 --output "$evidence/smoke.rvt"
+.venv/bin/python - "$evidence/smoke.rvt" >"$evidence/python.json" <<'PY'
+import json, rvt, sys
+model = rvt.RevitFile(sys.argv[1])
+assert model.version == 2024, model.version
+assert not model.missing_required_streams(), model.missing_required_streams()
+print(json.dumps({"version": model.version, "streams": model.stream_names(), "schema": model.schema_summary()}))
+PY
 "$bin/rvt-inspect" "$evidence/smoke.rvt" >"$evidence/inspect.txt"
 "$bin/rvt-info" "$evidence/smoke.rvt" >"$evidence/info.txt"
 "$bin/rvt-ifc" "$evidence/smoke.rvt" -o "$evidence/smoke.ifc" \

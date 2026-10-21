@@ -25,6 +25,7 @@ Each assistant has its own account sign-in, permissions and chat history.
 
 The native build uses `profile.ci` (no release LTO); WASM uses `--dev`.
 Cargo and Rayon default to two jobs in the container and SSH login shell.
+Node's feature installs npm 12.2.0; pnpm comes only from the repository pin.
 The wasm-pack 0.14.0 pin and Python hash-locked requirements remain shared
 with Cursor setup. No corpus downloads, prebuild fleet or unit tests run.
 The image digest and assistant CLI snapshots are deliberate reproducibility
@@ -37,6 +38,8 @@ Post-create logs, CLI outputs and a browser screenshot are under
 Failures preserve their logs and fail setup. To inspect one, use `less` or
 `sed -n '1,160p' <log>`. A resume only checks the environment and binding;
 it does not reinstall, rebuild or start a server.
+Bootstrap output is also recorded directly in the visible creation terminal,
+with the command's exit status preserved.
 
 ## Terminal and SSH
 

@@ -32,7 +32,7 @@ try {
   await page.goto(url);
   await page.locator('input[type=file]').setInputFiles(path.join(evidence, 'smoke.rvt'));
   await page.getByText(/Opened Revit 2024/).waitFor({ timeout: 120_000 });
-  await page.screenshot({ path: path.join(evidence, 'viewer-smoke.png'), fullPage: true });
+  await page.screenshot({ path: path.join(evidence, 'viewer-smoke.png'), fullPage: true, animations: 'disabled' });
   await writeFile(path.join(evidence, 'browser.json'), JSON.stringify({
     url, title: await page.title(), text: await page.locator('body').innerText(), errors,
     fixture: 'Synthetic, scaffold-only; does not validate real Revit geometry',

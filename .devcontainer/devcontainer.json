@@ -6,7 +6,11 @@
       "version": "stable",
       "profile": "minimal"
     },
-    "ghcr.io/devcontainers/features/node:1": { "version": "24" },
+    "ghcr.io/devcontainers/features/node:2": {
+      "version": "24",
+      "npmVersion": "12.2.0",
+      "pnpmVersion": "none"
+    },
     "ghcr.io/devcontainers/features/github-cli:1": {},
     "ghcr.io/devcontainers/features/sshd:1": { "version": "latest" }
   },
