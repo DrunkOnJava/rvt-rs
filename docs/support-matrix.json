@@ -700,6 +700,15 @@
       "evidence": "src/ifc/mod.rs SourceCoverageDiagnostics::measure; docs/export-diagnostics.md",
       "notes": "A10: exported/geometry fractions measured from diagnostics counts; decoded_element_fraction divides by the distinct ElementIds Global/ElemTable declares, only when walker ≤ that count (fail closed otherwise); the header element_count it used before 2026-09-22 is a per-release constant. Not converter-grade completeness.",
       "user_impact": "Diagnostics sidecar reports honest measured fractions when denominators exist; otherwise unset/null."
+    },
+    {
+      "id": "native-element-parameters",
+      "area": "parameters",
+      "name": "An element's saved parameters, named by the file's definitions, in rvt-elements and Python (RE-207)",
+      "status": "partial",
+      "evidence": "native_element_parameters::read / ElementParameters::json_entries; native_parameter_definitions::project (ParamDefFamType as ElementId); rvt-elements and rvt-py decoded_elements; tests/element_parameters.rs (RVT_NORDIC_LCA_DIR, RVT_PROJECT_CORPUS_DIR/r2025); examples/probe_re207_element_parameters.rs; tools/re/element_parameters_vs_ifc.py; reports/element-framing/RE-207-element-parameters.md",
+      "notes": "Revit 2023 to 2027 files. Each element's parameters are read from its native record (native_document::extract): its typed parameter sets (m_pParamValueSet*), the family slots of its own FamilyParams (FamilyInstance.m_pInstParams, FamilySymbol.m_pParams) a definition resolves, and the native fields read as built-in parameters. A parameter is named by its definition's m_caption (family, shared, project and global parameters); built-in parameters keep their negative id and no name, since the built-in catalog is not shipped (#255). A family instance's type (m_masterSymbolId) adds the type parameters the instance does not hold; a family parameter whose definition is an instance parameter is taken from the instance only. Values are saved, not evaluated, in internal units, with the SI value of a length, area, volume or angle. Measured against Revit's own IFC4 exports: on the BIM4LCA office (Revit 2024) every parameter named <set>.<property> whose property Revit writes on the element holds Revit's value, 7,606 of 7,606 as built and 7,592 of 7,592 at building permit; the housing on terrain 27 of 27; on the R2025 models a window's FireRating is its type's Fire Rating, 18 of 18. Exports made without Revit's own property sets do not show the other parameters, so their values are not measured. Not read: a family's built-in slots (a window type's Width and Height), a wall's or floor's type parameters, formulas' evaluated values. Nothing new is written to IFC.",
+      "user_impact": "Scripts and the CLI can read the family, shared and project parameters a Revit 2023 to 2027 model saves on each element and its type, by name, with units."
     }
   ]
 }

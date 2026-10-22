@@ -85,7 +85,9 @@ other recovery claim is measured against the oracle its report names, Revit's
 own IFC export of the same file wherever one exists; the measured tables are in the
 [README](../README.md#what-rvt-rs-reads-from-real-projects) and the four
 levels a file can reach (opened, elements identified, geometry, properties)
-are in the [supported profile](supported-profile.md).
+are in the [supported profile](supported-profile.md). On Revit 2023 to 2027
+files, `rvt-elements` and Python also list each element's saved parameters,
+named where the file defines them (RE-207); most are not written to IFC.
 
 It is not a converter for arbitrary models: most parameters, family
 geometry (except the experimental `--saved-meshes` option, which draws a
@@ -674,6 +676,22 @@ Revit's area (`reports/element-framing/RE-99-shaft-openings.md`).
 the arc layout with both angles 0), which gives round shaft 903725 its
 outline; 154 of Snowdon's slabs now match Revit's area within 0.1%
 (`reports/element-framing/RE-100-sketch-circles.md`).
+
+**RE-207 (2026-10-22)** lists each element's saved parameters in
+`rvt-elements` and Python's `decoded_elements()`, on Revit 2023 to 2027
+files (#35). They are read from the element's native record: its typed
+parameter sets, the family slots of its own `FamilyParams` that a
+definition resolves, and the native fields read as built-in parameters,
+each named by the file's own definition (family, shared, project and
+global parameters). A family instance's type adds the type parameters the
+instance does not hold. On the BIM4LCA office every parameter named
+`<set>.<property>` holds the value Revit's export writes for that property
+on the element, 7,606 of 7,606 as built and 7,592 of 7,592 at building
+permit, and on the R2025 models a window's `FireRating` is its type's `Fire
+Rating`, 18 of 18 (`reports/element-framing/RE-207-element-parameters.md`).
+Built-in parameters have no name (the built-in catalog is not shipped,
+#255), a family's built-in slots such as a window type's Width are not
+resolved, and nothing new is written to IFC.
 
 The public viewer's demo gallery leads with the two files this section
 measures, staged from the deploy workflow's `magnetar-io/revit-test-datasets`
