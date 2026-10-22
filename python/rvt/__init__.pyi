@@ -60,6 +60,13 @@ Keys:
 - ``byte_range`` (dict[str, int]): ``start`` and ``end`` offsets in
   decompressed stream bytes.
 - ``fields`` (list[TypedField]): decoded schema fields.
+- ``parameters`` (list[dict]): AProperty* value carriers, then, on Revit
+  2023 to 2027 files, the saved parameters of the element and its type,
+  as ``rvt-elements`` lists them: ``name`` (str | None), ``parameter_id``
+  (int), ``kind``, ``storage_type``, ``spec_type_id``, ``group_type_id``,
+  ``value`` (internal units), ``si_value`` / ``si_unit``, ``target_name``,
+  ``target_family``, ``level`` (``"instance"`` or ``"type"``),
+  ``source_element_id`` and ``source_class`` (#35, RE-207).
 - ``typed`` (dict | None): Lane Five MVP projection for Level / Wall /
   Floor / Door / Window / Room / Material; ``None`` for other classes.
 """

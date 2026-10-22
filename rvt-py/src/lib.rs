@@ -178,6 +178,7 @@ fn set_instance_field_items(
 fn decoded_element_to_dict<'py>(
     py: Python<'py>,
     element: &walker::DecodedElement,
+    saved: &rvt::native_element_parameters::ElementParameters,
 ) -> PyResult<Bound<'py, PyDict>> {
     let d = PyDict::new(py);
     match element.id {
@@ -200,12 +201,16 @@ fn decoded_element_to_dict<'py>(
     }
     d.set_item("fields", fields)?;
 
-    // #35 — AProperty* values when this row is a value carrier; empty
-    // for host elements until host↔parameter joins recover.
+    // #35 — AProperty* values when this row is a value carrier, then the
+    // saved parameters of its native record and its type's (RE-207).
     let params = PyList::empty(py);
-    for entry in elements::parameters::parameter_entries_from_decoded(element) {
+    for entry in elements::parameters::parameter_entries_from_decoded(element)
+        .iter()
+        .map(|entry| entry.to_json_value())
+        .chain(saved.json_entries(element.id))
+    {
         let json_module = py.import("json")?;
-        let entry_json = serde_json::to_string(&entry.to_json_value()).map_err(to_py_val)?;
+        let entry_json = serde_json::to_string(&entry).map_err(to_py_val)?;
         let entry_obj = json_module.call_method1("loads", (entry_json,))?;
         params.append(entry_obj)?;
     }
@@ -587,7 +592,7 @@ impl PyRevitFile {
     /// Conservative production decoded elements as Python dicts.
     ///
     /// Each element has `id`, `class_name`, `byte_range`, `fields`,
-    /// and `typed`. The fields use the same `name` / `kind` shape as
+    /// `parameters` (as `rvt-elements` lists them) and `typed`. The fields use the same `name` / `kind` shape as
     /// `read_adocument()`. `typed` is a Lane Five MVP projection
     /// (`Level` / `Wall` / `Floor` / `Door` / `Window` / `Room` /
     /// `Material`) or `None` for other classes.
@@ -600,9 +605,32 @@ impl PyRevitFile {
         .map_err(to_py_val)?
         .collect();
 
+        // Revit 2023 to 2027 only; a file whose parameters cannot be read
+        // keeps its elements, with a warning.
+        let ids = elements
+            .iter()
+            .filter_map(|e| e.id)
+            .map(u64::from)
+            .collect();
+        let saved = match rvt::native_element_parameters::read(&mut self.inner, &ids) {
+            Ok(saved) => saved,
+            Err(error) => {
+                let message =
+                    std::ffi::CString::new(format!("saved parameters not read: {error:#}"))
+                        .unwrap_or_default();
+                PyErr::warn(
+                    py,
+                    &py.get_type::<pyo3::exceptions::PyUserWarning>(),
+                    &message,
+                    1,
+                )?;
+                Default::default()
+            }
+        };
+
         let out = PyList::empty(py);
         for element in &elements {
-            out.append(decoded_element_to_dict(py, element)?)?;
+            out.append(decoded_element_to_dict(py, element, &saved)?)?;
         }
         Ok(out)
     }
