@@ -45,7 +45,7 @@ fn split_args(args: &str) -> Vec<String> {
 }
 
 /// Decode a STEP string literal's `\X\hh` and `\X2\hhhh…\X0\` escapes.
-fn decode_step_string(raw: &str) -> String {
+pub(crate) fn decode_step_string(raw: &str) -> String {
     let mut out = String::new();
     let mut rest = raw;
     while let Some(at) = rest.find('\\') {
