@@ -100,6 +100,7 @@ impl ElementDecoder for CeilingTypeDecoder {
 
 /// Typed view of a decoded Ceiling instance.
 #[derive(Debug, Clone, PartialEq, Default)]
+#[non_exhaustive]
 pub struct Ceiling {
     pub level_id: Option<u32>,
     /// Offset from the host level. Typically negative (ceiling is
@@ -140,6 +141,7 @@ impl Ceiling {
 
 /// Typed view of a decoded CeilingType.
 #[derive(Debug, Clone, PartialEq, Default)]
+#[non_exhaustive]
 pub struct CeilingType {
     pub name: Option<String>,
     pub thickness_feet: Option<f64>,

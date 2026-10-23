@@ -14,7 +14,7 @@ It comes as command-line tools, a Rust library, Python bindings and a browser vi
 | Inspect or export files from the command line | The [installation guide](docs/install.md); prebuilt binaries are on [GitHub Releases](https://github.com/DrunkOnJava/rvt-rs/releases). |
 | Work with files in Python | The [Python guide](docs/python.md) (`pip install rvt`). |
 | Check what your file will give | [What you can rely on, by input](#what-you-can-rely-on-by-input) below, then the [user guide](docs/user-guide.md). |
-| Use the Rust library | [Library surface](#library-surface) below and the [API documentation](https://docs.rs/rvt). |
+| Use the Rust library | The [examples](examples/README.md) (open a file, list its elements, export it), [Library surface](#library-surface) below and the [API documentation](https://docs.rs/rvt). |
 | Ask a question, report a problem or contribute | [Discussions](https://github.com/DrunkOnJava/rvt-rs/discussions) for questions, and the [contribution guide](CONTRIBUTING.md) for everything else. |
 
 ## Support and evidence
@@ -252,6 +252,8 @@ Revit files, Autodesk's shipped samples among them, can carry authoring metadata
 
 ## Library surface
 
+Three runnable examples show the library end to end: [`basics_inspect`](examples/basics_inspect.rs) reads what a file is, [`basics_elements`](examples/basics_elements.rs) lists its building elements by IFC type with their ElementIds, and [`basics_export`](examples/basics_export.rs) writes IFC4, glTF, a CSV schedule and the export diagnostics. `cargo run --example basics_inspect -- model.rvt` runs one on your file, and CI runs all three on the synthetic project the repository ships and on a real one, Einhoven (MIT). The other programs under `examples/` are research probes ([`examples/README.md`](examples/README.md)).
+
 All modules build for native targets and for `wasm32-unknown-unknown`, which the `rvt-wasm` crate compiles for the browser viewer. The type documentation is on [docs.rs](https://docs.rs/rvt):
 
 | Module | What it does |
@@ -274,7 +276,7 @@ All modules build for native targets and for `wasm32-unknown-unknown`, which the
 | `ifc` | Full IFC4 spatial tree + elements + materials + properties + openings + extrusion geometry + glTF 2.0 binary (`gltf::model_to_glb`) + plan-view SVG (`sheet::render_plan_svg`) + viewer data model (`scene_graph`, `camera`, `clipping`, `sheet`, `share`, `measure`, `annotation`, `pbr`) |
 | `streams` | Named constants for every invariant OLE stream in a Revit file |
 | `redact` | Shared PII scrubbers for all CLIs (`--redact` flag) |
-| (`rvt-wasm` crate) | the 14 JS-callable wasm-bindgen bindings powering the browser viewer, a crate of its own so `rvt` builds as a plain `rlib` |
+| (`rvt-wasm` crate) | the 22 JS-callable wasm-bindgen bindings powering the browser viewer ([`docs/viewer-api.md`](docs/viewer-api.md#the-javascript-bindings)), a crate of its own so `rvt` builds as a plain `rlib` |
 | `error` | Structured error type (`Error` / `Result`) |
 
 Runtime capabilities:

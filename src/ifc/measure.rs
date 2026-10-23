@@ -127,6 +127,7 @@ pub fn polygon_perimeter(points: &[Point3]) -> f64 {
 // Tracker: VW1-13.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
+#[non_exhaustive]
 pub enum Measurement {
     /// Linear distance between two points.
     Distance { a: Point3, b: Point3, value: f64 },

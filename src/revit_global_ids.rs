@@ -32,6 +32,7 @@
 //! element's first one: an element whose id has since changed (RE-41) keeps
 //! the id it was created with in its UniqueId.
 
+use crate::le_bytes;
 use crate::{Result, RevitFile, compression, elem_table, streams};
 use std::collections::BTreeMap;
 
@@ -58,22 +59,17 @@ pub struct EpisodeHistory {
     guids: Vec<[u8; 16]>,
 }
 
-fn read_u32(buf: &[u8], at: usize) -> Option<u32> {
-    buf.get(at..at.checked_add(4)?)
-        .map(|s| u32::from_le_bytes(s.try_into().expect("4 bytes")))
-}
-
 impl EpisodeHistory {
     /// Parse a decompressed `Global/History`, or `None` when its counts
     /// disagree, a count runs past the stream, or an entry is not closed by
     /// [`EPISODE_TERMINATOR`].
     pub fn parse(history: &[u8]) -> Option<Self> {
-        let count = read_u32(history, EPISODE_COUNT_OFFSET)? as usize;
-        let skipped = read_u32(history, EPISODE_TABLE_OFFSET)? as usize;
+        let count = le_bytes::u32_at(history, EPISODE_COUNT_OFFSET)? as usize;
+        let skipped = le_bytes::u32_at(history, EPISODE_TABLE_OFFSET)? as usize;
         let list_count_at = EPISODE_TABLE_OFFSET
             .checked_add(4)?
             .checked_add(skipped.checked_mul(4)?)?;
-        if read_u32(history, list_count_at)? as usize != count {
+        if le_bytes::u32_at(history, list_count_at)? as usize != count {
             return None;
         }
         let start = list_count_at + 4;
@@ -220,7 +216,7 @@ pub fn revit_global_ids(rf: &mut RevitFile) -> Result<BTreeMap<u32, String>> {
     };
     let mut out = BTreeMap::new();
     for record in &records {
-        let Some(episode) = read_u32(&record.raw, episode_offset) else {
+        let Some(episode) = le_bytes::u32_at(&record.raw, episode_offset) else {
             continue;
         };
         let Some(guid) = history.episode_guid(episode) else {

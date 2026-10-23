@@ -14,8 +14,7 @@
       "properties": {
         "start": { "type": "integer", "minimum": 0 },
         "end": { "type": "integer", "minimum": 0 }
-      },
-      "additionalProperties": false
+      }
     },
     "field": {
       "type": "object",
@@ -65,8 +64,7 @@
           "type": ["object", "null"],
           "additionalProperties": true
         }
-      },
-      "additionalProperties": false
+      }
     },
     "provenance": {
       "type": "object",
@@ -93,8 +91,7 @@
           "type": "array",
           "items": { "type": "string" }
         }
-      },
-      "additionalProperties": false
+      }
     }
   }
 }
