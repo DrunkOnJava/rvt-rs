@@ -80,9 +80,7 @@ impl EpisodeHistory {
             if entry[16] != EPISODE_TERMINATOR {
                 return None;
             }
-            let Some(guid) = entry.first_chunk::<16>() else {
-                return None;
-            };
+            let guid = entry.first_chunk::<16>()?;
             guids.push(*guid);
         }
         Some(Self { guids })

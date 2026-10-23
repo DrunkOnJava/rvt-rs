@@ -184,7 +184,7 @@ pub fn find_room_parameters(
     // the set lookup.
     let (low, high) = (u64::from(low), u64::from(high));
     for owner_at in 0..=(buf.len() - 8) {
-        let Some(raw) = crate::le_bytes::u64_at(buf, owner_at) else {
+        let Some(raw) = le_bytes::u64_at(buf, owner_at) else {
             continue;
         };
         if raw == 0 || raw < low || raw > high {
@@ -338,7 +338,7 @@ pub fn enclosing_data_object(buf: &[u8], at: usize) -> Option<u32> {
 /// where [`enclosing_data_object`] would be called for many offsets of one
 /// buffer, each a backward search of up to [`DATA_OBJECT_SEARCH`] bytes.
 pub fn data_objects(buf: &[u8]) -> Vec<(usize, DataObject)> {
-    let u32_at = |p: usize| crate::le_bytes::u32_at(buf, p).unwrap_or(0);
+    let u32_at = |p: usize| le_bytes::u32_at(buf, p).unwrap_or(0);
     let mut out = Vec::new();
     let mut p = 0;
     while p + DATA_OBJECT_HEADER <= buf.len() {
