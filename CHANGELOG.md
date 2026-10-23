@@ -127,24 +127,6 @@ All notable changes will be documented here. This project follows
 
 ### Changed
 
-- **Breaking: the stable API's output types are `#[non_exhaustive]`.** All
-  62 public enums of the stable modules and the 175 public structs whose
-  fields are all public, so a release can add a variant or a field without
-  breaking code that uses them. A `match` on one of these enums needs a
-  wildcard arm, and these structs can no longer be built with a struct
-  literal outside the crate. The 33 structs code outside the crate builds
-  stay as they were: the options and limits (`OpenLimits`, `WalkerLimits`,
-  `CsvOptions`, `StepOptions`, ...), the bridge's inputs (`ElementInput`,
-  `BuilderOptions`, `Storey`, `MaterialInfo`, `StreamPatch`), and the few
-  output types the tests construct (`DecodedElement`, `IfcModel`, `Wall`,
-  `ClassEntry`, ...).
-
-- **The API docs are written for someone outside the project.** Backlog
-  and task ids (`B55`, `VW1-13`, `SEC-12`, "Lane Six", "Phase 1") are gone
-  from the rustdoc text; where one was a citation it is kept in a
-  `// Tracker:` comment beside the item. The crate root says what `RE-NN`
-  and `#NNN` refer to, and CI checks that every RE finding the docs cite has
-  a report. The `ifc` module's overview, which still described per-element
 - **Breaking: `Error` is `#[non_exhaustive]`, and says what failed.** A
   `match` on it now needs a wildcard arm, so later variants are not breaking
   changes. Failures that were reported as `Error::BasicFileInfo` or
@@ -161,6 +143,18 @@ All notable changes will be documented here. This project follows
   `ADocument`. The other variants and their messages are unchanged. In
   Python, `RevitFile.read_adocument()` raises `ValueError`, where it raised
   `OSError`, for a file whose schema declares no `ADocument`.
+
+- **Breaking: the stable API's output types are `#[non_exhaustive]`.** All
+  62 public enums of the stable modules and the 175 public structs whose
+  fields are all public, so a release can add a variant or a field without
+  breaking code that uses them. A `match` on one of these enums needs a
+  wildcard arm, and these structs can no longer be built with a struct
+  literal outside the crate. The 33 structs code outside the crate builds
+  stay as they were: the options and limits (`OpenLimits`, `WalkerLimits`,
+  `CsvOptions`, `StepOptions`, ...), the bridge's inputs (`ElementInput`,
+  `BuilderOptions`, `Storey`, `MaterialInfo`, `StreamPatch`), and the few
+  output types the tests construct (`DecodedElement`, `IfcModel`, `Wall`,
+  `ClassEntry`, ...).
 
 - **The API docs are written for someone outside the project.** Backlog
   and task ids (`B55`, `VW1-13`, `SEC-12`) and work-plan labels ("Lane C",
