@@ -80,6 +80,9 @@ def main():
     model = ifcopenshell.open(args.reference)
     elements = {}
     for product in model.by_type("IfcProduct"):
+        # An opening carries its host's Tag.
+        if product.is_a("IfcOpeningElement"):
+            continue
         tag = getattr(product, "Tag", None)
         if tag and str(tag).isdigit():
             elements[int(tag)] = product.GlobalId
