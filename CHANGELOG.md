@@ -27,6 +27,8 @@ All notable changes will be documented here. This project follows
   puzzbobb's R2025 models a window's `Pset_WindowCommon.FireRating` is its
   type's `Fire Rating`, 18 of 18. `tools/re/element_parameters_vs_ifc.py`
   scores either output against Revit's export. Nothing new is written to IFC.
+  The library gives the same entries through
+  `elements::parameters::saved_parameters_lossy`.
 
 - **Each GitHub release carries the CLI archives' build provenance as a
   file (#891).** The release workflow already attested the archives; the

@@ -121,15 +121,11 @@ fn run(cli: Cli) -> anyhow::Result<()> {
     }
 
     // Revit 2023 to 2027 only; other files keep their AProperty* entries.
-    let ids = elements
-        .iter()
-        .filter_map(|e| e.id)
-        .map(u64::from)
-        .collect();
-    let saved = rvt::native_element_parameters::read(&mut rf, &ids).unwrap_or_else(|error| {
-        eprintln!("warning: saved parameters not read: {error:#}");
-        Default::default()
-    });
+    let saved = rvt::elements::parameters::saved_parameters_lossy(&mut rf, &elements);
+    for warning in &saved.diagnostics.warnings {
+        eprintln!("warning: {}", warning.message);
+    }
+    let saved = saved.value;
 
     let out: Vec<ElementOut> = elements
         .iter()
@@ -154,7 +150,7 @@ fn run(cli: Cli) -> anyhow::Result<()> {
                 parameters: rvt::elements::parameters::parameter_entries_from_decoded(element)
                     .iter()
                     .map(|e| e.to_json_value())
-                    .chain(saved.json_entries(element.id))
+                    .chain(saved.entries_for(element))
                     .collect(),
                 provenance: element.provenance.to_json_value(),
                 typed,

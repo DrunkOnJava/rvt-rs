@@ -74,7 +74,7 @@
       "additionalProperties": false
     },
     "savedParameter": {
-      "description": "native_element_parameters::ElementParameter: one saved value, in Revit's internal units, named by its definition's caption (null for a built-in or undefined id).",
+      "description": "research::native_element_parameters::ElementParameter: one saved value, in Revit's internal units, named by its definition's caption (null for a built-in or undefined id).",
       "type": "object",
       "required": [
         "name",

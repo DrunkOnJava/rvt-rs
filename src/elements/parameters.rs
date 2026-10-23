@@ -539,6 +539,51 @@ pub fn parameter_entries_from_decoded(decoded: &DecodedElement) -> Vec<Parameter
     }]
 }
 
+/// The saved parameters of a set of decoded elements, read by
+/// [`saved_parameters_lossy`].
+#[derive(Debug, Default)]
+pub struct SavedParameters {
+    read: crate::native_element_parameters::ElementParameters,
+}
+
+impl SavedParameters {
+    /// An element's saved parameters, as the JSON entries `rvt-elements` and
+    /// Python's `decoded_elements()` list after its AProperty* entries
+    /// (`docs/schemas/decoded-elements.schema.json`). None for an element with
+    /// no id, or one whose parameters were not read.
+    pub fn entries_for(&self, element: &DecodedElement) -> Vec<serde_json::Value> {
+        self.read.json_entries(element.id)
+    }
+}
+
+/// Read the saved parameters of `elements`: on a Revit 2023 to 2027 file, the
+/// values each element's native record saves, named by the file's own
+/// parameter definitions, with a family instance's type values after its own
+/// (RE-207). An older file's elements have none. When the file's parameters
+/// cannot be read, every element has none and the diagnostics carry a
+/// `saved-parameters-unread` warning.
+pub fn saved_parameters_lossy(
+    file: &mut crate::RevitFile,
+    elements: &[DecodedElement],
+) -> crate::parse_mode::Decoded<SavedParameters> {
+    let ids = elements
+        .iter()
+        .filter_map(|e| e.id)
+        .map(u64::from)
+        .collect();
+    match crate::native_element_parameters::read(file, &ids) {
+        Ok(read) => crate::parse_mode::Decoded::complete(SavedParameters { read }),
+        Err(error) => {
+            let mut diagnostics = crate::parse_mode::Diagnostics::default();
+            diagnostics.warn(crate::parse_mode::Warning::new(
+                "saved-parameters-unread",
+                format!("saved parameters not read: {error:#}"),
+            ));
+            crate::parse_mode::Decoded::partial(SavedParameters::default(), diagnostics)
+        }
+    }
+}
+
 fn vector_to_f64_3(components: &[InstanceField]) -> Option<[f64; 3]> {
     if components.len() < 3 {
         return None;

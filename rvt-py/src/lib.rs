@@ -178,7 +178,7 @@ fn set_instance_field_items(
 fn decoded_element_to_dict<'py>(
     py: Python<'py>,
     element: &walker::DecodedElement,
-    saved: &rvt::native_element_parameters::ElementParameters,
+    saved: &elements::parameters::SavedParameters,
 ) -> PyResult<Bound<'py, PyDict>> {
     let d = PyDict::new(py);
     match element.id {
@@ -207,7 +207,7 @@ fn decoded_element_to_dict<'py>(
     for entry in elements::parameters::parameter_entries_from_decoded(element)
         .iter()
         .map(|entry| entry.to_json_value())
-        .chain(saved.json_entries(element.id))
+        .chain(saved.entries_for(element))
     {
         let json_module = py.import("json")?;
         let entry_json = serde_json::to_string(&entry).map_err(to_py_val)?;
@@ -614,26 +614,17 @@ impl PyRevitFile {
 
         // Revit 2023 to 2027 only; a file whose parameters cannot be read
         // keeps its elements, with a warning.
-        let ids = elements
-            .iter()
-            .filter_map(|e| e.id)
-            .map(u64::from)
-            .collect();
-        let saved = match rvt::native_element_parameters::read(&mut self.inner, &ids) {
-            Ok(saved) => saved,
-            Err(error) => {
-                let message =
-                    std::ffi::CString::new(format!("saved parameters not read: {error:#}"))
-                        .unwrap_or_default();
-                PyErr::warn(
-                    py,
-                    &py.get_type::<pyo3::exceptions::PyUserWarning>(),
-                    &message,
-                    1,
-                )?;
-                Default::default()
-            }
-        };
+        let saved = elements::parameters::saved_parameters_lossy(&mut self.inner, &elements);
+        for warning in &saved.diagnostics.warnings {
+            let message = std::ffi::CString::new(warning.message.as_str()).unwrap_or_default();
+            PyErr::warn(
+                py,
+                &py.get_type::<pyo3::exceptions::PyUserWarning>(),
+                &message,
+                1,
+            )?;
+        }
+        let saved = saved.value;
 
         let out = PyList::empty(py);
         for element in &elements {
