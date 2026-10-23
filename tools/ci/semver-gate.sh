@@ -71,9 +71,10 @@ if grep -vxF -f head-api.txt base-api.txt > removed-api.txt; then
 fi
 
 # The other stable surfaces (RELEASE.md, "What 1.0 keeps stable"), each
-# against the base's: the wasm bindings the viewer calls, and the JSON the
-# CLIs and the Python package print. Exit 100 is a verdict, anything else a
-# check that could not run.
+# against the base's: the wasm bindings the viewer calls, the Python
+# package's type stubs (which CI's stubtest holds to the built wheel), and
+# the JSON the CLIs and the Python package print. Exit 100 is a verdict,
+# anything else a check that could not run.
 surface() {
     "$@"
     case $? in
@@ -88,8 +89,10 @@ surface() {
 work="${RUNNER_TEMP:-/tmp}/semver-surfaces"
 mkdir -p "$work/base"
 git show "$BASE:rvt-wasm/src/lib.rs" > "$work/base-wasm.rs" || exit 1
+git show "$BASE:python/rvt/__init__.pyi" > "$work/base-stubs.pyi" || exit 1
 git archive "$BASE" docs/schemas | tar -x -C "$work/base" || exit 1
 surface python3 tools/ci/wasm-api.py compat "$work/base-wasm.rs" rvt-wasm/src/lib.rs
+surface python3 tools/ci/python-api-compat.py "$work/base-stubs.pyi" python/rvt/__init__.pyi
 surface python3 tools/ci/schema-compat.py "$work/base/docs/schemas" docs/schemas
 
 if [ "$breaking" -eq 0 ]; then

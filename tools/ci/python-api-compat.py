@@ -12,7 +12,8 @@ default, or when an `@overload` the base offered is gone. A positional-only
 parameter is matched by its place, and `*args` and `**kwargs` by their role,
 since no caller can name them. An explicit re-export (`from m import X as X`)
 is a public name, and a key gone from a TypedDict (a returned dict's shape) a
-removed one. Exits 1 when there is any.
+removed one. Exits 100 when there is any, so that a crash (exit 1) is not a
+verdict.
 """
 
 import ast
@@ -162,5 +163,5 @@ if __name__ == "__main__":
     for line in found:
         print(f"breaking: {line}")
     if found:
-        sys.exit(1)
+        sys.exit(100)
     print("The Python API has no breaking change against the base.")
