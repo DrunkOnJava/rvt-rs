@@ -127,6 +127,18 @@ All notable changes will be documented here. This project follows
 
 ### Changed
 
+- **Breaking: `Error` is `#[non_exhaustive]`, and says what failed.** A
+  `match` on it now needs a wildcard arm, so later variants are not breaking
+  changes. Failures that were reported as `Error::BasicFileInfo` or
+  `Error::Cfb` although they had nothing to do with either now have their
+  own variants: `SchemaMismatch { decoder, schema }` for a typed decoder
+  given another class's schema (was "...Decoder received wrong schema"),
+  `NoDecoder` for a class with no typed decoder, `MissingClass` for a
+  schema with no `ADocument`, and `Malformed { what, detail }` for an
+  ArcWall or opening-index record, an `ADocument` or a `Global/ElemTable`
+  that does not have the shape its reader expects. Every variant is
+  documented. The other variants and their messages are unchanged.
+
 - **Breaking: the research readers moved to `rvt::research`, behind the
   `unstable-research` feature (#873).** The crate's API is now 27 stable
   modules (reading and identity, typed elements and the element walk,
