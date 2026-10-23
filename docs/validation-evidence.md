@@ -50,8 +50,8 @@ write:
    Revit's IFC export of Core Interior and must report the counts rvt-rs is
    gated against. The verdict of the three witnesses (rvt-rs reading the
    `.rvt`, the two readers reading Revit's `.ifc`) must pass on the claimed
-   surface, and the fresh observations must replay byte for byte against
-   the ones committed under `research/witness/`
+   surface, and each fresh observation's canonical payload hash must equal
+   the `observation_hash_sha256` committed under `research/witness/`
    ([`verification-protocol.md`](verification-protocol.md)).
 6. **Predefined types and placements match Revit's.** On the Core Interior
    export, every `PredefinedType` written must be one of the values Revit's

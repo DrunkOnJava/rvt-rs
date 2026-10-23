@@ -212,8 +212,8 @@ corpus (MIT, git-LFS); without it, each sub-benchmark emits a
 - **Medium-corpus coverage but no large-corpus coverage yet.** The
   project_file suite covers 913 KB and 34 MB project files. 50 MB+ fixtures
   remain open; contributions welcome.
-- **No per-class decode benchmark.** The 81 schema decoders are validated
-  against synthesized schema and bytes, and no benchmark times them. A real
+- **No per-class decode benchmark.** No benchmark times the 81 schema
+  decoders, and no test CI runs exercises most of them. A real
   project's elements come from its partition element records, and no
   benchmark times reading those either: the `project_file` suite times
   opening the file, the summary, the schema, the ElemTable and the

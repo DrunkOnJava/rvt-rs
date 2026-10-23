@@ -387,8 +387,8 @@ Honest boundary of what rvt-rs can demonstrate today:
 - **Every project, exactly** — Revit 2023, 2024 and 2025 projects export
   typed elements measured against Revit's own exports: on 2024 and 2025
   with geometry measured per category, on 2023 as their boxes, cut back
-  at wall joins and column faces (Demo 4's Core Interior run, and the
-  README's "What rvt-rs reads from real projects"). 2015 to 2022, 2026 and
+  at wall joins and column faces (the README's "What rvt-rs reads from
+  real projects"). 2015 to 2022, 2026 and
   2027 export experimentally. Where an
   element's bytes are not decoded, its body is its record's bounding box,
   and the export diagnostics say so.

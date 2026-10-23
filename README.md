@@ -189,7 +189,7 @@ The deploy workflow (`.github/workflows/deploy-viewer.yml`) checks the viewer's 
 
 ### Supported MVP workflow
 
-The supported end-to-end shell (issue M11-02) is intentionally honest about partial decode:
+The supported end-to-end shell is intentionally honest about partial decode:
 
 1. Open a supported Revit file locally (drop, file picker, or a redistributable gallery demo).
 2. Read the File status / confidence panel before trusting geometry.

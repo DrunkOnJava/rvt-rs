@@ -43,7 +43,7 @@ second (RVT → DWG) edge is still pending a Revit export session.
 
 **Research program pointer:** the
 [unified research report](research/unified-research-report.md) (rev 1.1)
-sets out the research on remapping ES ElementIds (H-ES5), whose fixtures
+sets out the research on remapping ES ElementIds, whose fixtures
 need a Revit-hosted API oracle that CI does not have.
 ES remapping is **not** a shipped capability; default IFC omits ES edges.
 Coordination mirror: [Discussion #112 notes](disc-112-coordination.md).
