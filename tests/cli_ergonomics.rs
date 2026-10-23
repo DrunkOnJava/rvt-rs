@@ -50,6 +50,11 @@ fn gltf_and_sheet_write_next_to_a_positional_input() {
     assert!(out.status.success(), "{}", stderr(&out));
     let glb = std::fs::read(dir.join("model.glb")).expect("model.glb written");
     assert_eq!(&glb[..4], b"glTF");
+    assert_eq!(
+        u32::from_le_bytes([glb[4], glb[5], glb[6], glb[7]]),
+        2,
+        "a glTF 2.0 binary container"
+    );
 
     let out = run(env!("CARGO_BIN_EXE_rvt-sheet"), &[input.as_os_str()]);
     assert!(out.status.success(), "{}", stderr(&out));

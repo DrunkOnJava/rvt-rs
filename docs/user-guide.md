@@ -222,6 +222,43 @@ where its outline was read from the solid Revit stores for it (RE-101); a
 room that keeps its bounding box has an empty area, since the area of a box
 is not the area of a room.
 
+The columns, in order. Lengths are in feet; with `--metric` they are in
+metres and `_ft` in a column's name becomes `_m`. A later release may add
+columns after these, but will not rename, drop or reorder one without
+calling it a breaking change.
+
+<!-- element-columns -->
+| Column | What it holds |
+|---|---|
+| `revit_element_id` | The element's Revit ElementId |
+| `ifc_type` | The IFC entity it is exported as, such as `IfcWall` |
+| `predefined_type` | The IFC predefined type, where one is set |
+| `name` | The element's name |
+| `level` | The name of its level |
+| `level_elevation_ft` | That level's elevation |
+| `material` | Its material's name, or its materials' names separated by `; ` |
+| `x_ft` | Placement, x |
+| `y_ft` | Placement, y |
+| `z_ft` | Placement, z |
+| `rotation_deg` | Its rotation in plan, in degrees |
+| `width_ft` | Width of a body extruded from a rectangle |
+| `depth_ft` | Depth of a body extruded from a rectangle |
+| `height_ft` | Height of an extruded body |
+| `host_revit_element_id` | The ElementId of a door's or window's host |
+| `body_source` | Where the body came from, such as `saved_graphics_mesh` |
+| `profile_resolved` | `true` where its plan profile was read from its sketch, `false` where it was not |
+
+<!-- room-columns -->
+| Column | What it holds |
+|---|---|
+| `revit_element_id` | The room's Revit ElementId |
+| `number` | The room number |
+| `name` | The room name |
+| `level` | The name of its level |
+| `level_elevation_ft` | That level's elevation |
+| `area_ft2` | Plan area, where the room's outline was read |
+| `body_source` | Where the room's solid came from |
+
 What the schedules contain is exactly what rvt-rs decodes, so check
 `rvt-inspect model.rvt` first: Revit 2024 project files with element
 records give walls, doors, windows, columns, slabs and rooms; other files
