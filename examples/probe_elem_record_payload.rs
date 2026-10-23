@@ -131,7 +131,7 @@ fn detect_marker_len(raw: &[u8]) -> usize {
     }
 }
 
-fn dump_record(r: &rvt::elem_table::ElemRecord) {
+fn dump_record(r: &elem_table::ElemRecord) {
     print!(
         "    offset=0x{:x} id_primary={} id_secondary={} raw=[",
         r.offset, r.id_primary, r.id_secondary

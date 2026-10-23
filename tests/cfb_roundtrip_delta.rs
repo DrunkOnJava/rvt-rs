@@ -258,7 +258,7 @@ fn cfb_single_stream_patch_preserves_unpatched_sectors() -> Result<()> {
         // internal state that `cfb::open_rw`'s `create_stream`
         // touches incidentally (timestamps, state bits).
         let existing = {
-            let mut rf = rvt::RevitFile::open(&src)?;
+            let mut rf = RevitFile::open(&src)?;
             rf.read_stream(BASIC_FILE_INFO)?
         };
         let patch = StreamPatch {
@@ -319,7 +319,7 @@ fn cfb_patch_growing_stream_preserves_unpatched() -> Result<()> {
 
         // Snapshot the original PartAtom bytes to compare after patch.
         let (original_bfi, original_partatom) = {
-            let mut rf = rvt::RevitFile::open(&src)?;
+            let mut rf = RevitFile::open(&src)?;
             let bfi = rf.read_stream(BASIC_FILE_INFO)?;
             let pa = rf.read_stream(PART_ATOM)?;
             (bfi, pa)
@@ -336,7 +336,7 @@ fn cfb_patch_growing_stream_preserves_unpatched() -> Result<()> {
         write_with_patches(&src, &dst, &[patch])?;
 
         // (a) dst is openable as a Revit file.
-        let mut rw = rvt::RevitFile::open(&dst)?;
+        let mut rw = RevitFile::open(&dst)?;
 
         // (b) patched stream round-trips the grown content.
         let bfi_after = rw.read_stream(BASIC_FILE_INFO)?;
@@ -379,7 +379,7 @@ fn cfb_patch_shrinking_stream_preserves_unpatched() -> Result<()> {
         let dst = tmp.join(format!("shrink-{year}.rfa"));
 
         let (original_bfi, original_partatom) = {
-            let mut rf = rvt::RevitFile::open(&src)?;
+            let mut rf = RevitFile::open(&src)?;
             let bfi = rf.read_stream(BASIC_FILE_INFO)?;
             let pa = rf.read_stream(PART_ATOM)?;
             (bfi, pa)
@@ -397,7 +397,7 @@ fn cfb_patch_shrinking_stream_preserves_unpatched() -> Result<()> {
         };
         write_with_patches(&src, &dst, &[patch])?;
 
-        let mut rw = rvt::RevitFile::open(&dst)?;
+        let mut rw = RevitFile::open(&dst)?;
         let bfi_after = rw.read_stream(BASIC_FILE_INFO)?;
         assert_eq!(
             bfi_after, shrunk,
@@ -437,7 +437,7 @@ fn cfb_multi_stream_patch_preserves_rest() -> Result<()> {
         // Snapshot every stream's bytes before patching so we can
         // compare unpatched streams after.
         let all_streams: Vec<(String, Vec<u8>)> = {
-            let mut rf = rvt::RevitFile::open(&src)?;
+            let mut rf = RevitFile::open(&src)?;
             let names = rf.stream_names();
             let mut out = Vec::with_capacity(names.len());
             for name in names {
@@ -487,7 +487,7 @@ fn cfb_multi_stream_patch_preserves_rest() -> Result<()> {
         write_with_patches(&src, &dst, &patches)?;
 
         // Both patches must round-trip.
-        let mut rw = rvt::RevitFile::open(&dst)?;
+        let mut rw = RevitFile::open(&dst)?;
         assert_eq!(
             rw.read_stream(BASIC_FILE_INFO)?,
             new_bfi,

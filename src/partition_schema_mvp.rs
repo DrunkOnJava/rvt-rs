@@ -159,7 +159,7 @@ pub fn recover_partition_schema_mvp(
         attach_room_outlines(rf, revit_version, &mut out.rooms);
         // --- Storeys from the Levels the records name (RE-107), by the
         // same rules as 2024's (RE-59, RE-68) ---
-        let level_elevations: std::collections::BTreeMap<u32, f64> =
+        let level_elevations: BTreeMap<u32, f64> =
             crate::partition_level_records::recover_partition_levels(rf, revit_version)
                 .unwrap_or_default()
                 .iter()
@@ -293,7 +293,7 @@ pub fn recover_partition_schema_mvp(
     // --- Base constraints of elements naming two Levels (RE-59), then
     // railings by their host and elements by the Level objects they name
     // (RE-60) ---
-    let level_elevations: std::collections::BTreeMap<u32, f64> =
+    let level_elevations: BTreeMap<u32, f64> =
         crate::partition_level_records::recover_partition_levels(rf, revit_version)
             .unwrap_or_default()
             .iter()
@@ -778,8 +778,7 @@ fn attach_system_type_names(
         Ok(records) => crate::elem_table::declared_ids(&records),
         Err(_) => return,
     };
-    let mut type_ids_by_category: std::collections::BTreeMap<i64, BTreeSet<u32>> =
-        std::collections::BTreeMap::new();
+    let mut type_ids_by_category: BTreeMap<i64, BTreeSet<u32>> = BTreeMap::new();
     let mut picks: Vec<(usize, u32)> = Vec::new();
     for (index, element) in elements.iter().enumerate() {
         let Some((references, category)) = record_references(rf, element) else {
@@ -804,7 +803,7 @@ fn attach_system_type_names(
         })
         .filter_map(|(index, element)| Some((index, element.id?)))
         .collect();
-    let mut railing_names = std::collections::BTreeMap::new();
+    let mut railing_names = BTreeMap::new();
     if revit_version >= 2024 && !unpicked.is_empty() {
         let (railing_picks, names) = railing_type_picks(rf, &unpicked);
         picks.extend(railing_picks);
@@ -870,7 +869,7 @@ fn attach_system_type_names(
 fn railing_type_picks(
     rf: &mut RevitFile,
     railings: &[(usize, u32)],
-) -> (Vec<(usize, u32)>, std::collections::BTreeMap<u32, String>) {
+) -> (Vec<(usize, u32)>, BTreeMap<u32, String>) {
     let Ok(classes) = rf.schema_classes() else {
         return Default::default();
     };
@@ -890,10 +889,8 @@ fn railing_type_picks(
     let mut type_ids: BTreeSet<u32> = BTreeSet::new();
     // Each type's name where its copies that read one agree; a copy whose
     // name does not read takes no part.
-    let mut type_names: std::collections::BTreeMap<u32, Option<String>> =
-        std::collections::BTreeMap::new();
-    let mut held: std::collections::BTreeMap<u32, BTreeSet<u32>> =
-        std::collections::BTreeMap::new();
+    let mut type_names: BTreeMap<u32, Option<String>> = BTreeMap::new();
+    let mut held: BTreeMap<u32, BTreeSet<u32>> = BTreeMap::new();
     for stream in rf.partition_stream_names() {
         let Ok(inflated) = rf.inflated_partition(&stream) else {
             continue;
@@ -953,7 +950,7 @@ fn type_data_names(
     rf: &mut RevitFile,
     header: &[u8; 10],
     wanted: &BTreeSet<u32>,
-) -> std::collections::BTreeMap<u32, Option<String>> {
+) -> BTreeMap<u32, Option<String>> {
     use crate::partition_room_parameters::{LatestCopy, partition_number};
     let mut names = LatestCopy::default();
     for stream in rf.partition_stream_names() {
@@ -975,7 +972,7 @@ fn type_data_names(
 fn attach_type_picks(
     elements: &mut [&mut DecodedElement],
     picks: Vec<(usize, u32)>,
-    names: &std::collections::BTreeMap<u32, Option<String>>,
+    names: &BTreeMap<u32, Option<String>>,
 ) {
     for (index, type_id) in picks {
         let Some(Some(name)) = names.get(&type_id) else {
@@ -1152,8 +1149,7 @@ fn attach_model_text_types(
         .iter()
         .flat_map(|(_, ids)| ids.iter().copied())
         .collect();
-    let mut names: std::collections::BTreeMap<u32, Option<String>> =
-        std::collections::BTreeMap::new();
+    let mut names: BTreeMap<u32, Option<String>> = BTreeMap::new();
     for stream in rf.partition_stream_names() {
         let Ok(inflated) = rf.inflated_partition(&stream) else {
             continue;
@@ -3329,7 +3325,7 @@ fn attach_stair_dimensions(
     else {
         return;
     };
-    let mut flight_counts: std::collections::BTreeMap<u32, u32> = std::collections::BTreeMap::new();
+    let mut flight_counts: BTreeMap<u32, u32> = BTreeMap::new();
     for (stair, found) in &dimensions {
         let of_stair: Vec<(u32, Option<u32>)> = runs
             .iter()
@@ -3700,8 +3696,8 @@ fn layer_bands_from_field(value: &InstanceField) -> Option<Vec<crate::ifc::Layer
 /// left out.
 fn layer_bands_field(
     layers: &[crate::partition_compound_structure::CompoundLayer],
-    appearances: &std::collections::BTreeMap<u32, crate::partition_materials::MaterialAppearance>,
-    names: &std::collections::BTreeMap<u32, String>,
+    appearances: &BTreeMap<u32, crate::partition_materials::MaterialAppearance>,
+    names: &BTreeMap<u32, String>,
 ) -> InstanceField {
     InstanceField::Vector(
         layers
@@ -4321,7 +4317,7 @@ fn attach_wall_layers(rf: &mut RevitFile, revit_version: u32, walls: &mut [Decod
     .ok()
     .flatten()
     .filter(|id| names.contains_key(id));
-    let layers: std::collections::BTreeMap<u32, Vec<pcs::CompoundLayer>> = layers
+    let layers: BTreeMap<u32, Vec<pcs::CompoundLayer>> = layers
         .into_iter()
         .map(|(type_id, type_layers)| {
             let type_layers = type_layers
@@ -4463,10 +4459,7 @@ fn attach_wall_butt_joins(
     rf: &mut RevitFile,
     revit_version: u32,
     walls: &mut [DecodedElement],
-    type_layers: &std::collections::BTreeMap<
-        u32,
-        Vec<crate::partition_compound_structure::CompoundLayer>,
-    >,
+    type_layers: &BTreeMap<u32, Vec<crate::partition_compound_structure::CompoundLayer>>,
 ) {
     use crate::element_record_wall_joins as joins;
     let float = |wall: &DecodedElement, wanted: &str| {
@@ -4705,7 +4698,7 @@ fn attach_stair_run_bodies(
     )
     .unwrap_or_default();
     let run_types = ptr::type_definition_ids(&type_records);
-    let mut type_of: std::collections::BTreeMap<usize, u32> = std::collections::BTreeMap::new();
+    let mut type_of: BTreeMap<usize, u32> = BTreeMap::new();
     for &index in &run_indices {
         if let Some((references, _)) = record_references(rf, &products[index]) {
             if let Some(type_id) = ptr::unique_type_reference(&references, &run_types) {
@@ -4724,7 +4717,7 @@ fn attach_stair_run_bodies(
     ) else {
         return;
     };
-    let sketches: std::collections::BTreeMap<u32, ps::RunSketch> = lines
+    let sketches: BTreeMap<u32, ps::RunSketch> = lines
         .iter()
         .filter_map(|(&id, lines)| Some((id, ps::run_sketch(lines)?)))
         .collect();
@@ -6262,8 +6255,7 @@ pub fn product_instances_from_partition_records(
         &declared,
     )?;
     let records = without_non_primary_options(rf, records);
-    let mut by_category: std::collections::BTreeMap<i64, Vec<_>> =
-        std::collections::BTreeMap::new();
+    let mut by_category: BTreeMap<i64, Vec<_>> = BTreeMap::new();
     for record in records {
         by_category
             .entry(record.builtin_category)
@@ -6467,7 +6459,7 @@ pub const ROOM_PARAMETER_SOURCE_FIELD: &str = "m_room_parameter_source";
 /// carriers answer for all 116 rooms and they agree 116 of 116.
 pub fn room_instances_from_records(
     records: Vec<crate::partition_element_records::PartitionElementRecord>,
-    parameters: &std::collections::BTreeMap<u32, crate::partition_room_parameters::RoomParameters>,
+    parameters: &BTreeMap<u32, crate::partition_room_parameters::RoomParameters>,
     level_ids: &BTreeSet<u32>,
 ) -> Vec<DecodedElement> {
     select_instance_records(records)
@@ -7055,7 +7047,7 @@ fn nested_in_openings(
 /// Instance selection proper: one record per exported ElementId.
 fn select_instance_records(
     records: Vec<crate::partition_element_records::PartitionElementRecord>,
-) -> std::collections::BTreeMap<u32, crate::partition_element_records::PartitionElementRecord> {
+) -> BTreeMap<u32, crate::partition_element_records::PartitionElementRecord> {
     use crate::partition_element_records::PartitionElementRecord;
     use std::collections::BTreeMap;
 
@@ -7290,7 +7282,7 @@ fn type_and_family_names_2023(
 /// stale one.
 fn select_newest_instance_records(
     records: Vec<crate::partition_element_records::PartitionElementRecord>,
-) -> std::collections::BTreeMap<u32, crate::partition_element_records::PartitionElementRecord> {
+) -> BTreeMap<u32, crate::partition_element_records::PartitionElementRecord> {
     use crate::partition_element_records::PartitionElementRecord;
     let partition = |record: &PartitionElementRecord| {
         record
@@ -7408,7 +7400,7 @@ pub fn slabs_from_partition_category_records(
         .filter(|record| record.builtin_category == per::OST_SKETCH_LINES)
         .cloned()
         .collect();
-    let mut plates: std::collections::BTreeMap<u32, [f64; 4]> = Default::default();
+    let mut plates: BTreeMap<u32, [f64; 4]> = Default::default();
     for record in scanned.iter().filter(|record| {
         record.builtin_category == per::OST_FLOORS
             || record.builtin_category == per::OST_BUILDING_PAD
@@ -7466,9 +7458,9 @@ fn sketch_plan_profiles(
     rf: &mut RevitFile,
     revit_version: u32,
     sketch_lines: &[crate::partition_element_records::PartitionElementRecord],
-    owners: &std::collections::BTreeMap<u32, [f64; 4]>,
+    owners: &BTreeMap<u32, [f64; 4]>,
     skip: &BTreeSet<u32>,
-) -> std::collections::BTreeMap<u32, crate::element_record_plan_profiles::PlanProfile> {
+) -> BTreeMap<u32, crate::element_record_plan_profiles::PlanProfile> {
     use crate::element_record_plan_profiles as erpp;
     use std::collections::BTreeMap;
     // RE-97: where an element's Sketch lists its curves, that list is the
@@ -7672,7 +7664,7 @@ fn attach_roof_profiles(rf: &mut RevitFile, revit_version: u32, products: &mut [
             _ => None,
         })
     };
-    let roofs: std::collections::BTreeMap<u32, [f64; 4]> = products
+    let roofs: BTreeMap<u32, [f64; 4]> = products
         .iter()
         .filter(|element| SKETCHED_PRODUCT_CLASSES.contains(&element.class.as_str()))
         .filter_map(|element| {
@@ -7765,8 +7757,8 @@ fn attach_shaft_voids(
     ) else {
         return;
     };
-    let mut boxes: std::collections::BTreeMap<u32, [f64; 4]> = Default::default();
-    let mut heights: std::collections::BTreeMap<u32, (f64, f64)> = Default::default();
+    let mut boxes: BTreeMap<u32, [f64; 4]> = Default::default();
+    let mut heights: BTreeMap<u32, (f64, f64)> = Default::default();
     for record in scanned
         .iter()
         .filter(|record| record.builtin_category == per::OST_SHAFT_OPENING)
@@ -7838,8 +7830,8 @@ fn shaft_outlines(
     rf: &mut RevitFile,
     revit_version: u32,
     sketch_lines: &[crate::partition_element_records::PartitionElementRecord],
-    shafts: &std::collections::BTreeMap<u32, [f64; 4]>,
-) -> std::collections::BTreeMap<u32, Vec<(f64, f64)>> {
+    shafts: &BTreeMap<u32, [f64; 4]>,
+) -> BTreeMap<u32, Vec<(f64, f64)>> {
     use crate::element_record_plan_profiles as erpp;
     use std::collections::BTreeMap;
     let line_ids: BTreeSet<u32> = sketch_lines.iter().map(|r| r.element_id).collect();
@@ -8066,7 +8058,7 @@ fn attach_roof_slopes(rf: &mut RevitFile, revit_version: u32, products: &mut [De
     let all_lines: BTreeSet<u32> = sketch_lines.iter().map(|line| line.element_id).collect();
     let lists =
         crate::element_record_plan_profiles::scan_sketch_curve_lists(rf, revit_version, &all_lines);
-    let mut edges: std::collections::BTreeMap<u32, BTreeSet<u32>> = Default::default();
+    let mut edges: BTreeMap<u32, BTreeSet<u32>> = Default::default();
     for line in &sketch_lines {
         if let Some(owner) = line
             .owner_reference
@@ -8096,9 +8088,8 @@ fn attach_roof_slopes(rf: &mut RevitFile, revit_version: u32, products: &mut [De
     // Every defining edge of a roof whose edges all carry a block: one is a
     // shed (RE-56), more a gable or hip (RE-199). A roof whose edges define
     // none, with one slope arrow, rises along the arrow (RE-199).
-    let mut defining: std::collections::BTreeMap<u32, Vec<(u32, f64, f64)>> = Default::default();
-    let mut sloped_by_arrow: std::collections::BTreeMap<u32, (u32, prs::ArrowHeights)> =
-        Default::default();
+    let mut defining: BTreeMap<u32, Vec<(u32, f64, f64)>> = Default::default();
+    let mut sloped_by_arrow: BTreeMap<u32, (u32, prs::ArrowHeights)> = Default::default();
     for (&roof, lines) in &edges {
         let (blocked, rest): (Vec<u32>, Vec<u32>) =
             lines.iter().partition(|line| slopes.contains_key(line));
@@ -8435,7 +8426,7 @@ pub const COVERING_FINISH_FIELD: &str = "m_covering_finish";
 /// whose material's name is not read.
 fn finish_of_layers(
     layers: &[crate::partition_compound_structure::CompoundLayer],
-    names: &std::collections::BTreeMap<u32, String>,
+    names: &BTreeMap<u32, String>,
 ) -> Option<String> {
     let finishes: Vec<&crate::partition_compound_structure::CompoundLayer> = layers
         .iter()
@@ -8975,7 +8966,7 @@ fn apply_beam_column_trim(
 /// as its host Level, from the Levels' own elevations (RE-51). Nothing
 /// changes where the Levels' elevations are not recovered.
 fn resolve_base_constraint_levels(
-    elevations: &std::collections::BTreeMap<u32, f64>,
+    elevations: &BTreeMap<u32, f64>,
     elements: &mut [&mut Vec<DecodedElement>],
 ) {
     use crate::element_record_level_refs as refs;
@@ -9021,7 +9012,7 @@ pub const FRAMING_TOP_LEVEL_SOURCE: &str = "structural_framing_top_level";
 /// records name the 0.0 m Level and none. Nothing changes where no Level, or
 /// more than one, is at the top.
 fn resolve_framing_top_levels(
-    elevations: &std::collections::BTreeMap<u32, f64>,
+    elevations: &BTreeMap<u32, f64>,
     elements: &mut [&mut Vec<DecodedElement>],
 ) {
     use crate::element_record_level_refs as refs;
@@ -9115,7 +9106,7 @@ fn record_level(element: &DecodedElement) -> Option<u32> {
 ///   other than Revit's on 73 of the 214 that name one.
 fn resolve_hosted_levels(
     rf: &mut RevitFile,
-    elevations: &std::collections::BTreeMap<u32, f64>,
+    elevations: &BTreeMap<u32, f64>,
     elements: &mut [&mut Vec<DecodedElement>],
 ) {
     use crate::element_record_level_refs as refs;
@@ -9129,7 +9120,7 @@ fn resolve_hosted_levels(
     if !pending {
         return;
     }
-    let hosts: std::collections::BTreeMap<u32, Option<u32>> = elements
+    let hosts: BTreeMap<u32, Option<u32>> = elements
         .iter()
         .flat_map(|list| list.iter())
         .filter(|element| matches!(element.class.as_str(), "Stair" | "Ramp"))
@@ -9196,7 +9187,7 @@ fn record_base_feet(element: &DecodedElement) -> Option<f64> {
 /// three multistory stairs, whose base is L3's elevation; Revit writes
 /// each one on L3 and again on L4.
 fn resolve_base_at_level(
-    elevations: &std::collections::BTreeMap<u32, f64>,
+    elevations: &BTreeMap<u32, f64>,
     elements: &mut [&mut Vec<DecodedElement>],
 ) {
     use crate::element_record_level_refs as refs;
@@ -9243,14 +9234,14 @@ pub const ELEVATION_PLACED_CLASSES: &[&str] = &[
 /// Measured on Snowdon Towers against every copy Revit writes of each
 /// element (a multistory stair and its railings appear once per storey).
 fn resolve_remaining_levels(
-    elevations: &std::collections::BTreeMap<u32, f64>,
+    elevations: &BTreeMap<u32, f64>,
     elements: &mut [&mut Vec<DecodedElement>],
 ) {
     use crate::element_record_level_refs as refs;
     if elevations.is_empty() {
         return;
     }
-    let leveled: std::collections::BTreeMap<u32, (String, u32)> = elements
+    let leveled: BTreeMap<u32, (String, u32)> = elements
         .iter()
         .flat_map(|list| list.iter())
         .filter_map(|element| Some((element.id?, (element.class.clone(), record_level(element)?))))

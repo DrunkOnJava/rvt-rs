@@ -35,6 +35,7 @@ use serde::{Deserialize, Serialize};
 /// for "inbound upload validation" and best-effort for "archival
 /// metadata extraction").
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[non_exhaustive]
 pub enum ParseMode {
     /// Any parse failure returns Err. Useful for SaaS pipelines
     /// where "looks like a valid Revit file but isn't" should be
@@ -93,6 +94,7 @@ impl Warning {
 /// a complete result should check `.is_empty()` or inspect specific
 /// warnings / partial-field lists.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct Diagnostics {
     /// Warnings encountered during the parse.
     pub warnings: Vec<Warning>,

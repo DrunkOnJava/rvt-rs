@@ -31,6 +31,7 @@
 //! further on. Not every material's name is found; the 2025 layout that
 //! keeps it further out is not read yet.
 
+use crate::le_bytes;
 use crate::{Result, RevitFile};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -74,19 +75,14 @@ impl MaterialAppearance {
     }
 }
 
-fn f32_at(buf: &[u8], at: usize) -> Option<f32> {
-    buf.get(at..at.checked_add(4)?)
-        .map(|s| f32::from_le_bytes(s.try_into().expect("4 bytes")))
-}
-
 /// The shading frame whose colour starts at `at`.
 fn frame_at(buf: &[u8], at: usize) -> Option<MaterialAppearance> {
     let start = at.checked_sub(32)?;
     if buf.get(start..start + 8)? != [0xff; 8] {
         return None;
     }
-    let transparency = f32_at(buf, at - 24)?;
-    let second = f32_at(buf, at - 20)?;
+    let transparency = le_bytes::f32_at(buf, at - 24)?;
+    let second = le_bytes::f32_at(buf, at - 20)?;
     // A run of `ff` longer than 8 also frames a read a few bytes early,
     // whose floats are subnormal: Core Interior's Glass reads 2.35e-38 and
     // black there, 0.75 and blue three bytes on.
@@ -118,14 +114,14 @@ fn frame_at(buf: &[u8], at: usize) -> Option<MaterialAppearance> {
 /// four ([`pattern_slots_32`]).
 fn frame_at_2023(buf: &[u8], at: usize, slots: usize) -> Option<MaterialAppearance> {
     let slots_at = at.checked_sub(8 * slots)?;
-    let transparency = f32_at(buf, slots_at.checked_sub(8)?)?;
-    let second = f32_at(buf, slots_at - 4)?;
+    let transparency = le_bytes::f32_at(buf, slots_at.checked_sub(8)?)?;
+    let second = le_bytes::f32_at(buf, slots_at - 4)?;
     let plausible = |v: f32| (0.0..=1.0).contains(&v) && (v == 0.0 || v.is_normal());
     if !plausible(transparency) || second != 0.5 {
         return None;
     }
     for slot in (slots_at..at).step_by(8) {
-        let id = u32_at(buf, slot)?;
+        let id = le_bytes::u32_at(buf, slot)?;
         if id != u32::MAX && id >= 0x0100_0000 {
             return None;
         }
@@ -256,16 +252,6 @@ fn utf16_name(buf: &[u8], at: usize, n: u32) -> Option<String> {
     String::from_utf16(&units).ok()
 }
 
-fn u32_at(buf: &[u8], at: usize) -> Option<u32> {
-    buf.get(at..at.checked_add(4)?)
-        .map(|s| u32::from_le_bytes(s.try_into().expect("4 bytes")))
-}
-
-fn i64_at(buf: &[u8], at: usize) -> Option<i64> {
-    buf.get(at..at.checked_add(8)?)
-        .map(|s| i64::from_le_bytes(s.try_into().expect("8 bytes")))
-}
-
 fn is_builtin_parameter(id: i64) -> bool {
     (-2_000_000..=-1_000_000).contains(&id)
 }
@@ -296,7 +282,7 @@ fn terminated_name(object: &[u8], revit_version: u32) -> Option<String> {
         let at = end
             .checked_sub(4 + 2 * n as usize)
             .filter(|&at| at >= from)?;
-        (u32_at(object, at)? == n)
+        (le_bytes::u32_at(object, at)? == n)
             .then(|| utf16_name(object, at + 4, n))
             .flatten()
     });
@@ -318,13 +304,13 @@ pub fn name_at(buf: &[u8], id_at: usize, revit_version: u32) -> Option<String> {
     let object = buf.get(id_at..end)?;
     let mut at = MATERIAL_TAG_OFFSET + 2;
     let mut zeros = 0;
-    while zeros < 4 && u32_at(object, at) == Some(0) {
+    while zeros < 4 && le_bytes::u32_at(object, at) == Some(0) {
         at += 4;
         zeros += 1;
     }
     if zeros >= 2 {
-        if let Some(n) = u32_at(object, at) {
-            if !i64_at(object, at + 4).is_some_and(is_builtin_parameter) {
+        if let Some(n) = le_bytes::u32_at(object, at) {
+            if !le_bytes::i64_at(object, at + 4).is_some_and(is_builtin_parameter) {
                 if let Some(name) = utf16_name(object, at + 4, n) {
                     return Some(name);
                 }
@@ -337,7 +323,7 @@ pub fn name_at(buf: &[u8], id_at: usize, revit_version: u32) -> Option<String> {
     if let Some(tag) = material_name_frame_tag(revit_version) {
         let frame = [0xff, 0xff, 0xff, 0xff, tag[0], tag[1]];
         let framed = memchr::memmem::find_iter(object, &frame).find_map(|hit| {
-            let n = u32_at(object, hit + frame.len())?;
+            let n = le_bytes::u32_at(object, hit + frame.len())?;
             utf16_name(object, hit + frame.len() + 4, n)
         });
         if framed.is_some() {
@@ -347,7 +333,7 @@ pub fn name_at(buf: &[u8], id_at: usize, revit_version: u32) -> Option<String> {
     let mut entry = NAME_PARAMETER.to_le_bytes().to_vec();
     entry.extend_from_slice(&[0, 0, 0, 0]);
     let parameter = memchr::memmem::find_iter(object, &entry).find_map(|hit| {
-        let n = u32_at(object, hit + entry.len())?;
+        let n = le_bytes::u32_at(object, hit + entry.len())?;
         utf16_name(object, hit + entry.len() + 4, n)
     });
     parameter.or_else(|| closed_name(object))
@@ -362,7 +348,7 @@ pub fn name_at(buf: &[u8], id_at: usize, revit_version: u32) -> Option<String> {
 /// other objects it lands on an earlier string.
 fn closed_name(object: &[u8]) -> Option<String> {
     (MATERIAL_TAG_OFFSET + 2..object.len().saturating_sub(4)).find_map(|at| {
-        let n = u32_at(object, at)?;
+        let n = le_bytes::u32_at(object, at)?;
         let name = utf16_name(object, at + 4, n)?;
         let after = at + 4 + 2 * usize::try_from(n).ok()?;
         let id = u64::from_le_bytes(object.get(after + 8..after + 16)?.try_into().ok()?);
@@ -730,7 +716,7 @@ pub fn scan_materials_32(
             {
                 continue;
             }
-            let Some(id) = u32_at(buf, id_at).filter(|id| declared.contains(id)) else {
+            let Some(id) = le_bytes::u32_at(buf, id_at).filter(|id| declared.contains(id)) else {
                 continue;
             };
             materials.insert(id);
@@ -740,7 +726,7 @@ pub fn scan_materials_32(
                 .or_else(|| terminated_name_2023(object, tags.physical_param_set))
                 .or_else(|| {
                     memchr::memmem::find_iter(object, &entry).find_map(|hit| {
-                        let n = u32_at(object, hit + entry.len())?;
+                        let n = le_bytes::u32_at(object, hit + entry.len())?;
                         utf16_name(object, hit + entry.len() + 4, n)
                     })
                 });
@@ -823,7 +809,7 @@ fn scan_category_material_2023(
             {
                 continue;
             }
-            if let Some(material) = u32_at(buf, at + 34) {
+            if let Some(material) = le_bytes::u32_at(buf, at + 34) {
                 found.insert(material);
             }
         }
@@ -862,7 +848,7 @@ fn scan_material_appearances_2023(
             {
                 continue;
             }
-            let Some(id) = u32_at(buf, id_at).filter(|id| declared.contains(id)) else {
+            let Some(id) = le_bytes::u32_at(buf, id_at).filter(|id| declared.contains(id)) else {
                 continue;
             };
             let to = id_at
@@ -901,7 +887,7 @@ fn terminated_name_2023(object: &[u8], physical_param_set: u16) -> Option<String
     let end = memchr::memmem::find(object, &terminator)?;
     let mut names = (1..=256u32).filter_map(|n| {
         let at = end.checked_sub(4 + 2 * n as usize)?;
-        (u32_at(object, at)? == n)
+        (le_bytes::u32_at(object, at)? == n)
             .then(|| utf16_name(object, at + 4, n))
             .flatten()
     });
@@ -915,14 +901,14 @@ fn terminated_name_2023(object: &[u8], physical_param_set: u16) -> Option<String
 fn own_name_field(object: &[u8]) -> Option<String> {
     let mut at = 0;
     let mut zeros = 0;
-    while zeros < 4 && u32_at(object, at) == Some(0) {
+    while zeros < 4 && le_bytes::u32_at(object, at) == Some(0) {
         at += 4;
         zeros += 1;
     }
     if zeros < 2 {
         return None;
     }
-    let n = u32_at(object, at)?;
+    let n = le_bytes::u32_at(object, at)?;
     // A slot followed by a BuiltInParameter id is a parameter entry.
     let parameter = i32::from_le_bytes(object.get(at + 4..at + 8)?.try_into().ok()?);
     if is_builtin_parameter(i64::from(parameter)) {

@@ -1935,7 +1935,7 @@ impl StepWriter {
         let mut element_material_pairs: Vec<(usize, usize)> = Vec::new();
         // Track (element_id, &PropertySet) so property-set emission
         // runs after all element IDs are assigned.
-        let mut element_property_sets: Vec<(usize, &super::entities::PropertySet)> = Vec::new();
+        let mut element_property_sets: Vec<(usize, &PropertySet)> = Vec::new();
         // Map vec index in model.entities → emitted IFC element id.
         // None when that entity wasn't a BuildingElement. Consulted
         // when resolving `host_element_index` for openings + for
@@ -3400,7 +3400,7 @@ impl StepWriter {
         // B73: of the type objects a type is written as, the one holding its
         // lowest ElementId takes the type's own GlobalId; Revit's exporter
         // keys the others by entity and predefined type.
-        let mut plain_owner: std::collections::BTreeMap<u32, (u32, usize)> = Default::default();
+        let mut plain_owner: BTreeMap<u32, (u32, usize)> = Default::default();
         for (index, group) in type_groups.iter().enumerate() {
             if group.global_id.is_some() {
                 continue;
