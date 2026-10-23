@@ -398,6 +398,22 @@ fn tier1_report_clis_validate_against_their_schemas() {
         "the three tier-1 projects: {doctor}"
     );
 
+    let matrix = command_json(
+        env!("CARGO_BIN_EXE_rvt-capabilities"),
+        &[std::ffi::OsStr::new("--matrix"), json],
+    );
+    validate(&load_schema("support-matrix.schema.json"), &matrix)
+        .expect("rvt-capabilities --matrix schema validation");
+    let shipped: Value = serde_json::from_str(
+        &std::fs::read_to_string(root.join("docs").join("support-matrix.json"))
+            .expect("read docs/support-matrix.json"),
+    )
+    .expect("parse docs/support-matrix.json");
+    assert_eq!(
+        matrix, shipped,
+        "--matrix prints the shipped support matrix"
+    );
+
     let capabilities = command_json(env!("CARGO_BIN_EXE_rvt-capabilities"), &[]);
     validate(
         &load_schema("capability-manifest.schema.json"),
@@ -462,6 +478,48 @@ fn cli_json_outputs_validate_against_stable_schemas() {
         history["entries"].as_array().is_some_and(|e| !e.is_empty()),
         "a real family has a document history: {history}"
     );
+
+    let partitions = command_json(
+        env!("CARGO_BIN_EXE_rvt-history"),
+        &[
+            sample_2024.as_os_str(),
+            std::ffi::OsStr::new("--partitions"),
+            std::ffi::OsStr::new("--json"),
+        ],
+    );
+    validate(&load_schema("history.schema.json"), &partitions)
+        .expect("history --partitions schema validation");
+    assert!(
+        partitions["partitions"]
+            .as_array()
+            .is_some_and(|r| !r.is_empty()),
+        "--partitions reads the family's Partitions/NN strings"
+    );
+
+    // A real schema carries the FieldType shapes the tier-1 fixture does not.
+    let table = command_json(
+        env!("CARGO_BIN_EXE_rvt-schema"),
+        &[sample_2024.as_os_str(), std::ffi::OsStr::new("--json")],
+    );
+    validate(&load_schema("schema-table.schema.json"), &table)
+        .expect("schema-table schema validation on a family");
+    let shapes: std::collections::BTreeSet<String> = table["classes"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .flat_map(|class| class["fields"].as_array().into_iter().flatten())
+        .filter_map(|field| match &field["field_type"] {
+            Value::String(unit) => Some(unit.clone()),
+            Value::Object(tagged) => tagged.keys().next().cloned(),
+            _ => None,
+        })
+        .collect();
+    for shape in ["Primitive", "String", "ElementId", "Container"] {
+        assert!(
+            shapes.contains(shape),
+            "no {shape} field in the family's schema: {shapes:?}"
+        );
+    }
 
     let elem_table = command_json(
         env!("CARGO_BIN_EXE_rvt-elem-table"),
