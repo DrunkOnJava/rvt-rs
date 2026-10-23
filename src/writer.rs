@@ -56,8 +56,11 @@ pub fn copy_file(src: &Path, dst: &Path) -> Result<()> {
         .create(true)
         .truncate(true)
         .open(dst)?;
-    let mut out = cfb::CompoundFile::create(out_file)
-        .map_err(|e| crate::Error::Cfb(format!("create dst: {e}")))?;
+    let mut out = cfb::CompoundFile::create(out_file).map_err(|e| crate::Error::Cfb {
+        op: "create",
+        path: Some(dst.display().to_string()),
+        source: e,
+    })?;
 
     // Create parent storages first. OLE2 requires `/Formats`, `/Global`,
     // `/Partitions` to exist as storages before their child streams can
@@ -74,8 +77,11 @@ pub fn copy_file(src: &Path, dst: &Path) -> Result<()> {
         for n in 1..parts.len() {
             let parent = format!("/{}", parts[..n].join("/"));
             if created.insert(parent.clone()) {
-                out.create_storage(&parent)
-                    .map_err(|e| crate::Error::Cfb(format!("create_storage {parent}: {e}")))?;
+                out.create_storage(&parent).map_err(|e| crate::Error::Cfb {
+                    op: "create_storage",
+                    path: Some(parent.clone()),
+                    source: e,
+                })?;
             }
         }
     }
@@ -87,14 +93,22 @@ pub fn copy_file(src: &Path, dst: &Path) -> Result<()> {
         } else {
             format!("/{name}")
         };
-        let mut s = out
-            .create_stream(&path)
-            .map_err(|e| crate::Error::Cfb(format!("create_stream {path}: {e}")))?;
-        s.write_all(&data)
-            .map_err(|e| crate::Error::Cfb(format!("write_all {path}: {e}")))?;
+        let mut s = out.create_stream(&path).map_err(|e| crate::Error::Cfb {
+            op: "create_stream",
+            path: Some(path.clone()),
+            source: e,
+        })?;
+        s.write_all(&data).map_err(|e| crate::Error::Cfb {
+            op: "write",
+            path: Some(path.clone()),
+            source: e,
+        })?;
     }
-    out.flush()
-        .map_err(|e| crate::Error::Cfb(format!("flush: {e}")))?;
+    out.flush().map_err(|e| crate::Error::Cfb {
+        op: "flush",
+        path: None,
+        source: e,
+    })?;
     Ok(())
 }
 
@@ -219,7 +233,12 @@ pub fn write_with_patches(src: &Path, dst: &Path, patches: &[StreamPatch]) -> Re
         let dst_parent = dst.parent().unwrap_or_else(|| Path::new("."));
         let dst_name = dst
             .file_name()
-            .ok_or_else(|| crate::Error::Cfb("dst has no filename component".into()))?
+            .ok_or_else(|| {
+                crate::Error::Io(std::io::Error::new(
+                    std::io::ErrorKind::InvalidInput,
+                    "the destination path has no file name",
+                ))
+            })?
             .to_string_lossy()
             .to_string();
         let tmp_name = format!(".{dst_name}.copy-{}", std::process::id());
@@ -246,7 +265,12 @@ pub fn write_with_patches(src: &Path, dst: &Path, patches: &[StreamPatch]) -> Re
         let dst_parent = dst.parent().unwrap_or_else(|| Path::new("."));
         let dst_name = dst
             .file_name()
-            .ok_or_else(|| crate::Error::Cfb("dst has no filename component".into()))?
+            .ok_or_else(|| {
+                crate::Error::Io(std::io::Error::new(
+                    std::io::ErrorKind::InvalidInput,
+                    "the destination path has no file name",
+                ))
+            })?
             .to_string_lossy()
             .to_string();
         let tmp_name = format!(".{dst_name}.rw-{}", std::process::id());
@@ -268,8 +292,11 @@ pub fn write_with_patches(src: &Path, dst: &Path, patches: &[StreamPatch]) -> Re
 
         std::fs::copy(src, &tmp_path)?;
         {
-            let mut rw = cfb::open_rw(&tmp_path)
-                .map_err(|e| crate::Error::Cfb(format!("open_rw {}: {e}", tmp_path.display())))?;
+            let mut rw = cfb::open_rw(&tmp_path).map_err(|e| crate::Error::Cfb {
+                op: "open",
+                path: Some(tmp_path.display().to_string()),
+                source: e,
+            })?;
             for (p, data) in patches.iter().zip(&framed) {
                 let path = if p.stream_name.starts_with('/') {
                     p.stream_name.clone()
@@ -280,16 +307,27 @@ pub fn write_with_patches(src: &Path, dst: &Path, patches: &[StreamPatch]) -> Re
                 // stream by design, which is what we want. The cfb
                 // crate reuses the prior sector chain when content
                 // fits and extends only the tail when it grows.
-                let mut s = rw
-                    .create_stream(&path)
-                    .map_err(|e| crate::Error::Cfb(format!("create_stream {path}: {e}")))?;
-                s.write_all(data)
-                    .map_err(|e| crate::Error::Cfb(format!("write_all {path}: {e}")))?;
-                s.flush()
-                    .map_err(|e| crate::Error::Cfb(format!("flush {path}: {e}")))?;
+                let mut s = rw.create_stream(&path).map_err(|e| crate::Error::Cfb {
+                    op: "create_stream",
+                    path: Some(path.clone()),
+                    source: e,
+                })?;
+                s.write_all(data).map_err(|e| crate::Error::Cfb {
+                    op: "write",
+                    path: Some(path.clone()),
+                    source: e,
+                })?;
+                s.flush().map_err(|e| crate::Error::Cfb {
+                    op: "flush",
+                    path: Some(path.clone()),
+                    source: e,
+                })?;
             }
-            rw.flush()
-                .map_err(|e| crate::Error::Cfb(format!("flush: {e}")))?;
+            rw.flush().map_err(|e| crate::Error::Cfb {
+                op: "flush",
+                path: None,
+                source: e,
+            })?;
         }
         std::fs::rename(&tmp_path, dst)?;
         guard.path = None;
@@ -301,7 +339,12 @@ pub fn write_with_patches(src: &Path, dst: &Path, patches: &[StreamPatch]) -> Re
     let dst_parent = dst.parent().unwrap_or_else(|| Path::new("."));
     let dst_name = dst
         .file_name()
-        .ok_or_else(|| crate::Error::Cfb("dst has no filename component".into()))?
+        .ok_or_else(|| {
+            crate::Error::Io(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "the destination path has no file name",
+            ))
+        })?
         .to_string_lossy()
         .to_string();
     let tmp_name = format!(".{dst_name}.tmp-{}", std::process::id());
@@ -330,8 +373,11 @@ pub fn write_with_patches(src: &Path, dst: &Path, patches: &[StreamPatch]) -> Re
         .create(true)
         .truncate(true)
         .open(&tmp_path)?;
-    let mut out = cfb::CompoundFile::create(out_file)
-        .map_err(|e| crate::Error::Cfb(format!("create tmp: {e}")))?;
+    let mut out = cfb::CompoundFile::create(out_file).map_err(|e| crate::Error::Cfb {
+        op: "create",
+        path: Some(tmp_path.display().to_string()),
+        source: e,
+    })?;
 
     // Pre-create parent storages (same logic as copy_file).
     let mut created: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
@@ -345,8 +391,11 @@ pub fn write_with_patches(src: &Path, dst: &Path, patches: &[StreamPatch]) -> Re
         for n in 1..parts.len() {
             let parent = format!("/{}", parts[..n].join("/"));
             if created.insert(parent.clone()) {
-                out.create_storage(&parent)
-                    .map_err(|e| crate::Error::Cfb(format!("create_storage {parent}: {e}")))?;
+                out.create_storage(&parent).map_err(|e| crate::Error::Cfb {
+                    op: "create_storage",
+                    path: Some(parent.clone()),
+                    source: e,
+                })?;
             }
         }
     }
@@ -362,26 +411,32 @@ pub fn write_with_patches(src: &Path, dst: &Path, patches: &[StreamPatch]) -> Re
         } else {
             format!("/{name}")
         };
-        let mut s = out
-            .create_stream(&path)
-            .map_err(|e| crate::Error::Cfb(format!("create_stream {path}: {e}")))?;
-        s.write_all(&data)
-            .map_err(|e| crate::Error::Cfb(format!("write_all {path}: {e}")))?;
+        let mut s = out.create_stream(&path).map_err(|e| crate::Error::Cfb {
+            op: "create_stream",
+            path: Some(path.clone()),
+            source: e,
+        })?;
+        s.write_all(&data).map_err(|e| crate::Error::Cfb {
+            op: "write",
+            path: Some(path.clone()),
+            source: e,
+        })?;
     }
-    out.flush()
-        .map_err(|e| crate::Error::Cfb(format!("flush: {e}")))?;
+    out.flush().map_err(|e| crate::Error::Cfb {
+        op: "flush",
+        path: None,
+        source: e,
+    })?;
     // Close before rename so Windows doesn't hold the handle.
     drop(out);
 
     // Atomic rename into place. If rename fails (e.g. cross-device),
     // fall back to copy+remove. On failure both dst and tmp may exist
     // briefly; the guard cleans up tmp.
-    std::fs::rename(&tmp_path, dst).map_err(|e| {
-        crate::Error::Cfb(format!(
-            "rename {} -> {}: {e}",
-            tmp_path.display(),
-            dst.display()
-        ))
+    std::fs::rename(&tmp_path, dst).map_err(|e| crate::Error::Cfb {
+        op: "rename",
+        path: Some(format!("{} -> {}", tmp_path.display(), dst.display())),
+        source: e,
     })?;
 
     // Rename succeeded — temp no longer exists, disarm the guard.
@@ -536,10 +591,13 @@ pub fn decompress_stream(dst: &Path, name: &str, framing: StreamFraming) -> Resu
         StreamFraming::CustomPrefix8 => {
             // 8-byte custom prefix — gzip starts at offset 8.
             if raw.len() < 8 {
-                return Err(crate::Error::Cfb(format!(
-                    "stream '{name}' too short for CustomPrefix8 framing: {} bytes",
-                    raw.len()
-                )));
+                return Err(crate::Error::Malformed {
+                    what: "stream framing",
+                    detail: format!(
+                        "stream '{name}' is {} bytes, too short for its 8-byte prefix",
+                        raw.len()
+                    ),
+                });
             }
             crate::compression::inflate_at(&raw, 8)
         }

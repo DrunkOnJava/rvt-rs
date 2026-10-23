@@ -156,7 +156,11 @@ pub fn read_metadata_from<R: Read + Seek>(mut reader: R) -> Result<FileMetadata>
         return Err(Error::NotACfbFile);
     }
     reader.rewind()?;
-    let mut cfb = cfb::CompoundFile::open(reader).map_err(|e| Error::Cfb(e.to_string()))?;
+    let mut cfb = cfb::CompoundFile::open(reader).map_err(|e| Error::Cfb {
+        op: "open",
+        path: None,
+        source: e,
+    })?;
     let bfi_bytes = read_small_stream(&mut cfb, BASIC_FILE_INFO)?
         .ok_or_else(|| Error::StreamNotFound(BASIC_FILE_INFO.to_string()))?;
     let bfi = BasicFileInfo::from_bytes(&bfi_bytes)?;
@@ -180,17 +184,21 @@ fn read_small_stream<R: Read + Seek>(
     if !cfb.is_stream(&path) {
         return Ok(None);
     }
-    let stream = cfb
-        .open_stream(&path)
-        .map_err(|e| Error::Cfb(e.to_string()))?;
+    let stream = cfb.open_stream(&path).map_err(|e| Error::Cfb {
+        op: "open_stream",
+        path: Some(path.clone()),
+        source: e,
+    })?;
     let mut bytes = Vec::new();
     stream
         .take(MAX_IDENTITY_STREAM_BYTES + 1)
         .read_to_end(&mut bytes)?;
     if bytes.len() as u64 > MAX_IDENTITY_STREAM_BYTES {
-        return Err(Error::Cfb(format!(
-            "stream '{name}' exceeds {MAX_IDENTITY_STREAM_BYTES} bytes"
-        )));
+        return Err(Error::TooLarge {
+            what: format!("stream '{name}'"),
+            size: bytes.len() as u64,
+            limit: MAX_IDENTITY_STREAM_BYTES,
+        });
     }
     Ok(Some(bytes))
 }

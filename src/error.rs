@@ -25,8 +25,29 @@ pub enum Error {
     NotACfbFile,
 
     /// The OLE container could not be opened, read or written.
-    #[error("CFB: {0}")]
-    Cfb(String),
+    #[error("CFB {op}{}: {source}", for_path(.path))]
+    Cfb {
+        /// What was being done: `open`, `open_stream`, `create`,
+        /// `create_storage`, `create_stream`, `write`, `flush` or `rename`.
+        op: &'static str,
+        /// The stream or file it was done to, where there is one.
+        path: Option<String>,
+        /// The I/O error, also [`std::error::Error::source`].
+        #[source]
+        source: io::Error,
+    },
+
+    /// A file, buffer or stream is larger than the limit set for it, such as
+    /// [`crate::reader::OpenLimits::max_file_bytes`].
+    #[error("{what} is {size} bytes, over the limit of {limit}")]
+    TooLarge {
+        /// What was too large, such as `"the file"` or `"stream 'Global/Latest'"`.
+        what: String,
+        /// Its size in bytes, or as far as it was read.
+        size: u64,
+        /// The limit in bytes.
+        limit: u64,
+    },
 
     /// The file has no stream of this name.
     #[error("Stream not found: {0}")]
@@ -96,4 +117,8 @@ pub enum Error {
     /// file itself is fine.
     #[error("operation cancelled by caller")]
     Cancelled,
+}
+
+fn for_path(path: &Option<String>) -> String {
+    path.as_deref().map(|p| format!(" {p}")).unwrap_or_default()
 }

@@ -142,6 +142,15 @@ All notable changes will be documented here. This project follows
   schema declares no `ADocument`, as it does when the record cannot be
   located, where it raised `OSError`.
 
+- **Breaking: `Error::Cfb` keeps the I/O error it reports (#899).** It was a
+  string. It is now `Cfb { op, path, source }`: what was being done, the
+  stream or file, and the `io::Error`, which `Error::source()` returns, so a
+  caller can tell a permission error from a full disk. A file, buffer or
+  stream over its limit (`OpenLimits`, the identity-stream cap) is the new
+  `Error::TooLarge { what, size, limit }`, a destination path without a
+  file name is `Error::Io` with `InvalidInput`, and a stream too short for
+  its framing is `Error::Malformed`. All three were `Cfb` before.
+
 - **Breaking: the research readers moved to `rvt::research`, behind the
   `unstable-research` feature (#873).** The crate's API is now 27 stable
   modules (reading and identity, typed elements and the element walk,
