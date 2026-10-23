@@ -14,7 +14,8 @@ cargo-fuzz = true
 [dependencies]
 libfuzzer-sys = "0.4"
 arbitrary = { version = "1", features = ["derive"] }
-rvt = { path = ".." }
+# The arc-wall and opening-index targets fuzz research readers.
+rvt = { path = "..", features = ["unstable-research"] }
 
 # Prevent this from being picked up as part of the main workspace
 [workspace]

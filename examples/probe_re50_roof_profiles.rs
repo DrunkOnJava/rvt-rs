@@ -21,9 +21,9 @@
 //!   cargo run --profile ci --example probe_re50_roof_profiles -- FILE.rvt
 
 use rvt::RevitFile;
-use rvt::element_record_plan_profiles::plan_profiles_from_sketch_line_records;
-use rvt::partition_element_records::{OST_SKETCH_LINES, scan_category_records_multi};
-use rvt::partition_schema_mvp::recover_partition_schema_mvp;
+use rvt::research::element_record_plan_profiles::plan_profiles_from_sketch_line_records;
+use rvt::research::partition_element_records::{OST_SKETCH_LINES, scan_category_records_multi};
+use rvt::research::partition_schema_mvp::recover_partition_schema_mvp;
 use rvt::walker::{DecodedElement, InstanceField, WalkerLimits};
 use std::collections::BTreeSet;
 use std::path::PathBuf;
@@ -118,7 +118,8 @@ fn main() -> rvt::Result<()> {
             // The exact ends each owned sketch line's data carries, and
             // whether they chain into closed loops (every end shared by
             // exactly two segments).
-            let lines = rvt::partition_beam_axes::scan_bounded_lines(&mut rf, version, &ids)?;
+            let lines =
+                rvt::research::partition_beam_axes::scan_bounded_lines(&mut rf, version, &ids)?;
             let key = |p: [f64; 3]| ((p[0] * 1e4).round() as i64, (p[1] * 1e4).round() as i64);
             let mut degree: std::collections::BTreeMap<(i64, i64), usize> = Default::default();
             for line in lines.values() {

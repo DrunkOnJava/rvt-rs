@@ -27,7 +27,10 @@
 
 use rvt::compression::{inflate_all_chunks, prepare_stream_for_inflate};
 use rvt::streams::GLOBAL_CONTENT_DOCUMENTS;
-use rvt::{RevitFile, elem_table, native_document, native_segments, schema_registry};
+use rvt::{
+    RevitFile, elem_table, research::native_document, research::native_segments,
+    research::schema_registry,
+};
 use std::collections::{BTreeMap, BTreeSet};
 
 type Key = [u8; 16];

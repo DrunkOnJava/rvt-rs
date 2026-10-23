@@ -223,7 +223,7 @@ pub struct ElementLayers {
     pub stacked: bool,
     /// The Revit system family of the element's type, which a type with
     /// layers implies (RE-61,
-    /// [`crate::partition_schema_mvp::system_family`]).
+    /// `crate::partition_schema_mvp::system_family`).
     #[serde(default)]
     pub system_family: Option<String>,
 }
@@ -244,7 +244,7 @@ pub struct LayerBand {
 }
 
 /// GlobalIds Revit's own exporter gives, rebuilt from the file (RE-48,
-/// [`crate::revit_global_ids`]). Empty when the file does not yield them.
+/// `crate::revit_global_ids`). Empty when the file does not yield them.
 #[derive(Debug, Default, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct RevitGlobalIds {
     /// The document's `Unique Document GUID` (BasicFileInfo). The GlobalIds
@@ -608,7 +608,7 @@ pub struct ExportConfidenceSummary {
     pub has_diagnostic_proxies: bool,
     pub warning_count: usize,
     /// Element records of a recovered category
-    /// ([`crate::partition_element_records::RECOVERED_CATEGORIES`]) the
+    /// (`crate::partition_element_records::RECOVERED_CATEGORIES`) the
     /// partition scan found but could not export because no ElementId is attributable
     /// to them (the `element_record_without_element_id` skipped item,
     /// RE-30). Non-zero means the model is incomplete, and `score` is
@@ -1435,7 +1435,7 @@ fn real_property(entity: &entities::IfcEntity, wanted: &str) -> Option<f64> {
 pub const WINDOW_TRIM_MAX_FEET: f64 = 0.5;
 
 /// RE-93, RE-94: a window's or door's opening as Revit's export cuts it,
-/// from its type ([`crate::partition_schema_mvp::FillerOpening`]), centred
+/// from its type (`crate::partition_schema_mvp::FillerOpening`), centred
 /// on its origin along its X axis. Across the wall it keeps `base`'s band,
 /// or the body's depth. `None` unless the element reports its opening
 /// ([`export_content::FILLER_OPENING_PROPERTIES`]), its width runs along
@@ -2102,7 +2102,7 @@ const INSTANCE_AS_TYPE: u16 = 2048;
 
 /// Give each family instance written as a distribution element or a proxy a
 /// port for each of its symbol's connectors that Revit's export writes one
-/// for ([`crate::native_connectors::symbol_port_indices`], B54, B83), joined
+/// for (`crate::native_connectors::symbol_port_indices`, B54, B83), joined
 /// or not; the writer skips a port a join has already given it. A file whose
 /// release the native record path does not read keeps the ports of its joins
 /// only.
@@ -2344,7 +2344,7 @@ fn record_base_elevation_feet(entity: &entities::IfcEntity) -> Option<f64> {
 ///
 /// Fail closed twice over:
 ///
-/// - [`crate::partition_level_records::scan_partition_levels`] returns
+/// - `crate::partition_level_records::scan_partition_levels` returns
 ///   nothing unless every standalone `OST_Levels` record owns exactly
 ///   one accepted name/elevation block and no two levels share an
 ///   elevation. A partial recovery is never emitted as a smaller
@@ -2403,10 +2403,10 @@ pub(crate) const STOREY_BIND_RECORD_LEVEL_REFERENCE: &str = "record_level_refere
 ///
 /// The record's counted reference list at `+0x88` carries the host
 /// Level as a plain ElementId slot;
-/// [`crate::element_record_level_refs::unique_level_reference`] accepts
+/// `crate::element_record_level_refs::unique_level_reference` accepts
 /// it when exactly one recovered Level is named. A column or wall that
 /// names two, its base and top constraint, takes its base constraint
-/// ([`crate::element_record_level_refs::base_constraint_level`], RE-59).
+/// (`crate::element_record_level_refs::base_constraint_level`, RE-59).
 ///
 /// Fail closed twice more here:
 ///
@@ -2503,7 +2503,7 @@ fn record_level_element_id(entity: &entities::IfcEntity) -> Option<u32> {
 /// - The storey set is replaced **only** when the recovered storeys
 ///   carry no elevation of their own (all at one value, which on the
 ///   current corpora means every Level row defaulted to 0.0) and at
-///   least [`crate::element_record_storeys::MIN_DISTINCT_ELEVATIONS`]
+///   least `crate::element_record_storeys::MIN_DISTINCT_ELEVATIONS`
 ///   distinct elevations were measured. A file whose ArcWall trailers
 ///   already gave real elevations keeps them.
 /// - Binding is an exact elevation match, and an element whose base
@@ -2512,7 +2512,7 @@ fn record_level_element_id(entity: &entities::IfcEntity) -> Option<u32> {
 ///
 /// Level *names* are not paired with the measured elevations unless
 /// there is exactly one name per elevation; see
-/// [`crate::element_record_storeys`] for why a rank join is not
+/// `crate::element_record_storeys` for why a rank join is not
 /// defensible on `2024_Core_Interior.rvt`.
 fn apply_element_record_storeys(
     entities: &mut [entities::IfcEntity],

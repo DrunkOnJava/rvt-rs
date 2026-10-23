@@ -23,12 +23,13 @@ fn main() {
     let mut rf = RevitFile::open(&path).expect("open");
     let table = rvt::elem_table::parse_records(&mut rf).expect("Global/ElemTable");
     let declared = rvt::elem_table::declared_ids(&table);
-    let (materials, names) = rvt::partition_materials::scan_materials_2023(&mut rf, &declared);
+    let (materials, names) =
+        rvt::research::partition_materials::scan_materials_2023(&mut rf, &declared);
     println!("{} materials, {} named", materials.len(), names.len());
     for id in &materials {
         println!("material {id}\t{:?}", names.get(id));
     }
-    for (owner, map) in rvt::partition_type_materials::type_material_names_2023(&mut rf) {
+    for (owner, map) in rvt::research::partition_type_materials::type_material_names_2023(&mut rf) {
         println!("type {owner}\t{map:?}");
     }
 }

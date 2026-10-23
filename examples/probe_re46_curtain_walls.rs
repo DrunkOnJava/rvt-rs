@@ -17,7 +17,7 @@
 //!   cargo run --profile ci --example probe_re46_curtain_walls -- FILE.rvt
 
 use rvt::RevitFile;
-use rvt::partition_element_records::{
+use rvt::research::partition_element_records::{
     OST_CURTAIN_WALL_MULLIONS, OST_CURTAIN_WALL_PANELS, OST_WALLS, PartitionElementRecord,
     scan_category_records_multi,
 };

@@ -28,14 +28,18 @@
 //!     MODEL.rvt [--json OUT.json]
 
 use rvt::RevitFile;
-use rvt::partition_element_records::{
+use rvt::research::partition_element_records::{
     OST_STAIRS_RUNS, REFERENCE_LIST_OFFSET, decode_reference_list,
 };
-use rvt::partition_schema_mvp::{
+use rvt::research::partition_schema_mvp::{
     STAIR_RISER_COUNT_FIELD, STAIR_RISER_HEIGHT_FIELD, recover_partition_schema_mvp,
 };
-use rvt::partition_stairs::{run_side_profile, run_sketch, scan_run_lines, scan_run_types};
-use rvt::partition_type_records::{scan_type_records, type_definition_ids, unique_type_reference};
+use rvt::research::partition_stairs::{
+    run_side_profile, run_sketch, scan_run_lines, scan_run_types,
+};
+use rvt::research::partition_type_records::{
+    scan_type_records, type_definition_ids, unique_type_reference,
+};
 use rvt::walker::{InstanceField, WalkerLimits};
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write as _;

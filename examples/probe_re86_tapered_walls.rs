@@ -22,8 +22,8 @@
 //!   cargo run --profile ci --example probe_re86_tapered_walls -- MODEL.rvt > walls.jsonl
 
 use rvt::RevitFile;
-use rvt::partition_compound_structure as pcs;
-use rvt::partition_element_records as per;
+use rvt::research::partition_compound_structure as pcs;
+use rvt::research::partition_element_records as per;
 use std::collections::{BTreeMap, BTreeSet};
 
 fn main() -> rvt::Result<()> {

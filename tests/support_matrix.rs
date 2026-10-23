@@ -368,8 +368,8 @@ fn every_release_read_has_a_support_matrix_status() {
         })
         .collect();
     for release in 2000..=2100 {
-        let read = rvt::partition_element_records::supports_revit_version(release)
-            || rvt::partition_element_records_2023::is_32bit_release(release);
+        let read = rvt::research::partition_element_records::supports_revit_version(release)
+            || rvt::research::partition_element_records_2023::is_32bit_release(release);
         let support = rvt::capability::release_support(release);
         match rvt::capability::release_capability_id(release) {
             Some(id) => {

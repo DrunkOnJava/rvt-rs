@@ -14,7 +14,7 @@
 //!   cargo run --profile ci --example probe_re128_record_flags -- MODEL.rvt > records.jsonl
 
 use rvt::RevitFile;
-use rvt::partition_element_records as per;
+use rvt::research::partition_element_records as per;
 
 fn main() -> rvt::Result<()> {
     let path = std::env::args().nth(1).expect("usage: MODEL.rvt");

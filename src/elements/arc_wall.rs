@@ -7,8 +7,8 @@
 //! [`crate::elements::all_decoders`]; it sits beside that registry as the
 //! typed partition path for Lane Five / M3-05.
 //!
-//! Downstream lanes (geometry, IFC) should call
-//! [`decode_candidate`] / [`decode_at`] rather than inventing a parallel
+//! Downstream lanes (geometry, IFC) should call [`decode_at`], or with
+//! `unstable-research` `decode_candidate`, rather than inventing a parallel
 //! scanner.
 //!
 //! # Rejection rules
@@ -16,14 +16,11 @@
 //! | Condition | Error |
 //! |---|---|
 //! | Candidate `class_name` is `Some` and not `"ArcWall"` | wrong-schema |
-//! | Candidate `class_tag` ≠ [`ARC_WALL_TAG`] | wrong-schema |
+//! | Candidate `class_tag` ≠ [`crate::arc_wall_record::ARC_WALL_TAG`] | wrong-schema |
 //! | Buffer fails [`ArcWallRecord::decode_standard`] gates | tag / variant / short |
 //! | Optional schema name gate fails | wrong-schema |
 
-use crate::arc_wall_record::{
-    ARC_WALL_TAG, ArcWallRecord, ArcWallTrailer, STANDARD_RECORD_MIN_SIZE,
-};
-use crate::partition_scanner::PartitionRecordCandidate;
+use crate::arc_wall_record::{ArcWallRecord, ArcWallTrailer, STANDARD_RECORD_MIN_SIZE};
 use crate::walker::{DecodedElement, InstanceField};
 use crate::{Error, Result};
 
@@ -45,7 +42,7 @@ pub struct ArcWall {
 }
 
 impl ArcWall {
-    fn from_parts(record: ArcWallRecord, trailer: Option<ArcWallTrailer>) -> Self {
+    pub(crate) fn from_parts(record: ArcWallRecord, trailer: Option<ArcWallTrailer>) -> Self {
         let element_id = trailer.and_then(|t| t.element_id);
         let type_id = trailer.and_then(|t| t.type_id);
         let base_elevation_feet = trailer.and_then(|t| t.base_elevation_feet);
@@ -168,6 +165,7 @@ impl ArcWall {
 }
 
 /// Build a typed [`ArcWall`] from a shared partition scan hit.
+#[cfg(feature = "unstable-research")]
 pub fn from_partition_arc_wall(wall: &crate::partition_arc_walls::PartitionArcWall) -> ArcWall {
     ArcWall::from_parts(wall.record, wall.trailer)
 }
@@ -204,7 +202,13 @@ pub fn decode_at(buf: &[u8], offset: usize, expected_class: Option<&str>) -> Res
 /// Rejects when the candidate names a different class or carries a
 /// non-ArcWall tag, even if the bytes at `offset` happen to look like
 /// an ArcWall envelope.
-pub fn decode_candidate(candidate: &PartitionRecordCandidate, buf: &[u8]) -> Result<ArcWall> {
+#[cfg(feature = "unstable-research")]
+pub fn decode_candidate(
+    candidate: &crate::partition_scanner::PartitionRecordCandidate,
+    buf: &[u8],
+) -> Result<ArcWall> {
+    use crate::arc_wall_record::ARC_WALL_TAG;
+
     reject_wrong_class(candidate.class_name.as_deref())?;
     if candidate.class_tag != ARC_WALL_TAG {
         return Err(Error::BasicFileInfo(format!(

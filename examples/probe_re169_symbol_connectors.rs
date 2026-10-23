@@ -10,7 +10,7 @@
 //!
 //! Usage: probe_re169_symbol_connectors <RE1-*.rvt>
 
-use rvt::{RevitFile, native_document};
+use rvt::{RevitFile, research::native_document};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 

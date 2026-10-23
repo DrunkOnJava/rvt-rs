@@ -14,7 +14,7 @@
 //!   cargo run --profile ci --example probe_re39_stair_parts -- FILE.rvt
 
 use rvt::RevitFile;
-use rvt::partition_element_records::{
+use rvt::research::partition_element_records::{
     BBOX_MARKER_OFFSET, CATEGORY_OFFSET, CONTAINER_NONE, CONTAINER_OFFSET, OST_STAIRS,
     OST_STAIRS_LANDINGS, OST_STAIRS_RAILING, OST_STAIRS_RUNS, OST_STAIRS_STRINGER_CARRIAGE,
     PLACEMENT_KIND_INSTANCE, PLACEMENT_KIND_OFFSET, REFERENCE_LIST_OFFSET, bbox_marker,

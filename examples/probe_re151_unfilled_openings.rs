@@ -16,7 +16,7 @@
 //!   cargo run --profile ci --example probe_re151_unfilled_openings -- MODEL.rvt
 
 use rvt::RevitFile;
-use rvt::partition_element_records::{self as per};
+use rvt::research::partition_element_records::{self as per};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
