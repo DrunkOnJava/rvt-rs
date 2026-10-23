@@ -1,5 +1,5 @@
 //! A family symbol's connectors, from its own native record and its family's
-//! (B54, #528).
+//! (#528).
 //!
 //! A `FamilySymbol` record lists its connectors in `m_arrConnectorData`, each
 //! entry with an `m_index` and a transform; its `Family` record holds a
@@ -19,6 +19,7 @@
 //! with nothing else but the two of a tank Revit's export leaves out (RE-171,
 //! Measure run 37303312731). A duct or pipe joins a family instance at every
 //! end, so the instances' connectors hold every join.
+// Tracker: B54.
 
 use crate::partition_connector_pairs::ConnectorPair;
 use crate::{RevitFile, native_document};

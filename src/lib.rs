@@ -108,6 +108,15 @@
 //! the `unstable-research` feature. They change whenever a finding does and
 //! are outside the semver promise.
 //!
+//! ## Reading the docs
+//!
+//! `RE-NN` names a reverse-engineering finding, positive or negative. Each
+//! is written up in `reports/element-framing/RE-NN-*.md` in the
+//! [repository](https://github.com/DrunkOnJava/rvt-rs/tree/main/reports/element-framing),
+//! which says what was examined, on which files, and what was measured;
+//! most compare against Revit's own export of the same model.
+//! `#NNN` is an issue or pull request there.
+//!
 //! ## Safety
 //!
 //! This crate is read-only for the OLE container and performs no

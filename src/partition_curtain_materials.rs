@@ -1,5 +1,5 @@
 //! A curtain wall mullion's and panel's material, from its type's data object
-//! (RE-166, B66).
+//! (RE-166).
 //!
 //! The data object (RE-153) of a mullion type, schema class
 //! `SysMullionFamSym`, holds its material's ElementId as the `u64` 135 bytes
@@ -14,6 +14,7 @@
 //! the "Glass" of Revit's export, as a material followed a tag on Snowdon
 //! Towers' panel types (RE-72). A value that is not one of the file's
 //! materials is not read as one.
+// Tracker: B66.
 
 use crate::partition_room_parameters::verified_data_object;
 use crate::{Result, RevitFile};
