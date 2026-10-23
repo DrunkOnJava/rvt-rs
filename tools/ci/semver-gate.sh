@@ -4,9 +4,11 @@
 #
 # - cargo-semver-checks lints the API against the base. Exit 100 is a
 #   verdict (violations found), 101 a check that could not complete.
-#   Before 1.0 the release type is `patch`, so anything not
-#   patch-compatible counts; from 1.0 it is `minor`, so a change that only
-#   needs a minor release (adding `#[must_use]`, say) does not.
+#   While the baseline is before 1.0 the release type is `patch`, so
+#   anything not patch-compatible counts; from 1.0 it is `minor`, so a
+#   change that only needs a minor release (adding `#[must_use]`, say)
+#   does not. Additive breaks, such as a variant added to an exhaustive
+#   enum, are this check's: the listing diff below sees only removals.
 # - cargo-public-api lists every public item with its full signature, at
 #   the base and at the head. A base line missing from the head is an item
 #   removed or changed, which covers what cargo-semver-checks documents it
@@ -22,13 +24,15 @@
 
 set -uo pipefail
 
-version=$(cargo metadata --no-deps --format-version 1 \
-    | python3 -c 'import json, sys; print(next(p["version"] for p in json.load(sys.stdin)["packages"] if p["name"] == "rvt"))')
+# The policy follows the baseline's version, not the head's: the pull
+# request that takes the crate to 1.0 is still judged by pre-1.0 rules.
+version=$(git show "$BASE:Cargo.toml" \
+    | python3 -c 'import sys, tomllib; print(tomllib.loads(sys.stdin.read())["package"]["version"])')
 case "$version" in
     0.*) release_type=patch ;;
     *) release_type=minor ;;
 esac
-echo "rvt $version: cargo-semver-checks at release type $release_type"
+echo "baseline rvt $version: cargo-semver-checks at release type $release_type"
 
 breaking=0
 cargo semver-checks -p rvt --baseline-rev "$BASE" --default-features --release-type "$release_type"

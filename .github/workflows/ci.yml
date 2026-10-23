@@ -690,6 +690,10 @@ jobs:
       pull-requests: read
     env:
       PUBLIC_API_TOOLCHAIN: nightly-2026-05-20
+      # Both trees are built only to compare their APIs. A warning a newer
+      # stable Rust finds in the unchanged baseline must not fail the
+      # comparison, or no pull request could fix it.
+      RUSTFLAGS: ""
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
