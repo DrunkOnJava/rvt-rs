@@ -187,7 +187,8 @@ pub fn scan_partition_lengths(
                 .checked_sub(16)
                 .and_then(|start| buf.get(start..at))
                 .filter(|entry| entry[8..] == [0xff; 8])
-                .map(|entry| f64::from_le_bytes(entry[..8].try_into().expect("8 bytes")))
+                .and_then(|entry| entry.first_chunk::<8>().copied())
+                .map(f64::from_le_bytes)
                 .filter(|value| value.is_finite() && value.abs() <= MAX_LENGTH_FEET)
             else {
                 continue;

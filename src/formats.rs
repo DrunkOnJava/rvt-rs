@@ -609,7 +609,7 @@ pub fn parse_schema_with_scan_limit(decompressed: &[u8], scan_limit: usize) -> R
         // Got a class-name candidate. Parse its fields until we hit
         // another likely class boundary (another length-prefixed name
         // matching our heuristic).
-        let class_name = std::str::from_utf8(name_bytes).unwrap().to_string();
+        let class_name = String::from_utf8_lossy(name_bytes).into_owned();
         let class_offset = i;
 
         // Move cursor past the class name header.
@@ -662,7 +662,7 @@ pub fn parse_schema_with_scan_limit(decompressed: &[u8], scan_limit: usize) -> R
                                     data[preamble_at + 9],
                                 ]);
                                 if flag & 0x8000 == 0 && fc == fc2 && fc <= 200 {
-                                    parent = Some(std::str::from_utf8(p).unwrap().to_string());
+                                    parent = Some(String::from_utf8_lossy(p).into_owned());
                                     declared_field_count = Some(fc);
                                     if flag != 0 {
                                         ancestor_tag = Some(flag);
@@ -842,7 +842,7 @@ fn scan_fields_until_next_class_bounded(
         if (2..=60).contains(&u32_len) && i + 4 + u32_len <= hard_stop {
             let slice = &data[i + 4..i + 4 + u32_len];
             if looks_like_field_name(slice) {
-                let field_name = std::str::from_utf8(slice).unwrap().to_string();
+                let field_name = String::from_utf8_lossy(slice).into_owned();
                 let post_name = i + 4 + u32_len;
 
                 // Optional C++ type follows. Try u32 prefix first, then u16.
