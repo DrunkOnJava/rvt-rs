@@ -16,7 +16,7 @@ use crate::{
 use cfb::CompoundFile;
 use serde::{Deserialize, Serialize};
 use std::{
-    collections::BTreeSet,
+    collections::{BTreeMap, BTreeSet},
     fs::File,
     io::{Cursor, Read},
     path::Path,
@@ -120,11 +120,9 @@ pub struct RevitFile {
     /// Memoised material names (RE-58, RE-203), by release and the hash of
     /// the declared ids they were read for: half a dozen material steps of
     /// an export each asked for them.
-    material_names:
-        std::collections::HashMap<(u32, u64), Arc<std::collections::BTreeMap<u32, String>>>,
+    material_names: std::collections::HashMap<(u32, u64), Arc<BTreeMap<u32, String>>>,
     /// Memoised materials each category's graphics styles name (RE-206).
-    category_style_materials:
-        Option<Arc<std::collections::BTreeMap<i64, std::collections::BTreeSet<u32>>>>,
+    category_style_materials: Option<Arc<BTreeMap<i64, BTreeSet<u32>>>>,
 }
 
 /// A partition stream's data objects, each at its offset (RE-153).
@@ -389,7 +387,7 @@ impl RevitFile {
     pub(crate) fn cached_material_names(
         &self,
         key: (u32, u64),
-    ) -> Option<Arc<std::collections::BTreeMap<u32, String>>> {
+    ) -> Option<Arc<BTreeMap<u32, String>>> {
         self.material_names.get(&key).cloned()
     }
 
@@ -397,7 +395,7 @@ impl RevitFile {
     pub(crate) fn cache_material_names(
         &mut self,
         key: (u32, u64),
-        names: Arc<std::collections::BTreeMap<u32, String>>,
+        names: Arc<BTreeMap<u32, String>>,
     ) {
         self.material_names.insert(key, names);
     }
@@ -405,14 +403,14 @@ impl RevitFile {
     /// The memoised materials each category's graphics styles name (RE-206).
     pub(crate) fn cached_category_style_materials(
         &self,
-    ) -> Option<Arc<std::collections::BTreeMap<i64, std::collections::BTreeSet<u32>>>> {
+    ) -> Option<Arc<BTreeMap<i64, BTreeSet<u32>>>> {
         self.category_style_materials.clone()
     }
 
     /// Memoise the materials each category's graphics styles name (RE-206).
     pub(crate) fn cache_category_style_materials(
         &mut self,
-        materials: Arc<std::collections::BTreeMap<i64, std::collections::BTreeSet<u32>>>,
+        materials: Arc<BTreeMap<i64, BTreeSet<u32>>>,
     ) {
         self.category_style_materials = Some(materials);
     }
