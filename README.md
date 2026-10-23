@@ -274,7 +274,7 @@ All modules build for native targets and for `wasm32-unknown-unknown`, which the
 | `ifc` | Full IFC4 spatial tree + elements + materials + properties + openings + extrusion geometry + glTF 2.0 binary (`gltf::model_to_glb`) + plan-view SVG (`sheet::render_plan_svg`) + viewer data model (`scene_graph`, `camera`, `clipping`, `sheet`, `share`, `measure`, `annotation`, `pbr`) |
 | `streams` | Named constants for every invariant OLE stream in a Revit file |
 | `redact` | Shared PII scrubbers for all CLIs (`--redact` flag) |
-| (`rvt-wasm` crate) | the 14 JS-callable wasm-bindgen bindings powering the browser viewer, a crate of its own so `rvt` builds as a plain `rlib` |
+| (`rvt-wasm` crate) | the 22 JS-callable wasm-bindgen bindings powering the browser viewer ([`docs/viewer-api.md`](docs/viewer-api.md#the-javascript-bindings)), a crate of its own so `rvt` builds as a plain `rlib` |
 | `error` | Structured error type (`Error` / `Result`) |
 
 Runtime capabilities:
