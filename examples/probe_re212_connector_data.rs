@@ -15,9 +15,10 @@
 //!   symbol <symbol> <family> <m_arrConnectorData>
 //!   instance <instance> <symbol> <Connector objects' fields>
 //!   fields <class> <root field names>   once per class
-//!   object <owner> <class name> <class tag> <start> <fields>   every object
+//!   object <owner> <class name> <class tag> <start> <token> <fields>   every object
 //!     of a family's graph but its cells, and of an instance's graph but its
-//!     root and connectors, that is not a geometry object
+//!     root, that is not a geometry object; pipes and ducts (`RbsPipeCurve`,
+//!     `RbsDuctCurve` and their flex kinds) are listed this way too
 //!   place <instance> <m_instOrigin, m_RefDir, m_zAxis, m_flippedX,
 //!     m_flippedY, m_insertOrientation, m_mirrored as a JSON object>
 //!
@@ -37,9 +38,17 @@ fn main() -> anyhow::Result<()> {
     let path = std::env::args().nth(1).expect("usage: MODEL.rvt");
     let mut rf = RevitFile::open(&path)?;
     let options = Options {
-        selected_classes: ["Family", "FamilySymbol", "FamilyInstance"]
-            .map(String::from)
-            .into(),
+        selected_classes: [
+            "Family",
+            "FamilySymbol",
+            "FamilyInstance",
+            "RbsPipeCurve",
+            "RbsDuctCurve",
+            "RbsFlexPipeCurve",
+            "RbsFlexDuctCurve",
+        ]
+        .map(String::from)
+        .into(),
         ..Options::default()
     };
     let mut shown = BTreeSet::new();
@@ -62,17 +71,18 @@ fn main() -> anyhow::Result<()> {
         }
         if class != "FamilySymbol" {
             for object in graph.objects.iter().skip(1) {
-                if object.class_name == "ConnectorDataCell" || object.class_name == "Connector" {
+                if object.class_name == "ConnectorDataCell" {
                     continue;
                 }
                 if object.class_name.starts_with("G") && object.class_name != "GInstance" {
                     continue;
                 }
                 println!(
-                    "object {id} {} {} {} {}",
+                    "object {id} {} {} {} {} {}",
                     object.class_name,
                     object.class_tag,
                     object.start,
+                    object.token,
                     serde_json::to_string(&object.fields)?
                 );
             }
