@@ -103,7 +103,7 @@ impl CurtainWall {
     }
 
     pub fn is_unconnected(&self) -> bool {
-        matches!(self.top_level_id, None | Some(0))
+        self.top_level_id.is_none_or(|id| id.get() == 0)
     }
 }
 

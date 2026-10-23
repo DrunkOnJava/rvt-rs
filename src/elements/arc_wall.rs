@@ -114,10 +114,10 @@ impl ArcWall {
                 },
             ),
         ];
-        if let Some(id) = self.element_id {
+        if let Some(id) = self.element_id.and_then(crate::ElementId::as_u32) {
             fields.push(("m_id".into(), InstanceField::ElementId { tag: 0, id }));
         }
-        if let Some(id) = self.type_id {
+        if let Some(id) = self.type_id.and_then(crate::ElementId::as_u32) {
             fields.push(("m_type_id".into(), InstanceField::ElementId { tag: 0, id }));
         }
         if let Some(elev) = self.base_elevation_feet {

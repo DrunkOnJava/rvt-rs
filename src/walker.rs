@@ -592,7 +592,7 @@ pub const DEFAULT_MIN_ELEMENT_CONFIDENCE: f32 = 0.55;
 #[derive(Debug, Clone)]
 pub struct DecodedElement {
     /// ElementId of this instance, if known.
-    pub id: Option<crate::ElementId>,
+    pub id: Option<u32>,
     /// Class name ("Wall", "Floor", "Level", etc.).
     pub class: String,
     /// Ordered list of `(field_name, value)` — one per declared
@@ -608,6 +608,12 @@ pub struct DecodedElement {
 }
 
 impl DecodedElement {
+    /// [`Self::id`] as an [`ElementId`](crate::ElementId), the typed id the
+    /// element structs carry.
+    pub fn element_id(&self) -> Option<crate::ElementId> {
+        self.id.map(crate::ElementId::from)
+    }
+
     /// Attach provenance, preserving other fields.
     pub fn with_provenance(mut self, provenance: ElementProvenance) -> Self {
         self.provenance = provenance;

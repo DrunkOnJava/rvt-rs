@@ -342,7 +342,7 @@ impl Wall {
     /// `true` when the wall's top isn't bound to a level — in that case
     /// height comes from `unconnected_height_feet`.
     pub fn is_unconnected(&self) -> bool {
-        matches!(self.top_level_id, None | Some(0))
+        self.top_level_id.is_none_or(|id| id.get() == 0)
     }
 }
 

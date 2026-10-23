@@ -43,9 +43,9 @@ use crate::walker::{DecodedElement, InstanceField};
 struct PlacedCommon {
     location: Option<Point3>,
     rotation_radians: Option<f64>,
-    level_id: Option<u32>,
-    host_id: Option<u32>,
-    symbol_id: Option<u32>,
+    level_id: Option<crate::ElementId>,
+    host_id: Option<crate::ElementId>,
+    symbol_id: Option<crate::ElementId>,
 }
 
 fn collect_common(decoded: &DecodedElement) -> PlacedCommon {
@@ -103,7 +103,7 @@ impl StructuralFoundation {
     /// Isolated footing (column footing) when no host is specified;
     /// strip/mat footings will have a host wall/slab.
     pub fn is_isolated(&self) -> bool {
-        matches!(self.host_id, None | Some(0))
+        self.host_id.is_none_or(|id| id.get() == 0)
     }
 }
 
@@ -131,7 +131,7 @@ impl Furnishing {
     }
 
     pub fn is_wall_hosted(&self) -> bool {
-        !matches!(self.host_id, None | Some(0))
+        !self.host_id.is_none_or(|id| id.get() == 0)
     }
 }
 

@@ -694,13 +694,13 @@ pub fn append_typed_production_elements(
                 "Door" => {
                     let door = Door::from_decoded(&decoded);
                     if let Some(host) = recover_door_host(&door).ok() {
-                        pending_host_id = Some(host.host_element_id);
+                        pending_host_id = host.host_element_id.as_u32();
                     }
                 }
                 "Window" => {
                     let window = Window::from_decoded(&decoded);
                     if let Some(host) = recover_window_host(&window).ok() {
-                        pending_host_id = Some(host.host_element_id);
+                        pending_host_id = host.host_element_id.as_u32();
                     }
                 }
                 _ => {}

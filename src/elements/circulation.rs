@@ -169,7 +169,7 @@ impl Railing {
     /// True when the railing has no host — a free-standing rail, not
     /// riding along a stair or floor.
     pub fn is_free_standing(&self) -> bool {
-        matches!(self.host_id, None | Some(0))
+        self.host_id.is_none_or(|id| id.get() == 0)
     }
 }
 

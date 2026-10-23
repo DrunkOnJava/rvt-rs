@@ -145,7 +145,7 @@ impl Category {
     /// `true` when this category has no parent — i.e. it's a top-level
     /// category like "Walls" or "Doors" rather than a subdivision.
     pub fn is_top_level(&self) -> bool {
-        matches!(self.parent_category_id, None | Some(0))
+        self.parent_category_id.is_none_or(|id| id.get() == 0)
     }
 }
 

@@ -201,7 +201,7 @@ impl Roof {
     /// common case — "roof sketched freely, ridge at whatever height
     /// the slopes yield").
     pub fn has_cutoff(&self) -> bool {
-        !matches!(self.cutoff_level_id, None | Some(0))
+        !self.cutoff_level_id.is_none_or(|id| id.get() == 0)
     }
 }
 

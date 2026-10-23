@@ -522,8 +522,8 @@ impl ArcWallRecord {
         let base_elevation_feet = base_elevation.is_finite().then_some(base_elevation);
 
         Some(ArcWallTrailer {
-            element_id,
-            type_id,
+            element_id: element_id.map(crate::ElementId::from),
+            type_id: type_id.map(crate::ElementId::from),
             base_elevation_feet,
         })
     }

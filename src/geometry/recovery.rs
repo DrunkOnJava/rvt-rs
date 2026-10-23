@@ -148,7 +148,7 @@ pub fn recover_wall_location_curve(decoded: &DecodedElement) -> RecoveryOutcome<
         return RecoveryOutcome::Recovered(WallLocationCurve {
             curve,
             source: WallLocationSource::SchemaEndpoints,
-            location_curve_id: curve_id,
+            location_curve_id: curve_id.map(crate::ElementId::from),
         });
     }
     if let Some(id) = curve_id {
@@ -542,7 +542,7 @@ pub enum OpeningKind {
 pub struct OpeningHostRelationship {
     pub opening_kind: OpeningKind,
     /// Host wall (or other host) ElementId. Never zero.
-    pub host_element_id: u32,
+    pub host_element_id: crate::ElementId,
     pub level_id: Option<crate::ElementId>,
     pub symbol_id: Option<crate::ElementId>,
 }
@@ -572,12 +572,12 @@ pub fn recover_window_host(window: &Window) -> RecoveryOutcome<OpeningHostRelati
 
 fn recover_opening_host(
     kind: OpeningKind,
-    host_id: Option<u32>,
-    level_id: Option<u32>,
-    symbol_id: Option<u32>,
+    host_id: Option<crate::ElementId>,
+    level_id: Option<crate::ElementId>,
+    symbol_id: Option<crate::ElementId>,
 ) -> RecoveryOutcome<OpeningHostRelationship> {
     match host_id {
-        Some(0) => RecoveryOutcome::Absent {
+        Some(id) if id.get() == 0 => RecoveryOutcome::Absent {
             diagnostic: GeometryDiagnostic::new(
                 "opening_host_unset",
                 format!("{kind:?} host_id is 0 (unhosted / unset)"),

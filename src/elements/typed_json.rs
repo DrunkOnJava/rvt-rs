@@ -39,6 +39,10 @@ pub fn mvp_typed_view(decoded: &DecodedElement) -> Option<Value> {
     }
 }
 
+fn opt_id(v: Option<crate::ElementId>) -> Value {
+    v.map_or(Value::Null, |id| json!(id.get()))
+}
+
 fn opt_u32(v: Option<u32>) -> Value {
     match v {
         Some(n) => json!(n),
@@ -95,16 +99,16 @@ fn level_json(v: &Level) -> Value {
     json!({
         "name": opt_string(&v.name),
         "elevation_feet": opt_f64(v.elevation_feet),
-        "level_type_id": opt_u32(v.level_type_id),
+        "level_type_id": opt_id(v.level_type_id),
         "is_building_story": opt_bool(v.is_building_story),
     })
 }
 
 fn wall_json(v: &Wall) -> Value {
     json!({
-        "base_level_id": opt_u32(v.base_level_id),
+        "base_level_id": opt_id(v.base_level_id),
         "base_offset_feet": opt_f64(v.base_offset_feet),
-        "top_level_id": opt_u32(v.top_level_id),
+        "top_level_id": opt_id(v.top_level_id),
         "top_offset_feet": opt_f64(v.top_offset_feet),
         "unconnected_height_feet": opt_f64(v.unconnected_height_feet),
         "structural_usage": match v.structural_usage {
@@ -115,27 +119,27 @@ fn wall_json(v: &Wall) -> Value {
             Some(l) => json!(location_line_str(l)),
             None => Value::Null,
         },
-        "type_id": opt_u32(v.type_id),
-        "host_id": opt_u32(v.host_id),
+        "type_id": opt_id(v.type_id),
+        "host_id": opt_id(v.host_id),
     })
 }
 
 fn floor_json(v: &Floor) -> Value {
     json!({
-        "level_id": opt_u32(v.level_id),
+        "level_id": opt_id(v.level_id),
         "height_offset_feet": opt_f64(v.height_offset_feet),
         "structural": opt_bool(v.structural),
         "is_slab_edge": opt_bool(v.is_slab_edge),
-        "type_id": opt_u32(v.type_id),
+        "type_id": opt_id(v.type_id),
         "span_direction_radians": opt_f64(v.span_direction_radians),
     })
 }
 
 fn door_json(v: &Door) -> Value {
     json!({
-        "level_id": opt_u32(v.level_id),
-        "host_id": opt_u32(v.host_id),
-        "symbol_id": opt_u32(v.symbol_id),
+        "level_id": opt_id(v.level_id),
+        "host_id": opt_id(v.host_id),
+        "symbol_id": opt_id(v.symbol_id),
         "location": match v.location {
             Some(p) => point3_json(p),
             None => Value::Null,
@@ -148,9 +152,9 @@ fn door_json(v: &Door) -> Value {
 
 fn window_json(v: &Window) -> Value {
     json!({
-        "level_id": opt_u32(v.level_id),
-        "host_id": opt_u32(v.host_id),
-        "symbol_id": opt_u32(v.symbol_id),
+        "level_id": opt_id(v.level_id),
+        "host_id": opt_id(v.host_id),
+        "symbol_id": opt_id(v.symbol_id),
         "location": match v.location {
             Some(p) => point3_json(p),
             None => Value::Null,
@@ -164,8 +168,8 @@ fn zone_json(v: &Zone) -> Value {
     json!({
         "name": opt_string(&v.name),
         "number": opt_string(&v.number),
-        "level_id": opt_u32(v.level_id),
-        "upper_limit_id": opt_u32(v.upper_limit_id),
+        "level_id": opt_id(v.level_id),
+        "upper_limit_id": opt_id(v.upper_limit_id),
         "base_offset_feet": opt_f64(v.base_offset_feet),
         "upper_offset_feet": opt_f64(v.upper_offset_feet),
         "area_square_feet": opt_f64(v.area_square_feet),
@@ -179,10 +183,10 @@ fn material_json(v: &Material) -> Value {
         "color": opt_u32(v.color),
         "transparency": opt_f64(v.transparency),
         "shininess": opt_f64(v.shininess),
-        "appearance_asset_id": opt_u32(v.appearance_asset_id),
-        "physical_asset_id": opt_u32(v.physical_asset_id),
-        "thermal_asset_id": opt_u32(v.thermal_asset_id),
-        "surface_pattern_id": opt_u32(v.surface_pattern_id),
-        "cut_pattern_id": opt_u32(v.cut_pattern_id),
+        "appearance_asset_id": opt_id(v.appearance_asset_id),
+        "physical_asset_id": opt_id(v.physical_asset_id),
+        "thermal_asset_id": opt_id(v.thermal_asset_id),
+        "surface_pattern_id": opt_id(v.surface_pattern_id),
+        "cut_pattern_id": opt_id(v.cut_pattern_id),
     })
 }
