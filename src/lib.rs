@@ -110,10 +110,11 @@
 //!
 //! ## Reading the docs
 //!
-//! `RE-NN` names a reverse-engineering finding. Each is written up, with
-//! the files measured, the reference export and the counts against it, in
-//! `reports/element-framing/RE-NN-*.md` in the
-//! [repository](https://github.com/DrunkOnJava/rvt-rs/tree/main/reports/element-framing).
+//! `RE-NN` names a reverse-engineering finding, positive or negative. Each
+//! is written up in `reports/element-framing/RE-NN-*.md` in the
+//! [repository](https://github.com/DrunkOnJava/rvt-rs/tree/main/reports/element-framing),
+//! which says what was examined, on which files, and what was measured;
+//! most compare against Revit's own export of the same model.
 //! `#NNN` is an issue or pull request there.
 //!
 //! ## Safety

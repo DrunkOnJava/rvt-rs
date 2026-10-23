@@ -128,11 +128,12 @@ All notable changes will be documented here. This project follows
 ### Changed
 
 - **The API docs are written for someone outside the project.** Backlog
-  and task ids (`B55`, `VW1-13`, `SEC-12`, "Lane Six", "Phase 1") are gone
-  from the rustdoc text; where one was a citation it is kept in a
-  `// Tracker:` comment beside the item. The crate root says what `RE-NN`
-  and `#NNN` refer to, and CI checks that every RE finding the docs cite has
-  a report. The `ifc` module's overview, which still described per-element
+  and task ids (`B55`, `VW1-13`, `SEC-12`) and work-plan labels ("Lane C",
+  "Phase 4d", "the attack plan") are gone from the rustdoc text, the CLIs'
+  included; where one was a citation it is kept in a `// Tracker:` comment
+  beside the item. The crate root says what `RE-NN` and `#NNN` refer to,
+  and CI checks that every RE finding the docs cite has a report and that
+  no planning label comes back. The `ifc` module's overview, which still described per-element
   export as pending, says what the exporter writes today, and
   `ifc::from_decoded` no longer claims to attach no geometry, materials or
   property sets.

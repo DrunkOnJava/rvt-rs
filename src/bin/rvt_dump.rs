@@ -12,7 +12,7 @@
 //! Useful for:
 //!   - feeding decompressed streams to Ghidra / IDA / radare2
 //!   - diffing streams with `xxd` / `hexdump` between versions
-//!   - building a corpus for future Phase D work
+//!   - building a corpus for object-graph research
 
 use clap::Parser;
 use rvt::{RevitFile, compression};

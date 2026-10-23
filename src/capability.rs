@@ -277,11 +277,11 @@ impl EvidenceTier {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum RelationDomain {
-    /// ES-held ElementId / reference candidates (Lane A).
+    /// ES-held ElementId / reference candidates.
     EsRefGraph,
     /// ES value-tree containment (separate from BIM topology).
     EsValueTree,
-    /// BIM host/opening/connect — only after evidence gates (Lane C).
+    /// BIM host/opening/connect — only after evidence gates.
     BimTopology,
     /// ElemTable ownership candidates (#152) — scored separately from ES.
     ElemTableOwnership,
