@@ -155,9 +155,9 @@ impl RevitFile {
     ///
     /// [`Error::Io`] when the file cannot be read (its message names the
     /// path), [`Error::NotACfbFile`] when it does not start with the OLE2 /
-    /// MS-CFB magic bytes (`D0 CF 11 E0 A1 B1 1A E1`), and [`Error::Cfb`]
-    /// when it is larger than [`OpenLimits::max_file_bytes`] or its
-    /// container does not open.
+    /// MS-CFB magic bytes (`D0 CF 11 E0 A1 B1 1A E1`), [`Error::TooLarge`]
+    /// when it is larger than [`OpenLimits::max_file_bytes`], and
+    /// [`Error::Cfb`] when its container does not open.
     ///
     /// # Examples
     ///
@@ -234,8 +234,9 @@ impl RevitFile {
     /// # Errors
     ///
     /// [`Error::NotACfbFile`] when the bytes do not start with the OLE2 /
-    /// MS-CFB magic bytes, and [`Error::Cfb`] when they exceed
-    /// [`OpenLimits::max_file_bytes`] or the container does not open.
+    /// MS-CFB magic bytes, [`Error::TooLarge`] when they exceed
+    /// [`OpenLimits::max_file_bytes`], and [`Error::Cfb`] when the container
+    /// does not open.
     ///
     /// # Examples
     ///
@@ -685,8 +686,9 @@ impl RevitFile {
     /// # Errors
     ///
     /// [`Error::StreamNotFound`] when `BasicFileInfo` or `Formats/Latest` is
-    /// missing, [`Error::Cfb`] or [`Error::Io`] when either cannot be read
-    /// (one larger than [`OpenLimits::max_stream_bytes`] among them),
+    /// missing, [`Error::Cfb`] or [`Error::Io`] when either cannot be read,
+    /// [`Error::TooLarge`] when either is larger than
+    /// [`OpenLimits::max_stream_bytes`],
     /// [`Error::BasicFileInfo`] or [`Error::PartAtom`] when either does not
     /// parse, and [`Error::Decompress`] or [`Error::DecompressLimitExceeded`]
     /// when `Formats/Latest` does not inflate or inflates past its cap.
