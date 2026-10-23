@@ -1594,12 +1594,12 @@ fn reference_property_sets(
 }
 
 /// The set Revit's own IFC export writes an element's Category, family and
-/// type in, and its type object's Category and Family Name (spike 257).
+/// type in, and its type object's Category and Family Name (#755).
 pub const REVIT_OTHER_SET: &str = "Other";
 
 /// The parameters Revit's own IFC export writes on an element for its
 /// category, family, type and phase, under its set and property names
-/// (spike 257): `Other` (Category, Family, Family and Type, Type, Type Id)
+/// (#755): `Other` (Category, Family, Family and Type, Type, Type Id)
 /// and `Phasing` (Phase Created). Each is written only from a value the
 /// element carries. The type's own parameters (Family Name, Type Name) go on
 /// its type object, as Revit writes them.

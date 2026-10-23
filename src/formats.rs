@@ -274,7 +274,7 @@ pub struct FieldEntry {
 
 /// Best-effort classification of a field's type encoding (the byte block
 /// that follows a field name in `Formats/Latest`). Derived from the
-/// 2026-04-19 Phase 4c.2 sweeps (Q5 + Q5.1) — see the §Q5 / §Q5.1
+/// 2026-04-19 Layer 4c.2 sweeps (Q5 + Q5.1) — see the §Q5 / §Q5.1
 /// addenda in `docs/rvt-moat-break-reconnaissance.md` for evidence.
 ///
 /// The primary discriminator is the first byte of the encoding:

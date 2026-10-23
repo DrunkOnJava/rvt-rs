@@ -1,4 +1,4 @@
-//! Phase B · Corpus-wide delta inference engine.
+//! Corpus-wide delta inference engine.
 //!
 //! Loads multiple Revit files (ideally same logical content across many
 //! versions), decompresses every stream, and classifies each byte position
@@ -11,7 +11,8 @@
 //! - **MonotonicInt** — strictly increasing integer sequence (IDs, timestamps)
 //! - **Variable** — genuinely varies (payload data)
 //!
-//! Output: per-stream region maps that feed Phase D's object-graph inference.
+//! Output: per-stream region maps, the structural hypotheses that the
+//! object-graph readers ([`crate::object_graph`]) start from.
 
 use crate::{Result, compression, reader::RevitFile, streams::year_for_partition};
 use serde::{Deserialize, Serialize};

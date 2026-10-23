@@ -1,6 +1,6 @@
 //! URL-based viewer state sharing.
 //!
-//! Ties the VW1 viewer primitives into a single `ViewerState`
+//! Ties the viewer primitives into a single `ViewerState`
 //! struct that can be base64-serialized to fit in a URL fragment.
 //! Typical flow:
 //!

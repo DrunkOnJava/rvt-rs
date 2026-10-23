@@ -49,8 +49,8 @@ const INITIAL_INFLATE_CAPACITY_BYTES: usize = 1024 * 1024;
 /// bound and called `read_to_end` with no size limit, so a
 /// hostile `.rvt` could trivially DoS any process that opened it.
 ///
-/// The audit (AUDIT-2026-04-19.md P0 item 4) flagged this as the
-/// single most urgent security fix before promoting the repo.
+/// An April 2026 security audit found it the most urgent fix the
+/// project needed.
 #[derive(Debug, Clone, Copy)]
 pub struct InflateLimits {
     /// Maximum decompressed output bytes per call.
@@ -305,7 +305,7 @@ pub enum FormatsIntegrityStatus {
     Incomplete,
 }
 
-/// Stable diagnostic code for Formats multipage integrity (A2 / PARSE-001).
+/// Stable diagnostic code for Formats multipage integrity.
 pub const RVT_FORMATS_MULTIPAGE_UNVERIFIED: &str = "RVT_FORMATS_MULTIPAGE_UNVERIFIED";
 
 /// Machine-readable `Formats/Latest` integrity sidecar for inspect / export /

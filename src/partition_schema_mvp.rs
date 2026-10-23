@@ -4871,7 +4871,7 @@ fn attach_named_parameters(
 }
 
 /// Field carrying the name of the phase an element was created in
-/// ([`crate::partition_phases`], spike 257).
+/// ([`crate::partition_phases`], #755).
 pub const PHASE_CREATED_FIELD: &str = "m_phase_created";
 
 /// Give each element the one phase its record's reference list names

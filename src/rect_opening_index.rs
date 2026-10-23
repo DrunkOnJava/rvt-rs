@@ -1,4 +1,4 @@
-//! Version-gated decoder for Revit 2024 ArcWallRectOpening 60 B index records (RE-15-09).
+//! Version-gated decoder for Revit 2024 ArcWallRectOpening 60 B index records (RE-15, #89).
 use crate::{Error, Result};
 
 pub const ARC_WALL_RECT_OPENING_TAG_2024: u16 = 0x01a7;

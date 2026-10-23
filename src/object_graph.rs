@@ -1,10 +1,10 @@
-//! Phase D v0 · Object graph deserializer — starter pieces.
+//! Object graph deserializer: starter pieces.
 //!
 //! This module contains partial parsers for specific record types we've
 //! successfully reverse-engineered from the decompressed `Global/Latest`
 //! and `Partitions/NN` streams. It grows incrementally as more classes
-//! are mapped; the `rvt-rs` v0.1 ships only the pieces we can verify
-//! byte-for-byte against the 11-version reference corpus.
+//! are mapped, and holds only the pieces verified byte for byte against
+//! the 11-release family corpus.
 //!
 //! # Currently supported
 //!

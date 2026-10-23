@@ -99,7 +99,8 @@ pub struct FixtureTransition {
 }
 
 impl FixtureTransition {
-    /// No-op baseline contract used by Phase A manifests.
+    /// A transition that changes nothing: the baseline a fixture manifest
+    /// compares its other transitions against.
     pub fn no_op_baseline(transition_id: impl Into<String>, fixture_id: impl Into<String>) -> Self {
         let id = fixture_id.into();
         Self {

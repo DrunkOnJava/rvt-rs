@@ -35,7 +35,7 @@
 //! - [`partition_mep_systems`]: MEP systems and their members (RE-162, #528)
 //! - [`partition_name_candidates`]: Partition UTF-16LE display-name candidates (RE-15, #86)
 //! - [`partition_names`]: Family and type names from partition name entries (RE-38)
-//! - [`partition_phases`]: Phase names, and the phase an element was created in (spike 257)
+//! - [`partition_phases`]: Phase names, and the phase an element was created in (#755)
 //! - [`partition_pipe_axes`]: Pipes as their cylinders, from their connector entries (RE-131, #96)
 //! - [`partition_roof_slopes`]: Roof edges' slopes (RE-56)
 //! - [`partition_room_boundaries`]: Room plan outlines from the faces of each room's stored solid (RE-101)
@@ -86,7 +86,7 @@
 //! - [`es_refs`]: ES reference occurrence locator contracts, with no decoder yet
 //! - [`evidence`]: Named evidence tiers and lightweight ledgers
 //! - [`identity`]: Document-scoped identity and source-span contracts
-//! - [`rect_opening_index`]: Version-gated decoder for Revit 2024 ArcWallRectOpening 60 B index records (RE-15-09)
+//! - [`rect_opening_index`]: Version-gated decoder for Revit 2024 ArcWallRectOpening 60 B index records (RE-15, #89)
 //! - [`relations`]: Experimental typed-relation domains, SCC condensation, and quarantine
 //! - [`revit_global_ids`]: The IFC `GlobalId` Revit's own exporter gives an element, rebuilt from the file (RE-48)
 //! - [`schema_registry`]: Forward-only Formats/Latest registry framing, without byte-name scanning

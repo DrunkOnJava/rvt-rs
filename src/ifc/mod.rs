@@ -318,13 +318,13 @@ pub struct ExportDiagnostics {
     pub unsupported_features: Vec<String>,
     pub warnings: Vec<String>,
     pub confidence: ExportConfidenceSummary,
-    /// A10 source-coverage fractions measured from export/decode stats.
+    /// Source-coverage fractions measured from export/decode stats.
     ///
     /// Fractions are set only when a trustworthy denominator exists;
     /// otherwise they stay `None` (fail closed — never invent ratios).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub source_coverage: Option<SourceCoverageDiagnostics>,
-    /// `Formats/Latest` page-boundary / strip-gate integrity (A2 / PARSE-001).
+    /// `Formats/Latest` page-boundary / strip-gate integrity (#151).
     /// `None` when the stream is absent from the container.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub formats_latest_integrity: Option<crate::compression::FormatsLatestIntegrity>,

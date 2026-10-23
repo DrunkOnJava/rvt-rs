@@ -523,7 +523,7 @@ impl StreamVerificationReport {
 /// step failed. Used internally by [`verify_patches_applied`]; pub
 /// so corpus audits can call it too.
 ///
-/// # Checksum-page policy (Finding 1 / #151)
+/// # Checksum-page policy (#151)
 ///
 /// The writer re-encodes patches with
 /// [`crate::compression::gzip_member_encode`], behind the 8-byte prefix for

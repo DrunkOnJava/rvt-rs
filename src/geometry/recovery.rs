@@ -262,7 +262,7 @@ fn endpoints_from_fields(decoded: &DecodedElement) -> Option<Curve> {
 pub enum FloorBoundarySource {
     /// Vector / float sequence on schema-driven Floor fields.
     SchemaSketch,
-    /// Closed plan polyline recovered from partition bytes (RE-15-07),
+    /// Closed plan polyline recovered from partition bytes (RE-15, #87),
     /// after ArcWall-centerline exclusion.
     PartitionPlanLoop,
 }
