@@ -14,7 +14,7 @@
 //!   cargo run --profile ci --example probe_re114_wall_lines_2023 -- MODEL.rvt
 
 use rvt::RevitFile;
-use rvt::partition_schema_mvp::recover_partition_schema_mvp;
+use rvt::research::partition_schema_mvp::recover_partition_schema_mvp;
 use rvt::walker::WalkerLimits;
 use std::collections::BTreeSet;
 
@@ -25,11 +25,13 @@ fn main() {
     let mvp = recover_partition_schema_mvp(&mut rf, version, WalkerLimits::default())
         .expect("partition records");
     let walls: BTreeSet<u32> = mvp.walls.iter().filter_map(|wall| wall.id).collect();
-    let lines = rvt::partition_beam_axes::scan_first_bounded_lines(&mut rf, version, &walls)
-        .expect("lines");
-    let orientations =
-        rvt::partition_compound_structure::scan_wall_orientations(&mut rf, version, &walls)
-            .expect("orientations");
+    let lines =
+        rvt::research::partition_beam_axes::scan_first_bounded_lines(&mut rf, version, &walls)
+            .expect("lines");
+    let orientations = rvt::research::partition_compound_structure::scan_wall_orientations(
+        &mut rf, version, &walls,
+    )
+    .expect("orientations");
     for id in &walls {
         let line = lines.get(id).map(|line| {
             let at = |t: f64| {

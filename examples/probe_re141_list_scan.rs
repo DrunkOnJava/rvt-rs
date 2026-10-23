@@ -23,7 +23,7 @@
 //!   cargo run --profile ci --example probe_re141_list_scan -- MODEL.rvt
 
 use rvt::RevitFile;
-use rvt::partition_element_records as per;
+use rvt::research::partition_element_records as per;
 use std::collections::{BTreeMap, BTreeSet};
 
 /// A list holds two references of 16 bytes after its count.

@@ -15,7 +15,7 @@
 //! ```
 
 use rvt::RevitFile;
-use rvt::partition_element_records as per;
+use rvt::research::partition_element_records as per;
 use std::collections::{BTreeMap, BTreeSet};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {

@@ -1,7 +1,9 @@
 //! RE-15-06 (#86) — locate real Material / Level / Space names in partition strings.
 use rvt::RevitFile;
 use rvt::object_graph;
-use rvt::partition_name_candidates::{NameBucket, collect_name_candidates, is_display_name};
+use rvt::research::partition_name_candidates::{
+    NameBucket, collect_name_candidates, is_display_name,
+};
 use std::collections::BTreeMap;
 
 const FILES: &[&str] = &["Revit_IFC5_Einhoven.rvt", "2024_Core_Interior.rvt"];

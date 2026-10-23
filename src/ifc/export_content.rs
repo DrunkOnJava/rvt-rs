@@ -1704,7 +1704,7 @@ fn is_external_set(ifc_type: &str) -> Option<&'static str> {
 /// property set entry reads before anything else (`PropertySetEntry
 /// ("Pset_WallCommon.IsExternal", "IsExternal")` in its pset definitions,
 /// CLEANROOM.md source 5), else the value Revit's exporter calculates
-/// ([`crate::partition_schema_mvp::IS_EXTERNAL_FIELD`]). `None` where neither
+/// (`crate::partition_schema_mvp::IS_EXTERNAL_FIELD`). `None` where neither
 /// is read.
 fn is_external_value(decoded: &DecodedElement, set: &str) -> Option<bool> {
     use crate::partition_schema_mvp as mvp;
@@ -2536,7 +2536,7 @@ fn oriented_box_solid(axes: [[f64; 3]; 3], half: [f64; 3], height: f64) -> entit
 pub const INSTANCE_ORIGIN_PROPERTIES: [&str; 2] = ["InstanceOriginX", "InstanceOriginY"];
 
 /// Properties holding a window's opening from its type and transform
-/// (RE-93, [`crate::partition_schema_mvp::FillerOpening`]): the plan point
+/// (RE-93, `crate::partition_schema_mvp::FillerOpening`): the plan point
 /// it is centred on and the direction of its width, model feet and a unit
 /// vector, then its base elevation, width and height, feet.
 pub const FILLER_OPENING_PROPERTIES: [&str; 7] = [
@@ -2550,7 +2550,7 @@ pub const FILLER_OPENING_PROPERTIES: [&str; 7] = [
 ];
 
 /// Properties holding a door's Width and Height from its type (RE-187,
-/// [`crate::partition_schema_mvp::DOOR_TYPE_SIZE_FIELDS`]), feet.
+/// `crate::partition_schema_mvp::DOOR_TYPE_SIZE_FIELDS`), feet.
 pub const DOOR_TYPE_SIZE_PROPERTIES: [&str; 2] = ["TypeWidth", "TypeHeight"];
 
 /// Classes whose body another rule draws, which a family instance's turn

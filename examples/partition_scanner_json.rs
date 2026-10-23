@@ -8,7 +8,7 @@
 //! ```
 
 use clap::Parser;
-use rvt::partition_scanner::{
+use rvt::research::partition_scanner::{
     ScanOptions, declared_but_unlocated_ids, element_id_partition_index, linkage_coverage,
     scan_partitions,
 };

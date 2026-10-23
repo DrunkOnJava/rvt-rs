@@ -18,6 +18,7 @@ Usage: tools/check-local.sh [options]
 Required gates (always run):
   cargo fmt --all -- --check
   cargo clippy --workspace --all-targets --all-features -- -D warnings
+  RUSTFLAGS="-D warnings -D unnameable_types" cargo check --lib --bins
   RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --lib
   cargo build --workspace --all-targets --all-features
   tools/ci/verify-real-files.sh     (real-file, CLI, contract targets only)
@@ -107,6 +108,7 @@ cd "$root"
 
 run cargo fmt --all -- --check
 run cargo clippy --workspace --all-targets --all-features -- -D warnings
+run env RUSTFLAGS="-D warnings -D unnameable_types" cargo check --lib --bins
 run env RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --lib
 run cargo build --workspace --all-targets --all-features
 run tools/ci/verify-real-files.sh

@@ -4,7 +4,7 @@
 //!
 //! Not part of the shipped decode path.
 
-use rvt::partition_level_records as levels;
+use rvt::research::partition_level_records as levels;
 use rvt::{RevitFile, compression};
 use std::collections::BTreeSet;
 

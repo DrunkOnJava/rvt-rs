@@ -303,7 +303,8 @@ fn probe(path: &str) -> anyhow::Result<Vec<String>> {
             "{{\"file\":{path:?},\"revit\":{revit},\"skipped\":\"before 2024\"}}"
         )]);
     }
-    let definitions = rvt::partition_room_parameters::find_parameter_definitions(&mut rf, revit);
+    let definitions =
+        rvt::research::partition_room_parameters::find_parameter_definitions(&mut rf, revit);
     let mut streams: Vec<Stream> = Vec::new();
     for name in rf.partition_stream_names() {
         if let Ok(inflated) = rf.inflated_partition(&name) {

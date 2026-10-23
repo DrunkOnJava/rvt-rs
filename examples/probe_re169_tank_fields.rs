@@ -8,7 +8,7 @@
 //!
 //! Usage: probe_re169_tank_fields <RE1-Plumbing.rvt>
 
-use rvt::{RevitFile, native_document};
+use rvt::{RevitFile, research::native_document};
 use std::collections::BTreeSet;
 use std::path::PathBuf;
 

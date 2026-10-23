@@ -28,8 +28,8 @@
 //!     MODEL.rvt > rows.tsv
 
 use rvt::RevitFile;
-use rvt::element_record_level_refs::{level_at_or_below, named_levels};
-use rvt::partition_element_records as per;
+use rvt::research::element_record_level_refs::{level_at_or_below, named_levels};
+use rvt::research::partition_element_records as per;
 use std::collections::{BTreeMap, BTreeSet};
 
 fn main() -> rvt::Result<()> {
@@ -37,7 +37,8 @@ fn main() -> rvt::Result<()> {
     let mut rf = RevitFile::open(&path)?;
     let version = rf.basic_file_info()?.version;
     let declared = rvt::elem_table::declared_ids(&rvt::elem_table::parse_records(&mut rf)?);
-    let levels = rvt::partition_level_records::recover_partition_levels(&mut rf, version)?;
+    let levels =
+        rvt::research::partition_level_records::recover_partition_levels(&mut rf, version)?;
     let elevations: BTreeMap<u32, f64> = levels
         .iter()
         .map(|level| (level.element_id, level.elevation_feet))
@@ -51,7 +52,8 @@ fn main() -> rvt::Result<()> {
         eprintln!("Revit {version}: element records are not read on this release");
         return Ok(());
     };
-    let objects = rvt::partition_level_records::scan_level_objects(&mut rf, &declared, &level_ids);
+    let objects =
+        rvt::research::partition_level_records::scan_level_objects(&mut rf, &declared, &level_ids);
     eprintln!(
         "Revit {version}: {} Levels, {} objects naming a Level",
         levels.len(),

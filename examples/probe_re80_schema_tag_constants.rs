@@ -29,7 +29,7 @@
 //! and how many chain records open the partitions with the `ElementHeader`
 //! tag.
 
-use rvt::partition_element_records::partition_record_chain;
+use rvt::research::partition_element_records::partition_record_chain;
 
 fn main() -> anyhow::Result<()> {
     for path in std::env::args().skip(1) {

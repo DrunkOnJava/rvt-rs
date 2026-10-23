@@ -127,6 +127,42 @@ All notable changes will be documented here. This project follows
 
 ### Changed
 
+- **Breaking: the research readers moved to `rvt::research`, behind the
+  `unstable-research` feature (#873).** The crate's API is now 27 stable
+  modules (reading and identity, typed elements and the element walk,
+  export, and the writer), which `RELEASE.md` names under "What 1.0 keeps
+  stable". The other 67 modules, the partition, native and element-record
+  readers behind the format findings and the Phase 1 contract stubs, change
+  whenever a finding does and are outside that promise. To keep using one,
+  enable the feature and add `research::` to its path:
+  `rvt::partition_element_records` is now
+  `rvt::research::partition_element_records`. The `RevitFile` accessors that
+  return research types (`element_names`, `design_options`,
+  `second_prologue_ids`, `partition_data_objects`), the ElemTable linkers
+  `link_arcwall_element_ids` and `link_partition_element_ids`, and
+  `elements::arc_wall::decode_candidate` and `from_partition_arc_wall` need
+  the feature too. `EvidenceTier` and the relation-domain registry the
+  capability manifest reports are now in `rvt::capability`, and
+  `relations::RelationDomain::for_edge_kind` is
+  `relations::domain_for_edge_kind`. `rvt::cli` is hidden from the docs.
+  Nothing changes for the CLIs, the Python package or the viewer, and the
+  crate builds the same code either way: the feature only makes the research
+  modules public. docs.rs shows them, marked as needing the feature.
+
+- **Breaking: one `elements::SimpleDecoder` replaces the 67 decoder types
+  the element modules generated.** The classes the schema walk decodes
+  field by field (`mep::DuctDecoder`, `generic::MassDecoder`,
+  `annotations::TextNoteDecoder` and 64 more) were each a unit struct
+  stamped out by one of 15 identical `simple_decoder!` macros. They are now
+  registered as `SimpleDecoder::new("<class>")`, which decodes exactly what
+  the type of that name did; `elements::all_decoders()` and
+  `decoder_for_class` return the same classes in the same order. A wrong
+  schema's error now reads `<class> decoder received wrong schema: ...`.
+  `decoder_for_class` returns a `&'static dyn ElementDecoder` from a
+  registry built once, so a lookup no longer builds all 81 decoders. The
+  `cargo generate` element template registers through `SimpleDecoder`
+  and no longer generates unit tests.
+
 - **What 1.0 requires is written down.** `docs/release-1.0-criteria.md`
   lists each requirement with its bar, the value measured now, and a status
   of passed, failed or not measured, linked to its evidence. 1.0 supports

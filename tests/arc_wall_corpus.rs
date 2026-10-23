@@ -10,7 +10,7 @@
 use rvt::arc_wall_record::{
     ARC_WALL_TAG, ARC_WALL_VARIANT_STANDARD, ArcWallRecord, ArcWallScanStatus,
 };
-use rvt::partition_arc_walls::{
+use rvt::research::partition_arc_walls::{
     element_id_partition_index, iter_partition_arc_walls, storeys_from_arc_wall_base_elevations,
 };
 use rvt::{RevitFile, compression, elem_table};
@@ -213,7 +213,7 @@ fn einhoven_shared_partition_api_recovers_trailer_ids_and_storeys() {
     let level_names = {
         let records =
             rvt::object_graph::string_records_from_partitions(&mut rf).expect("partition strings");
-        rvt::partition_name_candidates::building_storey_name_candidates(
+        rvt::research::partition_name_candidates::building_storey_name_candidates(
             records.iter().map(|r| r.value.as_str()),
         )
     };
@@ -221,8 +221,10 @@ fn einhoven_shared_partition_api_recovers_trailer_ids_and_storeys() {
         level_names.iter().any(|n| n == "Level 1"),
         "RE-15/#86: Einhoven partition strings should include Level 1, got {level_names:?}"
     );
-    let recovery =
-        rvt::partition_arc_walls::recover_storeys_from_arc_walls(&scan.walls, &level_names);
+    let recovery = rvt::research::partition_arc_walls::recover_storeys_from_arc_walls(
+        &scan.walls,
+        &level_names,
+    );
     assert!(
         recovery.named_from_partition >= 1,
         "at least one storey should receive a partition Level name"

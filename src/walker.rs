@@ -1421,7 +1421,7 @@ pub fn read_adocument_lossy_with_limits(
 /// validated partition ArcWall records are merged in as
 /// `DecodedElement` values with `class == "ArcWall"` (via
 /// [`crate::elements::arc_wall`]). Additional fail-closed partition
-/// MVP recovers ([`crate::partition_schema_mvp`]) may emit `Level`,
+/// MVP recovers (`crate::partition_schema_mvp`) may emit `Level`,
 /// `Material`, `Room`, `Floor` (plan-loop), and — on Revit 2024 —
 /// `ArcWallRectOpening` rows. Semantic `Door` / `Window` classes are
 /// **not** invented from opening-index bytes.
@@ -1551,7 +1551,8 @@ pub fn iter_elements_with_control(
             limits,
         ) {
             for wall in scan.walls {
-                let typed = crate::elements::arc_wall::from_partition_arc_wall(&wall);
+                let typed =
+                    crate::elements::arc_wall::ArcWall::from_parts(wall.record, wall.trailer);
                 let decoded = typed.to_decoded_element(&wall.partition, wall.offset);
                 if let Some(id) = decoded.id {
                     if !seen_ids.insert(id) {

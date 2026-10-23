@@ -42,7 +42,9 @@
 //!   cargo run --profile ci --example probe_re189_first_id_references -- FILE.rvt [--records]
 
 use rvt::RevitFile;
-use rvt::partition_element_records::{enclosing_record, file_bbox_marker, partition_record_chain};
+use rvt::research::partition_element_records::{
+    enclosing_record, file_bbox_marker, partition_record_chain,
+};
 use std::collections::{BTreeMap, HashSet};
 use std::path::PathBuf;
 
