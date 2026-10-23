@@ -85,9 +85,9 @@ All notable changes will be documented here. This project follows
 - **A column record holding a NaN no longer panics the export.** The
   column-cut grid sorted its edges with `partial_cmp(..).expect("finite")`,
   so a NaN read from a damaged record box stopped the whole export; it now
-  sorts with `f64::total_cmp`. 33 other reads of fixed-size integers from
-  file bytes lost their `expect`, reading through `first_chunk` or the
-  crate's checked little-endian reader instead.
+  sorts with `f64::total_cmp`. 40 other `expect` and `unwrap` calls on file
+  bytes and fixed arrays are gone: those reads go through `first_chunk` or
+  the crate's checked little-endian reader instead.
 
 - **A mass whose "Export to IFC As" names an entity is written as it (#864).**
   rvt-rs read no mass instances. The BIM4LCA office's two `VOLUME` masses
