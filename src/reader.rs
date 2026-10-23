@@ -182,15 +182,24 @@ impl RevitFile {
     /// `OpenLimits::default()` (2 GiB file, 256 MiB per stream, 256
     /// MiB per inflate).
     ///
-    /// ```no_run
-    /// use rvt::reader::{RevitFile, OpenLimits};
+    /// ```
+    /// use rvt::reader::{OpenLimits, RevitFile};
     ///
     /// // Only accept files up to 100 MB.
     /// let limits = OpenLimits {
     ///     max_file_bytes: 100 * 1024 * 1024,
     ///     ..OpenLimits::default()
     /// };
-    /// let mut rf = RevitFile::open_with_limits("your-project.rfa", limits)?;
+    /// let path = "corpus/tier1/architectural-2024/architectural-2024.rvt";
+    /// let rf = RevitFile::open_with_limits(path, limits)?;
+    /// assert!(!rf.stream_names().is_empty());
+    ///
+    /// // A file over the limit is refused before it is read.
+    /// let tiny = OpenLimits { max_file_bytes: 1024, ..OpenLimits::default() };
+    /// assert!(matches!(
+    ///     RevitFile::open_with_limits(path, tiny),
+    ///     Err(rvt::Error::TooLarge { .. })
+    /// ));
     /// # Ok::<(), rvt::Error>(())
     /// ```
     pub fn open_with_limits(path: impl AsRef<Path>, limits: OpenLimits) -> Result<Self> {
