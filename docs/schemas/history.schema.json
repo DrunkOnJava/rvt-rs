@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://drunkonjava.github.io/rvt-rs/schemas/history.schema.json",
+  "title": "rvt-history --json",
+  "description": "rvt-history --json: the document's upgrade history (rvt::object_graph::DocumentHistory), or with --all-strings / --partitions the string records of Global/Latest and the Partitions/NN streams.",
+  "type": "object",
+  "anyOf": [
+    {
+      "type": "object",
+      "required": [
+        "entries",
+        "string_section_offset"
+      ],
+      "properties": {
+        "entries": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "string_section_offset": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": [
+        "global_latest",
+        "partitions"
+      ],
+      "properties": {
+        "global_latest": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/string_record"
+          }
+        },
+        "partitions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/string_record"
+          }
+        }
+      },
+      "additionalProperties": false
+    }
+  ],
+  "$defs": {
+    "string_record": {
+      "type": "object",
+      "required": [
+        "offset",
+        "tag",
+        "value"
+      ],
+      "properties": {
+        "offset": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "tag": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "value": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

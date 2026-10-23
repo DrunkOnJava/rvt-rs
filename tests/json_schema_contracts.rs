@@ -188,6 +188,12 @@ fn checked_in_schemas_are_valid_json_schema_documents() {
         "es-capability.schema.json",
         "file-metadata.schema.json",
         "inventory-row.schema.json",
+        "capability-manifest.schema.json",
+        "elem-table.schema.json",
+        "history.schema.json",
+        "analyze.schema.json",
+        "inspect.schema.json",
+        "ifc-compare.schema.json",
     ] {
         let schema = load_schema(name);
         assert_eq!(
@@ -290,6 +296,74 @@ fn tier1_elements_cli_validates_decoded_and_counts_schemas() {
     assert!(counts["total"].as_u64().is_some());
 }
 
+/// The CLIs whose JSON had no contract (#873, S2), on the tier-1 synthetic
+/// project and the committed synthetic IFC files, so they run with no
+/// Autodesk corpus present. `rvt-history`'s default output needs a real
+/// document history and is checked on the family corpus below.
+#[test]
+fn tier1_report_clis_validate_against_their_schemas() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let fixture = root
+        .join("corpus")
+        .join("tier1")
+        .join("architectural-2024")
+        .join("architectural-2024.rvt");
+    let file = fixture.as_os_str();
+    let json = std::ffi::OsStr::new("--json");
+
+    let elem_table = command_json(env!("CARGO_BIN_EXE_rvt-elem-table"), &[file, json]);
+    validate(&load_schema("elem-table.schema.json"), &elem_table)
+        .expect("elem-table schema validation");
+
+    let analyze = command_json(env!("CARGO_BIN_EXE_rvt-analyze"), &[file, json]);
+    validate(&load_schema("analyze.schema.json"), &analyze).expect("analyze schema validation");
+
+    let inspect = command_json(env!("CARGO_BIN_EXE_rvt-inspect"), &[file, json]);
+    validate(&load_schema("inspect.schema.json"), &inspect).expect("inspect schema validation");
+    validate(
+        &load_schema("export-diagnostics.schema.json"),
+        &inspect["export_diagnostics"],
+    )
+    .expect("inspect export_diagnostics schema validation");
+
+    let strings = command_json(
+        env!("CARGO_BIN_EXE_rvt-history"),
+        &[file, std::ffi::OsStr::new("--all-strings"), json],
+    );
+    validate(&load_schema("history.schema.json"), &strings)
+        .expect("history --all-strings schema validation");
+
+    let capabilities = command_json(env!("CARGO_BIN_EXE_rvt-capabilities"), &[]);
+    validate(
+        &load_schema("capability-manifest.schema.json"),
+        &capabilities,
+    )
+    .expect("capability manifest schema validation");
+
+    let report = std::env::temp_dir().join(format!(
+        "rvt-ifc-compare-contract-{}.json",
+        std::process::id()
+    ));
+    let output = Command::new(env!("CARGO_BIN_EXE_rvt-ifc-compare"))
+        .arg(root.join("tests/fixtures/synthetic-project.ifc"))
+        .arg(root.join("tests/fixtures/synthetic-structural.ifc"))
+        .arg("--quiet")
+        .arg("--json")
+        .arg(&report)
+        .output()
+        .expect("run rvt-ifc-compare");
+    assert!(
+        output.status.success(),
+        "rvt-ifc-compare failed\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let text = std::fs::read_to_string(&report).expect("read the comparison report");
+    let _ = std::fs::remove_file(&report);
+    let compare: Value = serde_json::from_str(&text).expect("parse the comparison report");
+    validate(&load_schema("ifc-compare.schema.json"), &compare)
+        .expect("ifc-compare schema validation");
+}
+
 #[test]
 fn cli_json_outputs_validate_against_stable_schemas() {
     if !corpus_available() {
@@ -313,6 +387,16 @@ fn cli_json_outputs_validate_against_stable_schemas() {
         ],
     );
     validate(&load_schema("summary.schema.json"), &summary).expect("summary schema validation");
+
+    let history = command_json(
+        env!("CARGO_BIN_EXE_rvt-history"),
+        &[sample_2024.as_os_str(), std::ffi::OsStr::new("--json")],
+    );
+    validate(&load_schema("history.schema.json"), &history).expect("history schema validation");
+    assert!(
+        history["entries"].as_array().is_some_and(|e| !e.is_empty()),
+        "a real family has a document history: {history}"
+    );
 
     let schema_diagnostics = command_json(
         env!("CARGO_BIN_EXE_rvt-schema"),

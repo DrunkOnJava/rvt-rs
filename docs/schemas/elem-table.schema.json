@@ -1,0 +1,156 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://drunkonjava.github.io/rvt-rs/schemas/elem-table.schema.json",
+  "title": "rvt-elem-table --json",
+  "description": "The Global/ElemTable header and records, as rvt-elem-table --json prints them (rvt::elem_table). element_count is a per-release constant, not a count.",
+  "type": "object",
+  "required": [
+    "element_count",
+    "record_count",
+    "header_flag",
+    "decompressed_bytes",
+    "layout",
+    "parsed_records",
+    "records_with_owner",
+    "records"
+  ],
+  "properties": {
+    "element_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "record_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "header_flag": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "decompressed_bytes": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "layout": {
+      "$ref": "#/$defs/layout"
+    },
+    "parsed_records": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "records_with_owner": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "records": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/record"
+      }
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "layout": {
+      "type": "object",
+      "required": [
+        "start",
+        "stride",
+        "marker_offset",
+        "framing"
+      ],
+      "properties": {
+        "start": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "stride": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "marker_offset": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "framing": {
+          "$ref": "#/$defs/framing"
+        }
+      },
+      "additionalProperties": false
+    },
+    "framing": {
+      "anyOf": [
+        {
+          "enum": [
+            "Implicit"
+          ]
+        },
+        {
+          "type": "object",
+          "required": [
+            "Explicit"
+          ],
+          "properties": {
+            "Explicit": {
+              "type": "object",
+              "required": [
+                "marker_len"
+              ],
+              "properties": {
+                "marker_len": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "record": {
+      "type": "object",
+      "required": [
+        "offset",
+        "id_primary",
+        "id_secondary",
+        "raw"
+      ],
+      "properties": {
+        "offset": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "id_primary": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "id_secondary": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "owner_id": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "previous_ids": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "raw": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 255
+          }
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

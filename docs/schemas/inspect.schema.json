@@ -1,0 +1,274 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://drunkonjava.github.io/rvt-rs/schemas/inspect.schema.json",
+  "title": "rvt-inspect --json",
+  "description": "rvt-inspect --json: the file's health, what decoded, how ready it is for export, and the export diagnostics (export-diagnostics.schema.json), or, when the file cannot be read, the failure mode and the error. schema_version is 1.",
+  "type": "object",
+  "anyOf": [
+    {
+      "type": "object",
+      "required": [
+        "schema_version",
+        "failure_mode",
+        "file",
+        "decoded",
+        "export",
+        "warnings",
+        "next_steps",
+        "export_diagnostics"
+      ],
+      "properties": {
+        "schema_version": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "failure_mode": {
+          "$ref": "#/$defs/failure_mode"
+        },
+        "file": {
+          "type": "object",
+          "required": [
+            "input_path",
+            "file_size_bytes",
+            "file_opened",
+            "supported_revit_version",
+            "revit_version",
+            "build",
+            "original_path",
+            "stream_count",
+            "schema_parsed",
+            "release_support"
+          ],
+          "properties": {
+            "input_path": {
+              "type": "string"
+            },
+            "file_size_bytes": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "file_opened": {
+              "type": "boolean"
+            },
+            "supported_revit_version": {
+              "type": "boolean"
+            },
+            "revit_version": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "build": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "original_path": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "stream_count": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "schema_parsed": {
+              "type": "boolean"
+            },
+            "release_support": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "required": [
+                    "status",
+                    "capability"
+                  ],
+                  "properties": {
+                    "status": {
+                      "enum": [
+                        "verified",
+                        "partial",
+                        "experimental",
+                        "unsupported",
+                        "unknown"
+                      ]
+                    },
+                    "capability": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "additionalProperties": false
+        },
+        "decoded": {
+          "type": "object",
+          "required": [
+            "class_name_count",
+            "production_elements",
+            "diagnostic_candidates",
+            "arcwall_records",
+            "geometry_elements"
+          ],
+          "properties": {
+            "class_name_count": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "production_elements": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "diagnostic_candidates": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "arcwall_records": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "geometry_elements": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "additionalProperties": false
+        },
+        "export": {
+          "type": "object",
+          "required": [
+            "level",
+            "score",
+            "summary",
+            "can_write_ifc",
+            "building_elements",
+            "building_elements_with_geometry",
+            "unsupported_features"
+          ],
+          "properties": {
+            "level": {
+              "type": "string"
+            },
+            "score": {
+              "type": "number"
+            },
+            "summary": {
+              "type": "string"
+            },
+            "can_write_ifc": {
+              "type": "boolean"
+            },
+            "building_elements": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "building_elements_with_geometry": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "unsupported_features": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "next_steps": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "export_diagnostics": {
+          "type": "object",
+          "description": "The export diagnostics, export-diagnostics.schema.json."
+        }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": [
+        "schema_version",
+        "failure_mode",
+        "error"
+      ],
+      "properties": {
+        "schema_version": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "failure_mode": {
+          "$ref": "#/$defs/failure_mode"
+        },
+        "error": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    }
+  ],
+  "$defs": {
+    "failure_mode": {
+      "type": "object",
+      "required": [
+        "kind",
+        "title",
+        "summary",
+        "severity"
+      ],
+      "properties": {
+        "kind": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "summary": {
+          "type": "string"
+        },
+        "severity": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

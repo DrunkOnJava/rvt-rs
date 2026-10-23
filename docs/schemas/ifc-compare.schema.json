@@ -1,0 +1,287 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://drunkonjava.github.io/rvt-rs/schemas/ifc-compare.schema.json",
+  "title": "rvt-ifc-compare --json",
+  "description": "The comparison rvt-ifc-compare --json PATH writes (rvt::ifc::compare::IfcCompareReport): each file's summary and what differs between them.",
+  "type": "object",
+  "required": [
+    "left_label",
+    "right_label",
+    "left",
+    "right",
+    "entity_count_deltas",
+    "storeys_only_left",
+    "storeys_only_right",
+    "objects_only_left",
+    "objects_only_right",
+    "materials_only_left",
+    "materials_only_right",
+    "property_keys_only_left",
+    "property_keys_only_right",
+    "bounding_box_delta",
+    "notes"
+  ],
+  "properties": {
+    "left_label": {
+      "type": "string"
+    },
+    "right_label": {
+      "type": "string"
+    },
+    "left": {
+      "$ref": "#/$defs/summary"
+    },
+    "right": {
+      "$ref": "#/$defs/summary"
+    },
+    "entity_count_deltas": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": [
+          "left",
+          "right",
+          "delta"
+        ],
+        "properties": {
+          "left": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "right": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "delta": {
+            "type": "integer"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "storeys_only_left": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/storey"
+      }
+    },
+    "storeys_only_right": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/storey"
+      }
+    },
+    "objects_only_left": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/object"
+      }
+    },
+    "objects_only_right": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/object"
+      }
+    },
+    "materials_only_left": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "materials_only_right": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "property_keys_only_left": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "property_keys_only_right": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "bounding_box_delta": {
+      "anyOf": [
+        {
+          "type": "object",
+          "required": [
+            "left",
+            "right",
+            "max_extent_delta"
+          ],
+          "properties": {
+            "left": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/bounding_box"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "right": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/bounding_box"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "max_extent_delta": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "number"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "notes": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "summary": {
+      "type": "object",
+      "required": [
+        "entity_counts",
+        "storeys",
+        "bounding_box",
+        "objects",
+        "materials",
+        "property_keys"
+      ],
+      "properties": {
+        "entity_counts": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "storeys": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/storey"
+          }
+        },
+        "bounding_box": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/bounding_box"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "objects": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/object"
+          }
+        },
+        "materials": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "property_keys": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "storey": {
+      "type": "object",
+      "required": [
+        "name",
+        "elevation"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "elevation": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "object": {
+      "type": "object",
+      "required": [
+        "ifc_type",
+        "name"
+      ],
+      "properties": {
+        "ifc_type": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "bounding_box": {
+      "type": "object",
+      "required": [
+        "min",
+        "max"
+      ],
+      "properties": {
+        "min": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          }
+        },
+        "max": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          }
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}
