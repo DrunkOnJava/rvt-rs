@@ -127,6 +127,16 @@ All notable changes will be documented here. This project follows
 
 ### Changed
 
+- **Saved graphics are read faster, with the same output (#881, #882).**
+  An export with `--saved-meshes` caches pointer lookups, skips a
+  parameter pass the saved scene never used, and meshes elements in
+  parallel (one after the other in the browser viewer). On one runner, the
+  six reference models export in 0.64 to 0.94 of the time, and the IFC is
+  byte-identical (Measure run 39956807932). Thanks to n3ur0m4n. CI now
+  exports Einhoven and Core Interior with their saved meshes and validates
+  both with IfcOpenShell (#908): 11 of 11 and 138 of 138 bounding-box
+  bodies come from saved graphics, with 0 validation errors.
+
 - **The API's entry points have examples that run (#872).** The crate
   root's three examples and new ones on `RevitFile::open`,
   `metadata::read_metadata`, `walker::iter_elements`,
