@@ -12,6 +12,10 @@ authors = ["Griffin Long <151978260+DrunkOnJava@users.noreply.github.com>"]
 name = "stream-evidence"
 path = "src/main.rs"
 
+
+[lints]
+workspace = true
+
 [dependencies]
 rvt = { path = "../..", version = "=0.6.1" }
 flate2 = "1.0"

@@ -82,6 +82,16 @@ All notable changes will be documented here. This project follows
 
 ### Fixed
 
+- **The PyPI page's links work, and it is written for Python users (#905).**
+  PyPI showed the repository README, whose links are relative and resolve
+  under `pypi.org/project/rvt/`, so none reached its document. The page is
+  now `rvt-py/README.md`: install, a short example, what to expect, and
+  absolute links to the Python guide, the support table and the changelog.
+  That file said PyPI shipped 0.1.2 and the crate was not on crates.io; it
+  names no version now. The package's Documentation link opens the Python
+  guide. CI reads the built wheel's description, checks that it is that
+  file with absolute links only, and runs its example.
+
 - **A mass whose "Export to IFC As" names an entity is written as it (#864).**
   rvt-rs read no mass instances. The BIM4LCA office's two `VOLUME` masses
   carry `IfcSpace`, and Revit's export writes them as `IfcSpace`. They now
@@ -136,6 +146,13 @@ All notable changes will be documented here. This project follows
   none, so no export changes (Measure run 39367864281).
 
 ### Changed
+
+- **The Python guide's examples run in CI (#872).** The three runnable
+  blocks of `docs/python.md` run in order against the synthetic project file
+  `corpus/tier1/architectural-2024`, through the built wheel
+  (`tests/python/test_docs_python.py`). The 18 blocks that show a signature
+  or the shape of a result are fenced `text`, so the page no longer presents
+  them as code to run.
 
 - **Saved graphics are read faster, with the same output (#881, #882).**
   An export with `--saved-meshes` caches pointer lookups, skips a

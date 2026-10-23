@@ -16,6 +16,10 @@ publish = false  # Distributed via PyPI (as the `rvt` wheel), not crates.io.
 # is not needed for a pyo3-only consumer.
 crate-type = ["cdylib"]
 
+
+[lints]
+workspace = true
+
 [dependencies]
 # Core library — all the real work lives here. Path dependency so the
 # workspace can develop both in lock-step; crates.io publishing (if we
