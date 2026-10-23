@@ -40,7 +40,10 @@ def api(path):
             if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and public(node.name):
                 decorators = {d.id for d in node.decorator_list if isinstance(d, ast.Name)}
                 kind = "property" if "property" in decorators else "function"
-                out[prefix + node.name] = (kind, params(node) if kind == "function" else None)
+                # A pyo3 class is constructed through `__new__`; either spelling
+                # in the stubs is the class's constructor.
+                name = "__init__" if node.name == "__new__" else node.name
+                out[prefix + name] = (kind, params(node) if kind == "function" else None)
             elif isinstance(node, ast.ClassDef) and public(node.name):
                 out[prefix + node.name] = ("class", None)
                 members(prefix + node.name + ".", node.body)

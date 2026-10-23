@@ -26,3 +26,8 @@ except ImportError:
     # Flat pyo3 layout — the compiled extension IS this module.
     # Nothing to re-export; native attributes resolve directly.
     pass
+
+from typing import Any, Dict
+
+FileMetadata = Dict[str, Any]
+"""Return shape of `RevitFile.metadata()` and `read_metadata()` (see the stubs)."""

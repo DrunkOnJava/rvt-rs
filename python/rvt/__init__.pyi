@@ -1,13 +1,16 @@
 """Type stubs for the rvt Python bindings.
 
 Hand-maintained. Source of truth for the runtime API is
-`src/python.rs` — if you add a method there, add it here too.
+`rvt-py/src/lib.rs` — if you add a method there, add it here too. CI's
+stubtest step fails when the two disagree.
 PEP 561 marker (`py.typed`) accompanies this file so mypy and
 pyright pick it up.
 """
 from __future__ import annotations
 
-from typing import Any, Final, Optional, Union
+from typing import Any, Final, Optional, Union, final
+
+from typing_extensions import disjoint_base
 
 __version__: Final[str]
 
@@ -74,6 +77,8 @@ MVP_TYPED_CLASSES: Final[list[str]]
 """Lane Five schema-driven MVP class names exposed for introspection."""
 
 
+@final
+@disjoint_base
 class RevitFile:
     """Opened Revit file. Entry point for all Python bindings.
 
@@ -82,8 +87,8 @@ class RevitFile:
     non-CFB input, or read failures.
     """
 
-    def __init__(
-        self,
+    def __new__(
+        cls,
         path: str,
         max_file_bytes: Optional[int] = None,
         max_stream_bytes: Optional[int] = None,
@@ -93,7 +98,7 @@ class RevitFile:
         max_walker_trial_offsets: Optional[int] = None,
         max_walker_record_decode_bytes: Optional[int] = None,
         max_walker_container_records: Optional[int] = None,
-    ) -> None:
+    ) -> RevitFile:
         """Open a Revit file from a filesystem path, with optional
         resource limits.
 
