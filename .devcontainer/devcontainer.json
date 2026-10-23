@@ -35,7 +35,7 @@
   "otherPortsAttributes": { "onAutoForward": "ignore" },
   "customizations": {
     "vscode": {
-      "extensions": ["rust-lang.rust-analyzer", "ms-python.python", "ms-toolsai.jupyter", "anthropic.claude-code"]
+      "extensions": ["rust-lang.rust-analyzer", "vadimcn.vscode-lldb", "ms-python.python", "ms-toolsai.jupyter", "anthropic.claude-code"]
     }
   }
 }

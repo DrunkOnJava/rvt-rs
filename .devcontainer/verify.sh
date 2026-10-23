@@ -19,7 +19,19 @@ git rev-parse HEAD >"$evidence/source-sha.txt"
 bash .devcontainer/resume.sh
 cargo fmt --all -- --check
 bash tools/ci/verify-real-files.sh --check-only
-bin="${CARGO_TARGET_DIR:-$root/target}/${RVT_BUILD_PROFILE:-ci}"
+profile="${RVT_BUILD_PROFILE:-ci}"
+[ "$profile" != dev ] || profile=debug
+bin="${CARGO_TARGET_DIR:-$root/target}/$profile"
+# This script exercises what is already built and rebuilds nothing, so refuse
+# to vouch for an artifact older than a source it is built from.
+binding=$(.venv/bin/python -c 'import rvt._rvt as m; print(m.__file__)')
+for artifact in "$bin/rvt-inspect" "$binding" viewer/pkg/rvt_bg.wasm; do
+  newer=$(find src rvt-py/src rvt-wasm/src Cargo.toml Cargo.lock -newer "$artifact" -print -quit)
+  if [ -n "$newer" ]; then
+    printf '%s is older than %s; rebuild first (the rvt: smoke task does)\n' "$artifact" "$newer" >&3
+    exit 1
+  fi
+done
 "$bin/gen-fixture" codespace --classes Wall,Level,Project,Column,Door \
   --element-count 25 --year 2024 --output "$evidence/smoke.rvt"
 .venv/bin/python - "$evidence/smoke.rvt" >"$evidence/python.json" <<'PY'

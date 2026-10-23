@@ -6,7 +6,9 @@ git --no-pager log -1 --format='%H %s'
 for tool in cargo rustc python3 node pnpm gh codex claude; do
   command -v "$tool"
 done
-test -x "${CARGO_TARGET_DIR:-target}/${RVT_BUILD_PROFILE:-ci}/rvt-inspect"
+profile="${RVT_BUILD_PROFILE:-ci}"
+[ "$profile" != dev ] || profile=debug
+test -x "${CARGO_TARGET_DIR:-target}/$profile/rvt-inspect"
 test -s viewer/pkg/rvt_bg.wasm
 .venv/bin/python -c 'import rvt; print("Python binding:", rvt.__version__)'
 test -x "$HOME/.local/bin/jupyter-lab"
