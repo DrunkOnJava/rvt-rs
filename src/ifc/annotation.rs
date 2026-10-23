@@ -1,4 +1,4 @@
-//! Annotation overlay (VW1-12) — user-added markups rendered on top
+//! Annotation overlay — user-added markups rendered on top
 //! of the scene graph.
 //!
 //! Four annotation types cover the common viewer needs:
@@ -14,16 +14,18 @@
 //! viewer can attribute them.
 //!
 //! The whole `AnnotationLayer` is serde-serializable and fits
-//! naturally inside the `ViewerState` URL share payload (VW1-24)
+//! naturally inside the `ViewerState` URL share payload
 //! when the state is small — larger markup sets should persist
 //! out-of-band.
+// Tracker: VW1-12, VW1-24.
 
 use serde::{Deserialize, Serialize};
 
 /// 3D anchor in world space (feet).
 pub type Anchor = [f64; 3];
 
-/// Single annotation variant (VW1-12).
+/// Single annotation variant.
+// Tracker: VW1-12.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum Annotation {
@@ -85,8 +87,9 @@ impl Annotation {
     }
 }
 
-/// Ordered collection of annotations (VW1-12). The viewer renders
+/// Ordered collection of annotations. The viewer renders
 /// them in list order on top of the scene.
+// Tracker: VW1-12.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct AnnotationLayer {
     pub annotations: Vec<Annotation>,

@@ -1,54 +1,31 @@
-//! Layer 5 — IFC export (document-level scaffold).
+//! IFC4 export, and the model the glTF, plan SVG and CSV writers share.
 //!
-//! # What this module currently produces
+//! [`RvtDocExporter`] reads a [`RevitFile`](crate::RevitFile) into an
+//! [`IfcModel`]: the project, its site, building and storeys, and the
+//! elements read from the file's element records, each with the ElementId
+//! Revit gives it (written as the IFC `Tag`), its class and name, and, where
+//! they are read, its type object, storey, materials, property sets and
+//! GlobalId. Its body, where it has one, is Revit's shape where the
+//! element's data is decoded and its record's box otherwise; an element
+//! whose record has no box (an Area, for one) has no body. [`write_step`] serialises the
+//! model as deterministic ISO 10303-21 text, and [`gltf`], [`sheet`] and
+//! [`schedule_csv`] write the same model as GLB, plan SVG and CSV.
 //!
-//! A spec-valid but structurally minimal IFC4 STEP file containing:
+//! What is read on which release and input, category by category, is in
+//! `docs/supported-profile.md`, and every export's diagnostics name what was
+//! approximated or left out ([`RvtDocExporter::export_with_diagnostics`]).
 //!
-//! - `IfcProject` with name + description from PartAtom / BasicFileInfo
-//! - `IfcSite` → `IfcBuilding` → `IfcBuildingStorey` spatial hierarchy
-//!   (placeholder names today; real names from `Level` elements when
-//!   Lane Six elevation recovery succeeds)
-//! - `IfcClassification` + `IfcClassificationReference` for any
-//!   OmniClass codes found in PartAtom
-//! - Required framework entities (`IfcPerson`, `IfcOrganization`,
-//!   `IfcApplication`, `IfcOwnerHistory`, `IfcSIUnit`×4,
-//!   `IfcUnitAssignment`, `IfcGeometricRepresentationContext`)
+//! # Quality modes
 //!
-//! **Per-element entities now land as geometry-free IFC4 elements by
-//! default**, with Lane Six curves / loops / hosts / elevations
-//! attached when [`ExportQualityMode::Geometry`] or
-//! [`ExportQualityMode::Strict`] content policy requests them and
-//! recovery succeeds. `typed-no-geometry` strips geometry claims.
-//! Misleading `HostObjAttr` proxies are never emitted on the
-//! production path — use [`DiagnosticRvtDocExporter`] for research.
-//!
-//! # Eventual implementation plan
-//!
-//! 1. Layer 5b (per-element walker) produces typed `Category`, `Level`,
-//!    `Wall`, `Floor`, `Door`, `Window`, `Column`, `Beam`, etc.
-//! 2. Phase 5 (geometry) extracts curves, faces, solids for each
-//!    element.
-//! 3. Entity mapper translates:
-//!
-//!    | Revit concept | IFC mapping |
-//!    |---|---|
-//!    | Project metadata (PartAtom) | `IfcProject` (done) |
-//!    | Unit set (autodesk.unit.*) | `IfcUnitAssignment` / `IfcSIUnit` (best-effort modal read) |
-//!    | Level | `IfcBuildingStorey` (pending Layer 5b) |
-//!    | Wall | `IfcWall` + geometry (pending Phase 5) |
-//!    | Floor/Roof/Ceiling | `IfcSlab` / `IfcRoof` / `IfcCovering` (pending) |
-//!    | Door/Window | `IfcDoor` / `IfcWindow` + `IfcRelVoidsElement` (pending) |
-//!    | Column/Beam | `IfcColumn` / `IfcBeam` (pending) |
-//!    | Family (RFA) | `IfcTypeObject` + `IfcRepresentationMap` (pending) |
-//!    | Uniformat / OmniClass codes | `IfcClassificationReference` (done) |
-//!    | Material | `IfcMaterial` / `IfcMaterialLayerSet` (pending) |
-//!    | Parameters | `IfcPropertySet` + `IfcPropertySingleValue` (pending) |
-//!    | Host geometry | `IfcShapeRepresentation` (pending Phase 5) |
-//!
-//! 4. STEP serializer writes the `IfcModel` as `.ifc` text (done at
-//!    document level; extends to elements as Phase 6 lands).
-//! 5. IfcOpenShell + buildingSMART validators verify output against
-//!    the 11-release corpus (pending — IFC-41/43).
+//! [`ExportQualityMode`] chooses what is written. `scaffold` writes the
+//! production elements with whatever geometry is recovered,
+//! `typed-no-geometry` strips the geometry, `geometry` attaches recovered
+//! curves, loops, hosts and elevations, and `strict` writes what `geometry`
+//! does. The export itself never rejects a model: call
+//! [`ExportQualityMode::validate`] on the export's diagnostics to refuse an
+//! incomplete one, as the CLI and the Python package do for `strict`. The
+//! production exporter never writes `HostObjAttr` proxies;
+//! [`DiagnosticRvtDocExporter`] keeps low-confidence candidates for research.
 //!
 //! # Library collaboration
 //!
@@ -64,27 +41,27 @@
 //!
 //! | Module | What it does |
 //! |---|---|
-//! | [`category_map`] | Revit class → IFC4 type mapping (IFC-01) |
-//! | [`compare`] | IFC4 STEP file comparison summaries (M5-05) |
+//! | [`category_map`] | Revit class → IFC4 type mapping |
+//! | [`compare`] | IFC4 STEP file comparison summaries |
 //! | [`entities`] | IFC4 entity taxonomy (walls, floors, doors, …) |
-//! | [`export_content`] | Lane Seven quality-mode content policy |
+//! | [`export_content`] | What each quality mode writes |
 //! | [`from_decoded`] | Bridge: decoded Revit elements → IfcModel |
 //! | [`step_writer`] | IfcModel → ISO-10303-21 STEP text |
 //!
-//! VW1 viewer data model — Rust-side primitives a browser /
+//! The viewer's data model: Rust-side primitives a browser /
 //! desktop viewer binds to:
 //!
 //! | Module | What it does |
 //! |---|---|
-//! | [`scene_graph`] | Project → storey → element tree (VW1-05) + schedule (VW1-15) |
-//! | [`pbr`] | Revit Material → glTF PBR mapping (VW1-06) |
-//! | [`camera`] | Orbit-camera state + controls (VW1-07) |
-//! | [`clipping`] | ClippingPlane + SectionBox + ViewMode (VW1-10/14) |
-//! | [`measure`] | Distance / angle / polygon-area (VW1-13) |
-//! | [`annotation`] | Note / leader / polyline / pin markups (VW1-12) |
-//! | [`share`] | ViewerState URL-fragment serialization (VW1-24) |
-//! | [`gltf`] | glTF 2.0 GLB binary exporter (VW1-04) |
-//! | [`sheet`] | 2D SVG plan view emission (VW1-11) |
+//! | [`scene_graph`] | Project → storey → element tree + schedule |
+//! | [`pbr`] | Revit Material → glTF PBR mapping |
+//! | [`camera`] | Orbit-camera state + controls |
+//! | [`clipping`] | ClippingPlane + SectionBox + ViewMode |
+//! | [`measure`] | Distance / angle / polygon-area |
+//! | [`annotation`] | Note / leader / polyline / pin markups |
+//! | [`share`] | ViewerState URL-fragment serialization |
+//! | [`gltf`] | glTF 2.0 GLB binary exporter |
+//! | [`sheet`] | 2D SVG plan view emission |
 //! | [`schedule_csv`] | Element and room schedules as CSV (spreadsheets) |
 //!
 //! Typical viewer pipeline:
@@ -99,6 +76,7 @@
 //! 6. [`scene_graph::element_info_panel`] powers click-to-inspect
 //! 7. [`share::encode_to_fragment`] serializes the whole state into
 //!    a URL for collaboration
+// Tracker: IFC-01, M5-05, VW1-05, VW1-15, VW1-06, VW1-07, VW1-13, VW1-12, VW1-24, VW1-04, VW1-11.
 
 use crate::Result;
 
@@ -147,25 +125,28 @@ pub struct IfcModel {
     /// Materials available for association with BuildingElements.
     /// BuildingElement.material_index points into this list.
     pub materials: Vec<MaterialInfo>,
-    /// Compound material assemblies (IFC-28). Referenced by
+    /// Compound material assemblies. Referenced by
     /// `BuildingElement.material_layer_set_index`. Each layer
     /// inside a set references a material in `materials` above by
     /// index, so the two lists share a namespace — a layer can't
     /// reference a material that hasn't been registered there first.
+    // Tracker: IFC-28.
     pub material_layer_sets: Vec<entities::MaterialLayerSet>,
-    /// Compound structural profile assignments (IFC-30). Referenced
+    /// Compound structural profile assignments. Referenced
     /// by `BuildingElement.material_profile_set_index`. Used for
     /// columns and beams with named cross-sections (W12x26, HSS,
     /// circular columns). Profiles reference materials in
     /// `materials` above by index.
+    // Tracker: IFC-30.
     pub material_profile_sets: Vec<entities::MaterialProfileSet>,
-    /// Shared geometry maps for family / type instancing (IFC-21).
+    /// Shared geometry maps for family / type instancing.
     /// Any `BuildingElement` whose `representation_map_index` is
     /// `Some(i)` routes through `representation_maps[i]` via an
     /// `IfcMappedItem` instead of emitting its own body chain. Each
     /// map's shape is serialised once; instances add a ~4-entity
     /// mapped-item wrap. Empty `Vec` leaves writer behaviour
     /// unchanged.
+    // Tracker: IFC-21.
     pub representation_maps: Vec<entities::RepresentationMap>,
     /// The GlobalIds Revit's own exporter gives the model's elements and
     /// storeys (RE-48). The writer uses them in place of generated ones.
@@ -266,7 +247,8 @@ pub struct RevitGlobalIds {
     #[serde(default)]
     pub element_types: std::collections::BTreeMap<u32, String>,
     /// The file's Revit release, which picks the form of the GlobalId keys
-    /// Revit's exporter hashes (B73).
+    /// Revit's exporter hashes.
+    // Tracker: B73.
     #[serde(default)]
     pub revit_version: Option<u32>,
 }
@@ -330,13 +312,13 @@ pub struct ExportDiagnostics {
     pub unsupported_features: Vec<String>,
     pub warnings: Vec<String>,
     pub confidence: ExportConfidenceSummary,
-    /// A10 source-coverage fractions measured from export/decode stats.
+    /// Source-coverage fractions measured from export/decode stats.
     ///
     /// Fractions are set only when a trustworthy denominator exists;
     /// otherwise they stay `None` (fail closed — never invent ratios).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub source_coverage: Option<SourceCoverageDiagnostics>,
-    /// `Formats/Latest` page-boundary / strip-gate integrity (A2 / PARSE-001).
+    /// `Formats/Latest` page-boundary / strip-gate integrity (#151).
     /// `None` when the stream is absent from the container.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub formats_latest_integrity: Option<crate::compression::FormatsLatestIntegrity>,
@@ -518,10 +500,12 @@ pub struct DecodedExportDiagnostics {
     /// The property values the export writes in IFC common property sets
     /// (`Pset_*`), the sets Revit's exporter fills from element parameters
     /// (#35): each building element's sets, and the storey and building sets.
-    /// It equals the values of the file's `Pset_` sets (B49).
+    /// It equals the values of the file's `Pset_` sets.
+    // Tracker: B49.
     #[serde(default)]
     pub parameter_value_count: usize,
-    /// Mean provenance confidence across production `iter_elements` (M3-07).
+    /// Mean provenance confidence across production `iter_elements`.
+    // Tracker: M3-07.
     #[serde(default)]
     pub mean_element_confidence: Option<f32>,
     /// Elements whose provenance confidence is below
@@ -2124,7 +2108,7 @@ const INSTANCE_AS_TYPE: u16 = 2048;
 
 /// Give each family instance written as a distribution element or a proxy a
 /// port for each of its symbol's connectors that Revit's export writes one
-/// for (`crate::native_connectors::symbol_port_indices`, B54, B83), joined
+/// for (`crate::native_connectors::symbol_port_indices`), joined
 /// or not; the writer skips a port a join has already given it. A file whose
 /// release the native record path does not read keeps the ports of its joins
 /// only.
@@ -2182,8 +2166,8 @@ fn attach_family_instance_ports(
     }
 }
 
-/// A door's or window's type GlobalId as Revit's exporter makes it (B72,
-/// revit-ifc `GUIDUtil`): MD5 of `<original symbol's GlobalId>Sub-element:
+/// A door's or window's type GlobalId as Revit's exporter makes it
+/// (revit-ifc `GUIDUtil`): MD5 of `<original symbol's GlobalId>Sub-element:
 /// Flipped: <True|False>`, then ` InAssembly: False` from revit-ifc 25.4 on,
 /// read as a .NET GUID. A file of Revit 2025 or later takes the suffix (RE1,
 /// exported by Revit 2026), one of 2024 not (Core Interior, exported by

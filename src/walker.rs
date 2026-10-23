@@ -1,4 +1,5 @@
-//! Layer 5a walker — schema-directed instance reader for ADocument.
+//! The element walk: the schema-directed instance reader for `ADocument`
+//! and every element a file yields.
 //!
 //! Reads the root `ADocument` class's instance data from
 //! `Global/Latest` using the 100 %-classified schema produced by
@@ -66,7 +67,7 @@ pub enum InstanceField {
 
 /// Handle/ID index into a decompressed `Global/Latest` stream.
 ///
-/// Built by the Layer 5b walker from the element table. Maps each
+/// Built by the walker from the element table. Maps each
 /// `ElementId` to the byte offset in the stream where that element's
 /// record begins. Used by per-class decoders to dereference pointers
 /// across the object graph.
@@ -155,7 +156,7 @@ pub trait ElementDecoder: Sync + Send {
     }
 }
 
-/// Mirror of [`ElementDecoder`] for the write path (WRT-03). A per-
+/// Mirror of [`ElementDecoder`] for the write path. A per-
 /// class encoder takes a `DecodedElement` (typically produced by the
 /// decoder, possibly with a field or two mutated via the `writer`
 /// module's patch API) and a schema entry, and emits the
@@ -178,6 +179,7 @@ pub trait ElementDecoder: Sync + Send {
 ///     // default encode() uses encode_instance() — no override needed
 /// }
 /// ```
+// Tracker: WRT-03.
 pub trait ElementEncoder: Sync + Send {
     /// The class's name as it appears in `Formats/Latest`. Must
     /// match the paired `ElementDecoder::class_name` for round-trip.
@@ -199,7 +201,7 @@ pub trait ElementEncoder: Sync + Send {
     }
 }
 
-/// Inverse of [`read_field_by_type`] (WRT-03). Serialises a single
+/// Inverse of [`read_field_by_type`]. Serialises a single
 /// `InstanceField` value into `out` using the declared
 /// [`formats::FieldType`] to pick the wire layout.
 ///
@@ -210,6 +212,7 @@ pub trait ElementEncoder: Sync + Send {
 /// other mismatches emit an empty slice rather than panicking.
 /// The write path stays round-trip-safe for every field the
 /// decoder understood cleanly.
+// Tracker: WRT-03.
 pub fn write_field_by_type(value: &InstanceField, ty: &formats::FieldType, out: &mut Vec<u8>) {
     use formats::FieldType;
 
@@ -337,7 +340,7 @@ pub fn write_field_by_type(value: &InstanceField, ty: &formats::FieldType, out: 
     }
 }
 
-/// Encode an `ADocument`-level field (WRT-02). Mirrors
+/// Encode an `ADocument`-level field. Mirrors
 /// `read_field` — handles `Pointer`, `ElementId` / `ElementIdRef`
 /// (8-byte `tag,id` layout), and `Container { kind: 0x0e, .. }`
 /// (2-column layout via [`encode_ref_container`]). All other
@@ -347,6 +350,7 @@ pub fn write_field_by_type(value: &InstanceField, ty: &formats::FieldType, out: 
 /// Use this when encoding ADocument instance bytes back into
 /// Global/Latest, because the ADocument reader uses `read_field`
 /// rather than the generic `read_field_by_type`.
+// Tracker: WRT-02.
 pub fn write_adocument_field(value: &InstanceField, ft: &formats::FieldType, out: &mut Vec<u8>) {
     match (ft, value) {
         (formats::FieldType::Pointer { .. }, InstanceField::Pointer { raw }) => {
@@ -375,7 +379,7 @@ pub fn write_adocument_field(value: &InstanceField, ft: &formats::FieldType, out
     }
 }
 
-/// Serialise an ADocument instance back to its wire bytes (WRT-02).
+/// Serialise an ADocument instance back to its wire bytes.
 /// Inverse of the read_adocument decode path.
 ///
 /// Walks `adoc.fields` in schema order (not decoded order, so the
@@ -386,6 +390,7 @@ pub fn write_adocument_field(value: &InstanceField, ft: &formats::FieldType, out
 /// to the decoded prefix bytes (everything before `entry_offset`),
 /// then pass it to `write_with_patches` as a `CustomPrefix8` stream
 /// patch, which encodes it.
+// Tracker: WRT-02.
 pub fn encode_adocument_fields(
     schema: &formats::ClassEntry,
     fields: &[(String, InstanceField)],
@@ -404,7 +409,7 @@ pub fn encode_adocument_fields(
     out
 }
 
-/// Encode a 2-column reference container (WRT-09) — the inverse of
+/// Encode a 2-column reference container — the inverse of
 /// `read_field`'s `Container { kind: 0x0e, .. }` path. The on-
 /// disk layout for this field shape is:
 ///
@@ -421,6 +426,7 @@ pub fn encode_adocument_fields(
 ///
 /// Per-element padding is zero-filled — the reader ignores those
 /// four bytes, so the value is write-time free.
+// Tracker: WRT-09.
 pub fn encode_ref_container(col_a: &[u16], col_b: &[u16]) -> Vec<u8> {
     const ELEM_SIZE: usize = 6;
     let count_a = col_a.len();
@@ -440,7 +446,7 @@ pub fn encode_ref_container(col_a: &[u16], col_b: &[u16]) -> Vec<u8> {
 }
 
 /// Serialise a whole `DecodedElement` back to its wire bytes
-/// (WRT-03). Inverse of [`decode_instance`]. Walks the schema's
+///. Inverse of [`decode_instance`]. Walks the schema's
 /// declared fields in order and, for each, calls
 /// [`write_field_by_type`] with the matching `InstanceField` from
 /// `decoded.fields`.
@@ -450,6 +456,7 @@ pub fn encode_ref_container(col_a: &[u16], col_b: &[u16]) -> Vec<u8> {
 /// non-fallback `InstanceField` for every schema field. Callers
 /// should sanity-check `Completeness::typed_ratio()` before
 /// relying on round-trip equality.
+// Tracker: WRT-03.
 pub fn encode_instance(decoded: &DecodedElement, schema: &formats::ClassEntry) -> Vec<u8> {
     let mut out = Vec::with_capacity(decoded.byte_range.len());
     for (idx, schema_field) in schema.fields.iter().enumerate() {
@@ -467,10 +474,11 @@ pub fn encode_instance(decoded: &DecodedElement, schema: &formats::ClassEntry) -
     out
 }
 
-/// Why a [`DecodedElement`] exists and how strongly we trust it (M3-07).
+/// Why a [`DecodedElement`] exists and how strongly we trust it.
 ///
 /// Surfaced on CLI / Python / viewer JSON so callers can explain an
 /// element and hide low-confidence rows by default.
+// Tracker: M3-07.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ElementProvenance {
     /// Stream path inside the OLE container (e.g. `Global/Latest`,
@@ -569,7 +577,8 @@ impl ElementProvenance {
     }
 }
 
-/// Default floor for “hide low-confidence” UI / export filters (M3-07).
+/// Default floor for “hide low-confidence” UI / export filters.
+// Tracker: M3-07.
 pub const DEFAULT_MIN_ELEMENT_CONFIDENCE: f32 = 0.55;
 
 /// Result of decoding a single element's instance bytes.
@@ -591,7 +600,8 @@ pub struct DecodedElement {
     /// instance data occupies. For building a HandleIndex and for
     /// debugging byte-level decoding issues.
     pub byte_range: std::ops::Range<usize>,
-    /// Decode confidence and provenance (M3-07).
+    /// Decode confidence and provenance.
+    // Tracker: M3-07.
     pub provenance: ElementProvenance,
 }
 
@@ -985,7 +995,7 @@ impl WalkerLimitHit {
 }
 
 /// Resource caps applied while the walker scans and decodes instances
-/// (API-11). Every size- or count-prefixed wire value that could
+///. Every size- or count-prefixed wire value that could
 /// drive an allocation is compared against the matching cap; values
 /// above the cap trigger a graceful fallback or a diagnostic limit
 /// hit, not a panic.
@@ -1002,6 +1012,7 @@ impl WalkerLimitHit {
 ///     ..WalkerLimits::default()
 /// };
 /// ```
+// Tracker: API-11.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct WalkerLimits {
     /// Maximum decompressed `Global/Latest` bytes considered by
@@ -1055,7 +1066,7 @@ pub struct ADocumentInstance {
     pub fields: Vec<(String, InstanceField)>,
 }
 
-/// Per-instance decode completeness summary (API-09).
+/// Per-instance decode completeness summary.
 ///
 /// Callers that want to distinguish "every field decoded cleanly"
 /// from "we parsed the record but several fields fell back to raw
@@ -1063,6 +1074,7 @@ pub struct ADocumentInstance {
 /// breakdown. It's the programmatic equivalent of the
 /// human-readable §Q6.5 addendum in the recon report — "what does
 /// the walker fully understand right now?"
+// Tracker: API-09.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct Completeness {
     /// Total declared + parsed field count (always `fields.len()`).
@@ -1103,7 +1115,7 @@ impl Completeness {
 
 impl ADocumentInstance {
     /// Pointer bytes from the `m_elem_table` field, when the schema
-    /// and decoded payload surfaced it (L5B-01).
+    /// and decoded payload surfaced it.
     ///
     /// ADocument carries a pointer to the document-wide element
     /// index table — the map from `ElementId` to per-element record
@@ -1135,6 +1147,7 @@ impl ADocumentInstance {
     /// Consuming it (following into the referenced bytes and
     /// parsing an actual element index) is separate — see the
     /// `walk_elem_table_*` entry points on `RevitFile`.
+    // Tracker: L5B-01.
     pub fn elem_table_pointer(&self) -> Option<[u32; 2]> {
         const NAMES: &[&str] = &[
             "m_elem_table",
@@ -1278,7 +1291,7 @@ fn read_adocument_internal(
     ))
 }
 
-/// Strict variant of [`read_adocument`] (API-07). Returns `Err` if
+/// Strict variant of [`read_adocument`]. Returns `Err` if
 /// the walker's `Completeness` summary flags any raw-bytes
 /// fallback, OR if the ADocument entry-point detector couldn't
 /// confidently land on the record.
@@ -1288,12 +1301,10 @@ fn read_adocument_internal(
 /// correctness checks. The contract is: if this returns `Ok`, the
 /// `ADocumentInstance` has every declared field decoded into a
 /// typed `InstanceField` (no `Bytes` fallbacks).
+// Tracker: API-07.
 pub fn read_adocument_strict(rf: &mut RevitFile) -> Result<ADocumentInstance> {
     let Some(inst) = read_adocument(rf)? else {
-        return Err(Error::Malformed {
-            what: "ADocument",
-            detail: "no entry point found".into(),
-        });
+        return Err(Error::NotLocated("ADocument"));
     };
     let c = inst.completeness();
     if !c.is_fully_typed() {
@@ -1308,7 +1319,7 @@ pub fn read_adocument_strict(rf: &mut RevitFile) -> Result<ADocumentInstance> {
     Ok(inst)
 }
 
-/// Lossy variant of [`read_adocument`] (API-08). Returns a
+/// Lossy variant of [`read_adocument`]. Returns a
 /// [`crate::parse_mode::Decoded<ADocumentInstance>`] that surfaces
 /// the per-instance completeness summary as diagnostics rather
 /// than short-circuiting.
@@ -1328,6 +1339,7 @@ pub fn read_adocument_strict(rf: &mut RevitFile) -> Result<ADocumentInstance> {
 ///   `diagnostics.failed_streams` contains "ADocument" — entry
 ///   detector returned None. Value is a default `ADocumentInstance`
 ///   placeholder (`entry_offset=0, version=0, fields=vec![]`).
+// Tracker: API-08.
 pub fn read_adocument_lossy(
     rf: &mut RevitFile,
 ) -> Result<crate::parse_mode::Decoded<ADocumentInstance>> {
@@ -1376,8 +1388,8 @@ pub fn read_adocument_lossy_with_limits(
 /// stream, returning an iterator over [`DecodedElement`] values
 /// with their `id` field populated when a self-id was resolvable.
 ///
-/// This is L5B-11.6 — the high-level walker entry point that
-/// [`crate::ifc::RvtDocExporter`] will call to emit per-element IFC
+/// This is the high-level walker entry point that
+/// [`crate::ifc::RvtDocExporter`] calls, through [`iter_elements_with_limits`], to emit per-element IFC
 /// entities. Pipeline:
 ///   1. Read + decompress `Formats/Latest` → [`crate::formats::SchemaTable`].
 ///   2. Read + decompress `Global/Latest` → raw bytes.
@@ -1412,7 +1424,7 @@ pub fn read_adocument_lossy_with_limits(
 /// [`DIAGNOSTIC_ELEMENT_MIN_SCORE`] for reverse-engineering probes
 /// that need the broad candidate set.
 ///
-/// # Typed MVP + partition merge (M3-05 / M3-06)
+/// # Typed MVP + partition merge
 ///
 /// For each `Global/Latest` candidate whose class is in
 /// [`crate::elements::MVP_TYPED_CLASSES`], production iteration
@@ -1447,6 +1459,7 @@ pub fn read_adocument_lossy_with_limits(
 /// }
 /// # Ok::<(), rvt::Error>(())
 /// ```
+// Tracker: M3-05, M3-06.
 pub fn iter_elements(rf: &mut RevitFile) -> Result<impl Iterator<Item = DecodedElement>> {
     iter_elements_with_limits(rf, PRODUCTION_ELEMENT_MIN_SCORE, WalkerLimits::default())
 }
@@ -1608,7 +1621,7 @@ pub fn iter_elements_with_control(
     Ok(out.into_iter())
 }
 
-/// Which strategy resolved the ADocument entry offset (API-12).
+/// Which strategy resolved the ADocument entry offset.
 ///
 /// The walker's entry-point detector runs two strategies in order:
 /// a fast heuristic that looks for the sequential-id-table + 8-zero
@@ -1617,6 +1630,7 @@ pub fn iter_elements_with_control(
 /// offset is useful for debugging and for cross-version regression
 /// tests (a release that suddenly falls through to `Scored` when
 /// prior ones hit `Heuristic` is a signal of wire-layout drift).
+// Tracker: API-12.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DetectionStrategy {
     /// Fast heuristic hit — `heuristic_find` resolved directly.
@@ -1632,12 +1646,13 @@ pub enum DetectionStrategy {
     NotFound,
 }
 
-/// Diagnostic output of [`detect_adocument_start`] (API-12).
+/// Diagnostic output of [`detect_adocument_start`].
 ///
 /// Callers that want to understand WHY the walker landed where it
 /// did — for CI drift detection, cross-version regression reports,
 /// or user-facing "here's how confident I am" output — use this
 /// struct instead of plain `Option<usize>`.
+// Tracker: API-12.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct DetectionResult {
     /// Resolved byte offset into the decompressed `Global/Latest`
@@ -1661,7 +1676,7 @@ pub struct DetectionResult {
 }
 
 /// Schema-aware entry-point detection with per-call diagnostics
-/// (API-12). Same decision logic as the internal
+///. Same decision logic as the internal
 /// `find_adocument_start_with_schema`, but returns the strategy +
 /// score + candidate count that produced the result, instead of
 /// just an `Option<usize>`.
@@ -1669,6 +1684,7 @@ pub struct DetectionResult {
 /// Public surface for tools that want to surface detection
 /// confidence — the plain `read_adocument` path calls through the
 /// non-diagnostic variant for backwards compatibility.
+// Tracker: API-12.
 pub fn detect_adocument_start(
     d: &[u8],
     adoc_schema: Option<&formats::ClassEntry>,

@@ -1,7 +1,7 @@
 //! `Door` + `Window` — wall-hosted opening elements. Both are
 //! `FamilyInstance` subtypes at the class hierarchy level but ship
 //! with enough stable scalar fields to decode directly without first
-//! resolving the full family graph (which is task L5B-21).
+//! resolving the full family graph.
 //!
 //! Each element references:
 //! - A **host** (the wall it cuts through), via `m_host_id`

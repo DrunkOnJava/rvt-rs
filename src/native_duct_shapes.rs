@@ -1,4 +1,4 @@
-//! A duct type's shape, from its native record (B59, B43).
+//! A duct type's shape, from its native record.
 //!
 //! A rigid duct type is an `AbsDuctType` record whose objects include its
 //! sweep profile: `AbsSysRectSweepProfile`, `AbsSysCircSweepProfile` or
@@ -7,6 +7,7 @@
 //! the duct `<system family>:<type>:<ElementId>`. On RE1 Mechanical the duct
 //! type 53292 its 25 ducts use holds a rectangular profile, and the file's
 //! other duct types a round and an oval one (Measure run 37231078920).
+// Tracker: B59, B43.
 
 use crate::{RevitFile, native_document};
 use std::collections::{BTreeMap, BTreeSet};
@@ -32,7 +33,8 @@ impl DuctShape {
 
     /// The `Pset_DuctSegmentTypeCommon.Shape` value of this shape (IFC's
     /// `PEnum_DuctSegmentShape`), as Revit's export writes `RECTANGULAR` on
-    /// RE1's ducts (B43).
+    /// RE1's ducts.
+    // Tracker: B43.
     pub fn ifc_shape(self) -> &'static str {
         match self {
             Self::Rectangular => "RECTANGULAR",

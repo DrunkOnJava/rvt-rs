@@ -1,4 +1,5 @@
-//! Honest capability manifest snapshot (Phase 1 leftovers).
+//! The capability manifest: what rvt-rs reads, at the status
+//! `docs/support-matrix.json` allows.
 //!
 //! Emits research + product capability rows aligned with
 //! `docs/support-matrix.json` honesty ceilings. Does **not** claim ES
@@ -276,11 +277,11 @@ impl EvidenceTier {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum RelationDomain {
-    /// ES-held ElementId / reference candidates (Lane A).
+    /// ES-held ElementId / reference candidates.
     EsRefGraph,
     /// ES value-tree containment (separate from BIM topology).
     EsValueTree,
-    /// BIM host/opening/connect — only after evidence gates (Lane C).
+    /// BIM host/opening/connect — only after evidence gates.
     BimTopology,
     /// ElemTable ownership candidates (#152) — scored separately from ES.
     ElemTableOwnership,
@@ -323,7 +324,7 @@ pub struct RelationDomainRegistry {
 pub struct RelationDomainEntry {
     pub domain: RelationDomain,
     pub id: String,
-    /// Production wiring status — always experimental for Phase 1 leftovers.
+    /// Production wiring status; every domain is experimental today.
     pub status: DomainStatus,
     pub isolation_peers: Vec<RelationDomain>,
     pub notes: Vec<String>,
@@ -342,7 +343,8 @@ pub enum DomainStatus {
 }
 
 impl RelationDomainRegistry {
-    /// Seed registry with honest Phase 1 leftovers status.
+    /// The registry as it stands: every domain experimental, with its
+    /// isolation peers and notes.
     pub fn phase1_stub() -> Self {
         let domains = [
             RelationDomain::EsRefGraph,

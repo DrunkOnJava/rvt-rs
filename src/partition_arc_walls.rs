@@ -1,10 +1,11 @@
-//! Shared partition ArcWall iteration (RE-15 / D20).
+//! Shared partition ArcWall iteration (RE-15).
 //!
 //! The production walker (`iter_elements`) only scans `Global/Latest`
 //! and therefore cannot see ArcWall instance records, which live in
 //! `Partitions/*`. The IFC exporter previously inlined its own
 //! partition scan; this module is the shared path for IFC export,
 //! diagnostics, CLI counts, and ElemTable linkage.
+// Tracker: D20.
 
 use crate::arc_wall_record::{
     ArcWallRecord, ArcWallScanStatus, ArcWallTrailer, STANDARD_RECORD_MIN_SIZE,
@@ -203,7 +204,7 @@ pub fn element_id_partition_index(
 }
 
 /// Result of deriving storeys from ArcWall elevations, optionally
-/// labelled with partition Level-like display names (RE-15 / #86).
+/// labelled with partition Level-like display names (RE-15, #86).
 #[derive(Debug, Clone, PartialEq)]
 pub struct ArcWallStoreyRecovery {
     pub storeys: Vec<Storey>,

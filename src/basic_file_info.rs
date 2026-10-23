@@ -231,7 +231,7 @@ impl BasicFileInfo {
         self.property("ClientAppName")
     }
 
-    /// Encode a `BasicFileInfo` back to UTF-16LE bytes (WRT-07).
+    /// Encode a `BasicFileInfo` back to UTF-16LE bytes.
     /// Inverse of [`Self::from_bytes`].
     ///
     /// Uses the canonical 2019+ pattern:
@@ -251,6 +251,7 @@ impl BasicFileInfo {
     /// `original_path`, `guid`, and `locale` equal the original's.
     /// `raw_text` may differ (it's the decoder's reconstruction,
     /// not a byte-level echo).
+    // Tracker: WRT-07.
     pub fn encode(&self) -> Vec<u8> {
         let mut text = format!("{}", self.version);
         if let Some(build) = self.build.as_deref() {

@@ -1,4 +1,4 @@
-//! Phase names, and the phase an element was created in (spike 257).
+//! Phase names, and the phase an element was created in (#755).
 //!
 //! A Revit phase stores its name after its ElementId in one fixed frame:
 //!
