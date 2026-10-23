@@ -62,7 +62,6 @@ use encoding_rs::UTF_16LE;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[non_exhaustive]
 pub struct BasicFileInfo {
     /// 4-digit Revit release year (e.g. 2024).
     pub version: u32,
@@ -86,7 +85,6 @@ pub struct BasicFileInfo {
 
 /// One `Key: value` line from the `BasicFileInfo` text block.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[non_exhaustive]
 pub struct FileProperty {
     pub key: String,
     pub value: String,

@@ -815,7 +815,6 @@ pub enum ProfileDef {
 /// layer whose material is not known (IFC4 makes it optional).
 // Tracker: IFC-28.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[non_exhaustive]
 pub struct MaterialLayer {
     pub material_index: Option<usize>,
     pub thickness_feet: f64,
@@ -841,7 +840,6 @@ pub struct MaterialLayer {
 /// with subsequent layers stacked inward.
 // Tracker: IFC-28.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[non_exhaustive]
 pub struct MaterialLayerSet {
     pub name: String,
     pub layers: Vec<MaterialLayer>,
@@ -866,7 +864,6 @@ pub enum LayerSetDirection {
 /// of a copy of the filling element's body, which reaches past the wall by
 /// the door's swing.
 #[derive(Debug, Clone, Copy, PartialEq, serde::Serialize, serde::Deserialize)]
-#[non_exhaustive]
 pub struct OpeningCut {
     /// Rectangle size along the element's local X and Y, feet.
     pub x_dim_feet: f64,
@@ -884,7 +881,6 @@ pub struct OpeningCut {
 /// and in the category "Materials", as Revit's export writes them. A wall
 /// whose body is not a layer set has one per layer instead (RE-88).
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
-#[non_exhaustive]
 pub struct MaterialConstituentSet {
     /// Indices into `IfcModel.materials`, one per constituent, in the order
     /// written: a family instance's in name order, a wall's layers exterior
@@ -903,7 +899,6 @@ pub struct MaterialConstituentSet {
 /// they stack towards its positive or negative end, and where the first
 /// layer starts on it, feet from the placement.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
-#[non_exhaustive]
 pub struct MaterialLayerSetUsage {
     pub direction: LayerSetDirection,
     pub positive: bool,

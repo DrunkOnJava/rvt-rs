@@ -44,7 +44,6 @@ pub use recovery::{
 
 /// 3D point in project coordinates.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
-#[non_exhaustive]
 pub struct Point3 {
     pub x: f64,
     pub y: f64,
@@ -62,7 +61,6 @@ impl Point3 {
 /// 3D unit vector. Callers are responsible for normalization; no
 /// runtime check enforces it.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
-#[non_exhaustive]
 pub struct Vector3 {
     pub x: f64,
     pub y: f64,
@@ -81,7 +79,6 @@ impl Vector3 {
 
 /// 3D transform (rotation + translation + optional uniform scale).
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
-#[non_exhaustive]
 pub struct Transform3 {
     /// Origin of the local frame in parent coordinates.
     pub origin: Point3,
@@ -177,7 +174,6 @@ pub enum Curve {
 /// Closed or open loop of curves. Used for planar face boundaries
 /// and for sketches (floor/ceiling/roof boundaries).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[non_exhaustive]
 pub struct CurveLoop {
     pub curves: Vec<Curve>,
     /// `true` if the last curve's endpoint meets the first curve's
@@ -333,7 +329,6 @@ pub enum BooleanOp {
 
 /// Discretized triangular mesh.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[non_exhaustive]
 pub struct Mesh {
     pub vertices: Vec<Point3>,
     /// Triangle vertex indices, 3 per triangle.
@@ -344,7 +339,6 @@ pub struct Mesh {
 
 /// Point cloud (imported laser scans / photogrammetry).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[non_exhaustive]
 pub struct PointCloud {
     pub points: Vec<Point3>,
 }
@@ -355,7 +349,6 @@ pub struct PointCloud {
 
 /// Axis-aligned bounding box in project coordinates.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
-#[non_exhaustive]
 pub struct BoundingBox {
     pub min: Point3,
     pub max: Point3,

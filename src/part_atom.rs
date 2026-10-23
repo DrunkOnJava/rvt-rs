@@ -11,7 +11,6 @@ use quick_xml::events::Event;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
-#[non_exhaustive]
 pub struct PartAtom {
     /// The last title-like element seen — on families the family type
     /// name (`0610 x 0915mm` on the reference sample), on project files a
@@ -33,14 +32,12 @@ pub struct PartAtom {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[non_exhaustive]
 pub struct Taxonomy {
     pub term: String,
     pub label: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[non_exhaustive]
 pub struct Category {
     pub term: String,
     pub scheme: Option<String>,

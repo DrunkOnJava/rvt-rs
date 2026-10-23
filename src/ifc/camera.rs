@@ -25,7 +25,6 @@ use serde::{Deserialize, Serialize};
 /// that target.
 // Tracker: VW1-07.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
-#[non_exhaustive]
 pub struct CameraState {
     /// Point the camera is looking at, in world space (feet).
     pub target: [f64; 3],

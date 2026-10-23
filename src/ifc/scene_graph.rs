@@ -102,7 +102,6 @@ impl SceneNode {
 /// filter and re-rendering the returned tree.
 // Tracker: VW1-09.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[non_exhaustive]
 pub struct CategoryFilter {
     /// IFC types to hide. Matched case-insensitively against
     /// `SceneNode.ifc_type`. Use [`Self::hide`] to add a type,
