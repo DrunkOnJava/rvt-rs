@@ -68,6 +68,7 @@ impl ElementDecoder for ReferencePlaneDecoder {
 
 /// Typed view of a decoded ReferencePlane.
 #[derive(Debug, Clone, PartialEq, Default)]
+#[non_exhaustive]
 pub struct ReferencePlane {
     pub name: Option<String>,
     /// The "bubble" end is the one that carries the plane's name tag.

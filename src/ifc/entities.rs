@@ -18,6 +18,7 @@ use serde::{Deserialize, Serialize};
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "kind")]
+#[non_exhaustive]
 pub enum IfcEntity {
     Project {
         name: Option<String>,
@@ -271,6 +272,7 @@ pub struct Classification {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[non_exhaustive]
 pub enum ClassificationSource {
     OmniClass,
     Uniformat,
@@ -530,6 +532,7 @@ impl Extrusion {
 /// Maps to the IFC4 `IfcBooleanOperator` enum values.
 // Tracker: IFC-19.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[non_exhaustive]
 pub enum IfcBooleanOp {
     /// `.UNION.` — operand_a ∪ operand_b.
     Union,
@@ -585,6 +588,7 @@ pub struct BrepTriangle(pub u32, pub u32, pub u32);
 /// methods.
 // Tracker: IFC-18, IFC-19, IFC-20.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[non_exhaustive]
 pub enum SolidShape {
     /// Profile rotated about an axis through a specified angle.
     /// Emits `IfcRevolvedAreaSolid`. The profile is the
@@ -725,6 +729,7 @@ pub enum SolidShape {
 /// | Wall / slab / roof / ceiling | `Rectangle` (default, no override) |
 // Tracker: IFC-24.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[non_exhaustive]
 pub enum ProfileDef {
     /// `IFCRectangleProfileDef` — the default if `profile_override`
     /// is `None`. Kept as an explicit variant so callers can round-
@@ -846,6 +851,7 @@ pub struct MaterialLayerSet {
 /// Which axis of an element's placement a material layer set runs along
 /// (IFC4 `IfcLayerSetDirectionEnum`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[non_exhaustive]
 pub enum LayerSetDirection {
     Axis1,
     Axis2,
@@ -1013,6 +1019,7 @@ pub struct UnitAssignment {
 /// a valid IFC unit for a matched identifier.
 // Tracker: IFC-39.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum ForgeUnit {
     // ---- Length ----
     Millimeters,
@@ -1068,6 +1075,7 @@ pub enum ForgeUnit {
 
 /// IFC4 dimensional category (`LENGTHUNIT`, `AREAUNIT`, …).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum IfcUnitType {
     Length,
     Area,
@@ -1106,6 +1114,7 @@ impl IfcUnitType {
 /// equals `0.453592 kg`; one US gallon equals `0.00378541 m^3`.
 // Tracker: IFC-40.
 #[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
 pub enum IfcUnitEmission {
     /// Pure SI unit.
     Si {
@@ -1477,6 +1486,7 @@ pub struct Property {
 /// unit-consistent with the project-level `IfcUnitAssignment`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "kind", content = "value")]
+#[non_exhaustive]
 pub enum PropertyValue {
     /// Free-form text — `IfcText`.
     Text(String),

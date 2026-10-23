@@ -28,6 +28,7 @@ pub type Anchor = [f64; 3];
 // Tracker: VW1-12.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
+#[non_exhaustive]
 pub enum Annotation {
     /// Text label pinned to an anchor point.
     Note {
@@ -91,6 +92,7 @@ impl Annotation {
 /// them in list order on top of the scene.
 // Tracker: VW1-12.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct AnnotationLayer {
     pub annotations: Vec<Annotation>,
 }

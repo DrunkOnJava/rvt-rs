@@ -21,6 +21,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 /// Snapshot of structural facts extracted from one IFC STEP file.
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+#[non_exhaustive]
 pub struct IfcFileSummary {
     /// Uppercase entity type → occurrence count (DATA section only).
     pub entity_counts: BTreeMap<String, usize>,
@@ -37,18 +38,21 @@ pub struct IfcFileSummary {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[non_exhaustive]
 pub struct StoreySummary {
     pub name: String,
     pub elevation: Option<f64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[non_exhaustive]
 pub struct BoundingBox {
     pub min: [f64; 3],
     pub max: [f64; 3],
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+#[non_exhaustive]
 pub struct ObjectSummary {
     pub ifc_type: String,
     pub name: String,
@@ -56,6 +60,7 @@ pub struct ObjectSummary {
 
 /// Side-by-side comparison of two [`IfcFileSummary`] values.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[non_exhaustive]
 pub struct IfcCompareReport {
     pub left_label: String,
     pub right_label: String,
@@ -76,6 +81,7 @@ pub struct IfcCompareReport {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[non_exhaustive]
 pub struct CountDelta {
     pub left: usize,
     pub right: usize,
@@ -83,6 +89,7 @@ pub struct CountDelta {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[non_exhaustive]
 pub struct BoundingBoxDelta {
     pub left: Option<BoundingBox>,
     pub right: Option<BoundingBox>,

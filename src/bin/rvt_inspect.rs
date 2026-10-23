@@ -473,10 +473,12 @@ fn print_human_report(report: &InspectReport) {
             rvt::compression::FormatsIntegrityStatus::Ok => "ok",
             rvt::compression::FormatsIntegrityStatus::Uncertain => "uncertain",
             rvt::compression::FormatsIntegrityStatus::Incomplete => "incomplete",
+            _ => "unknown",
         };
         let strip = match fmt.checksum_tail_stripping {
             rvt::compression::ChecksumTailStripping::Disabled => "disabled",
             rvt::compression::ChecksumTailStripping::Enabled => "enabled",
+            _ => "unknown",
         };
         if let Some(code) = &fmt.diagnostic_code {
             println!("    status={status} · strip={strip} · code={code}");

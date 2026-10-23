@@ -116,6 +116,7 @@ impl Transform3 {
 /// `IfcNurbsCurve` without loss. Discretization, if needed, is a
 /// downstream concern.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[non_exhaustive]
 pub enum Curve {
     /// Straight line segment from `start` to `end`.
     Line { start: Point3, end: Point3 },
@@ -191,6 +192,7 @@ pub struct CurveLoop {
 /// whichever variant best describes the Revit face without
 /// lossy tessellation.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[non_exhaustive]
 pub enum Face {
     /// Planar face with outer boundary + optional holes.
     Planar {
@@ -257,6 +259,7 @@ pub enum Face {
 /// Most Revit elements assemble into 1–3 `Solid` values (e.g.
 /// a Wall becomes a stack of `Extrusion`s, one per layer).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[non_exhaustive]
 pub enum Solid {
     /// Profile swept linearly by `distance` along `direction`.
     /// Maps to `IfcExtrudedAreaSolid`.
@@ -317,6 +320,7 @@ pub enum Solid {
 
 /// Boolean operation between two solids.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[non_exhaustive]
 pub enum BooleanOp {
     Union,
     Difference,
