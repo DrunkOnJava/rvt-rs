@@ -15,8 +15,16 @@ const EPOCH: &str = "1700000000";
 fn inputs() -> Vec<PathBuf> {
     let tier1 = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("corpus/tier1/architectural-2024/architectural-2024.rvt");
+    // A configured project corpus must hold Einhoven; an unset one is a skip.
     let einhoven = std::env::var_os("RVT_PROJECT_CORPUS_DIR")
         .map(|dir| PathBuf::from(dir).join("Revit_IFC5_Einhoven.rvt"));
+    if let Some(path) = &einhoven {
+        assert!(
+            path.exists(),
+            "RVT_PROJECT_CORPUS_DIR is set but {} is absent",
+            path.display()
+        );
+    }
     [Some(tier1), einhoven]
         .into_iter()
         .flatten()
@@ -71,13 +79,22 @@ fn every_writer_writes_the_same_bytes_twice() {
         ));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
-        for (index, (bin, extra, ext)) in writers.iter().enumerate() {
-            let first = write(bin, &input, extra, &dir, &format!("{index}a"), ext);
+        // The two runs straddle a clock second, so a writer that takes the
+        // wall clock's time cannot write the same bytes twice.
+        let first: Vec<Vec<u8>> = writers
+            .iter()
+            .enumerate()
+            .map(|(index, (bin, extra, ext))| {
+                write(bin, &input, extra, &dir, &format!("{index}a"), ext)
+            })
+            .collect();
+        std::thread::sleep(std::time::Duration::from_millis(1100));
+        for (index, ((bin, extra, ext), first)) in writers.iter().zip(&first).enumerate() {
             let second = write(bin, &input, extra, &dir, &format!("{index}b"), ext);
             assert!(!first.is_empty(), "{bin} {extra:?} wrote nothing");
             let differs = first.iter().zip(&second).position(|(a, b)| a != b);
             assert!(
-                first == second,
+                *first == second,
                 "{bin} {extra:?} on {}: {} and {} bytes, first difference at {:?}",
                 input.display(),
                 first.len(),

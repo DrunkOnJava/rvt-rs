@@ -235,11 +235,15 @@ fn walker_limits_from_args(args: &Args) -> WalkerLimits {
 /// unset or empty (reproducible-builds.org).
 fn source_date_epoch() -> anyhow::Result<Option<i64>> {
     match std::env::var("SOURCE_DATE_EPOCH") {
-        Ok(value) if !value.is_empty() => value
+        Ok(value) if value.is_empty() => Ok(None),
+        Ok(value) => value
             .parse()
             .map(Some)
             .map_err(|_| anyhow::anyhow!("SOURCE_DATE_EPOCH must be Unix seconds, not {value:?}")),
-        _ => Ok(None),
+        Err(std::env::VarError::NotPresent) => Ok(None),
+        Err(std::env::VarError::NotUnicode(value)) => Err(anyhow::anyhow!(
+            "SOURCE_DATE_EPOCH must be Unix seconds, not {value:?}"
+        )),
     }
 }
 
