@@ -5,7 +5,7 @@
 
 use rvt::RevitFile;
 use rvt::control::{CancelToken, Stage, WalkerControl};
-use rvt::partition_scanner::{ScanOptions, scan_partitions_with_control};
+use rvt::research::partition_scanner::{ScanOptions, scan_partitions_with_control};
 use rvt::walker::{PRODUCTION_ELEMENT_MIN_SCORE, WalkerLimits, iter_elements_with_control};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
@@ -127,9 +127,12 @@ fn partition_scan_observes_the_token() {
     let scan =
         scan_partitions_with_control(&mut open(), version, &ScanOptions::default(), &control)
             .expect("uncancelled partition scan");
-    let plain =
-        rvt::partition_scanner::scan_partitions(&mut open(), version, &ScanOptions::default())
-            .unwrap();
+    let plain = rvt::research::partition_scanner::scan_partitions(
+        &mut open(),
+        version,
+        &ScanOptions::default(),
+    )
+    .unwrap();
     assert_eq!(scan.candidates.len(), plain.candidates.len());
     let events = seen.lock().unwrap();
     assert!(events.iter().all(|e| e.stage == Stage::PartitionScan));

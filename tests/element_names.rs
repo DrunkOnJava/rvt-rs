@@ -209,7 +209,7 @@ fn re1_names_are_revits() {
 fn check_system_type_names(rvt: &Path, reference: &Path, release: u32) -> Vec<(String, usize)> {
     let theirs = names_by_tag(&std::fs::read_to_string(reference).expect("reference IFC"));
     let mut rf = RevitFile::open(rvt).expect("open");
-    let mvp = rvt::partition_schema_mvp::recover_partition_schema_mvp(
+    let mvp = rvt::research::partition_schema_mvp::recover_partition_schema_mvp(
         &mut rf,
         release,
         rvt::walker::WalkerLimits::default(),
@@ -228,13 +228,22 @@ fn check_system_type_names(rvt: &Path, reference: &Path, release: u32) -> Vec<(S
         .chain(mvp.slabs.iter())
         .chain(mvp.products.iter())
     {
-        let family = field(element, rvt::partition_schema_mvp::FAMILY_NAME_FIELD);
-        let derived = field(element, rvt::partition_schema_mvp::FAMILY_NAME_SOURCE_FIELD)
-            .is_some_and(|source| source == rvt::partition_schema_mvp::SYSTEM_FAMILY_SOURCE);
+        let family = field(
+            element,
+            rvt::research::partition_schema_mvp::FAMILY_NAME_FIELD,
+        );
+        let derived = field(
+            element,
+            rvt::research::partition_schema_mvp::FAMILY_NAME_SOURCE_FIELD,
+        )
+        .is_some_and(|source| source == rvt::research::partition_schema_mvp::SYSTEM_FAMILY_SOURCE);
         if family.is_some() && !derived {
             continue;
         }
-        let Some(ours) = field(element, rvt::partition_schema_mvp::TYPE_NAME_FIELD) else {
+        let Some(ours) = field(
+            element,
+            rvt::research::partition_schema_mvp::TYPE_NAME_FIELD,
+        ) else {
             continue;
         };
         let id = element.id.expect("record id");

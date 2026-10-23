@@ -44,8 +44,7 @@ pub const DEFAULT_MAX_STREAM_BYTES: u64 = 256 * 1024 * 1024;
 /// pathological or hostile input that would otherwise force
 /// unbounded memory allocation.
 ///
-/// See audit P0 items 4 and 5 (AUDIT-2026-04-19.md) for the
-/// rationale — RVT is a file-upload target, and bounded resource
+/// RVT is a file-upload target, and bounded resource
 /// consumption is a DoS-safety requirement, not a nice-to-have.
 #[derive(Debug, Clone, Copy)]
 pub struct OpenLimits {
@@ -103,22 +102,29 @@ pub struct RevitFile {
     element_names: Option<Arc<crate::partition_names::ElementNames>>,
     /// Memoised design option sets and their primary options (RE-40).
     design_options: Option<Arc<crate::partition_design_options::DesignOptions>>,
-    /// Memoised production walk (B71): the elements
+    /// Memoised production walk: the elements
     /// [`crate::walker::iter_elements_with_control`] yields for a minimum
     /// score and walker limits. An export walks once to write and again for
     /// its diagnostics' class counts; the second reuses the first.
+    // Tracker: B71.
     walk: Option<CachedWalk>,
-    /// Memoised data objects (RE-153) of each partition stream (B80): the
+    /// Memoised data objects (RE-153) of each partition stream: the
     /// original symbols, railing types and MEP systems each scanned every
     /// partition for them.
+    // Tracker: B80.
     data_objects: std::collections::HashMap<String, PartitionDataObjects>,
-    /// Memoised native extraction preamble (B82): each native consumer read
+    /// Memoised native extraction preamble: each native consumer read
     /// the schema, the element index and the increments again.
+    // Tracker: B82.
     native_preamble: Option<Arc<crate::native_document::Preamble>>,
 }
 
 /// A partition stream's data objects, each at its offset (RE-153).
+#[cfg(feature = "unstable-research")]
 pub type PartitionDataObjects = Arc<Vec<(usize, crate::partition_room_parameters::DataObject)>>;
+#[cfg(not(feature = "unstable-research"))]
+pub(crate) type PartitionDataObjects =
+    Arc<Vec<(usize, crate::partition_room_parameters::DataObject)>>;
 
 /// A memoised walk: its minimum score, its limits and its elements.
 type CachedWalk = (
@@ -143,17 +149,23 @@ pub struct Summary {
 }
 
 impl RevitFile {
-    /// Open a Revit file from disk.
+    /// Open a Revit file from disk, under the default [`OpenLimits`].
     ///
-    /// Returns an error if the file doesn't exist, can't be read, or
-    /// doesn't start with the OLE2 / MS-CFB magic bytes
-    /// (`D0 CF 11 E0 A1 B1 1A E1`).
+    /// # Errors
     ///
-    /// ```no_run
+    /// [`Error::Io`] when the file cannot be read (its message names the
+    /// path), [`Error::NotACfbFile`] when it does not start with the OLE2 /
+    /// MS-CFB magic bytes (`D0 CF 11 E0 A1 B1 1A E1`), and [`Error::Cfb`]
+    /// when it is larger than [`OpenLimits::max_file_bytes`] or its
+    /// container does not open.
+    ///
+    /// # Examples
+    ///
+    /// ```
     /// use rvt::RevitFile;
     ///
-    /// let mut rf = RevitFile::open("your-project.rfa")?;
-    /// let summary = rf.summarize()?;
+    /// let mut rf = RevitFile::open("corpus/tier1/architectural-2024/architectural-2024.rvt")?;
+    /// let summary = rf.summarize_strict()?;
     /// println!("Revit {}", summary.version);
     /// # Ok::<(), rvt::Error>(())
     /// ```
@@ -218,6 +230,14 @@ impl RevitFile {
     ///
     /// Useful for callers that have the file bytes already (e.g. streamed
     /// over the network). Equivalent to `open` after a `read_to_end`.
+    ///
+    /// # Errors
+    ///
+    /// [`Error::NotACfbFile`] when the bytes do not start with the OLE2 /
+    /// MS-CFB magic bytes, and [`Error::Cfb`] when they exceed
+    /// [`OpenLimits::max_file_bytes`] or the container does not open.
+    ///
+    /// # Examples
     ///
     /// ```
     /// use rvt::RevitFile;
@@ -286,8 +306,19 @@ impl RevitFile {
 
     /// The data objects (RE-153) of partition stream `name`, each at its
     /// offset in the stream's inflated bytes ([`Self::inflated_partition`]),
-    /// memoised (B80).
+    /// memoised.
+    // Tracker: B80.
+    #[cfg(feature = "unstable-research")]
     pub fn partition_data_objects(&mut self, name: &str) -> Result<PartitionDataObjects> {
+        self.memoised_partition_data_objects(name)
+    }
+
+    /// `partition_data_objects` for the crate's own readers, with or without
+    /// `unstable-research`.
+    pub(crate) fn memoised_partition_data_objects(
+        &mut self,
+        name: &str,
+    ) -> Result<PartitionDataObjects> {
         if let Some(cached) = self.data_objects.get(name) {
             return Ok(Arc::clone(cached));
         }
@@ -301,7 +332,8 @@ impl RevitFile {
     }
 
     /// What every native extraction reads before the partitions
-    /// ([`crate::native_document::Preamble`]), memoised (B82).
+    /// (`crate::native_document::Preamble`), memoised.
+    // Tracker: B82.
     pub(crate) fn native_preamble(
         &mut self,
     ) -> anyhow::Result<Arc<crate::native_document::Preamble>> {
@@ -313,10 +345,19 @@ impl RevitFile {
         Ok(preamble)
     }
 
-    /// ElementIds [`crate::partition_element_records::assign_second_prologue_ids`]
+    /// ElementIds `research::partition_element_records::assign_second_prologue_ids`
     /// reads for second-prologue frames from their enclosing partition
     /// records, by stream and frame offset, memoised (RE-35).
+    #[cfg(feature = "unstable-research")]
     pub fn second_prologue_ids(
+        &mut self,
+    ) -> Arc<crate::partition_element_records::SecondPrologueIds> {
+        self.memoised_second_prologue_ids()
+    }
+
+    /// `second_prologue_ids` for the crate's own readers, with or without
+    /// `unstable-research`.
+    pub(crate) fn memoised_second_prologue_ids(
         &mut self,
     ) -> Arc<crate::partition_element_records::SecondPrologueIds> {
         if let Some(cached) = &self.second_prologue_ids {
@@ -331,7 +372,14 @@ impl RevitFile {
     /// Family and type names from the partition name entries, with each
     /// named type's family candidates, memoised (RE-38). Empty where the
     /// release is not proven or a stream does not parse.
+    #[cfg(feature = "unstable-research")]
     pub fn element_names(&mut self) -> Arc<crate::partition_names::ElementNames> {
+        self.memoised_element_names()
+    }
+
+    /// `element_names` for the crate's own readers, with or without
+    /// `unstable-research`.
+    pub(crate) fn memoised_element_names(&mut self) -> Arc<crate::partition_names::ElementNames> {
         if let Some(cached) = &self.element_names {
             return Arc::clone(cached);
         }
@@ -342,7 +390,8 @@ impl RevitFile {
     }
 
     /// The elements a production walk with `min_score` and `limits` yielded
-    /// on this file, when one ran (B71).
+    /// on this file, when one ran.
+    // Tracker: B71.
     pub(crate) fn cached_walk(
         &self,
         min_score: i64,
@@ -355,7 +404,8 @@ impl RevitFile {
     }
 
     /// Keep a production walk's elements for later walks with the same
-    /// `min_score` and `limits` (B71).
+    /// `min_score` and `limits`.
+    // Tracker: B71.
     pub(crate) fn store_walk(
         &mut self,
         min_score: i64,
@@ -367,7 +417,16 @@ impl RevitFile {
 
     /// Design option sets and their primary options, memoised (RE-40).
     /// Empty where the release is not proven or a stream does not parse.
+    #[cfg(feature = "unstable-research")]
     pub fn design_options(&mut self) -> Arc<crate::partition_design_options::DesignOptions> {
+        self.memoised_design_options()
+    }
+
+    /// `design_options` for the crate's own readers, with or without
+    /// `unstable-research`.
+    pub(crate) fn memoised_design_options(
+        &mut self,
+    ) -> Arc<crate::partition_design_options::DesignOptions> {
         if let Some(cached) = &self.design_options {
             return Arc::clone(cached);
         }
@@ -609,10 +668,21 @@ impl RevitFile {
         self.summarize_lossy().map(|d| d.value)
     }
 
-    /// Strict variant of [`RevitFile::summarize`] (API-04) — returns
-    /// `Err` on ANY parse failure, including PartAtom absence and
-    /// class-name enumeration failure. Use when downstream code
+    /// Strict variant of [`RevitFile::summarize`] — returns
+    /// `Err` on any parse failure of a stream it reads, including the
+    /// class-name inventory. A missing PartAtom is not a failure (project
+    /// files have none) and leaves `partatom` empty. Use when downstream code
     /// can't tolerate a partially-populated `Summary`.
+    ///
+    /// # Errors
+    ///
+    /// [`Error::StreamNotFound`] when `BasicFileInfo` or `Formats/Latest` is
+    /// missing, [`Error::Cfb`] or [`Error::Io`] when either cannot be read
+    /// (one larger than [`OpenLimits::max_stream_bytes`] among them),
+    /// [`Error::BasicFileInfo`] or [`Error::PartAtom`] when either does not
+    /// parse, and [`Error::Decompress`] or [`Error::DecompressLimitExceeded`]
+    /// when `Formats/Latest` does not inflate or inflates past its cap.
+    // Tracker: API-04.
     pub fn summarize_strict(&mut self) -> Result<Summary> {
         let streams = self.stream_names();
         let bfi = self.basic_file_info()?;
@@ -646,7 +716,7 @@ impl RevitFile {
         })
     }
 
-    /// Lossy variant (API-05) — returns a [`crate::parse_mode::Decoded<Summary>`]
+    /// Lossy variant — returns a [`crate::parse_mode::Decoded<Summary>`]
     /// that accumulates partial-parse issues into its
     /// `diagnostics` field instead of aborting. Fails only when
     /// BasicFileInfo itself is unreadable (without it there's
@@ -656,6 +726,7 @@ impl RevitFile {
     ///
     /// Use when you're summarising a batch of files and want a
     /// best-effort report even for the ones with partial parses.
+    // Tracker: API-05.
     pub fn summarize_lossy(&mut self) -> Result<crate::parse_mode::Decoded<Summary>> {
         use crate::parse_mode::{Decoded, Diagnostics};
 

@@ -17,7 +17,7 @@
 use crate::element_names::decode_step_string;
 use crate::is_external::{entities, list, split_args};
 use rvt::RevitFile;
-use rvt::native_element_parameters::{ElementParameter, ParameterLevel};
+use rvt::research::native_element_parameters::{ElementParameter, ParameterLevel};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
@@ -164,7 +164,7 @@ fn pair(rvt: &Path, ifc: &Path, names: &[&str]) -> (usize, Vec<String>) {
     let revit = revit_values(&step);
     let mut file = RevitFile::open(rvt).expect("model");
     let ids = revit.keys().copied().collect();
-    let ours = rvt::native_element_parameters::read(&mut file, &ids).expect("parameters");
+    let ours = rvt::research::native_element_parameters::read(&mut file, &ids).expect("parameters");
     let (mut paired, mut differ) = (0, Vec::new());
     for (id, parameters) in &ours.elements {
         // Revit takes a parameter named for the property before `Fire Rating`.
@@ -258,7 +258,7 @@ fn r2025_windows_take_their_types_fire_rating() {
     assert_eq!(paired, 3, "the three windows' Fire Rating");
     // The value is the type's: the window instances hold none of their own.
     let mut file = RevitFile::open(&model).expect("model");
-    let ours = rvt::native_element_parameters::read(&mut file, &BTreeSet::from([12538]))
+    let ours = rvt::research::native_element_parameters::read(&mut file, &BTreeSet::from([12538]))
         .expect("parameters");
     let fire = ours.elements[&12538]
         .iter()

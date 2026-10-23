@@ -10,8 +10,8 @@
 //! Usage: probe_re168_phase_slot <model.rvt>
 
 use rvt::RevitFile;
-use rvt::partition_element_records as per;
-use rvt::partition_room_parameters::data_objects;
+use rvt::research::partition_element_records as per;
+use rvt::research::partition_room_parameters::data_objects;
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 

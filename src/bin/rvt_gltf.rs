@@ -1,6 +1,6 @@
 //! `rvt-gltf` — convert a Revit file to a glTF 2.0 binary (.glb).
 //!
-//! VW1-16 CLI wrapping the VW1-04 exporter. Reads `src`, runs the
+//! The command-line front end of `rvt::ifc::gltf`. Reads `src`, runs the
 //! `RvtDocExporter` to produce an `IfcModel` (project metadata +
 //! whatever per-element info the walker can resolve), then emits
 //! the glb via `ifc::gltf::model_to_glb`.

@@ -1,49 +1,13 @@
-//! Named evidence tiers and lightweight ledgers (Phase 1).
+//! Named evidence tiers and lightweight ledgers of research observations.
 //!
 //! Ledgers record research observations and typed-edge *candidates*.
 //! They do **not** assert that ES remapping or BIM relations are verified.
 //!
 //! See `docs/research/unified-research-report.md` (§2, §3, §23).
 
+pub use crate::capability::EvidenceTier;
 use crate::identity::{ScopedElementRef, SourceSpan};
 use serde::{Deserialize, Serialize};
-
-/// Evidence ceiling labels from the unified research report (§2).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-pub enum EvidenceTier {
-    /// Speculative / untested hypothesis.
-    E0,
-    /// Single-environment observation.
-    E1,
-    /// Multi-file or multi-release observation; no independent oracle.
-    E2,
-    /// Independently reproduced on redistributable / owned fixtures.
-    E3,
-    /// Oracle-backed + automated regression.
-    E4,
-    /// Promoted capability with release gate + support-matrix row.
-    E5,
-}
-
-impl EvidenceTier {
-    /// Human-readable label.
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Self::E0 => "E0",
-            Self::E1 => "E1",
-            Self::E2 => "E2",
-            Self::E3 => "E3",
-            Self::E4 => "E4",
-            Self::E5 => "E5",
-        }
-    }
-
-    /// True when the tier is high enough for a `verified` capability claim.
-    pub fn meets_verified_gate(self) -> bool {
-        self >= Self::E4
-    }
-}
 
 /// One evidence note attached to a research observation or edge.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

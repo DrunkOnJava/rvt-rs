@@ -335,9 +335,22 @@ jobs:
           merge-multiple: true
       # `gh attestation verify <archive> -R DrunkOnJava/rvt-rs`
       - name: Attest the archives' build provenance
+        id: attest
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:
           subject-path: dist/rvt-rs-*
+      # The same bundle as a release file, one JSON line per attestation, the
+      # form `gh attestation download` writes. OpenSSF Scorecard's
+      # Signed-Releases check looks for provenance among a release's files
+      # (#891).
+      - name: Attach the provenance bundle to the release files
+        env:
+          BUNDLE: ${{ steps.attest.outputs.bundle-path }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          jq -c . "${BUNDLE}" > "dist/rvt-rs-${TAG}.intoto.jsonl"
+          test -s "dist/rvt-rs-${TAG}.intoto.jsonl"
       - name: Create the release if needed and upload
         env:
           GH_TOKEN: ${{ github.token }}

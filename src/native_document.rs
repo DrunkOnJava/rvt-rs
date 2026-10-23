@@ -26,7 +26,8 @@ pub struct ResourceBudget {
 pub struct Options {
     pub selected_ids: BTreeSet<u64>,
     /// Records whose class is one of these are selected as well as
-    /// `selected_ids`; with `selected_ids` empty, only they are (B79).
+    /// `selected_ids`; with `selected_ids` empty, only they are.
+    // Tracker: B79.
     pub selected_classes: BTreeSet<String>,
     pub channels: BTreeSet<u64>,
     pub max_stream_bytes: u64,
@@ -177,7 +178,7 @@ fn read_single_envelope(file: &mut RevitFile, name: &str) -> Result<(Vec<u8>, St
 /// What every native extraction reads before the partitions: the global
 /// streams' envelopes, the schema, the element index, the storage increments
 /// and the extensible storage catalog, read once per file
-/// ([`RevitFile::native_preamble`], B82).
+/// ([`RevitFile::native_preamble`]).
 pub(crate) struct Preamble {
     global_streams: BTreeMap<String, StreamEnvelope>,
     registry: schema_registry::Registry,
@@ -287,8 +288,9 @@ pub fn extract(
 /// Extract selected current indexed records' object graphs without the
 /// parameter-definition pass [`extract`] makes over every definition owner
 /// first, for callers that read objects' fields rather than saved parameter
-/// values (B80). Each record's saved metadata is read against no
+/// values. Each record's saved metadata is read against no
 /// definitions.
+// Tracker: B80.
 pub fn extract_graphs(
     file: &mut RevitFile,
     options: &Options,

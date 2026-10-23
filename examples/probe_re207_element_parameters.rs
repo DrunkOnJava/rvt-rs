@@ -32,7 +32,7 @@
 //!   cargo run --profile ci --example probe_re207_element_parameters -- MODEL.rvt
 
 use rvt::RevitFile;
-use rvt::native_element_parameters::read;
+use rvt::research::native_element_parameters::read;
 use rvt::walker::{PRODUCTION_ELEMENT_MIN_SCORE, WalkerLimits, iter_elements_with_limits};
 use serde_json::json;
 use std::collections::BTreeMap;

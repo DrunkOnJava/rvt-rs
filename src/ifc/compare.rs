@@ -1,4 +1,4 @@
-//! Lightweight IFC4 STEP comparison for export QA (M5-05 / #41).
+//! Lightweight IFC4 STEP comparison for export QA (#41).
 //!
 //! Parses ISO-10303-21 text without a full EXPRESS engine and summarizes
 //! the dimensions that matter when comparing an `rvt-rs` export against a
@@ -14,6 +14,7 @@
 //! This is deliberately approximate: STEP string escaping, multi-line
 //! entities, and nested lists are handled well enough for rvt-rs and
 //! common Revit exports, not as a general STEP validator.
+// Tracker: M5-05.
 
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};

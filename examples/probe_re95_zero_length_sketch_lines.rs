@@ -17,10 +17,10 @@
 //!   cargo run --profile ci --example probe_re95_zero_length_sketch_lines -- MODEL.rvt
 
 use rvt::RevitFile;
-use rvt::element_record_plan_profiles::{
+use rvt::research::element_record_plan_profiles::{
     VERTEX_EPS_FEET, plan_profile_from_lines, plan_profiles_from_sketch_line_records,
 };
-use rvt::partition_element_records as per;
+use rvt::research::partition_element_records as per;
 use std::collections::{BTreeMap, BTreeSet};
 
 fn main() -> rvt::Result<()> {
@@ -42,7 +42,7 @@ fn main() -> rvt::Result<()> {
         }
     }
     let ids: BTreeSet<u32> = owners.values().flat_map(|l| l.keys().copied()).collect();
-    let lines = rvt::partition_beam_axes::scan_bounded_lines(&mut rf, version, &ids)?;
+    let lines = rvt::research::partition_beam_axes::scan_bounded_lines(&mut rf, version, &ids)?;
     let point = |b: &[f64; 6]| (0..3).all(|axis| (b[axis + 3] - b[axis]).abs() <= VERTEX_EPS_FEET);
     println!(
         "release {version}: {} sketch-line owners, {} closed by their boxes, {} not",

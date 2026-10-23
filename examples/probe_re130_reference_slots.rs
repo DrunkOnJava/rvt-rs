@@ -14,7 +14,7 @@
 //!   cargo run --profile ci --example probe_re130_reference_slots -- MODEL.rvt > refs.jsonl
 
 use rvt::RevitFile;
-use rvt::partition_element_records as per;
+use rvt::research::partition_element_records as per;
 
 /// Revit's `OST_Levels`.
 const OST_LEVELS: i64 = -2_000_240;

@@ -19,7 +19,7 @@
 //! cargo run --profile ci --example probe_re31_owner_frame -- 2024_Core_Interior.rvt
 //! ```
 
-use rvt::partition_element_records as per;
+use rvt::research::partition_element_records as per;
 use rvt::{RevitFile, compression};
 use std::collections::{BTreeMap, BTreeSet};
 

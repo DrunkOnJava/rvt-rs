@@ -23,11 +23,11 @@
 //!     MODEL.rvt [--json OUT.json]
 
 use rvt::RevitFile;
-use rvt::partition_schema_mvp::{
+use rvt::research::partition_schema_mvp::{
     STAIR_RISER_COUNT_FIELD, TYPE_ID_FIELD, recover_partition_schema_mvp,
     stair_run_body_from_fields,
 };
-use rvt::partition_stairs::{run_sketch, scan_run_ends, scan_run_lines};
+use rvt::research::partition_stairs::{run_sketch, scan_run_ends, scan_run_lines};
 use rvt::walker::{InstanceField, WalkerLimits};
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write as _;

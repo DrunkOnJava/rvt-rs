@@ -1,8 +1,8 @@
 //! RE-53: walls drawn as their layers, each in its material's colour.
 //!
 //! FACT: a wall, floor, roof or ceiling type's data carries its compound
-//! structure (`rvt::partition_compound_structure`), a material's object
-//! carries its shading colour (`rvt::partition_materials`), and a wall's
+//! structure (`rvt::research::partition_compound_structure`), a material's object
+//! carries its shading colour (`rvt::research::partition_materials`), and a wall's
 //! data carries a flip flag that puts its exterior to the right or the left
 //! of its location line. On Autodesk's Snowdon Towers 2024 architectural
 //! sample the layers equal Revit's own on every type measured, and the flag

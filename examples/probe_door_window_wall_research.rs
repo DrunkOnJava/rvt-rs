@@ -13,7 +13,7 @@
 use rvt::arc_wall_record::{
     ARC_WALL_TAG, ARC_WALL_VARIANT_COMPOUND, ARC_WALL_VARIANT_STANDARD, SCHEMA_FAMILY_MARKER,
 };
-use rvt::rect_opening_index::{
+use rvt::research::rect_opening_index::{
     ARC_WALL_RECT_OPENING_TAG_2024, ArcWallRectOpeningIndex, OPENING_INDEX_FAMILY_MARKER,
     OPENING_INDEX_STRIDE,
 };

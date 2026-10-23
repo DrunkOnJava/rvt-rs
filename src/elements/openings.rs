@@ -1,7 +1,7 @@
 //! `Door` + `Window` — wall-hosted opening elements. Both are
 //! `FamilyInstance` subtypes at the class hierarchy level but ship
 //! with enough stable scalar fields to decode directly without first
-//! resolving the full family graph (which is task L5B-21).
+//! resolving the full family graph.
 //!
 //! Each element references:
 //! - A **host** (the wall it cuts through), via `m_host_id`
@@ -69,10 +69,10 @@ impl ElementDecoder for DoorDecoder {
         limits: crate::walker::WalkerLimits,
     ) -> Result<DecodedElement> {
         if schema.name != "Door" {
-            return Err(Error::BasicFileInfo(format!(
-                "DoorDecoder received wrong schema: {}",
-                schema.name
-            )));
+            return Err(Error::SchemaMismatch {
+                decoder: "Door",
+                schema: schema.name.clone(),
+            });
         }
         Ok(crate::walker::decode_instance_with_limits(
             bytes, 0, schema, limits,
@@ -105,10 +105,10 @@ impl ElementDecoder for WindowDecoder {
         limits: crate::walker::WalkerLimits,
     ) -> Result<DecodedElement> {
         if schema.name != "Window" {
-            return Err(Error::BasicFileInfo(format!(
-                "WindowDecoder received wrong schema: {}",
-                schema.name
-            )));
+            return Err(Error::SchemaMismatch {
+                decoder: "Window",
+                schema: schema.name.clone(),
+            });
         }
         Ok(crate::walker::decode_instance_with_limits(
             bytes, 0, schema, limits,

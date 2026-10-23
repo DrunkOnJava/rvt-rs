@@ -55,6 +55,38 @@ pub struct ObjectGraph {
     pub consumed_bytes: usize,
     pub objects: Vec<GraphObject>,
     pub edges: Vec<GraphEdge>,
+    /// Pointer lookup tables, built once on first use.
+    #[serde(skip)]
+    pub(crate) lookup: std::sync::OnceLock<PointerLookup>,
+}
+/// Edges by (source object, pointer offset) and objects by token.
+#[derive(Clone, Default)]
+pub(crate) struct PointerLookup {
+    pub(crate) edges: BTreeMap<(usize, usize), Vec<usize>>,
+    pub(crate) tokens: BTreeMap<u64, Vec<usize>>,
+}
+impl std::fmt::Debug for PointerLookup {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("PointerLookup")
+    }
+}
+impl ObjectGraph {
+    pub(crate) fn lookup(&self) -> &PointerLookup {
+        self.lookup.get_or_init(|| {
+            let mut lookup = PointerLookup::default();
+            for (i, e) in self.edges.iter().enumerate() {
+                lookup
+                    .edges
+                    .entry((e.source_object_index, e.pointer_offset))
+                    .or_default()
+                    .push(i);
+            }
+            for (i, o) in self.objects.iter().enumerate() {
+                lookup.tokens.entry(o.token as u64).or_default().push(i);
+            }
+            lookup
+        })
+    }
 }
 /// A non-null, non-external serialized pointer resolved within this bounded
 /// owning body. Object indices refer to `ObjectGraph::objects`; pointer offsets
@@ -226,6 +258,7 @@ pub fn decode_graph_with_catalog_usage(
             consumed_bytes: cursor.pos,
             objects,
             edges,
+            lookup: Default::default(),
         },
         usage,
     ))

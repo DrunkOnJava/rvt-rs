@@ -25,7 +25,7 @@
 //!   cargo run --profile ci --example probe_re72_curtain_panels -- MODEL.rvt > panels.tsv
 
 use rvt::RevitFile;
-use rvt::partition_element_records as per;
+use rvt::research::partition_element_records as per;
 use std::collections::{BTreeMap, BTreeSet};
 
 fn main() -> rvt::Result<()> {
@@ -33,7 +33,7 @@ fn main() -> rvt::Result<()> {
     let mut rf = RevitFile::open(&path)?;
     let version = rf.basic_file_info()?.version;
     let declared = rvt::elem_table::declared_ids(&rvt::elem_table::parse_records(&mut rf)?);
-    let Some(header) = rvt::partition_names::element_data_header(version) else {
+    let Some(header) = rvt::research::partition_names::element_data_header(version) else {
         eprintln!("Revit {version}: element data is not read on this release");
         return Ok(());
     };
@@ -93,11 +93,11 @@ fn main() -> rvt::Result<()> {
                 grids.entry(id).or_insert(wall);
             }
         }
-        objects.extend(rvt::partition_names::find_type_object_ids(
+        objects.extend(rvt::research::partition_names::find_type_object_ids(
             inflated.bytes(),
             &named,
         ));
-        data_names.extend(rvt::partition_names::find_element_data_names(
+        data_names.extend(rvt::research::partition_names::find_element_data_names(
             inflated.bytes(),
             &header,
             &named,

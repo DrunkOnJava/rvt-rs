@@ -1,6 +1,6 @@
 //! RE-58: material names, and material layer sets in the IFC export.
 //!
-//! FACT: a material's object (`rvt::partition_materials`) holds its name,
+//! FACT: a material's object (`rvt::research::partition_materials`) holds its name,
 //! and `partition_materials::name_at` reads it from the first of:
 //! - its own name field after the class tag: `u32 n` and `n` UTF-16 units;
 //! - where that field holds parameter entries first, the name ending at the
@@ -23,7 +23,7 @@
 //!     MODEL.rvt [--all]
 
 use rvt::RevitFile;
-use rvt::partition_materials::{scan_material_appearances, scan_material_names};
+use rvt::research::partition_materials::{scan_material_appearances, scan_material_names};
 use std::collections::{BTreeMap, BTreeSet};
 
 fn main() -> rvt::Result<()> {
@@ -35,10 +35,10 @@ fn main() -> rvt::Result<()> {
     let declared = rvt::elem_table::declared_ids(&rvt::elem_table::parse_records(&mut rf)?);
     let names = scan_material_names(&mut rf, version, &declared)?;
     let looks = scan_material_appearances(&mut rf, version, &declared)?;
-    let materials: BTreeSet<u32> = rvt::partition_type_records::scan_type_records(
+    let materials: BTreeSet<u32> = rvt::research::partition_type_records::scan_type_records(
         &mut rf,
         version,
-        rvt::partition_type_records::OST_MATERIALS,
+        rvt::research::partition_type_records::OST_MATERIALS,
         &declared,
     )?
     .iter()
@@ -61,7 +61,7 @@ fn main() -> rvt::Result<()> {
         }
         return Ok(());
     }
-    let layers = rvt::partition_compound_structure::scan_type_layers(
+    let layers = rvt::research::partition_compound_structure::scan_type_layers(
         &mut rf, version, &declared, &materials, &declared,
     )?;
     let mut used: BTreeMap<u32, usize> = BTreeMap::new();

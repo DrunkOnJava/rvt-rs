@@ -14,7 +14,7 @@
 //! cargo run --profile ci --example probe_re84_void_only_families -- model.rvt
 //! ```
 
-use rvt::partition_schema_mvp::{FAMILY_NAME_FIELD, TYPE_ID_FIELD};
+use rvt::research::partition_schema_mvp::{FAMILY_NAME_FIELD, TYPE_ID_FIELD};
 use rvt::walker::InstanceField;
 
 fn main() -> anyhow::Result<()> {
@@ -23,8 +23,8 @@ fn main() -> anyhow::Result<()> {
     };
     let mut rf = rvt::RevitFile::open(&path)?;
     let version = rf.basic_file_info()?.version;
-    let maps = rvt::partition_type_materials::type_material_names(&mut rf, version);
-    let mvp = rvt::partition_schema_mvp::recover_partition_schema_mvp(
+    let maps = rvt::research::partition_type_materials::type_material_names(&mut rf, version);
+    let mvp = rvt::research::partition_schema_mvp::recover_partition_schema_mvp(
         &mut rf,
         version,
         rvt::walker::WalkerLimits::default(),

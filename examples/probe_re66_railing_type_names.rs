@@ -20,8 +20,8 @@
 //!     MODEL.rvt > rows.tsv
 
 use rvt::RevitFile;
-use rvt::partition_element_records as per;
-use rvt::partition_type_records as ptr;
+use rvt::research::partition_element_records as per;
+use rvt::research::partition_type_records as ptr;
 use std::collections::{BTreeMap, BTreeSet};
 
 fn main() -> rvt::Result<()> {
@@ -31,7 +31,7 @@ fn main() -> rvt::Result<()> {
     let declared = rvt::elem_table::declared_ids(&rvt::elem_table::parse_records(&mut rf)?);
     let (Some(marker), Some(header)) = (
         per::bbox_marker(version),
-        rvt::partition_names::element_data_header(version),
+        rvt::research::partition_names::element_data_header(version),
     ) else {
         eprintln!("Revit {version}: element records are not read on this release");
         return Ok(());
@@ -66,20 +66,19 @@ fn main() -> rvt::Result<()> {
     let wanted: BTreeSet<u32> = railings.values().flatten().copied().collect();
     let mut data_names = BTreeMap::new();
     let mut object_names = BTreeMap::new();
-    let railing_tags = rf
-        .schema_classes()
-        .ok()
-        .and_then(|classes| rvt::partition_names::RailingTypeTags::from_classes(&classes));
+    let railing_tags = rf.schema_classes().ok().and_then(|classes| {
+        rvt::research::partition_names::RailingTypeTags::from_classes(&classes)
+    });
     for stream in rf.partition_stream_names() {
         let Ok(inflated) = rf.inflated_partition(&stream) else {
             continue;
         };
         let buf = inflated.bytes();
-        data_names.extend(rvt::partition_names::find_element_data_names(
+        data_names.extend(rvt::research::partition_names::find_element_data_names(
             buf, &header, &wanted,
         ));
         if let Some(tags) = railing_tags {
-            object_names.extend(rvt::partition_names::find_railing_type_names(
+            object_names.extend(rvt::research::partition_names::find_railing_type_names(
                 buf, &wanted, tags,
             ));
         }

@@ -1,4 +1,4 @@
-//! A pipe fitting's nominal size, from its own data object (RE-165, B44, #35).
+//! A pipe fitting's nominal size, from its own data object (RE-165, #35).
 //!
 //! A fitting's own data object (RE-153) holds one record per connector:
 //!
@@ -25,6 +25,7 @@
 //! nominal diameter is its connectors' one diameter, or, where it holds no
 //! connector record, its smallest pair's. A fitting whose connectors disagree
 //! (a reducer) has no single nominal size and is given none.
+// Tracker: B44.
 
 use crate::partition_room_parameters::DATA_OBJECT_HEADER;
 use crate::{Result, RevitFile};
@@ -151,7 +152,7 @@ pub fn scan_fitting_nominal_diameters(
     for stream in rf.partition_stream_names() {
         let (Ok(inflated), Ok(objects)) = (
             rf.inflated_partition(&stream),
-            rf.partition_data_objects(&stream),
+            rf.memoised_partition_data_objects(&stream),
         ) else {
             continue;
         };

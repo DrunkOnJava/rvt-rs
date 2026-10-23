@@ -11,7 +11,7 @@
 //! Runs against `RVT_PROJECT_CORPUS_DIR`. Skips what is absent.
 
 use rvt::RevitFile;
-use rvt::partition_element_records::{RECOVERED_CATEGORIES, scan_category_records_multi};
+use rvt::research::partition_element_records::{RECOVERED_CATEGORIES, scan_category_records_multi};
 use std::collections::BTreeSet;
 use std::path::PathBuf;
 

@@ -19,7 +19,7 @@
 //!   cargo run --profile ci --example probe_re47_stair_dimensions -- FILE.rvt
 
 use rvt::RevitFile;
-use rvt::partition_schema_mvp::{
+use rvt::research::partition_schema_mvp::{
     AGGREGATE_WHOLE_FIELD, STAIR_RISER_COUNT_FIELD, STAIR_RISER_HEIGHT_FIELD,
     STAIR_TREAD_DEPTH_FIELD, recover_partition_schema_mvp,
 };

@@ -18,44 +18,12 @@
 //! vector for callers that need them.
 
 use super::level::normalise_field_name;
-use crate::formats;
-use crate::walker::{DecodedElement, ElementDecoder, HandleIndex, InstanceField};
-use crate::{Error, Result};
-
-macro_rules! simple_decoder {
-    ($Struct:ident, $name:literal) => {
-        pub struct $Struct;
-
-        impl ElementDecoder for $Struct {
-            fn class_name(&self) -> &'static str {
-                $name
-            }
-
-            fn decode(
-                &self,
-                bytes: &[u8],
-                schema: &formats::ClassEntry,
-                _index: &HandleIndex,
-            ) -> Result<DecodedElement> {
-                if schema.name != $name {
-                    return Err(Error::BasicFileInfo(format!(
-                        "{} received wrong schema: {}",
-                        stringify!($Struct),
-                        schema.name
-                    )));
-                }
-                Ok(crate::walker::decode_instance(bytes, 0, schema))
-            }
-        }
-    };
-}
-
-simple_decoder!({{class_name}}Decoder, "{{class_name}}");
+use crate::walker::{DecodedElement, InstanceField};
 
 /// Typed view of a decoded `{{class_name}}`. Convenience wrapper on
-/// top of [`DecodedElement`]; call [`{{class_name}}Decoder::decode`]
-/// first, then [`{{class_name}}::from_decoded`] to project into this
-/// struct.
+/// top of [`DecodedElement`]: decode the instance with
+/// `SimpleDecoder::new("{{class_name}}")`, then call
+/// [`{{class_name}}::from_decoded`] to project it into this struct.
 ///
 /// TODO: extend with class-specific fields. Add one `Option<T>` per
 /// field you care about, then pattern-match in `from_decoded` below.
@@ -86,66 +54,5 @@ impl {{class_name}} {
             }
         }
         out
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::formats::ClassEntry;
-
-    fn wrong_schema() -> ClassEntry {
-        ClassEntry {
-            name: "Wall".into(),
-            offset: 0,
-            fields: vec![],
-            tag: None,
-            parent: None,
-            declared_field_count: None,
-            was_parent_only: false,
-            ancestor_tag: None,
-        }
-    }
-
-    #[test]
-    fn {{class_name_snake}}_rejects_wrong_schema() {
-        assert!(
-            {{class_name}}Decoder
-                .decode(&[], &wrong_schema(), &HandleIndex::new())
-                .is_err()
-        );
-    }
-
-    #[test]
-    fn {{class_name_snake}}_from_decoded() {
-        let fields = vec![(
-            "m_name".into(),
-            InstanceField::String("test-{{class_name_snake}}".into()),
-        )];
-        let decoded = DecodedElement {
-            id: None,
-            class: "{{class_name}}".into(),
-            fields,
-            byte_range: 0..0,
-        };
-        let v = {{class_name}}::from_decoded(&decoded);
-        assert_eq!(v.name.as_deref(), Some("test-{{class_name_snake}}"));
-    }
-
-    #[test]
-    fn empty_tolerance() {
-        let empty = DecodedElement {
-            id: None,
-            class: "{{class_name}}".into(),
-            fields: vec![],
-            byte_range: 0..0,
-        };
-        let v = {{class_name}}::from_decoded(&empty);
-        assert!(v.name.is_none());
-    }
-
-    #[test]
-    fn class_name() {
-        assert_eq!({{class_name}}Decoder.class_name(), "{{class_name}}");
     }
 }

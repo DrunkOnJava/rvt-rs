@@ -29,7 +29,7 @@
 //!     MODEL.rvt > walls.jsonl
 
 use rvt::RevitFile;
-use rvt::partition_schema_mvp as mvp;
+use rvt::research::partition_schema_mvp as mvp;
 use rvt::walker::InstanceField;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write as _;
@@ -41,10 +41,10 @@ fn main() -> rvt::Result<()> {
     let recovered =
         mvp::recover_partition_schema_mvp(&mut rf, version, rvt::walker::WalkerLimits::default())?;
     let declared = rvt::elem_table::declared_ids(&rvt::elem_table::parse_records(&mut rf)?);
-    let materials: BTreeSet<u32> = rvt::partition_type_records::scan_type_records(
+    let materials: BTreeSet<u32> = rvt::research::partition_type_records::scan_type_records(
         &mut rf,
         version,
-        rvt::partition_type_records::OST_MATERIALS,
+        rvt::research::partition_type_records::OST_MATERIALS,
         &declared,
     )?
     .iter()
@@ -61,18 +61,19 @@ fn main() -> rvt::Result<()> {
         .iter()
         .filter_map(|w| type_of(&w.fields))
         .collect();
-    let layers = rvt::partition_compound_structure::scan_type_layers(
+    let layers = rvt::research::partition_compound_structure::scan_type_layers(
         &mut rf, version, &types, &materials, &declared,
     )?;
-    let boxes: BTreeMap<u32, [f64; 6]> = rvt::partition_element_records::scan_category_records(
-        &mut rf,
-        version,
-        rvt::partition_element_records::OST_WALLS,
-        &declared,
-    )?
-    .into_iter()
-    .map(|record| (record.element_id, record.bbox_feet))
-    .collect();
+    let boxes: BTreeMap<u32, [f64; 6]> =
+        rvt::research::partition_element_records::scan_category_records(
+            &mut rf,
+            version,
+            rvt::research::partition_element_records::OST_WALLS,
+            &declared,
+        )?
+        .into_iter()
+        .map(|record| (record.element_id, record.bbox_feet))
+        .collect();
     let mut rows = 0;
     for wall in &recovered.walls {
         let (Some(id), Some(axis)) = (wall.id, mvp::wall_axis_from_fields(&wall.fields)) else {

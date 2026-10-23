@@ -395,7 +395,7 @@ export's `IfcWallType.Tag` is `3897` was an **index artifact**, not a
 second id space: the list is ascending and both ids are in it, with
 `1851` a record of category −2009014 that is not a wall type at all.
 **The join is library-side only.** It ships as
-`rvt::partition_type_records::unique_type_reference` with the corpus gate
+`rvt::research::partition_type_records::unique_type_reference` with the corpus gate
 `tests/iter_elements_typed.rs::core_interior_2024_wall_type_record_join`;
 it is **not** yet a property on the emitted wall, no emitted entity,
 property or relation changes, and both count manifests record that.

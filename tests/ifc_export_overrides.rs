@@ -8,7 +8,7 @@
 
 use rvt::RevitFile;
 use rvt::ifc::{RvtDocExporter, write_step};
-use rvt::partition_schema_mvp::{IFC_EXPORT_AS_FIELD, IFC_PREDEFINED_TYPE_FIELD};
+use rvt::research::partition_schema_mvp::{IFC_EXPORT_AS_FIELD, IFC_PREDEFINED_TYPE_FIELD};
 use rvt::walker::{DecodedElement, InstanceField};
 use std::collections::BTreeMap;
 use std::path::PathBuf;
@@ -66,7 +66,7 @@ fn core_interior_export_overrides_are_revits() {
         return;
     };
     let mut rf = RevitFile::open(&path).expect("open");
-    let mvp = rvt::partition_schema_mvp::recover_partition_schema_mvp(
+    let mvp = rvt::research::partition_schema_mvp::recover_partition_schema_mvp(
         &mut rf,
         2024,
         rvt::walker::WalkerLimits::default(),
