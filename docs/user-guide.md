@@ -241,12 +241,12 @@ calling it a breaking change.
 | `y_ft` | Placement, y |
 | `z_ft` | Placement, z |
 | `rotation_deg` | Its rotation in plan, in degrees |
-| `width_ft` | Width of a body extruded from a rectangle |
-| `depth_ft` | Depth of a body extruded from a rectangle |
-| `height_ft` | Height of an extruded body |
+| `width_ft` | Width of a body written as a plain extrusion of a rectangle; empty for every other body, placed extrusions such as stair runs, sloped beams and turned boxes included |
+| `depth_ft` | Depth of the same rectangle |
+| `height_ft` | Height of a body written as a plain extrusion; empty otherwise |
 | `host_revit_element_id` | The ElementId of a door's or window's host |
-| `body_source` | Where the body came from, such as `saved_graphics_mesh` |
-| `profile_resolved` | `true` where the body's shape was read from the file (a sketch, a type's section, a beam's or pipe's axis, a stair run, a wall's centreline or arc, an I-column's section), `false` where the body is the record's box |
+| `body_source` | Where the body came from, such as `partition_element_record_bbox` (the record's box) or `partition_wall_centreline` |
+| `profile_resolved` | `true` where the body's shape was read from the file (a sketch, a type's section, a beam's or pipe's axis, a stair run, a wall's centreline or arc, an I-column's section), `false` where none of those did. A `false` body can still be cut: a joined column's top or bottom moves to the cut |
 
 <!-- room-columns -->
 | Column | What it holds |
