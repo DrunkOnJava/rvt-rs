@@ -1,0 +1,125 @@
+#!/usr/bin/env python3
+"""Where a file keeps each element's editing episode, found from Revit's own
+GlobalIds (RE-208, #878).
+
+Revit's GlobalId for an element is its episode's GUID with the ElementId
+XORed into the last 32 bits (RE-48). So every GlobalId in Revit's export,
+with its element's Tag XORed back out, gives that element's episode GUID.
+This scorer takes the output of `examples/probe_re208_episodes_2015.rs` (the
+GUID runs it found in `Global/History` and every `Global/ElemTable` record)
+and Revit's export, and reports:
+
+- how many of the export's elements have an episode GUID that one of the
+  history's runs holds, and at which index of which run;
+- for those, every offset of the element's ElemTable record where a u32
+  equals that index counted from the first entry or from the last, ranked
+  by how many elements agree.
+
+Needs IfcOpenShell (`pip install ifcopenshell`).
+
+Usage:
+
+    python3 tools/re/episodes_vs_ifc.py <probe.txt> <revit.ifc> [--list]
+"""
+
+import argparse
+import collections
+import struct
+
+import ifcopenshell
+
+ALPHABET = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_$"
+
+
+def expand(global_id):
+    n = 0
+    for ch in global_id:
+        n = n * 64 + ALPHABET.index(ch)
+    return n.to_bytes(16, "big")
+
+
+def stored_order(canonical):
+    b = bytearray(canonical)
+    b[0:4] = b[0:4][::-1]
+    b[4:6] = b[4:6][::-1]
+    b[6:8] = b[6:8][::-1]
+    return bytes(b)
+
+
+def read_probe(path):
+    runs, records, header = collections.defaultdict(list), {}, []
+    for line in open(path, encoding="utf-8", errors="replace"):
+        parts = line.split()
+        if not parts:
+            continue
+        if parts[0] == "guid":
+            runs[int(parts[1])].append(bytes.fromhex(parts[3]))
+        elif parts[0] == "rec":
+            raw = bytes.fromhex(parts[3])
+            for ident in (int(parts[1]), int(parts[2])):
+                records.setdefault(ident, raw)
+        elif parts[0] in ("history", "elemtable", "run"):
+            header.append(line.rstrip())
+    return runs, records, header
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("probe")
+    ap.add_argument("reference")
+    ap.add_argument("--list", action="store_true")
+    args = ap.parse_args()
+    runs, records, header = read_probe(args.probe)
+    for line in header[:12]:
+        print(line)
+    where = {}
+    for start, guids in runs.items():
+        for index, guid in enumerate(guids):
+            where.setdefault(guid, (start, index, len(guids)))
+
+    model = ifcopenshell.open(args.reference)
+    elements = {}
+    for product in model.by_type("IfcProduct"):
+        tag = getattr(product, "Tag", None)
+        if tag and str(tag).isdigit():
+            elements[int(tag)] = product.GlobalId
+
+    found, missing, offsets = collections.Counter(), [], collections.Counter()
+    episodes = collections.Counter()
+    no_record = 0
+    for tag, global_id in sorted(elements.items()):
+        value = bytearray(expand(global_id))
+        low = struct.unpack(">I", value[12:16])[0] ^ tag
+        value[12:16] = struct.pack(">I", low)
+        guid = stored_order(bytes(value))
+        if guid not in where:
+            missing.append((tag, global_id, guid.hex()))
+            continue
+        start, index, n = where[guid]
+        found[start] += 1
+        episodes[(start, index)] += 1
+        raw = records.get(tag)
+        if raw is None:
+            no_record += 1
+            continue
+        for at in range(0, len(raw) - 3):
+            v = struct.unpack("<I", raw[at:at + 4])[0]
+            if v == index:
+                offsets[(at, "index from the first entry")] += 1
+            if v == n - 1 - index:
+                offsets[(at, "index from the last entry")] += 1
+
+    total = len(elements)
+    print(f"elements with a numeric Tag in Revit's export: {total}")
+    print(f"episode GUID in a history run: {sum(found.values())} ({', '.join(f'run at {s}: {c}' for s, c in sorted(found.items()))})")
+    print(f"distinct episodes they use: {len(episodes)}; no ElemTable record for the Tag: {no_record}")
+    print("record offsets holding the episode number, by elements agreeing:")
+    for (at, form), count in offsets.most_common(8):
+        print(f"  +{at} ({form}): {count}")
+    print(f"episode GUID in no run: {len(missing)}")
+    for tag, global_id, guid in missing[: 60 if args.list else 10]:
+        print(f"  {tag} {global_id} episode {guid}")
+
+
+if __name__ == "__main__":
+    main()
