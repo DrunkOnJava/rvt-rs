@@ -1,4 +1,4 @@
-//! Cross-version class-tag lookup (L5B-10).
+//! Cross-version class-tag lookup.
 //!
 //! Revit assigns each top-level serializable class a `u16` tag in
 //! the `Formats/Latest` schema header. The tag identifies the class
@@ -36,6 +36,7 @@
 //! return `None`; callers needing the full cross-version map should
 //! regenerate the CSV with `examples/tag_drift.rs` against a local
 //! 11-release corpus.
+// Tracker: L5B-10.
 
 /// The Revit releases represented in the compiled lookup table.
 /// Kept in ascending order to match CSV column order.

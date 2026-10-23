@@ -1024,6 +1024,12 @@ jobs:
             exit 1
           fi
           echo "Conflict-marker guard: clean."
+      # The crate root tells docs.rs readers that every `RE-NN` is a report
+      # under reports/, and that RE and issue numbers are the only tracker
+      # ids the docs use; this keeps both true for the Rust and Python API
+      # docs.
+      - name: API docs cite only reported RE findings and no planning labels
+        run: python3 tools/ci/api-doc-ids.py
 
   # Guards the Cloud Agent development environment config itself: shellcheck
   # the install script and validate `.cursor/environment.json` against the
