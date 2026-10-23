@@ -6,8 +6,10 @@
 //! ```
 //!
 //! Without arguments it exports the synthetic project file the repository
-//! ships, `corpus/tier1/architectural-2024/architectural-2024.rvt`, into the
-//! system's temporary directory.
+//! ships, `corpus/tier1/architectural-2024/architectural-2024.rvt`, into a
+//! directory of its own under the system's temporary directory. That file
+//! carries no element records, so its IFC is the spatial scaffold and its
+//! schedule has no rows; give it a real project to export its elements.
 
 use std::path::PathBuf;
 
@@ -18,12 +20,14 @@ use rvt::ifc::{RvtDocExporter, gltf, write_step};
 const FIXTURE: &str = "corpus/tier1/architectural-2024/architectural-2024.rvt";
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let mut args = std::env::args().skip(1);
-    let path = args.next().unwrap_or_else(|| FIXTURE.to_string());
-    let out: PathBuf = args
+    let mut args = std::env::args_os().skip(1);
+    let path = args
         .next()
-        .map(PathBuf::from)
-        .unwrap_or_else(std::env::temp_dir);
+        .map_or_else(|| PathBuf::from(FIXTURE), PathBuf::from);
+    let out = args.next().map_or_else(
+        || std::env::temp_dir().join(format!("rvt-basics-export-{}", std::process::id())),
+        PathBuf::from,
+    );
     std::fs::create_dir_all(&out)?;
 
     let mut rf = RevitFile::open(&path)?;

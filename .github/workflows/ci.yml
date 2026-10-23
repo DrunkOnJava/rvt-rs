@@ -435,6 +435,27 @@ jobs:
         env:
           RVT_PROJECT_CORPUS_DIR: ${{ github.workspace }}/_project_corpus/Revit
         run: 'cargo test --profile ci --test integration -- project_count_fixtures:: --nocapture'
+      # The user examples on a real project (#872): the tier-1 fixture the
+      # test job runs them on has no element records, so only a real file
+      # shows them listing and exporting elements. Einhoven (Revit 2023,
+      # MIT) exports 37 building elements.
+      - name: Run the user examples on a real project
+        env:
+          RVT_PROJECT_CORPUS_DIR: ${{ github.workspace }}/_project_corpus/Revit
+        shell: bash
+        run: |
+          set -euo pipefail
+          model="${RVT_PROJECT_CORPUS_DIR}/Revit_IFC5_Einhoven.rvt"
+          cargo run --profile ci --example basics_inspect -- "$model"
+          cargo run --profile ci --example basics_elements -- "$model" > "$RUNNER_TEMP/elements.txt"
+          cat "$RUNNER_TEMP/elements.txt"
+          grep -qE '^[1-9][0-9]* building elements$' "$RUNNER_TEMP/elements.txt" \
+            || { echo "::error::basics_elements listed no building element of Einhoven"; exit 1; }
+          out="$RUNNER_TEMP/einhoven-export"
+          cargo run --profile ci --example basics_export -- "$model" "$out"
+          rows=$(($(wc -l < "$out/elements.csv") - 1))
+          echo "elements.csv: $rows rows"
+          test "$rows" -gt 0 || { echo "::error::basics_export wrote an empty schedule for Einhoven"; exit 1; }
 
   ifcopenshell-validate:
     # IFC-41 / C9: the independent-validator gate. IfcOpenShell parses what

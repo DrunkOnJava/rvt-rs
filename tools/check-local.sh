@@ -113,9 +113,12 @@ run env RUSTFLAGS="-D warnings -D unnameable_types" cargo check --lib --bins
 run env RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --lib
 run cargo build --workspace --all-targets --all-features
 run tools/ci/verify-real-files.sh
-for example in basics_inspect basics_elements basics_export; do
-    run cargo run --profile ci --example "$example"
-done
+run cargo run --profile ci --example basics_inspect
+run cargo run --profile ci --example basics_elements
+basics_out="$(mktemp -d)"
+run cargo run --profile ci --example basics_export -- \
+    corpus/tier1/architectural-2024/architectural-2024.rvt "$basics_out"
+rm -rf "$basics_out"
 
 # --- optional gates ---------------------------------------------------------
 

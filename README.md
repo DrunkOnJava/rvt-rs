@@ -252,7 +252,7 @@ Revit files, Autodesk's shipped samples among them, can carry authoring metadata
 
 ## Library surface
 
-Three runnable examples show the library end to end: [`basics_inspect`](examples/basics_inspect.rs) reads what a file is, [`basics_elements`](examples/basics_elements.rs) lists its elements with their ElementIds and provenance, and [`basics_export`](examples/basics_export.rs) writes IFC4, glTF, a CSV schedule and the export diagnostics. `cargo run --example basics_inspect -- model.rvt` runs one on your file, and CI runs all three on the synthetic project the repository ships. The other programs under `examples/` are research probes ([`examples/README.md`](examples/README.md)).
+Three runnable examples show the library end to end: [`basics_inspect`](examples/basics_inspect.rs) reads what a file is, [`basics_elements`](examples/basics_elements.rs) lists its building elements by IFC type with their ElementIds, and [`basics_export`](examples/basics_export.rs) writes IFC4, glTF, a CSV schedule and the export diagnostics. `cargo run --example basics_inspect -- model.rvt` runs one on your file, and CI runs all three on the synthetic project the repository ships and on a real one, Einhoven (MIT). The other programs under `examples/` are research probes ([`examples/README.md`](examples/README.md)).
 
 All modules build for native targets and for `wasm32-unknown-unknown`, which the `rvt-wasm` crate compiles for the browser viewer. The type documentation is on [docs.rs](https://docs.rs/rvt):
 

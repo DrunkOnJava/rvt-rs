@@ -1,12 +1,14 @@
 # Examples
 
-**Using the library.** Start with these; each runs as-is on the synthetic
-project file the repository ships, and CI runs all three:
+**Using the library.** Start with these. Each runs as-is on the synthetic
+project file the repository ships, which has no element records, so it
+lists and exports none; CI runs all three on it and on `Revit_IFC5_Einhoven.rvt`
+(Revit 2023, from magnetar-io/revit-test-datasets, MIT), where they do:
 
 - [`basics_inspect.rs`](basics_inspect.rs): what a file is (release, build,
   title, last save, schema).
-- [`basics_elements.rs`](basics_elements.rs): its elements, by class, with
-  ElementIds and provenance.
+- [`basics_elements.rs`](basics_elements.rs): its building elements, by IFC
+  type, with ElementIds.
 - [`basics_export.rs`](basics_export.rs): IFC4, glTF, a CSV schedule and the
   export diagnostics.
 
