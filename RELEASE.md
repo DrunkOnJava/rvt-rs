@@ -87,7 +87,10 @@ version. The maintainer chose these surfaces on 2026-10-23 (#873).
 | The viewer's wasm API | The 22 JavaScript bindings [`docs/viewer-api.md`](docs/viewer-api.md) lists, with their arguments and the JSON shapes they return | `rvt-wasm` is not published, so code outside this repository builds it from source |
 
 A minor release may add public items, research modules and recovered
-content. A research module that moves into the stable modules is named in
+content. It may also add a variant to a public enum, which is why they are
+`#[non_exhaustive]`, and a value to a list of values in the JSON the CLIs
+print, such as a status or a reason code: code that reads one handles a
+value it does not know. A research module that moves into the stable modules is named in
 `CHANGELOG.md` and from then on follows the table above. The writer is stable
 as an API; what it can patch is rated in
 [`docs/support-matrix.json`](docs/support-matrix.json) (`stream-level-writer`).

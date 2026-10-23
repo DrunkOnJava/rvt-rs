@@ -5,9 +5,15 @@
 The schemas below describe what the CLIs and the Python package print, so
 they are read as output contracts: a consumer may rely on every field the
 base lists, on every field it requires being there, and on a field's type
-and enum values being among the base's. A schema or field that is gone, a
-field no longer required, a type or an enum value a field gains, or a
-`$ref` that changed is breaking; one that narrows or adds a field is not.
+being among the base's. A schema or field that is gone, a field no longer
+required, a type a field gains, or a `$ref` that changed is breaking; one
+that narrows or adds a field is not.
+
+A field's list of values (an `enum`: a status, a reason code) is open, as
+the Rust enums are `#[non_exhaustive]` (RELEASE.md, "What 1.0 keeps
+stable"): a consumer handles a value it does not know, so a release may add
+values, or stop writing one, without a breaking change.
+
 Exits 100 when there is any, so that a crash (exit 1) is not a verdict.
 """
 
@@ -55,10 +61,6 @@ def compare(base, head, path, found):
     bt, ht = types(base), types(head)
     if bt is not None and (ht is None or ht - bt):
         found.append(f"{path}: may now be {sorted((ht or {'anything'}) - (bt or set()))}")
-    if "enum" in base and set(map(json.dumps, head.get("enum", []))) - set(map(json.dumps, base["enum"])):
-        found.append(f"{path}: gained enum values")
-    if "enum" in base and "enum" not in head:
-        found.append(f"{path}: is no longer limited to its enum values")
     for name in base.get("required", []):
         if name not in head.get("required", []):
             found.append(f"{path}: {name} is no longer required")
