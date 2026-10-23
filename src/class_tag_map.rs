@@ -17,7 +17,7 @@
 //! # Usage
 //!
 //! ```no_run
-//! use rvt::class_tag_map::{tag_for_class, class_for_tag, REVIT_VERSIONS};
+//! use rvt::research::class_tag_map::{tag_for_class, class_for_tag, REVIT_VERSIONS};
 //!
 //! // Look up a class's tag in Revit 2024.
 //! let tag = tag_for_class("Wall", 2024);   // Some(0x0131) — hypothetical
