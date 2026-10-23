@@ -135,23 +135,8 @@ All notable changes will be documented here. This project follows
   byte-identical (Measure run 39956807932). Thanks to n3ur0m4n. CI now
   exports Einhoven and Core Interior with their saved meshes and validates
   both with IfcOpenShell (#908): 11 of 11 and 138 of 138 bounding-box
-  bodies come from saved graphics, with 0 validation errors. - **Breaking:
-  `Error` is `#[non_exhaustive]`, and says what failed.** A `match` on it
-  now needs a wildcard arm, so later variants are not breaking changes.
-  Failures that were reported as `Error::BasicFileInfo` or `Error::Cfb`
-  although they had nothing to do with either now have their own variants:
-  `SchemaMismatch { decoder, schema }` for a typed decoder given another
-  class's schema (was "...Decoder received wrong schema"), `NoDecoder` for
-  a class with no typed decoder, `MissingClass` for a schema with no
-  `ADocument`, and `Malformed { what, detail }` for an ArcWall or
-  opening-index record (a wrong class tag among them), an `ADocument` or a
-  `Global/ElemTable` that does not have the shape its reader expects.
-  Every variant is documented, and `NotLocated` is new for a record that
-  cannot be located with confidence, as `read_adocument_strict` reports an
-  earlier release's `ADocument`. The other variants and their messages are
-  unchanged. In Python, `RevitFile.read_adocument()` raises `ValueError`,
-  where it raised `OSError`, for a file whose schema declares no
-  `ADocument`.
+  bodies come from saved graphics, with 0 validation errors.
+
 - **The API's entry points have examples that run (#872).** The crate
   root's three examples and new ones on `RevitFile::open`,
   `metadata::read_metadata`, `walker::iter_elements`,
