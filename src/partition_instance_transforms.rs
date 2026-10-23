@@ -138,7 +138,8 @@ pub fn scan_instance_transforms(
             let id_at = hit + header.len();
             let Some(id) = buf
                 .get(id_at..id_at + 8)
-                .map(|b| u64::from_le_bytes(b.try_into().expect("8 bytes")))
+                .and_then(|b| b.first_chunk::<8>())
+                .map(|b| u64::from_le_bytes(*b))
                 .and_then(|id| u32::try_from(id).ok())
                 .filter(|id| ids.contains(id))
             else {

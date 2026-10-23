@@ -110,7 +110,7 @@ fn grid(prism: &[f64; 6], cutters: &[[f64; 6]], axis: usize) -> Vec<f64> {
             }
         }
     }
-    values.sort_by(|a, b| a.partial_cmp(b).expect("finite"));
+    values.sort_by(f64::total_cmp);
     values.dedup_by(|a, b| (*a - *b).abs() <= CUT_EPS_FEET);
     values
 }
