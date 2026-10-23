@@ -55,9 +55,12 @@ jobs:
           cat out/fmt-summary.txt >> "$GITHUB_STEP_SUMMARY"
       - name: rustdoc coverage
         run: |
-          cargo +nightly rustdoc -p rvt --lib -- -Z unstable-options --show-coverage > out/doc-coverage.txt 2>&1 || true
-          cargo +nightly rustdoc -p rvt --lib -- -Z unstable-options --show-coverage --output-format json > out/doc-coverage.json 2> out/doc-coverage-json.log || true
-          tail -n 5 out/doc-coverage.txt >> "$GITHUB_STEP_SUMMARY"
+          cargo +nightly rustdoc -p rvt --lib -- -Z unstable-options --show-coverage > out/doc-coverage.log 2>&1 || true
+          cp target/doc/rvt.txt out/doc-coverage.txt || true
+          cargo +nightly rustdoc -p rvt --lib -- -Z unstable-options --show-coverage --output-format json > out/doc-coverage-json.log 2>&1 || true
+          cp target/doc/rvt.json out/doc-coverage.json || true
+          ls target/doc >> out/doc-coverage.log
+          tail -n 5 out/doc-coverage.txt >> "$GITHUB_STEP_SUMMARY" || true
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
