@@ -1,4 +1,4 @@
-//! Bridge from Layer-5b decoded elements into the IFC model.
+//! Bridge from decoded elements into the IFC model.
 //!
 //! This is the "one call" integration layer: feed in `DecodedElement`
 //! values (produced by the per-class decoders in `src/elements/`) and
@@ -10,20 +10,14 @@
 //! → IFC-type mapping via [`super::category_map::lookup`] and the
 //! spatial-containment wiring happens in the STEP writer.
 //!
-//! # What this does NOT do yet
-//!
-//! - **Geometry.** Every emitted element has no `IfcShapeRepresentation`
-//!   attached. Phase 5 produces the solids / curves; then we add
-//!   `IfcExtrudedAreaSolid` / `IfcFacetedBrep` here.
-//! - **Materials.** Need the Material / FillPattern decoders' output
-//!   threaded through — straightforward once we accept a
-//!   `StylingCatalog` alongside the decoded elements.
-//! - **Property sets.** Parameter decoding is L5B-53..56.
-//! - **Type → instance linking.** `IfcTypeObject` is IFC-21 / IFC-22.
-//!
-//! The deliberate minimalism here keeps the integration surface tiny
-//! so each future layer (geometry, materials, properties) attaches
-//! orthogonally.
+//! Each [`ElementInput`] carries what the caller knows about the element:
+//! an extrusion, a material and its property sets. Its layer-set and
+//! profile-set indices point into `IfcModel` collections the bridge leaves
+//! empty, so a caller that uses them fills those collections itself. The production exporter, [`super::RvtDocExporter`], does
+//! not go through this bridge: it builds its model from the file's element
+//! records, with their bodies, type objects and GlobalIds. The bridge is for
+//! callers that bring their own decoded elements, such as
+//! `tests/ifc_synthetic_project.rs`.
 
 use super::entities::{
     Classification, Extrusion, IfcEntity, Property, PropertySet, PropertyValue, UnitAssignment,
@@ -86,19 +80,21 @@ pub struct ElementInput<'a> {
     /// (same as `model.entities` ordering).
     pub host_element_index: Option<usize>,
     /// Optional reference to a [`crate::ifc::entities::MaterialLayerSet`]
-    /// in the outgoing `IfcModel.material_layer_sets` (IFC-28). When
+    /// in the outgoing `IfcModel.material_layer_sets`. When
     /// set, takes precedence over `material_index` — the element is
     /// emitted with an `IfcMaterialLayerSetUsage` association
     /// instead of a single `IfcMaterial`. `None` preserves the
     /// single-material behaviour.
+    // Tracker: IFC-28.
     pub material_layer_set_index: Option<usize>,
     /// Optional reference to a [`crate::ifc::entities::MaterialProfileSet`]
-    /// in the outgoing `IfcModel.material_profile_sets` (IFC-30).
+    /// in the outgoing `IfcModel.material_profile_sets`.
     /// For structural framing (columns / beams) with named
     /// cross-sections. Takes precedence over `material_layer_set_index`
     /// and `material_index` when set.
+    // Tracker: IFC-30.
     pub material_profile_set_index: Option<usize>,
-    /// Optional richer solid geometry (IFC-18 / IFC-19 / IFC-20).
+    /// Optional richer solid geometry.
     /// When `Some`, the writer emits one of
     /// `IfcRevolvedAreaSolid` / `IfcBooleanResult` /
     /// `IfcFacetedBrep` into the element's Representation slot
@@ -107,15 +103,17 @@ pub struct ElementInput<'a> {
     /// [`crate::ifc::entities::SolidShape`] for the variant
     /// vocabulary. Precedence: `solid_shape` wins when both it
     /// and `extrusion` are set.
+    // Tracker: IFC-18, IFC-19, IFC-20.
     pub solid_shape: Option<crate::ifc::entities::SolidShape>,
     /// Index into the outgoing `IfcModel.representation_maps` —
     /// when set, the writer emits an `IfcMappedItem` +
     /// `IfcShapeRepresentation` with representation-type
     /// `'MappedRepresentation'` instead of a per-instance
-    /// extrusion / solid chain (IFC-21). Use this to share one
+    /// extrusion / solid chain. Use this to share one
     /// compiled shape across many instances of a Revit Symbol
     /// (family type). Highest-precedence slot — beats
     /// `solid_shape` and `extrusion`.
+    // Tracker: IFC-21.
     pub representation_map_index: Option<usize>,
 }
 
@@ -175,7 +173,7 @@ pub fn wall_extrusion(
     }
 }
 
-/// Length in feet of a straight 2D location-curve segment (GEO-27).
+/// Length in feet of a straight 2D location-curve segment.
 ///
 /// Revit walls store their geometry as a 2D location line — two
 /// points in the project XY plane. The wall body is the rectangle
@@ -187,6 +185,7 @@ pub fn wall_extrusion(
 /// it once per segment and build a [`wall_extrusion`] for each, or
 /// use [`wall_extrusion_from_location_line`] for the single-segment
 /// common case.
+// Tracker: GEO-27.
 pub fn wall_segment_length_feet(start: [f64; 2], end: [f64; 2]) -> f64 {
     let dx = end[0] - start[0];
     let dy = end[1] - start[1];
@@ -194,13 +193,14 @@ pub fn wall_segment_length_feet(start: [f64; 2], end: [f64; 2]) -> f64 {
 }
 
 /// Planar rotation (about +Z, radians) of a straight location-line
-/// segment (GEO-27). Zero when the line runs along +X; π/2 for +Y;
+/// segment. Zero when the line runs along +X; π/2 for +Y;
 /// -π/2 for -Y; etc.
 ///
 /// Used alongside [`wall_segment_length_feet`] to compute the
 /// IfcWall's `rotation_radians` so the extrusion profile faces
 /// the correct direction. Callers threading multi-segment walls
 /// call this per segment.
+// Tracker: GEO-27.
 pub fn wall_segment_angle_radians(start: [f64; 2], end: [f64; 2]) -> f64 {
     let dx = end[0] - start[0];
     let dy = end[1] - start[1];
@@ -208,7 +208,7 @@ pub fn wall_segment_angle_radians(start: [f64; 2], end: [f64; 2]) -> f64 {
 }
 
 /// Build a rectangular `Extrusion` from a decoded [`Wall`] + its
-/// 2D location-line endpoints (GEO-27).
+/// 2D location-line endpoints.
 ///
 /// Equivalent to calling [`wall_extrusion`] with the computed
 /// segment length, but expresses the caller's intent directly:
@@ -223,6 +223,7 @@ pub fn wall_segment_angle_radians(start: [f64; 2], end: [f64; 2]) -> f64 {
 /// Companion [`wall_segment_angle_radians`] gives the rotation to
 /// thread into `ElementInput.rotation_radians` so the profile
 /// faces the right way.
+// Tracker: GEO-27.
 pub fn wall_extrusion_from_location_line(
     wall: &Wall,
     wall_type: Option<&crate::elements::wall::WallType>,
@@ -232,7 +233,7 @@ pub fn wall_extrusion_from_location_line(
     wall_extrusion(wall, wall_type, wall_segment_length_feet(start, end))
 }
 
-/// Decompose a compound wall into its per-layer extrusions (GEO-27).
+/// Decompose a compound wall into its per-layer extrusions.
 ///
 /// A real Revit wall carries a layer set (gypsum / insulation /
 /// sheathing / brick). Each layer has its own thickness but the
@@ -247,9 +248,10 @@ pub fn wall_extrusion_from_location_line(
 /// `IfcRelAggregates(MultiLayerWall, [Layer1, Layer2, …])` pattern)
 /// or combine them into a single extrusion with the total thickness
 /// and attach the full layer set via
-/// `BuildingElement::material_layer_set_index` (IFC-28).
+/// `BuildingElement::material_layer_set_index`.
 ///
 /// Empty or zero-thickness layer lists return an empty vec.
+// Tracker: GEO-27, IFC-28.
 pub fn wall_layered_extrusions_from_location_line(
     wall: &Wall,
     start: [f64; 2],
@@ -289,7 +291,7 @@ pub fn slab_extrusion(
     }
 }
 
-/// Shoelace-formula area (GEO-28) for a closed planar polygon
+/// Shoelace-formula area for a closed planar polygon
 /// given as a sequence of `(x, y)` vertices in feet. Returns the
 /// unsigned area in square feet.
 ///
@@ -300,6 +302,7 @@ pub fn slab_extrusion(
 /// Used to compute `Qto_SlabBaseQuantities.GrossArea` / `NetArea`
 /// for IfcSlab / IfcFloor property sets, and as a sanity check that
 /// a decoded boundary really encloses area before it is extruded.
+// Tracker: GEO-28.
 pub fn polygon_area_sqft(points: &[(f64, f64)]) -> f64 {
     if points.len() < 3 {
         return 0.0;
@@ -314,12 +317,13 @@ pub fn polygon_area_sqft(points: &[(f64, f64)]) -> f64 {
     (sum * 0.5).abs()
 }
 
-/// Summed edge length (GEO-28) of a closed polygon given as a
+/// Summed edge length of a closed polygon given as a
 /// sequence of `(x, y)` vertices in feet. The last-to-first closing
 /// edge is included.
 ///
 /// Matches `Qto_SlabBaseQuantities.Perimeter`. Returns 0 for inputs
 /// with fewer than 2 points.
+// Tracker: GEO-28.
 pub fn polygon_perimeter_feet(points: &[(f64, f64)]) -> f64 {
     if points.len() < 2 {
         return 0.0;
@@ -337,7 +341,7 @@ pub fn polygon_perimeter_feet(points: &[(f64, f64)]) -> f64 {
 }
 
 /// Build an `Extrusion` for a floor from its **decoded boundary
-/// sketch** (GEO-28).
+/// sketch**.
 ///
 /// Revit stores slab geometry as a 2D closed loop of model lines
 /// (the "sketch") plus a per-FloorType thickness. This helper
@@ -355,6 +359,7 @@ pub fn polygon_perimeter_feet(points: &[(f64, f64)]) -> f64 {
 /// case. Paired with [`polygon_area_sqft`] and
 /// [`polygon_perimeter_feet`] to populate
 /// `Qto_SlabBaseQuantities`.
+// Tracker: GEO-28.
 pub fn floor_extrusion_from_boundary(
     boundary: &[(f64, f64)],
     floor_type: Option<&crate::elements::floor::FloorType>,
@@ -371,11 +376,12 @@ pub fn floor_extrusion_from_boundary(
     Extrusion::arbitrary_closed(boundary.to_vec(), thickness)
 }
 
-/// Build a `Qto_SlabBaseQuantities`-style [`PropertySet`] (GEO-28)
+/// Build a `Qto_SlabBaseQuantities`-style [`PropertySet`]
 /// from a decoded floor boundary + thickness. Populates GrossArea and
 /// Perimeter, and Depth and GrossVolume only where the floor type
 /// gives a thickness. Empty boundaries yield an empty property set (no
 /// bogus zero-valued quantities).
+// Tracker: GEO-28.
 pub fn floor_base_quantities(
     boundary: &[(f64, f64)],
     floor_type: Option<&crate::elements::floor::FloorType>,
@@ -429,13 +435,14 @@ pub fn roof_extrusion(
 
 // ---- GEO-29: Roof geometry with slopes ----
 
-/// Convert a US-construction "rise:run" pitch (GEO-29) to radians.
+/// Convert a US-construction "rise:run" pitch to radians.
 /// Rise is the vertical component, run is the horizontal — e.g.
 /// a "6 in 12" pitch passes `rise = 6.0, run = 12.0` and gets
 /// back roughly `0.4636` rad (26.57°).
 ///
 /// Returns 0 when `run <= 0.0` so callers can pipe raw Revit
 /// parameter values through without pre-validating.
+// Tracker: GEO-29.
 pub fn roof_pitch_radians_from_rise_run(rise: f64, run: f64) -> f64 {
     if run <= 0.0 {
         return 0.0;
@@ -443,26 +450,28 @@ pub fn roof_pitch_radians_from_rise_run(rise: f64, run: f64) -> f64 {
     (rise / run).atan()
 }
 
-/// Convert a slope in degrees to radians (GEO-29). Helper for
+/// Convert a slope in degrees to radians. Helper for
 /// callers reading `RVT_PARAM_ROOF_SLOPE` as a plain degree value.
+// Tracker: GEO-29.
 pub fn roof_pitch_radians_from_degrees(degrees: f64) -> f64 {
     degrees.to_radians()
 }
 
-/// Ridge-above-eave height (GEO-29) of a symmetric gabled roof
+/// Ridge-above-eave height of a symmetric gabled roof
 /// spanning `span_feet` between the two eave walls, with rafters
 /// rising at `pitch_rad` from horizontal. The ridge sits at the
 /// midline, so `height = (span/2) * tan(pitch)`.
 ///
 /// A flat roof (pitch 0) returns 0. Negative span or pitch are
 /// clamped to 0.
+// Tracker: GEO-29.
 pub fn gabled_roof_ridge_height(span_feet: f64, pitch_rad: f64) -> f64 {
     let s = span_feet.max(0.0);
     let p = pitch_rad.max(0.0);
     (s * 0.5) * p.tan()
 }
 
-/// Ridge length (GEO-29) of a hipped roof with a rectangular
+/// Ridge length of a hipped roof with a rectangular
 /// footprint. For a hip with equal pitch on all four sides, the
 /// ridge runs along the longer dimension for
 /// `length - width` feet. When `length == width` the hip degen-
@@ -470,11 +479,12 @@ pub fn gabled_roof_ridge_height(span_feet: f64, pitch_rad: f64) -> f64 {
 ///
 /// Inputs are normalised so callers can pass length/width in any
 /// order: the function uses `max - min` internally.
+// Tracker: GEO-29.
 pub fn hip_roof_ridge_length(length_feet: f64, width_feet: f64) -> f64 {
     (length_feet.max(width_feet) - length_feet.min(width_feet)).max(0.0)
 }
 
-/// Build an `Extrusion` for a **gabled** roof (GEO-29): the gable
+/// Build an `Extrusion` for a **gabled** roof: the gable
 /// profile is a triangle of base `span_feet` and height
 /// `(span_feet/2) * tan(pitch_rad)`, extruded along `length_feet`.
 ///
@@ -486,6 +496,7 @@ pub fn hip_roof_ridge_length(length_feet: f64, width_feet: f64) -> f64 {
 ///
 /// A flat (pitch 0) roof falls back to `roof_extrusion(length,
 /// span, roof_type)` so the output is still a valid slab solid.
+// Tracker: GEO-29.
 pub fn gabled_roof_extrusion(
     length_feet: f64,
     span_feet: f64,
@@ -501,7 +512,7 @@ pub fn gabled_roof_extrusion(
     Extrusion::arbitrary_closed(profile, length_feet.max(0.0))
 }
 
-/// Build vertex + triangle data (GEO-29) for a **hipped** roof
+/// Build vertex + triangle data for a **hipped** roof
 /// over a rectangular footprint. Returns `(vertices_feet,
 /// triangles)` ready for `SolidShape::FacetedBrep`.
 ///
@@ -513,6 +524,7 @@ pub fn gabled_roof_extrusion(
 /// All vertices sit in the element-local XY plane at `Z=0`
 /// (eaves) or `Z=ridge_height` (ridge line). Callers are
 /// responsible for translating to world coordinates.
+// Tracker: GEO-29.
 pub fn hip_roof_brep(
     length_feet: f64,
     width_feet: f64,
@@ -581,9 +593,10 @@ pub fn hip_roof_brep(
 
 // ---- GEO-32: Stair geometry (runs + landings + risers + treads) ----
 
-/// Pitch (GEO-32) of a straight stair run in radians, derived
+/// Pitch of a straight stair run in radians, derived
 /// from calibrated riser height + tread depth. `atan(rise / run)`.
 /// A zero-depth tread (infinitely steep ladder) returns `PI/2`.
+// Tracker: GEO-32.
 pub fn stair_pitch_radians(riser_height_feet: f64, tread_depth_feet: f64) -> f64 {
     if tread_depth_feet <= 0.0 {
         return std::f64::consts::FRAC_PI_2;
@@ -591,7 +604,7 @@ pub fn stair_pitch_radians(riser_height_feet: f64, tread_depth_feet: f64) -> f64
     (riser_height_feet / tread_depth_feet).atan()
 }
 
-/// Total run length (GEO-32) of a straight stair, in feet. A
+/// Total run length of a straight stair, in feet. A
 /// straight stair with N risers has N-1 treads between risers
 /// (the top landing is a separate element), so the horizontal
 /// distance covered is `(riser_count - 1) * tread_depth`.
@@ -599,6 +612,7 @@ pub fn stair_pitch_radians(riser_height_feet: f64, tread_depth_feet: f64) -> f64
 /// Callers that model a tread at the top of the run as part of
 /// the stair flight should pass `riser_count` unchanged and add
 /// `tread_depth` to the result.
+// Tracker: GEO-32.
 pub fn stair_run_length_feet(riser_count: u32, tread_depth_feet: f64) -> f64 {
     if riser_count == 0 {
         return 0.0;
@@ -606,7 +620,7 @@ pub fn stair_run_length_feet(riser_count: u32, tread_depth_feet: f64) -> f64 {
     (riser_count - 1) as f64 * tread_depth_feet.max(0.0)
 }
 
-/// Build the sawtooth profile (GEO-32) of a straight stair flight
+/// Build the sawtooth profile of a straight stair flight
 /// as a closed 2D polygon, suitable for
 /// [`Extrusion::arbitrary_closed`]. Extruded along the stair
 /// width, this yields an `IfcExtrudedAreaSolid` shaped like the
@@ -619,6 +633,7 @@ pub fn stair_run_length_feet(riser_count: u32, tread_depth_feet: f64) -> f64 {
 /// `riser_count == 0` returns an empty vec (caller should handle
 /// the degenerate case — typically by falling back to a plain
 /// rectangular extrusion of a landing).
+// Tracker: GEO-32.
 pub fn stair_sawtooth_profile(
     riser_count: u32,
     riser_height_feet: f64,
@@ -654,13 +669,14 @@ pub fn stair_sawtooth_profile(
     pts
 }
 
-/// Build an `Extrusion` for a straight stair flight (GEO-32) using
+/// Build an `Extrusion` for a straight stair flight using
 /// the sawtooth profile, extruded perpendicular to the run by
 /// `width_feet`.
 ///
 /// Falls back to a plain rectangular extrusion (run_length × 1 ft
 /// slab) when the sawtooth would be degenerate (zero risers or
 /// negative dimensions) so STEP emission always succeeds.
+// Tracker: GEO-32.
 pub fn stair_run_extrusion(stair: &Stair, width_feet: f64) -> Extrusion {
     let riser_count = stair.actual_riser_count.unwrap_or(0);
     let riser_h = stair.actual_riser_height_feet.unwrap_or(0.0);
@@ -679,10 +695,11 @@ pub fn stair_run_extrusion(stair: &Stair, width_feet: f64) -> Extrusion {
 }
 
 /// Build a rectangular `Extrusion` for a single stair **tread**
-/// board (GEO-32). Treads are modelled as thin slabs of
+/// board. Treads are modelled as thin slabs of
 /// `tread_depth × width × thickness` — callers emitting stairs
 /// as an IfcStair + child IfcStairFlight + per-tread IfcMember
 /// use this to shape each member.
+// Tracker: GEO-32.
 pub fn stair_tread_extrusion(
     tread_depth_feet: f64,
     width_feet: f64,
@@ -697,8 +714,9 @@ pub fn stair_tread_extrusion(
 }
 
 /// Build a rectangular `Extrusion` for a stair **landing**
-/// (GEO-32). Semantically an IfcSlab with PredefinedType LANDING
+///. Semantically an IfcSlab with PredefinedType LANDING
 /// in IFC4; shape-wise identical to any rectangular slab.
+// Tracker: GEO-32.
 pub fn stair_landing_extrusion(
     length_feet: f64,
     width_feet: f64,
@@ -714,15 +732,16 @@ pub fn stair_landing_extrusion(
 
 // ---- GEO-31 / GEO-30: Window + Door geometry and opening voids ----
 
-/// Small margin (GEO-31) added to an opening's width + height above
+/// Small margin added to an opening's width + height above
 /// the window/door frame, so the void in the host wall extends a
 /// hair past the frame and leaves no z-fighting sliver when the
 /// viewer renders both. Value in feet. IFC4 does not mandate this
 /// margin; it's a rendering hygiene nicety.
+// Tracker: GEO-31.
 pub const DEFAULT_OPENING_MARGIN_FEET: f64 = 0.01;
 
 /// Build a rectangular `Extrusion` for a **window** frame body
-/// (GEO-31). The three dimensions map as:
+///. The three dimensions map as:
 ///
 /// - `width_feet` — profile width along the host wall.
 /// - `height_feet` — vertical extrusion distance (window height).
@@ -735,6 +754,7 @@ pub const DEFAULT_OPENING_MARGIN_FEET: f64 = 0.01;
 /// depth perpendicular to the wall should pass it as
 /// `depth_feet`; the writer handles orientation via the parent
 /// `ElementInput.rotation_radians` shared with the host wall.
+// Tracker: GEO-31.
 pub fn window_extrusion(width_feet: f64, height_feet: f64, depth_feet: f64) -> Extrusion {
     Extrusion {
         width_feet: width_feet.max(0.0),
@@ -744,7 +764,7 @@ pub fn window_extrusion(width_feet: f64, height_feet: f64, depth_feet: f64) -> E
     }
 }
 
-/// Build the opening-void `Extrusion` for a window (GEO-31) — the
+/// Build the opening-void `Extrusion` for a window — the
 /// rectangular hole cut into the host wall. Equal-shape to
 /// [`window_extrusion`] but inflated by `margin_feet` on width and
 /// height to avoid z-fighting with the window body. Depth passes
@@ -756,6 +776,7 @@ pub fn window_extrusion(width_feet: f64, height_feet: f64, depth_feet: f64) -> E
 /// [`crate::ifc::entities::IfcEntity::BuildingElement`] handler
 /// emits `IfcOpeningElement` + `IfcRelVoidsElement` +
 /// `IfcRelFillsElement` automatically when it sees that wiring.
+// Tracker: GEO-31.
 pub fn window_opening_extrusion(
     width_feet: f64,
     height_feet: f64,
@@ -771,17 +792,19 @@ pub fn window_opening_extrusion(
     }
 }
 
-/// Build a rectangular `Extrusion` for a **door** body (GEO-30).
+/// Build a rectangular `Extrusion` for a **door** body.
 /// Same dimension mapping as [`window_extrusion`] — the semantic
 /// difference is purely in the host wall void (no sill).
+// Tracker: GEO-30.
 pub fn door_extrusion(width_feet: f64, height_feet: f64, depth_feet: f64) -> Extrusion {
     window_extrusion(width_feet, height_feet, depth_feet)
 }
 
-/// Build the opening-void `Extrusion` for a door (GEO-30). Same
+/// Build the opening-void `Extrusion` for a door. Same
 /// shape as [`window_opening_extrusion`] — the door/window
 /// distinction lives in the host's IfcDoor/IfcWindow entity, not
 /// in the void itself.
+// Tracker: GEO-30.
 pub fn door_opening_extrusion(
     width_feet: f64,
     height_feet: f64,
@@ -791,7 +814,7 @@ pub fn door_opening_extrusion(
     window_opening_extrusion(width_feet, height_feet, wall_thickness_feet, margin_feet)
 }
 
-/// Offset (GEO-31) a 3D placement from the host level's elevation
+/// Offset a 3D placement from the host level's elevation
 /// up by the window's sill height, returning the new Z.
 ///
 /// Revit stores a window's insertion point at the host level's
@@ -804,15 +827,17 @@ pub fn door_opening_extrusion(
 /// the level that hosts the window. `sill_height_feet` comes from
 /// the decoded `Window.sill_height_feet` (or
 /// `Window::sill_height_inches` / 12.0).
+// Tracker: GEO-31.
 pub fn window_placement_z_feet(host_level_elevation_feet: f64, sill_height_feet: f64) -> f64 {
     host_level_elevation_feet + sill_height_feet.max(0.0)
 }
 
 /// [`window_property_set`] plus the window's OverallWidth /
-/// OverallHeight / Depth when the caller has them (GEO-31), in the
+/// OverallHeight / Depth when the caller has them, in the
 /// same `RvtWindow` set: IFC4 makes the first two attributes of
 /// `IfcWindow`, not properties of `Pset_WindowCommon`. Values that are
 /// zero or negative are skipped.
+// Tracker: GEO-31.
 pub fn window_dimensions_property_set(
     window: &Window,
     width_feet: f64,
@@ -824,8 +849,9 @@ pub fn window_dimensions_property_set(
     non_empty_sets([("RvtWindow", properties)])
 }
 
-/// [`door_property_set`] plus the door's dimensions (GEO-30), as
+/// [`door_property_set`] plus the door's dimensions, as
 /// [`window_dimensions_property_set`] does for a window.
+// Tracker: GEO-30.
 pub fn door_dimensions_property_set(
     door: &Door,
     width_feet: f64,
@@ -907,7 +933,7 @@ pub fn column_extrusion(
 
 // ---- GEO-33: Column geometry (profile + levels) ----
 
-/// Resolved column height in feet (GEO-33), combining the column's
+/// Resolved column height in feet, combining the column's
 /// own `base_offset_feet` / `top_offset_feet` with the elevations
 /// of its base + top levels.
 ///
@@ -919,6 +945,7 @@ pub fn column_extrusion(
 /// only offsets the column has a mathematically undefined height.
 /// Clamps very small positive values to 0.1 ft so STEP output
 /// always represents a 3D solid.
+// Tracker: GEO-33.
 pub fn column_height_from_levels(
     column: &crate::elements::structural::Column,
     base_level_elevation_feet: Option<f64>,
@@ -932,13 +959,14 @@ pub fn column_height_from_levels(
     Some((diff + offset_delta).max(0.1))
 }
 
-/// Build an I/W-shape `Extrusion` for a structural column (GEO-33).
+/// Build an I/W-shape `Extrusion` for a structural column.
 /// `overall_width_feet` is the flange width (W9, W12, etc.), and
 /// `overall_depth_feet` is the web depth.
 ///
 /// Uses [`Extrusion::i_shape`] internally, so the writer emits an
 /// `IFCIShapeProfileDef` + `IfcExtrudedAreaSolid` of length
 /// `height_feet`.
+// Tracker: GEO-33.
 pub fn column_i_shape_extrusion(
     overall_width_feet: f64,
     overall_depth_feet: f64,
@@ -956,14 +984,16 @@ pub fn column_i_shape_extrusion(
 }
 
 /// Build a round-column `Extrusion` for a structural column
-/// (GEO-33). Emits `IFCCIRCLEPROFILEDEF` + IfcExtrudedAreaSolid.
+///. Emits `IFCCIRCLEPROFILEDEF` + IfcExtrudedAreaSolid.
+// Tracker: GEO-33.
 pub fn column_circular_extrusion(radius_feet: f64, height_feet: f64) -> Extrusion {
     Extrusion::circle(radius_feet.max(0.0), height_feet.max(0.1))
 }
 
 /// Build a rectangular hollow section (HSS) `Extrusion` for a
-/// structural column (GEO-33). Emits
+/// structural column. Emits
 /// `IFCRectangleHollowProfileDef` + IfcExtrudedAreaSolid.
+// Tracker: GEO-33.
 pub fn column_rectangular_hollow_extrusion(
     outer_width_feet: f64,
     outer_depth_feet: f64,
@@ -979,9 +1009,10 @@ pub fn column_rectangular_hollow_extrusion(
 }
 
 /// Build an `Extrusion` from an arbitrary closed polyline column
-/// profile (GEO-33) — for sketched-in-family columns that don't
+/// profile — for sketched-in-family columns that don't
 /// fit the standard I / circle / rectangle / hollow catalogue.
 /// Emits `IFCArbitraryClosedProfileDef` + polyline + IfcExtrudedAreaSolid.
+// Tracker: GEO-33.
 pub fn column_arbitrary_profile_extrusion(
     profile_points: Vec<(f64, f64)>,
     height_feet: f64,
@@ -989,10 +1020,11 @@ pub fn column_arbitrary_profile_extrusion(
     Extrusion::arbitrary_closed(profile_points, height_feet.max(0.1))
 }
 
-/// The property sets of a decoded column (GEO-33): `Pset_ColumnCommon`
+/// The property sets of a decoded column: `Pset_ColumnCommon`
 /// with LoadBearing, and rvt-rs's `RvtColumn` with the base and top
 /// offsets and the rotation, which IFC4's set does not declare. A set
 /// with nothing read is left out.
+// Tracker: GEO-33.
 pub fn column_property_set(column: &crate::elements::structural::Column) -> Vec<PropertySet> {
     let mut props = Vec::new();
     if let Some(v) = column.base_offset_feet {
@@ -1025,9 +1057,10 @@ pub fn column_property_set(column: &crate::elements::structural::Column) -> Vec<
 
 // ---- GEO-34: Beam geometry (profile + curve path) ----
 
-/// 3D length (GEO-34) of a straight beam from `start` to `end` in
+/// 3D length of a straight beam from `start` to `end` in
 /// feet. Euclidean distance including Z component, so it also
 /// works for sloped members.
+// Tracker: GEO-34.
 pub fn beam_length_3d_feet(start: crate::geometry::Point3, end: crate::geometry::Point3) -> f64 {
     let dx = end.x - start.x;
     let dy = end.y - start.y;
@@ -1035,23 +1068,25 @@ pub fn beam_length_3d_feet(start: crate::geometry::Point3, end: crate::geometry:
     (dx * dx + dy * dy + dz * dz).sqrt()
 }
 
-/// Yaw angle (GEO-34) of a beam's axis in the project XY plane,
+/// Yaw angle of a beam's axis in the project XY plane,
 /// in radians. Zero when the beam runs along +X, π/2 for +Y,
 /// -π/2 for -Y, π for -X. Useful for rotating the extrusion
 /// profile so it sits perpendicular to the beam's axis.
+// Tracker: GEO-34.
 pub fn beam_axis_yaw_radians(start: crate::geometry::Point3, end: crate::geometry::Point3) -> f64 {
     let dx = end.x - start.x;
     let dy = end.y - start.y;
     dy.atan2(dx)
 }
 
-/// Slope angle (GEO-34) of a beam's axis, in radians, measured
+/// Slope angle of a beam's axis, in radians, measured
 /// from the project horizontal plane. Zero for flat beams,
 /// positive when the end is higher than the start.
 ///
 /// Returns 0 for zero-length beams (degenerate input) so callers
 /// can thread the result into `rotation_radians` without further
 /// guards.
+// Tracker: GEO-34.
 pub fn beam_axis_pitch_radians(
     start: crate::geometry::Point3,
     end: crate::geometry::Point3,
@@ -1066,9 +1101,10 @@ pub fn beam_axis_pitch_radians(
     dz.atan2(horiz)
 }
 
-/// `true` when a beam is horizontal within `eps_feet` (GEO-34) —
+/// `true` when a beam is horizontal within `eps_feet` —
 /// useful for distinguishing floor-framing beams from raked
 /// trusses or sloped braces before emitting a representation.
+// Tracker: GEO-34.
 pub fn beam_is_horizontal(
     start: crate::geometry::Point3,
     end: crate::geometry::Point3,
@@ -1077,10 +1113,11 @@ pub fn beam_is_horizontal(
     (end.z - start.z).abs() < eps_feet
 }
 
-/// Build an I/W-shape `Extrusion` for a structural beam (GEO-34)
+/// Build an I/W-shape `Extrusion` for a structural beam
 /// — same profile math as [`column_i_shape_extrusion`] but the
 /// caller supplies the **beam length** along its axis. Emit as
 /// `IFCIShapeProfileDef` + `IfcExtrudedAreaSolid`.
+// Tracker: GEO-34.
 pub fn beam_i_shape_extrusion(
     overall_width_feet: f64,
     overall_depth_feet: f64,
@@ -1098,9 +1135,10 @@ pub fn beam_i_shape_extrusion(
 }
 
 /// Build a rectangular-hollow-section `Extrusion` for a beam
-/// (GEO-34). HSS tube members — common for tube-steel joists
+///. HSS tube members — common for tube-steel joists
 /// and decorative exposed framing. Emits
 /// `IFCRECTANGLEHOLLOWPROFILEDEF`.
+// Tracker: GEO-34.
 pub fn beam_rectangular_hollow_extrusion(
     outer_width_feet: f64,
     outer_depth_feet: f64,
@@ -1116,9 +1154,10 @@ pub fn beam_rectangular_hollow_extrusion(
 }
 
 /// Build an `Extrusion` from an arbitrary closed polyline beam
-/// profile (GEO-34) — for sketched-in-family beams outside the
+/// profile — for sketched-in-family beams outside the
 /// standard I / HSS catalogue. Emits
 /// `IFCARBITRARYCLOSEDPROFILEDEF` + polyline + IfcExtrudedAreaSolid.
+// Tracker: GEO-34.
 pub fn beam_arbitrary_profile_extrusion(
     profile_points: Vec<(f64, f64)>,
     length_feet: f64,
@@ -1126,9 +1165,10 @@ pub fn beam_arbitrary_profile_extrusion(
     Extrusion::arbitrary_closed(profile_points, length_feet.max(0.1))
 }
 
-/// Build a rectangular `Extrusion` for a beam (GEO-34). Used when
+/// Build a rectangular `Extrusion` for a beam. Used when
 /// the caller doesn't yet have profile data off the Symbol and
 /// just needs a reasonable block-shaped body.
+// Tracker: GEO-34.
 pub fn beam_rectangular_extrusion(width_feet: f64, depth_feet: f64, length_feet: f64) -> Extrusion {
     Extrusion {
         width_feet: width_feet.max(0.0),
@@ -1138,11 +1178,12 @@ pub fn beam_rectangular_extrusion(width_feet: f64, depth_feet: f64, length_feet:
     }
 }
 
-/// The property sets of a decoded beam (GEO-34): `Pset_BeamCommon` with
+/// The property sets of a decoded beam: `Pset_BeamCommon` with
 /// a `Span` computed from the 3D length when both endpoints are present
 /// and it is positive, and rvt-rs's `RvtBeam` with the start and end
 /// level offsets and the cross-section rotation, which IFC4's set does
 /// not declare. A set with nothing read is left out.
+// Tracker: GEO-34.
 pub fn beam_property_set(beam: &crate::elements::structural::Beam) -> Vec<PropertySet> {
     let mut props = Vec::new();
     if let Some(v) = beam.start_level_offset_feet {

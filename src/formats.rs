@@ -70,7 +70,7 @@ pub struct SchemaTable {
     pub scan_truncated: bool,
 }
 
-/// Derived diagnostic counters for a parsed [`SchemaTable`] (API-10).
+/// Derived diagnostic counters for a parsed [`SchemaTable`].
 ///
 /// These counters are computed on demand from the parsed table — the
 /// `SchemaTable` itself stores only the raw record lists to keep the
@@ -78,7 +78,9 @@ pub struct SchemaTable {
 /// quality metadata (for CLI output, CI drift detection, or
 /// cross-release regression checks) use [`SchemaTable::diagnostics`]
 /// and inspect the returned `SchemaDiagnostics`.
+// Tracker: API-10.
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct SchemaDiagnostics {
     /// Total number of classes in the schema.
     pub class_count: usize,
@@ -272,7 +274,7 @@ pub struct FieldEntry {
 
 /// Best-effort classification of a field's type encoding (the byte block
 /// that follows a field name in `Formats/Latest`). Derived from the
-/// 2026-04-19 Phase 4c.2 sweeps (Q5 + Q5.1) — see the §Q5 / §Q5.1
+/// 2026-04-19 Layer 4c.2 sweeps (Q5 + Q5.1) — see the §Q5 / §Q5.1
 /// addenda in `docs/rvt-moat-break-reconnaissance.md` for evidence.
 ///
 /// The primary discriminator is the first byte of the encoding:
@@ -290,6 +292,7 @@ pub struct FieldEntry {
 /// | `0x0b` | `u64` / `i64` | 8 |
 /// | `0x0e` | reference / pointer / container | variable (see sub-type) |
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum FieldType {
     /// A fixed-size numeric or boolean primitive. `size` is the wire
     /// size in bytes; `kind` is the type category byte (0x01, 0x02,
@@ -470,7 +473,7 @@ impl FieldType {
         }
     }
 
-    /// Encode (WRT-01) a `FieldType` back to its wire type-encoding
+    /// Encode a `FieldType` back to its wire type-encoding
     /// block — the inverse of [`FieldType::decode`]. Used by the
     /// write path (`write_with_patches` field-level edits and the
     /// forthcoming `ADocument` writer) to serialise schema records.
@@ -489,6 +492,7 @@ impl FieldType {
     /// canonical-form variant. The two collapsing cases (String alt
     /// encoding, Vector/Container 0x0011/0x0051 aliases) round-trip
     /// to the canonical form, never back to the alt.
+    // Tracker: WRT-01.
     pub fn encode(&self) -> Vec<u8> {
         match self {
             FieldType::Primitive { kind, .. } => vec![*kind, 0x00, 0x00, 0x00],
@@ -928,6 +932,7 @@ fn scan_fields_until_next_class_bounded(
 
 /// One class of the `Formats/Latest` schema as the grammar reads it (#154).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct SchemaClass {
     /// The class's serialization tag: its definition ordinal, 12 for the
     /// first class and one more for each further definition, top-level or
@@ -943,6 +948,7 @@ pub struct SchemaClass {
 /// Every class of a page-stripped `Formats/Latest` stream, in definition
 /// order (#154).
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct SchemaClasses {
     pub classes: Vec<SchemaClass>,
     /// Bytes read before the stream ended or a record broke the grammar.

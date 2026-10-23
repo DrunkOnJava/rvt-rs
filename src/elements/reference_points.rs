@@ -29,59 +29,8 @@
 //! `Transform3` for downstream consumers.
 
 use super::level::normalise_field_name;
-use crate::formats;
 use crate::geometry::{Point3, Transform3, Vector3};
-use crate::walker::{DecodedElement, ElementDecoder, HandleIndex, InstanceField};
-use crate::{Error, Result};
-
-macro_rules! simple_decoder {
-    ($Struct:ident, $name:literal) => {
-        pub struct $Struct;
-
-        impl ElementDecoder for $Struct {
-            fn class_name(&self) -> &'static str {
-                $name
-            }
-
-            fn decode(
-                &self,
-                bytes: &[u8],
-                schema: &formats::ClassEntry,
-                index: &HandleIndex,
-            ) -> Result<DecodedElement> {
-                self.decode_with_limits(
-                    bytes,
-                    schema,
-                    index,
-                    crate::walker::WalkerLimits::default(),
-                )
-            }
-
-            fn decode_with_limits(
-                &self,
-                bytes: &[u8],
-                schema: &formats::ClassEntry,
-                _index: &HandleIndex,
-                limits: crate::walker::WalkerLimits,
-            ) -> Result<DecodedElement> {
-                if schema.name != $name {
-                    return Err(Error::BasicFileInfo(format!(
-                        "{} received wrong schema: {}",
-                        stringify!($Struct),
-                        schema.name
-                    )));
-                }
-                Ok(crate::walker::decode_instance_with_limits(
-                    bytes, 0, schema, limits,
-                ))
-            }
-        }
-    };
-}
-
-simple_decoder!(BasePointDecoder, "BasePoint");
-simple_decoder!(SurveyPointDecoder, "SurveyPoint");
-simple_decoder!(ProjectPositionDecoder, "ProjectPosition");
+use crate::walker::{DecodedElement, InstanceField};
 
 /// Typed view of a decoded BasePoint.
 ///
@@ -90,6 +39,7 @@ simple_decoder!(ProjectPositionDecoder, "ProjectPosition");
 /// elevation field that sometimes overlaps m_z (depends on whether
 /// the file is a family or a project).
 #[derive(Debug, Clone, PartialEq, Default)]
+#[non_exhaustive]
 pub struct BasePoint {
     pub position: Option<Point3>,
     pub angle_radians: Option<f64>,
@@ -122,6 +72,7 @@ impl BasePoint {
 /// `angle_to_true_north` field that describes project-to-true-north
 /// rotation.
 #[derive(Debug, Clone, PartialEq, Default)]
+#[non_exhaustive]
 pub struct SurveyPoint {
     pub position: Option<Point3>,
     pub angle_to_true_north: Option<f64>,
@@ -165,6 +116,7 @@ impl SurveyPoint {
 /// Stores rotation (angle from true north) + translation
 /// (dx, dy, dz) between project and survey coordinate systems.
 #[derive(Debug, Clone, PartialEq, Default)]
+#[non_exhaustive]
 pub struct ProjectPosition {
     pub rotation_radians: Option<f64>,
     pub translation: Option<Vector3>,

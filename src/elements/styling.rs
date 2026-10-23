@@ -8,62 +8,11 @@
 //! relevant context together for contributors.
 
 use super::level::normalise_field_name;
-use crate::formats;
-use crate::walker::{DecodedElement, ElementDecoder, HandleIndex, InstanceField};
-use crate::{Error, Result};
-
-macro_rules! simple_decoder {
-    ($Struct:ident, $name:literal) => {
-        pub struct $Struct;
-
-        impl ElementDecoder for $Struct {
-            fn class_name(&self) -> &'static str {
-                $name
-            }
-
-            fn decode(
-                &self,
-                bytes: &[u8],
-                schema: &formats::ClassEntry,
-                index: &HandleIndex,
-            ) -> Result<DecodedElement> {
-                self.decode_with_limits(
-                    bytes,
-                    schema,
-                    index,
-                    crate::walker::WalkerLimits::default(),
-                )
-            }
-
-            fn decode_with_limits(
-                &self,
-                bytes: &[u8],
-                schema: &formats::ClassEntry,
-                _index: &HandleIndex,
-                limits: crate::walker::WalkerLimits,
-            ) -> Result<DecodedElement> {
-                if schema.name != $name {
-                    return Err(Error::BasicFileInfo(format!(
-                        "{} received wrong schema: {}",
-                        stringify!($Struct),
-                        schema.name
-                    )));
-                }
-                Ok(crate::walker::decode_instance_with_limits(
-                    bytes, 0, schema, limits,
-                ))
-            }
-        }
-    };
-}
-
-simple_decoder!(MaterialDecoder, "Material");
-simple_decoder!(FillPatternDecoder, "FillPattern");
-simple_decoder!(LinePatternDecoder, "LinePattern");
-simple_decoder!(LineStyleDecoder, "LineStyle");
+use crate::walker::{DecodedElement, InstanceField};
 
 /// Typed view of a decoded Material.
 #[derive(Debug, Clone, PartialEq, Default)]
+#[non_exhaustive]
 pub struct Material {
     pub name: Option<String>,
     /// Packed RGB, low byte = R.
@@ -128,6 +77,7 @@ impl Material {
 
 /// Typed view of a decoded FillPattern (surface or cut hatch).
 #[derive(Debug, Clone, PartialEq, Default)]
+#[non_exhaustive]
 pub struct FillPattern {
     pub name: Option<String>,
     /// True when the pattern is oriented to the host element's
@@ -154,6 +104,7 @@ impl FillPattern {
 
 /// Typed view of a decoded LinePattern (dash/dot pattern for lines).
 #[derive(Debug, Clone, PartialEq, Default)]
+#[non_exhaustive]
 pub struct LinePattern {
     pub name: Option<String>,
     /// Dash/space sequence in model units. Positive = dash, negative
@@ -183,6 +134,7 @@ impl LinePattern {
 
 /// Typed view of a decoded LineStyle.
 #[derive(Debug, Clone, PartialEq, Default)]
+#[non_exhaustive]
 pub struct LineStyle {
     pub name: Option<String>,
     pub weight: Option<u32>,

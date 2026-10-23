@@ -1,4 +1,4 @@
-//! Generic partition-stream record scanner (M3-03 / M3-04).
+//! Generic partition-stream record scanner.
 //!
 //! Scans decompressed `Partitions/*` buffers for schema class-tag hits
 //! that pass the RE-14.2 record-prefix filter (`filter_pad == 0` at
@@ -23,13 +23,14 @@
 //! Scores are clamped to `[0.0, 1.0]`. Callers may raise
 //! [`ScanOptions::min_confidence`] to drop low-signal hits.
 //!
-//! # ElemTable linkage (M3-04)
+//! # ElemTable linkage
 //!
 //! When a candidate recovers an ElementId (today: ArcWall singleton
 //! trailer), [`element_id_partition_index`] builds
 //! `ElementId → PartitionRecordRef`. Join against
 //! [`crate::elem_table::index_by_element_id`] via
 //! [`link_elem_table_to_partitions`].
+// Tracker: M3-03, M3-04.
 
 use crate::arc_wall_record::{
     ARC_WALL_TAG, ARC_WALL_VARIANT_STANDARD, ArcWallRecord, SCHEMA_FAMILY_MARKER,

@@ -10,22 +10,22 @@
 //!
 //! Coverage:
 //!
-//! | Revit class | Decoder | Discipline |
+//! | Revit class | Registered as | Discipline |
 //! |---|---|---|
-//! | `ElectricalEquipment` | `ElectricalEquipmentDecoder` | Electrical — panels, transformers |
-//! | `ElectricalFixture` | `ElectricalFixtureDecoder` | Electrical — fixtures, outlets |
-//! | `LightingFixture` | `LightingFixtureDecoder` | Electrical — luminaires (subtype of ElectricalFixture) |
-//! | `LightingDevice` | `LightingDeviceDecoder` | Electrical — switches, sensors |
-//! | `Duct` | `DuctDecoder` | Mechanical — HVAC ducts |
-//! | `DuctFitting` | `DuctFittingDecoder` | Mechanical — elbows, tees, transitions |
-//! | `MechanicalEquipment` | `MechanicalEquipmentDecoder` | Mechanical — boilers, chillers, AHUs |
-//! | `Pipe` | `PipeDecoder` | Plumbing — pipe segments |
-//! | `PipeFitting` | `PipeFittingDecoder` | Plumbing — fittings |
-//! | `PlumbingFixture` | `PlumbingFixtureDecoder` | Plumbing — sinks, water closets |
-//! | `SpecialtyEquipment` | `SpecialtyEquipmentDecoder` | Cross-discipline — carts, lab benches |
+//! | `ElectricalEquipment` | `SimpleDecoder::new("ElectricalEquipment")` | Electrical — panels, transformers |
+//! | `ElectricalFixture` | `SimpleDecoder::new("ElectricalFixture")` | Electrical — fixtures, outlets |
+//! | `LightingFixture` | `SimpleDecoder::new("LightingFixture")` | Electrical — luminaires (subtype of ElectricalFixture) |
+//! | `LightingDevice` | `SimpleDecoder::new("LightingDevice")` | Electrical — switches, sensors |
+//! | `Duct` | `SimpleDecoder::new("Duct")` | Mechanical — HVAC ducts |
+//! | `DuctFitting` | `SimpleDecoder::new("DuctFitting")` | Mechanical — elbows, tees, transitions |
+//! | `MechanicalEquipment` | `SimpleDecoder::new("MechanicalEquipment")` | Mechanical — boilers, chillers, AHUs |
+//! | `Pipe` | `SimpleDecoder::new("Pipe")` | Plumbing — pipe segments |
+//! | `PipeFitting` | `SimpleDecoder::new("PipeFitting")` | Plumbing — fittings |
+//! | `PlumbingFixture` | `SimpleDecoder::new("PlumbingFixture")` | Plumbing — sinks, water closets |
+//! | `SpecialtyEquipment` | `SimpleDecoder::new("SpecialtyEquipment")` | Cross-discipline — carts, lab benches |
 //!
-//! All decoders share the same `FamilyInstance` wire shape, so
-//! they are implemented via the `simple_decoder!` macro. The
+//! All of them share the same `FamilyInstance` wire shape, so each
+//! is a [`super::SimpleDecoder`]. The
 //! typed view below (`MepInstance`) is a best-effort surface for
 //! discipline-common fields; class-specific fields are left in
 //! the generic `DecodedElement.fields` for callers that want them.
@@ -41,69 +41,11 @@
 //! | `m_connector_count` | Primitive u32 | Number of MEP connectors on this instance |
 
 use super::level::normalise_field_name;
-use crate::formats;
-use crate::walker::{DecodedElement, ElementDecoder, HandleIndex, InstanceField};
-use crate::{Error, Result};
-
-macro_rules! simple_decoder {
-    ($Struct:ident, $name:literal) => {
-        pub struct $Struct;
-
-        impl ElementDecoder for $Struct {
-            fn class_name(&self) -> &'static str {
-                $name
-            }
-
-            fn decode(
-                &self,
-                bytes: &[u8],
-                schema: &formats::ClassEntry,
-                index: &HandleIndex,
-            ) -> Result<DecodedElement> {
-                self.decode_with_limits(
-                    bytes,
-                    schema,
-                    index,
-                    crate::walker::WalkerLimits::default(),
-                )
-            }
-
-            fn decode_with_limits(
-                &self,
-                bytes: &[u8],
-                schema: &formats::ClassEntry,
-                _index: &HandleIndex,
-                limits: crate::walker::WalkerLimits,
-            ) -> Result<DecodedElement> {
-                if schema.name != $name {
-                    return Err(Error::BasicFileInfo(format!(
-                        "{} received wrong schema: {}",
-                        stringify!($Struct),
-                        schema.name
-                    )));
-                }
-                Ok(crate::walker::decode_instance_with_limits(
-                    bytes, 0, schema, limits,
-                ))
-            }
-        }
-    };
-}
+use crate::walker::{DecodedElement, InstanceField};
 
 // L5B-36: Electrical family-instance decoders.
-simple_decoder!(ElectricalEquipmentDecoder, "ElectricalEquipment");
-simple_decoder!(ElectricalFixtureDecoder, "ElectricalFixture");
-simple_decoder!(LightingFixtureDecoder, "LightingFixture");
-simple_decoder!(LightingDeviceDecoder, "LightingDevice");
 
 // L5B-37: Mechanical / Plumbing / Specialty family-instance decoders.
-simple_decoder!(DuctDecoder, "Duct");
-simple_decoder!(DuctFittingDecoder, "DuctFitting");
-simple_decoder!(MechanicalEquipmentDecoder, "MechanicalEquipment");
-simple_decoder!(PipeDecoder, "Pipe");
-simple_decoder!(PipeFittingDecoder, "PipeFitting");
-simple_decoder!(PlumbingFixtureDecoder, "PlumbingFixture");
-simple_decoder!(SpecialtyEquipmentDecoder, "SpecialtyEquipment");
 
 /// Revit's `System Classification` enum, collapsed to the
 /// discipline families we care about. The full Revit enum has
@@ -115,6 +57,7 @@ simple_decoder!(SpecialtyEquipmentDecoder, "SpecialtyEquipment");
 /// coarse discipline; callers who need fine-grained subtypes can
 /// read the raw u32 directly.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[non_exhaustive]
 pub enum MepSystemClassification {
     #[default]
     Unknown,
@@ -150,6 +93,7 @@ impl MepSystemClassification {
 /// share it, which is enough to surface host level, system ref,
 /// and connector count uniformly.
 #[derive(Debug, Clone, PartialEq, Default)]
+#[non_exhaustive]
 pub struct MepInstance {
     pub name: Option<String>,
     pub level_id: Option<u32>,
