@@ -14,6 +14,12 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
+BUILD_PROFILE="${RVT_BUILD_PROFILE:-release}"
+case "$BUILD_PROFILE" in release|ci|dev) ;; *) echo "Unsupported build profile: $BUILD_PROFILE" >&2; exit 1 ;; esac
+WASM_PROFILE="${RVT_WASM_PROFILE:-release}"
+case "$WASM_PROFILE" in release|dev) ;; *) echo "Unsupported WASM profile: $WASM_PROFILE" >&2; exit 1 ;; esac
+BIN_DIR="${CARGO_TARGET_DIR:-$REPO_ROOT/target}/$BUILD_PROFILE"
+[ "$BUILD_PROFILE" != dev ] || BIN_DIR="${CARGO_TARGET_DIR:-$REPO_ROOT/target}/debug"
 
 log() { printf '\n=== %s ===\n' "$1"; }
 
@@ -49,7 +55,7 @@ rustc --version
 WASM_PACK_VERSION="v0.14.0"
 log "wasm-pack ${WASM_PACK_VERSION}"
 if command -v wasm-pack >/dev/null 2>&1 && \
-   wasm-pack --version 2>/dev/null | grep -q "${WASM_PACK_VERSION#v}"; then
+   [ "$(wasm-pack --version)" = "wasm-pack ${WASM_PACK_VERSION#v}" ]; then
   echo "already installed"
 else
   arch="$(uname -m)"
@@ -79,8 +85,8 @@ fi
 wasm-pack --version
 
 # --- 4. Build the Rust workspace (library + CLI binaries) ------------------
-log "cargo build --release"
-cargo build --release
+log "cargo build --locked --profile $BUILD_PROFILE"
+cargo build --locked --profile "$BUILD_PROFILE"
 
 # --- 5. Python bindings ----------------------------------------------------
 log "Python venv + maturin develop"
@@ -90,13 +96,17 @@ fi
 # shellcheck disable=SC1091
 . .venv/bin/activate
 python -m pip install --require-hashes -r tools/ci/requirements-dev.txt
-maturin develop --manifest-path rvt-py/Cargo.toml
+maturin_args=()
+if [ -n "${RVT_BUILD_PROFILE:-}" ]; then
+  maturin_args+=(--profile "$BUILD_PROFILE")
+fi
+maturin develop --locked --manifest-path rvt-py/Cargo.toml "${maturin_args[@]}"
 python -c "import rvt; print('rvt (python):', rvt.__version__)"
 deactivate
 
 # --- 6. WebAssembly viewer -------------------------------------------------
 log "Build WASM package into viewer/pkg"
-wasm-pack build rvt-wasm --target web --out-dir ../viewer/pkg --out-name rvt
+wasm-pack build rvt-wasm --"$WASM_PROFILE" --target web --out-dir ../viewer/pkg --out-name rvt -- --locked
 
 log "Viewer pnpm dependencies + type check + build"
 (
@@ -120,10 +130,10 @@ log "Viewer pnpm dependencies + type check + build"
 # than surfacing later inside an agent session.
 log "Smoke test (fixture -> rvt-inspect, wasm import audit)"
 SMOKE_DIR="$(mktemp -d)"
-./target/release/gen-fixture smoke \
+"$BIN_DIR/gen-fixture" smoke \
   --classes Wall,Level,Project --element-count 5 --year 2024 \
   --output "$SMOKE_DIR/smoke.rvt"
-./target/release/rvt-inspect "$SMOKE_DIR/smoke.rvt" >/dev/null
+"$BIN_DIR/rvt-inspect" "$SMOKE_DIR/smoke.rvt" >/dev/null
 echo "  rvt-inspect: OK"
 rm -rf "$SMOKE_DIR"
 
