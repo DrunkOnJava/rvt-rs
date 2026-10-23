@@ -19,7 +19,7 @@
 //! Usage:
 //!   cargo run --release --example probe_re201_curtain_render_styles -- MODEL.rvt
 
-use rvt::{RevitFile, native_document};
+use rvt::{RevitFile, research::native_document};
 use serde_json::json;
 use std::collections::BTreeSet;
 
