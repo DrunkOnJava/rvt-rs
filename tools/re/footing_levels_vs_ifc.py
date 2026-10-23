@@ -78,7 +78,7 @@ def main():
         if cls not in ("StructuralFoundation", "StructuralColumn") or ident not in storey_of:
             continue
         name, level_tag, elevation = storey_of[ident]
-        named = [f for f, v in fields.items() if re.search(rf"#{level_tag}\b", v)]
+        named = [f for f, v in fields.items() if level_tag != "?" and re.search(rf"#{level_tag}\b", v)]
         for f in named:
             holders[(cls, f)] += 1
         if not named:
@@ -97,6 +97,14 @@ def main():
     print(f"air terminals: {len(terminals)}, in Revit's export: {sum(1 for i in terminals if i in exported)}")
     for ident, fields in sorted(terminals.items()):
         print(f"  {ident} {'exported' if ident in exported else 'left out'}: {fields}")
+    near = collections.Counter()
+    for line in open(args.probe, encoding="utf-8", errors="replace"):
+        if line.startswith("near "):
+            _, cls, ident, level, rel, width = line.split()
+            near[(cls, level, int(rel), width)] += 1
+    print("Level ids near the records (class, Level, offset from the record, width): count")
+    for (cls, level, rel, width), n in sorted(near.items(), key=lambda kv: -kv[1])[:20]:
+        print(f"  {cls} {level} {rel:+d} {width}: {n}")
     print("referenced ids, where they appear:")
     for line in open(args.probe, encoding="utf-8", errors="replace"):
         if line.startswith("ref "):

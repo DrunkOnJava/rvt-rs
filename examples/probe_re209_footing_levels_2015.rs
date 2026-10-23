@@ -16,6 +16,9 @@
 //!   ref <id> <stream> <offset> <text> <hex>   where each id under 100000 that
 //!     a footing's or air terminal's reference list names appears as a u64,
 //!     with the first UTF-16 text in the 160 bytes after it (up to 6 places)
+//!   near <class> <id> <level id> <offset from the record> <u32|u64>
+//!     each recovered Level's id within 512 bytes before and 2048 after a
+//!     footing's or column's record
 //!
 //! Usage:
 //!   cargo run --profile ci --example probe_re209_footing_levels_2015 -- FILE.rvt
@@ -68,6 +71,7 @@ fn main() {
     let mut rf = RevitFile::open(&path).expect("open");
     let mut columns = 0;
     let mut targets = BTreeSet::new();
+    let mut records: Vec<(String, u32, String, usize)> = Vec::new();
     for element in iter_elements(&mut rf).expect("elements") {
         if matches!(
             element.class.as_str(),
@@ -101,6 +105,30 @@ fn main() {
         if !wanted {
             continue;
         }
+        if matches!(
+            element.class.as_str(),
+            "StructuralFoundation" | "StructuralColumn"
+        ) {
+            let stream = element
+                .fields
+                .iter()
+                .find_map(|(n, v)| match (n.as_str(), v) {
+                    ("m_source_stream", InstanceField::String(s)) => Some(s.clone()),
+                    _ => None,
+                });
+            let offset = element
+                .fields
+                .iter()
+                .find_map(|(n, v)| match (n.as_str(), v) {
+                    ("m_source_offset", InstanceField::Integer { value, .. }) => {
+                        usize::try_from(*value).ok()
+                    }
+                    _ => None,
+                });
+            if let (Some(stream), Some(offset), Some(id)) = (stream, offset, element.id) {
+                records.push((element.class.clone(), id, stream, offset));
+            }
+        }
         let fields: Vec<String> = element
             .fields
             .iter()
@@ -114,11 +142,38 @@ fn main() {
         );
     }
     let version = rf.basic_file_info().map(|info| info.version).unwrap_or(0);
-    for level in recover_partition_levels(&mut rf, version).unwrap_or_default() {
+    let levels = recover_partition_levels(&mut rf, version).unwrap_or_default();
+    for level in &levels {
         println!(
             "level {} {:.4} {}",
             level.element_id, level.elevation_feet, level.name
         );
+    }
+    for (class, id, stream, offset) in &records {
+        let Ok(inflated) = rf.inflated_partition(stream) else {
+            continue;
+        };
+        let data = inflated.bytes();
+        let start = offset.saturating_sub(512);
+        let end = (offset + 2048).min(data.len());
+        for level in &levels {
+            let narrow = level.element_id.to_le_bytes();
+            let wide = u64::from(level.element_id).to_le_bytes();
+            for at in start..end.saturating_sub(4) {
+                if data[at..at + 4] == narrow {
+                    let width = if data.get(at..at + 8) == Some(&wide[..]) {
+                        "u64"
+                    } else {
+                        "u32"
+                    };
+                    println!(
+                        "near {class} {id} {} {} {width}",
+                        level.element_id,
+                        at as i64 - *offset as i64
+                    );
+                }
+            }
+        }
     }
     let partitions: Vec<String> = rf
         .stream_names()
