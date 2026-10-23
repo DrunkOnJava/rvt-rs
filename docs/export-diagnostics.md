@@ -31,7 +31,7 @@ Supported quality gates are `scaffold`, `typed-no-geometry`, `geometry`, and
 |---|---|
 | `scaffold` | Framework + production elements; geometry when recovered. No HostObjAttr proxies. |
 | `typed-no-geometry` | Mapped/typed elements only; geometry fields stripped. |
-| `geometry` / `strict` | Mapped/typed elements; Lane Six curves/loops/hosts/elevations when present. |
+| `geometry` / `strict` | Mapped/typed elements; curves, loops, hosts and elevations when present. |
 
 `strict` fails before writing IFC when required model data is missing;
 when `--diagnostics` is present, the sidecar is still written for triage.

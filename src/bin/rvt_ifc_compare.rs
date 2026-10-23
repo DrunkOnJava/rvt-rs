@@ -1,4 +1,4 @@
-//! `rvt-ifc-compare` — compare two IFC4 STEP files for export QA (M5-05).
+//! `rvt-ifc-compare` — compare two IFC4 STEP files for export QA.
 //!
 //! Typical use: compare an `rvt-ifc` export against a Revit (or other
 //! reference) IFC of the same model. Emits a human summary on stdout and
@@ -8,6 +8,7 @@
 //! - `0` — comparison produced (even when divergences exist)
 //! - `1` — I/O or parse failure
 //! - `2` — `--fail-on-diff` set and any structural divergence was found
+// Tracker: M5-05.
 
 use clap::Parser;
 use rvt::ifc::compare::{compare_summaries, format_human_report, summarize_ifc_step};

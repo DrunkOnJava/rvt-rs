@@ -44,8 +44,7 @@ pub const DEFAULT_MAX_STREAM_BYTES: u64 = 256 * 1024 * 1024;
 /// pathological or hostile input that would otherwise force
 /// unbounded memory allocation.
 ///
-/// See audit P0 items 4 and 5 (AUDIT-2026-04-19.md) for the
-/// rationale — RVT is a file-upload target, and bounded resource
+/// RVT is a file-upload target, and bounded resource
 /// consumption is a DoS-safety requirement, not a nice-to-have.
 #[derive(Debug, Clone, Copy)]
 pub struct OpenLimits {
@@ -103,17 +102,20 @@ pub struct RevitFile {
     element_names: Option<Arc<crate::partition_names::ElementNames>>,
     /// Memoised design option sets and their primary options (RE-40).
     design_options: Option<Arc<crate::partition_design_options::DesignOptions>>,
-    /// Memoised production walk (B71): the elements
+    /// Memoised production walk: the elements
     /// [`crate::walker::iter_elements_with_control`] yields for a minimum
     /// score and walker limits. An export walks once to write and again for
     /// its diagnostics' class counts; the second reuses the first.
+    // Tracker: B71.
     walk: Option<CachedWalk>,
-    /// Memoised data objects (RE-153) of each partition stream (B80): the
+    /// Memoised data objects (RE-153) of each partition stream: the
     /// original symbols, railing types and MEP systems each scanned every
     /// partition for them.
+    // Tracker: B80.
     data_objects: std::collections::HashMap<String, PartitionDataObjects>,
-    /// Memoised native extraction preamble (B82): each native consumer read
+    /// Memoised native extraction preamble: each native consumer read
     /// the schema, the element index and the increments again.
+    // Tracker: B82.
     native_preamble: Option<Arc<crate::native_document::Preamble>>,
 }
 
@@ -290,7 +292,8 @@ impl RevitFile {
 
     /// The data objects (RE-153) of partition stream `name`, each at its
     /// offset in the stream's inflated bytes ([`Self::inflated_partition`]),
-    /// memoised (B80).
+    /// memoised.
+    // Tracker: B80.
     #[cfg(feature = "unstable-research")]
     pub fn partition_data_objects(&mut self, name: &str) -> Result<PartitionDataObjects> {
         self.memoised_partition_data_objects(name)
@@ -315,7 +318,8 @@ impl RevitFile {
     }
 
     /// What every native extraction reads before the partitions
-    /// (`crate::native_document::Preamble`), memoised (B82).
+    /// (`crate::native_document::Preamble`), memoised.
+    // Tracker: B82.
     pub(crate) fn native_preamble(
         &mut self,
     ) -> anyhow::Result<Arc<crate::native_document::Preamble>> {
@@ -372,7 +376,8 @@ impl RevitFile {
     }
 
     /// The elements a production walk with `min_score` and `limits` yielded
-    /// on this file, when one ran (B71).
+    /// on this file, when one ran.
+    // Tracker: B71.
     pub(crate) fn cached_walk(
         &self,
         min_score: i64,
@@ -385,7 +390,8 @@ impl RevitFile {
     }
 
     /// Keep a production walk's elements for later walks with the same
-    /// `min_score` and `limits` (B71).
+    /// `min_score` and `limits`.
+    // Tracker: B71.
     pub(crate) fn store_walk(
         &mut self,
         min_score: i64,
@@ -648,10 +654,11 @@ impl RevitFile {
         self.summarize_lossy().map(|d| d.value)
     }
 
-    /// Strict variant of [`RevitFile::summarize`] (API-04) — returns
+    /// Strict variant of [`RevitFile::summarize`] — returns
     /// `Err` on ANY parse failure, including PartAtom absence and
     /// class-name enumeration failure. Use when downstream code
     /// can't tolerate a partially-populated `Summary`.
+    // Tracker: API-04.
     pub fn summarize_strict(&mut self) -> Result<Summary> {
         let streams = self.stream_names();
         let bfi = self.basic_file_info()?;
@@ -685,7 +692,7 @@ impl RevitFile {
         })
     }
 
-    /// Lossy variant (API-05) — returns a [`crate::parse_mode::Decoded<Summary>`]
+    /// Lossy variant — returns a [`crate::parse_mode::Decoded<Summary>`]
     /// that accumulates partial-parse issues into its
     /// `diagnostics` field instead of aborting. Fails only when
     /// BasicFileInfo itself is unreadable (without it there's
@@ -695,6 +702,7 @@ impl RevitFile {
     ///
     /// Use when you're summarising a batch of files and want a
     /// best-effort report even for the ones with partial parses.
+    // Tracker: API-05.
     pub fn summarize_lossy(&mut self) -> Result<crate::parse_mode::Decoded<Summary>> {
         use crate::parse_mode::{Decoded, Diagnostics};
 
