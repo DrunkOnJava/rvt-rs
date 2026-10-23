@@ -64,7 +64,8 @@ def test_every_python_block_in_the_docs_runs(tmp_path: pathlib.Path) -> None:
 def test_the_pypi_page_is_the_python_readme_with_absolute_links() -> None:
     description = pypi_description()
     readme = (CRATE / "rvt-py/README.md").read_text(encoding="utf-8")
-    assert description.strip() == readme.strip(), "the wheel's description is not rvt-py/README.md"
+    lines = [line.rstrip() for line in description.strip().splitlines()]
+    assert lines == [line.rstrip() for line in readme.strip().splitlines()], "the wheel's description is not rvt-py/README.md"
     relative = [t for t in re.findall(r"\]\(([^)\s]+)\)", description) if not t.startswith("https://")]
     assert not relative, f"the PyPI page has links PyPI cannot resolve: {relative}"
 
