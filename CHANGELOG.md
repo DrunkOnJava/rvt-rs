@@ -77,8 +77,23 @@ All notable changes will be documented here. This project follows
   direction rvt-rs does not read (#834). A duct along one of the model's axes
   has its ports placed the same way, at the centres of its box's faces across
   its length: on RE1 Mechanical all 62 of the ports Revit writes on ducts and
-  pipes are within 0.01 ft of Revit's. Family-instance ports keep no
-  placement, and the no-geometry modes write none.
+  pipes are within 0.01 ft of Revit's. A port joined to a placed duct or
+  pipe port, a family instance's included, is placed at that port's point
+  with its axis, as Revit's export places every port joined to a segment's
+  (#869): all 118 such ports of RE1 Plumbing and all 59 of RE1 Mechanical
+  are within 0.01 ft of Revit's, where none was placed before. Their Z axes,
+  taken from the segment port's, agree with Revit's on 51 and 26 and are
+  opposite on the other 67 and 33; the segment ports' own axes are opposite
+  to Revit's on its `In` ports, whose flow direction rvt-rs does not read
+  (#834). Other family-instance ports keep no placement, and the no-geometry
+  modes write none.
+
+- **Every public type implements `Debug`, as the Rust API Guidelines ask (C-DEBUG).** The 14 element
+  decoders, the three exporters, `corpus::Sample` and `RevitFile` did not.
+  `RevitFile`'s shows the limits it was opened with and how many streams it
+  has inflated, not the file's bytes. The crate now warns on a public type
+  without one (`missing_debug_implementations`), which CI's `-D warnings`
+  makes an error.
 
 ### Fixed
 
@@ -154,6 +169,17 @@ All notable changes will be documented here. This project follows
   none, so no export changes (Measure run 39367864281).
 
 ### Changed
+
+- **The user pages say what rvt-rs does now (#907).** `docs/README.md`
+  indexes `docs/` as user pages, contributor pages and the research record.
+  The user pages lost their backlog ids and planning labels, and the claims
+  those labels sat on are corrected. `validation-evidence.md` described an
+  `ifc-smoke` job that does not exist and unit tests that no longer run; it
+  now describes the IfcOpenShell job's checks, the cross-witness verdict and
+  Measure. `compatibility.md`, `demos.md` and `benchmarks.md` said
+  per-element geometry was not implemented; they now say where it is exact
+  and where a body is a bounding box. The API doc check also reads every
+  user page the index lists.
 
 - **The Python guide's examples run in CI (#872).** The three runnable
   blocks of `docs/python.md` run in order against the synthetic project file
@@ -328,6 +354,15 @@ All notable changes will be documented here. This project follows
   minor one.
 
 ### Research
+
+- **Revit 2015's element GlobalIds are not in the file (RE-208, #878).**
+  On BIMcollab's 2015 example, every element GlobalId in Revit's export has
+  an episode prefix of its own (241 in 241, where Core Interior's 854 fall
+  in 5), so RE-48's history rule cannot rebuild them. A stored IfcGUID
+  parameter holds the last 21 characters of 229 of the 241; their first
+  character, the top two bits, differs every time, and nothing tested in the
+  file sets it. The project, site, building and five storeys are stored
+  exactly, which is the lead for the storeys' GlobalIds.
 
 - **Revit 2015 is scored against Revit 2015's own export (RE-198, #421).**
   BIMcollab's example structural model, a Revit 2015 project, comes with

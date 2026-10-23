@@ -95,7 +95,7 @@ pub struct Inventory {
     pub owners: Vec<Owner>,
     pub diagnostics: Vec<String>,
 }
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct InventoryBuilder {
     entities: Vec<Entity>,
     owners: Vec<Owner>,

@@ -119,6 +119,17 @@ pub struct RevitFile {
     native_preamble: Option<Arc<crate::native_document::Preamble>>,
 }
 
+/// The limits it was opened with and how many streams it has inflated so
+/// far; the container's bytes and the caches are left out.
+impl std::fmt::Debug for RevitFile {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RevitFile")
+            .field("limits", &self.limits)
+            .field("inflated_streams", &self.inflated.len())
+            .finish_non_exhaustive()
+    }
+}
+
 /// A partition stream's data objects, each at its offset (RE-153).
 #[cfg(feature = "unstable-research")]
 pub type PartitionDataObjects = Arc<Vec<(usize, crate::partition_room_parameters::DataObject)>>;
