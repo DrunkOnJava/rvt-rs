@@ -23,6 +23,7 @@
 //! A round duct is stored as width = height = diameter, as a pipe is, so the
 //! fields do not tell a round duct from a square one.
 
+use crate::le_bytes;
 use crate::{Result, RevitFile};
 use std::collections::BTreeMap;
 
@@ -89,32 +90,14 @@ impl CurveFields {
     }
 }
 
-fn read_f64(buf: &[u8], at: usize) -> Option<f64> {
-    Some(f64::from_le_bytes(
-        buf.get(at..at.checked_add(8)?)?.try_into().ok()?,
-    ))
-}
-
-fn read_u32(buf: &[u8], at: usize) -> Option<u32> {
-    Some(u32::from_le_bytes(
-        buf.get(at..at.checked_add(4)?)?.try_into().ok()?,
-    ))
-}
-
-fn read_u64(buf: &[u8], at: usize) -> Option<u64> {
-    Some(u64::from_le_bytes(
-        buf.get(at..at.checked_add(8)?)?.try_into().ok()?,
-    ))
-}
-
 /// The point of the connector entry whose marker `u32 1` starts at `at`.
 fn entry_point(buf: &[u8], at: usize) -> Option<[f64; 3]> {
-    if read_u32(buf, at.checked_sub(4)?)? > MAX_CONNECTOR_INDEX {
+    if le_bytes::u32_at(buf, at.checked_sub(4)?)? > MAX_CONNECTOR_INDEX {
         return None;
     }
     let mut point = [0.0; 3];
     for (axis, slot) in point.iter_mut().enumerate() {
-        *slot = read_f64(buf, at + 4 + 8 * axis)?;
+        *slot = le_bytes::f64_at(buf, at + 4 + 8 * axis)?;
         if !slot.is_finite() {
             return None;
         }
@@ -124,9 +107,9 @@ fn entry_point(buf: &[u8], at: usize) -> Option<[f64; 3]> {
 
 /// The fields at the anchor at `anchor`, when they are a size and a type.
 fn fields_at(buf: &[u8], anchor: usize) -> Option<CurveFields> {
-    let width = read_f64(buf, anchor + WIDTH_OFFSET)?;
-    let height = read_f64(buf, anchor + HEIGHT_OFFSET)?;
-    let type_id = u32::try_from(read_u64(buf, anchor + TYPE_OFFSET)?).ok()?;
+    let width = le_bytes::f64_at(buf, anchor + WIDTH_OFFSET)?;
+    let height = le_bytes::f64_at(buf, anchor + HEIGHT_OFFSET)?;
+    let type_id = u32::try_from(le_bytes::u64_at(buf, anchor + TYPE_OFFSET)?).ok()?;
     let size = |v: f64| v.is_finite() && v > 0.0 && v < 1_000.0;
     (size(width) && size(height) && type_id != 0).then_some(CurveFields {
         width_feet: width,
@@ -180,7 +163,9 @@ pub fn scan_pipe_diameters(
                 continue;
             }
             let at = p + PIPE_INNER_DIAMETER_OFFSET;
-            let (Some(inner), Some(outer)) = (read_f64(buf, at), read_f64(buf, at + 8)) else {
+            let (Some(inner), Some(outer)) =
+                (le_bytes::f64_at(buf, at), le_bytes::f64_at(buf, at + 8))
+            else {
                 continue;
             };
             if !(inner > 0.0 && inner < outer && outer < MAX_PIPE_DIAMETER_FEET) {

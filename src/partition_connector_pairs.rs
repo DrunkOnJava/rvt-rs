@@ -32,6 +32,7 @@
 //! inverted. A fitting's own record holds only the sorted ids of the elements
 //! it refers to.
 
+use crate::le_bytes;
 use crate::{Result, RevitFile};
 use std::collections::BTreeSet;
 
@@ -97,30 +98,18 @@ struct RawList {
     other_index: u32,
 }
 
-fn u32_at(buf: &[u8], at: usize) -> Option<u32> {
-    Some(u32::from_le_bytes(
-        buf.get(at..at.checked_add(4)?)?.try_into().ok()?,
-    ))
-}
-
-fn u64_at(buf: &[u8], at: usize) -> Option<u64> {
-    Some(u64::from_le_bytes(
-        buf.get(at..at.checked_add(8)?)?.try_into().ok()?,
-    ))
-}
-
 /// The element, connector index and flag of the reference at `at`.
 fn reference_at(buf: &[u8], at: usize) -> Option<(u64, u32, u32)> {
     Some((
-        u64_at(buf, at)?,
-        u32_at(buf, at + 8)?,
-        u32_at(buf, at + 12)?,
+        le_bytes::u64_at(buf, at)?,
+        le_bytes::u32_at(buf, at + 8)?,
+        le_bytes::u32_at(buf, at + 12)?,
     ))
 }
 
 /// The list at `at` in `tail`, when it is a join of one of `curves`.
 fn list_at(tail: &[u8], at: usize, curves: &BTreeSet<u64>) -> Option<RawList> {
-    if u32_at(tail, at)? != LIST_ENTRIES {
+    if le_bytes::u32_at(tail, at)? != LIST_ENTRIES {
         return None;
     }
     let (own, own_index, own_flag) = reference_at(tail, at + 4)?;
@@ -231,7 +220,7 @@ fn fitting_list_at(
     fittings: &BTreeSet<u64>,
     others: &BTreeSet<u64>,
 ) -> Option<ConnectorPair> {
-    if u32_at(buf, at)? != LIST_ENTRIES {
+    if le_bytes::u32_at(buf, at)? != LIST_ENTRIES {
         return None;
     }
     let (element, index, own_flag) = reference_at(buf, at + 4)?;

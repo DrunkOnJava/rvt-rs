@@ -164,6 +164,7 @@ pub mod error;
 pub mod formats;
 pub mod geometry;
 pub mod ifc;
+mod le_bytes;
 pub mod level_bind;
 pub mod metadata;
 pub mod object_graph;
