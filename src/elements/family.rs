@@ -49,6 +49,7 @@ use crate::walker::{DecodedElement, InstanceField};
 
 /// Typed view for Symbol (family type definition).
 #[derive(Debug, Clone, PartialEq, Default)]
+#[non_exhaustive]
 pub struct Symbol {
     pub name: Option<String>,
     pub family_id: Option<u32>,
@@ -90,6 +91,7 @@ impl Symbol {
 /// (Door, Window, Column, …) have their own decoders that extract
 /// extra scalar fields beyond this common base.
 #[derive(Debug, Clone, PartialEq, Default)]
+#[non_exhaustive]
 pub struct FamilyInstance {
     pub symbol_id: Option<u32>,
     pub level_id: Option<u32>,

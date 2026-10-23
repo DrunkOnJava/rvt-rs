@@ -24,6 +24,7 @@ const MAX_IDENTITY_STREAM_BYTES: u64 = 4 * 1024 * 1024;
 
 /// Document identity recovered from `BasicFileInfo` and the Atom entry.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct FileMetadata {
     /// Revit release that saved the file (e.g. `2024`).
     pub revit_version: u32,
@@ -122,9 +123,24 @@ impl RevitFile {
 }
 
 /// [`FileMetadata`] for the file at `path`, reading only the identity
-/// streams. Returns [`Error::NotACfbFile`] for anything that is not an
-/// OLE/CFB container and [`Error::StreamNotFound`] for a CFB file (a `.doc`,
-/// an `.msg`, …) without `BasicFileInfo`. I/O errors name the path.
+/// streams.
+///
+/// # Errors
+///
+/// [`Error::NotACfbFile`] for anything that is not an OLE/CFB container,
+/// [`Error::Cfb`] when the container does not open, [`Error::TooLarge`] when
+/// an identity stream is larger than its cap, [`Error::StreamNotFound`] for
+/// a CFB file (a `.doc`, an `.msg`, …) without `BasicFileInfo`,
+/// [`Error::BasicFileInfo`] when that stream does not parse, and
+/// [`Error::Io`], naming the path, when the file cannot be read.
+///
+/// # Examples
+///
+/// ```
+/// let meta = rvt::metadata::read_metadata("corpus/tier1/architectural-2024/architectural-2024.rvt")?;
+/// println!("Revit {}, last saved {:?}", meta.revit_version, meta.last_saved);
+/// # Ok::<(), rvt::Error>(())
+/// ```
 pub fn read_metadata(path: impl AsRef<Path>) -> Result<FileMetadata> {
     let path = path.as_ref();
     let with_path = |e: std::io::Error| {
@@ -143,7 +159,7 @@ pub fn read_metadata(path: impl AsRef<Path>) -> Result<FileMetadata> {
         )));
     }
     let file = std::fs::File::open(path).map_err(with_path)?;
-    read_metadata_from(std::io::BufReader::new(file))
+    read_metadata_from(std::io::BufReader::new(file)).map_err(|e| e.in_file(path))
 }
 
 /// [`read_metadata`] over any seekable reader (an open file, a
@@ -156,7 +172,11 @@ pub fn read_metadata_from<R: Read + Seek>(mut reader: R) -> Result<FileMetadata>
         return Err(Error::NotACfbFile);
     }
     reader.rewind()?;
-    let mut cfb = cfb::CompoundFile::open(reader).map_err(|e| Error::Cfb(e.to_string()))?;
+    let mut cfb = cfb::CompoundFile::open(reader).map_err(|e| Error::Cfb {
+        op: "open",
+        path: None,
+        source: e,
+    })?;
     let bfi_bytes = read_small_stream(&mut cfb, BASIC_FILE_INFO)?
         .ok_or_else(|| Error::StreamNotFound(BASIC_FILE_INFO.to_string()))?;
     let bfi = BasicFileInfo::from_bytes(&bfi_bytes)?;
@@ -180,17 +200,21 @@ fn read_small_stream<R: Read + Seek>(
     if !cfb.is_stream(&path) {
         return Ok(None);
     }
-    let stream = cfb
-        .open_stream(&path)
-        .map_err(|e| Error::Cfb(e.to_string()))?;
+    let stream = cfb.open_stream(&path).map_err(|e| Error::Cfb {
+        op: "open_stream",
+        path: Some(path.clone()),
+        source: e,
+    })?;
     let mut bytes = Vec::new();
     stream
         .take(MAX_IDENTITY_STREAM_BYTES + 1)
         .read_to_end(&mut bytes)?;
     if bytes.len() as u64 > MAX_IDENTITY_STREAM_BYTES {
-        return Err(Error::Cfb(format!(
-            "stream '{name}' exceeds {MAX_IDENTITY_STREAM_BYTES} bytes"
-        )));
+        return Err(Error::TooLarge {
+            what: format!("stream '{name}'"),
+            size: bytes.len() as u64,
+            limit: MAX_IDENTITY_STREAM_BYTES,
+        });
     }
     Ok(Some(bytes))
 }

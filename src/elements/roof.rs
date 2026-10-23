@@ -9,7 +9,8 @@
 //!
 //! Both share the same class in the file (the `m_roof_type` field
 //! distinguishes which flavour). Geometry assembly (slope planes,
-//! ridge/valley topology, eave cuts) is GEO-29.
+//! ridge/valley topology, eave cuts) is done by the exporter's
+//! `ifc::body_geometry`, not here.
 //!
 //! # Typical Revit field shape (names stable 2016–2026)
 //!
@@ -40,6 +41,7 @@ use crate::{Error, Result};
 
 /// How a roof is geometrically defined at the element level.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[non_exhaustive]
 pub enum RoofKind {
     #[default]
     Footprint,
@@ -58,6 +60,7 @@ impl RoofKind {
 
 /// How Revit trims the rafters at the eave.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[non_exhaustive]
 pub enum RafterCut {
     #[default]
     PlumbCut,
@@ -100,10 +103,10 @@ impl ElementDecoder for RoofDecoder {
         limits: crate::walker::WalkerLimits,
     ) -> Result<DecodedElement> {
         if schema.name != "Roof" {
-            return Err(Error::BasicFileInfo(format!(
-                "RoofDecoder received wrong schema: {}",
-                schema.name
-            )));
+            return Err(Error::SchemaMismatch {
+                decoder: "Roof",
+                schema: schema.name.clone(),
+            });
         }
         Ok(crate::walker::decode_instance_with_limits(
             bytes, 0, schema, limits,
@@ -136,10 +139,10 @@ impl ElementDecoder for RoofTypeDecoder {
         limits: crate::walker::WalkerLimits,
     ) -> Result<DecodedElement> {
         if schema.name != "RoofType" {
-            return Err(Error::BasicFileInfo(format!(
-                "RoofTypeDecoder received wrong schema: {}",
-                schema.name
-            )));
+            return Err(Error::SchemaMismatch {
+                decoder: "RoofType",
+                schema: schema.name.clone(),
+            });
         }
         Ok(crate::walker::decode_instance_with_limits(
             bytes, 0, schema, limits,
@@ -149,6 +152,7 @@ impl ElementDecoder for RoofTypeDecoder {
 
 /// Typed view of a decoded Roof instance.
 #[derive(Debug, Clone, PartialEq, Default)]
+#[non_exhaustive]
 pub struct Roof {
     pub level_id: Option<u32>,
     pub base_offset_feet: Option<f64>,
@@ -201,6 +205,7 @@ impl Roof {
 
 /// Typed view of a decoded RoofType.
 #[derive(Debug, Clone, PartialEq, Default)]
+#[non_exhaustive]
 pub struct RoofType {
     pub name: Option<String>,
     pub thickness_feet: Option<f64>,

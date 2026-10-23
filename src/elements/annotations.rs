@@ -45,6 +45,7 @@ use crate::walker::{DecodedElement, InstanceField};
 
 /// Typed view of a decoded Dimension.
 #[derive(Debug, Clone, PartialEq, Default)]
+#[non_exhaustive]
 pub struct Dimension {
     pub owner_view_id: Option<u32>,
     pub dimension_type_id: Option<u32>,
@@ -84,6 +85,7 @@ impl Dimension {
 
 /// Tag-head position in local view coordinates, in feet.
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
+#[non_exhaustive]
 pub struct TagHeadPosition {
     pub x: f64,
     pub y: f64,
@@ -91,6 +93,7 @@ pub struct TagHeadPosition {
 
 /// Which axis the tag text runs along.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[non_exhaustive]
 pub enum TagOrientation {
     #[default]
     Horizontal,
@@ -110,6 +113,7 @@ impl TagOrientation {
 
 /// Typed view of a decoded Tag.
 #[derive(Debug, Clone, PartialEq, Default)]
+#[non_exhaustive]
 pub struct Tag {
     pub owner_view_id: Option<u32>,
     /// ElementId of the element this tag annotates.
@@ -156,6 +160,7 @@ impl Tag {
 
 /// Which side the text is anchored against.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[non_exhaustive]
 pub enum HorizontalAlignment {
     #[default]
     Left,
@@ -177,6 +182,7 @@ impl HorizontalAlignment {
 
 /// Typed view of a decoded TextNote.
 #[derive(Debug, Clone, PartialEq, Default)]
+#[non_exhaustive]
 pub struct TextNote {
     pub owner_view_id: Option<u32>,
     pub text_note_type_id: Option<u32>,

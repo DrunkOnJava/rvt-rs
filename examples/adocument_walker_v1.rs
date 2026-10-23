@@ -286,6 +286,7 @@ fn read_field(ft: &formats::FieldType, bytes: &[u8]) -> (usize, String) {
             (4 + byte_len, format!("String(len={len}) = {s:?}"))
         }
         Unknown { .. } => (0, "Unknown FieldType — cannot walk".into()),
+        _ => (0, "FieldType this probe does not know — cannot walk".into()),
     }
 }
 

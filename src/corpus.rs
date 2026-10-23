@@ -1,4 +1,4 @@
-//! Phase B · Corpus-wide delta inference engine.
+//! Corpus-wide delta inference engine.
 //!
 //! Loads multiple Revit files (ideally same logical content across many
 //! versions), decompresses every stream, and classifies each byte position
@@ -11,7 +11,8 @@
 //! - **MonotonicInt** — strictly increasing integer sequence (IDs, timestamps)
 //! - **Variable** — genuinely varies (payload data)
 //!
-//! Output: per-stream region maps that feed Phase D's object-graph inference.
+//! Output: per-stream region maps, the structural hypotheses that the
+//! object-graph readers ([`crate::object_graph`]) start from.
 
 use crate::{Result, compression, reader::RevitFile, streams::year_for_partition};
 use serde::{Deserialize, Serialize};
@@ -39,6 +40,7 @@ impl Sample {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[non_exhaustive]
 pub enum ByteClass {
     Invariant,
     LowVariance(u8), // 2..=5 distinct values
@@ -48,6 +50,7 @@ pub enum ByteClass {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct StreamDeltaReport {
     /// Stream name, e.g. `Global/PartitionTable`.
     pub name: String,
@@ -72,6 +75,7 @@ pub struct StreamDeltaReport {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct InvariantRun {
     pub offset: usize,
     pub length: usize,
@@ -79,6 +83,7 @@ pub struct InvariantRun {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct CorpusReport {
     pub samples: Vec<String>,
     pub streams: Vec<StreamDeltaReport>,

@@ -21,6 +21,7 @@
 /// entity's `PredefinedType` attribute when present (e.g.
 /// `"FLOOR"` / `"ROOF"` for IfcSlab, `"BEAM"` for IfcBeam).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct Mapping {
     pub revit_class: &'static str,
     pub ifc_type: &'static str,
@@ -773,7 +774,7 @@ pub fn lookup_export_override(value: &str) -> Option<&'static Mapping> {
 /// property-sets (`Pset_MemberCommon`) or group members into an
 /// `IfcRelAggregates` under a truss / frame assembly.
 ///
-/// IFC-10: IfcMember is IFC4's dedicated entity for secondary
+/// IfcMember is IFC4's dedicated entity for secondary
 /// structural elements. Routing through it (rather than the
 /// fallback `IfcBeam`) lets validators and downstream tools
 /// distinguish primary beams from bracing / purlins / studs /

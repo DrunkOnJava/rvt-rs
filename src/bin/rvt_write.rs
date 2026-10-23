@@ -1,11 +1,11 @@
 //! `rvt-write` — apply stream-level patches to a Revit file and verify
 //! the round-trip.
 //!
-//! WRT-14 capstone CLI that ties together:
+//! The command-line front end that ties together:
 //!
-//! - [`rvt::writer::write_with_patches_verified`] (WRT-13)
-//! - [`rvt::compression::validate_truncated_gzip_round_trip`] (WRT-11)
-//! - [`rvt::round_trip::verify_instance_round_trip`] (WRT-04)
+//! - [`rvt::writer::write_with_patches_verified`]
+//! - [`rvt::compression::validate_truncated_gzip_round_trip`]
+//! - [`rvt::round_trip::verify_instance_round_trip`]
 //!
 //! Workflow: the user supplies a JSON manifest of stream patches + a
 //! source .rvt/.rfa, the writer applies them to a new output path, and
@@ -31,6 +31,7 @@
 //!   ]
 //! }
 //! ```
+// Tracker: WRT-13, WRT-11, WRT-04.
 
 use clap::Parser;
 use rvt::writer::{StreamFraming, StreamPatch, write_with_patches_verified};
