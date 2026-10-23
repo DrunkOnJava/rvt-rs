@@ -2122,10 +2122,13 @@ const INSTANCE_AS_TYPE: u16 = 2048;
 
 /// Give each family instance written as a distribution element or a proxy a
 /// port for each of its symbol's connectors that Revit's export writes one
-/// for (`crate::native_connectors::symbol_port_indices`), joined
-/// or not; the writer skips a port a join has already given it. A file whose
-/// release the native record path does not read keeps the ports of its joins
-/// only.
+/// for, with its flow direction, joined or not; the writer skips a port a
+/// join has already given it. The ducts' and pipes' ports, written by then,
+/// take their flow direction from the same pass
+/// (`crate::native_connectors::connector_ports`, RE-212), and then every
+/// joined pair is given Revit's directions ([`apply_partner_directions`]). A
+/// file whose release the native record path does not read keeps the ports
+/// of its joins only, with no direction.
 fn attach_family_instance_ports(
     rf: &mut crate::RevitFile,
     entities: &mut Vec<entities::IfcEntity>,
@@ -2152,30 +2155,127 @@ fn attach_family_instance_ports(
             Some((index, id, *element_type_ids.get(&id)?))
         })
         .collect();
-    if instances.is_empty() {
+    let segments: std::collections::BTreeSet<u64> = entities
+        .iter()
+        .filter_map(|entity| match entity {
+            entities::IfcEntity::Port { id, .. } => Some(u64::from(*id)),
+            _ => None,
+        })
+        .collect();
+    if instances.is_empty() && segments.is_empty() {
         return;
     }
     let symbols = instances
         .iter()
-        .map(|(_, _, symbol)| u64::from(*symbol))
+        .map(|(_, id, symbol)| (u64::from(*id), u64::from(*symbol)))
         .collect();
-    let Ok(ports) = crate::native_connectors::symbol_port_indices(rf, &symbols) else {
+    let Ok(read) = crate::native_connectors::connector_ports(rf, &symbols, &segments) else {
         return;
     };
-    for (element, id, symbol) in instances {
-        for &(index, domain) in ports.get(&u64::from(symbol)).into_iter().flatten() {
+    for entity in entities.iter_mut() {
+        let entities::IfcEntity::Port {
+            id,
+            index,
+            flow_direction,
+            ..
+        } = entity
+        else {
+            continue;
+        };
+        if let Some(&direction) = read.segments.get(&(u64::from(*id), *index)) {
+            *flow_direction =
+                crate::native_connectors::flow_direction_of(direction).map(str::to_string);
+        }
+    }
+    for (element, id, _) in instances {
+        for port in read.instances.get(&u64::from(id)).into_iter().flatten() {
             entities.push(entities::IfcEntity::Port {
                 element,
                 id,
-                index,
+                index: port.index,
                 predefined_type: Some(
-                    crate::native_connectors::port_type_of_domain(domain).to_string(),
+                    crate::native_connectors::port_type_of_domain(port.domain).to_string(),
                 ),
-                flow_direction: crate::native_connectors::port_flow_direction_of_domain(domain)
-                    .map(str::to_string),
+                flow_direction: port.flow_direction.map(str::to_string),
                 location_feet: None,
                 direction: None,
             });
+        }
+    }
+    apply_partner_directions(entities);
+}
+
+/// A duct, pipe or fitting connector that is bidirectional, joined to one
+/// with a direction, takes the opposite direction (RE-212). revit-ifc writes
+/// a join as one connection, an `InPort` on the element the flow enters and
+/// an `OutPort` on the one it leaves, from the connector with a direction:
+/// on RE1 Mechanical three pipe ends joined to an air handler's connectors.
+fn apply_partner_directions(entities: &mut [entities::IfcEntity]) {
+    let mut own: std::collections::BTreeMap<(u32, u32), &'static str> =
+        std::collections::BTreeMap::new();
+    for entity in entities.iter() {
+        let entities::IfcEntity::Port {
+            id,
+            index,
+            predefined_type,
+            flow_direction: Some(flow),
+            ..
+        } = entity
+        else {
+            continue;
+        };
+        if !matches!(predefined_type.as_deref(), Some("DUCT" | "PIPE")) {
+            continue;
+        }
+        let opposite = match flow.as_str() {
+            "SINK" => "SOURCE",
+            "SOURCE" => "SINK",
+            _ => continue,
+        };
+        own.insert((*id, *index), opposite);
+    }
+    let mut partners: std::collections::BTreeMap<(u32, u32), Vec<(u32, u32)>> =
+        std::collections::BTreeMap::new();
+    for entity in entities.iter() {
+        if let entities::IfcEntity::PortConnection {
+            a_id,
+            a_index,
+            b_id,
+            b_index,
+            ..
+        } = entity
+        {
+            partners
+                .entry((*a_id, *a_index))
+                .or_default()
+                .push((*b_id, *b_index));
+            partners
+                .entry((*b_id, *b_index))
+                .or_default()
+                .push((*a_id, *a_index));
+        }
+    }
+    for entity in entities.iter_mut() {
+        let entities::IfcEntity::Port {
+            id,
+            index,
+            predefined_type,
+            flow_direction,
+            ..
+        } = entity
+        else {
+            continue;
+        };
+        if !matches!(predefined_type.as_deref(), Some("DUCT" | "PIPE"))
+            || flow_direction.as_deref() != Some("SOURCEANDSINK")
+        {
+            continue;
+        }
+        let opposite = partners
+            .get(&(*id, *index))
+            .and_then(|joined| joined.iter().find_map(|key| own.get(key)));
+        if let Some(opposite) = opposite {
+            *flow_direction = Some((*opposite).to_string());
         }
     }
 }
