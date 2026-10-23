@@ -74,7 +74,7 @@ print(summary["classes"], summary["fields"], summary["cpp_types"])
 # Full schema as JSON (~1-2 MB on typical families).
 import json
 schema = json.loads(f.schema_json())
-adoc = next(c for c in schema["classes"] if c["name"] == "ADocument")
+adoc = next((c for c in schema["classes"] if c["name"] == "ADocument"), None)
 
 # Layer-5a walker — ADocument instance fields. Returns None when
 # the entry-point detector can't confidently locate ADocument.
