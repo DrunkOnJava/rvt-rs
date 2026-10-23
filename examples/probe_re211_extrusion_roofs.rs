@@ -16,8 +16,9 @@
 //!     arc=<centre xyz>,r=<radius>,x=<axis>,y=<axis>,a=<start>..<end>
 //!     (each reading the data allows; "-" where it does not)
 //!   list <sketched element> <sketch line ids>   each Sketch's curve list (RE-97)
-//!   data <roof id> <stream>+<offset> <len> <hex of up to 1024 bytes>
-//!   f64 <roof id> +<offset> <value>   each finite f64 in the roof's data
+//!   data <id> <stream>+<offset> <len> <hex of up to 1024 bytes>, for each
+//!     roof and each sketch line of one
+//!   f64 <id> +<offset> <value>   each finite f64 in that data
 //!     with 1e-3 <= |value| <= 1e4, at every byte offset
 //!
 //! Usage:
@@ -91,6 +92,15 @@ fn main() -> rvt::Result<()> {
             line.bbox_feet.map(|v| format!("{v:.6}")).join(",")
         );
     }
+    // The roofs' data, and their own sketch lines', whose curve may be a kind
+    // neither a line nor an arc reads.
+    let mut dump_ids = roof_ids.clone();
+    dump_ids.extend(
+        lines
+            .iter()
+            .filter(|l| l.owner_reference.is_some_and(|o| roof_ids.contains(&o)))
+            .map(|l| l.element_id),
+    );
     for (sketched, ids) in scan_sketch_curve_lists(&mut rf, version, &line_ids) {
         println!("list {sketched} {ids:?}");
     }
@@ -109,7 +119,7 @@ fn main() -> rvt::Result<()> {
             let Some(id) = layout.id_at(buf, at) else {
                 continue;
             };
-            if !roof_ids.contains(&id) {
+            if !dump_ids.contains(&id) {
                 continue;
             }
             let end = hits.get(index + 1).copied().unwrap_or(buf.len());
