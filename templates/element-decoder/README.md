@@ -37,10 +37,9 @@ snake-case form is derived from `class_name` via the liquid
 
 ## After generation
 
-The generated file compiles as-is (it builds a minimal
-`simple_decoder!` + `{{class_name}}` struct with a single `name`
-field) but it is a **scaffold**, not a finished decoder. Three
-follow-up steps:
+The generated file is a typed view, `{{class_name}}` with a single
+`name` field, over what `SimpleDecoder` decodes. It is a **scaffold**,
+not a finished decoder. Three follow-up steps:
 
 1. **Register it** in `src/elements/mod.rs`:
 
@@ -50,7 +49,7 @@ follow-up steps:
    pub fn all_decoders() -> Vec<Box<dyn ElementDecoder>> {
        vec![
            // ... existing decoders
-           Box::new(dimension::DimensionDecoder),
+           Box::new(SimpleDecoder::new("Dimension")),
        ]
    }
    ```
@@ -60,12 +59,11 @@ follow-up steps:
    and record the real field list in the module docstring + the
    typed struct. Replace the `TODO` markers left by the template.
 
-3. **Extend the tests.** The template ships three canonical tests
-   (`<snake>_rejects_wrong_schema`, `<snake>_from_decoded`,
-   `empty_tolerance`) that exercise the name field. Add more tests
-   once the full field shape is known — see
-   `src/elements/level.rs` and `src/elements/drafting.rs` for
-   fuller examples.
+3. **Check it on a real file.** Run
+   `cargo run --release --bin rvt-elements -- <file>` on a corpus file
+   that holds the class and compare the fields with Revit's own export.
+   Unit tests are not accepted (`CONTRIBUTING.md`): put the evidence in
+   the pull request.
 
 The contributor guide at `docs/extending-layer-5b.md` has the full
 walkthrough including field-type dispatch, schema discovery, and
@@ -74,12 +72,10 @@ corpus integration tests.
 ## Style notes
 
 - Generated files follow `drafting.rs` conventions: 4-space indent,
-  `simple_decoder!` macro, `normalise_field_name` imported from the
-  `level` module, tests using `ClassEntry { ..., was_parent_only:
-  false, ancestor_tag: None }`.
+  registration through `SimpleDecoder`, and `normalise_field_name`
+  imported from the `level` module.
 - `cargo fmt --all` and `cargo clippy --all-targets -- -D warnings`
-  must both be clean after you finish populating the decoder — the
-  scaffold already passes both gates.
+  must both be clean after you finish populating the decoder.
 - Do not delete the `TODO` markers without replacing them with real
   content; the guide grep's for them to find decoders that were
   scaffolded but never filled in.
