@@ -32,6 +32,7 @@ pub type Room = Zone;
 
 /// Shared typed view for Room/Area/Space — same shape, same code path.
 #[derive(Debug, Clone, PartialEq, Default)]
+#[non_exhaustive]
 pub struct Zone {
     pub name: Option<String>,
     pub number: Option<String>,

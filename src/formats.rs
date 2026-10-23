@@ -80,6 +80,7 @@ pub struct SchemaTable {
 /// and inspect the returned `SchemaDiagnostics`.
 // Tracker: API-10.
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct SchemaDiagnostics {
     /// Total number of classes in the schema.
     pub class_count: usize,
@@ -105,7 +106,7 @@ pub struct SchemaDiagnostics {
     /// usually means the full schema for that class lives in another
     /// stream or is implicit.
     pub parent_only_class_count: usize,
-    /// Classes that carry a non-zero `ancestor_tag` (the Q4 addendum read
+    /// Classes that carry a non-zero `ancestor_tag` (the §Q4 addendum read
     /// it as a reference distinct from `parent`; not reproduced, RE-137).
     pub ancestor_tag_count: usize,
     /// Parse candidates skipped for validation reasons. Copied from
@@ -252,7 +253,7 @@ pub struct ClassEntry {
     /// count): the tag of the base's base, the class's grandparent, on
     /// every class that has one on 53 files of 2016 to 2027 (RE-146, #154,
     /// reported by puzzbobb). The parser lands on the base's own base
-    /// reference when the base is defined inline. The Q4 addendum read it
+    /// reference when the base is defined inline. The §Q4 addendum read it
     /// as a distinct ancestor (RE-137 did not reproduce that); see the §Q4
     /// addendum in `docs/rvt-moat-break-reconnaissance.md`.
     ///
@@ -273,7 +274,7 @@ pub struct FieldEntry {
 
 /// Best-effort classification of a field's type encoding (the byte block
 /// that follows a field name in `Formats/Latest`). Derived from the
-/// 2026-04-19 Layer 4c.2 sweeps (Q5 + Q5.1) — see the §Q5 / §Q5.1
+/// 2026-04-19 Layer 4c.2 sweeps — see the §Q5 / §Q5.1
 /// addenda in `docs/rvt-moat-break-reconnaissance.md` for evidence.
 ///
 /// The primary discriminator is the first byte of the encoding:
@@ -291,6 +292,7 @@ pub struct FieldEntry {
 /// | `0x0b` | `u64` / `i64` | 8 |
 /// | `0x0e` | reference / pointer / container | variable (see sub-type) |
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum FieldType {
     /// A fixed-size numeric or boolean primitive. `size` is the wire
     /// size in bytes; `kind` is the type category byte (0x01, 0x02,
@@ -930,6 +932,7 @@ fn scan_fields_until_next_class_bounded(
 
 /// One class of the `Formats/Latest` schema as the grammar reads it (#154).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct SchemaClass {
     /// The class's serialization tag: its definition ordinal, 12 for the
     /// first class and one more for each further definition, top-level or
@@ -945,6 +948,7 @@ pub struct SchemaClass {
 /// Every class of a page-stripped `Formats/Latest` stream, in definition
 /// order (#154).
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct SchemaClasses {
     pub classes: Vec<SchemaClass>,
     /// Bytes read before the stream ended or a record broke the grammar.

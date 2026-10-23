@@ -56,6 +56,7 @@ use crate::walker::{DecodedElement, InstanceField};
 /// Value readers dispatch on this to decide
 /// how to interpret the raw bytes of a given element's value slot.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[non_exhaustive]
 pub enum StorageType {
     /// No storage — the parameter is a category placeholder with no
     /// value (rare; mostly used for computed labels).
@@ -122,6 +123,7 @@ impl StorageType {
 /// `ParameterElement` are what distinguish these modes.
 // Tracker: L5B-56.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[non_exhaustive]
 pub enum ParameterValueSource {
     /// User-set (default). Writable, no implicit dependency on
     /// other parameters or geometry.
@@ -137,6 +139,7 @@ pub enum ParameterValueSource {
 
 /// Typed view of a decoded ParameterElement.
 #[derive(Debug, Clone, PartialEq, Default)]
+#[non_exhaustive]
 pub struct ParameterElement {
     pub name: Option<String>,
     pub parameter_group: Option<u32>,
@@ -218,6 +221,7 @@ impl ParameterElement {
 /// `guid` (the stable cross-project identifier that makes a shared
 /// parameter "shared"), and a free-form `description`.
 #[derive(Debug, Clone, PartialEq, Default)]
+#[non_exhaustive]
 pub struct SharedParameter {
     pub base: ParameterElement,
     /// Stable cross-project GUID. This is what lets two projects
@@ -263,6 +267,7 @@ impl SharedParameter {
 /// still round-trip, just without a typed view).
 // Tracker: L5B-54.
 #[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
 pub enum ParameterValue {
     /// `APropertyBoolean.m_value` — single 8-bit bool (0 / 1).
     Boolean(bool),
@@ -459,6 +464,7 @@ impl ParameterValue {
 /// returns a non-empty list only when `decoded` itself is an
 /// AProperty* carrier. Other classes return `[]` (honest empty).
 #[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
 pub struct ParameterEntry {
     /// Parameter display name when known; AProperty carriers rarely
     /// embed the definition name on the value instance alone.

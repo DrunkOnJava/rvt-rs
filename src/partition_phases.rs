@@ -23,6 +23,7 @@
 //!
 //! Only Revit 2024 is measured.
 
+use crate::le_bytes;
 use crate::{Result, RevitFile};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -59,7 +60,7 @@ pub fn find_phase_names(
         if rest[..3] != [0, 0, 0] || id_at < 4 || buf[id_at - 4..id_at] != [1, 0, 0, 0] {
             continue;
         }
-        let Some(id) = read_u64(buf, id_at).and_then(|v| u32::try_from(v).ok()) else {
+        let Some(id) = le_bytes::u64_at(buf, id_at).and_then(|v| u32::try_from(v).ok()) else {
             continue;
         };
         let tagged = phase_tag.is_some_and(|tag| {
@@ -159,9 +160,4 @@ pub fn phase_created<'a>(
         (Some(id), None) => Some((id, phases[&id].as_str())),
         _ => None,
     }
-}
-
-fn read_u64(buf: &[u8], at: usize) -> Option<u64> {
-    buf.get(at..at + 8)
-        .map(|b| u64::from_le_bytes(b.try_into().expect("8 bytes")))
 }

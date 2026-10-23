@@ -36,6 +36,7 @@ use crate::{Error, Result};
 /// Floor function classification — mirrors Revit's two-value enum
 /// (Revit doesn't split floors as finely as walls).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[non_exhaustive]
 pub enum FloorFunction {
     #[default]
     Interior,
@@ -134,6 +135,7 @@ impl ElementDecoder for FloorTypeDecoder {
 
 /// Typed view of a decoded Floor instance.
 #[derive(Debug, Clone, PartialEq, Default)]
+#[non_exhaustive]
 pub struct Floor {
     pub level_id: Option<u32>,
     /// Offset from host level's elevation. Can be negative.
@@ -179,6 +181,7 @@ impl Floor {
 
 /// Typed view of a decoded FloorType.
 #[derive(Debug, Clone, PartialEq, Default)]
+#[non_exhaustive]
 pub struct FloorType {
     pub name: Option<String>,
     pub function: Option<FloorFunction>,

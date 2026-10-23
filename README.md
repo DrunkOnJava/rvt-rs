@@ -14,7 +14,7 @@ It comes as command-line tools, a Rust library, Python bindings and a browser vi
 | Inspect or export files from the command line | The [installation guide](docs/install.md); prebuilt binaries are on [GitHub Releases](https://github.com/DrunkOnJava/rvt-rs/releases). |
 | Work with files in Python | The [Python guide](docs/python.md) (`pip install rvt`). |
 | Check what your file will give | [What you can rely on, by input](#what-you-can-rely-on-by-input) below, then the [user guide](docs/user-guide.md). |
-| Use the Rust library | [Library surface](#library-surface) below and the [API documentation](https://docs.rs/rvt). |
+| Use the Rust library | The [examples](examples/README.md) (open a file, list its elements, export it), [Library surface](#library-surface) below and the [API documentation](https://docs.rs/rvt). |
 | Ask a question, report a problem or contribute | [Discussions](https://github.com/DrunkOnJava/rvt-rs/discussions) for questions, and the [contribution guide](CONTRIBUTING.md) for everything else. |
 
 ## Support and evidence
@@ -53,7 +53,7 @@ The latest release is [v0.6.1](https://github.com/DrunkOnJava/rvt-rs/releases/ta
 
 The browser viewer is built from `main`, so it runs what `main` has; what `main` adds after 0.6.1 is under `[Unreleased]` in [`CHANGELOG.md`](CHANGELOG.md). To use `main` before the next release, build from source ([`docs/install.md`](docs/install.md#build-from-source)).
 
-Rust 2024 edition (MSRV 1.87). **Nineteen CLIs ship** (`rvt-analyze`, `rvt-info`, `rvt-inspect`, `rvt-schema`, `rvt-history`, `rvt-diff`, `rvt-corpus`, `rvt-dump`, `rvt-doc`, `rvt-ifc`, `rvt-ifc-compare`, `rvt-write`, `rvt-gltf`, `rvt-sheet`, `rvt-elem-table`, `rvt-elements`, `rvt-capabilities`, `rvt-schedule`, `gen-fixture`) plus the reproducible probes under `examples/`, one or more per format finding. Python bindings via pyo3+maturin in the `rvt-py` workspace member (SEC-12/13 — the core `rvt` crate is unconditionally `#![forbid(unsafe_code)]`) — `pip install rvt`.
+Rust 2024 edition (MSRV 1.87). **Nineteen CLIs ship** (`rvt-analyze`, `rvt-info`, `rvt-inspect`, `rvt-schema`, `rvt-history`, `rvt-diff`, `rvt-corpus`, `rvt-dump`, `rvt-doc`, `rvt-ifc`, `rvt-ifc-compare`, `rvt-write`, `rvt-gltf`, `rvt-sheet`, `rvt-elem-table`, `rvt-elements`, `rvt-capabilities`, `rvt-schedule`, `gen-fixture`) plus the reproducible probes under `examples/`, one or more per format finding. Python bindings via pyo3+maturin in the `rvt-py` workspace member (so the core `rvt` crate can stay unconditionally `#![forbid(unsafe_code)]`) — `pip install rvt`.
 
 ## What works today
 
@@ -74,15 +74,15 @@ Rust 2024 edition (MSRV 1.87). **Nineteen CLIs ship** (`rvt-analyze`, `rvt-info`
 | IFC4 STEP export — spatial tree | ✓ | `IfcProject` + `IfcSite` + `IfcBuilding` + `IfcBuildingStorey` + OmniClass classifications |
 | IFC4 STEP export — elements | partial | Revit 2023, 2024 and 2025 projects, and 2015 to 2022, 2026 and 2027 projects experimentally: typed entities from element records, measured against Revit's own export where there is one ([next section](#what-rvt-rs-reads-from-real-projects), and the table [by input](#what-you-can-rely-on-by-input) for 2015 to 2023, 2026 and 2027). Revit 2014 and earlier: the spatial scaffold. Low-confidence `HostObjAttr` candidates are never exported as proxies. |
 | IFC4 STEP export — geometry | partial | Extrusions of arbitrary closed profiles with voids, sloped extrusions, stepped stair flights and B-rep solids. What each category gets on real files, and how exact it is, is in [the next section](#what-rvt-rs-reads-from-real-projects); anything not decoded is its record's bounding box. |
-| IFC4 STEP export — materials | ✓ | Single-material via `IfcMaterial` + `IfcRelAssociatesMaterial`; compound assemblies via `IfcMaterialLayerSet` + `IfcMaterialLayerSetUsage` (IFC-28/29). On Revit 2024 and 2025 files, walls, floors, roofs and ceilings carry their type's layers with material names and thicknesses (RE-58). |
+| IFC4 STEP export — materials | ✓ | Single-material via `IfcMaterial` + `IfcRelAssociatesMaterial`; compound assemblies via `IfcMaterialLayerSet` + `IfcMaterialLayerSetUsage`. On Revit 2024 and 2025 files, walls, floors, roofs and ceilings carry their type's layers with material names and thicknesses (RE-58). |
 | IFC4 STEP export — properties | ✓ | `IfcPropertySet` + `IfcPropertySingleValue` with typed values (`IfcText`, `IfcInteger`, `IfcReal`, `IfcBoolean`, `IfcLengthMeasure`, `IfcPlaneAngleMeasure`, `IfcAreaMeasure`, `IfcVolumeMeasure`, `IfcCountMeasure`, `IfcTimeMeasure`, `IfcMassMeasure`) wired via `IfcRelDefinesByProperties`. |
 | IFC4 STEP export — openings | partial | `IfcOpeningElement` + `IfcRelVoidsElement` + `IfcRelFillsElement`: each door and window cuts its host wall. The host is the wall Revit fills the opening in for 138 of 138 on Core Interior and 192 of 194 on Snowdon Towers, where the other 2 take another wall Revit also cuts (RE-23, RE-85). The opening is as deep as the host wall and otherwise the door's or window's box: within 0.25 ft of Revit's on all 138 Core Interior openings and within 0.26 ft on 124 of Snowdon's 194 (RE-83). A window whose type stores its Width, Height and Default Sill Height takes Revit's opening from them, centred on its origin, and its `OverallWidth` / `OverallHeight`: 56 of Snowdon's 68 windows, each within 0.001 ft of Revit's (RE-93). A door whose body is its type's Rough Height tall takes its type's rough opening the same way: 57 of Snowdon's 126 doors, 54 within 0.001 ft of Revit's (RE-94). Any other door whose type stores its Width and Height carries them as its `OverallWidth` / `OverallHeight`: all 132 Core Interior doors and 4 of RE1's 5, equal to Revit's (RE-187). Otherwise it is not Revit's opening profile, and in walls that are not straight extrusions it stays the element's box (#227). |
 | Geometry extraction | partial | See the next section: walls from their centreline, joins and arcs; slabs and roofs from their sketches; sloped roofs as their planes (sheds, gables, hips, slope arrows); columns cut by walls; beams along their axes; stair flights as treads and risers. Doors, windows, furniture and most families are boxes. |
-| glTF 2.0 binary export | ✓ | `model_to_glb()` produces a valid `.glb` file that loads in Three.js's `GLTFLoader` (VW1-04), each element drawn as its IFC body: rotated, with its sketched or steel profile, or as its swept, revolved or brep solid. `rvt-gltf` CLI. |
+| glTF 2.0 binary export | ✓ | `model_to_glb()` produces a valid `.glb` file that loads in Three.js's `GLTFLoader`, each element drawn as its IFC body: rotated, with its sketched or steel profile, or as its swept, revolved or brep solid. `rvt-gltf` CLI. |
 | CSV schedules | partial | `rvt-schedule`, the viewer's Schedule panel and `RevitFile.schedule_csv()` write element and room schedules for Excel / Sheets; rows are exactly what decodes (typed on Revit 2024 projects with element records). |
-| 2D plan-view SVG export | ✓ | `render_plan_svg()` produces per-category-coloured SVG (walls black, doors amber, columns red, …) (VW1-11), each element drawn as its body's plan outline, rotated and with holes open, with slabs beneath the walls. `rvt-sheet` CLI. |
-| Browser viewer | ✓ | Live at <https://drunkonjava.github.io/rvt-rs/>. WebAssembly build of the core library + Three.js + Vite. Zero-upload, in-tab parse, Export glTF/IFC/SVG buttons, URL-based share via `share::ViewerState`. (VW1-01 through VW1-24 shipped.) |
-| Fuzz-regression harness | ✓ | 11 libFuzzer targets, run nightly, and 38 adversarial regression cases in `tests/fuzz_regressions.rs`, run by CI on every pull request. Caught a real `gzip_header_len` bounds bug on 9-byte truncated headers (Q-04). |
+| 2D plan-view SVG export | ✓ | `render_plan_svg()` produces per-category-coloured SVG (walls black, doors amber, columns red, …), each element drawn as its body's plan outline, rotated and with holes open, with slabs beneath the walls. `rvt-sheet` CLI. |
+| Browser viewer | ✓ | Live at <https://drunkonjava.github.io/rvt-rs/>. WebAssembly build of the core library + Three.js + Vite. Zero-upload, in-tab parse, Export glTF/IFC/SVG buttons, URL-based share via `share::ViewerState`. |
+| Fuzz-regression harness | ✓ | 11 libFuzzer targets, run nightly, and 38 adversarial regression cases in `tests/fuzz_regressions.rs`, run by CI on every pull request. Caught a real `gzip_header_len` bounds bug on 9-byte truncated headers. |
 
 ## What rvt-rs reads from real projects
 
@@ -135,7 +135,7 @@ All of the above were used to develop the decoder. Three models that were not, A
 | Element geometry beyond what is listed above | partial | Where the bytes are not decoded, a body is the element record's bounding box, and the export diagnostics say so. Still boxes by default: doors, windows and loadable families, turned with the instance where it is turned (RE-87); `--saved-meshes` draws them from the mesh Revit saved for display (RE-78: within 0.01 ft of Revit's export for 158 of 158 on Core Interior, 207 of 214 on RE1 (Revit 2025) and 3,332 of 3,736 on Snowdon Towers); ducts and pipe fittings, though pipes are cylinders where their ends are proven (RE-131); openings across and in height, which are the door's or window's box cut to the wall's depth (#227). Not decoded: roofs by extrusion (#883) and hip roofs over a T or U footprint (#884), monolithic, riserless and spiral stair flights (#357), edited wall profiles and some wall ends (#358: both ends match Revit on 716 of Snowdon's 1,078 walls), the boundaries of 7 of Snowdon's 54 rooms, whose stored solids do not close at the floor (#90), and phase filtering (#328). A slab sketched as separate pieces exports one element per piece, as Revit's export does (#331). |
 | Community corpus open/scaffold verification | executed (scaffold only) | `tools/fetch-corpus.sh` + `examples/probe_corpus_batch_validate.rs` reported **222/223** real files passing open → schema → scaffold IFC (`docs/corpus-hunt-2026-04-21.md`). That measures container/schema/scaffold health, not typed element extraction. |
 | Parameters and system-family type names | partial | Partition records are read through their record chain (RE-35), their frame prologue and reference lists, and the name entries of loadable families and types (RE-38, RE-42). The type names of system families (walls, floors, ceilings, roofs, railings) come from the type's own serialised data (RE-44, #322). Since RE-207, `rvt-elements` and Python list each element's saved parameters on Revit 2023 to 2027 files, but built-in parameters have no name (the built-in catalog is not shipped, #255), a family's built-in slots (a window type's Width and Height) are not resolved, a wall's or floor's type parameters are not joined to it, and none is written to IFC beyond the sets above (#35). |
-| Scalar-Container wire format on real bytes | assumption only | L5B-09 fix assumes Vector-equivalent layout for kinds 0x01/0x02/0x04/0x05/0x07/0x0b/0x0d. Round-trip tests use synthesized bytes; no real-.rvt round-trip has been exercised. Tracked as WF-01..03. |
+| Scalar-Container wire format on real bytes | assumption only | The fix of the Scalar-Container decoder assumes Vector-equivalent layout for kinds 0x01/0x02/0x04/0x05/0x07/0x0b/0x0d. Round-trip tests use synthesized bytes; no real-.rvt round-trip has been exercised. |
 | Patched CFB roundtrip for grow/shrink cases | covered | Family corpus tests cover identity, grow, shrink, multi-stream, and missing-stream patches; project-corpus tests cover identity/grow/shrink/multi while preserving unpatched streams plus GUID/history. |
 
 ## Why the schema matters
@@ -157,7 +157,7 @@ If you are building BIM or AEC tooling and want an Apache-2.0 Revit reader to bu
 
 ## Quick demo
 
-One command produces the full forensic picture — identity, upgrade history, format anchors, schema table, Phase D link histogram, content metadata, and a disclosure scan:
+One command produces the full forensic picture — identity, upgrade history, format anchors, schema table, schema-to-data link histogram, content metadata, and a disclosure scan:
 
 ```bash
 cargo build --release
@@ -190,7 +190,7 @@ The deploy workflow (`.github/workflows/deploy-viewer.yml`) checks the viewer's 
 
 ### Supported MVP workflow
 
-The supported end-to-end shell (issue M11-02) is intentionally honest about partial decode:
+The supported end-to-end shell is intentionally honest about partial decode:
 
 1. Open a supported Revit file locally (drop, file picker, or a redistributable gallery demo).
 2. Read the File status / confidence panel before trusting geometry.
@@ -202,7 +202,7 @@ What still depends on decoder work: element records of Revit 2014 and earlier (2
 
 **Sample output** (all pre-scrubbed with `--redact`, committed for review):
 
-- **One-screen teaser**: [`docs/demo/rvt-analyze-2024-teaser.txt`](docs/demo/rvt-analyze-2024-teaser.txt) — the four highlight sections fit in one terminal screen (identity, format anchors, Phase D linkage, disclosure scan)
+- **One-screen teaser**: [`docs/demo/rvt-analyze-2024-teaser.txt`](docs/demo/rvt-analyze-2024-teaser.txt) — the four highlight sections fit in one terminal screen (identity, format anchors, schema-to-data linkage, disclosure scan)
 - **Full terminal report**: [`docs/demo/rvt-analyze-2024-redacted.txt`](docs/demo/rvt-analyze-2024-redacted.txt) — 130 lines of structured output
 - **JSON report**:    [`docs/demo/rvt-analyze-2024-redacted.json`](docs/demo/rvt-analyze-2024-redacted.json) — machine-readable version
 - **Tag-drift heatmap**: [`docs/data/tag-drift-heatmap.svg`](docs/data/tag-drift-heatmap.svg) — visual proof of class-ID drift across 11 Revit releases
@@ -229,7 +229,7 @@ A build-server path also appears in C++ assertion strings inside the same DLL; i
 
 Partition streams are inflated once per file and cached on the `RevitFile` handle (#266). On the 33.7 MB `2024_Core_Interior.rvt`, `rvt-ifc --mode geometry` went from **26.07 s / 2641.4 MiB** peak RSS to **1.69 s / 490.1 MiB** (Apple Silicon, `/usr/bin/time -l`, best of three), and the exported IFC is byte-identical once the writer's two wall-clock stamps are normalised. In the browser the same file decodes in **about 3 s** on the deployed site, where it used to take about 28. Every `tools/perf_budget.py --require-category medium` row now passes with an order of magnitude of headroom, without any budget being loosened.
 
-## Phase D findings
+## Findings of the first reconnaissance
 
 Six reproducible findings from the first reconnaissance (April 2026), all documented in [`docs/rvt-moat-break-reconnaissance.md`](docs/rvt-moat-break-reconnaissance.md) and reproducible from `examples/`:
 
@@ -253,6 +253,8 @@ Revit files, Autodesk's shipped samples among them, can carry authoring metadata
 
 ## Library surface
 
+Three runnable examples show the library end to end: [`basics_inspect`](examples/basics_inspect.rs) reads what a file is, [`basics_elements`](examples/basics_elements.rs) lists its building elements by IFC type with their ElementIds, and [`basics_export`](examples/basics_export.rs) writes IFC4, glTF, a CSV schedule and the export diagnostics. `cargo run --example basics_inspect -- model.rvt` runs one on your file, and CI runs all three on the synthetic project the repository ships and on a real one, Einhoven (MIT). The other programs under `examples/` are research probes ([`examples/README.md`](examples/README.md)).
+
 All modules build for native targets and for `wasm32-unknown-unknown`, which the `rvt-wasm` crate compiles for the browser viewer. The type documentation is on [docs.rs](https://docs.rs/rvt):
 
 | Module | What it does |
@@ -275,7 +277,7 @@ All modules build for native targets and for `wasm32-unknown-unknown`, which the
 | `ifc` | Full IFC4 spatial tree + elements + materials + properties + openings + extrusion geometry + glTF 2.0 binary (`gltf::model_to_glb`) + plan-view SVG (`sheet::render_plan_svg`) + viewer data model (`scene_graph`, `camera`, `clipping`, `sheet`, `share`, `measure`, `annotation`, `pbr`) |
 | `streams` | Named constants for every invariant OLE stream in a Revit file |
 | `redact` | Shared PII scrubbers for all CLIs (`--redact` flag) |
-| (`rvt-wasm` crate) | the 14 JS-callable wasm-bindgen bindings powering the browser viewer, a crate of its own so `rvt` builds as a plain `rlib` |
+| (`rvt-wasm` crate) | the 22 JS-callable wasm-bindgen bindings powering the browser viewer ([`docs/viewer-api.md`](docs/viewer-api.md#the-javascript-bindings)), a crate of its own so `rvt` builds as a plain `rlib` |
 | `error` | Structured error type (`Error` / `Result`) |
 
 Runtime capabilities:
@@ -333,7 +335,7 @@ cargo build --release
 # (categories, OmniClass, Uniformat, Autodesk unit identifiers, …)
 ./target/release/rvt-history --partitions my-project.rvt
 
-# Hex-dump every decompressed stream (for Phase D work)
+# Hex-dump every decompressed stream (for format research)
 ./target/release/rvt-dump my-project.rvt
 
 # IFC4 STEP export — everything decoded; the default mode accepts a scaffold-only result, with warnings
@@ -382,7 +384,7 @@ Every format finding has a probe under `examples/`, whose module documentation s
 ```bash
 cargo build --release --examples
 
-# --- schema ↔ data linkage (Phase D) ---
+# --- schema ↔ data linkage ---
 ./target/release/examples/probe_link              <file>           # null-hypothesis: class names absent from Global/Latest
 ./target/release/examples/tag_bytes               <file>           # hex around known class names in Formats/Latest
 ./target/release/examples/tag_dump                <file>           # statistical sweep of post-name u16 patterns
@@ -390,7 +392,7 @@ cargo build --release --examples
 ./target/release/examples/tag_drift               <sample-dir> <out.csv>   # per-class drift table 2016-2026
 ./target/release/examples/tag_drift_svg           <in.csv> <out.svg>       # render drift table as colour-coded SVG heatmap
 
-# --- record framing (Phase 4c) ---
+# --- record framing ---
 ./target/release/examples/record_framing          <file>           # dump bytes at tagged-class defs + first tag occurrence
 ./target/release/examples/elem_table_probe        <sample-dir>     # Global/ElemTable structural sweep across releases
 ./target/release/examples/partitions_header_probe <sample-dir>     # 44-byte Partitions/NN header + chunk offsets
@@ -401,7 +403,7 @@ cargo build --release --examples
 ./target/release/examples/partition_diff          <sample-dir>     # show the 2 varying bytes per release
 ./target/release/examples/partition_full          <file>           # full annotated hex dump + UUID decode
 
-# --- write path (Phase 6) ---
+# --- write path ---
 ./target/release/examples/roundtrip                                # copy 2024 sample, verify all 13 streams identical
 ```
 
@@ -451,20 +453,20 @@ The format, layer by layer, and how far each layer is understood. Some rows reco
 | 4c.2 · Field-body decoding | `FieldType` enum classifies all but 9 to 12 schema fields per release across 8 variants (Primitive, String, Guid, ElementId, ElementIdRef, Pointer, Vector, Container). 11 discriminator bytes mapped, including generalized scalar-base Vector/Container (`{kind} 0x10 ...` / `{kind} 0x50 ...`) and the `0x0d` point-type base. | **Done (all but 9 to 12 of 10,000 to 12,000 fields per release since #410; the earlier 100.00% on 13,570 fields covered the first 64 KB of each schema; zero `Unknown`)** |
 | 4d · ElemTable | `Global/ElemTable`: the `u32` record count at `0x02`, then records from `0x06`, 28 bytes through Revit 2023 and 40 from 2024, each with its ElementId and owner (#152, RE-41, #737) | **Partial**: why a record's first id sometimes differs from its ElementId is open (#760) |
 | 5 · IFC4 export | Full spatial tree + per-element IFC entities + `IfcLocalPlacement` + extruded, swept, revolved and B-rep bodies + compound material layers + typed property sets + `IfcOpeningElement`/`IfcRelVoidsElement`/`IfcRelFillsElement` for doors and windows. Deterministic ISO-10303-21 output; CI validates the exports of the reference projects with IfcOpenShell. | **Partial**: what each category gets is in [What rvt-rs reads from real projects](#what-rvt-rs-reads-from-real-projects); a body that is not decoded is its element's bounding box |
-| 6 · Write path | Byte-preserving copy for unchanged files; stream-level patching for named OLE streams with atomic temp-file rename, per-stream verification, grow/shrink/multi-stream coverage, and GUID/history preservation checks. Field-level semantic patching is Phase 7. | **Done (stream-level); field-level pending** |
-| 7 · Browser viewer | WebAssembly build of the core + Three.js + Vite + Pages deploy. Zero-upload, in-tab parse, export buttons for glTF/IFC/SVG, URL-state share. Live at <https://drunkonjava.github.io/rvt-rs/>. | **Done** (VW1-01..24) |
+| 6 · Write path | Byte-preserving copy for unchanged files; stream-level patching for named OLE streams with atomic temp-file rename, per-stream verification, grow/shrink/multi-stream coverage, and GUID/history preservation checks. Field-level semantic patching is not implemented (ADR-002). | **Done (stream-level); field-level pending** |
+| 7 · Browser viewer | WebAssembly build of the core + Three.js + Vite + Pages deploy. Zero-upload, in-tab parse, export buttons for glTF/IFC/SVG, URL-state share. Live at <https://drunkonjava.github.io/rvt-rs/>. | **Done** |
 
-The original research questions, Q4 to Q7, are resolved: Q5 to Q7 as first answered, and Q4 by RE-146, after its first reading did not reproduce (RE-137). Layer 4c.2 classified 100.00% of the 13,570 fields in the first 64 KB of each schema; #410 found the rest of `Formats/Latest` was being inflated without its page strip, and on the whole schema (122,107 fields across 11 releases) 9 to 12 fields per release remain unclassified. In April 2026 the next frontier was real-world project files (Q-01), where one `.rvt` probe caught a `gzip_header_len` bounds bug that family files never hit; the partition element records (RE-21 onward) and the measured tables above are where that work went.
+The original research questions are resolved: those on field encodings, `Global/Latest` and `Partitions/NN` as first answered, and the class preamble's flag word by RE-146, after its first reading did not reproduce (RE-137). Layer 4c.2 classified 100.00% of the 13,570 fields in the first 64 KB of each schema; #410 found the rest of `Formats/Latest` was being inflated without its page strip, and on the whole schema (122,107 fields across 11 releases) 9 to 12 fields per release remain unclassified. In April 2026 the next frontier was real-world project files, where one `.rvt` probe caught a `gzip_header_len` bounds bug that family files never hit; the partition element records (RE-21 onward) and the measured tables above are where that work went.
 
 Key findings from this phase:
 
-- **Q4** (superseded, RE-137) The u16 "flag" word in each tagged-class preamble was read as a class-tag reference distinct from the parent. That reading did not reproduce under the page-stripped schema grammar (#410, #154): the nine classes behind it have the bases the grammar gives (`HostObjAttr` → `Symbol`), not the "ancestor" named, on 17 files of 2016 to 2026, and every base reference resolves. RE-146 then identified the word: it is the grandparent class's tag, which the Q4 addendum had looked up among base tags (#154).
-- **Q5** Each field's `type_encoding` is `[byte category][u16 sub_type][optional body]`. 9 category bytes mapped (`0x01` bool, `0x02` u16, `0x04/0x05` u32, `0x06` f32, `0x07` f64, `0x08` string, `0x09` GUID, `0x0b` u64, `0x0e` reference/container).
-- **Q5.1** Coverage extended to 84% of fields.
-- **Q5.2** Coverage reaches **100%** of the fields in the first 64 KB of each schema (13,570 across 11 releases; #410 later read the whole schema). Generalized `{scalar_base} 0x10 ...` / `{scalar_base} 0x50 ...` as vector/container modifiers; added `0x0d` point-type base; added `0x08 0x60 ...` alternate string encoding; added `ElementIdRef { referenced_tag, sub }` for references that carry a specific target-class tag; added deprecated `0x03` i32-alias seen only in 2016–2018. See `docs/rvt-moat-break-reconnaissance.md` §Q5.2.
-- **Q6** `Global/Latest` is **not** an index + heap — it's a flat TLV stream.
-- **Q6.1** Instance data is **schema-directed** (tag-less, protobuf-style). Decoding requires schema-first sequential walk from a known entry point.
-- **Q7** `Partitions/NN` trailer u32 fields are **not** per-chunk offsets. Gzip-magic scan remains correct.
+- **Class preamble flag word** (superseded, RE-137) The u16 "flag" word in each tagged-class preamble was read as a class-tag reference distinct from the parent. That reading did not reproduce under the page-stripped schema grammar (#410, #154): the nine classes behind it have the bases the grammar gives (`HostObjAttr` → `Symbol`), not the "ancestor" named, on 17 files of 2016 to 2026, and every base reference resolves. RE-146 then identified the word: it is the grandparent class's tag, which an earlier addendum had looked up among base tags (#154).
+- **Field type encoding** Each field's `type_encoding` is `[byte category][u16 sub_type][optional body]`. 9 category bytes mapped (`0x01` bool, `0x02` u16, `0x04/0x05` u32, `0x06` f32, `0x07` f64, `0x08` string, `0x09` GUID, `0x0b` u64, `0x0e` reference/container).
+- **Field-type coverage** extended to 84% of fields,
+  then reaches **100%** of the fields in the first 64 KB of each schema (13,570 across 11 releases; #410 later read the whole schema). Generalized `{scalar_base} 0x10 ...` / `{scalar_base} 0x50 ...` as vector/container modifiers; added `0x0d` point-type base; added `0x08 0x60 ...` alternate string encoding; added `ElementIdRef { referenced_tag, sub }` for references that carry a specific target-class tag; added deprecated `0x03` i32-alias seen only in 2016–2018. See `docs/rvt-moat-break-reconnaissance.md` §Q5.2.
+- **`Global/Latest` layout** It is **not** an index + heap — it's a flat TLV stream.
+- **Instance data** is **schema-directed** (tag-less, protobuf-style). Decoding requires schema-first sequential walk from a known entry point.
+- **`Partitions/NN` trailers** Their u32 fields are **not** per-chunk offsets. Gzip-magic scan remains correct.
 
 The full analysis narrative with 12 dated addenda lives in [`docs/rvt-moat-break-reconnaissance.md`](docs/rvt-moat-break-reconnaissance.md). Session-length synthesis in [`docs/rvt-phase4c-session-2026-04-19.md`](docs/rvt-phase4c-session-2026-04-19.md).
 

@@ -224,5 +224,6 @@ fn field_json(name: &str, value: &InstanceField) -> serde_json::Value {
             "kind": "bytes",
             "len": b.len(),
         }),
+        _ => serde_json::json!({ "name": name, "kind": "unknown" }),
     }
 }

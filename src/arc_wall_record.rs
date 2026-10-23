@@ -12,7 +12,7 @@
 //! - 2024 needs a separate decoder implementation.
 //!
 //! See `reports/element-framing/RE-13-synthesis.md` for the cross-
-//! version drift evidence and open questions (Q18-Q20, hypotheses
+//! version drift evidence and open questions (its §Q18 to §Q20, hypotheses
 //! H17-H19, decisions D23-D27 scoping this module's coverage).
 //!
 //! Production callers should use
@@ -108,6 +108,7 @@ pub const ARC_WALL_STANDARD_SUPPORTED_REVIT_VERSIONS: &[u32] = &[2023];
 /// and Level ElementId are **not** present as stable trailer fields
 /// on the Einhoven 2023 corpus.
 #[derive(Debug, Clone, Copy, PartialEq)]
+#[non_exhaustive]
 pub struct ArcWallTrailer {
     /// ElementId at `+0x10e`, accepted only when it equals the echo
     /// at `+0x11c` and is not a null/max sentinel. 23/24 Einhoven
@@ -124,6 +125,7 @@ pub struct ArcWallTrailer {
 
 /// Status for a version-scoped standard ArcWall scan.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum ArcWallScanStatus {
     /// The caller supplied a Revit release covered by this decoder.
     Supported { revit_version: u32 },
@@ -151,6 +153,7 @@ impl ArcWallScanStatus {
 
 /// Result of a bounded ArcWall byte scan ([`ArcWallRecord::find_all_with_limits`]).
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct ArcWallFindResult {
     /// Byte offsets of candidate standard ArcWall records.
     pub offsets: Vec<usize>,
@@ -162,6 +165,7 @@ pub struct ArcWallFindResult {
 
 /// Result of a version-scoped ArcWall scan.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct ArcWallScanReport {
     /// Whether the scan ran or was suppressed by the release guard.
     pub status: ArcWallScanStatus,
@@ -179,6 +183,7 @@ pub struct ArcWallScanReport {
 /// wall records use a different envelope and are tracked as separate
 /// reverse-engineering work.
 #[derive(Debug, Clone, Copy, PartialEq)]
+#[non_exhaustive]
 pub struct ArcWallRecord {
     /// Tag value read from the record. Always `0x0191` for valid records.
     pub tag: u16,

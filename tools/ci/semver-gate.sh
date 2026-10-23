@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Fail a pull request that breaks the stable Rust API without announcing it
-# (S2, #873). Two checks, because neither alone sees every break:
+# Fail a pull request that breaks a stable surface without announcing it
+# (S2, #873): the Rust API, the viewer's wasm bindings and the CLIs' JSON.
+# For the Rust API two checks, because neither alone sees every break:
 #
 # - cargo-semver-checks lints the API against the base. Exit 100 is a
 #   verdict (violations found), 101 a check that could not complete.
@@ -19,10 +20,17 @@
 # from the API so that re-running the job after a retitle sees it. A tool
 # that cannot complete fails the job whatever the title says.
 #
-# Needs BASE (the base commit), PR, REPO and GH_TOKEN, cargo-semver-checks
-# and cargo-public-api, and the nightly named by PUBLIC_API_TOOLCHAIN.
+# Runs on the pull request's merge commit, as actions/checkout checks it
+# out, and needs PR, REPO and GH_TOKEN, cargo-semver-checks and
+# cargo-public-api, and the nightly named by PUBLIC_API_TOOLCHAIN.
 
 set -uo pipefail
+
+# The base is the merge commit's first parent: main as GitHub merged the
+# pull request into it. The event's base.sha can be older (7c4e87f5 on
+# #912 with main at 6af75c97), and comparing with it counts changes main
+# took since as the pull request's.
+BASE=$(git rev-parse HEAD^1) || exit 1
 
 # The policy follows the baseline's version, not the head's: the pull
 # request that takes the crate to 1.0 is still judged by pre-1.0 rules.
@@ -62,16 +70,41 @@ if grep -vxF -f head-api.txt base-api.txt > removed-api.txt; then
     breaking=1
 fi
 
+# The other stable surfaces (RELEASE.md, "What 1.0 keeps stable"), each
+# against the base's: the wasm bindings the viewer calls, the Python
+# package's type stubs (which CI's stubtest holds to the built wheel), and
+# the JSON the CLIs and the Python package print. Exit 100 is a verdict,
+# anything else a check that could not run.
+surface() {
+    "$@"
+    case $? in
+        0) ;;
+        100) breaking=1 ;;
+        *)
+            echo "::error::$* could not run"
+            exit 1
+            ;;
+    esac
+}
+work="${RUNNER_TEMP:-/tmp}/semver-surfaces"
+mkdir -p "$work/base"
+git show "$BASE:rvt-wasm/src/lib.rs" > "$work/base-wasm.rs" || exit 1
+git show "$BASE:python/rvt/__init__.pyi" > "$work/base-stubs.pyi" || exit 1
+git archive "$BASE" docs/schemas | tar -x -C "$work/base" || exit 1
+surface python3 tools/ci/wasm-api.py compat "$work/base-wasm.rs" rvt-wasm/src/lib.rs
+surface python3 tools/ci/python-api-compat.py "$work/base-stubs.pyi" python/rvt/__init__.pyi
+surface python3 tools/ci/schema-compat.py "$work/base/docs/schemas" docs/schemas
+
 if [ "$breaking" -eq 0 ]; then
-    echo "The stable API has no breaking change against the base."
+    echo "The stable surfaces have no breaking change against the base."
     exit 0
 fi
 title=$(gh api "repos/$REPO/pulls/$PR" --jq .title)
 body=$(gh api "repos/$REPO/pulls/$PR" --jq '.body // ""')
 if printf '%s\n' "$title" | grep -qE '^[a-z]+(\([^)]*\))?!:' \
     || printf '%s\n' "$body" | grep -qE '^BREAKING[ -]CHANGE:'; then
-    echo "::notice::The stable API has a breaking change (above), and the pull request announces it."
+    echo "::notice::A stable surface has a breaking change (above), and the pull request announces it."
     exit 0
 fi
-echo "::error::The stable API has a breaking change (above) that the pull request does not announce. Mark the title type(scope)!: or undo the change, then re-run this job."
+echo "::error::A stable surface has a breaking change (above) that the pull request does not announce. Mark the title type(scope)!: or undo the change, then re-run this job."
 exit 1

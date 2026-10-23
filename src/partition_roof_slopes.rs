@@ -33,6 +33,7 @@
 //! the roofs of `R2025_Models.zip` (#356: sheds, a gable, hips, L-shaped hips)
 //! every defining edge and its angle match Revit's own IFC export.
 
+use crate::le_bytes;
 use crate::{Result, RevitFile};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -52,16 +53,6 @@ pub struct EdgeSlope {
     /// How far the edge's plane is raised at the edge, feet: the f64 at
     /// +0x3b on 2025 (RE-199), 0 on 2024, where that f64 is −rise/run.
     pub plate_offset_feet: f64,
-}
-
-fn f64_at(buf: &[u8], at: usize) -> Option<f64> {
-    buf.get(at..at.checked_add(8)?)
-        .map(|s| f64::from_le_bytes(s.try_into().expect("8 bytes")))
-}
-
-fn u32_at(buf: &[u8], at: usize) -> Option<u32> {
-    buf.get(at..at.checked_add(4)?)
-        .map(|s| u32::from_le_bytes(s.try_into().expect("4 bytes")))
 }
 
 /// The slope block of a roof sketch line, from its data, as Revit 2024
@@ -84,12 +75,12 @@ pub fn edge_slope_in(data: &[u8], revit_version: u32) -> Option<EdgeSlope> {
         if zeros.iter().any(|&b| b != 0) {
             return None;
         }
-        let angle = f64_at(data, at.checked_sub(0x18)?)?;
+        let angle = le_bytes::f64_at(data, at.checked_sub(0x18)?)?;
         if !(angle.is_finite() && angle > 0.0 && angle < std::f64::consts::FRAC_PI_2) {
             return None;
         }
         let small = i64::from_le_bytes(data.get(at + 0x20..at + 0x28)?.try_into().ok()?);
-        if !(-64..=-1).contains(&small) || u32_at(data, at + 0x2c)? != 7 {
+        if !(-64..=-1).contains(&small) || le_bytes::u32_at(data, at + 0x2c)? != 7 {
             return None;
         }
         let flags = data.get(at + 0x30..at + 0x34)?;
@@ -99,14 +90,14 @@ pub fn edge_slope_in(data: &[u8], revit_version: u32) -> Option<EdgeSlope> {
             _ => return None,
         };
         if defines_slope {
-            let rise_over_run = f64_at(data, at + 0x3b)?;
+            let rise_over_run = le_bytes::f64_at(data, at + 0x3b)?;
             let recorded = revit_version == 2025 || (rise_over_run + angle.tan()).abs() <= 1e-9;
             if !recorded {
                 return None;
             }
         }
         let plate_offset_feet = match revit_version {
-            2025 => f64_at(data, at + 0x3b).filter(|v| v.is_finite())?,
+            2025 => le_bytes::f64_at(data, at + 0x3b).filter(|v| v.is_finite())?,
             _ => 0.0,
         };
         Some(EdgeSlope {
@@ -230,15 +221,21 @@ pub fn arrow_heights(data: &[u8]) -> Option<ArrowHeights> {
             _ => return None,
         };
         let base = at.checked_sub(0x28)?;
-        let angle = f64_at(data, base + 0x20)?;
+        let angle = le_bytes::f64_at(data, base + 0x20)?;
         if !(angle.is_finite() && angle > 0.0 && angle < std::f64::consts::FRAC_PI_2) {
             return None;
         }
-        let levels = [f64_at(data, base + 0x10)?, f64_at(data, base + 0x18)?];
+        let levels = [
+            le_bytes::f64_at(data, base + 0x10)?,
+            le_bytes::f64_at(data, base + 0x18)?,
+        ];
         if levels != [0.0, 0.0] {
             return None;
         }
-        let (tail_feet, head_feet) = (f64_at(data, base)?, f64_at(data, base + 0x08)?);
+        let (tail_feet, head_feet) = (
+            le_bytes::f64_at(data, base)?,
+            le_bytes::f64_at(data, base + 0x08)?,
+        );
         (tail_feet.is_finite() && head_feet.is_finite() && (by_angle || head_feet != tail_feet))
             .then_some(ArrowHeights {
                 tail_feet,
@@ -315,7 +312,7 @@ pub const FASCIA_DEPTH_NEXT_ID: i64 = -1_001_711;
 /// (50 mm); a two-cut rafter's plumb face at the eave is that tall.
 pub fn fascia_depth(data: &[u8]) -> Option<f64> {
     let at = memchr::memmem::find(data, &FASCIA_DEPTH_NEXT_ID.to_le_bytes())?;
-    f64_at(data, at.checked_sub(8)?).filter(|v| v.is_finite() && (0.0..100.0).contains(v))
+    le_bytes::f64_at(data, at.checked_sub(8)?).filter(|v| v.is_finite() && (0.0..100.0).contains(v))
 }
 
 /// Each roof's [`fascia_depth`], by ElementId, from its element data; a

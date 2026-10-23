@@ -23,6 +23,7 @@ use serde::{Deserialize, Serialize};
 /// Coarse encoding classification for a `TransmissionData` payload.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[non_exhaustive]
 pub enum TransmissionEncoding {
     /// Stream missing or zero-length.
     Empty,
@@ -35,6 +36,7 @@ pub enum TransmissionEncoding {
 /// One opportunistic extract from a UTF-16LE payload (research triage).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
+#[non_exhaustive]
 pub enum TransmissionExtract {
     /// UUID / GUID-shaped token (8-4-4-4-12 hex).
     Uuid { value: String },
@@ -46,6 +48,7 @@ pub enum TransmissionExtract {
 
 /// Detect + opportunistic extract summary for `TransmissionData`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct TransmissionDataProbe {
     pub encoding: TransmissionEncoding,
     pub byte_len: usize,

@@ -129,6 +129,11 @@ fn render(inst: &ADocumentInstance) -> Vec<OutField> {
                 kind: "bytes".into(),
                 value: serde_json::json!({ "len": b.len() }),
             },
+            _ => OutField {
+                name: name.clone(),
+                kind: "unknown".into(),
+                value: serde_json::Value::Null,
+            },
         })
         .collect()
 }

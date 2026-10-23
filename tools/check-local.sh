@@ -23,6 +23,7 @@ Required gates (always run):
   cargo build --workspace --all-targets --all-features
   cargo test --profile ci --doc     (the API docs' examples, on corpus/tier1)
   tools/ci/verify-real-files.sh     (real-file, CLI, contract targets only)
+  cargo run --example basics_*      (the user examples, on corpus/tier1)
 
 Optional gates (opt-in; fail clearly when prerequisites are missing):
   --viewer         viewer/ pnpm typecheck + build (no network install)
@@ -114,6 +115,12 @@ run env RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --lib
 run cargo build --workspace --all-targets --all-features
 run cargo test --profile ci --doc
 run tools/ci/verify-real-files.sh
+run cargo run --profile ci --example basics_inspect
+run cargo run --profile ci --example basics_elements
+basics_out="$(mktemp -d)"
+run cargo run --profile ci --example basics_export -- \
+    corpus/tier1/architectural-2024/architectural-2024.rvt "$basics_out"
+rm -rf "$basics_out"
 
 # --- optional gates ---------------------------------------------------------
 

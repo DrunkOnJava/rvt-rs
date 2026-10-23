@@ -10,9 +10,8 @@ The current support boundary is tracked in the
 [supported MVP input profile](supported-profile.md). The machine-readable
 [executable support matrix](support-matrix.json) (schema:
 [`support-matrix.schema.json`](schemas/support-matrix.schema.json)) is the
-checked-in capability ceiling for audit controls COR-001 / TEST-001 /
-DOC-001 — statuses there must stay honest and must not claim
-converter-grade typed recovery. Keep that matrix, this page, the README,
+checked-in capability ceiling: `tests/support_matrix.rs` keeps its
+statuses honest, and none may claim converter-grade typed recovery. Keep that matrix, this page, the README,
 and the viewer support matrix aligned.
 
 **Verification protocol:** what "verified" means here is defined in
@@ -42,11 +41,10 @@ alignment" section of `docs/verification-protocol.md`. The umbrella repository
 is [DrunkOnJava/octetproof](https://github.com/DrunkOnJava/octetproof); the
 second (RVT → DWG) edge is still pending a Revit export session.
 
-**Research program pointer:** the governing
+**Research program pointer:** the
 [unified research report](research/unified-research-report.md) (rev 1.1)
-sequences Phase 0 product readiness → Phase 1 identity/evidence contracts →
-Phase 2 ES ElementId remapping oracle (H-ES5). Phase 2 fixture generation
-requires a Revit-hosted API oracle and is **not** available on Cloud VMs.
+sets out the research on remapping ES ElementIds, whose fixtures
+need a Revit-hosted API oracle that CI does not have.
 ES remapping is **not** a shipped capability; default IFC omits ES edges.
 Coordination mirror: [Discussion #112 notes](disc-112-coordination.md).
 
@@ -92,7 +90,7 @@ named where the file defines them (RE-207); most are not written to IFC.
 It is not a converter for arbitrary models: most parameters, family
 geometry (except the experimental `--saved-meshes` option, which draws a
 Revit 2024, 2025 or 2026 family instance from the mesh Revit saved for its
-display, RE-78, B77), roofs by extrusion or over a T or U footprint, the boundaries of
+display, RE-78), roofs by extrusion or over a T or U footprint, the boundaries of
 rooms whose stored solid does not close, opening profiles and phase
 filtering are not decoded, and rvt-rs does not edit
 Revit model data.

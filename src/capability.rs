@@ -19,6 +19,7 @@ pub const SUPPORT_MATRIX_JSON: &str = include_str!("../docs/support-matrix.json"
 /// How rvt-rs reads a Revit release's element records (#871): the
 /// [`SUPPORT_MATRIX_JSON`] row that holds them and that row's status.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct ReleaseSupport {
     /// The row's status: `verified`, `partial` or `experimental`, or
     /// `unsupported` where no element records of the release are read.
@@ -67,6 +68,7 @@ pub fn release_support(revit_version: u32) -> ReleaseSupport {
 /// Manifest status vocabulary (subset of support-matrix + ES schema).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[non_exhaustive]
 pub enum CapabilityStatus {
     Unsupported,
     Research,
@@ -89,6 +91,7 @@ impl CapabilityStatus {
 
 /// One capability row in the doctor / CLI snapshot.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct CapabilityRecord {
     pub capability_id: String,
     pub status: CapabilityStatus,
@@ -105,6 +108,7 @@ pub struct CapabilityRecord {
 
 /// Versioned capability manifest for CLI / doctor emission.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct CapabilityManifest {
     pub schema_version: u32,
     pub manifest_id: String,
@@ -239,6 +243,7 @@ impl CapabilityManifest {
 /// Evidence ceiling labels from the unified research report (§2).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+#[non_exhaustive]
 pub enum EvidenceTier {
     /// Speculative / untested hypothesis.
     E0,
@@ -276,6 +281,7 @@ impl EvidenceTier {
 /// Isolated relation domain. Edges must not silently migrate across domains.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[non_exhaustive]
 pub enum RelationDomain {
     /// ES-held ElementId / reference candidates.
     EsRefGraph,
@@ -313,6 +319,7 @@ impl RelationDomain {
 
 /// Registry of known relation domains with honesty notes.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct RelationDomainRegistry {
     pub domains: Vec<RelationDomainEntry>,
     pub experimental: bool,
@@ -321,6 +328,7 @@ pub struct RelationDomainRegistry {
 
 /// One registered domain row.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct RelationDomainEntry {
     pub domain: RelationDomain,
     pub id: String,
@@ -333,6 +341,7 @@ pub struct RelationDomainEntry {
 /// Domain promotion status (intentionally coarse).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[non_exhaustive]
 pub enum DomainStatus {
     /// Architecture stub only — not wired to product claims.
     Experimental,
