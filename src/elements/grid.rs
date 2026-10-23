@@ -86,7 +86,7 @@ pub struct Grid {
     pub end: Option<Point3>,
     pub show_head_start: Option<bool>,
     pub show_head_end: Option<bool>,
-    pub type_id: Option<u32>,
+    pub type_id: Option<crate::ElementId>,
 }
 
 impl Grid {
@@ -110,7 +110,9 @@ impl Grid {
                 ("elevation", InstanceField::Float { value, .. }) => elev = Some(*value),
                 ("showheadstart", InstanceField::Bool(b)) => out.show_head_start = Some(*b),
                 ("showheadend", InstanceField::Bool(b)) => out.show_head_end = Some(*b),
-                ("typeid", InstanceField::ElementId { id, .. }) => out.type_id = Some(*id),
+                ("typeid", InstanceField::ElementId { id, .. }) => {
+                    out.type_id = Some(crate::ElementId::from(*id))
+                }
                 _ => {}
             }
         }
@@ -145,7 +147,7 @@ pub struct GridType {
     pub name: Option<String>,
     pub bubble_location: Option<BubbleLocation>,
     pub line_weight: Option<u32>,
-    pub line_pattern_id: Option<u32>,
+    pub line_pattern_id: Option<crate::ElementId>,
 }
 
 impl GridType {
@@ -161,7 +163,7 @@ impl GridType {
                     out.line_weight = Some(*value as u32);
                 }
                 ("linepatternid" | "patternid", InstanceField::ElementId { id, .. }) => {
-                    out.line_pattern_id = Some(*id);
+                    out.line_pattern_id = Some(crate::ElementId::from(*id));
                 }
                 _ => {}
             }

@@ -509,7 +509,7 @@ fn score_candidate(
         consumed_end = offset + STANDARD_RECORD_MIN_SIZE;
         if let Some(trailer) = ArcWallRecord::decode_trailer(buf, offset) {
             if let Some(id) = trailer.element_id {
-                element_id = Some(id);
+                element_id = id.as_u32();
                 confidence = 0.95;
                 consumed_end = offset + crate::arc_wall_record::STANDARD_TRAILER_DECODE_END;
             }

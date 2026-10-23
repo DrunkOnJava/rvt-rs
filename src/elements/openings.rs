@@ -123,9 +123,9 @@ impl ElementDecoder for WindowDecoder {
 struct OpeningCommon {
     location: Option<Point3>,
     rotation_radians: Option<f64>,
-    level_id: Option<u32>,
-    host_id: Option<u32>,
-    symbol_id: Option<u32>,
+    level_id: Option<crate::ElementId>,
+    host_id: Option<crate::ElementId>,
+    symbol_id: Option<crate::ElementId>,
 }
 
 fn collect_common(decoded: &DecodedElement) -> OpeningCommon {
@@ -142,11 +142,13 @@ fn collect_common(decoded: &DecodedElement) -> OpeningCommon {
                 out.rotation_radians = Some(*value);
             }
             ("levelid" | "hostlevelid", InstanceField::ElementId { id, .. }) => {
-                out.level_id = Some(*id);
+                out.level_id = Some(crate::ElementId::from(*id));
             }
-            ("hostid", InstanceField::ElementId { id, .. }) => out.host_id = Some(*id),
+            ("hostid", InstanceField::ElementId { id, .. }) => {
+                out.host_id = Some(crate::ElementId::from(*id))
+            }
             ("symbolid" | "typeid" | "familysymbolid", InstanceField::ElementId { id, .. }) => {
-                out.symbol_id = Some(*id);
+                out.symbol_id = Some(crate::ElementId::from(*id));
             }
             _ => {}
         }
@@ -161,9 +163,9 @@ fn collect_common(decoded: &DecodedElement) -> OpeningCommon {
 #[derive(Debug, Clone, PartialEq, Default)]
 #[non_exhaustive]
 pub struct Door {
-    pub level_id: Option<u32>,
-    pub host_id: Option<u32>,
-    pub symbol_id: Option<u32>,
+    pub level_id: Option<crate::ElementId>,
+    pub host_id: Option<crate::ElementId>,
+    pub symbol_id: Option<crate::ElementId>,
     pub location: Option<Point3>,
     pub rotation_radians: Option<f64>,
     pub flip_hand: Option<bool>,
@@ -207,9 +209,9 @@ impl Door {
 /// Typed view of a decoded Window.
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct Window {
-    pub level_id: Option<u32>,
-    pub host_id: Option<u32>,
-    pub symbol_id: Option<u32>,
+    pub level_id: Option<crate::ElementId>,
+    pub host_id: Option<crate::ElementId>,
+    pub symbol_id: Option<crate::ElementId>,
     pub location: Option<Point3>,
     pub rotation_radians: Option<f64>,
     /// Distance from host level's elevation up to the windowsill.

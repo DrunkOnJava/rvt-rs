@@ -32,9 +32,9 @@ use crate::walker::{DecodedElement, InstanceField};
 struct FamilyCommon {
     location: Option<Point3>,
     rotation_radians: Option<f64>,
-    level_id: Option<u32>,
-    host_id: Option<u32>,
-    symbol_id: Option<u32>,
+    level_id: Option<crate::ElementId>,
+    host_id: Option<crate::ElementId>,
+    symbol_id: Option<crate::ElementId>,
 }
 
 fn collect_common(decoded: &DecodedElement) -> FamilyCommon {
@@ -51,11 +51,13 @@ fn collect_common(decoded: &DecodedElement) -> FamilyCommon {
                 out.rotation_radians = Some(*value);
             }
             ("levelid" | "hostlevelid", InstanceField::ElementId { id, .. }) => {
-                out.level_id = Some(*id);
+                out.level_id = Some(crate::ElementId::from(*id));
             }
-            ("hostid", InstanceField::ElementId { id, .. }) => out.host_id = Some(*id),
+            ("hostid", InstanceField::ElementId { id, .. }) => {
+                out.host_id = Some(crate::ElementId::from(*id))
+            }
             ("symbolid" | "typeid" | "familysymbolid", InstanceField::ElementId { id, .. }) => {
-                out.symbol_id = Some(*id);
+                out.symbol_id = Some(crate::ElementId::from(*id));
             }
             _ => {}
         }
@@ -70,9 +72,9 @@ fn collect_common(decoded: &DecodedElement) -> FamilyCommon {
 #[derive(Debug, Clone, PartialEq, Default)]
 #[non_exhaustive]
 pub struct GenericModel {
-    pub level_id: Option<u32>,
-    pub host_id: Option<u32>,
-    pub symbol_id: Option<u32>,
+    pub level_id: Option<crate::ElementId>,
+    pub host_id: Option<crate::ElementId>,
+    pub symbol_id: Option<crate::ElementId>,
     pub location: Option<Point3>,
     pub rotation_radians: Option<f64>,
     pub category_name: Option<String>,
@@ -104,9 +106,9 @@ impl GenericModel {
 #[derive(Debug, Clone, PartialEq, Default)]
 #[non_exhaustive]
 pub struct Mass {
-    pub level_id: Option<u32>,
-    pub host_id: Option<u32>,
-    pub symbol_id: Option<u32>,
+    pub level_id: Option<crate::ElementId>,
+    pub host_id: Option<crate::ElementId>,
+    pub symbol_id: Option<crate::ElementId>,
     pub location: Option<Point3>,
     pub rotation_radians: Option<f64>,
 }
