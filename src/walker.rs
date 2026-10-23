@@ -57,7 +57,7 @@ pub enum InstanceField {
     /// 16-byte GUID / UUID.
     Guid([u8; 16]),
     /// UTF-16LE length-prefixed string (both schema-encoded forms).
-    String(std::string::String),
+    String(String),
     /// Generic vector of homogeneous `InstanceField` values. Wire:
     /// `[u32 count][count × element]` where element layout depends on
     /// the vector's element FieldType.
@@ -485,24 +485,24 @@ pub fn encode_instance(decoded: &DecodedElement, schema: &formats::ClassEntry) -
 pub struct ElementProvenance {
     /// Stream path inside the OLE container (e.g. `Global/Latest`,
     /// `partition:/BasicFileInfo`-adjacent partition name).
-    pub source_stream: Option<std::string::String>,
+    pub source_stream: Option<String>,
     /// Absolute byte offset of the record in that stream (often
     /// matches [`DecodedElement::byte_range`].start).
     pub source_offset: Option<usize>,
     /// Record family: `schema_instance`, `partition_arcwall`,
     /// `partition_schema_mvp`, etc.
-    pub record_kind: Option<std::string::String>,
+    pub record_kind: Option<String>,
     /// Decoder identity (`LevelDecoder`, `generic_decode_instance`,
     /// `ArcWallRecord`, `partition_schema_mvp::floor_plan_loop`, …).
-    pub decoder: Option<std::string::String>,
+    pub decoder: Option<String>,
     /// Trust score in `[0.0, 1.0]`. Unspecified constructors default
     /// to `1.0` so legacy test fixtures stay visible until they set
     /// an honest score.
     pub confidence: f32,
     /// Schema / MVP fields that were required but absent.
-    pub missing_required_fields: Vec<std::string::String>,
+    pub missing_required_fields: Vec<String>,
     /// Non-fatal decode notes.
-    pub warnings: Vec<std::string::String>,
+    pub warnings: Vec<String>,
 }
 
 impl Default for ElementProvenance {
@@ -553,7 +553,7 @@ impl ElementProvenance {
         kind: &str,
         decoder: &str,
         confidence: f32,
-        warnings: impl IntoIterator<Item = impl Into<std::string::String>>,
+        warnings: impl IntoIterator<Item = impl Into<String>>,
     ) -> Self {
         Self {
             source_stream: Some(stream.into()),
@@ -594,10 +594,10 @@ pub struct DecodedElement {
     /// ElementId of this instance, if known.
     pub id: Option<u32>,
     /// Class name ("Wall", "Floor", "Level", etc.).
-    pub class: std::string::String,
+    pub class: String,
     /// Ordered list of `(field_name, value)` — one per declared
     /// schema field, populated in schema order.
-    pub fields: Vec<(std::string::String, InstanceField)>,
+    pub fields: Vec<(String, InstanceField)>,
     /// Byte range in the decompressed stream that this element's
     /// instance data occupies. For building a HandleIndex and for
     /// debugging byte-level decoding issues.

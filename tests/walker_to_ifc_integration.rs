@@ -425,9 +425,7 @@ fn arcwall_decoder_yields_ifcwall_on_einhoven() -> Result<()> {
         .entities
         .iter()
         .filter_map(|e| match e {
-            rvt::ifc::entities::IfcEntity::BuildingElement { ifc_type, .. } => {
-                Some(ifc_type.as_str())
-            }
+            IfcEntity::BuildingElement { ifc_type, .. } => Some(ifc_type.as_str()),
             _ => None,
         })
         .filter(|t| *t == "IFCWALL")
@@ -443,7 +441,7 @@ fn arcwall_decoder_yields_ifcwall_on_einhoven() -> Result<()> {
         .filter(|e| {
             matches!(
                 e,
-                rvt::ifc::entities::IfcEntity::BuildingElement {
+                IfcEntity::BuildingElement {
                     ifc_type,
                     location_feet: Some(_),
                     extrusion: Some(_),
@@ -471,7 +469,7 @@ fn arcwall_decoder_yields_ifcwall_on_einhoven() -> Result<()> {
         .filter(|e| {
             matches!(
                 e,
-                rvt::ifc::entities::IfcEntity::BuildingElement {
+                IfcEntity::BuildingElement {
                     ifc_type,
                     storey_index: Some(_),
                     ..
@@ -487,7 +485,7 @@ fn arcwall_decoder_yields_ifcwall_on_einhoven() -> Result<()> {
         .entities
         .iter()
         .filter(|e| match e {
-            rvt::ifc::entities::IfcEntity::BuildingElement {
+            IfcEntity::BuildingElement {
                 ifc_type,
                 property_set: Some(pset),
                 ..
@@ -577,7 +575,7 @@ fn arcwall_2024_project_does_not_run_2023_decoder() -> Result<()> {
         .entities
         .iter()
         .filter_map(|e| match e {
-            rvt::ifc::entities::IfcEntity::BuildingElement { name, .. } => Some(name.as_str()),
+            IfcEntity::BuildingElement { name, .. } => Some(name.as_str()),
             _ => None,
         })
         .filter(|name| name.starts_with("ArcWall-"))

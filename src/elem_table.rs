@@ -30,6 +30,7 @@
 //! tail (#152, #553). A 12-byte implicit layout from `0x30` remains only as
 //! the fallback for a table neither record size fits.
 
+use crate::le_bytes;
 use crate::{Error, Result, RevitFile, compression, streams::GLOBAL_ELEM_TABLE};
 use serde::{Deserialize, Serialize};
 
@@ -170,11 +171,6 @@ fn record_fields(stride: usize) -> Option<(usize, usize, usize)> {
     }
 }
 
-fn u32_at(d: &[u8], at: usize) -> Option<u32> {
-    let bytes = d.get(at..at.checked_add(4)?)?;
-    Some(u32::from_le_bytes(bytes.try_into().ok()?))
-}
-
 /// Detect the record layout: the record size (28 or 40 bytes) at which the
 /// stated number of records fits from `0x06` with ids rising over the whole
 /// table. When both fit equally, the one that leaves the shorter tail wins
@@ -205,7 +201,7 @@ pub fn detect_layout(d: &[u8]) -> ElemTableLayout {
         let mut previous = None;
         let mut rises = 0;
         for k in 0..count {
-            let id = u32_at(d, RECORDS_ORIGIN + k * stride + element_id_at)?;
+            let id = le_bytes::u32_at(d, RECORDS_ORIGIN + k * stride + element_id_at)?;
             if previous.is_some_and(|p| id > p) {
                 rises += 1;
             }
@@ -266,14 +262,18 @@ pub fn parse_records_from_bytes(
         };
         let (id_primary, id_secondary, owner_id) = match layout.framing {
             RecordFraming::Implicit => {
-                let (Some(a), Some(b)) = (u32_at(record, 0), u32_at(record, 4)) else {
+                let (Some(a), Some(b)) = (le_bytes::u32_at(record, 0), le_bytes::u32_at(record, 4))
+                else {
                     break;
                 };
                 (a, b, None)
             }
             RecordFraming::Explicit { marker_len } => {
                 let second_at = record_fields(layout.stride).map_or(4, |(second, _, _)| second);
-                let (Some(a), Some(b)) = (u32_at(record, 0), u32_at(record, second_at)) else {
+                let (Some(a), Some(b)) = (
+                    le_bytes::u32_at(record, 0),
+                    le_bytes::u32_at(record, second_at),
+                ) else {
                     break;
                 };
                 (a, b, owner_field(record, layout.marker_offset, marker_len))

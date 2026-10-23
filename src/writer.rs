@@ -369,7 +369,7 @@ pub fn write_with_patches(src: &Path, dst: &Path, patches: &[StreamPatch]) -> Re
         path: Some(tmp_path.clone()),
     };
 
-    let out_file = std::fs::OpenOptions::new()
+    let out_file = OpenOptions::new()
         .read(true)
         .write(true)
         .create(true)
