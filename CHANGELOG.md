@@ -15,6 +15,16 @@ All notable changes will be documented here. This project follows
   finds it. `gh attestation verify <archive> -R DrunkOnJava/rvt-rs` works as
   before.
 
+- **Three examples show the library end to end (#872).**
+  `cargo run --example basics_inspect -- model.rvt` reads what a file is,
+  `basics_elements` lists its building elements by IFC type with their
+  ElementIds,
+  and `basics_export` writes IFC4, glTF, a CSV schedule and the export
+  diagnostics. Each runs on the synthetic project in `corpus/tier1/` without
+  an argument, and CI runs all three on it and on Einhoven, a real
+  Revit 2023 project (MIT), where they must list and export elements. `examples/README.md` tells them apart
+  from the research probes, and the README links them.
+
 - **Gable, hip and slope-arrow roofs are drawn as their planes, and Revit
   2025 roofs slope (#356, RE-199).** A footprint roof with more than one
   edge that defines a slope is drawn as its edges' planes, each rising from
