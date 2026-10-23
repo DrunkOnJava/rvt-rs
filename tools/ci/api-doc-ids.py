@@ -8,9 +8,10 @@ Python guide.
 The crate root tells docs.rs readers that every `RE-NN` is written up in
 `reports/**/RE-NN-*.md`, and that `#NNN` is an issue or pull request; those
 are the only tracker ids the docs use. Backlog and task ids (`B55`,
-`SEC-12`, `VW1-13`), work-plan labels ("Lane C", "Phase 4d", "the attack
-plan") mean nothing outside the project: one that is a citation belongs in a
-`// Tracker:` comment beside the item. Code spans and quoted strings are
+`SEC-12`, `VW1-13`, audit items such as "P0 item 4") and work-plan labels
+("Lane C", "Phase 4d", "spike 257", "the attack plan") mean nothing
+outside the project: one that is a citation belongs in a `// Tracker:`
+comment beside the item. Code spans and quoted strings are
 skipped, so a Revit phase named "Phase 1" stays.
 """
 
@@ -30,7 +31,7 @@ def has_report(cited):
 planning = re.compile(
     r"\b(?:Lane (?:[A-Z]|One|Two|Three|Four|Five|Six|Seven)"
     r"|Phase (?:[A-D]|\d+[a-z]?(?:\.\d+)?)"
-    r"|[Aa]ttack[- ]plan"
+    r"|[Aa]ttack[- ]plan|[Ss]pike \d+|VW\d+(?:-\d+)?|[Aa]udit P[0-3]|P[0-3] items?|Finding \d+|PARSE-\d+"
     r"|B\d{2,3}|SEC-\d+|VW\d-\d+|L5B-\d+|WRT-\d+|IFC-\d+|GEO-\d+|ELEM-\d+|API-\d+|VAL-\d+|M\d-\d+)\b"
 )
 missing = {}

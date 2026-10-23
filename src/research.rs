@@ -35,7 +35,7 @@
 //! - [`partition_mep_systems`]: MEP systems and their members (RE-162, #528)
 //! - [`partition_name_candidates`]: Partition UTF-16LE display-name candidates (RE-15, #86)
 //! - [`partition_names`]: Family and type names from partition name entries (RE-38)
-//! - [`partition_phases`]: Phase names, and the phase an element was created in (spike 257)
+//! - [`partition_phases`]: Phase names, and the phase an element was created in (#755)
 //! - [`partition_pipe_axes`]: Pipes as their cylinders, from their connector entries (RE-131, #96)
 //! - [`partition_roof_slopes`]: Roof edges' slopes (RE-56)
 //! - [`partition_room_boundaries`]: Room plan outlines from the faces of each room's stored solid (RE-101)

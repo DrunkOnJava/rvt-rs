@@ -44,8 +44,7 @@ pub const DEFAULT_MAX_STREAM_BYTES: u64 = 256 * 1024 * 1024;
 /// pathological or hostile input that would otherwise force
 /// unbounded memory allocation.
 ///
-/// See audit P0 items 4 and 5 (AUDIT-2026-04-19.md) for the
-/// rationale — RVT is a file-upload target, and bounded resource
+/// RVT is a file-upload target, and bounded resource
 /// consumption is a DoS-safety requirement, not a nice-to-have.
 #[derive(Debug, Clone, Copy)]
 pub struct OpenLimits {

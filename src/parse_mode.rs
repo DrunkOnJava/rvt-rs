@@ -1,6 +1,6 @@
 //! Strict vs lossy parse modes + diagnostics.
 //!
-//! Audit P1 identified the single most important API discipline
+//! An April 2026 audit found the most important API discipline
 //! problem in rvt-rs: the same method (e.g. `RevitFile::summarize`)
 //! sometimes returned partial results with errors silently swallowed,
 //! and sometimes returned clean results — with no way for callers to
