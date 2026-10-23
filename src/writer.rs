@@ -47,6 +47,22 @@ use std::path::Path;
 /// byte-for-byte. For equivalence, check byte-level equality of the
 /// decompressed streams on both sides — not the raw file bytes, because
 /// OLE sector ordering may differ.
+///
+/// ```
+/// use rvt::RevitFile;
+/// use std::path::Path;
+///
+/// let src = Path::new("corpus/tier1/architectural-2024/architectural-2024.rvt");
+/// let dst = std::env::temp_dir().join(format!("rvt-copy-{}.rvt", std::process::id()));
+/// rvt::writer::copy_file(src, &dst)?;
+/// // Every stream reads back as the source's.
+/// let (mut original, mut copy) = (RevitFile::open(src)?, RevitFile::open(&dst)?);
+/// for name in original.stream_names() {
+///     assert_eq!(original.read_stream(&name)?, copy.read_stream(&name)?);
+/// }
+/// std::fs::remove_file(&dst)?;
+/// # Ok::<(), Box<dyn std::error::Error>>(())
+/// ```
 pub fn copy_file(src: &Path, dst: &Path) -> Result<()> {
     let mut rf = RevitFile::open(src)?;
     let streams = rf.stream_names();
