@@ -57,6 +57,7 @@
           "description": "AProperty* value carriers for this row, then, on Revit 2023 to 2027 files, the saved parameters of the element's native record and its type's (#35, RE-207).",
           "type": "array",
           "items": {
+            "type": "object",
             "anyOf": [
               { "$ref": "#/$defs/savedParameter" },
               { "type": "object", "required": ["name", "source_class"], "additionalProperties": true }
