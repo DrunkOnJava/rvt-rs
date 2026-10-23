@@ -97,7 +97,7 @@ All notable changes will be documented here. This project follows
   Towers 5,134 of the 5,134 elements rvt-rs gives materials have Revit's
   set (3,689 after RE-200). Core Interior exports as before. The material
   names and category styles are memoised, and Snowdon's export takes
-  23 s against 20 s before.
+  23 s against 20 s before. By puzzbobb (#886).
 
 - **A family instance takes the materials its own parameters name (#355).**
   Where a family type's geometry-material map holds no material, #580
@@ -109,7 +109,7 @@ All notable changes will be documented here. This project follows
   Revit's set, 4 before.
   Locally on Snowdon Towers, 232 more elements have Revit's set and none
   fewer. Core Interior, the RE1 models and the other R2025 models export
-  as before.
+  as before. By puzzbobb (#886).
 
 - **A mass whose "Export to IFC As" names an entity is written as it (#864).**
   rvt-rs read no mass instances. The BIM4LCA office's two `VOLUME` masses
