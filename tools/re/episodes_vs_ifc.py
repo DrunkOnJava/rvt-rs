@@ -117,8 +117,24 @@ def main():
     for (at, form), count in offsets.most_common(8):
         print(f"  +{at} ({form}): {count}")
     print(f"episode GUID in no run: {len(missing)}")
-    for tag, global_id, guid in missing[: 60 if args.list else 10]:
+    for tag, global_id, guid in missing[: 20 if args.list else 10]:
         print(f"  {tag} {global_id} episode {guid}")
+
+    # A GlobalId taken from a stored IfcGUID parameter is in the file as text.
+    stored = collections.defaultdict(list)
+    for line in open(args.probe, encoding="utf-8", errors="replace"):
+        parts = line.split()
+        if len(parts) >= 5 and parts[0] == "gid":
+            stored[parts[4]].append((parts[1], int(parts[2]), parts[3], parts[5] if len(parts) > 5 else ""))
+    by_tag = {gid: tag for tag, gid in elements.items()}
+    hits = {gid: stored[gid] for gid in by_tag if gid in stored}
+    print(f"GlobalId-shaped strings in the file: {len(stored)}; Revit's element GlobalIds among them: {len(hits)} of {len(by_tag)}")
+    places = collections.Counter((s, enc) for occ in hits.values() for s, _, enc, _ in occ)
+    for (stream, enc), n in places.most_common(10):
+        print(f"  {stream} {enc}: {n}")
+    for gid, occ in list(hits.items())[: 12 if args.list else 4]:
+        for stream, at, enc, before in occ[:2]:
+            print(f"  {by_tag[gid]} {gid} {stream}+{at} {enc} before={before}")
 
 
 if __name__ == "__main__":

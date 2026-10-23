@@ -17,6 +17,10 @@
 //!   guid <run offset> <index> <32 hex, stored order>
 //!   elemtable <bytes> records=<n | error> len=<record length>
 //!   rec <id_primary> <id_secondary> <raw hex>
+//!   gid <stream> <offset> <utf16|ascii> <string> <hex of the 32 bytes before>
+//!     every 22-character string of IFC's GlobalId alphabet whose first
+//!     character is 0 to 3, in each partition and `Global/Latest`: a GlobalId
+//!     Revit's exporter took from a stored IfcGUID parameter would be one.
 //!
 //! Usage:
 //!   cargo run --profile ci --example probe_re208_episodes_2015 -- FILE.rvt
@@ -48,6 +52,51 @@ fn inflate(rf: &mut RevitFile, name: &str) -> Result<Vec<u8>, String> {
     compression::inflate_at_auto(data)
         .map(|(_, out)| out)
         .map_err(|e| e.to_string())
+}
+
+const GID_ALPHABET: &[u8] = b"0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_$";
+
+fn scan_global_ids(stream: &str, data: &[u8]) {
+    let is_gid = |b: u8| GID_ALPHABET.contains(&b);
+    let before = |at: usize| hex(&data[at.saturating_sub(32)..at]);
+    // ASCII: exactly 22 alphabet bytes, not part of a longer run.
+    let mut i = 0;
+    while i < data.len() {
+        if !is_gid(data[i]) {
+            i += 1;
+            continue;
+        }
+        let start = i;
+        while i < data.len() && is_gid(data[i]) {
+            i += 1;
+        }
+        if i - start == 22 && (b'0'..=b'3').contains(&data[start]) {
+            let text = String::from_utf8_lossy(&data[start..i]);
+            println!("gid {stream} {start} ascii {text} {}", before(start));
+        }
+    }
+    // UTF-16LE: 22 alphabet code units, each followed by a zero byte.
+    for parity in 0..2 {
+        let mut i = parity;
+        while i + 1 < data.len() {
+            if !(is_gid(data[i]) && data[i + 1] == 0) {
+                i += 2;
+                continue;
+            }
+            let start = i;
+            while i + 1 < data.len() && is_gid(data[i]) && data[i + 1] == 0 {
+                i += 2;
+            }
+            if (i - start) / 2 == 22 && (b'0'..=b'3').contains(&data[start]) {
+                let text: String = data[start..i]
+                    .iter()
+                    .step_by(2)
+                    .map(|&b| char::from(b))
+                    .collect();
+                println!("gid {stream} {start} utf16 {text} {}", before(start));
+            }
+        }
+    }
 }
 
 fn main() {
@@ -107,5 +156,22 @@ fn main() {
             }
         }
         Err(error) => println!("elemtable {table_bytes} records=error {error}"),
+    }
+
+    let mut names: Vec<String> = rf
+        .stream_names()
+        .into_iter()
+        .filter(|n| n.starts_with("Partitions/"))
+        .collect();
+    names.push(streams::GLOBAL_LATEST.to_string());
+    for name in names {
+        match rf.inflated_partition(&name) {
+            Ok(inflated) => scan_global_ids(&name, inflated.bytes()),
+            Err(_) => {
+                if let Ok(bytes) = inflate(&mut rf, &name) {
+                    scan_global_ids(&name, &bytes);
+                }
+            }
+        }
     }
 }
