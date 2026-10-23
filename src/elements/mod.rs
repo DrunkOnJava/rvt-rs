@@ -69,6 +69,8 @@ pub mod zones;
 
 pub use simple_decoder::SimpleDecoder;
 
+use std::sync::LazyLock;
+
 use crate::Result;
 use crate::formats;
 use crate::walker::{DecodedElement, ElementDecoder, HandleIndex};
@@ -183,9 +185,16 @@ pub fn all_decoders() -> Vec<Box<dyn ElementDecoder>> {
 /// Returns `None` when the class has no typed decoder in
 /// [`all_decoders`]. ArcWall is never returned here — use
 /// [`arc_wall::decode_at`] instead.
-pub fn decoder_for_class(name: &str) -> Option<Box<dyn ElementDecoder>> {
-    all_decoders().into_iter().find(|d| d.class_name() == name)
+pub fn decoder_for_class(name: &str) -> Option<&'static dyn ElementDecoder> {
+    REGISTRY
+        .iter()
+        .find(|d| d.class_name() == name)
+        .map(Box::as_ref)
 }
+
+/// [`all_decoders`], built once: a lookup allocates nothing, and the walker
+/// looks one up for every typed candidate.
+static REGISTRY: LazyLock<Vec<Box<dyn ElementDecoder>>> = LazyLock::new(all_decoders);
 
 /// Decode instance bytes through the registered typed decoder for
 /// `schema.name`, enforcing wrong-schema rejection.

@@ -158,7 +158,9 @@ All notable changes will be documented here. This project follows
   the type of that name did; `elements::all_decoders()` and
   `decoder_for_class` return the same classes in the same order. A wrong
   schema's error now reads `<class> decoder received wrong schema: ...`.
-  The `cargo generate` element template registers through `SimpleDecoder`
+  `decoder_for_class` returns a `&'static dyn ElementDecoder` from a
+  registry built once, so a lookup no longer builds all 81 decoders. The
+  `cargo generate` element template registers through `SimpleDecoder`
   and no longer generates unit tests.
 
 - **What 1.0 requires is written down.** `docs/release-1.0-criteria.md`
