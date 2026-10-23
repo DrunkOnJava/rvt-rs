@@ -23,7 +23,7 @@
       ],
       "loadable": true,
       "expected_quality": "Geometry",
-      "expected_quality_note": "Real-project wall geometry (decoder baseline in tests/fixtures/project-counts/revit-ifc5-einhoven.json). Not a full typed model: no floors, doors, windows or rooms yet.",
+      "expected_quality_note": "Real-project wall geometry (decoder baseline in tests/fixtures/project-counts/revit-ifc5-einhoven.json). Not a full typed model: no floors, doors or rooms yet.",
       "license": "MIT (magnetar-io/revit-test-datasets)",
       "provenance": "magnetar-io/revit-test-datasets: Revit/Revit_IFC5_Einhoven.rvt",
       "source_candidates": [

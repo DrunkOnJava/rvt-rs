@@ -47,19 +47,18 @@ interface Journey {
   loadTimeout: number;
 }
 
-type Counts = Record<
-  string,
-  { decoder_metric?: string; decoder_expected?: number; decoder_tolerance?: number }
->;
-
 for (const journey of journeys) {
   const source = journey.demoId
     ? path.resolve(__dirname, '../public/demos', journey.file)
     : path.join(corpus, journey.file);
-  const journeyTest = fs.existsSync(source) ? test : test.skip;
+  // Deploy viewer fetches every model and sets RVT_VIEWER_REQUIRE_JOURNEYS,
+  // so a model missing there fails; elsewhere it is a skip.
+  const required = process.env.RVT_VIEWER_REQUIRE_JOURNEYS === '1';
+  const journeyTest = required || fs.existsSync(source) ? test : test.skip;
 
   journeyTest(`the whole journey on ${journey.file}`, async ({ page }) => {
     test.setTimeout(900_000);
+    expect(fs.existsSync(source), `${source} was not staged or fetched`).toBe(true);
 
     // Open.
     await page.goto('/');
@@ -136,19 +135,33 @@ for (const journey of journeys) {
       await expect(shapes.locator('.status-value')).toContainText(String(total));
     }
 
-    // The CLI's pinned counts for this file.
+    // The CLI's pinned counts for this file: its counts, relations and
+    // storeys, each as tests/project_count_fixtures.rs reads them.
     if (!journey.fixture) return;
-    const counts: Counts = JSON.parse(
+    const manifest = JSON.parse(
       fs.readFileSync(path.join(repo, 'tests/fixtures/project-counts', journey.fixture), 'utf8'),
-    ).counts;
+    );
+    type Pin = [string, string | undefined, number | undefined, number];
+    type Section = Record<string, Record<string, unknown>>;
+    const pins = (section: Section | undefined, prefix: string, expected: string): Pin[] =>
+      Object.entries(section ?? {}).map(([name, spec]) => [
+        `${prefix}${name}`,
+        spec.decoder_metric as string | undefined,
+        spec[expected] as number | undefined,
+        (spec.decoder_tolerance as number | undefined) ?? 0,
+      ]);
+    const pinned: Pin[] = [
+      ...pins(manifest.counts, '', 'decoder_expected'),
+      ...pins(manifest.relations, 'relations.', 'decoder_expected_pairs'),
+      ...pins(manifest.storeys, 'storeys.', 'decoder_expected_storeys'),
+    ];
     let checked = 0;
-    for (const [name, count] of Object.entries(counts)) {
-      if (!count.decoder_metric || count.decoder_expected === undefined) continue;
-      const actual = metric(count.decoder_metric, diagnostics, step);
-      const tolerance = count.decoder_tolerance ?? 0;
+    for (const [name, decoderMetric, expected, tolerance] of pinned) {
+      if (!decoderMetric || expected === undefined) continue;
+      const actual = metric(decoderMetric, diagnostics, step);
       expect(
-        Math.abs(actual - count.decoder_expected),
-        `${name}: ${count.decoder_metric} is ${actual}, the CLI's is ${count.decoder_expected}`,
+        Math.abs(actual - expected),
+        `${name}: ${decoderMetric} is ${actual}, the CLI's is ${expected}`,
       ).toBeLessThanOrEqual(tolerance);
       checked += 1;
     }

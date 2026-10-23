@@ -176,6 +176,7 @@ jobs:
         working-directory: viewer
         env:
           RVT_VIEWER_SAMPLE: ../_project_corpus/Revit/Revit_IFC5_Einhoven.rvt
+          RVT_VIEWER_REQUIRE_JOURNEYS: "1"
         run: pnpm run test:browser
 
       # The HTML report and each failed test's trace, kept for 14 days.
