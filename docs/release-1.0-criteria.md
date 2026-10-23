@@ -1,6 +1,7 @@
 # 1.0.0 release criteria
 
-Last measured 2026-10-21, on `main` at `e56245fc`.
+Measured 2026-10-21, on `main` at `e56245fc`; the stability rows S1, S2 and S4
+were measured again on 2026-10-23, in the pull requests that changed them.
 
 1.0.0 is the first release with a stability commitment
 ([`RELEASE.md`](../RELEASE.md#versioning)). Its milestone states the goal: a
@@ -43,7 +44,7 @@ only in a pull request that links the new evidence.
 | | Requirement | Bar | Measured now | Status |
 |---|---|---|---|---|
 | S1 | The stable surface is named ([#873](https://github.com/DrunkOnJava/rvt-rs/issues/873)) | `RELEASE.md` names the surfaces 1.0 commits to (the crate, the Python package, the CLIs and their JSON, the output formats, the wasm API) and those it does not | [`RELEASE.md`](../RELEASE.md#what-10-keeps-stable) names all five and what each leaves out. The crate keeps 27 modules stable; the other 67 are under `rvt::research`, behind the `unstable-research` feature, and `rvt::cli` is hidden. CI fails if a stable item hands out a research type (`unnameable_types` on the default-features build) | **passed** |
-| S2 | Breaking changes are caught (#873) | Each stable surface has a check that fails on an unannounced breaking change | The crate: CI's `semver checks` job compares each pull request's public API with its base (cargo-semver-checks) and fails on a breaking change the title does not mark with `!`. The CLIs: the inventory is checked, and the JSON schema contracts run on Linux with the family corpus, but six of the twelve CLIs that print JSON (`rvt-analyze`, `rvt-capabilities`, `rvt-elem-table`, `rvt-history`, `rvt-ifc-compare`, `rvt-inspect`) have no schema. The Python API, the output formats and the wasm API have no check | **failed** |
+| S2 | Breaking changes are caught (#873) | Each stable surface has a check that fails on an unannounced breaking change | CI's `semver checks` job compares each pull request with its base and fails on a breaking change the title does not mark with `!`: the crate's public API (cargo-semver-checks), the Python type stubs (`tools/ci/python-api-compat.py`; stubtest holds the stubs to the built wheel), the 22 wasm bindings (`tools/ci/wasm-api.py`) and the CLIs' JSON schemas (`tools/ci/schema-compat.py`). All twelve CLIs that print JSON have a schema their output is validated against on Linux with the family corpus. The output formats: IfcOpenShell validates the exports, `rvt-gltf` writes a glTF 2.0 container, the schedules begin with the columns the user guide lists, and every writer gives the same bytes twice on the same file (`tests/reproducible_outputs.rs`, `rvt-ifc` with `SOURCE_DATE_EPOCH`) | **passed** |
 | S3 | The Rust API is documented with runnable examples ([#872](https://github.com/DrunkOnJava/rvt-rs/issues/872)) | docs.rs shows the user entry points, each with an example CI runs | docs.rs builds 0.6.1. The crate-level examples are `no_run`, and `examples/` holds research probes only | **failed** |
 | S4 | The Python API is documented with runnable examples (#872) | Every Python block in [`python.md`](python.md) runs in CI | The 3 runnable blocks run in CI against `corpus/tier1/` (`tests/python/test_docs_python.py`, in the wheel job); the other 18 show a signature or a result shape and are fenced `text` | **passed** |
 
