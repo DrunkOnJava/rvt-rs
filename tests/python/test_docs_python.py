@@ -66,7 +66,9 @@ def test_the_pypi_page_is_the_python_readme_with_absolute_links() -> None:
     readme = (CRATE / "rvt-py/README.md").read_text(encoding="utf-8")
     lines = [line.rstrip() for line in description.strip().splitlines()]
     assert lines == [line.rstrip() for line in readme.strip().splitlines()], "the wheel's description is not rvt-py/README.md"
-    relative = [t for t in re.findall(r"\]\(([^)\s]+)\)", description) if not t.startswith("https://")]
+    targets = re.findall(r"\]\(([^)\s]+)\)", description)
+    targets += re.findall(r"(?m)^\s{0,3}\[[^\]]+\]:\s*<?([^>\s]+)", description)  # reference definitions
+    relative = [t for t in targets if not t.startswith("https://")]
     assert not relative, f"the PyPI page has links PyPI cannot resolve: {relative}"
 
 

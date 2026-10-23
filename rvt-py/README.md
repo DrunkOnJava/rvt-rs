@@ -6,7 +6,7 @@ Read Autodesk Revit files (`.rvt`, `.rfa`, `.rte`, `.rft`) in Python, without Re
 pip install rvt
 ```
 
-One wheel per platform covers Python 3.8 and later, and no Rust toolchain is needed to install it.
+One wheel per platform covers Python 3.8 and later on Linux (x86-64 and ARM64, glibc and musl), macOS (Apple silicon and Intel) and 64-bit Windows, with no Rust toolchain needed. On any other platform pip builds the package from source, which needs a Rust toolchain.
 
 ## Example
 
@@ -22,9 +22,10 @@ f = rvt.RevitFile("model.rvt")
 counts = f.element_counts()
 print(counts["total"], counts["by_class"])
 
-with open("model.ifc", "w") as out:
+with open("model.ifc", "w", encoding="utf-8") as out:
     out.write(f.write_ifc())
-with open("elements.csv", "w") as out:
+# The CSV already ends its rows with \r\n: write it with newline="".
+with open("elements.csv", "w", encoding="utf-8", newline="") as out:
     out.write(f.schedule_csv("elements"))
 
 # What the export approximated or left out, as `rvt-ifc --diagnostics`
