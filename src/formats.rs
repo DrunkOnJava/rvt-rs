@@ -105,7 +105,7 @@ pub struct SchemaDiagnostics {
     /// usually means the full schema for that class lives in another
     /// stream or is implicit.
     pub parent_only_class_count: usize,
-    /// Classes that carry a non-zero `ancestor_tag` (the Q4 addendum read
+    /// Classes that carry a non-zero `ancestor_tag` (the §Q4 addendum read
     /// it as a reference distinct from `parent`; not reproduced, RE-137).
     pub ancestor_tag_count: usize,
     /// Parse candidates skipped for validation reasons. Copied from
@@ -252,7 +252,7 @@ pub struct ClassEntry {
     /// count): the tag of the base's base, the class's grandparent, on
     /// every class that has one on 53 files of 2016 to 2027 (RE-146, #154,
     /// reported by puzzbobb). The parser lands on the base's own base
-    /// reference when the base is defined inline. The Q4 addendum read it
+    /// reference when the base is defined inline. The §Q4 addendum read it
     /// as a distinct ancestor (RE-137 did not reproduce that); see the §Q4
     /// addendum in `docs/rvt-moat-break-reconnaissance.md`.
     ///
@@ -273,7 +273,7 @@ pub struct FieldEntry {
 
 /// Best-effort classification of a field's type encoding (the byte block
 /// that follows a field name in `Formats/Latest`). Derived from the
-/// 2026-04-19 Layer 4c.2 sweeps (Q5 + Q5.1) — see the §Q5 / §Q5.1
+/// 2026-04-19 Layer 4c.2 sweeps — see the §Q5 / §Q5.1
 /// addenda in `docs/rvt-moat-break-reconnaissance.md` for evidence.
 ///
 /// The primary discriminator is the first byte of the encoding:

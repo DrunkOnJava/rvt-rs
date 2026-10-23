@@ -34,7 +34,9 @@ planning = re.compile(
     r"\b(?:Lane (?:[A-Z0-9]|One|Two|Three|Four|Five|Six|Seven|Eight|Nine|Ten|Eleven|Twelve)"
     r"|Phase (?:[A-D]|\d+[a-z]?(?:\.\d+)?)"
     r"|[Aa]ttack[- ]plan|[Ss]pike \d+|VW\d+(?:-\d+)?|[Aa]udit P[0-3]|P[0-3] items?|Finding \d+|PARSE-\d+"
-    r"|Q-\d+|COR-\d+|TEST-\d+|DOC-\d+"
+    r"|Q-\d+|COR-\d+|TEST-\d+|DOC-\d+|WF-\d+"
+    # A bare research-question id; a section of a report is cited as §Q6.5.
+    r"|(?<!§)Q\d+(?:\.\d+)?"
     r"|B\d{2,3}|SEC-\d+|VW\d-\d+|L5B-\d+|WRT-\d+|IFC-\d+|GEO-\d+|ELEM-\d+|API-\d+|VAL-\d+|M\d-\d+)\b"
 )
 missing = {}

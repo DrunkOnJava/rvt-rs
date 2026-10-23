@@ -214,8 +214,10 @@ corpus (MIT, git-LFS); without it, each sub-benchmark emits a
   remain open; contributions welcome.
 - **No per-class decode benchmark.** The 81 schema decoders are validated
   against synthesized schema and bytes, and no benchmark times them. A real
-  project's elements come from its partition element records, which the
-  `project_file` suite reads.
+  project's elements come from its partition element records, and no
+  benchmark times reading those either: the `project_file` suite times
+  opening the file, the summary, the schema, the ElemTable and the
+  `ADocument` walk.
 - **The CLI numbers predate geometry.** They were taken when exports had
   no geometry, per-element materials or `IfcShapeRepresentation`; Revit
   2024 and 2025 exports now carry all three, which costs more per file.

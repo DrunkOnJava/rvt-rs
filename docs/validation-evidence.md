@@ -33,8 +33,11 @@ write:
      least one `IfcBuildingStorey`.
    - The entity counts `rvt-ifc --diagnostics` reports against
      IfcOpenShell's object graph.
-   - `IfcRelContainedInSpatialStructure` coverage: one relation per
-     non-empty storey, covering every exported building element.
+   - `IfcRelContainedInSpatialStructure` coverage: the relations relate
+     only to storeys or the building, between one and the storey count
+     relate to storeys, at most one relates to the building (the elements
+     bound to no storey), and together they relate at least as many
+     elements as the diagnostics count as exported building elements.
    - A unit assignment.
    - Geometry and material limitations stay explicit in the diagnostics,
      and where the export has geometry, matching `IfcProductDefinitionShape`
@@ -51,9 +54,12 @@ write:
    the ones committed under `research/witness/`
    ([`verification-protocol.md`](verification-protocol.md)).
 6. **Predefined types and placements match Revit's.** On the Core Interior
-   export, every `PredefinedType` written must be the value Revit's exporter
-   writes for that type (#220), and two pinned elements' placement must
-   compose to where Revit puts them (#232).
+   export, every `PredefinedType` written must be one of the values Revit's
+   exporter writes for that IFC class (#220). The check compares each
+   element with its class's set of values, not with the value Revit wrote
+   for the same element: Revit's slabs carry both `.FLOOR.` and `.ROOF.`.
+   Two pinned elements' placement must compose to where Revit puts them
+   (#232).
 7. **The full project export, on a narrow surface.** The same three
    witnesses also run against Revit's full Core Interior export. The claimed
    fields are deliberately few; what rvt-rs cannot claim yet is excluded by
