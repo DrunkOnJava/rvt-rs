@@ -187,7 +187,8 @@ pub fn scan_material_appearances(
             let id_at = at + 4;
             let Some(id) = buf
                 .get(id_at..id_at + 8)
-                .map(|s| u64::from_le_bytes(s.try_into().expect("8 bytes")))
+                .and_then(|s| s.first_chunk::<8>())
+                .map(|b| u64::from_le_bytes(*b))
                 .and_then(|id| u32::try_from(id).ok())
                 .filter(|id| declared.contains(id))
             else {
@@ -385,7 +386,8 @@ pub fn scan_material_names(
             let id_at = at + 4;
             let Some(id) = buf
                 .get(id_at..id_at + 8)
-                .map(|s| u64::from_le_bytes(s.try_into().expect("8 bytes")))
+                .and_then(|s| s.first_chunk::<8>())
+                .map(|b| u64::from_le_bytes(*b))
                 .and_then(|id| u32::try_from(id).ok())
                 .filter(|id| declared.contains(id))
             else {
@@ -493,7 +495,8 @@ pub fn scan_category_material(
         for at in memchr::memmem::find_iter(buf, &pattern) {
             if let Some(material) = buf
                 .get(at + pattern.len()..at + pattern.len() + 8)
-                .map(|b| u64::from_le_bytes(b.try_into().expect("8 bytes")))
+                .and_then(|b| b.first_chunk::<8>())
+                .map(|b| u64::from_le_bytes(*b))
             {
                 found.insert(material);
             }
@@ -661,7 +664,9 @@ fn scan_category_material_2023(
         let buf = inflated.bytes();
         for at in memchr::memmem::find_iter(buf, &pattern) {
             let entry = |offset: usize, len: usize| buf.get(at + offset..at + offset + len);
-            let word = entry(8, 4).map(|b| u32::from_le_bytes(b.try_into().expect("4 bytes")));
+            let word = entry(8, 4)
+                .and_then(|b| b.first_chunk::<4>())
+                .map(|b| u32::from_le_bytes(*b));
             if !matches!(word, Some(1 | 2))
                 || entry(12, 4) != Some(&[1, 0, 0, 0][..])
                 || entry(16, 6) != Some(&frame[..])

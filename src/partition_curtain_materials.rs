@@ -68,9 +68,9 @@ pub fn scan_curtain_type_materials(
                 if object.class & 0xffff != tag || object.end < start + at + 8 {
                     continue;
                 }
-                let value = u64::from_le_bytes(
-                    buf[start + at..start + at + 8].try_into().expect("8 bytes"),
-                );
+                let Some(value) = crate::le_bytes::u64_at(buf, start + at) else {
+                    continue;
+                };
                 match u32::try_from(value) {
                     Ok(material) if materials.contains(&material) => {
                         out.insert(object.element_id, material);

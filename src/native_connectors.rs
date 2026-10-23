@@ -57,38 +57,204 @@ pub fn port_type_of_domain(domain: i64) -> &'static str {
     }
 }
 
-/// The IFC4 `FlowDirection` of a port on a connector of Revit's `domain`
-/// (RE-197): `SOURCEANDSINK` for every domain but HVAC and piping, which
-/// alone give a connector a direction in Revit's exporter (revit-ifc
-/// `ConnectorExporter`); measured on electrical connectors, every port of
-/// which is `SOURCEANDSINK` in Revit's exports of the RE1 models and the
-/// BIM4LCA office. `None` for HVAC and piping: their connector's direction
-/// is the family's, which rvt-rs does not read. An electrical connector whose
-/// description sets `Flow=Source` or `Flow=Sink` is exported with that
-/// direction by Revit; rvt-rs does not read the description (#834), so such
-/// a port is written `SOURCEANDSINK`.
-pub fn port_flow_direction_of_domain(domain: i64) -> Option<&'static str> {
-    match domain {
-        1 | 3 => None,
-        _ => Some("SOURCEANDSINK"),
+/// A connector's Flow Direction in its family (RE-212): the `m_int` of this
+/// built-in parameter in the connector's own `FamilyParams`, 1 In, 2 Out and
+/// 0 bidirectional. Piping connectors carry the first, HVAC ones the second.
+const PIPE_FLOW_DIRECTION: i64 = -1_140_248;
+const DUCT_FLOW_DIRECTION: i64 = -1_140_219;
+
+/// The IFC4 `FlowDirection` of a port (RE-212), from its connector's
+/// `domain`, its family's Flow Direction (`family`) and the direction its
+/// instance's connector calculation holds (`calculated`, its `m_eDirection`,
+/// numbered as the family's): what revit-ifc's `ConnectorExporter` writes
+/// from the API's `Connector.Direction`. Only HVAC and piping connectors have
+/// a direction there, so every other domain is `SOURCEANDSINK`, as on every
+/// electrical port of the RE1 models and the BIM4LCA office. An HVAC or
+/// piping connector takes its family's direction where the family sets one,
+/// and its calculated one where the family leaves it bidirectional:
+/// measured on RE1 Plumbing and Mechanical, 224 of 224 family-instance
+/// ports, among them an air handler's piping connector whose calculation
+/// says Out and whose family and Revit's export say In. `None` where either
+/// needed value is not read. An electrical connector whose description sets
+/// `Flow=Source` or `Flow=Sink` is exported with that direction by Revit;
+/// rvt-rs does not read the description (#834), so such a port is written
+/// `SOURCEANDSINK`.
+pub fn port_flow_direction(
+    domain: i64,
+    family: Option<i64>,
+    calculated: Option<i64>,
+) -> Option<&'static str> {
+    if !matches!(domain, 1 | 3) {
+        return Some("SOURCEANDSINK");
+    }
+    match family? {
+        0 => flow_direction_of(calculated?),
+        direction => flow_direction_of(direction),
     }
 }
 
-/// For each of `symbols` that is a `FamilySymbol` with connectors, the
-/// connector indices Revit's export writes ports for, in the symbol's order,
-/// each with its connector's domain. Errs where the native record path does
-/// not read the file's release.
-pub fn symbol_port_indices(
+/// The IFC4 `FlowDirection` a connector direction numbered as a family's
+/// Flow Direction names: 1 In `SINK`, 2 Out `SOURCE`, 0 bidirectional
+/// `SOURCEANDSINK` (RE-212).
+pub fn flow_direction_of(direction: i64) -> Option<&'static str> {
+    match direction {
+        0 => Some("SOURCEANDSINK"),
+        1 => Some("SINK"),
+        2 => Some("SOURCE"),
+        _ => None,
+    }
+}
+
+/// A port Revit's export writes on a family instance.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct InstancePort {
+    /// The connector's index in its symbol.
+    pub index: u32,
+    /// Revit's `Domain` of the connector.
+    pub domain: i64,
+    /// The port's IFC4 `FlowDirection` ([`port_flow_direction`]), `None`
+    /// where it is not read.
+    pub flow_direction: Option<&'static str>,
+}
+
+/// The `m_id64` an ElementId-shaped field holds, as the native records keep
+/// it.
+fn element_id_i64(value: &serde_json::Value) -> Option<i64> {
+    value.get("m_id")?.get("m_id64")?.as_i64()
+}
+
+/// Each connector's Flow Direction in a `Family` record's graph (RE-212), by
+/// connector index. A `ConnectorDataCell` names its own parameters with
+/// `m_oRelevantParams`, an object the record holds after every cell; the
+/// cells' and those `FamilyParams` objects' orders are the same, so the n-th
+/// cell by that reference's offset owns the n-th `FamilyParams` after it.
+/// Empty where the counts differ.
+fn family_flow_directions(graph: &crate::native_parameters::ObjectGraph) -> BTreeMap<i64, i64> {
+    let mut cells: Vec<(u64, i64, i64)> = graph
+        .objects
+        .iter()
+        .filter(|object| object.class_name == "ConnectorDataCell")
+        .filter_map(|cell| {
+            let offset = cell
+                .fields
+                .get("m_oRelevantParams")?
+                .get("offset")?
+                .as_u64()?;
+            let index = cell.fields.get("m_index")?.as_i64()?;
+            let domain = cell.fields.get("m_domain")?.as_i64()?;
+            Some((offset, index, domain))
+        })
+        .collect();
+    cells.sort_unstable();
+    let Some(&(first, _, _)) = cells.first() else {
+        return BTreeMap::new();
+    };
+    let mut params: Vec<&crate::native_parameters::GraphObject> = graph
+        .objects
+        .iter()
+        .filter(|object| object.class_name == "FamilyParams")
+        .filter(|object| u64::try_from(object.start).is_ok_and(|start| start > first))
+        .collect();
+    params.sort_by_key(|object| object.start);
+    if params.len() != cells.len() {
+        return BTreeMap::new();
+    }
+    cells
+        .iter()
+        .zip(params)
+        .filter_map(|(&(_, index, domain), params)| {
+            let wanted = match domain {
+                3 => PIPE_FLOW_DIRECTION,
+                1 => DUCT_FLOW_DIRECTION,
+                _ => return None,
+            };
+            let value = params
+                .fields
+                .get("m_params")?
+                .as_array()?
+                .iter()
+                .find(|param| param.get("m_paramId").and_then(element_id_i64) == Some(wanted))?
+                .get("m_int")?
+                .as_i64()?;
+            Some((index, value))
+        })
+        .collect()
+}
+
+/// Each connector's calculated direction in a family instance's or a duct's
+/// or pipe's record graph (RE-212), by connector index: the `m_eDirection`
+/// of the `MEPFamilyConnectorCalculation*` or `SegmentConnectorCalculation`
+/// object whose `m_pConnector` names the connector's object, numbered as a
+/// family's Flow Direction.
+fn calculated_directions(graph: &crate::native_parameters::ObjectGraph) -> BTreeMap<u32, i64> {
+    let index_of_token: BTreeMap<u64, u32> = graph
+        .objects
+        .iter()
+        .filter(|object| object.class_name == "Connector")
+        .filter_map(|connector| {
+            let index = connector.fields.get("m_nIndex")?.as_u64()?;
+            Some((u64::from(connector.token), u32::try_from(index).ok()?))
+        })
+        .collect();
+    graph
+        .objects
+        .iter()
+        .filter(|object| {
+            object
+                .class_name
+                .starts_with("MEPFamilyConnectorCalculation")
+                || object.class_name == "SegmentConnectorCalculation"
+        })
+        .filter_map(|calculation| {
+            let token = calculation
+                .fields
+                .get("m_pConnector")?
+                .get("pointer_token")?
+                .as_u64()?;
+            let direction = calculation.fields.get("m_eDirection")?.as_i64()?;
+            Some((*index_of_token.get(&token)?, direction))
+        })
+        .collect()
+}
+
+/// What [`connector_ports`] reads.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ConnectorPorts {
+    /// For each family instance whose symbol has connectors, the ports
+    /// Revit's export writes for it, in the symbol's order: every connector
+    /// outside the cable tray and conduit domain, with its domain and flow
+    /// direction.
+    pub instances: BTreeMap<u64, Vec<InstancePort>>,
+    /// Each duct's and pipe's connector's calculated direction, by ElementId
+    /// and connector index, numbered as a family's Flow Direction: 1 In,
+    /// 2 Out, 0 bidirectional (RE-212).
+    pub segments: BTreeMap<(u64, u32), i64>,
+}
+
+/// The ports of `instances` (a family instance's ElementId and its
+/// symbol's) and the calculated directions of the connectors of `segments`
+/// (ducts and pipes), in one pass over the partitions. Errs where the native
+/// record path does not read the file's release.
+pub fn connector_ports(
     rf: &mut RevitFile,
-    symbols: &BTreeSet<u64>,
-) -> anyhow::Result<BTreeMap<u64, Vec<(u32, i64)>>> {
+    instances: &BTreeMap<u64, u64>,
+    segments: &BTreeSet<u64>,
+) -> anyhow::Result<ConnectorPorts> {
     let mut connectors: BTreeMap<u64, (u64, Vec<i64>)> = BTreeMap::new();
-    let mut domains: BTreeMap<u64, BTreeMap<i64, i64>> = BTreeMap::new();
-    // One pass reads the symbols and every family (B79): which families the
-    // symbols name is known only once they are read, and a second pass over
-    // the partitions costs more than decoding the families none names.
+    let mut cells: BTreeMap<u64, BTreeMap<i64, i64>> = BTreeMap::new();
+    let mut family_directions: BTreeMap<u64, BTreeMap<i64, i64>> = BTreeMap::new();
+    let mut calculated: BTreeMap<u64, BTreeMap<u32, i64>> = BTreeMap::new();
+    let mut segment_directions: BTreeMap<(u64, u32), i64> = BTreeMap::new();
+    // One pass reads the instances, their symbols, the segments and every
+    // family (B79):
+    // which families the symbols name is known only once they are read, and
+    // a second pass over the partitions costs more than decoding the
+    // families none names.
+    let mut selected: BTreeSet<u64> = instances.values().copied().collect();
+    selected.extend(instances.keys().copied());
+    selected.extend(segments.iter().copied());
     let options = native_document::Options {
-        selected_ids: symbols.clone(),
+        selected_ids: selected,
         selected_classes: BTreeSet::from(["Family".to_string()]),
         ..native_document::Options::default()
     };
@@ -96,6 +262,7 @@ pub fn symbol_port_indices(
         let Some(graph) = record.graph.as_ref() else {
             return Ok(());
         };
+        let id = record.identity.element_id;
         match record.class_name.as_deref() {
             Some("FamilySymbol") => {
                 let Some(root) = graph.objects.first() else {
@@ -113,11 +280,11 @@ pub fn symbol_port_indices(
                     indices.is_empty(),
                     root.fields.get("m_familyId").and_then(element_id),
                 ) {
-                    connectors.insert(record.identity.element_id, (family, indices));
+                    connectors.insert(id, (family, indices));
                 }
             }
             Some("Family") => {
-                let cells = domains.entry(record.identity.element_id).or_default();
+                let domains = cells.entry(id).or_default();
                 for object in graph
                     .objects
                     .iter()
@@ -125,29 +292,54 @@ pub fn symbol_port_indices(
                 {
                     let value = |name: &str| object.fields.get(name).and_then(|v| v.as_i64());
                     if let (Some(index), Some(domain)) = (value("m_index"), value("m_domain")) {
-                        cells.insert(index, domain);
+                        domains.insert(index, domain);
                     }
+                }
+                family_directions.insert(id, family_flow_directions(graph));
+            }
+            Some("FamilyInstance") if instances.contains_key(&id) => {
+                calculated.insert(id, calculated_directions(graph));
+            }
+            _ if segments.contains(&id) => {
+                for (index, direction) in calculated_directions(graph) {
+                    segment_directions.insert((id, index), direction);
                 }
             }
             _ => {}
         }
         Ok(())
     })?;
-    Ok(connectors
-        .into_iter()
-        .filter_map(|(symbol, (family, indices))| {
-            let cells = domains.get(&family)?;
-            let ports: Vec<(u32, i64)> = indices
-                .into_iter()
-                .filter_map(|index| {
-                    let domain = *cells.get(&index)?;
+    let instance_ports = instances
+        .iter()
+        .filter_map(|(&instance, symbol)| {
+            let (family, indices) = connectors.get(symbol)?;
+            let domains = cells.get(family)?;
+            let directions = family_directions.get(family);
+            let calculations = calculated.get(&instance);
+            let ports: Vec<InstancePort> = indices
+                .iter()
+                .filter_map(|&index| {
+                    let domain = *domains.get(&index)?;
                     PORT_DOMAINS.contains(&domain).then_some(())?;
-                    Some((u32::try_from(index).ok()?, domain))
+                    let index_u32 = u32::try_from(index).ok()?;
+                    Some(InstancePort {
+                        index: index_u32,
+                        domain,
+                        flow_direction: port_flow_direction(
+                            domain,
+                            directions.and_then(|d| d.get(&index).copied()),
+                            calculations.and_then(|c| c.get(&index_u32).copied()),
+                        ),
+                    })
                 })
                 .collect();
-            (!ports.is_empty()).then_some((symbol, ports))
+            (!ports.is_empty()).then_some((instance, ports))
         })
-        .collect())
+        .collect();
+    Ok(ConnectorPorts {
+        instances: instance_ports,
+        segments: segment_directions,
+    })
 }
 
 /// Every join the connectors of `instances` (family instances' ElementIds)

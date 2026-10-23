@@ -8,6 +8,19 @@ All notable changes will be documented here. This project follows
 
 ### Added
 
+- **Every port has Revit's flow direction, name and description (RE-212,
+  #834).** A family instance's HVAC or piping connector takes the Flow
+  Direction its family sets in the connector's own parameters, or, where the
+  family leaves it bidirectional, the direction Revit calculated for the
+  instance's connector. A duct's or pipe's connector takes its calculated
+  direction. A bidirectional connector joined to one with a direction takes
+  the opposite one. On RE1 Plumbing, Mechanical and Electrical that is every
+  one of Revit's 463 ports, where rvt-rs wrote `NOTDEFINED` on all 408 HVAC
+  and piping ports before. Ports are now named `InPort_`, `OutPort_` or
+  `Port_` by their direction and described `Flow`, as Revit names them, and
+  a sink placed at a pipe's end points into it. `SystemType` is still not
+  written.
+
 - **Each GitHub release carries the CLI archives' build provenance as a
   file (#891).** The release workflow already attested the archives; the
   attestation bundle is now also attached as `rvt-rs-vX.Y.Z.intoto.jsonl`,
@@ -96,6 +109,14 @@ All notable changes will be documented here. This project follows
   makes an error.
 
 ### Fixed
+
+- **A column record holding a NaN no longer panics the export.** The
+  column-cut grid sorted its edges with `partial_cmp(..).expect("finite")`,
+  so a NaN read from a damaged record box stopped the whole export. A
+  column or cutter with a non-finite coordinate now gets no cut box, and the
+  grid sorts with `f64::total_cmp`. 40 other `expect` and `unwrap` calls on file
+  bytes and fixed arrays are gone: those reads go through `first_chunk` or
+  the crate's checked little-endian reader instead.
 
 - **The PyPI page's links work, and it is written for Python users (#905).**
   PyPI showed the repository README, whose links are relative and resolve
