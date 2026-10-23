@@ -15,6 +15,7 @@
 //! f64 Xx · f64 Yx · f64 Zx · f64 Xy · f64 Yy · f64 Zy · f64 Xz · f64 Yz · f64 Zz · f64 ox · f64 oy · f64 oz
 //! ```
 
+use crate::le_bytes;
 use crate::{Result, RevitFile};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -67,17 +68,12 @@ impl InstanceTransform {
     }
 }
 
-fn f64_at(data: &[u8], at: usize) -> Option<f64> {
-    data.get(at..at.checked_add(8)?)
-        .map(|b| f64::from_le_bytes(b.try_into().expect("8 bytes")))
-}
-
 /// The nine values at `at` as a rotation, rows first; `None` unless they
 /// are orthonormal with determinant 1.
 fn rotation_at(data: &[u8], at: usize) -> Option<[[f64; 3]; 3]> {
     let mut rows = [[0.0; 3]; 3];
     for (index, value) in rows.iter_mut().flatten().enumerate() {
-        let v = f64_at(data, at + 8 * index)?;
+        let v = le_bytes::f64_at(data, at + 8 * index)?;
         if !(v.is_finite() && v.abs() <= 1.0 + ROTATION_TOLERANCE) {
             return None;
         }
@@ -105,9 +101,9 @@ pub fn instance_transform(data: &[u8]) -> Option<InstanceTransform> {
     (0..end.saturating_sub(96)).find_map(|at| {
         let rows = rotation_at(data, at)?;
         let origin = [
-            f64_at(data, at + 72)?,
-            f64_at(data, at + 80)?,
-            f64_at(data, at + 88)?,
+            le_bytes::f64_at(data, at + 72)?,
+            le_bytes::f64_at(data, at + 80)?,
+            le_bytes::f64_at(data, at + 88)?,
         ];
         if !origin.iter().all(|v| v.is_finite()) {
             return None;

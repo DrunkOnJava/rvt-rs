@@ -145,6 +145,7 @@
 //!   elevation; the recovery is all-or-nothing per file at the
 //!   caller's gate (see [`recovered_levels_are_a_storey_set`]).
 
+use crate::le_bytes;
 use crate::{Result, RevitFile};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
@@ -308,25 +309,6 @@ pub fn supports_revit_version(revit_version: u32) -> bool {
     PARTITION_LEVEL_SUPPORTED_REVIT_VERSIONS.contains(&revit_version)
 }
 
-fn read_u16(buf: &[u8], off: usize) -> Option<u16> {
-    buf.get(off..off + 2)
-        .map(|s| u16::from_le_bytes(s.try_into().expect("2 bytes")))
-}
-
-fn read_u32(buf: &[u8], off: usize) -> Option<u32> {
-    buf.get(off..off + 4)
-        .map(|s| u32::from_le_bytes(s.try_into().expect("4 bytes")))
-}
-
-fn read_u64(buf: &[u8], off: usize) -> Option<u64> {
-    buf.get(off..off + 8)
-        .map(|s| u64::from_le_bytes(s.try_into().expect("8 bytes")))
-}
-
-fn read_f64(buf: &[u8], off: usize) -> Option<f64> {
-    read_u64(buf, off).map(f64::from_bits)
-}
-
 /// Decode one Level record at `offset`, fail-closed.
 ///
 /// `declared_ids` is the `Global/ElemTable` id set; a record whose
@@ -356,7 +338,7 @@ pub fn decode_record_at_with(
     if offset.checked_add(RECORD_MIN_LEN)? > buf.len() {
         return None;
     }
-    let raw_id = read_u64(buf, offset)?;
+    let raw_id = le_bytes::u64_at(buf, offset)?;
     let element_id = if per::carries_no_element_id(raw_id) {
         u32::try_from(per::enclosing_record(chain, offset)?.element_id).ok()?
     } else {
@@ -365,18 +347,18 @@ pub fn decode_record_at_with(
     if element_id == 0 || !declared_ids.contains(&element_id) {
         return None;
     }
-    if read_u16(buf, offset + 0x10)? != 0 {
+    if le_bytes::u16_at(buf, offset + 0x10)? != 0 {
         return None;
     }
-    if read_u64(buf, offset + per::CATEGORY_OFFSET)? as i64 != OST_LEVELS {
+    if le_bytes::u64_at(buf, offset + per::CATEGORY_OFFSET)? as i64 != OST_LEVELS {
         return None;
     }
     if buf[offset + RECORD_MARKER_OFFSET..offset + RECORD_MARKER_OFFSET + marker.len()] != *marker {
         return None;
     }
-    let flags = read_u32(buf, offset + 0x08)?;
-    let container = read_u64(buf, offset + per::CONTAINER_OFFSET)?;
-    let placement_kind = read_u32(buf, offset + per::PLACEMENT_KIND_OFFSET)?;
+    let flags = le_bytes::u32_at(buf, offset + 0x08)?;
+    let container = le_bytes::u64_at(buf, offset + per::CONTAINER_OFFSET)?;
+    let placement_kind = le_bytes::u32_at(buf, offset + per::PLACEMENT_KIND_OFFSET)?;
     Some(PartitionLevelRecord {
         stream: stream.to_string(),
         offset,
@@ -478,7 +460,7 @@ fn building_story_after(buf: &[u8], name_end: usize, id_len: usize) -> Option<bo
     } else {
         let anchor = name_end + find_subslice(window, &BUILDING_STORY_ANCHOR)?;
         let id_at = anchor + BUILDING_STORY_ANCHOR.len() + 8;
-        if read_u64(buf, id_at)? > u64::from(u32::MAX) {
+        if le_bytes::u64_at(buf, id_at)? > u64::from(u32::MAX) {
             return None;
         }
         id_at + 8
@@ -557,9 +539,9 @@ fn decode_name_block(
         return None;
     }
     let owner = if id_len == 4 {
-        u64::from(read_u32(buf, owner_at)?)
+        u64::from(le_bytes::u32_at(buf, owner_at)?)
     } else {
-        read_u64(buf, owner_at)?
+        le_bytes::u64_at(buf, owner_at)?
     };
     if owner == 0 || owner > u64::from(u32::MAX) {
         return None;
@@ -568,7 +550,7 @@ fn decode_name_block(
     if !declared_ids.contains(&element_id) {
         return None;
     }
-    let chars = read_u32(buf, value - LENGTH_PREFIX_OFFSET_BEFORE_NAME)? as usize;
+    let chars = le_bytes::u32_at(buf, value - LENGTH_PREFIX_OFFSET_BEFORE_NAME)? as usize;
     if chars == 0 || chars > MAX_NAME_CHARS {
         return None;
     }
@@ -584,7 +566,7 @@ fn decode_name_block(
     }
     let window = buf.get(end..(end + ELEVATION_MARKER_SEARCH_BYTES).min(buf.len()))?;
     let at = end + find_subslice(window, marker)? + ELEVATION_OFFSET_AFTER_MARKER;
-    let elevation_feet = read_f64(buf, at)?;
+    let elevation_feet = le_bytes::f64_at(buf, at)?;
     if !elevation_feet.is_finite() || elevation_feet.abs() > MAX_ELEVATION_FEET {
         return None;
     }
@@ -671,14 +653,14 @@ pub fn owned_level_ids(buf: &[u8], level_ids: &BTreeSet<u32>) -> BTreeSet<u32> {
     let mut out = BTreeSet::new();
     for (id, owner_at) in crate::partition_id_objects::find_id_objects(buf, level_ids) {
         let value = owner_at + OWNER_OFFSET_BEFORE_NAME;
-        let Some(chars) = read_u32(buf, value - LENGTH_PREFIX_OFFSET_BEFORE_NAME) else {
+        let Some(chars) = le_bytes::u32_at(buf, value - LENGTH_PREFIX_OFFSET_BEFORE_NAME) else {
             continue;
         };
         if !(1..=MAX_NAME_CHARS as u32).contains(&chars) {
             continue;
         }
         let sentinel = buf.get(owner_at + 8..owner_at + 16);
-        let owner = read_u64(buf, owner_at + 16);
+        let owner = le_bytes::u64_at(buf, owner_at + 16);
         if sentinel.is_some_and(|run| run.iter().all(|b| *b == 0xff))
             && owner.is_some_and(|o| o != 0 && o < u64::from(u32::MAX))
         {
@@ -830,11 +812,11 @@ pub fn find_level_records_2023(
     memchr::memmem::find_iter(buf, &needle)
         .filter_map(|category| {
             let id_at = category.checked_sub(ID_BEFORE_CATEGORY_2023)?;
-            let element_id = read_u32(buf, id_at)?;
+            let element_id = le_bytes::u32_at(buf, id_at)?;
             if element_id == 0 || !declared_ids.contains(&element_id) {
                 return None;
             }
-            if read_u16(buf, id_at + HEADER_TAG_AFTER_ID_2023)? != header_tag {
+            if le_bytes::u16_at(buf, id_at + HEADER_TAG_AFTER_ID_2023)? != header_tag {
                 return None;
             }
             let marker_at = category + MARKER_AFTER_CATEGORY_2023;
@@ -845,12 +827,15 @@ pub fn find_level_records_2023(
                 stream: stream.to_string(),
                 offset: id_at,
                 element_id,
-                flags: read_u32(buf, id_at + 4)?,
-                container: match read_u32(buf, category + CONTAINER_AFTER_CATEGORY_2023)? {
+                flags: le_bytes::u32_at(buf, id_at + 4)?,
+                container: match le_bytes::u32_at(buf, category + CONTAINER_AFTER_CATEGORY_2023)? {
                     u32::MAX => u64::MAX,
                     id => u64::from(id),
                 },
-                placement_kind: read_u32(buf, category + PLACEMENT_KIND_AFTER_CATEGORY_2023)?,
+                placement_kind: le_bytes::u32_at(
+                    buf,
+                    category + PLACEMENT_KIND_AFTER_CATEGORY_2023,
+                )?,
             })
         })
         .collect()
@@ -1020,7 +1005,10 @@ pub fn scan_level_objects(
         };
         let buf = inflated.bytes();
         for at in memchr::memmem::find_iter(buf, &[1u8, 0, 0, 0]) {
-            let (Some(id), Some(level)) = (read_u64(buf, at + 4), read_u64(buf, at + 12)) else {
+            let (Some(id), Some(level)) = (
+                le_bytes::u64_at(buf, at + 4),
+                le_bytes::u64_at(buf, at + 12),
+            ) else {
                 continue;
             };
             let (Ok(id), Ok(level)) = (u32::try_from(id), u32::try_from(level)) else {

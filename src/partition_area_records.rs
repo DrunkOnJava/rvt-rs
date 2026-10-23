@@ -39,6 +39,7 @@
 //!   (fail closed).
 
 use crate::RevitFile;
+use crate::le_bytes;
 use crate::partition_element_records::{
     CATEGORY_OFFSET, CONTAINER_NONE, CONTAINER_OFFSET, PLACEMENT_KIND_INSTANCE,
     PLACEMENT_KIND_OFFSET, file_bbox_marker, frame_design_option, partition_record_chain,
@@ -55,16 +56,6 @@ pub const OST_AREAS: i64 = -2_003_200;
 
 /// The `m_source` of an Area read here.
 pub const AREA_RECORD_SOURCE: &str = "partition_area_record";
-
-fn read_u32(buf: &[u8], at: usize) -> Option<u32> {
-    buf.get(at..at.checked_add(4)?)
-        .map(|b| u32::from_le_bytes(b.try_into().expect("4 bytes")))
-}
-
-fn read_u64(buf: &[u8], at: usize) -> Option<u64> {
-    buf.get(at..at.checked_add(8)?)
-        .map(|b| u64::from_le_bytes(b.try_into().expect("8 bytes")))
-}
 
 /// One Area record as its latest partition holds it.
 struct AreaRecord {
@@ -99,7 +90,8 @@ fn area_records(
                 continue;
             };
             if !declared.contains(&id)
-                || read_u64(buf, span.start + CATEGORY_OFFSET).map(|c| c as i64) != Some(OST_AREAS)
+                || le_bytes::u64_at(buf, span.start + CATEGORY_OFFSET).map(|c| c as i64)
+                    != Some(OST_AREAS)
             {
                 continue;
             }
@@ -122,7 +114,7 @@ fn area_records(
 fn named_level(bytes: &[u8], level_ids: &BTreeSet<u32>) -> Option<u32> {
     let mut named = BTreeSet::new();
     for at in CATEGORY_OFFSET..bytes.len().saturating_sub(7) {
-        if let Some(id) = read_u64(bytes, at)
+        if let Some(id) = le_bytes::u64_at(bytes, at)
             .and_then(|v| u32::try_from(v).ok())
             .filter(|id| level_ids.contains(id))
         {
@@ -158,8 +150,9 @@ pub fn areas_from_partition_chain_records(
     let placed: BTreeMap<u32, AreaRecord> = area_records(rf, &marker, &declared)
         .into_iter()
         .filter(|(_, record)| {
-            read_u64(&record.bytes, CONTAINER_OFFSET) == Some(CONTAINER_NONE)
-                && read_u32(&record.bytes, PLACEMENT_KIND_OFFSET) == Some(PLACEMENT_KIND_INSTANCE)
+            le_bytes::u64_at(&record.bytes, CONTAINER_OFFSET) == Some(CONTAINER_NONE)
+                && le_bytes::u32_at(&record.bytes, PLACEMENT_KIND_OFFSET)
+                    == Some(PLACEMENT_KIND_INSTANCE)
                 && !frame_design_option(&record.bytes, 0)
                     .is_some_and(|option| options.is_non_primary(option))
         })
