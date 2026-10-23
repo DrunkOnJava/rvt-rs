@@ -155,6 +155,25 @@ All notable changes will be documented here. This project follows
   Python, `RevitFile.read_adocument()` raises `ValueError`, where it raised
   `OSError`, for a file whose schema declares no `ADocument`.
 
+- **Breaking: the stable API's output types are `#[non_exhaustive]`.** All
+  62 public enums of the stable modules and the 135 public structs that
+  only rvt-rs produces, so a release can add a variant or a field without
+  breaking code that uses them. A `match` on one of these enums needs a
+  wildcard arm, and these structs can no longer be built with a struct
+  literal outside the crate. The structs callers build stay as they were:
+  the options and limits (`OpenLimits`, `WalkerLimits`, `CsvOptions`,
+  `StepOptions`, ...), the bridge's inputs (`ElementInput`,
+  `BuilderOptions`, `Storey`, `MaterialInfo`, `StreamPatch`,
+  `ExportContentPolicy`, `corpus::Sample`, `parse_mode::Warning`),
+  `IfcModel` and the parts it is assembled from (materials, layer sets and
+  element layers, opening cuts, GlobalIds), the glTF document records
+  `write_glb` writes, the geometry primitives (`Point3`, `CurveLoop`,
+  `Mesh`, ...), the viewer's state (`CameraState`, `ClippingPlane`,
+  `SectionBox`, `ViewerState`, `CategoryFilter`), the schedule rows
+  `Schedule::from_rows` takes, what the encoders write
+  (`BasicFileInfo`, `PartAtom`), and the few output types the tests
+  construct (`DecodedElement`, `Wall`, `ClassEntry`, ...).
+
 - **The API docs are written for someone outside the project.** Backlog
   and task ids (`B55`, `VW1-13`, `SEC-12`) and work-plan labels ("Lane C",
   "Phase 4d", "the attack plan") are gone from the API docs: the crate's

@@ -36,6 +36,7 @@ pub const MAX_TRIANGULATED_POINTS: usize = 2048;
 
 /// A triangle mesh. Triangles wind counter-clockwise seen from outside.
 #[derive(Debug, Clone, Default, PartialEq)]
+#[non_exhaustive]
 pub struct Mesh {
     pub vertices: Vec<[f64; 3]>,
     pub triangles: Vec<[u32; 3]>,
@@ -71,6 +72,7 @@ impl Mesh {
 
 /// What an element's body is, in the STEP writer's order of precedence.
 #[derive(Debug, Clone, Copy)]
+#[non_exhaustive]
 pub enum Body<'a> {
     Extrusion(&'a Extrusion),
     Solid(&'a SolidShape),
@@ -101,6 +103,7 @@ pub fn element_body<'a>(entity: &'a IfcEntity, maps: &'a [RepresentationMap]) ->
 /// The element placement: `location_feet` (or the origin) turned
 /// `rotation_radians` about +Z.
 #[derive(Debug, Clone, Copy, PartialEq)]
+#[non_exhaustive]
 pub struct Placement {
     pub origin: [f64; 3],
     pub cos: f64,
@@ -330,6 +333,7 @@ fn ear_clip(poly: &[Point2]) -> Option<Vec<[u32; 3]>> {
 /// A profile ready to extrude or sweep: its rings, outer counter-clockwise
 /// and holes clockwise, and a triangulation of the area between them.
 #[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
 pub struct Section {
     pub rings: Vec<Ring>,
     pub cap_points: Ring,

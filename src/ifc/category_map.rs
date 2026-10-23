@@ -21,6 +21,7 @@
 /// entity's `PredefinedType` attribute when present (e.g.
 /// `"FLOOR"` / `"ROOF"` for IfcSlab, `"BEAM"` for IfcBeam).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct Mapping {
     pub revit_class: &'static str,
     pub ifc_type: &'static str,

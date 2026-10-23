@@ -79,6 +79,7 @@ fn collect_common(decoded: &DecodedElement) -> PlacedCommon {
 
 /// Typed view for StructuralFoundation.
 #[derive(Debug, Clone, PartialEq, Default)]
+#[non_exhaustive]
 pub struct StructuralFoundation {
     pub level_id: Option<u32>,
     pub host_id: Option<u32>,
@@ -106,6 +107,7 @@ impl StructuralFoundation {
 
 /// Typed view for Furniture / FurnitureSystem / Casework.
 #[derive(Debug, Clone, PartialEq, Default)]
+#[non_exhaustive]
 pub struct Furnishing {
     pub level_id: Option<u32>,
     pub host_id: Option<u32>,
@@ -133,6 +135,7 @@ impl Furnishing {
 
 /// Typed view for Rebar.
 #[derive(Debug, Clone, PartialEq, Default)]
+#[non_exhaustive]
 pub struct Rebar {
     pub host_id: Option<u32>,
     pub bar_type_id: Option<u32>,
