@@ -9,7 +9,8 @@
 //!
 //! Both share the same class in the file (the `m_roof_type` field
 //! distinguishes which flavour). Geometry assembly (slope planes,
-//! ridge/valley topology, eave cuts) is GEO-29.
+//! ridge/valley topology, eave cuts) is done by the exporter's
+//! `ifc::body_geometry`, not here.
 //!
 //! # Typical Revit field shape (names stable 2016–2026)
 //!

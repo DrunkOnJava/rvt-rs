@@ -1,4 +1,4 @@
-//! ES reference occurrence locator contracts (Phase 1).
+//! ES reference occurrence locator contracts (no decoder yet).
 //!
 //! Public API types for localizing ElementId (and related) references
 //! inside Extensible Storage / ElementSettings-adjacent payloads once an
@@ -99,7 +99,8 @@ pub struct FixtureTransition {
 }
 
 impl FixtureTransition {
-    /// No-op baseline contract used by Phase A manifests.
+    /// A transition that changes nothing: the baseline a fixture manifest
+    /// compares its other transitions against.
     pub fn no_op_baseline(transition_id: impl Into<String>, fixture_id: impl Into<String>) -> Self {
         let id = fixture_id.into();
         Self {
@@ -113,7 +114,7 @@ impl FixtureTransition {
     }
 }
 
-/// Phase 2 family identifiers (documentation / manifest only).
+/// Identifiers of the ES reference families (documentation and manifest only).
 pub mod families {
     pub const N1: &str = "N1";
     pub const N2: &str = "N2";

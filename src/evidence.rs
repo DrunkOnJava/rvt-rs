@@ -1,4 +1,4 @@
-//! Named evidence tiers and lightweight ledgers (Phase 1).
+//! Named evidence tiers and lightweight ledgers of research observations.
 //!
 //! Ledgers record research observations and typed-edge *candidates*.
 //! They do **not** assert that ES remapping or BIM relations are verified.
