@@ -299,7 +299,8 @@ fn tier1_elements_cli_validates_decoded_and_counts_schemas() {
 /// The CLIs whose JSON had no contract (#873, S2), on the tier-1 synthetic
 /// project and the committed synthetic IFC files, so they run with no
 /// Autodesk corpus present. `rvt-history`'s default output needs a real
-/// document history and is checked on the family corpus below.
+/// document history, and `rvt-elem-table` a real `Global/ElemTable` (the
+/// fixtures' is empty), so those two are checked on the family corpus below.
 #[test]
 fn tier1_report_clis_validate_against_their_schemas() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
@@ -310,10 +311,6 @@ fn tier1_report_clis_validate_against_their_schemas() {
         .join("architectural-2024.rvt");
     let file = fixture.as_os_str();
     let json = std::ffi::OsStr::new("--json");
-
-    let elem_table = command_json(env!("CARGO_BIN_EXE_rvt-elem-table"), &[file, json]);
-    validate(&load_schema("elem-table.schema.json"), &elem_table)
-        .expect("elem-table schema validation");
 
     let analyze = command_json(env!("CARGO_BIN_EXE_rvt-analyze"), &[file, json]);
     validate(&load_schema("analyze.schema.json"), &analyze).expect("analyze schema validation");
@@ -396,6 +393,19 @@ fn cli_json_outputs_validate_against_stable_schemas() {
     assert!(
         history["entries"].as_array().is_some_and(|e| !e.is_empty()),
         "a real family has a document history: {history}"
+    );
+
+    let elem_table = command_json(
+        env!("CARGO_BIN_EXE_rvt-elem-table"),
+        &[sample_2024.as_os_str(), std::ffi::OsStr::new("--json")],
+    );
+    validate(&load_schema("elem-table.schema.json"), &elem_table)
+        .expect("elem-table schema validation");
+    assert!(
+        elem_table["records"]
+            .as_array()
+            .is_some_and(|r| !r.is_empty()),
+        "a real family declares elements in Global/ElemTable"
     );
 
     let schema_diagnostics = command_json(

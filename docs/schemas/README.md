@@ -35,11 +35,11 @@ See [`docs/research/unified-research-report.md`](../research/unified-research-re
 
 The integration test `tests/json_schema_contracts.rs` runs every CLI that
 prints JSON and validates its output against its schema: on the tier-1
-synthetic fixtures for `rvt-info`, `rvt-elements`, `rvt-elem-table`,
-`rvt-analyze`, `rvt-inspect`, `rvt-history --all-strings`, `rvt-capabilities`
-and `rvt-ifc-compare`, so those run with no Autodesk corpus present, and on the
-family corpus for `rvt-info`, `rvt-history`, `rvt-schema`, `rvt-doc`,
-`rvt-ifc --diagnostics` and `rvt-corpus`. CI's Linux test job has the corpus
+synthetic fixtures for `rvt-info`, `rvt-elements`, `rvt-analyze`,
+`rvt-inspect`, `rvt-history --all-strings`, `rvt-capabilities` and
+`rvt-ifc-compare`, so those run with no Autodesk corpus present, and on the
+family corpus for `rvt-info`, `rvt-history`, `rvt-elem-table`, `rvt-schema`,
+`rvt-doc`, `rvt-ifc --diagnostics` and `rvt-corpus`. CI's Linux test job has the corpus
 and fails if it is missing.
 
 `tests/support_matrix.rs` validates the seeded support matrix against
