@@ -38,6 +38,18 @@ pub struct StepOptions {
 /// data section centred on `IfcProject`. Uses current wall-clock
 /// timestamp. For deterministic output (e.g. tests), use
 /// [`write_step_with_options`] with `StepOptions::timestamp = Some(_)`.
+///
+/// # Examples
+///
+/// ```
+/// use rvt::RevitFile;
+/// use rvt::ifc::{Exporter, RvtDocExporter, write_step};
+///
+/// let mut rf = RevitFile::open("corpus/tier1/architectural-2024/architectural-2024.rvt")?;
+/// let ifc = write_step(&RvtDocExporter.export(&mut rf)?);
+/// assert!(ifc.starts_with("ISO-10303-21;"));
+/// # Ok::<(), rvt::Error>(())
+/// ```
 pub fn write_step(model: &IfcModel) -> String {
     write_step_with_options(model, &StepOptions::default())
 }
