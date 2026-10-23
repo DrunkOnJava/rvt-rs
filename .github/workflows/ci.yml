@@ -706,7 +706,8 @@ jobs:
           PR: ${{ github.event.pull_request.number }}
           REPO: ${{ github.repository }}
         run: |
-          set -uo pipefail
+          # Actions runs bash with -e; the exit status is judged below.
+          set +e -uo pipefail
           cargo semver-checks -p rvt --baseline-rev "$BASE" --default-features --release-type patch 2>&1 | tee semver.log
           status=${PIPESTATUS[0]}
           if [ "$status" -eq 0 ]; then
