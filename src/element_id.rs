@@ -21,7 +21,9 @@ use std::fmt;
 /// assert_eq!(ElementId::from_raw(u64::from(u32::MAX)), None);
 /// assert_eq!(ElementId::from_raw(7), Some(ElementId::new(7)));
 /// ```
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize,
+)]
 #[serde(transparent)]
 pub struct ElementId(i64);
 
