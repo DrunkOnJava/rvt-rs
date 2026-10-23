@@ -151,6 +151,26 @@ def main():
             for _, _, _, before in occ:
                 prefixes[before[-16:]] += 1
     print(f"Revit's GlobalIds whose last 21 characters a stored string has: {matched} of {len(by_tag)}")
+    # The stored value as a UniqueId-based GlobalId: XOR the Tag out of it and
+    # look its episode up; and how its top two bits relate to the export's.
+    in_history, xor_top = 0, collections.Counter()
+    relation = collections.Counter()
+    for gid, tag in by_tag.items():
+        for s, _ in by_suffix.get(gid[1:], []):
+            value = bytearray(expand(s))
+            low = struct.unpack(">I", value[12:16])[0] ^ tag
+            value[12:16] = struct.pack(">I", low)
+            if stored_order(bytes(value)) in where:
+                in_history += 1
+            a, b = ALPHABET.index(s[0]), ALPHABET.index(gid[0])
+            xor_top[a ^ b] += 1
+            e = expand(gid)
+            relation[("export byte 15 low 2 bits", e[15] & 3, "xor", a ^ b)] += 1
+            relation[("tag low 2 bits", tag & 3, "xor", a ^ b)] += 1
+    print(f"  stored values whose episode (Tag XORed out) is in the history: {in_history}")
+    print("  stored top two bits XOR Revit's: " + ", ".join(f"{k} {v}" for k, v in sorted(xor_top.items())))
+    for key, n in sorted(relation.items()):
+        print(f"  {key}: {n}")
     print("  stored first character -> Revit's: " + ", ".join(f"{a}->{b} {n}" for (a, b), n in sorted(firsts.items())))
     print("  the 8 bytes before those strings: " + ", ".join(f"{p} {n}" for p, n in prefixes.most_common(4)))
 
