@@ -110,7 +110,8 @@ panel before opening it. Browser checks bind preview port 4173 to loopback.
 Use `gh codespace ports forward 5173:5173 -c YOUR_RVT_CODESPACE` for local
 access without making it public. Stop the foreground server with Ctrl-C.
 `verify.sh` exercises what is already built and rebuilds nothing: it fails when
-the CLI, the Python binding or the WASM package is older than a source file,
+the CLI, the Python binding, the WASM package or the viewer bundle is older than
+a source file,
 so rebuild all three first, as above or with the `rvt: smoke` task.
 The smoke script saves `viewer-smoke.png`, `browser.json`, the exact source
 SHA, CLI output, IFC and diagnostics. Open the screenshot for visual review.

@@ -11,6 +11,10 @@ exec 3>&1
 exec >"$evidence/verify.log" 2>&1
 trap 'printf "Verification failed; read %s/verify.log\n" "$evidence" >&3' ERR
 git rev-parse HEAD >"$evidence/source-sha.txt"
+# What was verified is the working tree: keep its changes beside the commit.
+git status --porcelain=v1 >"$evidence/source-status.txt"
+git diff HEAD >"$evidence/source.patch"
+[ ! -s "$evidence/source-status.txt" ] || printf 'dirty: see source-status.txt and source.patch\n' >>"$evidence/source-sha.txt"
 {
   rustc --version; cargo --version; python3 --version; node --version
   npm --version; pnpm --version; wasm-pack --version; gh --version
@@ -32,6 +36,11 @@ for artifact in "$bin/rvt-inspect" "$binding" viewer/pkg/rvt_bg.wasm; do
     exit 1
   fi
 done
+newer=$(find viewer/src viewer/index.html viewer/vite.config.ts viewer/package.json -newer viewer/dist/index.html -print -quit)
+if [ -n "$newer" ]; then
+  printf 'viewer/dist is older than %s; rebuild first (the rvt: smoke task does)\n' "$newer" >&3
+  exit 1
+fi
 "$bin/gen-fixture" codespace --classes Wall,Level,Project,Column,Door \
   --element-count 25 --year 2024 --output "$evidence/smoke.rvt"
 .venv/bin/python - "$evidence/smoke.rvt" >"$evidence/python.json" <<'PY'
