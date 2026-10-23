@@ -1,0 +1,60 @@
+name: style audit census
+
+on:
+  push:
+    branches: ["audit/google-style-census"]
+
+permissions:
+  contents: read
+
+jobs:
+  census:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install toolchains
+        run: |
+          rustup toolchain install stable --profile minimal --no-self-update --component clippy
+          rustup toolchain install nightly --profile minimal --no-self-update --component rustfmt
+          rustup default stable
+          mkdir -p out
+          { rustc --version; cargo clippy --version; rustfmt +nightly --version; } | tee out/versions.txt
+      - name: Clippy census
+        env:
+          CARGO_INCREMENTAL: "0"
+        run: |
+          LINTS="-W missing_docs -W missing_debug_implementations -W missing_copy_implementations
+            -W unreachable_pub -W unused_qualifications
+            -W clippy::wildcard_imports -W clippy::enum_glob_use -W clippy::absolute_paths
+            -W clippy::rc_buffer -W clippy::redundant_clone -W clippy::implicit_clone -W clippy::needless_pass_by_value
+            -W clippy::ref_option -W clippy::fn_params_excessive_bools -W clippy::struct_excessive_bools
+            -W clippy::unwrap_used -W clippy::expect_used -W clippy::panic -W clippy::unreachable
+            -W clippy::todo -W clippy::unimplemented -W clippy::indexing_slicing -W clippy::unwrap_in_result
+            -W clippy::missing_panics_doc -W clippy::missing_errors_doc -W clippy::unnecessary_wraps
+            -W clippy::exhaustive_enums -W clippy::exhaustive_structs
+            -W clippy::single_char_lifetime_names -W clippy::undocumented_unsafe_blocks
+            -W clippy::must_use_candidate -W clippy::return_self_not_must_use
+            -W clippy::missing_assert_message -W clippy::manual_assert -W clippy::needless_for_each
+            -W clippy::string_add -W clippy::string_add_assign -W clippy::too_many_lines
+            -W clippy::allow_attributes_without_reason"
+          cargo clippy --workspace --lib --bins --all-features --message-format=json -- $LINTS > out/prod.jsonl || echo "prod exit $?" >> out/status.txt
+          cargo clippy --workspace --all-targets --all-features --message-format=json -- $LINTS > out/all.jsonl || echo "all exit $?" >> out/status.txt
+          cd out && python3 ../.github/audit/census.py prod.jsonl all.jsonl > /dev/null
+          cat summary.md >> "$GITHUB_STEP_SUMMARY"
+      - name: rustfmt with the Google options
+        run: |
+          for opt in imports_granularity=Module hex_literal_case=Lower format_macro_matchers=true; do
+            cargo +nightly fmt --all -- --check --config "$opt" > "out/fmt-${opt%%=*}.txt" 2>&1 || true
+            printf '%s: %s diff hunks in %s files\n' "$opt" \
+              "$(grep -c '^Diff in' "out/fmt-${opt%%=*}.txt")" \
+              "$(grep '^Diff in' "out/fmt-${opt%%=*}.txt" | sed 's/ at line.*//' | sort -u | wc -l)" | tee -a out/fmt-summary.txt
+          done
+          cat out/fmt-summary.txt >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: style-census
+          path: out/
