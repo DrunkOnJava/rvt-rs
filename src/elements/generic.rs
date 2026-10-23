@@ -23,58 +23,8 @@
 //! | `m_category_name` | String | Designer-supplied category label for GenericModel |
 
 use super::level::normalise_field_name;
-use crate::formats;
 use crate::geometry::Point3;
-use crate::walker::{DecodedElement, ElementDecoder, HandleIndex, InstanceField};
-use crate::{Error, Result};
-
-macro_rules! simple_decoder {
-    ($Struct:ident, $name:literal) => {
-        pub struct $Struct;
-
-        impl ElementDecoder for $Struct {
-            fn class_name(&self) -> &'static str {
-                $name
-            }
-
-            fn decode(
-                &self,
-                bytes: &[u8],
-                schema: &formats::ClassEntry,
-                index: &HandleIndex,
-            ) -> Result<DecodedElement> {
-                self.decode_with_limits(
-                    bytes,
-                    schema,
-                    index,
-                    crate::walker::WalkerLimits::default(),
-                )
-            }
-
-            fn decode_with_limits(
-                &self,
-                bytes: &[u8],
-                schema: &formats::ClassEntry,
-                _index: &HandleIndex,
-                limits: crate::walker::WalkerLimits,
-            ) -> Result<DecodedElement> {
-                if schema.name != $name {
-                    return Err(Error::BasicFileInfo(format!(
-                        "{} received wrong schema: {}",
-                        stringify!($Struct),
-                        schema.name
-                    )));
-                }
-                Ok(crate::walker::decode_instance_with_limits(
-                    bytes, 0, schema, limits,
-                ))
-            }
-        }
-    };
-}
-
-simple_decoder!(GenericModelDecoder, "GenericModel");
-simple_decoder!(MassDecoder, "Mass");
+use crate::walker::{DecodedElement, InstanceField};
 
 /// Common projection shared by GenericModel + Mass. Same shape as
 /// `OpeningCommon` / `PlacedCommon` in sibling modules.

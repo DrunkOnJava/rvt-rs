@@ -149,6 +149,20 @@ All notable changes will be documented here. This project follows
   crate builds the same code either way: the feature only makes the research
   modules public. docs.rs shows them, marked as needing the feature.
 
+- **Breaking: one `elements::SimpleDecoder` replaces the 67 decoder types
+  the element modules generated.** The classes the schema walk decodes
+  field by field (`mep::DuctDecoder`, `generic::MassDecoder`,
+  `annotations::TextNoteDecoder` and 64 more) were each a unit struct
+  stamped out by one of 15 identical `simple_decoder!` macros. They are now
+  registered as `SimpleDecoder::new("<class>")`, which decodes exactly what
+  the type of that name did; `elements::all_decoders()` and
+  `decoder_for_class` return the same classes in the same order. A wrong
+  schema's error now reads `<class> decoder received wrong schema: ...`.
+  `decoder_for_class` returns a `&'static dyn ElementDecoder` from a
+  registry built once, so a lookup no longer builds all 81 decoders. The
+  `cargo generate` element template registers through `SimpleDecoder`
+  and no longer generates unit tests.
+
 - **What 1.0 requires is written down.** `docs/release-1.0-criteria.md`
   lists each requirement with its bar, the value measured now, and a status
   of passed, failed or not measured, linked to its evidence. 1.0 supports

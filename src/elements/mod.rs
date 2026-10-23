@@ -1,7 +1,11 @@
 //! Per-class element decoders.
 //!
 //! Each submodule implements [`crate::walker::ElementDecoder`] for
-//! one Revit class. Adding a new class is a three-file change:
+//! one Revit class, or, where the walk's own field order is enough, the
+//! class is registered as a [`SimpleDecoder`] with its name. Adding a
+//! class that needs no class-specific decoding is one line in
+//! [`all_decoders`]: `Box::new(SimpleDecoder::new("MyClass"))`. A class
+//! that does is a three-file change:
 //!
 //! 1. Add `mod my_class;` here.
 //! 2. Register it in [`all_decoders`] (consulted by production
@@ -56,11 +60,16 @@ pub mod project_organization;
 pub mod reference_planes;
 pub mod reference_points;
 pub mod roof;
+pub mod simple_decoder;
 pub mod structural;
 pub mod styling;
 pub mod typed_json;
 pub mod wall;
 pub mod zones;
+
+pub use simple_decoder::SimpleDecoder;
+
+use std::sync::LazyLock;
 
 use crate::Result;
 use crate::formats;
@@ -86,15 +95,15 @@ pub fn all_decoders() -> Vec<Box<dyn ElementDecoder>> {
         Box::new(level::LevelDecoder),
         Box::new(category::CategoryDecoder),
         Box::new(category::SubcategoryDecoder),
-        Box::new(styling::MaterialDecoder),
-        Box::new(styling::FillPatternDecoder),
-        Box::new(styling::LinePatternDecoder),
-        Box::new(styling::LineStyleDecoder),
-        Box::new(reference_points::BasePointDecoder),
-        Box::new(reference_points::SurveyPointDecoder),
-        Box::new(reference_points::ProjectPositionDecoder),
-        Box::new(grid::GridDecoder),
-        Box::new(grid::GridTypeDecoder),
+        Box::new(SimpleDecoder::new("Material")),
+        Box::new(SimpleDecoder::new("FillPattern")),
+        Box::new(SimpleDecoder::new("LinePattern")),
+        Box::new(SimpleDecoder::new("LineStyle")),
+        Box::new(SimpleDecoder::new("BasePoint")),
+        Box::new(SimpleDecoder::new("SurveyPoint")),
+        Box::new(SimpleDecoder::new("ProjectPosition")),
+        Box::new(SimpleDecoder::new("Grid")),
+        Box::new(SimpleDecoder::new("GridType")),
         Box::new(reference_planes::ReferencePlaneDecoder),
         Box::new(wall::WallDecoder),
         Box::new(wall::WallTypeDecoder),
@@ -106,68 +115,68 @@ pub fn all_decoders() -> Vec<Box<dyn ElementDecoder>> {
         Box::new(ceiling::CeilingTypeDecoder),
         Box::new(openings::DoorDecoder),
         Box::new(openings::WindowDecoder),
-        Box::new(structural::ColumnDecoder),
-        Box::new(structural::StructuralColumnDecoder),
-        Box::new(structural::BeamDecoder),
-        Box::new(structural::StructuralFramingDecoder),
-        Box::new(circulation::StairDecoder),
-        Box::new(circulation::StairTypeDecoder),
-        Box::new(circulation::RailingDecoder),
-        Box::new(circulation::RailingTypeDecoder),
-        Box::new(zones::RoomDecoder),
-        Box::new(zones::AreaDecoder),
-        Box::new(zones::SpaceDecoder),
-        Box::new(foundation_and_furnishings::StructuralFoundationDecoder),
-        Box::new(foundation_and_furnishings::FurnitureDecoder),
-        Box::new(foundation_and_furnishings::FurnitureSystemDecoder),
-        Box::new(foundation_and_furnishings::CaseworkDecoder),
-        Box::new(foundation_and_furnishings::RebarDecoder),
-        Box::new(project_organization::PhaseDecoder),
-        Box::new(project_organization::DesignOptionDecoder),
-        Box::new(project_organization::WorksetDecoder),
-        Box::new(generic::GenericModelDecoder),
-        Box::new(generic::MassDecoder),
-        Box::new(curtain_wall::CurtainWallDecoder),
-        Box::new(curtain_wall::CurtainGridDecoder),
-        Box::new(curtain_wall::CurtainMullionDecoder),
-        Box::new(curtain_wall::CurtainPanelDecoder),
-        Box::new(family::SymbolDecoder),
-        Box::new(family::FamilyInstanceDecoder),
-        Box::new(drafting::ViewDecoder),
-        Box::new(drafting::SheetDecoder),
-        Box::new(drafting::ScheduleDecoder),
-        Box::new(drafting::ScheduleViewDecoder),
-        Box::new(annotations::DimensionDecoder),
-        Box::new(annotations::TagDecoder),
-        Box::new(annotations::TextNoteDecoder),
-        Box::new(annotations::AnnotationDecoder),
-        Box::new(project_organization::RevisionDecoder),
-        Box::new(parameters::ParameterElementDecoder),
-        Box::new(parameters::SharedParameterDecoder),
-        Box::new(mep::ElectricalEquipmentDecoder),
-        Box::new(mep::ElectricalFixtureDecoder),
-        Box::new(mep::LightingFixtureDecoder),
-        Box::new(mep::LightingDeviceDecoder),
-        Box::new(mep::DuctDecoder),
-        Box::new(mep::DuctFittingDecoder),
-        Box::new(mep::MechanicalEquipmentDecoder),
-        Box::new(mep::PipeDecoder),
-        Box::new(mep::PipeFittingDecoder),
-        Box::new(mep::PlumbingFixtureDecoder),
-        Box::new(mep::SpecialtyEquipmentDecoder),
+        Box::new(SimpleDecoder::new("Column")),
+        Box::new(SimpleDecoder::new("StructuralColumn")),
+        Box::new(SimpleDecoder::new("Beam")),
+        Box::new(SimpleDecoder::new("StructuralFraming")),
+        Box::new(SimpleDecoder::new("Stair")),
+        Box::new(SimpleDecoder::new("StairType")),
+        Box::new(SimpleDecoder::new("Railing")),
+        Box::new(SimpleDecoder::new("RailingType")),
+        Box::new(SimpleDecoder::new("Room")),
+        Box::new(SimpleDecoder::new("Area")),
+        Box::new(SimpleDecoder::new("Space")),
+        Box::new(SimpleDecoder::new("StructuralFoundation")),
+        Box::new(SimpleDecoder::new("Furniture")),
+        Box::new(SimpleDecoder::new("FurnitureSystem")),
+        Box::new(SimpleDecoder::new("Casework")),
+        Box::new(SimpleDecoder::new("Rebar")),
+        Box::new(SimpleDecoder::new("Phase")),
+        Box::new(SimpleDecoder::new("DesignOption")),
+        Box::new(SimpleDecoder::new("Workset")),
+        Box::new(SimpleDecoder::new("GenericModel")),
+        Box::new(SimpleDecoder::new("Mass")),
+        Box::new(SimpleDecoder::new("CurtainWall")),
+        Box::new(SimpleDecoder::new("CurtainGrid")),
+        Box::new(SimpleDecoder::new("CurtainMullion")),
+        Box::new(SimpleDecoder::new("CurtainPanel")),
+        Box::new(SimpleDecoder::new("Symbol")),
+        Box::new(SimpleDecoder::new("FamilyInstance")),
+        Box::new(SimpleDecoder::new("View")),
+        Box::new(SimpleDecoder::new("Sheet")),
+        Box::new(SimpleDecoder::new("Schedule")),
+        Box::new(SimpleDecoder::new("ScheduleView")),
+        Box::new(SimpleDecoder::new("Dimension")),
+        Box::new(SimpleDecoder::new("Tag")),
+        Box::new(SimpleDecoder::new("TextNote")),
+        Box::new(SimpleDecoder::new("Annotation")),
+        Box::new(SimpleDecoder::new("Revision")),
+        Box::new(SimpleDecoder::new("ParameterElement")),
+        Box::new(SimpleDecoder::new("SharedParameter")),
+        Box::new(SimpleDecoder::new("ElectricalEquipment")),
+        Box::new(SimpleDecoder::new("ElectricalFixture")),
+        Box::new(SimpleDecoder::new("LightingFixture")),
+        Box::new(SimpleDecoder::new("LightingDevice")),
+        Box::new(SimpleDecoder::new("Duct")),
+        Box::new(SimpleDecoder::new("DuctFitting")),
+        Box::new(SimpleDecoder::new("MechanicalEquipment")),
+        Box::new(SimpleDecoder::new("Pipe")),
+        Box::new(SimpleDecoder::new("PipeFitting")),
+        Box::new(SimpleDecoder::new("PlumbingFixture")),
+        Box::new(SimpleDecoder::new("SpecialtyEquipment")),
         // L5B-54: AProperty* value-carrier classes. The schema
         // represents every element's parameter values as instances
         // of one of these subclasses, keyed by name to a matching
         // ParameterElement definition.
-        Box::new(parameters::APropertyDecoder),
-        Box::new(parameters::APropertyBooleanDecoder),
-        Box::new(parameters::APropertyIntegerDecoder),
-        Box::new(parameters::APropertyEnumDecoder),
-        Box::new(parameters::APropertyDouble1Decoder),
-        Box::new(parameters::APropertyDouble3Decoder),
-        Box::new(parameters::APropertyFloatDecoder),
-        Box::new(parameters::APropertyFloat3Decoder),
-        Box::new(parameters::APropertyStringDecoder),
+        Box::new(SimpleDecoder::new("AProperty")),
+        Box::new(SimpleDecoder::new("APropertyBoolean")),
+        Box::new(SimpleDecoder::new("APropertyInteger")),
+        Box::new(SimpleDecoder::new("APropertyEnum")),
+        Box::new(SimpleDecoder::new("APropertyDouble1")),
+        Box::new(SimpleDecoder::new("APropertyDouble3")),
+        Box::new(SimpleDecoder::new("APropertyFloat")),
+        Box::new(SimpleDecoder::new("APropertyFloat3")),
+        Box::new(SimpleDecoder::new("APropertyString")),
     ]
 }
 
@@ -176,9 +185,16 @@ pub fn all_decoders() -> Vec<Box<dyn ElementDecoder>> {
 /// Returns `None` when the class has no typed decoder in
 /// [`all_decoders`]. ArcWall is never returned here — use
 /// [`arc_wall::decode_at`] instead.
-pub fn decoder_for_class(name: &str) -> Option<Box<dyn ElementDecoder>> {
-    all_decoders().into_iter().find(|d| d.class_name() == name)
+pub fn decoder_for_class(name: &str) -> Option<&'static dyn ElementDecoder> {
+    REGISTRY
+        .iter()
+        .find(|d| d.class_name() == name)
+        .map(Box::as_ref)
 }
+
+/// [`all_decoders`], built once: a lookup allocates nothing, and the walker
+/// looks one up for every typed candidate.
+static REGISTRY: LazyLock<Vec<Box<dyn ElementDecoder>>> = LazyLock::new(all_decoders);
 
 /// Decode instance bytes through the registered typed decoder for
 /// `schema.name`, enforcing wrong-schema rejection.

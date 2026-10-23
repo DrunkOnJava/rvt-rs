@@ -41,59 +41,7 @@
 //! | `m_horizontal_alignment` | Primitive u32 | 0=Left 1=Center 2=Right |
 
 use super::level::normalise_field_name;
-use crate::formats;
-use crate::walker::{DecodedElement, ElementDecoder, HandleIndex, InstanceField};
-use crate::{Error, Result};
-
-macro_rules! simple_decoder {
-    ($Struct:ident, $name:literal) => {
-        pub struct $Struct;
-
-        impl ElementDecoder for $Struct {
-            fn class_name(&self) -> &'static str {
-                $name
-            }
-
-            fn decode(
-                &self,
-                bytes: &[u8],
-                schema: &formats::ClassEntry,
-                index: &HandleIndex,
-            ) -> Result<DecodedElement> {
-                self.decode_with_limits(
-                    bytes,
-                    schema,
-                    index,
-                    crate::walker::WalkerLimits::default(),
-                )
-            }
-
-            fn decode_with_limits(
-                &self,
-                bytes: &[u8],
-                schema: &formats::ClassEntry,
-                _index: &HandleIndex,
-                limits: crate::walker::WalkerLimits,
-            ) -> Result<DecodedElement> {
-                if schema.name != $name {
-                    return Err(Error::BasicFileInfo(format!(
-                        "{} received wrong schema: {}",
-                        stringify!($Struct),
-                        schema.name
-                    )));
-                }
-                Ok(crate::walker::decode_instance_with_limits(
-                    bytes, 0, schema, limits,
-                ))
-            }
-        }
-    };
-}
-
-simple_decoder!(DimensionDecoder, "Dimension");
-simple_decoder!(TagDecoder, "Tag");
-simple_decoder!(TextNoteDecoder, "TextNote");
-simple_decoder!(AnnotationDecoder, "Annotation");
+use crate::walker::{DecodedElement, InstanceField};
 
 /// Typed view of a decoded Dimension.
 #[derive(Debug, Clone, PartialEq, Default)]
