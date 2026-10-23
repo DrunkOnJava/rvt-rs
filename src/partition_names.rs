@@ -479,10 +479,12 @@ pub const TYPE_OBJECT_TAG_OFFSET: usize = 0x47;
 pub const RAILING_TYPE_NAME_WINDOW: std::ops::Range<usize> = 0x100..0x300;
 /// The class whose tag sits at [`TYPE_OBJECT_TAG_OFFSET`] of a railing
 /// type's object: [`TYPE_OBJECT_TAG`] on Revit 2024, `0x103c` on RE1's 2025
-/// schema (B45).
+/// schema.
+// Tracker: B45.
 pub const TYPE_OBJECT_CLASS: &str = "SymbolInfo";
 /// The class of the unset field frame that follows a railing type's name:
-/// `0x020b` on Revit 2024, `0x0220` on RE1's 2025 schema (B45).
+/// `0x020b` on Revit 2024, `0x0220` on RE1's 2025 schema.
+// Tracker: B45.
 pub const RAILING_TYPE_NAME_END_CLASS: &str = "BalusterPattern";
 
 /// The tags a railing type's object is found and its name ended by
@@ -774,7 +776,7 @@ fn railing_type_name_at(buf: &[u8], id_at: usize, tags: RailingTypeTags) -> Opti
 }
 
 /// A railing type's name in its `StairsRailingAttr` data object (RE-153,
-/// B45, Revit 2025): the one name that ends at the object's first name-end
+/// Revit 2025): the one name that ends at the object's first name-end
 /// frame, as in RE-66's type objects. RE1 Architecture's type 446543 holds
 /// "-" there, at +571 of its 1,253-byte object.
 pub fn railing_type_name_in(object: &[u8], tags: RailingTypeTags) -> Option<String> {

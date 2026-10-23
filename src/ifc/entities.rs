@@ -1,8 +1,8 @@
 //! IFC entity types targeted by the exporter.
 //!
 //! Intentionally minimal — only the entity categories the mapping table in
-//! `mod.rs` references. Expand as Layer 4c progresses and more Revit
-//! classes become decodable.
+//! `mod.rs` references. It grows as more Revit classes become
+//! decodable.
 
 use serde::{Deserialize, Serialize};
 
@@ -18,6 +18,7 @@ use serde::{Deserialize, Serialize};
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "kind")]
+#[non_exhaustive]
 pub enum IfcEntity {
     Project {
         name: Option<String>,
@@ -100,7 +101,7 @@ pub enum IfcEntity {
         host_element_index: Option<usize>,
         /// Index into `IfcModel.material_layer_sets` — the layered
         /// assembly (gypsum / insulation / sheathing / …) that
-        /// makes up this element (IFC-28). Used for walls, slabs,
+        /// makes up this element. Used for walls, slabs,
         /// roofs, and ceilings that have a real multi-layer
         /// composition. When set, the writer emits
         /// `IfcMaterialLayerSet` + `IfcMaterialLayerSetUsage` + an
@@ -108,18 +109,20 @@ pub enum IfcEntity {
         /// usage — *instead of* the single-material path driven by
         /// `material_index`. When both are set, the layer set
         /// wins (single-material falls back to the first layer).
+        // Tracker: IFC-28.
         #[serde(default)]
         material_layer_set_index: Option<usize>,
         /// Index into `IfcModel.material_profile_sets` — the
         /// profile-based material assignment for structural framing
-        /// (columns / beams) with named cross-sections (IFC-30).
+        /// (columns / beams) with named cross-sections.
         /// When set, the writer emits `IfcMaterialProfileSet` +
         /// `IfcMaterialProfileSetUsage` instead of the single-material
         /// or layer-set paths. Precedence order for material
         /// association: profile_set > layer_set > single material.
+        // Tracker: IFC-30.
         #[serde(default)]
         material_profile_set_index: Option<usize>,
-        /// Optional richer solid geometry (IFC-18 / IFC-19 / IFC-20).
+        /// Optional richer solid geometry.
         /// When `Some`, the writer emits the corresponding
         /// `IfcRevolvedAreaSolid`, `IfcBooleanResult`, or
         /// `IfcFacetedBrep` chain into the element's Representation
@@ -128,25 +131,27 @@ pub enum IfcEntity {
         /// `extrusion` are set, `solid_shape` wins; when both are
         /// `None`, the element stays geometry-free
         /// (Representation = $).
+        // Tracker: IFC-18, IFC-19, IFC-20.
         #[serde(default)]
         solid_shape: Option<SolidShape>,
         /// Index into `IfcModel.representation_maps` — when set,
         /// the element shares a common shape representation with
-        /// other instances pointing at the same map (IFC-21). The
+        /// other instances pointing at the same map. The
         /// writer emits an `IfcMappedItem` + `IfcShapeRepresentation`
         /// with representation-type `'MappedRepresentation'` in
         /// place of the per-instance extrusion / solid chain.
         ///
         /// Precedence (highest wins):
-        /// 1. `representation_map_index`   (IFC-21 mapped item)
-        /// 2. `solid_shape`                (IFC-18/19/20 solid)
-        /// 3. `extrusion`                  (IFC-16 extruded area)
+        /// 1. `representation_map_index`   (mapped item)
+        /// 2. `solid_shape`                (solid)
+        /// 3. `extrusion`                  (extruded area)
         /// 4. none                         (Representation = $)
         ///
         /// Typical Revit → IFC use: every Door or Window sharing
         /// the same Symbol (type family) references a single
         /// representation map. The writer emits the shape chain
         /// once, instances emit a ~4-entity IfcMappedItem wrap.
+        // Tracker: IFC-21.
         #[serde(default)]
         representation_map_index: Option<usize>,
     },
@@ -170,8 +175,9 @@ pub enum IfcEntity {
     /// `b_id`). Both are indices into `IfcModel::entities`. The writer gives
     /// each connector an `IfcDistributionPort` named after its element and
     /// index, joins the two with an `IfcRelConnectsPorts`, and nests each in
-    /// its element with an `IfcRelNests` (B84). The ports have no
+    /// its element with an `IfcRelNests`. The ports have no
     /// flow direction: the file's lists do not carry one.
+    // Tracker: B84.
     PortConnection {
         a: usize,
         a_id: u32,
@@ -181,7 +187,7 @@ pub enum IfcEntity {
         b_index: u32,
     },
     /// Connector `index` of the distribution element at `element` (ElementId
-    /// `id`, an index into `IfcModel::entities`) (B54): the writer gives it
+    /// `id`, an index into `IfcModel::entities`): the writer gives it
     /// its `IfcDistributionPort`, tied to the element, where no join has.
     /// Revit's export writes connectors 0 and 1 of every duct and pipe, and
     /// each connector of a family instance's symbol, whether or not anything
@@ -197,6 +203,7 @@ pub enum IfcEntity {
     /// vector, model axes, its placement's Z axis points along: out of the
     /// pipe at that end, or into it for a port whose flow is `SINK`, as
     /// Revit's export writes them.
+    // Tracker: B54.
     Port {
         element: usize,
         id: u32,
@@ -231,7 +238,7 @@ pub enum IfcEntity {
         outline_feet: Vec<(f64, f64)>,
         depth_feet: f64,
     },
-    /// The opening a wall's edited elevation profile cuts (B55): voiding the
+    /// The opening a wall's edited elevation profile cuts: voiding the
     /// wall at `host` (an index into `IfcModel::entities`), placed in its
     /// frame. `outline_feet` lies in the wall's vertical plane, along the
     /// wall's axis and up from the placement's origin, counter-clockwise; the
@@ -239,6 +246,7 @@ pub enum IfcEntity {
     /// lies `plane_offset_feet` to the axis's left of the origin, and the
     /// outline is extruded `thickness_feet` through the wall, centred on the
     /// plane, as Revit's export writes it.
+    // Tracker: B55.
     WallProfileOpening {
         host: usize,
         tag: String,
@@ -248,10 +256,11 @@ pub enum IfcEntity {
         plane_offset_feet: f64,
         thickness_feet: f64,
     },
-    /// The building elements a room's space contains (B63): `elements`
+    /// The building elements a room's space contains: `elements`
     /// (indices into `IfcModel::entities`) are contained in the `IfcSpace` at
     /// `space` instead of their storey, as Revit's export contains a room's
     /// furniture, fixtures and equipment. They keep their `storey_index`.
+    // Tracker: B63.
     SpaceContainment { space: usize, elements: Vec<usize> },
 }
 
@@ -263,6 +272,7 @@ pub struct Classification {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[non_exhaustive]
 pub enum ClassificationSource {
     OmniClass,
     Uniformat,
@@ -290,13 +300,14 @@ pub struct ClassificationItem {
 /// cross-section (circle, I-beam, T, L, U, hollow rectangle, hollow
 /// circle, arbitrary closed polyline) set [`profile_override`] to a
 /// [`ProfileDef`] — when `Some`, the writer emits the matching
-/// `IfcProfileDef` subclass (IFC-24) and ignores `width_feet` /
+/// `IfcProfileDef` subclass and ignores `width_feet` /
 /// `depth_feet`. `height_feet` is always honoured as the extrusion
 /// depth.
 ///
 /// [`width_feet`]: Extrusion::width_feet
 /// [`depth_feet`]: Extrusion::depth_feet
 /// [`profile_override`]: Extrusion::profile_override
+// Tracker: IFC-24.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Extrusion {
     /// Profile width (local X, in feet) when `profile_override` is
@@ -312,7 +323,7 @@ pub struct Extrusion {
     /// for a slab = slab thickness; for a column = height; for a
     /// beam = length along its structural axis.
     pub height_feet: f64,
-    /// Optional non-rectangular profile (IFC-24). When `Some`, the
+    /// Optional non-rectangular profile. When `Some`, the
     /// writer emits the corresponding `IfcProfileDef` subclass
     /// (`IFCCIRCLEPROFILEDEF`, `IFCIShapeProfileDef`,
     /// `IFCTShapeProfileDef`, `IFCLShapeProfileDef`,
@@ -321,6 +332,7 @@ pub struct Extrusion {
     /// instead of the default `IFCRectangleProfileDef`. Use
     /// `Extrusion::circle`, `Extrusion::i_shape`, etc. constructors
     /// for ergonomics.
+    // Tracker: IFC-24.
     #[serde(default)]
     pub profile_override: Option<ProfileDef>,
 }
@@ -516,9 +528,11 @@ impl Extrusion {
     }
 }
 
-/// Boolean operation between two solids (IFC-19).
+/// Boolean operation between two solids.
 /// Maps to the IFC4 `IfcBooleanOperator` enum values.
+// Tracker: IFC-19.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[non_exhaustive]
 pub enum IfcBooleanOp {
     /// `.UNION.` — operand_a ∪ operand_b.
     Union,
@@ -549,15 +563,15 @@ impl IfcBooleanOp {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BrepTriangle(pub u32, pub u32, pub u32);
 
-/// A rich solid geometry for a `BuildingElement` (IFC-18 /
-/// IFC-19 / IFC-20). Covers three IFC4 solid-body paths that the
+/// A rich solid geometry for a `BuildingElement`. Covers three IFC4
+/// solid-body paths that the
 /// rectangular [`Extrusion`] can't express:
 ///
 /// | Variant | IFC4 entity chain emitted |
 /// |---|---|
-/// | `RevolvedArea` | `IfcProfileDef subclass` + `IfcRevolvedAreaSolid` (IFC-18) |
-/// | `BooleanResult` | `IfcBooleanResult(op, a, b)` with recursive operand emission (IFC-19) |
-/// | `FacetedBrep` | `IfcCartesianPoint` × N + `IfcPolyLoop` × F + `IfcFaceBound` × F + `IfcFace` × F + `IfcClosedShell` + `IfcFacetedBrep` (IFC-20) |
+/// | `RevolvedArea` | `IfcProfileDef subclass` + `IfcRevolvedAreaSolid` |
+/// | `BooleanResult` | `IfcBooleanResult(op, a, b)` with recursive operand emission |
+/// | `FacetedBrep` | `IfcCartesianPoint` × N + `IfcPolyLoop` × F + `IfcFaceBound` × F + `IfcFace` × F + `IfcClosedShell` + `IfcFacetedBrep` |
 ///
 /// The `RevolvedArea` variant is the right fit for axi-symmetric
 /// elements — lathe-turned columns, bell curves, domes. The
@@ -572,15 +586,18 @@ pub struct BrepTriangle(pub u32, pub u32, pub u32);
 /// See the writer in `step_writer.rs::emit_solid_shape` for the
 /// exact entity layout and the `emit_solid_shape_*` helper
 /// methods.
+// Tracker: IFC-18, IFC-19, IFC-20.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[non_exhaustive]
 pub enum SolidShape {
     /// Profile rotated about an axis through a specified angle.
-    /// Emits `IfcRevolvedAreaSolid` (IFC-18). The profile is the
+    /// Emits `IfcRevolvedAreaSolid`. The profile is the
     /// same `ProfileDef` vocabulary used by
     /// [`Extrusion::profile_override`], so a pear-shaped turned
     /// pier column is `RevolvedArea { profile: ArbitraryClosed
     /// { points: <half-silhouette> }, axis_..., angle_radians:
     /// 2π }`.
+    // Tracker: IFC-18.
     RevolvedArea {
         /// 2D cross-section to rotate.
         profile: ProfileDef,
@@ -592,24 +609,26 @@ pub enum SolidShape {
         /// turned column / sphere-of-revolution).
         angle_radians: f64,
     },
-    /// CSG combination of two nested solids (IFC-19). Emits
+    /// CSG combination of two nested solids. Emits
     /// `IfcBooleanResult(op, a, b)` with operand_a / operand_b
     /// recursively emitted by the same dispatcher. Use `Difference`
     /// for Revit "subtract void from body" patterns when the void
     /// can't be expressed as an `IfcOpeningElement` link (e.g. a
     /// coffered ceiling, a pier with a carved niche).
+    // Tracker: IFC-19.
     BooleanResult {
         op: IfcBooleanOp,
         operand_a: Box<SolidShape>,
         operand_b: Box<SolidShape>,
     },
-    /// Closed polyhedral surface as a faceted brep (IFC-20).
+    /// Closed polyhedral surface as a faceted brep.
     /// Emits `IFCFACETEDBREP` with one `IfcClosedShell` wrapping
     /// `IfcFace` / `IfcFaceBound` / `IfcPolyLoop` entities and
     /// one `IfcCartesianPoint` per unique vertex. Used for any
     /// Revit element whose body is a mesh rather than a swept
     /// profile — imported terrain, free-form roofs, conceptual
     /// massing brep output, DirectShape IfcOpenShell triangulation.
+    // Tracker: IFC-20.
     FacetedBrep {
         /// Vertex coordinates in element-local space (feet). The
         /// writer converts to metres at emit time.
@@ -638,7 +657,7 @@ pub enum SolidShape {
     /// with the other CSG operands.
     ExtrudedArea(Extrusion),
     /// Profile swept along an arbitrary polyline directrix with a
-    /// fixed up-reference direction (IFC-17). Emits IFC4
+    /// fixed up-reference direction. Emits IFC4
     /// `IfcFixedReferenceSweptAreaSolid`. Use for cable trays,
     /// pipes, duct runs, curtain-wall mullions along a curve,
     /// sloped handrails — anything where the profile stays
@@ -654,6 +673,7 @@ pub enum SolidShape {
     /// IFC4 reserves start / end parameters for trimming the
     /// directrix; we always sweep the full polyline (0 → 1
     /// normalised) which is the correct default for Revit data.
+    // Tracker: IFC-17.
     SweptPath {
         /// 2D cross-section (see [`ProfileDef`]).
         profile: ProfileDef,
@@ -686,7 +706,7 @@ pub enum SolidShape {
     },
 }
 
-/// Named cross-sections for an extrusion (IFC-24). Feeds one of
+/// Named cross-sections for an extrusion. Feeds one of
 /// eight IFC4 `IfcProfileDef` subclasses. All values in feet
 /// (writer converts to metres at emit time). Profiles are centred
 /// on the element origin in the local XY frame; positive X is the
@@ -707,7 +727,9 @@ pub enum SolidShape {
 /// | Beam (tee) | `TShape` |
 /// | Curtain mullion | `ArbitraryClosed` |
 /// | Wall / slab / roof / ceiling | `Rectangle` (default, no override) |
+// Tracker: IFC-24.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[non_exhaustive]
 pub enum ProfileDef {
     /// `IFCRectangleProfileDef` — the default if `profile_override`
     /// is `None`. Kept as an explicit variant so callers can round-
@@ -787,10 +809,11 @@ pub enum ProfileDef {
 }
 
 /// One layer of a compound building-element material assembly
-/// (IFC-28). `thickness_feet` is the physical thickness (writer
+///. `thickness_feet` is the physical thickness (writer
 /// converts to metres at emit time). `material_index` points into
 /// `IfcModel.materials` — the material filling this layer, or `None` for a
 /// layer whose material is not known (IFC4 makes it optional).
+// Tracker: IFC-28.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MaterialLayer {
     pub material_index: Option<usize>,
@@ -805,7 +828,7 @@ pub struct MaterialLayer {
 }
 
 /// An ordered set of [`MaterialLayer`]s representing the compound
-/// composition of a wall / floor / roof / ceiling (IFC-28). Maps
+/// composition of a wall / floor / roof / ceiling. Maps
 /// to IFC4 `IfcMaterialLayerSet` + (via
 /// `IfcEntity::BuildingElement::material_layer_set_index`)
 /// `IfcMaterialLayerSetUsage`.
@@ -815,6 +838,7 @@ pub struct MaterialLayer {
 /// partitions are usually 2-3. The ordering matters: IFC4
 /// interprets index `0` as the outermost layer (exterior or top side)
 /// with subsequent layers stacked inward.
+// Tracker: IFC-28.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MaterialLayerSet {
     pub name: String,
@@ -827,6 +851,7 @@ pub struct MaterialLayerSet {
 /// Which axis of an element's placement a material layer set runs along
 /// (IFC4 `IfcLayerSetDirectionEnum`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[non_exhaustive]
 pub enum LayerSetDirection {
     Axis1,
     Axis2,
@@ -890,10 +915,11 @@ impl MaterialLayerSet {
 }
 
 /// One material assigned to a structural profile in a
-/// [`MaterialProfileSet`] (IFC-30). `material_index` references
+/// [`MaterialProfileSet`]. `material_index` references
 /// `IfcModel.materials`; `profile_name` identifies the profile
 /// (I-beam, HSS tube, circular column) defined elsewhere in the
 /// model via `IfcProfileDef`.
+// Tracker: IFC-30.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MaterialProfile {
     pub material_index: usize,
@@ -912,7 +938,7 @@ pub struct MaterialProfile {
 }
 
 /// An ordered set of [`MaterialProfile`]s for a structural
-/// framing element (IFC-30). Analog of [`MaterialLayerSet`] but
+/// framing element. Analog of [`MaterialLayerSet`] but
 /// for columns and beams rather than compound walls. Most
 /// structural elements have exactly one profile; composite
 /// sections (steel + concrete encasement) use multiple.
@@ -920,6 +946,7 @@ pub struct MaterialProfile {
 /// Maps to IFC4 `IfcMaterialProfileSet` + (via
 /// `IfcEntity::BuildingElement::material_profile_set_index`)
 /// `IfcMaterialProfileSetUsage`.
+// Tracker: IFC-30.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MaterialProfileSet {
     pub name: String,
@@ -928,7 +955,7 @@ pub struct MaterialProfileSet {
     pub description: Option<String>,
 }
 
-/// Shared geometry for a family / type / symbol (IFC-21).
+/// Shared geometry for a family / type / symbol.
 /// Any number of `BuildingElement` instances can reference the
 /// same `RepresentationMap` via `representation_map_index` —
 /// the writer emits the underlying shape chain once and each
@@ -940,6 +967,7 @@ pub struct MaterialProfileSet {
 ///
 /// Maps to IFC4 `IfcRepresentationMap` + (through the writer's
 /// dispatch) `IfcMappedItem` per referencing instance.
+// Tracker: IFC-21.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RepresentationMap {
     /// Human-readable name for the family / type. Emitted as
@@ -971,7 +999,7 @@ pub struct UnitAssignment {
     pub ifc_mapping: Option<String>,
 }
 
-/// A parsed Forge (Autodesk) unit identifier (IFC-39).
+/// A parsed Forge (Autodesk) unit identifier.
 ///
 /// Revit carries its project / family unit preferences as
 /// "Forge-style" identifier strings in the `PartAtom` XML and in
@@ -989,7 +1017,9 @@ pub struct UnitAssignment {
 /// Invariant: every non-`Other` variant has a defined
 /// [`ForgeUnit::ifc_emission`] mapping — callers can always emit
 /// a valid IFC unit for a matched identifier.
+// Tracker: IFC-39.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum ForgeUnit {
     // ---- Length ----
     Millimeters,
@@ -1045,6 +1075,7 @@ pub enum ForgeUnit {
 
 /// IFC4 dimensional category (`LENGTHUNIT`, `AREAUNIT`, …).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum IfcUnitType {
     Length,
     Area,
@@ -1068,7 +1099,7 @@ impl IfcUnitType {
     }
 }
 
-/// How an IFC unit should be emitted (IFC-40).
+/// How an IFC unit should be emitted.
 ///
 /// - `SI { prefix, name }`: emits a single `IFCSIUNIT(*, <type>,
 ///   <prefix>, <name>)`. Prefix is `None` for ambient (e.g. metres,
@@ -1081,7 +1112,9 @@ impl IfcUnitType {
 /// Example conversion factors: one foot equals `0.3048 m`; one inch
 /// equals `0.0254 m`; one degree equals `π / 180 rad`; one pound
 /// equals `0.453592 kg`; one US gallon equals `0.00378541 m^3`.
+// Tracker: IFC-40.
 #[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
 pub enum IfcUnitEmission {
     /// Pure SI unit.
     Si {
@@ -1453,6 +1486,7 @@ pub struct Property {
 /// unit-consistent with the project-level `IfcUnitAssignment`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "kind", content = "value")]
+#[non_exhaustive]
 pub enum PropertyValue {
     /// Free-form text — `IfcText`.
     Text(String),
@@ -1481,18 +1515,23 @@ pub enum PropertyValue {
     /// Angle in radians. Maps to `IfcPlaneAngleMeasure`.
     AngleRadians(f64),
     /// Area in square feet (writer converts to square metres).
-    /// Maps to `IfcAreaMeasure`. (IFC-32)
+    /// Maps to `IfcAreaMeasure`.
+    // Tracker: IFC-32.
     AreaSquareFeet(f64),
     /// Volume in cubic feet (writer converts to cubic metres).
-    /// Maps to `IfcVolumeMeasure`. (IFC-32)
+    /// Maps to `IfcVolumeMeasure`.
+    // Tracker: IFC-32.
     VolumeCubicFeet(f64),
     /// Unitless discrete count — occupancy, rebar count, fixture count.
-    /// Maps to `IfcCountMeasure`. (IFC-32)
+    /// Maps to `IfcCountMeasure`.
+    // Tracker: IFC-32.
     CountValue(i64),
-    /// Time measurement in seconds. Maps to `IfcTimeMeasure`. (IFC-32)
+    /// Time measurement in seconds. Maps to `IfcTimeMeasure`.
+    // Tracker: IFC-32.
     TimeSeconds(f64),
     /// Mass in pounds (writer converts to kilograms).
-    /// Maps to `IfcMassMeasure`. (IFC-32)
+    /// Maps to `IfcMassMeasure`.
+    // Tracker: IFC-32.
     MassPounds(f64),
     /// A thermal transmittance in W/(m²·K), as Revit stores it. Maps to
     /// `IfcThermalTransmittanceMeasure`, which standard property sets such
@@ -1503,7 +1542,8 @@ pub enum PropertyValue {
     List(Vec<PropertyValue>),
     /// Values of an enumeration, as labels: the writer emits an
     /// `IfcPropertyEnumeratedValue`, as Revit's export writes
-    /// `Pset_DuctSegmentTypeCommon.Shape` (B43).
+    /// `Pset_DuctSegmentTypeCommon.Shape`.
+    // Tracker: B43.
     Enumerated(Vec<String>),
 }
 

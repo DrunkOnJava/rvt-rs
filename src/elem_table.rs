@@ -36,6 +36,7 @@ use serde::{Deserialize, Serialize};
 
 /// Header extracted from the first bytes of decompressed Global/ElemTable.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct ElemTableHeader {
     /// Named for what it was assumed to be, but not a count of elements:
     /// the serialization tag of the class `ElemTable` in the file's own
@@ -57,6 +58,7 @@ pub struct ElemTableHeader {
 
 /// How records are framed in this ElemTable stream.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[non_exhaustive]
 pub enum RecordFraming {
     /// 12-byte records from `0x30`, no owner field: the fallback for a
     /// table neither record size fits. No corpus file uses it.
@@ -86,6 +88,7 @@ pub struct ElemTableLayout {
 /// On the implicit fallback layout, `id_primary`/`id_secondary` are the first
 /// two `u32`s of the 12-byte record.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct ElemRecord {
     /// Offset in the decompressed stream where this record begins.
     pub offset: usize,
@@ -118,6 +121,7 @@ pub struct ElemRecord {
 /// Backward-compat record type from the pre-corpus-probe parser. Kept so
 /// existing callers and tests keep compiling; prefer `ElemRecord` for new work.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct ElemRecordRough {
     /// Offset in the decompressed stream where this record begins.
     pub offset: usize,
@@ -127,9 +131,10 @@ pub struct ElemRecordRough {
 
 fn parse_header_bytes(d: &[u8]) -> Result<ElemTableHeader> {
     if d.len() < 0x30 {
-        return Err(Error::BasicFileInfo(
-            "Global/ElemTable stream too short for header".into(),
-        ));
+        return Err(Error::Malformed {
+            what: "Global/ElemTable",
+            detail: "shorter than its header".into(),
+        });
     }
     let element_count = u16::from_le_bytes([d[0], d[1]]);
     let record_count = u32::from_le_bytes([d[2], d[3], d[4], d[5]]);
@@ -345,6 +350,7 @@ pub fn index_by_element_id(records: &[ElemRecord]) -> std::collections::BTreeMap
 /// partition ArcWall trailer.
 #[cfg(feature = "unstable-research")]
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub struct LinkedArcWallElement<'a> {
     pub element_id: u32,
     pub elem_record: &'a ElemRecord,

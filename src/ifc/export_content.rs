@@ -1,4 +1,4 @@
-//! Mode-aware IFC content policy (Lane Seven).
+//! Mode-aware IFC content policy.
 //!
 //! [`ExportQualityMode`] is both a *validation gate* (see
 //! [`super::ExportQualityMode::validate`]) and a *content policy*
@@ -8,7 +8,7 @@
 //! |---|---|
 //! | `scaffold` | Framework + production elements; geometry when recovered. No diagnostic proxies. |
 //! | `typed-no-geometry` | Mapped / typed elements only; geometry fields stripped. |
-//! | `geometry` | Mapped / typed elements; attach Lane Six curves / loops / hosts / elevations when present. |
+//! | `geometry` | Mapped / typed elements; attach recovered curves, loops, hosts and elevations when present. |
 //! | `strict` | Same emission as `geometry`; validation then fails closed on incomplete output. |
 //!
 //! `HostObjAttr` and other low-confidence parent-class hits are never
@@ -33,6 +33,7 @@ use std::collections::{BTreeMap, HashMap};
 
 /// Result of folding production walker hits into an IFC draft.
 #[derive(Debug, Default)]
+#[non_exhaustive]
 pub struct TypedProductionAppend {
     /// Revit element id → index in `entities` (for host linking).
     pub id_to_entity: HashMap<u32, usize>,
@@ -56,8 +57,9 @@ pub struct TypedProductionAppend {
     /// Each family instance's original symbol, by ElementId (RE-167).
     pub element_original_symbols: BTreeMap<u32, u32>,
     /// Whether Revit's exporter takes each door's and window's symbol as
-    /// flipped, by ElementId (B72): read in every quality mode, as the flip
-    /// is part of the type's GlobalId (B74).
+    /// flipped, by ElementId: read in every quality mode, as the flip
+    /// is part of the type's GlobalId.
+    // Tracker: B72, B74.
     pub element_flips: BTreeMap<u32, bool>,
     /// The `Pset_PipeSegmentOccurrence` sets whose `InvertElevation` is a
     /// pipe's invert worked out in model height, by index in the entities,
@@ -98,7 +100,7 @@ impl ExportContentPolicy {
 }
 
 /// Property-set name carried by a body recovered from a partition
-/// element record's bounding box (#204 / #211).
+/// element record's bounding box (#204, #211).
 pub const ELEMENT_RECORD_PROPERTY_SET: &str = "RvtElementRecordGeometry";
 
 /// Property naming an element-record element's family (RE-38).
@@ -180,7 +182,8 @@ pub(crate) fn is_distribution_element(ifc_type: &str) -> bool {
         )
 }
 
-/// An element's place in plan, for a door's or window's flip (B72).
+/// An element's place in plan, for a door's or window's flip.
+// Tracker: B72.
 struct PlanFrame {
     location: [f64; 2],
     /// The direction of the element's axis, where it has a body.
@@ -203,7 +206,7 @@ fn plan_axis_turn(rotation_radians: Option<f64>, body: &Extrusion) -> f64 {
 }
 
 /// Whether Revit's exporter takes a door's or window's symbol as flipped
-/// (B72, revit-ifc `DoorWindowInfo.CalculateDoorWindowInformation`): whether
+/// (revit-ifc `DoorWindowInfo.CalculateDoorWindowInformation`): whether
 /// the side of its host wall's axis its box centre lies on differs from the
 /// side its own Y axis (`facing`) points to, a side being +Y of the wall's
 /// direction. The direction's sign cancels out. A door with no host wall, or
@@ -219,8 +222,9 @@ fn door_symbol_flipped(door: [f64; 2], wall: [f64; 2], wall_turn: f64, facing: [
 }
 
 /// The record properties that say what an element is rather than where it
-/// is or how it is drawn, which an export without geometry keeps (B74),
+/// is or how it is drawn, which an export without geometry keeps,
 /// along with the type's text parameters (RE-77).
+// Tracker: B74.
 const IDENTITY_PROPERTIES: [&str; 10] = [
     crate::element_record_level_refs::LEVEL_ELEMENT_ID_PROPERTY,
     "LevelBindSource",
@@ -235,7 +239,8 @@ const IDENTITY_PROPERTIES: [&str; 10] = [
 ];
 
 /// `set` less every property that is not one of [`IDENTITY_PROPERTIES`] or
-/// a type text parameter of `decoded` (B74).
+/// a type text parameter of `decoded`.
+// Tracker: B74.
 fn identity_property_set(mut set: PropertySet, decoded: &DecodedElement) -> PropertySet {
     let type_parameters: Vec<&str> = decoded
         .fields
@@ -376,15 +381,13 @@ pub fn append_typed_production_elements(
     // #847: each pipe's two ends and the connector entry keys at each.
     let mut pipe_ends: BTreeMap<usize, PipeEnds> = BTreeMap::new();
     // RE-162: each MEP system's name and members, by its ElementId.
-    let mut pending_systems: std::collections::BTreeMap<u32, (Option<String>, Vec<usize>)> =
-        Default::default();
+    let mut pending_systems: BTreeMap<u32, (Option<String>, Vec<usize>)> = Default::default();
     // Bodies of aggregate wholes, held back until their parts are known: a
     // whole that no part names keeps its own body.
-    let mut held_bodies: std::collections::BTreeMap<usize, Extrusion> =
-        std::collections::BTreeMap::new();
+    let mut held_bodies: BTreeMap<usize, Extrusion> = BTreeMap::new();
     // B72: each element's plan frame by entity index, and each door's and
     // window's facing and host, for the flip its type's GlobalId hashes.
-    let mut frames: std::collections::HashMap<usize, PlanFrame> = Default::default();
+    let mut frames: HashMap<usize, PlanFrame> = Default::default();
     let mut facings: BTreeMap<u32, [f64; 2]> = BTreeMap::new();
     let mut opening_hosts: Vec<(usize, u32, u32)> = Vec::new();
     let mut level_bind = crate::level_bind::LevelStoreyBind::new();
@@ -1097,8 +1100,7 @@ pub fn append_typed_production_elements(
     }
 
     // #323: group each whole's parts into one aggregate.
-    let mut parts_by_whole: std::collections::BTreeMap<usize, Vec<usize>> =
-        std::collections::BTreeMap::new();
+    let mut parts_by_whole: BTreeMap<usize, Vec<usize>> = BTreeMap::new();
     for (part_index, whole_id) in pending_parts {
         if let Some(&whole_index) = out.id_to_entity.get(&whole_id) {
             parts_by_whole
@@ -1523,7 +1525,7 @@ fn stair_property_set(decoded: &DecodedElement) -> Option<PropertySet> {
 
 /// The sets holding `Reference` of each entity and predefined type written
 /// ([`reference_set_kinds`]).
-type ReferenceKinds = std::collections::BTreeMap<
+type ReferenceKinds = BTreeMap<
     (String, Option<&'static str>),
     Vec<(
         &'static str,
@@ -1588,12 +1590,12 @@ fn reference_property_sets(
 }
 
 /// The set Revit's own IFC export writes an element's Category, family and
-/// type in, and its type object's Category and Family Name (spike 257).
+/// type in, and its type object's Category and Family Name (#755).
 pub const REVIT_OTHER_SET: &str = "Other";
 
 /// The parameters Revit's own IFC export writes on an element for its
 /// category, family, type and phase, under its set and property names
-/// (spike 257): `Other` (Category, Family, Family and Type, Type, Type Id)
+/// (#755): `Other` (Category, Family, Family and Type, Type, Type Id)
 /// and `Phasing` (Phase Created). Each is written only from a value the
 /// element carries. The type's own parameters (Family Name, Type Name) go on
 /// its type object, as Revit writes them.
@@ -1757,7 +1759,8 @@ fn add_is_external(
 }
 
 /// Add `Finish` (`IfcText`) to a covering's `Pset_CoveringCommon` among
-/// `sets`: its type's finish layers' materials (B41).
+/// `sets`: its type's finish layers' materials.
+// Tracker: B41.
 fn add_covering_finish(sets: &mut [PropertySet], ifc_type: &str, decoded: &DecodedElement) {
     if ifc_type != "IFCCOVERING" {
         return;
@@ -2109,12 +2112,13 @@ pub(super) fn pipe_inverts_above_storeys(
     }
 }
 
-/// The entities a room's space contains in Revit's export (B63): on RE1
+/// The entities a room's space contains in Revit's export: on RE1
 /// Architecture its furniture, sanitary terminals and equipment written as
 /// proxies, and no wall, door, slab, covering or curtain wall. On the
 /// BIM4LCA office (#792) Revit's export also puts its waste, fire
 /// suppression and air terminals and electric appliances in their rooms'
 /// spaces.
+// Tracker: B63.
 const ROOM_CONTENT_TYPES: [&str; 7] = [
     "IFCFURNITURE",
     "IFCSANITARYTERMINAL",
@@ -2133,7 +2137,7 @@ type PlanLoop = Vec<(f64, f64)>;
 fn space_plan_outline(
     location: &[f64; 3],
     rotation: f64,
-    extrusion: &entities::Extrusion,
+    extrusion: &Extrusion,
 ) -> Option<(PlanLoop, Vec<PlanLoop>)> {
     let (sin, cos) = rotation.sin_cos();
     let place = |ring: &[(f64, f64)]| -> PlanLoop {
@@ -2161,12 +2165,13 @@ fn space_plan_outline(
 }
 
 /// Contain each room's furniture, fixtures and equipment in its space, as
-/// Revit's export does (B63): a family instance written as one of
+/// Revit's export does: a family instance written as one of
 /// [`ROOM_CONTENT_TYPES`], hosted by nothing, whose location lies in the plan
 /// outline of a space on its storey, or, where it lies in none, whose plan box
 /// overlaps exactly one, as a cabinet recessed into a room's wall does (RE1
 /// Architecture's 375441, 0.08 ft outside its room). Everything else stays in
 /// its storey.
+// Tracker: B63.
 pub(super) fn contain_in_spaces(entities: &mut Vec<entities::IfcEntity>) {
     use crate::element_record_plan_profiles::inside;
     let is_family_instance = |set: &Option<PropertySet>| {
@@ -2456,9 +2461,10 @@ struct RecordGeometry {
 /// its outline in the body's frame, and the floor's thickness, feet.
 type VoidBody = (usize, u32, Vec<(f64, f64)>, f64);
 
-/// A wall's elevation-profile opening (B55): its tag, its outline along and
+/// A wall's elevation-profile opening: its tag, its outline along and
 /// up the wall, the wall's axis turn in its placement, the sketch plane's
 /// offset to the axis's left, and the wall's thickness.
+// Tracker: B55.
 type ProfileOpening = (u32, Vec<(f64, f64)>, f64, f64, f64);
 
 /// `BodyHeightSource` of a column drawn as its body after geometry joins: the

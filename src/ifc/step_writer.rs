@@ -1,6 +1,6 @@
 //! Minimal STEP / ISO-10303-21 serializer for `IfcModel` → valid IFC4.
 //!
-//! This is the serialization half of Layer 5. Given an `IfcModel` in
+//! This is the serialization half of the IFC export. Given an `IfcModel` in
 //! memory, produce a .ifc text file that a spec-compliant reader
 //! (IfcOpenShell, BlenderBIM, buildingSMART validator) accepts.
 //!
@@ -38,6 +38,18 @@ pub struct StepOptions {
 /// data section centred on `IfcProject`. Uses current wall-clock
 /// timestamp. For deterministic output (e.g. tests), use
 /// [`write_step_with_options`] with `StepOptions::timestamp = Some(_)`.
+///
+/// # Examples
+///
+/// ```
+/// use rvt::RevitFile;
+/// use rvt::ifc::{Exporter, RvtDocExporter, write_step};
+///
+/// let mut rf = RevitFile::open("corpus/tier1/architectural-2024/architectural-2024.rvt")?;
+/// let ifc = write_step(&RvtDocExporter.export(&mut rf)?);
+/// assert!(ifc.starts_with("ISO-10303-21;"));
+/// # Ok::<(), rvt::Error>(())
+/// ```
 pub fn write_step(model: &IfcModel) -> String {
     write_step_with_options(model, &StepOptions::default())
 }
@@ -205,7 +217,8 @@ fn type_entity_for(ifc_upper: &str, predefined: Option<&str>) -> Option<(String,
 type PortPoint = (usize, [f64; 3], Option<[f64; 3]>);
 
 /// revit-ifc's name for a type entity the writer emits (its `IFCEntityType`
-/// enum), as its GUID keys spell it (B73).
+/// enum), as its GUID keys spell it.
+// Tracker: B73.
 fn revit_ifc_type_entity_name(step_name: &str) -> Option<&'static str> {
     Some(match step_name {
         "IFCDOORTYPE" => "IfcDoorType",
@@ -771,7 +784,7 @@ impl StepWriter {
         polyline_id
     }
 
-    /// Emit a richer solid body (IFC-18 / IFC-19 / IFC-20) and
+    /// Emit a richer solid body and
     /// return `(solid_entity_id, representation_type_token)`. The
     /// second value is the `IfcShapeRepresentation.RepresentationType`
     /// token that the caller should use: `"SweptSolid"` for
@@ -793,6 +806,7 @@ impl StepWriter {
     /// translation twice (#232). Callers that author their profiles in
     /// the element-local frame — every rvt-rs path does — pass the
     /// project-level identity placement.
+    // Tracker: IFC-18, IFC-19, IFC-20.
     fn emit_solid_shape(
         &mut self,
         shape: &SolidShape,
@@ -1131,10 +1145,11 @@ impl StepWriter {
     /// (#403). The writer converts Revit's feet, square and cubic feet and
     /// pounds on the way out and writes angles in radians, so these are
     /// the units a reader must apply. `model.units`, Revit's display units
-    /// (IFC-40), describe the source model and stay out of it; the export
+    ///, describe the source model and stay out of it; the export
     /// diagnostics report them. A model with a thermal transmittance in any
     /// element's property set also gets kelvin and W/(m²·K), the derived unit
     /// its values are in (RE-194), as Revit's export declares it.
+    // Tracker: IFC-40.
     fn emit_unit_assignment(&mut self, model: &IfcModel) -> Vec<usize> {
         let mut units: Vec<usize> = [
             ("LENGTHUNIT", "$", "METRE"),
@@ -1920,7 +1935,7 @@ impl StepWriter {
         let mut element_material_pairs: Vec<(usize, usize)> = Vec::new();
         // Track (element_id, &PropertySet) so property-set emission
         // runs after all element IDs are assigned.
-        let mut element_property_sets: Vec<(usize, &super::entities::PropertySet)> = Vec::new();
+        let mut element_property_sets: Vec<(usize, &PropertySet)> = Vec::new();
         // Map vec index in model.entities → emitted IFC element id.
         // None when that entity wasn't a BuildingElement. Consulted
         // when resolving `host_element_index` for openings + for
@@ -3385,7 +3400,7 @@ impl StepWriter {
         // B73: of the type objects a type is written as, the one holding its
         // lowest ElementId takes the type's own GlobalId; Revit's exporter
         // keys the others by entity and predefined type.
-        let mut plain_owner: std::collections::BTreeMap<u32, (u32, usize)> = Default::default();
+        let mut plain_owner: BTreeMap<u32, (u32, usize)> = Default::default();
         for (index, group) in type_groups.iter().enumerate() {
             if group.global_id.is_some() {
                 continue;

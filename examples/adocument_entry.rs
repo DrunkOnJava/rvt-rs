@@ -148,6 +148,7 @@ fn main() -> anyhow::Result<()> {
                         unknown_count += 1;
                         0
                     }
+                    _ => 0,
                 };
                 expected_size += sz;
             }

@@ -26,7 +26,7 @@
 //!
 //! The 2D boundary sketch (edges of the floor in plan view) lives in
 //! the ADocument element table, reachable via the element's history
-//! chain — geometry assembly is task GEO-28.
+//! chain. Geometry assembly is not done here.
 
 use super::level::normalise_field_name;
 use crate::formats;
@@ -36,6 +36,7 @@ use crate::{Error, Result};
 /// Floor function classification — mirrors Revit's two-value enum
 /// (Revit doesn't split floors as finely as walls).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[non_exhaustive]
 pub enum FloorFunction {
     #[default]
     Interior,
@@ -85,10 +86,10 @@ impl ElementDecoder for FloorDecoder {
         limits: crate::walker::WalkerLimits,
     ) -> Result<DecodedElement> {
         if schema.name != "Floor" {
-            return Err(Error::BasicFileInfo(format!(
-                "FloorDecoder received wrong schema: {}",
-                schema.name
-            )));
+            return Err(Error::SchemaMismatch {
+                decoder: "Floor",
+                schema: schema.name.clone(),
+            });
         }
         Ok(crate::walker::decode_instance_with_limits(
             bytes, 0, schema, limits,
@@ -121,10 +122,10 @@ impl ElementDecoder for FloorTypeDecoder {
         limits: crate::walker::WalkerLimits,
     ) -> Result<DecodedElement> {
         if schema.name != "FloorType" {
-            return Err(Error::BasicFileInfo(format!(
-                "FloorTypeDecoder received wrong schema: {}",
-                schema.name
-            )));
+            return Err(Error::SchemaMismatch {
+                decoder: "FloorType",
+                schema: schema.name.clone(),
+            });
         }
         Ok(crate::walker::decode_instance_with_limits(
             bytes, 0, schema, limits,
@@ -134,6 +135,7 @@ impl ElementDecoder for FloorTypeDecoder {
 
 /// Typed view of a decoded Floor instance.
 #[derive(Debug, Clone, PartialEq, Default)]
+#[non_exhaustive]
 pub struct Floor {
     pub level_id: Option<u32>,
     /// Offset from host level's elevation. Can be negative.
@@ -179,6 +181,7 @@ impl Floor {
 
 /// Typed view of a decoded FloorType.
 #[derive(Debug, Clone, PartialEq, Default)]
+#[non_exhaustive]
 pub struct FloorType {
     pub name: Option<String>,
     pub function: Option<FloorFunction>,

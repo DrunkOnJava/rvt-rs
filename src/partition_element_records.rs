@@ -109,7 +109,7 @@ use std::collections::{BTreeMap, BTreeSet};
 pub const PARTITION_ELEMENT_RECORD_SUPPORTED_REVIT_VERSIONS: &[u32] = &[2024, 2025, 2026, 2027];
 
 /// The name Revit's `Category` parameter gives an element of each
-/// `BuiltInCategory` (spike 257), a sub-category as `Parent: Name`.
+/// `BuiltInCategory` (#755), a sub-category as `Parent: Name`.
 ///
 /// The ids are Autodesk's published API constants; each name is the one
 /// Revit 2024's own IFC export writes as `Other.Category` for elements whose

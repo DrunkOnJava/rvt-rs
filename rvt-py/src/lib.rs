@@ -171,6 +171,9 @@ fn set_instance_field_items(
             out.set_item("kind", "bytes")?;
             out.set_item("len", b.len())?;
         }
+        _ => {
+            out.set_item("kind", "unknown")?;
+        }
     }
     Ok(())
 }
@@ -388,7 +391,7 @@ impl PyRevitFile {
         Ok(Some(serde_json::to_string(&bfi).map_err(to_py_val)?))
     }
 
-    /// Strict variant of [`basic_file_info_json`] (API-14). Raises
+    /// Strict variant of [`basic_file_info_json`]. Raises
     /// `ValueError` if the stream is missing or parse fails, instead
     /// of returning `None`. Use when downstream Python code needs
     /// to fail loud on malformed input.
@@ -471,7 +474,10 @@ impl PyRevitFile {
 
     /// Run the Layer-5a walker and return ADocument's instance fields
     /// as a Python dict, or `None` if the entry-point detector can't
-    /// confidently locate an ADocument record in this file.
+    /// confidently locate an ADocument record in this file. Raises
+    /// `ValueError` if the file's schema declares no ADocument class,
+    /// which no Revit file lacks (a synthetic file, or a damaged schema),
+    /// and `IOError` if a stream cannot be read.
     ///
     /// Return shape when present:
     ///
@@ -488,15 +494,16 @@ impl PyRevitFile {
     /// }
     /// ```
     fn read_adocument<'py>(&mut self, py: Python<'py>) -> PyResult<Option<Bound<'py, PyDict>>> {
-        let Some(inst) = walker::read_adocument_with_limits(&mut self.inner, self.walker_limits)
-            .map_err(to_py_io)?
-        else {
-            return Ok(None);
+        let inst = match walker::read_adocument_with_limits(&mut self.inner, self.walker_limits) {
+            Ok(Some(inst)) => inst,
+            Ok(None) => return Ok(None),
+            Err(e @ rvt::Error::MissingClass(_)) => return Err(to_py_val(e)),
+            Err(e) => return Err(to_py_io(e)),
         };
         instance_to_dict(py, &inst).map(Some)
     }
 
-    /// Strict variant of [`read_adocument`] (API-15). Raises
+    /// Strict variant of [`read_adocument`]. Raises
     /// `ValueError` if the entry-point detector couldn't confidently
     /// locate the record, OR if any field fell back to raw bytes.
     /// Contract: success means every field decoded cleanly — mirrors
@@ -518,7 +525,7 @@ impl PyRevitFile {
     }
 
     /// Lossy variant of [`read_adocument`] with a diagnostics
-    /// accumulator exposed to Python (API-16). Returns a dict with
+    /// accumulator exposed to Python. Returns a dict with
     /// `value` (the ADocument dict), `complete` (bool),
     /// `partial_fields` (list of field names that fell back to raw
     /// bytes), `failed_streams` (list), and `confidence` (float or
@@ -539,7 +546,10 @@ impl PyRevitFile {
     /// ```
     fn read_adocument_lossy<'py>(&mut self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
         let decoded = walker::read_adocument_lossy_with_limits(&mut self.inner, self.walker_limits)
-            .map_err(to_py_io)?;
+            .map_err(|e| match e {
+                rvt::Error::MissingClass(_) => to_py_val(e),
+                e => to_py_io(e),
+            })?;
         let out = PyDict::new(py);
         let value = instance_to_dict(py, &decoded.value)?;
         out.set_item("value", value)?;
@@ -560,7 +570,7 @@ impl PyRevitFile {
         Ok(out)
     }
 
-    /// Schema diagnostics as a dict (API-13 Python surface for
+    /// Schema diagnostics as a dict (the Python surface of
     /// `SchemaTable::diagnostics`). Returns class_count,
     /// parsed_field_count, declared_field_count_sum,
     /// field_count_mismatches, tagged_class_count,
@@ -588,7 +598,7 @@ impl PyRevitFile {
     ///
     /// Each element has `id`, `class_name`, `byte_range`, `fields`,
     /// and `typed`. The fields use the same `name` / `kind` shape as
-    /// `read_adocument()`. `typed` is a Lane Five MVP projection
+    /// `read_adocument()`. `typed` is the typed projection
     /// (`Level` / `Wall` / `Floor` / `Door` / `Window` / `Room` /
     /// `Material`) or `None` for other classes.
     fn decoded_elements<'py>(&mut self, py: Python<'py>) -> PyResult<Bound<'py, PyList>> {
@@ -638,15 +648,15 @@ impl PyRevitFile {
     /// the file can't be parsed far enough to produce a model, or if
     /// `mode` quality gates are not met.
     ///
-    /// Modes (forward-compatible with Lane 7 geometry work):
+    /// Modes:
     /// - `scaffold` — always accept a spec-valid envelope (default)
     /// - `typed-no-geometry` — require validated typed elements
     /// - `geometry` — require typed elements + geometry
     /// - `strict` — geometry + metadata/units/storeys + no warnings
     ///
-    /// On synthetic / scaffold-only fixtures, only `scaffold`
-    /// typically succeeds; stronger modes raise `ValueError` until
-    /// real typed/geometry recovery is available.
+    /// On a file with no recovered elements, such as the synthetic
+    /// fixtures, only `scaffold` succeeds; the stronger modes raise
+    /// `ValueError`.
     #[pyo3(signature = (mode = "scaffold"))]
     fn write_ifc(&mut self, mode: &str) -> PyResult<String> {
         let mode = parse_export_quality_mode(mode)?;

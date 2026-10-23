@@ -74,11 +74,13 @@ print(summary["classes"], summary["fields"], summary["cpp_types"])
 # Full schema as JSON (~1-2 MB on typical families).
 import json
 schema = json.loads(f.schema_json())
-adoc = next(c for c in schema["classes"] if c["name"] == "ADocument")
+adoc = next((c for c in schema["classes"] if c["name"] == "ADocument"), None)
 
 # Layer-5a walker — ADocument instance fields. Returns None when
-# the entry-point detector can't confidently locate ADocument.
-doc = f.read_adocument()
+# the entry-point detector can't confidently locate ADocument. A file
+# whose schema declares no ADocument (a synthetic one) raises instead,
+# so ask only when `adoc` above found the class.
+doc = f.read_adocument() if adoc is not None else None
 if doc is not None:
     for field in doc["fields"][-3:]:
         print(field["name"], "→", field["kind"], field.get("id"))
@@ -98,7 +100,7 @@ Every signature below is verified against
 
 ### Module-level
 
-```python
+```text
 rvt.__version__  # str — same as the Rust crate version (Cargo.toml)
 
 rvt.rvt_to_ifc(path: str, mode: str = "scaffold") -> str
@@ -142,7 +144,7 @@ The terms used in those diagnostics are defined in
 
 #### Constructor
 
-```python
+```text
 rvt.RevitFile(
     path: str,
     max_file_bytes: int | None = None,
@@ -201,13 +203,13 @@ project `.rvt` files).
 
 #### Methods
 
-```python
+```text
 stream_names(self) -> list[str]
 ```
 All OLE stream paths in the file, sorted, `/`-separated
 regardless of host OS. The reference corpus has 13 entries.
 
-```python
+```text
 read_stream(self, name: str) -> bytes
 ```
 Raw bytes of the named OLE stream. Accepts either leading-slash
@@ -219,14 +221,14 @@ want decompressed content need the Rust-side
 Python. Subject to `max_stream_bytes`. Raises `IOError` on
 unknown stream names.
 
-```python
+```text
 missing_required_streams(self) -> list[str]
 ```
 Required Revit stream names that are absent. Empty list on a
 valid Revit file. Useful for pre-validating an input before
 running heavy extractors.
 
-```python
+```text
 basic_file_info_json(self) -> str | None
 basic_file_info_json_strict(self) -> str
 ```
@@ -237,7 +239,7 @@ struct. `basic_file_info_json` returns `None` if the `BasicFileInfo`
 stream can't be parsed; `basic_file_info_json_strict` raises
 `ValueError` instead.
 
-```python
+```text
 part_atom_json(self) -> str | None
 part_atom_json_strict(self) -> str
 ```
@@ -249,13 +251,13 @@ returns `None` if the file has no `PartAtom` stream or it does not
 parse; `part_atom_json_strict` raises `ValueError` naming which
 (`Stream not found: PartAtom` or `Malformed PartAtom XML: ...`).
 
-```python
+```text
 schema_summary(self) -> dict[str, int]
 ```
 Decoded schema counts. Cheap. Keys: `classes`, `fields`,
 `cpp_types` (all `int`).
 
-```python
+```text
 schema_json(self) -> str
 ```
 Full schema as a JSON string. The Rust-side `SchemaTable` type
@@ -265,7 +267,7 @@ get a structured dict.
 
 Return shape after `json.loads`:
 
-```python
+```text
 {
     "classes": [
         {
@@ -299,16 +301,18 @@ counts, export diagnostics, and corpus reports are checked in under
 [`docs/schemas/`](schemas/). Use those files for automation contracts
 instead of scraping prose examples.
 
-```python
+```text
 read_adocument(self) -> dict | None
 ```
 Run the Layer-5a walker and return `ADocument`'s instance fields
-as a dict, or `None` if the entry-point detector can't
-confidently locate an `ADocument` record in this file.
+as a dict, or `None` if the entry-point detector can't confidently
+locate an `ADocument` record in this file. Raises `ValueError` if the
+file's schema declares no `ADocument` class, which no Revit file lacks
+(a synthetic file, or a damaged schema).
 
 Return shape when present:
 
-```python
+```text
 {
     "entry_offset": int,   # byte offset in decompressed Global/Latest
     "version": int,        # Revit release year
@@ -333,7 +337,7 @@ Field kinds:
 | `ref_container` | `count: int`, `col_a: list[int]`, `col_b: list[int]` | Two-column reference container (u16 per cell) |
 | `bytes` | `len: int` | Raw bytes; field type not yet decoded |
 
-```python
+```text
 decoded_elements(self) -> list[dict]
 element_counts(self) -> dict
 export_diagnostics(self) -> dict
@@ -341,7 +345,7 @@ export_diagnostics(self) -> dict
 
 `decoded_elements()` returns production-walker elements. Each entry
 has `id`, `class_name`, `byte_range`, `fields`, and `typed`. `typed`
-is the Lane Five MVP projection for
+is the typed projection for
 `Level` / `Wall` / `Floor` / `Door` / `Window` / `Room` / `Material`
 (also listed as `rvt.MVP_TYPED_CLASSES`), or `None` for other classes.
 JSON contract: [`decoded-elements.schema.json`](schemas/decoded-elements.schema.json).
@@ -356,7 +360,7 @@ CLI mirror: `rvt-elements file.rvt --counts`.
 `export_diagnostics()` / `export_diagnostics_json()` return the IFC
 export diagnostics sidecar (same payload as `rvt-ifc --diagnostics`).
 
-```python
+```text
 write_ifc(self, mode: str = "scaffold") -> str
 export_diagnostics_json(self) -> str
 ```
@@ -378,13 +382,13 @@ not meet that export quality.
 conversion failure if `export_diagnostics_json()` reports zero validated
 building elements or zero geometry elements. Use `mode="strict"` in automation
 when an incomplete real-model export should raise `ValueError` instead of
-returning IFC text. On synthetic / scaffold-only fixtures, only `scaffold`
-typically succeeds until Lane 7 geometry recovery lands.
+returning IFC text. On a file with no recovered elements, such as the
+synthetic fixtures, only `scaffold` succeeds.
 
 `export_diagnostics_json()` returns the JSON diagnostics sidecar
 for the default IFC export without writing files.
 
-```python
+```text
 read_adocument_strict(self) -> dict
 read_adocument_lossy(self) -> dict
 ```
@@ -394,7 +398,7 @@ fields fell back to raw bytes. `read_adocument_lossy` returns
 `{"value", "complete", "partial_fields", "failed_streams", "warnings",
 "confidence"}` and raises `OSError` only on stream-level failures.
 
-```python
+```text
 schema_diagnostics(self) -> dict
 ```
 Integer counts describing the parsed schema: `class_count`,
@@ -403,7 +407,7 @@ Integer counts describing the parsed schema: `class_count`,
 `parent_only_class_count`, `ancestor_tag_count`, `skipped_records`,
 `cpp_type_count`. Raises `ValueError` if the schema can't be parsed.
 
-```python
+```text
 elem_table_header(self) -> dict
 elem_table_records(self) -> list[dict]
 declared_element_ids(self) -> list[int]
@@ -418,7 +422,7 @@ The `Global/ElemTable` index. `elem_table_header()` returns
 deduplicated set of ElementIds the table declares. CLI mirror:
 `rvt-elem-table file.rvt --json`.
 
-```python
+```text
 __repr__(self) -> str
 ```
 Returns `"RevitFile(version=2024)"` or `"RevitFile(version=?)"`

@@ -39,6 +39,7 @@ use crate::walker::{DecodedElement, InstanceField};
 /// elevation field that sometimes overlaps m_z (depends on whether
 /// the file is a family or a project).
 #[derive(Debug, Clone, PartialEq, Default)]
+#[non_exhaustive]
 pub struct BasePoint {
     pub position: Option<Point3>,
     pub angle_radians: Option<f64>,
@@ -71,6 +72,7 @@ impl BasePoint {
 /// `angle_to_true_north` field that describes project-to-true-north
 /// rotation.
 #[derive(Debug, Clone, PartialEq, Default)]
+#[non_exhaustive]
 pub struct SurveyPoint {
     pub position: Option<Point3>,
     pub angle_to_true_north: Option<f64>,
@@ -114,6 +116,7 @@ impl SurveyPoint {
 /// Stores rotation (angle from true north) + translation
 /// (dx, dy, dz) between project and survey coordinate systems.
 #[derive(Debug, Clone, PartialEq, Default)]
+#[non_exhaustive]
 pub struct ProjectPosition {
     pub rotation_radians: Option<f64>,
     pub translation: Option<Vector3>,
