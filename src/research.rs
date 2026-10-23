@@ -86,7 +86,7 @@
 //! - [`es_refs`]: ES reference occurrence locator contracts, with no decoder yet
 //! - [`evidence`]: Named evidence tiers and lightweight ledgers
 //! - [`identity`]: Document-scoped identity and source-span contracts
-//! - [`rect_opening_index`]: Version-gated decoder for Revit 2024 ArcWallRectOpening 60 B index records (RE-15-09)
+//! - [`rect_opening_index`]: Version-gated decoder for Revit 2024 ArcWallRectOpening 60 B index records (RE-15, #89)
 //! - [`relations`]: Experimental typed-relation domains, SCC condensation, and quarantine
 //! - [`revit_global_ids`]: The IFC `GlobalId` Revit's own exporter gives an element, rebuilt from the file (RE-48)
 //! - [`schema_registry`]: Forward-only Formats/Latest registry framing, without byte-name scanning

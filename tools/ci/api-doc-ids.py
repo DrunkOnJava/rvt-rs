@@ -19,7 +19,14 @@ import re
 import sys
 
 root = pathlib.Path(__file__).resolve().parents[2]
-reports = {m.group(1) for p in (root / "reports").rglob("RE-*.md") if (m := re.match(r"(RE-\d+)[-.]", p.name))}
+reports = sorted(p.name for p in (root / "reports").rglob("RE-*.md"))
+citation = re.compile(r"\bRE-\d+(?:[.-]\d+)*")
+
+
+def has_report(cited):
+    return any(name.startswith((f"{cited}-", f"{cited}.")) for name in reports)
+
+
 planning = re.compile(
     r"\b(?:Lane (?:[A-Z]|One|Two|Three|Four|Five|Six|Seven)"
     r"|Phase (?:[A-D]|\d+[a-z]?(?:\.\d+)?)"
@@ -36,14 +43,14 @@ for path in paths:
         if path.suffix == ".rs" and not stripped.startswith(("///", "//!")):
             continue
         place = f"{path.relative_to(root)}:{number}"
-        for cited in re.findall(r"\bRE-\d+", stripped):
-            if cited not in reports:
+        for cited in citation.findall(stripped):
+            if not has_report(cited):
                 missing.setdefault(cited, []).append(place)
         prose = re.sub(r'`[^`]*`|"[^"]*"', "", stripped)
         labels += [(place, label) for label in planning.findall(prose)]
 
 for cited, places in sorted(missing.items()):
-    print(f"::error::{cited} is cited in the API docs but reports/ has no {cited}-*.md: {', '.join(places[:5])}")
+    print(f"::error::{cited} is cited in the API docs but no report is named {cited}-*.md: {', '.join(places[:5])}")
 for place, label in labels:
     print(f"::error file={place.split(':')[0]},line={place.split(':')[1]}::the API docs carry the planning label {label!r}; move it to a // Tracker: comment")
 if missing or labels:
