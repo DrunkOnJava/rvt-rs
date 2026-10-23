@@ -39,7 +39,7 @@ pub fn partition_for_year(year: u32) -> Option<u32> {
 
 /// Inverse of `partition_for_year`. Used for files with unexpected year
 /// encodings when we can see the partition number but not the year.
-pub fn year_for_partition(n: u32) -> Option<u32> {
+pub(crate) fn year_for_partition(n: u32) -> Option<u32> {
     match n {
         58 => Some(2016),
         60 => Some(2017),
