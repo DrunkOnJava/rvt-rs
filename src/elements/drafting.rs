@@ -8,7 +8,7 @@
 //! IfcDocumentReference, neither of which we emit yet).
 //!
 //! We decode them for:
-//! - **Round-trip write support** (Phase 7) — can't re-emit a
+//! - **Round-trip write support** — can't re-emit a
 //!   file without knowing its drafting contents.
 //! - **Schedule → data extraction** — Schedules aggregate element
 //!   properties; useful for BIM-to-spreadsheet tooling even if

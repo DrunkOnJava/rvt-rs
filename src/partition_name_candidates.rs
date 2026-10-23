@@ -1,4 +1,4 @@
-//! Partition UTF-16LE display-name candidates (RE-15 / #86).
+//! Partition UTF-16LE display-name candidates (RE-15, #86).
 //!
 //! Adapted from the RE-15 geometry-probes branch (`cursor/re15-geometry-probes-44c9`,
 //! PR #117). Pure string heuristics over

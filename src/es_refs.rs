@@ -1,4 +1,4 @@
-//! ES reference occurrence locator contracts (Phase 1).
+//! ES reference occurrence locator contracts (no decoder yet).
 //!
 //! Public API types for localizing ElementId (and related) references
 //! inside Extensible Storage / ElementSettings-adjacent payloads once an
@@ -113,7 +113,7 @@ impl FixtureTransition {
     }
 }
 
-/// Phase 2 family identifiers (documentation / manifest only).
+/// Identifiers of the ES reference families (documentation and manifest only).
 pub mod families {
     pub const N1: &str = "N1";
     pub const N2: &str = "N2";

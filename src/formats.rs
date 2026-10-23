@@ -70,7 +70,7 @@ pub struct SchemaTable {
     pub scan_truncated: bool,
 }
 
-/// Derived diagnostic counters for a parsed [`SchemaTable`] (API-10).
+/// Derived diagnostic counters for a parsed [`SchemaTable`].
 ///
 /// These counters are computed on demand from the parsed table — the
 /// `SchemaTable` itself stores only the raw record lists to keep the
@@ -78,6 +78,7 @@ pub struct SchemaTable {
 /// quality metadata (for CLI output, CI drift detection, or
 /// cross-release regression checks) use [`SchemaTable::diagnostics`]
 /// and inspect the returned `SchemaDiagnostics`.
+// Tracker: API-10.
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
 pub struct SchemaDiagnostics {
     /// Total number of classes in the schema.
@@ -470,7 +471,7 @@ impl FieldType {
         }
     }
 
-    /// Encode (WRT-01) a `FieldType` back to its wire type-encoding
+    /// Encode a `FieldType` back to its wire type-encoding
     /// block — the inverse of [`FieldType::decode`]. Used by the
     /// write path (`write_with_patches` field-level edits and the
     /// forthcoming `ADocument` writer) to serialise schema records.
@@ -489,6 +490,7 @@ impl FieldType {
     /// canonical-form variant. The two collapsing cases (String alt
     /// encoding, Vector/Container 0x0011/0x0051 aliases) round-trip
     /// to the canonical form, never back to the alt.
+    // Tracker: WRT-01.
     pub fn encode(&self) -> Vec<u8> {
         match self {
             FieldType::Primitive { kind, .. } => vec![*kind, 0x00, 0x00, 0x00],

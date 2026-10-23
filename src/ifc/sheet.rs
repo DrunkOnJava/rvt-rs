@@ -1,4 +1,4 @@
-//! Sheet rendering (VW1-11) — emit a 2D plan view of an `IfcModel`
+//! Sheet rendering — emit a 2D plan view of an `IfcModel`
 //! as SVG.
 //!
 //! Each placed `BuildingElement` with a body is drawn as what that body
@@ -12,13 +12,15 @@
 //! Output is a self-contained SVG document — no external
 //! stylesheets, no JS. Drop it in a browser, embed in a report,
 //! or convert to PDF via any SVG-to-PDF tool.
+// Tracker: VW1-11.
 
 use super::IfcModel;
 use super::body_geometry::{Body, Placement, Ring, element_body, plan_outline};
 use super::entities::IfcEntity;
 use std::fmt::Write;
 
-/// Options controlling sheet SVG output (VW1-11).
+/// Options controlling sheet SVG output.
+// Tracker: VW1-11.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct SheetOptions {
     /// Plot width in SVG user units (pixels by default).
@@ -45,7 +47,7 @@ impl Default for SheetOptions {
     }
 }
 
-/// Render `model` as an SVG plan view (VW1-11). Returns a string
+/// Render `model` as an SVG plan view. Returns a string
 /// ready to write to a `.svg` file or embed inline.
 ///
 /// The plan is a top-down projection: X maps to SVG x, Y maps to
@@ -55,6 +57,7 @@ impl Default for SheetOptions {
 ///
 /// Elements without a body or a `location_feet` are skipped
 /// (nothing to draw).
+// Tracker: VW1-11.
 pub fn render_plan_svg(model: &IfcModel, options: &SheetOptions) -> String {
     let footprints = collect_footprints(model);
     let (min_x, min_y, max_x, max_y) = bbox_of_footprints(&footprints);
@@ -243,10 +246,11 @@ fn bbox_of_footprints(fps: &[Footprint]) -> (f64, f64, f64, f64) {
     )
 }
 
-/// Per-category colour mapping (VW1-11), from the viewer design system's
+/// Per-category colour mapping, from the viewer design system's
 /// ramps: walls black, windows blue, doors amber, columns and beams red,
 /// slabs gray, stairs dark amber and furniture green. Each fill is the
 /// light tint of its stroke's ramp.
+// Tracker: VW1-11.
 fn colors_for_ifc_type(ifc_type: &str) -> (&'static str, &'static str) {
     match ifc_type {
         "IFCWALL" | "IFCWALLSTANDARDCASE" => ("#000000", "#E4E5E7"),

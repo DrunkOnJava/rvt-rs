@@ -1024,6 +1024,10 @@ jobs:
             exit 1
           fi
           echo "Conflict-marker guard: clean."
+      # The crate root tells docs.rs readers that every `RE-NN` is a report
+      # under reports/; this keeps that true.
+      - name: Every RE finding rustdoc cites has a report
+        run: python3 tools/ci/re-citations.py
 
   # Guards the Cloud Agent development environment config itself: shellcheck
   # the install script and validate `.cursor/environment.json` against the

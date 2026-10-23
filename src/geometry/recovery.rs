@@ -1,4 +1,4 @@
-//! Lane Six — recover wall curves, floor loops, opening hosts, and
+//! Recover wall curves, floor loops, opening hosts, and
 //! level elevations from typed element views / decoded fields.
 //!
 //! # Honesty contract
@@ -119,7 +119,7 @@ impl WallLocationCurve {
 /// Recover a location curve from a typed ArcWall partition decode.
 ///
 /// Always succeeds for a valid [`ArcWall`]: the core record carries
-/// start/end XYZ under RE-14.3 H16.
+/// its start and end points (RE-14's hypothesis H16).
 pub fn recover_wall_location_curve_from_arc_wall(wall: &ArcWall) -> WallLocationCurve {
     let (sx, sy, sz) = wall.start_point();
     let (ex, ey, ez) = wall.end_point();

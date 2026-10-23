@@ -7,37 +7,40 @@
 //! stable API reads through these modules internally, so turning the feature
 //! on adds paths to them and changes nothing else.
 //!
-//! Each module states the fact it reads and the report that measures it.
+//! Each module states the fact it reads and the report that measures it:
+//! `RE-NN` is
+//! [`reports/element-framing/RE-NN-*.md`](https://github.com/DrunkOnJava/rvt-rs/tree/main/reports/element-framing)
+//! in the repository, and `#NNN` an issue or pull request there.
 //!
 //! ## Partition records
 //!
-//! - [`partition_arc_walls`]: Shared partition ArcWall iteration (RE-15 / D20)
+//! - [`partition_arc_walls`]: Shared partition ArcWall iteration (RE-15)
 //! - [`partition_area_records`]: Revit 2024 Areas from their partition chain records (#763)
 //! - [`partition_beam_axes`]: Beam location lines from their serialised element data (RE-49)
 //! - [`partition_column_nodes`]: A column's true z-range from its instance geometry node (RE-173)
 //! - [`partition_compound_structure`]: Host types' layers and which side of a wall is its exterior (RE-53)
 //! - [`partition_connector_pairs`]: Which element each end of a duct or pipe is joined to (RE-138, #528)
-//! - [`partition_curtain_materials`]: A curtain wall mullion's and panel's material, from its type's data object (RE-166, B66)
+//! - [`partition_curtain_materials`]: A curtain wall mullion's and panel's material, from its type's data object (RE-166)
 //! - [`partition_curve_fields`]: A duct's or pipe's size and type, from its curve object (RE-134, #96, #35)
 //! - [`partition_design_options`]: Design option sets and their primary options (#319, RE-40)
 //! - [`partition_element_records`]: Partition element-record headers
 //! - [`partition_element_records_2023`]: Revit 2023 partition element records (RE-81, #421), and Revit 2015 to 2022's, which take the same layout (RE-180, RE-181)
-//! - [`partition_fitting_sizes`]: A pipe fitting's nominal size, from its own data object (RE-165, B44, #35)
+//! - [`partition_fitting_sizes`]: A pipe fitting's nominal size, from its own data object (RE-165, #35)
 //! - [`partition_id_objects`]: Serialised objects keyed by their ElementId, found in one pass
 //! - [`partition_ifc_export_overrides`]: Per-element IFC export-type overrides carried in the Revit 2024 partition parameter blocks (#212, RE-22)
 //! - [`partition_instance_transforms`]: A family instance's transform, from its own element data (RE-87)
 //! - [`partition_level_parameters`]: Level parameters of an element, from its per-element association record (RE-172)
 //! - [`partition_level_records`]: Revit `Level` elements recovered from the partition streams (#218, RE-24)
 //! - [`partition_materials`]: Material shading colours and transparency (RE-53)
-//! - [`partition_mep_systems`]: MEP systems and their members (RE-162, B33, #528)
-//! - [`partition_name_candidates`]: Partition UTF-16LE display-name candidates (RE-15 / #86)
+//! - [`partition_mep_systems`]: MEP systems and their members (RE-162, #528)
+//! - [`partition_name_candidates`]: Partition UTF-16LE display-name candidates (RE-15, #86)
 //! - [`partition_names`]: Family and type names from partition name entries (RE-38)
 //! - [`partition_phases`]: Phase names, and the phase an element was created in (spike 257)
 //! - [`partition_pipe_axes`]: Pipes as their cylinders, from their connector entries (RE-131, #96)
 //! - [`partition_roof_slopes`]: Roof edges' slopes (RE-56)
 //! - [`partition_room_boundaries`]: Room plan outlines from the faces of each room's stored solid (RE-101)
 //! - [`partition_room_parameters`]: Room number / name / host Level from the Revit 2024 partition parameter block a room owns (#90, RE-29)
-//! - [`partition_scanner`]: Generic partition-stream record scanner (M3-03 / M3-04)
+//! - [`partition_scanner`]: Generic partition-stream record scanner
 //! - [`partition_schema_mvp`]: Schema / partition MVP recovers for production `iter_elements`
 //! - [`partition_stairs`]: Stair and stair-run dimensions from their serialised element data (RE-47)
 //! - [`partition_type_materials`]: The materials a family type's geometry uses (#355, RE-82)
@@ -55,9 +58,9 @@
 //!
 //! ## Native records
 //!
-//! - [`native_connectors`]: A family symbol's connectors, from its own native record and its family's (B54, #528)
+//! - [`native_connectors`]: A family symbol's connectors, from its own native record and its family's (#528)
 //! - [`native_document`]: Streaming current-record extraction with structural schemas and native IDs
-//! - [`native_duct_shapes`]: A duct type's shape, from its native record (B59, B43)
+//! - [`native_duct_shapes`]: A duct type's shape, from its native record
 //! - [`native_element`]: Bounded native Element base fields, using the structurally decoded schema
 //! - [`native_empty_faces`]: Strict classifier for the observed empty-trim saved-graphics records
 //! - [`native_es_catalog`]: File-local Extensible Storage catalog from the owned Global/Latest graph
@@ -78,15 +81,16 @@
 //!
 //! ## Other research
 //!
-//! - [`class_tag_map`]: Cross-version class-tag lookup (L5B-10)
+//! - [`class_tag_map`]: Cross-version class-tag lookup
 //! - [`compound_framing`]: Compound ArcWall (`0x0821`) stamp / marker investigation harness
-//! - [`es_refs`]: ES reference occurrence locator contracts (Phase 1)
-//! - [`evidence`]: Named evidence tiers and lightweight ledgers (Phase 1)
-//! - [`identity`]: Document-scoped identity and source-span contracts (Phase 1)
+//! - [`es_refs`]: ES reference occurrence locator contracts, with no decoder yet
+//! - [`evidence`]: Named evidence tiers and lightweight ledgers
+//! - [`identity`]: Document-scoped identity and source-span contracts
 //! - [`rect_opening_index`]: Version-gated decoder for Revit 2024 ArcWallRectOpening 60 B index records (RE-15-09)
 //! - [`relations`]: Experimental typed-relation domains, SCC condensation, and quarantine
 //! - [`revit_global_ids`]: The IFC `GlobalId` Revit's own exporter gives an element, rebuilt from the file (RE-48)
 //! - [`schema_registry`]: Forward-only Formats/Latest registry framing, without byte-name scanning
+// Tracker: D20, B66, B44, B33, M3-03, M3-04, B54, B59, B43, L5B-10.
 
 #[path = "class_tag_map.rs"]
 pub mod class_tag_map;

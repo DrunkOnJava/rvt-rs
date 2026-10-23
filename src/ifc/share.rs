@@ -1,4 +1,4 @@
-//! URL-based viewer state sharing (VW1-24).
+//! URL-based viewer state sharing.
 //!
 //! Ties the VW1 viewer primitives into a single `ViewerState`
 //! struct that can be base64-serialized to fit in a URL fragment.
@@ -16,13 +16,15 @@
 //! it), no versioning (a breaking change bumps the JSON schema's
 //! top-level keys so `decode_from_fragment` returns `None`
 //! gracefully).
+// Tracker: VW1-24.
 
 use super::camera::CameraState;
 use super::clipping::{SectionBox, ViewMode};
 use super::scene_graph::CategoryFilter;
 use serde::{Deserialize, Serialize};
 
-/// Complete viewer state bundled for URL sharing (VW1-24).
+/// Complete viewer state bundled for URL sharing.
+// Tracker: VW1-24.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct ViewerState {
     /// Optional file hash / identifier — when present, frontends
@@ -48,22 +50,24 @@ pub struct ViewerState {
     pub selected_name: Option<String>,
 }
 
-/// Base64-encode a `ViewerState` to a URL-safe fragment (VW1-24).
+/// Base64-encode a `ViewerState` to a URL-safe fragment.
 /// The returned string is ready to drop into
 /// `window.location.hash = "#v=" + returned` on the frontend.
 ///
 /// Uses the standard base64 alphabet with `=` padding.
+// Tracker: VW1-24.
 pub fn encode_to_fragment(state: &ViewerState) -> String {
     let json =
         serde_json::to_string(state).expect("ViewerState serialization can't fail — pure data");
     base64_encode(json.as_bytes())
 }
 
-/// Decode a URL fragment back into a `ViewerState` (VW1-24).
+/// Decode a URL fragment back into a `ViewerState`.
 /// Returns `None` when the fragment is invalid base64, produces
 /// invalid UTF-8, or doesn't parse as the current `ViewerState`
 /// JSON schema. Callers should fall back to `ViewerState::default()`
 /// when this returns `None`.
+// Tracker: VW1-24.
 pub fn decode_from_fragment(fragment: &str) -> Option<ViewerState> {
     let trimmed = fragment
         .trim()

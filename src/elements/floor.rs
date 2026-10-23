@@ -26,7 +26,7 @@
 //!
 //! The 2D boundary sketch (edges of the floor in plan view) lives in
 //! the ADocument element table, reachable via the element's history
-//! chain — geometry assembly is task GEO-28.
+//! chain. Geometry assembly is not done here.
 
 use super::level::normalise_field_name;
 use crate::formats;
