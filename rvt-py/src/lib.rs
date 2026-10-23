@@ -171,6 +171,9 @@ fn set_instance_field_items(
             out.set_item("kind", "bytes")?;
             out.set_item("len", b.len())?;
         }
+        _ => {
+            out.set_item("kind", "unknown")?;
+        }
     }
     Ok(())
 }

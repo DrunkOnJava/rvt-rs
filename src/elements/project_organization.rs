@@ -44,6 +44,7 @@ use crate::walker::{DecodedElement, InstanceField};
 
 /// Typed view for Phase.
 #[derive(Debug, Clone, PartialEq, Default)]
+#[non_exhaustive]
 pub struct Phase {
     pub name: Option<String>,
     pub description: Option<String>,
@@ -71,6 +72,7 @@ impl Phase {
 
 /// Typed view for DesignOption.
 #[derive(Debug, Clone, PartialEq, Default)]
+#[non_exhaustive]
 pub struct DesignOption {
     pub name: Option<String>,
     pub is_primary: Option<bool>,
@@ -98,6 +100,7 @@ impl DesignOption {
 
 /// Typed view for Workset.
 #[derive(Debug, Clone, PartialEq, Default)]
+#[non_exhaustive]
 pub struct Workset {
     pub name: Option<String>,
     pub unique_id: Option<String>,
@@ -138,6 +141,7 @@ impl Workset {
 /// `Issued` means it has been signed off and the revision table on the
 /// sheet should lock it in place.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[non_exhaustive]
 pub enum RevisionStatus {
     #[default]
     Draft,
@@ -174,6 +178,7 @@ impl RevisionStatus {
 /// | `m_issued_by` | String | Author / firm. |
 /// | `m_status` | Primitive u32 | 0 = Draft, 1 = Issued. |
 #[derive(Debug, Clone, PartialEq, Default)]
+#[non_exhaustive]
 pub struct Revision {
     pub sequence_number: Option<u32>,
     pub revision_date: Option<String>,

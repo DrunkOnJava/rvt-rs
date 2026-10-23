@@ -57,6 +57,7 @@ impl CancelToken {
 
 /// Which phase of a scan a [`ProgressEvent`] describes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum Stage {
     /// `Formats/Latest` decompress + schema parse (reported as 0 then 1/1).
     SchemaParse,
@@ -83,6 +84,7 @@ impl Stage {
 /// One progress report. `total` is `None` when the stage has no known
 /// denominator yet.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct ProgressEvent {
     pub stage: Stage,
     pub done: u64,

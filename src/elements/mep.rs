@@ -57,6 +57,7 @@ use crate::walker::{DecodedElement, InstanceField};
 /// coarse discipline; callers who need fine-grained subtypes can
 /// read the raw u32 directly.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[non_exhaustive]
 pub enum MepSystemClassification {
     #[default]
     Unknown,
@@ -92,6 +93,7 @@ impl MepSystemClassification {
 /// share it, which is enough to surface host level, system ref,
 /// and connector count uniformly.
 #[derive(Debug, Clone, PartialEq, Default)]
+#[non_exhaustive]
 pub struct MepInstance {
     pub name: Option<String>,
     pub level_id: Option<u32>,

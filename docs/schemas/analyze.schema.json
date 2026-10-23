@@ -1,0 +1,359 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://drunkonjava.github.io/rvt-rs/schemas/analyze.schema.json",
+  "title": "rvt-analyze --json",
+  "description": "The forensic report rvt-analyze --json prints: identity, upgrade history, format anchors, schema and Global/Latest link summaries, content metadata and disclosures. --redact scrubs the paths and names it carries.",
+  "type": "object",
+  "required": [
+    "identity",
+    "history",
+    "format_anchors",
+    "schema",
+    "link",
+    "content_metadata",
+    "disclosures"
+  ],
+  "properties": {
+    "identity": {
+      "type": "object",
+      "required": [
+        "file_path",
+        "file_size_bytes",
+        "revit_version",
+        "build_tag",
+        "creator_path",
+        "file_guid",
+        "locale",
+        "format_version_counter",
+        "partition_stream"
+      ],
+      "properties": {
+        "file_path": {
+          "type": "string"
+        },
+        "file_size_bytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "revit_version": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "build_tag": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "creator_path": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "file_guid": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "locale": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "format_version_counter": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "partition_stream": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "history": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "format_anchors": {
+      "type": "object",
+      "required": [
+        "partition_table_bytes",
+        "partition_table_invariant_bytes",
+        "format_identifier_guid",
+        "partition_description",
+        "contents_wrapper_magic"
+      ],
+      "properties": {
+        "partition_table_bytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "partition_table_invariant_bytes": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "format_identifier_guid": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "partition_description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "contents_wrapper_magic": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "schema": {
+      "type": "object",
+      "required": [
+        "total_class_candidates",
+        "tagged_class_count",
+        "sample_tagged_classes"
+      ],
+      "properties": {
+        "total_class_candidates": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "tagged_class_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "sample_tagged_classes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "name",
+              "tag"
+            ],
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "tag": {
+                "type": "integer",
+                "minimum": 0
+              }
+            }
+          }
+        }
+      }
+    },
+    "link": {
+      "type": "object",
+      "required": [
+        "global_latest_bytes",
+        "total_tag_hits",
+        "expected_if_uniform_per_tag",
+        "top_classes"
+      ],
+      "properties": {
+        "global_latest_bytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "total_tag_hits": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "expected_if_uniform_per_tag": {
+          "type": "number"
+        },
+        "top_classes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "name",
+              "tag",
+              "hits",
+              "ratio_vs_uniform"
+            ],
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "tag": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "hits": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "ratio_vs_uniform": {
+                "type": "number"
+              }
+            }
+          }
+        }
+      }
+    },
+    "content_metadata": {
+      "type": "object",
+      "required": [
+        "global_latest_string_records",
+        "partitions_nn_string_records",
+        "autodesk_units",
+        "autodesk_specs",
+        "autodesk_parameter_groups",
+        "uniformat_codes",
+        "omniclass_codes",
+        "revit_categories_misc",
+        "example_uniformat",
+        "example_categories"
+      ],
+      "properties": {
+        "global_latest_string_records": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "partitions_nn_string_records": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "autodesk_units": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "autodesk_specs": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "autodesk_parameter_groups": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "uniformat_codes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "omniclass_codes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "revit_categories_misc": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "example_uniformat": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "example_categories": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "disclosures": {
+      "type": "object",
+      "required": [
+        "creator_paths",
+        "embedded_personal_names",
+        "autodesk_internal_paths",
+        "build_server_paths"
+      ],
+      "properties": {
+        "creator_paths": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "embedded_personal_names": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "autodesk_internal_paths": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "build_server_paths": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}
