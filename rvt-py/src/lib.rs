@@ -470,8 +470,9 @@ impl PyRevitFile {
     }
 
     /// Run the Layer-5a walker and return ADocument's instance fields
-    /// as a Python dict, or `None` if the entry-point detector can't
-    /// confidently locate an ADocument record in this file.
+    /// as a Python dict, or `None` if the file's schema declares no
+    /// ADocument class or the entry-point detector can't confidently
+    /// locate an ADocument record in this file.
     ///
     /// Return shape when present:
     ///
@@ -488,10 +489,10 @@ impl PyRevitFile {
     /// }
     /// ```
     fn read_adocument<'py>(&mut self, py: Python<'py>) -> PyResult<Option<Bound<'py, PyDict>>> {
-        let Some(inst) = walker::read_adocument_with_limits(&mut self.inner, self.walker_limits)
-            .map_err(to_py_io)?
-        else {
-            return Ok(None);
+        let inst = match walker::read_adocument_with_limits(&mut self.inner, self.walker_limits) {
+            Ok(Some(inst)) => inst,
+            Ok(None) | Err(rvt::Error::MissingClass(_)) => return Ok(None),
+            Err(e) => return Err(to_py_io(e)),
         };
         instance_to_dict(py, &inst).map(Some)
     }

@@ -137,7 +137,10 @@ All notable changes will be documented here. This project follows
   schema with no `ADocument`, and `Malformed { what, detail }` for an
   ArcWall or opening-index record, an `ADocument` or a `Global/ElemTable`
   that does not have the shape its reader expects. Every variant is
-  documented. The other variants and their messages are unchanged.
+  documented. The other variants and their messages are unchanged. In
+  Python, `RevitFile.read_adocument()` returns `None` for a file whose
+  schema declares no `ADocument`, as it does when the record cannot be
+  located, where it raised `OSError`.
 
 - **Breaking: the research readers moved to `rvt::research`, behind the
   `unstable-research` feature (#873).** The crate's API is now 27 stable

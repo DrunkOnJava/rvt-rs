@@ -303,8 +303,9 @@ instead of scraping prose examples.
 read_adocument(self) -> dict | None
 ```
 Run the Layer-5a walker and return `ADocument`'s instance fields
-as a dict, or `None` if the entry-point detector can't
-confidently locate an `ADocument` record in this file.
+as a dict, or `None` if the file's schema declares no `ADocument`
+class or the entry-point detector can't confidently locate an
+`ADocument` record in this file.
 
 Return shape when present:
 
