@@ -110,7 +110,7 @@ fn grid(prism: &[f64; 6], cutters: &[[f64; 6]], axis: usize) -> Vec<f64> {
             }
         }
     }
-    values.sort_by(|a, b| a.partial_cmp(b).expect("finite"));
+    values.sort_by(f64::total_cmp);
     values.dedup_by(|a, b| (*a - *b).abs() <= CUT_EPS_FEET);
     values
 }
@@ -123,6 +123,15 @@ fn grid(prism: &[f64; 6], cutters: &[[f64; 6]], axis: usize) -> Vec<f64> {
 /// which is what the record states and what Revit's bounding box
 /// agrees with on every such column of the recorded edge.
 pub fn difference_box(prism: &[f64; 6], cutters: &[[f64; 6]]) -> Option<[f64; 6]> {
+    // A NaN or an infinity read from a damaged record makes every comparison
+    // below false, so it would pass the checks and reach the box.
+    if !prism
+        .iter()
+        .chain(cutters.iter().flatten())
+        .all(|v| v.is_finite())
+    {
+        return None;
+    }
     let cutters: Vec<[f64; 6]> = cutters
         .iter()
         .filter(|cutter| overlaps(prism, cutter))

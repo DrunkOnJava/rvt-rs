@@ -776,7 +776,8 @@ pub fn supports_revit_version(revit_version: u32) -> bool {
 pub fn decode_reference_list(buf: &[u8], at: usize) -> Option<Vec<u64>> {
     let count = buf
         .get(at..at + 4)
-        .map(|s| u32::from_le_bytes(s.try_into().expect("4 bytes")))? as usize;
+        .and_then(|s| s.first_chunk::<4>())
+        .map(|b| u32::from_le_bytes(*b))? as usize;
     if count == 0 || count > REFERENCE_LIST_MAX_ENTRIES {
         return None;
     }

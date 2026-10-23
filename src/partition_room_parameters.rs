@@ -184,7 +184,9 @@ pub fn find_room_parameters(
     // the set lookup.
     let (low, high) = (u64::from(low), u64::from(high));
     for owner_at in 0..=(buf.len() - 8) {
-        let raw = u64::from_le_bytes(buf[owner_at..owner_at + 8].try_into().expect("8 bytes"));
+        let Some(raw) = le_bytes::u64_at(buf, owner_at) else {
+            continue;
+        };
         if raw == 0 || raw < low || raw > high {
             continue;
         }
@@ -336,7 +338,7 @@ pub fn enclosing_data_object(buf: &[u8], at: usize) -> Option<u32> {
 /// where [`enclosing_data_object`] would be called for many offsets of one
 /// buffer, each a backward search of up to [`DATA_OBJECT_SEARCH`] bytes.
 pub fn data_objects(buf: &[u8]) -> Vec<(usize, DataObject)> {
-    let u32_at = |p: usize| u32::from_le_bytes(buf[p..p + 4].try_into().expect("4 bytes"));
+    let u32_at = |p: usize| le_bytes::u32_at(buf, p).unwrap_or(0);
     let mut out = Vec::new();
     let mut p = 0;
     while p + DATA_OBJECT_HEADER <= buf.len() {
@@ -375,7 +377,8 @@ pub struct DataObject {
 pub fn verified_data_object(buf: &[u8], p: usize) -> Option<DataObject> {
     let u32_at = |p: usize| {
         buf.get(p..p.checked_add(4)?)
-            .map(|b| u32::from_le_bytes(b.try_into().expect("4 bytes")))
+            .and_then(|b| b.first_chunk::<4>())
+            .map(|b| u32::from_le_bytes(*b))
     };
     if u32_at(p.checked_add(4)?)? != 0 {
         return None;

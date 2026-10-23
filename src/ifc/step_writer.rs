@@ -2987,7 +2987,7 @@ impl StepWriter {
             )
         };
         // #847: where each connector is, by its element, when it is read.
-        let port_points: HashMap<(u32, u32), PortPoint> = model
+        let mut port_points: HashMap<(u32, u32), PortPoint> = model
             .entities
             .iter()
             .filter_map(|entity| match entity {
@@ -3011,6 +3011,34 @@ impl StepWriter {
                 _ => None,
             })
             .collect();
+        // #869: a connector joined to a placed connector of a duct or pipe is
+        // at the same point, with the same axis, as Revit's export writes
+        // every port joined to a segment's (RE1: 118 of 118 on Plumbing, 59
+        // of 59 on Mechanical, at the point).
+        for entity in &model.entities {
+            let super::entities::IfcEntity::PortConnection {
+                a,
+                a_id,
+                a_index,
+                b,
+                b_id,
+                b_index,
+            } = entity
+            else {
+                continue;
+            };
+            for (placed, element, open) in [
+                ((*a_id, *a_index), *b, (*b_id, *b_index)),
+                ((*b_id, *b_index), *a, (*a_id, *a_index)),
+            ] {
+                if port_points.contains_key(&open) {
+                    continue;
+                }
+                if let Some(&(_, point, direction)) = port_points.get(&placed) {
+                    port_points.insert(open, (element, point, direction));
+                }
+            }
+        }
         let element_frames: HashMap<usize, (Option<[f64; 3]>, Option<f64>)> = model
             .entities
             .iter()
