@@ -25,7 +25,7 @@
 //!   cargo run --profile ci --example probe_re155_reference_slots -- MODEL.rvt ...
 
 use rvt::RevitFile;
-use rvt::partition_element_records as per;
+use rvt::research::partition_element_records as per;
 use rvt::walker::InstanceField;
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -70,7 +70,7 @@ fn probe(path: &str) -> anyhow::Result<Vec<String>> {
     };
     let declared = rvt::elem_table::declared_ids(&rvt::elem_table::parse_records(&mut rf)?);
     let levels: BTreeSet<u64> =
-        rvt::partition_level_records::recover_partition_levels(&mut rf, revit)
+        rvt::research::partition_level_records::recover_partition_levels(&mut rf, revit)
             .unwrap_or_default()
             .iter()
             .map(|level| u64::from(level.element_id))
@@ -80,7 +80,7 @@ fn probe(path: &str) -> anyhow::Result<Vec<String>> {
         let Some(id) = element.id else { continue };
         let type_id = element.fields.iter().find_map(|(name, value)| match value {
             InstanceField::ElementId { id, .. }
-                if name == rvt::partition_schema_mvp::TYPE_ID_FIELD =>
+                if name == rvt::research::partition_schema_mvp::TYPE_ID_FIELD =>
             {
                 Some(u64::from(*id))
             }

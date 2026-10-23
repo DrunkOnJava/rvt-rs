@@ -15,8 +15,8 @@
 //! ```
 
 use rvt::RevitFile;
-use rvt::partition_element_records::{OST_STRUCTURAL_COLUMNS, OST_STRUCTURAL_FRAMING};
-use rvt::partition_element_records_2023::{REVIT_2023, scan_records};
+use rvt::research::partition_element_records::{OST_STRUCTURAL_COLUMNS, OST_STRUCTURAL_FRAMING};
+use rvt::research::partition_element_records_2023::{REVIT_2023, scan_records};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let path = std::env::args()

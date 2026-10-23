@@ -61,10 +61,10 @@ impl ElementDecoder for CategoryDecoder {
         limits: crate::walker::WalkerLimits,
     ) -> Result<DecodedElement> {
         if schema.name != "Category" {
-            return Err(Error::BasicFileInfo(format!(
-                "CategoryDecoder received wrong schema: {}",
-                schema.name
-            )));
+            return Err(Error::SchemaMismatch {
+                decoder: "Category",
+                schema: schema.name.clone(),
+            });
         }
         Ok(crate::walker::decode_instance_with_limits(
             bytes, 0, schema, limits,
@@ -97,10 +97,10 @@ impl ElementDecoder for SubcategoryDecoder {
         limits: crate::walker::WalkerLimits,
     ) -> Result<DecodedElement> {
         if schema.name != "Subcategory" {
-            return Err(Error::BasicFileInfo(format!(
-                "SubcategoryDecoder received wrong schema: {}",
-                schema.name
-            )));
+            return Err(Error::SchemaMismatch {
+                decoder: "Subcategory",
+                schema: schema.name.clone(),
+            });
         }
         Ok(crate::walker::decode_instance_with_limits(
             bytes, 0, schema, limits,
@@ -110,6 +110,7 @@ impl ElementDecoder for SubcategoryDecoder {
 
 /// Typed view of a decoded Category.
 #[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
 pub struct Category {
     pub name: Option<String>,
     pub builtin_id: Option<i64>,
@@ -150,6 +151,7 @@ impl Category {
 
 /// Typed view of a decoded Subcategory.
 #[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
 pub struct Subcategory {
     pub name: Option<String>,
     pub parent_category_id: Option<u32>,

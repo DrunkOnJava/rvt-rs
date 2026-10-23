@@ -18,7 +18,9 @@ mod common;
 
 use common::{ALL_YEARS, sample_for_year};
 use rvt::compression::prepare_stream_for_inflate;
-use rvt::{RevitFile, native_document, native_segments, schema_registry};
+use rvt::{
+    RevitFile, research::native_document, research::native_segments, research::schema_registry,
+};
 
 fn require_family_corpus() -> bool {
     std::env::var("RVT_REQUIRE_CORPUS")

@@ -12,7 +12,7 @@
 //!   cargo run --profile ci --example probe_re76_schema_class_tags -- FILE.rvt ...
 use rvt::RevitFile;
 use rvt::elem_table;
-use rvt::partition_element_records::scan_category_records_multi;
+use rvt::research::partition_element_records::scan_category_records_multi;
 use std::collections::{BTreeMap, BTreeSet};
 
 const CATEGORIES: &[(i64, &str)] = &[

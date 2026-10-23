@@ -15,7 +15,7 @@
 //!   cargo run --profile ci --example probe_re67_model_text_types -- MODEL.rvt
 
 use rvt::RevitFile;
-use rvt::partition_element_records as per;
+use rvt::research::partition_element_records as per;
 use std::collections::{BTreeMap, BTreeSet};
 
 fn main() -> rvt::Result<()> {
@@ -66,7 +66,7 @@ fn main() -> rvt::Result<()> {
         let Ok(inflated) = rf.inflated_partition(&stream) else {
             continue;
         };
-        names.extend(rvt::partition_names::find_text_type_names(
+        names.extend(rvt::research::partition_names::find_text_type_names(
             inflated.bytes(),
             &wanted,
         ));

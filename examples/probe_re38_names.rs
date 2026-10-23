@@ -15,12 +15,12 @@
 //!   cargo run --profile ci --example probe_re38_names -- FILE.rvt
 
 use rvt::RevitFile;
-use rvt::partition_element_records::{
+use rvt::research::partition_element_records::{
     BBOX_MARKER_OFFSET, BUILTIN_CATEGORY_MAX, BUILTIN_CATEGORY_MIN, CATEGORY_OFFSET,
     CONTAINER_NONE, CONTAINER_OFFSET, PLACEMENT_KIND_INSTANCE, PLACEMENT_KIND_OFFSET,
     REFERENCE_LIST_OFFSET, bbox_marker, decode_reference_list,
 };
-use rvt::partition_names::{resolve_family, resolve_type};
+use rvt::research::partition_names::{resolve_family, resolve_type};
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 

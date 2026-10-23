@@ -18,7 +18,7 @@
 //!   cargo run --profile ci --example probe_re41_elem_table_secondary_ids -- FILE.rvt
 
 use rvt::RevitFile;
-use rvt::partition_element_records::{bbox_marker, partition_record_chain};
+use rvt::research::partition_element_records::{bbox_marker, partition_record_chain};
 use std::collections::BTreeSet;
 use std::path::PathBuf;
 

@@ -154,7 +154,7 @@ pub fn areas_from_partition_chain_records(
         Ok(records) => crate::elem_table::declared_ids(&records),
         Err(_) => return Vec::new(),
     };
-    let options = rf.design_options();
+    let options = rf.memoised_design_options();
     let placed: BTreeMap<u32, AreaRecord> = area_records(rf, &marker, &declared)
         .into_iter()
         .filter(|(_, record)| {

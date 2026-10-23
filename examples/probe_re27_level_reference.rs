@@ -10,8 +10,8 @@
 
 use rvt::RevitFile;
 use rvt::elem_table;
-use rvt::partition_element_records as per;
-use rvt::partition_level_records;
+use rvt::research::partition_element_records as per;
+use rvt::research::partition_level_records;
 use std::collections::{BTreeMap, BTreeSet};
 use std::env;
 use std::path::PathBuf;

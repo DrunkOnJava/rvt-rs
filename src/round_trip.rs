@@ -1,4 +1,4 @@
-//! Round-trip verification harness (WRT-04).
+//! Round-trip verification harness.
 //!
 //! Proves that the reader and writer are byte-exact inverses for any
 //! instance the reader understands cleanly. Use this module to gate
@@ -48,6 +48,7 @@
 //! typed-clean result that isn't byte-exact is a bug in either the
 //! reader or the writer — the harness reports which field diverged
 //! so the fix lives in the right place.
+// Tracker: WRT-04.
 
 use crate::formats::ClassEntry;
 use crate::walker::{
@@ -59,6 +60,7 @@ use crate::walker::{
 /// tooling to decide whether a change to the reader / writer
 /// preserves the invariant.
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub struct RoundTripReport {
     /// Number of bytes the reader consumed, starting at the
     /// caller-supplied offset.

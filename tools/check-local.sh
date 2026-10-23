@@ -18,9 +18,12 @@ Usage: tools/check-local.sh [options]
 Required gates (always run):
   cargo fmt --all -- --check
   cargo clippy --workspace --all-targets --all-features -- -D warnings
+  RUSTFLAGS="-D warnings -D unnameable_types" cargo check --lib --bins
   RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --lib
   cargo build --workspace --all-targets --all-features
+  cargo test --profile ci --doc     (the API docs' examples, on corpus/tier1)
   tools/ci/verify-real-files.sh     (real-file, CLI, contract targets only)
+  cargo run --example basics_*      (the user examples, on corpus/tier1)
 
 Optional gates (opt-in; fail clearly when prerequisites are missing):
   --viewer         viewer/ pnpm typecheck + build (no network install)
@@ -107,9 +110,17 @@ cd "$root"
 
 run cargo fmt --all -- --check
 run cargo clippy --workspace --all-targets --all-features -- -D warnings
+run env RUSTFLAGS="-D warnings -D unnameable_types" cargo check --lib --bins
 run env RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --lib
 run cargo build --workspace --all-targets --all-features
+run cargo test --profile ci --doc
 run tools/ci/verify-real-files.sh
+run cargo run --profile ci --example basics_inspect
+run cargo run --profile ci --example basics_elements
+basics_out="$(mktemp -d)"
+run cargo run --profile ci --example basics_export -- \
+    corpus/tier1/architectural-2024/architectural-2024.rvt "$basics_out"
+rm -rf "$basics_out"
 
 # --- optional gates ---------------------------------------------------------
 

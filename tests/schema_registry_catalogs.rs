@@ -11,7 +11,7 @@
 mod common;
 
 use common::{ALL_YEARS, sample_for_year};
-use rvt::{RevitFile, native_document, schema_registry};
+use rvt::{RevitFile, research::native_document, research::schema_registry};
 use std::collections::BTreeMap;
 
 fn require_family_corpus() -> bool {

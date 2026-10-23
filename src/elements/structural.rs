@@ -44,64 +44,13 @@
 //! | `m_start_level_offset` / `m_end_level_offset` | f64 | Per-end offsets from level |
 
 use super::level::normalise_field_name;
-use crate::formats;
 use crate::geometry::Point3;
-use crate::walker::{DecodedElement, ElementDecoder, HandleIndex, InstanceField};
-use crate::{Error, Result};
-
-macro_rules! simple_decoder {
-    ($Struct:ident, $name:literal) => {
-        pub struct $Struct;
-
-        impl ElementDecoder for $Struct {
-            fn class_name(&self) -> &'static str {
-                $name
-            }
-
-            fn decode(
-                &self,
-                bytes: &[u8],
-                schema: &formats::ClassEntry,
-                index: &HandleIndex,
-            ) -> Result<DecodedElement> {
-                self.decode_with_limits(
-                    bytes,
-                    schema,
-                    index,
-                    crate::walker::WalkerLimits::default(),
-                )
-            }
-
-            fn decode_with_limits(
-                &self,
-                bytes: &[u8],
-                schema: &formats::ClassEntry,
-                _index: &HandleIndex,
-                limits: crate::walker::WalkerLimits,
-            ) -> Result<DecodedElement> {
-                if schema.name != $name {
-                    return Err(Error::BasicFileInfo(format!(
-                        "{} received wrong schema: {}",
-                        stringify!($Struct),
-                        schema.name
-                    )));
-                }
-                Ok(crate::walker::decode_instance_with_limits(
-                    bytes, 0, schema, limits,
-                ))
-            }
-        }
-    };
-}
-
-simple_decoder!(ColumnDecoder, "Column");
-simple_decoder!(StructuralColumnDecoder, "StructuralColumn");
-simple_decoder!(BeamDecoder, "Beam");
-simple_decoder!(StructuralFramingDecoder, "StructuralFraming");
+use crate::walker::{DecodedElement, InstanceField};
 
 /// Typed view of a decoded Column (architectural or structural — the
 /// `is_structural` flag disambiguates).
 #[derive(Debug, Clone, PartialEq, Default)]
+#[non_exhaustive]
 pub struct Column {
     pub base_level_id: Option<u32>,
     pub top_level_id: Option<u32>,
@@ -169,6 +118,7 @@ impl Column {
 
 /// Typed view of a decoded Beam.
 #[derive(Debug, Clone, PartialEq, Default)]
+#[non_exhaustive]
 pub struct Beam {
     pub level_id: Option<u32>,
     pub symbol_id: Option<u32>,

@@ -58,7 +58,8 @@ pub struct PartitionSchemaMvp {
     pub areas: Vec<DecodedElement>,
     /// 2024 ArcWallRectOpening index rows — not typed Door/Window.
     pub rect_openings: Vec<DecodedElement>,
-    /// 2024 `OST_Columns` partition element records (M4-09 / #204).
+    /// 2024 `OST_Columns` partition element records (#204).
+    // Tracker: M4-09.
     pub columns: Vec<DecodedElement>,
     /// 2024 `OST_Walls` partition element records (#211).
     pub walls: Vec<DecodedElement>,
@@ -838,12 +839,13 @@ fn attach_system_type_names(
 }
 
 /// The type of each of `railings` (index, ElementId) that its own
-/// `BaseRailing` data object (RE-153) names (B45): the one ElementId in the
+/// `BaseRailing` data object (RE-153) names: the one ElementId in the
 /// object's payload, at any offset, of a railing type's `StairsRailingAttr`
 /// object. RE1 Architecture's railing 462556 holds its type 446543, Revit's
 /// `IfcRailingType` Tag, at +283 of its 329-byte object. With the picks, the
 /// picked types' names their own objects hold
 /// ([`crate::partition_names::railing_type_name_in`]). Revit 2024 and later.
+// Tracker: B45.
 fn railing_type_picks(
     rf: &mut RevitFile,
     railings: &[(usize, u32)],
@@ -876,7 +878,7 @@ fn railing_type_picks(
             continue;
         };
         let buf = inflated.bytes();
-        let Ok(objects) = rf.partition_data_objects(&stream) else {
+        let Ok(objects) = rf.memoised_partition_data_objects(&stream) else {
             continue;
         };
         for &(p, object) in objects.iter() {
@@ -1023,7 +1025,7 @@ fn attach_wall_sweep_types(
     if lists.is_empty() {
         return;
     }
-    let entries = rf.element_names();
+    let entries = rf.memoised_element_names();
     let wanted: BTreeSet<u32> = lists
         .iter()
         .flat_map(|(_, ids)| ids.iter().copied())
@@ -1312,7 +1314,7 @@ pub fn scan_empty_curtain_panels(
         Ok(records) => crate::elem_table::declared_ids(&records),
         Err(_) => return Ok(out),
     };
-    let names = rf.element_names();
+    let names = rf.memoised_element_names();
     let empty_families: BTreeSet<u32> = names
         .entries
         .iter()
@@ -1324,7 +1326,7 @@ pub fn scan_empty_curtain_panels(
     }
     let records =
         per::scan_category_records(rf, revit_version, per::OST_CURTAIN_WALL_PANELS, &declared)?;
-    let options = rf.design_options();
+    let options = rf.memoised_design_options();
     let mut panels: BTreeSet<u32> = BTreeSet::new();
     let mut types: BTreeSet<u32> = BTreeSet::new();
     for record in records
@@ -1486,13 +1488,14 @@ fn attach_curtain_axes(rf: &mut RevitFile, revit_version: u32, products: &mut [D
     }
 }
 
-/// Fields holding a door's or window's facing (B72): the plan direction of
+/// Fields holding a door's or window's facing: the plan direction of
 /// its transform's Y axis (RE-87), which Revit's exporter sets against its
 /// host wall to decide whether the door's symbol is flipped.
+// Tracker: B72.
 pub const OPENING_FACING_FIELDS: [&str; 2] = ["m_opening_facing_x", "m_opening_facing_y"];
 
 /// Give each door and window whose transform (RE-87) is found its facing
-/// ([`OPENING_FACING_FIELDS`], B72).
+/// ([`OPENING_FACING_FIELDS`]).
 fn attach_opening_facings(
     rf: &mut RevitFile,
     revit_version: u32,
@@ -1625,7 +1628,7 @@ fn attach_original_symbols<const N: usize>(
             .and_then(|number| number.parse::<u32>().ok())
             .unwrap_or(0);
         let buf = inflated.bytes();
-        let Ok(objects) = rf.partition_data_objects(&stream) else {
+        let Ok(objects) = rf.memoised_partition_data_objects(&stream) else {
             continue;
         };
         for &(p, object) in objects.iter() {
@@ -2404,7 +2407,7 @@ fn attach_pipe_type_names(rf: &mut RevitFile, elements: &mut [DecodedElement]) {
 }
 
 fn attach_family_and_type_names(rf: &mut RevitFile, elements: &mut [DecodedElement]) {
-    let names = rf.element_names();
+    let names = rf.memoised_element_names();
     if names.entries.is_empty() {
         return;
     }
@@ -2814,7 +2817,7 @@ fn attach_stair_names(rf: &mut RevitFile, revit_version: u32, products: &mut [De
     let Some(marker) = per::bbox_marker(revit_version) else {
         return;
     };
-    let assigned = rf.second_prologue_ids();
+    let assigned = rf.memoised_second_prologue_ids();
     let none = BTreeMap::new();
     let mut members: BTreeMap<(u32, &'static str), BTreeSet<u32>> = BTreeMap::new();
     for stream in rf.partition_stream_names() {
@@ -3518,24 +3521,28 @@ fn attach_system_family_names(
 /// body (RE-54). A wall without a type, a location line or an orientation
 /// gets none of these. Membranes, which have no width, are left out.
 /// The field prefix of the openings a wall's edited elevation profile cuts
-/// (B55): `m_profile_opening_<k>`, the opening's outline as model-feet
+///: `m_profile_opening_<k>`, the opening's outline as model-feet
 /// points in the wall's vertical plane, and `m_profile_opening_<k>_tag`, the
 /// ElementId it is tagged with.
+// Tracker: B55.
 pub const PROFILE_OPENING_FIELD: &str = "m_profile_opening";
 
 /// How far apart two sketch points may lie and still meet, and how far off a
-/// plane or a side a point may lie and still be on it (B55), feet.
+/// plane or a side a point may lie and still be on it, feet.
+// Tracker: B55.
 const PROFILE_EPS_FEET: f64 = 1e-3;
 
-/// A sketch line: its ElementId, start and end, model feet (B55).
+/// A sketch line: its ElementId, start and end, model feet.
+// Tracker: B55.
 pub type SketchSegment = (u32, [f64; 3], [f64; 3]);
 
 /// A sketch line in its plane: its ElementId, and its ends along and up the
-/// plane (B55).
+/// plane.
+// Tracker: B55.
 type PlaneEdge = (u32, (f64, f64), (f64, f64));
 
 /// Give each wall whose elevation profile was edited the openings that cuts
-/// (B55, RE-151's 63rd opening).
+/// (RE-151's 63rd opening).
 ///
 /// The profile is the wall's sketch, the curves its sketch lists (RE-97),
 /// each read as a straight line
@@ -3636,7 +3643,7 @@ fn attach_wall_profile_openings(
 }
 
 /// The openings a wall's edited elevation profile cuts, from its sketch
-/// lines (ElementId, start, end, model feet) (B55): each region between a
+/// lines (ElementId, start, end, model feet): each region between a
 /// run of lines that leaves the profile's bounding rectangle and the
 /// rectangle's edge, as model-feet points in the profile's plane,
 /// counter-clockwise in its own along-and-up coordinates, tagged with the
@@ -3644,6 +3651,7 @@ fn attach_wall_profile_openings(
 /// opening (55859, also the last line of its sketch). Empty where the lines
 /// do not lie in one vertical plane, do not close one loop, or never leave
 /// the rectangle.
+// Tracker: B55.
 pub fn elevation_profile_cuts(segments: &[SketchSegment]) -> Vec<(u32, Vec<[f64; 3]>)> {
     let eps = PROFILE_EPS_FEET;
     let points: Vec<[f64; 3]> = segments.iter().flat_map(|(_, a, b)| [*a, *b]).collect();
@@ -3816,7 +3824,8 @@ pub fn elevation_profile_cuts(segments: &[SketchSegment]) -> Vec<(u32, Vec<[f64;
 }
 
 /// The openings a wall's edited elevation profile cuts, as the partition MVP
-/// gives them ([`PROFILE_OPENING_FIELD`]): each one's tag and outline (B55).
+/// gives them ([`PROFILE_OPENING_FIELD`]): each one's tag and outline.
+// Tracker: B55.
 pub fn profile_openings_from_fields(
     fields: &[(String, InstanceField)],
 ) -> Vec<(u32, Vec<[f64; 3]>)> {
@@ -4862,7 +4871,7 @@ fn attach_named_parameters(
 }
 
 /// Field carrying the name of the phase an element was created in
-/// ([`crate::partition_phases`], spike 257).
+/// ([`crate::partition_phases`], #755).
 pub const PHASE_CREATED_FIELD: &str = "m_phase_created";
 
 /// Give each element the one phase its record's reference list names
@@ -5009,7 +5018,7 @@ fn attach_mep_systems(
 
 /// Give each duct and pipe the width and height its curve object holds, and
 /// each one still without a type (a duct, or a pipe RE-130's reference list
-/// does not type, B29) its curve's type and that type's name
+/// does not type) its curve's type and that type's name
 /// ([`crate::partition_curve_fields`], RE-134;
 /// [`crate::partition_names::find_mep_curve_type_names`], RE-130). An element
 /// whose anchor is not found gets nothing.
@@ -5131,7 +5140,7 @@ fn attach_curve_fields(rf: &mut RevitFile, revit_version: u32, products: &mut [D
 
 /// Give each typed duct the system family its type's shape names
 /// (`Rectangular Duct`, `Round Duct`, `Oval Duct`,
-/// [`crate::native_duct_shapes`], B59), so it is named
+/// [`crate::native_duct_shapes`]), so it is named
 /// `Family:Type:ElementId` as Revit names it. A file whose release the native
 /// record path does not read leaves its ducts without one.
 fn attach_duct_system_families(rf: &mut RevitFile, products: &mut [DecodedElement]) {
@@ -5189,7 +5198,8 @@ fn attach_duct_system_families(rf: &mut RevitFile, products: &mut [DecodedElemen
 }
 
 /// Field carrying a duct's shape as IFC names it (`RECTANGULAR`, `ROUND`,
-/// `FLATOVAL`), from its type (B43).
+/// `FLATOVAL`), from its type.
+// Tracker: B43.
 pub const DUCT_SHAPE_FIELD: &str = "m_duct_shape";
 
 /// The cylinder the partition MVP gave a pipe, when its connector entries
@@ -5607,10 +5617,11 @@ fn attach_connector_pairs(rf: &mut RevitFile, revit_version: u32, products: &mut
 ///
 /// A door or window set in a curtain wall's grid in place of a panel is one
 /// of its parts too, as Revit's export aggregates RE1 Architecture's door
-/// 445975 under curtain wall 445961 (B64). It takes the curtain wall of the
+/// 445975 under curtain wall 445961. It takes the curtain wall of the
 /// one grid its record names. Naming a curtain wall directly is not enough:
 /// on Snowdon Towers three doors name curtain wall 1506500 and Revit leaves
 /// them standalone (RE-46). No record box decides a door either.
+// Tracker: B64.
 fn attach_curtain_walls(
     rf: &mut RevitFile,
     revit_version: u32,
@@ -6093,7 +6104,7 @@ pub fn room_instances_from_records(
 }
 
 /// Recover architectural column instances from partition element
-/// records (M4-09 / #204, instance rule replaced in #211).
+/// records (#204, instance rule replaced in #211).
 ///
 /// The `OST_Columns` sweep carries the type-symbol envelopes too, so
 /// the family/type join of #215 costs no extra inflate — see
@@ -6462,7 +6473,7 @@ fn without_non_primary_options(
     rf: &mut RevitFile,
     mut records: Vec<crate::partition_element_records::PartitionElementRecord>,
 ) -> Vec<crate::partition_element_records::PartitionElementRecord> {
-    let options = rf.design_options();
+    let options = rf.memoised_design_options();
     records.retain(|record| !options.excludes(record));
     records
 }
@@ -8004,7 +8015,8 @@ fn attach_slab_layers(
 }
 
 /// Field holding a ceiling's finish, the names of its type's finish layers'
-/// materials each followed by `;` (B41).
+/// materials each followed by `;`.
+// Tracker: B41.
 pub const COVERING_FINISH_FIELD: &str = "m_covering_finish";
 
 /// The names of the materials of `layers`' finish layers (functions 4 and

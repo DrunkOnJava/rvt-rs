@@ -35,6 +35,7 @@ use serde::{Deserialize, Serialize};
 
 /// Header extracted from the first bytes of decompressed Global/ElemTable.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct ElemTableHeader {
     /// Named for what it was assumed to be, but not a count of elements:
     /// the serialization tag of the class `ElemTable` in the file's own
@@ -56,6 +57,7 @@ pub struct ElemTableHeader {
 
 /// How records are framed in this ElemTable stream.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[non_exhaustive]
 pub enum RecordFraming {
     /// 12-byte records from `0x30`, no owner field: the fallback for a
     /// table neither record size fits. No corpus file uses it.
@@ -85,6 +87,7 @@ pub struct ElemTableLayout {
 /// On the implicit fallback layout, `id_primary`/`id_secondary` are the first
 /// two `u32`s of the 12-byte record.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct ElemRecord {
     /// Offset in the decompressed stream where this record begins.
     pub offset: usize,
@@ -117,6 +120,7 @@ pub struct ElemRecord {
 /// Backward-compat record type from the pre-corpus-probe parser. Kept so
 /// existing callers and tests keep compiling; prefer `ElemRecord` for new work.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct ElemRecordRough {
     /// Offset in the decompressed stream where this record begins.
     pub offset: usize,
@@ -126,9 +130,10 @@ pub struct ElemRecordRough {
 
 fn parse_header_bytes(d: &[u8]) -> Result<ElemTableHeader> {
     if d.len() < 0x30 {
-        return Err(Error::BasicFileInfo(
-            "Global/ElemTable stream too short for header".into(),
-        ));
+        return Err(Error::Malformed {
+            what: "Global/ElemTable",
+            detail: "shorter than its header".into(),
+        });
     }
     let element_count = u16::from_le_bytes([d[0], d[1]]);
     let record_count = u32::from_le_bytes([d[2], d[3], d[4], d[5]]);
@@ -343,7 +348,9 @@ pub fn index_by_element_id(records: &[ElemRecord]) -> std::collections::BTreeMap
 
 /// One ElementId that appears in both ElemTable and a decoded
 /// partition ArcWall trailer.
+#[cfg(feature = "unstable-research")]
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub struct LinkedArcWallElement<'a> {
     pub element_id: u32,
     pub elem_record: &'a ElemRecord,
@@ -352,6 +359,7 @@ pub struct LinkedArcWallElement<'a> {
 
 /// Join ArcWall trailer ElementIds to ElemTable rows and partition
 /// record refs. Returns only ids present in **both** maps.
+#[cfg(feature = "unstable-research")]
 pub fn link_arcwall_element_ids<'a>(
     elem_by_id: &std::collections::BTreeMap<u32, &'a ElemRecord>,
     partition_by_id: &std::collections::BTreeMap<
@@ -375,9 +383,10 @@ pub fn link_arcwall_element_ids<'a>(
 /// Join generic partition-scanner ElementIds to ElemTable rows.
 ///
 /// Thin wrapper around
-/// [`crate::partition_scanner::link_elem_table_to_partitions`] so
+/// `crate::partition_scanner::link_elem_table_to_partitions` so
 /// ElemTable callers share one import path with the ArcWall-specific
 /// linker above.
+#[cfg(feature = "unstable-research")]
 pub fn link_partition_element_ids<'a>(
     elem_by_id: &std::collections::BTreeMap<u32, &'a ElemRecord>,
     partition_by_id: &std::collections::BTreeMap<u32, crate::partition_scanner::PartitionRecordRef>,
@@ -413,7 +422,7 @@ pub const RECORD_LEN_40: usize = 40;
 /// (Structural). `id_secondary` is the id the element's partition record
 /// carries (RE-35) and the `Tag` Revit's own IFC export writes, and
 /// `id_primary` is the id the element was created with, which only its
-/// GlobalId still uses ([`crate::revit_global_ids`], RE-48). No element
+/// GlobalId still uses (`research::revit_global_ids`, RE-48). No element
 /// record of either file names a first id that is not also some element's
 /// current id (RE-189), so a first id is no longer declared on its own: 84
 /// ids on Architectural and 20 on Structural that named no element.

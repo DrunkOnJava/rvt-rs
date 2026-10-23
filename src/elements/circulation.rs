@@ -42,62 +42,11 @@
 //! | `m_top_rail_height` | f64 | Height of top rail above host (feet) |
 
 use super::level::normalise_field_name;
-use crate::formats;
-use crate::walker::{DecodedElement, ElementDecoder, HandleIndex, InstanceField};
-use crate::{Error, Result};
-
-macro_rules! simple_decoder {
-    ($Struct:ident, $name:literal) => {
-        pub struct $Struct;
-
-        impl ElementDecoder for $Struct {
-            fn class_name(&self) -> &'static str {
-                $name
-            }
-
-            fn decode(
-                &self,
-                bytes: &[u8],
-                schema: &formats::ClassEntry,
-                index: &HandleIndex,
-            ) -> Result<DecodedElement> {
-                self.decode_with_limits(
-                    bytes,
-                    schema,
-                    index,
-                    crate::walker::WalkerLimits::default(),
-                )
-            }
-
-            fn decode_with_limits(
-                &self,
-                bytes: &[u8],
-                schema: &formats::ClassEntry,
-                _index: &HandleIndex,
-                limits: crate::walker::WalkerLimits,
-            ) -> Result<DecodedElement> {
-                if schema.name != $name {
-                    return Err(Error::BasicFileInfo(format!(
-                        "{} received wrong schema: {}",
-                        stringify!($Struct),
-                        schema.name
-                    )));
-                }
-                Ok(crate::walker::decode_instance_with_limits(
-                    bytes, 0, schema, limits,
-                ))
-            }
-        }
-    };
-}
-
-simple_decoder!(StairDecoder, "Stair");
-simple_decoder!(StairTypeDecoder, "StairType");
-simple_decoder!(RailingDecoder, "Railing");
-simple_decoder!(RailingTypeDecoder, "RailingType");
+use crate::walker::{DecodedElement, InstanceField};
 
 /// Typed view of a decoded Stair.
 #[derive(Debug, Clone, PartialEq, Default)]
+#[non_exhaustive]
 pub struct Stair {
     pub base_level_id: Option<u32>,
     pub top_level_id: Option<u32>,
@@ -161,6 +110,7 @@ impl Stair {
 
 /// Typed view of a StairType.
 #[derive(Debug, Clone, PartialEq, Default)]
+#[non_exhaustive]
 pub struct StairType {
     pub name: Option<String>,
     pub is_exterior: Option<bool>,
@@ -219,6 +169,7 @@ impl Railing {
 
 /// Typed view of a RailingType.
 #[derive(Debug, Clone, PartialEq, Default)]
+#[non_exhaustive]
 pub struct RailingType {
     pub name: Option<String>,
     pub top_rail_height_feet: Option<f64>,

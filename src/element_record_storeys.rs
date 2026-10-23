@@ -24,7 +24,7 @@
 //!   reference export.
 //! - **Not claimed:** which *named* Revit Level sits at that
 //!   elevation. Level ElementId recovery is falsified on this corpus
-//!   (RE-20 / #86) and the recovered name strings carry no order that
+//!   (RE-20, #86) and the recovered name strings carry no order that
 //!   would let a rank join stand up — on Core Interior there are 12
 //!   name candidates against 11 measured elevations, and pairing the
 //!   two by rank puts `Level 6` at 91 ft where the export puts

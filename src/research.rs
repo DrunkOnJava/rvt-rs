@@ -1,0 +1,228 @@
+//! Research readers: the partition, native and element-record decoders
+//! behind the format findings in `reports/`.
+//!
+//! Available with the `unstable-research` feature. Everything here changes
+//! whenever a finding does, in any release, and is outside the semver promise
+//! the rest of the crate makes (`RELEASE.md`, "What 1.0 keeps stable"). The
+//! stable API reads through these modules internally, so turning the feature
+//! on adds paths to them and changes nothing else.
+//!
+//! Each module states the fact it reads and the report that measures it:
+//! `RE-NN` is
+//! [`reports/element-framing/RE-NN-*.md`](https://github.com/DrunkOnJava/rvt-rs/tree/main/reports/element-framing)
+//! in the repository, and `#NNN` an issue or pull request there.
+//!
+//! ## Partition records
+//!
+//! - [`partition_arc_walls`]: Shared partition ArcWall iteration (RE-15)
+//! - [`partition_area_records`]: Revit 2024 Areas from their partition chain records (#763)
+//! - [`partition_beam_axes`]: Beam location lines from their serialised element data (RE-49)
+//! - [`partition_column_nodes`]: A column's true z-range from its instance geometry node (RE-173)
+//! - [`partition_compound_structure`]: Host types' layers and which side of a wall is its exterior (RE-53)
+//! - [`partition_connector_pairs`]: Which element each end of a duct or pipe is joined to (RE-138, #528)
+//! - [`partition_curtain_materials`]: A curtain wall mullion's and panel's material, from its type's data object (RE-166)
+//! - [`partition_curve_fields`]: A duct's or pipe's size and type, from its curve object (RE-134, #96, #35)
+//! - [`partition_design_options`]: Design option sets and their primary options (#319, RE-40)
+//! - [`partition_element_records`]: Partition element-record headers
+//! - [`partition_element_records_2023`]: Revit 2023 partition element records (RE-81, #421), and Revit 2015 to 2022's, which take the same layout (RE-180, RE-181)
+//! - [`partition_fitting_sizes`]: A pipe fitting's nominal size, from its own data object (RE-165, #35)
+//! - [`partition_id_objects`]: Serialised objects keyed by their ElementId, found in one pass
+//! - [`partition_ifc_export_overrides`]: Per-element IFC export-type overrides carried in the Revit 2024 partition parameter blocks (#212, RE-22)
+//! - [`partition_instance_transforms`]: A family instance's transform, from its own element data (RE-87)
+//! - [`partition_level_parameters`]: Level parameters of an element, from its per-element association record (RE-172)
+//! - [`partition_level_records`]: Revit `Level` elements recovered from the partition streams (#218, RE-24)
+//! - [`partition_materials`]: Material shading colours and transparency (RE-53)
+//! - [`partition_mep_systems`]: MEP systems and their members (RE-162, #528)
+//! - [`partition_name_candidates`]: Partition UTF-16LE display-name candidates (RE-15, #86)
+//! - [`partition_names`]: Family and type names from partition name entries (RE-38)
+//! - [`partition_phases`]: Phase names, and the phase an element was created in (#755)
+//! - [`partition_pipe_axes`]: Pipes as their cylinders, from their connector entries (RE-131, #96)
+//! - [`partition_roof_slopes`]: Roof edges' slopes (RE-56)
+//! - [`partition_room_boundaries`]: Room plan outlines from the faces of each room's stored solid (RE-101)
+//! - [`partition_room_parameters`]: Room number / name / host Level from the Revit 2024 partition parameter block a room owns (#90, RE-29)
+//! - [`partition_scanner`]: Generic partition-stream record scanner
+//! - [`partition_schema_mvp`]: Schema / partition MVP recovers for production `iter_elements`
+//! - [`partition_stairs`]: Stair and stair-run dimensions from their serialised element data (RE-47)
+//! - [`partition_type_materials`]: The materials a family type's geometry uses (#355, RE-82)
+//! - [`partition_type_parameters`]: Text parameters of element types, stored under their BuiltInParameter (#35, RE-77)
+//! - [`partition_type_records`]: Revit *type* records recovered from the partition streams (#88, RE-28)
+//!
+//! ## Element records
+//!
+//! - [`element_record_beam_cuts`]: Beam bodies on Revit 2023
+//! - [`element_record_column_cuts`]: Column bodies
+//! - [`element_record_level_refs`]: Level ElementId binding from a partition element record's counted reference list (#219, RE-27)
+//! - [`element_record_plan_profiles`]: Plan profiles for sketched elements, from `OST_SketchLines` partition element records (#31, RE-25)
+//! - [`element_record_storeys`]: Storey elevations recovered from partition element-record bboxes
+//! - [`element_record_wall_joins`]: Wall bodies
+//!
+//! ## Native records
+//!
+//! - [`native_connectors`]: A family symbol's connectors, from its own native record and its family's (#528)
+//! - [`native_document`]: Streaming current-record extraction with structural schemas and native IDs
+//! - [`native_duct_shapes`]: A duct type's shape, from its native record
+//! - [`native_element`]: Bounded native Element base fields, using the structurally decoded schema
+//! - [`native_empty_faces`]: Strict classifier for the observed empty-trim saved-graphics records
+//! - [`native_es_catalog`]: File-local Extensible Storage catalog from the owned Global/Latest graph
+//! - [`native_extensible_storage`]: File-local Extensible Storage definitions
+//! - [`native_graphics_traversal`]: Bounded traversal of saved graphics under the default 3D context
+//! - [`native_index`]: Native project identities and creation-episode UniqueIds
+//! - [`native_metadata`]: Lossless projections of selected saved metadata from a complete native graph
+//! - [`native_parameter_definitions`]: Parameter definitions recovered through native owner-to-definition edges
+//! - [`native_parameters`]: Schema-directed native value prefixes and deferred parameter sets
+//! - [`native_parametric_mesh`]: Bounded UV-grid meshing for decoded parametric surfaces
+//! - [`native_parametric_surface`]: Typed evaluators for the non-planar surfaces observed in saved graphs
+//! - [`native_saved_glb`]: glTF export of native saved meshes, retaining face and material provenance
+//! - [`native_saved_materials`]: Saved material ownership and the default viewport conversion
+//! - [`native_saved_mesh`]: Tessellation of bounded saved planar and cylindrical BRep faces
+//! - [`native_saved_scene`]: Current native saved-graphics extraction with explicit shared-symbol closure
+//! - [`native_segments`]: Forward-only physical partition markers and continuation groups
+//! - [`native_wall_types`]: A wall's type Function, from the native records of the wall and its type (RE-185, RE-193)
+//!
+//! ## Other research
+//!
+//! - [`class_tag_map`]: Cross-version class-tag lookup
+//! - [`compound_framing`]: Compound ArcWall (`0x0821`) stamp / marker investigation harness
+//! - [`es_refs`]: ES reference occurrence locator contracts, with no decoder yet
+//! - [`evidence`]: Named evidence tiers and lightweight ledgers
+//! - [`identity`]: Document-scoped identity and source-span contracts
+//! - [`rect_opening_index`]: Version-gated decoder for Revit 2024 ArcWallRectOpening 60 B index records (RE-15, #89)
+//! - [`relations`]: Experimental typed-relation domains, SCC condensation, and quarantine
+//! - [`revit_global_ids`]: The IFC `GlobalId` Revit's own exporter gives an element, rebuilt from the file (RE-48)
+//! - [`schema_registry`]: Forward-only Formats/Latest registry framing, without byte-name scanning
+// Tracker: D20, B66, B44, B33, M3-03, M3-04, B54, B59, B43, L5B-10.
+
+#[path = "class_tag_map.rs"]
+pub mod class_tag_map;
+#[path = "compound_framing.rs"]
+pub mod compound_framing;
+#[path = "element_record_beam_cuts.rs"]
+pub mod element_record_beam_cuts;
+#[path = "element_record_column_cuts.rs"]
+pub mod element_record_column_cuts;
+#[path = "element_record_level_refs.rs"]
+pub mod element_record_level_refs;
+#[path = "element_record_plan_profiles.rs"]
+pub mod element_record_plan_profiles;
+#[path = "element_record_storeys.rs"]
+pub mod element_record_storeys;
+#[path = "element_record_wall_joins.rs"]
+pub mod element_record_wall_joins;
+#[path = "es_refs.rs"]
+pub mod es_refs;
+#[path = "evidence.rs"]
+pub mod evidence;
+#[path = "identity.rs"]
+pub mod identity;
+#[path = "native_connectors.rs"]
+pub mod native_connectors;
+#[path = "native_document.rs"]
+pub mod native_document;
+#[path = "native_duct_shapes.rs"]
+pub mod native_duct_shapes;
+#[path = "native_element.rs"]
+pub mod native_element;
+#[path = "native_empty_faces.rs"]
+pub mod native_empty_faces;
+#[path = "native_es_catalog.rs"]
+pub mod native_es_catalog;
+#[path = "native_extensible_storage.rs"]
+pub mod native_extensible_storage;
+#[path = "native_graphics_traversal.rs"]
+pub mod native_graphics_traversal;
+#[path = "native_index.rs"]
+pub mod native_index;
+#[path = "native_metadata.rs"]
+pub mod native_metadata;
+#[path = "native_parameter_definitions.rs"]
+pub mod native_parameter_definitions;
+#[path = "native_parameters.rs"]
+pub mod native_parameters;
+#[path = "native_parametric_mesh.rs"]
+pub mod native_parametric_mesh;
+#[path = "native_parametric_surface.rs"]
+pub mod native_parametric_surface;
+#[path = "native_saved_glb.rs"]
+pub mod native_saved_glb;
+#[path = "native_saved_materials.rs"]
+pub mod native_saved_materials;
+#[path = "native_saved_mesh.rs"]
+pub mod native_saved_mesh;
+#[path = "native_saved_scene.rs"]
+pub mod native_saved_scene;
+#[path = "native_segments.rs"]
+pub mod native_segments;
+#[path = "native_wall_types.rs"]
+pub mod native_wall_types;
+#[path = "partition_arc_walls.rs"]
+pub mod partition_arc_walls;
+#[path = "partition_area_records.rs"]
+pub mod partition_area_records;
+#[path = "partition_beam_axes.rs"]
+pub mod partition_beam_axes;
+#[path = "partition_column_nodes.rs"]
+pub mod partition_column_nodes;
+#[path = "partition_compound_structure.rs"]
+pub mod partition_compound_structure;
+#[path = "partition_connector_pairs.rs"]
+pub mod partition_connector_pairs;
+#[path = "partition_curtain_materials.rs"]
+pub mod partition_curtain_materials;
+#[path = "partition_curve_fields.rs"]
+pub mod partition_curve_fields;
+#[path = "partition_design_options.rs"]
+pub mod partition_design_options;
+#[path = "partition_element_records.rs"]
+pub mod partition_element_records;
+#[path = "partition_element_records_2023.rs"]
+pub mod partition_element_records_2023;
+#[path = "partition_fitting_sizes.rs"]
+pub mod partition_fitting_sizes;
+#[path = "partition_id_objects.rs"]
+pub mod partition_id_objects;
+#[path = "partition_ifc_export_overrides.rs"]
+pub mod partition_ifc_export_overrides;
+#[path = "partition_instance_transforms.rs"]
+pub mod partition_instance_transforms;
+#[path = "partition_level_parameters.rs"]
+pub mod partition_level_parameters;
+#[path = "partition_level_records.rs"]
+pub mod partition_level_records;
+#[path = "partition_materials.rs"]
+pub mod partition_materials;
+#[path = "partition_mep_systems.rs"]
+pub mod partition_mep_systems;
+#[path = "partition_name_candidates.rs"]
+pub mod partition_name_candidates;
+#[path = "partition_names.rs"]
+pub mod partition_names;
+#[path = "partition_phases.rs"]
+pub mod partition_phases;
+#[path = "partition_pipe_axes.rs"]
+pub mod partition_pipe_axes;
+#[path = "partition_roof_slopes.rs"]
+pub mod partition_roof_slopes;
+#[path = "partition_room_boundaries.rs"]
+pub mod partition_room_boundaries;
+#[path = "partition_room_parameters.rs"]
+pub mod partition_room_parameters;
+#[path = "partition_scanner.rs"]
+pub mod partition_scanner;
+#[path = "partition_schema_mvp.rs"]
+pub mod partition_schema_mvp;
+#[path = "partition_stairs.rs"]
+pub mod partition_stairs;
+#[path = "partition_type_materials.rs"]
+pub mod partition_type_materials;
+#[path = "partition_type_parameters.rs"]
+pub mod partition_type_parameters;
+#[path = "partition_type_records.rs"]
+pub mod partition_type_records;
+#[path = "rect_opening_index.rs"]
+pub mod rect_opening_index;
+#[path = "relations.rs"]
+pub mod relations;
+#[path = "revit_global_ids.rs"]
+pub mod revit_global_ids;
+#[path = "schema_registry.rs"]
+pub mod schema_registry;

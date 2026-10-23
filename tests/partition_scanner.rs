@@ -4,7 +4,7 @@
 //! path. Optional magnetar corpus tests skip without `RVT_PROJECT_CORPUS_DIR`.
 
 use rvt::arc_wall_record::ArcWallRecord;
-use rvt::partition_scanner::{
+use rvt::research::partition_scanner::{
     PartitionScanStatus, ScanOptions, arcwall_standard_offsets, declared_but_unlocated_ids,
     element_id_partition_index, iter_partition_candidates, link_elem_table_to_partitions,
     linkage_coverage, scan_partitions, scanner_status, supports_revit_version,

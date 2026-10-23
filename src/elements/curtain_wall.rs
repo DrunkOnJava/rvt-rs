@@ -55,59 +55,7 @@
 //! | `m_u_index` / `m_v_index` | Primitive u32 | Grid-cell coordinates of this panel |
 
 use super::level::normalise_field_name;
-use crate::formats;
-use crate::walker::{DecodedElement, ElementDecoder, HandleIndex, InstanceField};
-use crate::{Error, Result};
-
-macro_rules! simple_decoder {
-    ($Struct:ident, $name:literal) => {
-        pub struct $Struct;
-
-        impl ElementDecoder for $Struct {
-            fn class_name(&self) -> &'static str {
-                $name
-            }
-
-            fn decode(
-                &self,
-                bytes: &[u8],
-                schema: &formats::ClassEntry,
-                index: &HandleIndex,
-            ) -> Result<DecodedElement> {
-                self.decode_with_limits(
-                    bytes,
-                    schema,
-                    index,
-                    crate::walker::WalkerLimits::default(),
-                )
-            }
-
-            fn decode_with_limits(
-                &self,
-                bytes: &[u8],
-                schema: &formats::ClassEntry,
-                _index: &HandleIndex,
-                limits: crate::walker::WalkerLimits,
-            ) -> Result<DecodedElement> {
-                if schema.name != $name {
-                    return Err(Error::BasicFileInfo(format!(
-                        "{} received wrong schema: {}",
-                        stringify!($Struct),
-                        schema.name
-                    )));
-                }
-                Ok(crate::walker::decode_instance_with_limits(
-                    bytes, 0, schema, limits,
-                ))
-            }
-        }
-    };
-}
-
-simple_decoder!(CurtainWallDecoder, "CurtainWall");
-simple_decoder!(CurtainGridDecoder, "CurtainGrid");
-simple_decoder!(CurtainMullionDecoder, "CurtainMullion");
-simple_decoder!(CurtainPanelDecoder, "CurtainPanel");
+use crate::walker::{DecodedElement, InstanceField};
 
 /// Typed view for CurtainWall. Shares most of the shape with
 /// `crate::elements::wall::Wall` but lives as a separate type
@@ -115,6 +63,7 @@ simple_decoder!(CurtainPanelDecoder, "CurtainPanel");
 /// `StructuralUsage` — those concepts don't apply to mullion-
 /// panel assemblies.
 #[derive(Debug, Clone, PartialEq, Default)]
+#[non_exhaustive]
 pub struct CurtainWall {
     pub base_level_id: Option<u32>,
     pub top_level_id: Option<u32>,
@@ -160,6 +109,7 @@ impl CurtainWall {
 /// curtain wall. Each line count + the parent CurtainWall host
 /// fully describe the grid topology.
 #[derive(Debug, Clone, PartialEq, Default)]
+#[non_exhaustive]
 pub struct CurtainGrid {
     pub host_id: Option<u32>,
     pub u_line_count: Option<u32>,
@@ -195,6 +145,7 @@ impl CurtainGrid {
 
 /// Typed view for CurtainMullion — a single framing member.
 #[derive(Debug, Clone, PartialEq, Default)]
+#[non_exhaustive]
 pub struct CurtainMullion {
     pub host_id: Option<u32>,
     pub symbol_id: Option<u32>,
@@ -221,6 +172,7 @@ impl CurtainMullion {
 /// Typed view for CurtainPanel — a single glass / spandrel / infill
 /// panel bound by two pairs of grid lines.
 #[derive(Debug, Clone, PartialEq, Default)]
+#[non_exhaustive]
 pub struct CurtainPanel {
     pub host_id: Option<u32>,
     pub symbol_id: Option<u32>,

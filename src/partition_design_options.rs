@@ -203,7 +203,7 @@ pub fn find_set_entries(buf: &[u8], options: &[u32]) -> Vec<(String, u32)> {
 
 /// The design option sets of a whole file and their primary options.
 /// Empty where the release's record shape is not proven.
-/// [`crate::RevitFile::design_options`] memoises it.
+/// `RevitFile::design_options` memoises it.
 pub fn compute_design_options(rf: &mut RevitFile) -> Result<DesignOptions> {
     let mut out = DesignOptions::default();
     let version = rf.basic_file_info()?.version;
@@ -280,7 +280,7 @@ pub fn scan_non_primary_option_instances(
     if !supports_revit_version(revit_version) {
         return Ok(by_class);
     }
-    let options = rf.design_options();
+    let options = rf.memoised_design_options();
     if options.sets.is_empty() {
         return Ok(by_class);
     }
