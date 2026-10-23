@@ -135,6 +135,24 @@ def main():
     for gid, occ in list(hits.items())[: 12 if args.list else 4]:
         for stream, at, enc, before in occ[:2]:
             print(f"  {by_tag[gid]} {gid} {stream}+{at} {enc} before={before}")
+    # The same 21 trailing characters with another first one: the stored value
+    # differs from Revit's in the top two bits only.
+    by_suffix = collections.defaultdict(list)
+    for s, occ in stored.items():
+        by_suffix[s[1:]].append((s, occ))
+    firsts, matched, prefixes = collections.Counter(), 0, collections.Counter()
+    for gid, tag in by_tag.items():
+        found = by_suffix.get(gid[1:])
+        if not found:
+            continue
+        matched += 1
+        for s, occ in found:
+            firsts[(s[0], gid[0])] += 1
+            for _, _, _, before in occ:
+                prefixes[before[-16:]] += 1
+    print(f"Revit's GlobalIds whose last 21 characters a stored string has: {matched} of {len(by_tag)}")
+    print("  stored first character -> Revit's: " + ", ".join(f"{a}->{b} {n}" for (a, b), n in sorted(firsts.items())))
+    print("  the 8 bytes before those strings: " + ", ".join(f"{p} {n}" for p, n in prefixes.most_common(4)))
 
 
 if __name__ == "__main__":
