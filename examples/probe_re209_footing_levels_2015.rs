@@ -20,6 +20,7 @@
 //!     each recovered Level's id within 512 bytes before and 2048 after a
 //!     footing's or column's record
 //!   bytes <class> <id> +300 <hex>   a footing record's bytes +300 to +420
+//!   list <class> <id> +<offset> [ids] levels=[..]   each 0x04b9 id list
 //!
 //! Usage:
 //!   cargo run --profile ci --example probe_re209_footing_levels_2015 -- FILE.rvt
@@ -155,6 +156,32 @@ fn main() {
             continue;
         };
         let data = inflated.bytes();
+        // Every `u16 0x04b9 · u32 n · n × u32` list from the record on, and
+        // which of the file's Levels it names.
+        let level_ids: BTreeSet<u32> = levels.iter().map(|l| l.element_id).collect();
+        let scan_end = (offset + 2048).min(data.len());
+        let mut at = *offset;
+        while at + 6 <= scan_end {
+            if data[at..at + 2] == [0xb9, 0x04] {
+                let n = u32::from_le_bytes([data[at + 2], data[at + 3], data[at + 4], data[at + 5]])
+                    as usize;
+                if (1..=64).contains(&n) && at + 6 + 4 * n <= data.len() {
+                    let ids: Vec<u32> = (0..n)
+                        .map(|k| {
+                            let p = at + 6 + 4 * k;
+                            u32::from_le_bytes([data[p], data[p + 1], data[p + 2], data[p + 3]])
+                        })
+                        .collect();
+                    let named: Vec<&u32> = ids.iter().filter(|id| level_ids.contains(id)).collect();
+                    println!(
+                        "list {class} {id} +{} {:?} levels={named:?}",
+                        at - offset,
+                        ids
+                    );
+                }
+            }
+            at += 1;
+        }
         if class == "StructuralFoundation" {
             let window = &data[(offset + 300).min(data.len())..(offset + 420).min(data.len())];
             let hex: String = window.iter().map(|b| format!("{b:02x}")).collect();

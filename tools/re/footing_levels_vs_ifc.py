@@ -105,6 +105,22 @@ def main():
     print("Level ids near the records (class, Level, offset from the record, width): count")
     for (cls, level, rel, width), n in sorted(near.items(), key=lambda kv: -kv[1])[:20]:
         print(f"  {cls} {level} {rel:+d} {width}: {n}")
+    lists = collections.defaultdict(list)
+    for line in open(args.probe, encoding="utf-8", errors="replace"):
+        if line.startswith("list "):
+            parts = line.split(" ", 4)
+            levels_named = line.rsplit("levels=", 1)[1].strip()
+            lists[(parts[1], int(parts[2]))].append(levels_named)
+    by_class = collections.Counter()
+    for (cls, ident), named in lists.items():
+        distinct = {n for n in named if n != "[]"}
+        verdict = "no Level" if not distinct else "one Level" if len(distinct) == 1 and len(eval(next(iter(distinct)))) == 1 else "several"
+        exported_storey = storey_of.get(ident)
+        right = ""
+        if verdict == "one Level" and exported_storey and exported_storey[1] != "?":
+            right = " (Revit's)" if str(exported_storey[1]) in next(iter(distinct)) else " (not Revit's)"
+        by_class[(cls, verdict + right)] += 1
+    print("0x04b9 lists naming a Level, by element: " + ", ".join(f"{c} {v} {n}" for (c, v), n in sorted(by_class.items())))
     print("referenced ids, where they appear:")
     for line in open(args.probe, encoding="utf-8", errors="replace"):
         if line.startswith("ref "):
