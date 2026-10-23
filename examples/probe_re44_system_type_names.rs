@@ -19,11 +19,11 @@
 //!   cargo run --profile ci --example probe_re44_system_type_names -- FILE.rvt
 
 use rvt::RevitFile;
-use rvt::partition_element_records::{
+use rvt::research::partition_element_records::{
     OST_BUILDING_PAD, OST_CEILINGS, OST_FLOORS, OST_ROOFS, OST_STAIRS_RAILING, OST_WALLS,
 };
-use rvt::partition_names::{element_data_header, find_element_data_names};
-use rvt::partition_type_records::{scan_type_records, type_definition_ids};
+use rvt::research::partition_names::{element_data_header, find_element_data_names};
+use rvt::research::partition_type_records::{scan_type_records, type_definition_ids};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 

@@ -40,15 +40,15 @@
 //! Usage:
 //!   cargo run --profile ci --example probe_re193_is_external -- MODEL.rvt
 
-use rvt::partition_room_parameters::{
+use rvt::research::partition_room_parameters::{
     FUNCTION_PARAMETER, enclosing_data_object, find_parameter_definitions, scan_integer_parameter,
 };
-use rvt::partition_schema_mvp::{
+use rvt::research::partition_schema_mvp::{
     AGGREGATE_WHOLE_FIELD, OPENING_HOST_FIELD, TYPE_ID_FIELD, recover_partition_schema_mvp,
 };
-use rvt::partition_type_parameters::family_parameters_named;
+use rvt::research::partition_type_parameters::family_parameters_named;
 use rvt::walker::{DecodedElement, InstanceField, WalkerLimits};
-use rvt::{RevitFile, native_document};
+use rvt::{RevitFile, research::native_document};
 use serde_json::json;
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -128,7 +128,7 @@ fn main() -> rvt::Result<()> {
     let elements =
         recover_partition_schema_mvp(&mut rf, version, WalkerLimits::default())?.into_elements();
     let declared = rvt::elem_table::declared_ids(&rvt::elem_table::parse_records(&mut rf)?);
-    let global_ids = rvt::revit_global_ids::revit_global_ids(&mut rf).unwrap_or_default();
+    let global_ids = rvt::research::revit_global_ids::revit_global_ids(&mut rf).unwrap_or_default();
 
     let types: BTreeMap<u32, u32> = elements
         .iter()

@@ -21,7 +21,7 @@
 //!   cargo run --profile ci --example probe_re101_room_solids -- MODEL.rvt
 
 use rvt::RevitFile;
-use rvt::partition_room_boundaries::{room_outline, solid_faces, solid_headers};
+use rvt::research::partition_room_boundaries::{room_outline, solid_faces, solid_headers};
 use std::collections::BTreeMap;
 
 fn area(ring: &[(f64, f64)]) -> f64 {
@@ -40,7 +40,7 @@ fn main() -> rvt::Result<()> {
     let path = std::env::args().nth(1).expect("usage: MODEL.rvt");
     let mut rf = RevitFile::open(&path)?;
     let version = rf.basic_file_info()?.version;
-    let rooms = rvt::partition_schema_mvp::recover_partition_schema_mvp(
+    let rooms = rvt::research::partition_schema_mvp::recover_partition_schema_mvp(
         &mut rf,
         version,
         rvt::walker::WalkerLimits::default(),

@@ -25,8 +25,8 @@
 //! Usage:
 //!   cargo run --profile ci --example probe_re185_wall_function -- MODEL.rvt ...
 
-use rvt::partition_room_parameters::{PARAMETER_GROUP_PREFIX, enclosing_data_object};
-use rvt::{RevitFile, native_document};
+use rvt::research::partition_room_parameters::{PARAMETER_GROUP_PREFIX, enclosing_data_object};
+use rvt::{RevitFile, research::native_document};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
@@ -374,7 +374,9 @@ fn probe(path: &str) -> anyhow::Result<()> {
     for id in FIRE_RATING_CANDIDATES {
         fire.insert(
             id,
-            rvt::partition_room_parameters::scan_text_parameter(&mut rf, revit, &types, id),
+            rvt::research::partition_room_parameters::scan_text_parameter(
+                &mut rf, revit, &types, id,
+            ),
         );
     }
     println!(

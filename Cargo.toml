@@ -51,6 +51,12 @@ members = [".", "rvt-py", "rvt-wasm", "tools/stream_evidence"]
 #
 # Then open the produced `dhat-heap.json` in dhat-viewer.
 dhat-heap = ["dep:dhat"]
+# The research modules under `rvt::research`: the partition, native and
+# element-record readers behind the format findings in `reports/`. Their API
+# changes with each finding, so they sit outside the semver promise
+# (RELEASE.md, "What 1.0 keeps stable"). The probes, tests and benches get
+# this feature through the self dev-dependency below.
+unstable-research = []
 
 [dependencies]
 # Microsoft Compound File Binary (OLE) container — reads the outer
@@ -112,6 +118,11 @@ js-sys = "0.3"
 # stays `publish = false` (a regular dependency made `cargo publish -p rvt`
 # fail with "no matching package named `stream-evidence`").
 stream-evidence = { path = "tools/stream_evidence" }
+# Turns on `unstable-research` for every dev target (the probes in examples/,
+# the integration tests, the benches) without turning it on for `cargo build`,
+# `cargo install` or the published crate. Path-only, so `cargo publish`
+# strips it.
+rvt = { path = ".", features = ["unstable-research"] }
 # Statistical benchmarking harness — drives `benches/*` and
 # powers the criterion-based cells in `docs/benchmarks.md` (Q-05).
 # `html_reports` renders per-run HTML + SVG so CI artefacts are

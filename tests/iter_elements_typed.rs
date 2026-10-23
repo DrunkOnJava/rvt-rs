@@ -190,7 +190,8 @@ fn einhoven_partition_schema_mvp_levels_materials_floors() {
     let version = rf.basic_file_info().unwrap().version;
     assert_eq!(version, 2023);
 
-    let scan = rvt::partition_arc_walls::scan_partition_arc_walls(&mut rf, version).unwrap();
+    let scan =
+        rvt::research::partition_arc_walls::scan_partition_arc_walls(&mut rf, version).unwrap();
     assert!(scan.walls.len() >= 20);
     let mut recovered_curves = 0usize;
     let mut with_elevation = 0usize;
@@ -306,8 +307,9 @@ fn core_interior_2024_rect_openings_not_fake_doors() {
         max_candidates: 2_000,
         ..walker::WalkerLimits::default()
     };
-    let mvp = rvt::partition_schema_mvp::recover_partition_schema_mvp(&mut rf, version, limits)
-        .expect("mvp");
+    let mvp =
+        rvt::research::partition_schema_mvp::recover_partition_schema_mvp(&mut rf, version, limits)
+            .expect("mvp");
     assert!(
         mvp.rect_openings.len() >= 50,
         "expected ≥50 ArcWallRectOpening index rows on 2024 Core Interior, got {}",
@@ -432,8 +434,9 @@ fn core_interior_2024_slab_instances_and_export_overrides() {
         max_candidates: 2_000,
         ..walker::WalkerLimits::default()
     };
-    let mvp = rvt::partition_schema_mvp::recover_partition_schema_mvp(&mut rf, version, limits)
-        .expect("mvp");
+    let mvp =
+        rvt::research::partition_schema_mvp::recover_partition_schema_mvp(&mut rf, version, limits)
+            .expect("mvp");
 
     assert_eq!(
         mvp.slabs.len(),
@@ -607,8 +610,9 @@ fn core_interior_2024_slab_plan_profiles() {
         max_candidates: 2_000,
         ..walker::WalkerLimits::default()
     };
-    let mvp = rvt::partition_schema_mvp::recover_partition_schema_mvp(&mut rf, version, limits)
-        .expect("mvp");
+    let mvp =
+        rvt::research::partition_schema_mvp::recover_partition_schema_mvp(&mut rf, version, limits)
+            .expect("mvp");
     assert_eq!(mvp.slabs.len(), 100);
 
     let mut without: Vec<u32> = Vec::new();
@@ -618,7 +622,7 @@ fn core_interior_2024_slab_plan_profiles() {
     for slab in &mvp.slabs {
         let id = slab.id.expect("record-backed slab carries an id");
         let Some(profile) =
-            rvt::element_record_plan_profiles::plan_profile_from_fields(&slab.fields)
+            rvt::research::element_record_plan_profiles::plan_profile_from_fields(&slab.fields)
         else {
             without.push(id);
             continue;
@@ -808,8 +812,9 @@ fn core_interior_2024_door_window_host_wall_binding() {
         max_candidates: 2_000,
         ..walker::WalkerLimits::default()
     };
-    let mvp = rvt::partition_schema_mvp::recover_partition_schema_mvp(&mut rf, version, limits)
-        .expect("mvp");
+    let mvp =
+        rvt::research::partition_schema_mvp::recover_partition_schema_mvp(&mut rf, version, limits)
+            .expect("mvp");
 
     let wall_ids: std::collections::BTreeSet<u32> =
         mvp.walls.iter().filter_map(|wall| wall.id).collect();
@@ -824,7 +829,7 @@ fn core_interior_2024_door_window_host_wall_binding() {
             .iter()
             .find_map(|(name, value)| match (name.as_str(), value) {
                 (
-                    rvt::partition_schema_mvp::OPENING_HOST_FIELD,
+                    rvt::research::partition_schema_mvp::OPENING_HOST_FIELD,
                     walker::InstanceField::ElementId { id, .. },
                 ) => Some(*id),
                 _ => None,
@@ -862,9 +867,9 @@ fn core_interior_2024_door_window_host_wall_binding() {
             opening.fields.iter().any(|(name, value)| matches!(
                 (name.as_str(), value),
                 (
-                    rvt::partition_schema_mvp::OPENING_HOST_PROVENANCE_FIELD,
+                    rvt::research::partition_schema_mvp::OPENING_HOST_PROVENANCE_FIELD,
                     walker::InstanceField::String(text),
-                ) if text == rvt::partition_schema_mvp::OPENING_HOST_PROVENANCE
+                ) if text == rvt::research::partition_schema_mvp::OPENING_HOST_PROVENANCE
             )),
             "opening {:?} lacks host provenance",
             opening.id
@@ -897,8 +902,9 @@ fn core_interior_2024_column_type_symbol_join() {
 
     let mut rf = RevitFile::open(&path).expect("open 2024");
     let version = rf.basic_file_info().unwrap().version;
-    let level_ids = rvt::partition_schema_mvp::level_element_ids(&mut rf, version).expect("levels");
-    let columns = rvt::partition_schema_mvp::columns_from_partition_category_records(
+    let level_ids =
+        rvt::research::partition_schema_mvp::level_element_ids(&mut rf, version).expect("levels");
+    let columns = rvt::research::partition_schema_mvp::columns_from_partition_category_records(
         &mut rf, version, &level_ids,
     )
     .expect("columns");
@@ -920,15 +926,15 @@ fn core_interior_2024_column_type_symbol_join() {
         for (name, value) in &column.fields {
             match (name.as_str(), value) {
                 (
-                    rvt::partition_schema_mvp::TYPE_SYMBOL_FIELD,
+                    rvt::research::partition_schema_mvp::TYPE_SYMBOL_FIELD,
                     walker::InstanceField::ElementId { id, .. },
                 ) => symbol = Some(*id),
                 (
-                    rvt::partition_schema_mvp::TYPE_PROFILE_WIDTH_FIELD,
+                    rvt::research::partition_schema_mvp::TYPE_PROFILE_WIDTH_FIELD,
                     walker::InstanceField::Float { value, .. },
                 ) => section.0 = Some(*value),
                 (
-                    rvt::partition_schema_mvp::TYPE_PROFILE_DEPTH_FIELD,
+                    rvt::research::partition_schema_mvp::TYPE_PROFILE_DEPTH_FIELD,
                     walker::InstanceField::Float { value, .. },
                 ) => section.1 = Some(*value),
                 ("m_bboxWidth", walker::InstanceField::Float { value, .. }) => {
@@ -938,13 +944,13 @@ fn core_interior_2024_column_type_symbol_join() {
                     depth = Some(*value);
                 }
                 (
-                    rvt::element_record_column_cuts::COLUMN_BODY_SOURCE_FIELD,
+                    rvt::research::element_record_column_cuts::COLUMN_BODY_SOURCE_FIELD,
                     walker::InstanceField::String(text),
                 ) => {
                     cut_source = Some(text.clone());
                 }
                 (
-                    rvt::element_record_column_cuts::COLUMN_CUT_WALL_COUNT_FIELD,
+                    rvt::research::element_record_column_cuts::COLUMN_CUT_WALL_COUNT_FIELD,
                     walker::InstanceField::Integer { value, .. },
                 ) => {
                     cut_walls = Some(*value);
@@ -987,7 +993,7 @@ fn core_interior_2024_column_type_symbol_join() {
                 // element as the type's own fact.
                 assert_eq!(
                     source,
-                    rvt::element_record_column_cuts::COLUMN_BODY_JOIN_CUT
+                    rvt::research::element_record_column_cuts::COLUMN_BODY_JOIN_CUT
                 );
                 assert!(
                     width <= section_width + 1e-9 && depth <= section_depth + 1e-9,
@@ -1032,12 +1038,13 @@ fn core_interior_2024_wall_join_trimmed_bodies() {
         eprintln!("skipping: {} missing", path.display());
         return;
     }
-    use rvt::element_record_wall_joins as joins;
+    use rvt::research::element_record_wall_joins as joins;
 
     let mut rf = RevitFile::open(&path).expect("open 2024");
     let version = rf.basic_file_info().unwrap().version;
-    let level_ids = rvt::partition_schema_mvp::level_element_ids(&mut rf, version).expect("levels");
-    let walls = rvt::partition_schema_mvp::walls_from_partition_category_records(
+    let level_ids =
+        rvt::research::partition_schema_mvp::level_element_ids(&mut rf, version).expect("levels");
+    let walls = rvt::research::partition_schema_mvp::walls_from_partition_category_records(
         &mut rf, version, &level_ids,
     )
     .expect("walls");
@@ -1138,8 +1145,9 @@ fn core_interior_2024_column_join_cut_plan_extents() {
     }
     let mut rf = RevitFile::open(&path).expect("open 2024");
     let version = rf.basic_file_info().unwrap().version;
-    let level_ids = rvt::partition_schema_mvp::level_element_ids(&mut rf, version).expect("levels");
-    let columns = rvt::partition_schema_mvp::columns_from_partition_category_records(
+    let level_ids =
+        rvt::research::partition_schema_mvp::level_element_ids(&mut rf, version).expect("levels");
+    let columns = rvt::research::partition_schema_mvp::columns_from_partition_category_records(
         &mut rf, version, &level_ids,
     )
     .expect("columns");
@@ -1200,7 +1208,7 @@ fn core_interior_2024_wall_joins_are_named_in_the_reference_list() {
         eprintln!("skipping: {} or the slim export is missing", path.display());
         return;
     }
-    use rvt::element_record_wall_joins as joins;
+    use rvt::research::element_record_wall_joins as joins;
 
     let mut rf = RevitFile::open(&path).expect("open 2024");
     let version = rf.basic_file_info().unwrap().version;
@@ -1209,14 +1217,14 @@ fn core_interior_2024_wall_joins_are_named_in_the_reference_list() {
         .into_iter()
         .map(|record| record.id_primary)
         .collect();
-    let records = rvt::partition_element_records::scan_category_records(
+    let records = rvt::research::partition_element_records::scan_category_records(
         &mut rf,
         version,
-        rvt::partition_element_records::OST_WALLS,
+        rvt::research::partition_element_records::OST_WALLS,
         &declared,
     )
     .expect("wall records");
-    let instances: Vec<rvt::partition_element_records::PartitionElementRecord> = records
+    let instances: Vec<rvt::research::partition_element_records::PartitionElementRecord> = records
         .into_iter()
         .filter(|record| record.is_exported_instance())
         .collect();
@@ -1387,8 +1395,9 @@ fn core_interior_2024_room_instances_names_and_envelopes() {
     let mut rf = RevitFile::open(&path).expect("open 2024");
     let version = rf.basic_file_info().unwrap().version;
     assert_eq!(version, 2024);
-    let level_ids = rvt::partition_schema_mvp::level_element_ids(&mut rf, version).expect("levels");
-    let rooms = rvt::partition_schema_mvp::rooms_from_partition_category_records(
+    let level_ids =
+        rvt::research::partition_schema_mvp::level_element_ids(&mut rf, version).expect("levels");
+    let rooms = rvt::research::partition_schema_mvp::rooms_from_partition_category_records(
         &mut rf, version, &level_ids,
     )
     .expect("rooms");
@@ -1414,15 +1423,15 @@ fn core_interior_2024_room_instances_names_and_envelopes() {
             match (field.as_str(), value) {
                 ("m_name", walker::InstanceField::String(text)) => name = Some(text.clone()),
                 (
-                    rvt::partition_schema_mvp::ROOM_NUMBER_FIELD,
+                    rvt::research::partition_schema_mvp::ROOM_NUMBER_FIELD,
                     walker::InstanceField::String(text),
                 ) => number = Some(text.clone()),
                 (
-                    rvt::partition_schema_mvp::ROOM_PARAMETER_SOURCE_FIELD,
+                    rvt::research::partition_schema_mvp::ROOM_PARAMETER_SOURCE_FIELD,
                     walker::InstanceField::String(text),
                 ) => source = Some(text.clone()),
                 (
-                    rvt::element_record_level_refs::LEVEL_REFERENCE_FIELD,
+                    rvt::research::element_record_level_refs::LEVEL_REFERENCE_FIELD,
                     walker::InstanceField::ElementId { id, .. },
                 ) => {
                     assert!(
@@ -1450,7 +1459,7 @@ fn core_interior_2024_room_instances_names_and_envelopes() {
         }
         assert_eq!(
             source.as_deref(),
-            Some(rvt::partition_room_parameters::ROOM_PARAMETER_SOURCE),
+            Some(rvt::research::partition_room_parameters::ROOM_PARAMETER_SOURCE),
             "room {id} must record where its number and name came from"
         );
         // Every room on this file is 8 ft floor-to-ceiling, and the
@@ -1480,7 +1489,8 @@ fn core_interior_2024_room_instances_names_and_envelopes() {
     // no sketch, so nothing may claim a profile for it.
     for room in &rooms {
         assert!(
-            rvt::element_record_plan_profiles::plan_profile_from_fields(&room.fields).is_none(),
+            rvt::research::element_record_plan_profiles::plan_profile_from_fields(&room.fields)
+                .is_none(),
             "room {:?} must not claim a plan profile",
             room.id
         );
@@ -1512,8 +1522,8 @@ fn core_interior_2024_wall_type_record_join() {
         eprintln!("skipping: {} missing", path.display());
         return;
     }
-    use rvt::partition_element_records as per;
-    use rvt::partition_type_records as ptr;
+    use rvt::research::partition_element_records as per;
+    use rvt::research::partition_type_records as ptr;
     use std::collections::{BTreeMap, BTreeSet};
 
     let mut rf = RevitFile::open(&path).expect("open 2024");
@@ -1619,7 +1629,7 @@ fn core_interior_2024_material_record_family() {
         eprintln!("skipping: {} missing", path.display());
         return;
     }
-    use rvt::partition_type_records as ptr;
+    use rvt::research::partition_type_records as ptr;
     use std::collections::BTreeSet;
 
     let mut rf = RevitFile::open(&path).expect("open 2024");
@@ -1649,7 +1659,7 @@ fn core_interior_2024_material_record_family() {
     let wall_types = ptr::scan_type_records(
         &mut rf,
         version,
-        rvt::partition_element_records::OST_WALLS,
+        rvt::research::partition_element_records::OST_WALLS,
         &declared,
     )
     .expect("wall type records");

@@ -9,11 +9,13 @@ use proptest::prelude::*;
 use rvt::compression;
 use rvt::control::CancelToken;
 use rvt::elem_table;
-use rvt::es_refs::{EsPathSegment, EsReferenceOccurrence, FixtureMutation, FixtureTransition};
-use rvt::evidence::EvidenceTier;
 use rvt::formats;
-use rvt::identity::DocumentIdentity;
-use rvt::partition_scanner::{ScanOptions, scan_partition_buffer};
+use rvt::research::es_refs::{
+    EsPathSegment, EsReferenceOccurrence, FixtureMutation, FixtureTransition,
+};
+use rvt::research::evidence::EvidenceTier;
+use rvt::research::identity::DocumentIdentity;
+use rvt::research::partition_scanner::{ScanOptions, scan_partition_buffer};
 use std::collections::BTreeMap;
 
 fn bytes(max: usize) -> impl Strategy<Value = Vec<u8>> {

@@ -182,7 +182,7 @@ pub fn all_decoders() -> Vec<Box<dyn ElementDecoder>> {
 ///
 /// Returns `None` when the class has no typed decoder in
 /// [`all_decoders`]. ArcWall is never returned here — use
-/// [`arc_wall::decode_candidate`] instead.
+/// [`arc_wall::decode_at`] instead.
 pub fn decoder_for_class(name: &str) -> Option<Box<dyn ElementDecoder>> {
     all_decoders().into_iter().find(|d| d.class_name() == name)
 }

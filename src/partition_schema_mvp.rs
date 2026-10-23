@@ -876,7 +876,7 @@ fn railing_type_picks(
             continue;
         };
         let buf = inflated.bytes();
-        let Ok(objects) = rf.partition_data_objects(&stream) else {
+        let Ok(objects) = rf.memoised_partition_data_objects(&stream) else {
             continue;
         };
         for &(p, object) in objects.iter() {
@@ -1023,7 +1023,7 @@ fn attach_wall_sweep_types(
     if lists.is_empty() {
         return;
     }
-    let entries = rf.element_names();
+    let entries = rf.memoised_element_names();
     let wanted: BTreeSet<u32> = lists
         .iter()
         .flat_map(|(_, ids)| ids.iter().copied())
@@ -1312,7 +1312,7 @@ pub fn scan_empty_curtain_panels(
         Ok(records) => crate::elem_table::declared_ids(&records),
         Err(_) => return Ok(out),
     };
-    let names = rf.element_names();
+    let names = rf.memoised_element_names();
     let empty_families: BTreeSet<u32> = names
         .entries
         .iter()
@@ -1324,7 +1324,7 @@ pub fn scan_empty_curtain_panels(
     }
     let records =
         per::scan_category_records(rf, revit_version, per::OST_CURTAIN_WALL_PANELS, &declared)?;
-    let options = rf.design_options();
+    let options = rf.memoised_design_options();
     let mut panels: BTreeSet<u32> = BTreeSet::new();
     let mut types: BTreeSet<u32> = BTreeSet::new();
     for record in records
@@ -1625,7 +1625,7 @@ fn attach_original_symbols<const N: usize>(
             .and_then(|number| number.parse::<u32>().ok())
             .unwrap_or(0);
         let buf = inflated.bytes();
-        let Ok(objects) = rf.partition_data_objects(&stream) else {
+        let Ok(objects) = rf.memoised_partition_data_objects(&stream) else {
             continue;
         };
         for &(p, object) in objects.iter() {
@@ -2404,7 +2404,7 @@ fn attach_pipe_type_names(rf: &mut RevitFile, elements: &mut [DecodedElement]) {
 }
 
 fn attach_family_and_type_names(rf: &mut RevitFile, elements: &mut [DecodedElement]) {
-    let names = rf.element_names();
+    let names = rf.memoised_element_names();
     if names.entries.is_empty() {
         return;
     }
@@ -2814,7 +2814,7 @@ fn attach_stair_names(rf: &mut RevitFile, revit_version: u32, products: &mut [De
     let Some(marker) = per::bbox_marker(revit_version) else {
         return;
     };
-    let assigned = rf.second_prologue_ids();
+    let assigned = rf.memoised_second_prologue_ids();
     let none = BTreeMap::new();
     let mut members: BTreeMap<(u32, &'static str), BTreeSet<u32>> = BTreeMap::new();
     for stream in rf.partition_stream_names() {
@@ -6462,7 +6462,7 @@ fn without_non_primary_options(
     rf: &mut RevitFile,
     mut records: Vec<crate::partition_element_records::PartitionElementRecord>,
 ) -> Vec<crate::partition_element_records::PartitionElementRecord> {
-    let options = rf.design_options();
+    let options = rf.memoised_design_options();
     records.retain(|record| !options.excludes(record));
     records
 }

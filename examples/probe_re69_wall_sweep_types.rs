@@ -20,7 +20,7 @@
 //!   cargo run --profile ci --example probe_re69_wall_sweep_types -- MODEL.rvt
 
 use rvt::RevitFile;
-use rvt::partition_element_records as per;
+use rvt::research::partition_element_records as per;
 use std::collections::{BTreeMap, BTreeSet};
 
 fn main() -> rvt::Result<()> {
@@ -30,7 +30,7 @@ fn main() -> rvt::Result<()> {
     let declared = rvt::elem_table::declared_ids(&rvt::elem_table::parse_records(&mut rf)?);
     let (Some(marker), Some(header)) = (
         per::bbox_marker(version),
-        rvt::partition_names::element_data_header(version),
+        rvt::research::partition_names::element_data_header(version),
     ) else {
         eprintln!("Revit {version}: element records are not read on this release");
         return Ok(());
@@ -68,11 +68,11 @@ fn main() -> rvt::Result<()> {
         let Ok(inflated) = rf.inflated_partition(&stream) else {
             continue;
         };
-        objects.extend(rvt::partition_names::find_type_object_ids(
+        objects.extend(rvt::research::partition_names::find_type_object_ids(
             inflated.bytes(),
             &wanted,
         ));
-        names.extend(rvt::partition_names::find_element_data_names(
+        names.extend(rvt::research::partition_names::find_element_data_names(
             inflated.bytes(),
             &header,
             &wanted,

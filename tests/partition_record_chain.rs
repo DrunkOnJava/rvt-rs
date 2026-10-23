@@ -14,7 +14,7 @@
 
 use rvt::RevitFile;
 use rvt::elem_table;
-use rvt::partition_element_records::{
+use rvt::research::partition_element_records::{
     BBOX_MARKER_OFFSET, BUILTIN_CATEGORY_MAX, BUILTIN_CATEGORY_MIN, CATEGORY_OFFSET, bbox_marker,
     enclosing_record, partition_record_chain,
 };

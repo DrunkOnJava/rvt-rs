@@ -20,7 +20,7 @@
 //!   cargo run --profile ci --example probe_re132_slik_vectors -- MODEL.rvt
 
 use rvt::RevitFile;
-use rvt::partition_element_records as per;
+use rvt::research::partition_element_records as per;
 use sha2::{Digest, Sha256};
 
 /// How closely a box side must match, millimetres. His values are rounded to
@@ -170,7 +170,7 @@ fn diagnose_2023(rf: &mut RevitFile, vector: &Vector) -> String {
         .ok()
         .and_then(|from| buf.get(from..from + 8))
         .map(|b| i64::from_le_bytes(b.try_into().expect("8 bytes")));
-    let marker = rvt::partition_element_records_2023::record_marker(rf);
+    let marker = rvt::research::partition_element_records_2023::record_marker(rf);
     let marker_ok = marker.is_some_and(|(marker, _)| {
         let from = (at + ID_TO_MARKER_2023) as usize;
         buf.get(from..from + 8) == Some(marker.as_slice())
@@ -203,7 +203,7 @@ fn main() -> rvt::Result<()> {
     let classes = rf.schema_classes()?;
     let declared = rvt::elem_table::declared_ids(&rvt::elem_table::parse_records(&mut rf)?);
     let records = if version == 2023 {
-        rvt::partition_element_records_2023::scan_records(&mut rf, version)
+        rvt::research::partition_element_records_2023::scan_records(&mut rf, version)
     } else {
         per::scan_category_records_multi(
             &mut rf,

@@ -1000,6 +1000,7 @@ dependencies = [
  "memchr",
  "proptest",
  "quick-xml",
+ "rvt",
  "serde",
  "serde_json",
  "sha2",

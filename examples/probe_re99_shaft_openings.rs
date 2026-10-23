@@ -18,8 +18,8 @@
 //!   cargo run --profile ci --example probe_re99_shaft_openings -- MODEL.rvt
 
 use rvt::RevitFile;
-use rvt::partition_element_records as per;
-use rvt::partition_schema_mvp::recover_partition_schema_mvp;
+use rvt::research::partition_element_records as per;
+use rvt::research::partition_schema_mvp::recover_partition_schema_mvp;
 use rvt::walker::WalkerLimits;
 
 fn main() -> rvt::Result<()> {
@@ -41,7 +41,7 @@ fn main() -> rvt::Result<()> {
     let mut cut = 0;
     for element in mvp.slabs.iter().chain(mvp.products.iter()) {
         let Some(profile) =
-            rvt::element_record_plan_profiles::plan_profile_from_fields(&element.fields)
+            rvt::research::element_record_plan_profiles::plan_profile_from_fields(&element.fields)
         else {
             continue;
         };
