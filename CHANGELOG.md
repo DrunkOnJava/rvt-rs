@@ -15,6 +15,16 @@ All notable changes will be documented here. This project follows
   finds it. `gh attestation verify <archive> -R DrunkOnJava/rvt-rs` works as
   before.
 
+- **Three examples show the library end to end (#872).**
+  `cargo run --example basics_inspect -- model.rvt` reads what a file is,
+  `basics_elements` lists its building elements by IFC type with their
+  ElementIds,
+  and `basics_export` writes IFC4, glTF, a CSV schedule and the export
+  diagnostics. Each runs on the synthetic project in `corpus/tier1/` without
+  an argument, and CI runs all three on it and on Einhoven, a real
+  Revit 2023 project (MIT), where they must list and export elements. `examples/README.md` tells them apart
+  from the research probes, and the README links them.
+
 - **Gable, hip and slope-arrow roofs are drawn as their planes, and Revit
   2025 roofs slope (#356, RE-199).** A footprint roof with more than one
   edge that defines a slope is drawn as its edges' planes, each rising from
@@ -78,7 +88,24 @@ All notable changes will be documented here. This project follows
   (#834). Other family-instance ports keep no placement, and the no-geometry
   modes write none.
 
+- **Every public type implements `Debug`, as the Rust API Guidelines ask (C-DEBUG).** The 14 element
+  decoders, the three exporters, `corpus::Sample` and `RevitFile` did not.
+  `RevitFile`'s shows the limits it was opened with and how many streams it
+  has inflated, not the file's bytes. The crate now warns on a public type
+  without one (`missing_debug_implementations`), which CI's `-D warnings`
+  makes an error.
+
 ### Fixed
+
+- **The PyPI page's links work, and it is written for Python users (#905).**
+  PyPI showed the repository README, whose links are relative and resolve
+  under `pypi.org/project/rvt/`, so none reached its document. The page is
+  now `rvt-py/README.md`: install, a short example, what to expect, and
+  absolute links to the Python guide, the support table and the changelog.
+  That file said PyPI shipped 0.1.2 and the crate was not on crates.io; it
+  names no version now. The package's Documentation link opens the Python
+  guide. CI reads the built wheel's description, checks that it is that
+  file with absolute links only, and runs its example.
 
 - **A mass whose "Export to IFC As" names an entity is written as it (#864).**
   rvt-rs read no mass instances. The BIM4LCA office's two `VOLUME` masses
@@ -134,6 +161,34 @@ All notable changes will be documented here. This project follows
   none, so no export changes (Measure run 39367864281).
 
 ### Changed
+
+- **The user pages say what rvt-rs does now (#907).** `docs/README.md`
+  indexes `docs/` as user pages, contributor pages and the research record.
+  The user pages lost their backlog ids and planning labels, and the claims
+  those labels sat on are corrected. `validation-evidence.md` described an
+  `ifc-smoke` job that does not exist and unit tests that no longer run; it
+  now describes the IfcOpenShell job's checks, the cross-witness verdict and
+  Measure. `compatibility.md`, `demos.md` and `benchmarks.md` said
+  per-element geometry was not implemented; they now say where it is exact
+  and where a body is a bounding box. The API doc check also reads every
+  user page the index lists.
+
+- **The Python guide's examples run in CI (#872).** The three runnable
+  blocks of `docs/python.md` run in order against the synthetic project file
+  `corpus/tier1/architectural-2024`, through the built wheel
+  (`tests/python/test_docs_python.py`). The 18 blocks that show a signature
+  or the shape of a result are fenced `text`, so the page no longer presents
+  them as code to run.
+
+- **Saved graphics are read faster, with the same output (#881, #882).**
+  An export with `--saved-meshes` caches pointer lookups, skips a
+  parameter pass the saved scene never used, and meshes elements in
+  parallel (one after the other in the browser viewer). On one runner, the
+  six reference models export in 0.64 to 0.94 of the time, and the IFC is
+  byte-identical (Measure run 39956807932). Thanks to n3ur0m4n. CI now
+  exports Einhoven and Core Interior with their saved meshes and validates
+  both with IfcOpenShell (#908): 11 of 11 and 138 of 138 bounding-box
+  bodies come from saved graphics, with 0 validation errors.
 
 - **The API's entry points have examples that run (#872).** The crate
   root's three examples and new ones on `RevitFile::open`,
@@ -291,6 +346,15 @@ All notable changes will be documented here. This project follows
   minor one.
 
 ### Research
+
+- **Revit 2015's element GlobalIds are not in the file (RE-208, #878).**
+  On BIMcollab's 2015 example, every element GlobalId in Revit's export has
+  an episode prefix of its own (241 in 241, where Core Interior's 854 fall
+  in 5), so RE-48's history rule cannot rebuild them. A stored IfcGUID
+  parameter holds the last 21 characters of 229 of the 241; their first
+  character, the top two bits, differs every time, and nothing tested in the
+  file sets it. The project, site, building and five storeys are stored
+  exactly, which is the lead for the storeys' GlobalIds.
 
 - **Revit 2015 is scored against Revit 2015's own export (RE-198, #421).**
   BIMcollab's example structural model, a Revit 2015 project, comes with

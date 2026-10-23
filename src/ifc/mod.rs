@@ -783,6 +783,7 @@ pub struct NotYetImplemented {
 ///
 /// (Renamed from `NullExporter` in v0.1.3 — the old name implied
 /// it returns `NotYetImplemented`, which it does not.)
+#[derive(Debug)]
 pub struct PlaceholderExporter;
 
 impl Exporter for PlaceholderExporter {
@@ -838,6 +839,7 @@ impl PlaceholderExporter {
 /// classification references + best-effort project unit assignment.
 /// Pending walker expansion: categories from the family-graph
 /// references and building-element geometry.
+#[derive(Debug)]
 pub struct RvtDocExporter;
 
 impl Exporter for RvtDocExporter {
@@ -927,6 +929,7 @@ impl RvtDocExporter {
 /// `IFCBUILDINGELEMENTPROXY` elements with `RvtRsDiagnosticCandidate`
 /// provenance. It is intended for reverse-engineering and issue
 /// attachments, not for normal model exchange.
+#[derive(Debug)]
 pub struct DiagnosticRvtDocExporter;
 
 impl Exporter for DiagnosticRvtDocExporter {
@@ -1004,7 +1007,7 @@ fn export_rvt_doc(
     quality_mode: ExportQualityMode,
     walker_limits: crate::walker::WalkerLimits,
 ) -> Result<IfcModel> {
-    let policy = export_content::ExportContentPolicy::for_quality_mode(quality_mode);
+    let policy = ExportContentPolicy::for_quality_mode(quality_mode);
     // Identity from PartAtom if present; fall back to the file name in
     // BasicFileInfo's original path.
     let part = rf.part_atom().ok();
@@ -2843,7 +2846,7 @@ fn append_production_walker_elements(
     entities: &mut Vec<entities::IfcEntity>,
     building_storeys: &mut Vec<Storey>,
     materials: &mut Vec<MaterialInfo>,
-    policy: export_content::ExportContentPolicy,
+    policy: ExportContentPolicy,
     walker_limits: crate::walker::WalkerLimits,
 ) -> WalkerElementData {
     if let Ok(decoded_iter) = crate::walker::iter_elements_with_limits(

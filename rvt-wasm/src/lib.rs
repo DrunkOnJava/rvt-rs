@@ -1,7 +1,7 @@
-//! WASM bindings (VW1-01) — JS-callable wrappers around the
-//! viewer API.
+//! WASM bindings — JS-callable wrappers around the viewer API,
+//! listed in `docs/viewer-api.md` ("The JavaScript bindings").
 //!
-//! Its own crate (C6), so the core library builds as a plain `rlib`.
+//! Its own crate, so the core library builds as a plain `rlib`.
 //! Build with, from the repository root:
 //!
 //! ```bash
@@ -127,7 +127,7 @@ pub fn open_rvt_bytes_with_diagnostics_and_limits(
 /// return `{ model, diagnostics }`.
 ///
 /// `mode` is one of `scaffold`, `typed-no-geometry`, `geometry`, or
-/// `strict` (Lane Seven). Stronger modes fail closed when the decoded
+/// `strict`. Stronger modes fail closed when the decoded
 /// coverage cannot satisfy the requested bar — the viewer uses this to
 /// surface honest confidence rather than over-claiming geometry.
 #[wasm_bindgen(js_name = openRvtBytesWithDiagnosticsMode)]

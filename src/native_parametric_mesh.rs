@@ -307,9 +307,7 @@ pub(crate) fn face_grid(g: &ObjectGraph, fi: usize) -> Result<FaceGrid> {
                     .and_then(|face| face.fields.get("m_pSurf"))
                     .is_some()
             }) {
-                let Some(surface_index) =
-                    crate::native_saved_mesh::pointer(g, i, &g.objects[i].fields["m_pSurf"])?
-                else {
+                let Some(surface_index) = pointer(g, i, &g.objects[i].fields["m_pSurf"])? else {
                     continue;
                 };
                 if g.objects[surface_index].class_name != "RuledSurf" {

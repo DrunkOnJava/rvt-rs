@@ -21,7 +21,7 @@ pub struct QuantityMaterial {
     pub material_id: i64,
     pub provenance: Vec<Value>,
 }
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct Resolver {
     initialized_generic_traits: bool,
     materials: BTreeMap<i64, RenderMaterial>,

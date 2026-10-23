@@ -73,9 +73,7 @@ fn writes_next_to_the_input_and_to_stdout() {
     );
     let csv = std::fs::read_to_string(dir.join("model.elements.csv")).expect("elements csv");
     let rows = csv_rows(&csv);
-    assert_eq!(rows[0][0], "revit_element_id");
-    assert_eq!(rows[0].len(), 17);
-    assert!(rows.iter().all(|r| r.len() == 17), "ragged rows");
+    assert!(rows.iter().all(|r| r.len() == rows[0].len()), "ragged rows");
 
     let out = schedule(&[
         input.as_os_str(),
@@ -93,19 +91,82 @@ fn writes_next_to_the_input_and_to_stdout() {
     );
     let csv = String::from_utf8(out.stdout).unwrap();
     assert!(csv.starts_with('\u{FEFF}'), "--excel writes a BOM");
-    assert_eq!(
-        csv_rows(&csv)[0],
-        [
-            "revit_element_id",
-            "number",
-            "name",
-            "level",
-            "level_elevation_m",
-            "area_m2",
-            "body_source"
-        ]
-    );
     let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// A column table of the user guide ("Get A Schedule Into Excel"), after
+/// its `<!-- marker -->`, in order.
+fn documented_columns(marker: &str) -> Vec<String> {
+    let guide = std::fs::read_to_string(
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("docs")
+            .join("user-guide.md"),
+    )
+    .expect("read the user guide");
+    let start = guide
+        .find(&format!("<!-- {marker} -->"))
+        .unwrap_or_else(|| panic!("the user guide has no {marker} table"));
+    guide[start..]
+        .lines()
+        .skip(1)
+        .take_while(|line| line.starts_with('|'))
+        .skip(2)
+        .map(|row| {
+            row.split('|')
+                .nth(1)
+                .unwrap()
+                .trim()
+                .trim_matches('`')
+                .to_string()
+        })
+        .collect()
+}
+
+/// The schedules are a published output (#873, S2): each begins with the
+/// columns the user guide lists, in that order, in feet and in metres. A
+/// column may be added after them; renaming, dropping or reordering one is
+/// a breaking change and fails here.
+#[test]
+fn schedules_begin_with_the_documented_columns() {
+    let Some(fixture) = tier1() else { return };
+    for (kind, marker) in [("elements", "element-columns"), ("rooms", "room-columns")] {
+        let documented = documented_columns(marker);
+        assert!(!documented.is_empty(), "the {marker} table is empty");
+        for metric in [false, true] {
+            let mut args = vec![
+                fixture.as_os_str(),
+                "--schedule".as_ref(),
+                kind.as_ref(),
+                "-o".as_ref(),
+                "-".as_ref(),
+            ];
+            if metric {
+                args.push("--metric".as_ref());
+            }
+            let out = schedule(&args);
+            assert!(
+                out.status.success(),
+                "{}",
+                String::from_utf8_lossy(&out.stderr)
+            );
+            let csv = String::from_utf8(out.stdout).unwrap();
+            let header = csv_rows(&csv).remove(0);
+            let expected: Vec<String> = documented
+                .iter()
+                .map(|c| {
+                    if metric {
+                        c.replace("_ft", "_m")
+                    } else {
+                        c.clone()
+                    }
+                })
+                .collect();
+            assert!(
+                header.starts_with(&expected),
+                "{kind} schedule (metric {metric}) columns {header:?} do not begin with the documented {expected:?}"
+            );
+        }
+    }
 }
 
 #[test]

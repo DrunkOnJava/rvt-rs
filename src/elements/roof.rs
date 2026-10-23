@@ -79,6 +79,7 @@ impl RafterCut {
 }
 
 /// Registered decoder for the `Roof` class.
+#[derive(Debug)]
 pub struct RoofDecoder;
 
 impl ElementDecoder for RoofDecoder {
@@ -115,6 +116,7 @@ impl ElementDecoder for RoofDecoder {
 }
 
 /// Registered decoder for the `RoofType` class.
+#[derive(Debug)]
 pub struct RoofTypeDecoder;
 
 impl ElementDecoder for RoofTypeDecoder {
