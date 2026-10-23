@@ -47,6 +47,22 @@ use std::path::Path;
 /// byte-for-byte. For equivalence, check byte-level equality of the
 /// decompressed streams on both sides — not the raw file bytes, because
 /// OLE sector ordering may differ.
+///
+/// ```
+/// use rvt::RevitFile;
+/// use std::path::Path;
+///
+/// let src = Path::new("corpus/tier1/architectural-2024/architectural-2024.rvt");
+/// let dst = std::env::temp_dir().join(format!("rvt-copy-{}.rvt", std::process::id()));
+/// rvt::writer::copy_file(src, &dst)?;
+/// // Every stream reads back as the source's.
+/// let (mut original, mut copy) = (RevitFile::open(src)?, RevitFile::open(&dst)?);
+/// for name in original.stream_names() {
+///     assert_eq!(original.read_stream(&name)?, copy.read_stream(&name)?);
+/// }
+/// std::fs::remove_file(&dst)?;
+/// # Ok::<(), Box<dyn std::error::Error>>(())
+/// ```
 pub fn copy_file(src: &Path, dst: &Path) -> Result<()> {
     let mut rf = RevitFile::open(src)?;
     let streams = rf.stream_names();
@@ -622,17 +638,25 @@ pub fn decompress_stream(dst: &Path, name: &str, framing: StreamFraming) -> Resu
 ///
 /// Typical use:
 ///
-/// ```no_run
-/// # use rvt::writer::{write_with_patches, verify_patches_applied, StreamPatch, StreamFraming};
-/// # use std::path::Path;
+/// ```
+/// use rvt::RevitFile;
+/// use rvt::writer::{StreamFraming, StreamPatch, verify_patches_applied, write_with_patches};
+/// use std::path::Path;
+///
+/// let src = Path::new("corpus/tier1/architectural-2024/architectural-2024.rvt");
+/// let dst = std::env::temp_dir().join(format!("rvt-writer-doc-{}.rvt", std::process::id()));
+/// // Write BasicFileInfo back with the bytes it holds: every other stream is
+/// // copied byte for byte.
+/// let current = RevitFile::open(src)?.read_stream("BasicFileInfo")?;
 /// let patches = vec![StreamPatch {
-///     stream_name: "Formats/Latest".into(),
-///     new_decompressed: vec![/* new bytes */],
-///     framing: StreamFraming::RawGzipFromZero,
+///     stream_name: "BasicFileInfo".into(),
+///     new_decompressed: current,
+///     framing: StreamFraming::Verbatim,
 /// }];
-/// write_with_patches(Path::new("in.rfa"), Path::new("out.rfa"), &patches)?;
-/// let report = verify_patches_applied(Path::new("out.rfa"), &patches)?;
+/// write_with_patches(src, &dst, &patches)?;
+/// let report = verify_patches_applied(&dst, &patches)?;
 /// assert!(report.all_matched(), "one or more patches failed to round-trip");
+/// # std::fs::remove_file(&dst).ok();
 /// # Ok::<(), rvt::Error>(())
 /// ```
 // Tracker: WRT-13.
