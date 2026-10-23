@@ -261,6 +261,14 @@ We use Conventional Commits:
 Scopes that appear frequently: `formats`, `object_graph`,
 `elem_table`, `partitions`, `writer`, `ifc`, `readme`, `cli`.
 
+A pull request that breaks the stable Rust API (`RELEASE.md`, "What 1.0
+keeps stable") marks its title with `!`, as in `refactor(error)!: ...`, or
+carries a `BREAKING CHANGE:` footer in its body. CI's `semver checks` job
+compares the API with the pull request's base using cargo-semver-checks and
+fails on a breaking change the pull request does not announce. After
+retitling, re-run that job. The research modules behind `unstable-research`
+are not checked.
+
 ## Reverse-engineering findings
 
 When you discover something new about the file format:

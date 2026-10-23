@@ -29,6 +29,7 @@ use serde::{Deserialize, Serialize};
 
 /// A single node in the rendered scene graph.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct SceneNode {
     /// Display name from the underlying entity (project name, storey
     /// name, element display name). Falls back to `ifc_type` when
@@ -164,6 +165,7 @@ impl CategoryFilter {
 /// the same index the scene graph puts on its nodes.
 // Tracker: M4-04.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct RelatedElement {
     /// Index into `model.entities`.
     pub entity_index: usize,
@@ -174,6 +176,7 @@ pub struct RelatedElement {
 /// One end of a wall that butt-joins another wall, as its join lists read
 /// (RE-70), or stops against it at a T joint (RE-73).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct PanelJoin {
     /// `"Start"` or `"End"` of the wall's location line.
     pub end: String,
@@ -189,6 +192,7 @@ pub struct PanelJoin {
 /// unit-carrying text (`"10.500 ft"`, `"90.0°"`) so the frontend
 /// never re-derives a unit or a rounding rule.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct PanelRow {
     pub label: String,
     pub value: String,
@@ -208,6 +212,7 @@ impl PanelRow {
 /// so the viewer can align measurements without parsing the
 /// formatted text back apart.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct PanelProperty {
     pub name: String,
     /// Formatted value carrying its unit where the value kind has
@@ -226,6 +231,7 @@ pub struct PanelProperty {
 /// renders `name` as the group heading and one row per entry in
 /// `properties`, instead of dumping the raw `property_set` JSON.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct PanelPropertyGroup {
     /// Property-set name — `"Pset_WallCommon"`, `"Pset_RevitType_Wall"`.
     pub name: String,
@@ -237,6 +243,7 @@ pub struct PanelPropertyGroup {
 /// the scene graph puts on its `IFCBUILDINGSTOREY` nodes, so the
 /// viewer can jump to that node the way #269 jumps to a host.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct PanelStorey {
     /// Index into `model.building_storeys`.
     pub index: usize,
@@ -251,6 +258,7 @@ pub struct PanelStorey {
 /// is how many `BuildingElement`s in the model share it — what
 /// the viewer's highlight affordance acts on.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct PanelMaterial {
     /// Index into `model.materials`.
     pub index: usize,
@@ -262,6 +270,7 @@ pub struct PanelMaterial {
 /// read"` where the file's material name was not found, its thickness, and
 /// the material as a highlight target where it is known.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct PanelLayer {
     pub label: String,
     pub value: String,
@@ -272,6 +281,7 @@ pub struct PanelLayer {
 /// An element's material layers (RE-58), in the order its layer set lists
 /// them.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct PanelLayers {
     /// The layer set's name: `Family:Type` (RE-61), or the type name.
     pub name: String,
@@ -301,6 +311,7 @@ pub struct PanelLayers {
 /// `entity_index` and the underlying model.
 // Tracker: VW1-08.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct ElementInfoPanel {
     pub name: String,
     pub ifc_type: String,
@@ -815,6 +826,7 @@ pub struct ScheduleRow {
 /// and uses `entity_indices` to highlight the whole type in the
 /// 3-D scene at once.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct ScheduleTypeGroup {
     pub ifc_type: String,
     pub count: usize,
@@ -830,6 +842,7 @@ pub struct ScheduleTypeGroup {
 /// different sort should resort the returned vec.
 // Tracker: VW1-15.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct Schedule {
     pub rows: Vec<ScheduleRow>,
     /// Per-IFC-type breakdown of `rows`, ordered by descending

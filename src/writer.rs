@@ -131,6 +131,7 @@ pub struct StreamPatch {
 /// - `Global/*` streams: 8-byte custom prefix (`00 × 8`), then gzip.
 /// - `Formats/Latest` and `Global/ContentDocuments`: gzip from byte 0.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum StreamFraming {
     /// Gzip starts at offset 0 (e.g. Formats/Latest).
     RawGzipFromZero,
@@ -523,6 +524,7 @@ pub fn history_entries_preserved(src: &Path, dst: &Path) -> Result<bool> {
 /// stream diverged from expectations.
 // Tracker: WRT-13.
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub struct StreamVerification {
     /// OLE stream name, e.g. `"Formats/Latest"`.
     pub stream_name: String,
@@ -547,6 +549,7 @@ pub struct StreamVerification {
 /// Aggregate result of verifying every patched stream.
 // Tracker: WRT-13.
 #[derive(Debug, Clone, Default)]
+#[non_exhaustive]
 pub struct StreamVerificationReport {
     /// Per-stream outcomes in the same order as the input patches.
     pub streams: Vec<StreamVerification>,

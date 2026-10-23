@@ -672,6 +672,54 @@ jobs:
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - run: cargo doc --no-deps --lib
 
+  # S2 (#873): a pull request that breaks the stable Rust API says so.
+  # tools/ci/semver-gate.sh compares the crate's public API (default
+  # features, so neither `unstable-research` nor `dhat-heap`) with the pull
+  # request's base, not the last release: main can already hold breaking
+  # changes that were announced when they landed. It runs cargo-semver-checks
+  # and a cargo-public-api listing diff, and passes a breaking change only
+  # when the title carries `!` or the body a `BREAKING CHANGE:` footer.
+  # cargo-public-api 0.52 reads the rustdoc JSON of nightlies from
+  # 2025-11-22, so its nightly is pinned near its release.
+  semver:
+    name: semver checks
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      pull-requests: read
+    env:
+      PUBLIC_API_TOOLCHAIN: nightly-2026-05-20
+      # Both trees are built only to compare their APIs. A warning a newer
+      # stable Rust finds in the unchanged baseline must not fail the
+      # comparison, or no pull request could fix it.
+      RUSTFLAGS: ""
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Install Rust stable and the public API listing's nightly
+        shell: bash
+        run: |
+          rustup toolchain install stable --profile minimal --no-self-update
+          rustup default stable
+          rustup toolchain install "$PUBLIC_API_TOOLCHAIN" --profile minimal --no-self-update
+          echo CARGO_INCREMENTAL=0 >> "$GITHUB_ENV"
+          echo CARGO_TERM_COLOR=always >> "$GITHUB_ENV"
+          rustc --version
+      - name: Install cargo-semver-checks and cargo-public-api
+        uses: taiki-e/install-action@8cca0918f8471c33515202b73f56ab27f2bed283 # v2.87.29
+        with:
+          tool: cargo-semver-checks@0.51.0,cargo-public-api@0.52.0
+      - name: The stable API breaks nothing the pull request does not announce
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+        run: tools/ci/semver-gate.sh
+
   # Q-09: benchmark-build regression gate.
   #
   # Runs `cargo bench --no-run` to compile every benchmark target
@@ -1096,6 +1144,7 @@ jobs:
       - viewer-dependencies
       - pii-guard
       - env-config
+      - semver
     runs-on: ubuntu-24.04
     steps:
       - name: Every job passed

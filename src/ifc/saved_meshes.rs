@@ -29,6 +29,7 @@ pub const SAVED_MESH_BODY_SOURCE: &str = "saved_graphics_mesh";
 
 /// What [`attach`] did.
 #[derive(Debug, Default, Clone, PartialEq, Eq, serde::Serialize)]
+#[non_exhaustive]
 pub struct SavedMeshReport {
     /// Elements whose body was the record's bounding box.
     pub candidates: usize,
