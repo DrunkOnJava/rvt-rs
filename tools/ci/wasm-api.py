@@ -4,7 +4,8 @@
     python3 tools/ci/wasm-api.py docs <lib.rs> <README.md> <docs/viewer-api.md>
 
 `compat` prints the breaking changes between two versions of the bindings
-and exits 1 when there is any. JavaScript calls them by their `js_name` and
+and exits 100 when there is any (as cargo-semver-checks does), so that a
+crash, which exits 1, is not read as a verdict. JavaScript calls them by their `js_name` and
 passes arguments by position, so a binding removed or renamed, a parameter
 removed, moved or retyped, a new parameter that is not an `Option` (which
 JavaScript may leave out), or a changed return type is breaking.
@@ -61,7 +62,7 @@ def main(argv):
         for line in found:
             print(f"breaking: {line}")
         if found:
-            return 1
+            return 100
         print("The wasm API has no breaking change against the base.")
         return 0
     if argv[1:2] == ["docs"]:

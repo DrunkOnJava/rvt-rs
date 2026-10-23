@@ -8,7 +8,7 @@ base lists, on every field it requires being there, and on a field's type
 and enum values being among the base's. A schema or field that is gone, a
 field no longer required, a type or an enum value a field gains, or a
 `$ref` that changed is breaking; one that narrows or adds a field is not.
-Exits 1 when there is any.
+Exits 100 when there is any, so that a crash (exit 1) is not a verdict.
 """
 
 import json
@@ -17,6 +17,7 @@ import sys
 
 OUTPUTS = [
     "analyze.schema.json",
+    "corpus-doctor.schema.json",
     "capability-manifest.schema.json",
     "corpus-report.schema.json",
     "decoded-elements.schema.json",
@@ -30,6 +31,7 @@ OUTPUTS = [
     "inspect.schema.json",
     "inventory-row.schema.json",
     "schema-diagnostics.schema.json",
+    "schema-table.schema.json",
     "summary.schema.json",
     "witness-observation.schema.json",
 ]
@@ -96,7 +98,7 @@ def main(base_dir, head_dir):
     for line in found:
         print(f"breaking: {line}")
     if found:
-        return 1
+        return 100
     print("The CLIs' JSON schemas have no breaking change against the base.")
     return 0
 
