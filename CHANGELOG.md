@@ -8,6 +8,19 @@ All notable changes will be documented here. This project follows
 
 ### Added
 
+- **Every port has Revit's flow direction, name and description (RE-212,
+  #834).** A family instance's HVAC or piping connector takes the Flow
+  Direction its family sets in the connector's own parameters, or, where the
+  family leaves it bidirectional, the direction Revit calculated for the
+  instance's connector. A duct's or pipe's connector takes its calculated
+  direction. A bidirectional connector joined to one with a direction takes
+  the opposite one. On RE1 Plumbing, Mechanical and Electrical that is every
+  one of Revit's 463 ports, where rvt-rs wrote `NOTDEFINED` on all 408 HVAC
+  and piping ports before. Ports are now named `InPort_`, `OutPort_` or
+  `Port_` by their direction and described `Flow`, as Revit names them, and
+  a sink placed at a pipe's end points into it. `SystemType` is still not
+  written.
+
 - **Each GitHub release carries the CLI archives' build provenance as a
   file (#891).** The release workflow already attested the archives; the
   attestation bundle is now also attached as `rvt-rs-vX.Y.Z.intoto.jsonl`,

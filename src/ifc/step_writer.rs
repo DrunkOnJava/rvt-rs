@@ -2957,6 +2957,35 @@ impl StepWriter {
                 .map_or(".NOTDEFINED.,$", String::as_str)
                 .to_string()
         };
+        // RE-212: Revit names a port by its flow, `InPort_` for a sink,
+        // `OutPort_` for a source and `Port_` otherwise (revit-ifc
+        // `ConnectorExporter`).
+        let port_prefixes: HashMap<(u32, u32), &'static str> = model
+            .entities
+            .iter()
+            .filter_map(|entity| match entity {
+                super::entities::IfcEntity::Port {
+                    id,
+                    index,
+                    flow_direction: Some(flow),
+                    ..
+                } => Some((
+                    (*id, *index),
+                    match flow.to_ascii_uppercase().as_str() {
+                        "SINK" => "In",
+                        "SOURCE" => "Out",
+                        _ => "",
+                    },
+                )),
+                _ => None,
+            })
+            .collect();
+        let port_name = |id: u32, index: u32| {
+            format!(
+                "{}Port_{id}_{index}",
+                port_prefixes.get(&(id, index)).copied().unwrap_or("")
+            )
+        };
         // #847: where each connector is, by its element, when it is read.
         let mut port_points: HashMap<(u32, u32), PortPoint> = model
             .entities
@@ -3062,8 +3091,9 @@ impl StepWriter {
                 self.emit_entity(
                     port,
                     format!(
-                        "IFCDISTRIBUTIONPORT('{}',#{owner_hist},'Port_{id}_{index}',$,$,{placement},$,{},$)",
+                        "IFCDISTRIBUTIONPORT('{}',#{owner_hist},'{}','Flow',$,{placement},$,{},$)",
                         gid(&["port", &id_text, &index_text]),
+                        port_name(id, index),
                         port_attribute(id, index),
                     ),
                 );
@@ -3122,8 +3152,9 @@ impl StepWriter {
             self.emit_entity(
                 port,
                 format!(
-                    "IFCDISTRIBUTIONPORT('{}',#{owner_hist},'Port_{id}_{index}',$,$,{placement},$,{},$)",
+                    "IFCDISTRIBUTIONPORT('{}',#{owner_hist},'{}','Flow',$,{placement},$,{},$)",
                     gid(&["port", &id_text, &index_text]),
+                    port_name(*id, *index),
                     port_attribute(*id, *index),
                 ),
             );
