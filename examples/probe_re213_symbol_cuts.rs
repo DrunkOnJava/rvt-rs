@@ -10,10 +10,16 @@
 //! loops are not empty; `tools/re/symbol_cuts_vs_ifc.py` measures them
 //! against the sizes Revit's export gives the symbol's doors and windows.
 //!
+//! A door or window whose family takes its size from instance parameters
+//! has a `FamilySymbol` of its own beside its type's, and the probe prints
+//! each `FamilyInstance`'s ElementId-valued fields, so the instance's own
+//! symbol can be found.
+//!
 //! Output, one JSON value per line:
-//!   cut <symbol> <family> <the five fields as one JSON object>
+//!   cut <symbol> <family> <owner> <the five fields as one JSON object>
 //!   object <symbol> <class name> <class tag> <start> <token> <fields>
 //!     the first 400 objects of that symbol's graph after its root
+//!   instance <id> <owner> <its root's fields that hold an ElementId>
 //!
 //! Usage:
 //!   cargo run --profile ci --example probe_re213_symbol_cuts -- MODEL.rvt
@@ -47,7 +53,7 @@ fn main() -> anyhow::Result<()> {
     let path = std::env::args().nth(1).expect("usage: MODEL.rvt");
     let mut rf = RevitFile::open(&path)?;
     let options = Options {
-        selected_classes: ["FamilySymbol".to_string()].into(),
+        selected_classes: ["FamilySymbol".to_string(), "FamilyInstance".to_string()].into(),
         ..Options::default()
     };
     extract_graphs(&mut rf, &options, |record| {
@@ -57,18 +63,31 @@ fn main() -> anyhow::Result<()> {
         let Some(root) = graph.objects.first() else {
             return Ok(());
         };
+        let id = record.identity.element_id;
+        let owner = record.identity.owning_element_id;
+        if record.class_name.as_deref() == Some("FamilyInstance") {
+            let refs: serde_json::Map<String, Value> = root
+                .fields
+                .as_object()
+                .into_iter()
+                .flatten()
+                .filter(|(_, value)| value.to_string().contains("m_id64"))
+                .map(|(name, value)| (name.clone(), value.clone()))
+                .collect();
+            println!("instance {id} {owner} {}", serde_json::to_string(&refs)?);
+            return Ok(());
+        }
         let loops = root.fields.get("m_pCutLoops").unwrap_or(&Value::Null);
         if empty(loops) {
             return Ok(());
         }
-        let id = record.identity.element_id;
         let family = root.fields.get("m_familyId").and_then(element_id);
         let cut: serde_json::Map<String, Value> = FIELDS
             .iter()
             .filter_map(|name| Some((name.to_string(), root.fields.get(*name)?.clone())))
             .collect();
         println!(
-            "cut {id} {} {}",
+            "cut {id} {} {owner} {}",
             family.map_or("-".to_string(), |f| f.to_string()),
             serde_json::to_string(&cut)?
         );
