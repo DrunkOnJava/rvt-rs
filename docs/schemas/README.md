@@ -6,9 +6,9 @@ forward-compatible by default: new additive fields may appear without a schema
 version bump, so the output schemas leave `additionalProperties` open, but
 incompatible removals or type changes require a version bump in the producing
 payload. A list of values, such as a status or a reason code, is open the same
-way: a minor release may add a value, so code that reads one handles a value
-it does not know (`RELEASE.md`, "What 1.0 keeps stable";
-`tools/ci/schema-compat.py` passes an added value and fails a removed one).
+way: a minor release may add a value or stop writing one, so code that reads
+one handles a value it does not know (`RELEASE.md`, "What 1.0 keeps stable";
+`tools/ci/schema-compat.py` counts neither as a breaking change).
 The schemas of checked-in data (the support matrix, the witness registry) stay
 closed.
 
