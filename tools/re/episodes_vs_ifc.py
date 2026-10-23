@@ -185,6 +185,45 @@ def main():
     print("  stored first character -> Revit's: " + ", ".join(f"{a}->{b} {n}" for (a, b), n in sorted(firsts.items())))
     print("  the 8 bytes before those strings: " + ", ".join(f"{p} {n}" for p, n in prefixes.most_common(4)))
 
+    # Elements made in one episode share its first 12 bytes once their Tag is
+    # XORed out of the last 4: count the groups.
+    for label, values in (("Revit's element GlobalIds", list(by_tag.items())),
+                          ("stored strings matched to them", [(s, by_tag[g]) for g in by_tag for s, _ in by_suffix.get(g[1:], [])])):
+        groups = collections.Counter()
+        for gid, tag in values:
+            if gid[0] not in ALPHABET[:4]:
+                continue
+            value = bytearray(expand(gid))
+            value[12:16] = struct.pack(">I", struct.unpack(">I", value[12:16])[0] ^ tag)
+            groups[bytes(value[:12])] += 1
+        print(f"{label}: {len(values)} in {len(groups)} episode prefixes, largest {max(groups.values(), default=0)}")
+
+    # Every GlobalId whose bytes 1 to 11 are a history episode's: what its
+    # first byte and its last 32 bits hold against the episode's.
+    print("GlobalIds sharing bytes 1-11 with a history episode:")
+    shared = collections.Counter()
+    for root in model.by_type("IfcRoot"):
+        value = expand(root.GlobalId) if root.GlobalId[0] in ALPHABET[:4] else None
+        hit = middles.get(value[1:12]) if value else None
+        if hit is None:
+            continue
+        episode = stored_order(runs[hit[0]][hit[1]])
+        low = struct.unpack(">I", value[12:16])[0] ^ struct.unpack(">I", episode[12:16])[0]
+        shared[(root.is_a(), hit, value[0] ^ episode[0])] += 1
+        if args.list:
+            print(f"  {root.is_a()} {root.GlobalId} Tag {getattr(root, 'Tag', None)} id XORed in {low}")
+    for (cls, hit, top), n in sorted(shared.items()):
+        print(f"  {cls}: {n}, episode {hit[1]} of the run at {hit[0]}, first byte XOR {top:#04x}")
+
+    # The first character carries the top two bits, so a GUID encoder writes
+    # 0 to 3 there.
+    print("first character of every GlobalId, by class:")
+    by_class = collections.defaultdict(collections.Counter)
+    for root in model.by_type("IfcRoot"):
+        by_class[root.is_a()][root.GlobalId[0]] += 1
+    for cls, chars in sorted(by_class.items(), key=lambda kv: -sum(kv[1].values())):
+        print(f"  {cls} {sum(chars.values())}: " + ", ".join(f"{c} {n}" for c, n in sorted(chars.items())))
+
 
 if __name__ == "__main__":
     main()
