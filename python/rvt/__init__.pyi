@@ -240,7 +240,9 @@ class RevitFile:
     def read_adocument(self) -> Optional[TypedADocument]:
         """Run the Layer-5a walker and return ADocument's instance
         as a dict, or ``None`` if the entry-point detector can't
-        confidently locate ADocument in the file.
+        confidently locate ADocument in the file. Raises ``ValueError``
+        if the file's schema declares no ADocument class, which no Revit
+        file lacks (a synthetic file, or a damaged schema).
 
         See module docs for the field-kind schema.
         """

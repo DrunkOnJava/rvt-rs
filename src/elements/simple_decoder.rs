@@ -48,10 +48,10 @@ impl ElementDecoder for SimpleDecoder {
         limits: WalkerLimits,
     ) -> Result<DecodedElement> {
         if schema.name != self.class_name {
-            return Err(Error::BasicFileInfo(format!(
-                "{} decoder received wrong schema: {}",
-                self.class_name, schema.name
-            )));
+            return Err(Error::SchemaMismatch {
+                decoder: self.class_name,
+                schema: schema.name.clone(),
+            });
         }
         Ok(crate::walker::decode_instance_with_limits(
             bytes, 0, schema, limits,
