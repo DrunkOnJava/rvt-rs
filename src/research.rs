@@ -58,6 +58,7 @@
 //!
 //! ## Native records
 //!
+//! - [`native_column_joins`]: The wall a column is first joined to, and the side of it the column stands on (RE-202, #355)
 //! - [`native_connectors`]: A family symbol's connectors, from its own native record and its family's (#528)
 //! - [`native_document`]: Streaming current-record extraction with structural schemas and native IDs
 //! - [`native_duct_shapes`]: A duct type's shape, from its native record
@@ -65,18 +66,22 @@
 //! - [`native_empty_faces`]: Strict classifier for the observed empty-trim saved-graphics records
 //! - [`native_es_catalog`]: File-local Extensible Storage catalog from the owned Global/Latest graph
 //! - [`native_extensible_storage`]: File-local Extensible Storage definitions
+//! - [`native_family_forms`]: Whether a loaded family draws visible geometry with no material, from its embedded document (RE-204, #355)
 //! - [`native_graphics_traversal`]: Bounded traversal of saved graphics under the default 3D context
 //! - [`native_index`]: Native project identities and creation-episode UniqueIds
+//! - [`native_instance_materials`]: The materials a family instance's own parameters give it (RE-200, #355)
 //! - [`native_metadata`]: Lossless projections of selected saved metadata from a complete native graph
 //! - [`native_parameter_definitions`]: Parameter definitions recovered through native owner-to-definition edges
 //! - [`native_parameters`]: Schema-directed native value prefixes and deferred parameter sets
 //! - [`native_parametric_mesh`]: Bounded UV-grid meshing for decoded parametric surfaces
 //! - [`native_parametric_surface`]: Typed evaluators for the non-planar surfaces observed in saved graphs
+//! - [`native_rendered_content`]: Family types whose family is rendered content (RE-202, #355)
 //! - [`native_saved_glb`]: glTF export of native saved meshes, retaining face and material provenance
 //! - [`native_saved_materials`]: Saved material ownership and the default viewport conversion
 //! - [`native_saved_mesh`]: Tessellation of bounded saved planar and cylindrical BRep faces
 //! - [`native_saved_scene`]: Current native saved-graphics extraction with explicit shared-symbol closure
 //! - [`native_segments`]: Forward-only physical partition markers and continuation groups
+//! - [`native_type_materials`]: The materials a family type's geometry is drawn in (RE-203, #355)
 //! - [`native_wall_types`]: A wall's type Function, from the native records of the wall and its type (RE-185, RE-193)
 //!
 //! ## Other research
@@ -114,6 +119,8 @@ pub mod es_refs;
 pub mod evidence;
 #[path = "identity.rs"]
 pub mod identity;
+#[path = "native_column_joins.rs"]
+pub mod native_column_joins;
 #[path = "native_connectors.rs"]
 pub mod native_connectors;
 #[path = "native_document.rs"]
@@ -128,10 +135,14 @@ pub mod native_empty_faces;
 pub mod native_es_catalog;
 #[path = "native_extensible_storage.rs"]
 pub mod native_extensible_storage;
+#[path = "native_family_forms.rs"]
+pub mod native_family_forms;
 #[path = "native_graphics_traversal.rs"]
 pub mod native_graphics_traversal;
 #[path = "native_index.rs"]
 pub mod native_index;
+#[path = "native_instance_materials.rs"]
+pub mod native_instance_materials;
 #[path = "native_metadata.rs"]
 pub mod native_metadata;
 #[path = "native_parameter_definitions.rs"]
@@ -142,6 +153,8 @@ pub mod native_parameters;
 pub mod native_parametric_mesh;
 #[path = "native_parametric_surface.rs"]
 pub mod native_parametric_surface;
+#[path = "native_rendered_content.rs"]
+pub mod native_rendered_content;
 #[path = "native_saved_glb.rs"]
 pub mod native_saved_glb;
 #[path = "native_saved_materials.rs"]
@@ -152,6 +165,8 @@ pub mod native_saved_mesh;
 pub mod native_saved_scene;
 #[path = "native_segments.rs"]
 pub mod native_segments;
+#[path = "native_type_materials.rs"]
+pub mod native_type_materials;
 #[path = "native_wall_types.rs"]
 pub mod native_wall_types;
 #[path = "partition_arc_walls.rs"]
