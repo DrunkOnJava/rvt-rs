@@ -3,8 +3,9 @@ maintainer's planning label.
 
 The API docs are the rustdoc of the crate and of the Python bindings (pyo3
 turns `///` into the Python docstring), the type stubs IDEs show, and the
-user pages `docs/README.md` lists under "For users" (the Python guide among
-them). The research record keeps its ids as written.
+repository README and the user pages `docs/README.md` lists under "For
+users" (the Python guide among them). The research record keeps its ids as
+written.
 
 The crate root tells docs.rs readers that every `RE-NN` is written up in
 `reports/**/RE-NN-*.md`, and that `#NNN` is an issue or pull request; those
@@ -42,7 +43,7 @@ paths = sorted((root / "src").rglob("*.rs")) + sorted((root / "rvt-py/src").rglo
 paths += sorted((root / "python/rvt").glob("*.pyi"))
 index = (root / "docs/README.md").read_text(encoding="utf-8")
 users = index.split("## For users", 1)[1].split("\n## ", 1)[0]
-paths += sorted({root / "docs" / link for link in re.findall(r"\]\(([^)#]+\.md)\)", users)})
+paths += sorted({root / "docs" / link for link in re.findall(r"\]\(([^)#]+\.md)\)", users)}) + [root / "README.md"]
 for path in paths:
     for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
         stripped = line.lstrip().replace('"""', "")
@@ -52,7 +53,10 @@ for path in paths:
         for cited in citation.findall(stripped):
             if not has_report(cited):
                 missing.setdefault(cited, []).append(place)
-        prose = re.sub(r'`[^`]*`|"[^"]*"', "", stripped)
+        # Code spans are code. In Rust and the stubs a quoted string is data
+        # (a Revit phase named "Phase 1"); on a markdown page it is prose.
+        quoted = r'`[^`]*`|"[^"]*"' if path.suffix in (".rs", ".pyi") else r"`[^`]*`"
+        prose = re.sub(quoted, "", stripped)
         labels += [(place, label) for label in planning.findall(prose)]
 
 for cited, places in sorted(missing.items()):

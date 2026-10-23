@@ -212,11 +212,10 @@ corpus (MIT, git-LFS); without it, each sub-benchmark emits a
 - **Medium-corpus coverage but no large-corpus coverage yet.** The
   project_file suite covers 913 KB and 34 MB project files. 50 MB+ fixtures
   remain open; contributions welcome.
-- **Synthetic fixtures for per-class decode.** The 81 schema decoders
-  are validated against synthesized schema and bytes, so
-  `bench_decode_class` times them on that input. A real project's elements
-  come from its partition element records, which the `project_file` suite
-  reads.
+- **No per-class decode benchmark.** The 81 schema decoders are validated
+  against synthesized schema and bytes, and no benchmark times them. A real
+  project's elements come from its partition element records, which the
+  `project_file` suite reads.
 - **The CLI numbers predate geometry.** They were taken when exports had
   no geometry, per-element materials or `IfcShapeRepresentation`; Revit
   2024 and 2025 exports now carry all three, which costs more per file.

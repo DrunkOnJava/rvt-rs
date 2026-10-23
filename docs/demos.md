@@ -133,7 +133,7 @@ Why this matters: these class names and type signatures match the
 symbols exported by the public `RevitAPI.dll` NuGet package one-to-one.
 The on-disk schema *is* the live type dictionary for the object graph in
 `Global/Latest` — which is why the schema tags appear there at ~340× the
-uniform-random rate. See README § "Phase D findings" and
+uniform-random rate. See README § "Findings of the first reconnaissance" and
 [`docs/data/tag-drift-2016-2026.csv`](data/tag-drift-2016-2026.csv) for
 the drift table across the 11-release corpus.
 
@@ -384,10 +384,12 @@ exactly what you want.
 
 Honest boundary of what rvt-rs can demonstrate today:
 
-- **Every project, exactly** — Revit 2024 and 2025 projects export
-  typed elements with geometry measured against Revit's own exports
-  (Demo 4's Core Interior run, and the README's "What rvt-rs reads from
-  real projects"); other releases export experimentally. Where an
+- **Every project, exactly** — Revit 2023, 2024 and 2025 projects export
+  typed elements measured against Revit's own exports: on 2024 and 2025
+  with geometry measured per category, on 2023 as their boxes, cut back
+  at wall joins and column faces (Demo 4's Core Interior run, and the
+  README's "What rvt-rs reads from real projects"). 2015 to 2022, 2026 and
+  2027 export experimentally. Where an
   element's bytes are not decoded, its body is its record's bounding box,
   and the export diagnostics say so.
 - **Revit 2016–2023 ADocument walk** — validated on 2024–2026 only;

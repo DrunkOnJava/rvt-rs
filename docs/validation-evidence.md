@@ -63,8 +63,9 @@ write:
 
 The Measure workflow (`.github/workflows/measure.yml`) exports the six
 redistributable reference models (Core Interior, Einhoven and the four RE1
-models) and scores each export against Revit's own IFC export of the same
-model with the scorers under `tools/re/`: element counts, ElementIds,
+models) and scores the five that come with Revit's own IFC export (all but
+Einhoven, which is only exported and schema-checked) against it, with the
+scorers under `tools/re/`: element counts, ElementIds,
 bodies, materials, storeys, openings and more. It is not part of
 `CI passed`. It runs when the measurement itself changes and is dispatched
 for a change to what the exporter writes. The reports under
@@ -73,7 +74,8 @@ for a change to what the exporter writes. The reports under
 ## Reproducing the evidence locally
 
 ```bash
-# IfcOpenShell imports, and the arity check on the committed synthetic IFC files
+# IfcOpenShell imports; rvt-ifc exports the three tier-1 projects to /tmp, and
+# the arity check runs on those exports
 tools/check-local.sh --ifcopenshell
 
 # IfcOpenShell on the committed synthetic project (Python, with the
