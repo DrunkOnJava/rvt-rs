@@ -14,6 +14,11 @@ within 0.001 ft, two ways:
 - the loop of any cut symbol the element's own `FamilyInstance` record
   names, or that the instance owns, counted per field name.
 
+It then takes the corners of the `IfcOpeningElement` each element fills, in
+that element's own placement, and compares their X and Z ranges with the
+matched loop's, and their Y range (across the host) with the loop's plane,
+for #227 (an opening cut from the loop rather than the element's box).
+
 Usage:
 
     python3 tools/re/symbol_cuts_vs_ifc.py <probe output> <revit-export.ifc> [--list]
@@ -28,8 +33,11 @@ import re
 import sys
 
 import ifcopenshell
+import ifcopenshell.geom
 import ifcopenshell.util.element
+import ifcopenshell.util.placement
 import ifcopenshell.util.unit
+import numpy as np
 
 FEET = 0.3048
 TOLERANCE_FEET = 1e-3
@@ -52,7 +60,7 @@ def curve_points(cls, f):
 
 
 def read_probe(path):
-    """Symbol -> (owner, loop extents (x, y, z) or None, curve classes), and
+    """Symbol -> (owner, loop (min, max) corners or None, curve classes), and
     instance -> (owner, {field: [ElementIds]})."""
     cuts, objects, instances = {}, collections.defaultdict(list), {}
     for line in open(path):
@@ -85,15 +93,39 @@ def read_probe(path):
                     break
                 points += p
             if points:
-                extents = tuple(max(p[i] for p in points) - min(p[i] for p in points) for i in range(3))
+                extents = (
+                    tuple(min(p[i] for p in points) for i in range(3)),
+                    tuple(max(p[i] for p in points) for i in range(3)),
+                )
         symbols[symbol] = (owner, extents, classes)
     return symbols, instances
 
 
 def revit_sizes(path):
-    """Tag -> (class, type Tag, OverallWidth ft, OverallHeight ft)."""
+    """Tag -> (class, type Tag, OverallWidth ft, OverallHeight ft, the
+    filled opening's (min, max) corners in the element's placement, ft)."""
     f = ifcopenshell.open(path)
     metres = ifcopenshell.util.unit.calculate_unit_scale(f)
+    settings = ifcopenshell.geom.settings()
+    settings.set("use-world-coords", True)
+    fills = {rel.RelatedBuildingElement.id(): rel.RelatingOpeningElement for rel in f.by_type("IfcRelFillsElement")}
+
+    def opening_box(element):
+        opening = fills.get(element.id())
+        if opening is None or element.ObjectPlacement is None:
+            return None
+        try:
+            shape = ifcopenshell.geom.create_shape(settings, opening)
+        except Exception:
+            return None
+        verts = np.array(shape.geometry.verts, dtype=float).reshape(-1, 3)
+        if not len(verts):
+            return None
+        frame = np.array(ifcopenshell.util.placement.get_local_placement(element.ObjectPlacement), dtype=float)
+        frame[:3, 3] *= metres
+        local = (np.linalg.inv(frame) @ np.c_[verts, np.ones(len(verts))].T).T[:, :3] / FEET
+        return local.min(axis=0), local.max(axis=0)
+
     out = {}
     for entity in ("IfcDoor", "IfcWindow"):
         for element in f.by_type(entity):
@@ -105,16 +137,21 @@ def revit_sizes(path):
                 str(kind.Tag) if kind is not None and kind.Tag else None,
                 element.OverallWidth * metres / FEET,
                 element.OverallHeight * metres / FEET,
+                opening_box(element),
             )
     return out
 
 
-def equal(extents, width, height):
+def equal(loop, width, height):
     return (
-        extents is not None
-        and abs(extents[0] - width) <= TOLERANCE_FEET
-        and abs(extents[2] - height) <= TOLERANCE_FEET
+        loop is not None
+        and abs(loop[1][0] - loop[0][0] - width) <= TOLERANCE_FEET
+        and abs(loop[1][2] - loop[0][2] - height) <= TOLERANCE_FEET
     )
+
+
+def band(diff):
+    return next((f"within {limit} ft" for limit in (0.001, 0.01, 0.1, 0.26, 1.0) if diff <= limit), "over 1 ft")
 
 
 def main():
@@ -131,8 +168,10 @@ def main():
 
     tally = collections.Counter()
     by_field = collections.Counter()
-    misses = []
-    for tag, (entity, type_tag, width, height) in sorted(revit.items()):
+    placed = collections.Counter()
+    across = collections.Counter()
+    misses, worst = [], []
+    for tag, (entity, type_tag, width, height, box) in sorted(revit.items()):
         tally[(entity, "elements")] += 1
         type_cut = symbols.get(type_tag)
         if type_cut is None:
@@ -148,16 +187,27 @@ def main():
                 if str(i) in symbols and str(i) != type_tag:
                     own.append((name, str(i)))
         own += [("owned", s) for s in owned.get(tag, [])]
-        matched = False
+        matched = None
         for name, symbol in own:
             if equal(symbols[symbol][1], width, height):
                 by_field[(entity, name, "equal")] += 1
-                matched = True
+                matched = matched or symbol
             else:
                 by_field[(entity, name, "differs")] += 1
+        if matched is None and type_cut is not None and equal(type_cut[1], width, height):
+            matched = type_tag
+        if matched is not None and box is not None:
+            lo, hi = symbols[matched][1]
+            diff = max(abs(box[0][0] - lo[0]), abs(box[1][0] - hi[0]), abs(box[0][2] - lo[2]), abs(box[1][2] - hi[2]))
+            placed[(entity, band(diff))] += 1
+            plane = lo[1]
+            across[(entity, "loop plane inside the opening" if box[0][1] - 1e-3 <= plane <= box[1][1] + 1e-3
+                    else "loop plane outside the opening")] += 1
+            worst.append((diff, tag, entity, matched, [round(float(v), 4) for v in (*box[0], *box[1])],
+                          [round(v, 4) for v in (*lo, *hi)]))
         if not own:
             tally[(entity, "instance names no other cut symbol")] += 1
-        if not matched and not equal(type_cut[1] if type_cut else None, width, height):
+        if matched is None:
             misses.append((tag, entity, type_tag, width, height, own))
 
     for entity in sorted({e for e, _ in tally}):
@@ -168,6 +218,12 @@ def main():
         for (e, name, verdict), count in sorted(by_field.items()):
             if e == entity:
                 print(f"  instance's {name} -> cut symbol, loop {verdict:7} {count}")
+        for (e, label), count in sorted(placed.items()):
+            if e == entity:
+                print(f"  opening's X and Z ranges against the matched loop's, {label}: {count}")
+        for (e, label), count in sorted(across.items()):
+            if e == entity:
+                print(f"  {label}: {count}")
     print(f"\n{len(misses)} with no cut loop equal to Revit's size")
     if listing:
         for tag, entity, type_tag, width, height, own in misses[:60]:
@@ -175,6 +231,9 @@ def main():
             text = ", ".join(f"{name}={s} {symbols[s][1]}" for name, s in own)
             print(f"  {entity} {tag} type {type_tag}: Revit {width:.4f} x {height:.4f} ft; "
                   f"type loop {t[1] if t else None}; own: {text or '-'}")
+        print("\nopenings against their matched loop, worst first (opening min, max; loop min, max):")
+        for diff, tag, entity, symbol, opening, loop in sorted(worst, reverse=True)[:40]:
+            print(f"  {entity} {tag} symbol {symbol}: {diff:.4f} ft; opening {opening}; loop {loop}")
 
 
 main()
