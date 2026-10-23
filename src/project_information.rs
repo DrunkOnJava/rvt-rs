@@ -12,6 +12,7 @@
 //! The entry's *name* is a temp path on the saving machine that embeds the
 //! Windows user folder, so it is never surfaced — only the entry body is read.
 
+use crate::le_bytes;
 use crate::part_atom::PartAtom;
 use crate::{Error, Result};
 use std::io::Read;
@@ -27,27 +28,22 @@ pub fn parse(bytes: &[u8], max_inflated: usize) -> Result<PartAtom> {
     PartAtom::from_bytes(&body)
 }
 
-fn u16_at(bytes: &[u8], at: usize) -> Option<u16> {
-    Some(u16::from_le_bytes(bytes.get(at..at + 2)?.try_into().ok()?))
-}
-
-fn u32_at(bytes: &[u8], at: usize) -> Option<u32> {
-    Some(u32::from_le_bytes(bytes.get(at..at + 4)?.try_into().ok()?))
-}
-
 fn malformed(what: &str) -> Error {
     Error::Decompress(format!("ProjectInformation: {what}"))
 }
 
 /// Decompressed body of the archive's first local file entry.
 fn first_entry(bytes: &[u8], max_inflated: usize) -> Result<Vec<u8>> {
-    if u32_at(bytes, 0) != Some(LOCAL_FILE_HEADER) {
+    if le_bytes::u32_at(bytes, 0) != Some(LOCAL_FILE_HEADER) {
         return Err(malformed("not a ZIP archive"));
     }
-    let method = u16_at(bytes, 8).ok_or_else(|| malformed("truncated local header"))?;
-    let compressed = u32_at(bytes, 18).ok_or_else(|| malformed("truncated local header"))? as usize;
-    let name_len = u16_at(bytes, 26).ok_or_else(|| malformed("truncated local header"))? as usize;
-    let extra_len = u16_at(bytes, 28).ok_or_else(|| malformed("truncated local header"))? as usize;
+    let method = le_bytes::u16_at(bytes, 8).ok_or_else(|| malformed("truncated local header"))?;
+    let compressed =
+        le_bytes::u32_at(bytes, 18).ok_or_else(|| malformed("truncated local header"))? as usize;
+    let name_len =
+        le_bytes::u16_at(bytes, 26).ok_or_else(|| malformed("truncated local header"))? as usize;
+    let extra_len =
+        le_bytes::u16_at(bytes, 28).ok_or_else(|| malformed("truncated local header"))? as usize;
     let data = bytes
         .get(30 + name_len + extra_len..)
         .ok_or_else(|| malformed("entry data past end of stream"))?;

@@ -80,6 +80,7 @@ pub struct SchemaTable {
 /// and inspect the returned `SchemaDiagnostics`.
 // Tracker: API-10.
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct SchemaDiagnostics {
     /// Total number of classes in the schema.
     pub class_count: usize,
@@ -291,6 +292,7 @@ pub struct FieldEntry {
 /// | `0x0b` | `u64` / `i64` | 8 |
 /// | `0x0e` | reference / pointer / container | variable (see sub-type) |
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum FieldType {
     /// A fixed-size numeric or boolean primitive. `size` is the wire
     /// size in bytes; `kind` is the type category byte (0x01, 0x02,
@@ -930,6 +932,7 @@ fn scan_fields_until_next_class_bounded(
 
 /// One class of the `Formats/Latest` schema as the grammar reads it (#154).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct SchemaClass {
     /// The class's serialization tag: its definition ordinal, 12 for the
     /// first class and one more for each further definition, top-level or
@@ -945,6 +948,7 @@ pub struct SchemaClass {
 /// Every class of a page-stripped `Formats/Latest` stream, in definition
 /// order (#154).
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct SchemaClasses {
     pub classes: Vec<SchemaClass>,
     /// Bytes read before the stream ended or a record broke the grammar.

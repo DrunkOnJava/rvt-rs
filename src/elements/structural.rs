@@ -50,6 +50,7 @@ use crate::walker::{DecodedElement, InstanceField};
 /// Typed view of a decoded Column (architectural or structural — the
 /// `is_structural` flag disambiguates).
 #[derive(Debug, Clone, PartialEq, Default)]
+#[non_exhaustive]
 pub struct Column {
     pub base_level_id: Option<u32>,
     pub top_level_id: Option<u32>,
@@ -117,6 +118,7 @@ impl Column {
 
 /// Typed view of a decoded Beam.
 #[derive(Debug, Clone, PartialEq, Default)]
+#[non_exhaustive]
 pub struct Beam {
     pub level_id: Option<u32>,
     pub symbol_id: Option<u32>,

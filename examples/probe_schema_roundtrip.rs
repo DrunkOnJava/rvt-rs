@@ -131,6 +131,7 @@ fn main() {
                         format!("Container 0x{kind:02x}")
                     }
                     formats::FieldType::Unknown { .. } => "Unknown".to_string(),
+                    _ => "Other".to_string(),
                 };
                 let entry = by_kind.entry(kind_label.clone()).or_insert((0, 0));
                 if matches {

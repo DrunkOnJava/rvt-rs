@@ -20,6 +20,7 @@ mod table;
 
 /// The value type IFC4 declares for a standard property.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum StandardPropertyKind {
     /// `IfcBoolean`, from a Yes/No parameter.
     Boolean,
@@ -46,6 +47,7 @@ pub enum StandardPropertyKind {
 /// predefined type it is scoped to if any, and its properties of the kinds
 /// in [`StandardPropertyKind`].
 #[derive(Debug)]
+#[non_exhaustive]
 pub struct StandardPropertySet {
     /// The set's name.
     pub name: &'static str,
