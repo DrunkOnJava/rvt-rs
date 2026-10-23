@@ -2732,6 +2732,116 @@ pub const STAIR_RUN_BODY_SOURCE: &str = "partition_stair_run_sketch";
 /// `BodySource` of a shed roof drawn along its slope (RE-56).
 pub const ROOF_SLOPE_BODY_SOURCE: &str = "partition_roof_slope";
 
+/// `BodySource` of a roof by extrusion drawn as its section (RE-211).
+pub const ROOF_EXTRUSION_BODY_SOURCE: &str = "partition_roof_extrusion";
+
+/// A roof by extrusion's body (RE-211): its section
+/// ([`crate::partition_schema_mvp::RoofExtrusion`]) run along its axis from
+/// `start` to `end`, as a closed faceted brep in the element's frame at
+/// `origin`. The two caps are the section, which rises along `u` on its top
+/// and its underside alike, cut into triangles between the two; the sides
+/// join the caps along the section's outline. Every triangle faces out.
+fn roof_extrusion_solid(
+    extrusion: &crate::partition_schema_mvp::RoofExtrusion,
+    origin: [f64; 3],
+    (start, end): (f64, f64),
+) -> Option<entities::SolidShape> {
+    let (top, bottom) = (&extrusion.top, &extrusion.bottom);
+    if top.len() < 2 || bottom.len() < 2 || !start.is_finite() || !end.is_finite() || end <= start {
+        return None;
+    }
+    let axis = extrusion.axis;
+    let u_axis = 1 - axis;
+    let place = |(u, v): (f64, f64), along: f64| {
+        let mut point = [0.0; 3];
+        point[axis] = along - origin[axis];
+        point[u_axis] = u - origin[u_axis];
+        point[2] = v - origin[2];
+        point
+    };
+    // The outline: the top along `u`, then the underside back.
+    let outline: Vec<(f64, f64)> = top.iter().chain(bottom.iter().rev()).copied().collect();
+    let n = outline.len();
+    let mut vertices: Vec<[f64; 3]> = outline.iter().map(|&p| place(p, start)).collect();
+    vertices.extend(outline.iter().map(|&p| place(p, end)));
+    // Cap triangles between the top (outline 0..m) and the underside
+    // (outline n-1 down to m), sweeping along `u`.
+    let m = top.len();
+    let bottom_index = |j: usize| n - 1 - j;
+    let mut cap: Vec<[usize; 3]> = Vec::new();
+    let (mut i, mut j) = (0, 0);
+    while i + 1 < m || j + 1 < bottom.len() {
+        let next_top = (i + 1 < m).then(|| top[i + 1].0);
+        let next_bottom = (j + 1 < bottom.len()).then(|| bottom[j + 1].0);
+        let advance_top = match (next_top, next_bottom) {
+            (Some(a), Some(b)) => a <= b,
+            (Some(_), None) => true,
+            _ => false,
+        };
+        if advance_top {
+            cap.push([i, i + 1, bottom_index(j)]);
+            i += 1;
+        } else {
+            cap.push([i, bottom_index(j + 1), bottom_index(j)]);
+            j += 1;
+        }
+    }
+    let mut triangles: Vec<[usize; 3]> = Vec::new();
+    // The outward side of a triangle: the caps face away from each other,
+    // a side away from the section (its outline runs clockwise across the
+    // plane, top first, so an edge's outward normal is on its left).
+    let mut outward: Vec<[f64; 3]> = Vec::new();
+    let mut axis_vector = [0.0; 3];
+    axis_vector[axis] = 1.0;
+    for &[a, b, c] in &cap {
+        triangles.push([a, b, c]);
+        outward.push(axis_vector.map(|v| -v));
+        triangles.push([a + n, b + n, c + n]);
+        outward.push(axis_vector);
+    }
+    for k in 0..n {
+        let next = (k + 1) % n;
+        let (du, dv) = (
+            outline[next].0 - outline[k].0,
+            outline[next].1 - outline[k].1,
+        );
+        let mut normal = [0.0; 3];
+        normal[u_axis] = -dv;
+        normal[2] = du;
+        triangles.push([k, next, next + n]);
+        outward.push(normal);
+        triangles.push([k, next + n, k + n]);
+        outward.push(normal);
+    }
+    let triangles = triangles
+        .into_iter()
+        .zip(outward)
+        .map(|([a, b, c], out)| {
+            let (pa, pb, pc) = (vertices[a], vertices[b], vertices[c]);
+            let (e1, e2) = (
+                [pb[0] - pa[0], pb[1] - pa[1], pb[2] - pa[2]],
+                [pc[0] - pa[0], pc[1] - pa[1], pc[2] - pa[2]],
+            );
+            let normal = [
+                e1[1] * e2[2] - e1[2] * e2[1],
+                e1[2] * e2[0] - e1[0] * e2[2],
+                e1[0] * e2[1] - e1[1] * e2[0],
+            ];
+            let facing = normal[0] * out[0] + normal[1] * out[1] + normal[2] * out[2];
+            let [a, b, c] = if facing < 0.0 { [a, c, b] } else { [a, b, c] };
+            Some(entities::BrepTriangle(
+                u32::try_from(a).ok()?,
+                u32::try_from(b).ok()?,
+                u32::try_from(c).ok()?,
+            ))
+        })
+        .collect::<Option<Vec<_>>>()?;
+    Some(entities::SolidShape::FacetedBrep {
+        vertices_feet: vertices,
+        triangles,
+    })
+}
+
 /// How closely a shed roof's rise and thickness must reproduce its record
 /// box's height for its slope to be drawn, feet.
 const ROOF_SLOPE_CLOSURE_FEET: f64 = 1e-4;
@@ -3712,6 +3822,25 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
     } else {
         None
     };
+    // RE-211: a roof by extrusion, its section run across its record box.
+    let roof_extrusion = if class == "Roof" && roof_slope.is_none() {
+        crate::partition_schema_mvp::roof_extrusion_from_fields(&decoded.fields).and_then(
+            |extrusion| {
+                let (centre, size) = if extrusion.axis == 0 {
+                    (x, width)
+                } else {
+                    (y, depth)
+                };
+                roof_extrusion_solid(
+                    &extrusion,
+                    [x, y, z],
+                    (centre - size / 2.0, centre + size / 2.0),
+                )
+            },
+        )
+    } else {
+        None
+    };
     // #331: the further pieces of a sketch of separate loops, each its own
     // body at the element's placement, as Revit exports one element per
     // piece.
@@ -3792,6 +3921,11 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
                     .or_else(|| pipe.map(|_| PIPE_AXIS_BODY_SOURCE.into()))
                     .or_else(|| stair_run.as_ref().map(|_| STAIR_RUN_BODY_SOURCE.into()))
                     .or_else(|| roof_slope.as_ref().map(|_| ROOF_SLOPE_BODY_SOURCE.into()))
+                    .or_else(|| {
+                        roof_extrusion
+                            .as_ref()
+                            .map(|_| ROOF_EXTRUSION_BODY_SOURCE.into())
+                    })
                     .or_else(|| i_column.map(|_| COLUMN_I_SECTION_BODY_SOURCE.into()))
                     .or_else(|| turned.map(|_| INSTANCE_TURNED_BODY_SOURCE.into()))
                     .or_else(|| oriented.map(|_| INSTANCE_ORIENTED_BODY_SOURCE.into()))
@@ -4242,7 +4376,7 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
                         None,
                     )
                 }
-                None => match (turned, roof_slope) {
+                None => match (turned, roof_slope.or(roof_extrusion)) {
                     (Some((angle, along, across)), None) => (
                         Some(angle),
                         Extrusion::rectangle(along, across, height),

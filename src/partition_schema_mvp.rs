@@ -484,6 +484,8 @@ pub fn recover_partition_schema_mvp(
     attach_wall_profile_openings(rf, revit_version, &mut out.walls);
     // --- A shed roof's slope (RE-56) ---
     attach_roof_slopes(rf, revit_version, &mut out.products);
+    // --- A roof by extrusion's section (RE-211) ---
+    attach_extrusion_roofs(rf, revit_version, &mut out.products);
     // --- Floors', roofs' and ceilings' layers (RE-57) ---
     attach_slab_layers(
         rf,
@@ -7522,6 +7524,332 @@ pub const ROOF_SLOPE_EDGE_FIELDS: [&str; 4] = [
 ];
 /// Field holding that edge's slope angle from horizontal, radians (RE-56).
 pub const ROOF_SLOPE_ANGLE_FIELD: &str = "m_roof_slope_angle";
+/// Field holding a roof by extrusion's top, `(u, z)` points along the plane
+/// its sketch is in, `u` rising, model feet (RE-211).
+pub const ROOF_EXTRUSION_TOP_FIELD: &str = "m_roof_extrusion_top";
+/// Field holding a roof by extrusion's underside, as
+/// [`ROOF_EXTRUSION_TOP_FIELD`] (RE-211).
+pub const ROOF_EXTRUSION_BOTTOM_FIELD: &str = "m_roof_extrusion_bottom";
+/// Field holding the model axis a roof by extrusion runs along, 0 for x and
+/// 1 for y; `u` is the other horizontal axis (RE-211).
+pub const ROOF_EXTRUSION_AXIS_FIELD: &str = "m_roof_extrusion_axis";
+/// How closely a roof by extrusion's section must reproduce its record box,
+/// feet (RE-211).
+pub const ROOF_EXTRUSION_BOX_TOLERANCE_FEET: f64 = 1e-3;
+/// Chords a sketch's B-spline is drawn with in a roof by extrusion's
+/// section (RE-211).
+pub const ROOF_EXTRUSION_SPLINE_SEGMENTS: usize = 256;
+/// How far apart two sketch curves' ends may be and still join in a roof by
+/// extrusion's profile, feet (RE-211).
+pub const ROOF_EXTRUSION_JOIN_FEET: f64 = 1e-4;
+
+/// A roof by extrusion's section (RE-211): its top and its underside, each
+/// `(u, z)` with `u` rising along the plane its sketch is in, and the model
+/// axis it runs along.
+#[derive(Debug, Clone, PartialEq)]
+pub struct RoofExtrusion {
+    pub axis: usize,
+    pub top: Vec<(f64, f64)>,
+    pub bottom: Vec<(f64, f64)>,
+}
+
+/// The [`RoofExtrusion`] [`attach_extrusion_roofs`] recorded.
+pub fn roof_extrusion_from_fields(fields: &[(String, InstanceField)]) -> Option<RoofExtrusion> {
+    let field = |wanted: &str| {
+        fields
+            .iter()
+            .find_map(|(name, value)| (name == wanted).then_some(value))
+    };
+    let axis = match field(ROOF_EXTRUSION_AXIS_FIELD)? {
+        InstanceField::Integer { value, .. } => usize::try_from(*value).ok().filter(|a| *a < 2)?,
+        _ => return None,
+    };
+    Some(RoofExtrusion {
+        axis,
+        top: crate::element_record_plan_profiles::points_from_field(field(
+            ROOF_EXTRUSION_TOP_FIELD,
+        )?)?,
+        bottom: crate::element_record_plan_profiles::points_from_field(field(
+            ROOF_EXTRUSION_BOTTOM_FIELD,
+        )?)?,
+    })
+}
+
+/// The underside of a roof whose top is `top` (`(u, z)`, `u` rising) and
+/// whose thickness is `thickness`, measured square to the top: the top
+/// offset down by it, its ends carried along their tangents to the plumb
+/// lines through the top's ends and cut there (RE-211). `None` where the
+/// underside does not rise along `u` throughout, as where the top curves
+/// tighter than the thickness.
+pub fn roof_extrusion_bottom(top: &[(f64, f64)], thickness: f64) -> Option<Vec<(f64, f64)>> {
+    if top.len() < 2 || !(thickness.is_finite() && thickness > 0.0) {
+        return None;
+    }
+    let normal = |i: usize| {
+        let (a, b) = (top[i.saturating_sub(1)], top[(i + 1).min(top.len() - 1)]);
+        let (du, dv) = (b.0 - a.0, b.1 - a.1);
+        let length = du.hypot(dv);
+        (length > 0.0).then(|| (dv / length, -du / length))
+    };
+    let offset: Vec<(f64, f64)> = (0..top.len())
+        .map(|i| normal(i).map(|(nu, nv)| (top[i].0 + thickness * nu, top[i].1 + thickness * nv)))
+        .collect::<Option<_>>()?;
+    let carried = |a: (f64, f64), b: (f64, f64)| (b.0 + 1e3 * (b.0 - a.0), b.1 + 1e3 * (b.1 - a.1));
+    let mut chain = vec![carried(offset[1], offset[0])];
+    chain.extend(offset.iter().copied());
+    chain.push(carried(offset[offset.len() - 2], offset[offset.len() - 1]));
+    let (low, high) = (top[0].0, top[top.len() - 1].0);
+    let mut bottom = Vec::new();
+    for pair in chain.windows(2) {
+        let ((u0, v0), (u1, v1)) = (pair[0], pair[1]);
+        for edge in [low, high] {
+            if (u0 - edge) * (u1 - edge) < 0.0 {
+                bottom.push((edge, v0 + (v1 - v0) * (edge - u0) / (u1 - u0)));
+            }
+        }
+        if (low..=high).contains(&u1) {
+            bottom.push((u1, v1));
+        }
+    }
+    let rises = bottom.windows(2).all(|pair| pair[1].0 > pair[0].0);
+    let ends = bottom.first().is_some_and(|p| (p.0 - low).abs() < 1e-9)
+        && bottom.last().is_some_and(|p| (p.0 - high).abs() < 1e-9);
+    (rises && ends).then_some(bottom)
+}
+
+/// Give each roof by extrusion its section (RE-211). Such a roof is
+/// sketched in a vertical plane: every sketch line of it is flat along one
+/// horizontal model axis, at one place along it. Its profile is those lines
+/// joined end to end, rising along the plane's other horizontal axis, each a
+/// straight line or a B-spline ([`crate::partition_beam_axes::BoundedSpline`])
+/// within its record box. The profile is the roof's top; its type's layers
+/// give the thickness square to it, and both ends are cut plumb. The section
+/// is kept only where it reproduces the roof's record box across the plane
+/// to [`ROOF_EXTRUSION_BOX_TOLERANCE_FEET`]; the roof then runs along the
+/// axis over its box. Measured on `11_RoofByExtrusion` (R2025): every one of
+/// the 1,187 vertices of Revit's body within 0.001 ft of the section.
+fn attach_extrusion_roofs(rf: &mut RevitFile, revit_version: u32, products: &mut [DecodedElement]) {
+    use crate::partition_beam_axes as pba;
+    use crate::partition_element_records as per;
+    if !pba::SKETCH_SPLINE_SUPPORTED_REVIT_VERSIONS.contains(&revit_version) {
+        return;
+    }
+    let float = |element: &DecodedElement, wanted: &str| {
+        element.fields.iter().find_map(|(name, value)| match value {
+            InstanceField::Float { value, .. } if name == wanted => Some(*value),
+            _ => None,
+        })
+    };
+    let type_of = |element: &DecodedElement| {
+        element.fields.iter().find_map(|(name, value)| match value {
+            InstanceField::ElementId { id, .. } if name == TYPE_ID_FIELD => Some(*id),
+            _ => None,
+        })
+    };
+    let boxes: BTreeMap<u32, [f64; 6]> = products
+        .iter()
+        .filter(|element| element.class == "Roof" && type_of(element).is_some())
+        .filter(|element| {
+            crate::element_record_plan_profiles::plan_profile_from_fields(&element.fields).is_none()
+        })
+        .filter_map(|element| {
+            let (x, y, z) = (
+                float(element, "m_locationX")?,
+                float(element, "m_locationY")?,
+                float(element, "m_locationZ")?,
+            );
+            let (w, d, h) = (
+                float(element, "m_bboxWidth")?,
+                float(element, "m_bboxDepth")?,
+                float(element, "m_bboxHeight")?,
+            );
+            Some((
+                element.id?,
+                [x - w / 2.0, y - d / 2.0, z, x + w / 2.0, y + d / 2.0, z + h],
+            ))
+        })
+        .collect();
+    if boxes.is_empty() {
+        return;
+    }
+    let declared = match crate::elem_table::parse_records(rf) {
+        Ok(records) => crate::elem_table::declared_ids(&records),
+        Err(_) => return,
+    };
+    let Ok(sketch_lines) =
+        per::scan_category_records_multi(rf, revit_version, &[per::OST_SKETCH_LINES], &declared)
+    else {
+        return;
+    };
+    let mut lines_of: BTreeMap<u32, Vec<&per::PartitionElementRecord>> = BTreeMap::new();
+    for line in &sketch_lines {
+        if let Some(owner) = line
+            .owner_reference
+            .filter(|owner| boxes.contains_key(owner))
+        {
+            lines_of.entry(owner).or_default().push(line);
+        }
+    }
+    // The axis each roof's sketch is flat along, where all its lines are flat
+    // along the same one at the same place.
+    let planes: BTreeMap<u32, (usize, f64)> = lines_of
+        .iter()
+        .filter_map(|(&roof, lines)| {
+            let flat = |line: &per::PartitionElementRecord, k: usize| {
+                (line.bbox_feet[k + 3] - line.bbox_feet[k]).abs() < 1e-6
+            };
+            let axis = (0..2).find(|&k| lines.iter().all(|line| flat(line, k)))?;
+            let at = lines.first()?.bbox_feet[axis];
+            lines
+                .iter()
+                .all(|line| (line.bbox_feet[axis] - at).abs() < 1e-6)
+                .then_some((roof, (axis, at)))
+        })
+        .collect();
+    if planes.is_empty() {
+        return;
+    }
+    let line_ids: BTreeSet<u32> = planes
+        .keys()
+        .flat_map(|roof| lines_of[roof].iter().map(|line| line.element_id))
+        .collect();
+    let splines = pba::scan_sketch_splines(rf, revit_version, &line_ids).unwrap_or_default();
+    let straight = pba::scan_sketch_bounded_lines(rf, revit_version, &line_ids).unwrap_or_default();
+    let types: BTreeSet<u32> = products
+        .iter()
+        .filter(|element| element.id.is_some_and(|id| planes.contains_key(&id)))
+        .filter_map(type_of)
+        .collect();
+    let materials: BTreeSet<u32> = crate::partition_type_records::scan_type_records(
+        rf,
+        revit_version,
+        crate::partition_type_records::OST_MATERIALS,
+        &declared,
+    )
+    .unwrap_or_default()
+    .iter()
+    .map(|record| record.element_id)
+    .collect();
+    let Ok(layers) = crate::partition_compound_structure::scan_type_layers(
+        rf,
+        revit_version,
+        &types,
+        &materials,
+        &declared,
+    ) else {
+        return;
+    };
+    let inside = |point: [f64; 3], record: &[f64; 6]| {
+        (0..3).all(|k| {
+            point[k] >= record[k] - pba::END_TOLERANCE_FEET
+                && point[k] <= record[k + 3] + pba::END_TOLERANCE_FEET
+        })
+    };
+    for roof in products.iter_mut() {
+        let Some(id) = roof.id else {
+            continue;
+        };
+        let (Some(&(axis, at)), Some(record)) = (planes.get(&id), boxes.get(&id)) else {
+            continue;
+        };
+        let Some(thickness) = type_of(roof)
+            .and_then(|t| layers.get(&t))
+            .map(|layers| layers.iter().map(|layer| layer.width_feet).sum::<f64>())
+        else {
+            continue;
+        };
+        let u_axis = 1 - axis;
+        // Each line's points across the plane, from its own data, within its
+        // record box.
+        let mut curves: Vec<Vec<(f64, f64)>> = Vec::new();
+        for line in &lines_of[&id] {
+            let points = if let Some(spline) = splines.get(&line.element_id) {
+                spline
+                    .control_points
+                    .iter()
+                    .all(|&[_, x, y, z]| inside([x, y, z], &line.bbox_feet))
+                    .then(|| spline.points(ROOF_EXTRUSION_SPLINE_SEGMENTS))
+                    .flatten()
+            } else {
+                straight.get(&line.element_id).and_then(|segment| {
+                    let ends = [segment.start(), segment.end()];
+                    ends.iter()
+                        .all(|end| inside(*end, &line.bbox_feet))
+                        .then(|| ends.to_vec())
+                })
+            };
+            let Some(points) = points else {
+                curves.clear();
+                break;
+            };
+            let mut across: Vec<(f64, f64)> = points.iter().map(|p| (p[u_axis], p[2])).collect();
+            if across.last().map(|p| p.0) < across.first().map(|p| p.0) {
+                across.reverse();
+            }
+            curves.push(across);
+        }
+        if curves.is_empty() {
+            continue;
+        }
+        curves.sort_by(|a, b| a[0].0.total_cmp(&b[0].0));
+        let mut top: Vec<(f64, f64)> = Vec::new();
+        let mut joined = true;
+        for curve in &curves {
+            match top.last() {
+                None => top.extend(curve.iter().copied()),
+                Some(&(u, v)) => {
+                    let (cu, cv) = curve[0];
+                    if (cu - u).hypot(cv - v) > ROOF_EXTRUSION_JOIN_FEET {
+                        joined = false;
+                        break;
+                    }
+                    top.extend(curve.iter().skip(1).copied());
+                }
+            }
+        }
+        if !joined || !top.windows(2).all(|pair| pair[1].0 > pair[0].0) {
+            continue;
+        }
+        let Some(bottom) = roof_extrusion_bottom(&top, thickness) else {
+            continue;
+        };
+        let us = || top.iter().chain(&bottom).map(|p| p.0);
+        let vs = || top.iter().chain(&bottom).map(|p| p.1);
+        let section = [
+            us().fold(f64::INFINITY, f64::min),
+            vs().fold(f64::INFINITY, f64::min),
+            us().fold(f64::NEG_INFINITY, f64::max),
+            vs().fold(f64::NEG_INFINITY, f64::max),
+        ];
+        let wanted = [record[u_axis], record[2], record[u_axis + 3], record[5]];
+        let reproduces = section
+            .iter()
+            .zip(wanted)
+            .all(|(got, want)| (got - want).abs() <= ROOF_EXTRUSION_BOX_TOLERANCE_FEET);
+        let in_plane = at >= record[axis] - ROOF_EXTRUSION_BOX_TOLERANCE_FEET
+            && at <= record[axis + 3] + ROOF_EXTRUSION_BOX_TOLERANCE_FEET;
+        if !(reproduces && in_plane) {
+            continue;
+        }
+        roof.fields.push((
+            ROOF_EXTRUSION_AXIS_FIELD.into(),
+            InstanceField::Integer {
+                value: axis as i64,
+                signed: false,
+                size: 8,
+            },
+        ));
+        roof.fields.push((
+            ROOF_EXTRUSION_TOP_FIELD.into(),
+            crate::element_record_plan_profiles::loop_field(&top),
+        ));
+        roof.fields.push((
+            ROOF_EXTRUSION_BOTTOM_FIELD.into(),
+            crate::element_record_plan_profiles::loop_field(&bottom),
+        ));
+    }
+}
+
 /// Field holding the roof's type thickness, its layers summed (RE-56).
 pub const ROOF_TYPE_THICKNESS_FIELD: &str = "m_roof_type_thickness";
 /// Field holding how far the first defining edge's plane is raised at the

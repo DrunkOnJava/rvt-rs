@@ -359,7 +359,7 @@ fn piece_from_field(field: &InstanceField) -> Option<PlanPiece> {
     })
 }
 
-fn points_from_field(field: &InstanceField) -> Option<Vec<(f64, f64)>> {
+pub(crate) fn points_from_field(field: &InstanceField) -> Option<Vec<(f64, f64)>> {
     let InstanceField::Vector(points) = field else {
         return None;
     };
@@ -379,7 +379,7 @@ fn points_from_field(field: &InstanceField) -> Option<Vec<(f64, f64)>> {
     Some(out)
 }
 
-fn loop_field(points: &[(f64, f64)]) -> InstanceField {
+pub(crate) fn loop_field(points: &[(f64, f64)]) -> InstanceField {
     InstanceField::Vector(
         points
             .iter()
