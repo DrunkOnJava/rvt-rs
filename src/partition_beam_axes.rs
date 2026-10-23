@@ -39,6 +39,7 @@
 //! a median 0.625 ft at the larger end), so the solid runs the line's full
 //! length.
 
+use crate::le_bytes;
 use crate::{Result, RevitFile};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -103,11 +104,6 @@ impl BoundedLine {
     }
 }
 
-fn read_f64(buf: &[u8], at: usize) -> Option<f64> {
-    buf.get(at..at.checked_add(8)?)
-        .map(|s| f64::from_le_bytes(s.try_into().expect("8 bytes")))
-}
-
 /// The bounded line whose tag starts at `at`: finite values, a unit
 /// direction and a start parameter below the end one.
 pub fn bounded_line_at(buf: &[u8], at: usize) -> Option<BoundedLine> {
@@ -116,7 +112,7 @@ pub fn bounded_line_at(buf: &[u8], at: usize) -> Option<BoundedLine> {
     }
     let mut values = [0.0f64; 8];
     for (index, value) in values.iter_mut().enumerate() {
-        *value = read_f64(buf, at + 4 + 8 * index)?;
+        *value = le_bytes::f64_at(buf, at + 4 + 8 * index)?;
     }
     if !values.iter().all(|v| v.is_finite()) {
         return None;
@@ -206,7 +202,7 @@ pub fn arc_values_at(buf: &[u8], at: usize) -> Option<BoundedArc> {
     }
     let mut values = [0.0f64; 12];
     for (index, value) in values.iter_mut().enumerate() {
-        *value = read_f64(buf, at + 4 + 8 * index)?;
+        *value = le_bytes::f64_at(buf, at + 4 + 8 * index)?;
     }
     if !values.iter().all(|v| v.is_finite()) {
         return None;
@@ -262,7 +258,7 @@ pub fn first_circle(data: &[u8]) -> Option<BoundedArc> {
     memchr::memmem::find_iter(data, &CIRCLE_TAG).find_map(|at| {
         let mut values = [0.0f64; 12];
         for (index, value) in values.iter_mut().enumerate() {
-            *value = read_f64(data, at + 4 + 8 * index)?;
+            *value = le_bytes::f64_at(data, at + 4 + 8 * index)?;
         }
         if !values.iter().all(|v| v.is_finite()) {
             return None;

@@ -99,6 +99,9 @@ jobs:
       # would apply clippy's exported-API rules to research items that are
       # private there.
       - run: cargo clippy -p rvt-wasm --all-targets --no-deps -- -D warnings
+      # The pyo3 bindings and the stream-evidence harness are workspace
+      # members the lines above do not lint.
+      - run: cargo clippy -p rvt-py -p stream-evidence --all-targets --no-deps -- -D warnings
 
   test:
     # Unit tests are banned (maintainer directive, 2026-09-23): this job
@@ -963,6 +966,13 @@ jobs:
             export RVT_SAMPLES_DIR="$PWD/_corpus/examples/Autodesk"
           fi
           python3 -m pytest tests/python -q -rs
+      # S2 (#873): the type stubs are the Python API's listing, and
+      # tools/ci/python-api-compat.py judges a breaking change by diffing
+      # them. stubtest keeps them true: it fails when the installed wheel and
+      # python/rvt/__init__.pyi disagree on a name, a parameter or a default.
+      - name: The type stubs match the built wheel
+        if: runner.os == 'Linux'
+        run: python3 -m mypy.stubtest rvt
       - name: Upload wheel artifact
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -1143,6 +1153,10 @@ jobs:
       # docs.
       - name: API docs cite only reported RE findings and no planning labels
         run: python3 tools/ci/api-doc-ids.py
+      # The README's count and docs/viewer-api.md's table name exactly the
+      # bindings rvt-wasm exports.
+      - name: The docs list every wasm binding
+        run: python3 tools/ci/wasm-api.py docs rvt-wasm/src/lib.rs README.md docs/viewer-api.md
 
   # Guards the Cloud Agent development environment config itself: shellcheck
   # the install script and validate `.cursor/environment.json` against the

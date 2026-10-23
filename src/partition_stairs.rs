@@ -46,6 +46,7 @@
 //!
 //! Nothing here reads a release other than 2024.
 
+use crate::le_bytes;
 use crate::partition_beam_axes::BoundedLine;
 use crate::{Result, RevitFile};
 use std::collections::{BTreeMap, BTreeSet};
@@ -94,16 +95,6 @@ pub fn supports_revit_version(revit_version: u32) -> bool {
     STAIR_DIMENSIONS_SUPPORTED_REVIT_VERSIONS.contains(&revit_version)
 }
 
-fn read_u32(buf: &[u8], at: usize) -> Option<u32> {
-    buf.get(at..at.checked_add(4)?)
-        .map(|s| u32::from_le_bytes(s.try_into().expect("4 bytes")))
-}
-
-fn read_f64(buf: &[u8], at: usize) -> Option<f64> {
-    buf.get(at..at.checked_add(8)?)
-        .map(|s| f64::from_le_bytes(s.try_into().expect("8 bytes")))
-}
-
 /// Where `anchor` first starts within [`ANCHOR_WINDOW`] of `data_offset`.
 fn anchor_at(buf: &[u8], data_offset: usize, anchor: &[u8]) -> Option<usize> {
     let end = data_offset
@@ -123,9 +114,9 @@ fn plausible(value: f64, limit_feet: f64) -> Option<f64> {
 /// is out of range.
 pub fn stair_dimensions_at(buf: &[u8], data_offset: usize) -> Option<StairDimensions> {
     let anchor = anchor_at(buf, data_offset, &STAIR_DIMENSIONS_ANCHOR)?;
-    let riser_height_feet = plausible(read_f64(buf, anchor + RISER_HEIGHT_OFFSET)?, 2.0)?;
-    let tread_depth_feet = plausible(read_f64(buf, anchor + TREAD_DEPTH_OFFSET)?, 10.0)?;
-    let riser_count = read_u32(buf, anchor + RISER_COUNT_OFFSET)?;
+    let riser_height_feet = plausible(le_bytes::f64_at(buf, anchor + RISER_HEIGHT_OFFSET)?, 2.0)?;
+    let tread_depth_feet = plausible(le_bytes::f64_at(buf, anchor + TREAD_DEPTH_OFFSET)?, 10.0)?;
+    let riser_count = le_bytes::u32_at(buf, anchor + RISER_COUNT_OFFSET)?;
     if !(1..=MAX_RISERS).contains(&riser_count) {
         return None;
     }
@@ -139,7 +130,7 @@ pub fn stair_dimensions_at(buf: &[u8], data_offset: usize) -> Option<StairDimens
 /// The number of risers in the run data that starts at `data_offset`.
 pub fn run_riser_count_at(buf: &[u8], data_offset: usize) -> Option<u32> {
     let anchor = anchor_at(buf, data_offset, &STAIR_RUN_RISERS_ANCHOR)?;
-    let count = read_u32(buf, anchor + STAIR_RUN_RISERS_ANCHOR.len())?;
+    let count = le_bytes::u32_at(buf, anchor + STAIR_RUN_RISERS_ANCHOR.len())?;
     (1..=MAX_RISERS).contains(&count).then_some(count)
 }
 
@@ -394,7 +385,7 @@ fn flag(buf: &[u8], at: usize) -> Option<bool> {
 }
 
 fn utf16_at(buf: &[u8], at: usize) -> Option<String> {
-    let length = usize::try_from(read_u32(buf, at)?).ok()?;
+    let length = usize::try_from(le_bytes::u32_at(buf, at)?).ok()?;
     if length == 0 || length > 256 {
         return None;
     }
@@ -414,7 +405,7 @@ pub fn run_type_at(buf: &[u8], id_at: usize) -> Option<RunType> {
         return None;
     }
     let length = |offset: usize, limit_feet: f64| {
-        let value = read_f64(buf, id_at + offset)?;
+        let value = le_bytes::f64_at(buf, id_at + offset)?;
         (value.is_finite() && (0.0..limit_feet).contains(&value)).then_some(value)
     };
     let flags = id_at + RUN_TYPE_FLAGS_OFFSET;
@@ -519,7 +510,7 @@ fn type_name_text(name: String) -> Option<String> {
 
 /// A stair type's name: the string after its parameter entries.
 fn stair_type_name(buf: &[u8], at: usize) -> Option<String> {
-    let count = read_u32(buf, at)?;
+    let count = le_bytes::u32_at(buf, at)?;
     if count > 16 {
         return None;
     }
@@ -529,7 +520,7 @@ fn stair_type_name(buf: &[u8], at: usize) -> Option<String> {
         if parameter >= 0 {
             return None;
         }
-        let length = usize::try_from(read_u32(buf, at + 8)?).ok()?;
+        let length = usize::try_from(le_bytes::u32_at(buf, at + 8)?).ok()?;
         if length > 256 {
             return None;
         }
@@ -560,7 +551,7 @@ pub fn component_type_at(buf: &[u8], id_at: usize, kind: ComponentKind) -> Optio
                 }
                 components.insert(u32::try_from(id).ok()?);
             }
-            let family = match read_u32(buf, id_at + STAIR_TYPE_CONSTRUCTION_OFFSET)? {
+            let family = match le_bytes::u32_at(buf, id_at + STAIR_TYPE_CONSTRUCTION_OFFSET)? {
                 0 => Some("Assembled Stair"),
                 1 => Some("Cast-In-Place Stair"),
                 2 => None,
@@ -655,12 +646,12 @@ pub struct RunEnds {
 pub fn run_ends_at(data: &[u8], base_elevation_feet: f64, width_feet: f64) -> Option<RunEnds> {
     let end = data.len().min(RUN_ENDS_WINDOW);
     (0..end.saturating_sub(RUN_ENDS_FLAGS_OFFSET + 2)).find_map(|at| {
-        let value = |index: usize| read_f64(data, at + 8 * index);
+        let value = |index: usize| le_bytes::f64_at(data, at + 8 * index);
         let (bottom, top, width) = (value(0)?, value(1)?, value(4)?);
         if (bottom - base_elevation_feet).abs() >= SKETCH_TOLERANCE_FEET
             || (width - width_feet).abs() >= SKETCH_TOLERANCE_FEET
             || !(top.is_finite() && top > bottom)
-            || read_u32(data, at + 56)? >= RUN_TOP_RISER_INDEX_LIMIT
+            || le_bytes::u32_at(data, at + 56)? >= RUN_TOP_RISER_INDEX_LIMIT
         {
             return None;
         }

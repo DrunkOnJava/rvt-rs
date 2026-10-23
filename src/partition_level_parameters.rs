@@ -16,6 +16,7 @@
 //! own IFC export; see `reports/element-framing/RE-172-level-parameters.md`.
 
 use crate::RevitFile;
+use crate::le_bytes;
 use std::collections::BTreeMap;
 
 /// Field carrying an element's level parameter (its Level name).
@@ -48,16 +49,12 @@ const STAIR_TOP_AFTER: usize = 32;
 /// two different recovered Levels sit [`STAIR_TOP_AFTER`] bytes apart.
 fn stair_levels(buf: &[u8], id: usize, names: &BTreeMap<u32, String>) -> Option<(String, String)> {
     let mut hits = STAIR_BASE_OFFSETS.iter().filter_map(|&k| {
-        let base = names.get(&u32_at(buf, id + k)?)?;
-        let top = names.get(&u32_at(buf, id + k + STAIR_TOP_AFTER)?)?;
+        let base = names.get(&le_bytes::u32_at(buf, id + k)?)?;
+        let top = names.get(&le_bytes::u32_at(buf, id + k + STAIR_TOP_AFTER)?)?;
         (base != top).then(|| (base.clone(), top.clone()))
     });
     let found = hits.next()?;
     hits.next().is_none().then_some(found)
-}
-
-fn u32_at(buf: &[u8], at: usize) -> Option<u32> {
-    Some(u32::from_le_bytes(buf.get(at..at + 4)?.try_into().ok()?))
 }
 
 /// Recovered Level names and elevations (feet) by id.
@@ -95,10 +92,10 @@ pub fn level_parameters(
         for (i, &at) in starts.iter().enumerate() {
             let id = at + MARK.len();
             let (Some(element), Some(0), Some(level), Some(tail)) = (
-                u32_at(buf, id),
-                u32_at(buf, id + 4),
-                u32_at(buf, id + 8),
-                u32_at(buf, id + 12),
+                le_bytes::u32_at(buf, id),
+                le_bytes::u32_at(buf, id + 4),
+                le_bytes::u32_at(buf, id + 8),
+                le_bytes::u32_at(buf, id + 12),
             ) else {
                 continue;
             };
@@ -124,10 +121,10 @@ pub fn level_parameters(
                     return None;
                 }
                 let g = [
-                    u32_at(buf, at - 4)?,
-                    u32_at(buf, at)?,
-                    u32_at(buf, at + 4)?,
-                    u32_at(buf, at + 8)?,
+                    le_bytes::u32_at(buf, at - 4)?,
+                    le_bytes::u32_at(buf, at)?,
+                    le_bytes::u32_at(buf, at + 4)?,
+                    le_bytes::u32_at(buf, at + 8)?,
                 ];
                 (g[0] == 0 && g[2] == 0 && g[3] >= 0xffff_fff0)
                     .then(|| names.get(&g[1]).cloned())

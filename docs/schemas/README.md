@@ -5,8 +5,12 @@ bindings, viewer diagnostics, and release-support workflows. They are
 forward-compatible by default: new additive fields may appear without a schema
 version bump, so the output schemas leave `additionalProperties` open, but
 incompatible removals or type changes require a version bump in the producing
-payload. The schemas of checked-in data (the support matrix, the witness
-registry) stay closed.
+payload. A list of values, such as a status or a reason code, is open the same
+way: a minor release may add a value or stop writing one, so code that reads
+one handles a value it does not know (`RELEASE.md`, "What 1.0 keeps stable";
+`tools/ci/schema-compat.py` counts neither as a breaking change).
+The schemas of checked-in data (the support matrix, the witness registry) stay
+closed.
 
 | Schema | Producer |
 |---|---|
