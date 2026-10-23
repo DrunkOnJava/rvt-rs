@@ -215,6 +215,18 @@ def main():
     for (cls, hit, top), n in sorted(shared.items()):
         print(f"  {cls}: {n}, episode {hit[1]} of the run at {hit[0]}, first byte XOR {top:#04x}")
 
+    # The project, site, building and storeys have no Tag: is a stored string
+    # their GlobalId, whole or on its last 21 characters?
+    spatial = ("IfcProject", "IfcSite", "IfcBuilding", "IfcBuildingStorey")
+    whole, tail = collections.Counter(), collections.Counter()
+    for root in model.by_type("IfcRoot"):
+        if root.is_a() in spatial:
+            whole[(root.is_a(), root.GlobalId in stored)] += 1
+            tail[(root.is_a(), bool(by_suffix.get(root.GlobalId[1:])))] += 1
+    for cls in spatial:
+        n = whole[(cls, True)] + whole[(cls, False)]
+        print(f"{cls}: {n}, GlobalId a stored string {whole[(cls, True)]}, its last 21 characters {tail[(cls, True)]}")
+
     # The first character carries the top two bits, so a GUID encoder writes
     # 0 to 3 there.
     print("first character of every GlobalId, by class:")
