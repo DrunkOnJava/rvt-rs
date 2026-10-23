@@ -13,25 +13,28 @@
 //! repository say exactly what is read on which input, and every export
 //! comes with diagnostics naming what was approximated or left out.
 //!
+//! The examples below run in CI against the synthetic project file the
+//! repository ships, `corpus/tier1/architectural-2024/architectural-2024.rvt`.
+//!
 //! ## Read a file's identity
 //!
-//! ```no_run
+//! ```
 //! use rvt::RevitFile;
 //!
-//! let mut rf = RevitFile::open("model.rvt")?;
-//! let summary = rf.summarize()?;
-//! println!("Revit {} ({})", summary.version, summary.build.as_deref().unwrap_or("—"));
+//! let mut rf = RevitFile::open("corpus/tier1/architectural-2024/architectural-2024.rvt")?;
+//! let summary = rf.summarize_strict()?;
+//! println!("Revit {} ({})", summary.version, summary.build.as_deref().unwrap_or("-"));
 //! # Ok::<(), rvt::Error>(())
 //! ```
 //!
-//! ## List the elements of a Revit 2024 or 2025 project
+//! ## List the elements of a project
 //!
-//! ```no_run
+//! ```
 //! use rvt::RevitFile;
 //! use rvt::ifc::RvtDocExporter;
 //! use rvt::ifc::entities::IfcEntity;
 //!
-//! let mut rf = RevitFile::open("project.rvt")?;
+//! let mut rf = RevitFile::open("corpus/tier1/architectural-2024/architectural-2024.rvt")?;
 //! let result = RvtDocExporter.export_with_diagnostics(&mut rf)?;
 //! for entity in &result.model.entities {
 //!     if let IfcEntity::BuildingElement { ifc_type, name, type_guid, .. } = entity {
@@ -40,20 +43,23 @@
 //!     }
 //! }
 //! // What was approximated or left out, as the CLI's --diagnostics writes it.
-//! println!("{}", serde_json::to_string_pretty(&result.diagnostics).unwrap());
+//! println!("{}", serde_json::to_string_pretty(&result.diagnostics)?);
 //! # Ok::<(), Box<dyn std::error::Error>>(())
 //! ```
 //!
 //! ## Write IFC4 and glTF
 //!
-//! ```no_run
+//! ```
 //! use rvt::RevitFile;
 //! use rvt::ifc::{Exporter, RvtDocExporter, gltf::model_to_glb, write_step};
 //!
-//! let mut rf = RevitFile::open("project.rvt")?;
+//! let mut rf = RevitFile::open("corpus/tier1/architectural-2024/architectural-2024.rvt")?;
 //! let model = RvtDocExporter.export(&mut rf)?;
-//! std::fs::write("project.ifc", write_step(&model))?;
-//! std::fs::write("project.glb", model_to_glb(&model))?;
+//! let out = std::env::temp_dir().join(format!("rvt-doc-example-{}", std::process::id()));
+//! std::fs::create_dir_all(&out)?;
+//! std::fs::write(out.join("project.ifc"), write_step(&model))?;
+//! std::fs::write(out.join("project.glb"), model_to_glb(&model))?;
+//! # std::fs::remove_dir_all(&out)?;
 //! # Ok::<(), Box<dyn std::error::Error>>(())
 //! ```
 //!
