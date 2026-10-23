@@ -50,13 +50,21 @@ def main():
     probe = read_probe(args.probe)
     model = ifcopenshell.open(args.reference)
 
+    # IFC2X3 storeys carry no Tag: join them to the file's Levels by name.
+    levels = {}
+    for line in open(args.probe, encoding="utf-8", errors="replace"):
+        if line.startswith("level "):
+            _, ident, elevation, name = line.rstrip("\n").split(" ", 3)
+            levels.setdefault(name, int(ident))
+    print(f"levels: {sorted((n, i) for n, i in levels.items())}")
     storey_of = {}
     for rel in model.by_type("IfcRelContainedInSpatialStructure"):
         storey = rel.RelatingStructure
         if storey.is_a("IfcBuildingStorey"):
             for element in rel.RelatedElements:
                 if element.Tag and str(element.Tag).isdigit():
-                    storey_of[int(element.Tag)] = (storey.Name, storey.Tag, storey.Elevation)
+                    storey_of[int(element.Tag)] = (storey.Name, levels.get(storey.Name, "?"), storey.Elevation)
+    print(f"storeys: {sorted({(s.Name, s.Elevation) for s in model.by_type('IfcBuildingStorey')}, key=lambda x: x[1] or 0)}")
     exported = {
         int(p.Tag): p.is_a()
         for p in model.by_type("IfcProduct")
@@ -89,6 +97,10 @@ def main():
     print(f"air terminals: {len(terminals)}, in Revit's export: {sum(1 for i in terminals if i in exported)}")
     for ident, fields in sorted(terminals.items()):
         print(f"  {ident} {'exported' if ident in exported else 'left out'}: {fields}")
+    print("referenced ids, where they appear:")
+    for line in open(args.probe, encoding="utf-8", errors="replace"):
+        if line.startswith("ref "):
+            print("  " + line.rstrip()[:200])
 
 
 if __name__ == "__main__":
