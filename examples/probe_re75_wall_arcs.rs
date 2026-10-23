@@ -18,7 +18,7 @@
 //!   cargo run --profile ci --example probe_re75_wall_arcs -- MODEL.rvt > arcs.jsonl
 
 use rvt::RevitFile;
-use rvt::partition_element_records as per;
+use rvt::research::partition_element_records as per;
 use std::collections::{BTreeMap, BTreeSet};
 
 fn main() -> rvt::Result<()> {
@@ -32,7 +32,8 @@ fn main() -> rvt::Result<()> {
             .map(|record| (record.element_id, record.bbox_feet))
             .collect();
     let walls: BTreeSet<u32> = boxes.keys().copied().collect();
-    let arcs = rvt::partition_compound_structure::scan_wall_arcs(&mut rf, version, &walls)?;
+    let arcs =
+        rvt::research::partition_compound_structure::scan_wall_arcs(&mut rf, version, &walls)?;
     for (id, arc) in &arcs {
         let b = boxes[id];
         println!(

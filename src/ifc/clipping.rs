@@ -1,4 +1,4 @@
-//! Clipping planes (VW1-14) + view modes (VW1-10) — spatial culling
+//! Clipping planes + view modes — spatial culling
 //! primitives and the viewer's plan/3D/section state machine.
 //!
 //! A `ClippingPlane` is an oriented half-space: `dot(point - origin,
@@ -15,6 +15,7 @@
 //!
 //! The math here is kept pure-Rust and no-deps so the same logic
 //! runs identically on native and WASM targets.
+// Tracker: VW1-14, VW1-10.
 
 use serde::{Deserialize, Serialize};
 
@@ -71,12 +72,13 @@ impl ClippingPlane {
     }
 }
 
-/// Axis-aligned section box (VW1-14). Viewers expose this to the
+/// Axis-aligned section box. Viewers expose this to the
 /// user as a draggable box in the 3D canvas; elements outside the
 /// box are culled from the rendered scene.
 ///
 /// The box is inclusive on all boundaries — a point exactly on a
 /// face is inside.
+// Tracker: VW1-14.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct SectionBox {
     pub min: [f64; 3],
@@ -145,9 +147,10 @@ impl SectionBox {
     }
 }
 
-/// Viewer camera / projection mode (VW1-10). Viewers bind this to
+/// Viewer camera / projection mode. Viewers bind this to
 /// a segmented-control UI; each mode dictates which clipping +
 /// projection defaults apply.
+// Tracker: VW1-10.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ViewMode {
@@ -163,13 +166,14 @@ pub enum ViewMode {
 }
 
 impl ViewMode {
-    /// Default section box for this mode (VW1-10). `Plan` slices
+    /// Default section box for this mode. `Plan` slices
     /// to a horizontal band at the storey elevation ± 10 ft;
     /// `Section` returns a vertical strip along the X axis;
     /// `ThreeD` returns the infinite box (no spatial clipping).
     ///
     /// Callers override with their own SectionBox when the user
     /// draws an explicit cut.
+    // Tracker: VW1-10.
     pub fn default_section_box(
         self,
         storey_elevation_feet: f64,

@@ -37,7 +37,8 @@ fn main() -> anyhow::Result<()> {
     let version = rf.basic_file_info()?.version;
     let records = rvt::elem_table::parse_records(&mut rf)?;
     let declared = rvt::elem_table::declared_ids(&records);
-    let names = rvt::partition_materials::scan_material_names(&mut rf, version, &declared)?;
+    let names =
+        rvt::research::partition_materials::scan_material_names(&mut rf, version, &declared)?;
     let options = native_document::Options {
         selected_classes: BTreeSet::from(["SysMullionFamSym".into(), "SysPanelFamSym".into()]),
         ..native_document::Options::default()

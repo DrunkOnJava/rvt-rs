@@ -10,8 +10,8 @@
 //!   cargo run --profile ci --example probe_re138_connector_pairs -- MODEL.rvt
 
 use rvt::RevitFile;
-use rvt::partition_connector_pairs as pairs;
-use rvt::partition_element_records as per;
+use rvt::research::partition_connector_pairs as pairs;
+use rvt::research::partition_element_records as per;
 use std::collections::BTreeSet;
 
 fn main() -> rvt::Result<()> {

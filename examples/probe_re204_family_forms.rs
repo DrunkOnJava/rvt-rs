@@ -19,7 +19,7 @@
 //!   cargo run --release --example probe_re204_family_forms -- MODEL.rvt
 
 use rvt::RevitFile;
-use rvt::partition_schema_mvp::{TYPE_ID_FIELD, recover_partition_schema_mvp};
+use rvt::research::partition_schema_mvp::{TYPE_ID_FIELD, recover_partition_schema_mvp};
 use rvt::walker::{InstanceField, WalkerLimits};
 use serde_json::json;
 use std::collections::BTreeSet;
@@ -33,7 +33,8 @@ fn main() -> anyhow::Result<()> {
     let decoded = recover_partition_schema_mvp(&mut rf, version, WalkerLimits::default())?;
     let records = rvt::elem_table::parse_records(&mut rf)?;
     let declared = rvt::elem_table::declared_ids(&records);
-    let names = rvt::partition_materials::scan_material_names(&mut rf, version, &declared)?;
+    let names =
+        rvt::research::partition_materials::scan_material_names(&mut rf, version, &declared)?;
     let materials: BTreeSet<u32> = names.keys().copied().collect();
     let types: BTreeSet<u64> = decoded
         .columns
@@ -50,9 +51,10 @@ fn main() -> anyhow::Result<()> {
             })
         })
         .collect();
-    let maps = rvt::native_type_materials::geometry_materials(&mut rf, &types, &materials)?;
+    let maps =
+        rvt::research::native_type_materials::geometry_materials(&mut rf, &types, &materials)?;
     let families: BTreeSet<u64> = maps.values().filter_map(|m| m.family).collect();
-    let forms = rvt::native_family_forms::family_forms(&mut rf, &families)?;
+    let forms = rvt::research::native_family_forms::family_forms(&mut rf, &families)?;
     let (mut hiding, mut no_unset) = (0usize, 0usize);
     for (family, found) in &forms {
         let hidden: Vec<&str> = found

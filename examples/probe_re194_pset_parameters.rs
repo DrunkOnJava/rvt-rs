@@ -37,8 +37,8 @@
 //!   cargo run --profile ci --example probe_re194_pset_parameters -- MODEL.rvt
 
 use rvt::RevitFile;
-use rvt::partition_room_parameters::{DATA_OBJECT_HEADER, find_parameter_definitions};
-use rvt::partition_schema_mvp::recover_partition_schema_mvp;
+use rvt::research::partition_room_parameters::{DATA_OBJECT_HEADER, find_parameter_definitions};
+use rvt::research::partition_schema_mvp::recover_partition_schema_mvp;
 use rvt::walker::WalkerLimits;
 use serde_json::{Value, json};
 use std::collections::{BTreeMap, BTreeSet};
@@ -99,7 +99,7 @@ fn main() -> rvt::Result<()> {
     let version = rf.basic_file_info()?.version;
     let elements =
         recover_partition_schema_mvp(&mut rf, version, WalkerLimits::default())?.into_elements();
-    let global_ids = rvt::revit_global_ids::revit_global_ids(&mut rf).unwrap_or_default();
+    let global_ids = rvt::research::revit_global_ids::revit_global_ids(&mut rf).unwrap_or_default();
     let ids: BTreeSet<u32> = elements.iter().filter_map(|element| element.id).collect();
     let names: BTreeMap<i64, String> = find_parameter_definitions(&mut rf, version)
         .into_iter()

@@ -1,7 +1,7 @@
 //! RE-15 geometry-probe corpus invariants.
 use rvt::object_graph;
-use rvt::partition_name_candidates::{NameBucket, collect_name_candidates};
-use rvt::rect_opening_index::{
+use rvt::research::partition_name_candidates::{NameBucket, collect_name_candidates};
+use rvt::research::rect_opening_index::{
     ARC_WALL_RECT_OPENING_TAG_2024, ArcWallRectOpeningIndex, OPENING_INDEX_FAMILY_MARKER,
     OPENING_INDEX_STRIDE,
 };

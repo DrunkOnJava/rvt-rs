@@ -15,7 +15,7 @@
 //!   cargo run --release --example probe_re206_category_styles -- MODEL.rvt
 
 use rvt::RevitFile;
-use rvt::partition_element_records::{OST_CEILINGS, OST_FLOORS, OST_ROOFS, OST_WALLS};
+use rvt::research::partition_element_records::{OST_CEILINGS, OST_FLOORS, OST_ROOFS, OST_WALLS};
 use serde_json::json;
 
 fn main() -> anyhow::Result<()> {
@@ -26,7 +26,8 @@ fn main() -> anyhow::Result<()> {
     let version = rf.basic_file_info()?.version;
     let records = rvt::elem_table::parse_records(&mut rf)?;
     let declared = rvt::elem_table::declared_ids(&records);
-    let names = rvt::partition_materials::scan_material_names(&mut rf, version, &declared)?;
+    let names =
+        rvt::research::partition_materials::scan_material_names(&mut rf, version, &declared)?;
     for (label, category) in [
         ("Walls", OST_WALLS),
         ("Floors", OST_FLOORS),
@@ -34,8 +35,9 @@ fn main() -> anyhow::Result<()> {
         ("Ceilings", OST_CEILINGS),
     ] {
         let effective =
-            rvt::partition_materials::scan_category_material(&mut rf, version, category)?;
-        let styles = rvt::partition_materials::native_category_material(&mut rf, category)?;
+            rvt::research::partition_materials::scan_category_material(&mut rf, version, category)?;
+        let styles =
+            rvt::research::partition_materials::native_category_material(&mut rf, category)?;
         println!(
             "{}",
             json!({

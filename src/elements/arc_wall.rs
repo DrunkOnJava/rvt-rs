@@ -5,10 +5,10 @@
 //! than the schema-field wire format used by [`crate::walker::ElementDecoder`].
 //! This module is therefore **not** registered in
 //! [`crate::elements::all_decoders`]; it sits beside that registry as the
-//! typed partition path for Lane Five / M3-05.
+//! typed partition path for ArcWall.
 //!
-//! Downstream lanes (geometry, IFC) should call
-//! [`decode_candidate`] / [`decode_at`] rather than inventing a parallel
+//! Downstream lanes (geometry, IFC) should call [`decode_at`], or with
+//! `unstable-research` `decode_candidate`, rather than inventing a parallel
 //! scanner.
 //!
 //! # Rejection rules
@@ -16,14 +16,11 @@
 //! | Condition | Error |
 //! |---|---|
 //! | Candidate `class_name` is `Some` and not `"ArcWall"` | wrong-schema |
-//! | Candidate `class_tag` ≠ [`ARC_WALL_TAG`] | wrong-schema |
+//! | Candidate `class_tag` ≠ [`crate::arc_wall_record::ARC_WALL_TAG`] | wrong-schema |
 //! | Buffer fails [`ArcWallRecord::decode_standard`] gates | tag / variant / short |
 //! | Optional schema name gate fails | wrong-schema |
 
-use crate::arc_wall_record::{
-    ARC_WALL_TAG, ArcWallRecord, ArcWallTrailer, STANDARD_RECORD_MIN_SIZE,
-};
-use crate::partition_scanner::PartitionRecordCandidate;
+use crate::arc_wall_record::{ArcWallRecord, ArcWallTrailer, STANDARD_RECORD_MIN_SIZE};
 use crate::walker::{DecodedElement, InstanceField};
 use crate::{Error, Result};
 
@@ -45,7 +42,7 @@ pub struct ArcWall {
 }
 
 impl ArcWall {
-    fn from_parts(record: ArcWallRecord, trailer: Option<ArcWallTrailer>) -> Self {
+    pub(crate) fn from_parts(record: ArcWallRecord, trailer: Option<ArcWallTrailer>) -> Self {
         let element_id = trailer.and_then(|t| t.element_id);
         let type_id = trailer.and_then(|t| t.type_id);
         let base_elevation_feet = trailer.and_then(|t| t.base_elevation_feet);
@@ -60,12 +57,12 @@ impl ArcWall {
         }
     }
 
-    /// Wall centerline start point (ft) under RE-14.3 H16.
+    /// Wall centerline start point (ft), on RE-14's hypothesis H16.
     pub fn start_point(&self) -> (f64, f64, f64) {
         self.record.start_point()
     }
 
-    /// Wall centerline end point (ft) under RE-14.3 H16.
+    /// Wall centerline end point (ft), on RE-14's hypothesis H16.
     pub fn end_point(&self) -> (f64, f64, f64) {
         self.record.end_point()
     }
@@ -168,6 +165,7 @@ impl ArcWall {
 }
 
 /// Build a typed [`ArcWall`] from a shared partition scan hit.
+#[cfg(feature = "unstable-research")]
 pub fn from_partition_arc_wall(wall: &crate::partition_arc_walls::PartitionArcWall) -> ArcWall {
     ArcWall::from_parts(wall.record, wall.trailer)
 }
@@ -176,9 +174,10 @@ pub fn from_partition_arc_wall(wall: &crate::partition_arc_walls::PartitionArcWa
 fn reject_wrong_class(class_name: Option<&str>) -> Result<()> {
     match class_name {
         None | Some("ArcWall") => Ok(()),
-        Some(other) => Err(Error::BasicFileInfo(format!(
-            "ArcWallDecoder received wrong schema: {other}"
-        ))),
+        Some(other) => Err(Error::SchemaMismatch {
+            decoder: "ArcWall",
+            schema: other.to_string(),
+        }),
     }
 }
 
@@ -187,12 +186,15 @@ fn reject_wrong_class(class_name: Option<&str>) -> Result<()> {
 pub fn decode_at(buf: &[u8], offset: usize, expected_class: Option<&str>) -> Result<ArcWall> {
     reject_wrong_class(expected_class)?;
     if buf.len().saturating_sub(offset) < STANDARD_RECORD_MIN_SIZE {
-        return Err(Error::Cfb(format!(
-            "ArcWall decode: buffer too short ({} < {} at offset {})",
-            buf.len().saturating_sub(offset),
-            STANDARD_RECORD_MIN_SIZE,
-            offset
-        )));
+        return Err(Error::Malformed {
+            what: "ArcWall record",
+            detail: format!(
+                "buffer too short ({} < {} at offset {})",
+                buf.len().saturating_sub(offset),
+                STANDARD_RECORD_MIN_SIZE,
+                offset
+            ),
+        });
     }
     let record = ArcWallRecord::decode_standard(buf, offset)?;
     let trailer = ArcWallRecord::decode_trailer(buf, offset);
@@ -204,13 +206,22 @@ pub fn decode_at(buf: &[u8], offset: usize, expected_class: Option<&str>) -> Res
 /// Rejects when the candidate names a different class or carries a
 /// non-ArcWall tag, even if the bytes at `offset` happen to look like
 /// an ArcWall envelope.
-pub fn decode_candidate(candidate: &PartitionRecordCandidate, buf: &[u8]) -> Result<ArcWall> {
+#[cfg(feature = "unstable-research")]
+pub fn decode_candidate(
+    candidate: &crate::partition_scanner::PartitionRecordCandidate,
+    buf: &[u8],
+) -> Result<ArcWall> {
+    use crate::arc_wall_record::ARC_WALL_TAG;
+
     reject_wrong_class(candidate.class_name.as_deref())?;
     if candidate.class_tag != ARC_WALL_TAG {
-        return Err(Error::BasicFileInfo(format!(
-            "ArcWallDecoder received wrong schema tag: 0x{:04x} (expected 0x{ARC_WALL_TAG:04x})",
-            candidate.class_tag
-        )));
+        return Err(Error::Malformed {
+            what: "ArcWall record",
+            detail: format!(
+                "class tag 0x{:04x}, expected 0x{ARC_WALL_TAG:04x}",
+                candidate.class_tag
+            ),
+        });
     }
     decode_at(buf, candidate.offset, candidate.class_name.as_deref())
 }

@@ -5,12 +5,12 @@
 //! offline.
 //!
 //! Not part of the shipped decode path — the shipped path is
-//! `rvt::element_record_plan_profiles::plan_profiles_from_sketch_line_records`,
+//! `rvt::research::element_record_plan_profiles::plan_profiles_from_sketch_line_records`,
 //! reached through
-//! `rvt::partition_schema_mvp::slabs_from_partition_category_records`.
+//! `rvt::research::partition_schema_mvp::slabs_from_partition_category_records`.
 
-use rvt::element_record_plan_profiles as profiles;
-use rvt::partition_element_records as per;
+use rvt::research::element_record_plan_profiles as profiles;
+use rvt::research::partition_element_records as per;
 use rvt::{RevitFile, compression};
 use std::collections::{BTreeMap, BTreeSet};
 

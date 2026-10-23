@@ -24,9 +24,9 @@
 //!   cargo run --release --example probe_re200_instance_material_params -- MODEL.rvt
 
 use rvt::RevitFile;
-use rvt::native_instance_materials::instance_parameter_materials;
-use rvt::partition_schema_mvp::{TYPE_ID_FIELD, recover_partition_schema_mvp};
-use rvt::partition_type_materials::unset_material_types;
+use rvt::research::native_instance_materials::instance_parameter_materials;
+use rvt::research::partition_schema_mvp::{TYPE_ID_FIELD, recover_partition_schema_mvp};
+use rvt::research::partition_type_materials::unset_material_types;
 use rvt::walker::{InstanceField, WalkerLimits};
 use serde_json::json;
 use std::collections::BTreeSet;
@@ -41,7 +41,8 @@ fn main() -> anyhow::Result<()> {
     let unset = unset_material_types(&mut rf, version);
     let records = rvt::elem_table::parse_records(&mut rf)?;
     let declared = rvt::elem_table::declared_ids(&records);
-    let names = rvt::partition_materials::scan_material_names(&mut rf, version, &declared)?;
+    let names =
+        rvt::research::partition_materials::scan_material_names(&mut rf, version, &declared)?;
     let materials: BTreeSet<u32> = names.keys().copied().collect();
 
     let mut rows = Vec::new();

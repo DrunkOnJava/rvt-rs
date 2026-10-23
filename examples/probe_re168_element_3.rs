@@ -7,7 +7,7 @@
 //! Usage: probe_re168_element_3 <model.rvt>
 
 use rvt::RevitFile;
-use rvt::partition_room_parameters::data_objects;
+use rvt::research::partition_room_parameters::data_objects;
 use std::path::PathBuf;
 
 fn strings(bytes: &[u8]) -> Vec<String> {

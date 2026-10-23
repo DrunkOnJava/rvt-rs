@@ -8,7 +8,7 @@
 
 use rvt::RevitFile;
 use rvt::ifc::{RvtDocExporter, write_step};
-use rvt::partition_level_records::recover_partition_levels;
+use rvt::research::partition_level_records::recover_partition_levels;
 use std::collections::BTreeSet;
 use std::path::PathBuf;
 

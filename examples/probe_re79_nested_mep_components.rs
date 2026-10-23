@@ -41,8 +41,8 @@ fn main() -> anyhow::Result<()> {
     let mut rf = rvt::RevitFile::open(rvt)?;
     let version = rf.basic_file_info()?.version;
     let declared = rvt::elem_table::declared_ids(&rvt::elem_table::parse_records(&mut rf)?);
-    let categories = rvt::partition_element_records::NESTED_COMPONENT_CATEGORIES;
-    let records = rvt::partition_element_records::scan_category_records_multi(
+    let categories = rvt::research::partition_element_records::NESTED_COMPONENT_CATEGORIES;
+    let records = rvt::research::partition_element_records::scan_category_records_multi(
         &mut rf,
         version,
         &categories,

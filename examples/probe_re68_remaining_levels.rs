@@ -18,7 +18,7 @@
 //! The probe prints one tab-separated row per record of those categories
 //! that names no Level:
 //! - its id and class, and its base elevation;
-//! - the Level [`rvt::element_record_level_refs::elevation_band_level`]
+//! - the Level [`rvt::research::element_record_level_refs::elevation_band_level`]
 //!   gives;
 //! - the Levels the objects it names carry.
 //!
@@ -29,8 +29,8 @@
 //!     MODEL.rvt > rows.tsv
 
 use rvt::RevitFile;
-use rvt::element_record_level_refs::{elevation_band_level, named_levels};
-use rvt::partition_element_records as per;
+use rvt::research::element_record_level_refs::{elevation_band_level, named_levels};
+use rvt::research::partition_element_records as per;
 use std::collections::{BTreeMap, BTreeSet};
 
 fn main() -> rvt::Result<()> {
@@ -38,7 +38,8 @@ fn main() -> rvt::Result<()> {
     let mut rf = RevitFile::open(&path)?;
     let version = rf.basic_file_info()?.version;
     let declared = rvt::elem_table::declared_ids(&rvt::elem_table::parse_records(&mut rf)?);
-    let levels = rvt::partition_level_records::recover_partition_levels(&mut rf, version)?;
+    let levels =
+        rvt::research::partition_level_records::recover_partition_levels(&mut rf, version)?;
     let elevations: BTreeMap<u32, f64> = levels
         .iter()
         .map(|level| (level.element_id, level.elevation_feet))
@@ -48,12 +49,13 @@ fn main() -> rvt::Result<()> {
         .map(|level| (level.element_id, level.name.as_str()))
         .collect();
     let level_ids: BTreeSet<u32> = elevations.keys().copied().collect();
-    let objects = rvt::partition_level_records::scan_level_objects(&mut rf, &declared, &level_ids);
+    let objects =
+        rvt::research::partition_level_records::scan_level_objects(&mut rf, &declared, &level_ids);
     let wanted: Vec<(i64, &str)> = per::PRODUCT_RECORD_CATEGORIES
         .iter()
         .copied()
         .filter(|(_, class)| {
-            rvt::partition_schema_mvp::ELEVATION_PLACED_CLASSES.contains(class)
+            rvt::research::partition_schema_mvp::ELEVATION_PLACED_CLASSES.contains(class)
                 || matches!(*class, "PlumbingFixture" | "Railing")
         })
         .collect();

@@ -1,6 +1,6 @@
 //! Follow-up hard-gap probes: VWall instances, string↔id joins, minority columns.
 use rvt::arc_wall_record::SCHEMA_FAMILY_MARKER;
-use rvt::rect_opening_index::{
+use rvt::research::rect_opening_index::{
     ArcWallRectOpeningIndex, OPENING_INDEX_FAMILY_MARKER, OPENING_INDEX_STRIDE,
 };
 use rvt::{RevitFile, compression, elem_table, formats, streams};

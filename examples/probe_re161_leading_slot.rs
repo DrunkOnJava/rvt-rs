@@ -14,7 +14,7 @@
 //!   cargo run --profile ci --example probe_re161_leading_slot -- MODEL.rvt ...
 
 use rvt::RevitFile;
-use rvt::partition_element_records as per;
+use rvt::research::partition_element_records as per;
 use std::collections::{BTreeMap, BTreeSet};
 
 /// Parameter ids printed per model.

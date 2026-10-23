@@ -16,7 +16,7 @@
 //!   cargo run --profile ci --example probe_re40_design_options -- FILE.rvt
 
 use rvt::RevitFile;
-use rvt::partition_element_records::{RECOVERED_CATEGORIES, scan_category_records_multi};
+use rvt::research::partition_element_records::{RECOVERED_CATEGORIES, scan_category_records_multi};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 

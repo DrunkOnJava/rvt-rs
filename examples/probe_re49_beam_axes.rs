@@ -7,7 +7,7 @@
 //! origin · f64×3 unit direction`). On 940 both ends lie inside the record
 //! box, and on 923 a box `length × width × depth` along the line reproduces
 //! the record box to 0.01 ft (the section solve of
-//! `rvt::partition_beam_axes::beam_body`).
+//! `rvt::research::partition_beam_axes::beam_body`).
 //!
 //! Given a VIM export of the same model (`vimaec/vim-format`, MIT), the
 //! probe measures each solved beam against the mesh the VIM holds for its
@@ -23,8 +23,8 @@
 //!     MODEL.rvt [MODEL.vim "Document Title"]
 
 use rvt::RevitFile;
-use rvt::partition_beam_axes::{END_TOLERANCE_FEET, beam_body, scan_bounded_lines};
-use rvt::partition_schema_mvp::{
+use rvt::research::partition_beam_axes::{END_TOLERANCE_FEET, beam_body, scan_bounded_lines};
+use rvt::research::partition_schema_mvp::{
     FAMILY_NAME_FIELD, TYPE_NAME_FIELD, element_record_bbox, recover_partition_schema_mvp,
 };
 use rvt::walker::{DecodedElement, InstanceField, WalkerLimits};

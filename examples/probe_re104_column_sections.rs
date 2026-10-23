@@ -18,7 +18,7 @@
 //!     MODEL.rvt MODEL.vim "Document Title"
 
 use rvt::RevitFile;
-use rvt::partition_schema_mvp::{
+use rvt::research::partition_schema_mvp::{
     COLUMN_I_AXIS_FIELDS, FAMILY_NAME_FIELD, TYPE_NAME_FIELD, beam_i_section_from_fields,
     element_record_bbox, recover_partition_schema_mvp,
 };

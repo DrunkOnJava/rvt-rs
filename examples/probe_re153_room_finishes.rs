@@ -23,7 +23,7 @@
 //!   cargo run --profile ci --example probe_re153_room_finishes -- MODEL.rvt ...
 
 use rvt::RevitFile;
-use rvt::partition_element_records as per;
+use rvt::research::partition_element_records as per;
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
@@ -244,7 +244,7 @@ fn probe(path: &str, full: bool) -> anyhow::Result<Vec<String>> {
     }
     let number_of = |values: &BTreeMap<i64, BTreeSet<String>>| {
         values
-            .get(&rvt::partition_room_parameters::ROOM_NUMBER_PARAMETER)
+            .get(&rvt::research::partition_room_parameters::ROOM_NUMBER_PARAMETER)
             .filter(|v| v.len() == 1)
             .and_then(|v| v.iter().next().cloned())
     };

@@ -22,8 +22,8 @@
 //!   cargo run --profile ci --example probe_re187_door_window_sizes -- MODEL.rvt
 
 use rvt::RevitFile;
-use rvt::partition_schema_mvp::{TYPE_ID_FIELD, recover_partition_schema_mvp};
-use rvt::partition_type_parameters::{
+use rvt::research::partition_schema_mvp::{TYPE_ID_FIELD, recover_partition_schema_mvp};
+use rvt::research::partition_type_parameters::{
     DOOR_ROUGH_HEIGHT_PARAMETER, DOOR_ROUGH_WIDTH_PARAMETER, WINDOW_HEIGHT_PARAMETER,
     WINDOW_WIDTH_PARAMETER, family_parameters_named, scan_partition_lengths,
 };

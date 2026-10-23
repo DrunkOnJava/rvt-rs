@@ -24,7 +24,7 @@
 //! misses each record that is a container member.
 
 use rvt::RevitFile;
-use rvt::partition_element_records::{
+use rvt::research::partition_element_records::{
     BBOX_MARKER_OFFSET, BUILTIN_CATEGORY_MAX, BUILTIN_CATEGORY_MIN, CATEGORY_OFFSET,
     CONTAINER_OFFSET,
 };
@@ -42,7 +42,7 @@ fn u64_at(buf: &[u8], at: usize) -> Option<u64> {
 fn containers_2024(path: &str) -> anyhow::Result<BTreeMap<u64, u64>> {
     let mut rf = RevitFile::open(path)?;
     let version = rf.basic_file_info()?.version;
-    let marker = rvt::partition_element_records::file_bbox_marker(&mut rf, version)
+    let marker = rvt::research::partition_element_records::file_bbox_marker(&mut rf, version)
         .ok_or_else(|| anyhow::anyhow!("{path}: no 2024-shaped record marker"))?;
     let mut out = BTreeMap::new();
     for stream in rf.partition_stream_names() {
@@ -77,7 +77,7 @@ fn main() -> anyhow::Result<()> {
     let expected = containers_2024(reference)?;
     let mut rf = RevitFile::open(old)?;
     let version = rf.basic_file_info()?.version;
-    let (marker, _) = rvt::partition_element_records_2023::record_marker(&mut rf)
+    let (marker, _) = rvt::research::partition_element_records_2023::record_marker(&mut rf)
         .ok_or_else(|| anyhow::anyhow!("{old}: no Outline/ElementParents in the schema"))?;
     let (mut shared, mut set, mut wide_agrees, mut narrow_agrees, mut set_wide) = (0, 0, 0, 0, 0);
     for stream in rf.partition_stream_names() {

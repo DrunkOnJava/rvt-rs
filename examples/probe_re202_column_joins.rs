@@ -20,8 +20,10 @@
 //!   cargo run --release --example probe_re202_column_joins -- MODEL.rvt
 
 use rvt::RevitFile;
-use rvt::element_record_column_cuts::COLUMN_JOINED_WALL_FIELD;
-use rvt::partition_schema_mvp::{TYPE_ID_FIELD, TYPE_MATERIAL_FIELD, recover_partition_schema_mvp};
+use rvt::research::element_record_column_cuts::COLUMN_JOINED_WALL_FIELD;
+use rvt::research::partition_schema_mvp::{
+    TYPE_ID_FIELD, TYPE_MATERIAL_FIELD, recover_partition_schema_mvp,
+};
 use rvt::walker::{InstanceField, WalkerLimits};
 use serde_json::json;
 use std::collections::BTreeSet;
@@ -38,9 +40,9 @@ fn main() -> anyhow::Result<()> {
         .iter()
         .filter_map(|c| c.id.map(u64::from))
         .collect();
-    let joins = rvt::native_column_joins::joins(&mut rf, &ids)?;
+    let joins = rvt::research::native_column_joins::joins(&mut rf, &ids)?;
     let walls: BTreeSet<u64> = joins.values().flatten().copied().collect();
-    let sides = rvt::native_column_joins::wall_sides(&mut rf, &walls)?;
+    let sides = rvt::research::native_column_joins::wall_sides(&mut rf, &walls)?;
     let mut joined = 0usize;
     for column in &decoded.columns {
         let Some(id) = column.id.map(u64::from) else {
@@ -106,7 +108,7 @@ fn main() -> anyhow::Result<()> {
             })
         })
         .collect();
-    let rendered = rvt::native_rendered_content::rendered_content_types(&mut rf, &types)?;
+    let rendered = rvt::research::native_rendered_content::rendered_content_types(&mut rf, &types)?;
     for type_id in &rendered {
         println!("{}", json!({"rendered_content_type": type_id}));
     }

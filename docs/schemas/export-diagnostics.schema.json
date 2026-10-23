@@ -410,7 +410,7 @@
       }
     },
     "formats_latest_integrity": {
-      "description": "Formats/Latest page-boundary integrity under the Finding 1 narrow gate (strip stays disabled). Additive A2/PARSE-001 field.",
+      "description": "Formats/Latest page-boundary integrity under the narrow gate of #151 (the page strip stays disabled).",
       "type": [
         "object",
         "null"

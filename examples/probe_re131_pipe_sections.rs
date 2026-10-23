@@ -16,7 +16,7 @@
 //!   cargo run --profile ci --example probe_re131_pipe_sections -- MODEL.rvt > pipes.jsonl
 
 use rvt::RevitFile;
-use rvt::partition_element_records as per;
+use rvt::research::partition_element_records as per;
 use std::collections::BTreeMap;
 
 /// How far outside the pipe's box a point may fall, feet.

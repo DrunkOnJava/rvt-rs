@@ -16,7 +16,7 @@
 //!   cargo run --profile ci --example probe_re43_invalid_id_frames -- FILE.rvt
 
 use rvt::RevitFile;
-use rvt::partition_element_records::{
+use rvt::research::partition_element_records::{
     BBOX_MARKER_OFFSET, CATEGORY_OFFSET, CONTAINER_NONE, CONTAINER_OFFSET, PLACEMENT_KIND_INSTANCE,
     PLACEMENT_KIND_OFFSET, bbox_marker, enclosing_record, partition_record_chain,
 };
