@@ -20,8 +20,8 @@ Revit hashes a door's or window's type GlobalId from its original symbol's Globa
 
 ## 3. Measured
 
-Both targets pass on RE1 Architecture, Electrical, Mechanical and Plumbing and on Core Interior: every type object's GlobalId equals Revit's. Core Interior's witness observation changed with them, from IfcColumnType 1 to 175, IfcSlabType 5 to 7 and IfcDoorType 3 to 10, and IfcOpenShell validates the export with no issues.
+Both targets pass on RE1 Architecture, Electrical, Mechanical and Plumbing and on Core Interior: every element typed in both rvt-rs's export and Revit's has its type object's GlobalId equal to Revit's. The targets compare only elements typed in both, so they do not show that rvt-rs types every element Revit types. Core Interior's witness observation changed with them, from IfcColumnType 1 to 175, IfcSlabType 5 to 7 and IfcDoorType 3 to 10, and IfcOpenShell validates the export with no issues.
 
 ## 4. Not established
 
-- The typed-no-geometry export mode writes no type objects, so no flip-dependent GlobalId is written there (B74).
+- At #666 the typed-no-geometry export mode wrote no type objects, so no flip-dependent GlobalId was written there (B74). #694 changed that: the mode keeps each element's type object, entity, GlobalId and name, as `tests/typed_no_geometry_types.rs` checks.
