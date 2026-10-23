@@ -21,7 +21,7 @@
 //!
 //! `category` dumps every record of the given `BuiltInCategory` that
 //! carries the bbox-less record marker
-//! [`rvt::partition_level_records::RECORD_MARKER`] at `+0x50`, with
+//! [`rvt::research::partition_level_records::RECORD_MARKER`] at `+0x50`, with
 //! the counted `u64` slot list at `+0x56` and a trailing window.
 //!
 //! Both modes also emit every RE-24-shaped name block in the file, so
@@ -29,8 +29,8 @@
 //!
 //! Not part of the shipped decode path.
 
-use rvt::partition_element_records as per;
-use rvt::partition_level_records as plr;
+use rvt::research::partition_element_records as per;
+use rvt::research::partition_level_records as plr;
 use rvt::{RevitFile, compression};
 use std::collections::BTreeSet;
 

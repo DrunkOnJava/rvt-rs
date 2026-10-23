@@ -26,7 +26,7 @@
 //! ```
 
 use rvt::RevitFile;
-use rvt::partition_element_records_2023 as per32;
+use rvt::research::partition_element_records_2023 as per32;
 use rvt::walker::{DecodedElement, InstanceField};
 use std::collections::{BTreeMap, BTreeSet};
 

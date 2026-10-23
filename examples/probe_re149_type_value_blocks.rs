@@ -19,7 +19,7 @@
 //!   cargo run --profile ci --example probe_re149_type_value_blocks -- MODEL.rvt
 
 use rvt::RevitFile;
-use rvt::partition_schema_mvp::{self, TYPE_ID_FIELD, TYPE_MATERIAL_FIELD};
+use rvt::research::partition_schema_mvp::{self, TYPE_ID_FIELD, TYPE_MATERIAL_FIELD};
 use rvt::walker::{InstanceField, WalkerLimits};
 use std::collections::BTreeMap;
 

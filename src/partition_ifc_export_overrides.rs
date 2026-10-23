@@ -471,7 +471,7 @@ pub fn scan_export_parameters(
             continue;
         };
         let found = if revit_version >= 2024 {
-            let Ok(objects) = rf.partition_data_objects(&stream) else {
+            let Ok(objects) = rf.memoised_partition_data_objects(&stream) else {
                 continue;
             };
             find_export_parameters_in_objects(inflated.bytes(), &objects, declared)

@@ -90,7 +90,7 @@ are in the [supported profile](supported-profile.md).
 It is not a converter for arbitrary models: most parameters, family
 geometry (except the experimental `--saved-meshes` option, which draws a
 Revit 2024, 2025 or 2026 family instance from the mesh Revit saved for its
-display, RE-78, B77), hip and gable roofs, the boundaries of
+display, RE-78, B77), roofs by extrusion or over a T or U footprint, the boundaries of
 rooms whose stored solid does not close, opening profiles and phase
 filtering are not decoded, and rvt-rs does not edit
 Revit model data.
@@ -393,7 +393,7 @@ export's `IfcWallType.Tag` is `3897` was an **index artifact**, not a
 second id space: the list is ascending and both ids are in it, with
 `1851` a record of category −2009014 that is not a wall type at all.
 **The join is library-side only.** It ships as
-`rvt::partition_type_records::unique_type_reference` with the corpus gate
+`rvt::research::partition_type_records::unique_type_reference` with the corpus gate
 `tests/iter_elements_typed.rs::core_interior_2024_wall_type_record_join`;
 it is **not** yet a property on the emitted wall, no emitted entity,
 property or relation changes, and both count manifests record that.

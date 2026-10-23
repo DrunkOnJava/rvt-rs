@@ -8,6 +8,44 @@ All notable changes will be documented here. This project follows
 
 ### Added
 
+- **Each GitHub release carries the CLI archives' build provenance as a
+  file (#891).** The release workflow already attested the archives; the
+  attestation bundle is now also attached as `rvt-rs-vX.Y.Z.intoto.jsonl`,
+  so it can be checked offline and OpenSSF Scorecard's Signed-Releases check
+  finds it. `gh attestation verify <archive> -R DrunkOnJava/rvt-rs` works as
+  before.
+
+- **Gable, hip and slope-arrow roofs are drawn as their planes, and Revit
+  2025 roofs slope (#356, RE-199).** A footprint roof with more than one
+  edge that defines a slope is drawn as its edges' planes, each rising from
+  its edge at its angle and raised by the edge's plate offset, and each held
+  to its edge's wedge, so hips and the valley of an L-shaped hip come out as
+  Revit draws them; the eave is set by the shallowest edge. A roof sloped by
+  a slope arrow rises along the arrow, set by "Height at Tail" or by
+  "Slope". A Revit 2025 roof's rafter cut (plumb, two-cut plumb or two-cut
+  square) and fascia depth are read, and a two-cut is cut level at its eave.
+  On Revit 2025 the edge slope block, each sketch line's segment and a
+  Sketch's curve list are now read: those readers refused 2025, so every
+  2025 roof was a level block and edited sketches lost their outline. As for
+  sheds since RE-56, a body is drawn only where it reproduces the roof's
+  record box height, and a roof stays a level block otherwise. On puzzbobb's
+  Revit 2025 models (`R2025_Models.zip`, Measure `-f r2025=true`, run
+  39602093604), 18 of the 19 roofs Revit's exports hold now have Revit's
+  body, every vertex within 0.001 ft of Revit's and the volume within 1e-4
+  of it, where main had none; the 19th is a roof by extrusion. Measure
+  scores every roof body against Revit's export with
+  `tools/re/roof_bodies_vs_ifc.py`. On Autodesk's sample projects, which
+  have no Revit export, one roof of rac_advanced is drawn along its slope
+  arrow in both its 2024 and 2025 saves, and the 2025 readers draw 29 more
+  elements of rac_advanced 2025, 4 of rac_basic 2025 and 1 of rst_basic 2025
+  from their sketches rather than as their boxes. Every other 2024 sample,
+  the reference models and the BIM4LCA office export as before; on one
+  runner, rac_advanced 2025 exports in 1.08 times main's time and rac_basic
+  2025 in 1.06. Not drawn: roofs by extrusion (#883), hip roofs over a T or
+  U footprint (#884), and a square two-cut with a fascia; a Revit 2024 roof
+  with several defining edges takes the same path, but none is measured
+  (#885). By puzzbobb (#870).
+
 - **Every output says when a file's release is read experimentally (#871).**
   The export diagnostics carry `input.release_support`: the
   `docs/support-matrix.json` row that rates the release's element records,
@@ -88,6 +126,42 @@ All notable changes will be documented here. This project follows
   none, so no export changes (Measure run 39367864281).
 
 ### Changed
+
+- **Breaking: the research readers moved to `rvt::research`, behind the
+  `unstable-research` feature (#873).** The crate's API is now 27 stable
+  modules (reading and identity, typed elements and the element walk,
+  export, and the writer), which `RELEASE.md` names under "What 1.0 keeps
+  stable". The other 67 modules, the partition, native and element-record
+  readers behind the format findings and the Phase 1 contract stubs, change
+  whenever a finding does and are outside that promise. To keep using one,
+  enable the feature and add `research::` to its path:
+  `rvt::partition_element_records` is now
+  `rvt::research::partition_element_records`. The `RevitFile` accessors that
+  return research types (`element_names`, `design_options`,
+  `second_prologue_ids`, `partition_data_objects`), the ElemTable linkers
+  `link_arcwall_element_ids` and `link_partition_element_ids`, and
+  `elements::arc_wall::decode_candidate` and `from_partition_arc_wall` need
+  the feature too. `EvidenceTier` and the relation-domain registry the
+  capability manifest reports are now in `rvt::capability`, and
+  `relations::RelationDomain::for_edge_kind` is
+  `relations::domain_for_edge_kind`. `rvt::cli` is hidden from the docs.
+  Nothing changes for the CLIs, the Python package or the viewer, and the
+  crate builds the same code either way: the feature only makes the research
+  modules public. docs.rs shows them, marked as needing the feature.
+
+- **Breaking: one `elements::SimpleDecoder` replaces the 67 decoder types
+  the element modules generated.** The classes the schema walk decodes
+  field by field (`mep::DuctDecoder`, `generic::MassDecoder`,
+  `annotations::TextNoteDecoder` and 64 more) were each a unit struct
+  stamped out by one of 15 identical `simple_decoder!` macros. They are now
+  registered as `SimpleDecoder::new("<class>")`, which decodes exactly what
+  the type of that name did; `elements::all_decoders()` and
+  `decoder_for_class` return the same classes in the same order. A wrong
+  schema's error now reads `<class> decoder received wrong schema: ...`.
+  `decoder_for_class` returns a `&'static dyn ElementDecoder` from a
+  registry built once, so a lookup no longer builds all 81 decoders. The
+  `cargo generate` element template registers through `SimpleDecoder`
+  and no longer generates unit tests.
 
 - **What 1.0 requires is written down.** `docs/release-1.0-criteria.md`
   lists each requirement with its bar, the value measured now, and a status

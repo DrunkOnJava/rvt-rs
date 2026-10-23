@@ -43,12 +43,14 @@
 //!   cargo run --profile ci --example probe_re45_ifc_export_parameters -- FILE.rvt
 
 use rvt::RevitFile;
-use rvt::partition_element_records::{BUILTIN_CATEGORY_NAMES, scan_category_records_multi};
-use rvt::partition_ifc_export_overrides::{
+use rvt::research::partition_element_records::{
+    BUILTIN_CATEGORY_NAMES, scan_category_records_multi,
+};
+use rvt::research::partition_ifc_export_overrides::{
     EXPORT_PARAMETER_WINDOW, IFC_EXPORT_ELEMENT_AS, IFC_EXPORT_ELEMENT_TYPE_AS,
     scan_export_parameters,
 };
-use rvt::partition_room_parameters::DATA_OBJECT_HEADER;
+use rvt::research::partition_room_parameters::DATA_OBJECT_HEADER;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
@@ -101,7 +103,7 @@ fn main() -> rvt::Result<()> {
         );
     }
 
-    let Some(header) = rvt::partition_names::element_data_header(version) else {
+    let Some(header) = rvt::research::partition_names::element_data_header(version) else {
         println!("entries: no element-data header is measured for release {version}");
         return Ok(());
     };

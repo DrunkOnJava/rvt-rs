@@ -18,7 +18,7 @@
 //! and `tools/re/opening_hosts_vs_ifc.py` compares the hosts an rvt-rs export
 //! writes with Revit's own export of the same model.
 
-use rvt::partition_element_records as records;
+use rvt::research::partition_element_records as records;
 
 fn main() -> anyhow::Result<()> {
     let Some(path) = std::env::args().nth(1) else {

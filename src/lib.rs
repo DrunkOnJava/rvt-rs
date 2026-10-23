@@ -68,36 +68,45 @@
 //!   fields ([`formats::parse_schema`]).
 //! - **Elements**: `Global/ElemTable` declares the ElementIds; each element's
 //!   record in the `Partitions/*` streams carries its category, class,
-//!   bounding box and references ([`partition_element_records`]).
+//!   bounding box and references (`research::partition_element_records`).
 //!
 //! ## Module overview
 //!
-//! - [`reader`] — [`RevitFile`], the main entry point
-//! - [`basic_file_info`] — version, GUID, build tag, creator path, worksharing text block
-//! - [`metadata`] — [`metadata::FileMetadata`]: document identity, readable without loading the whole file
-//! - [`part_atom`] — Atom XML with OmniClass + taxonomies
-//! - [`project_information`] — project-file `ProjectInformation` ZIP → Atom entry
-//! - [`formats`] — class schema with tags, parents, field types
-//! - [`object_graph`] — document history, string-record extraction
-//! - [`elem_table`] — `Global/ElemTable` parser
-//! - [`partitions`] — `Partitions/NN` header + chunk splitter
-//! - [`partition_scanner`] — version-gated generic partition record candidates
-//! - [`compression`] — truncated-gzip decode
-//! - [`class_index`] — fast class-name inventory
-//! - [`corpus`] — cross-version delta analysis
-//! - [`identity`] — document-scoped ElementId / UniqueId contracts (Phase 1)
-//! - [`evidence`] — evidence tiers + research edge ledgers (Phase 1)
-//! - [`es_refs`] — ES reference occurrence locator contracts (Phase 1; no decoder)
-//! - [`relations`] — experimental relation-domain registry + SCC/quarantine stubs
-//! - [`capability`] — honest capability manifest snapshot for doctor/CLI
-//! - [`transmission_data`] — TransmissionData UTF-16LE detect + opportunistic XML/UUID/path extract
-//! - [`compound_framing`] — compound ArcWall `0x0821` marker tokenization (research; no opening decode)
-//! - [`writer`] — byte-preserving OLE round-trip
-//! - [`redact`] — shared PII scrubbers for all CLIs
-//! - [`cli`] — behaviour shared by the shipped CLIs (quiet exit on a closed pipe)
-//! - [`ifc`] — IFC4 / glTF / plan SVG / CSV export and diagnostics
-//! - [`error`] — [`Error`] + [`Result`] aliases
-//! - [`streams`] — named constants for every invariant OLE stream
+//! These modules are the stable API: from 1.0 they change only in a major
+//! release (`RELEASE.md`, "What 1.0 keeps stable").
+//!
+//! - [`reader`]: [`RevitFile`], the entry point: open a file from a path or bytes, with resource limits
+//! - [`error`]: [`Error`] and [`Result`]
+//! - [`streams`]: names of the OLE streams every Revit file carries
+//! - [`compression`]: truncated-gzip and checksum-paged stream decoding
+//! - [`basic_file_info`]: `BasicFileInfo`: version, GUID, build, creator path, worksharing
+//! - [`metadata`]: [`metadata::FileMetadata`]: what a file is, without reading the whole model
+//! - [`part_atom`]: `PartAtom` Atom XML: family identity, OmniClass and taxonomies
+//! - [`project_information`]: a project file's `ProjectInformation` Atom entry
+//! - [`transmission_data`]: `TransmissionData`: encoding detection and the links it records
+//! - [`formats`]: `Formats/Latest`: every serialized class, its tag, parent and field types
+//! - [`class_index`]: a fast inventory of the class names a file declares
+//! - [`elem_table`]: `Global/ElemTable`: the ElementIds a file declares
+//! - [`partitions`]: the `Partitions/NN` stream header and chunk splitter
+//! - [`object_graph`]: document history and string records
+//! - [`elements`]: typed elements and the per-class decoders
+//! - [`arc_wall_record`]: the Revit 2023 ArcWall partition record
+//! - [`walker`]: the element walk: every element a file yields, with its provenance
+//! - [`parse_mode`]: strict and lossy parse results with diagnostics
+//! - [`control`]: cooperative cancellation and progress for long scans
+//! - [`geometry`]: geometry primitives the element walk and the exporters share
+//! - [`level_bind`]: fail-closed binding of Levels to building storeys
+//! - [`ifc`]: IFC4, glTF, plan SVG and CSV export, with diagnostics
+//! - [`capability`]: the capability manifest built from `docs/support-matrix.json`
+//! - [`corpus`]: cross-version comparison behind `rvt-corpus`
+//! - [`writer`]: byte-preserving copy and stream-level patching
+//! - [`round_trip`]: verification that a written file round-trips
+//! - [`redact`]: PII scrubbers for anything a report prints
+//!
+//! The research modules behind the format findings in `reports/` (the
+//! partition, native and element-record readers) are under `research`, behind
+//! the `unstable-research` feature. They change whenever a finding does and
+//! are outside the semver promise.
 //!
 //! ## Safety
 //!
@@ -124,6 +133,7 @@
 //! advice.
 
 #![warn(rust_2024_compatibility)]
+#![cfg_attr(docsrs, feature(doc_cfg))]
 // SEC-11 + SEC-12 + SEC-13: forbid `unsafe` in the core library.
 // Revit files come from untrusted sources, so any raw-pointer or
 // uninit-memory manoeuvre is a potential parser vulnerability.
@@ -143,97 +153,66 @@ pub mod arc_wall_record;
 pub mod basic_file_info;
 pub mod capability;
 pub mod class_index;
-pub mod class_tag_map;
+#[doc(hidden)]
 pub mod cli;
-pub mod compound_framing;
 pub mod compression;
 pub mod control;
 pub mod corpus;
 pub mod elem_table;
-pub mod element_record_beam_cuts;
-pub mod element_record_column_cuts;
-pub mod element_record_level_refs;
-pub mod element_record_plan_profiles;
-pub mod element_record_storeys;
-pub mod element_record_wall_joins;
 pub mod elements;
 pub mod error;
-pub mod es_refs;
-pub mod evidence;
 pub mod formats;
 pub mod geometry;
-pub mod identity;
 pub mod ifc;
 pub mod level_bind;
 pub mod metadata;
-pub mod native_connectors;
-pub mod native_document;
-pub mod native_duct_shapes;
-pub mod native_element;
-pub mod native_empty_faces;
-pub mod native_es_catalog;
-pub mod native_extensible_storage;
-pub mod native_graphics_traversal;
-pub mod native_index;
-pub mod native_metadata;
-pub mod native_parameter_definitions;
-pub mod native_parameters;
-pub mod native_parametric_mesh;
-pub mod native_parametric_surface;
-pub mod native_saved_glb;
-pub mod native_saved_materials;
-pub mod native_saved_mesh;
-pub mod native_saved_scene;
-pub mod native_segments;
-pub mod native_wall_types;
 pub mod object_graph;
 pub mod parse_mode;
 pub mod part_atom;
-pub mod partition_arc_walls;
-pub mod partition_area_records;
-pub mod partition_beam_axes;
-pub mod partition_column_nodes;
-pub mod partition_compound_structure;
-pub mod partition_connector_pairs;
-pub mod partition_curtain_materials;
-pub mod partition_curve_fields;
-pub mod partition_design_options;
-pub mod partition_element_records;
-pub mod partition_element_records_2023;
-pub mod partition_fitting_sizes;
-pub mod partition_id_objects;
-pub mod partition_ifc_export_overrides;
-pub mod partition_instance_transforms;
-pub mod partition_level_parameters;
-pub mod partition_level_records;
-pub mod partition_materials;
-pub mod partition_mep_systems;
-pub mod partition_name_candidates;
-pub mod partition_names;
-pub mod partition_phases;
-pub mod partition_pipe_axes;
-pub mod partition_roof_slopes;
-pub mod partition_room_boundaries;
-pub mod partition_room_parameters;
-pub mod partition_scanner;
-pub mod partition_schema_mvp;
-pub mod partition_stairs;
-pub mod partition_type_materials;
-pub mod partition_type_parameters;
-pub mod partition_type_records;
 pub mod partitions;
 pub mod project_information;
 pub mod reader;
-pub mod rect_opening_index;
 pub mod redact;
-pub mod relations;
-pub mod revit_global_ids;
 pub mod round_trip;
-pub mod schema_registry;
 pub mod streams;
 pub mod transmission_data;
 pub mod walker;
 pub mod writer;
+
+#[cfg(feature = "unstable-research")]
+pub mod research;
+#[cfg(not(feature = "unstable-research"))]
+#[allow(
+    dead_code,
+    unused_imports,
+    reason = "without unstable-research, research code only the probes call is unreachable"
+)]
+mod research;
+
+#[allow(
+    unused_imports,
+    reason = "keeps every crate::<research module> path working; not every module is named outside research"
+)]
+pub(crate) use research::{
+    class_tag_map, compound_framing, element_record_beam_cuts, element_record_column_cuts,
+    element_record_level_refs, element_record_plan_profiles, element_record_storeys,
+    element_record_wall_joins, es_refs, evidence, identity, native_connectors, native_document,
+    native_duct_shapes, native_element, native_empty_faces, native_es_catalog,
+    native_extensible_storage, native_graphics_traversal, native_index, native_metadata,
+    native_parameter_definitions, native_parameters, native_parametric_mesh,
+    native_parametric_surface, native_saved_glb, native_saved_materials, native_saved_mesh,
+    native_saved_scene, native_segments, native_wall_types, partition_arc_walls,
+    partition_area_records, partition_beam_axes, partition_column_nodes,
+    partition_compound_structure, partition_connector_pairs, partition_curtain_materials,
+    partition_curve_fields, partition_design_options, partition_element_records,
+    partition_element_records_2023, partition_fitting_sizes, partition_id_objects,
+    partition_ifc_export_overrides, partition_instance_transforms, partition_level_parameters,
+    partition_level_records, partition_materials, partition_mep_systems, partition_name_candidates,
+    partition_names, partition_phases, partition_pipe_axes, partition_roof_slopes,
+    partition_room_boundaries, partition_room_parameters, partition_scanner, partition_schema_mvp,
+    partition_stairs, partition_type_materials, partition_type_parameters, partition_type_records,
+    rect_opening_index, relations, revit_global_ids, schema_registry,
+};
 
 // Python bindings live in their own workspace member crate
 // (`rvt-py/`) as of SEC-12 / SEC-13, so pyo3's unavoidable

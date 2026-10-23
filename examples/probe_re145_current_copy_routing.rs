@@ -29,7 +29,10 @@
 //!   cargo run --profile ci --example probe_re145_current_copy_routing -- MODEL.rvt ...
 
 use rvt::compression::prepare_stream_for_inflate;
-use rvt::{RevitFile, native_document, native_index, native_segments, schema_registry};
+use rvt::{
+    RevitFile, research::native_document, research::native_index, research::native_segments,
+    research::schema_registry,
+};
 use std::collections::{BTreeMap, BTreeSet};
 
 /// Elements listed per file in each example list.

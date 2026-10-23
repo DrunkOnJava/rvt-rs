@@ -61,7 +61,7 @@
 
 use rvt::RevitFile;
 use rvt::compression::InflatedStream;
-use rvt::partition_element_records as per;
+use rvt::research::partition_element_records as per;
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -587,7 +587,7 @@ fn run() -> rvt::Result<()> {
     // RE-140: the element-record marker from the file's schema; in a 2023-form
     // file the markers, the 32-bit header 52 bytes before each, and a
     // well-formed box after it.
-    let marker = rvt::partition_element_records_2023::record_marker(&mut rf);
+    let marker = rvt::research::partition_element_records_2023::record_marker(&mut rf);
     let (mut markers, mut marker_headers, mut marker_boxes) = (0usize, 0usize, 0usize);
     let mut strict: Vec<(u64, u32)> = Vec::new();
     let mut rejected: Vec<(u64, u32)> = Vec::new();

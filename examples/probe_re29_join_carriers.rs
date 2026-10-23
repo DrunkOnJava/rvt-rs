@@ -16,12 +16,12 @@
 //! scored against a reference IFC export offline
 //! (`tools/re/ifc_world_aabb.py`). Not part of the shipped decode
 //! path; the shipped paths are
-//! `rvt::element_record_wall_joins::join_trims` and
-//! `rvt::element_record_column_cuts::column_cut_boxes`.
+//! `rvt::research::element_record_wall_joins::join_trims` and
+//! `rvt::research::element_record_column_cuts::column_cut_boxes`.
 
-use rvt::element_record_column_cuts as cuts;
-use rvt::element_record_wall_joins as joins;
-use rvt::partition_element_records as per;
+use rvt::research::element_record_column_cuts as cuts;
+use rvt::research::element_record_wall_joins as joins;
+use rvt::research::partition_element_records as per;
 use rvt::{RevitFile, compression};
 use std::collections::{BTreeMap, BTreeSet};
 

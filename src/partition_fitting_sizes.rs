@@ -151,7 +151,7 @@ pub fn scan_fitting_nominal_diameters(
     for stream in rf.partition_stream_names() {
         let (Ok(inflated), Ok(objects)) = (
             rf.inflated_partition(&stream),
-            rf.partition_data_objects(&stream),
+            rf.memoised_partition_data_objects(&stream),
         ) else {
             continue;
         };

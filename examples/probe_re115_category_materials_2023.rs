@@ -22,15 +22,22 @@ fn main() {
     let version = rf.basic_file_info().expect("BasicFileInfo").version;
     let table = rvt::elem_table::parse_records(&mut rf).expect("Global/ElemTable");
     let declared = rvt::elem_table::declared_ids(&table);
-    let (_, names) = rvt::partition_materials::scan_materials_2023(&mut rf, &declared);
+    let (_, names) = rvt::research::partition_materials::scan_materials_2023(&mut rf, &declared);
     for (label, category) in [
-        ("Walls", rvt::partition_element_records::OST_WALLS),
-        ("Floors", rvt::partition_element_records::OST_FLOORS),
-        ("Roofs", rvt::partition_element_records::OST_ROOFS),
-        ("Ceilings", rvt::partition_element_records::OST_CEILINGS),
+        ("Walls", rvt::research::partition_element_records::OST_WALLS),
+        (
+            "Floors",
+            rvt::research::partition_element_records::OST_FLOORS,
+        ),
+        ("Roofs", rvt::research::partition_element_records::OST_ROOFS),
+        (
+            "Ceilings",
+            rvt::research::partition_element_records::OST_CEILINGS,
+        ),
     ] {
-        let material = rvt::partition_materials::scan_category_material(&mut rf, version, category)
-            .expect("object styles");
+        let material =
+            rvt::research::partition_materials::scan_category_material(&mut rf, version, category)
+                .expect("object styles");
         let name = material.and_then(|id| names.get(&id));
         println!("{label}\t{material:?}\t{name:?}");
     }

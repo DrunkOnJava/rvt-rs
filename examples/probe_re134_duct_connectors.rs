@@ -23,8 +23,8 @@
 //!   cargo run --profile ci --example probe_re134_duct_connectors -- MODEL.rvt > mep.jsonl
 
 use rvt::RevitFile;
-use rvt::partition_element_records as per;
-use rvt::partition_names::{MEP_CURVE_TYPE_ID_REPEAT, MEP_CURVE_TYPE_NAME_OFFSET};
+use rvt::research::partition_element_records as per;
+use rvt::research::partition_names::{MEP_CURVE_TYPE_ID_REPEAT, MEP_CURVE_TYPE_NAME_OFFSET};
 use std::collections::BTreeSet;
 
 /// How far outside a record's box an entry's point may fall, feet.

@@ -1,6 +1,8 @@
 //! RE-15 follow-up — 60 B opening-index + ArcWall thickness sweep.
 use rvt::arc_wall_record::{ARC_WALL_TAG, ARC_WALL_VARIANT_STANDARD};
-use rvt::rect_opening_index::{ARC_WALL_RECT_OPENING_TAG_2024, OPENING_INDEX_FAMILY_MARKER};
+use rvt::research::rect_opening_index::{
+    ARC_WALL_RECT_OPENING_TAG_2024, OPENING_INDEX_FAMILY_MARKER,
+};
 use rvt::{RevitFile, compression};
 use std::collections::BTreeMap;
 

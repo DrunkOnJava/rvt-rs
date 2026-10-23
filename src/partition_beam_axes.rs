@@ -353,6 +353,25 @@ pub fn scan_bounded_lines(
     scan_first_bounded_lines(rf, revit_version, ids)
 }
 
+/// Releases where a sketch line's own data is measured to hold its segment
+/// as a bounded line: 2024 (RE-50) and 2025 (RE-199, the roof sketches of
+/// #356's `R2025_Models.zip`, each line's ends on Revit's exported outline).
+pub const SKETCH_LINE_SUPPORTED_REVIT_VERSIONS: &[u32] = &[2024, 2025];
+
+/// Each sketch line's segment, read as [`scan_bounded_lines`] reads a beam's
+/// line, on the releases in [`SKETCH_LINE_SUPPORTED_REVIT_VERSIONS`]; empty
+/// on others.
+pub fn scan_sketch_bounded_lines(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    ids: &BTreeSet<u32>,
+) -> Result<BTreeMap<u32, BoundedLine>> {
+    if !SKETCH_LINE_SUPPORTED_REVIT_VERSIONS.contains(&revit_version) {
+        return Ok(BTreeMap::new());
+    }
+    scan_first_bounded_lines(rf, revit_version, ids)
+}
+
 /// [`scan_bounded_lines`] without its release gate, for callers that
 /// measured the layout on other releases (a wall's location line on 2025,
 /// RE-55). Empty where the element-data header is not known.

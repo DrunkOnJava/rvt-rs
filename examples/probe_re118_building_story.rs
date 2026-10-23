@@ -19,8 +19,8 @@ fn main() {
     let path = std::env::args().nth(1).expect("usage: MODEL.rvt");
     let mut rf = RevitFile::open(&path).expect("open");
     let version = rf.basic_file_info().expect("BasicFileInfo").version;
-    let levels =
-        rvt::partition_level_records::recover_partition_levels(&mut rf, version).expect("levels");
+    let levels = rvt::research::partition_level_records::recover_partition_levels(&mut rf, version)
+        .expect("levels");
     for level in levels {
         println!(
             "{}\t{}\t{:.4} ft\tbuilding story {:?}",
