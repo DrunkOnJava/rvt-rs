@@ -488,7 +488,7 @@ jobs:
           test "$(find dist -maxdepth 1 -name '*.whl' | wc -l)" -eq 7
           test "$(find dist -maxdepth 1 -name '*.tar.gz' | wc -l)" -eq 1
       - name: Publish to TestPyPI
-        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
+        uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086 # v1.14.3
         with:
           repository-url: https://test.pypi.org/legacy/
           skip-existing: true
@@ -539,7 +539,7 @@ jobs:
           test "$(find dist -maxdepth 1 -name '*.whl' | wc -l)" -eq 7
           test "$(find dist -maxdepth 1 -name '*.tar.gz' | wc -l)" -eq 1
       - name: Publish to PyPI
-        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
+        uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086 # v1.14.3
         with:
           # No `password:` — trusted publisher OIDC is auto-detected
           # when `id-token: write` is set and a trusted publisher
