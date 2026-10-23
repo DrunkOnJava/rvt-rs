@@ -49,6 +49,15 @@ The vertices off by more than 0.0001 ft are on the curved faces, where Revit's m
 - `partition_schema_mvp::attach_extrusion_roofs` reads each roof whose sketch lines are all flat along one horizontal axis, at one place. It joins the lines end to end into a profile rising along the plane's other horizontal axis, each a B-spline or a straight line within its record box. It offsets the profile by the type's layers and cuts its ends plumb. It keeps the section only where it reproduces the roof's record box across the plane, to 0.001 ft.
 - `export_content::roof_extrusion_solid` writes the section over the record box along the axis as a closed faceted brep, with `BodySource` `partition_roof_extrusion`.
 
+The export, measured against `main` in Measure run [40008435453](https://github.com/DrunkOnJava/rvt-rs/actions/runs/40008435453) (`-f r2025=true`):
+
+| | `main` | this change |
+|---|---:|---:|
+| roof 4262's volume against Revit's 411.9355 ft³ | 7,665.40 ft³ (the record box) | 412.0527 ft³ (1.00028) |
+| Revit's vertices within 0.001 ft of rvt-rs's surface | | 1,187 of 1,187 (worst 0.000541 ft) |
+
+`roof_bodies_vs_ifc` now also measures each of Revit's vertices against rvt-rs's surface. Its vertex test pairs each of Revit's vertices with rvt-rs's nearest vertex, and a body swept along a straight run needs no vertices between its ends, where Revit's mesh has them, so that test reports 9.11 ft here: half the run. On the other 18 roofs of the R2025 models both tests pass as before. No other output of any model Measure scores changed.
+
 ## 5. What it does not cover
 
 - One roof, on one release. A roof by extrusion on 2024, 2026 or 2027 keeps its box, as one whose sketch holds an arc does: a sketch arc is read on 2024 only (RE-96).
