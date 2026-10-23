@@ -52,11 +52,11 @@ use crate::walker::{DecodedElement, InstanceField};
 #[derive(Debug, Clone, PartialEq, Default)]
 #[non_exhaustive]
 pub struct Column {
-    pub base_level_id: Option<u32>,
-    pub top_level_id: Option<u32>,
+    pub base_level_id: Option<crate::ElementId>,
+    pub top_level_id: Option<crate::ElementId>,
     pub base_offset_feet: Option<f64>,
     pub top_offset_feet: Option<f64>,
-    pub symbol_id: Option<u32>,
+    pub symbol_id: Option<crate::ElementId>,
     pub location: Option<Point3>,
     pub rotation_radians: Option<f64>,
     pub is_structural: Option<bool>,
@@ -71,10 +71,10 @@ impl Column {
         for (field_name, value) in &decoded.fields {
             match (normalise_field_name(field_name).as_str(), value) {
                 ("baselevelid" | "levelid", InstanceField::ElementId { id, .. }) => {
-                    out.base_level_id = Some(*id);
+                    out.base_level_id = Some(crate::ElementId::from(*id));
                 }
                 ("toplevelid", InstanceField::ElementId { id, .. }) => {
-                    out.top_level_id = Some(*id);
+                    out.top_level_id = Some(crate::ElementId::from(*id));
                 }
                 ("baseoffset", InstanceField::Float { value, .. }) => {
                     out.base_offset_feet = Some(*value);
@@ -83,7 +83,7 @@ impl Column {
                     out.top_offset_feet = Some(*value);
                 }
                 ("symbolid" | "typeid" | "familysymbolid", InstanceField::ElementId { id, .. }) => {
-                    out.symbol_id = Some(*id);
+                    out.symbol_id = Some(crate::ElementId::from(*id));
                 }
                 ("locationx", InstanceField::Float { value, .. }) => lx = Some(*value),
                 ("locationy", InstanceField::Float { value, .. }) => ly = Some(*value),
@@ -120,8 +120,8 @@ impl Column {
 #[derive(Debug, Clone, PartialEq, Default)]
 #[non_exhaustive]
 pub struct Beam {
-    pub level_id: Option<u32>,
-    pub symbol_id: Option<u32>,
+    pub level_id: Option<crate::ElementId>,
+    pub symbol_id: Option<crate::ElementId>,
     pub start: Option<Point3>,
     pub end: Option<Point3>,
     pub cross_section_rotation_radians: Option<f64>,
@@ -141,10 +141,10 @@ impl Beam {
         for (field_name, value) in &decoded.fields {
             match (normalise_field_name(field_name).as_str(), value) {
                 ("levelid" | "hostlevelid", InstanceField::ElementId { id, .. }) => {
-                    out.level_id = Some(*id);
+                    out.level_id = Some(crate::ElementId::from(*id));
                 }
                 ("symbolid" | "typeid" | "familysymbolid", InstanceField::ElementId { id, .. }) => {
-                    out.symbol_id = Some(*id);
+                    out.symbol_id = Some(crate::ElementId::from(*id));
                 }
                 ("startx", InstanceField::Float { value, .. }) => sx = Some(*value),
                 ("starty", InstanceField::Float { value, .. }) => sy = Some(*value),

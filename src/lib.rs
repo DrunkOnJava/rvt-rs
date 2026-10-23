@@ -174,6 +174,7 @@ pub mod compression;
 pub mod control;
 pub mod corpus;
 pub mod elem_table;
+pub mod element_id;
 pub mod elements;
 pub mod error;
 pub mod formats;
@@ -239,5 +240,6 @@ pub(crate) use research::{
 
 // The WASM bindings (VW1-01) are their own crate, `rvt-wasm` (C6).
 
+pub use element_id::ElementId;
 pub use error::{Error, Result};
 pub use reader::RevitFile;

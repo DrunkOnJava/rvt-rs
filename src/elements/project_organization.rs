@@ -76,7 +76,7 @@ impl Phase {
 pub struct DesignOption {
     pub name: Option<String>,
     pub is_primary: Option<bool>,
-    pub option_set_id: Option<u32>,
+    pub option_set_id: Option<crate::ElementId>,
 }
 
 impl DesignOption {
@@ -89,7 +89,7 @@ impl DesignOption {
                     out.is_primary = Some(*b);
                 }
                 ("optionsetid" | "setid", InstanceField::ElementId { id, .. }) => {
-                    out.option_set_id = Some(*id);
+                    out.option_set_id = Some(crate::ElementId::from(*id));
                 }
                 _ => {}
             }

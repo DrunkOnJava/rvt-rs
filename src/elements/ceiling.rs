@@ -102,11 +102,11 @@ impl ElementDecoder for CeilingTypeDecoder {
 #[derive(Debug, Clone, PartialEq, Default)]
 #[non_exhaustive]
 pub struct Ceiling {
-    pub level_id: Option<u32>,
+    pub level_id: Option<crate::ElementId>,
     /// Offset from the host level. Typically negative (ceiling is
     /// below the level). `-0.66667` = "suspended 8" below level".
     pub height_offset_feet: Option<f64>,
-    pub type_id: Option<u32>,
+    pub type_id: Option<crate::ElementId>,
     pub room_bounding: Option<bool>,
 }
 
@@ -116,12 +116,14 @@ impl Ceiling {
         for (field_name, value) in &decoded.fields {
             match (normalise_field_name(field_name).as_str(), value) {
                 ("levelid" | "hostlevelid", InstanceField::ElementId { id, .. }) => {
-                    out.level_id = Some(*id);
+                    out.level_id = Some(crate::ElementId::from(*id));
                 }
                 ("heightoffset" | "offset", InstanceField::Float { value, .. }) => {
                     out.height_offset_feet = Some(*value);
                 }
-                ("typeid", InstanceField::ElementId { id, .. }) => out.type_id = Some(*id),
+                ("typeid", InstanceField::ElementId { id, .. }) => {
+                    out.type_id = Some(crate::ElementId::from(*id))
+                }
                 ("roombounding" | "isroombounding", InstanceField::Bool(b)) => {
                     out.room_bounding = Some(*b);
                 }

@@ -48,15 +48,15 @@ use crate::walker::{DecodedElement, InstanceField};
 #[derive(Debug, Clone, PartialEq, Default)]
 #[non_exhaustive]
 pub struct Stair {
-    pub base_level_id: Option<u32>,
-    pub top_level_id: Option<u32>,
+    pub base_level_id: Option<crate::ElementId>,
+    pub top_level_id: Option<crate::ElementId>,
     pub base_offset_feet: Option<f64>,
     pub top_offset_feet: Option<f64>,
     pub desired_riser_count: Option<u32>,
     pub actual_riser_count: Option<u32>,
     pub actual_tread_depth_feet: Option<f64>,
     pub actual_riser_height_feet: Option<f64>,
-    pub type_id: Option<u32>,
+    pub type_id: Option<crate::ElementId>,
 }
 
 impl Stair {
@@ -65,10 +65,10 @@ impl Stair {
         for (field_name, value) in &decoded.fields {
             match (normalise_field_name(field_name).as_str(), value) {
                 ("baselevelid" | "levelid", InstanceField::ElementId { id, .. }) => {
-                    out.base_level_id = Some(*id);
+                    out.base_level_id = Some(crate::ElementId::from(*id));
                 }
                 ("toplevelid", InstanceField::ElementId { id, .. }) => {
-                    out.top_level_id = Some(*id);
+                    out.top_level_id = Some(crate::ElementId::from(*id));
                 }
                 ("baseoffset", InstanceField::Float { value, .. }) => {
                     out.base_offset_feet = Some(*value);
@@ -88,7 +88,9 @@ impl Stair {
                 ("actualriserheight", InstanceField::Float { value, .. }) => {
                     out.actual_riser_height_feet = Some(*value);
                 }
-                ("typeid", InstanceField::ElementId { id, .. }) => out.type_id = Some(*id),
+                ("typeid", InstanceField::ElementId { id, .. }) => {
+                    out.type_id = Some(crate::ElementId::from(*id))
+                }
                 _ => {}
             }
         }
@@ -135,10 +137,10 @@ impl StairType {
 /// Typed view of a decoded Railing.
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct Railing {
-    pub level_id: Option<u32>,
-    pub host_id: Option<u32>,
+    pub level_id: Option<crate::ElementId>,
+    pub host_id: Option<crate::ElementId>,
     pub height_offset_feet: Option<f64>,
-    pub type_id: Option<u32>,
+    pub type_id: Option<crate::ElementId>,
 }
 
 impl Railing {
@@ -147,13 +149,17 @@ impl Railing {
         for (field_name, value) in &decoded.fields {
             match (normalise_field_name(field_name).as_str(), value) {
                 ("levelid" | "hostlevelid", InstanceField::ElementId { id, .. }) => {
-                    out.level_id = Some(*id);
+                    out.level_id = Some(crate::ElementId::from(*id));
                 }
-                ("hostid", InstanceField::ElementId { id, .. }) => out.host_id = Some(*id),
+                ("hostid", InstanceField::ElementId { id, .. }) => {
+                    out.host_id = Some(crate::ElementId::from(*id))
+                }
                 ("heightoffset" | "offset", InstanceField::Float { value, .. }) => {
                     out.height_offset_feet = Some(*value);
                 }
-                ("typeid", InstanceField::ElementId { id, .. }) => out.type_id = Some(*id),
+                ("typeid", InstanceField::ElementId { id, .. }) => {
+                    out.type_id = Some(crate::ElementId::from(*id))
+                }
                 _ => {}
             }
         }

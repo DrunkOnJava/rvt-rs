@@ -592,7 +592,7 @@ pub const DEFAULT_MIN_ELEMENT_CONFIDENCE: f32 = 0.55;
 #[derive(Debug, Clone)]
 pub struct DecodedElement {
     /// ElementId of this instance, if known.
-    pub id: Option<u32>,
+    pub id: Option<crate::ElementId>,
     /// Class name ("Wall", "Floor", "Level", etc.).
     pub class: String,
     /// Ordered list of `(field_name, value)` — one per declared

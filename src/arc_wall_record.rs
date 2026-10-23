@@ -113,11 +113,11 @@ pub struct ArcWallTrailer {
     /// ElementId at `+0x10e`, accepted only when it equals the echo
     /// at `+0x11c` and is not a null/max sentinel. 23/24 Einhoven
     /// standard walls validate; all 23 hit `Global/ElemTable`.
-    pub element_id: Option<u32>,
+    pub element_id: Option<crate::ElementId>,
     /// Shared u32 at `+0xfe`. Constant `0x217a` across all 24 Einhoven
     /// standard walls and present in ElemTable — interpreted as a
     /// WallType / symbol handle candidate (not yet joined to width).
-    pub type_id: Option<u32>,
+    pub type_id: Option<crate::ElementId>,
     /// f64 at `+0xf6`. Matches the core start-point Z on every
     /// observed record — the wall's base elevation in feet.
     pub base_elevation_feet: Option<f64>,
