@@ -1304,10 +1304,7 @@ fn read_adocument_internal(
 // Tracker: API-07.
 pub fn read_adocument_strict(rf: &mut RevitFile) -> Result<ADocumentInstance> {
     let Some(inst) = read_adocument(rf)? else {
-        return Err(Error::Malformed {
-            what: "ADocument",
-            detail: "no entry point found".into(),
-        });
+        return Err(Error::NotLocated("ADocument"));
     };
     let c = inst.completeness();
     if !c.is_fully_typed() {

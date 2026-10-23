@@ -135,12 +135,14 @@ All notable changes will be documented here. This project follows
   given another class's schema (was "...Decoder received wrong schema"),
   `NoDecoder` for a class with no typed decoder, `MissingClass` for a
   schema with no `ADocument`, and `Malformed { what, detail }` for an
-  ArcWall or opening-index record, an `ADocument` or a `Global/ElemTable`
-  that does not have the shape its reader expects. Every variant is
-  documented. The other variants and their messages are unchanged. In
-  Python, `RevitFile.read_adocument()` returns `None` for a file whose
-  schema declares no `ADocument`, as it does when the record cannot be
-  located, where it raised `OSError`.
+  ArcWall or opening-index record (a wrong class tag among them), an
+  `ADocument` or a `Global/ElemTable` that does not have the shape its
+  reader expects. Every variant is
+  documented, and `NotLocated` is new for a record that cannot be located
+  with confidence, as `read_adocument_strict` reports an earlier release's
+  `ADocument`. The other variants and their messages are unchanged. In
+  Python, `RevitFile.read_adocument()` raises `ValueError`, where it raised
+  `OSError`, for a file whose schema declares no `ADocument`.
 
 - **The API docs are written for someone outside the project.** Backlog
   and task ids (`B55`, `VW1-13`, `SEC-12`) and work-plan labels ("Lane C",
@@ -187,7 +189,8 @@ All notable changes will be documented here. This project follows
   registered as `SimpleDecoder::new("<class>")`, which decodes exactly what
   the type of that name did; `elements::all_decoders()` and
   `decoder_for_class` return the same classes in the same order. A wrong
-  schema's error now reads `<class> decoder received wrong schema: ...`.
+  schema's error is `Error::SchemaMismatch`, which reads `<class> decoder
+  received the schema of <schema>`.
   `decoder_for_class` returns a `&'static dyn ElementDecoder` from a
   registry built once, so a lookup no longer builds all 81 decoders. The
   `cargo generate` element template registers through `SimpleDecoder`

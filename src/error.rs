@@ -1,9 +1,11 @@
 //! The crate's error type.
 //!
-//! Every fallible function in the crate returns [`Result`], whose error is
-//! [`Error`](enum@Error). Input is untrusted, so a file rvt-rs cannot read is
-//! reported as an [`Error`](enum@Error); the parsers are written not to panic on it and
-//! are fuzzed for it. `Error` is `#[non_exhaustive]`: a release may add
+//! Reading, decoding, exporting and writing a Revit file return [`Result`],
+//! whose error is [`Error`](enum@Error); the few functions that only convert
+//! JSON, such as `CapabilityManifest::to_json_string`, return
+//! `serde_json::Error`. Input is untrusted, so a file rvt-rs cannot read is
+//! reported as an [`Error`](enum@Error); the parsers are written not to panic
+//! on it and are fuzzed for it. `Error` is `#[non_exhaustive]`: a release may add
 //! variants, so a `match` on it needs a wildcard arm.
 
 use std::io;
@@ -71,6 +73,13 @@ pub enum Error {
     /// The file's schema (`Formats/Latest`) declares no class of this name.
     #[error("the schema declares no {0} class")]
     MissingClass(&'static str),
+
+    /// A record the reader looks for could not be located with confidence,
+    /// as when the `ADocument` entry-point detector, validated on Revit 2024
+    /// to 2026, finds no offset in an earlier release's layout. The file
+    /// may be valid.
+    #[error("the {0} record could not be located")]
+    NotLocated(&'static str),
 
     /// A typed decoder was handed the schema entry of another class.
     #[error("{decoder} decoder received the schema of {schema}")]

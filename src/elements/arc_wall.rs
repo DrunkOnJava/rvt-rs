@@ -215,9 +215,12 @@ pub fn decode_candidate(
 
     reject_wrong_class(candidate.class_name.as_deref())?;
     if candidate.class_tag != ARC_WALL_TAG {
-        return Err(Error::SchemaMismatch {
-            decoder: "ArcWall",
-            schema: format!("class tag 0x{:04x}", candidate.class_tag),
+        return Err(Error::Malformed {
+            what: "ArcWall record",
+            detail: format!(
+                "class tag 0x{:04x}, expected 0x{ARC_WALL_TAG:04x}",
+                candidate.class_tag
+            ),
         });
     }
     decode_at(buf, candidate.offset, candidate.class_name.as_deref())

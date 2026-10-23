@@ -470,9 +470,11 @@ impl PyRevitFile {
     }
 
     /// Run the Layer-5a walker and return ADocument's instance fields
-    /// as a Python dict, or `None` if the file's schema declares no
-    /// ADocument class or the entry-point detector can't confidently
-    /// locate an ADocument record in this file.
+    /// as a Python dict, or `None` if the entry-point detector can't
+    /// confidently locate an ADocument record in this file. Raises
+    /// `ValueError` if the file's schema declares no ADocument class,
+    /// which no Revit file lacks (a synthetic file, or a damaged schema),
+    /// and `IOError` if a stream cannot be read.
     ///
     /// Return shape when present:
     ///
@@ -491,7 +493,8 @@ impl PyRevitFile {
     fn read_adocument<'py>(&mut self, py: Python<'py>) -> PyResult<Option<Bound<'py, PyDict>>> {
         let inst = match walker::read_adocument_with_limits(&mut self.inner, self.walker_limits) {
             Ok(Some(inst)) => inst,
-            Ok(None) | Err(rvt::Error::MissingClass(_)) => return Ok(None),
+            Ok(None) => return Ok(None),
+            Err(e @ rvt::Error::MissingClass(_)) => return Err(to_py_val(e)),
             Err(e) => return Err(to_py_io(e)),
         };
         instance_to_dict(py, &inst).map(Some)
@@ -540,7 +543,10 @@ impl PyRevitFile {
     /// ```
     fn read_adocument_lossy<'py>(&mut self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
         let decoded = walker::read_adocument_lossy_with_limits(&mut self.inner, self.walker_limits)
-            .map_err(to_py_io)?;
+            .map_err(|e| match e {
+                rvt::Error::MissingClass(_) => to_py_val(e),
+                e => to_py_io(e),
+            })?;
         let out = PyDict::new(py);
         let value = instance_to_dict(py, &decoded.value)?;
         out.set_item("value", value)?;

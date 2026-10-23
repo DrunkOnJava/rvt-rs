@@ -96,9 +96,10 @@ impl ElementDecoder for MyClassDecoder {
         limits: crate::walker::WalkerLimits,
     ) -> Result<DecodedElement> {
         if schema.name != "MyClass" {
-            return Err(Error::BasicFileInfo(format!(
-                "MyClassDecoder received wrong schema: {}", schema.name
-            )));
+            return Err(Error::SchemaMismatch {
+                decoder: "MyClass",
+                schema: schema.name.clone(),
+            });
         }
         let decoded = crate::walker::decode_instance_with_limits(bytes, 0, schema, limits);
         // The walk never fails: a short or unsupported read leaves a
@@ -110,7 +111,10 @@ impl ElementDecoder for MyClassDecoder {
                 && matches!(v, InstanceField::String(_))
         });
         if !has_name {
-            return Err(Error::BasicFileInfo("MyClass without its name string".into()));
+            return Err(Error::Malformed {
+                what: "MyClass instance",
+                detail: "no name string".into(),
+            });
         }
         Ok(decoded)
     }
