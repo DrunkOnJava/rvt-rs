@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process';
 import { open, writeFile } from 'node:fs/promises';
+import { createServer } from 'node:net';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -9,7 +10,15 @@ const require = createRequire(new URL('../viewer/package.json', import.meta.url)
 const { chromium } = require('@playwright/test');
 const evidence = process.argv[2];
 if (!evidence || !path.isAbsolute(evidence)) throw new Error('Absolute evidence directory required');
-const port = Number(process.env.RVT_VIEWER_PORT ?? 4173);
+// A port the system hands out free, so no older preview can answer for this
+// one; RVT_VIEWER_PORT picks one instead.
+const freePort = () => new Promise((resolve, reject) => {
+  const probe = createServer().once('error', reject).listen(0, '127.0.0.1', () => {
+    const { port } = probe.address();
+    probe.close(() => resolve(port));
+  });
+});
+const port = Number(process.env.RVT_VIEWER_PORT ?? await freePort());
 const url = `http://127.0.0.1:${port}`;
 const log = await open(path.join(evidence, 'preview.log'), 'w');
 const vite = path.join(path.dirname(require.resolve('vite/package.json')), 'bin/vite.js');
@@ -21,7 +30,9 @@ try {
   const deadline = Date.now() + 30_000;
   for (;;) {
     if (server.exitCode !== null) throw new Error(`Preview exited: ${server.exitCode}; inspect preview.log`);
-    try { if ((await fetch(url)).ok) break; } catch {}
+    // Ready once it answers and this preview is still the one running:
+    // --strictPort makes it exit when another holds the port.
+    try { if ((await fetch(url)).ok && server.exitCode === null) break; } catch {}
     if (Date.now() >= deadline) throw new Error('Preview did not become ready');
     await new Promise(resolve => setTimeout(resolve, 250));
   }

@@ -29,14 +29,19 @@ bin="${CARGO_TARGET_DIR:-$root/target}/$profile"
 # This script exercises what is already built and rebuilds nothing, so refuse
 # to vouch for an artifact older than a source it is built from.
 binding=$(.venv/bin/python -c 'import rvt._rvt as m; print(m.__file__)')
-for artifact in "$bin/rvt-inspect" "$binding" viewer/pkg/rvt_bg.wasm; do
-  newer=$(find src rvt-py/src rvt-wasm/src Cargo.toml Cargo.lock -newer "$artifact" -print -quit)
+# The sources, and the data the crate embeds with include_str! (grep the
+# crates for include_ to keep this list whole).
+inputs=(src rvt-py/src rvt-wasm/src Cargo.toml Cargo.lock docs/data docs/support-matrix.json)
+for artifact in "$bin/gen-fixture" "$bin/rvt-inspect" "$bin/rvt-info" "$bin/rvt-ifc" \
+  "$binding" viewer/pkg/rvt_bg.wasm; do
+  newer=$(find "${inputs[@]}" -newer "$artifact" -print -quit)
   if [ -n "$newer" ]; then
     printf '%s is older than %s; rebuild first (the rvt: smoke task does)\n' "$artifact" "$newer" >&3
     exit 1
   fi
 done
-newer=$(find viewer/src viewer/index.html viewer/vite.config.ts viewer/package.json -newer viewer/dist/index.html -print -quit)
+# The bundle is built from the viewer's sources and the wasm package.
+newer=$(find viewer/src viewer/pkg viewer/index.html viewer/vite.config.ts viewer/package.json -newer viewer/dist/index.html -print -quit)
 if [ -n "$newer" ]; then
   printf 'viewer/dist is older than %s; rebuild first (the rvt: smoke task does)\n' "$newer" >&3
   exit 1
