@@ -12,7 +12,7 @@
 //! - 2024 needs a separate decoder implementation.
 //!
 //! See `reports/element-framing/RE-13-synthesis.md` for the cross-
-//! version drift evidence and open questions (Q18-Q20, hypotheses
+//! version drift evidence and open questions (its §Q18 to §Q20, hypotheses
 //! H17-H19, decisions D23-D27 scoping this module's coverage).
 //!
 //! Production callers should use
