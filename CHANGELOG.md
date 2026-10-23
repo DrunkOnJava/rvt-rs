@@ -15,7 +15,7 @@ All notable changes will be documented here. This project follows
   instance's connector. A duct's or pipe's connector takes its calculated
   direction. A bidirectional connector joined to one with a direction takes
   the opposite one. On RE1 Plumbing, Mechanical and Electrical that is every
-  one of Revit's 463 ports, where rvt-rs wrote `NOTDEFINED` on all 410 HVAC
+  one of Revit's 463 ports, where rvt-rs wrote `NOTDEFINED` on all 408 HVAC
   and piping ports before. Ports are now named `InPort_`, `OutPort_` or
   `Port_` by their direction and described `Flow`, as Revit names them, and
   a sink placed at a pipe's end points into it. `SystemType` is still not
