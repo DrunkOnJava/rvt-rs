@@ -67,8 +67,16 @@ All notable changes will be documented here. This project follows
   direction rvt-rs does not read (#834). A duct along one of the model's axes
   has its ports placed the same way, at the centres of its box's faces across
   its length: on RE1 Mechanical all 62 of the ports Revit writes on ducts and
-  pipes are within 0.01 ft of Revit's. Family-instance ports keep no
-  placement, and the no-geometry modes write none.
+  pipes are within 0.01 ft of Revit's. A port joined to a placed duct or
+  pipe port, a family instance's included, is placed at that port's point
+  with its axis, as Revit's export places every port joined to a segment's
+  (#869): all 118 such ports of RE1 Plumbing and all 59 of RE1 Mechanical
+  are within 0.01 ft of Revit's, where none was placed before. Their Z axes,
+  taken from the segment port's, agree with Revit's on 51 and 26 and are
+  opposite on the other 67 and 33; the segment ports' own axes are opposite
+  to Revit's on its `In` ports, whose flow direction rvt-rs does not read
+  (#834). Other family-instance ports keep no placement, and the no-geometry
+  modes write none.
 
 ### Fixed
 
