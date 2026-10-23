@@ -872,6 +872,28 @@ impl RvtDocExporter {
         export_rvt_doc(rf, RvtDocExportMode::Default, quality_mode, limits)
     }
 
+    /// The IFC model of `rf` and the diagnostics of the export: what was
+    /// read, what was approximated (a body drawn as its record's box) and
+    /// what was left out, as `rvt-ifc --diagnostics` writes them.
+    ///
+    /// # Errors
+    ///
+    /// The errors of reading the file, as [`crate::walker::iter_elements`]
+    /// lists them. A class or release rvt-rs does not read is not an error:
+    /// it is left out and counted in the diagnostics.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rvt::RevitFile;
+    /// use rvt::ifc::RvtDocExporter;
+    ///
+    /// let mut rf = RevitFile::open("corpus/tier1/architectural-2024/architectural-2024.rvt")?;
+    /// let result = RvtDocExporter.export_with_diagnostics(&mut rf)?;
+    /// println!("{} entities", result.model.entities.len());
+    /// println!("{}", serde_json::to_string(&result.diagnostics)?);
+    /// # Ok::<(), Box<dyn std::error::Error>>(())
+    /// ```
     pub fn export_with_diagnostics(&self, rf: &mut crate::RevitFile) -> Result<ExportResult> {
         self.export_with_diagnostics_and_limits(rf, crate::walker::WalkerLimits::default())
     }

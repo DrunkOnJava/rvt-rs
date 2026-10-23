@@ -802,6 +802,18 @@ pub fn write_glb(doc: &GltfDocument, bin: &[u8], out: &mut Vec<u8>) {
 }
 
 /// One-call convenience: `IfcModel` → GLB bytes.
+///
+/// # Examples
+///
+/// ```
+/// use rvt::RevitFile;
+/// use rvt::ifc::{Exporter, RvtDocExporter, gltf::model_to_glb};
+///
+/// let mut rf = RevitFile::open("corpus/tier1/architectural-2024/architectural-2024.rvt")?;
+/// let glb = model_to_glb(&RvtDocExporter.export(&mut rf)?);
+/// assert_eq!(&glb[..4], b"glTF");
+/// # Ok::<(), rvt::Error>(())
+/// ```
 pub fn model_to_glb(model: &IfcModel) -> Vec<u8> {
     let (doc, bin) = build_gltf(model);
     let mut out = Vec::new();

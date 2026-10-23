@@ -123,9 +123,24 @@ impl RevitFile {
 }
 
 /// [`FileMetadata`] for the file at `path`, reading only the identity
-/// streams. Returns [`Error::NotACfbFile`] for anything that is not an
-/// OLE/CFB container and [`Error::StreamNotFound`] for a CFB file (a `.doc`,
-/// an `.msg`, …) without `BasicFileInfo`. I/O errors name the path.
+/// streams.
+///
+/// # Errors
+///
+/// [`Error::NotACfbFile`] for anything that is not an OLE/CFB container,
+/// [`Error::Cfb`] when the container does not open or an identity stream is
+/// larger than its cap, [`Error::StreamNotFound`] for a CFB file (a `.doc`,
+/// an `.msg`, …) without `BasicFileInfo`, [`Error::BasicFileInfo`] when that
+/// stream does not parse, and [`Error::Io`], naming the path, when the file
+/// cannot be read.
+///
+/// # Examples
+///
+/// ```
+/// let meta = rvt::metadata::read_metadata("corpus/tier1/architectural-2024/architectural-2024.rvt")?;
+/// println!("Revit {}, last saved {:?}", meta.revit_version, meta.last_saved);
+/// # Ok::<(), rvt::Error>(())
+/// ```
 pub fn read_metadata(path: impl AsRef<Path>) -> Result<FileMetadata> {
     let path = path.as_ref();
     let with_path = |e: std::io::Error| {
