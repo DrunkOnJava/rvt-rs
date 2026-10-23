@@ -132,3 +132,22 @@ pub enum Error {
 fn for_path(path: &Option<String>) -> String {
     path.as_deref().map(|p| format!(" {p}")).unwrap_or_default()
 }
+
+impl Error {
+    /// Name the file a container error happened in, when it was raised by
+    /// code that had only the bytes or a reader.
+    pub(crate) fn in_file(self, file: &std::path::Path) -> Self {
+        match self {
+            Error::Cfb {
+                op,
+                path: None,
+                source,
+            } => Error::Cfb {
+                op,
+                path: Some(file.display().to_string()),
+                source,
+            },
+            other => other,
+        }
+    }
+}

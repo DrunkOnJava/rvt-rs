@@ -106,7 +106,7 @@ pub fn copy_file(src: &Path, dst: &Path) -> Result<()> {
     }
     out.flush().map_err(|e| crate::Error::Cfb {
         op: "flush",
-        path: None,
+        path: Some(dst.display().to_string()),
         source: e,
     })?;
     Ok(())
@@ -327,7 +327,7 @@ pub fn write_with_patches(src: &Path, dst: &Path, patches: &[StreamPatch]) -> Re
             }
             rw.flush().map_err(|e| crate::Error::Cfb {
                 op: "flush",
-                path: None,
+                path: Some(tmp_path.display().to_string()),
                 source: e,
             })?;
         }
@@ -426,7 +426,7 @@ pub fn write_with_patches(src: &Path, dst: &Path, patches: &[StreamPatch]) -> Re
     }
     out.flush().map_err(|e| crate::Error::Cfb {
         op: "flush",
-        path: None,
+        path: Some(tmp_path.display().to_string()),
         source: e,
     })?;
     // Close before rename so Windows doesn't hold the handle.

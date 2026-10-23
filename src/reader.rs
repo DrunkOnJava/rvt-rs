@@ -224,7 +224,7 @@ impl RevitFile {
         let mut f = File::open(path).map_err(with_path)?;
         let mut bytes = Vec::with_capacity(metadata.len() as usize);
         f.read_to_end(&mut bytes).map_err(with_path)?;
-        Self::open_bytes_with_limits(bytes, limits)
+        Self::open_bytes_with_limits(bytes, limits).map_err(|e| e.in_file(path))
     }
 
     /// Open a Revit file from an in-memory byte buffer.

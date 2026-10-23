@@ -159,7 +159,7 @@ pub fn read_metadata(path: impl AsRef<Path>) -> Result<FileMetadata> {
         )));
     }
     let file = std::fs::File::open(path).map_err(with_path)?;
-    read_metadata_from(std::io::BufReader::new(file))
+    read_metadata_from(std::io::BufReader::new(file)).map_err(|e| e.in_file(path))
 }
 
 /// [`read_metadata`] over any seekable reader (an open file, a
