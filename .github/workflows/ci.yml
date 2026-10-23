@@ -716,7 +716,6 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-          BASE: ${{ github.event.pull_request.base.sha }}
           PR: ${{ github.event.pull_request.number }}
           REPO: ${{ github.repository }}
         run: tools/ci/semver-gate.sh
