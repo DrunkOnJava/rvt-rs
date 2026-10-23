@@ -55,7 +55,6 @@ pub enum ParseMode {
 /// free-form strings — so downstream tooling can filter and count
 /// them without pattern-matching on prose.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[non_exhaustive]
 pub struct Warning {
     /// Short machine-readable code identifying the class of warning
     /// (e.g. `"schema-parse-skipped"`, `"stream-inflate-failed"`,

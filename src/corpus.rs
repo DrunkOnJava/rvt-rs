@@ -19,7 +19,6 @@ use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, path::Path};
 
 /// One sample in the corpus.
-#[non_exhaustive]
 pub struct Sample {
     pub label: String,
     pub year: Option<u32>,

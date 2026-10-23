@@ -192,7 +192,6 @@ pub struct IfcModel {
 
 /// A layered element's layers across its thickness (RE-53).
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
-#[non_exhaustive]
 pub struct ElementLayers {
     /// Unit plan direction, model axes, from the element's inside to its
     /// exterior face.
@@ -212,7 +211,6 @@ pub struct ElementLayers {
 
 /// One layer of an [`ElementLayers`].
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
-#[non_exhaustive]
 pub struct LayerBand {
     /// Feet.
     pub width_feet: f64,
@@ -229,7 +227,6 @@ pub struct LayerBand {
 /// GlobalIds Revit's own exporter gives, rebuilt from the file (RE-48,
 /// `crate::revit_global_ids`). Empty when the file does not yield them.
 #[derive(Debug, Default, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-#[non_exhaustive]
 pub struct RevitGlobalIds {
     /// The document's `Unique Document GUID` (BasicFileInfo). The GlobalIds
     /// the writer generates for entities Revit gives none are derived from

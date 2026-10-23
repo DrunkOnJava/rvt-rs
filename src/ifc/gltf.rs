@@ -38,7 +38,6 @@ use serde::{Deserialize, Serialize};
 /// serialized JSON is a valid glTF file.
 // Tracker: VW1-04.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
-#[non_exhaustive]
 pub struct GltfDocument {
     pub asset: Asset,
     pub scene: Option<usize>,
@@ -60,7 +59,6 @@ pub struct GltfDocument {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[non_exhaustive]
 pub struct Asset {
     pub version: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -77,13 +75,11 @@ impl Default for Asset {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[non_exhaustive]
 pub struct Scene {
     pub nodes: Vec<usize>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
-#[non_exhaustive]
 pub struct Node {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
@@ -109,7 +105,6 @@ pub struct Node {
 /// all three of which were inert while the nodes carried no
 /// extras at all.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[non_exhaustive]
 pub struct NodeExtras {
     #[serde(rename = "entityIndex")]
     pub entity_index: usize,
@@ -118,7 +113,6 @@ pub struct NodeExtras {
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
-#[non_exhaustive]
 pub struct Mesh {
     pub primitives: Vec<Primitive>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -138,7 +132,6 @@ pub struct Primitive {
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
-#[non_exhaustive]
 pub struct Material {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
@@ -151,7 +144,6 @@ pub struct Material {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[non_exhaustive]
 pub struct PbrMetallicRoughness {
     /// `[r, g, b, a]` linear 0-1.
     #[serde(rename = "baseColorFactor")]
@@ -173,7 +165,6 @@ impl Default for PbrMetallicRoughness {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[non_exhaustive]
 pub struct Buffer {
     #[serde(rename = "byteLength")]
     pub byte_length: usize,
@@ -184,7 +175,6 @@ pub struct Buffer {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[non_exhaustive]
 pub struct BufferView {
     pub buffer: usize,
     #[serde(rename = "byteOffset", default)]
@@ -199,7 +189,6 @@ pub struct BufferView {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[non_exhaustive]
 pub struct Accessor {
     #[serde(rename = "bufferView")]
     pub buffer_view: usize,
