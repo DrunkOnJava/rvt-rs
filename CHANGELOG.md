@@ -84,8 +84,9 @@ All notable changes will be documented here. This project follows
 
 - **A column record holding a NaN no longer panics the export.** The
   column-cut grid sorted its edges with `partial_cmp(..).expect("finite")`,
-  so a NaN read from a damaged record box stopped the whole export; it now
-  sorts with `f64::total_cmp`. 40 other `expect` and `unwrap` calls on file
+  so a NaN read from a damaged record box stopped the whole export. A
+  column or cutter with a non-finite coordinate now gets no cut box, and the
+  grid sorts with `f64::total_cmp`. 40 other `expect` and `unwrap` calls on file
   bytes and fixed arrays are gone: those reads go through `first_chunk` or
   the crate's checked little-endian reader instead.
 
