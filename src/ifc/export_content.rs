@@ -376,15 +376,13 @@ pub fn append_typed_production_elements(
     // #847: each pipe's two ends and the connector entry keys at each.
     let mut pipe_ends: BTreeMap<usize, PipeEnds> = BTreeMap::new();
     // RE-162: each MEP system's name and members, by its ElementId.
-    let mut pending_systems: std::collections::BTreeMap<u32, (Option<String>, Vec<usize>)> =
-        Default::default();
+    let mut pending_systems: BTreeMap<u32, (Option<String>, Vec<usize>)> = Default::default();
     // Bodies of aggregate wholes, held back until their parts are known: a
     // whole that no part names keeps its own body.
-    let mut held_bodies: std::collections::BTreeMap<usize, Extrusion> =
-        std::collections::BTreeMap::new();
+    let mut held_bodies: BTreeMap<usize, Extrusion> = BTreeMap::new();
     // B72: each element's plan frame by entity index, and each door's and
     // window's facing and host, for the flip its type's GlobalId hashes.
-    let mut frames: std::collections::HashMap<usize, PlanFrame> = Default::default();
+    let mut frames: HashMap<usize, PlanFrame> = Default::default();
     let mut facings: BTreeMap<u32, [f64; 2]> = BTreeMap::new();
     let mut opening_hosts: Vec<(usize, u32, u32)> = Vec::new();
     let mut level_bind = crate::level_bind::LevelStoreyBind::new();
@@ -1097,8 +1095,7 @@ pub fn append_typed_production_elements(
     }
 
     // #323: group each whole's parts into one aggregate.
-    let mut parts_by_whole: std::collections::BTreeMap<usize, Vec<usize>> =
-        std::collections::BTreeMap::new();
+    let mut parts_by_whole: BTreeMap<usize, Vec<usize>> = BTreeMap::new();
     for (part_index, whole_id) in pending_parts {
         if let Some(&whole_index) = out.id_to_entity.get(&whole_id) {
             parts_by_whole
@@ -1523,7 +1520,7 @@ fn stair_property_set(decoded: &DecodedElement) -> Option<PropertySet> {
 
 /// The sets holding `Reference` of each entity and predefined type written
 /// ([`reference_set_kinds`]).
-type ReferenceKinds = std::collections::BTreeMap<
+type ReferenceKinds = BTreeMap<
     (String, Option<&'static str>),
     Vec<(
         &'static str,
@@ -2133,7 +2130,7 @@ type PlanLoop = Vec<(f64, f64)>;
 fn space_plan_outline(
     location: &[f64; 3],
     rotation: f64,
-    extrusion: &entities::Extrusion,
+    extrusion: &Extrusion,
 ) -> Option<(PlanLoop, Vec<PlanLoop>)> {
     let (sin, cos) = rotation.sin_cos();
     let place = |ring: &[(f64, f64)]| -> PlanLoop {

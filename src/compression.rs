@@ -407,7 +407,7 @@ fn gzip_trailer_verifies(data: &[u8]) -> bool {
     let mut buf = [0u8; 8192];
     let mut total = 0usize;
     loop {
-        match std::io::Read::read(&mut decoder, &mut buf) {
+        match Read::read(&mut decoder, &mut buf) {
             Ok(0) => return true,
             Ok(n) => {
                 total = total.saturating_add(n);

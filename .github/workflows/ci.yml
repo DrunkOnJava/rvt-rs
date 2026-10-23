@@ -99,6 +99,9 @@ jobs:
       # would apply clippy's exported-API rules to research items that are
       # private there.
       - run: cargo clippy -p rvt-wasm --all-targets --no-deps -- -D warnings
+      # The pyo3 bindings and the stream-evidence harness are workspace
+      # members the lines above do not lint.
+      - run: cargo clippy -p rvt-py -p stream-evidence --all-targets --no-deps -- -D warnings
 
   test:
     # Unit tests are banned (maintainer directive, 2026-09-23): this job

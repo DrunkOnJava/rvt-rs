@@ -307,7 +307,7 @@ pub fn extract_graphs(
 /// repeated after it. The group's declared object count and body bytes must
 /// agree with what is read.
 fn group_records(
-    source: &native_segments::GroupSource,
+    source: &GroupSource,
     bytes: &[u8],
     version: u32,
 ) -> Result<Vec<(u64, usize, usize, usize)>> {
