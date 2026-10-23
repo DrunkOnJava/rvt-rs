@@ -133,6 +133,7 @@ All notable changes will be documented here. This project follows
   (`tests/python/test_docs_python.py`). The 18 blocks that show a signature
   or the shape of a result are fenced `text`, so the page no longer presents
   them as code to run.
+
 - **The API's entry points have examples that run (#872).** The crate
   root's three examples and new ones on `RevitFile::open`,
   `metadata::read_metadata`, `walker::iter_elements`,
