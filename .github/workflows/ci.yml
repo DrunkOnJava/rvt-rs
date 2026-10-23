@@ -525,6 +525,29 @@ jobs:
           python -m ifcopenshell.validate /tmp/walker-real-project.ifc
           python -m ifcopenshell.validate /tmp/core-interior.ifc
           python tools/ci/ifc_schema_arity.py /tmp/walker-real-project.ifc /tmp/core-interior.ifc
+      # #908: saved graphics are opt-in (--saved-meshes), so no other job
+      # reads them. Export both real projects with them, fail if they are not
+      # read or if no Core Interior body comes from them, and validate both
+      # exports.
+      - name: Export and validate real projects with their saved meshes
+        env:
+          RVT_PROJECT_CORPUS_DIR: ${{ github.workspace }}/_project_corpus/Revit
+        run: |
+          set -euo pipefail
+          for m in Revit_IFC5_Einhoven 2024_Core_Interior; do
+            status=0
+            ./target/ci/rvt-ifc "${RVT_PROJECT_CORPUS_DIR}/$m.rvt" --saved-meshes \
+              -o "/tmp/$m-saved.ifc" 2> "/tmp/$m-saved.log" || status=$?
+            cat "/tmp/$m-saved.log"
+            test "$status" -eq 0
+            grep -qE '^rvt-ifc: [0-9]+ of [0-9]+ bounding-box bodies drawn from their saved graphics' "/tmp/$m-saved.log" \
+              || { echo "::error::$m: the saved graphics were not read"; exit 1; }
+            python -m ifcopenshell.validate "/tmp/$m-saved.ifc"
+          done
+          replaced=$(sed -nE 's/^rvt-ifc: ([0-9]+) of [0-9]+ bounding-box bodies drawn.*/\1/p' /tmp/2024_Core_Interior-saved.log)
+          test "${replaced:-0}" -gt 0 \
+            || { echo "::error::no Core Interior body was drawn from its saved graphics"; exit 1; }
+          python tools/ci/ifc_schema_arity.py /tmp/Revit_IFC5_Einhoven-saved.ifc /tmp/2024_Core_Interior-saved.ifc
       # Cross-witness gate (docs/verification-protocol.md): an independent
       # IFC reader parses the Revit-authored reference export and must agree
       # with the same manifest counts the rvt-rs decoder is gated against.
