@@ -49,8 +49,8 @@ const INITIAL_INFLATE_CAPACITY_BYTES: usize = 1024 * 1024;
 /// bound and called `read_to_end` with no size limit, so a
 /// hostile `.rvt` could trivially DoS any process that opened it.
 ///
-/// The audit (AUDIT-2026-04-19.md P0 item 4) flagged this as the
-/// single most urgent security fix before promoting the repo.
+/// An April 2026 security audit found it the most urgent fix the
+/// project needed.
 #[derive(Debug, Clone, Copy)]
 pub struct InflateLimits {
     /// Maximum decompressed output bytes per call.
@@ -208,7 +208,8 @@ pub struct InflatedStream {
     concat: Vec<u8>,
     chunk_ends: Vec<usize>,
     /// Each member's offset in the prepared stream and the bytes its gzip
-    /// header and DEFLATE stream take there (B82).
+    /// header and DEFLATE stream take there.
+    // Tracker: B82.
     members: Vec<(usize, usize)>,
 }
 
@@ -239,7 +240,8 @@ impl InflatedStream {
 
     /// The inflated member whose gzip header starts at `offset` of the
     /// prepared stream ([`prepare_stream_for_inflate`]), with the bytes its
-    /// header and DEFLATE stream take there (B82).
+    /// header and DEFLATE stream take there.
+    // Tracker: B82.
     pub fn member_at(&self, offset: usize) -> Option<(&[u8], usize)> {
         let i = self
             .members
@@ -301,7 +303,7 @@ pub enum FormatsIntegrityStatus {
     Incomplete,
 }
 
-/// Stable diagnostic code for Formats multipage integrity (A2 / PARSE-001).
+/// Stable diagnostic code for Formats multipage integrity.
 pub const RVT_FORMATS_MULTIPAGE_UNVERIFIED: &str = "RVT_FORMATS_MULTIPAGE_UNVERIFIED";
 
 /// Machine-readable `Formats/Latest` integrity sidecar for inspect / export /
@@ -519,7 +521,8 @@ pub fn inflate_at_with_limits(
 }
 
 /// [`inflate_at_with_limits`], with the number of bytes of `data` the gzip
-/// header and its DEFLATE stream take from `offset` (B82).
+/// header and its DEFLATE stream take from `offset`.
+// Tracker: B82.
 pub fn inflate_member_at_with_limits(
     data: &[u8],
     offset: usize,
@@ -667,7 +670,8 @@ pub fn inflate_all_chunks_with_limits(
 }
 
 /// [`inflate_all_chunks_with_limits`], with each chunk's offset in `data`
-/// and the bytes its gzip header and DEFLATE stream take there (B82).
+/// and the bytes its gzip header and DEFLATE stream take there.
+// Tracker: B82.
 fn inflate_all_members_with_limits(
     data: &[u8],
     per_chunk: InflateLimits,
@@ -741,7 +745,8 @@ pub fn truncated_gzip_encode_with_prefix8(bytes: &[u8]) -> Result<Vec<u8>> {
 /// header and DEFLATE data, then the CRC32 and ISIZE trailer. Revit's own
 /// `Formats/Latest` and `Global/Latest` carry that trailer, and a conforming
 /// reader such as `crate::native_document::read_single` checks it, so this
-/// is what the writer stores (B69).
+/// is what the writer stores.
+// Tracker: B69.
 pub fn gzip_member_encode(bytes: &[u8]) -> Result<Vec<u8>> {
     let mut out = truncated_gzip_encode(bytes)?;
     let mut crc = flate2::Crc::new();
@@ -751,7 +756,7 @@ pub fn gzip_member_encode(bytes: &[u8]) -> Result<Vec<u8>> {
     Ok(out)
 }
 
-/// Validate (WRT-11) that [`truncated_gzip_encode`] and
+/// Validate that [`truncated_gzip_encode`] and
 /// [`inflate_at`] are round-trip-exact inverses for the given
 /// payload. Encodes `bytes`, inflates the result, compares
 /// byte-for-byte.
@@ -765,6 +770,7 @@ pub fn gzip_member_encode(bytes: &[u8]) -> Result<Vec<u8>> {
 /// [`crate::writer::write_with_patches`] — if this fails, the
 /// writer would have produced a file that the reader couldn't
 /// re-open.
+// Tracker: WRT-11.
 pub fn validate_truncated_gzip_round_trip(bytes: &[u8]) -> Result<()> {
     let encoded = truncated_gzip_encode(bytes)?;
     let decoded = inflate_at(&encoded, 0)?;
@@ -785,10 +791,11 @@ pub fn validate_truncated_gzip_round_trip(bytes: &[u8]) -> Result<()> {
     Ok(())
 }
 
-/// Validate (WRT-11) that [`truncated_gzip_encode_with_prefix8`]
+/// Validate that [`truncated_gzip_encode_with_prefix8`]
 /// is a round-trip-exact inverse for the given payload. Encodes
 /// with the 8-byte custom prefix, inflates at offset 8, compares
 /// byte-for-byte.
+// Tracker: WRT-11.
 pub fn validate_truncated_gzip_prefix8_round_trip(bytes: &[u8]) -> Result<()> {
     let encoded = truncated_gzip_encode_with_prefix8(bytes)?;
     // First 8 bytes are the custom prefix; caller-visible invariant

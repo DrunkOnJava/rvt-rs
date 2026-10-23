@@ -87,7 +87,8 @@ pub enum Error {
 
     /// The writer refused a patch it cannot write as Revit stores it: a
     /// stream kept in checksummed pages whose new bytes would span one, when
-    /// rvt-rs cannot compute the page checksum (B69).
+    /// rvt-rs cannot compute the page checksum.
+    // Tracker: B69.
     #[error("write refused: {0}")]
     WriteRefused(String),
 

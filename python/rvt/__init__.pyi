@@ -60,7 +60,7 @@ Keys:
 - ``byte_range`` (dict[str, int]): ``start`` and ``end`` offsets in
   decompressed stream bytes.
 - ``fields`` (list[TypedField]): decoded schema fields.
-- ``typed`` (dict | None): Lane Five MVP projection for Level / Wall /
+- ``typed`` (dict | None): the typed projection for Level / Wall /
   Floor / Door / Window / Room / Material; ``None`` for other classes.
 """
 
@@ -71,7 +71,7 @@ Keys: ``total`` (int) and ``by_class`` (dict[str, int]).
 """
 
 MVP_TYPED_CLASSES: Final[list[str]]
-"""Lane Five schema-driven MVP class names exposed for introspection."""
+"""The classes whose elements carry a ``typed`` projection in ``decoded_elements()``."""
 
 
 class RevitFile:
@@ -252,7 +252,7 @@ class RevitFile:
         Each entry has ``id``, ``class_name``, ``byte_range``,
         ``fields``, and ``typed``. The field dictionaries use the same
         kind-specific shape as ``read_adocument()["fields"]``.
-        ``typed`` is the Lane Five MVP projection when
+        ``typed`` is the typed projection when
         ``class_name`` is in ``MVP_TYPED_CLASSES``, else ``None``.
         """
 
@@ -270,8 +270,9 @@ class RevitFile:
         ``mode`` is one of ``"scaffold"``, ``"typed-no-geometry"``,
         ``"geometry"``, or ``"strict"``. Stronger modes raise
         ``ValueError`` when the recovered model data is not complete
-        enough for that quality level. On scaffold-only fixtures only
-        ``scaffold`` typically succeeds until Lane 7 geometry lands.
+        enough for that quality level. On a file with no recovered
+        elements, such as the synthetic fixtures, only ``scaffold``
+        succeeds.
         """
 
     def export_diagnostics_json(self) -> str:

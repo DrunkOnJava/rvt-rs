@@ -33,13 +33,14 @@ struct Cli {
     #[arg(long)]
     counts: bool,
 
-    /// Omit the Lane Five MVP `typed` projection on each element.
+    /// Omit the `typed` projection (the typed view of the decoded classes) on each element.
     #[arg(long)]
     no_typed: bool,
 
     /// Hide elements whose provenance confidence is below this floor
-    /// (M3-07). Default keeps everything; pass `0.55` to match the
+    ///. Default keeps everything; pass `0.55` to match the
     /// viewer/export low-confidence filter.
+    // Tracker: M3-07.
     #[arg(long, default_value_t = 0.0)]
     min_confidence: f32,
 
@@ -64,7 +65,7 @@ struct ElementOut {
     /// AProperty* values when this element is a value carrier; empty
     /// for host elements until host↔parameter joins recover (#35).
     parameters: Vec<serde_json::Value>,
-    /// M3-07 decode confidence + provenance.
+    /// Decode confidence and provenance.
     provenance: serde_json::Value,
     #[serde(skip_serializing_if = "Option::is_none")]
     typed: Option<serde_json::Value>,
