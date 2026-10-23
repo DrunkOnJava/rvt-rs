@@ -68,6 +68,7 @@ fn collect_common(decoded: &DecodedElement) -> FamilyCommon {
 
 /// Typed view for GenericModel.
 #[derive(Debug, Clone, PartialEq, Default)]
+#[non_exhaustive]
 pub struct GenericModel {
     pub level_id: Option<u32>,
     pub host_id: Option<u32>,
@@ -101,6 +102,7 @@ impl GenericModel {
 
 /// Typed view for Mass.
 #[derive(Debug, Clone, PartialEq, Default)]
+#[non_exhaustive]
 pub struct Mass {
     pub level_id: Option<u32>,
     pub host_id: Option<u32>,

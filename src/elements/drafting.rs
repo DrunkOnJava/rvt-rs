@@ -8,7 +8,7 @@
 //! IfcDocumentReference, neither of which we emit yet).
 //!
 //! We decode them for:
-//! - **Round-trip write support** (Phase 7) — can't re-emit a
+//! - **Round-trip write support** — can't re-emit a
 //!   file without knowing its drafting contents.
 //! - **Schedule → data extraction** — Schedules aggregate element
 //!   properties; useful for BIM-to-spreadsheet tooling even if
@@ -47,6 +47,7 @@ use crate::walker::{DecodedElement, InstanceField};
 /// Which kind of drawing the View represents. Revit's ViewType enum
 /// expanded; we model the most common values.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[non_exhaustive]
 pub enum ViewKind {
     #[default]
     FloorPlan,
@@ -90,6 +91,7 @@ impl ViewKind {
 
 /// Typed view of a decoded View.
 #[derive(Debug, Clone, PartialEq, Default)]
+#[non_exhaustive]
 pub struct View {
     pub name: Option<String>,
     pub kind: Option<ViewKind>,
@@ -132,6 +134,7 @@ impl View {
 
 /// Typed view of a decoded Sheet.
 #[derive(Debug, Clone, PartialEq, Default)]
+#[non_exhaustive]
 pub struct Sheet {
     pub name: Option<String>,
     pub number: Option<String>,
@@ -170,6 +173,7 @@ impl Sheet {
 
 /// Typed view of a decoded Schedule / ScheduleView.
 #[derive(Debug, Clone, PartialEq, Default)]
+#[non_exhaustive]
 pub struct Schedule {
     pub name: Option<String>,
     /// The Revit category that this schedule aggregates ("Walls",

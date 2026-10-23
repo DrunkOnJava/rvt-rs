@@ -41,6 +41,7 @@ use crate::walker::{DecodedElement, InstanceField};
 
 /// Which end(s) of the grid show a label bubble.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[non_exhaustive]
 pub enum BubbleLocation {
     #[default]
     None,
@@ -62,6 +63,7 @@ impl BubbleLocation {
 
 /// Whether the grid line is straight or curved.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[non_exhaustive]
 pub enum GridCurveKind {
     #[default]
     Line,
@@ -76,6 +78,7 @@ impl GridCurveKind {
 
 /// Typed view of a decoded Grid.
 #[derive(Debug, Clone, PartialEq, Default)]
+#[non_exhaustive]
 pub struct Grid {
     pub name: Option<String>,
     pub curve_kind: Option<GridCurveKind>,
@@ -137,6 +140,7 @@ impl Grid {
 
 /// Typed view of a decoded GridType.
 #[derive(Debug, Clone, PartialEq, Default)]
+#[non_exhaustive]
 pub struct GridType {
     pub name: Option<String>,
     pub bubble_location: Option<BubbleLocation>,

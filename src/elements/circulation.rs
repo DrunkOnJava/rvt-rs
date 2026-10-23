@@ -46,6 +46,7 @@ use crate::walker::{DecodedElement, InstanceField};
 
 /// Typed view of a decoded Stair.
 #[derive(Debug, Clone, PartialEq, Default)]
+#[non_exhaustive]
 pub struct Stair {
     pub base_level_id: Option<u32>,
     pub top_level_id: Option<u32>,
@@ -109,6 +110,7 @@ impl Stair {
 
 /// Typed view of a StairType.
 #[derive(Debug, Clone, PartialEq, Default)]
+#[non_exhaustive]
 pub struct StairType {
     pub name: Option<String>,
     pub is_exterior: Option<bool>,
@@ -167,6 +169,7 @@ impl Railing {
 
 /// Typed view of a RailingType.
 #[derive(Debug, Clone, PartialEq, Default)]
+#[non_exhaustive]
 pub struct RailingType {
     pub name: Option<String>,
     pub top_rail_height_feet: Option<f64>,

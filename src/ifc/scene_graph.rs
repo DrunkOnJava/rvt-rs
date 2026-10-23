@@ -1,4 +1,4 @@
-//! Scene graph builder (VW1-05) — project → storey → element hierarchy.
+//! Scene graph builder — project → storey → element hierarchy.
 //!
 //! Produces a tree representation of an [`IfcModel`] suitable for
 //! downstream viewers (WebGL, Three.js, plain JSON). The model
@@ -21,6 +21,7 @@
 //! points at a wall) are nested under their host rather than
 //! alongside it — the tree matches how a 3D viewer should render
 //! them visually (door "inside" wall).
+// Tracker: VW1-05.
 
 use super::IfcModel;
 use super::entities::IfcEntity;
@@ -28,6 +29,7 @@ use serde::{Deserialize, Serialize};
 
 /// A single node in the rendered scene graph.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct SceneNode {
     /// Display name from the underlying entity (project name, storey
     /// name, element display name). Falls back to `ifc_type` when
@@ -91,13 +93,14 @@ impl SceneNode {
     }
 }
 
-/// Category-based visibility filter (VW1-09) for a scene graph.
+/// Category-based visibility filter for a scene graph.
 /// Carries a hide-list of IFC type strings; any node whose
 /// `ifc_type` matches (case-insensitive) is filtered out of the
 /// tree, along with all of its descendants.
 ///
 /// Viewers implement "layer toggles" by toggling IFC types in this
 /// filter and re-rendering the returned tree.
+// Tracker: VW1-09.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CategoryFilter {
     /// IFC types to hide. Matched case-insensitively against
@@ -157,10 +160,12 @@ impl CategoryFilter {
     }
 }
 
-/// One end of a host relationship (M4-04). Carries enough to label
+/// One end of a host relationship. Carries enough to label
 /// the row and to re-select the related element: `entity_index` is
 /// the same index the scene graph puts on its nodes.
+// Tracker: M4-04.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct RelatedElement {
     /// Index into `model.entities`.
     pub entity_index: usize,
@@ -171,6 +176,7 @@ pub struct RelatedElement {
 /// One end of a wall that butt-joins another wall, as its join lists read
 /// (RE-70), or stops against it at a T joint (RE-73).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct PanelJoin {
     /// `"Start"` or `"End"` of the wall's location line.
     pub end: String,
@@ -186,6 +192,7 @@ pub struct PanelJoin {
 /// unit-carrying text (`"10.500 ft"`, `"90.0°"`) so the frontend
 /// never re-derives a unit or a rounding rule.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct PanelRow {
     pub label: String,
     pub value: String,
@@ -205,6 +212,7 @@ impl PanelRow {
 /// so the viewer can align measurements without parsing the
 /// formatted text back apart.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct PanelProperty {
     pub name: String,
     /// Formatted value carrying its unit where the value kind has
@@ -223,6 +231,7 @@ pub struct PanelProperty {
 /// renders `name` as the group heading and one row per entry in
 /// `properties`, instead of dumping the raw `property_set` JSON.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct PanelPropertyGroup {
     /// Property-set name — `"Pset_WallCommon"`, `"Pset_RevitType_Wall"`.
     pub name: String,
@@ -234,6 +243,7 @@ pub struct PanelPropertyGroup {
 /// the scene graph puts on its `IFCBUILDINGSTOREY` nodes, so the
 /// viewer can jump to that node the way #269 jumps to a host.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct PanelStorey {
     /// Index into `model.building_storeys`.
     pub index: usize,
@@ -248,6 +258,7 @@ pub struct PanelStorey {
 /// is how many `BuildingElement`s in the model share it — what
 /// the viewer's highlight affordance acts on.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct PanelMaterial {
     /// Index into `model.materials`.
     pub index: usize,
@@ -259,6 +270,7 @@ pub struct PanelMaterial {
 /// read"` where the file's material name was not found, its thickness, and
 /// the material as a highlight target where it is known.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct PanelLayer {
     pub label: String,
     pub value: String,
@@ -269,6 +281,7 @@ pub struct PanelLayer {
 /// An element's material layers (RE-58), in the order its layer set lists
 /// them.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct PanelLayers {
     /// The layer set's name: `Family:Type` (RE-61), or the type name.
     pub name: String,
@@ -282,7 +295,7 @@ pub struct PanelLayers {
     pub total: String,
 }
 
-/// Element info panel payload (VW1-08). The shape a viewer's
+/// Element info panel payload. The shape a viewer's
 /// "click to inspect" UI reads — a single JSON-ready struct
 /// describing an element's identity, location, and property set.
 ///
@@ -296,7 +309,9 @@ pub struct PanelLayers {
 ///
 /// Populate via [`element_info_panel`] given a scene node's
 /// `entity_index` and the underlying model.
+// Tracker: VW1-08.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct ElementInfoPanel {
     pub name: String,
     pub ifc_type: String,
@@ -348,7 +363,8 @@ pub struct ElementInfoPanel {
     #[serde(default)]
     pub further_property_groups: Vec<PanelPropertyGroup>,
     /// The element this one is hosted by — the wall a door or
-    /// window sits in (M4-04). `None` when nothing hosts it.
+    /// window sits in. `None` when nothing hosts it.
+    // Tracker: M4-04.
     #[serde(default)]
     pub host: Option<RelatedElement>,
     /// Elements hosted by this one, in entity order — the doors and
@@ -369,11 +385,12 @@ pub struct ElementInfoPanel {
     pub missing: Vec<String>,
 }
 
-/// Build an element-info panel payload (VW1-08) for the entity at
+/// Build an element-info panel payload for the entity at
 /// `entity_index` in `model`. Returns `None` when the index is
 /// out of range or the entity at that index isn't a
 /// `BuildingElement` (project / type-object entities have no
 /// viewer-side info panel).
+// Tracker: VW1-08.
 pub fn element_info_panel(model: &IfcModel, entity_index: usize) -> Option<ElementInfoPanel> {
     let ent = model.entities.get(entity_index)?;
     let IfcEntity::BuildingElement {
@@ -787,10 +804,11 @@ fn property_value_is_numeric(v: &super::entities::PropertyValue) -> bool {
     }
 }
 
-/// Row of a schedule table (VW1-15) — one per `BuildingElement`
+/// Row of a schedule table — one per `BuildingElement`
 /// in an IfcModel. Fields are pre-formatted strings so the
 /// viewer can render the table without additional
 /// unit-conversion logic.
+// Tracker: VW1-15.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ScheduleRow {
     pub entity_index: usize,
@@ -808,6 +826,7 @@ pub struct ScheduleRow {
 /// and uses `entity_indices` to highlight the whole type in the
 /// 3-D scene at once.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct ScheduleTypeGroup {
     pub ifc_type: String,
     pub count: usize,
@@ -818,10 +837,12 @@ pub struct ScheduleTypeGroup {
     pub storeys: Vec<String>,
 }
 
-/// Schedule-view payload (VW1-15). Pre-ordered by (storey
+/// Schedule-view payload. Pre-ordered by (storey
 /// elevation, name) for stable output — viewers that want a
 /// different sort should resort the returned vec.
+// Tracker: VW1-15.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct Schedule {
     pub rows: Vec<ScheduleRow>,
     /// Per-IFC-type breakdown of `rows`, ordered by descending
@@ -862,7 +883,7 @@ impl Schedule {
         )
     }
 
-    /// Render as CSV (VW1-15). Header row + one row per
+    /// Render as CSV. Header row + one row per
     /// `ScheduleRow` with fields in the same order as the
     /// struct: entity_index, ifc_type, name, storey, material,
     /// guid. Values with commas or quotes are double-quote
@@ -870,6 +891,7 @@ impl Schedule {
     /// spreadsheet would read as a formula is prefixed with `'`.
     /// For spreadsheet schedules with placement, size, host and
     /// room columns use [`super::schedule_csv`].
+    // Tracker: VW1-15.
     pub fn to_csv(&self) -> String {
         let mut out = String::new();
         out.push_str("entity_index,ifc_type,name,storey,material,guid\n");
@@ -906,9 +928,10 @@ fn csv_field(s: &str) -> String {
 }
 
 /// Build a tabular schedule of every `BuildingElement` in `model`
-/// (VW1-15). Non-BuildingElement entities are skipped. Rows are
+///. Non-BuildingElement entities are skipped. Rows are
 /// ordered by `(storey_elevation_feet, name)` so the output is
 /// stable across runs.
+// Tracker: VW1-15.
 pub fn build_schedule(model: &IfcModel) -> Schedule {
     let mut rows: Vec<(f64, ScheduleRow)> = Vec::new();
     for (idx, ent) in model.entities.iter().enumerate() {
@@ -987,8 +1010,9 @@ fn group_rows_by_ifc_type(rows: &[ScheduleRow]) -> Vec<ScheduleTypeGroup> {
 }
 
 /// Collect all distinct `ifc_type` strings present in the scene
-/// graph (VW1-09). Use as the source of truth for a viewer's
+/// graph. Use as the source of truth for a viewer's
 /// "layer" toggle UI.
+// Tracker: VW1-09.
 pub fn distinct_ifc_types(root: &SceneNode) -> Vec<String> {
     let mut seen: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
     collect_types(root, &mut seen);
@@ -1002,7 +1026,7 @@ fn collect_types(node: &SceneNode, out: &mut std::collections::BTreeSet<String>)
     }
 }
 
-/// Build a scene graph tree from an `IfcModel` (VW1-05). Walks the
+/// Build a scene graph tree from an `IfcModel`. Walks the
 /// flat `model.entities` list + `model.building_storeys` and nests
 /// them into a three-level tree:
 ///
@@ -1017,6 +1041,7 @@ fn collect_types(node: &SceneNode, out: &mut std::collections::BTreeSet<String>)
 ///
 /// Non-BuildingElement entities (Project / BuildingElementType /
 /// TypeObject) are skipped — they're metadata, not render-surface.
+// Tracker: VW1-05.
 pub fn build_scene_graph(model: &IfcModel) -> SceneNode {
     // Root project node.
     let project_name = model

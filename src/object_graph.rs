@@ -1,10 +1,10 @@
-//! Phase D v0 · Object graph deserializer — starter pieces.
+//! Object graph deserializer: starter pieces.
 //!
 //! This module contains partial parsers for specific record types we've
 //! successfully reverse-engineered from the decompressed `Global/Latest`
 //! and `Partitions/NN` streams. It grows incrementally as more classes
-//! are mapped; the `rvt-rs` v0.1 ships only the pieces we can verify
-//! byte-for-byte against the 11-version reference corpus.
+//! are mapped, and holds only the pieces verified byte for byte against
+//! the 11-release family corpus.
 //!
 //! # Currently supported
 //!
@@ -28,6 +28,7 @@ use encoding_rs::UTF_16LE;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct DocumentHistory {
     /// Ordered list of Revit version strings this file has seen, oldest first.
     pub entries: Vec<String>,
@@ -122,6 +123,7 @@ impl DocumentHistory {
 /// The tag value is almost certainly the class-ID that binds the record
 /// to an entry in `Formats/Latest`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct StringRecord {
     pub offset: usize,
     pub tag: u32,

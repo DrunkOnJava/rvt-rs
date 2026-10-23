@@ -1,7 +1,6 @@
 //! `rvt-history` — dump the document-version-upgrade history of a Revit file.
 //!
-//! Phase D v0: the first tangible result of schema-driven object-graph
-//! parsing. Reads `Global/Latest` and returns every Revit release that has
+//! Reads `Global/Latest` and returns every Revit release that has
 //! ever opened and saved this file, in chronological order.
 //!
 //! # Honesty
