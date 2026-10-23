@@ -59,6 +59,7 @@
 //! exactly half the type's thickness either side of it on 964 of Snowdon's
 //! 1,054 walls, all of them with word 1 (RE-54).
 
+use crate::le_bytes;
 use crate::{Result, RevitFile};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -196,16 +197,6 @@ pub struct CompoundLayer {
     pub function: u32,
 }
 
-fn u32_at(buf: &[u8], at: usize) -> Option<u32> {
-    buf.get(at..at.checked_add(4)?)
-        .map(|s| u32::from_le_bytes(s.try_into().expect("4 bytes")))
-}
-
-fn u64_at(buf: &[u8], at: usize) -> Option<u64> {
-    buf.get(at..at.checked_add(8)?)
-        .map(|s| u64::from_le_bytes(s.try_into().expect("8 bytes")))
-}
-
 /// The layers whose count starts at `count_at`, or `None` unless every
 /// record is one a type can have: a width under 10 ft that is positive (0
 /// only on a membrane or a structural deck), a material in `materials` or by category, a deck
@@ -219,15 +210,15 @@ pub fn layers_at(
 ) -> Option<Vec<CompoundLayer>> {
     let id_at = |at: usize| -> Option<u64> {
         if layout.wide_ids {
-            u64_at(buf, at)
+            le_bytes::u64_at(buf, at)
         } else {
-            u32_at(buf, at).map(|id| match id {
+            le_bytes::u32_at(buf, at).map(|id| match id {
                 u32::MAX => u64::MAX,
                 id => u64::from(id),
             })
         }
     };
-    let count = usize::try_from(u32_at(buf, count_at)?).ok()?;
+    let count = usize::try_from(le_bytes::u32_at(buf, count_at)?).ok()?;
     if !(1..=MAX_LAYERS).contains(&count) {
         return None;
     }
@@ -237,7 +228,7 @@ pub fn layers_at(
         let width = f64::from_le_bytes(buf.get(at..at + 8)?.try_into().ok()?);
         let material = id_at(at + layout.material_at)?;
         let deck = id_at(at + layout.deck_at)?;
-        let function = u32_at(buf, at + layout.function_at)?;
+        let function = le_bytes::u32_at(buf, at + layout.function_at)?;
         // A membrane has no width, and nor has a structural deck whose
         // profile is carried by the layer above it (RE-112).
         let widthless = matches!(function, 100 | 200);
@@ -272,14 +263,14 @@ fn framed(buf: &[u8], count_at: usize, tag: [u8; 2]) -> bool {
         return true;
     }
     // The type's name (u32 k, k UTF-16 code units), u32 0.
-    if count_at < 4 || u32_at(buf, count_at - 4) != Some(0) {
+    if count_at < 4 || le_bytes::u32_at(buf, count_at - 4) != Some(0) {
         return false;
     }
     (1..=MAX_NAME_UNITS).any(|k: usize| {
         let Some(start) = count_at.checked_sub(4 + 2 * k + 4) else {
             return false;
         };
-        u32_at(buf, start) == Some(k as u32)
+        le_bytes::u32_at(buf, start) == Some(k as u32)
             && (0..k).all(|i| {
                 buf.get(start + 4 + 2 * i..start + 6 + 2 * i)
                     .map(|unit| u16::from_le_bytes([unit[0], unit[1]]))
@@ -331,9 +322,9 @@ pub fn scan_type_layers(
         for (index, &hit) in hits.iter().enumerate() {
             let id_at = hit + header.len();
             let id = if layout.wide_ids {
-                u64_at(buf, id_at).and_then(|id| u32::try_from(id).ok())
+                le_bytes::u64_at(buf, id_at).and_then(|id| u32::try_from(id).ok())
             } else {
-                u32_at(buf, id_at)
+                le_bytes::u32_at(buf, id_at)
             };
             let Some(id) = id.filter(|id| types.contains(id)) else {
                 continue;
@@ -409,9 +400,9 @@ pub fn wall_orientation_has_word(revit_version: u32) -> bool {
 /// ([`wall_orientation_has_word`]); without it, the word reads 0.
 pub fn wall_orientation_with(data: &[u8], has_word: bool) -> Option<WallOrientation> {
     let at = memchr::memmem::find(data, &WALL_FLIP_ANCHOR)? + WALL_FLIP_ANCHOR.len();
-    let location_line = u32_at(data, at)?;
+    let location_line = le_bytes::u32_at(data, at)?;
     let (word, flip_at) = if has_word {
-        (u32_at(data, at + 4)?, at + 8)
+        (le_bytes::u32_at(data, at + 4)?, at + 8)
     } else {
         (0, at + 4)
     };
@@ -524,13 +515,13 @@ pub fn wall_joined_entries(
 ) -> WallJoinedEntries {
     let mut out: BTreeMap<u32, Option<Vec<u32>>> = BTreeMap::new();
     for at in memchr::memmem::find_iter(data, &WALL_JOINED_LIST_WORD) {
-        if u32_at(data, at + 4) != Some(tag)
-            || u32_at(data, at + 8) != Some(2)
-            || (count_at > 12 && u32_at(data, at + 12) != Some(0))
+        if le_bytes::u32_at(data, at + 4) != Some(tag)
+            || le_bytes::u32_at(data, at + 8) != Some(2)
+            || (count_at > 12 && le_bytes::u32_at(data, at + 12) != Some(0))
         {
             continue;
         }
-        let Some(count) = u32_at(data, at + count_at).map(|count| count as usize) else {
+        let Some(count) = le_bytes::u32_at(data, at + count_at).map(|count| count as usize) else {
             continue;
         };
         if count == 0 || count > MAX_WALL_JOIN_ENTRIES {
@@ -539,20 +530,20 @@ pub fn wall_joined_entries(
         let mut cursor = at + count_at + 4;
         let mut entries = Vec::with_capacity(count);
         for _ in 0..count {
-            let Some(id) = u64_at(data, cursor)
+            let Some(id) = le_bytes::u64_at(data, cursor)
                 .and_then(|id| u32::try_from(id).ok())
                 .filter(|id| walls.contains(id))
             else {
                 break;
             };
-            let Some(n) = u32_at(data, cursor + 8)
+            let Some(n) = le_bytes::u32_at(data, cursor + 8)
                 .map(|n| n as usize)
                 .filter(|n| *n <= MAX_WALL_JOINED_WORDS)
             else {
                 break;
             };
             let Some(words) = (0..n)
-                .map(|index| u32_at(data, cursor + 12 + 4 * index))
+                .map(|index| le_bytes::u32_at(data, cursor + 12 + 4 * index))
                 .collect::<Option<Vec<u32>>>()
             else {
                 break;
@@ -608,7 +599,7 @@ pub fn scan_wall_joined_entries(
         let hits: Vec<usize> = memchr::memmem::find_iter(buf, &header).collect();
         for (index, &hit) in hits.iter().enumerate() {
             let id_at = hit + header.len();
-            let Some(id) = u64_at(buf, id_at)
+            let Some(id) = le_bytes::u64_at(buf, id_at)
                 .and_then(|id| u32::try_from(id).ok())
                 .filter(|id| read.contains(id))
             else {
@@ -728,7 +719,7 @@ pub fn scan_wall_type_face_angles(
         let hits: Vec<usize> = memchr::memmem::find_iter(buf, &header).collect();
         for (index, &hit) in hits.iter().enumerate() {
             let id_at = hit + header.len();
-            let Some(id) = u64_at(buf, id_at)
+            let Some(id) = le_bytes::u64_at(buf, id_at)
                 .and_then(|id| u32::try_from(id).ok())
                 .filter(|id| types.contains(id))
             else {
@@ -802,22 +793,22 @@ pub fn wall_join_lists(
     let mut out = Vec::new();
     for at in memchr::memmem::find_iter(data, &WALL_JOIN_LIST_WORD) {
         let (Some(tag), Some(2), Some(count)) = (
-            u32_at(data, at + 4),
-            u32_at(data, at + 8),
-            u32_at(data, at + count_at),
+            le_bytes::u32_at(data, at + 4),
+            le_bytes::u32_at(data, at + 8),
+            le_bytes::u32_at(data, at + count_at),
         ) else {
             continue;
         };
         let count = count as usize;
         if count == 0
             || count > MAX_WALL_JOIN_ENTRIES
-            || (count_at > 12 && u32_at(data, at + 12) != Some(0))
+            || (count_at > 12 && le_bytes::u32_at(data, at + 12) != Some(0))
         {
             continue;
         }
         let named: Option<Vec<u32>> = (0..count)
             .map(|index| {
-                u64_at(data, at + count_at + 8 + index * WALL_JOIN_ENTRY_LEN)
+                le_bytes::u64_at(data, at + count_at + 8 + index * WALL_JOIN_ENTRY_LEN)
                     .and_then(|id| u32::try_from(id).ok())
                     .filter(|id| walls.contains(id))
             })
@@ -859,7 +850,7 @@ pub fn scan_wall_join_partners(
         let hits: Vec<usize> = memchr::memmem::find_iter(buf, &header).collect();
         for (index, &hit) in hits.iter().enumerate() {
             let id_at = hit + header.len();
-            let Some(id) = u64_at(buf, id_at)
+            let Some(id) = le_bytes::u64_at(buf, id_at)
                 .and_then(|id| u32::try_from(id).ok())
                 .filter(|id| read.contains(id))
             else {

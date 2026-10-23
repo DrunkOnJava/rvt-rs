@@ -59,6 +59,7 @@
 //! export — no misses, no extras. The 21st (`16925`) is a container
 //! member, which the instance rule already excludes.
 
+use crate::le_bytes;
 use crate::{Result, RevitFile};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
@@ -103,16 +104,6 @@ pub fn supports_revit_version(revit_version: u32) -> bool {
     IFC_EXPORT_OVERRIDE_SUPPORTED_REVIT_VERSIONS.contains(&revit_version)
 }
 
-fn read_u32(buf: &[u8], off: usize) -> Option<u32> {
-    buf.get(off..off + 4)
-        .map(|s| u32::from_le_bytes(s.try_into().expect("4 bytes")))
-}
-
-fn read_u64(buf: &[u8], off: usize) -> Option<u64> {
-    buf.get(off..off + 8)
-        .map(|s| u64::from_le_bytes(s.try_into().expect("8 bytes")))
-}
-
 /// Decode one override entry whose value string starts at `offset`.
 ///
 /// Fail-closed at every step: a bad length, a non-alphanumeric value,
@@ -127,7 +118,7 @@ pub fn decode_at(
     if offset < OWNER_CONFIRM_OFFSET_BEFORE_VALUE {
         return None;
     }
-    let chars = read_u32(buf, offset - LENGTH_PREFIX_OFFSET_BEFORE_VALUE)? as usize;
+    let chars = le_bytes::u32_at(buf, offset - LENGTH_PREFIX_OFFSET_BEFORE_VALUE)? as usize;
     if !(MIN_VALUE_CHARS..=MAX_VALUE_CHARS).contains(&chars) {
         return None;
     }
@@ -150,8 +141,8 @@ pub fn decode_at(
     if !value.starts_with(VALUE_PREFIX) {
         return None;
     }
-    let owner = read_u64(buf, offset - OWNER_OFFSET_BEFORE_VALUE)?;
-    let confirm = read_u64(buf, offset - OWNER_CONFIRM_OFFSET_BEFORE_VALUE)?;
+    let owner = le_bytes::u64_at(buf, offset - OWNER_OFFSET_BEFORE_VALUE)?;
+    let confirm = le_bytes::u64_at(buf, offset - OWNER_CONFIRM_OFFSET_BEFORE_VALUE)?;
     if owner != confirm || owner == 0 || owner > u64::from(u32::MAX) {
         return None;
     }
@@ -332,7 +323,7 @@ impl ExportParameters {
 /// One export parameter value: an IFC entity name for the two "export as"
 /// keys, an enumerator-shaped identifier for the two predefined types.
 fn export_parameter_value(buf: &[u8], at: usize, key: i64) -> Option<String> {
-    let units = read_u32(buf, at)? as usize;
+    let units = le_bytes::u32_at(buf, at)? as usize;
     if !(1..=MAX_VALUE_CHARS).contains(&units) {
         return None;
     }
@@ -377,7 +368,7 @@ pub fn find_export_parameters(
     collect_export_parameters(buf, declared, |hit| {
         let from = hit.saturating_sub(EXPORT_PARAMETER_WINDOW);
         let start = memchr::memmem::rfind(&buf[from..hit], header)?;
-        read_u64(buf, from + start + header.len()).and_then(|id| u32::try_from(id).ok())
+        le_bytes::u64_at(buf, from + start + header.len()).and_then(|id| u32::try_from(id).ok())
     })
 }
 

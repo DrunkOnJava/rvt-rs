@@ -1,0 +1,118 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://drunkonjava.github.io/rvt-rs/schemas/corpus-doctor.schema.json",
+  "title": "rvt-corpus doctor --json",
+  "description": "The triage rvt-corpus doctor --json prints for the Revit files under its paths: each file's bucket, release, failure and warnings, and the buckets with their counts and suggested labels. schema_version is 1.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "files_scanned",
+    "buckets",
+    "files"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "const": 1
+    },
+    "files_scanned": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "buckets": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": [
+          "count",
+          "suggested_labels",
+          "sample_paths"
+        ],
+        "properties": {
+          "count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "suggested_labels": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "sample_paths": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "files": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "path",
+          "bucket",
+          "ok",
+          "revit_version",
+          "failure",
+          "warnings",
+          "unsupported_features",
+          "suggested_labels"
+        ],
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "bucket": {
+            "type": "string"
+          },
+          "ok": {
+            "type": "boolean"
+          },
+          "revit_version": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "failure": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "unsupported_features": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "suggested_labels": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -38,6 +38,14 @@ autotests = false
 # `maturin build --manifest-path rvt-py/Cargo.toml`.
 members = [".", "rvt-py", "rvt-wasm", "tools/stream_evidence"]
 
+# Lints beyond rustc's and clippy's defaults that the workspace keeps, so an
+# editor shows what CI enforces: CI denies every warning (`-D warnings`).
+[workspace.lints.rust]
+unused_qualifications = "warn"
+
+[lints]
+workspace = true
+
 [features]
 # Heap-profiling mode (Q-08). When enabled, binaries built from
 # `examples/dhat_*.rs` install the `dhat` global allocator and

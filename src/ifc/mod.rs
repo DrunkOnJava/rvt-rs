@@ -1007,7 +1007,7 @@ fn export_rvt_doc(
     quality_mode: ExportQualityMode,
     walker_limits: crate::walker::WalkerLimits,
 ) -> Result<IfcModel> {
-    let policy = export_content::ExportContentPolicy::for_quality_mode(quality_mode);
+    let policy = ExportContentPolicy::for_quality_mode(quality_mode);
     // Identity from PartAtom if present; fall back to the file name in
     // BasicFileInfo's original path.
     let part = rf.part_atom().ok();
@@ -2846,7 +2846,7 @@ fn append_production_walker_elements(
     entities: &mut Vec<entities::IfcEntity>,
     building_storeys: &mut Vec<Storey>,
     materials: &mut Vec<MaterialInfo>,
-    policy: export_content::ExportContentPolicy,
+    policy: ExportContentPolicy,
     walker_limits: crate::walker::WalkerLimits,
 ) -> WalkerElementData {
     if let Ok(decoded_iter) = crate::walker::iter_elements_with_limits(

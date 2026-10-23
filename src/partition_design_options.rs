@@ -43,6 +43,7 @@
 //! before. Only an option of a resolved set that is not its primary is
 //! reported as non-primary.
 
+use crate::le_bytes;
 use crate::partition_element_records::{
     CATEGORY_OFFSET, PartitionElementRecord, partition_record_chain, supports_revit_version,
 };
@@ -113,28 +114,18 @@ impl DesignOptions {
     }
 }
 
-fn read_u32(buf: &[u8], at: usize) -> Option<u32> {
-    buf.get(at..at.checked_add(4)?)
-        .map(|b| u32::from_le_bytes(b.try_into().expect("4 bytes")))
-}
-
-fn read_u64(buf: &[u8], at: usize) -> Option<u64> {
-    buf.get(at..at.checked_add(8)?)
-        .map(|b| u64::from_le_bytes(b.try_into().expect("8 bytes")))
-}
-
 /// The options an option-set partition record lists, or `None` when the
 /// record in `buf[start..end]` is not one: its category must be
 /// [`OST_DESIGN_OPTION_SETS`], and the list at [`OPTION_LIST_OFFSET`] must
 /// start with the record's own `set_id`, stay inside the record, and name
 /// at least one option distinct from the set.
 pub fn option_set_members(buf: &[u8], start: usize, end: usize, set_id: u64) -> Option<Vec<u32>> {
-    let category = read_u64(buf, start.checked_add(CATEGORY_OFFSET)?)? as i64;
+    let category = le_bytes::u64_at(buf, start.checked_add(CATEGORY_OFFSET)?)? as i64;
     if category != OST_DESIGN_OPTION_SETS {
         return None;
     }
     let list_at = start.checked_add(OPTION_LIST_OFFSET)?;
-    let count = read_u32(buf, list_at)? as usize;
+    let count = le_bytes::u32_at(buf, list_at)? as usize;
     if !(2..=OPTIONS_PER_SET_MAX + 1).contains(&count) {
         return None;
     }
@@ -142,12 +133,12 @@ pub fn option_set_members(buf: &[u8], start: usize, end: usize, set_id: u64) -> 
     if ids_at.checked_add(count.checked_mul(8)?)? > end {
         return None;
     }
-    if read_u64(buf, ids_at)? != set_id {
+    if le_bytes::u64_at(buf, ids_at)? != set_id {
         return None;
     }
     let mut options = Vec::with_capacity(count - 1);
     for index in 1..count {
-        let id = read_u64(buf, ids_at + index * 8)?;
+        let id = le_bytes::u64_at(buf, ids_at + index * 8)?;
         let id = u32::try_from(id).ok()?;
         if u64::from(id) == set_id || options.contains(&id) {
             return None;
@@ -170,7 +161,7 @@ pub fn find_set_entries(buf: &[u8], options: &[u32]) -> Vec<(String, u32)> {
     let mut out = Vec::new();
     for hit in memchr::memmem::find_iter(buf, &needle) {
         let length_at = hit + needle.len();
-        let Some(units) = read_u32(buf, length_at).map(|n| n as usize) else {
+        let Some(units) = le_bytes::u32_at(buf, length_at).map(|n| n as usize) else {
             continue;
         };
         if !(1..=SET_NAME_MAX_UNITS).contains(&units) {
@@ -190,7 +181,8 @@ pub fn find_set_entries(buf: &[u8], options: &[u32]) -> Vec<(String, u32)> {
         if name.trim().is_empty() || name.chars().any(char::is_control) {
             continue;
         }
-        let Some(primary) = read_u64(buf, name_at + units * 2).and_then(|v| u32::try_from(v).ok())
+        let Some(primary) =
+            le_bytes::u64_at(buf, name_at + units * 2).and_then(|v| u32::try_from(v).ok())
         else {
             continue;
         };

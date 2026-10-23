@@ -99,6 +99,9 @@ jobs:
       # would apply clippy's exported-API rules to research items that are
       # private there.
       - run: cargo clippy -p rvt-wasm --all-targets --no-deps -- -D warnings
+      # The pyo3 bindings and the stream-evidence harness are workspace
+      # members the lines above do not lint.
+      - run: cargo clippy -p rvt-py -p stream-evidence --all-targets --no-deps -- -D warnings
 
   test:
     # Unit tests are banned (maintainer directive, 2026-09-23): this job
@@ -234,6 +237,20 @@ jobs:
           RVT_SAMPLES_DIR: ${{ matrix.with_corpus && format('{0}/_corpus/examples/Autodesk', github.workspace) || '' }}
           RVT_REQUIRE_CORPUS: ${{ matrix.with_corpus && '1' || '' }}
         run: tools/ci/verify-real-files.sh --profile ci --no-fail-fast
+      # The user examples the README links (examples/README.md), run on the
+      # committed synthetic project so they cannot drift from the API
+      # (#872). Linux only: they do not depend on the platform.
+      - name: Run the user examples
+        if: runner.os == 'Linux' && matrix.label != 'msrv'
+        shell: bash
+        run: |
+          out="$RUNNER_TEMP/basics-export"
+          cargo run --profile ci --example basics_inspect
+          cargo run --profile ci --example basics_elements
+          cargo run --profile ci --example basics_export -- corpus/tier1/architectural-2024/architectural-2024.rvt "$out"
+          for f in model.ifc model.glb elements.csv diagnostics.json; do
+            test -s "$out/$f" || { echo "::error::basics_export wrote no $f"; exit 1; }
+          done
 
   # #836: a sum or product of file-derived lengths in `usize` that a 64-bit
   # build cannot overflow can still wrap on a 32-bit target, and pass a
@@ -428,6 +445,27 @@ jobs:
         env:
           RVT_PROJECT_CORPUS_DIR: ${{ github.workspace }}/_project_corpus/Revit
         run: 'cargo test --profile ci --test integration -- project_count_fixtures:: --nocapture'
+      # The user examples on a real project (#872): the tier-1 fixture the
+      # test job runs them on has no element records, so only a real file
+      # shows them listing and exporting elements. Einhoven (Revit 2023,
+      # MIT) exports 37 building elements.
+      - name: Run the user examples on a real project
+        env:
+          RVT_PROJECT_CORPUS_DIR: ${{ github.workspace }}/_project_corpus/Revit
+        shell: bash
+        run: |
+          set -euo pipefail
+          model="${RVT_PROJECT_CORPUS_DIR}/Revit_IFC5_Einhoven.rvt"
+          cargo run --profile ci --example basics_inspect -- "$model"
+          cargo run --profile ci --example basics_elements -- "$model" > "$RUNNER_TEMP/elements.txt"
+          cat "$RUNNER_TEMP/elements.txt"
+          grep -qE '^[1-9][0-9]* building elements$' "$RUNNER_TEMP/elements.txt" \
+            || { echo "::error::basics_elements listed no building element of Einhoven"; exit 1; }
+          out="$RUNNER_TEMP/einhoven-export"
+          cargo run --profile ci --example basics_export -- "$model" "$out"
+          rows=$(($(wc -l < "$out/elements.csv") - 1))
+          echo "elements.csv: $rows rows"
+          test "$rows" -gt 0 || { echo "::error::basics_export wrote an empty schedule for Einhoven"; exit 1; }
 
   ifcopenshell-validate:
     # IFC-41 / C9: the independent-validator gate. IfcOpenShell parses what
@@ -532,6 +570,29 @@ jobs:
           python -m ifcopenshell.validate /tmp/walker-real-project.ifc
           python -m ifcopenshell.validate /tmp/core-interior.ifc
           python tools/ci/ifc_schema_arity.py /tmp/walker-real-project.ifc /tmp/core-interior.ifc
+      # #908: saved graphics are opt-in (--saved-meshes), so no other job
+      # reads them. Export both real projects with them, fail unless each
+      # draws some body from them, and validate both exports.
+      - name: Export and validate real projects with their saved meshes
+        env:
+          RVT_PROJECT_CORPUS_DIR: ${{ github.workspace }}/_project_corpus/Revit
+        run: |
+          set -euo pipefail
+          for m in Revit_IFC5_Einhoven 2024_Core_Interior; do
+            status=0
+            ./target/ci/rvt-ifc "${RVT_PROJECT_CORPUS_DIR}/$m.rvt" --saved-meshes \
+              -o "/tmp/$m-saved.ifc" 2> "/tmp/$m-saved.log" || status=$?
+            cat "/tmp/$m-saved.log"
+            test "$status" -eq 0
+            # attach() reports "0 of 0" without reading anything when a
+            # model has no box-bodied candidates, so the count must be
+            # positive: Einhoven draws 11 and Core Interior 138.
+            replaced=$(sed -nE 's/^rvt-ifc: ([0-9]+) of [0-9]+ bounding-box bodies drawn from their saved graphics.*/\1/p' "/tmp/$m-saved.log")
+            test "${replaced:-0}" -gt 0 \
+              || { echo "::error::$m: no body was drawn from its saved graphics"; exit 1; }
+            python -m ifcopenshell.validate "/tmp/$m-saved.ifc"
+          done
+          python tools/ci/ifc_schema_arity.py /tmp/Revit_IFC5_Einhoven-saved.ifc /tmp/2024_Core_Interior-saved.ifc
       # Cross-witness gate (docs/verification-protocol.md): an independent
       # IFC reader parses the Revit-authored reference export and must agree
       # with the same manifest counts the rvt-rs decoder is gated against.
@@ -905,6 +966,13 @@ jobs:
             export RVT_SAMPLES_DIR="$PWD/_corpus/examples/Autodesk"
           fi
           python3 -m pytest tests/python -q -rs
+      # S2 (#873): the type stubs are the Python API's listing, and
+      # tools/ci/python-api-compat.py judges a breaking change by diffing
+      # them. stubtest keeps them true: it fails when the installed wheel and
+      # python/rvt/__init__.pyi disagree on a name, a parameter or a default.
+      - name: The type stubs match the built wheel
+        if: runner.os == 'Linux'
+        run: python3 -m mypy.stubtest rvt
       - name: Upload wheel artifact
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -1085,6 +1153,10 @@ jobs:
       # docs.
       - name: API docs cite only reported RE findings and no planning labels
         run: python3 tools/ci/api-doc-ids.py
+      # The README's count and docs/viewer-api.md's table name exactly the
+      # bindings rvt-wasm exports.
+      - name: The docs list every wasm binding
+        run: python3 tools/ci/wasm-api.py docs rvt-wasm/src/lib.rs README.md docs/viewer-api.md
 
   # Guards the Cloud Agent development environment config itself: shellcheck
   # the install script and validate `.cursor/environment.json` against the

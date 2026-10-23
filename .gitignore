@@ -21,7 +21,8 @@
 # CLAUDE.md provides cross-session context to the Claude agent. It lives
 # at the PARENT of this repo (rvt-recon-2026-04-19/CLAUDE.md), not
 # inside the repo. This entry is a defensive guard in case anyone
-# copies or symlinks it here.
+# copies or symlinks it here. A Codespace writes its own, which imports
+# AGENTS.md (.devcontainer/first-create.sh).
 CLAUDE.md
 .claude/*.local.md
 .claude/*.local.json
@@ -55,6 +56,11 @@ config.local.*
 
 # ---- Editor / IDE ----
 .vscode/
+!/.vscode/
+/.vscode/*
+!/.vscode/settings.json
+!/.vscode/tasks.json
+!/.vscode/launch.json
 .idea/
 .nvim/
 .zed/
