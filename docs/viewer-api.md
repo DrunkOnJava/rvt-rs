@@ -1,9 +1,11 @@
 # Rust-side viewer API reference
 
 The `rvt::ifc` module ships a complete Rust data model for a
-browser/desktop 3D viewer. This document maps every public
-function a WASM frontend (VW1-01/02/03) would expose, grouped by
-the 11 submodules that make up the viewer surface.
+browser/desktop 3D viewer, and the `rvt-wasm` crate exposes it to
+JavaScript: [The JavaScript bindings](#the-javascript-bindings) below lists
+every function the browser viewer can call. The sections before it map the
+Rust functions behind them, grouped by the 11 submodules that make up the
+viewer surface.
 
 Everything listed here is:
 
@@ -326,46 +328,39 @@ let svg = render_plan_svg(&model, &SheetOptions::default());
 //    - Share URL     → encode_to_fragment(&state)
 ```
 
-## What the WASM bindings need
+## The JavaScript bindings
 
-For VW1-01/02/03, `wasm-bindgen` wraps the above with JavaScript-
-callable surface:
+`rvt-wasm/src/lib.rs` exports these 22 functions through `wasm-bindgen`, and
+`wasm-pack` builds them into `viewer/pkg/`. They are the wasm API that 1.0
+keeps stable (`RELEASE.md`, "What 1.0 keeps stable"): CI fails a pull request
+that removes or renames one, removes, moves or retypes a parameter, adds one
+that cannot be left out, or changes what one returns, unless its title marks
+the breaking change with `!` (`tools/ci/wasm-api.py`). An object argument or
+result is a plain JSON-compatible value (`serde-wasm-bindgen`). A function
+that fails throws a string describing the error.
 
-```rust
-#[wasm_bindgen(js_name = openRvtBytes)]
-pub fn open_rvt_bytes(bytes: &[u8]) -> Result<JsValue, JsError> {
-    let mut rf = RevitFile::open_bytes(bytes.to_vec())?;
-    let model = RvtDocExporter.export(&mut rf)?;
-    Ok(serde_wasm_bindgen::to_value(&model)?)
-}
-
-#[wasm_bindgen(js_name = openRvtBytesWithDiagnostics)]
-pub fn open_rvt_bytes_with_diagnostics(bytes: &[u8]) -> Result<JsValue, JsError> {
-    let mut rf = RevitFile::open_bytes(bytes.to_vec())?;
-    let result = RvtDocExporter.export_with_diagnostics(&mut rf)?;
-    Ok(serde_wasm_bindgen::to_value(&result)?)
-}
-
-#[wasm_bindgen(js_name = openRvtBytesWithDiagnosticsAndLimits)]
-pub fn open_rvt_bytes_with_diagnostics_and_limits(
-    bytes: &[u8],
-    limits: JsValue,
-) -> Result<JsValue, JsError> {
-    let mut rf = RevitFile::open_bytes(bytes.to_vec())?;
-    let limits = walker_limits_from_js(limits)?;
-    let result = RvtDocExporter.export_with_diagnostics_and_limits(&mut rf, limits)?;
-    Ok(serde_wasm_bindgen::to_value(&result)?)
-}
-
-#[wasm_bindgen]
-pub fn scene_graph(model_json: JsValue) -> Result<JsValue, JsError> {
-    let model: IfcModel = serde_wasm_bindgen::from_value(model_json)?;
-    let scene = build_scene_graph(&model);
-    Ok(serde_wasm_bindgen::to_value(&scene)?)
-}
-
-// ...repeat for every public function above.
-```
-
-Every function listed is JSON-round-trippable, so the binding
-layer is mechanical — no custom FFI conversions needed.
+<!-- wasm-bindings -->
+| Binding | Arguments | Returns | What it does |
+|---|---|---|---|
+| `openRvtBytes` | `bytes: Uint8Array` | `IfcModel` | Opens a Revit file and exports its model |
+| `openRvtBytesWithLimits` | `bytes`, `limits: WalkerLimits` | `IfcModel` | The same, with the walker's scan limits |
+| `openRvtBytesWithDiagnostics` | `bytes` | `{ model, diagnostics }` | The model and its export diagnostics, as `rvt-ifc --diagnostics` writes them |
+| `openRvtBytesWithDiagnosticsAndLimits` | `bytes`, `limits` | `{ model, diagnostics }` | The same, with scan limits |
+| `openRvtBytesWithDiagnosticsMode` | `bytes`, `mode: string` | `{ model, diagnostics }` | The same at an export quality mode: `scaffold`, `typed-no-geometry`, `geometry` or `strict`, the stronger ones failing when the file cannot meet them |
+| `openRvtBytesWithDiagnosticsModeAndLimits` | `bytes`, `mode`, `limits` | `{ model, diagnostics }` | The same, with scan limits |
+| `quickSummary` | `bytes` | `Summary` | Release, build, PartAtom and the stream inventory, read without decoding the model |
+| `fileMetadata` | `bytes` | `FileMetadata` | Document identity (release, worksharing, last save, GUID, save counter), from the two identity streams only |
+| `scheduleCsv` | `model`, `kind: string`, `metric: boolean`, `excel: boolean` | `string` | The element (`kind` `"elements"`) or room (`"rooms"`) schedule as CSV, the columns of the [user guide](user-guide.md#get-a-schedule-into-excel) |
+| `buildSceneGraph` | `model` | scene tree | The model's scene graph |
+| `distinctIfcTypes` | `scene` | `string[]` | The IFC types in a scene, for the layer toggles |
+| `applyCategoryFilter` | `scene`, `filter: CategoryFilter` | scene tree | The scene pruned by a category filter |
+| `elementInfoPanel` | `model`, `entity_index: number` | info panel | What the info panel shows for one element |
+| `buildSchedule` | `model` | schedule table | A flat table of every building element |
+| `modelToGlb` | `model` | `Uint8Array` | The model as a glTF 2.0 binary |
+| `modelToIfcStep` | `model` | `string` | The model as an IFC4 STEP document |
+| `renderPlanSvg` | `model`, `options: SheetOptions` or `null` | `string` | A plan view as SVG |
+| `encodeToFragment` | `state: ViewerState` | `string` | A viewer state as a URL fragment |
+| `decodeFromFragment` | `fragment: string` | `ViewerState` or `null` | A URL fragment back into a viewer state |
+| `cameraEye` | `state: CameraState` | `[x, y, z]` | The camera's eye position |
+| `defaultSectionBoxForView` | `mode: ViewMode`, `storey_elevation_feet: number`, `model_bbox` | section box | The default section box for a view mode |
+| `defaultSheetOptions` | none | `SheetOptions` | The plan view's default options |
