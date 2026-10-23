@@ -41,9 +41,9 @@ case $? in
         ;;
 esac
 
-cargo public-api --help > /dev/null || exit 1
+cargo public-api --help || exit 1
 listing() {
-    (cd "$1" && cargo public-api --toolchain "$PUBLIC_API_TOOLCHAIN" -p rvt) > "$2" \
+    (cd "$1" && cargo +"$PUBLIC_API_TOOLCHAIN" public-api -p rvt) > "$2" \
         || { echo "::error::cargo public-api could not list the API at $1"; exit 1; }
 }
 base_dir="${RUNNER_TEMP:-/tmp}/semver-base"
