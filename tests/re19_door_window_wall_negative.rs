@@ -3,7 +3,7 @@
 //! Corpus-backed. Skips cleanly without `RVT_PROJECT_CORPUS_DIR`.
 //! See `reports/element-framing/RE-19-door-window-wall-negative.md`.
 
-use rvt::rect_opening_index::ArcWallRectOpeningIndex;
+use rvt::research::rect_opening_index::ArcWallRectOpeningIndex;
 use rvt::{RevitFile, compression, formats, streams, walker};
 use std::collections::BTreeMap;
 use std::path::PathBuf;

@@ -21,8 +21,8 @@
 //!   cargo run --profile ci --example probe_re97_sketch_curve_lists -- MODEL.rvt
 
 use rvt::RevitFile;
-use rvt::element_record_plan_profiles::scan_sketch_curve_lists;
-use rvt::partition_element_records as per;
+use rvt::research::element_record_plan_profiles::scan_sketch_curve_lists;
+use rvt::research::partition_element_records as per;
 use std::collections::{BTreeMap, BTreeSet};
 
 fn main() -> rvt::Result<()> {

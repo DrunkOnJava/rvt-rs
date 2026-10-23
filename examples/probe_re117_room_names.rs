@@ -15,7 +15,7 @@
 //!   cargo run --profile ci --example probe_re117_room_names -- MODEL.rvt
 
 use rvt::RevitFile;
-use rvt::partition_schema_mvp::recover_partition_schema_mvp;
+use rvt::research::partition_schema_mvp::recover_partition_schema_mvp;
 use rvt::walker::WalkerLimits;
 use std::collections::BTreeSet;
 
@@ -26,8 +26,9 @@ fn main() {
     let mvp = recover_partition_schema_mvp(&mut rf, version, WalkerLimits::default())
         .expect("partition records");
     let rooms: BTreeSet<u32> = mvp.rooms.iter().filter_map(|room| room.id).collect();
-    let found =
-        rvt::partition_room_parameters::scan_room_parameter_entries(&mut rf, version, &rooms);
+    let found = rvt::research::partition_room_parameters::scan_room_parameter_entries(
+        &mut rf, version, &rooms,
+    );
     for id in &rooms {
         println!("{id}\t{:?}", found.get(id));
     }

@@ -261,6 +261,14 @@ We use Conventional Commits:
 Scopes that appear frequently: `formats`, `object_graph`,
 `elem_table`, `partitions`, `writer`, `ifc`, `readme`, `cli`.
 
+A pull request that breaks the stable Rust API (`RELEASE.md`, "What 1.0
+keeps stable") marks its title with `!`, as in `refactor(error)!: ...`, or
+carries a `BREAKING CHANGE:` footer in its body. CI's `semver checks` job
+compares the API with the pull request's base using cargo-semver-checks and
+fails on a breaking change the pull request does not announce. After
+retitling, re-run that job. The research modules behind `unstable-research`
+are not checked.
+
 ## Reverse-engineering findings
 
 When you discover something new about the file format:
@@ -269,7 +277,13 @@ When you discover something new about the file format:
    the finding from bytes: one self-contained file whose module doc states
    the fact it proves and how to check it, with corpus paths taken from
    arguments or the `RVT_*` environment variables, never hardcoded. The
-   `probe_re*.rs` files are the pattern.
+   `probe_re*.rs` files are the pattern. A new reader the probe needs is a
+   research module: put the file in `src/` and declare it in
+   `src/research.rs` (not `src/lib.rs`), and the probe imports it as
+   `rvt::research::<module>`. Probes, tests and benches build with the
+   `unstable-research` feature on; `cargo build` and the published crate do
+   not. A reader moves into the stable API only by a decision recorded in
+   `RELEASE.md` ("What 1.0 keeps stable").
 2. Write a dated report, `reports/element-framing/RE-NN-<topic>.md`: status
    (positive or negative), the files and their sha256, the reference export
    measured against, and counts against Revit's own export (matches,

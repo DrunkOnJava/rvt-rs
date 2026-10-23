@@ -7,7 +7,9 @@
 #
 # BIN_DIR holds the rvt-ifc, rvt-gltf and rvt-info to measure; MODELS_DIR is
 # where tools/fetch-reference-models.sh put the models, with the R2025 models
-# in its r2025/ folder when tools/ci/fetch-r2025-models.sh fetched them. For
+# in its r2025/ folder when tools/ci/fetch-r2025-models.sh fetched them, and
+# BIMcollab's Revit 2015 model in its bimcollab/ folder when
+# tools/ci/fetch-bimcollab.sh fetched it. For
 # each model this writes OUT_DIR/<model>/:
 #   - model.ifc, when KEEP_IFC is set: the exported IFC itself;
 #   - ifc.sha256: the exported IFC's hash without its FILE_NAME and
@@ -74,12 +76,18 @@ if [ -d "$MODELS/r2025" ]; then
 r2025-$stem|r2025/$stem.rvt|$export_ifc"
   done
 fi
+# BIMcollab's example structural model (Revit 2015) with Revit 2015's export of
+# it (research/bimcollab-models.tsv, RE-198), only with `-f bimcollab=true`.
+if [ -f "$MODELS/bimcollab/02_BIMcollab_Example_STR.rvt" ]; then
+  MODELS_LIST="$MODELS_LIST
+bimcollab-str-2015|bimcollab/02_BIMcollab_Example_STR.rvt|bimcollab/02_BIMcollab_Example_STR_optimized.ifc"
+fi
 # Scorers taking <rvt-rs.ifc> <revit-export.ifc>, and <model.glb> <revit-export.ifc>.
 IFC_SCORERS="class_sets_vs_ifc aggregates_vs_ifc global_ids_vs_ifc names_vs_ifc storeys_vs_ifc
 room_names_vs_ifc type_objects_vs_ifc layer_sets_vs_ifc element_materials_vs_ifc
 material_colours_vs_ifc openings_vs_ifc opening_hosts_vs_ifc opening_boxes_vs_ifc
 door_bodies_vs_ifc door_window_sizes_vs_ifc oriented_boxes_vs_ifc plan_profiles_vs_ifc
-pipe_bodies_vs_ifc duct_bodies_vs_ifc ports_vs_ifc psets_vs_ifc saved_meshes_vs_ifc tagged_spaces_vs_ifc port_places_vs_ifc"
+pipe_bodies_vs_ifc duct_bodies_vs_ifc roof_bodies_vs_ifc ports_vs_ifc psets_vs_ifc saved_meshes_vs_ifc tagged_spaces_vs_ifc port_places_vs_ifc"
 GLB_SCORERS="wall_bodies_vs_ifc wall_ends_cv_vs_ifc wall_layers_vs_ifc slab_layers_vs_ifc glb_material_colours_vs_ifc"
 
 # Witness artifacts (research/witness/<id>/observations/rvt-rs.json) per model.

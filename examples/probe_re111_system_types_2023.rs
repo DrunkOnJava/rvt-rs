@@ -20,7 +20,7 @@
 //!   cargo run --profile ci --example probe_re111_system_types_2023 -- MODEL.rvt
 
 use rvt::RevitFile;
-use rvt::partition_element_records_2023::{REVIT_2023, scan_records};
+use rvt::research::partition_element_records_2023::{REVIT_2023, scan_records};
 use std::collections::{BTreeMap, BTreeSet};
 
 /// OST_Walls, OST_Floors, OST_Roofs.
@@ -33,7 +33,7 @@ fn main() {
     let recorded: BTreeSet<u32> = records.iter().map(|record| record.element_id).collect();
     let table = rvt::elem_table::parse_records(&mut rf).expect("Global/ElemTable");
     let declared = rvt::elem_table::declared_ids(&table);
-    let entries = rvt::partition_names::name_entries_2023(&mut rf, &declared);
+    let entries = rvt::research::partition_names::name_entries_2023(&mut rf, &declared);
     let wanted: BTreeSet<u32> = declared
         .iter()
         .copied()
@@ -44,10 +44,9 @@ fn main() {
         let Ok(inflated) = rf.inflated_partition(&stream) else {
             continue;
         };
-        names.extend(rvt::partition_names::find_element_data_names_2023(
-            inflated.bytes(),
-            &wanted,
-        ));
+        names.extend(
+            rvt::research::partition_names::find_element_data_names_2023(inflated.bytes(), &wanted),
+        );
     }
     // The categories of the records naming each id.
     let mut named_by: BTreeMap<u32, BTreeSet<i64>> = BTreeMap::new();

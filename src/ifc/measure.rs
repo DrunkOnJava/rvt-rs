@@ -1,17 +1,19 @@
-//! Measurement tool (VW1-13) — distance, angle, area primitives for
+//! Measurement tool — distance, angle, area primitives for
 //! the viewer's "measure" overlay.
 //!
 //! All functions operate in the caller's native unit (feet by
 //! convention for this crate); they're pure math and make no
 //! unit-system assumptions. Returned values carry the input's
 //! unit — `distance(a, b)` in feet returns feet.
+// Tracker: VW1-13.
 
 use serde::{Deserialize, Serialize};
 
 /// 3D point — three floats, caller's units.
 pub type Point3 = [f64; 3];
 
-/// Euclidean distance between two 3D points (VW1-13).
+/// Euclidean distance between two 3D points.
+// Tracker: VW1-13.
 pub fn distance(a: Point3, b: Point3) -> f64 {
     let dx = a[0] - b[0];
     let dy = a[1] - b[1];
@@ -19,8 +21,9 @@ pub fn distance(a: Point3, b: Point3) -> f64 {
     (dx * dx + dy * dy + dz * dz).sqrt()
 }
 
-/// Signed 3D vector from `a` to `b` (VW1-13). Not a distance —
+/// Signed 3D vector from `a` to `b`. Not a distance —
 /// keep sign per axis so callers can query direction.
+// Tracker: VW1-13.
 pub fn vector(a: Point3, b: Point3) -> Point3 {
     [b[0] - a[0], b[1] - a[1], b[2] - a[2]]
 }
@@ -44,9 +47,10 @@ pub fn magnitude(v: Point3) -> f64 {
     (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).sqrt()
 }
 
-/// Unit-length copy of a vector (VW1-13). Returns the zero vector
+/// Unit-length copy of a vector. Returns the zero vector
 /// when magnitude is zero — callers who care about that case must
 /// check before normalising.
+// Tracker: VW1-13.
 pub fn normalize(v: Point3) -> Point3 {
     let m = magnitude(v);
     if m == 0.0 {
@@ -56,13 +60,14 @@ pub fn normalize(v: Point3) -> Point3 {
     }
 }
 
-/// Angle in radians at vertex `b` of the path `a -> b -> c` (VW1-13).
+/// Angle in radians at vertex `b` of the path `a -> b -> c`.
 /// Returns 0 for degenerate configurations where either leg has
 /// zero length.
 ///
 /// Result is in `[0, π]` (unsigned). Viewers that need a signed
 /// angle compute it themselves using a reference axis + cross
 /// product sign.
+// Tracker: VW1-13.
 pub fn angle_abc(a: Point3, b: Point3, c: Point3) -> f64 {
     let ba = vector(b, a);
     let bc = vector(b, c);
@@ -75,7 +80,7 @@ pub fn angle_abc(a: Point3, b: Point3, c: Point3) -> f64 {
 }
 
 /// Signed area of a 3D polygon via the shoelace-in-plane variant
-/// (VW1-13). Assumes the polygon is (approximately) planar —
+///. Assumes the polygon is (approximately) planar —
 /// non-planar polygons return the projected area onto the
 /// plane whose normal is the vector sum of per-triangle normals
 /// (a common convention; good enough for viewer measurement).
@@ -83,6 +88,7 @@ pub fn angle_abc(a: Point3, b: Point3, c: Point3) -> f64 {
 /// Returns the unsigned magnitude, so winding doesn't matter.
 /// Points should be in order (CW or CCW) — random order produces
 /// an arbitrary result.
+// Tracker: VW1-13.
 pub fn polygon_area_3d(points: &[Point3]) -> f64 {
     if points.len() < 3 {
         return 0.0;
@@ -100,9 +106,10 @@ pub fn polygon_area_3d(points: &[Point3]) -> f64 {
     magnitude(normal) * 0.5
 }
 
-/// Total perimeter of a closed 3D polygon (VW1-13). Sums edge
+/// Total perimeter of a closed 3D polygon. Sums edge
 /// distances including the closing edge (last → first). Polygons
 /// with < 2 points return 0.
+// Tracker: VW1-13.
 pub fn polygon_perimeter(points: &[Point3]) -> f64 {
     if points.len() < 2 {
         return 0.0;
@@ -115,8 +122,9 @@ pub fn polygon_perimeter(points: &[Point3]) -> f64 {
     sum
 }
 
-/// Record of a single measurement operation (VW1-13). Matches the
+/// Record of a single measurement operation. Matches the
 /// shape a viewer's measurement-panel UI binds to.
+// Tracker: VW1-13.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum Measurement {

@@ -22,7 +22,7 @@
 //!   cargo run --profile ci --example probe_re141_connector_anchors -- MODEL.rvt
 
 use rvt::RevitFile;
-use rvt::partition_element_records as per;
+use rvt::research::partition_element_records as per;
 use std::collections::{BTreeMap, BTreeSet};
 
 /// Anchors dumped in full per (anchor class, host class).

@@ -27,12 +27,13 @@ lists the local-only files with their source and hash, and never fetches them.
 | magnetar Core Interior | 2024 | MIT, redistributable | IFC4 ReferenceView 1.2, Revit 24.0.20.20 (the full `_slim` export, and a 20 KB element fixture) | 360 walls, 132 doors, 6 windows, 256 columns, 80 slabs, 15 storeys; Revit's GlobalId on 854 elements, 116 rooms and 15 storeys. Run in CI. |
 | magnetar Einhoven | 2023 | MIT, redistributable | none | 2023 element records with no export to score against (walls, windows, materials), the 2023 arc-wall path; pinned by the project-count fixture and the viewer's browser test |
 | IFC-ECS RE1 Architecture, Mechanical, Plumbing, Electrical | 2025 | MIT, redistributable | IFC2X3 CoordinationView 2.0, Revit 26.2.0.20 | 2025 element records; Architecture: 7 walls, 2 slabs, 11 rooms; 2 storeys each; Revit's GlobalIds 73 / 73 / 123 / 12. Run in CI. |
-| Autodesk Snowdon Towers Architectural | 2024 | none declared, local only | IFC4 ReferenceView 1.2, Revit 24.0.20.20 | 6,021 exported, 5,945 of them in Revit's export; 1,078 walls; 18 storeys; wall joins, layers, curtain walls, stairs, roofs |
+| Autodesk Snowdon Towers Architectural | 2024 | none declared, local only | IFC4 ReferenceView 1.2, Revit 24.0.20.20 | 5,974 exported, 5,945 of them in Revit's export; 1,078 walls; 18 storeys; wall joins, layers, curtain walls, stairs, roofs |
 | Autodesk Snowdon Towers Structural | 2024 | none declared, local only | VIM | beams along their axes, structural categories |
 | Autodesk Snowdon Towers Plumbing, HVAC, Electrical | 2024 | Autodesk sample, local only; downloaded from Autodesk's "Revit Sample Project Files" page (sha256 `4f80526b…`, `58538599…`, `e50e1b71…`) | VIM (2027 edition) | **held out**: never used to develop the decoder, measured once as they are (`reports/validation/held-out-snowdon-mep-2026-09-27.md`) |
 | MIT 4.567 tutorial house, 2024 and 2025 saves | 2024, 2025 | copyright reserved, local only | none | the same model and ElementIds in two releases; the one shed roof |
 | 255ribeiro Projeto1, `teste_export_2025` | 2025 | none declared, local only | IFC4X3 CoordinationView; IFC4 DesignTransferView 1.0, Revit 25.4 (PTB) | metric projects; IFC export overrides; files saved in `PTB` (RE-123) |
 | 255ribeiro `Exemplo_data`, `modelo_bim` | 2023 | none declared, local only | IFC4 ReferenceView 1.2, Revit 23.1 (`Exemplo_data`); IFC4 DesignTransferView 1.0, Revit 26.2 PTB (`modelo_bim`, exported from the 2023 file by a later Revit) | Revit 2023 element records (RE-81 to RE-122): 37 of 37 and 37 of 45 elements, storeys, types, layers, materials, wall joins, beams; files saved in `PTB` |
+| BIMcollab example, structural model (`02_BIMcollab_Example_STR`) | 2015 | none stated, local only; BIMcollab's public example project (`research/bimcollab-models.tsv`, fetched by Measure with `-f bimcollab=true`, STE1200's pointer) | IFC2X3 CoordinationView 2.0, Revit Architecture 2015, 2014-10-08, rewritten by Solibri's IFC Optimizer; the model was renamed after it | **held out**, measured once before any fix (RE-198): all 241 exported elements by ElementId and class, 3 more written, GlobalIds not rebuilt (#878), 16 footings on no storey (#879); wall faces and layer sets as Revit's |
 
 ## Candidates, not yet measured here
 
@@ -44,13 +45,13 @@ their source by whoever runs the measurement, never committed.
 | Model | Revit | Source | sha256 | Why |
 |---|---|---|---|---|
 | AA-SingleDwellingHouse-RVT-CIADD, with its IFC | 2026 | [flowbim.ee](https://flowbim.ee/files/content/cci/ENG/AA-SingleDwellingHouse-RVT-CIADD.rvt) | `eeff78f3…0a654` (IFC `c9e2986c…67342`) | the first 2026 project with Revit's export: the 2026 element-record gate (#421); measured in RE-124 (88 placed instances, all in Revit's export) |
-| 02_BIMcollab_Example_STR, with its IFC2X3 | 2015 | the public BIMcollab example project package | `8cd1f122…e193` | the pre-2024 record envelope (#421) |
 | rac_basic_sample_project | 2017 | Autodesk sample | `a1d3d077…5fefb` | the same, with no export; now fetched and measured with the other sample projects (below, RE-140) |
 | Geberit VariForm washbasin PRO_1833290, two variants | 2018 family | Geberit | `28b9d111…e5e4`, `0d48b22c…fbb9` | DirectShape meshes in a family |
 | Pucciplast Cassetta Eco 9/4 l (EN) | 2022 family | Pucciplast | `a610ffcc…ae00` | sketch forms and voids in a family |
 
-STE1200's test vectors for the first three (record bytes, offsets and the
-values read) are the cross-check for any reader of them.
+STE1200's test vectors for the 2026 house, the BIMcollab model (now measured,
+RE-198) and the 2017 sample (record bytes, offsets and the values read) are the
+cross-check for any reader of them.
 
 ## Autodesk's sample projects, fetched for a run
 

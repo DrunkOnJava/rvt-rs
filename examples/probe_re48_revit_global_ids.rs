@@ -16,7 +16,7 @@
 //!   cargo run --profile ci --example probe_re48_revit_global_ids -- FILE.rvt [REVIT.ifc]
 
 use rvt::RevitFile;
-use rvt::revit_global_ids::revit_global_ids;
+use rvt::research::revit_global_ids::revit_global_ids;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 

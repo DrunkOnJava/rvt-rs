@@ -31,7 +31,7 @@ Supported quality gates are `scaffold`, `typed-no-geometry`, `geometry`, and
 |---|---|
 | `scaffold` | Framework + production elements; geometry when recovered. No HostObjAttr proxies. |
 | `typed-no-geometry` | Mapped/typed elements only; geometry fields stripped. |
-| `geometry` / `strict` | Mapped/typed elements; Lane Six curves/loops/hosts/elevations when present. |
+| `geometry` / `strict` | Mapped/typed elements; curves, loops, hosts and elevations when present. |
 
 `strict` fails before writing IFC when required model data is missing;
 when `--diagnostics` is present, the sidecar is still written for triage.
@@ -54,7 +54,7 @@ minor release; incompatible changes must increment this number.
 |---|---:|---|
 | `schema_version` | integer | Diagnostics schema version. |
 | `mode` | string | `placeholder`, `default`, or `diagnostic_proxies`. |
-| `input` | object | Revit version and build, the file name of the path Revit last saved the file at (`original_path`, without its folders), the export's project name, and which required streams are present. |
+| `input` | object | Revit version and build, the file name of the path Revit last saved the file at (`original_path`, without its folders), the export's project name, which required streams are present, and `release_support`: how the release's element records are read, as the `status` (`verified`, `partial`, `experimental`, or `unsupported` where none are read) of the `docs/support-matrix.json` row named in `capability` (#871). An `experimental` release also adds a warning. |
 | `decoded` | object | Counts recovered by reader-side scanners before IFC emission. |
 | `exported` | object | IFC model entity counts, geometry count, materials, units, storeys. |
 | `skipped` | array | Suppressed items, grouped by reason and class. |
@@ -246,7 +246,11 @@ export.
     "has_basic_file_info": true,
     "has_part_atom": true,
     "has_formats_latest": true,
-    "has_global_latest": true
+    "has_global_latest": true,
+    "release_support": {
+      "status": "partial",
+      "capability": "typed-project-elements"
+    }
   },
   "decoded": {
     "production_walker_elements": 0,

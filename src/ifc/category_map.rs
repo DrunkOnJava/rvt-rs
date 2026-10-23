@@ -436,7 +436,7 @@ pub fn lookup(revit_class: &str) -> Option<&'static Mapping> {
 /// redirect a decoded element to (#212, RE-22).
 ///
 /// The override carrier is general —
-/// [`crate::partition_ifc_export_overrides`] returns whatever value
+/// `crate::partition_ifc_export_overrides` returns whatever value
 /// string the parameter block holds — but acting on a value is a
 /// claim, so only values proven against a reference export are
 /// listed. An unlisted value leaves the element on its class mapping,
@@ -773,7 +773,7 @@ pub fn lookup_export_override(value: &str) -> Option<&'static Mapping> {
 /// property-sets (`Pset_MemberCommon`) or group members into an
 /// `IfcRelAggregates` under a truss / frame assembly.
 ///
-/// IFC-10: IfcMember is IFC4's dedicated entity for secondary
+/// IfcMember is IFC4's dedicated entity for secondary
 /// structural elements. Routing through it (rather than the
 /// fallback `IfcBeam`) lets validators and downstream tools
 /// distinguish primary beams from bracing / purlins / studs /

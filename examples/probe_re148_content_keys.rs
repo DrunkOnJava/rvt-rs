@@ -22,7 +22,9 @@
 
 use rvt::compression::{inflate_all_chunks, prepare_stream_for_inflate};
 use rvt::streams::GLOBAL_CONTENT_DOCUMENTS;
-use rvt::{RevitFile, native_document, native_segments, schema_registry};
+use rvt::{
+    RevitFile, research::native_document, research::native_segments, research::schema_registry,
+};
 use std::collections::BTreeMap;
 
 const EXAMPLES: usize = 5;

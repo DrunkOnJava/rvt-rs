@@ -1,4 +1,5 @@
-//! Honest capability manifest snapshot (Phase 1 leftovers).
+//! The capability manifest: what rvt-rs reads, at the status
+//! `docs/support-matrix.json` allows.
 //!
 //! Emits research + product capability rows aligned with
 //! `docs/support-matrix.json` honesty ceilings. Does **not** claim ES
@@ -7,8 +8,6 @@
 //! Schema: `docs/schemas/capability-manifest.schema.json` (and the ES
 //! promotion stub at `docs/schemas/es-capability.schema.json`).
 
-use crate::evidence::EvidenceTier;
-use crate::relations::{RelationDomain, RelationDomainRegistry};
 use serde::{Deserialize, Serialize};
 
 /// `docs/support-matrix.json` as built into this crate: every capability with
@@ -16,6 +15,54 @@ use serde::{Deserialize, Serialize};
 /// can do; README, `docs/status.md` and `docs/supported-profile.md` summarise
 /// it, and `tests/support_matrix.rs` keeps it honest.
 pub const SUPPORT_MATRIX_JSON: &str = include_str!("../docs/support-matrix.json");
+
+/// How rvt-rs reads a Revit release's element records (#871): the
+/// [`SUPPORT_MATRIX_JSON`] row that holds them and that row's status.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ReleaseSupport {
+    /// The row's status: `verified`, `partial` or `experimental`, or
+    /// `unsupported` where no element records of the release are read.
+    pub status: String,
+    /// The row's id, or `None` where no element records of the release are
+    /// read.
+    pub capability: Option<String>,
+}
+
+/// The [`SUPPORT_MATRIX_JSON`] row that holds a release's element records,
+/// or `None` for a release whose element records are not read.
+pub fn release_capability_id(revit_version: u32) -> Option<&'static str> {
+    match revit_version {
+        2015..=2018 => Some("element-records-revit-2015-2018"),
+        2019..=2022 => Some("element-records-revit-2019-2022"),
+        2023 => Some("element-records-revit-2023"),
+        2024 => Some("typed-project-elements"),
+        2025 => Some("element-records-revit-2025"),
+        2026 => Some("element-records-revit-2026"),
+        2027 => Some("element-records-revit-2027"),
+        _ => None,
+    }
+}
+
+/// How a release's element records are read, from the support matrix built
+/// into this crate, so it cannot disagree with the matrix.
+pub fn release_support(revit_version: u32) -> ReleaseSupport {
+    let capability = release_capability_id(revit_version);
+    let status = capability
+        .and_then(|id| {
+            let matrix: serde_json::Value = serde_json::from_str(SUPPORT_MATRIX_JSON).ok()?;
+            matrix["capabilities"]
+                .as_array()?
+                .iter()
+                .find(|row| row["id"] == id)?["status"]
+                .as_str()
+                .map(str::to_string)
+        })
+        .unwrap_or_else(|| "unsupported".to_string());
+    ReleaseSupport {
+        status,
+        capability: capability.map(str::to_string),
+    }
+}
 
 /// Manifest status vocabulary (subset of support-matrix + ES schema).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -186,5 +233,159 @@ impl CapabilityManifest {
     /// Lookup by capability id.
     pub fn get(&self, id: &str) -> Option<&CapabilityRecord> {
         self.capabilities.iter().find(|c| c.capability_id == id)
+    }
+}
+
+/// Evidence ceiling labels from the unified research report (§2).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum EvidenceTier {
+    /// Speculative / untested hypothesis.
+    E0,
+    /// Single-environment observation.
+    E1,
+    /// Multi-file or multi-release observation; no independent oracle.
+    E2,
+    /// Independently reproduced on redistributable / owned fixtures.
+    E3,
+    /// Oracle-backed + automated regression.
+    E4,
+    /// Promoted capability with release gate + support-matrix row.
+    E5,
+}
+
+impl EvidenceTier {
+    /// Human-readable label.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::E0 => "E0",
+            Self::E1 => "E1",
+            Self::E2 => "E2",
+            Self::E3 => "E3",
+            Self::E4 => "E4",
+            Self::E5 => "E5",
+        }
+    }
+
+    /// True when the tier is high enough for a `verified` capability claim.
+    pub fn meets_verified_gate(self) -> bool {
+        self >= Self::E4
+    }
+}
+
+/// Isolated relation domain. Edges must not silently migrate across domains.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RelationDomain {
+    /// ES-held ElementId / reference candidates.
+    EsRefGraph,
+    /// ES value-tree containment (separate from BIM topology).
+    EsValueTree,
+    /// BIM host/opening/connect — only after evidence gates.
+    BimTopology,
+    /// ElemTable ownership candidates (#152) — scored separately from ES.
+    ElemTableOwnership,
+    /// Catch-all research-only domain.
+    ResearchOther,
+}
+
+impl RelationDomain {
+    /// Stable id for manifests / CLI output.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::EsRefGraph => "es_ref_graph",
+            Self::EsValueTree => "es_value_tree",
+            Self::BimTopology => "bim_topology",
+            Self::ElemTableOwnership => "elem_table_ownership",
+            Self::ResearchOther => "research_other",
+        }
+    }
+
+    /// Domains that must never contribute to each other's promotion scores.
+    pub fn isolation_peers(self) -> &'static [RelationDomain] {
+        match self {
+            Self::EsRefGraph | Self::EsValueTree => &[Self::ElemTableOwnership],
+            Self::ElemTableOwnership => &[Self::EsRefGraph, Self::EsValueTree],
+            Self::BimTopology | Self::ResearchOther => &[],
+        }
+    }
+}
+
+/// Registry of known relation domains with honesty notes.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct RelationDomainRegistry {
+    pub domains: Vec<RelationDomainEntry>,
+    pub experimental: bool,
+    pub notes: Vec<String>,
+}
+
+/// One registered domain row.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct RelationDomainEntry {
+    pub domain: RelationDomain,
+    pub id: String,
+    /// Production wiring status; every domain is experimental today.
+    pub status: DomainStatus,
+    pub isolation_peers: Vec<RelationDomain>,
+    pub notes: Vec<String>,
+}
+
+/// Domain promotion status (intentionally coarse).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DomainStatus {
+    /// Architecture stub only — not wired to product claims.
+    Experimental,
+    /// Research observations may be recorded; no verified claims.
+    Research,
+    /// Do not use for product / IFC defaults.
+    Quarantined,
+}
+
+impl RelationDomainRegistry {
+    /// The registry as it stands: every domain experimental, with its
+    /// isolation peers and notes.
+    pub fn phase1_stub() -> Self {
+        let domains = [
+            RelationDomain::EsRefGraph,
+            RelationDomain::EsValueTree,
+            RelationDomain::BimTopology,
+            RelationDomain::ElemTableOwnership,
+            RelationDomain::ResearchOther,
+        ]
+        .into_iter()
+        .map(|domain| RelationDomainEntry {
+            domain,
+            id: domain.as_str().to_string(),
+            status: DomainStatus::Experimental,
+            isolation_peers: domain.isolation_peers().to_vec(),
+            notes: match domain {
+                RelationDomain::EsRefGraph => {
+                    vec!["ES ElementId remapping not claimed (H-ES5 Phase 2 Revit-blocked)".into()]
+                }
+                RelationDomain::EsValueTree => {
+                    vec!["Separate from BIM topology per governing decision §3.2".into()]
+                }
+                RelationDomain::BimTopology => {
+                    vec!["Bound by RE-19 / RE-20 negatives; no invented Door/Window joins".into()]
+                }
+                RelationDomain::ElemTableOwnership => {
+                    vec!["#152 scoring wall — ES refs must not contribute".into()]
+                }
+                RelationDomain::ResearchOther => {
+                    vec!["Catch-all; never promote without an explicit domain move".into()]
+                }
+            },
+        })
+        .collect();
+        Self {
+            domains,
+            experimental: true,
+            notes: vec![
+                "RelationDomainRegistry is experimental architecture — not production topology."
+                    .into(),
+                "Default IFC must not emit ES-derived edges (G-IFC).".into(),
+            ],
+        }
     }
 }

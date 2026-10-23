@@ -1,4 +1,4 @@
-//! Mode-aware IFC content policy (Lane Seven).
+//! Mode-aware IFC content policy.
 //!
 //! [`ExportQualityMode`] is both a *validation gate* (see
 //! [`super::ExportQualityMode::validate`]) and a *content policy*
@@ -8,7 +8,7 @@
 //! |---|---|
 //! | `scaffold` | Framework + production elements; geometry when recovered. No diagnostic proxies. |
 //! | `typed-no-geometry` | Mapped / typed elements only; geometry fields stripped. |
-//! | `geometry` | Mapped / typed elements; attach Lane Six curves / loops / hosts / elevations when present. |
+//! | `geometry` | Mapped / typed elements; attach recovered curves, loops, hosts and elevations when present. |
 //! | `strict` | Same emission as `geometry`; validation then fails closed on incomplete output. |
 //!
 //! `HostObjAttr` and other low-confidence parent-class hits are never
@@ -56,8 +56,9 @@ pub struct TypedProductionAppend {
     /// Each family instance's original symbol, by ElementId (RE-167).
     pub element_original_symbols: BTreeMap<u32, u32>,
     /// Whether Revit's exporter takes each door's and window's symbol as
-    /// flipped, by ElementId (B72): read in every quality mode, as the flip
-    /// is part of the type's GlobalId (B74).
+    /// flipped, by ElementId: read in every quality mode, as the flip
+    /// is part of the type's GlobalId.
+    // Tracker: B72, B74.
     pub element_flips: BTreeMap<u32, bool>,
     /// The `Pset_PipeSegmentOccurrence` sets whose `InvertElevation` is a
     /// pipe's invert worked out in model height, by index in the entities,
@@ -98,7 +99,7 @@ impl ExportContentPolicy {
 }
 
 /// Property-set name carried by a body recovered from a partition
-/// element record's bounding box (#204 / #211).
+/// element record's bounding box (#204, #211).
 pub const ELEMENT_RECORD_PROPERTY_SET: &str = "RvtElementRecordGeometry";
 
 /// Property naming an element-record element's family (RE-38).
@@ -180,7 +181,8 @@ pub(crate) fn is_distribution_element(ifc_type: &str) -> bool {
         )
 }
 
-/// An element's place in plan, for a door's or window's flip (B72).
+/// An element's place in plan, for a door's or window's flip.
+// Tracker: B72.
 struct PlanFrame {
     location: [f64; 2],
     /// The direction of the element's axis, where it has a body.
@@ -203,7 +205,7 @@ fn plan_axis_turn(rotation_radians: Option<f64>, body: &Extrusion) -> f64 {
 }
 
 /// Whether Revit's exporter takes a door's or window's symbol as flipped
-/// (B72, revit-ifc `DoorWindowInfo.CalculateDoorWindowInformation`): whether
+/// (revit-ifc `DoorWindowInfo.CalculateDoorWindowInformation`): whether
 /// the side of its host wall's axis its box centre lies on differs from the
 /// side its own Y axis (`facing`) points to, a side being +Y of the wall's
 /// direction. The direction's sign cancels out. A door with no host wall, or
@@ -219,8 +221,9 @@ fn door_symbol_flipped(door: [f64; 2], wall: [f64; 2], wall_turn: f64, facing: [
 }
 
 /// The record properties that say what an element is rather than where it
-/// is or how it is drawn, which an export without geometry keeps (B74),
+/// is or how it is drawn, which an export without geometry keeps,
 /// along with the type's text parameters (RE-77).
+// Tracker: B74.
 const IDENTITY_PROPERTIES: [&str; 10] = [
     crate::element_record_level_refs::LEVEL_ELEMENT_ID_PROPERTY,
     "LevelBindSource",
@@ -235,7 +238,8 @@ const IDENTITY_PROPERTIES: [&str; 10] = [
 ];
 
 /// `set` less every property that is not one of [`IDENTITY_PROPERTIES`] or
-/// a type text parameter of `decoded` (B74).
+/// a type text parameter of `decoded`.
+// Tracker: B74.
 fn identity_property_set(mut set: PropertySet, decoded: &DecodedElement) -> PropertySet {
     let type_parameters: Vec<&str> = decoded
         .fields
@@ -1588,12 +1592,12 @@ fn reference_property_sets(
 }
 
 /// The set Revit's own IFC export writes an element's Category, family and
-/// type in, and its type object's Category and Family Name (spike 257).
+/// type in, and its type object's Category and Family Name (#755).
 pub const REVIT_OTHER_SET: &str = "Other";
 
 /// The parameters Revit's own IFC export writes on an element for its
 /// category, family, type and phase, under its set and property names
-/// (spike 257): `Other` (Category, Family, Family and Type, Type, Type Id)
+/// (#755): `Other` (Category, Family, Family and Type, Type, Type Id)
 /// and `Phasing` (Phase Created). Each is written only from a value the
 /// element carries. The type's own parameters (Family Name, Type Name) go on
 /// its type object, as Revit writes them.
@@ -1704,7 +1708,7 @@ fn is_external_set(ifc_type: &str) -> Option<&'static str> {
 /// property set entry reads before anything else (`PropertySetEntry
 /// ("Pset_WallCommon.IsExternal", "IsExternal")` in its pset definitions,
 /// CLEANROOM.md source 5), else the value Revit's exporter calculates
-/// ([`crate::partition_schema_mvp::IS_EXTERNAL_FIELD`]). `None` where neither
+/// (`crate::partition_schema_mvp::IS_EXTERNAL_FIELD`). `None` where neither
 /// is read.
 fn is_external_value(decoded: &DecodedElement, set: &str) -> Option<bool> {
     use crate::partition_schema_mvp as mvp;
@@ -1757,7 +1761,8 @@ fn add_is_external(
 }
 
 /// Add `Finish` (`IfcText`) to a covering's `Pset_CoveringCommon` among
-/// `sets`: its type's finish layers' materials (B41).
+/// `sets`: its type's finish layers' materials.
+// Tracker: B41.
 fn add_covering_finish(sets: &mut [PropertySet], ifc_type: &str, decoded: &DecodedElement) {
     if ifc_type != "IFCCOVERING" {
         return;
@@ -2109,12 +2114,13 @@ pub(super) fn pipe_inverts_above_storeys(
     }
 }
 
-/// The entities a room's space contains in Revit's export (B63): on RE1
+/// The entities a room's space contains in Revit's export: on RE1
 /// Architecture its furniture, sanitary terminals and equipment written as
 /// proxies, and no wall, door, slab, covering or curtain wall. On the
 /// BIM4LCA office (#792) Revit's export also puts its waste, fire
 /// suppression and air terminals and electric appliances in their rooms'
 /// spaces.
+// Tracker: B63.
 const ROOM_CONTENT_TYPES: [&str; 7] = [
     "IFCFURNITURE",
     "IFCSANITARYTERMINAL",
@@ -2161,12 +2167,13 @@ fn space_plan_outline(
 }
 
 /// Contain each room's furniture, fixtures and equipment in its space, as
-/// Revit's export does (B63): a family instance written as one of
+/// Revit's export does: a family instance written as one of
 /// [`ROOM_CONTENT_TYPES`], hosted by nothing, whose location lies in the plan
 /// outline of a space on its storey, or, where it lies in none, whose plan box
 /// overlaps exactly one, as a cabinet recessed into a room's wall does (RE1
 /// Architecture's 375441, 0.08 ft outside its room). Everything else stays in
 /// its storey.
+// Tracker: B63.
 pub(super) fn contain_in_spaces(entities: &mut Vec<entities::IfcEntity>) {
     use crate::element_record_plan_profiles::inside;
     let is_family_instance = |set: &Option<PropertySet>| {
@@ -2456,9 +2463,10 @@ struct RecordGeometry {
 /// its outline in the body's frame, and the floor's thickness, feet.
 type VoidBody = (usize, u32, Vec<(f64, f64)>, f64);
 
-/// A wall's elevation-profile opening (B55): its tag, its outline along and
+/// A wall's elevation-profile opening: its tag, its outline along and
 /// up the wall, the wall's axis turn in its placement, the sketch plane's
 /// offset to the axis's left, and the wall's thickness.
+// Tracker: B55.
 type ProfileOpening = (u32, Vec<(f64, f64)>, f64, f64, f64);
 
 /// `BodyHeightSource` of a column drawn as its body after geometry joins: the
@@ -2536,7 +2544,7 @@ fn oriented_box_solid(axes: [[f64; 3]; 3], half: [f64; 3], height: f64) -> entit
 pub const INSTANCE_ORIGIN_PROPERTIES: [&str; 2] = ["InstanceOriginX", "InstanceOriginY"];
 
 /// Properties holding a window's opening from its type and transform
-/// (RE-93, [`crate::partition_schema_mvp::FillerOpening`]): the plan point
+/// (RE-93, `crate::partition_schema_mvp::FillerOpening`): the plan point
 /// it is centred on and the direction of its width, model feet and a unit
 /// vector, then its base elevation, width and height, feet.
 pub const FILLER_OPENING_PROPERTIES: [&str; 7] = [
@@ -2550,7 +2558,7 @@ pub const FILLER_OPENING_PROPERTIES: [&str; 7] = [
 ];
 
 /// Properties holding a door's Width and Height from its type (RE-187,
-/// [`crate::partition_schema_mvp::DOOR_TYPE_SIZE_FIELDS`]), feet.
+/// `crate::partition_schema_mvp::DOOR_TYPE_SIZE_FIELDS`), feet.
 pub const DOOR_TYPE_SIZE_PROPERTIES: [&str; 2] = ["TypeWidth", "TypeHeight"];
 
 /// Classes whose body another rule draws, which a family instance's turn
@@ -2783,6 +2791,163 @@ fn roof_slope_solid(
         |p| sign * offset(p) * rise,
         vertical,
     )?;
+    Some(entities::SolidShape::FacetedBrep {
+        vertices_feet: mesh.vertices,
+        triangles: mesh
+            .triangles
+            .into_iter()
+            .map(|[a, b, c]| entities::BrepTriangle(a, b, c))
+            .collect(),
+    })
+}
+
+/// Whether `p` lies inside the ring `ring` (even-odd rule).
+fn point_in_ring((px, py): (f64, f64), ring: &[(f64, f64)]) -> bool {
+    let mut inside = false;
+    for i in 0..ring.len() {
+        let ((ax, ay), (bx, by)) = (ring[i], ring[(i + 1) % ring.len()]);
+        if (ay > py) != (by > py) && px < ax + (py - ay) * (bx - ax) / (by - ay) {
+            inside = !inside;
+        }
+    }
+    inside
+}
+
+/// A gable or hip roof's body (RE-199): each defining edge's plane rises
+/// from it into the roof at its angle (raised by the edge's plate offset).
+/// A plane counts within its edge's straight-skeleton wedge: on the edge's
+/// side, between the lines where it meets its neighbouring defining edges'
+/// planes, which converge at a hip and part at a valley. The roof's top is
+/// the lowest counting plane at each point, so hips and valleys both come
+/// out right over convex and L-shaped footprints. The planes' tops meet the
+/// outline at one eave height, `T / cos θ` of the shallowest edge; each
+/// plane's underside lies its own `T / cos θ` below its top, never below
+/// the record box's base.
+///
+/// With `rafter_cut`, a two-cut rafter's fascia depth `F`, the eave height
+/// is `F` instead, and each plane is cut level at the base raised by its
+/// plate offset: `F = 0` (the default) sets the plain roof down by the
+/// thickness's vertical extent, `F = T / cos θ` is the plain roof. The
+/// plumb and square two-cuts coincide at `F = 0`.
+///
+/// Revit's export of the roofs of #356's `R2025_Models.zip` has this shape:
+/// sheds, a gable, hips at 30° and at 15° and 35°, two-cuts with plate
+/// offsets, and L-shaped hips with a raised edge and a hole. `None` unless the
+/// highest point of the top reproduces `height` within
+/// [`ROOF_SLOPE_CLOSURE_FEET`].
+fn roof_planes_solid(
+    slopes: &[crate::partition_schema_mvp::RoofSlope],
+    [x, y]: [f64; 2],
+    outer: &[(f64, f64)],
+    inner: &[Vec<(f64, f64)>],
+    height: f64,
+    rafter_cut: Option<f64>,
+) -> Option<entities::SolidShape> {
+    if outer.len() < 3 {
+        return None;
+    }
+    let mut planes: Vec<(super::body_geometry::PlanPlane, f64)> = Vec::new();
+    let mut domains: Vec<Vec<super::body_geometry::PlanPlane>> = Vec::new();
+    // Each edge's ends and a point just inside its middle, local feet.
+    let mut ends: Vec<[(f64, f64); 2]> = Vec::new();
+    let mut probes: Vec<(f64, f64)> = Vec::new();
+    for slope in slopes {
+        let [sx, sy] = slope.edge_start;
+        let [ex, ey] = slope.edge_end;
+        let length = (ex - sx).hypot(ey - sy);
+        let angle = slope.angle_radians;
+        if !(length > 1e-9
+            && angle.is_finite()
+            && angle > 0.0
+            && angle < std::f64::consts::FRAC_PI_2
+            && slope.thickness_feet > 0.0)
+        {
+            return None;
+        }
+        let (ux, uy) = ((ex - sx) / length, (ey - sy) / length);
+        // Distance from the edge in local coordinates: -uy·px + ux·py + c.
+        let c = (x - sx) * -uy + (y - sy) * ux;
+        // The plane rises into the roof: the side of the edge that a point
+        // just inside its midpoint lies on. Over a non-convex footprint the
+        // outline crosses the edge's line, and the plane's domain ends there.
+        let mid = ((sx + ex) / 2.0 - x, (sy + ey) / 2.0 - y);
+        let probe = (mid.0 - uy * 1e-3, mid.1 + ux * 1e-3);
+        let sign = if point_in_ring(probe, outer) {
+            1.0
+        } else {
+            -1.0
+        };
+        let rise = sign * angle.tan();
+        domains.push(vec![[-uy * sign, ux * sign, c * sign]]);
+        ends.push([(sx - x, sy - y), (ex - x, ey - y)]);
+        probes.push((mid.0 - uy * sign * 1e-3, mid.1 + ux * sign * 1e-3));
+        planes.push((
+            [-uy * rise, ux * rise, c * rise + slope.plate_offset_feet],
+            slope.thickness_feet / angle.cos(),
+        ));
+    }
+    // The wedge of each edge: at each end it shares with another defining
+    // edge, the side of the line where their planes meet that holds the
+    // edge's own middle.
+    let at = |[a, b, c]: super::body_geometry::PlanPlane, (px, py): (f64, f64)| a * px + b * py + c;
+    for i in 0..planes.len() {
+        for j in 0..planes.len() {
+            let shared = i != j
+                && ends[i].iter().any(|&(px, py)| {
+                    ends[j]
+                        .iter()
+                        .any(|&(qx, qy)| (px - qx).abs() < 1e-6 && (py - qy).abs() < 1e-6)
+                });
+            if !shared {
+                continue;
+            }
+            let (pi, pj) = (planes[i].0, planes[j].0);
+            let mut line = [pi[0] - pj[0], pi[1] - pj[1], pi[2] - pj[2]];
+            if line[0].hypot(line[1]) < 1e-12 {
+                continue;
+            }
+            if at(line, probes[i]) < 0.0 {
+                line = line.map(|v| -v);
+            }
+            domains[i].push(line);
+        }
+    }
+    let eave = if let Some(fascia) = rafter_cut {
+        fascia
+    } else {
+        planes
+            .iter()
+            .map(|(_, vertical)| *vertical)
+            .fold(f64::INFINITY, f64::min)
+    };
+    let tops: Vec<_> = planes
+        .iter()
+        .map(|([a, b, c], _)| [*a, *b, c + eave])
+        .collect();
+    // A two-cut plane is cut level at its own eave's top, the base raised by
+    // its plate offset; otherwise at the base.
+    let undersides: Vec<_> = planes
+        .iter()
+        .zip(slopes)
+        .map(|(([a, b, c], vertical), slope)| {
+            let floor = if rafter_cut.is_some() {
+                slope.plate_offset_feet
+            } else {
+                0.0
+            };
+            ([*a, *b, c + eave - vertical], floor)
+        })
+        .collect();
+    let mesh =
+        super::body_geometry::envelope_slab_mesh(outer, inner, &tops, &undersides, &domains)?;
+    let highest = mesh
+        .vertices
+        .iter()
+        .map(|v| v[2])
+        .fold(f64::NEG_INFINITY, f64::max);
+    if (highest - height).abs() > ROOF_SLOPE_CLOSURE_FEET {
+        return None;
+    }
     Some(entities::SolidShape::FacetedBrep {
         vertices_feet: mesh.vertices,
         triangles: mesh
@@ -3505,10 +3670,14 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
             .and_then(|axis| turned_box(axis, width, depth))
     };
     // RE-56: a shed roof whose slope reproduces its record box rises along
-    // it.
+    // it. RE-199: a gable or hip roof, its planes' lowest envelope, and
+    // either cut level at its base when that is what its box records.
     let roof_slope = if class == "Roof" {
         profile.as_ref().and_then(|profile| {
-            let slope = crate::partition_schema_mvp::roof_slope_from_fields(&decoded.fields)?;
+            let slopes = crate::partition_schema_mvp::roof_slopes_from_fields(&decoded.fields);
+            let fascia =
+                crate::partition_schema_mvp::roof_fascia_depth_from_fields(&decoded.fields)
+                    .unwrap_or(0.0);
             let outer: Vec<(f64, f64)> = profile
                 .outer_xy
                 .iter()
@@ -3519,7 +3688,28 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
                 .iter()
                 .map(|ring| ring.iter().map(|(px, py)| (px - x, py - y)).collect())
                 .collect();
-            roof_slope_solid(slope, [x, y], &outer, &inner, height)
+            use crate::partition_roof_slopes::RafterCut;
+            let plain = || match slopes.as_slice() {
+                [] => None,
+                [slope] => roof_slope_solid(*slope, [x, y], &outer, &inner, height),
+                _ => roof_planes_solid(&slopes, [x, y], &outer, &inner, height, None),
+            };
+            let two_cut = || {
+                (!slopes.is_empty())
+                    .then(|| {
+                        roof_planes_solid(&slopes, [x, y], &outer, &inner, height, Some(fascia))
+                    })
+                    .flatten()
+            };
+            // RE-199: the roof's own rafter cut where it is read; elsewhere
+            // the plain body, else the two-cut one its record box singles out.
+            match crate::partition_schema_mvp::roof_rafter_cut_from_fields(&decoded.fields) {
+                Some(RafterCut::Plumb) => plain(),
+                Some(RafterCut::TwoCutPlumb) => two_cut(),
+                // A square two-cut with a fascia is not measured.
+                Some(RafterCut::TwoCutSquare) => (fascia == 0.0).then(two_cut).flatten(),
+                None => plain().or_else(two_cut),
+            }
         })
     } else {
         None

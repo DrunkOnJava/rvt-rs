@@ -8,7 +8,7 @@
 //!
 //! Usage: probe_re169_export_flag <RE1-Plumbing.rvt>
 
-use rvt::{RevitFile, native_document};
+use rvt::{RevitFile, research::native_document};
 use std::path::PathBuf;
 
 const FAMILY: u64 = 491228;

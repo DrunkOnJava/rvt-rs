@@ -349,3 +349,48 @@ fn status_docs_reference_executable_support_matrix() {
         "DOC-001: docs/status.md should point readers at the executable matrix / audit control"
     );
 }
+
+/// #871: every release whose element records rvt-rs reads names the
+/// support-matrix row that rates them, and that row exists, so no release is
+/// read without the diagnostics saying how far to rely on it.
+#[test]
+fn every_release_read_has_a_support_matrix_status() {
+    let matrix = load_json("docs/support-matrix.json");
+    let statuses: BTreeMap<&str, &str> = matrix["capabilities"]
+        .as_array()
+        .expect("capabilities array")
+        .iter()
+        .map(|row| {
+            (
+                row["id"].as_str().expect("capability id"),
+                row["status"].as_str().expect("capability status"),
+            )
+        })
+        .collect();
+    for release in 2000..=2100 {
+        let read = rvt::research::partition_element_records::supports_revit_version(release)
+            || rvt::research::partition_element_records_2023::is_32bit_release(release);
+        let support = rvt::capability::release_support(release);
+        match rvt::capability::release_capability_id(release) {
+            Some(id) => {
+                assert!(
+                    read,
+                    "Revit {release} names row {id}, but its element records are not read"
+                );
+                assert_eq!(
+                    statuses.get(id).copied(),
+                    Some(support.status.as_str()),
+                    "Revit {release}: row {id} is not in docs/support-matrix.json"
+                );
+                assert_ne!(support.status, "unsupported", "Revit {release}: row {id}");
+            }
+            None => {
+                assert!(
+                    !read,
+                    "Revit {release}'s element records are read, but no support-matrix row rates them (#871)"
+                );
+                assert_eq!(support.status, "unsupported");
+            }
+        }
+    }
+}

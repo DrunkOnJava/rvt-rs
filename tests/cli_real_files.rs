@@ -309,8 +309,8 @@ fn write_round_trips_or_refuses_a_streams_own_bytes() {
             ("Global/Latest", "CustomPrefix8"),
         ] {
             let mut rf = rvt::RevitFile::open(source).expect("open source");
-            let decoded =
-                rvt::native_document::read_single(&mut rf, stream).expect("decode source stream");
+            let decoded = rvt::research::native_document::read_single(&mut rf, stream)
+                .expect("decode source stream");
             let manifest = dir.join("patches.json");
             let patches = serde_json::json!({
                 "patches": [{ "stream_name": stream, "new_decompressed": decoded, "framing": framing }]
@@ -346,8 +346,8 @@ fn write_round_trips_or_refuses_a_streams_own_bytes() {
             // rvt-write said it wrote the stream: rvt-rs's reader must read
             // back the bytes it was given, and nothing else may change.
             let mut written = rvt::RevitFile::open(&target).expect("open written file");
-            let read_back =
-                rvt::native_document::read_single(&mut written, stream).unwrap_or_else(|e| {
+            let read_back = rvt::research::native_document::read_single(&mut written, stream)
+                .unwrap_or_else(|e| {
                     panic!(
                         "{year} {stream}: rvt-write exited 0 but the stream does not decode: {e:#}"
                     )

@@ -82,6 +82,7 @@ classification in its file-status panel.
 | `unsupported_revit_version` | The file opened, but its Revit version is outside the 2015 to 2027 releases rvt-rs reads. |
 | `unsupported_model_layout` | The container/version is acceptable, but model records did not meet the production confidence bar. |
 | `corrupt_file` | The input could not be opened as a readable Revit OLE/CFB container. |
+| `experimental_release` | Model elements were recovered from a Revit release that is read experimentally: too few files of it are measured against Revit's own export to rely on its elements (#871). |
 | `partial_decode` | Some model data was recovered, but warnings, unsupported features, or missing geometry remain. |
 | `scaffold_only_export` | IFC can be written as a framework, but no validated building elements were decoded. |
 | `parser_bug_please_report` | The file opened, but diagnostics could not classify export readiness. |

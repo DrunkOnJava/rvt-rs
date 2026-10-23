@@ -1,6 +1,6 @@
 # Roadmap
 
-Last reviewed: 2026-10-19
+Last reviewed: 2026-10-21
 
 This roadmap is the public, contributor-facing view of where rvt-rs is headed.
 The support boundary lives in [`docs/status.md`](docs/status.md) and the
@@ -32,7 +32,7 @@ IFC export of the same model wherever one is measured, and for 2015 to 2018,
 sample projects saved by Revit
 2019, 2023 and 2026 (but 2015's `rst_basic`, another model than its 2019 copy).
 What is not decoded
-(most parameters, family geometry, hip and gable roofs, opening profiles,
+(most parameters, family geometry, roofs by extrusion, opening profiles,
 phase filtering) is listed in [`docs/status.md`](docs/status.md), and
 the four levels a file can reach are in the
 [supported profile](docs/supported-profile.md).
@@ -99,7 +99,7 @@ improvement and a residual against Revit's own exports on the reference pack
 (#407), approximations stay labelled (#409), and a slice ships in the next
 release that contains it. Open now: wall bodies thicker or thinner
 than their type's layers (#358), stair flights (#357) and aggregates (#323),
-sloped roofs (#356, needs a pitched-roof oracle), element materials (#355),
+roofs by extrusion and over T or U footprints (#883, #884), element materials (#355),
 the opening cut from the wall location curve (#227), room boundaries whose
 solid does not close (#90), beams (#94), MEP equipment and routes (#96), the
 sketch-to-solid pipeline (#156), and the Snowdon slabs that are not in Revit's
@@ -123,12 +123,18 @@ itself is open.
 ### 1.0.0: first-class utility
 
 A dependable open-source Revit data reader: a new user installs it, opens a
-supported model, gets correct elements, geometry and properties with every
-approximation visible, and can reproduce the measurements. Held-out licensed
-models are measured before fixes (#408), a reference pack and a
-privacy-preserving contribution path exist (#407), and the Rust and Python APIs
-are documented with runnable examples. Breadth (more releases, more categories)
-never lowers measured correctness.
+model, gets correct elements, geometry and properties, and can reproduce the
+measurements. 1.0 supports every Revit release from 2015 to 2027 and ships with
+no gaps or limitations: every body is Revit's own shape, every property
+Revit's export writes is written, and no release is experimental. The
+requirements, each with its bar, measured value and evidence, are in
+[`docs/release-1.0-criteria.md`](docs/release-1.0-criteria.md), which is the
+release decision; the milestone's completion percentage is not. They include
+held-out models measured before fixes (#408), every release with a Revit
+export of its own (#421), the surfaces the stability commitment covers (#873),
+APIs documented with examples CI runs (#872), and practitioners' reports
+(#874). Breadth (more releases, more categories) never lowers measured
+correctness.
 
 ## Contribution Priorities
 

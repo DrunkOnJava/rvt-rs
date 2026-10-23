@@ -22,11 +22,11 @@
 //! ```
 
 use rvt::RevitFile;
-use rvt::partition_beam_axes::{END_TOLERANCE_FEET, beam_body, scan_bounded_lines};
-use rvt::partition_element_records::{
+use rvt::research::partition_beam_axes::{END_TOLERANCE_FEET, beam_body, scan_bounded_lines};
+use rvt::research::partition_element_records::{
     OST_STRUCTURAL_COLUMNS, OST_STRUCTURAL_FRAMING, scan_category_records_multi,
 };
-use rvt::partition_schema_mvp::{
+use rvt::research::partition_schema_mvp::{
     FAMILY_NAME_FIELD, TYPE_NAME_FIELD, element_record_bbox, recover_partition_schema_mvp,
 };
 use rvt::walker::{DecodedElement, InstanceField, WalkerLimits};
@@ -496,7 +496,8 @@ fn main() -> rvt::Result<()> {
     // The join cutbacks each beam stores: after 16 bytes of ff and
     // `02 00 00 00 02 00 00 00` in its element data, a pair of f64 at +0x2a,
     // the start's and the end's in line order.
-    let layout = rvt::partition_names::element_data_layout(version).expect("measured release");
+    let layout =
+        rvt::research::partition_names::element_data_layout(version).expect("measured release");
     let mut anchor = [0xffu8; 24];
     anchor[16..].copy_from_slice(&[2, 0, 0, 0, 2, 0, 0, 0]);
     let mut stored: BTreeMap<u32, Vec<[f64; 2]>> = BTreeMap::new();

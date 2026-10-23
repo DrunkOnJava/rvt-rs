@@ -888,13 +888,14 @@ pub const SKETCH_MIN_CURVES: usize = 3;
 /// `sketch_lines`. A sketch line's own owner reference names another element
 /// where the sketch was edited, so the list is the sketch's membership. An
 /// element whose copies disagree, or a line two sketches list, is dropped.
-/// Empty for a release this layout is not measured on (Revit 2024 only).
+/// Empty for a release this layout is not measured on: Revit 2024, and 2025
+/// (RE-199, the edited roof sketches of #356's `R2025_Models.zip`).
 pub fn scan_sketch_curve_lists(
     rf: &mut crate::RevitFile,
     revit_version: u32,
     sketch_lines: &std::collections::BTreeSet<u32>,
 ) -> BTreeMap<u32, Vec<u32>> {
-    if revit_version != 2024 || sketch_lines.is_empty() {
+    if !matches!(revit_version, 2024 | 2025) || sketch_lines.is_empty() {
         return BTreeMap::new();
     }
     let Some(header) = crate::partition_names::element_data_header(revit_version) else {

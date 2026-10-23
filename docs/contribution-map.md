@@ -13,7 +13,7 @@ AEC users without overstating current capability.
 | Tests | Add fixture assertions that prevent false-positive decode claims | `tests/project_corpus_smoke.rs`, `tests/walker_to_ifc_integration.rs` |
 | Viewer UX | Make unsupported-file states clearer and accessible | `viewer/`, [`docs/viewer-privacy-posture.md`](viewer-privacy-posture.md) |
 
-## Open Remainders (as of 2026-10-19)
+## Open Remainders (as of 2026-10-21)
 
 The issue tracker is the source of truth; this is its state today, by
 milestone, with each issue's own title. Pick one rather than re-opening a
@@ -25,6 +25,8 @@ milestone is for.
 
 | Issue | Remainder |
 |---|---|
+| [#869](https://github.com/DrunkOnJava/rvt-rs/issues/869) | A family instance's IfcDistributionPort has no placement: its connectors are in its family's coordinates |
+| [#824](https://github.com/DrunkOnJava/rvt-rs/issues/824) | BIM4LCA office: 31 of 63 slabs' top surfaces differ from Revit's (8 at twice the area, 20 at +0.35%, holes missing) |
 | [#358](https://github.com/DrunkOnJava/rvt-rs/issues/358) | Wall bodies thicker or thinner than their type's layers: 165 Snowdon walls drawn whole (RE-53) |
 | [#357](https://github.com/DrunkOnJava/rvt-rs/issues/357) | Stair flights not yet drawn: monolithic (end-with-riser flag), riserless, spiral, and nosing profiles |
 | [#356](https://github.com/DrunkOnJava/rvt-rs/issues/356) | Sloped roofs need a Revit 2024/2025 pitched-roof oracle |
@@ -43,27 +45,30 @@ milestone is for.
 | Issue | Remainder |
 |---|---|
 | [#844](https://github.com/DrunkOnJava/rvt-rs/issues/844) | Core Interior's six windows and one RE1 door write no OverallWidth/OverallHeight: their size is not where RE-187 reads it |
+| [#834](https://github.com/DrunkOnJava/rvt-rs/issues/834) | A port's description, system classification and HVAC or piping direction are not read (#828 follow-up) |
+| [#810](https://github.com/DrunkOnJava/rvt-rs/issues/810) | BIM4LCA office doors: Revit's OverallWidth is the door's own extent, 10 mm over its type's Width; 0 of 268 written as Revit's |
 | [#223](https://github.com/DrunkOnJava/rvt-rs/issues/223) | Element record +0x46: the flag word is unread (+0x4a is the schema class, RE-76) |
 | [#155](https://github.com/DrunkOnJava/rvt-rs/issues/155) | RE: Decode parameter-store wire formats and exact Revit unit encodings |
 | [#35](https://github.com/DrunkOnJava/rvt-rs/issues/35) | M4-07: Recover common parameters |
 
 ### 1.0.0: first-class utility
 
+The requirements these serve, each with its bar, status and evidence, are in
+[`release-1.0-criteria.md`](release-1.0-criteria.md).
+
 | Issue | Remainder |
 |---|---|
+| [#874](https://github.com/DrunkOnJava/rvt-rs/issues/874) | 1.0: practitioner workflow reports folded into the supported profile |
+| [#873](https://github.com/DrunkOnJava/rvt-rs/issues/873) | 1.0: name the surfaces the stability commitment covers, and check each for breaking changes |
+| [#872](https://github.com/DrunkOnJava/rvt-rs/issues/872) | 1.0: documented Rust and Python APIs whose examples run in CI |
+| [#871](https://github.com/DrunkOnJava/rvt-rs/issues/871) | A file's release is read experimentally, but the diagnostics, rvt-inspect and the viewer do not say so |
+| [#792](https://github.com/DrunkOnJava/rvt-rs/issues/792) | Nordic LCA office: 323 elements exported as a different IFC class than Revit's export |
 | [#421](https://github.com/DrunkOnJava/rvt-rs/issues/421) | Element records beyond 2024/2025: derive the marker from the schema and measure the older envelope (RE-80 follow-up) |
 | [#408](https://github.com/DrunkOnJava/rvt-rs/issues/408) | Held-out validation: measure on licensed models not used to develop the decoder |
 
 ### Unscheduled
 
-| Issue | Remainder |
-|---|---|
-| [#847](https://github.com/DrunkOnJava/rvt-rs/issues/847) | IfcDistributionPort has no placement: Revit's export places each port at its connector |
-| [#834](https://github.com/DrunkOnJava/rvt-rs/issues/834) | A port's description, system classification and HVAC or piping direction are not read (#828 follow-up) |
-| [#824](https://github.com/DrunkOnJava/rvt-rs/issues/824) | BIM4LCA office: 31 of 63 slabs' top surfaces differ from Revit's (8 at twice the area, 20 at +0.35%, holes missing) |
-| [#810](https://github.com/DrunkOnJava/rvt-rs/issues/810) | BIM4LCA office doors: Revit's OverallWidth is the door's own extent, 10 mm over its type's Width; 0 of 268 written as Revit's |
-| [#792](https://github.com/DrunkOnJava/rvt-rs/issues/792) | Nordic LCA office: 323 elements exported as a different IFC class than Revit's export |
-| [#763](https://github.com/DrunkOnJava/rvt-rs/issues/763) | Nordic LCA office: Revit's export has 44 family instances as IfcSpace (their own Export to IFC As) that rvt-rs writes as proxies |
+None: every open issue has a user-facing acceptance criterion and a milestone.
 
 ### Good first issues
 

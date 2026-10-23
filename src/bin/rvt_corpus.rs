@@ -1,12 +1,12 @@
 //! `rvt-corpus` — analyze multiple Revit files as a corpus.
 //!
-//! Phase B of the attack plan. Feed in 3+ versions of the same content and
+//! Feed in 3+ versions of the same content and
 //! get a structural classification of every byte position per stream:
 //! invariant (structural constants), low-variance (type tags), size-correlated
 //! (length fields), or variable (payload data).
 //!
-//! This drives Phase D (object graph parsing) by generating 80% of the
-//! structural hypotheses automatically.
+//! The object-graph readers (`rvt::object_graph`) start from the
+//! structural hypotheses it generates.
 
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use rvt::corpus::{Sample, analyze_corpus};

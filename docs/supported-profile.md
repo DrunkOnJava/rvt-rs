@@ -96,6 +96,9 @@ Revit leaves them out.
 
 - A body that is the element's bounding box is a correctly placed, correctly
   sized box. It is never a guess at a shape.
+- A file of a release read experimentally (Revit 2015 to 2022, 2026 and
+  2027) says so: the export diagnostics' `input.release_support`, a warning,
+  `rvt-inspect`'s `experimental_release` and the viewer's file status (#871).
 - Where rvt-rs cannot tell something, it leaves it out rather than guess: an
   element whose storey is unknown sits in the building, not on a storey; a
   missing value is absent, not zero.

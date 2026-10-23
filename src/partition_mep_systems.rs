@@ -1,4 +1,4 @@
-//! MEP systems and their members (RE-162, B33, #528).
+//! MEP systems and their members (RE-162, #528).
 //!
 //! An MEP system is an element of its own, a data object (RE-153) of class
 //! `RbsHvacSystem`, `RbsPipingSystem` or `RbsElectricalSystem`. An HVAC or
@@ -9,6 +9,7 @@
 //! Electrical models (Revit 2025, MIT), against Revit's own IFC: every one of
 //! Revit's 26 `IfcSystem`s is one such object of the same name, and every
 //! element Revit groups in it holds its id.
+// Tracker: B33.
 
 use crate::partition_room_parameters::{DATA_OBJECT_HEADER, verified_data_object};
 use crate::{Result, RevitFile};
@@ -171,7 +172,7 @@ pub fn scan_mep_systems(
             continue;
         };
         let buf = inflated.bytes();
-        let Ok(objects) = rf.partition_data_objects(stream) else {
+        let Ok(objects) = rf.memoised_partition_data_objects(stream) else {
             continue;
         };
         for &(p, object) in objects.iter() {

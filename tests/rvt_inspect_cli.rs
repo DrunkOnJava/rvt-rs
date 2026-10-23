@@ -88,6 +88,61 @@ fn rvt_inspect_text_is_nontechnical_and_actionable() {
     assert!(text.contains("Next steps"));
 }
 
+/// #871: on every release of the family corpus, the report and the export
+/// diagnostics say how the release's element records are read, and an
+/// experimental release carries a warning that says so.
+#[test]
+fn rvt_inspect_json_reports_how_each_release_is_read() {
+    if !corpus_available() {
+        eprintln!(
+            "skipping rvt-inspect release-support assertion: family corpus missing at {}",
+            samples_dir().display()
+        );
+        return;
+    }
+
+    for year in common::ALL_YEARS {
+        let output = Command::new(env!("CARGO_BIN_EXE_rvt-inspect"))
+            .arg(sample_for_year(year))
+            .arg("--json")
+            .output()
+            .expect("run rvt-inspect --json");
+        assert!(
+            output.status.success(),
+            "rvt-inspect --json failed on {year}\nstderr:\n{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let json: Value = serde_json::from_slice(&output.stdout).expect("parse inspect JSON");
+        let support = &json["file"]["release_support"];
+        let status = support["status"]
+            .as_str()
+            .unwrap_or_else(|| panic!("{year}: file.release_support.status missing: {support}"));
+        assert!(
+            ["verified", "partial", "experimental"].contains(&status),
+            "{year}: a release rvt-rs reads is rated {status}"
+        );
+        assert!(
+            support["capability"].is_string(),
+            "{year}: no support-matrix row named"
+        );
+        assert_eq!(
+            &json["export_diagnostics"]["input"]["release_support"], support,
+            "{year}: the report and the export diagnostics disagree"
+        );
+        let warned = json["warnings"]
+            .as_array()
+            .expect("warnings array")
+            .iter()
+            .filter_map(Value::as_str)
+            .any(|warning| warning.contains("is read experimentally"));
+        assert_eq!(
+            warned,
+            status == "experimental",
+            "{year}: rated {status}, experimental warning present: {warned}"
+        );
+    }
+}
+
 #[test]
 fn rvt_inspect_json_reports_corrupt_file_failure_mode() {
     let path = std::env::temp_dir().join(format!(
