@@ -153,6 +153,7 @@ impl SectionBox {
 // Tracker: VW1-10.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[non_exhaustive]
 pub enum ViewMode {
     /// Orthographic top-down plan view — typical default for
     /// floor plans. Usually paired with a horizontal `z_min <= z

@@ -282,6 +282,7 @@ pub const EXPORT_DIAGNOSTICS_SCHEMA_VERSION: u32 = 1;
 /// IFC export mode represented in diagnostics sidecars.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[non_exhaustive]
 pub enum ExportDiagnosticsMode {
     Placeholder,
     Default,
@@ -291,6 +292,7 @@ pub enum ExportDiagnosticsMode {
 /// Result type for callers that want both the IFC model and the
 /// user/shareable export diagnostics sidecar in one pass.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[non_exhaustive]
 pub struct ExportResult {
     pub model: IfcModel,
     pub diagnostics: ExportDiagnostics,
@@ -302,6 +304,7 @@ pub struct ExportResult {
 /// and WASM callers can attach it to issue reports without understanding
 /// Revit internals.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[non_exhaustive]
 pub struct ExportDiagnostics {
     pub schema_version: u32,
     pub mode: ExportDiagnosticsMode,
@@ -326,6 +329,7 @@ pub struct ExportDiagnostics {
 
 /// A10 export source-coverage block (measured when denominators exist).
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[non_exhaustive]
 pub struct SourceCoverageDiagnostics {
     pub status: SourceCoverageStatus,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -341,6 +345,7 @@ pub struct SourceCoverageDiagnostics {
 /// Measurement state for [`SourceCoverageDiagnostics`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[non_exhaustive]
 pub enum SourceCoverageStatus {
     Unset,
     Unknown,
@@ -468,6 +473,7 @@ fn elem_table_declared_element_count(rf: &mut crate::RevitFile) -> Option<usize>
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[non_exhaustive]
 pub struct ExportInputDiagnostics {
     pub revit_version: Option<u32>,
     pub build: Option<String>,
@@ -488,6 +494,7 @@ pub struct ExportInputDiagnostics {
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[non_exhaustive]
 pub struct DecodedExportDiagnostics {
     pub production_walker_elements: usize,
     pub diagnostic_proxy_candidates: usize,
@@ -524,6 +531,7 @@ fn default_min_element_confidence_serde() -> f32 {
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[non_exhaustive]
 pub struct ExportedModelDiagnostics {
     pub total_entities: usize,
     pub building_elements: usize,
@@ -575,6 +583,7 @@ pub struct ExportedModelDiagnostics {
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[non_exhaustive]
 pub struct SkippedExportItem {
     pub reason: String,
     pub count: usize,
@@ -583,6 +592,7 @@ pub struct SkippedExportItem {
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[non_exhaustive]
 pub struct ExportConfidenceSummary {
     pub level: String,
     pub score: f32,
@@ -610,6 +620,7 @@ pub struct ExportConfidenceSummary {
 /// of writing an IFC that looks more complete than it is.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "kebab-case")]
+#[non_exhaustive]
 pub enum ExportQualityMode {
     Scaffold,
     TypedNoGeometry,
@@ -711,6 +722,7 @@ impl std::str::FromStr for ExportQualityMode {
 #[error(
     "unknown IFC export mode `{value}`; expected scaffold, typed-no-geometry, geometry, or strict"
 )]
+#[non_exhaustive]
 pub struct ExportQualityModeParseError {
     pub value: String,
 }
@@ -719,6 +731,7 @@ pub struct ExportQualityModeParseError {
 #[error(
     "IFC export mode `{mode}` cannot be satisfied: {reason} (confidence level: {confidence_level})"
 )]
+#[non_exhaustive]
 pub struct ExportQualityValidationError {
     pub mode: ExportQualityMode,
     pub reason: String,
@@ -754,6 +767,7 @@ pub trait Exporter {
 /// Returned by exporters that cannot yet produce a given entity class.
 #[derive(Debug, Clone, thiserror::Error)]
 #[error("IFC export not yet implemented: {reason}")]
+#[non_exhaustive]
 pub struct NotYetImplemented {
     pub reason: String,
 }
@@ -855,6 +869,28 @@ impl RvtDocExporter {
         export_rvt_doc(rf, RvtDocExportMode::Default, quality_mode, limits)
     }
 
+    /// The IFC model of `rf` and the diagnostics of the export: what was
+    /// read, what was approximated (a body drawn as its record's box) and
+    /// what was left out, as `rvt-ifc --diagnostics` writes them.
+    ///
+    /// # Errors
+    ///
+    /// The errors of reading the file, as [`crate::walker::iter_elements`]
+    /// lists them. A class or release rvt-rs does not read is not an error:
+    /// it is left out and counted in the diagnostics.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rvt::RevitFile;
+    /// use rvt::ifc::RvtDocExporter;
+    ///
+    /// let mut rf = RevitFile::open("corpus/tier1/architectural-2024/architectural-2024.rvt")?;
+    /// let result = RvtDocExporter.export_with_diagnostics(&mut rf)?;
+    /// println!("{} entities", result.model.entities.len());
+    /// println!("{}", serde_json::to_string(&result.diagnostics)?);
+    /// # Ok::<(), Box<dyn std::error::Error>>(())
+    /// ```
     pub fn export_with_diagnostics(&self, rf: &mut crate::RevitFile) -> Result<ExportResult> {
         self.export_with_diagnostics_and_limits(rf, crate::walker::WalkerLimits::default())
     }

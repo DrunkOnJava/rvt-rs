@@ -134,6 +134,7 @@ type CachedWalk = (
 );
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct Summary {
     pub file_size: u64,
     pub streams: Vec<String>,
@@ -149,17 +150,23 @@ pub struct Summary {
 }
 
 impl RevitFile {
-    /// Open a Revit file from disk.
+    /// Open a Revit file from disk, under the default [`OpenLimits`].
     ///
-    /// Returns an error if the file doesn't exist, can't be read, or
-    /// doesn't start with the OLE2 / MS-CFB magic bytes
-    /// (`D0 CF 11 E0 A1 B1 1A E1`).
+    /// # Errors
     ///
-    /// ```no_run
+    /// [`Error::Io`] when the file cannot be read (its message names the
+    /// path), [`Error::NotACfbFile`] when it does not start with the OLE2 /
+    /// MS-CFB magic bytes (`D0 CF 11 E0 A1 B1 1A E1`), [`Error::TooLarge`]
+    /// when it is larger than [`OpenLimits::max_file_bytes`], and
+    /// [`Error::Cfb`] when its container does not open.
+    ///
+    /// # Examples
+    ///
+    /// ```
     /// use rvt::RevitFile;
     ///
-    /// let mut rf = RevitFile::open("your-project.rfa")?;
-    /// let summary = rf.summarize()?;
+    /// let mut rf = RevitFile::open("corpus/tier1/architectural-2024/architectural-2024.rvt")?;
+    /// let summary = rf.summarize_strict()?;
     /// println!("Revit {}", summary.version);
     /// # Ok::<(), rvt::Error>(())
     /// ```
@@ -208,22 +215,31 @@ impl RevitFile {
             )));
         }
         if metadata.len() > limits.max_file_bytes {
-            return Err(Error::Cfb(format!(
-                "file size {} exceeds limit {}",
-                metadata.len(),
-                limits.max_file_bytes
-            )));
+            return Err(Error::TooLarge {
+                what: "the file".into(),
+                size: metadata.len(),
+                limit: limits.max_file_bytes,
+            });
         }
         let mut f = File::open(path).map_err(with_path)?;
         let mut bytes = Vec::with_capacity(metadata.len() as usize);
         f.read_to_end(&mut bytes).map_err(with_path)?;
-        Self::open_bytes_with_limits(bytes, limits)
+        Self::open_bytes_with_limits(bytes, limits).map_err(|e| e.in_file(path))
     }
 
     /// Open a Revit file from an in-memory byte buffer.
     ///
     /// Useful for callers that have the file bytes already (e.g. streamed
     /// over the network). Equivalent to `open` after a `read_to_end`.
+    ///
+    /// # Errors
+    ///
+    /// [`Error::NotACfbFile`] when the bytes do not start with the OLE2 /
+    /// MS-CFB magic bytes, [`Error::TooLarge`] when they exceed
+    /// [`OpenLimits::max_file_bytes`], and [`Error::Cfb`] when the container
+    /// does not open.
+    ///
+    /// # Examples
     ///
     /// ```
     /// use rvt::RevitFile;
@@ -241,16 +257,20 @@ impl RevitFile {
     /// paths that skip disk stat.
     pub fn open_bytes_with_limits(bytes: Vec<u8>, limits: OpenLimits) -> Result<Self> {
         if (bytes.len() as u64) > limits.max_file_bytes {
-            return Err(Error::Cfb(format!(
-                "in-memory buffer size {} exceeds limit {}",
-                bytes.len(),
-                limits.max_file_bytes
-            )));
+            return Err(Error::TooLarge {
+                what: "the in-memory buffer".into(),
+                size: bytes.len() as u64,
+                limit: limits.max_file_bytes,
+            });
         }
         if bytes.len() < 8 || bytes[..8] != [0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1] {
             return Err(Error::NotACfbFile);
         }
-        let cfb = CompoundFile::open(Cursor::new(bytes)).map_err(|e| Error::Cfb(e.to_string()))?;
+        let cfb = CompoundFile::open(Cursor::new(bytes)).map_err(|e| Error::Cfb {
+            op: "open",
+            path: None,
+            source: e,
+        })?;
         Ok(Self {
             cfb,
             limits,
@@ -485,7 +505,7 @@ impl RevitFile {
     ///
     /// `max_bytes` is the ceiling on output size. A stream whose
     /// declared size (or read position) exceeds this returns
-    /// `Error::Cfb("stream exceeds limit…")`.
+    /// [`Error::TooLarge`].
     pub fn read_stream_with_limit(&mut self, name: &str, max_bytes: u64) -> Result<Vec<u8>> {
         let path = if name.starts_with('/') {
             name.to_string()
@@ -500,9 +520,11 @@ impl RevitFile {
         // Reject before reading.
         let stream_size = stream.len();
         if stream_size > max_bytes {
-            return Err(Error::Cfb(format!(
-                "stream '{name}' size {stream_size} exceeds limit {max_bytes}"
-            )));
+            return Err(Error::TooLarge {
+                what: format!("stream '{name}'"),
+                size: stream_size,
+                limit: max_bytes,
+            });
         }
         let cap = (stream_size as usize).min(max_bytes as usize);
         let mut out = Vec::with_capacity(cap);
@@ -515,9 +537,11 @@ impl RevitFile {
                 break;
             }
             if (out.len() as u64) + (n as u64) > max_bytes {
-                return Err(Error::Cfb(format!(
-                    "stream '{name}' exceeded limit {max_bytes} mid-read"
-                )));
+                return Err(Error::TooLarge {
+                    what: format!("stream '{name}'"),
+                    size: out.len() as u64 + n as u64,
+                    limit: max_bytes,
+                });
             }
             out.extend_from_slice(&buf[..n]);
         }
@@ -655,9 +679,20 @@ impl RevitFile {
     }
 
     /// Strict variant of [`RevitFile::summarize`] — returns
-    /// `Err` on ANY parse failure, including PartAtom absence and
-    /// class-name enumeration failure. Use when downstream code
+    /// `Err` on any parse failure of a stream it reads, including the
+    /// class-name inventory. A missing PartAtom is not a failure (project
+    /// files have none) and leaves `partatom` empty. Use when downstream code
     /// can't tolerate a partially-populated `Summary`.
+    ///
+    /// # Errors
+    ///
+    /// [`Error::StreamNotFound`] when `BasicFileInfo` or `Formats/Latest` is
+    /// missing, [`Error::Cfb`] or [`Error::Io`] when either cannot be read,
+    /// [`Error::TooLarge`] when either is larger than
+    /// [`OpenLimits::max_stream_bytes`],
+    /// [`Error::BasicFileInfo`] or [`Error::PartAtom`] when either does not
+    /// parse, and [`Error::Decompress`] or [`Error::DecompressLimitExceeded`]
+    /// when `Formats/Latest` does not inflate or inflates past its cap.
     // Tracker: API-04.
     pub fn summarize_strict(&mut self) -> Result<Summary> {
         let streams = self.stream_names();

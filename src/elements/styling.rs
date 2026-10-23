@@ -12,6 +12,7 @@ use crate::walker::{DecodedElement, InstanceField};
 
 /// Typed view of a decoded Material.
 #[derive(Debug, Clone, PartialEq, Default)]
+#[non_exhaustive]
 pub struct Material {
     pub name: Option<String>,
     /// Packed RGB, low byte = R.
@@ -76,6 +77,7 @@ impl Material {
 
 /// Typed view of a decoded FillPattern (surface or cut hatch).
 #[derive(Debug, Clone, PartialEq, Default)]
+#[non_exhaustive]
 pub struct FillPattern {
     pub name: Option<String>,
     /// True when the pattern is oriented to the host element's
@@ -102,6 +104,7 @@ impl FillPattern {
 
 /// Typed view of a decoded LinePattern (dash/dot pattern for lines).
 #[derive(Debug, Clone, PartialEq, Default)]
+#[non_exhaustive]
 pub struct LinePattern {
     pub name: Option<String>,
     /// Dash/space sequence in model units. Positive = dash, negative
@@ -131,6 +134,7 @@ impl LinePattern {
 
 /// Typed view of a decoded LineStyle.
 #[derive(Debug, Clone, PartialEq, Default)]
+#[non_exhaustive]
 pub struct LineStyle {
     pub name: Option<String>,
     pub weight: Option<u32>,

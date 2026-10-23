@@ -60,6 +60,7 @@ use crate::walker::{
 /// tooling to decide whether a change to the reader / writer
 /// preserves the invariant.
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub struct RoundTripReport {
     /// Number of bytes the reader consumed, starting at the
     /// caller-supplied offset.

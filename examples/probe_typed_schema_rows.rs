@@ -38,6 +38,7 @@ fn kind(value: &InstanceField) -> String {
         }
         InstanceField::Vector(v) => format!("Vector[{}]", v.len()),
         InstanceField::Bytes(b) => format!("Bytes[{}]", b.len()),
+        _ => "Other".into(),
     }
 }
 

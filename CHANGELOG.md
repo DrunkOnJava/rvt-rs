@@ -15,6 +15,16 @@ All notable changes will be documented here. This project follows
   finds it. `gh attestation verify <archive> -R DrunkOnJava/rvt-rs` works as
   before.
 
+- **Three examples show the library end to end (#872).**
+  `cargo run --example basics_inspect -- model.rvt` reads what a file is,
+  `basics_elements` lists its building elements by IFC type with their
+  ElementIds,
+  and `basics_export` writes IFC4, glTF, a CSV schedule and the export
+  diagnostics. Each runs on the synthetic project in `corpus/tier1/` without
+  an argument, and CI runs all three on it and on Einhoven, a real
+  Revit 2023 project (MIT), where they must list and export elements. `examples/README.md` tells them apart
+  from the research probes, and the README links them.
+
 - **Gable, hip and slope-arrow roofs are drawn as their planes, and Revit
   2025 roofs slope (#356, RE-199).** A footprint roof with more than one
   edge that defines a slope is drawn as its edges' planes, each rising from
@@ -143,6 +153,28 @@ All notable changes will be documented here. This project follows
   (`tests/python/test_docs_python.py`). The 18 blocks that show a signature
   or the shape of a result are fenced `text`, so the page no longer presents
   them as code to run.
+
+- **Saved graphics are read faster, with the same output (#881, #882).**
+  An export with `--saved-meshes` caches pointer lookups, skips a
+  parameter pass the saved scene never used, and meshes elements in
+  parallel (one after the other in the browser viewer). On one runner, the
+  six reference models export in 0.64 to 0.94 of the time, and the IFC is
+  byte-identical (Measure run 39956807932). Thanks to n3ur0m4n. CI now
+  exports Einhoven and Core Interior with their saved meshes and validates
+  both with IfcOpenShell (#908): 11 of 11 and 138 of 138 bounding-box
+  bodies come from saved graphics, with 0 validation errors.
+
+- **The API's entry points have examples that run (#872).** The crate
+  root's three examples and new ones on `RevitFile::open`,
+  `metadata::read_metadata`, `walker::iter_elements`,
+  `RvtDocExporter::export_with_diagnostics`, `write_step`,
+  `gltf::model_to_glb` and `schedule_csv::elements_csv` open the synthetic
+  project file the repository ships, `corpus/tier1/architectural-2024`,
+  and CI now runs every documentation example (`cargo test --doc`), which
+  it never did. Those entry points document their errors (`# Errors`), and
+  `summarize_strict`'s doc no longer says a missing PartAtom is a failure:
+  it is not. The crate root's example used the deprecated `summarize`.
+
 - **Breaking: `Error` is `#[non_exhaustive]`, and says what failed.** A
   `match` on it now needs a wildcard arm, so later variants are not breaking
   changes. Failures that were reported as `Error::BasicFileInfo` or
@@ -160,6 +192,25 @@ All notable changes will be documented here. This project follows
   Python, `RevitFile.read_adocument()` raises `ValueError`, where it raised
   `OSError`, for a file whose schema declares no `ADocument`.
 
+- **Breaking: the stable API's output types are `#[non_exhaustive]`.** All
+  62 public enums of the stable modules and the 135 public structs that
+  only rvt-rs produces, so a release can add a variant or a field without
+  breaking code that uses them. A `match` on one of these enums needs a
+  wildcard arm, and these structs can no longer be built with a struct
+  literal outside the crate. The structs callers build stay as they were:
+  the options and limits (`OpenLimits`, `WalkerLimits`, `CsvOptions`,
+  `StepOptions`, ...), the bridge's inputs (`ElementInput`,
+  `BuilderOptions`, `Storey`, `MaterialInfo`, `StreamPatch`,
+  `ExportContentPolicy`, `corpus::Sample`, `parse_mode::Warning`),
+  `IfcModel` and the parts it is assembled from (materials, layer sets and
+  element layers, opening cuts, GlobalIds), the glTF document records
+  `write_glb` writes, the geometry primitives (`Point3`, `CurveLoop`,
+  `Mesh`, ...), the viewer's state (`CameraState`, `ClippingPlane`,
+  `SectionBox`, `ViewerState`, `CategoryFilter`), the schedule rows
+  `Schedule::from_rows` takes, what the encoders write
+  (`BasicFileInfo`, `PartAtom`), and the few output types the tests
+  construct (`DecodedElement`, `Wall`, `ClassEntry`, ...).
+
 - **The API docs are written for someone outside the project.** Backlog
   and task ids (`B55`, `VW1-13`, `SEC-12`) and work-plan labels ("Lane C",
   "Phase 4d", "the attack plan") are gone from the API docs: the crate's
@@ -174,6 +225,15 @@ All notable changes will be documented here. This project follows
   export as pending, says what the exporter writes today, and
   `ifc::from_decoded` no longer claims to attach no geometry, materials or
   property sets.
+
+- **Breaking: `Error::Cfb` keeps the I/O error it reports (#899).** It was a
+  string. It is now `Cfb { op, path, source }`: what was being done, the
+  stream or file, and the `io::Error`, which `Error::source()` returns, so a
+  caller can tell a permission error from a full disk. A file, buffer or
+  stream over its limit (`OpenLimits`, the identity-stream cap) is the new
+  `Error::TooLarge { what, size, limit }`, a destination path without a
+  file name is `Error::Io` with `InvalidInput`, and a stream too short for
+  its framing is `Error::Malformed`. All three were `Cfb` before.
 
 - **Breaking: the research readers moved to `rvt::research`, behind the
   `unstable-research` feature (#873).** The crate's API is now 27 stable
