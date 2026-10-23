@@ -82,6 +82,16 @@ All notable changes will be documented here. This project follows
 
 ### Fixed
 
+- **The PyPI page's links work, and it is written for Python users (#905).**
+  PyPI showed the repository README, whose links are relative and resolve
+  under `pypi.org/project/rvt/`, so none reached its document. The page is
+  now `rvt-py/README.md`: install, a short example, what to expect, and
+  absolute links to the Python guide, the support table and the changelog.
+  That file said PyPI shipped 0.1.2 and the crate was not on crates.io; it
+  names no version now. The package's Documentation link opens the Python
+  guide. CI reads the built wheel's description, checks that it is that
+  file with absolute links only, and runs its example.
+
 - **A mass whose "Export to IFC As" names an entity is written as it (#864).**
   rvt-rs read no mass instances. The BIM4LCA office's two `VOLUME` masses
   carry `IfcSpace`, and Revit's export writes them as `IfcSpace`. They now

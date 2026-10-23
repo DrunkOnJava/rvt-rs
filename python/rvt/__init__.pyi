@@ -1,13 +1,14 @@
 """Type stubs for the rvt Python bindings.
 
 Hand-maintained. Source of truth for the runtime API is
-`src/python.rs` — if you add a method there, add it here too.
+`rvt-py/src/lib.rs` — if you add a method there, add it here too. CI's
+stubtest step fails when the two disagree.
 PEP 561 marker (`py.typed`) accompanies this file so mypy and
 pyright pick it up.
 """
 from __future__ import annotations
 
-from typing import Any, Final, Optional, Union
+from typing import Any, Final, Optional, Union, final
 
 __version__: Final[str]
 
@@ -74,6 +75,7 @@ MVP_TYPED_CLASSES: Final[list[str]]
 """The classes whose elements carry a ``typed`` projection in ``decoded_elements()``."""
 
 
+@final
 class RevitFile:
     """Opened Revit file. Entry point for all Python bindings.
 
@@ -82,8 +84,8 @@ class RevitFile:
     non-CFB input, or read failures.
     """
 
-    def __init__(
-        self,
+    def __new__(
+        cls,
         path: str,
         max_file_bytes: Optional[int] = None,
         max_stream_bytes: Optional[int] = None,
@@ -93,7 +95,7 @@ class RevitFile:
         max_walker_trial_offsets: Optional[int] = None,
         max_walker_record_decode_bytes: Optional[int] = None,
         max_walker_container_records: Optional[int] = None,
-    ) -> None:
+    ) -> RevitFile:
         """Open a Revit file from a filesystem path, with optional
         resource limits.
 
@@ -184,6 +186,11 @@ class RevitFile:
         can't be parsed.
         """
 
+    def basic_file_info_json_strict(self) -> str:
+        """``basic_file_info_json()``, raising ``ValueError`` where it
+        returns ``None``: the stream is missing or does not parse.
+        """
+
     def schedule_csv(
         self, kind: str = "elements", metric: bool = False, excel: bool = False
     ) -> str:
@@ -223,6 +230,15 @@ class RevitFile:
         ``classes``, ``fields``, ``cpp_types``.
         """
 
+    def schema_diagnostics(self) -> dict[str, int]:
+        """Counts describing the parsed schema: ``class_count``,
+        ``parsed_field_count``, ``declared_field_count_sum``,
+        ``field_count_mismatches``, ``tagged_class_count``,
+        ``parent_only_class_count``, ``ancestor_tag_count``,
+        ``skipped_records``, ``cpp_type_count``. Raises ``ValueError``
+        if the schema can't be parsed.
+        """
+
     def schema_json(self) -> str:
         """Full schema as a JSON string (parseable via ``json.loads``).
 
@@ -245,6 +261,17 @@ class RevitFile:
         file lacks (a synthetic file, or a damaged schema).
 
         See module docs for the field-kind schema.
+        """
+
+    def read_adocument_strict(self) -> TypedADocument:
+        """``read_adocument()``, raising ``ValueError`` when the record is
+        not located or any of its fields fell back to raw bytes.
+        """
+
+    def read_adocument_lossy(self) -> dict[str, Any]:
+        """``read_adocument()`` with what went wrong: ``value`` (the
+        ADocument dict), ``complete`` (bool), ``partial_fields``,
+        ``failed_streams``, ``warnings`` and ``confidence``.
         """
 
     def decoded_elements(self) -> list[TypedDecodedElement]:
