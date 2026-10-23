@@ -26,6 +26,7 @@ use crate::{Error, Result};
 
 /// Typed view of a standard ArcWall recovered from partition bytes.
 #[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
 pub struct ArcWall {
     /// Fixed-size core record (tag, coords, envelope).
     pub record: ArcWallRecord,

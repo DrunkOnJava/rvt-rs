@@ -18,6 +18,7 @@ use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, path::Path};
 
 /// One sample in the corpus.
+#[non_exhaustive]
 pub struct Sample {
     pub label: String,
     pub year: Option<u32>,
@@ -39,6 +40,7 @@ impl Sample {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[non_exhaustive]
 pub enum ByteClass {
     Invariant,
     LowVariance(u8), // 2..=5 distinct values
@@ -48,6 +50,7 @@ pub enum ByteClass {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct StreamDeltaReport {
     /// Stream name, e.g. `Global/PartitionTable`.
     pub name: String,
@@ -72,6 +75,7 @@ pub struct StreamDeltaReport {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct InvariantRun {
     pub offset: usize,
     pub length: usize,
@@ -79,6 +83,7 @@ pub struct InvariantRun {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct CorpusReport {
     pub samples: Vec<String>,
     pub streams: Vec<StreamDeltaReport>,

@@ -127,6 +127,18 @@ All notable changes will be documented here. This project follows
 
 ### Changed
 
+- **Breaking: the stable API's output types are `#[non_exhaustive]`.** All
+  62 public enums of the stable modules and the 175 public structs whose
+  fields are all public, so a release can add a variant or a field without
+  breaking code that uses them. A `match` on one of these enums needs a
+  wildcard arm, and these structs can no longer be built with a struct
+  literal outside the crate. The 33 structs code outside the crate builds
+  stay as they were: the options and limits (`OpenLimits`, `WalkerLimits`,
+  `CsvOptions`, `StepOptions`, ...), the bridge's inputs (`ElementInput`,
+  `BuilderOptions`, `Storey`, `MaterialInfo`, `StreamPatch`), and the few
+  output types the tests construct (`DecodedElement`, `IfcModel`, `Wall`,
+  `ClassEntry`, ...).
+
 - **The API docs are written for someone outside the project.** Backlog
   and task ids (`B55`, `VW1-13`, `SEC-12`, "Lane Six", "Phase 1") are gone
   from the rustdoc text; where one was a citation it is kept in a

@@ -41,6 +41,7 @@ use crate::{Error, Result};
 
 /// How a roof is geometrically defined at the element level.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[non_exhaustive]
 pub enum RoofKind {
     #[default]
     Footprint,
@@ -59,6 +60,7 @@ impl RoofKind {
 
 /// How Revit trims the rafters at the eave.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[non_exhaustive]
 pub enum RafterCut {
     #[default]
     PlumbCut,
@@ -150,6 +152,7 @@ impl ElementDecoder for RoofTypeDecoder {
 
 /// Typed view of a decoded Roof instance.
 #[derive(Debug, Clone, PartialEq, Default)]
+#[non_exhaustive]
 pub struct Roof {
     pub level_id: Option<u32>,
     pub base_offset_feet: Option<f64>,
@@ -202,6 +205,7 @@ impl Roof {
 
 /// Typed view of a decoded RoofType.
 #[derive(Debug, Clone, PartialEq, Default)]
+#[non_exhaustive]
 pub struct RoofType {
     pub name: Option<String>,
     pub thickness_feet: Option<f64>,

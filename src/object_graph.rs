@@ -28,6 +28,7 @@ use encoding_rs::UTF_16LE;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct DocumentHistory {
     /// Ordered list of Revit version strings this file has seen, oldest first.
     pub entries: Vec<String>,
@@ -122,6 +123,7 @@ impl DocumentHistory {
 /// The tag value is almost certainly the class-ID that binds the record
 /// to an entry in `Formats/Latest`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct StringRecord {
     pub offset: usize,
     pub tag: u32,

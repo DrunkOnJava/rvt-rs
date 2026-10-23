@@ -27,6 +27,7 @@ use serde::{Deserialize, Serialize};
 /// what matters — but viewers that render the clip indicator line
 /// may prefer unit normals.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct ClippingPlane {
     pub origin: [f64; 3],
     pub normal: [f64; 3],
@@ -80,6 +81,7 @@ impl ClippingPlane {
 /// face is inside.
 // Tracker: VW1-14.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct SectionBox {
     pub min: [f64; 3],
     pub max: [f64; 3],
@@ -153,6 +155,7 @@ impl SectionBox {
 // Tracker: VW1-10.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[non_exhaustive]
 pub enum ViewMode {
     /// Orthographic top-down plan view — typical default for
     /// floor plans. Usually paired with a horizontal `z_min <= z

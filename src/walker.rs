@@ -35,6 +35,7 @@ use crate::{Error, Result, RevitFile, compression, formats, streams};
 /// wire shapes fall through to [`InstanceField::Bytes`] so downstream
 /// tooling can still inspect raw bytes.
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub enum InstanceField {
     /// `[u32 a][u32 b]` pointer slot. Both-zero means NULL; both-ones
     /// also sometimes seen as a NULL sentinel.
@@ -480,6 +481,7 @@ pub fn encode_instance(decoded: &DecodedElement, schema: &formats::ClassEntry) -
 /// element and hide low-confidence rows by default.
 // Tracker: M3-07.
 #[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
 pub struct ElementProvenance {
     /// Stream path inside the OLE container (e.g. `Global/Latest`,
     /// `partition:/BasicFileInfo`-adjacent partition name).
@@ -965,6 +967,7 @@ pub fn decode_instance_with_limits(
 
 /// Resource cap that stopped or truncated a walker scan.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum WalkerLimitHit {
     MaxScanBytes,
     MaxCandidates,
@@ -1055,6 +1058,7 @@ impl Default for WalkerLimits {
 /// ADocument's instance, as extracted by the v0.1.2 walker. Field
 /// names mirror the schema exactly.
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub struct ADocumentInstance {
     /// Byte offset in `Global/Latest`'s decompressed stream where the
     /// ADocument record was found.
@@ -1076,6 +1080,7 @@ pub struct ADocumentInstance {
 /// the walker fully understand right now?"
 // Tracker: API-09.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[non_exhaustive]
 pub struct Completeness {
     /// Total declared + parsed field count (always `fields.len()`).
     pub total: usize,
@@ -1613,6 +1618,7 @@ pub fn iter_elements_with_control(
 /// prior ones hit `Heuristic` is a signal of wire-layout drift).
 // Tracker: API-12.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum DetectionStrategy {
     /// Fast heuristic hit — `heuristic_find` resolved directly.
     /// Typical of Revit 2024-2026 where ADocument sits in a
@@ -1635,6 +1641,7 @@ pub enum DetectionStrategy {
 /// struct instead of plain `Option<usize>`.
 // Tracker: API-12.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct DetectionResult {
     /// Resolved byte offset into the decompressed `Global/Latest`
     /// stream where ADocument's record begins. `None` when
@@ -1774,6 +1781,7 @@ pub fn detect_adocument_start_with_limits(
 /// [`walk_score`]). Callers apply a threshold (typically ≥ 80)
 /// before trusting the match.
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub struct ScanCandidate {
     /// Byte offset in the buffer where the candidate instance starts.
     pub offset: usize,
@@ -1786,6 +1794,7 @@ pub struct ScanCandidate {
 }
 
 #[derive(Debug, Clone, Default)]
+#[non_exhaustive]
 pub struct ScanCandidatesResult {
     pub candidates: Vec<ScanCandidate>,
     pub scanned_bytes: usize,

@@ -47,6 +47,7 @@ use crate::{Error, Result};
 
 /// How a wall's load-bearing role is classified.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[non_exhaustive]
 pub enum StructuralUsage {
     #[default]
     NonBearing,
@@ -69,6 +70,7 @@ impl StructuralUsage {
 /// Which side of the location line represents the "face" Revit shows
 /// in outlines and which side receives finish layers.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[non_exhaustive]
 pub enum LocationLine {
     #[default]
     WallCenterline,
@@ -94,6 +96,7 @@ impl LocationLine {
 
 /// The three wall classifications Revit stores at the type level.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[non_exhaustive]
 pub enum WallKind {
     #[default]
     Basic,
@@ -119,6 +122,7 @@ impl WallKind {
 /// The functional role a wall plays architecturally — drives IFC
 /// predefined-type tagging (`INTERNAL`, `PARTITIONING`, `PARAPET`…).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[non_exhaustive]
 pub enum WallFunction {
     #[default]
     Interior,

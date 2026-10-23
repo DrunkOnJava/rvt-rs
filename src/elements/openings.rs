@@ -159,6 +159,7 @@ fn collect_common(decoded: &DecodedElement) -> OpeningCommon {
 
 /// Typed view of a decoded Door.
 #[derive(Debug, Clone, PartialEq, Default)]
+#[non_exhaustive]
 pub struct Door {
     pub level_id: Option<u32>,
     pub host_id: Option<u32>,

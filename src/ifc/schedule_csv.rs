@@ -27,6 +27,7 @@ const FEET_TO_METRES: f64 = 0.3048;
 
 /// Length unit for the size and position columns.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum LengthUnit {
     /// Revit's internal unit; column suffix `_ft`.
     #[default]

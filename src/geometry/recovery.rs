@@ -24,6 +24,7 @@ use crate::walker::{DecodedElement, InstanceField};
 
 /// Stable machine-readable reason a recovery path failed closed.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct GeometryDiagnostic {
     pub code: &'static str,
     pub message: String,
@@ -40,6 +41,7 @@ impl GeometryDiagnostic {
 
 /// Result of a geometry recovery attempt.
 #[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
 pub enum RecoveryOutcome<T> {
     Recovered(T),
     Absent { diagnostic: GeometryDiagnostic },
@@ -81,6 +83,7 @@ impl<T> RecoveryOutcome<T> {
 
 /// Where a wall location curve was recovered from.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum WallLocationSource {
     /// Standard ArcWall partition record centerline (RE-14.3).
     ArcWallPartition,
@@ -90,6 +93,7 @@ pub enum WallLocationSource {
 
 /// Recovered wall location curve in project coordinates (feet).
 #[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
 pub struct WallLocationCurve {
     pub curve: Curve,
     pub source: WallLocationSource,
@@ -254,6 +258,7 @@ fn endpoints_from_fields(decoded: &DecodedElement) -> Option<Curve> {
 
 /// Where a floor boundary was recovered from.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum FloorBoundarySource {
     /// Vector / float sequence on schema-driven Floor fields.
     SchemaSketch,
@@ -264,6 +269,7 @@ pub enum FloorBoundarySource {
 
 /// Recovered floor/slab plan boundary (feet).
 #[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
 pub struct FloorBoundaryLoop {
     /// Outer loop vertices in plan `(x, y)`. Not required to repeat
     /// the first point; [`Self::closed`] records closure.
@@ -524,6 +530,7 @@ fn polygon_area_xy(points: &[(f64, f64)]) -> f64 {
 
 /// Kind of wall-hosted opening.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum OpeningKind {
     Door,
     Window,
@@ -531,6 +538,7 @@ pub enum OpeningKind {
 
 /// Host relationship for a door or window.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct OpeningHostRelationship {
     pub opening_kind: OpeningKind,
     /// Host wall (or other host) ElementId. Never zero.
@@ -596,6 +604,7 @@ fn recover_opening_host(
 
 /// Recovered level elevation in project feet.
 #[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
 pub struct LevelElevation {
     pub name: Option<String>,
     pub elevation_feet: f64,

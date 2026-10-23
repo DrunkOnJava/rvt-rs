@@ -110,6 +110,7 @@ impl ElementDecoder for SubcategoryDecoder {
 
 /// Typed view of a decoded Category.
 #[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
 pub struct Category {
     pub name: Option<String>,
     pub builtin_id: Option<i64>,
@@ -150,6 +151,7 @@ impl Category {
 
 /// Typed view of a decoded Subcategory.
 #[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
 pub struct Subcategory {
     pub name: Option<String>,
     pub parent_category_id: Option<u32>,

@@ -26,6 +26,7 @@ use serde::{Deserialize, Serialize};
 /// Complete viewer state bundled for URL sharing.
 // Tracker: VW1-24.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct ViewerState {
     /// Optional file hash / identifier — when present, frontends
     /// can refuse to restore state that belongs to a different

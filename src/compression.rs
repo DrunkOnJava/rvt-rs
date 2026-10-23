@@ -280,6 +280,7 @@ impl InflatedStream {
 /// Whether production inflate strips checksum-page trailers for a stream.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[non_exhaustive]
 pub enum ChecksumTailStripping {
     /// No longer produced for `Formats/Latest` (#410); kept for readers of
     /// older diagnostics.
@@ -294,6 +295,7 @@ pub enum ChecksumTailStripping {
 /// (Discussion #112 / #151 residual).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[non_exhaustive]
 pub enum FormatsIntegrityStatus {
     /// Stored length is under one full checksum page and inflate succeeded.
     Ok,
@@ -309,6 +311,7 @@ pub const RVT_FORMATS_MULTIPAGE_UNVERIFIED: &str = "RVT_FORMATS_MULTIPAGE_UNVERI
 /// Machine-readable `Formats/Latest` integrity sidecar for inspect / export /
 /// viewer File Status.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[non_exhaustive]
 pub struct FormatsLatestIntegrity {
     pub stream: String,
     pub stored_bytes: usize,

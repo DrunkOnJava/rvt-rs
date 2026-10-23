@@ -28,6 +28,7 @@ pub const HEADER_SIZE: usize = 44;
 /// are partially reverse-engineered; see FACT F7/F8 in
 /// `docs/rvt-moat-break-reconnaissance.md` for the evidence trail.
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub struct PartitionHeader {
     /// First u32 LE — appears to equal `chunk_count + 1` in most releases.
     pub declared_count_plus_one: u32,
@@ -45,6 +46,7 @@ pub struct PartitionHeader {
 /// caller can pass the slice through `compression::inflate_at` (offset 0)
 /// to get the decompressed payload.
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub struct PartitionChunk {
     /// Starting offset of the chunk within the raw Partitions/NN stream.
     pub raw_offset: usize,

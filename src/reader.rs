@@ -135,6 +135,7 @@ type CachedWalk = (
 );
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct Summary {
     pub file_size: u64,
     pub streams: Vec<String>,

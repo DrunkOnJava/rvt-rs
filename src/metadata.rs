@@ -24,6 +24,7 @@ const MAX_IDENTITY_STREAM_BYTES: u64 = 4 * 1024 * 1024;
 
 /// Document identity recovered from `BasicFileInfo` and the Atom entry.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct FileMetadata {
     /// Revit release that saved the file (e.g. `2024`).
     pub revit_version: u32,

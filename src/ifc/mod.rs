@@ -192,6 +192,7 @@ pub struct IfcModel {
 
 /// A layered element's layers across its thickness (RE-53).
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[non_exhaustive]
 pub struct ElementLayers {
     /// Unit plan direction, model axes, from the element's inside to its
     /// exterior face.
@@ -211,6 +212,7 @@ pub struct ElementLayers {
 
 /// One layer of an [`ElementLayers`].
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[non_exhaustive]
 pub struct LayerBand {
     /// Feet.
     pub width_feet: f64,
@@ -227,6 +229,7 @@ pub struct LayerBand {
 /// GlobalIds Revit's own exporter gives, rebuilt from the file (RE-48,
 /// `crate::revit_global_ids`). Empty when the file does not yield them.
 #[derive(Debug, Default, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[non_exhaustive]
 pub struct RevitGlobalIds {
     /// The document's `Unique Document GUID` (BasicFileInfo). The GlobalIds
     /// the writer generates for entities Revit gives none are derived from
@@ -282,6 +285,7 @@ pub const EXPORT_DIAGNOSTICS_SCHEMA_VERSION: u32 = 1;
 /// IFC export mode represented in diagnostics sidecars.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[non_exhaustive]
 pub enum ExportDiagnosticsMode {
     Placeholder,
     Default,
@@ -291,6 +295,7 @@ pub enum ExportDiagnosticsMode {
 /// Result type for callers that want both the IFC model and the
 /// user/shareable export diagnostics sidecar in one pass.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[non_exhaustive]
 pub struct ExportResult {
     pub model: IfcModel,
     pub diagnostics: ExportDiagnostics,
@@ -302,6 +307,7 @@ pub struct ExportResult {
 /// and WASM callers can attach it to issue reports without understanding
 /// Revit internals.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[non_exhaustive]
 pub struct ExportDiagnostics {
     pub schema_version: u32,
     pub mode: ExportDiagnosticsMode,
@@ -326,6 +332,7 @@ pub struct ExportDiagnostics {
 
 /// A10 export source-coverage block (measured when denominators exist).
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[non_exhaustive]
 pub struct SourceCoverageDiagnostics {
     pub status: SourceCoverageStatus,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -341,6 +348,7 @@ pub struct SourceCoverageDiagnostics {
 /// Measurement state for [`SourceCoverageDiagnostics`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[non_exhaustive]
 pub enum SourceCoverageStatus {
     Unset,
     Unknown,
@@ -468,6 +476,7 @@ fn elem_table_declared_element_count(rf: &mut crate::RevitFile) -> Option<usize>
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[non_exhaustive]
 pub struct ExportInputDiagnostics {
     pub revit_version: Option<u32>,
     pub build: Option<String>,
@@ -488,6 +497,7 @@ pub struct ExportInputDiagnostics {
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[non_exhaustive]
 pub struct DecodedExportDiagnostics {
     pub production_walker_elements: usize,
     pub diagnostic_proxy_candidates: usize,
@@ -524,6 +534,7 @@ fn default_min_element_confidence_serde() -> f32 {
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[non_exhaustive]
 pub struct ExportedModelDiagnostics {
     pub total_entities: usize,
     pub building_elements: usize,
@@ -575,6 +586,7 @@ pub struct ExportedModelDiagnostics {
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[non_exhaustive]
 pub struct SkippedExportItem {
     pub reason: String,
     pub count: usize,
@@ -583,6 +595,7 @@ pub struct SkippedExportItem {
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[non_exhaustive]
 pub struct ExportConfidenceSummary {
     pub level: String,
     pub score: f32,
@@ -610,6 +623,7 @@ pub struct ExportConfidenceSummary {
 /// of writing an IFC that looks more complete than it is.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "kebab-case")]
+#[non_exhaustive]
 pub enum ExportQualityMode {
     Scaffold,
     TypedNoGeometry,
@@ -711,6 +725,7 @@ impl std::str::FromStr for ExportQualityMode {
 #[error(
     "unknown IFC export mode `{value}`; expected scaffold, typed-no-geometry, geometry, or strict"
 )]
+#[non_exhaustive]
 pub struct ExportQualityModeParseError {
     pub value: String,
 }
@@ -719,6 +734,7 @@ pub struct ExportQualityModeParseError {
 #[error(
     "IFC export mode `{mode}` cannot be satisfied: {reason} (confidence level: {confidence_level})"
 )]
+#[non_exhaustive]
 pub struct ExportQualityValidationError {
     pub mode: ExportQualityMode,
     pub reason: String,
@@ -754,6 +770,7 @@ pub trait Exporter {
 /// Returned by exporters that cannot yet produce a given entity class.
 #[derive(Debug, Clone, thiserror::Error)]
 #[error("IFC export not yet implemented: {reason}")]
+#[non_exhaustive]
 pub struct NotYetImplemented {
     pub reason: String,
 }
