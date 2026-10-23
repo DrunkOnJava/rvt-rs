@@ -62,8 +62,9 @@ def main():
         storey = rel.RelatingStructure
         if storey.is_a("IfcBuildingStorey"):
             for element in rel.RelatedElements:
-                if element.Tag and str(element.Tag).isdigit():
-                    storey_of[int(element.Tag)] = (storey.Name, levels.get(storey.Name, "?"), storey.Elevation)
+                tag = getattr(element, "Tag", None)
+                if tag and str(tag).isdigit():
+                    storey_of[int(tag)] = (storey.Name, levels.get(storey.Name, "?"), storey.Elevation)
     print(f"storeys: {sorted({(s.Name, s.Elevation) for s in model.by_type('IfcBuildingStorey')}, key=lambda x: x[1] or 0)}")
     exported = {
         int(p.Tag): p.is_a()
