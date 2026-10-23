@@ -103,10 +103,10 @@ impl ElementDecoder for RoofDecoder {
         limits: crate::walker::WalkerLimits,
     ) -> Result<DecodedElement> {
         if schema.name != "Roof" {
-            return Err(Error::BasicFileInfo(format!(
-                "RoofDecoder received wrong schema: {}",
-                schema.name
-            )));
+            return Err(Error::SchemaMismatch {
+                decoder: "Roof",
+                schema: schema.name.clone(),
+            });
         }
         Ok(crate::walker::decode_instance_with_limits(
             bytes, 0, schema, limits,
@@ -139,10 +139,10 @@ impl ElementDecoder for RoofTypeDecoder {
         limits: crate::walker::WalkerLimits,
     ) -> Result<DecodedElement> {
         if schema.name != "RoofType" {
-            return Err(Error::BasicFileInfo(format!(
-                "RoofTypeDecoder received wrong schema: {}",
-                schema.name
-            )));
+            return Err(Error::SchemaMismatch {
+                decoder: "RoofType",
+                schema: schema.name.clone(),
+            });
         }
         Ok(crate::walker::decode_instance_with_limits(
             bytes, 0, schema, limits,

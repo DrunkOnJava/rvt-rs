@@ -130,9 +130,10 @@ pub struct ElemRecordRough {
 
 fn parse_header_bytes(d: &[u8]) -> Result<ElemTableHeader> {
     if d.len() < 0x30 {
-        return Err(Error::BasicFileInfo(
-            "Global/ElemTable stream too short for header".into(),
-        ));
+        return Err(Error::Malformed {
+            what: "Global/ElemTable",
+            detail: "shorter than its header".into(),
+        });
     }
     let element_count = u16::from_le_bytes([d[0], d[1]]);
     let record_count = u32::from_le_bytes([d[2], d[3], d[4], d[5]]);

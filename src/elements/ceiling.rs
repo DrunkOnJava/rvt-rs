@@ -51,10 +51,10 @@ impl ElementDecoder for CeilingDecoder {
         limits: crate::walker::WalkerLimits,
     ) -> Result<DecodedElement> {
         if schema.name != "Ceiling" {
-            return Err(Error::BasicFileInfo(format!(
-                "CeilingDecoder received wrong schema: {}",
-                schema.name
-            )));
+            return Err(Error::SchemaMismatch {
+                decoder: "Ceiling",
+                schema: schema.name.clone(),
+            });
         }
         Ok(crate::walker::decode_instance_with_limits(
             bytes, 0, schema, limits,
@@ -87,10 +87,10 @@ impl ElementDecoder for CeilingTypeDecoder {
         limits: crate::walker::WalkerLimits,
     ) -> Result<DecodedElement> {
         if schema.name != "CeilingType" {
-            return Err(Error::BasicFileInfo(format!(
-                "CeilingTypeDecoder received wrong schema: {}",
-                schema.name
-            )));
+            return Err(Error::SchemaMismatch {
+                decoder: "CeilingType",
+                schema: schema.name.clone(),
+            });
         }
         Ok(crate::walker::decode_instance_with_limits(
             bytes, 0, schema, limits,

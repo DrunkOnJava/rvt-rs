@@ -175,9 +175,10 @@ pub fn from_partition_arc_wall(wall: &crate::partition_arc_walls::PartitionArcWa
 fn reject_wrong_class(class_name: Option<&str>) -> Result<()> {
     match class_name {
         None | Some("ArcWall") => Ok(()),
-        Some(other) => Err(Error::BasicFileInfo(format!(
-            "ArcWallDecoder received wrong schema: {other}"
-        ))),
+        Some(other) => Err(Error::SchemaMismatch {
+            decoder: "ArcWall",
+            schema: other.to_string(),
+        }),
     }
 }
 
@@ -186,12 +187,15 @@ fn reject_wrong_class(class_name: Option<&str>) -> Result<()> {
 pub fn decode_at(buf: &[u8], offset: usize, expected_class: Option<&str>) -> Result<ArcWall> {
     reject_wrong_class(expected_class)?;
     if buf.len().saturating_sub(offset) < STANDARD_RECORD_MIN_SIZE {
-        return Err(Error::Cfb(format!(
-            "ArcWall decode: buffer too short ({} < {} at offset {})",
-            buf.len().saturating_sub(offset),
-            STANDARD_RECORD_MIN_SIZE,
-            offset
-        )));
+        return Err(Error::Malformed {
+            what: "ArcWall record",
+            detail: format!(
+                "buffer too short ({} < {} at offset {})",
+                buf.len().saturating_sub(offset),
+                STANDARD_RECORD_MIN_SIZE,
+                offset
+            ),
+        });
     }
     let record = ArcWallRecord::decode_standard(buf, offset)?;
     let trailer = ArcWallRecord::decode_trailer(buf, offset);
@@ -212,10 +216,13 @@ pub fn decode_candidate(
 
     reject_wrong_class(candidate.class_name.as_deref())?;
     if candidate.class_tag != ARC_WALL_TAG {
-        return Err(Error::BasicFileInfo(format!(
-            "ArcWallDecoder received wrong schema tag: 0x{:04x} (expected 0x{ARC_WALL_TAG:04x})",
-            candidate.class_tag
-        )));
+        return Err(Error::Malformed {
+            what: "ArcWall record",
+            detail: format!(
+                "class tag 0x{:04x}, expected 0x{ARC_WALL_TAG:04x}",
+                candidate.class_tag
+            ),
+        });
     }
     decode_at(buf, candidate.offset, candidate.class_name.as_deref())
 }
