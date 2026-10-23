@@ -1,4 +1,4 @@
-//! JSON projections of Lane Five MVP typed views.
+//! JSON projections of the typed views of `MVP_TYPED_CLASSES`.
 //!
 //! Used by the Python bindings and the `rvt-elements` CLI so both
 //! surfaces share one dictionary shape. Non-MVP classes return
@@ -15,7 +15,7 @@ use crate::geometry::Point3;
 use crate::walker::DecodedElement;
 use serde_json::{Value, json};
 
-/// `true` when `class_name` is in the Lane Five schema-driven MVP set.
+/// `true` when `class_name` has a typed view (`MVP_TYPED_CLASSES`).
 pub fn is_mvp_typed_class(class_name: &str) -> bool {
     MVP_TYPED_CLASSES.contains(&class_name)
 }

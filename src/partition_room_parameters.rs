@@ -598,7 +598,7 @@ fn read_entry(buf: &[u8], hit: usize, kind: EntryKind) -> Option<EntryValue> {
 /// stored, by parameter and ElementId, on Revit 2024 and later: the entry with
 /// the parameter's key in the element's own data object (RE-153), the
 /// innermost one holding it among the stream's data objects, memoised on the
-/// handle (`RevitFile::partition_data_objects`, B80). Only the payloads of
+/// handle (`RevitFile::partition_data_objects`). Only the payloads of
 /// the elements' own objects are searched. The latest partition's copy is
 /// taken, and an element whose entries there disagree gets nothing (#800).
 pub fn scan_parameter_entries(

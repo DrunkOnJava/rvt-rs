@@ -127,6 +127,77 @@ All notable changes will be documented here. This project follows
 
 ### Changed
 
+- **The API's entry points have examples that run (#872).** The crate
+  root's three examples and new ones on `RevitFile::open`,
+  `metadata::read_metadata`, `walker::iter_elements`,
+  `RvtDocExporter::export_with_diagnostics`, `write_step`,
+  `gltf::model_to_glb` and `schedule_csv::elements_csv` open the synthetic
+  project file the repository ships, `corpus/tier1/architectural-2024`,
+  and CI now runs every documentation example (`cargo test --doc`), which
+  it never did. Those entry points document their errors (`# Errors`), and
+  `summarize_strict`'s doc no longer says a missing PartAtom is a failure:
+  it is not. The crate root's example used the deprecated `summarize`.
+
+- **Breaking: `Error` is `#[non_exhaustive]`, and says what failed.** A
+  `match` on it now needs a wildcard arm, so later variants are not breaking
+  changes. Failures that were reported as `Error::BasicFileInfo` or
+  `Error::Cfb` although they had nothing to do with either now have their
+  own variants: `SchemaMismatch { decoder, schema }` for a typed decoder
+  given another class's schema (was "...Decoder received wrong schema"),
+  `NoDecoder` for a class with no typed decoder, `MissingClass` for a
+  schema with no `ADocument`, and `Malformed { what, detail }` for an
+  ArcWall or opening-index record (a wrong class tag among them), an
+  `ADocument` or a `Global/ElemTable` that does not have the shape its
+  reader expects. Every variant is
+  documented, and `NotLocated` is new for a record that cannot be located
+  with confidence, as `read_adocument_strict` reports an earlier release's
+  `ADocument`. The other variants and their messages are unchanged. In
+  Python, `RevitFile.read_adocument()` raises `ValueError`, where it raised
+  `OSError`, for a file whose schema declares no `ADocument`.
+
+- **Breaking: the stable API's output types are `#[non_exhaustive]`.** All
+  62 public enums of the stable modules and the 135 public structs that
+  only rvt-rs produces, so a release can add a variant or a field without
+  breaking code that uses them. A `match` on one of these enums needs a
+  wildcard arm, and these structs can no longer be built with a struct
+  literal outside the crate. The structs callers build stay as they were:
+  the options and limits (`OpenLimits`, `WalkerLimits`, `CsvOptions`,
+  `StepOptions`, ...), the bridge's inputs (`ElementInput`,
+  `BuilderOptions`, `Storey`, `MaterialInfo`, `StreamPatch`,
+  `ExportContentPolicy`, `corpus::Sample`, `parse_mode::Warning`),
+  `IfcModel` and the parts it is assembled from (materials, layer sets and
+  element layers, opening cuts, GlobalIds), the glTF document records
+  `write_glb` writes, the geometry primitives (`Point3`, `CurveLoop`,
+  `Mesh`, ...), the viewer's state (`CameraState`, `ClippingPlane`,
+  `SectionBox`, `ViewerState`, `CategoryFilter`), the schedule rows
+  `Schedule::from_rows` takes, what the encoders write
+  (`BasicFileInfo`, `PartAtom`), and the few output types the tests
+  construct (`DecodedElement`, `Wall`, `ClassEntry`, ...).
+
+- **The API docs are written for someone outside the project.** Backlog
+  and task ids (`B55`, `VW1-13`, `SEC-12`) and work-plan labels ("Lane C",
+  "Phase 4d", "the attack plan") are gone from the API docs: the crate's
+  and the CLIs' rustdoc, the Python docstrings and type stubs, and the
+  Python guide; where one was a citation it is kept in a `// Tracker:`
+  comment beside the item. The Python docs no longer say only `scaffold`
+  export succeeds until geometry recovery lands: that is true of a file
+  with no recovered elements, such as the synthetic fixtures. The crate
+  root says what `RE-NN` and `#NNN` refer to, and CI checks that every RE
+  finding the docs cite has a report and that no planning label comes
+  back. The `ifc` module's overview, which still described per-element
+  export as pending, says what the exporter writes today, and
+  `ifc::from_decoded` no longer claims to attach no geometry, materials or
+  property sets.
+
+- **Breaking: `Error::Cfb` keeps the I/O error it reports (#899).** It was a
+  string. It is now `Cfb { op, path, source }`: what was being done, the
+  stream or file, and the `io::Error`, which `Error::source()` returns, so a
+  caller can tell a permission error from a full disk. A file, buffer or
+  stream over its limit (`OpenLimits`, the identity-stream cap) is the new
+  `Error::TooLarge { what, size, limit }`, a destination path without a
+  file name is `Error::Io` with `InvalidInput`, and a stream too short for
+  its framing is `Error::Malformed`. All three were `Cfb` before.
+
 - **Breaking: the research readers moved to `rvt::research`, behind the
   `unstable-research` feature (#873).** The crate's API is now 27 stable
   modules (reading and identity, typed elements and the element walk,
@@ -157,7 +228,8 @@ All notable changes will be documented here. This project follows
   registered as `SimpleDecoder::new("<class>")`, which decodes exactly what
   the type of that name did; `elements::all_decoders()` and
   `decoder_for_class` return the same classes in the same order. A wrong
-  schema's error now reads `<class> decoder received wrong schema: ...`.
+  schema's error is `Error::SchemaMismatch`, which reads `<class> decoder
+  received the schema of <schema>`.
   `decoder_for_class` returns a `&'static dyn ElementDecoder` from a
   registry built once, so a lookup no longer builds all 81 decoders. The
   `cargo generate` element template registers through `SimpleDecoder`

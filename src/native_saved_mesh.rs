@@ -45,26 +45,13 @@ impl Default for CylinderTessellationProfile {
 }
 struct PointerIndex<'a> {
     graph: &'a ObjectGraph,
-    edges: BTreeMap<(usize, usize), Vec<usize>>,
-    tokens: BTreeMap<u64, Vec<usize>>,
+    lookup: &'a crate::native_parameters::PointerLookup,
 }
 impl<'a> PointerIndex<'a> {
     fn new(graph: &'a ObjectGraph) -> Self {
-        let mut edges: BTreeMap<_, Vec<_>> = BTreeMap::new();
-        let mut tokens: BTreeMap<_, Vec<_>> = BTreeMap::new();
-        for (i, e) in graph.edges.iter().enumerate() {
-            edges
-                .entry((e.source_object_index, e.pointer_offset))
-                .or_default()
-                .push(i);
-        }
-        for (i, o) in graph.objects.iter().enumerate() {
-            tokens.entry(o.token as u64).or_default().push(i);
-        }
         Self {
             graph,
-            edges,
-            tokens,
+            lookup: graph.lookup(),
         }
     }
     fn resolve(&self, source: usize, v: &Value) -> Result<Option<usize>> {
@@ -77,6 +64,7 @@ impl<'a> PointerIndex<'a> {
         }
         let off = v["offset"].as_u64().context("pointer offset")? as usize;
         let edges = self
+            .lookup
             .edges
             .get(&(source, off))
             .map(Vec::as_slice)
@@ -101,52 +89,13 @@ impl<'a> PointerIndex<'a> {
         }
         ensure!(edges.is_empty(), "ambiguous pointer edge");
         ensure!(t != u32::MAX as u64, "unresolved anonymous pointer");
-        let objs = self.tokens.get(&t).map(Vec::as_slice).unwrap_or(&[]);
+        let objs = self.lookup.tokens.get(&t).map(Vec::as_slice).unwrap_or(&[]);
         ensure!(objs.len() == 1, "unresolved or ambiguous token {t}");
         Ok(Some(objs[0]))
     }
 }
 pub fn pointer(g: &ObjectGraph, source: usize, v: &Value) -> Result<Option<usize>> {
-    let t = v["pointer_token"]
-        .as_u64()
-        .context("missing pointer token")?;
-    if t == 0 {
-        return Ok(None);
-    }
-    let off = v["offset"].as_u64().context("pointer offset")? as usize;
-    let edges: Vec<_> = g
-        .edges
-        .iter()
-        .filter(|e| e.source_object_index == source && e.pointer_offset == off)
-        .collect();
-    if edges.len() == 1 {
-        let e = edges[0];
-        let target = g
-            .objects
-            .get(e.target_object_index)
-            .context("pointer target out of bounds")?;
-        ensure!(
-            e.pointer_token as u64 == t && target.class_tag == e.target_class_tag,
-            "pointer edge metadata mismatch"
-        );
-        if let Some(tag) = v["class_tag"].as_u64() {
-            ensure!(
-                tag == target.class_tag as u64,
-                "pointer target class mismatch"
-            )
-        }
-        return Ok(Some(e.target_object_index));
-    }
-    ensure!(edges.is_empty(), "ambiguous pointer edge");
-    ensure!(t != u32::MAX as u64, "unresolved anonymous pointer");
-    let objs: Vec<_> = g
-        .objects
-        .iter()
-        .enumerate()
-        .filter(|(_, o)| o.token as u64 == t)
-        .collect();
-    ensure!(objs.len() == 1, "unresolved or ambiguous token {t}");
-    Ok(Some(objs[0].0))
+    PointerIndex::new(g).resolve(source, v)
 }
 fn point<const N: usize>(v: &Value) -> Result<[f64; N]> {
     let a = v.as_array().context("point array")?;

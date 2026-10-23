@@ -1,6 +1,6 @@
 //! `rvt-capabilities` — emit an honest capability / relation-domain snapshot.
 //!
-//! Doctor-style CLI for Phase 1 leftovers. Prints JSON (default) or a short
+//! Doctor-style CLI for the capability manifest. Prints JSON (default) or a short
 //! text summary. Does **not** claim ES remapping, compound openings, or
 //! converter-grade IFC.
 

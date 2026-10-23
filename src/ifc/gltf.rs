@@ -1,4 +1,4 @@
-//! glTF 2.0 exporter (VW1-04) — dep-free binary GLB emission.
+//! glTF 2.0 exporter — dep-free binary GLB emission.
 //!
 //! Produces a `.glb` file ready to load into Three.js, BabylonJS,
 //! Blender, or any glTF 2.0 viewer. Each `BuildingElement` is drawn as the
@@ -8,7 +8,7 @@
 //! other body (a sketched profile, a steel section, a swept or revolved
 //! solid, a brep) has its own mesh. An element with no body gets a node
 //! with no mesh. Each element gets a material drawn from
-//! `PbrMaterial::from_material_info` (VW1-06).
+//! `PbrMaterial::from_material_info`.
 //!
 //! Element nodes are in the model's frame, feet with +Z up. glTF is
 //! metres with +Y up, so they hang under one root node whose matrix
@@ -24,6 +24,7 @@
 //! [u32 bin_chunk_length] [u32 chunk_type=0x004E4942 "BIN\0"]
 //! [bin_chunk_length bytes binary buffer, padded to 4-byte with 0x00]
 //! ```
+// Tracker: VW1-04, VW1-06.
 
 use super::IfcModel;
 use super::body_geometry::{self, Body, Placement, body_mesh, element_body};
@@ -31,10 +32,11 @@ use super::entities::IfcEntity;
 use super::pbr::PbrMaterial;
 use serde::{Deserialize, Serialize};
 
-/// Top-level glTF 2.0 JSON document (VW1-04).
+/// Top-level glTF 2.0 JSON document.
 ///
 /// Matches the glTF spec field names exactly (camelCase) so the
 /// serialized JSON is a valid glTF file.
+// Tracker: VW1-04.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct GltfDocument {
     pub asset: Asset,
@@ -208,7 +210,7 @@ pub struct Accessor {
 
 /// Unit-cube vertex positions ([-0.5, 0.5]³, 24 verts — 4 per
 /// face for correct per-face normals). Shared across every
-/// element in the first-pass VW1-04 export.
+/// element in the first-pass export.
 fn unit_cube_vertices() -> [f32; 24 * 3] {
     // 6 faces × 4 verts × 3 coords.
     let h = 0.5_f32;
@@ -245,7 +247,7 @@ pub const Z_UP_FEET_TO_Y_UP_METRES: [f32; 16] = [
 ];
 
 /// Build a glTF document + binary buffer from an `IfcModel`
-/// (VW1-04). Returns `(document, binary_buffer)` — wire into
+///. Returns `(document, binary_buffer)` — wire into
 /// [`write_glb`] for a single-file `.glb` output.
 ///
 /// Every `BuildingElement` becomes a node carrying its entity index and
@@ -254,6 +256,7 @@ pub const Z_UP_FEET_TO_Y_UP_METRES: [f32; 16] = [
 /// its placement: the shared unit cube scaled, turned and moved for a
 /// plain rectangular extrusion, a per-element mesh turned and moved for
 /// any other body, and no mesh for an element with none.
+// Tracker: VW1-04.
 pub fn build_gltf(model: &IfcModel) -> (GltfDocument, Vec<u8>) {
     let mut bin = Vec::<u8>::new();
     let mut doc = GltfDocument::default();
@@ -754,9 +757,10 @@ fn push_mesh(
 }
 
 /// Write a GLB (binary glTF) file to `out` given a JSON document
-/// + binary buffer (VW1-04).
+/// + binary buffer.
 ///
 /// Spec reference: <https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html#glb-file-format-specification>
+// Tracker: VW1-04.
 pub fn write_glb(doc: &GltfDocument, bin: &[u8], out: &mut Vec<u8>) {
     let json_text = serde_json::to_string(doc).expect("serialize glTF doc");
     let mut json_bytes = json_text.into_bytes();
@@ -787,6 +791,18 @@ pub fn write_glb(doc: &GltfDocument, bin: &[u8], out: &mut Vec<u8>) {
 }
 
 /// One-call convenience: `IfcModel` → GLB bytes.
+///
+/// # Examples
+///
+/// ```
+/// use rvt::RevitFile;
+/// use rvt::ifc::{Exporter, RvtDocExporter, gltf::model_to_glb};
+///
+/// let mut rf = RevitFile::open("corpus/tier1/architectural-2024/architectural-2024.rvt")?;
+/// let glb = model_to_glb(&RvtDocExporter.export(&mut rf)?);
+/// assert_eq!(&glb[..4], b"glTF");
+/// # Ok::<(), rvt::Error>(())
+/// ```
 pub fn model_to_glb(model: &IfcModel) -> Vec<u8> {
     let (doc, bin) = build_gltf(model);
     let mut out = Vec::new();

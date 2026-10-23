@@ -1,6 +1,6 @@
 //! `rvt-schema` — dump the embedded serialization schema from a Revit file.
 //!
-//! Phase C of the attack plan. Revit ships its complete serialization
+//! Revit ships its complete serialization
 //! schema inside every `.rvt` / `.rfa` file in the `Formats/Latest` stream:
 //! class names, field names, and full C++ type signatures including STL
 //! generics like `std::pair< ElementId, double >`. This binary makes that

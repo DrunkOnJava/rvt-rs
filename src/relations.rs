@@ -6,8 +6,8 @@
 //! ownership must stay in separate [`RelationDomain`]s so research ledgers do
 //! not cross-contaminate scoring (especially ES vs #152).
 //!
-//! **Experimental / not production.** These helpers are architecture stubs for
-//! Phase 1 leftovers. They do **not** claim ES remapping, Door/Window joins,
+//! **Experimental / not production.** These helpers are architecture stubs.
+//! They do **not** claim ES remapping, Door/Window joins,
 //! compound openings, or converter-grade IFC are solved. Nothing here is wired
 //! into default IFC emission.
 
