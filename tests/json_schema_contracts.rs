@@ -42,8 +42,23 @@ fn validate(schema: &Value, value: &Value) -> Result<(), String> {
 
 fn validate_at(root: &Value, schema: &Value, value: &Value, path: &str) -> Result<(), String> {
     if let Some(reference) = schema.get("$ref").and_then(Value::as_str) {
+        // A reference to a sibling schema (`export-diagnostics.schema.json`)
+        // is validated against that file, as a consumer resolving it from
+        // this schema's `$id` would.
+        if !reference.starts_with('#') {
+            let other = load_schema(reference);
+            return validate_at(&other, &other, value, path);
+        }
         let resolved = resolve_ref(root, reference)?;
         return validate_at(root, resolved, value, path);
+    }
+
+    if let Some(expected) = schema.get("const") {
+        if expected != value {
+            return Err(format!(
+                "{path}: {value:?} is not the constant {expected:?}"
+            ));
+        }
     }
 
     if let Some(options) = schema.get("anyOf").and_then(Value::as_array) {
@@ -116,6 +131,16 @@ fn validate_at(root: &Value, schema: &Value, value: &Value, path: &str) -> Resul
     }
 
     if let Some(array) = value.as_array() {
+        if let Some(min) = schema.get("minItems").and_then(Value::as_u64) {
+            if (array.len() as u64) < min {
+                return Err(format!("{path}: {} items, fewer than {min}", array.len()));
+            }
+        }
+        if let Some(max) = schema.get("maxItems").and_then(Value::as_u64) {
+            if (array.len() as u64) > max {
+                return Err(format!("{path}: {} items, more than {max}", array.len()));
+            }
+        }
         if let Some(item_schema) = schema.get("items") {
             for (idx, child) in array.iter().enumerate() {
                 validate_at(root, item_schema, child, &format!("{path}[{idx}]"))?;
@@ -194,6 +219,7 @@ fn checked_in_schemas_are_valid_json_schema_documents() {
         "analyze.schema.json",
         "inspect.schema.json",
         "ifc-compare.schema.json",
+        "schema-table.schema.json",
     ] {
         let schema = load_schema(name);
         assert_eq!(
@@ -317,11 +343,25 @@ fn tier1_report_clis_validate_against_their_schemas() {
 
     let inspect = command_json(env!("CARGO_BIN_EXE_rvt-inspect"), &[file, json]);
     validate(&load_schema("inspect.schema.json"), &inspect).expect("inspect schema validation");
-    validate(
-        &load_schema("export-diagnostics.schema.json"),
-        &inspect["export_diagnostics"],
-    )
-    .expect("inspect export_diagnostics schema validation");
+
+    // The error report, which rvt-inspect --json prints with a nonzero exit
+    // for a file it cannot read.
+    let not_revit = root.join("README.md");
+    let output = Command::new(env!("CARGO_BIN_EXE_rvt-inspect"))
+        .arg(&not_revit)
+        .arg("--json")
+        .output()
+        .expect("run rvt-inspect");
+    assert!(!output.status.success(), "rvt-inspect read README.md");
+    let report: Value = serde_json::from_slice(&output.stdout)
+        .expect("rvt-inspect prints its error report as JSON");
+    validate(&load_schema("inspect.schema.json"), &report)
+        .expect("inspect error report schema validation");
+    assert!(report["error"].is_string(), "{report}");
+
+    let schema_table = command_json(env!("CARGO_BIN_EXE_rvt-schema"), &[file, json]);
+    validate(&load_schema("schema-table.schema.json"), &schema_table)
+        .expect("schema-table schema validation");
 
     let strings = command_json(
         env!("CARGO_BIN_EXE_rvt-history"),

@@ -55,8 +55,7 @@
           "delta": {
             "type": "integer"
           }
-        },
-        "additionalProperties": false
+        }
       }
     },
     "storeys_only_left": {
@@ -143,15 +142,16 @@
                   "type": "array",
                   "items": {
                     "type": "number"
-                  }
+                  },
+                  "minItems": 3,
+                  "maxItems": 3
                 },
                 {
                   "type": "null"
                 }
               ]
             }
-          },
-          "additionalProperties": false
+          }
         },
         {
           "type": "null"
@@ -165,7 +165,6 @@
       }
     }
   },
-  "additionalProperties": false,
   "$defs": {
     "summary": {
       "type": "object",
@@ -219,8 +218,7 @@
             "type": "string"
           }
         }
-      },
-      "additionalProperties": false
+      }
     },
     "storey": {
       "type": "object",
@@ -242,8 +240,7 @@
             }
           ]
         }
-      },
-      "additionalProperties": false
+      }
     },
     "object": {
       "type": "object",
@@ -258,8 +255,7 @@
         "name": {
           "type": "string"
         }
-      },
-      "additionalProperties": false
+      }
     },
     "bounding_box": {
       "type": "object",
@@ -272,16 +268,19 @@
           "type": "array",
           "items": {
             "type": "number"
-          }
+          },
+          "minItems": 3,
+          "maxItems": 3
         },
         "max": {
           "type": "array",
           "items": {
             "type": "number"
-          }
+          },
+          "minItems": 3,
+          "maxItems": 3
         }
-      },
-      "additionalProperties": false
+      }
     }
   }
 }

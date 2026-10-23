@@ -3,8 +3,10 @@
 These schemas document the stable JSON surfaces used by the CLIs, Python
 bindings, viewer diagnostics, and release-support workflows. They are
 forward-compatible by default: new additive fields may appear without a schema
-version bump, but incompatible removals or type changes require a version bump
-in the producing payload.
+version bump, so the output schemas leave `additionalProperties` open, but
+incompatible removals or type changes require a version bump in the producing
+payload. The schemas of checked-in data (the support matrix, the witness
+registry) stay closed.
 
 | Schema | Producer |
 |---|---|
@@ -24,6 +26,7 @@ in the producing payload.
 | [`analyze.schema.json`](analyze.schema.json) | `rvt-analyze --json` |
 | [`inspect.schema.json`](inspect.schema.json) | `rvt-inspect --json`, including its error report |
 | [`ifc-compare.schema.json`](ifc-compare.schema.json) | `rvt-ifc-compare --json PATH` (`ifc::compare::IfcCompareReport`) |
+| [`schema-table.schema.json`](schema-table.schema.json) | `rvt-schema --json` (`formats::SchemaTable`; `--diagnostics` prints `schema-diagnostics`) |
 | [`es-observation.schema.json`](es-observation.schema.json) | ES remap research observations (H-ES5; not a production decode claim) |
 | [`es-capability.schema.json`](es-capability.schema.json) | Research capability promotion stub (report §15.16) |
 | [`witness-registry.schema.json`](witness-registry.schema.json) | Checked-in [`research/witness-registry.json`](../../research/witness-registry.json) (`tests/witness_registry.rs`) |
@@ -36,8 +39,9 @@ See [`docs/research/unified-research-report.md`](../research/unified-research-re
 The integration test `tests/json_schema_contracts.rs` runs every CLI that
 prints JSON and validates its output against its schema: on the tier-1
 synthetic fixtures for `rvt-info`, `rvt-elements`, `rvt-analyze`,
-`rvt-inspect`, `rvt-history --all-strings`, `rvt-capabilities` and
-`rvt-ifc-compare`, so those run with no Autodesk corpus present, and on the
+`rvt-inspect` (its report and its error report), `rvt-history --all-strings`,
+`rvt-schema`, `rvt-capabilities` and `rvt-ifc-compare`, so those run with no
+Autodesk corpus present, and on the
 family corpus for `rvt-info`, `rvt-history`, `rvt-elem-table`, `rvt-schema`,
 `rvt-doc`, `rvt-ifc --diagnostics` and `rvt-corpus`. CI's Linux test job has the corpus
 and fails if it is missing.

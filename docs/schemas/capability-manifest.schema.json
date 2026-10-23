@@ -23,9 +23,7 @@
         "required": [
           "capability_id",
           "status",
-          "evidence_tier",
-          "claims",
-          "non_claims"
+          "evidence_tier"
         ],
         "properties": {
           "capability_id": { "type": "string", "minLength": 1 },

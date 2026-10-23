@@ -119,16 +119,14 @@
                         }
                       ]
                     }
-                  },
-                  "additionalProperties": false
+                  }
                 },
                 {
                   "type": "null"
                 }
               ]
             }
-          },
-          "additionalProperties": false
+          }
         },
         "decoded": {
           "type": "object",
@@ -160,8 +158,7 @@
               "type": "integer",
               "minimum": 0
             }
-          },
-          "additionalProperties": false
+          }
         },
         "export": {
           "type": "object",
@@ -201,8 +198,7 @@
                 "type": "string"
               }
             }
-          },
-          "additionalProperties": false
+          }
         },
         "warnings": {
           "type": "array",
@@ -217,11 +213,9 @@
           }
         },
         "export_diagnostics": {
-          "type": "object",
-          "description": "The export diagnostics, export-diagnostics.schema.json."
+          "$ref": "export-diagnostics.schema.json"
         }
-      },
-      "additionalProperties": false
+      }
     },
     {
       "type": "object",
@@ -241,8 +235,7 @@
         "error": {
           "type": "string"
         }
-      },
-      "additionalProperties": false
+      }
     }
   ],
   "$defs": {
@@ -267,8 +260,7 @@
         "severity": {
           "type": "string"
         }
-      },
-      "additionalProperties": false
+      }
     }
   }
 }
