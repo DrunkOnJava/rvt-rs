@@ -49,7 +49,9 @@ Every `vX.Y.Z` release:
 - Has a GitHub release page for the tag, whose body is the version's
   `CHANGELOG.md` section and a link to the [user guide](docs/user-guide.md),
   carrying the CLI archives for Linux, macOS and Windows, `SHA256SUMS` and
-  their build-provenance attestations.
+  the archives' build provenance, `rvt-rs-vX.Y.Z.intoto.jsonl` (the bundle
+  `gh attestation verify <archive> -R DrunkOnJava/rvt-rs` also reads from
+  GitHub).
 - Publishes the `rvt` crate to [crates.io](https://crates.io/crates/rvt),
   Python wheels for Linux (glibc and musl), macOS and Windows and an sdist
   to [PyPI](https://pypi.org/project/rvt/), and the container image
