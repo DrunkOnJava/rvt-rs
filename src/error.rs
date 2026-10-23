@@ -1,15 +1,15 @@
 //! The crate's error type.
 //!
 //! Every fallible function in the crate returns [`Result`], whose error is
-//! [`Error`]. Input is untrusted, so a file rvt-rs cannot read is
-//! reported as an [`Error`]; the parsers are written not to panic on it and
+//! [`Error`](enum@Error). Input is untrusted, so a file rvt-rs cannot read is
+//! reported as an [`Error`](enum@Error); the parsers are written not to panic on it and
 //! are fuzzed for it. `Error` is `#[non_exhaustive]`: a release may add
 //! variants, so a `match` on it needs a wildcard arm.
 
 use std::io;
 use thiserror::Error;
 
-/// `std::result::Result` with [`Error`] as the default error.
+/// `std::result::Result` with [`Error`](enum@Error) as the default error.
 pub type Result<T, E = Error> = std::result::Result<T, E>;
 
 /// Why an operation on a Revit file failed.
