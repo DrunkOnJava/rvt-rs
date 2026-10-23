@@ -132,23 +132,12 @@ All notable changes will be documented here. This project follows
   `metadata::read_metadata`, `walker::iter_elements`,
   `RvtDocExporter::export_with_diagnostics`, `write_step`,
   `gltf::model_to_glb` and `schedule_csv::elements_csv` open the synthetic
-  project file the repository ships, `corpus/tier1/architectural-2024`, and
-  CI now runs every documentation example (`cargo test --doc`), which it never
-  did. Those entry points document their errors (`# Errors`), and
+  project file the repository ships, `corpus/tier1/architectural-2024`,
+  and CI now runs every documentation example (`cargo test --doc`), which
+  it never did. Those entry points document their errors (`# Errors`), and
   `summarize_strict`'s doc no longer says a missing PartAtom is a failure:
   it is not. The crate root's example used the deprecated `summarize`.
 
-- **Breaking: `Error` is `#[non_exhaustive]`, and says what failed.** A
-  `match` on it now needs a wildcard arm, so later variants are not breaking
-  changes. Failures that were reported as `Error::BasicFileInfo` or
-  `Error::Cfb` although they had nothing to do with either now have their
-  own variants: `SchemaMismatch { decoder, schema }` for a typed decoder
-  given another class's schema (was "...Decoder received wrong schema"),
-  `NoDecoder` for a class with no typed decoder, `MissingClass` for a
-  schema with no `ADocument`, and `Malformed { what, detail }` for an
-  ArcWall or opening-index record, an `ADocument` or a `Global/ElemTable`
-  that does not have the shape its reader expects. Every variant is
-  documented. The other variants and their messages are unchanged.
 - **Breaking: `Error` is `#[non_exhaustive]`, and says what failed.** A
   `match` on it now needs a wildcard arm, so later variants are not breaking
   changes. Failures that were reported as `Error::BasicFileInfo` or

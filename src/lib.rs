@@ -55,9 +55,11 @@
 //!
 //! let mut rf = RevitFile::open("corpus/tier1/architectural-2024/architectural-2024.rvt")?;
 //! let model = RvtDocExporter.export(&mut rf)?;
-//! let out = std::env::temp_dir();
+//! let out = std::env::temp_dir().join(format!("rvt-doc-example-{}", std::process::id()));
+//! std::fs::create_dir_all(&out)?;
 //! std::fs::write(out.join("project.ifc"), write_step(&model))?;
 //! std::fs::write(out.join("project.glb"), model_to_glb(&model))?;
+//! # std::fs::remove_dir_all(&out)?;
 //! # Ok::<(), Box<dyn std::error::Error>>(())
 //! ```
 //!

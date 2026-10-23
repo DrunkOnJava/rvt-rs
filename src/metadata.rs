@@ -127,9 +127,11 @@ impl RevitFile {
 /// # Errors
 ///
 /// [`Error::NotACfbFile`] for anything that is not an OLE/CFB container,
-/// [`Error::StreamNotFound`] for a CFB file (a `.doc`, an `.msg`, …) without
-/// `BasicFileInfo`, and [`Error::Io`], naming the path, when the file cannot
-/// be read.
+/// [`Error::Cfb`] when the container does not open or an identity stream is
+/// larger than its cap, [`Error::StreamNotFound`] for a CFB file (a `.doc`,
+/// an `.msg`, …) without `BasicFileInfo`, [`Error::BasicFileInfo`] when that
+/// stream does not parse, and [`Error::Io`], naming the path, when the file
+/// cannot be read.
 ///
 /// # Examples
 ///

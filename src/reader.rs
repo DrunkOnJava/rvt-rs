@@ -677,9 +677,11 @@ impl RevitFile {
     /// # Errors
     ///
     /// [`Error::StreamNotFound`] when `BasicFileInfo` or `Formats/Latest` is
-    /// missing, [`Error::BasicFileInfo`] or [`Error::PartAtom`] when either
-    /// stream does not parse, and [`Error::Decompress`] when `Formats/Latest`
-    /// does not inflate.
+    /// missing, [`Error::Cfb`] or [`Error::Io`] when either cannot be read
+    /// (one larger than [`OpenLimits::max_stream_bytes`] among them),
+    /// [`Error::BasicFileInfo`] or [`Error::PartAtom`] when either does not
+    /// parse, and [`Error::Decompress`] or [`Error::DecompressLimitExceeded`]
+    /// when `Formats/Latest` does not inflate or inflates past its cap.
     // Tracker: API-04.
     pub fn summarize_strict(&mut self) -> Result<Summary> {
         let streams = self.stream_names();

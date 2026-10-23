@@ -1444,9 +1444,9 @@ pub fn read_adocument_lossy_with_limits(
 /// # Errors
 ///
 /// The errors of reading what the walk needs: [`Error::StreamNotFound`]
-/// when `Formats/Latest` or `Global/Latest` is missing,
-/// [`Error::Decompress`] when one does not inflate, and
-/// [`Error::MissingClass`] when the schema declares no `ADocument`.
+/// when `Formats/Latest` or `Global/Latest` is missing, and
+/// [`Error::Decompress`] or [`Error::DecompressLimitExceeded`] when one
+/// does not inflate or inflates past the walk's limits.
 ///
 /// # Examples
 ///
