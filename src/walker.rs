@@ -1436,11 +1436,29 @@ pub fn read_adocument_lossy_with_limits(
 /// When the file's Revit year is in the ArcWall-supported set,
 /// validated partition ArcWall records are merged in as
 /// `DecodedElement` values with `class == "ArcWall"` (via
-/// [`crate::elements::arc_wall`]). Additional fail-closed partition
-/// MVP recovers (`crate::partition_schema_mvp`) may emit `Level`,
-/// `Material`, `Room`, `Floor` (plan-loop), and — on Revit 2024 —
-/// `ArcWallRectOpening` rows. Semantic `Door` / `Window` classes are
-/// **not** invented from opening-index bytes.
+/// [`crate::elements::arc_wall`]). The partition streams' element records
+/// then add the elements they carry, each typed by the record's own
+/// `BuiltInCategory`; Door and Window classes are never inferred from
+/// opening-index bytes.
+///
+/// # Errors
+///
+/// The errors of reading what the walk needs: [`Error::StreamNotFound`]
+/// when `Formats/Latest` or `Global/Latest` is missing, and
+/// [`Error::Decompress`] or [`Error::DecompressLimitExceeded`] when one
+/// does not inflate or inflates past the walk's limits.
+///
+/// # Examples
+///
+/// ```
+/// use rvt::RevitFile;
+///
+/// let mut rf = RevitFile::open("corpus/tier1/architectural-2024/architectural-2024.rvt")?;
+/// for element in rvt::walker::iter_elements(&mut rf)? {
+///     println!("{} {:?} from {:?}", element.class, element.id, element.provenance);
+/// }
+/// # Ok::<(), rvt::Error>(())
+/// ```
 // Tracker: M3-05, M3-06.
 pub fn iter_elements(rf: &mut RevitFile) -> Result<impl Iterator<Item = DecodedElement>> {
     iter_elements_with_limits(rf, PRODUCTION_ELEMENT_MIN_SCORE, WalkerLimits::default())

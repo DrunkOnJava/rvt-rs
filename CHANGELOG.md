@@ -152,6 +152,33 @@ All notable changes will be documented here. This project follows
   unchanged. In Python, `RevitFile.read_adocument()` raises `ValueError`,
   where it raised `OSError`, for a file whose schema declares no
   `ADocument`.
+- **The API's entry points have examples that run (#872).** The crate
+  root's three examples and new ones on `RevitFile::open`,
+  `metadata::read_metadata`, `walker::iter_elements`,
+  `RvtDocExporter::export_with_diagnostics`, `write_step`,
+  `gltf::model_to_glb` and `schedule_csv::elements_csv` open the synthetic
+  project file the repository ships, `corpus/tier1/architectural-2024`,
+  and CI now runs every documentation example (`cargo test --doc`), which
+  it never did. Those entry points document their errors (`# Errors`), and
+  `summarize_strict`'s doc no longer says a missing PartAtom is a failure:
+  it is not. The crate root's example used the deprecated `summarize`.
+
+- **Breaking: `Error` is `#[non_exhaustive]`, and says what failed.** A
+  `match` on it now needs a wildcard arm, so later variants are not breaking
+  changes. Failures that were reported as `Error::BasicFileInfo` or
+  `Error::Cfb` although they had nothing to do with either now have their
+  own variants: `SchemaMismatch { decoder, schema }` for a typed decoder
+  given another class's schema (was "...Decoder received wrong schema"),
+  `NoDecoder` for a class with no typed decoder, `MissingClass` for a
+  schema with no `ADocument`, and `Malformed { what, detail }` for an
+  ArcWall or opening-index record (a wrong class tag among them), an
+  `ADocument` or a `Global/ElemTable` that does not have the shape its
+  reader expects. Every variant is
+  documented, and `NotLocated` is new for a record that cannot be located
+  with confidence, as `read_adocument_strict` reports an earlier release's
+  `ADocument`. The other variants and their messages are unchanged. In
+  Python, `RevitFile.read_adocument()` raises `ValueError`, where it raised
+  `OSError`, for a file whose schema declares no `ADocument`.
 
 - **The API docs are written for someone outside the project.** Backlog
   and task ids (`B55`, `VW1-13`, `SEC-12`) and work-plan labels ("Lane C",
