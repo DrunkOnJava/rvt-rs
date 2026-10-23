@@ -60,9 +60,10 @@ def curve_points(cls, f):
 
 
 def read_probe(path):
-    """Symbol -> (owner, loop (min, max) corners or None, curve classes), and
-    instance -> (owner, {field: [ElementIds]})."""
-    cuts, objects, instances = {}, collections.defaultdict(list), {}
+    """Symbol -> (owner, loop (min, max) corners or None, curve classes),
+    instance -> (owner, {field: [ElementIds]}), and symbol -> its root's
+    ElementId-valued fields."""
+    cuts, objects, instances, refs = {}, collections.defaultdict(list), {}, {}
     for line in open(path):
         if line.startswith("cut "):
             _, symbol, _family, owner, _fields = line.split(" ", 4)
@@ -77,6 +78,16 @@ def read_probe(path):
                 for name, value in json.loads(fields).items()
             }
             instances[instance] = (int(owner), ids)
+        elif line.startswith("deep "):
+            _, instance, found = line.split(" ", 2)
+            ids = collections.defaultdict(list)
+            for cls, name, value in json.loads(found):
+                ids[f"{cls}.{name}"].append(int(value))
+            owner = instances.get(instance, (None, {}))[0]
+            instances[instance] = (owner, dict(ids))
+        elif line.startswith("symbolrefs "):
+            _, symbol, fields = line.split(" ", 2)
+            refs[symbol] = json.loads(fields)
     symbols = {}
     for symbol, owner in cuts.items():
         by_token = {token: (cls, f) for cls, token, f in objects[symbol] if token != NO_TOKEN}
@@ -98,7 +109,7 @@ def read_probe(path):
                     tuple(max(p[i] for p in points) for i in range(3)),
                 )
         symbols[symbol] = (owner, extents, classes)
-    return symbols, instances
+    return symbols, instances, refs
 
 
 def revit_sizes(path):
@@ -157,7 +168,7 @@ def band(diff):
 def main():
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
     listing = "--list" in sys.argv
-    symbols, instances = read_probe(args[0])
+    symbols, instances, refs = read_probe(args[0])
     revit = revit_sizes(args[1])
     owned = collections.defaultdict(list)
     for symbol, (owner, _, _) in symbols.items():
@@ -231,6 +242,10 @@ def main():
             text = ", ".join(f"{name}={s} {symbols[s][1]}" for name, s in own)
             print(f"  {entity} {tag} type {type_tag}: Revit {width:.4f} x {height:.4f} ft; "
                   f"type loop {t[1] if t else None}; own: {text or '-'}")
+        types = {type_tag for _, type_tag, _, _, _ in revit.values()}
+        print("\ncut symbols that are no exported element's type, with their ElementId fields:")
+        for symbol in sorted(set(symbols) - types, key=int):
+            print(f"  {symbol} loop {symbols[symbol][1]}: {json.dumps(refs.get(symbol, {}))[:600]}")
         print("\nopenings against their matched loop, worst first (opening min, max; loop min, max):")
         for diff, tag, entity, symbol, opening, loop in sorted(worst, reverse=True)[:40]:
             print(f"  {entity} {tag} symbol {symbol}: {diff:.4f} ft; opening {opening}; loop {loop}")
