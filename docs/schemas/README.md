@@ -19,6 +19,7 @@ registry) stay closed.
 | [`element-counts.schema.json`](element-counts.schema.json) | `rvt-elements --counts`, Python `RevitFile.element_counts()` |
 | [`export-diagnostics.schema.json`](export-diagnostics.schema.json) | `rvt-ifc --diagnostics`, Python `export_diagnostics_json()` |
 | [`corpus-report.schema.json`](corpus-report.schema.json) | `rvt-corpus -f json` |
+| [`corpus-doctor.schema.json`](corpus-doctor.schema.json) | `rvt-corpus doctor --json` |
 | [`support-matrix.schema.json`](support-matrix.schema.json) | Checked-in [`docs/support-matrix.json`](../support-matrix.json) (audit A3) |
 | [`capability-manifest.schema.json`](capability-manifest.schema.json) | `rvt-capabilities` honest snapshot (`capability::CapabilityManifest`) |
 | [`elem-table.schema.json`](elem-table.schema.json) | `rvt-elem-table --json` (`Global/ElemTable` header and records) |
@@ -38,13 +39,13 @@ See [`docs/research/unified-research-report.md`](../research/unified-research-re
 
 The integration test `tests/json_schema_contracts.rs` runs every CLI that
 prints JSON and validates its output against its schema: on the tier-1
-synthetic fixtures for `rvt-info`, `rvt-elements`, `rvt-analyze`,
-`rvt-inspect` (its report and its error report), `rvt-history --all-strings`,
-`rvt-schema`, `rvt-capabilities` and `rvt-ifc-compare`, so those run with no
-Autodesk corpus present, and on the
-family corpus for `rvt-info`, `rvt-history`, `rvt-elem-table`, `rvt-schema`,
-`rvt-doc`, `rvt-ifc --diagnostics` and `rvt-corpus`. CI's Linux test job has the corpus
-and fails if it is missing.
+synthetic fixtures for `rvt-info`, `rvt-elements`, `rvt-analyze`, `rvt-inspect`
+(its report and its error report), `rvt-history --all-strings`, `rvt-schema`,
+`rvt-corpus doctor`, `rvt-capabilities` and `rvt-ifc-compare`, so those run
+with no Autodesk corpus present, and on the family corpus for `rvt-info`,
+`rvt-history`, `rvt-elem-table`, `rvt-schema`, `rvt-doc`, `rvt-ifc
+--diagnostics` and `rvt-corpus`. CI's Linux test job has the corpus and fails
+if it is missing.
 
 `tests/support_matrix.rs` validates the seeded support matrix against
 `support-matrix.schema.json` and enforces honesty ceilings (COR-001 /

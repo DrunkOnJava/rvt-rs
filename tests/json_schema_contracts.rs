@@ -53,6 +53,14 @@ fn validate_at(root: &Value, schema: &Value, value: &Value, path: &str) -> Resul
         return validate_at(root, resolved, value, path);
     }
 
+    if let Some(min) = schema.get("minLength").and_then(Value::as_u64) {
+        if let Some(text) = value.as_str() {
+            if (text.chars().count() as u64) < min {
+                return Err(format!("{path}: {text:?} is shorter than {min}"));
+            }
+        }
+    }
+
     if let Some(expected) = schema.get("const") {
         if expected != value {
             return Err(format!(
@@ -220,6 +228,7 @@ fn checked_in_schemas_are_valid_json_schema_documents() {
         "inspect.schema.json",
         "ifc-compare.schema.json",
         "schema-table.schema.json",
+        "corpus-doctor.schema.json",
     ] {
         let schema = load_schema(name);
         assert_eq!(
@@ -369,6 +378,25 @@ fn tier1_report_clis_validate_against_their_schemas() {
     );
     validate(&load_schema("history.schema.json"), &strings)
         .expect("history --all-strings schema validation");
+    assert!(
+        strings["global_latest"].is_array() && strings["partitions"].is_array(),
+        "--all-strings prints the string records, not the history: {strings}"
+    );
+
+    let doctor = command_json(
+        env!("CARGO_BIN_EXE_rvt-corpus"),
+        &[
+            std::ffi::OsStr::new("doctor"),
+            root.join("corpus").join("tier1").as_os_str(),
+            json,
+        ],
+    );
+    validate(&load_schema("corpus-doctor.schema.json"), &doctor)
+        .expect("corpus doctor schema validation");
+    assert!(
+        doctor["files_scanned"].as_u64() >= Some(3),
+        "the three tier-1 projects: {doctor}"
+    );
 
     let capabilities = command_json(env!("CARGO_BIN_EXE_rvt-capabilities"), &[]);
     validate(
