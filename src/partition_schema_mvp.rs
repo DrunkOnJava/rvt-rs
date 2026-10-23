@@ -7539,6 +7539,9 @@ pub const ROOF_EXTRUSION_BOX_TOLERANCE_FEET: f64 = 1e-3;
 /// Chords a sketch's B-spline is drawn with in a roof by extrusion's
 /// section (RE-211).
 pub const ROOF_EXTRUSION_SPLINE_SEGMENTS: usize = 256;
+/// The share of a sketch spline's span its second and last but one points
+/// lie in from its ends (RE-211).
+pub const ROOF_EXTRUSION_END_SHARE: f64 = 1e-4;
 /// How far apart two sketch curves' ends may be and still join in a roof by
 /// extrusion's profile, feet (RE-211).
 pub const ROOF_EXTRUSION_JOIN_FEET: f64 = 1e-4;
@@ -7553,7 +7556,8 @@ pub struct RoofExtrusion {
     pub bottom: Vec<(f64, f64)>,
 }
 
-/// The [`RoofExtrusion`] [`attach_extrusion_roofs`] recorded.
+/// The [`RoofExtrusion`] the extrusion-roof pass recorded in an element's
+/// fields (RE-211).
 pub fn roof_extrusion_from_fields(fields: &[(String, InstanceField)]) -> Option<RoofExtrusion> {
     let field = |wanted: &str| {
         fields
@@ -7575,6 +7579,22 @@ pub fn roof_extrusion_from_fields(fields: &[(String, InstanceField)]) -> Option<
     })
 }
 
+/// A sketch spline's points for a roof by extrusion's top (RE-211):
+/// [`ROOF_EXTRUSION_SPLINE_SEGMENTS`] chords, and a point
+/// [`ROOF_EXTRUSION_END_SHARE`] of its span in from each end, so the first and
+/// last chords lie along the curve's ends, which the plumb cuts follow.
+fn roof_extrusion_spline_points(
+    spline: &crate::partition_beam_axes::BoundedSpline,
+) -> Option<Vec<[f64; 3]>> {
+    let (start, end) = (spline.start_parameter, spline.end_parameter);
+    let span = end - start;
+    let segments = ROOF_EXTRUSION_SPLINE_SEGMENTS;
+    let mut parameters = vec![start, start + span * ROOF_EXTRUSION_END_SHARE];
+    parameters.extend((1..segments).map(|i| start + span * i as f64 / segments as f64));
+    parameters.extend([end - span * ROOF_EXTRUSION_END_SHARE, end]);
+    parameters.into_iter().map(|p| spline.point(p)).collect()
+}
+
 /// The underside of a roof whose top is `top` (`(u, z)`, `u` rising) and
 /// whose thickness is `thickness`, measured square to the top: the top
 /// offset down by it, its ends carried along their tangents to the plumb
@@ -7585,15 +7605,32 @@ pub fn roof_extrusion_bottom(top: &[(f64, f64)], thickness: f64) -> Option<Vec<(
     if top.len() < 2 || !(thickness.is_finite() && thickness > 0.0) {
         return None;
     }
-    let normal = |i: usize| {
-        let (a, b) = (top[i.saturating_sub(1)], top[(i + 1).min(top.len() - 1)]);
-        let (du, dv) = (b.0 - a.0, b.1 - a.1);
-        let length = du.hypot(dv);
-        (length > 0.0).then(|| (dv / length, -du / length))
-    };
-    let offset: Vec<(f64, f64)> = (0..top.len())
-        .map(|i| normal(i).map(|(nu, nv)| (top[i].0 + thickness * nu, top[i].1 + thickness * nv)))
+    // Each segment's normal down from it, and each point's offset: an end
+    // along its segment's normal, a joint where the two segments' offsets
+    // meet, `t (n1 + n2) / (1 + n1 · n2)` from it.
+    let normals: Vec<(f64, f64)> = top
+        .windows(2)
+        .map(|pair| {
+            let (du, dv) = (pair[1].0 - pair[0].0, pair[1].1 - pair[0].1);
+            let length = du.hypot(dv);
+            (length > 0.0).then(|| (dv / length, -du / length))
+        })
         .collect::<Option<_>>()?;
+    let mut offset = Vec::with_capacity(top.len());
+    for (i, &(u, v)) in top.iter().enumerate() {
+        let (a, b) = (
+            normals[i.saturating_sub(1)],
+            normals[i.min(normals.len() - 1)],
+        );
+        let scale = 1.0 + a.0 * b.0 + a.1 * b.1;
+        if scale < 1e-6 {
+            return None;
+        }
+        offset.push((
+            u + thickness * (a.0 + b.0) / scale,
+            v + thickness * (a.1 + b.1) / scale,
+        ));
+    }
     let carried = |a: (f64, f64), b: (f64, f64)| (b.0 + 1e3 * (b.0 - a.0), b.1 + 1e3 * (b.1 - a.1));
     let mut chain = vec![carried(offset[1], offset[0])];
     chain.extend(offset.iter().copied());
@@ -7681,15 +7718,26 @@ fn attach_extrusion_roofs(rf: &mut RevitFile, revit_version: u32, products: &mut
     else {
         return;
     };
-    let mut lines_of: BTreeMap<u32, Vec<&per::PartitionElementRecord>> = BTreeMap::new();
+    // A line framed in more than one partition is one line: its first copy.
+    let mut copies: BTreeMap<u32, BTreeMap<u32, &per::PartitionElementRecord>> = BTreeMap::new();
     for line in &sketch_lines {
         if let Some(owner) = line
             .owner_reference
             .filter(|owner| boxes.contains_key(owner))
         {
-            lines_of.entry(owner).or_default().push(line);
+            let kept = copies.entry(owner).or_default();
+            let first = kept.get(&line.element_id).is_none_or(|held| {
+                (line.stream.as_str(), line.offset) < (held.stream.as_str(), held.offset)
+            });
+            if first {
+                kept.insert(line.element_id, line);
+            }
         }
     }
+    let lines_of: BTreeMap<u32, Vec<&per::PartitionElementRecord>> = copies
+        .into_iter()
+        .map(|(owner, lines)| (owner, lines.into_values().collect()))
+        .collect();
     // The axis each roof's sketch is flat along, where all its lines are flat
     // along the same one at the same place.
     let planes: BTreeMap<u32, (usize, f64)> = lines_of
@@ -7768,7 +7816,7 @@ fn attach_extrusion_roofs(rf: &mut RevitFile, revit_version: u32, products: &mut
                     .control_points
                     .iter()
                     .all(|&[_, x, y, z]| inside([x, y, z], &line.bbox_feet))
-                    .then(|| spline.points(ROOF_EXTRUSION_SPLINE_SEGMENTS))
+                    .then(|| roof_extrusion_spline_points(spline))
                     .flatten()
             } else {
                 straight.get(&line.element_id).and_then(|segment| {
