@@ -8,6 +8,13 @@ All notable changes will be documented here. This project follows
 
 ### Added
 
+- **Each GitHub release carries the CLI archives' build provenance as a
+  file (#891).** The release workflow already attested the archives; the
+  attestation bundle is now also attached as `rvt-rs-vX.Y.Z.intoto.jsonl`,
+  so it can be checked offline and OpenSSF Scorecard's Signed-Releases check
+  finds it. `gh attestation verify <archive> -R DrunkOnJava/rvt-rs` works as
+  before.
+
 - **Gable, hip and slope-arrow roofs are drawn as their planes, and Revit
   2025 roofs slope (#356, RE-199).** A footprint roof with more than one
   edge that defines a slope is drawn as its edges' planes, each rising from
