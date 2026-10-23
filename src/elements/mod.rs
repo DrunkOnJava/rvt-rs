@@ -209,12 +209,8 @@ pub fn decode_typed(
     schema: &formats::ClassEntry,
     index: &HandleIndex,
 ) -> Result<DecodedElement> {
-    let decoder = decoder_for_class(&schema.name).ok_or_else(|| {
-        crate::Error::BasicFileInfo(format!(
-            "no typed decoder registered for class {}",
-            schema.name
-        ))
-    })?;
+    let decoder = decoder_for_class(&schema.name)
+        .ok_or_else(|| crate::Error::NoDecoder(schema.name.clone()))?;
     decoder.decode(bytes, schema, index)
 }
 
@@ -225,12 +221,8 @@ pub fn decode_typed_with_limits(
     index: &HandleIndex,
     limits: crate::walker::WalkerLimits,
 ) -> Result<DecodedElement> {
-    let decoder = decoder_for_class(&schema.name).ok_or_else(|| {
-        crate::Error::BasicFileInfo(format!(
-            "no typed decoder registered for class {}",
-            schema.name
-        ))
-    })?;
+    let decoder = decoder_for_class(&schema.name)
+        .ok_or_else(|| crate::Error::NoDecoder(schema.name.clone()))?;
     decoder.decode_with_limits(bytes, schema, index, limits)
 }
 

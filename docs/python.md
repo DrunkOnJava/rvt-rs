@@ -305,8 +305,10 @@ instead of scraping prose examples.
 read_adocument(self) -> dict | None
 ```
 Run the Layer-5a walker and return `ADocument`'s instance fields
-as a dict, or `None` if the entry-point detector can't
-confidently locate an `ADocument` record in this file.
+as a dict, or `None` if the entry-point detector can't confidently
+locate an `ADocument` record in this file. Raises `ValueError` if the
+file's schema declares no `ADocument` class, which no Revit file lacks
+(a synthetic file, or a damaged schema).
 
 Return shape when present:
 

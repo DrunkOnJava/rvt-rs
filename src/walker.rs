@@ -1255,7 +1255,7 @@ fn read_adocument_internal(
         .classes
         .iter()
         .find(|c| c.name == "ADocument")
-        .ok_or_else(|| Error::BasicFileInfo("ADocument not in schema".into()))?;
+        .ok_or(Error::MissingClass("ADocument"))?;
 
     let raw = rf.read_stream(streams::GLOBAL_LATEST)?;
     let (_, d) = compression::inflate_stream_auto(streams::GLOBAL_LATEST, &raw)?;
@@ -1304,16 +1304,17 @@ fn read_adocument_internal(
 // Tracker: API-07.
 pub fn read_adocument_strict(rf: &mut RevitFile) -> Result<ADocumentInstance> {
     let Some(inst) = read_adocument(rf)? else {
-        return Err(Error::BasicFileInfo(
-            "ADocument entry-point detector returned None".into(),
-        ));
+        return Err(Error::NotLocated("ADocument"));
     };
     let c = inst.completeness();
     if !c.is_fully_typed() {
-        return Err(Error::BasicFileInfo(format!(
-            "ADocument decode incomplete: {} of {} fields fell back to raw bytes",
-            c.raw_bytes_fallback, c.total
-        )));
+        return Err(Error::Malformed {
+            what: "ADocument",
+            detail: format!(
+                "decode incomplete: {} of {} fields fell back to raw bytes",
+                c.raw_bytes_fallback, c.total
+            ),
+        });
     }
     Ok(inst)
 }
