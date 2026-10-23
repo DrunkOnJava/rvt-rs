@@ -24,8 +24,8 @@
 ///     "C:\\ProgramData\\Autodesk\\RVT 2024"
 /// );
 /// ```
-pub fn redact_path_str(p: &str) -> String {
-    let mut out = p.to_string();
+pub fn redact_path_str(p: impl AsRef<str>) -> String {
+    let mut out = p.as_ref().to_string();
     for n in ["\\Users\\", "/Users/"] {
         if let Some(idx) = out.find(n) {
             let tail_start = idx + n.len();
