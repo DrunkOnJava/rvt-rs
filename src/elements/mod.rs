@@ -29,7 +29,7 @@
 //! Wall / Floor / Door values use these; callers who want a
 //! uniform untyped dump use `decode_instance` directly.
 //!
-//! # Lane Five MVP set
+//! # The typed set
 //!
 //! Schema-driven typed decoders with wrong-schema rejection:
 //! Level, Wall, Floor, Door, Window, Room, Material.
@@ -75,11 +75,12 @@ use crate::Result;
 use crate::formats;
 use crate::walker::{DecodedElement, ElementDecoder, HandleIndex};
 
-/// Schema-driven MVP class names for Lane Five (M3-05).
+/// Class names the element walk decodes through their typed decoder.
 ///
 /// ArcWall is intentionally omitted — use [`arc_wall`] for partition
 /// records. `WallType` / `FloorType` remain available via
 /// [`all_decoders`] but are not required for the MVP acceptance set.
+// Tracker: M3-05.
 pub const MVP_TYPED_CLASSES: &[&str] = &[
     "Level", "Wall", "Floor", "Door", "Window", "Room", "Material",
 ];
@@ -208,12 +209,8 @@ pub fn decode_typed(
     schema: &formats::ClassEntry,
     index: &HandleIndex,
 ) -> Result<DecodedElement> {
-    let decoder = decoder_for_class(&schema.name).ok_or_else(|| {
-        crate::Error::BasicFileInfo(format!(
-            "no typed decoder registered for class {}",
-            schema.name
-        ))
-    })?;
+    let decoder = decoder_for_class(&schema.name)
+        .ok_or_else(|| crate::Error::NoDecoder(schema.name.clone()))?;
     decoder.decode(bytes, schema, index)
 }
 
@@ -224,12 +221,8 @@ pub fn decode_typed_with_limits(
     index: &HandleIndex,
     limits: crate::walker::WalkerLimits,
 ) -> Result<DecodedElement> {
-    let decoder = decoder_for_class(&schema.name).ok_or_else(|| {
-        crate::Error::BasicFileInfo(format!(
-            "no typed decoder registered for class {}",
-            schema.name
-        ))
-    })?;
+    let decoder = decoder_for_class(&schema.name)
+        .ok_or_else(|| crate::Error::NoDecoder(schema.name.clone()))?;
     decoder.decode_with_limits(bytes, schema, index, limits)
 }
 

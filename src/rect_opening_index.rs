@@ -1,4 +1,4 @@
-//! Version-gated decoder for Revit 2024 ArcWallRectOpening 60 B index records (RE-15-09).
+//! Version-gated decoder for Revit 2024 ArcWallRectOpening 60 B index records (RE-15, #89).
 use crate::{Error, Result};
 
 pub const ARC_WALL_RECT_OPENING_TAG_2024: u16 = 0x01a7;
@@ -23,28 +23,33 @@ impl ArcWallRectOpeningIndex {
     }
 
     pub fn decode(buf: &[u8], offset: usize) -> Result<Self> {
-        let end = offset.checked_add(OPENING_INDEX_STRIDE).ok_or_else(|| {
-            Error::Cfb(format!(
-                "ArcWallRectOpeningIndex: offset overflow at {offset}"
-            ))
-        })?;
+        let end = offset
+            .checked_add(OPENING_INDEX_STRIDE)
+            .ok_or_else(|| Error::Malformed {
+                what: "ArcWallRectOpening index record",
+                detail: format!("offset overflow at {offset}"),
+            })?;
         if end > buf.len() {
-            return Err(Error::Cfb(format!(
-                "ArcWallRectOpeningIndex: buffer too short ({} < {end})",
-                buf.len()
-            )));
+            return Err(Error::Malformed {
+                what: "ArcWallRectOpening index record",
+                detail: format!("buffer too short ({} < {end})", buf.len()),
+            });
         }
         let tag = u16::from_le_bytes([buf[offset], buf[offset + 1]]);
         if tag != ARC_WALL_RECT_OPENING_TAG_2024 {
-            return Err(Error::Cfb(format!(
-                "ArcWallRectOpeningIndex: expected tag 0x{ARC_WALL_RECT_OPENING_TAG_2024:04x}, got 0x{tag:04x}"
-            )));
+            return Err(Error::Malformed {
+                what: "ArcWallRectOpening index record",
+                detail: format!(
+                    "expected tag 0x{ARC_WALL_RECT_OPENING_TAG_2024:04x}, got 0x{tag:04x}"
+                ),
+            });
         }
         let pad = u16::from_le_bytes([buf[offset + 2], buf[offset + 3]]);
         if pad != 0 {
-            return Err(Error::Cfb(format!(
-                "ArcWallRectOpeningIndex: expected pad 0, got 0x{pad:04x}"
-            )));
+            return Err(Error::Malformed {
+                what: "ArcWallRectOpening index record",
+                detail: format!("expected pad 0, got 0x{pad:04x}"),
+            });
         }
         let family_marker = u32::from_le_bytes([
             buf[offset + 0x10],
@@ -53,9 +58,12 @@ impl ArcWallRectOpeningIndex {
             buf[offset + 0x13],
         ]);
         if family_marker != OPENING_INDEX_FAMILY_MARKER {
-            return Err(Error::Cfb(format!(
-                "ArcWallRectOpeningIndex: expected family marker 0x{OPENING_INDEX_FAMILY_MARKER:08x}, got 0x{family_marker:08x}"
-            )));
+            return Err(Error::Malformed {
+                what: "ArcWallRectOpening index record",
+                detail: format!(
+                    "expected family marker 0x{OPENING_INDEX_FAMILY_MARKER:08x}, got 0x{family_marker:08x}"
+                ),
+            });
         }
         Ok(Self {
             tag,

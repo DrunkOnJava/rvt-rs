@@ -214,7 +214,7 @@ impl PartAtom {
         Ok(atom)
     }
 
-    /// Encode a `PartAtom` back to Atom-format XML bytes (WRT-08).
+    /// Encode a `PartAtom` back to Atom-format XML bytes.
     /// Inverse of [`Self::from_bytes`].
     ///
     /// The writer emits UTF-8 XML with the Autodesk schema
@@ -242,6 +242,7 @@ impl PartAtom {
     /// preserves `title`, `id`, `updated`, every `Taxonomy`, every
     /// `Category`, and `omniclass`. `raw_xml` will differ (it's the
     /// reconstructed text, not a byte-echo of the original input).
+    // Tracker: WRT-08.
     pub fn encode(&self) -> Vec<u8> {
         let mut out = String::with_capacity(256);
         out.push_str("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");

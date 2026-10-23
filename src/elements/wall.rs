@@ -1,7 +1,7 @@
 //! `Wall` + `WallType` — the single highest-leverage element class in
 //! any architectural Revit model. Decoded here into stable typed
 //! views; geometry assembly (extrusion from location curve + layered
-//! compound structure) lives in `src/geometry/` and is task GEO-27.
+//! compound structure) lives in `src/geometry/` and the exporter.
 //!
 //! # Typical Revit field shape (names stable 2016–2026)
 //!
@@ -22,8 +22,7 @@
 //!
 //! The 2D `location curve` (the line in plan view that the wall was
 //! drawn along) is stored by the ADocument walker separately — the
-//! `location_curve_id` here is a handle into that table. Wiring that
-//! up is task L5B-01 + GEO-27.
+//! `location_curve_id` here is a handle into that table.
 //!
 //! WallType:
 //!
@@ -36,8 +35,9 @@
 //! | `m_structural` | Primitive bool | Load-bearing by default? |
 //!
 //! Multi-layer compound structure (`m_compound`) is a nested structure
-//! that the walker's Vector variant (L5B-08) will surface later. For
+//! that the walker's Vector variant will surface later. For
 //! now we capture the scalar fields.
+// Tracker: L5B-08.
 
 use super::level::normalise_field_name;
 use crate::formats;
@@ -179,10 +179,10 @@ impl ElementDecoder for WallDecoder {
         limits: crate::walker::WalkerLimits,
     ) -> Result<DecodedElement> {
         if schema.name != "Wall" {
-            return Err(Error::BasicFileInfo(format!(
-                "WallDecoder received wrong schema: {}",
-                schema.name
-            )));
+            return Err(Error::SchemaMismatch {
+                decoder: "Wall",
+                schema: schema.name.clone(),
+            });
         }
         Ok(crate::walker::decode_instance_with_limits(
             bytes, 0, schema, limits,
@@ -215,10 +215,10 @@ impl ElementDecoder for WallTypeDecoder {
         limits: crate::walker::WalkerLimits,
     ) -> Result<DecodedElement> {
         if schema.name != "WallType" {
-            return Err(Error::BasicFileInfo(format!(
-                "WallTypeDecoder received wrong schema: {}",
-                schema.name
-            )));
+            return Err(Error::SchemaMismatch {
+                decoder: "WallType",
+                schema: schema.name.clone(),
+            });
         }
         Ok(crate::walker::decode_instance_with_limits(
             bytes, 0, schema, limits,

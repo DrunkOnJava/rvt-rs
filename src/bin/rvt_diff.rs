@@ -1,6 +1,6 @@
 //! `rvt-diff` — compare two Revit files stream-by-stream.
 //!
-//! Phase B of the RVT reverse-engineering attack: take two (or more)
+//! Take two (or more)
 //! versions of the *same logical* content and identify what's invariant
 //! vs what changes. The invariant bytes are format structure; the varying
 //! bytes are payload. This is the delta-analysis step that makes object

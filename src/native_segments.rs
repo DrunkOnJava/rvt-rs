@@ -90,9 +90,10 @@ pub fn walk(
 /// [`walk`], taking each segment's inflated bytes from `inflated`, the same
 /// stream's members inflated once for every reader of the file
 /// ([`crate::RevitFile::inflated_partition`]), where it holds them, rather
-/// than inflating them again (B82). A member is taken only where it is the
+/// than inflating them again. A member is taken only where it is the
 /// whole segment, with a CRC and ISIZE that match it; any other segment is
 /// inflated and checked as [`walk`] does.
+// Tracker: B82.
 pub fn walk_inflated(
     prepared: &[u8],
     inflated: Option<&InflatedStream>,

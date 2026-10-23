@@ -152,14 +152,15 @@ pub enum StreamFraming {
 /// `OpenOptions::truncate(true).open(dst)` call caused.
 /// A patch's bytes as they are stored, framed as it asks: one complete gzip
 /// member, with the CRC32 and ISIZE trailer Revit's own streams carry and a
-/// conforming reader checks (B69).
+/// conforming reader checks.
 ///
 /// Revit stores the streams [`crate::compression::is_checksum_paged_stream`]
 /// names in pages of [`crate::compression::REVIT_STORED_PAGE_BYTES`] bytes,
 /// each ending in a checksum rvt-rs cannot compute, and every reader strips
 /// those trailers. Framed bytes that fit in one page carry no trailer and are
 /// written as they are; longer ones would be read back wrong, so the patch is
-/// refused with [`crate::Error::WriteRefused`] before anything is written (B69).
+/// refused with [`crate::Error::WriteRefused`] before anything is written.
+// Tracker: B69.
 fn framed_patch_bytes(p: &StreamPatch) -> Result<Vec<u8>> {
     use crate::compression;
     let data = match p.framing {
@@ -391,10 +392,11 @@ pub fn write_with_patches(src: &Path, dst: &Path, patches: &[StreamPatch]) -> Re
 
 // ---- WRT-05: GUID preservation across write ----
 
-/// Read the BasicFileInfo GUID from a Revit file (WRT-05). Returns
+/// Read the BasicFileInfo GUID from a Revit file. Returns
 /// `Ok(None)` when the stream exists but no GUID was embedded. Used
 /// by the write-path invariant tests to confirm a write cycle
 /// preserves the file's identity.
+// Tracker: WRT-05.
 pub fn file_guid(path: &Path) -> Result<Option<String>> {
     let mut rf = RevitFile::open(path)?;
     let stream_name = "BasicFileInfo";
@@ -412,7 +414,7 @@ pub fn file_guid(path: &Path) -> Result<Option<String>> {
 /// carry the same GUID, `Ok(false)` when GUIDs diverge, and an
 /// error when either file is unreadable.
 ///
-/// This is the primary WRT-05 invariant check — call it right
+/// This is the primary invariant check — call it right
 /// after any [`write_with_patches`] / [`write_with_patches_verified`]
 /// to gate deploys on GUID preservation.
 pub fn guid_preserved(src: &Path, dst: &Path) -> Result<bool> {
@@ -423,7 +425,7 @@ pub fn guid_preserved(src: &Path, dst: &Path) -> Result<bool> {
 
 // ---- WRT-06: History chain preservation ----
 
-/// Read the document-history entries from a Revit file (WRT-06).
+/// Read the document-history entries from a Revit file.
 /// Returns the ordered list of Revit-version strings embedded in
 /// `Global/Latest` — oldest first, same order as
 /// [`crate::object_graph::DocumentHistory::entries`].
@@ -431,6 +433,7 @@ pub fn guid_preserved(src: &Path, dst: &Path) -> Result<bool> {
 /// Returns `Ok(Vec::new())` when no Global/Latest stream exists or
 /// when the stream has no embedded "Revit …" markers. Err when the
 /// stream read or decompression fails.
+// Tracker: WRT-06.
 pub fn file_history_entries(path: &Path) -> Result<Vec<String>> {
     let mut rf = RevitFile::open(path)?;
     let stream_name = crate::streams::GLOBAL_LATEST;
@@ -444,12 +447,13 @@ pub fn file_history_entries(path: &Path) -> Result<Vec<String>> {
 }
 
 /// Verify that a write cycle preserved the document-history chain
-/// (WRT-06). Returns `Ok(true)` when src and dst share the exact
+///. Returns `Ok(true)` when src and dst share the exact
 /// same ordered entry list, `Ok(false)` on divergence, and Err
 /// when either file is unreadable.
 ///
 /// Pair with [`guid_preserved`] for a two-value "file-identity
 /// preserved" predicate after any [`write_with_patches`] cycle.
+// Tracker: WRT-06.
 pub fn history_entries_preserved(src: &Path, dst: &Path) -> Result<bool> {
     let a = file_history_entries(src)?;
     let b = file_history_entries(dst)?;
@@ -458,10 +462,11 @@ pub fn history_entries_preserved(src: &Path, dst: &Path) -> Result<bool> {
 
 // ---- WRT-13: Stream hash verification per write ----
 
-/// Per-stream verification outcome (WRT-13). One entry per
+/// Per-stream verification outcome. One entry per
 /// expected stream; the `match_`/`first_diff_at` pair distinguishes
 /// clean success from a specific byte position where the written
 /// stream diverged from expectations.
+// Tracker: WRT-13.
 #[derive(Debug, Clone)]
 pub struct StreamVerification {
     /// OLE stream name, e.g. `"Formats/Latest"`.
@@ -484,7 +489,8 @@ pub struct StreamVerification {
     pub expected_len: usize,
 }
 
-/// Aggregate result of verifying every patched stream (WRT-13).
+/// Aggregate result of verifying every patched stream.
+// Tracker: WRT-13.
 #[derive(Debug, Clone, Default)]
 pub struct StreamVerificationReport {
     /// Per-stream outcomes in the same order as the input patches.
@@ -514,7 +520,7 @@ impl StreamVerificationReport {
 /// step failed. Used internally by [`verify_patches_applied`]; pub
 /// so corpus audits can call it too.
 ///
-/// # Checksum-page policy (Finding 1 / #151)
+/// # Checksum-page policy (#151)
 ///
 /// The writer re-encodes patches with
 /// [`crate::compression::gzip_member_encode`], behind the 8-byte prefix for
@@ -526,8 +532,9 @@ impl StreamVerificationReport {
 /// to be ≥ one stored page. Identity copies (`read_stream` / empty-patch)
 /// remain stored-byte accurate. A paged encoder is still out of scope, so
 /// the writer refuses a patch whose stored bytes would span a page of a paged
-/// stream (B69): every stream it writes reads back the same through the
+/// stream: every stream it writes reads back the same through the
 /// stripping path.
+// Tracker: B69.
 pub fn decompress_stream(dst: &Path, name: &str, framing: StreamFraming) -> Result<Vec<u8>> {
     let mut rf = RevitFile::open(dst)?;
     let raw = rf.read_stream(name)?;
@@ -548,7 +555,7 @@ pub fn decompress_stream(dst: &Path, name: &str, framing: StreamFraming) -> Resu
 }
 
 /// Verify that every patch in `patches` round-tripped through the
-/// writer cleanly (WRT-13). Opens `dst`, reads each named stream,
+/// writer cleanly. Opens `dst`, reads each named stream,
 /// decompresses it with the patch's `framing`, and compares the
 /// resulting bytes to the patch's `new_decompressed`.
 ///
@@ -567,6 +574,7 @@ pub fn decompress_stream(dst: &Path, name: &str, framing: StreamFraming) -> Resu
 /// assert!(report.all_matched(), "one or more patches failed to round-trip");
 /// # Ok::<(), rvt::Error>(())
 /// ```
+// Tracker: WRT-13.
 pub fn verify_patches_applied(
     dst: &Path,
     patches: &[StreamPatch],
@@ -612,13 +620,14 @@ pub fn verify_patches_applied(
 }
 
 /// Convenience wrapper: [`write_with_patches`] followed by
-/// [`verify_patches_applied`] on the written file (WRT-13).
+/// [`verify_patches_applied`] on the written file.
 /// Returns the verification report directly so callers can gate
 /// deployment on `report.all_matched()` without a second call.
 ///
 /// On verification failure the output file is left in place so the
 /// caller can inspect it — we don't auto-delete, since the bytes
 /// may still be useful for diagnosis.
+// Tracker: WRT-13.
 pub fn write_with_patches_verified(
     src: &Path,
     dst: &Path,

@@ -21,6 +21,7 @@ Required gates (always run):
   RUSTFLAGS="-D warnings -D unnameable_types" cargo check --lib --bins
   RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --lib
   cargo build --workspace --all-targets --all-features
+  cargo test --profile ci --doc     (the API docs' examples, on corpus/tier1)
   tools/ci/verify-real-files.sh     (real-file, CLI, contract targets only)
 
 Optional gates (opt-in; fail clearly when prerequisites are missing):
@@ -111,6 +112,7 @@ run cargo clippy --workspace --all-targets --all-features -- -D warnings
 run env RUSTFLAGS="-D warnings -D unnameable_types" cargo check --lib --bins
 run env RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --lib
 run cargo build --workspace --all-targets --all-features
+run cargo test --profile ci --doc
 run tools/ci/verify-real-files.sh
 
 # --- optional gates ---------------------------------------------------------
