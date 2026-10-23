@@ -62,6 +62,7 @@
 //! - [`native_document`]: Streaming current-record extraction with structural schemas and native IDs
 //! - [`native_duct_shapes`]: A duct type's shape, from its native record
 //! - [`native_element`]: Bounded native Element base fields, using the structurally decoded schema
+//! - [`native_element_parameters`]: An element's saved parameter values, named by the file's definitions, type values after its own (#35, RE-207)
 //! - [`native_empty_faces`]: Strict classifier for the observed empty-trim saved-graphics records
 //! - [`native_es_catalog`]: File-local Extensible Storage catalog from the owned Global/Latest graph
 //! - [`native_extensible_storage`]: File-local Extensible Storage definitions
@@ -122,6 +123,8 @@ pub mod native_document;
 pub mod native_duct_shapes;
 #[path = "native_element.rs"]
 pub mod native_element;
+#[path = "native_element_parameters.rs"]
+pub mod native_element_parameters;
 #[path = "native_empty_faces.rs"]
 pub mod native_empty_faces;
 #[path = "native_es_catalog.rs"]
