@@ -5,8 +5,9 @@
 //! elements read from the file's element records, each with the ElementId
 //! Revit gives it (written as the IFC `Tag`), its class and name, and, where
 //! they are read, its type object, storey, materials, property sets and
-//! GlobalId, with a body that is Revit's shape where the element's data is
-//! decoded and its record's box otherwise. [`write_step`] serialises the
+//! GlobalId. Its body, where it has one, is Revit's shape where the
+//! element's data is decoded and its record's box otherwise; an element
+//! whose record has no box (an Area, for one) has no body. [`write_step`] serialises the
 //! model as deterministic ISO 10303-21 text, and [`gltf`], [`sheet`] and
 //! [`schedule_csv`] write the same model as GLB, plan SVG and CSV.
 //!
@@ -20,7 +21,9 @@
 //! production elements with whatever geometry is recovered,
 //! `typed-no-geometry` strips the geometry, `geometry` attaches recovered
 //! curves, loops, hosts and elevations, and `strict` writes what `geometry`
-//! does and then fails rather than return an incomplete model. The
+//! does. The export itself never rejects a model: call
+//! [`ExportQualityMode::validate`] on the export's diagnostics to refuse an
+//! incomplete one, as the CLI and the Python package do for `strict`. The
 //! production exporter never writes `HostObjAttr` proxies;
 //! [`DiagnosticRvtDocExporter`] keeps low-confidence candidates for research.
 //!

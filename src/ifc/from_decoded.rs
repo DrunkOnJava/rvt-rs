@@ -11,8 +11,9 @@
 //! spatial-containment wiring happens in the STEP writer.
 //!
 //! Each [`ElementInput`] carries what the caller knows about the element:
-//! an extrusion, a material, material layer set or profile set, and its
-//! property sets. The production exporter, [`super::RvtDocExporter`], does
+//! an extrusion, a material and its property sets. Its layer-set and
+//! profile-set indices point into `IfcModel` collections the bridge leaves
+//! empty, so a caller that uses them fills those collections itself. The production exporter, [`super::RvtDocExporter`], does
 //! not go through this bridge: it builds its model from the file's element
 //! records, with their bodies, type objects and GlobalIds. The bridge is for
 //! callers that bring their own decoded elements, such as
