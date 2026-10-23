@@ -149,7 +149,7 @@ impl ArcWall {
             0.85
         };
         DecodedElement {
-            id: self.element_id,
+            id: self.element_id.and_then(crate::ElementId::as_u32),
             class: "ArcWall".into(),
             fields,
             byte_range: offset..end,

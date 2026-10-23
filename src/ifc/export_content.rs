@@ -1407,7 +1407,7 @@ fn wall_geometry_from_decoded(decoded: &DecodedElement) -> Option<RecoveredWallG
     if let Some(id) = curve.location_curve_id {
         properties.push(Property {
             name: "LocationCurveId".into(),
-            value: PropertyValue::Integer(i64::from(id)),
+            value: PropertyValue::Integer(id.get()),
         });
     }
     Some(RecoveredWallGeom {
