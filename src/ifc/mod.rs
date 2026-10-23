@@ -783,6 +783,7 @@ pub struct NotYetImplemented {
 ///
 /// (Renamed from `NullExporter` in v0.1.3 — the old name implied
 /// it returns `NotYetImplemented`, which it does not.)
+#[derive(Debug)]
 pub struct PlaceholderExporter;
 
 impl Exporter for PlaceholderExporter {
@@ -838,6 +839,7 @@ impl PlaceholderExporter {
 /// classification references + best-effort project unit assignment.
 /// Pending walker expansion: categories from the family-graph
 /// references and building-element geometry.
+#[derive(Debug)]
 pub struct RvtDocExporter;
 
 impl Exporter for RvtDocExporter {
@@ -927,6 +929,7 @@ impl RvtDocExporter {
 /// `IFCBUILDINGELEMENTPROXY` elements with `RvtRsDiagnosticCandidate`
 /// provenance. It is intended for reverse-engineering and issue
 /// attachments, not for normal model exchange.
+#[derive(Debug)]
 pub struct DiagnosticRvtDocExporter;
 
 impl Exporter for DiagnosticRvtDocExporter {

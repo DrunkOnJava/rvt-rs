@@ -80,6 +80,13 @@ All notable changes will be documented here. This project follows
   pipes are within 0.01 ft of Revit's. Family-instance ports keep no
   placement, and the no-geometry modes write none.
 
+- **Every public type implements `Debug`, as the Rust API Guidelines ask (C-DEBUG).** The 14 element
+  decoders, the three exporters, `corpus::Sample` and `RevitFile` did not.
+  `RevitFile`'s shows the limits it was opened with and how many streams it
+  has inflated, not the file's bytes. The crate now warns on a public type
+  without one (`missing_debug_implementations`), which CI's `-D warnings`
+  makes an error.
+
 ### Fixed
 
 - **The PyPI page's links work, and it is written for Python users (#905).**

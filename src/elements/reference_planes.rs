@@ -31,6 +31,7 @@ use crate::walker::{DecodedElement, ElementDecoder, HandleIndex, InstanceField};
 use crate::{Error, Result};
 
 /// Registered decoder for the `ReferencePlane` class.
+#[derive(Debug)]
 pub struct ReferencePlaneDecoder;
 
 impl ElementDecoder for ReferencePlaneDecoder {
