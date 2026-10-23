@@ -11,7 +11,8 @@ use rvt::{
     RevitFile,
     ifc::{
         DiagnosticRvtDocExporter, ExportDiagnostics, ExportQualityMode, PlaceholderExporter,
-        RvtDocExporter, StepOptions, write_step_with_options,
+        RvtDocExporter,
+        step_writer::{StepOptions, write_step_with_options},
     },
     walker::WalkerLimits,
 };
