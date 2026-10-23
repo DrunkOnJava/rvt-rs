@@ -127,6 +127,7 @@ fn run() -> anyhow::Result<()> {
         elem_table::RecordFraming::Implicit => {
             format!("Implicit ({} B stride, no owner field)", layout.stride)
         }
+        _ => format!("Other ({} B stride)", layout.stride),
     };
     println!(
         "  layout: {layout_label}  first record offset: 0x{:x}",

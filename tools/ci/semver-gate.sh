@@ -20,10 +20,17 @@
 # from the API so that re-running the job after a retitle sees it. A tool
 # that cannot complete fails the job whatever the title says.
 #
-# Needs BASE (the base commit), PR, REPO and GH_TOKEN, cargo-semver-checks
-# and cargo-public-api, and the nightly named by PUBLIC_API_TOOLCHAIN.
+# Runs on the pull request's merge commit, as actions/checkout checks it
+# out, and needs PR, REPO and GH_TOKEN, cargo-semver-checks and
+# cargo-public-api, and the nightly named by PUBLIC_API_TOOLCHAIN.
 
 set -uo pipefail
+
+# The base is the merge commit's first parent: main as GitHub merged the
+# pull request into it. The event's base.sha can be older (7c4e87f5 on
+# #912 with main at 6af75c97), and comparing with it counts changes main
+# took since as the pull request's.
+BASE=$(git rev-parse HEAD^1) || exit 1
 
 # The policy follows the baseline's version, not the head's: the pull
 # request that takes the crate to 1.0 is still judged by pre-1.0 rules.

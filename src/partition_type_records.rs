@@ -103,6 +103,7 @@
 //!   check against. See the report's negative sections; nothing in
 //!   this module invents a layer.
 
+use crate::le_bytes;
 use crate::{Result, RevitFile};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
@@ -207,21 +208,6 @@ pub fn supports_revit_version(revit_version: u32) -> bool {
     PARTITION_TYPE_RECORD_SUPPORTED_REVIT_VERSIONS.contains(&revit_version)
 }
 
-fn read_u16(buf: &[u8], at: usize) -> Option<u16> {
-    buf.get(at..at + 2)
-        .map(|s| u16::from_le_bytes(s.try_into().expect("2 bytes")))
-}
-
-fn read_u32(buf: &[u8], at: usize) -> Option<u32> {
-    buf.get(at..at + 4)
-        .map(|s| u32::from_le_bytes(s.try_into().expect("4 bytes")))
-}
-
-fn read_u64(buf: &[u8], at: usize) -> Option<u64> {
-    buf.get(at..at + 8)
-        .map(|s| u64::from_le_bytes(s.try_into().expect("8 bytes")))
-}
-
 /// Decode one type record at `offset`, fail-closed.
 ///
 /// `declared_ids` is the `Global/ElemTable` id set; a record whose
@@ -260,7 +246,7 @@ pub fn decode_at_with_marker(
     if offset.checked_add(RECORD_MIN_LEN)? > buf.len() {
         return None;
     }
-    let raw_id = read_u64(buf, offset)?;
+    let raw_id = le_bytes::u64_at(buf, offset)?;
     if crate::partition_element_records::carries_no_element_id(raw_id) {
         return None;
     }
@@ -287,7 +273,7 @@ pub fn decode_second_prologue_at(
     element_id: u32,
     bbox_marker: &[u8; 8],
 ) -> Option<PartitionTypeRecord> {
-    if !crate::partition_element_records::carries_no_element_id(read_u64(buf, offset)?) {
+    if !crate::partition_element_records::carries_no_element_id(le_bytes::u64_at(buf, offset)?) {
         return None;
     }
     decode_frame_as(stream, buf, offset, element_id, None, bbox_marker)
@@ -308,14 +294,14 @@ fn decode_frame_as(
     }
     let own = u64::from(element_id);
     if let Some(magic) = magic {
-        if read_u32(buf, offset + PROLOGUE_MAGIC_OFFSET)? != magic {
+        if le_bytes::u32_at(buf, offset + PROLOGUE_MAGIC_OFFSET)? != magic {
             return None;
         }
     }
-    if read_u16(buf, offset + 0x10)? != 0 {
+    if le_bytes::u16_at(buf, offset + 0x10)? != 0 {
         return None;
     }
-    let builtin_category = read_u64(buf, offset + per::CATEGORY_OFFSET)? as i64;
+    let builtin_category = le_bytes::u64_at(buf, offset + per::CATEGORY_OFFSET)? as i64;
     if !(per::BUILTIN_CATEGORY_MIN..=per::BUILTIN_CATEGORY_MAX).contains(&builtin_category) {
         return None;
     }
@@ -325,7 +311,7 @@ fn decode_frame_as(
     {
         return None;
     }
-    let count = read_u32(buf, offset + SLOT_COUNT_OFFSET)? as usize;
+    let count = le_bytes::u32_at(buf, offset + SLOT_COUNT_OFFSET)? as usize;
     if count == 0 || count > SLOT_LIST_MAX_ENTRIES {
         return None;
     }
@@ -336,7 +322,7 @@ fn decode_frame_as(
     }
     let mut slots = Vec::with_capacity(count);
     for index in 0..count {
-        slots.push(read_u64(buf, start + index * 8)?);
+        slots.push(le_bytes::u64_at(buf, start + index * 8)?);
     }
     if !slots.contains(&own) {
         return None;
@@ -345,10 +331,10 @@ fn decode_frame_as(
         stream: stream.to_string(),
         offset,
         element_id,
-        flags: read_u32(buf, offset + 0x08)?,
+        flags: le_bytes::u32_at(buf, offset + 0x08)?,
         builtin_category,
-        container: read_u64(buf, offset + per::CONTAINER_OFFSET)?,
-        placement_kind: read_u32(buf, offset + per::PLACEMENT_KIND_OFFSET)?,
+        container: le_bytes::u64_at(buf, offset + per::CONTAINER_OFFSET)?,
+        placement_kind: le_bytes::u32_at(buf, offset + per::PLACEMENT_KIND_OFFSET)?,
         slots,
     })
 }

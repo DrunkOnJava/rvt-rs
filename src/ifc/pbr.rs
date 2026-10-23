@@ -31,6 +31,7 @@ use serde::{Deserialize, Serialize};
 /// Field ranges match the glTF spec exactly so the serializer is
 /// a straight copy — no extra math at emit time.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct PbrMaterial {
     /// Linear RGB, 0-1. Viewers apply gamma correction on display.
     pub base_color_rgb: [f32; 3],
