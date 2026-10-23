@@ -412,32 +412,36 @@ fn inventory_row(path: &Path, redact: bool) -> Row {
 /// Read every file on a small worker pool (network shares are latency-bound)
 /// and return rows in input order.
 fn inventory(files: &[PathBuf], redact: bool) -> Vec<Row> {
-    use std::sync::Mutex;
     use std::sync::atomic::{AtomicUsize, Ordering};
     let workers = std::thread::available_parallelism()
         .map_or(4, |n| n.get())
         .clamp(1, 8)
         .min(files.len());
     let next = AtomicUsize::new(0);
-    let slots: Mutex<Vec<Option<Row>>> = Mutex::new(files.iter().map(|_| None).collect());
+    let mut rows: Vec<(usize, Row)> = Vec::with_capacity(files.len());
     std::thread::scope(|scope| {
-        for _ in 0..workers {
-            scope.spawn(|| {
-                loop {
-                    let i = next.fetch_add(1, Ordering::Relaxed);
-                    let Some(path) = files.get(i) else { break };
-                    let row = inventory_row(path, redact);
-                    slots.lock().unwrap_or_else(|p| p.into_inner())[i] = Some(row);
-                }
-            });
+        let handles: Vec<_> = (0..workers)
+            .map(|_| {
+                scope.spawn(|| {
+                    let mut done = Vec::new();
+                    loop {
+                        let i = next.fetch_add(1, Ordering::Relaxed);
+                        let Some(path) = files.get(i) else { break };
+                        done.push((i, inventory_row(path, redact)));
+                    }
+                    done
+                })
+            })
+            .collect();
+        for handle in handles {
+            match handle.join() {
+                Ok(done) => rows.extend(done),
+                Err(panic) => std::panic::resume_unwind(panic),
+            }
         }
     });
-    slots
-        .into_inner()
-        .unwrap_or_else(|p| p.into_inner())
-        .into_iter()
-        .flatten()
-        .collect()
+    rows.sort_unstable_by_key(|(i, _)| *i);
+    rows.into_iter().map(|(_, row)| row).collect()
 }
 
 fn human_size(bytes: Option<u64>) -> String {
