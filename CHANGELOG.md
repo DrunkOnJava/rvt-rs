@@ -332,6 +332,15 @@ All notable changes will be documented here. This project follows
 
 ### Research
 
+- **Revit 2015's element GlobalIds are not in the file (RE-208, #878).**
+  On BIMcollab's 2015 example, every element GlobalId in Revit's export has
+  an episode prefix of its own (241 in 241, where Core Interior's 854 fall
+  in 5), so RE-48's history rule cannot rebuild them. A stored IfcGUID
+  parameter holds the last 21 characters of 229 of the 241; their first
+  character, the top two bits, differs every time, and nothing tested in the
+  file sets it. The project, site, building and five storeys are stored
+  exactly, which is the lead for the storeys' GlobalIds.
+
 - **Revit 2015 is scored against Revit 2015's own export (RE-198, #421).**
   BIMcollab's example structural model, a Revit 2015 project, comes with
   Revit 2015's IFC2X3 export of it. Measure fetches both by hash with
