@@ -335,9 +335,13 @@ let svg = render_plan_svg(&model, &SheetOptions::default());
 keeps stable (`RELEASE.md`, "What 1.0 keeps stable"): CI fails a pull request
 that removes or renames one, removes, moves or retypes a parameter, adds one
 that cannot be left out, or changes what one returns, unless its title marks
-the breaking change with `!` (`tools/ci/wasm-api.py`). An object argument or
-result is a plain JSON-compatible value (`serde-wasm-bindgen`). A function
-that fails throws a string describing the error.
+the breaking change with `!` (`tools/ci/wasm-api.py`). An argument or result
+is what `serde-wasm-bindgen` makes of the Rust value: an object for a struct,
+an array for a list, and a `Map` for a map, such as the diagnostics'
+`exported.by_ifc_type` or the model's `global_ids.elements`. `JSON.stringify`
+writes a `Map` as `{}`, so the viewer turns the diagnostics' maps into objects
+before it shows or saves them. A function that fails throws a string
+describing the error.
 
 <!-- wasm-bindings -->
 | Binding | Arguments | Returns | What it does |

@@ -8,6 +8,18 @@ All notable changes will be documented here. This project follows
 
 ### Added
 
+- **The viewer's whole journey is tested on the six redistributable
+  reference models.** A browser test opens Einhoven, Core Interior and the
+  four RE1 models, inspects an element, downloads the schedule, the IFC, the
+  GLB, the plan SVG and the diagnostics, and checks them against each other:
+  the inspected element is in the schedule and in the IFC under its
+  ElementId, the schedule lists exactly the elements the diagnostics count by
+  type, and on Einhoven and Core Interior the export has the counts
+  `tests/project_count_fixtures.rs` pins for the CLI's export of the same
+  file. Deploy viewer fetches the RE1 models for it. The Einhoven demo card
+  gave 24 walls and 42 materials; it now gives the 26 walls, 9 curtain
+  panels, 2 windows and 36 materials the viewer shows.
+
 - **Each GitHub release carries the CLI archives' build provenance as a
   file (#891).** The release workflow already attested the archives; the
   attestation bundle is now also attached as `rvt-rs-vX.Y.Z.intoto.jsonl`,
@@ -81,6 +93,15 @@ All notable changes will be documented here. This project follows
   placement, and the no-geometry modes write none.
 
 ### Fixed
+
+- **The viewer's downloaded diagnostics keep their per-type counts, and its
+  Shapes row appears.** The bindings hand a Rust map over as a JavaScript
+  `Map`, which `JSON.stringify` writes as `{}`. So `exported.by_ifc_type`,
+  `body_sources` and the other maps were empty in the diagnostics the viewer
+  showed and saved. The status panel's Shapes row, which says how many
+  bodies are bounding boxes (#409), summed an empty list and never appeared.
+  The viewer now turns the diagnostics' maps into objects when it receives
+  them, and `docs/viewer-api.md` no longer says results are plain JSON.
 
 - **The PyPI page's links work, and it is written for Python users (#905).**
   PyPI showed the repository README, whose links are relative and resolve
