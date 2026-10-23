@@ -18,7 +18,7 @@ use rvt::arc_wall_record::ArcWallRecord;
 use rvt::class_index::extract_class_names;
 use rvt::compression::{find_gzip_offsets, inflate_all_chunks};
 use rvt::ifc::share::decode_from_fragment;
-use rvt::rect_opening_index::ArcWallRectOpeningIndex;
+use rvt::research::rect_opening_index::ArcWallRectOpeningIndex;
 use rvt::walker::WalkerLimits;
 
 fuzz_target!(|data: &[u8]| {

@@ -14,11 +14,11 @@ use rvt::compression;
 use rvt::elem_table;
 use rvt::formats;
 use rvt::object_graph;
-use rvt::partition_arc_walls::{
+use rvt::research::partition_arc_walls::{
     recover_storeys_from_arc_walls, scan_partition_arc_walls_with_limits,
 };
-use rvt::partition_name_candidates::building_storey_name_candidates;
-use rvt::partition_schema_mvp::recover_partition_schema_mvp;
+use rvt::research::partition_name_candidates::building_storey_name_candidates;
+use rvt::research::partition_schema_mvp::recover_partition_schema_mvp;
 use rvt::walker::WalkerLimits;
 use std::collections::{BTreeMap, BTreeSet};
 use std::env;

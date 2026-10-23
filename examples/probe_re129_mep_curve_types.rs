@@ -19,7 +19,7 @@
 //!   cargo run --profile ci --example probe_re129_mep_curve_types -- MODEL.rvt
 
 use rvt::RevitFile;
-use rvt::partition_element_records as per;
+use rvt::research::partition_element_records as per;
 
 fn main() -> rvt::Result<()> {
     let path = std::env::args().nth(1).expect("usage: MODEL.rvt");
@@ -90,7 +90,7 @@ fn main() -> rvt::Result<()> {
     }
     // Which element's data holds each name: the nearest element-data
     // header (`element_data_header` + ElementId) before it.
-    if let Some(layout) = rvt::partition_names::element_data_layout(version) {
+    if let Some(layout) = rvt::research::partition_names::element_data_layout(version) {
         for needle in ["221116-WTR", "233113-DUCT-Tees"] {
             let units: Vec<u8> = needle.encode_utf16().flat_map(u16::to_le_bytes).collect();
             for stream in rf.partition_stream_names() {
@@ -118,7 +118,7 @@ fn main() -> rvt::Result<()> {
     }
     // Declared ids in every pipe's (and every duct's) own element data, and
     // whether each such id's own data holds a type name.
-    if let Some(layout) = rvt::partition_names::element_data_layout(version) {
+    if let Some(layout) = rvt::research::partition_names::element_data_layout(version) {
         let category_of: std::collections::BTreeMap<u32, i64> = records
             .iter()
             .map(|record| (record.element_id, record.builtin_category))

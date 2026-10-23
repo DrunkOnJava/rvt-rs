@@ -32,12 +32,12 @@
 //!   cargo run --profile ci --example probe_re191_area_records -- FILE.rvt
 
 use rvt::RevitFile;
-use rvt::partition_element_records::{
+use rvt::research::partition_element_records::{
     BUILTIN_CATEGORY_MAX, BUILTIN_CATEGORY_MIN, CATEGORY_OFFSET, PLACEMENT_KIND_INSTANCE,
     PLACEMENT_KIND_OFFSET, builtin_category_name, file_bbox_marker, partition_record_chain,
 };
-use rvt::partition_level_records::recover_partition_levels;
-use rvt::partition_room_parameters::{
+use rvt::research::partition_level_records::recover_partition_levels;
+use rvt::research::partition_room_parameters::{
     DATA_OBJECT_HEADER, data_objects, scan_room_parameter_entries, scan_room_parameters,
 };
 use std::collections::{BTreeMap, BTreeSet};
@@ -163,7 +163,7 @@ fn main() -> rvt::Result<()> {
         .into_iter()
         .map(|level| (level.element_id, (level.name, level.elevation_feet)))
         .collect();
-    let global_ids = rvt::revit_global_ids::revit_global_ids(&mut rf).unwrap_or_default();
+    let global_ids = rvt::research::revit_global_ids::revit_global_ids(&mut rf).unwrap_or_default();
 
     let mut category_of: BTreeMap<u32, i64> = BTreeMap::new();
     let mut area_records: BTreeMap<u32, Vec<RecordCopy>> = BTreeMap::new();

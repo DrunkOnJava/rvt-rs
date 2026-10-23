@@ -11,7 +11,7 @@
 //! Corpus resolution follows `tests/elem_table_frame.rs`: a configured but
 //! incomplete project corpus fails, an absent one skips and says so.
 
-use rvt::{RevitFile, native_document};
+use rvt::{RevitFile, research::native_document};
 use std::collections::BTreeSet;
 use std::path::PathBuf;
 

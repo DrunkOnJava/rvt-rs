@@ -17,7 +17,7 @@
 //!   cargo run --profile ci --example probe_re126_wall_flip_flag -- MODEL.rvt
 
 use rvt::RevitFile;
-use rvt::partition_compound_structure as pcs;
+use rvt::research::partition_compound_structure as pcs;
 use std::collections::{BTreeMap, BTreeSet};
 
 /// How far into a wall's data the anchor is looked for.
@@ -27,11 +27,11 @@ fn main() -> rvt::Result<()> {
     let path = std::env::args().nth(1).expect("usage: MODEL.rvt");
     let mut rf = RevitFile::open(&path)?;
     let version = rf.basic_file_info()?.version;
-    let Some(layout) = rvt::partition_names::element_data_layout(version) else {
+    let Some(layout) = rvt::research::partition_names::element_data_layout(version) else {
         eprintln!("Revit {version}: element data is not read on this release");
         return Ok(());
     };
-    let mvp = rvt::partition_schema_mvp::recover_partition_schema_mvp(
+    let mvp = rvt::research::partition_schema_mvp::recover_partition_schema_mvp(
         &mut rf,
         version,
         rvt::walker::WalkerLimits::default(),

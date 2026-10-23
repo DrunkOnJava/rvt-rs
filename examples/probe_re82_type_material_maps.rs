@@ -22,7 +22,7 @@ fn main() -> anyhow::Result<()> {
     };
     let mut rf = rvt::RevitFile::open(&path)?;
     let version = rf.basic_file_info()?.version;
-    let maps = rvt::partition_type_materials::type_material_names(&mut rf, version);
+    let maps = rvt::research::partition_type_materials::type_material_names(&mut rf, version);
     for (owner, names) in &maps {
         println!("{owner}\t{}", names.join("; "));
     }

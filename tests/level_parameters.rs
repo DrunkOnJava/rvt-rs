@@ -221,11 +221,12 @@ fn nordic_housing_terrain_levels_are_revits_storeys() {
     }
     let storeys = revit_storeys(&std::fs::read_to_string(&reference_ifc).expect("reference IFC"));
     let mut rf = RevitFile::open(&rvt).expect("open");
-    let levels: Vec<String> = rvt::partition_level_records::recover_partition_levels(&mut rf, 2024)
-        .expect("levels")
-        .into_iter()
-        .map(|level| level.name)
-        .collect();
+    let levels: Vec<String> =
+        rvt::research::partition_level_records::recover_partition_levels(&mut rf, 2024)
+            .expect("levels")
+            .into_iter()
+            .map(|level| level.name)
+            .collect();
     let result = RvtDocExporter
         .export_with_diagnostics(&mut rf)
         .expect("export");

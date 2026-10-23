@@ -740,7 +740,7 @@ pub fn truncated_gzip_encode_with_prefix8(bytes: &[u8]) -> Result<Vec<u8>> {
 /// Encode `bytes` as one complete gzip member: [`truncated_gzip_encode`]'s
 /// header and DEFLATE data, then the CRC32 and ISIZE trailer. Revit's own
 /// `Formats/Latest` and `Global/Latest` carry that trailer, and a conforming
-/// reader such as [`crate::native_document::read_single`] checks it, so this
+/// reader such as `crate::native_document::read_single` checks it, so this
 /// is what the writer stores (B69).
 pub fn gzip_member_encode(bytes: &[u8]) -> Result<Vec<u8>> {
     let mut out = truncated_gzip_encode(bytes)?;

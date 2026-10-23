@@ -20,10 +20,10 @@
 //!   cargo run --profile ci --example probe_re93_window_openings -- MODEL.rvt
 
 use rvt::RevitFile;
-use rvt::partition_schema_mvp::{
+use rvt::research::partition_schema_mvp::{
     TYPE_ID_FIELD, TYPE_NAME_FIELD, filler_opening_from_fields, recover_partition_schema_mvp,
 };
-use rvt::partition_type_parameters::type_window_openings;
+use rvt::research::partition_type_parameters::type_window_openings;
 use rvt::walker::{InstanceField, WalkerLimits};
 use std::collections::{BTreeMap, BTreeSet};
 

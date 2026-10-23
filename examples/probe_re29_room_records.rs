@@ -24,7 +24,7 @@
 //!
 //! Not part of the shipped decode path.
 
-use rvt::partition_element_records as per;
+use rvt::research::partition_element_records as per;
 use rvt::{RevitFile, compression};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -828,7 +828,7 @@ fn quantise(v: f64) -> i64 {
 /// The UTF-16LE parameter value whose RE-22 owner slot sits at
 /// `owner_at` and whose confirmation slot agrees, or `None`.
 fn owner_framed_string(buf: &[u8], owner_at: usize, element_id: u32) -> Option<String> {
-    use rvt::partition_ifc_export_overrides as ovr;
+    use rvt::research::partition_ifc_export_overrides as ovr;
     let value_at = owner_at.checked_add(ovr::OWNER_OFFSET_BEFORE_VALUE)?;
     let confirm_at = value_at.checked_sub(ovr::OWNER_CONFIRM_OFFSET_BEFORE_VALUE)?;
     let confirm = u64::from_le_bytes(buf.get(confirm_at..confirm_at + 8)?.try_into().ok()?);

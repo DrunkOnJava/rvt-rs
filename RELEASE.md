@@ -71,6 +71,25 @@ surfaces that page names (its S1, #873), and each of them has a check that
 fails on an unannounced breaking change (S2). A milestone's completion
 percentage is not part of the gate.
 
+## What 1.0 keeps stable
+
+From 1.0.0, a breaking change to any surface below needs a new major
+version. The maintainer chose these surfaces on 2026-10-23 (#873).
+
+| Surface | What 1.0 keeps stable | What it does not |
+|---|---|---|
+| The `rvt` crate | The 27 modules the crate root's module overview lists: reading and identity, typed elements and the element walk, export, and the byte-preserving writer. Their public items keep their names, signatures and meaning | `rvt::research` and everything else behind the `unstable-research` feature: the partition, native and element-record readers behind the format findings, which change whenever a finding does. `rvt::cli`, which exists for the shipped CLIs and is hidden from the docs |
+| The 19 CLIs | Their names, flags and the JSON they print, as [`docs/schemas/`](docs/schemas/) describes it | Text meant for people to read |
+| The Python package `rvt` | The classes and functions in [`python/rvt/__init__.pyi`](python/rvt/__init__.pyi) | |
+| Output formats | Valid IFC4 (ISO 10303-21), binary glTF 2.0, plan SVG and CSV, written deterministically | Their content. A finding that recovers more elements, properties or geometry is a minor release |
+| The viewer's wasm API | The JSON shapes in [`docs/viewer-api.md`](docs/viewer-api.md) | `rvt-wasm` is not published, so code outside this repository builds it from source |
+
+A minor release may add public items, research modules and recovered
+content. A research module that moves into the stable modules is named in
+`CHANGELOG.md` and from then on follows the table above. The writer is stable
+as an API; what it can patch is rated in
+[`docs/support-matrix.json`](docs/support-matrix.json) (`stream-level-writer`).
+
 ## Release checklist (for maintainers)
 
 Run in order. Don't skip steps — the audit-driven culture for this

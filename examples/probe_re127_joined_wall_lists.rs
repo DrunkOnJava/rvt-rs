@@ -124,37 +124,39 @@ fn main() -> rvt::Result<()> {
     let path = std::env::args().nth(1).expect("usage: MODEL.rvt");
     let mut rf = RevitFile::open(&path)?;
     let version = rf.basic_file_info()?.version;
-    let count_at = rvt::partition_compound_structure::wall_join_count_offset(version).unwrap_or(16);
-    let Some(header) = rvt::partition_names::element_data_header(version) else {
+    let count_at =
+        rvt::research::partition_compound_structure::wall_join_count_offset(version).unwrap_or(16);
+    let Some(header) = rvt::research::partition_names::element_data_header(version) else {
         eprintln!("Revit {version}: element data is not read on this release");
         return Ok(());
     };
-    let mvp = rvt::partition_schema_mvp::recover_partition_schema_mvp(
+    let mvp = rvt::research::partition_schema_mvp::recover_partition_schema_mvp(
         &mut rf,
         version,
         rvt::walker::WalkerLimits::default(),
     )?;
     let walls: BTreeSet<u32> = mvp.walls.iter().filter_map(|wall| wall.id).collect();
-    let axes: BTreeMap<u32, rvt::partition_schema_mvp::WallAxis> = mvp
+    let axes: BTreeMap<u32, rvt::research::partition_schema_mvp::WallAxis> = mvp
         .walls
         .iter()
         .filter_map(|wall| {
             Some((
                 wall.id?,
-                rvt::partition_schema_mvp::wall_axis_from_fields(&wall.fields)?,
+                rvt::research::partition_schema_mvp::wall_axis_from_fields(&wall.fields)?,
             ))
         })
         .collect();
     let declared = rvt::elem_table::declared_ids(&rvt::elem_table::parse_records(&mut rf)?);
-    let boxes: BTreeMap<u32, [f64; 6]> = rvt::partition_element_records::scan_category_records(
-        &mut rf,
-        version,
-        rvt::partition_element_records::OST_WALLS,
-        &declared,
-    )?
-    .into_iter()
-    .map(|record| (record.element_id, record.bbox_feet))
-    .collect();
+    let boxes: BTreeMap<u32, [f64; 6]> =
+        rvt::research::partition_element_records::scan_category_records(
+            &mut rf,
+            version,
+            rvt::research::partition_element_records::OST_WALLS,
+            &declared,
+        )?
+        .into_iter()
+        .map(|record| (record.element_id, record.bbox_feet))
+        .collect();
     let mut lists: BTreeMap<u32, Vec<String>> = BTreeMap::new();
     for stream in rf.partition_stream_names() {
         let Ok(inflated) = rf.inflated_partition(&stream) else {

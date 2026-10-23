@@ -18,7 +18,7 @@
 //!   cargo run --profile ci --example probe_re160_phase_entries -- MODEL.rvt ...
 
 use rvt::RevitFile;
-use rvt::partition_element_records as per;
+use rvt::research::partition_element_records as per;
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 

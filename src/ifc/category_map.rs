@@ -436,7 +436,7 @@ pub fn lookup(revit_class: &str) -> Option<&'static Mapping> {
 /// redirect a decoded element to (#212, RE-22).
 ///
 /// The override carrier is general —
-/// [`crate::partition_ifc_export_overrides`] returns whatever value
+/// `crate::partition_ifc_export_overrides` returns whatever value
 /// string the parameter block holds — but acting on a value is a
 /// claim, so only values proven against a reference export are
 /// listed. An unlisted value leaves the element on its class mapping,

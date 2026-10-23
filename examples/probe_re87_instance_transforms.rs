@@ -17,7 +17,7 @@
 //!   cargo run --profile ci --example probe_re87_instance_transforms -- MODEL.rvt > transforms.jsonl
 
 use rvt::RevitFile;
-use rvt::partition_instance_transforms as pit;
+use rvt::research::partition_instance_transforms as pit;
 use std::collections::BTreeSet;
 
 fn main() -> rvt::Result<()> {

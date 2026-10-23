@@ -20,8 +20,8 @@
 //!     MODEL.rvt [MODEL.vim "Document Title"]
 
 use rvt::RevitFile;
-use rvt::partition_beam_axes::{beam_body, i_section_body, scan_bounded_lines};
-use rvt::partition_schema_mvp::{
+use rvt::research::partition_beam_axes::{beam_body, i_section_body, scan_bounded_lines};
+use rvt::research::partition_schema_mvp::{
     FAMILY_NAME_FIELD, TYPE_NAME_FIELD, beam_i_section_from_fields, element_record_bbox,
     recover_partition_schema_mvp,
 };

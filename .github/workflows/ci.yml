@@ -83,6 +83,16 @@ jobs:
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - run: cargo clippy --all-targets --all-features -- -D warnings
+      # The stable API as `cargo install` and every downstream build compile
+      # it: without `unstable-research`, so research modules are private.
+      # `unnameable_types` fails on any research type that a stable item
+      # still hands out (RELEASE.md, "What 1.0 keeps stable"). rustc's lints
+      # only: clippy's exported-API exemptions do not apply to the private
+      # research modules, and the line above already runs clippy on them.
+      - name: Default features keep research types out of the stable API
+        env:
+          RUSTFLAGS: "-D warnings -D unnameable_types"
+        run: cargo check --lib --bins
       # The wasm bindings are their own crate (C6); it builds natively too.
       - run: cargo clippy -p rvt-wasm --all-targets -- -D warnings
 
@@ -732,6 +742,9 @@ jobs:
       # Mirror the [package.metadata.docs.rs] settings from Cargo.toml
       # (`all-features = true`) — if these drift, update both.
       - run: cargo +nightly-2026-10-01 doc --no-deps --all-features
+      # docs.rs must mark the research modules as needing the feature.
+      - name: Research modules carry the unstable-research banner
+        run: grep -q 'unstable-research</code>' target/doc/rvt/research/index.html
 
   python-wheel:
     name: Python wheel / ${{ matrix.os }}
