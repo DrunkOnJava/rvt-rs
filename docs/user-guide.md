@@ -231,12 +231,12 @@ calling it a breaking change.
 | Column | What it holds |
 |---|---|
 | `revit_element_id` | The element's Revit ElementId |
-| `ifc_type` | The IFC entity it is exported as, such as `IfcWall` |
+| `ifc_type` | The IFC entity it is exported as, as the STEP file spells it, such as `IFCWALL` |
 | `predefined_type` | The IFC predefined type, where one is set |
 | `name` | The element's name |
 | `level` | The name of its level |
 | `level_elevation_ft` | That level's elevation |
-| `material` | Its material's name, or its materials' names separated by `; ` |
+| `material` | Its material's name; for a layered wall, floor, roof or ceiling, the name of its layer set (its `Family:Type`); for a family instance of several materials, their names separated by `; ` |
 | `x_ft` | Placement, x |
 | `y_ft` | Placement, y |
 | `z_ft` | Placement, z |
@@ -246,7 +246,7 @@ calling it a breaking change.
 | `height_ft` | Height of an extruded body |
 | `host_revit_element_id` | The ElementId of a door's or window's host |
 | `body_source` | Where the body came from, such as `saved_graphics_mesh` |
-| `profile_resolved` | `true` where its plan profile was read from its sketch, `false` where it was not |
+| `profile_resolved` | `true` where the body's shape was read from the file (a sketch, a type's section, a beam's or pipe's axis, a stair run, a wall's centreline or arc, an I-column's section), `false` where the body is the record's box |
 
 <!-- room-columns -->
 | Column | What it holds |
