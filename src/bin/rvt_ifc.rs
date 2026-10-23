@@ -79,6 +79,12 @@ struct Args {
     /// display (#255). Slower on large files.
     #[arg(long, conflicts_with = "placeholder")]
     saved_meshes: bool,
+    /// Also write Revit's own property sets, as Revit's exporter does with
+    /// "Export Revit property sets": each element's named parameters in one
+    /// set per parameter group, and its type's on its type object (RE-210).
+    /// Revit 2023 to 2027 files. Slower on large files.
+    #[arg(long, conflicts_with = "placeholder")]
+    revit_property_sets: bool,
     /// Write a JSON diagnostics sidecar for bug reports and support.
     ///
     /// The sidecar includes input metadata, decoded/exported element counts,
@@ -158,6 +164,22 @@ fn run(args: Args) -> anyhow::Result<()> {
                 );
             }
             Err(e) => eprintln!("rvt-ifc: saved graphics not read, bodies unchanged: {e}"),
+        }
+    }
+
+    if args.revit_property_sets {
+        // Like the saved graphics, the parameters only add to the export:
+        // when they cannot be read, it goes ahead without them, and says so.
+        match rvt::ifc::revit_property_sets::attach(&mut rf, &mut model) {
+            Ok(report) => eprintln!(
+                "rvt-ifc: Revit property sets on {} elements and {} types, and type sets on {} elements of types with no type object ({} properties, {} named parameters left out)",
+                report.elements,
+                report.types,
+                report.untyped_elements,
+                report.properties,
+                report.left_out
+            ),
+            Err(e) => eprintln!("rvt-ifc: Revit property sets not written: {e:#}"),
         }
     }
 

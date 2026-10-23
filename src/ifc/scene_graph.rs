@@ -752,6 +752,11 @@ fn format_property_value(v: &super::entities::PropertyValue) -> String {
         PropertyValue::TimeSeconds(t) => format!("{t:.1} s"),
         PropertyValue::MassPounds(m) => format!("{m:.2} lb"),
         PropertyValue::ThermalTransmittance(u) => format!("{u:.3} W/(m²·K)"),
+        PropertyValue::VolumetricFlowRate(q) => format!("{q:.4} m³/s"),
+        PropertyValue::Pressure(p) => format!("{p:.1} Pa"),
+        PropertyValue::Power(w) => format!("{w:.1} W"),
+        PropertyValue::ElectricVoltage(v) => format!("{v:.1} V"),
+        PropertyValue::ElectricCurrent(i) => format!("{i:.2} A"),
         PropertyValue::List(items) => items
             .iter()
             .map(format_property_value)
@@ -779,6 +784,11 @@ fn property_value_kind(v: &super::entities::PropertyValue) -> &'static str {
         PropertyValue::TimeSeconds(_) => "time",
         PropertyValue::MassPounds(_) => "mass",
         PropertyValue::ThermalTransmittance(_) => "thermal_transmittance",
+        PropertyValue::VolumetricFlowRate(_) => "volumetric_flow_rate",
+        PropertyValue::Pressure(_) => "pressure",
+        PropertyValue::Power(_) => "power",
+        PropertyValue::ElectricVoltage(_) => "electric_voltage",
+        PropertyValue::ElectricCurrent(_) => "electric_current",
         PropertyValue::List(_) => "list",
         PropertyValue::Enumerated(_) => "text",
     }

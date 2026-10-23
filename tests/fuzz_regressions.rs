@@ -829,6 +829,7 @@ fn step_writer_handles_adversarial_model_strings() {
             material_layer_usages: Default::default(),
             element_type_materials: Default::default(),
             element_type_ids: Default::default(),
+            type_property_sets: Default::default(),
             material_constituent_sets: Vec::new(),
             opening_cuts: Default::default(),
             body_pieces: Default::default(),
