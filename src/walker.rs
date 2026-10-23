@@ -1242,7 +1242,7 @@ fn read_adocument_internal(
         .classes
         .iter()
         .find(|c| c.name == "ADocument")
-        .ok_or_else(|| Error::MissingClass("ADocument"))?;
+        .ok_or(Error::MissingClass("ADocument"))?;
 
     let raw = rf.read_stream(streams::GLOBAL_LATEST)?;
     let (_, d) = compression::inflate_stream_auto(streams::GLOBAL_LATEST, &raw)?;
