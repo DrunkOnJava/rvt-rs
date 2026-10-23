@@ -872,7 +872,9 @@ pub fn decode_at_with_marker(
     if carries_no_element_id(raw_id) {
         return None;
     }
-    let element_id = raw_id as u32;
+    let Ok(element_id) = u32::try_from(raw_id) else {
+        return None;
+    };
     if !declared_ids.contains(&element_id) {
         return None;
     }

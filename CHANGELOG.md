@@ -65,6 +65,13 @@ All notable changes will be documented here. This project follows
 
 ### Fixed
 
+- **An element record whose ElementId is beyond the 32-bit range is no
+  longer read as a different element (#888).** Revit 2024 and later store
+  ElementIds in 8 bytes; the element-record decoder kept only the low 32
+  bits, so a record carrying `0x1_0000_0005` was admitted as ElementId 5
+  when 5 was declared. It is now skipped, as every other ElementId read in
+  the module already did.
+
 - **A mass whose "Export to IFC As" names an entity is written as it (#864).**
   rvt-rs read no mass instances. The BIM4LCA office's two `VOLUME` masses
   carry `IfcSpace`, and Revit's export writes them as `IfcSpace`. They now
