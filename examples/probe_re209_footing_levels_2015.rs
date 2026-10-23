@@ -19,6 +19,7 @@
 //!   near <class> <id> <level id> <offset from the record> <u32|u64>
 //!     each recovered Level's id within 512 bytes before and 2048 after a
 //!     footing's or column's record
+//!   bytes <class> <id> +300 <hex>   a footing record's bytes +300 to +420
 //!
 //! Usage:
 //!   cargo run --profile ci --example probe_re209_footing_levels_2015 -- FILE.rvt
@@ -154,6 +155,11 @@ fn main() {
             continue;
         };
         let data = inflated.bytes();
+        if class == "StructuralFoundation" {
+            let window = &data[(offset + 300).min(data.len())..(offset + 420).min(data.len())];
+            let hex: String = window.iter().map(|b| format!("{b:02x}")).collect();
+            println!("bytes {class} {id} +300 {hex}");
+        }
         let start = offset.saturating_sub(512);
         let end = (offset + 2048).min(data.len());
         for level in &levels {
