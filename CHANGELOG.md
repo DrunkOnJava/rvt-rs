@@ -156,7 +156,7 @@ All notable changes will be documented here. This project follows
   `OSError`, for a file whose schema declares no `ADocument`.
 
 - **Breaking: the stable API's output types are `#[non_exhaustive]`.** All
-  62 public enums of the stable modules and the 136 public structs that
+  62 public enums of the stable modules and the 135 public structs that
   only rvt-rs produces, so a release can add a variant or a field without
   breaking code that uses them. A `match` on one of these enums needs a
   wildcard arm, and these structs can no longer be built with a struct
@@ -169,7 +169,8 @@ All notable changes will be documented here. This project follows
   element layers, opening cuts, GlobalIds), the glTF document records
   `write_glb` writes, the geometry primitives (`Point3`, `CurveLoop`,
   `Mesh`, ...), the viewer's state (`CameraState`, `ClippingPlane`,
-  `SectionBox`, `ViewerState`, `CategoryFilter`), what the encoders write
+  `SectionBox`, `ViewerState`, `CategoryFilter`), the schedule rows
+  `Schedule::from_rows` takes, what the encoders write
   (`BasicFileInfo`, `PartAtom`), and the few output types the tests
   construct (`DecodedElement`, `Wall`, `ClassEntry`, ...).
 

@@ -810,7 +810,6 @@ fn property_value_is_numeric(v: &super::entities::PropertyValue) -> bool {
 /// unit-conversion logic.
 // Tracker: VW1-15.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[non_exhaustive]
 pub struct ScheduleRow {
     pub entity_index: usize,
     pub ifc_type: String,
