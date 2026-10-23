@@ -5,7 +5,7 @@
 //! than the schema-field wire format used by [`crate::walker::ElementDecoder`].
 //! This module is therefore **not** registered in
 //! [`crate::elements::all_decoders`]; it sits beside that registry as the
-//! typed partition path for Lane Five / M3-05.
+//! typed partition path for ArcWall.
 //!
 //! Downstream lanes (geometry, IFC) should call [`decode_at`], or with
 //! `unstable-research` `decode_candidate`, rather than inventing a parallel
@@ -57,12 +57,12 @@ impl ArcWall {
         }
     }
 
-    /// Wall centerline start point (ft) under RE-14.3 H16.
+    /// Wall centerline start point (ft), on RE-14's hypothesis H16.
     pub fn start_point(&self) -> (f64, f64, f64) {
         self.record.start_point()
     }
 
-    /// Wall centerline end point (ft) under RE-14.3 H16.
+    /// Wall centerline end point (ft), on RE-14's hypothesis H16.
     pub fn end_point(&self) -> (f64, f64, f64) {
         self.record.end_point()
     }
@@ -215,9 +215,12 @@ pub fn decode_candidate(
 
     reject_wrong_class(candidate.class_name.as_deref())?;
     if candidate.class_tag != ARC_WALL_TAG {
-        return Err(Error::SchemaMismatch {
-            decoder: "ArcWall",
-            schema: format!("class tag 0x{:04x}", candidate.class_tag),
+        return Err(Error::Malformed {
+            what: "ArcWall record",
+            detail: format!(
+                "class tag 0x{:04x}, expected 0x{ARC_WALL_TAG:04x}",
+                candidate.class_tag
+            ),
         });
     }
     decode_at(buf, candidate.offset, candidate.class_name.as_deref())

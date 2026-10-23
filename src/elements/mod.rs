@@ -29,7 +29,7 @@
 //! Wall / Floor / Door values use these; callers who want a
 //! uniform untyped dump use `decode_instance` directly.
 //!
-//! # Lane Five MVP set
+//! # The typed set
 //!
 //! Schema-driven typed decoders with wrong-schema rejection:
 //! Level, Wall, Floor, Door, Window, Room, Material.
@@ -75,11 +75,12 @@ use crate::Result;
 use crate::formats;
 use crate::walker::{DecodedElement, ElementDecoder, HandleIndex};
 
-/// Schema-driven MVP class names for Lane Five (M3-05).
+/// Class names the element walk decodes through their typed decoder.
 ///
 /// ArcWall is intentionally omitted — use [`arc_wall`] for partition
 /// records. `WallType` / `FloorType` remain available via
 /// [`all_decoders`] but are not required for the MVP acceptance set.
+// Tracker: M3-05.
 pub const MVP_TYPED_CLASSES: &[&str] = &[
     "Level", "Wall", "Floor", "Door", "Window", "Room", "Material",
 ];

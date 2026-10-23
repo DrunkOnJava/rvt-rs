@@ -1,8 +1,8 @@
-//! Geometry primitives and Lane Six recovery helpers.
+//! Geometry primitives, and the recovery of element geometry from typed views.
 //!
 //! Primitive types ([`Point3`], [`Curve`], [`Solid`], …) are the
-//! **output** of the per-element walker (Phase 4 Layer 5b) and the
-//! **input** of the IFC exporter's geometry mapper (Phase 6).
+//! **output** of the per-element walker and the
+//! **input** of the IFC exporter's geometry mapper.
 //! [`recovery`] turns typed Wall / Floor / Door / Window / Level
 //! views (and ArcWall partition records) into location curves,
 //! boundary loops, host relationships, and elevations — fail-closed
