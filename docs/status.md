@@ -85,7 +85,8 @@ own IFC export of the same file wherever one exists; the measured tables are in 
 levels a file can reach (opened, elements identified, geometry, properties)
 are in the [supported profile](supported-profile.md). On Revit 2023 to 2027
 files, `rvt-elements` and Python also list each element's saved parameters,
-named where the file defines them (RE-207); most are not written to IFC.
+named where the file defines them (RE-207), and `rvt-ifc --revit-property-sets`
+writes the named ones in Revit's own property sets (RE-210).
 
 It is not a converter for arbitrary models: most parameters, family
 geometry (except the experimental `--saved-meshes` option, which draws a
@@ -690,6 +691,28 @@ Rating`, 18 of 18 (`reports/element-framing/RE-207-element-parameters.md`).
 Built-in parameters have no name (the built-in catalog is not shipped,
 #255), a family's built-in slots such as a window type's Width are not
 resolved, and nothing new is written to IFC.
+
+**RE-210 (2026-10-22)** adds `rvt-ifc --revit-property-sets` (#35). It
+writes each element's named saved parameters (RE-207) as Revit's exporter
+does with "Export Revit property sets", following revit-ifc's
+`Release_25.x.x` branch: one set per parameter group, named for the group,
+the type's on its type object (or on its elements with `(Type)` added where
+it has none), the IFC group left out, one parameter per name in a group,
+and each value by its storage and spec, air flows, pressures, powers,
+voltages and currents in SI units. Against Revit 2025's export of
+Autodesk's Snowdon Towers HVAC with "Export Revit property sets" (measured
+locally, not committed), all 28,906 properties written (counted per
+element) are in the set of the same name, on the element or type object of
+the same Tag, with Revit's value; Revit writes 79,907 more, nearly all
+built-in parameters. On Snowdon Architectural, 58,346 of 58,733 are: 369
+more are in sets Revit names with `(Type)` on 13 of its type objects, as
+the order of its export has it, and 18 are curtain panels' type category,
+written before. On the BIM4LCA office as
+built, `FireExit` in `Identity Data` equals Revit's `Pset_DoorCommon` and
+`Pset_WindowCommon.FireExit` on 498 of 498 doors and windows
+(`reports/element-framing/RE-210-revit-property-sets.md`). Built-in
+parameters, enumerations and other specs are left out, and the sets keep
+rvt-rs's own GlobalIds.
 
 The public viewer's demo gallery leads with the two files this section
 measures, staged from the deploy workflow's `magnetar-io/revit-test-datasets`
