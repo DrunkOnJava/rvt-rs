@@ -126,6 +126,15 @@ for (const journey of journeys) {
     expect(rows.length - 1).toBe(
       diagnostics.exported.building_elements + (byType.IFCOPENINGELEMENT ?? 0),
     );
+    // The status panel says how many bodies are boxes (#409).
+    const bodies = Object.values(diagnostics.exported.body_sources ?? {}) as number[];
+    const shapes = page.locator('#status-panel .status-row', {
+      has: page.locator('.status-label', { hasText: /^Shapes$/ }),
+    });
+    if (bodies.length > 0) {
+      const total = bodies.reduce((sum, n) => sum + n, 0);
+      await expect(shapes.locator('.status-value')).toContainText(String(total));
+    }
 
     // The CLI's pinned counts for this file.
     if (!journey.fixture) return;
