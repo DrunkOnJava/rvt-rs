@@ -147,17 +147,23 @@ pub struct Summary {
 }
 
 impl RevitFile {
-    /// Open a Revit file from disk.
+    /// Open a Revit file from disk, under the default [`OpenLimits`].
     ///
-    /// Returns an error if the file doesn't exist, can't be read, or
-    /// doesn't start with the OLE2 / MS-CFB magic bytes
-    /// (`D0 CF 11 E0 A1 B1 1A E1`).
+    /// # Errors
     ///
-    /// ```no_run
+    /// [`Error::Io`] when the file cannot be read (its message names the
+    /// path), [`Error::NotACfbFile`] when it does not start with the OLE2 /
+    /// MS-CFB magic bytes (`D0 CF 11 E0 A1 B1 1A E1`), and [`Error::Cfb`]
+    /// when it is larger than [`OpenLimits::max_file_bytes`] or its
+    /// container does not open.
+    ///
+    /// # Examples
+    ///
+    /// ```
     /// use rvt::RevitFile;
     ///
-    /// let mut rf = RevitFile::open("your-project.rfa")?;
-    /// let summary = rf.summarize()?;
+    /// let mut rf = RevitFile::open("corpus/tier1/architectural-2024/architectural-2024.rvt")?;
+    /// let summary = rf.summarize_strict()?;
     /// println!("Revit {}", summary.version);
     /// # Ok::<(), rvt::Error>(())
     /// ```
@@ -222,6 +228,14 @@ impl RevitFile {
     ///
     /// Useful for callers that have the file bytes already (e.g. streamed
     /// over the network). Equivalent to `open` after a `read_to_end`.
+    ///
+    /// # Errors
+    ///
+    /// [`Error::NotACfbFile`] when the bytes do not start with the OLE2 /
+    /// MS-CFB magic bytes, and [`Error::Cfb`] when they exceed
+    /// [`OpenLimits::max_file_bytes`] or the container does not open.
+    ///
+    /// # Examples
     ///
     /// ```
     /// use rvt::RevitFile;
@@ -649,9 +663,17 @@ impl RevitFile {
     }
 
     /// Strict variant of [`RevitFile::summarize`] (API-04) — returns
-    /// `Err` on ANY parse failure, including PartAtom absence and
-    /// class-name enumeration failure. Use when downstream code
+    /// `Err` on any parse failure of a stream it reads, including the
+    /// class-name inventory. A missing PartAtom is not a failure (project
+    /// files have none) and leaves `partatom` empty. Use when downstream code
     /// can't tolerate a partially-populated `Summary`.
+    ///
+    /// # Errors
+    ///
+    /// [`Error::StreamNotFound`] when `BasicFileInfo` or `Formats/Latest` is
+    /// missing, [`Error::BasicFileInfo`] or [`Error::PartAtom`] when either
+    /// stream does not parse, and [`Error::Decompress`] when `Formats/Latest`
+    /// does not inflate.
     pub fn summarize_strict(&mut self) -> Result<Summary> {
         let streams = self.stream_names();
         let bfi = self.basic_file_info()?;
