@@ -150,6 +150,7 @@ def main():
         return None
 
     joins = collections.Counter()
+    joined = collections.Counter()
     for rel in model.by_type("IfcRelConnectsPorts"):
         pair = [rel.RelatingPort, rel.RelatedPort]
         owners = [owner(p) for p in pair]
@@ -165,10 +166,25 @@ def main():
                 "opposite axis" if cos < -0.99 else "same axis" if cos > 0.99 else "other axis",
             )
         ] += 1
+        # rvt-rs's placement of the same joined port, against Revit's.
+        match = PORT_NAME.match(other.Name or "")
+        if not match:
+            continue
+        own = mine.get((match.group(1), int(match.group(2))))
+        if own is None:
+            joined["not placed by rvt-rs"] += 1
+        elif math.dist(own[0], op) <= TOLERANCE_FT:
+            joined[f"placed within {TOLERANCE_FT} ft of Revit's"] += 1
+            cos = sum(own[1][i] * oz[i] for i in range(3))
+            joined[f"Z axis {'as' if cos > 0.99 else 'opposite to' if cos < -0.99 else 'across'} Revit's"] += 1
+        else:
+            joined["placed elsewhere"] += 1
+            listed.append(f"  {other.Name}: rvt-rs's joined port {math.dist(own[0], op):.4f} ft from Revit's")
     print(
         "Revit's ports joined to a segment's port: "
         + ", ".join(f"{a}, {b} {n}" for (a, b), n in joins.most_common(8))
     )
+    print("rvt-rs's ports joined to a segment's port: " + ", ".join(f"{k} {v}" for k, v in joined.most_common()))
     for line in listed[:60]:
         print(line)
 
