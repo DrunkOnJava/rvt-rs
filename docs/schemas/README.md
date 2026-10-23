@@ -32,7 +32,7 @@ closed.
 | [`inspect.schema.json`](inspect.schema.json) | `rvt-inspect --json`, including its error report |
 | [`ifc-compare.schema.json`](ifc-compare.schema.json) | `rvt-ifc-compare --json PATH` (`ifc::compare::IfcCompareReport`) |
 | [`schema-table.schema.json`](schema-table.schema.json) | `rvt-schema --json` (`formats::SchemaTable`; `--diagnostics` prints `schema-diagnostics`) |
-| [`es-observation.schema.json`](es-observation.schema.json) | ES remap research observations (H-ES5; not a production decode claim) |
+| [`es-observation.schema.json`](es-observation.schema.json) | ES remap research observations (not a production decode claim) |
 | [`es-capability.schema.json`](es-capability.schema.json) | Research capability promotion stub (report §15.16) |
 | [`witness-registry.schema.json`](witness-registry.schema.json) | Checked-in [`research/witness-registry.json`](../../research/witness-registry.json) (`tests/witness_registry.rs`) |
 | [`witness-observation.schema.json`](witness-observation.schema.json) | `rvt-ifc --observation`, `tools/ci/witness-ifcopenshell.py --observation` (OctetProof §6.2) |
@@ -52,9 +52,8 @@ with no Autodesk corpus present, and on the family corpus for `rvt-info`,
 if it is missing.
 
 `tests/support_matrix.rs` validates the seeded support matrix against
-`support-matrix.schema.json` and enforces honesty ceilings (COR-001 /
-TEST-001 / DOC-001): converter-grade RVT-to-IFC and generic typed recovery
-must not be marked `verified`.
+`support-matrix.schema.json` and enforces honesty ceilings: converter-grade
+RVT-to-IFC and generic typed recovery must not be marked `verified`.
 
 `es-observation` and `es-capability` are research contracts, not tied to any
 CLI's output. `capability-manifest` is what `rvt-capabilities` prints, an
