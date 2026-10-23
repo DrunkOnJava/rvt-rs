@@ -77,8 +77,10 @@ schema = json.loads(f.schema_json())
 adoc = next((c for c in schema["classes"] if c["name"] == "ADocument"), None)
 
 # Layer-5a walker — ADocument instance fields. Returns None when
-# the entry-point detector can't confidently locate ADocument.
-doc = f.read_adocument()
+# the entry-point detector can't confidently locate ADocument. A file
+# whose schema declares no ADocument (a synthetic one) raises instead,
+# so ask only when `adoc` above found the class.
+doc = f.read_adocument() if adoc is not None else None
 if doc is not None:
     for field in doc["fields"][-3:]:
         print(field["name"], "→", field["kind"], field.get("id"))
