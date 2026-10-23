@@ -1,6 +1,6 @@
 //! Compound ArcWall (`0x0821`) stamp / marker investigation harness.
 //!
-//! Research-only helpers for Lane C framing work described in
+//! Research-only helpers for the compound-wall framing work described in
 //! `reports/element-framing/RE-14.3-synthesis.md` and
 //! `reports/element-framing/RE-15-synthesis.md`.
 //!

@@ -14,7 +14,7 @@
 //!
 //! This module currently exposes `chunks_from_stream` which finds gzip
 //! magic markers and returns the chunk-byte-ranges. It does NOT yet parse
-//! the header's explicit chunk table; that is a Phase 4d task. The
+//! the header's explicit chunk table. The
 //! gzip-magic scanner is conservative enough to work across all 11
 //! releases we have samples for.
 

@@ -8,7 +8,7 @@
 //! element's saved mesh.
 //!
 //! On RE1's four models (Revit 2025) 207 of the 214 bodies replaced are
-//! within 0.01 ft of Revit's export (B77, Measure run 37231768480).
+//! within 0.01 ft of Revit's export (Measure run 37231768480).
 //!
 //! On Core Interior the saved meshes coincide with the bodies rvt-rs already
 //! draws exactly (walls 351 of 360, columns 256 of 256, slabs 80 of 80), and
