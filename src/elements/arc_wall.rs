@@ -16,13 +16,11 @@
 //! | Condition | Error |
 //! |---|---|
 //! | Candidate `class_name` is `Some` and not `"ArcWall"` | wrong-schema |
-//! | Candidate `class_tag` ≠ [`ARC_WALL_TAG`] | wrong-schema |
+//! | Candidate `class_tag` ≠ [`crate::arc_wall_record::ARC_WALL_TAG`] | wrong-schema |
 //! | Buffer fails [`ArcWallRecord::decode_standard`] gates | tag / variant / short |
 //! | Optional schema name gate fails | wrong-schema |
 
-use crate::arc_wall_record::{
-    ARC_WALL_TAG, ArcWallRecord, ArcWallTrailer, STANDARD_RECORD_MIN_SIZE,
-};
+use crate::arc_wall_record::{ArcWallRecord, ArcWallTrailer, STANDARD_RECORD_MIN_SIZE};
 use crate::walker::{DecodedElement, InstanceField};
 use crate::{Error, Result};
 
@@ -209,6 +207,8 @@ pub fn decode_candidate(
     candidate: &crate::partition_scanner::PartitionRecordCandidate,
     buf: &[u8],
 ) -> Result<ArcWall> {
+    use crate::arc_wall_record::ARC_WALL_TAG;
+
     reject_wrong_class(candidate.class_name.as_deref())?;
     if candidate.class_tag != ARC_WALL_TAG {
         return Err(Error::BasicFileInfo(format!(
