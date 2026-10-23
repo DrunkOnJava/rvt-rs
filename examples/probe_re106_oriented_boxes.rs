@@ -18,7 +18,7 @@
 //!   cargo run --profile ci --example probe_re106_oriented_boxes -- MODEL.rvt
 
 use rvt::RevitFile;
-use rvt::partition_schema_mvp::{element_record_bbox, recover_partition_schema_mvp};
+use rvt::research::partition_schema_mvp::{element_record_bbox, recover_partition_schema_mvp};
 use rvt::walker::WalkerLimits;
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -39,8 +39,9 @@ fn main() -> rvt::Result<()> {
         .filter(|e| e.class == "CurtainWallMullion" || e.class == "CurtainWallPanel")
         .collect();
     let ids: BTreeSet<u32> = elements.iter().filter_map(|e| e.id).collect();
-    let transforms =
-        rvt::partition_instance_transforms::scan_instance_transforms(&mut rf, version, &ids)?;
+    let transforms = rvt::research::partition_instance_transforms::scan_instance_transforms(
+        &mut rf, version, &ids,
+    )?;
     let mut census: BTreeMap<(String, &str), usize> = BTreeMap::new();
     for element in &elements {
         let key = (|| {

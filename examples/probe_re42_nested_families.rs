@@ -70,7 +70,7 @@ fn main() -> rvt::Result<()> {
     };
     let mut agreement: BTreeMap<&str, usize> = BTreeMap::new();
     for (type_id, _, owner_id) in &ambiguous {
-        let host = rvt::partition_names::resolve_family(&names, *type_id);
+        let host = rvt::research::partition_names::resolve_family(&names, *type_id);
         let key = match (host, owner_id) {
             (None, _) => "nesting rule: none",
             (Some(_), None) => "nesting rule: a family, owner unset",
@@ -87,7 +87,7 @@ fn main() -> rvt::Result<()> {
             .iter()
             .map(|c| format!("{c} {:?}", name(c)))
             .collect();
-        let host = rvt::partition_names::resolve_family(&names, type_id);
+        let host = rvt::research::partition_names::resolve_family(&names, type_id);
         println!(
             "  type {type_id} {:?}: candidates {listed:?}, owner {owner_id:?} {:?}, nesting rule {host:?} {:?}",
             name(&type_id),

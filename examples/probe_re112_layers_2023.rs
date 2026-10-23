@@ -16,7 +16,7 @@
 //!   cargo run --profile ci --example probe_re112_layers_2023 -- MODEL.rvt
 
 use rvt::RevitFile;
-use rvt::partition_schema_mvp::{TYPE_ID_FIELD, recover_partition_schema_mvp};
+use rvt::research::partition_schema_mvp::{TYPE_ID_FIELD, recover_partition_schema_mvp};
 use rvt::walker::{InstanceField, WalkerLimits};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -39,7 +39,7 @@ fn main() {
         .collect();
     let table = rvt::elem_table::parse_records(&mut rf).expect("Global/ElemTable");
     let declared = rvt::elem_table::declared_ids(&table);
-    let layers = rvt::partition_compound_structure::scan_type_layers(
+    let layers = rvt::research::partition_compound_structure::scan_type_layers(
         &mut rf, version, &types, &declared, &declared,
     )
     .expect("layers");
@@ -51,10 +51,12 @@ fn main() {
     let mut names: BTreeMap<u32, String> = BTreeMap::new();
     for stream in rf.partition_stream_names() {
         if let Ok(inflated) = rf.inflated_partition(&stream) {
-            names.extend(rvt::partition_names::find_element_data_names_2023(
-                inflated.bytes(),
-                &materials,
-            ));
+            names.extend(
+                rvt::research::partition_names::find_element_data_names_2023(
+                    inflated.bytes(),
+                    &materials,
+                ),
+            );
         }
     }
     for (type_id, type_layers) in &layers {

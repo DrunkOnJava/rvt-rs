@@ -118,7 +118,11 @@ pub struct RevitFile {
 }
 
 /// A partition stream's data objects, each at its offset (RE-153).
+#[cfg(feature = "unstable-research")]
 pub type PartitionDataObjects = Arc<Vec<(usize, crate::partition_room_parameters::DataObject)>>;
+#[cfg(not(feature = "unstable-research"))]
+pub(crate) type PartitionDataObjects =
+    Arc<Vec<(usize, crate::partition_room_parameters::DataObject)>>;
 
 /// A memoised walk: its minimum score, its limits and its elements.
 type CachedWalk = (
@@ -287,7 +291,17 @@ impl RevitFile {
     /// The data objects (RE-153) of partition stream `name`, each at its
     /// offset in the stream's inflated bytes ([`Self::inflated_partition`]),
     /// memoised (B80).
+    #[cfg(feature = "unstable-research")]
     pub fn partition_data_objects(&mut self, name: &str) -> Result<PartitionDataObjects> {
+        self.memoised_partition_data_objects(name)
+    }
+
+    /// `partition_data_objects` for the crate's own readers, with or without
+    /// `unstable-research`.
+    pub(crate) fn memoised_partition_data_objects(
+        &mut self,
+        name: &str,
+    ) -> Result<PartitionDataObjects> {
         if let Some(cached) = self.data_objects.get(name) {
             return Ok(Arc::clone(cached));
         }
@@ -301,7 +315,7 @@ impl RevitFile {
     }
 
     /// What every native extraction reads before the partitions
-    /// ([`crate::native_document::Preamble`]), memoised (B82).
+    /// (`crate::native_document::Preamble`), memoised (B82).
     pub(crate) fn native_preamble(
         &mut self,
     ) -> anyhow::Result<Arc<crate::native_document::Preamble>> {
@@ -313,10 +327,19 @@ impl RevitFile {
         Ok(preamble)
     }
 
-    /// ElementIds [`crate::partition_element_records::assign_second_prologue_ids`]
+    /// ElementIds `research::partition_element_records::assign_second_prologue_ids`
     /// reads for second-prologue frames from their enclosing partition
     /// records, by stream and frame offset, memoised (RE-35).
+    #[cfg(feature = "unstable-research")]
     pub fn second_prologue_ids(
+        &mut self,
+    ) -> Arc<crate::partition_element_records::SecondPrologueIds> {
+        self.memoised_second_prologue_ids()
+    }
+
+    /// `second_prologue_ids` for the crate's own readers, with or without
+    /// `unstable-research`.
+    pub(crate) fn memoised_second_prologue_ids(
         &mut self,
     ) -> Arc<crate::partition_element_records::SecondPrologueIds> {
         if let Some(cached) = &self.second_prologue_ids {
@@ -331,7 +354,14 @@ impl RevitFile {
     /// Family and type names from the partition name entries, with each
     /// named type's family candidates, memoised (RE-38). Empty where the
     /// release is not proven or a stream does not parse.
+    #[cfg(feature = "unstable-research")]
     pub fn element_names(&mut self) -> Arc<crate::partition_names::ElementNames> {
+        self.memoised_element_names()
+    }
+
+    /// `element_names` for the crate's own readers, with or without
+    /// `unstable-research`.
+    pub(crate) fn memoised_element_names(&mut self) -> Arc<crate::partition_names::ElementNames> {
         if let Some(cached) = &self.element_names {
             return Arc::clone(cached);
         }
@@ -367,7 +397,16 @@ impl RevitFile {
 
     /// Design option sets and their primary options, memoised (RE-40).
     /// Empty where the release is not proven or a stream does not parse.
+    #[cfg(feature = "unstable-research")]
     pub fn design_options(&mut self) -> Arc<crate::partition_design_options::DesignOptions> {
+        self.memoised_design_options()
+    }
+
+    /// `design_options` for the crate's own readers, with or without
+    /// `unstable-research`.
+    pub(crate) fn memoised_design_options(
+        &mut self,
+    ) -> Arc<crate::partition_design_options::DesignOptions> {
         if let Some(cached) = &self.design_options {
             return Arc::clone(cached);
         }

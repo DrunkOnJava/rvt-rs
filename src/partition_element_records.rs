@@ -1161,7 +1161,7 @@ fn is_symbol_frame(buf: &[u8], offset: usize) -> bool {
 
 /// Second-prologue ElementIds for a whole file, keyed by partition stream
 /// and frame offset (RE-35). Empty where the release's record shape is not
-/// proven. [`crate::RevitFile::second_prologue_ids`] memoises it.
+/// proven. `RevitFile::second_prologue_ids` memoises it.
 pub fn compute_second_prologue_ids(rf: &mut RevitFile) -> SecondPrologueIds {
     let mut out = SecondPrologueIds::new();
     let Ok(version) = rf.basic_file_info().map(|b| b.version) else {
@@ -1497,7 +1497,7 @@ pub fn scan_unattributed_frames(
         return Ok(by_class);
     };
     let categories: Vec<i64> = RECOVERED_CATEGORIES.iter().map(|(c, _)| *c).collect();
-    let assigned_all = rf.second_prologue_ids();
+    let assigned_all = rf.memoised_second_prologue_ids();
     let none = BTreeMap::new();
     for stream in rf.partition_stream_names() {
         let Ok(inflated) = rf.inflated_partition(&stream) else {
@@ -1537,7 +1537,7 @@ pub fn scan_volumeless_instances(
     // An element in a non-primary design option is left out for that reason
     // instead, and counted by
     // `partition_design_options::scan_non_primary_option_instances`.
-    let options = rf.design_options();
+    let options = rf.memoised_design_options();
     // An element framed more than once counts once, and only when no frame
     // of it has volume.
     let mut with_volume: BTreeSet<u32> = BTreeSet::new();
@@ -1599,7 +1599,7 @@ pub fn scan_category_records_multi(
         return Ok(Vec::new());
     }
     let streams = rf.partition_stream_names();
-    let assigned_all = rf.second_prologue_ids();
+    let assigned_all = rf.memoised_second_prologue_ids();
     let none = BTreeMap::new();
     let mut per_category: Vec<Vec<PartitionElementRecord>> =
         vec![Vec::new(); builtin_categories.len()];

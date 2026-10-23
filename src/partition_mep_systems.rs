@@ -171,7 +171,7 @@ pub fn scan_mep_systems(
             continue;
         };
         let buf = inflated.bytes();
-        let Ok(objects) = rf.partition_data_objects(stream) else {
+        let Ok(objects) = rf.memoised_partition_data_objects(stream) else {
             continue;
         };
         for &(p, object) in objects.iter() {

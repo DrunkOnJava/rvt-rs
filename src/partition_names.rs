@@ -231,7 +231,7 @@ fn named_ids_in(
 
 /// Name entries and type-to-family candidates for a whole file (RE-38).
 /// Empty where the release's record shape is not proven.
-/// [`crate::RevitFile::element_names`] memoises it.
+/// `RevitFile::element_names` memoises it.
 pub fn compute_element_names(rf: &mut RevitFile) -> Result<ElementNames> {
     let mut out = ElementNames::default();
     let version = rf.basic_file_info()?.version;

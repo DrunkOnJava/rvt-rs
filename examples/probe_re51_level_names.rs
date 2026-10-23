@@ -20,7 +20,7 @@
 //!   cargo run --profile ci --example probe_re51_level_names -- FILE.rvt
 
 use rvt::RevitFile;
-use rvt::partition_level_records::{
+use rvt::research::partition_level_records::{
     elevation_marker, find_name_blocks_with, owned_level_ids, recover_partition_levels,
     scan_partition_level_ids,
 };

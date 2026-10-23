@@ -39,7 +39,7 @@ fn nordic_housing_timber_keeps_its_storeys() {
     }
     let mut rf = RevitFile::open(&rvt).expect("open");
     let storeys: Vec<(String, f64)> =
-        rvt::partition_level_records::recover_partition_levels(&mut rf, 2024)
+        rvt::research::partition_level_records::recover_partition_levels(&mut rf, 2024)
             .expect("levels")
             .into_iter()
             .filter(|level| level.building_story != Some(false))

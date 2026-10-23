@@ -11,7 +11,7 @@
 //! Runs against `RVT_PROJECT_CORPUS_DIR` (`RE1-*.rvt` with Revit's
 //! `RE1-*.ifc`). Skips what is absent.
 
-use rvt::{RevitFile, native_document};
+use rvt::{RevitFile, research::native_document};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 

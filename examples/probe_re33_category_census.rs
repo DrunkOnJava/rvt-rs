@@ -13,7 +13,7 @@
 
 use rvt::RevitFile;
 use rvt::elem_table;
-use rvt::partition_element_records::{bbox_marker, decode_at_with_marker};
+use rvt::research::partition_element_records::{bbox_marker, decode_at_with_marker};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 

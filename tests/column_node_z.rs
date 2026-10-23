@@ -15,7 +15,7 @@
 //! against Revit's Base Level and Base Offset.
 
 use rvt::RevitFile;
-use rvt::partition_schema_mvp::recover_partition_schema_mvp;
+use rvt::research::partition_schema_mvp::recover_partition_schema_mvp;
 use rvt::walker::{InstanceField, WalkerLimits};
 use std::path::PathBuf;
 

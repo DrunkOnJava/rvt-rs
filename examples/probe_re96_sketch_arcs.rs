@@ -17,8 +17,8 @@
 //!   cargo run --profile ci --example probe_re96_sketch_arcs -- MODEL.rvt
 
 use rvt::RevitFile;
-use rvt::element_record_plan_profiles::{VERTEX_EPS_FEET, arc_points};
-use rvt::partition_element_records as per;
+use rvt::research::element_record_plan_profiles::{VERTEX_EPS_FEET, arc_points};
+use rvt::research::partition_element_records as per;
 use std::collections::{BTreeMap, BTreeSet};
 
 fn main() -> rvt::Result<()> {
@@ -39,11 +39,11 @@ fn main() -> rvt::Result<()> {
         }
     }
     let ids: BTreeSet<u32> = owners.values().flat_map(|l| l.keys().copied()).collect();
-    let curves = rvt::partition_beam_axes::scan_sketch_curves(&mut rf, version, &ids)?;
+    let curves = rvt::research::partition_beam_axes::scan_sketch_curves(&mut rf, version, &ids)?;
     let eps = VERTEX_EPS_FEET;
     let mut with_arcs = 0;
     for (owner, lines) in &owners {
-        let arcs: Vec<(u32, rvt::partition_beam_axes::BoundedArc, bool)> = lines
+        let arcs: Vec<(u32, rvt::research::partition_beam_axes::BoundedArc, bool)> = lines
             .iter()
             .filter_map(|(id, b)| {
                 let arc = curves.get(id)?.arc?;

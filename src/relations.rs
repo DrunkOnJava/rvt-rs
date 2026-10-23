@@ -11,135 +11,22 @@
 //! compound openings, or converter-grade IFC are solved. Nothing here is wired
 //! into default IFC emission.
 
+pub use crate::capability::{
+    DomainStatus, RelationDomain, RelationDomainEntry, RelationDomainRegistry,
+};
 use crate::evidence::{EdgeKind, EvidenceTier, TypedEdge};
 use crate::identity::ScopedElementRef;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
-/// Isolated relation domain. Edges must not silently migrate across domains.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum RelationDomain {
-    /// ES-held ElementId / reference candidates (Lane A).
-    EsRefGraph,
-    /// ES value-tree containment (separate from BIM topology).
-    EsValueTree,
-    /// BIM host/opening/connect — only after evidence gates (Lane C).
-    BimTopology,
-    /// ElemTable ownership candidates (#152) — scored separately from ES.
-    ElemTableOwnership,
-    /// Catch-all research-only domain.
-    ResearchOther,
-}
-
-impl RelationDomain {
-    /// Stable id for manifests / CLI output.
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Self::EsRefGraph => "es_ref_graph",
-            Self::EsValueTree => "es_value_tree",
-            Self::BimTopology => "bim_topology",
-            Self::ElemTableOwnership => "elem_table_ownership",
-            Self::ResearchOther => "research_other",
-        }
-    }
-
-    /// Domains that must never contribute to each other's promotion scores.
-    pub fn isolation_peers(self) -> &'static [RelationDomain] {
-        match self {
-            Self::EsRefGraph | Self::EsValueTree => &[Self::ElemTableOwnership],
-            Self::ElemTableOwnership => &[Self::EsRefGraph, Self::EsValueTree],
-            Self::BimTopology | Self::ResearchOther => &[],
-        }
-    }
-
-    /// Map a ledger [`EdgeKind`] into a domain (fail closed on `Other`).
-    pub fn for_edge_kind(kind: &EdgeKind) -> Self {
-        match kind {
-            EdgeKind::EsElementIdRef => Self::EsRefGraph,
-            EdgeKind::EsValueTree => Self::EsValueTree,
-            EdgeKind::BimRelation => Self::BimTopology,
-            EdgeKind::ElemTableOwnership => Self::ElemTableOwnership,
-            EdgeKind::Other(_) => Self::ResearchOther,
-        }
-    }
-}
-
-/// Registry of known relation domains with honesty notes.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct RelationDomainRegistry {
-    pub domains: Vec<RelationDomainEntry>,
-    pub experimental: bool,
-    pub notes: Vec<String>,
-}
-
-/// One registered domain row.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct RelationDomainEntry {
-    pub domain: RelationDomain,
-    pub id: String,
-    /// Production wiring status — always experimental for Phase 1 leftovers.
-    pub status: DomainStatus,
-    pub isolation_peers: Vec<RelationDomain>,
-    pub notes: Vec<String>,
-}
-
-/// Domain promotion status (intentionally coarse).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum DomainStatus {
-    /// Architecture stub only — not wired to product claims.
-    Experimental,
-    /// Research observations may be recorded; no verified claims.
-    Research,
-    /// Do not use for product / IFC defaults.
-    Quarantined,
-}
-
-impl RelationDomainRegistry {
-    /// Seed registry with honest Phase 1 leftovers status.
-    pub fn phase1_stub() -> Self {
-        let domains = [
-            RelationDomain::EsRefGraph,
-            RelationDomain::EsValueTree,
-            RelationDomain::BimTopology,
-            RelationDomain::ElemTableOwnership,
-            RelationDomain::ResearchOther,
-        ]
-        .into_iter()
-        .map(|domain| RelationDomainEntry {
-            domain,
-            id: domain.as_str().to_string(),
-            status: DomainStatus::Experimental,
-            isolation_peers: domain.isolation_peers().to_vec(),
-            notes: match domain {
-                RelationDomain::EsRefGraph => {
-                    vec!["ES ElementId remapping not claimed (H-ES5 Phase 2 Revit-blocked)".into()]
-                }
-                RelationDomain::EsValueTree => {
-                    vec!["Separate from BIM topology per governing decision §3.2".into()]
-                }
-                RelationDomain::BimTopology => {
-                    vec!["Bound by RE-19 / RE-20 negatives; no invented Door/Window joins".into()]
-                }
-                RelationDomain::ElemTableOwnership => {
-                    vec!["#152 scoring wall — ES refs must not contribute".into()]
-                }
-                RelationDomain::ResearchOther => {
-                    vec!["Catch-all; never promote without an explicit domain move".into()]
-                }
-            },
-        })
-        .collect();
-        Self {
-            domains,
-            experimental: true,
-            notes: vec![
-                "RelationDomainRegistry is experimental architecture — not production topology."
-                    .into(),
-                "Default IFC must not emit ES-derived edges (G-IFC).".into(),
-            ],
-        }
+/// The domain a ledger [`EdgeKind`] belongs to (fail closed on `Other`).
+pub fn domain_for_edge_kind(kind: &EdgeKind) -> RelationDomain {
+    match kind {
+        EdgeKind::EsElementIdRef => RelationDomain::EsRefGraph,
+        EdgeKind::EsValueTree => RelationDomain::EsValueTree,
+        EdgeKind::BimRelation => RelationDomain::BimTopology,
+        EdgeKind::ElemTableOwnership => RelationDomain::ElemTableOwnership,
+        EdgeKind::Other(_) => RelationDomain::ResearchOther,
     }
 }
 
@@ -226,7 +113,7 @@ impl RelationGraph {
 
     /// Insert an edge when its [`EdgeKind`] maps to this domain; else quarantine.
     pub fn push_typed(&mut self, edge: &TypedEdge) {
-        let domain = RelationDomain::for_edge_kind(&edge.kind);
+        let domain = domain_for_edge_kind(&edge.kind);
         let domain_edge = DomainEdge::from_typed(edge);
         self.nodes.insert(domain_edge.from.clone());
         self.nodes.insert(domain_edge.to.clone());

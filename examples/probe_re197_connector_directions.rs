@@ -14,7 +14,7 @@
 //! Usage: probe_re197_connector_directions <model.rvt>, with Revit's export
 //! beside it as `<model>.ifc` or `<model>_Revit.ifc`.
 
-use rvt::{RevitFile, native_document};
+use rvt::{RevitFile, research::native_document};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 
@@ -135,7 +135,7 @@ fn main() -> anyhow::Result<()> {
                         .fields
                         .get("m_oRelevantParams")
                         .and_then(|pointer| {
-                            rvt::native_saved_mesh::pointer(graph, cell_index, pointer)
+                            rvt::research::native_saved_mesh::pointer(graph, cell_index, pointer)
                                 .ok()
                                 .flatten()
                         })

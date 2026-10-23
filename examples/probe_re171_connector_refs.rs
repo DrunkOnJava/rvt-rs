@@ -14,7 +14,7 @@
 //! Usage:
 //!   cargo run --profile ci --example probe_re171_connector_refs -- MODEL.rvt
 
-use rvt::{RevitFile, native_document};
+use rvt::{RevitFile, research::native_document};
 use std::collections::{BTreeMap, BTreeSet};
 
 /// Connector objects whose fields are printed whole.

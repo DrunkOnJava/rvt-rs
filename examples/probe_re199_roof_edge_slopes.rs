@@ -12,9 +12,9 @@
 //! Usage: probe_re199_roof_edge_slopes <model.rvt>
 
 use rvt::RevitFile;
-use rvt::partition_element_records::{OST_SKETCH_LINES, scan_category_records_multi};
-use rvt::partition_roof_slopes::edge_slope_in;
-use rvt::partition_schema_mvp::recover_partition_schema_mvp;
+use rvt::research::partition_element_records::{OST_SKETCH_LINES, scan_category_records_multi};
+use rvt::research::partition_roof_slopes::edge_slope_in;
+use rvt::research::partition_schema_mvp::recover_partition_schema_mvp;
 use rvt::walker::{InstanceField, WalkerLimits};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
@@ -35,7 +35,7 @@ fn main() -> anyhow::Result<()> {
     let path = PathBuf::from(std::env::args().nth(1).expect("usage: FILE.rvt"));
     let mut rf = RevitFile::open(&path)?;
     let version = rf.basic_file_info()?.version;
-    let header = rvt::partition_names::element_data_header(version)
+    let header = rvt::research::partition_names::element_data_header(version)
         .ok_or_else(|| anyhow::anyhow!("no element data header for {version}"))?;
     let mvp = recover_partition_schema_mvp(&mut rf, version, WalkerLimits::default())?;
     let roofs: BTreeMap<u32, f64> = mvp
@@ -58,8 +58,9 @@ fn main() -> anyhow::Result<()> {
     // membership; a line's owner reference names another element once the
     // sketch is edited.
     let all_lines: BTreeSet<u32> = sketch_lines.iter().map(|l| l.element_id).collect();
-    let lists =
-        rvt::element_record_plan_profiles::scan_sketch_curve_lists(&mut rf, version, &all_lines);
+    let lists = rvt::research::element_record_plan_profiles::scan_sketch_curve_lists(
+        &mut rf, version, &all_lines,
+    );
     let mut owned: BTreeMap<u32, u32> = BTreeMap::new();
     for line in &sketch_lines {
         if let Some(owner) = line
@@ -74,20 +75,21 @@ fn main() -> anyhow::Result<()> {
         owned.extend(curves.iter().map(|&c| (c, *owner)));
     }
     let ids: BTreeSet<u32> = owned.keys().copied().collect();
-    let bounded = rvt::partition_beam_axes::scan_sketch_bounded_lines(&mut rf, version, &ids)?;
+    let bounded =
+        rvt::research::partition_beam_axes::scan_sketch_bounded_lines(&mut rf, version, &ids)?;
     println!("release {version}: roofs {roofs:?}");
     let roof_ids: BTreeSet<u32> = roofs.keys().copied().collect();
     println!(
         "slope arrows: {:?}",
-        rvt::partition_roof_slopes::scan_arrow_heights(&mut rf, version, &ids)?
+        rvt::research::partition_roof_slopes::scan_arrow_heights(&mut rf, version, &ids)?
     );
     println!(
         "rafter cuts: {:?}",
-        rvt::partition_roof_slopes::scan_rafter_cuts(&mut rf, version, &roof_ids)
+        rvt::research::partition_roof_slopes::scan_rafter_cuts(&mut rf, version, &roof_ids)
     );
     println!(
         "fascia depths: {:?}",
-        rvt::partition_roof_slopes::scan_fascia_depths(&mut rf, version, &roof_ids)?
+        rvt::research::partition_roof_slopes::scan_fascia_depths(&mut rf, version, &roof_ids)?
     );
     let mut seen: BTreeSet<(u32, Vec<u8>)> = BTreeSet::new();
     for stream in rf.partition_stream_names() {

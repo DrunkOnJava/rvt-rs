@@ -23,8 +23,8 @@
 //!     MODEL.rvt > rows.tsv
 
 use rvt::RevitFile;
-use rvt::partition_element_records as per;
-use rvt::partition_type_records as ptr;
+use rvt::research::partition_element_records as per;
+use rvt::research::partition_type_records as ptr;
 use std::collections::{BTreeMap, BTreeSet};
 
 fn main() -> rvt::Result<()> {
@@ -85,7 +85,7 @@ fn main() -> rvt::Result<()> {
         .iter()
         .flat_map(|record| named(&record.references, &wall_types))
         .collect();
-    let layers = rvt::partition_compound_structure::scan_type_layers(
+    let layers = rvt::research::partition_compound_structure::scan_type_layers(
         &mut rf, version, &wanted, &materials, &declared,
     )?;
     let layered: BTreeSet<u32> = layers
@@ -94,14 +94,16 @@ fn main() -> rvt::Result<()> {
         .map(|(id, _)| *id)
         .collect();
     let mut names: BTreeMap<u32, String> = BTreeMap::new();
-    if let Some(header) = rvt::partition_names::element_data_header(version) {
+    if let Some(header) = rvt::research::partition_names::element_data_header(version) {
         for stream in rf.partition_stream_names() {
             let Ok(inflated) = rf.inflated_partition(&stream) else {
                 continue;
             };
-            for (id, name) in
-                rvt::partition_names::find_element_data_names(inflated.bytes(), &header, &wanted)
-            {
+            for (id, name) in rvt::research::partition_names::find_element_data_names(
+                inflated.bytes(),
+                &header,
+                &wanted,
+            ) {
                 names.entry(id).or_insert(name);
             }
         }

@@ -22,7 +22,7 @@
 //!     MODEL.rvt > records.tsv
 
 use rvt::RevitFile;
-use rvt::partition_element_records as per;
+use rvt::research::partition_element_records as per;
 use std::collections::{BTreeMap, BTreeSet};
 
 fn main() -> rvt::Result<()> {
@@ -30,7 +30,8 @@ fn main() -> rvt::Result<()> {
     let mut rf = RevitFile::open(&path)?;
     let version = rf.basic_file_info()?.version;
     let declared = rvt::elem_table::declared_ids(&rvt::elem_table::parse_records(&mut rf)?);
-    let levels = rvt::partition_level_records::recover_partition_levels(&mut rf, version)?;
+    let levels =
+        rvt::research::partition_level_records::recover_partition_levels(&mut rf, version)?;
     let by_id: BTreeMap<u32, (String, f64)> = levels
         .iter()
         .map(|level| (level.element_id, (level.name.clone(), level.elevation_feet)))
@@ -67,14 +68,16 @@ fn main() -> rvt::Result<()> {
                 if !seen.insert(record.element_id) {
                     continue;
                 }
-                let named: Vec<String> =
-                    rvt::element_record_level_refs::named_levels(&record.references, &level_ids)
-                        .iter()
-                        .map(|id| {
-                            let (level, elevation) = &by_id[id];
-                            format!("{id}:{level}:{elevation:.6}")
-                        })
-                        .collect();
+                let named: Vec<String> = rvt::research::element_record_level_refs::named_levels(
+                    &record.references,
+                    &level_ids,
+                )
+                .iter()
+                .map(|id| {
+                    let (level, elevation) = &by_id[id];
+                    format!("{id}:{level}:{elevation:.6}")
+                })
+                .collect();
                 println!(
                     "{}\t{name}\t{}\t{:#x}\t{}\t{:.6}\t{:.6}\t{}",
                     record.element_id,
