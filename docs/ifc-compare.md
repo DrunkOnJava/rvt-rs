@@ -1,6 +1,6 @@
 # IFC comparison tooling (`rvt-ifc-compare`)
 
-M5-05 / #41.
+#41.
 
 Compare an `rvt-rs` IFC4 STEP export against a reference IFC (typically a
 Revit IFC export of the same model). The tool is a lightweight STEP
