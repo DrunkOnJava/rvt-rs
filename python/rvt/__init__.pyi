@@ -10,8 +10,6 @@ from __future__ import annotations
 
 from typing import Any, Final, Optional, Union, final
 
-from typing_extensions import disjoint_base
-
 __version__: Final[str]
 
 FileMetadata = dict[str, Any]
@@ -78,7 +76,6 @@ MVP_TYPED_CLASSES: Final[list[str]]
 
 
 @final
-@disjoint_base
 class RevitFile:
     """Opened Revit file. Entry point for all Python bindings.
 
@@ -189,6 +186,11 @@ class RevitFile:
         can't be parsed.
         """
 
+    def basic_file_info_json_strict(self) -> str:
+        """``basic_file_info_json()``, raising ``ValueError`` where it
+        returns ``None``: the stream is missing or does not parse.
+        """
+
     def schedule_csv(
         self, kind: str = "elements", metric: bool = False, excel: bool = False
     ) -> str:
@@ -228,6 +230,15 @@ class RevitFile:
         ``classes``, ``fields``, ``cpp_types``.
         """
 
+    def schema_diagnostics(self) -> dict[str, int]:
+        """Counts describing the parsed schema: ``class_count``,
+        ``parsed_field_count``, ``declared_field_count_sum``,
+        ``field_count_mismatches``, ``tagged_class_count``,
+        ``parent_only_class_count``, ``ancestor_tag_count``,
+        ``skipped_records``, ``cpp_type_count``. Raises ``ValueError``
+        if the schema can't be parsed.
+        """
+
     def schema_json(self) -> str:
         """Full schema as a JSON string (parseable via ``json.loads``).
 
@@ -248,6 +259,17 @@ class RevitFile:
         confidently locate ADocument in the file.
 
         See module docs for the field-kind schema.
+        """
+
+    def read_adocument_strict(self) -> TypedADocument:
+        """``read_adocument()``, raising ``ValueError`` when the record is
+        not located or any of its fields fell back to raw bytes.
+        """
+
+    def read_adocument_lossy(self) -> dict[str, Any]:
+        """``read_adocument()`` with what went wrong: ``value`` (the
+        ADocument dict), ``complete`` (bool), ``partial_fields``,
+        ``failed_streams``, ``warnings`` and ``confidence``.
         """
 
     def decoded_elements(self) -> list[TypedDecodedElement]:

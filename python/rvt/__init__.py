@@ -27,7 +27,13 @@ except ImportError:
     # Nothing to re-export; native attributes resolve directly.
     pass
 
-from typing import Any, Dict
+from typing import Any, Dict, List, Union
 
+# The return shapes the stubs name, so that `from rvt import FileMetadata`
+# works at runtime too. `typing` generics, since the wheel supports Python 3.8.
 FileMetadata = Dict[str, Any]
-"""Return shape of `RevitFile.metadata()` and `read_metadata()` (see the stubs)."""
+TypedSchemaSummary = Dict[str, int]
+TypedField = Dict[str, Union[str, int, List[int]]]
+TypedADocument = Dict[str, Union[int, List[TypedField]]]
+TypedDecodedElement = Dict[str, Any]
+TypedElementCounts = Dict[str, Union[int, Dict[str, int]]]
