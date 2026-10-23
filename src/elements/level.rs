@@ -47,10 +47,10 @@ impl ElementDecoder for LevelDecoder {
         limits: crate::walker::WalkerLimits,
     ) -> Result<DecodedElement> {
         if schema.name != "Level" {
-            return Err(Error::BasicFileInfo(format!(
-                "LevelDecoder received wrong schema: {}",
-                schema.name
-            )));
+            return Err(Error::SchemaMismatch {
+                decoder: "Level",
+                schema: schema.name.clone(),
+            });
         }
         // Use the generic decoder to produce field-by-field
         // InstanceField values. This handles the byte-level walk +

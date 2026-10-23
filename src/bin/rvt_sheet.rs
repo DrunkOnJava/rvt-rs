@@ -1,7 +1,6 @@
 //! `rvt-sheet` — render a 2D plan view of a Revit file as SVG.
 //!
-//! Fourth shipping binary in the rvt-rs toolkit. Wraps the VW1-11
-//! sheet renderer. Useful for:
+//! The command-line front end of the plan renderer, `rvt::ifc::sheet`. Useful for:
 //!
 //! - embedding a plan in a markdown README or a PDF report
 //! - quick visual sanity check after `rvt-write` edits

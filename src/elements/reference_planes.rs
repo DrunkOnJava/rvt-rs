@@ -55,10 +55,10 @@ impl ElementDecoder for ReferencePlaneDecoder {
         limits: crate::walker::WalkerLimits,
     ) -> Result<DecodedElement> {
         if schema.name != "ReferencePlane" {
-            return Err(Error::BasicFileInfo(format!(
-                "ReferencePlaneDecoder received wrong schema: {}",
-                schema.name
-            )));
+            return Err(Error::SchemaMismatch {
+                decoder: "ReferencePlane",
+                schema: schema.name.clone(),
+            });
         }
         Ok(crate::walker::decode_instance_with_limits(
             bytes, 0, schema, limits,
@@ -68,6 +68,7 @@ impl ElementDecoder for ReferencePlaneDecoder {
 
 /// Typed view of a decoded ReferencePlane.
 #[derive(Debug, Clone, PartialEq, Default)]
+#[non_exhaustive]
 pub struct ReferencePlane {
     pub name: Option<String>,
     /// The "bubble" end is the one that carries the plane's name tag.

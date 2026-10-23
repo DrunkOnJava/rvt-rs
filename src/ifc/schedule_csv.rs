@@ -27,6 +27,7 @@ const FEET_TO_METRES: f64 = 0.3048;
 
 /// Length unit for the size and position columns.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum LengthUnit {
     /// Revit's internal unit; column suffix `_ft`.
     #[default]
@@ -104,6 +105,19 @@ pub fn room_columns(unit: LengthUnit) -> Vec<String> {
 }
 
 /// One row per building element (rooms included, as `IFCSPACE`).
+///
+/// # Examples
+///
+/// ```
+/// use rvt::RevitFile;
+/// use rvt::ifc::schedule_csv::{CsvOptions, elements_csv};
+/// use rvt::ifc::{Exporter, RvtDocExporter};
+///
+/// let mut rf = RevitFile::open("corpus/tier1/architectural-2024/architectural-2024.rvt")?;
+/// let csv = elements_csv(&RvtDocExporter.export(&mut rf)?, &CsvOptions::default());
+/// println!("{}", csv.lines().next().unwrap_or_default());
+/// # Ok::<(), rvt::Error>(())
+/// ```
 pub fn elements_csv(model: &IfcModel, options: &CsvOptions) -> String {
     let unit = options.unit;
     let mut rows: Vec<(f64, String, Vec<String>)> = Vec::new();

@@ -1,4 +1,4 @@
-//! Revit material → PBR material mapping (VW1-06).
+//! Revit material → PBR material mapping.
 //!
 //! Downstream viewers (Three.js, WebGL, glTF exporters) consume
 //! materials in the physically-based-rendering (PBR) format that
@@ -21,6 +21,7 @@
 //! picks reasonable values that make scenes render recognizably
 //! in a viewer. Callers that want authoritative PBR should
 //! override per-material from their own material library.
+// Tracker: VW1-06.
 
 use super::MaterialInfo;
 use serde::{Deserialize, Serialize};
@@ -30,6 +31,7 @@ use serde::{Deserialize, Serialize};
 /// Field ranges match the glTF spec exactly so the serializer is
 /// a straight copy — no extra math at emit time.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct PbrMaterial {
     /// Linear RGB, 0-1. Viewers apply gamma correction on display.
     pub base_color_rgb: [f32; 3],
@@ -114,7 +116,7 @@ fn alpha_from_transparency(t: Option<f64>) -> f32 {
     }
 }
 
-/// Name-driven material classifier (VW1-06). Returns `(metallic,
+/// Name-driven material classifier. Returns `(metallic,
 /// roughness, double_sided)` based on keywords in the material
 /// name — matches the typical Revit family naming ("Glass —
 /// Tinted", "Steel — Painted", "Wood — Oak").
@@ -128,6 +130,7 @@ fn alpha_from_transparency(t: Option<f64>) -> f32 {
 /// - Concrete / masonry: metallic 0, roughness 0.9
 /// - Paint / ceramic / tile: metallic 0, roughness 0.5
 /// - Default (unknown): metallic 0, roughness 0.6
+// Tracker: VW1-06.
 fn classify_from_name(name: &str) -> (f32, f32, bool) {
     let n = name.to_ascii_lowercase();
     if n.contains("glass") || n.contains("glazing") || n.contains("acrylic") {

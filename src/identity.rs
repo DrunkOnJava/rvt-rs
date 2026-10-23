@@ -1,4 +1,4 @@
-//! Document-scoped identity and source-span contracts (Phase 1).
+//! Document-scoped identity and source-span contracts.
 //!
 //! These types establish **fail-closed** identity scoping before any ES
 //! remapping decoder exists. They do **not** claim that ES ElementId
@@ -47,7 +47,7 @@ impl DocumentIdentity {
 
 /// Revit UniqueId when known (36-char GUID string form).
 ///
-/// Phase 1 stores the string as recovered/declared by an oracle or
+/// The string is stored as recovered or declared by an oracle or
 /// fixture manifest. No on-disk UniqueId decoder is implied.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct UniqueId(pub String);

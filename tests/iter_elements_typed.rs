@@ -103,7 +103,7 @@ fn decode_instance_prefer_typed_fails_closed_for_mvp_wrong_schema() {
     };
     let wall = elements::decoder_for_class("Wall").unwrap();
     assert!(
-        wall.decode(&[], &floor_schema, &rvt::walker::HandleIndex::new())
+        wall.decode(&[], &floor_schema, &walker::HandleIndex::new())
             .is_err(),
         "WallDecoder must reject Floor schema"
     );
@@ -111,7 +111,7 @@ fn decode_instance_prefer_typed_fails_closed_for_mvp_wrong_schema() {
         name: "NoSuchClass".into(),
         ..floor_schema
     };
-    assert!(elements::decode_typed(&[], &bogus, &rvt::walker::HandleIndex::new()).is_err());
+    assert!(elements::decode_typed(&[], &bogus, &walker::HandleIndex::new()).is_err());
     assert!(MVP_TYPED_CLASSES.contains(&"Wall"));
 }
 
@@ -327,7 +327,7 @@ fn core_interior_2024_rect_openings_not_fake_doors() {
     // below. The counts are the exact ElementId sets Revit's own full
     // export tags: 360 IFCWALL, 132 IFCDOOR, 6 IFCWINDOW.
     let decoded: Vec<_> =
-        walker::iter_elements_with_limits(&mut rf, walker::PRODUCTION_ELEMENT_MIN_SCORE, limits)
+        walker::iter_elements_with_limits(&mut rf, PRODUCTION_ELEMENT_MIN_SCORE, limits)
             .expect("iter_elements")
             .collect();
     for (class, expected) in [("Wall", 360usize), ("Door", 132), ("Window", 6)] {
@@ -361,7 +361,7 @@ fn core_interior_2024_rect_openings_not_fake_doors() {
                 (n.as_str(), v),
                 (
                     "m_related_id_a_in_elem_table",
-                    rvt::walker::InstanceField::Bool(true)
+                    walker::InstanceField::Bool(true)
                 )
             )
         });
@@ -370,7 +370,7 @@ fn core_interior_2024_rect_openings_not_fake_doors() {
                 (n.as_str(), v),
                 (
                     "m_related_id_b_in_elem_table",
-                    rvt::walker::InstanceField::Bool(true)
+                    walker::InstanceField::Bool(true)
                 )
             )
         });
@@ -459,7 +459,7 @@ fn core_interior_2024_slab_instances_and_export_overrides() {
             e.fields.iter().any(|(name, value)| {
                 matches!(
                     (name.as_str(), value),
-                    ("m_ifc_export_as", rvt::walker::InstanceField::String(text))
+                    ("m_ifc_export_as", walker::InstanceField::String(text))
                         if text == "IfcShadingDevice"
                 )
             })
@@ -632,7 +632,7 @@ fn core_interior_2024_slab_plan_profiles() {
         let bounds = profile.plan_bounds_feet().expect("bounds");
         let mut record_box = [f64::NAN; 4];
         for (name, value) in &slab.fields {
-            if let rvt::walker::InstanceField::Float { value, .. } = value {
+            if let walker::InstanceField::Float { value, .. } = value {
                 match name.as_str() {
                     "m_locationX" => record_box[0] = *value,
                     "m_locationY" => record_box[1] = *value,

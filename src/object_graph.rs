@@ -1,10 +1,10 @@
-//! Phase D v0 · Object graph deserializer — starter pieces.
+//! Object graph deserializer: starter pieces.
 //!
 //! This module contains partial parsers for specific record types we've
 //! successfully reverse-engineered from the decompressed `Global/Latest`
 //! and `Partitions/NN` streams. It grows incrementally as more classes
-//! are mapped; the `rvt-rs` v0.1 ships only the pieces we can verify
-//! byte-for-byte against the 11-version reference corpus.
+//! are mapped, and holds only the pieces verified byte for byte against
+//! the 11-release family corpus.
 //!
 //! # Currently supported
 //!
@@ -28,6 +28,7 @@ use encoding_rs::UTF_16LE;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct DocumentHistory {
     /// Ordered list of Revit version strings this file has seen, oldest first.
     pub entries: Vec<String>,
@@ -122,6 +123,7 @@ impl DocumentHistory {
 /// The tag value is almost certainly the class-ID that binds the record
 /// to an entry in `Formats/Latest`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct StringRecord {
     pub offset: usize,
     pub tag: u32,
@@ -276,7 +278,7 @@ fn is_printable_ascii_utf16le(body: &[u8]) -> bool {
 }
 
 /// Pull all string records from a Revit file's `Global/Latest` stream.
-pub fn string_records_from_file(rf: &mut crate::RevitFile) -> Result<Vec<StringRecord>> {
+pub fn string_records_from_file(rf: &mut RevitFile) -> Result<Vec<StringRecord>> {
     let bytes = rf.read_stream(GLOBAL_LATEST)?;
     let (_, decomp) = compression::inflate_stream_auto(GLOBAL_LATEST, &bytes)?;
     Ok(extract_string_records(&decomp))
@@ -288,14 +290,12 @@ pub fn string_records_from_file(rf: &mut crate::RevitFile) -> Result<Vec<StringR
 /// bulk Revit content lives — category names, OmniClass/Uniformat codes,
 /// Autodesk parameter-group + spec identifiers, localized format strings,
 /// timestamps, asset-library references, etc.
-pub fn string_records_from_partitions(rf: &mut crate::RevitFile) -> Result<Vec<StringRecord>> {
+pub fn string_records_from_partitions(rf: &mut RevitFile) -> Result<Vec<StringRecord>> {
     Ok(rf.partition_string_records()?.as_ref().clone())
 }
 
 /// Uncached extraction behind [`crate::reader::RevitFile::partition_string_records`].
-pub(crate) fn extract_partition_string_records(
-    rf: &mut crate::RevitFile,
-) -> Result<Vec<StringRecord>> {
+pub(crate) fn extract_partition_string_records(rf: &mut RevitFile) -> Result<Vec<StringRecord>> {
     let partition_name = rf
         .partition_stream_name()
         .ok_or_else(|| crate::Error::StreamNotFound("no Partitions/NN stream".into()))?;

@@ -241,8 +241,9 @@ pub fn solid_headers(buf: &[u8], room_id: u32) -> Vec<usize> {
 }
 
 /// [`solid_headers`] for every ElementId at once, in one pass over `buf`
-/// (B85): each [`ROOM_SOLID_TAG`] with the `u64` before it, or before
+///: each [`ROOM_SOLID_TAG`] with the `u64` before it, or before
 /// `ff ff ff ff` before it.
+// Tracker: B85.
 pub fn solid_headers_by_id(buf: &[u8]) -> BTreeMap<u64, Vec<usize>> {
     let mut out: BTreeMap<u64, Vec<usize>> = BTreeMap::new();
     for tag in memchr::memmem::find_iter(buf, &ROOM_SOLID_TAG) {

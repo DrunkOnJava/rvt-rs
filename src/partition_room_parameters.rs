@@ -49,6 +49,7 @@
 //!
 //! See `reports/element-framing/RE-29-room-instance-and-envelope.md`.
 
+use crate::le_bytes;
 use crate::{Result, RevitFile};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
@@ -106,16 +107,6 @@ pub fn supports_revit_version(revit_version: u32) -> bool {
     ROOM_PARAMETER_SUPPORTED_REVIT_VERSIONS.contains(&revit_version)
 }
 
-fn read_u32(buf: &[u8], at: usize) -> Option<u32> {
-    buf.get(at..at + 4)
-        .map(|s| u32::from_le_bytes(s.try_into().expect("4 bytes")))
-}
-
-fn read_u64(buf: &[u8], at: usize) -> Option<u64> {
-    buf.get(at..at + 8)
-        .map(|s| u64::from_le_bytes(s.try_into().expect("8 bytes")))
-}
-
 /// A UTF-16LE string of `chars` code units at `at`, rejected when it
 /// holds a control character.
 fn utf16_at(buf: &[u8], at: usize, chars: usize) -> Option<String> {
@@ -146,24 +137,24 @@ pub fn decode_at(
     owner_at: usize,
     element_id: u32,
 ) -> Option<RoomParameters> {
-    if read_u64(buf, owner_at)? != u64::from(element_id) {
+    if le_bytes::u64_at(buf, owner_at)? != u64::from(element_id) {
         return None;
     }
     let confirm_at = owner_at.checked_add(OWNER_CONFIRM_OFFSET)?;
-    if read_u64(buf, confirm_at)? != u64::from(element_id) {
+    if le_bytes::u64_at(buf, confirm_at)? != u64::from(element_id) {
         return None;
     }
-    let level_slot = read_u64(buf, owner_at.checked_add(LEVEL_OFFSET)?)?;
+    let level_slot = le_bytes::u64_at(buf, owner_at.checked_add(LEVEL_OFFSET)?)?;
 
     let number_len_at = owner_at.checked_add(NUMBER_LENGTH_OFFSET)?;
-    let number_chars = read_u32(buf, number_len_at)? as usize;
+    let number_chars = le_bytes::u32_at(buf, number_len_at)? as usize;
     let number_at = number_len_at.checked_add(4)?;
     let number = utf16_at(buf, number_at, number_chars)?;
 
     let name_len_at = number_at
         .checked_add(number_chars.checked_mul(2)?)?
         .checked_add(NAME_GAP_AFTER_NUMBER)?;
-    let name_chars = read_u32(buf, name_len_at)? as usize;
+    let name_chars = le_bytes::u32_at(buf, name_len_at)? as usize;
     let name = utf16_at(buf, name_len_at.checked_add(4)?, name_chars)?;
 
     Some(RoomParameters {
@@ -448,7 +439,7 @@ pub fn scan_text_parameter(
         let partition = partition_number(&stream);
         let buf = inflated.bytes();
         for hit in memchr::memmem::find_iter(buf, &tag) {
-            let value = match read_u32(buf, hit + tag.len()) {
+            let value = match le_bytes::u32_at(buf, hit + tag.len()) {
                 Some(0) => String::new(),
                 _ => match utf16_entry(buf, hit + tag.len(), 256) {
                     Some(value) => value,
@@ -498,7 +489,7 @@ pub fn scan_integer_parameter(
         let partition = partition_number(&stream);
         let buf = inflated.bytes();
         for hit in memchr::memmem::find_iter(buf, &tag) {
-            let Some(value) = read_u32(buf, hit + tag.len()) else {
+            let Some(value) = le_bytes::u32_at(buf, hit + tag.len()) else {
                 continue;
             };
             let Some(element) = enclosing_data_object(buf, hit).filter(|id| elements.contains(id))
@@ -579,13 +570,13 @@ pub enum EntryValue {
 
 fn read_entry(buf: &[u8], hit: usize, kind: EntryKind) -> Option<EntryValue> {
     match kind {
-        EntryKind::Word => read_u32(buf, hit + 8).map(EntryValue::Word),
-        EntryKind::Text => match read_u32(buf, hit + 8)? {
+        EntryKind::Word => le_bytes::u32_at(buf, hit + 8).map(EntryValue::Word),
+        EntryKind::Text => match le_bytes::u32_at(buf, hit + 8)? {
             0 => Some(EntryValue::Text(String::new())),
             _ => utf16_entry(buf, hit + 8, 256).map(EntryValue::Text),
         },
         EntryKind::Real => {
-            let bits = read_u64(buf, hit.checked_sub(8)?)?;
+            let bits = le_bytes::u64_at(buf, hit.checked_sub(8)?)?;
             Some(f64::from_bits(bits))
                 .filter(|value| value.is_finite())
                 .map(EntryValue::Real)
@@ -598,7 +589,7 @@ fn read_entry(buf: &[u8], hit: usize, kind: EntryKind) -> Option<EntryValue> {
 /// stored, by parameter and ElementId, on Revit 2024 and later: the entry with
 /// the parameter's key in the element's own data object (RE-153), the
 /// innermost one holding it among the stream's data objects, memoised on the
-/// handle (`RevitFile::partition_data_objects`, B80). Only the payloads of
+/// handle (`RevitFile::partition_data_objects`). Only the payloads of
 /// the elements' own objects are searched. The latest partition's copy is
 /// taken, and an element whose entries there disagree gets nothing (#800).
 pub fn scan_parameter_entries(

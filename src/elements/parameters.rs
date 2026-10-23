@@ -11,8 +11,7 @@
 //!    parameter applies to. Handled elsewhere (category-bindings,
 //!    future work).
 //! 3. **Value** — the actual stored number / string / ElementId for
-//!    a specific host element. Handled by the value-extraction pass
-//!    (L5B-54, separate task).
+//!    a specific host element. Handled by the value-extraction pass.
 //!
 //! # Typical field shape (observed 2016–2026)
 //!
@@ -54,9 +53,10 @@ use crate::walker::{DecodedElement, InstanceField};
 ///
 /// Maps to Revit's `StorageType` enum. Every ParameterElement has
 /// exactly one `StorageType`, set at creation and never changed.
-/// Value readers (L5B-54, separate task) dispatch on this to decide
+/// Value readers dispatch on this to decide
 /// how to interpret the raw bytes of a given element's value slot.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[non_exhaustive]
 pub enum StorageType {
     /// No storage — the parameter is a category placeholder with no
     /// value (rare; mostly used for computed labels).
@@ -102,7 +102,7 @@ impl StorageType {
     }
 }
 
-/// How a parameter's value is produced (L5B-56).
+/// How a parameter's value is produced.
 ///
 /// Revit parameters come in three flavours by how their value is
 /// produced:
@@ -121,7 +121,9 @@ impl StorageType {
 ///
 /// The `m_is_calculated` / `m_is_reporting` flags on
 /// `ParameterElement` are what distinguish these modes.
+// Tracker: L5B-56.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[non_exhaustive]
 pub enum ParameterValueSource {
     /// User-set (default). Writable, no implicit dependency on
     /// other parameters or geometry.
@@ -137,6 +139,7 @@ pub enum ParameterValueSource {
 
 /// Typed view of a decoded ParameterElement.
 #[derive(Debug, Clone, PartialEq, Default)]
+#[non_exhaustive]
 pub struct ParameterElement {
     pub name: Option<String>,
     pub parameter_group: Option<u32>,
@@ -144,10 +147,11 @@ pub struct ParameterElement {
     pub unit_type: Option<u32>,
     pub is_shared: Option<bool>,
     pub visible: Option<bool>,
-    /// How this parameter's value is produced (L5B-56). `None` when
+    /// How this parameter's value is produced. `None` when
     /// the relevant flags weren't present in the decoded payload;
     /// treat as [`ParameterValueSource::UserSet`] for
     /// user-facing writability purposes.
+    // Tracker: L5B-56.
     pub value_source: Option<ParameterValueSource>,
 }
 
@@ -217,6 +221,7 @@ impl ParameterElement {
 /// `guid` (the stable cross-project identifier that makes a shared
 /// parameter "shared"), and a free-form `description`.
 #[derive(Debug, Clone, PartialEq, Default)]
+#[non_exhaustive]
 pub struct SharedParameter {
     pub base: ParameterElement,
     /// Stable cross-project GUID. This is what lets two projects
@@ -245,7 +250,7 @@ impl SharedParameter {
     }
 }
 
-/// A single decoded parameter value (L5B-54).
+/// A single decoded parameter value.
 ///
 /// Revit's parameter system stores each element's parameter values
 /// as a sequence of `AProperty*` class instances. The specific
@@ -260,7 +265,9 @@ impl SharedParameter {
 /// best-effort typed fields (useful when Revit ships a new
 /// AProperty variant we haven't mapped yet — the field bytes
 /// still round-trip, just without a typed view).
+// Tracker: L5B-54.
 #[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
 pub enum ParameterValue {
     /// `APropertyBoolean.m_value` — single 8-bit bool (0 / 1).
     Boolean(bool),
@@ -457,6 +464,7 @@ impl ParameterValue {
 /// returns a non-empty list only when `decoded` itself is an
 /// AProperty* carrier. Other classes return `[]` (honest empty).
 #[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
 pub struct ParameterEntry {
     /// Parameter display name when known; AProperty carriers rarely
     /// embed the definition name on the value instance alone.
@@ -563,7 +571,7 @@ fn vector_to_f32_3(components: &[InstanceField]) -> Option<[f32; 3]> {
 }
 
 /// A per-element (or per-type) collection of decoded parameter
-/// values keyed by parameter name (L5B-55).
+/// values keyed by parameter name.
 ///
 /// Revit's parameter-inheritance model has two tiers:
 ///
@@ -579,6 +587,7 @@ fn vector_to_f32_3(components: &[InstanceField]) -> Option<[f32; 3]> {
 /// This struct holds one tier's view of the name → value map.
 /// Pair two of them — one for the type, one for the instance —
 /// and resolve with [`effective_value`].
+// Tracker: L5B-55.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct ParameterBundle {
     /// `BTreeMap` rather than `HashMap` so iteration order is
@@ -624,7 +633,7 @@ impl ParameterBundle {
 }
 
 /// Resolve the effective value of a named parameter given both
-/// tiers (L5B-55).
+/// tiers.
 ///
 /// Precedence follows Revit's own model: **instance wins over
 /// type**. The instance bundle is consulted first; if the
@@ -656,6 +665,7 @@ impl ParameterBundle {
 /// // Unknown name → None.
 /// assert!(effective_value(&instance_params, &type_params, "Unknown").is_none());
 /// ```
+// Tracker: L5B-55.
 pub fn effective_value<'a>(
     instance: &'a ParameterBundle,
     type_: &'a ParameterBundle,
@@ -665,7 +675,7 @@ pub fn effective_value<'a>(
 }
 
 /// Merge a type bundle and an instance bundle into a single
-/// effective-view bundle (L5B-55).
+/// effective-view bundle.
 ///
 /// Every parameter name present in EITHER bundle appears in the
 /// result. Instance values override type values for overlapping
@@ -675,6 +685,7 @@ pub fn effective_value<'a>(
 /// Useful when a downstream consumer (IFC property-set builder,
 /// schedule extractor) needs the full effective parameter map for
 /// an element without doing per-name lookups.
+// Tracker: L5B-55.
 pub fn merge_effective(instance: &ParameterBundle, type_: &ParameterBundle) -> ParameterBundle {
     let mut out = type_.clone();
     for (name, value) in instance.iter() {

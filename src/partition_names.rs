@@ -23,6 +23,7 @@
 //! export names an element; it reproduces that name exactly on every
 //! Snowdon instance where both joins are unique.
 
+use crate::le_bytes;
 use crate::partition_element_records::{
     BUILTIN_CATEGORY_MAX, BUILTIN_CATEGORY_MIN, PartitionRecordSpan, bbox_marker,
     partition_record_chain, supports_revit_version,
@@ -83,7 +84,9 @@ pub fn name_entries_2023(rf: &mut RevitFile, declared: &BTreeSet<u32>) -> BTreeM
         };
         let buf = inflated.bytes();
         for at in memchr::memmem::find_iter(buf, &[1u8, 0, 0, 0]) {
-            let (Some(id), Some(units)) = (read_u32(buf, at + 4), read_u32(buf, at + 8)) else {
+            let (Some(id), Some(units)) =
+                (le_bytes::u32_at(buf, at + 4), le_bytes::u32_at(buf, at + 8))
+            else {
                 continue;
             };
             let units = units as usize;
@@ -122,16 +125,6 @@ pub fn name_entries_2023(rf: &mut RevitFile, declared: &BTreeSet<u32>) -> BTreeM
         .collect()
 }
 
-fn read_u32(buf: &[u8], at: usize) -> Option<u32> {
-    buf.get(at..at.checked_add(4)?)
-        .map(|b| u32::from_le_bytes(b.try_into().expect("4 bytes")))
-}
-
-fn read_u64(buf: &[u8], at: usize) -> Option<u64> {
-    buf.get(at..at.checked_add(8)?)
-        .map(|b| u64::from_le_bytes(b.try_into().expect("8 bytes")))
-}
-
 /// Every name entry in `buf` whose ElementId is declared.
 ///
 /// Anchors on the `i64` category that closes an entry: its top five bytes
@@ -145,7 +138,7 @@ pub fn find_name_entries(buf: &[u8], declared_ids: &BTreeSet<u32>) -> Vec<NameEn
         let Some(at) = hit.checked_sub(3) else {
             continue;
         };
-        let Some(category) = read_u64(buf, at).map(|v| v as i64) else {
+        let Some(category) = le_bytes::u64_at(buf, at).map(|v| v as i64) else {
             continue;
         };
         if !(BUILTIN_CATEGORY_MIN..=BUILTIN_CATEGORY_MAX).contains(&category) {
@@ -158,13 +151,14 @@ pub fn find_name_entries(buf: &[u8], declared_ids: &BTreeSet<u32>) -> Vec<NameEn
             let Some(length_at) = start.checked_sub(4) else {
                 break;
             };
-            if read_u32(buf, length_at) != Some(units as u32) {
+            if le_bytes::u32_at(buf, length_at) != Some(units as u32) {
                 continue;
             }
             let Some(id_at) = length_at.checked_sub(8) else {
                 break;
             };
-            let Some(element_id) = read_u64(buf, id_at).and_then(|v| u32::try_from(v).ok()) else {
+            let Some(element_id) = le_bytes::u64_at(buf, id_at).and_then(|v| u32::try_from(v).ok())
+            else {
                 continue;
             };
             if !declared_ids.contains(&element_id) {
@@ -215,7 +209,7 @@ fn named_ids_in(
 ) -> BTreeSet<u32> {
     let mut out = BTreeSet::new();
     for at in 0..body.len().saturating_sub(7) {
-        let Some(id) = read_u64(body, at).and_then(|v| u32::try_from(v).ok()) else {
+        let Some(id) = le_bytes::u64_at(body, at).and_then(|v| u32::try_from(v).ok()) else {
             continue;
         };
         if id != own
@@ -338,7 +332,7 @@ pub fn find_element_data_names(
     wanted: &BTreeSet<u32>,
 ) -> BTreeMap<u32, String> {
     element_data_names(buf, header, wanted, false, |buf, at| {
-        read_u64(buf, at).and_then(|v| u32::try_from(v).ok())
+        le_bytes::u64_at(buf, at).and_then(|v| u32::try_from(v).ok())
     })
 }
 
@@ -365,9 +359,9 @@ impl ElementDataLayout {
     /// The ElementId at `at`, right after the header.
     pub fn id_at(&self, buf: &[u8], at: usize) -> Option<u32> {
         if self.wide_id {
-            read_u64(buf, at).and_then(|id| u32::try_from(id).ok())
+            le_bytes::u64_at(buf, at).and_then(|id| u32::try_from(id).ok())
         } else {
-            read_u32(buf, at)
+            le_bytes::u32_at(buf, at)
         }
     }
 }
@@ -431,7 +425,7 @@ pub fn find_element_data_names_32(
         return BTreeMap::new();
     };
     let own_data_only = revit_version < 2019;
-    let mut names = element_data_names(buf, &header, wanted, own_data_only, read_u32);
+    let mut names = element_data_names(buf, &header, wanted, own_data_only, le_bytes::u32_at);
     if revit_version != crate::partition_element_records_2023::REVIT_2023 {
         names.retain(|_, name| name.chars().nth(1).is_some());
     }
@@ -485,10 +479,12 @@ pub const TYPE_OBJECT_TAG_OFFSET: usize = 0x47;
 pub const RAILING_TYPE_NAME_WINDOW: std::ops::Range<usize> = 0x100..0x300;
 /// The class whose tag sits at [`TYPE_OBJECT_TAG_OFFSET`] of a railing
 /// type's object: [`TYPE_OBJECT_TAG`] on Revit 2024, `0x103c` on RE1's 2025
-/// schema (B45).
+/// schema.
+// Tracker: B45.
 pub const TYPE_OBJECT_CLASS: &str = "SymbolInfo";
 /// The class of the unset field frame that follows a railing type's name:
-/// `0x020b` on Revit 2024, `0x0220` on RE1's 2025 schema (B45).
+/// `0x020b` on Revit 2024, `0x0220` on RE1's 2025 schema.
+// Tracker: B45.
 pub const RAILING_TYPE_NAME_END_CLASS: &str = "BalusterPattern";
 
 /// The tags a railing type's object is found and its name ended by
@@ -599,10 +595,10 @@ pub fn find_mep_curve_type_names(buf: &[u8], wanted: &BTreeSet<u32>) -> BTreeMap
     // MEP_CURVE_TYPE_ID_REPEAT bytes on, rather than a search per id.
     let last = buf.len().saturating_sub(MEP_CURVE_TYPE_ID_REPEAT + 8);
     for at in 0..last {
-        let value = read_u64(buf, at).expect("in bounds");
+        let value = le_bytes::u64_at(buf, at).expect("in bounds");
         if value < u64::from(low)
             || value > u64::from(high)
-            || read_u64(buf, at + MEP_CURVE_TYPE_ID_REPEAT) != Some(value)
+            || le_bytes::u64_at(buf, at + MEP_CURVE_TYPE_ID_REPEAT) != Some(value)
         {
             continue;
         }
@@ -616,7 +612,7 @@ pub fn find_mep_curve_type_names(buf: &[u8], wanted: &BTreeSet<u32>) -> BTreeMap
         {
             continue;
         }
-        let Some(units) = read_u32(buf, at + MEP_CURVE_TYPE_NAME_OFFSET)
+        let Some(units) = le_bytes::u32_at(buf, at + MEP_CURVE_TYPE_NAME_OFFSET)
             .and_then(|n| usize::try_from(n).ok())
             .filter(|n| (1..=NAME_MAX_UNITS).contains(n))
         else {
@@ -747,7 +743,7 @@ fn framed_string(buf: &[u8], start: usize, stop: usize, tag: [u8; 2]) -> Option<
     let frame = [0xff, 0xff, 0xff, 0xff, tag[0], tag[1]];
     let window = buf.get(start..stop)?;
     let at = start + memchr::memmem::find(window, &frame)? + frame.len();
-    let units = read_u32(buf, at)? as usize;
+    let units = le_bytes::u32_at(buf, at)? as usize;
     if !(1..=NAME_MAX_UNITS).contains(&units) {
         return None;
     }
@@ -780,7 +776,7 @@ fn railing_type_name_at(buf: &[u8], id_at: usize, tags: RailingTypeTags) -> Opti
 }
 
 /// A railing type's name in its `StairsRailingAttr` data object (RE-153,
-/// B45, Revit 2025): the one name that ends at the object's first name-end
+/// Revit 2025): the one name that ends at the object's first name-end
 /// frame, as in RE-66's type objects. RE1 Architecture's type 446543 holds
 /// "-" there, at +571 of its 1,253-byte object.
 pub fn railing_type_name_in(object: &[u8], tags: RailingTypeTags) -> Option<String> {
@@ -792,7 +788,7 @@ pub fn railing_type_name_in(object: &[u8], tags: RailingTypeTags) -> Option<Stri
 fn name_ending_at(buf: &[u8], end: usize) -> Option<String> {
     let mut names = (1..=NAME_MAX_UNITS).filter_map(|units| {
         let at = end.checked_sub(4 + 2 * units)?;
-        if read_u32(buf, at)? as usize != units {
+        if le_bytes::u32_at(buf, at)? as usize != units {
             return None;
         }
         let code_units: Vec<u16> = buf
@@ -841,7 +837,7 @@ fn first_framed_name(
         if tag == [0xff, 0xff] {
             continue;
         }
-        let Some(units) = read_u32(buf, at + 6).map(|n| n as usize) else {
+        let Some(units) = le_bytes::u32_at(buf, at + 6).map(|n| n as usize) else {
             continue;
         };
         if !(1..=NAME_MAX_UNITS).contains(&units) || (own_data_only && units == 1) {

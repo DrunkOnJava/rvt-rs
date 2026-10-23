@@ -1,0 +1,327 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://drunkonjava.github.io/rvt-rs/schemas/schema-table.schema.json",
+  "title": "rvt-schema --json",
+  "description": "The serialization schema of Formats/Latest as rvt-schema --json prints it (rvt::formats::SchemaTable), after its --grep, --with-fields and --top filters.",
+  "type": "object",
+  "required": [
+    "classes",
+    "cpp_types",
+    "skipped_records",
+    "scanned_bytes",
+    "total_bytes",
+    "scan_truncated"
+  ],
+  "properties": {
+    "classes": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/class"
+      }
+    },
+    "cpp_types": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "skipped_records": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "scanned_bytes": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "total_bytes": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "scan_truncated": {
+      "type": "boolean"
+    }
+  },
+  "$defs": {
+    "class": {
+      "type": "object",
+      "required": [
+        "name",
+        "offset",
+        "fields",
+        "tag",
+        "parent",
+        "declared_field_count",
+        "was_parent_only",
+        "ancestor_tag"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "offset": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "fields": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/field"
+          }
+        },
+        "tag": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "parent": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "declared_field_count": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "was_parent_only": {
+          "type": "boolean"
+        },
+        "ancestor_tag": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "field": {
+      "type": "object",
+      "required": [
+        "name",
+        "cpp_type",
+        "field_type"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "cpp_type": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "field_type": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/field_type"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "field_type": {
+      "anyOf": [
+        {
+          "enum": [
+            "String",
+            "Guid",
+            "ElementId"
+          ]
+        },
+        {
+          "type": "object",
+          "required": [
+            "Primitive"
+          ],
+          "properties": {
+            "Primitive": {
+              "type": "object",
+              "required": [
+                "kind",
+                "size"
+              ],
+              "properties": {
+                "kind": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "size": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "ElementIdRef"
+          ],
+          "properties": {
+            "ElementIdRef": {
+              "type": "object",
+              "required": [
+                "referenced_tag",
+                "sub"
+              ],
+              "properties": {
+                "referenced_tag": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "sub": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "Pointer"
+          ],
+          "properties": {
+            "Pointer": {
+              "type": "object",
+              "required": [
+                "kind"
+              ],
+              "properties": {
+                "kind": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "Vector"
+          ],
+          "properties": {
+            "Vector": {
+              "type": "object",
+              "required": [
+                "kind",
+                "body"
+              ],
+              "properties": {
+                "kind": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "body": {
+                  "type": "array",
+                  "items": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 255
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "Container"
+          ],
+          "properties": {
+            "Container": {
+              "type": "object",
+              "required": [
+                "kind",
+                "cpp_signature",
+                "body"
+              ],
+              "properties": {
+                "kind": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "cpp_signature": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "body": {
+                  "type": "array",
+                  "items": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 255
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "Unknown"
+          ],
+          "properties": {
+            "Unknown": {
+              "type": "object",
+              "required": [
+                "bytes"
+              ],
+              "properties": {
+                "bytes": {
+                  "type": "array",
+                  "items": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 255
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

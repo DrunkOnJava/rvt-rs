@@ -1,4 +1,4 @@
-//! A pipe fitting's nominal size, from its own data object (RE-165, B44, #35).
+//! A pipe fitting's nominal size, from its own data object (RE-165, #35).
 //!
 //! A fitting's own data object (RE-153) holds one record per connector:
 //!
@@ -25,7 +25,9 @@
 //! nominal diameter is its connectors' one diameter, or, where it holds no
 //! connector record, its smallest pair's. A fitting whose connectors disagree
 //! (a reducer) has no single nominal size and is given none.
+// Tracker: B44.
 
+use crate::le_bytes;
 use crate::partition_room_parameters::DATA_OBJECT_HEADER;
 use crate::{Result, RevitFile};
 use std::collections::{BTreeMap, BTreeSet};
@@ -47,12 +49,6 @@ pub fn supports_revit_version(revit_version: u32) -> bool {
     revit_version >= 2024
 }
 
-fn f64_at(buf: &[u8], at: usize) -> Option<f64> {
-    Some(f64::from_le_bytes(
-        buf.get(at..at.checked_add(8)?)?.try_into().ok()?,
-    ))
-}
-
 /// `diameter` when it is a size and twice `radius`.
 fn twice(radius: f64, diameter: f64) -> Option<f64> {
     (diameter.is_normal() && DIAMETER_FEET.contains(&diameter) && diameter == 2.0 * radius)
@@ -63,22 +59,22 @@ fn twice(radius: f64, diameter: f64) -> Option<f64> {
 /// one starts there.
 fn connector_diameter(payload: &[u8], p: usize) -> Option<f64> {
     let direction = [
-        f64_at(payload, p)?,
-        f64_at(payload, p + 8)?,
-        f64_at(payload, p + 16)?,
+        le_bytes::f64_at(payload, p)?,
+        le_bytes::f64_at(payload, p + 8)?,
+        le_bytes::f64_at(payload, p + 16)?,
     ];
     let length = direction.iter().map(|v| v * v).sum::<f64>().sqrt();
     let origin = [
-        f64_at(payload, p + 24)?,
-        f64_at(payload, p + 32)?,
-        f64_at(payload, p + 40)?,
+        le_bytes::f64_at(payload, p + 24)?,
+        le_bytes::f64_at(payload, p + 32)?,
+        le_bytes::f64_at(payload, p + 40)?,
     ];
     if (length - 1.0).abs() > 1e-9 || !origin.iter().all(|v| v.is_finite()) {
         return None;
     }
     twice(
-        f64_at(payload, p + CONNECTOR_RADIUS_AT)?,
-        f64_at(payload, p + CONNECTOR_DIAMETER_AT)?,
+        le_bytes::f64_at(payload, p + CONNECTOR_RADIUS_AT)?,
+        le_bytes::f64_at(payload, p + CONNECTOR_DIAMETER_AT)?,
     )
 }
 
@@ -111,8 +107,8 @@ fn pair_diameter(payload: &[u8], at: usize) -> Option<f64> {
         return None;
     }
     twice(
-        f64_at(payload, at.checked_sub(ENTRY_STRIDE)?)?,
-        f64_at(payload, at)?,
+        le_bytes::f64_at(payload, at.checked_sub(ENTRY_STRIDE)?)?,
+        le_bytes::f64_at(payload, at)?,
     )
 }
 

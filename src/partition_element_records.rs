@@ -96,6 +96,7 @@
 //! - Category membership alone is **not** an instance claim: a
 //!   family symbol carries the same category as its instances.
 
+use crate::le_bytes;
 use crate::{Result, RevitFile};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
@@ -108,7 +109,7 @@ use std::collections::{BTreeMap, BTreeSet};
 pub const PARTITION_ELEMENT_RECORD_SUPPORTED_REVIT_VERSIONS: &[u32] = &[2024, 2025, 2026, 2027];
 
 /// The name Revit's `Category` parameter gives an element of each
-/// `BuiltInCategory` (spike 257), a sub-category as `Parent: Name`.
+/// `BuiltInCategory` (#755), a sub-category as `Parent: Name`.
 ///
 /// The ids are Autodesk's published API constants; each name is the one
 /// Revit 2024's own IFC export writes as `Other.Category` for elements whose
@@ -764,25 +765,6 @@ pub fn supports_revit_version(revit_version: u32) -> bool {
         && bbox_marker(revit_version).is_some()
 }
 
-fn read_u64(buf: &[u8], off: usize) -> Option<u64> {
-    buf.get(off..off + 8)
-        .map(|s| u64::from_le_bytes(s.try_into().expect("8 bytes")))
-}
-
-fn read_f64(buf: &[u8], off: usize) -> Option<f64> {
-    read_u64(buf, off).map(f64::from_bits)
-}
-
-fn read_u32(buf: &[u8], off: usize) -> Option<u32> {
-    buf.get(off..off.checked_add(4)?)
-        .map(|s| u32::from_le_bytes(s.try_into().expect("4 bytes")))
-}
-
-fn read_u16(buf: &[u8], off: usize) -> Option<u16> {
-    buf.get(off..off.checked_add(2)?)
-        .map(|s| u16::from_le_bytes(s.try_into().expect("2 bytes")))
-}
-
 /// Decode the counted reference list whose `u32` length prefix sits
 /// at `at` (#222, RE-23).
 ///
@@ -805,7 +787,7 @@ pub fn decode_reference_list(buf: &[u8], at: usize) -> Option<Vec<u64>> {
     }
     let mut out = Vec::with_capacity(count);
     for index in 0..count {
-        out.push(read_u64(buf, start + index * 8)?);
+        out.push(le_bytes::u64_at(buf, start + index * 8)?);
     }
     Some(out)
 }
@@ -868,7 +850,7 @@ pub fn decode_at_with_marker(
     if offset.checked_add(RECORD_MIN_LEN)? > buf.len() {
         return None;
     }
-    let raw_id = read_u64(buf, offset)?;
+    let raw_id = le_bytes::u64_at(buf, offset)?;
     if carries_no_element_id(raw_id) {
         return None;
     }
@@ -897,7 +879,7 @@ pub fn decode_frame_as(
     if u16::from_le_bytes([buf[offset + 0x10], buf[offset + 0x11]]) != 0 {
         return None;
     }
-    let builtin_category = read_u64(buf, offset + CATEGORY_OFFSET)? as i64;
+    let builtin_category = le_bytes::u64_at(buf, offset + CATEGORY_OFFSET)? as i64;
     if !(BUILTIN_CATEGORY_MIN..=BUILTIN_CATEGORY_MAX).contains(&builtin_category) {
         return None;
     }
@@ -906,7 +888,7 @@ pub fn decode_frame_as(
     }
     let mut bbox_feet = [0.0f64; 6];
     for (index, slot) in bbox_feet.iter_mut().enumerate() {
-        let value = read_f64(buf, offset + BBOX_OFFSET + index * 8)?;
+        let value = le_bytes::f64_at(buf, offset + BBOX_OFFSET + index * 8)?;
         if !value.is_finite() {
             return None;
         }
@@ -917,10 +899,10 @@ pub fn decode_frame_as(
             return None;
         }
     }
-    let flags = read_u64(buf, offset + 0x08).map(|v| (v & 0xffff_ffff) as u32)?;
-    let container = read_u64(buf, offset + CONTAINER_OFFSET)?;
+    let flags = le_bytes::u64_at(buf, offset + 0x08).map(|v| (v & 0xffff_ffff) as u32)?;
+    let container = le_bytes::u64_at(buf, offset + CONTAINER_OFFSET)?;
     let placement_kind =
-        read_u64(buf, offset + PLACEMENT_KIND_OFFSET).map(|v| (v & 0xffff_ffff) as u32)?;
+        le_bytes::u64_at(buf, offset + PLACEMENT_KIND_OFFSET).map(|v| (v & 0xffff_ffff) as u32)?;
     let references = offset
         .checked_add(REFERENCE_LIST_OFFSET)
         .and_then(|at| decode_reference_list(buf, at))
@@ -955,7 +937,7 @@ pub fn decode_frame_as(
 /// The design option at `+0x2a` of the frame at `offset`
 /// ([`PartitionElementRecord::design_option`]).
 pub fn frame_design_option(buf: &[u8], offset: usize) -> Option<u32> {
-    read_u64(buf, offset.checked_add(DESIGN_OPTION_OFFSET)?)
+    le_bytes::u64_at(buf, offset.checked_add(DESIGN_OPTION_OFFSET)?)
         .filter(|value| *value != u64::MAX)
         .and_then(|value| u32::try_from(value).ok())
 }
@@ -964,8 +946,8 @@ pub fn frame_design_option(buf: &[u8], offset: usize) -> Option<u32> {
 /// rule: no container reference and the placed-instance kind. Both fields
 /// sit at the same offsets in the second prologue (RE-33).
 fn is_instance_frame(buf: &[u8], offset: usize) -> bool {
-    read_u64(buf, offset + CONTAINER_OFFSET) == Some(CONTAINER_NONE)
-        && read_u64(buf, offset + PLACEMENT_KIND_OFFSET)
+    le_bytes::u64_at(buf, offset + CONTAINER_OFFSET) == Some(CONTAINER_NONE)
+        && le_bytes::u64_at(buf, offset + PLACEMENT_KIND_OFFSET)
             .is_some_and(|v| (v & 0xffff_ffff) as u32 == PLACEMENT_KIND_INSTANCE)
 }
 
@@ -1018,18 +1000,19 @@ pub fn partition_record_chain(buf: &[u8], marker: &[u8; 8]) -> Vec<PartitionReco
     let constant = record_prologue_constant(marker);
     let mut chain = Vec::new();
     let mut at = 0usize;
-    while let Some(element_id) = read_u64(buf, at) {
-        let Some(size) = read_u32(buf, at + 8).map(|v| v as usize) else {
+    while let Some(element_id) = le_bytes::u64_at(buf, at) {
+        let Some(size) = le_bytes::u32_at(buf, at + 8).map(|v| v as usize) else {
             break;
         };
-        if size < PARTITION_RECORD_HEADER_LEN || read_u16(buf, at + 0x0c) != Some(constant) {
+        if size < PARTITION_RECORD_HEADER_LEN || le_bytes::u16_at(buf, at + 0x0c) != Some(constant)
+        {
             break;
         }
         let Some(end) = at.checked_add(size) else {
             break;
         };
-        let flags = end.checked_add(8).and_then(|t| read_u32(buf, t));
-        let echo = end.checked_add(12).and_then(|t| read_u32(buf, t));
+        let flags = end.checked_add(8).and_then(|t| le_bytes::u32_at(buf, t));
+        let echo = end.checked_add(12).and_then(|t| le_bytes::u32_at(buf, t));
         if !matches!(flags, Some(0 | 0x0100_0000)) || echo.map(|v| v as usize) != Some(size) {
             break;
         }
@@ -1058,7 +1041,7 @@ pub fn enclosing_record(
 fn frame_has_volume(buf: &[u8], offset: usize) -> bool {
     let mut bbox = [0.0f64; 6];
     for (index, slot) in bbox.iter_mut().enumerate() {
-        match read_f64(buf, offset + BBOX_OFFSET + index * 8) {
+        match le_bytes::f64_at(buf, offset + BBOX_OFFSET + index * 8) {
             Some(value) if value.is_finite() => *slot = value,
             _ => return false,
         }
@@ -1146,16 +1129,16 @@ pub fn carries_no_element_id(raw: u64) -> bool {
 /// `+0x00` ([`carries_no_element_id`]): the frames
 /// [`assign_second_prologue_ids_with`] resolves.
 fn is_second_prologue_frame(buf: &[u8], offset: usize, symbols: bool) -> bool {
-    read_u64(buf, offset + CATEGORY_OFFSET)
+    le_bytes::u64_at(buf, offset + CATEGORY_OFFSET)
         .is_some_and(|v| (BUILTIN_CATEGORY_MIN..=BUILTIN_CATEGORY_MAX).contains(&(v as i64)))
-        && read_u64(buf, offset).is_some_and(carries_no_element_id)
+        && le_bytes::u64_at(buf, offset).is_some_and(carries_no_element_id)
         && (is_instance_frame(buf, offset) || (symbols && is_symbol_frame(buf, offset)))
 }
 
 /// Whether the frame at `offset` carries the type-symbol placement kind
 /// ([`PLACEMENT_KIND_SYMBOL`]).
 fn is_symbol_frame(buf: &[u8], offset: usize) -> bool {
-    read_u64(buf, offset + PLACEMENT_KIND_OFFSET)
+    le_bytes::u64_at(buf, offset + PLACEMENT_KIND_OFFSET)
         .is_some_and(|v| (v & 0xffff_ffff) as u32 == PLACEMENT_KIND_SYMBOL)
 }
 
@@ -1211,7 +1194,9 @@ pub fn find_category_records_assigned(
     let mut out =
         find_category_records_with_marker(stream, buf, builtin_category, declared_ids, marker);
     for (&offset, &element_id) in assigned {
-        if read_u64(buf, offset + CATEGORY_OFFSET).map(|v| v as i64) != Some(builtin_category) {
+        if le_bytes::u64_at(buf, offset + CATEGORY_OFFSET).map(|v| v as i64)
+            != Some(builtin_category)
+        {
             continue;
         }
         if let Some(mut record) = decode_frame_as(stream, buf, offset, element_id, marker) {
@@ -1280,7 +1265,8 @@ pub fn find_categories_records_assigned(
         }
     }
     for (&offset, &element_id) in assigned {
-        let Some(category) = read_u64(buf, offset + CATEGORY_OFFSET).map(|v| v as i64) else {
+        let Some(category) = le_bytes::u64_at(buf, offset + CATEGORY_OFFSET).map(|v| v as i64)
+        else {
             continue;
         };
         for (index, wanted) in builtin_categories.iter().enumerate() {
@@ -1467,13 +1453,14 @@ pub fn count_unattributed_frames_excluding(
         if assigned.contains_key(&offset) || enclosing_record(&chain, offset).is_none() {
             continue;
         }
-        let Some(category) = read_u64(buf, offset + CATEGORY_OFFSET).map(|v| v as i64) else {
+        let Some(category) = le_bytes::u64_at(buf, offset + CATEGORY_OFFSET).map(|v| v as i64)
+        else {
             continue;
         };
         if !categories.contains(&category) {
             continue;
         }
-        if !read_u64(buf, offset).is_some_and(carries_no_element_id) {
+        if !le_bytes::u64_at(buf, offset).is_some_and(carries_no_element_id) {
             continue;
         }
         // A frame with no volume is a 2D symbol Revit's export leaves out

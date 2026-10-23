@@ -108,6 +108,7 @@ pub const ARC_WALL_STANDARD_SUPPORTED_REVIT_VERSIONS: &[u32] = &[2023];
 /// and Level ElementId are **not** present as stable trailer fields
 /// on the Einhoven 2023 corpus.
 #[derive(Debug, Clone, Copy, PartialEq)]
+#[non_exhaustive]
 pub struct ArcWallTrailer {
     /// ElementId at `+0x10e`, accepted only when it equals the echo
     /// at `+0x11c` and is not a null/max sentinel. 23/24 Einhoven
@@ -124,6 +125,7 @@ pub struct ArcWallTrailer {
 
 /// Status for a version-scoped standard ArcWall scan.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum ArcWallScanStatus {
     /// The caller supplied a Revit release covered by this decoder.
     Supported { revit_version: u32 },
@@ -151,6 +153,7 @@ impl ArcWallScanStatus {
 
 /// Result of a bounded ArcWall byte scan ([`ArcWallRecord::find_all_with_limits`]).
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct ArcWallFindResult {
     /// Byte offsets of candidate standard ArcWall records.
     pub offsets: Vec<usize>,
@@ -162,6 +165,7 @@ pub struct ArcWallFindResult {
 
 /// Result of a version-scoped ArcWall scan.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct ArcWallScanReport {
     /// Whether the scan ran or was suppressed by the release guard.
     pub status: ArcWallScanStatus,
@@ -179,6 +183,7 @@ pub struct ArcWallScanReport {
 /// wall records use a different envelope and are tracked as separate
 /// reverse-engineering work.
 #[derive(Debug, Clone, Copy, PartialEq)]
+#[non_exhaustive]
 pub struct ArcWallRecord {
     /// Tag value read from the record. Always `0x0191` for valid records.
     pub tag: u16,
@@ -234,36 +239,47 @@ impl ArcWallRecord {
     pub fn decode_standard(buf: &[u8], offset: usize) -> Result<Self> {
         let record_end = offset
             .checked_add(STANDARD_RECORD_MIN_SIZE)
-            .ok_or_else(|| {
-                Error::Cfb(format!(
-                    "ArcWall decode: offset overflow at offset {offset}"
-                ))
+            .ok_or_else(|| Error::Malformed {
+                what: "ArcWall record",
+                detail: format!("offset overflow at offset {offset}"),
             })?;
         if record_end > buf.len() {
-            return Err(Error::Cfb(format!(
-                "ArcWall decode: buffer too short ({} < {} at offset {})",
-                buf.len(),
-                record_end,
-                offset
-            )));
+            return Err(Error::Malformed {
+                what: "ArcWall record",
+                detail: format!(
+                    "buffer too short ({} < {} at offset {})",
+                    buf.len(),
+                    record_end,
+                    offset
+                ),
+            });
         }
         let tag = u16::from_le_bytes([buf[offset], buf[offset + 1]]);
         if tag != ARC_WALL_TAG {
-            return Err(Error::Cfb(format!(
-                "ArcWall decode: expected tag 0x{ARC_WALL_TAG:04x}, got 0x{tag:04x} at offset {offset}"
-            )));
+            return Err(Error::Malformed {
+                what: "ArcWall record",
+                detail: format!(
+                    "expected tag 0x{ARC_WALL_TAG:04x}, got 0x{tag:04x} at offset {offset}"
+                ),
+            });
         }
         let filter_pad = u16::from_le_bytes([buf[offset + 2], buf[offset + 3]]);
         if filter_pad != 0 {
-            return Err(Error::Cfb(format!(
-                "ArcWall decode: expected filter_pad 0x0000, got 0x{filter_pad:04x} at offset {offset}"
-            )));
+            return Err(Error::Malformed {
+                what: "ArcWall record",
+                detail: format!(
+                    "expected filter_pad 0x0000, got 0x{filter_pad:04x} at offset {offset}"
+                ),
+            });
         }
         let variant = u16::from_le_bytes([buf[offset + 0x10], buf[offset + 0x11]]);
         if variant != ARC_WALL_VARIANT_STANDARD {
-            return Err(Error::Cfb(format!(
-                "ArcWall decode: expected variant 0x{ARC_WALL_VARIANT_STANDARD:04x}, got 0x{variant:04x} at offset {offset}"
-            )));
+            return Err(Error::Malformed {
+                what: "ArcWall record",
+                detail: format!(
+                    "expected variant 0x{ARC_WALL_VARIANT_STANDARD:04x}, got 0x{variant:04x} at offset {offset}"
+                ),
+            });
         }
 
         let fixed_header_0 = u32::from_le_bytes([
