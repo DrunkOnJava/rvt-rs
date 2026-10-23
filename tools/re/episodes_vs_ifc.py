@@ -168,6 +168,17 @@ def main():
             relation[("export byte 15 low 2 bits", e[15] & 3, "xor", a ^ b)] += 1
             relation[("tag low 2 bits", tag & 3, "xor", a ^ b)] += 1
     print(f"  stored values whose episode (Tag XORed out) is in the history: {in_history}")
+    # An episode mixed with the id some other way would still share bytes 1 to
+    # 11 (canonical order) with the GlobalId.
+    middles = {}
+    for start, guids in runs.items():
+        for index, g in enumerate(guids):
+            middles.setdefault(stored_order(g)[1:12], (start, index))
+    share_export = sum(1 for gid in by_tag if expand(gid)[1:12] in middles)
+    share_stored = sum(1 for s in stored if expand(s)[1:12] in middles)
+    print(f"  GlobalIds sharing bytes 1-11 with a history episode: Revit's {share_export} of {len(by_tag)}, stored {share_stored} of {len(stored)}")
+    shared8 = sum(1 for gid in by_tag if any(expand(gid)[4:12] == stored_order(g)[4:12] for gs in runs.values() for g in gs))
+    print(f"  Revit's GlobalIds sharing bytes 4-11 with a history episode: {shared8}")
     print("  stored top two bits XOR Revit's: " + ", ".join(f"{k} {v}" for k, v in sorted(xor_top.items())))
     for key, n in sorted(relation.items()):
         print(f"  {key}: {n}")
