@@ -63,6 +63,7 @@ use crate::walker::{DecodedElement, InstanceField};
 /// `StructuralUsage` — those concepts don't apply to mullion-
 /// panel assemblies.
 #[derive(Debug, Clone, PartialEq, Default)]
+#[non_exhaustive]
 pub struct CurtainWall {
     pub base_level_id: Option<u32>,
     pub top_level_id: Option<u32>,
@@ -108,6 +109,7 @@ impl CurtainWall {
 /// curtain wall. Each line count + the parent CurtainWall host
 /// fully describe the grid topology.
 #[derive(Debug, Clone, PartialEq, Default)]
+#[non_exhaustive]
 pub struct CurtainGrid {
     pub host_id: Option<u32>,
     pub u_line_count: Option<u32>,
@@ -143,6 +145,7 @@ impl CurtainGrid {
 
 /// Typed view for CurtainMullion — a single framing member.
 #[derive(Debug, Clone, PartialEq, Default)]
+#[non_exhaustive]
 pub struct CurtainMullion {
     pub host_id: Option<u32>,
     pub symbol_id: Option<u32>,
@@ -169,6 +172,7 @@ impl CurtainMullion {
 /// Typed view for CurtainPanel — a single glass / spandrel / infill
 /// panel bound by two pairs of grid lines.
 #[derive(Debug, Clone, PartialEq, Default)]
+#[non_exhaustive]
 pub struct CurtainPanel {
     pub host_id: Option<u32>,
     pub symbol_id: Option<u32>,

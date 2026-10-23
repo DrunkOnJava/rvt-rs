@@ -3,8 +3,10 @@
 These schemas document the stable JSON surfaces used by the CLIs, Python
 bindings, viewer diagnostics, and release-support workflows. They are
 forward-compatible by default: new additive fields may appear without a schema
-version bump, but incompatible removals or type changes require a version bump
-in the producing payload.
+version bump, so the output schemas leave `additionalProperties` open, but
+incompatible removals or type changes require a version bump in the producing
+payload. The schemas of checked-in data (the support matrix, the witness
+registry) stay closed.
 
 | Schema | Producer |
 |---|---|
@@ -17,8 +19,15 @@ in the producing payload.
 | [`element-counts.schema.json`](element-counts.schema.json) | `rvt-elements --counts`, Python `RevitFile.element_counts()` |
 | [`export-diagnostics.schema.json`](export-diagnostics.schema.json) | `rvt-ifc --diagnostics`, Python `export_diagnostics_json()` |
 | [`corpus-report.schema.json`](corpus-report.schema.json) | `rvt-corpus -f json` |
+| [`corpus-doctor.schema.json`](corpus-doctor.schema.json) | `rvt-corpus doctor --json` |
 | [`support-matrix.schema.json`](support-matrix.schema.json) | Checked-in [`docs/support-matrix.json`](../support-matrix.json) (audit A3) |
 | [`capability-manifest.schema.json`](capability-manifest.schema.json) | `rvt-capabilities` honest snapshot (`capability::CapabilityManifest`) |
+| [`elem-table.schema.json`](elem-table.schema.json) | `rvt-elem-table --json` (`Global/ElemTable` header and records) |
+| [`history.schema.json`](history.schema.json) | `rvt-history --json` (document history), and with `--all-strings` / `--partitions` the string records |
+| [`analyze.schema.json`](analyze.schema.json) | `rvt-analyze --json` |
+| [`inspect.schema.json`](inspect.schema.json) | `rvt-inspect --json`, including its error report |
+| [`ifc-compare.schema.json`](ifc-compare.schema.json) | `rvt-ifc-compare --json PATH` (`ifc::compare::IfcCompareReport`) |
+| [`schema-table.schema.json`](schema-table.schema.json) | `rvt-schema --json` (`formats::SchemaTable`; `--diagnostics` prints `schema-diagnostics`) |
 | [`es-observation.schema.json`](es-observation.schema.json) | ES remap research observations (H-ES5; not a production decode claim) |
 | [`es-capability.schema.json`](es-capability.schema.json) | Research capability promotion stub (report §15.16) |
 | [`witness-registry.schema.json`](witness-registry.schema.json) | Checked-in [`research/witness-registry.json`](../../research/witness-registry.json) (`tests/witness_registry.rs`) |
@@ -28,18 +37,21 @@ in the producing payload.
 Research mirrors also live under [`research/es-remap/`](../../research/es-remap/).
 See [`docs/research/unified-research-report.md`](../research/unified-research-report.md).
 
-The integration test `tests/json_schema_contracts.rs` validates these schemas
-against real CLI payloads when the redistributable sample corpus is available.
-Tier-1 / `gen-fixture` payloads are also covered for the decoded-elements and
-element-counts contracts so Cloud / no-Autodesk environments stay green.
+The integration test `tests/json_schema_contracts.rs` runs every CLI that
+prints JSON and validates its output against its schema: on the tier-1
+synthetic fixtures for `rvt-info`, `rvt-elements`, `rvt-analyze`, `rvt-inspect`
+(its report and its error report), `rvt-history --all-strings`, `rvt-schema`,
+`rvt-corpus doctor`, `rvt-capabilities` and `rvt-ifc-compare`, so those run
+with no Autodesk corpus present, and on the family corpus for `rvt-info`,
+`rvt-history`, `rvt-elem-table`, `rvt-schema`, `rvt-doc`, `rvt-ifc
+--diagnostics` and `rvt-corpus`. CI's Linux test job has the corpus and fails
+if it is missing.
 
 `tests/support_matrix.rs` validates the seeded support matrix against
 `support-matrix.schema.json` and enforces honesty ceilings (COR-001 /
 TEST-001 / DOC-001): converter-grade RVT-to-IFC and generic typed recovery
 must not be marked `verified`.
 
-`es-observation` / `es-capability` / `capability-manifest` schemas are research
-or doctor contracts. They are validated structurally in unit tests via serde
-round-trips of Phase 1 types; they are **not** wired to production CLI success
-claims. `rvt-capabilities` emits an honest snapshot (ArcWall 2023 verified,
-compound / ES remap unsupported).
+`es-observation` and `es-capability` are research contracts, not tied to any
+CLI's output. `capability-manifest` is what `rvt-capabilities` prints, an
+honest snapshot of what is supported, and the contract test validates it.

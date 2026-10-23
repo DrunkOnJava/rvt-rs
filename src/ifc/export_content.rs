@@ -33,6 +33,7 @@ use std::collections::{BTreeMap, HashMap};
 
 /// Result of folding production walker hits into an IFC draft.
 #[derive(Debug, Default)]
+#[non_exhaustive]
 pub struct TypedProductionAppend {
     /// Revit element id → index in `entities` (for host linking).
     pub id_to_entity: HashMap<u32, usize>,

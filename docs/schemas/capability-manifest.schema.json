@@ -23,9 +23,7 @@
         "required": [
           "capability_id",
           "status",
-          "evidence_tier",
-          "claims",
-          "non_claims"
+          "evidence_tier"
         ],
         "properties": {
           "capability_id": { "type": "string", "minLength": 1 },
@@ -55,7 +53,23 @@
       "type": "object",
       "required": ["domains", "experimental", "notes"],
       "properties": {
-        "domains": { "type": "array" },
+        "domains": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["domain", "id", "status", "isolation_peers", "notes"],
+            "properties": {
+              "domain": { "enum": ["es_ref_graph", "es_value_tree", "bim_topology", "elem_table_ownership", "research_other"] },
+              "id": { "type": "string", "minLength": 1 },
+              "status": { "enum": ["experimental", "research", "quarantined"] },
+              "isolation_peers": {
+                "type": "array",
+                "items": { "enum": ["es_ref_graph", "es_value_tree", "bim_topology", "elem_table_ownership", "research_other"] }
+              },
+              "notes": { "type": "array", "items": { "type": "string" } }
+            }
+          }
+        },
         "experimental": { "type": "boolean" },
         "notes": { "type": "array", "items": { "type": "string" } }
       },
