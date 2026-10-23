@@ -127,6 +127,13 @@ All notable changes will be documented here. This project follows
 
 ### Changed
 
+- **The Python guide's examples run in CI (#872).** The three runnable
+  blocks of `docs/python.md` run in order against the synthetic project file
+  `corpus/tier1/architectural-2024`, through the built wheel
+  (`tests/python/test_docs_python.py`). The 18 blocks that show a signature
+  or the shape of a result are fenced `text`, so the page no longer presents
+  them as code to run.
+
 - **Breaking: the research readers moved to `rvt::research`, behind the
   `unstable-research` feature (#873).** The crate's API is now 27 stable
   modules (reading and identity, typed elements and the element walk,
