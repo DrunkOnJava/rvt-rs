@@ -2,7 +2,7 @@
 
 The `rvt::ifc` module ships a complete Rust data model for a
 browser/desktop 3D viewer. This document maps every public
-function a WASM frontend (VW1-01/02/03) would expose, grouped by
+function a WASM frontend would expose, grouped by
 the 11 submodules that make up the viewer surface.
 
 Everything listed here is:
@@ -328,7 +328,7 @@ let svg = render_plan_svg(&model, &SheetOptions::default());
 
 ## What the WASM bindings need
 
-For VW1-01/02/03, `wasm-bindgen` wraps the above with JavaScript-
+`wasm-bindgen` wraps the above with JavaScript-
 callable surface:
 
 ```rust

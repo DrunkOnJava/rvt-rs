@@ -4,140 +4,81 @@ rvt-rs ships a pure-Rust STEP writer for IFC4 (no IfcOpenShell
 runtime dependency). Claiming "spec-valid IFC4" is cheap; demonstrating
 it is the point of this doc.
 
-## What we validate automatically (every commit)
+## What CI checks on every pull request
 
-Three layers of IFC conformance are enforced as CI jobs on every
-push and pull request. See [`.github/workflows/ci.yml`](../.github/workflows/ci.yml).
+The `ifcopenshell-validate` job ("IfcOpenShell validates exports" in
+[`.github/workflows/ci.yml`](../.github/workflows/ci.yml)) is part of
+`CI passed`, the check every merge needs. It exports with the `rvt-ifc` the
+pull request builds and checks the result against readers rvt-rs did not
+write:
 
-### Layer 1 — Rust-side structural assertions
+1. **The IFC4 property set table is buildingSMART's.** The table the writer
+   uses to place a property in a standard `Pset_` is generated from
+   buildingSMART's definitions (pinned by commit and sha256) and
+   IfcOpenShell's IFC4 schema. The committed table must be the generator's
+   output (#817).
+2. **The tier-1 projects export valid IFC4.** The three synthetic projects
+   in `corpus/tier1/` (architectural 2024, MEP 2024, structural 2023, made
+   by `gen-fixture`) are exported and validated by `ifcopenshell.validate`
+   against the IFC4 schema, and by
+   [`tools/ci/ifc_schema_arity.py`](../tools/ci/ifc_schema_arity.py)
+   against each entity's declared attribute count and `PredefinedType`.
+3. **A real project's export is internally consistent.**
+   `Revit_IFC5_Einhoven.rvt` (Revit 2023, from
+   [`magnetar-io/revit-test-datasets`](https://github.com/magnetar-io/revit-test-datasets),
+   MIT) is exported, and
+   [`tools/ci/validate-real-ifc.py`](../tools/ci/validate-real-ifc.py)
+   cross-checks it:
+   - `IFC4` schema, one `IfcProject`, `IfcSite` and `IfcBuilding`, and at
+     least one `IfcBuildingStorey`.
+   - The entity counts `rvt-ifc --diagnostics` reports against
+     IfcOpenShell's object graph.
+   - `IfcRelContainedInSpatialStructure` coverage: one relation per
+     non-empty storey, covering every exported building element.
+   - A unit assignment.
+   - Geometry and material limitations stay explicit in the diagnostics,
+     and where the export has geometry, matching `IfcProductDefinitionShape`
+     coverage.
+4. **Real exports validate in full.** The Einhoven export and the
+   `2024_Core_Interior.rvt` export (Revit 2024, thousands of property
+   values) go through `ifcopenshell.validate` and the arity check.
+5. **Independent readers agree with Revit's own export.** IfcOpenShell and
+   IFClite, a separate Rust STEP reader with no IfcOpenShell code, each read
+   Revit's IFC export of Core Interior and must report the counts rvt-rs is
+   gated against. The verdict of the three witnesses (rvt-rs reading the
+   `.rvt`, the two readers reading Revit's `.ifc`) must pass on the claimed
+   surface, and the fresh observations must replay byte for byte against
+   the ones committed under `research/witness/`
+   ([`verification-protocol.md`](verification-protocol.md)).
+6. **Predefined types and placements match Revit's.** On the Core Interior
+   export, every `PredefinedType` written must be the value Revit's exporter
+   writes for that type (#220), and two pinned elements' placement must
+   compose to where Revit puts them (#232).
+7. **The full project export, on a narrow surface.** The same three
+   witnesses also run against Revit's full Core Interior export. The claimed
+   fields are deliberately few; what rvt-rs cannot claim yet is excluded by
+   name, with its tracking issue.
 
-**Job**: `ifc-smoke` (IFC-42).
+## What is measured against Revit's own exports
 
-Builds `tests/ifc_synthetic_project.rs` (end-to-end: decoded elements
-→ `build_ifc_model` → `write_step` → `.ifc` file) and grep-asserts
-the committed fixture carries the expected entity counts:
-
-| Entity | Count |
-|---|---|
-| `IFCPROJECT` | 1 |
-| `IFCBUILDINGSTOREY` | 3 |
-| `IFCWALL` | 4 |
-| `IFCSLAB` | 1 |
-| `IFCDOOR` | 1 |
-| `IFCWINDOW` | 2 |
-| `IFCMATERIAL` | 2 |
-| `IFCPROPERTYSET` | 2 |
-| `IFCOPENINGELEMENT` | 1 |
-| `IFCRELVOIDSELEMENT` | 1 |
-| `IFCRELFILLSELEMENT` | 1 |
-| `IFCEXTRUDEDAREASOLID` | 7 |
-
-Catches writer regressions that drop elements, mis-count openings,
-or silently truncate STEP output.
-
-### Layer 2 — IfcOpenShell independent validation
-
-**Job**: `ifcopenshell-validate` (IFC-41).
-
-Installs [IfcOpenShell](https://github.com/IfcOpenShell/IfcOpenShell) from
-PyPI, the version and dependencies `tools/ci/requirements-ifc.txt` pins with
-their hashes, and loads the committed
-[`tests/fixtures/synthetic-project.ifc`](../tests/fixtures/synthetic-project.ifc)
-through its full IFC4 schema parser. Fails the CI run if any of:
-
-- The file's declared schema is not `IFC4`.
-- The spatial hierarchy isn't the expected 1 project / 1 site /
-  1 building / 3 storeys shape.
-- Per-element counts (walls/slabs/doors/windows) drift.
-- Any `IfcOpeningElement` has a dangling `IfcRelVoidsElement` or
-  `IfcRelFillsElement` reference (the substring-counting in Layer 1
-  can't see dangling refs — Python-side IfcOpenShell materialises
-  them and would raise during `open()`).
-
-This is the independent third-party gate. rvt-rs's own tests assert
-what the writer emits; IfcOpenShell asserts what the IFC4 spec
-accepts.
-
-The same job also checks out the small
-[`magnetar-io/revit-test-datasets`](https://github.com/magnetar-io/revit-test-datasets)
-project corpus, runs `rvt-ifc` against `Revit_IFC5_Einhoven.rvt`,
-and validates the freshly generated STEP file with
-[`tools/ci/validate-real-ifc.py`](../tools/ci/validate-real-ifc.py).
-That real-project gate cross-checks:
-
-- `IFC4` schema plus one `IfcProject`, `IfcSite`, `IfcBuilding`, and
-  at least one `IfcBuildingStorey`.
-- Entity counts reported by `rvt-ifc --diagnostics` against the
-  IfcOpenShell object graph, currently including the Einhoven
-  `IfcWall` population.
-- `IfcRelContainedInSpatialStructure` coverage for exported building
-  elements (one relation per non-empty storey; related-element total
-  must cover diagnostics `building_elements`).
-- Unit assignment presence.
-- Remaining geometry/material limitations stay explicit in diagnostics;
-  when a real-project export has geometry, the validator requires matching
-  `IfcProductDefinitionShape` coverage.
-
-### Layer 3 — 357 lib unit tests covering every emission path
-
-**Job**: `test` (unit tests).
-
-Per-feature coverage enforced at compile time + runtime:
-
-| IFC4 feature | Tests file | Count |
-|---|---|---|
-| STEP escaping / Unicode / GUIDs | `src/ifc/step_writer.rs` | 8 |
-| Spatial hierarchy | `src/ifc/step_writer.rs` | 5 |
-| Per-element entity emission | `src/ifc/step_writer.rs` | 4 |
-| Material layer set (IFC-28/29) | `src/ifc/step_writer.rs` | 2 |
-| Material profile set (IFC-30) | `src/ifc/step_writer.rs` | 2 |
-| Property-set emission (IFC-31/33) | `src/ifc/step_writer.rs` | 2 |
-| IfcQuantity variants (IFC-32) | `src/ifc/entities.rs` | 1 |
-| Opening / fill (IFC-37/38) | `src/ifc/step_writer.rs` | 3 |
-| IfcProfileDef subclasses (IFC-24) | `src/ifc/step_writer.rs` | 9 |
-| IfcMember routing (IFC-10) | `src/ifc/category_map.rs` | 7 |
-| IfcRevolvedAreaSolid (IFC-18) | `src/ifc/step_writer.rs` | 1 |
-| IfcBooleanResult (IFC-19) | `src/ifc/step_writer.rs` | 2 |
-| IfcFacetedBrep (IFC-20) | `src/ifc/step_writer.rs` | 1 |
-| IfcRepresentationMap (IFC-21) | `src/ifc/step_writer.rs` | 3 |
-| IfcFixedReferenceSweptAreaSolid (IFC-17) | `src/ifc/step_writer.rs` | 1 |
-| ForgeUnit → IfcSIUnit / IfcConversionBasedUnit (IFC-39/40) | `src/ifc/entities.rs` + `step_writer.rs` | 10 |
-| Category → IFC type mapping (IFC-01) | `src/ifc/category_map.rs` | 14 |
-
-357 total lib tests as of 2026-04-20. Every test runs on every push
-(ubuntu + macOS + windows matrix).
-
-## What's deferred — buildingSMART Model Validator
-
-The [buildingSMART Model Validator](https://www.buildingsmart.org/compliance/certified-software/certification-tools/) is the canonical conformance tool for IFC4.
-Running it produces a multi-page PDF report enumerating rule
-pass/fail per buildingSMART MVD ("Model View Definition").
-
-Integrating it into CI is possible but requires:
-
-1. Acquiring a buildingSMART validator license (commercial / research).
-2. Packaging the validator as a container or self-hosted runner step.
-3. Parsing its PDF / XML output into a CI-friendly exit code.
-
-This is tracked as IFC-43 in the task board. Until the validator is
-wired into CI, the evidence trail is:
-
-- **Automated**: Layers 1-3 above.
-- **Spot-check**: `tests/fixtures/synthetic-project.ifc` has been
-  manually loaded in [BlenderBIM](https://blenderbim.org) 0.0.240509
-  without errors and displays the expected spatial hierarchy +
-  per-element geometry. Spot-checks are not a CI substitute — they
-  cover the same scenarios as Layer 2 and can only catch regressions
-  a human notices visually.
+The Measure workflow (`.github/workflows/measure.yml`) exports the six
+redistributable reference models (Core Interior, Einhoven and the four RE1
+models) and scores each export against Revit's own IFC export of the same
+model with the scorers under `tools/re/`: element counts, ElementIds,
+bodies, materials, storeys, openings and more. It is not part of
+`CI passed`. It runs when the measurement itself changes and is dispatched
+for a change to what the exporter writes. The reports under
+`reports/element-framing/` cite the runs they rest on.
 
 ## Reproducing the evidence locally
 
 ```bash
-# Layer 1 + 3: real-file, CLI and contract checks (unit tests are banned)
-tools/ci/verify-real-files.sh --release
+# IfcOpenShell imports, and the arity check on the committed synthetic IFC files
+tools/check-local.sh --ifcopenshell
 
-# Layer 2: IfcOpenShell validation (requires Python + pip)
-pip install --require-hashes -r tools/ci/requirements-ifc.txt  # the witness CI pins
+# IfcOpenShell on the committed synthetic project (Python, with the
+# versions CI pins)
+pip install --require-hashes -r tools/ci/requirements-ifc.txt
 python - <<'PY'
 import ifcopenshell
 f = ifcopenshell.open("tests/fixtures/synthetic-project.ifc")
@@ -146,11 +87,20 @@ print("project:", f.by_type("IfcProject")[0].Name)
 print("storeys:", [s.Name for s in f.by_type("IfcBuildingStorey")])
 print("walls:", len(f.by_type("IfcWall")))
 PY
-
-# Regenerate the fixture from current source (verifies the fixture
-# stays in sync with the writer):
-DUMP_IFC=1 cargo test --release --test integration -- ifc_synthetic_project::
 ```
+
+The real-project checks need the magnetar corpus in `_project_corpus/Revit`
+([`CONTRIBUTING.md`](../CONTRIBUTING.md) says how to fetch it).
+
+## What is not checked
+
+- **buildingSMART's Validation Service** is not run in CI. Of its rules,
+  only the standard property sets are mirrored, through the generated table
+  above.
+- **Viewers.** Once, `tests/fixtures/synthetic-project.ifc` was loaded in
+  [BlenderBIM](https://blenderbim.org) 0.0.240509 without errors and showed
+  the expected spatial hierarchy and geometry. That is a spot check, not a
+  gate.
 
 ## Known limitations
 

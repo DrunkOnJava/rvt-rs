@@ -127,6 +127,17 @@ All notable changes will be documented here. This project follows
 
 ### Changed
 
+- **The user pages say what rvt-rs does now (#907).** `docs/README.md`
+  indexes `docs/` as user pages, contributor pages and the research record.
+  The user pages lost their backlog ids and planning labels, and the claims
+  those labels sat on are corrected. `validation-evidence.md` described an
+  `ifc-smoke` job that does not exist and unit tests that no longer run; it
+  now describes the IfcOpenShell job's checks, the cross-witness verdict and
+  Measure. `compatibility.md`, `demos.md` and `benchmarks.md` said
+  per-element geometry was not implemented; they now say where it is exact
+  and where a body is a bounding box. The API doc check also reads every
+  user page the index lists.
+
 - **The API docs are written for someone outside the project.** Backlog
   and task ids (`B55`, `VW1-13`, `SEC-12`) and work-plan labels ("Lane C",
   "Phase 4d", "the attack plan") are gone from the API docs: the crate's

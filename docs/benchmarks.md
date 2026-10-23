@@ -3,7 +3,7 @@
 Performance measurement methodology, `hyperfine` CLI-level timings, and
 four `criterion` library-level suites. The suites cover the inner-loop
 paths every CLI hits (compression, BasicFileInfo, schema) plus a
-multi-megabyte project-file suite (Q-07) that times open/summarize/
+multi-megabyte project-file suite that times open/summarize/
 schema/elem_table/walker against 913 KB and 34 MB real `.rvt` files.
 
 ## Methodology
@@ -83,7 +83,7 @@ noisy, so wall-clock regression gates are useful as a trend signal and
 nightly guard, while ordinary CI keeps the cheaper `cargo bench --no-run`
 compile gate on every code push.
 
-### Multi-megabyte results (Q-07)
+### Multi-megabyte results
 
 `cargo bench --bench project_file -- --quick --warm-up-time 1
 --measurement-time 3` on Apple M2 Max, Rust release profile (`lto =
@@ -198,7 +198,7 @@ cargo bench --bench compression
 cargo bench --bench basic_file_info
 cargo bench --bench schema
 
-# Q-07 multi-MB project file suite (skips if corpus absent;
+# The multi-MB project file suite (skips if corpus absent;
 # override path with RVT_PROJECT_CORPUS_DIR)
 cargo bench --bench project_file
 ```
@@ -211,17 +211,18 @@ corpus (MIT, git-LFS); without it, each sub-benchmark emits a
 
 - **Medium-corpus coverage but no large-corpus coverage yet.** The
   project_file suite covers 913 KB and 34 MB project files. 50 MB+ fixtures
-  remain open; contributions welcome. See Q-01 in the TODO.
-- **Synthetic fixtures for per-class decode.** The 29 Layer 5b decoders
-  are validated against synthesized schema+bytes fixtures (same harness
-  as the class-decoder unit tests). Real-file corpus validation is open
-  work — see Q-01 in the TODO. `bench_decode_class` numbers will carry
-  the same caveat.
-- **Timings will change as decoder coverage expands.** The current
-  CLI-level numbers include no geometry extraction (Phase 5), no
-  per-element materials, and no `IfcShapeRepresentation` emission.
-  Adding those will raise per-file cost. Treat the shipped numbers as
-  measurements of the current library surface, not as a stable floor.
+  remain open; contributions welcome.
+- **Synthetic fixtures for per-class decode.** The 81 schema decoders
+  are validated against synthesized schema and bytes, so
+  `bench_decode_class` times them on that input. A real project's elements
+  come from its partition element records, which the `project_file` suite
+  reads.
+- **The CLI numbers predate geometry.** They were taken when exports had
+  no geometry, per-element materials or `IfcShapeRepresentation`; Revit
+  2024 and 2025 exports now carry all three, which costs more per file.
+  [`status.md`](status.md#performance) has a current export timing on Core
+  Interior. Treat the numbers here as measurements of the library they
+  were taken on, not as a floor.
 - **Cold vs hot cache.** hyperfine defaults to warm-cache runs after
   1-2 warmups. First-open-from-disk cost is not separately reported.
 - **No allocation profiling.** The `Allocations` column in the planned

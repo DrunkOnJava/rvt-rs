@@ -182,8 +182,8 @@ note: ADocument record not locatable in this release's stream
       layout. This is expected for Revit 2016–2023 today.
 ```
 
-Extending the entry-point detector to every release is task
-L5B-11 *(historical planning id; not yet implemented)*.
+Extending the entry-point detector to every release is
+*(not yet implemented)*.
 
 Per-element typed views live under [`src/elements/`](../src/elements/) —
 81 decoders (Level, Wall, Floor, Roof, Door, Window, Column, Beam,
@@ -210,11 +210,10 @@ The `Wall` typed view is larger — `base_offset_feet`,
 `ElementId` references to the top level and `WallType`. Full field
 table: [`src/elements/wall.rs`](../src/elements/wall.rs).
 
-Driving this loop off the live `Global/Latest` element table — so a
-Revit file's full Level / Wall / Door inventory falls out automatically
-— is task L5B-01 *(historical planning id; not yet implemented)*; today
-the walker exposes `ADocument`, and per-element decoders run against
-synthesised schema+bytes fixtures.
+A real project's elements come from its partition element records
+instead (Demo 4). Driving these schema decoders off the live
+`Global/Latest` element table is *(not yet implemented)*, so they run
+against synthesised schema and bytes.
 
 ---
 
@@ -385,30 +384,24 @@ exactly what you want.
 
 Honest boundary of what rvt-rs can demonstrate today:
 
-- **Full `.rvt` → `.ifc` with real geometry** — `rvt-ifc` produces a
-  valid spatial tree + classification, but per-element geometry
-  extraction from the Revit file's native surface / solid / mesh
-  encoding lives in the [GEO-27 … GEO-34] backlog
-  *(not yet implemented)*. The synthetic fixture demonstrates what the
-  *writer* does with decoded input; the live `.rvt` → decoded-input
-  bridge is the next frontier.
+- **Every project, exactly** — Revit 2024 and 2025 projects export
+  typed elements with geometry measured against Revit's own exports
+  (Demo 4's Core Interior run, and the README's "What rvt-rs reads from
+  real projects"); other releases export experimentally. Where an
+  element's bytes are not decoded, its body is its record's bounding box,
+  and the export diagnostics say so.
 - **Revit 2016–2023 ADocument walk** — validated on 2024–2026 only;
   older releases return `ADocument record not locatable`
   *(not yet implemented)*.
 - **Field-level writes** — stream-level byte-preserving round-trip
   works (13/13 streams), but rewriting a specific schema field back
-  into a Revit file is the [WRT-01 … WRT-14] task family
-  *(not yet implemented)*.
-- **Web viewer demo gallery beyond two real projects** — the
-  [VW1-*] tasks shipped (WASM build, Three.js viewer, glTF export;
-  live at <https://drunkonjava.github.io/rvt-rs/>), and the gallery
-  described in [`docs/viewer-demos.json`](viewer-demos.json) opens
+  into a Revit file is *(not yet implemented)*;\n  [ADR-002](decisions/ADR-002-semantic-write-api-gate.md) gates it.
+- **Web viewer demos beyond two real projects** — the viewer is live at
+  <https://drunkonjava.github.io/rvt-rs/>, and the gallery described in
+  [`docs/viewer-demos.json`](viewer-demos.json) opens
   `Revit_IFC5_Einhoven.rvt` (2023, 913 KB) and
   `2024_Core_Interior.rvt` (2024, 33.7 MB) from the MIT
   magnetar-io/revit-test-datasets corpus, hash-verified at staging
   time. Every other gallery entry is a 20 KB synthetic or a family
   `.rfa`; a broader redistributable real-project corpus is
   *(not yet available)*.
-
-Each of these lands as individual commits on `main` with linked task
-IDs (`git log --oneline | grep -E "(IFC|GEO|L5B|WRT)-"`).

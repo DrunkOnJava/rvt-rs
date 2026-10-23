@@ -34,12 +34,9 @@ Tier-1 / `gen-fixture` payloads are also covered for the decoded-elements and
 element-counts contracts so Cloud / no-Autodesk environments stay green.
 
 `tests/support_matrix.rs` validates the seeded support matrix against
-`support-matrix.schema.json` and enforces honesty ceilings (COR-001 /
-TEST-001 / DOC-001): converter-grade RVT-to-IFC and generic typed recovery
-must not be marked `verified`.
+`support-matrix.schema.json` and enforces honesty ceilings: converter-grade
+RVT-to-IFC and generic typed recovery must not be marked `verified`.
 
-`es-observation` / `es-capability` / `capability-manifest` schemas are research
-or doctor contracts. They are validated structurally in unit tests via serde
-round-trips of Phase 1 types; they are **not** wired to production CLI success
-claims. `rvt-capabilities` emits an honest snapshot (ArcWall 2023 verified,
-compound / ES remap unsupported).
+`es-observation` and `es-capability` are research contracts, not tied to any
+CLI's output. `capability-manifest` is what `rvt-capabilities` prints, an
+honest snapshot of what is supported, and the contract test validates it.
