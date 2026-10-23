@@ -147,6 +147,17 @@ All notable changes will be documented here. This project follows
 
 ### Changed
 
+- **The user pages say what rvt-rs does now (#907).** `docs/README.md`
+  indexes `docs/` as user pages, contributor pages and the research record.
+  The user pages lost their backlog ids and planning labels, and the claims
+  those labels sat on are corrected. `validation-evidence.md` described an
+  `ifc-smoke` job that does not exist and unit tests that no longer run; it
+  now describes the IfcOpenShell job's checks, the cross-witness verdict and
+  Measure. `compatibility.md`, `demos.md` and `benchmarks.md` said
+  per-element geometry was not implemented; they now say where it is exact
+  and where a body is a bounding box. The API doc check also reads every
+  user page the index lists.
+
 - **The Python guide's examples run in CI (#872).** The three runnable
   blocks of `docs/python.md` run in order against the synthetic project file
   `corpus/tier1/architectural-2024`, through the built wheel
@@ -320,6 +331,15 @@ All notable changes will be documented here. This project follows
   minor one.
 
 ### Research
+
+- **Revit 2015's element GlobalIds are not in the file (RE-208, #878).**
+  On BIMcollab's 2015 example, every element GlobalId in Revit's export has
+  an episode prefix of its own (241 in 241, where Core Interior's 854 fall
+  in 5), so RE-48's history rule cannot rebuild them. A stored IfcGUID
+  parameter holds the last 21 characters of 229 of the 241; their first
+  character, the top two bits, differs every time, and nothing tested in the
+  file sets it. The project, site, building and five storeys are stored
+  exactly, which is the lead for the storeys' GlobalIds.
 
 - **Revit 2015 is scored against Revit 2015's own export (RE-198, #421).**
   BIMcollab's example structural model, a Revit 2015 project, comes with
