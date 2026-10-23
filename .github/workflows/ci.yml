@@ -665,6 +665,68 @@ jobs:
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - run: cargo doc --no-deps --lib
 
+  # S2 (#873): a pull request that breaks the stable Rust API says so.
+  # cargo-semver-checks compares the crate's public API (default features, so
+  # neither `unstable-research` nor `dhat-heap`) with the pull request's base,
+  # not the last release: main can already hold breaking changes that were
+  # announced when they landed. A breaking change passes only when the title
+  # carries the Conventional Commits `!` or the body a `BREAKING CHANGE:`
+  # footer. The title is read from the API, not the event, so re-running the
+  # job after a retitle sees the new one. A run that fails without a semver
+  # verdict (the tool or a build failed) fails whatever the title says.
+  semver:
+    name: semver checks
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Install Rust stable
+        shell: bash
+        run: |
+          rustup toolchain install stable --profile minimal --no-self-update
+          rustup default stable
+          echo CARGO_INCREMENTAL=0 >> "$GITHUB_ENV"
+          echo CARGO_TERM_COLOR=always >> "$GITHUB_ENV"
+          rustc --version
+      - name: Install cargo-semver-checks
+        uses: taiki-e/install-action@8cca0918f8471c33515202b73f56ab27f2bed283 # v2.87.29
+        with:
+          tool: cargo-semver-checks@0.51.0
+      - name: The stable API breaks nothing the pull request does not announce
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+          PR: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -uo pipefail
+          cargo semver-checks -p rvt --baseline-rev "$BASE" --default-features --release-type patch 2>&1 | tee semver.log
+          status=${PIPESTATUS[0]}
+          if [ "$status" -eq 0 ]; then
+            echo "The stable API has no breaking change against the base."
+            exit 0
+          fi
+          if ! grep -qE 'semver requires new (major|minor) version' semver.log; then
+            echo "::error::cargo-semver-checks failed without a verdict (exit $status); see the log above"
+            exit 1
+          fi
+          title=$(gh api "repos/$REPO/pulls/$PR" --jq .title)
+          body=$(gh api "repos/$REPO/pulls/$PR" --jq '.body // ""')
+          if printf '%s\n' "$title" | grep -qE '^[a-z]+(\([^)]*\))?!:' \
+            || printf '%s\n' "$body" | grep -qE '^BREAKING[ -]CHANGE:'; then
+            echo "::notice::The stable API has a breaking change (above), and the pull request announces it."
+            exit 0
+          fi
+          echo "::error::The stable API has a breaking change (above) that the pull request does not announce. Mark the title type(scope)!: or undo the change, then re-run this job."
+          exit 1
+
   # Q-09: benchmark-build regression gate.
   #
   # Runs `cargo bench --no-run` to compile every benchmark target
@@ -1083,6 +1145,7 @@ jobs:
       - viewer-dependencies
       - pii-guard
       - env-config
+      - semver
     runs-on: ubuntu-24.04
     steps:
       - name: Every job passed
