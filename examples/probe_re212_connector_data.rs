@@ -21,6 +21,8 @@
 //!     `RbsDuctCurve` and their flex kinds) are listed this way too
 //!   place <instance> <m_instOrigin, m_RefDir, m_zAxis, m_flippedX,
 //!     m_flippedY, m_insertOrientation, m_mirrored as a JSON object>
+//!   transform <instance> <axes X, Y, Z> <origin>   the instance's transform
+//!     in model space, from its element data (RE-87)
 //!
 //! Usage:
 //!   cargo run --profile ci --example probe_re212_connector_data -- MODEL.rvt
@@ -52,6 +54,7 @@ fn main() -> anyhow::Result<()> {
         ..Options::default()
     };
     let mut shown = BTreeSet::new();
+    let mut instances = BTreeSet::new();
     extract_graphs(&mut rf, &options, |record| {
         let (Some(class), Some(graph)) = (record.class_name.as_deref(), record.graph.as_ref())
         else {
@@ -88,6 +91,9 @@ fn main() -> anyhow::Result<()> {
             }
         }
         if class == "FamilyInstance" {
+            if let Ok(id) = u32::try_from(id) {
+                instances.insert(id);
+            }
             let place: serde_json::Map<String, Value> = [
                 "m_instOrigin",
                 "m_RefDir",
@@ -148,5 +154,16 @@ fn main() -> anyhow::Result<()> {
         }
         Ok(())
     })?;
+    let version = rf.basic_file_info()?.version;
+    let transforms = rvt::research::partition_instance_transforms::scan_instance_transforms(
+        &mut rf, version, &instances,
+    )?;
+    for (id, transform) in transforms {
+        println!(
+            "transform {id} {} {}",
+            serde_json::to_string(&transform.axes)?,
+            serde_json::to_string(&transform.origin)?
+        );
+    }
     Ok(())
 }
