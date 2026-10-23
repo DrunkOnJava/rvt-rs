@@ -15,6 +15,11 @@
 //!   symbol <symbol> <family> <m_arrConnectorData>
 //!   instance <instance> <symbol> <Connector objects' fields>
 //!   fields <class> <root field names>   once per class
+//!   object <owner> <class name> <class tag> <start> <fields>   every object
+//!     of a family's graph but its cells, and of an instance's graph but its
+//!     root and connectors, that is not a geometry object
+//!   place <instance> <m_instOrigin, m_RefDir, m_zAxis, m_flippedX,
+//!     m_flippedY, m_insertOrientation, m_mirrored as a JSON object>
 //!
 //! Usage:
 //!   cargo run --profile ci --example probe_re212_connector_data -- MODEL.rvt
@@ -54,6 +59,38 @@ fn main() -> anyhow::Result<()> {
                 .map(|o| o.keys().collect())
                 .unwrap_or_default();
             println!("fields {class} {}", serde_json::to_string(&names)?);
+        }
+        if class != "FamilySymbol" {
+            for object in graph.objects.iter().skip(1) {
+                if object.class_name == "ConnectorDataCell" || object.class_name == "Connector" {
+                    continue;
+                }
+                if object.class_name.starts_with("G") && object.class_name != "GInstance" {
+                    continue;
+                }
+                println!(
+                    "object {id} {} {} {} {}",
+                    object.class_name,
+                    object.class_tag,
+                    object.start,
+                    serde_json::to_string(&object.fields)?
+                );
+            }
+        }
+        if class == "FamilyInstance" {
+            let place: serde_json::Map<String, Value> = [
+                "m_instOrigin",
+                "m_RefDir",
+                "m_zAxis",
+                "m_flippedX",
+                "m_flippedY",
+                "m_insertOrientation",
+                "m_mirrored",
+            ]
+            .iter()
+            .filter_map(|name| Some((name.to_string(), root.fields.get(*name)?.clone())))
+            .collect();
+            println!("place {id} {}", serde_json::to_string(&place)?);
         }
         match class {
             "Family" => {
