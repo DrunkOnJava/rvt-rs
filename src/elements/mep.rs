@@ -96,14 +96,14 @@ impl MepSystemClassification {
 #[non_exhaustive]
 pub struct MepInstance {
     pub name: Option<String>,
-    pub level_id: Option<u32>,
+    pub level_id: Option<crate::ElementId>,
     pub system_classification: Option<MepSystemClassification>,
     /// Raw classification code. Always populated when
     /// `system_classification` is non-`None` — surfaced separately
     /// for callers who need the exact Revit enum value, not the
     /// coarse bucket.
     pub system_classification_code: Option<u32>,
-    pub system_type_id: Option<u32>,
+    pub system_type_id: Option<crate::ElementId>,
     pub connector_count: Option<u32>,
 }
 
@@ -114,7 +114,7 @@ impl MepInstance {
             match (normalise_field_name(field_name).as_str(), value) {
                 ("name", InstanceField::String(s)) => out.name = Some(s.clone()),
                 ("levelid", InstanceField::ElementId { id, .. }) => {
-                    out.level_id = Some(*id);
+                    out.level_id = Some(crate::ElementId::from(*id));
                 }
                 (
                     "systemclassification" | "classification",
@@ -125,7 +125,7 @@ impl MepInstance {
                     out.system_classification_code = Some(code);
                 }
                 ("systemtypeid" | "mepsystemtypeid", InstanceField::ElementId { id, .. }) => {
-                    out.system_type_id = Some(*id);
+                    out.system_type_id = Some(crate::ElementId::from(*id));
                 }
                 ("connectorcount", InstanceField::Integer { value, .. }) => {
                     out.connector_count = Some(*value as u32);

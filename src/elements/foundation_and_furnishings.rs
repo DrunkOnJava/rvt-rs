@@ -43,9 +43,9 @@ use crate::walker::{DecodedElement, InstanceField};
 struct PlacedCommon {
     location: Option<Point3>,
     rotation_radians: Option<f64>,
-    level_id: Option<u32>,
-    host_id: Option<u32>,
-    symbol_id: Option<u32>,
+    level_id: Option<crate::ElementId>,
+    host_id: Option<crate::ElementId>,
+    symbol_id: Option<crate::ElementId>,
 }
 
 fn collect_common(decoded: &DecodedElement) -> PlacedCommon {
@@ -62,11 +62,13 @@ fn collect_common(decoded: &DecodedElement) -> PlacedCommon {
                 out.rotation_radians = Some(*value);
             }
             ("levelid" | "hostlevelid", InstanceField::ElementId { id, .. }) => {
-                out.level_id = Some(*id);
+                out.level_id = Some(crate::ElementId::from(*id));
             }
-            ("hostid", InstanceField::ElementId { id, .. }) => out.host_id = Some(*id),
+            ("hostid", InstanceField::ElementId { id, .. }) => {
+                out.host_id = Some(crate::ElementId::from(*id))
+            }
             ("symbolid" | "typeid" | "familysymbolid", InstanceField::ElementId { id, .. }) => {
-                out.symbol_id = Some(*id);
+                out.symbol_id = Some(crate::ElementId::from(*id));
             }
             _ => {}
         }
@@ -81,9 +83,9 @@ fn collect_common(decoded: &DecodedElement) -> PlacedCommon {
 #[derive(Debug, Clone, PartialEq, Default)]
 #[non_exhaustive]
 pub struct StructuralFoundation {
-    pub level_id: Option<u32>,
-    pub host_id: Option<u32>,
-    pub symbol_id: Option<u32>,
+    pub level_id: Option<crate::ElementId>,
+    pub host_id: Option<crate::ElementId>,
+    pub symbol_id: Option<crate::ElementId>,
     pub location: Option<Point3>,
 }
 
@@ -101,7 +103,7 @@ impl StructuralFoundation {
     /// Isolated footing (column footing) when no host is specified;
     /// strip/mat footings will have a host wall/slab.
     pub fn is_isolated(&self) -> bool {
-        matches!(self.host_id, None | Some(0))
+        self.host_id.is_none_or(|id| id.get() == 0)
     }
 }
 
@@ -109,9 +111,9 @@ impl StructuralFoundation {
 #[derive(Debug, Clone, PartialEq, Default)]
 #[non_exhaustive]
 pub struct Furnishing {
-    pub level_id: Option<u32>,
-    pub host_id: Option<u32>,
-    pub symbol_id: Option<u32>,
+    pub level_id: Option<crate::ElementId>,
+    pub host_id: Option<crate::ElementId>,
+    pub symbol_id: Option<crate::ElementId>,
     pub location: Option<Point3>,
     pub rotation_radians: Option<f64>,
 }
@@ -129,7 +131,7 @@ impl Furnishing {
     }
 
     pub fn is_wall_hosted(&self) -> bool {
-        !matches!(self.host_id, None | Some(0))
+        !self.host_id.is_none_or(|id| id.get() == 0)
     }
 }
 
@@ -137,8 +139,8 @@ impl Furnishing {
 #[derive(Debug, Clone, PartialEq, Default)]
 #[non_exhaustive]
 pub struct Rebar {
-    pub host_id: Option<u32>,
-    pub bar_type_id: Option<u32>,
+    pub host_id: Option<crate::ElementId>,
+    pub bar_type_id: Option<crate::ElementId>,
     pub quantity: Option<u32>,
     pub length_feet: Option<f64>,
 }
@@ -148,9 +150,11 @@ impl Rebar {
         let mut out = Self::default();
         for (field_name, value) in &decoded.fields {
             match (normalise_field_name(field_name).as_str(), value) {
-                ("hostid", InstanceField::ElementId { id, .. }) => out.host_id = Some(*id),
+                ("hostid", InstanceField::ElementId { id, .. }) => {
+                    out.host_id = Some(crate::ElementId::from(*id))
+                }
                 ("bartypeid" | "typeid", InstanceField::ElementId { id, .. }) => {
-                    out.bar_type_id = Some(*id);
+                    out.bar_type_id = Some(crate::ElementId::from(*id));
                 }
                 ("quantity", InstanceField::Integer { value, .. }) => {
                     out.quantity = Some(*value as u32);

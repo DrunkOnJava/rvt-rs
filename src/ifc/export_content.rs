@@ -694,13 +694,13 @@ pub fn append_typed_production_elements(
                 "Door" => {
                     let door = Door::from_decoded(&decoded);
                     if let Some(host) = recover_door_host(&door).ok() {
-                        pending_host_id = Some(host.host_element_id);
+                        pending_host_id = host.host_element_id.as_u32();
                     }
                 }
                 "Window" => {
                     let window = Window::from_decoded(&decoded);
                     if let Some(host) = recover_window_host(&window).ok() {
-                        pending_host_id = Some(host.host_element_id);
+                        pending_host_id = host.host_element_id.as_u32();
                     }
                 }
                 _ => {}
@@ -1407,7 +1407,7 @@ fn wall_geometry_from_decoded(decoded: &DecodedElement) -> Option<RecoveredWallG
     if let Some(id) = curve.location_curve_id {
         properties.push(Property {
             name: "LocationCurveId".into(),
-            value: PropertyValue::Integer(i64::from(id)),
+            value: PropertyValue::Integer(id.get()),
         });
     }
     Some(RecoveredWallGeom {
