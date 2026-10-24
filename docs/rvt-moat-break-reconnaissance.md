@@ -2140,6 +2140,34 @@ A Sketch element's data names the element it sketches 77 bytes from its element-
 
 A door type's value block holds its Width (−1001301) and Height (−1001300), the BuiltInParameters RE-93 reads for windows, and Revit's IFC export writes them as the door's `OverallWidth` / `OverallHeight` wherever they are read: 136 of 136 doors on Core Interior and RE1 Architecture. A window's type size is not its overall size on Core Interior (1010 mm against Revit's 1500 × 2700 mm). Report: `reports/element-framing/RE-187-door-overall-sizes.md`; probe: `examples/probe_re187_door_window_sizes.rs`.
 
+## Addendum — RE-200 a family instance's own material parameters (2026-10-21)
+
+Where a family type's geometry-material map (`FamilySymbol.m_geomTag2MaterialId`) holds only unset values, the instance's `FamilyInstance.m_pInstParams` points to a `FamilyParams` whose `m_params` entries hold material ElementIds in `m_elemId`, and Revit's IFC4 export gives the instance exactly those materials, `<Unnamed>` where they name none. All 9 window trims and muntins of each R2025 model 12 to 17 (puzzbobb's models, #356). Report: `reports/element-framing/RE-200-instance-material-parameters.md`; probe: `examples/probe_re200_instance_material_params.rs`.
+
+## Addendum — RE-201 a mullion or curtain panel type's material is its m_renderStyleId (2026-10-21)
+
+Every mullion type (`SysMullionFamSym`) and panel type (`SysPanelFamSym`) holds its material in `m_renderStyleId`. RE-166's read at +135 of the data object misses it where an optional field before it is 2 bytes shorter (+133): 10 of Snowdon Towers' 13 exported mullion types. Read by name, it is Revit's material on all 1,425 members and 348 plates of Snowdon Towers. Report: `reports/element-framing/RE-201-curtain-render-styles.md`; probe: `examples/probe_re201_curtain_render_styles.rs`.
+
+## Addendum — RE-202 a column's joins, a wall's exterior side, rendered content (2026-10-21)
+
+A column's record holds a `CutPairGStep` per joined element, `m_otherId`, in `m_id` order. A wall's location curve is `VWallDriver.m_pCrv` and its exterior lies to the left of it unless `SWall.m_isFlipped` (`VWallDriver.m_flip` is false on all 198 walls joined to Snowdon's columns). Revit's export gives an off-centre column whose type has no material one layer of its first joined wall, the one on the column's side. A family whose `Family.m_eRenderModelType` is 4 (RPC, planting) is exported with `<Unnamed>` alone, 127 of 127 on Snowdon Towers. Report: `reports/element-framing/RE-202-column-joins-and-rendered-content.md`; probe: `examples/probe_re202_column_joins.rs`.
+
+## Addendum — RE-203 a type's map by name; a material's own name (2026-10-21)
+
+RE-82's value-block scan also takes the materials of a component the type nests (Snowdon's 21 counter tops take their sink's appliance materials); the type's `m_geomTag2MaterialId` read from its native record holds Revit's set. A material's own `Material.m_name` agrees with the scanned name on 514 of 515 materials across seven models; the scan reads Snowdon's "Bronze, Architectural" as '1/4" Head'. Report: `reports/element-framing/RE-203-native-type-maps.md`; probe: `examples/probe_re203_type_maps.rs`.
+
+## Addendum — RE-204 a loaded family's own document shows its forms (2026-10-21)
+
+A loaded family's document is a keyed block of the project's partitions (RE-163); it decodes with the project's schema, and its element ids are the project's. Its forms hold `m_materialId` (−1 none), `m_cutting` and `Visible` (`IS_VISIBLE_PARAM` −1006205) in their `ParamValueSetInt`. A type whose map holds −1 values has `<Unnamed>` in Revit's export only where the family shows a visible, non-void form with no material: not on Snowdon's 21 washer-dryers and umbrella table (hidden forms) or RE1 Electrical's fire panel (none, and no nested family). Report: `reports/element-framing/RE-204-family-document-forms.md`; probe: `examples/probe_re204_family_forms.rs`.
+
+## Addendum — RE-205 the overlapping joined wall; materials only hidden forms have (2026-10-21)
+
+An off-centre column takes the first join among the walls that overlap it, and the wall's exterior layer where its box reaches past both of the wall's faces: 108 of Snowdon's 108. A material only hidden forms of a type's family have is left out of Revit's export ("Clearance" on Refrig_Base_wDrawers). Report: `reports/element-framing/RE-205-columns-and-hidden-forms.md`; probes: `examples/probe_re202_column_joins.rs`, `examples/probe_re204_family_forms.rs`.
+
+## Addendum — RE-206 a category's material is named by its graphics styles; nested visibility (2026-10-21)
+
+Each category's `GStyleElem` objects (`m_categoryId`) hold a `GStyle` whose `m_materialElemId` is the category's material. It is the material Revit's export writes for a layer that takes its category's material where the object styles (RE-91) are unset (Snowdon Towers) or not read (every 2025 file): "Default Wall" on all 117 walls of the R2025 models. A nested family's form whose `Visible` is bound (`FamilyParametrizedElemParamsCell`) to a family parameter is shown by its value on the nested instance, else its type, matched by caption (`ParamDef*.m_caption`). Report: `reports/element-framing/RE-206-category-styles-and-nested-visibility.md`; probes: `examples/probe_re206_category_styles.rs`, `examples/probe_re204_family_forms.rs`.
+
 ## Addendum — RE-207 an element's saved parameters, named by the file's definitions (2026-10-22)
 
 An element's native record holds its saved parameter values in its typed sets (`m_pParamValueSetDouble`, `…Int`, `…AString`, `…ElementId`) and, for a family instance or type, in the `m_params` slots of its own `FamilyParams` (`FamilyInstance.m_pInstParams`, `FamilySymbol.m_pParams`); a positive parameter id is named by its definition's `m_caption` (`ParamElemFamily`, `ParamElemExternal`, `ParamElemGlobal` and project owners), and a `ParamDefFamType` definition's value is the ElementId of a family type of its `m_categoryId` (a window's Muntin Pattern names the Generic Model type `Muntin Pattern_2x2`). A family instance's type parameters are its `m_masterSymbolId`'s slots whose definition is not an instance parameter. Against Revit 2024's own export of the BIM4LCA office, every parameter named `<set>.<property>` read this way holds the value Revit writes for that property on the element: 7,606 of 7,606 as built, 7,592 of 7,592 at building permit; on the R2025 models a window's `Pset_WindowCommon.FireRating` is its type's family parameter `Fire Rating`, 18 of 18. Built-in parameters' names are not in the file; a family's built-in slots (Width −1001301, Height −1001300) carry no storage type and are not resolved (`reports/element-framing/RE-207-element-parameters.md`).

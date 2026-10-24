@@ -831,14 +831,15 @@ async function loadBytes(file: File): Promise<void> {
     distinctTypes = msg.types;
     lastGlb = msg.glb;
     lastSchedule = msg.schedule;
-    currentDiagnostics = msg.diagnostics;
+    // Diagnostics are saved and shown as JSON, so their maps become objects.
+    currentDiagnostics = plainJson(msg.diagnostics);
     lastFileStem = file.name.replace(/\.(rvt|rfa|rte|rft)$/i, '');
     renderScene(msg.glb);
     renderTree();
     renderCategories();
     renderScheduleSummary(msg.schedule);
-    renderExportQuality(msg.diagnostics);
-    renderStatusPanel(msg.diagnostics);
+    renderExportQuality(currentDiagnostics);
+    renderStatusPanel(currentDiagnostics);
     fileMetaEl.textContent = `${file.name} · ${formatBytes(file.size)} · ${countEntities(msg.scene)} entities`;
     dropzone.classList.add('hidden');
     exportGlbBtn.disabled = false;
@@ -852,7 +853,7 @@ async function loadBytes(file: File): Promise<void> {
     setStatus(`Loaded · ${msg.types.length} categories · IFC bar ${qualityMode}`);
     stopLoadOverlay();
     clearDemoCardBusy();
-    maybeShowScaffoldNote(msg.diagnostics);
+    maybeShowScaffoldNote(currentDiagnostics);
     const elapsed = Math.max(1, Math.round((performance.now() - loadStartedAt) / 1000));
     toast(`Loaded ${file.name} · ${msg.types.length} categories · ${elapsed} s`, 'ok');
   });
@@ -1946,6 +1947,26 @@ function zoomButton(): HTMLButtonElement | null {
   btn.title = 'Bring this element into view (F, or double-click it)';
   btn.addEventListener('click', () => frameEntities(new Set([idx]), entityLabel(idx)));
   return btn;
+}
+
+/**
+ * `value` with each `Map` in it made a plain object. serde-wasm-bindgen
+ * hands a Rust map over as a `Map`, which `JSON.stringify` writes as `{}`
+ * and `Object.values` reads as empty.
+ */
+function plainJson<T>(value: T): T {
+  if (value instanceof Map) {
+    return Object.fromEntries(
+      [...value].map(([key, item]) => [String(key), plainJson(item)]),
+    ) as T;
+  }
+  if (Array.isArray(value)) return value.map((item) => plainJson(item)) as T;
+  if (value !== null && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, item]) => [key, plainJson(item)]),
+    ) as T;
+  }
+  return value;
 }
 
 /** The GlobalId Revit's own export gives entity `idx`, when rebuilt (RE-48). */
