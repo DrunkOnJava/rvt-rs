@@ -497,6 +497,9 @@ A check whose files are absent skips with a message, so a partial corpus is fine
 
 ## For contributors
 
+Use the [Codespaces development environment](docs/codespaces.md) for remote
+Linux builds and the viewer from VS Code, a terminal, Codex or Claude Code.
+
 rvt-rs is a clean-room reader for Revit files: an Apache-2.0 Rust core with
 Python bindings and a WebAssembly viewer, with no Revit install or Autodesk
 SDK at build or run time. Contributing does not need private files either —

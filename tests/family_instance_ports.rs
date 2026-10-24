@@ -10,6 +10,11 @@
 //! `Port_<ElementId>_<index>` tied to the element with that `Tag`. Ducts and
 //! pipes are `tests/duct_and_pipe_ports.rs`'s.
 //!
+//! Every port both exports hold, a duct's and a pipe's included, must also
+//! have Revit's flow direction and the name prefix that goes with it,
+//! `InPort_` for a sink, `OutPort_` for a source and `Port_` otherwise
+//! (RE-212).
+//!
 //! Runs against `RVT_PROJECT_CORPUS_DIR` (`RE1-Electrical.rvt`,
 //! `RE1-Plumbing.rvt` and `RE1-Mechanical.rvt` with Revit's `RE1-*.ifc`).
 //! Skips what is absent.
@@ -188,5 +193,72 @@ fn family_instances_have_revits_ports() {
     assert!(
         compared > 0 || !dir.join("RE1-Electrical.rvt").exists(),
         "no family-instance port was compared"
+    );
+}
+
+/// Each port's name prefix (`In`, `Out` or none) and `FlowDirection`, by key.
+fn port_directions(step: &str) -> BTreeMap<(u32, u32), (String, String)> {
+    entities(step)
+        .values()
+        .filter(|(entity, _)| entity == "IFCDISTRIBUTIONPORT")
+        .filter_map(|(_, args)| {
+            let key = port_key(args)?;
+            let name = args.split('\'').nth(3)?;
+            let prefix = name.split("Port_").next()?.to_string();
+            let flow = ["SOURCEANDSINK", "SOURCE", "SINK", "NOTDEFINED"]
+                .into_iter()
+                .find(|flow| args.contains(&format!(".{flow}.")))?
+                .to_string();
+            Some((key, (prefix, flow)))
+        })
+        .collect()
+}
+
+#[test]
+fn ports_have_revits_flow_directions() {
+    let Some(dir) = std::env::var_os("RVT_PROJECT_CORPUS_DIR").map(PathBuf::from) else {
+        eprintln!("skipping: RVT_PROJECT_CORPUS_DIR is not set");
+        return;
+    };
+    let mut failures = Vec::new();
+    let mut compared = 0;
+    for model in ["Electrical", "Plumbing", "Mechanical"] {
+        let rvt = dir.join(format!("RE1-{model}.rvt"));
+        let reference = dir.join(format!("RE1-{model}.ifc"));
+        if !rvt.exists() || !reference.exists() {
+            eprintln!("skipping {}: model or reference absent", rvt.display());
+            continue;
+        }
+        let theirs = port_directions(&std::fs::read_to_string(&reference).expect("reference"));
+        let mut rf = RevitFile::open(&rvt).expect("open");
+        let result = RvtDocExporter
+            .export_with_diagnostics(&mut rf)
+            .expect("export");
+        let ours = port_directions(&write_step(&result.model));
+        let both: Vec<_> = theirs.keys().filter(|key| ours.contains_key(key)).collect();
+        let differ: Vec<_> = both
+            .iter()
+            .filter(|key| ours.get(key) != theirs.get(key))
+            .map(|key| (**key, ours.get(key), theirs.get(key)))
+            .collect();
+        eprintln!(
+            "RE1-{model}: {} of the {} ports both write have Revit's direction",
+            both.len() - differ.len(),
+            both.len()
+        );
+        if !differ.is_empty() {
+            failures.push(format!(
+                "RE1-{model}: {} of {} ports differ from Revit's (key, ours, Revit's); first: {:?}",
+                differ.len(),
+                both.len(),
+                differ.iter().take(6).collect::<Vec<_>>()
+            ));
+        }
+        compared += both.len();
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+    assert!(
+        compared > 0 || !dir.join("RE1-Electrical.rvt").exists(),
+        "no port was compared"
     );
 }

@@ -148,6 +148,7 @@
 //! advice.
 
 #![warn(rust_2024_compatibility)]
+#![warn(missing_debug_implementations)]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 // SEC-11 + SEC-12 + SEC-13: forbid `unsafe` in the core library.
 // Revit files come from untrusted sources, so any raw-pointer or

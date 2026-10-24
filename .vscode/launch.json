@@ -1,0 +1,21 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Debug rvt-inspect", "type": "lldb", "request": "launch",
+      "program": "${workspaceFolder}/target/debug/rvt-inspect",
+      "args": ["${input:rvtFile}"], "cwd": "${workspaceFolder}",
+      "env": { "RUST_BACKTRACE": "1" }, "preLaunchTask": "rvt: debug build"
+    },
+    {
+      "name": "Python: current file", "type": "debugpy", "request": "launch",
+      "program": "${file}", "console": "integratedTerminal", "cwd": "${workspaceFolder}", "justMyCode": true
+    }
+  ],
+  "inputs": [
+    {
+      "id": "rvtFile", "type": "promptString", "description": "Revit file path, absolute or relative to the remote checkout",
+      "default": "corpus/tier1/architectural-2024/architectural-2024.rvt"
+    }
+  ]
+}

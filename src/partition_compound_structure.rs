@@ -689,7 +689,8 @@ pub fn wall_type_face_angles(data: &[u8]) -> Option<[f64; 3]> {
     }
     let angle = |index: usize| {
         data.get(at + 8 * index..at + 8 * index + 8)
-            .map(|b| f64::from_le_bytes(b.try_into().expect("8 bytes")))
+            .and_then(|b| b.first_chunk::<8>())
+            .map(|b| f64::from_le_bytes(*b))
             .filter(|value| {
                 *value == 0.0 || (1e-9..std::f64::consts::FRAC_PI_2).contains(&value.abs())
             })

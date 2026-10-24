@@ -131,9 +131,9 @@ pub fn project(graph: &ObjectGraph) -> Result<Option<Definition>> {
             }
             Ok::<_, anyhow::Error>(format!(
                 "{:08x}-{:04x}-{:04x}-{:02x}{:02x}-{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}",
-                u32::from_le_bytes(b[0..4].try_into().unwrap()),
-                u16::from_le_bytes(b[4..6].try_into().unwrap()),
-                u16::from_le_bytes(b[6..8].try_into().unwrap()),
+                u32::from_le_bytes([b[0], b[1], b[2], b[3]]),
+                u16::from_le_bytes([b[4], b[5]]),
+                u16::from_le_bytes([b[6], b[7]]),
                 b[8],
                 b[9],
                 b[10],
