@@ -117,7 +117,10 @@ project treats a silent skipped step the same as an untested change.
    [Versioning](#versioning). The wheel takes its version from
    `rvt-py/Cargo.toml` (`pyproject.toml` declares it dynamic), so
    `pyproject.toml` needs no edit.
-5. **Update `CHANGELOG.md`.** Move items from `[Unreleased]` into a new
+5. **Update `CHANGELOG.md`.** Run `python3 tools/release/changelog.py
+   assemble`, which moves the fragments under `changelog.d/` into
+   `[Unreleased]` and deletes them (#938). Then move items from
+   `[Unreleased]` into a new
    `[X.Y.Z] — YYYY-MM-DD` section, leaving an empty `[Unreleased]` above
    it. Open the section with a short introduction and an **Upgrading from
    X.Y** list of what a user of the previous release has to change. Then

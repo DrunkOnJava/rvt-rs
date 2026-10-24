@@ -37,6 +37,7 @@ Unit tests are banned in this repository: do not add them. Show the change worki
 -->
 
 - [ ] README / docs reflect the current state after this PR — no claims of features that are not actually shipped in this PR
+- [ ] A user-visible change has its entry as a fragment under `changelog.d/<section>/` (see `changelog.d/README.md`), not in `CHANGELOG.md`
 - [ ] If a limitation was resolved, the "Known limitations" / "What works today" section in the relevant docs is updated
 - [ ] If a new limitation was introduced, it is documented in the PR body and in-code
 - [ ] Commit messages describe WHAT changed and WHY, not "fix things" or "updates"

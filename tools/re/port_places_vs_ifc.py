@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Where Revit's export places a pipe's ports, against the ends of rvt-rs's
-pipe (#847).
+pipe (#847), and rvt-rs's other ports against Revit's (#869).
 
 Revit writes each connector as an `IfcDistributionPort` named
 `<In or Out>Port_<ElementId>_<index>`, placed at the connector. rvt-rs draws
@@ -185,6 +185,34 @@ def main():
         + ", ".join(f"{a}, {b} {n}" for (a, b), n in joins.most_common(8))
     )
     print("rvt-rs's ports joined to a segment's port: " + ", ".join(f"{k} {v}" for k, v in joined.most_common()))
+    # #869: Revit's other ports of elements that are not segments, which no
+    # segment's port joins, against rvt-rs's own placement of them.
+    joined_to_segment = set()
+    for rel in model.by_type("IfcRelConnectsPorts"):
+        pair = [rel.RelatingPort, rel.RelatedPort]
+        if any(o is not None and o.is_a("IfcFlowSegment") for o in (owner(p) for p in pair)):
+            joined_to_segment.update(p.id() for p in pair)
+    unjoined = collections.Counter()
+    for port in model.by_type("IfcDistributionPort"):
+        match = PORT_NAME.match(port.Name or "")
+        element = owner(port)
+        if not match or not port.ObjectPlacement or port.id() in joined_to_segment:
+            continue
+        if element is None or element.is_a("IfcFlowSegment"):
+            continue
+        point, axis = place(port)
+        side = "In" if port.Name.startswith("In") else "Out" if port.Name.startswith("Out") else "-"
+        own = mine.get((match.group(1), int(match.group(2))))
+        if own is None:
+            unjoined["not placed by rvt-rs"] += 1
+        elif math.dist(own[0], point) <= TOLERANCE_FT:
+            unjoined[f"placed within {TOLERANCE_FT} ft of Revit's"] += 1
+            cos = sum(own[1][i] * axis[i] for i in range(3))
+            unjoined[f"Z axis {'as' if cos > 0.99 else 'opposite to' if cos < -0.99 else 'across'} Revit's ({side})"] += 1
+        else:
+            unjoined["placed elsewhere"] += 1
+            listed.append(f"  {port.Name}: rvt-rs's unjoined port {math.dist(own[0], point):.4f} ft from Revit's")
+    print("rvt-rs's ports no segment's port joins: " + ", ".join(f"{k} {v}" for k, v in unjoined.most_common()))
     for line in listed[:60]:
         print(line)
 

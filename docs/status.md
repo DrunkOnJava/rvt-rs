@@ -90,7 +90,7 @@ named where the file defines them (RE-207); most are not written to IFC.
 It is not a converter for arbitrary models: most parameters, family
 geometry (except the experimental `--saved-meshes` option, which draws a
 Revit 2024, 2025 or 2026 family instance from the mesh Revit saved for its
-display, RE-78), roofs by extrusion or over a T or U footprint, the boundaries of
+display, RE-78), roofs over a T or U footprint and roofs by extrusion outside Revit 2025, the boundaries of
 rooms whose stored solid does not close, opening profiles and phase
 filtering are not decoded, and rvt-rs does not edit
 Revit model data.
@@ -724,13 +724,17 @@ Built-in parameters have no name (the built-in catalog is not shipped,
 resolved, and nothing new is written to IFC.
 
 **RE-215 (2026-10-24)** gives each door and window on Revit 2024 and 2025
-the `OverallWidth` and `OverallHeight` Revit's export writes: the extents of
-the outline the symbol that draws it cuts in its host, read from that
-symbol's `m_pCutLoops`. The instance names that symbol in its
-`InstanceInfo.m_symbolId`, and it is its own where the instance's parameters
-size the family. Equal to Revit's on 138 of 138 doors and windows on Core
-Interior (its six windows had `$`), on RE1 Architecture's 4 doors with one
-and on the R2025 models (`reports/element-framing/RE-215-symbol-cut-loops.md`).
+whose symbol cuts an outline the `OverallWidth` and `OverallHeight` Revit's
+export writes: the extents of the outline the symbol that draws it cuts in
+its host, read from that symbol's `m_pCutLoops`. The instance names that
+symbol in its `InstanceInfo.m_symbolId`, and it is its own where the
+instance's parameters size the family. Equal to Revit's on 138 of 138 doors
+and windows on Core Interior (its six windows had `$`), on RE1
+Architecture's 4 doors with one and on the R2025 models
+(`reports/element-framing/RE-215-symbol-cut-loops.md`). On the BIM4LCA
+office, 187 of its 269 doors cut one and have Revit's sizes; its 269 windows
+and other 82 doors are drawn by symbols with no cut loop and keep what they
+had (#810).
 
 The public viewer's demo gallery leads with the two files this section
 measures, staged from the deploy workflow's `magnetar-io/revit-test-datasets`

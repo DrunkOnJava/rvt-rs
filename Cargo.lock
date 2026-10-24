@@ -984,7 +984,7 @@ dependencies = [
 
 [[package]]
 name = "rvt"
-version = "0.6.1"
+version = "0.7.0"
 dependencies = [
  "anyhow",
  "cfb",
@@ -1011,7 +1011,7 @@ dependencies = [
 
 [[package]]
 name = "rvt-py"
-version = "0.6.1"
+version = "0.7.0"
 dependencies = [
  "anyhow",
  "pyo3",
@@ -1023,7 +1023,7 @@ dependencies = [
 
 [[package]]
 name = "rvt-wasm"
-version = "0.6.1"
+version = "0.7.0"
 dependencies = [
  "rvt",
  "serde",
