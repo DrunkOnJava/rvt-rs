@@ -85,6 +85,7 @@ real      space_common
 real      space_containment
 real      space_types
 real      spatial_property_sets
+real      tapered_walls_2025
 real      type_global_ids
 real      typed_no_geometry_types
 real      unfilled_openings
