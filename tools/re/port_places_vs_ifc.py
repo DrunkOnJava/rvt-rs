@@ -52,12 +52,12 @@ def pipe_axes(path):
     """Tag -> (first end, second end), feet, of each extruded flow segment."""
     model = ifcopenshell.open(path)
     scale = unit.calculate_unit_scale(model) / FT
-    local = site_local(model)
+    in_site = site_local(model)
     out = {}
     for element in model.by_type("IfcFlowSegment"):
         if not element.Tag or not element.Representation:
             continue
-        world = local(element.ObjectPlacement)
+        world = in_site(element.ObjectPlacement)
         for representation in element.Representation.Representations:
             for item in representation.Items:
                 if not item.is_a("IfcExtrudedAreaSolid"):
@@ -77,13 +77,13 @@ def ports(path):
     """(ElementId, index, In/Out) -> (point in feet, Z axis) of each named port."""
     model = ifcopenshell.open(path)
     scale = unit.calculate_unit_scale(model) / FT
-    local = site_local(model)
+    in_site = site_local(model)
     out = {}
     for port in model.by_type("IfcDistributionPort"):
         match = PORT_NAME.match(port.Name or "")
         if not match or not port.ObjectPlacement:
             continue
-        matrix = local(port.ObjectPlacement)
+        matrix = in_site(port.ObjectPlacement)
         point = [float(v) * scale for v in matrix[:3, 3]]
         axis = [float(matrix[i][2]) for i in range(3)]
         side = "In" if (port.Name or "").startswith("In") else "Out" if (port.Name or "").startswith("Out") else "-"
@@ -154,10 +154,10 @@ def main():
     # port, against that segment port.
     model = ifcopenshell.open(args.reference)
     scale = unit.calculate_unit_scale(model) / FT
-    local = site_local(model)
+    in_site = site_local(model)
 
     def place(port):
-        matrix = local(port.ObjectPlacement)
+        matrix = in_site(port.ObjectPlacement)
         return [float(v) * scale for v in matrix[:3, 3]], [float(matrix[i][2]) for i in range(3)]
 
     def owner(port):
