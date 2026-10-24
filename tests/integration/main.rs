@@ -167,6 +167,8 @@ mod space_types;
 mod spatial_property_sets;
 #[path = "../support_matrix.rs"]
 mod support_matrix;
+#[path = "../tapered_walls_2025.rs"]
+mod tapered_walls_2025;
 #[path = "../type_global_ids.rs"]
 mod type_global_ids;
 #[path = "../typed_no_geometry_types.rs"]

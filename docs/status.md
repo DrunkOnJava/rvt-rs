@@ -627,6 +627,12 @@ thickness about its line at the top. Each is now that cross-section along
 its line: 19 of the 20 within 0.001 ft of Revit's body across the wall at
 five heights (none within 0.1 ft before), and 24 walls better in the GLB,
 none worse (`reports/element-framing/RE-86-tapered-walls.md`).
+**RE-213 (2026-10-24)** reads the same face angles on Revit 2025, which
+frames them with twelve zero bytes after the `u32 2` instead of eight. On
+Snowdon Towers saved by Revit 2025, 19 of the 20 walls Revit tapers are within
+0.001 ft of its body across the wall (none within 0.1 ft before), and 24 walls
+are better in the GLB, none worse
+(`reports/element-framing/RE-213-tapered-walls-2025.md`).
 **RE-87 (2026-09-28)** reads a family instance's transform: twelve `f64` in
 its data, a 3 x 3 rotation stored row by row and its origin. On Snowdon
 Towers, of the 1,956 upright transforms in Revit's export, 1,951 point X
