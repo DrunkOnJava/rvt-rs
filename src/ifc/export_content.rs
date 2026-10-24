@@ -2781,9 +2781,16 @@ fn roof_extrusion_solid(
     let twice_area = |a: [f64; 2], b: [f64; 2], c: [f64; 2]| {
         (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0])
     };
+    // Relative to the outline's first point, so large model coordinates do
+    // not cancel.
+    let origin = points[0];
     let section = (0..n)
         .map(|k| {
             let (a, b) = (points[k], points[(k + 1) % n]);
+            let (a, b) = (
+                [a[0] - origin[0], a[1] - origin[1]],
+                [b[0] - origin[0], b[1] - origin[1]],
+            );
             a[0] * b[1] - b[0] * a[1]
         })
         .sum::<f64>()

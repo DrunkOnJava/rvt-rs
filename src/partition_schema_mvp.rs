@@ -8284,13 +8284,27 @@ fn attach_extrusion_roofs(rf: &mut RevitFile, revit_version: u32, products: &mut
     else {
         return;
     };
+    // A roof's lines are those its Sketch lists (RE-97), which an edited
+    // sketch's lines' owner references need not name, or else those naming
+    // it.
+    let all_lines: BTreeSet<u32> = sketch_lines.iter().map(|line| line.element_id).collect();
+    let lists =
+        crate::element_record_plan_profiles::scan_sketch_curve_lists(rf, revit_version, &all_lines);
+    let listed: BTreeMap<u32, u32> = lists
+        .iter()
+        .filter(|(roof, _)| boxes.contains_key(roof))
+        .flat_map(|(&roof, curves)| curves.iter().map(move |&line| (line, roof)))
+        .collect();
+    let roof_of = |line: &per::PartitionElementRecord| {
+        listed.get(&line.element_id).copied().or_else(|| {
+            line.owner_reference
+                .filter(|owner| boxes.contains_key(owner) && !lists.contains_key(owner))
+        })
+    };
     // A line framed in more than one partition is one line: its first copy.
     let mut copies: BTreeMap<u32, BTreeMap<u32, &per::PartitionElementRecord>> = BTreeMap::new();
     for line in &sketch_lines {
-        if let Some(owner) = line
-            .owner_reference
-            .filter(|owner| boxes.contains_key(owner))
-        {
+        if let Some(owner) = roof_of(line) {
             let kept = copies.entry(owner).or_default();
             let first = kept.get(&line.element_id).is_none_or(|held| {
                 (line.stream.as_str(), line.offset) < (held.stream.as_str(), held.offset)
@@ -8363,7 +8377,7 @@ fn attach_extrusion_roofs(rf: &mut RevitFile, revit_version: u32, products: &mut
         let Some(id) = roof.id else {
             continue;
         };
-        let (Some(&(axis, at)), Some(record)) = (planes.get(&id), boxes.get(&id)) else {
+        let (Some(&(axis, _)), Some(record)) = (planes.get(&id), boxes.get(&id)) else {
             continue;
         };
         let Some(thickness) = type_of(roof)
@@ -8440,9 +8454,9 @@ fn attach_extrusion_roofs(rf: &mut RevitFile, revit_version: u32, products: &mut
             .iter()
             .zip(wanted)
             .all(|(got, want)| (got - want).abs() <= ROOF_EXTRUSION_BOX_TOLERANCE_FEET);
-        let in_plane = at >= record[axis] - ROOF_EXTRUSION_BOX_TOLERANCE_FEET
-            && at <= record[axis + 3] + ROOF_EXTRUSION_BOX_TOLERANCE_FEET;
-        if !(reproduces && in_plane) {
+        // The extrusion runs over the record box along `axis`, wherever its
+        // sketch plane is: Revit's Start and End may put it to one side.
+        if !reproduces {
             continue;
         }
         roof.fields.push((
