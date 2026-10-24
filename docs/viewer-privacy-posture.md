@@ -1,4 +1,4 @@
-# Viewer privacy posture (VW1-21)
+# Viewer privacy posture
 
 The browser viewer (`viewer/`, deployed at
 <https://drunkonjava.github.io/rvt-rs/>) is a **client-side-only**
@@ -52,7 +52,7 @@ Contributions that would break the invariant:
 If a future viewer wants any of these, it does them in a
 **separate** crate that explicitly opts in — not in `rvt-core`.
 
-## What this means for the WASM build (VW1-01)
+## What this means for the WASM build
 
 The compiled `.wasm` artifact, built from the `rvt-wasm` crate:
 
@@ -66,7 +66,7 @@ CI asserts the import list on every deploy (check 2 under
 [Auditability](#auditability)): an import that reaches the network fails
 the build.
 
-## What this means for the static site (VW1-18)
+## What this means for the static site
 
 The viewer is deployed to GitHub Pages, a static host, and keeps to these
 rules:

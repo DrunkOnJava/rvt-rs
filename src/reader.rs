@@ -119,6 +119,17 @@ pub struct RevitFile {
     native_preamble: Option<Arc<crate::native_document::Preamble>>,
 }
 
+/// The limits it was opened with and how many streams it has inflated so
+/// far; the container's bytes and the caches are left out.
+impl std::fmt::Debug for RevitFile {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RevitFile")
+            .field("limits", &self.limits)
+            .field("inflated_streams", &self.inflated.len())
+            .finish_non_exhaustive()
+    }
+}
+
 /// A partition stream's data objects, each at its offset (RE-153).
 #[cfg(feature = "unstable-research")]
 pub type PartitionDataObjects = Arc<Vec<(usize, crate::partition_room_parameters::DataObject)>>;
@@ -182,15 +193,24 @@ impl RevitFile {
     /// `OpenLimits::default()` (2 GiB file, 256 MiB per stream, 256
     /// MiB per inflate).
     ///
-    /// ```no_run
-    /// use rvt::reader::{RevitFile, OpenLimits};
+    /// ```
+    /// use rvt::reader::{OpenLimits, RevitFile};
     ///
     /// // Only accept files up to 100 MB.
     /// let limits = OpenLimits {
     ///     max_file_bytes: 100 * 1024 * 1024,
     ///     ..OpenLimits::default()
     /// };
-    /// let mut rf = RevitFile::open_with_limits("your-project.rfa", limits)?;
+    /// let path = "corpus/tier1/architectural-2024/architectural-2024.rvt";
+    /// let rf = RevitFile::open_with_limits(path, limits)?;
+    /// assert!(!rf.stream_names().is_empty());
+    ///
+    /// // A file over the limit is refused before it is read.
+    /// let tiny = OpenLimits { max_file_bytes: 1024, ..OpenLimits::default() };
+    /// assert!(matches!(
+    ///     RevitFile::open_with_limits(path, tiny),
+    ///     Err(rvt::Error::TooLarge { .. })
+    /// ));
     /// # Ok::<(), rvt::Error>(())
     /// ```
     pub fn open_with_limits(path: impl AsRef<Path>, limits: OpenLimits) -> Result<Self> {
@@ -255,6 +275,22 @@ impl RevitFile {
     /// has already been done by the caller if they came through
     /// [`Self::open_with_limits`]; here it's repeated for in-memory
     /// paths that skip disk stat.
+    ///
+    /// ```
+    /// use rvt::reader::{OpenLimits, RevitFile};
+    ///
+    /// let bytes = std::fs::read("corpus/tier1/architectural-2024/architectural-2024.rvt")?;
+    /// let rf = RevitFile::open_bytes_with_limits(bytes.clone(), OpenLimits::default())?;
+    /// assert!(!rf.stream_names().is_empty());
+    ///
+    /// // Bytes over the limit are refused before they are parsed.
+    /// let tiny = OpenLimits { max_file_bytes: 1024, ..OpenLimits::default() };
+    /// assert!(matches!(
+    ///     RevitFile::open_bytes_with_limits(bytes, tiny),
+    ///     Err(rvt::Error::TooLarge { .. })
+    /// ));
+    /// # Ok::<(), Box<dyn std::error::Error>>(())
+    /// ```
     pub fn open_bytes_with_limits(bytes: Vec<u8>, limits: OpenLimits) -> Result<Self> {
         if (bytes.len() as u64) > limits.max_file_bytes {
             return Err(Error::TooLarge {

@@ -956,11 +956,13 @@ fn sketch_curve_list(
 ) -> Option<(u32, Vec<u32>)> {
     let u64_at = |at: usize| {
         data.get(at..at.checked_add(8)?)
-            .map(|s| u64::from_le_bytes(s.try_into().expect("8 bytes")))
+            .and_then(|s| s.first_chunk::<8>())
+            .map(|b| u64::from_le_bytes(*b))
     };
     let u32_at = |at: usize| {
         data.get(at..at.checked_add(4)?)
-            .map(|s| u32::from_le_bytes(s.try_into().expect("4 bytes")))
+            .and_then(|s| s.first_chunk::<4>())
+            .map(|b| u32::from_le_bytes(*b))
     };
     let own = u32::try_from(u64_at(header_len)?).ok()?;
     let owner = u32::try_from(u64_at(SKETCH_OWNER_OFFSET)?).ok()?;

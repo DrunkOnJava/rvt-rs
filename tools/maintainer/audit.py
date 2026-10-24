@@ -14,6 +14,7 @@ Usage:
 """
 
 import argparse
+import base64
 import fnmatch
 import json
 import re
@@ -309,7 +310,12 @@ def dependabot_entries():
     return entries
 
 
-@check("Dependabot watches every lockfile, Dockerfile and composite action, or the audit says why not")
+def blob(repo, item):
+    """A file of the tree listing, as text."""
+    return base64.b64decode(gh(f"repos/{repo}/git/blobs/{item['sha']}")["content"]).decode("utf-8", "replace")
+
+
+@check("Dependabot watches every lockfile, Dockerfile, composite action and devcontainer, or the audit says why not")
 def dependabot_coverage(repo):
     tree = gh(f"repos/{repo}/git/trees/HEAD?recursive=1")
     if tree.get("truncated"):
@@ -325,6 +331,10 @@ def dependabot_coverage(repo):
             need[("npm", folder)] = path
         elif name == "Dockerfile" or name.startswith("Dockerfile."):
             need[("docker", folder)] = path
+        elif re.fullmatch(r"requirements[^/]*\.txt", name) and "--hash=" in blob(repo, item):
+            need[("pip", folder)] = path
+        elif path in (".devcontainer/devcontainer.json", ".devcontainer.json"):
+            need[("devcontainers", "/")] = path
         elif re.fullmatch(r"\.github/actions/[^/]+/action\.ya?ml", path):
             need[("github-actions", folder)] = path
     watched = dependabot_entries()
