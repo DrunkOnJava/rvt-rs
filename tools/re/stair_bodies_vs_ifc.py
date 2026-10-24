@@ -13,7 +13,10 @@ body in world space with IfcOpenShell and compares, in feet, as
 
 A flight drawn as its record box has the box's volume and corners, so it
 misses on both; one drawn as its treads and risers matches on both or on
-neither.
+neither. The surface test does not tell a box from a flight: a straight
+flight's vertices all lie on its two side faces, which are the box's sides.
+On `main` every flight of the R2025 stair models (13 to 17) is its box,
+with 4 to 57 ft3 of Revit's against 237 to 684 ft3 (Measure 40140290382).
 
 Needs IfcOpenShell (`pip install ifcopenshell`).
 
