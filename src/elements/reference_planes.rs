@@ -79,7 +79,7 @@ pub struct ReferencePlane {
     pub normal: Option<Vector3>,
     pub is_template: Option<bool>,
     /// View the plane was created in; `0` or absent means model-level.
-    pub owner_view_id: Option<u32>,
+    pub owner_view_id: Option<crate::ElementId>,
 }
 
 impl ReferencePlane {
@@ -108,7 +108,7 @@ impl ReferencePlane {
                 ("cutvecz", InstanceField::Float { value, .. }) => nz = Some(*value),
                 ("istemplate", InstanceField::Bool(b)) => out.is_template = Some(*b),
                 ("ownerviewid", InstanceField::ElementId { id, .. }) => {
-                    out.owner_view_id = Some(*id);
+                    out.owner_view_id = Some(crate::ElementId::from(*id));
                 }
                 _ => {}
             }

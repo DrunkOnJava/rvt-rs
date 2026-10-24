@@ -40,12 +40,18 @@ pub struct PartitionArcWall {
 impl PartitionArcWall {
     /// ElemTable-linkable ElementId when the trailer validated.
     pub fn element_id(&self) -> Option<u32> {
-        self.trailer.as_ref().and_then(|t| t.element_id)
+        self.trailer
+            .as_ref()
+            .and_then(|t| t.element_id)
+            .and_then(crate::ElementId::as_u32)
     }
 
     /// Shared type-symbol candidate from the trailer (`+0xfe`).
     pub fn type_id(&self) -> Option<u32> {
-        self.trailer.as_ref().and_then(|t| t.type_id)
+        self.trailer
+            .as_ref()
+            .and_then(|t| t.type_id)
+            .and_then(crate::ElementId::as_u32)
     }
 
     /// Base elevation in feet (trailer `+0xf6`, else core start Z).

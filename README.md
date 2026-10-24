@@ -23,7 +23,7 @@ Support depends on the Revit release, the file type and the feature. Opening a f
 
 The recovery figures in this README compare rvt-rs's export with Revit's own IFC export of the same file, element by element, on the models named in [What rvt-rs reads from real projects](#what-rvt-rs-reads-from-real-projects). Other models of the same releases are expected to behave alike but are not measured, and files saved by the same release can store their data differently. [`docs/support-matrix.json`](docs/support-matrix.json) records each capability with its evidence and its status ceiling.
 
-This README describes the development branch, `main`, which the browser viewer is also built from. Installed packages are the latest release; [Release 0.6.1 and main](#release-061-and-main) says what differs.
+This README describes the development branch, `main`, which the browser viewer is also built from. Installed packages are the latest release; [Release 0.7.0 and main](#release-070-and-main) says what differs.
 
 ## What you can rely on, by input
 
@@ -42,16 +42,19 @@ This README describes the development branch, `main`, which the browser viewer i
 
 `rvt-capabilities --matrix -f text` prints the support matrix; [`docs/status.md`](docs/status.md) and [`docs/supported-profile.md`](docs/supported-profile.md) summarise it.
 
-## Release 0.6.1 and main
+## Release 0.7.0 and main
 
-The latest release is [v0.6.1](https://github.com/DrunkOnJava/rvt-rs/releases/tag/v0.6.1) (2026-10-19): 0.6.0, released the same day, with an overflow fixed that could make an export panic on a 32-bit target, such as the WebAssembly the browser viewer runs (#836; the viewer, built from `main`, has had the fix since it landed there), and a corrected support table: opening Revit 2027 and 2015 projects is measured only on Autodesk's sample projects, where previews and PartAtom are not measured; Revit 2014 and earlier projects are not measured on a documented project; and `IsExternal` is written on every class but curtain mullions and panels. `cargo install rvt --locked`, `pip install rvt`, the release archives and the container image install it, and "Upgrading from 0.5" in the [changelog](CHANGELOG.md) says what a user of 0.5 has to change. What 0.6.0 added, in brief:
+The latest release is [v0.7.0](https://github.com/DrunkOnJava/rvt-rs/releases/tag/v0.7.0) (2026-10-24). `cargo install rvt --locked`, `pip install rvt`, the release archives and the container image install it, and "Upgrading from 0.6" in the [changelog](CHANGELOG.md) says what a user of 0.6 has to change: the research readers need the `unstable-research` feature, `Error` and the stable API's output types are `#[non_exhaustive]`, and some errors, the decoder types and the property set builders changed. What 0.7.0 added, in brief:
 
-- **IFC4's own property sets:** 0.5 took some of its standard property sets from Revit's exports of the RE1 models, which are IFC2X3. Every standard property set rvt-rs writes now matches buildingSMART's published IFC4 property set definitions on all 89 exports Measure checks, by rvt-rs's own check of them (#822, #826); buildingSMART's Validation Service has not been run on them, and quantity sets are not checked. The values 0.5 wrote in IFC2X3's sets are in the IFC4 sets Revit's own IFC4 export writes them in, but for a pipe fitting's nominal diameter, which no IFC4 set of a fitting holds: it is in rvt-rs's own set.
-- **More of what Revit's exporter writes:** parameters named for an IFC4 property set's property (RE-194, #817), `IsExternal` on every class but curtain mullions and panels (RE-193), a type's Fire Rating in the element's common set, a door's and window's overall size (RE-187, RE-215), Revit 2024 Areas as spaces (RE-191), and each port's type and, on an electrical connector, its flow direction (RE-197).
-- **Older and newer releases, experimentally:** Revit 2015 to 2022 and 2027 projects export their elements, measured against the same models saved by a neighbouring release rather than against a Revit export (RE-179 to RE-181).
-- **The browser viewer** no longer panics on a string field whose length is corrupt (#835).
+- **Roofs as Revit draws them:** gable, hip and slope-arrow roofs as their planes, with Revit 2025 roofs' slopes, rafter cuts and fascias (RE-199), and a Revit 2025 roof by extrusion as its sketch's section (RE-211): on puzzbobb's Revit 2025 models, 19 of the 19 roofs in Revit's exports have Revit's body, every one of Revit's vertices within 0.001 ft of rvt-rs's surface.
+- **Walls, doors and windows:** Revit 2025's tapered walls are tapered (RE-213). On Revit 2024 and 2025, a door's or window's `OverallWidth` and `OverallHeight` are the outline its symbol cuts in its host, and so is the opening it cuts where its type gives none (RE-215).
+- **Ports:** placed at a pipe's ends and at a duct's along a model axis (#847), at the port they join (#922), and, on Revit 2025, at their connector through the family instance's transform (#869), with Revit's flow direction, name and description on HVAC and piping ports (RE-212). `SystemType` is not written.
+- **Materials and parameters:** family instances, mullions, columns and walls carry Revit's materials, read from their native records (RE-200 to RE-206), and `rvt-elements` and Python list each element's saved parameters on Revit 2023 to 2027 files (RE-207).
+- **Reproducible output:** `rvt-ifc` honours `SOURCE_DATE_EPOCH`, and CI checks that `rvt-ifc`, `rvt-gltf`, `rvt-sheet` and `rvt-schedule` give the same bytes twice (#873).
+- **The API 1.0 keeps:** 27 stable modules, with the research readers behind `unstable-research`; non-exhaustive errors and output types; `Debug` on every public type; examples that CI runs; and semver checks on the Rust API, the Python stubs, the wasm bindings and the JSON schemas.
+- **The browser viewer**'s whole journey is tested on the six redistributable reference models, and its downloaded diagnostics keep their per-type counts.
 
-The browser viewer is built from `main`, so it runs what `main` has; what `main` adds after 0.6.1 is under `[Unreleased]` in [`CHANGELOG.md`](CHANGELOG.md). To use `main` before the next release, build from source ([`docs/install.md`](docs/install.md#build-from-source)).
+The browser viewer is built from `main`, so it runs what `main` has; what `main` adds after 0.7.0 is under `[Unreleased]` in [`CHANGELOG.md`](CHANGELOG.md). To use `main` before the next release, build from source ([`docs/install.md`](docs/install.md#build-from-source)).
 
 Rust 2024 edition (MSRV 1.87). **Nineteen CLIs ship** (`rvt-analyze`, `rvt-info`, `rvt-inspect`, `rvt-schema`, `rvt-history`, `rvt-diff`, `rvt-corpus`, `rvt-dump`, `rvt-doc`, `rvt-ifc`, `rvt-ifc-compare`, `rvt-write`, `rvt-gltf`, `rvt-sheet`, `rvt-elem-table`, `rvt-elements`, `rvt-capabilities`, `rvt-schedule`, `gen-fixture`) plus the reproducible probes under `examples/`, one or more per format finding. Python bindings via pyo3+maturin in the `rvt-py` workspace member (so the core `rvt` crate can stay unconditionally `#![forbid(unsafe_code)]`) — `pip install rvt`.
 

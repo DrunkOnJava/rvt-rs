@@ -36,8 +36,8 @@ pub type Room = Zone;
 pub struct Zone {
     pub name: Option<String>,
     pub number: Option<String>,
-    pub level_id: Option<u32>,
-    pub upper_limit_id: Option<u32>,
+    pub level_id: Option<crate::ElementId>,
+    pub upper_limit_id: Option<crate::ElementId>,
     pub base_offset_feet: Option<f64>,
     pub upper_offset_feet: Option<f64>,
     pub area_square_feet: Option<f64>,
@@ -54,10 +54,10 @@ impl Zone {
                     out.number = Some(s.clone());
                 }
                 ("levelid" | "hostlevelid", InstanceField::ElementId { id, .. }) => {
-                    out.level_id = Some(*id);
+                    out.level_id = Some(crate::ElementId::from(*id));
                 }
                 ("upperlimitid" | "upperlevelid", InstanceField::ElementId { id, .. }) => {
-                    out.upper_limit_id = Some(*id);
+                    out.upper_limit_id = Some(crate::ElementId::from(*id));
                 }
                 ("baseoffset", InstanceField::Float { value, .. }) => {
                     out.base_offset_feet = Some(*value);

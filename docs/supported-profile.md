@@ -4,7 +4,7 @@ What rvt-rs can be trusted with today, in the terms a BIM user would check.
 The evidence behind every line is in [`support-matrix.json`](support-matrix.json)
 (`rvt-capabilities --matrix -f text` prints it) and in the measured tables of the
 [README](../README.md#what-rvt-rs-reads-from-real-projects). This page
-describes `main`; the latest release is v0.6.1, and what has landed since
+describes `main`; the latest release is v0.7.0, and what has landed since
 is under `[Unreleased]` in [`CHANGELOG.md`](../CHANGELOG.md).
 
 ## Four levels of "it works"
@@ -55,7 +55,7 @@ OLE/CFB Revit container is refused with an error, never a partial model.
 |---|---|---|
 | Walls | a body from the wall's centreline and its type's thickness, drawn as its layers in the viewer and glTF, ending as its joins say, along its arc when curved, leaning on its exterior face when tapered | faces exactly Revit's on 1,030 of Snowdon's 1,078 walls; both ends on 724 |
 | Floors, building pads | the sketched plan outline, holes included, at the measured thickness | Core Interior 80 of 80 outlines |
-| Roofs | the sketched outline; a shed roof along its slope | 11 of 13 outlined Snowdon roofs with Revit's area; hip and gable roofs are boxes (#356) |
+| Roofs | the sketched outline; a shed, gable or hip roof, or one sloped by an arrow, as its planes (RE-56, RE-199); a Revit 2025 roof by extrusion as its sketch's section (RE-211) | 11 of 13 outlined Snowdon roofs with Revit's area; on puzzbobb's Revit 2025 models, 19 of 19 roofs with Revit's body (RE-199, RE-211); hips over T and U footprints are level blocks (#884) |
 | Columns | the column prism minus what walls cut from it | Core Interior 256 of 256, exact |
 | Beams | along their location line with their section; a steel beam whose type stores an I section as that I (RE-103) | 923 of 942 Snowdon structural beams on their line; 377 drawn as their I, Revit's own shape and place on all 271 its VIM export scores; channels and angles are not drawn yet (#94) |
 | Steel columns | a structural column whose type stores an I section as that I, turned to the column's own X axis (RE-104) | all 40 of Snowdon's steel columns; Revit's own shape and turn on all 24 its VIM export scores; tubes and other sections keep their box. Every I-section member carries its I as an `IfcMaterialProfileSet` of its type's material (RE-105) |

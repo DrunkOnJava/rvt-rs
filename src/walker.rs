@@ -608,6 +608,12 @@ pub struct DecodedElement {
 }
 
 impl DecodedElement {
+    /// [`Self::id`] as an [`ElementId`](crate::ElementId), the typed id the
+    /// element structs carry.
+    pub fn element_id(&self) -> Option<crate::ElementId> {
+        self.id.map(crate::ElementId::from)
+    }
+
     /// Attach provenance, preserving other fields.
     pub fn with_provenance(mut self, provenance: ElementProvenance) -> Self {
         self.provenance = provenance;

@@ -47,8 +47,8 @@ use crate::walker::{DecodedElement, InstanceField};
 #[derive(Debug, Clone, PartialEq, Default)]
 #[non_exhaustive]
 pub struct Dimension {
-    pub owner_view_id: Option<u32>,
-    pub dimension_type_id: Option<u32>,
+    pub owner_view_id: Option<crate::ElementId>,
+    pub dimension_type_id: Option<crate::ElementId>,
     /// Reported distance in feet — Revit's native internal unit.
     pub value_feet: Option<f64>,
     /// Empty when the user has not overridden the auto-label.
@@ -62,10 +62,10 @@ impl Dimension {
         for (field_name, value) in &decoded.fields {
             match (normalise_field_name(field_name).as_str(), value) {
                 ("ownerviewid" | "viewid", InstanceField::ElementId { id, .. }) => {
-                    out.owner_view_id = Some(*id);
+                    out.owner_view_id = Some(crate::ElementId::from(*id));
                 }
                 ("dimensiontypeid" | "typeid", InstanceField::ElementId { id, .. }) => {
-                    out.dimension_type_id = Some(*id);
+                    out.dimension_type_id = Some(crate::ElementId::from(*id));
                 }
                 ("value", InstanceField::Float { value, .. }) => {
                     out.value_feet = Some(*value);
@@ -115,9 +115,9 @@ impl TagOrientation {
 #[derive(Debug, Clone, PartialEq, Default)]
 #[non_exhaustive]
 pub struct Tag {
-    pub owner_view_id: Option<u32>,
+    pub owner_view_id: Option<crate::ElementId>,
     /// ElementId of the element this tag annotates.
-    pub tagged_element_id: Option<u32>,
+    pub tagged_element_id: Option<crate::ElementId>,
     pub head_position: Option<TagHeadPosition>,
     pub orientation: Option<TagOrientation>,
     pub has_leader: Option<bool>,
@@ -129,10 +129,10 @@ impl Tag {
         for (field_name, value) in &decoded.fields {
             match (normalise_field_name(field_name).as_str(), value) {
                 ("ownerviewid" | "viewid", InstanceField::ElementId { id, .. }) => {
-                    out.owner_view_id = Some(*id);
+                    out.owner_view_id = Some(crate::ElementId::from(*id));
                 }
                 ("taggedelementid" | "elementid", InstanceField::ElementId { id, .. }) => {
-                    out.tagged_element_id = Some(*id);
+                    out.tagged_element_id = Some(crate::ElementId::from(*id));
                 }
                 ("tagheadposition" | "headposition", InstanceField::Vector(components))
                     if components.len() >= 2 =>
@@ -184,8 +184,8 @@ impl HorizontalAlignment {
 #[derive(Debug, Clone, PartialEq, Default)]
 #[non_exhaustive]
 pub struct TextNote {
-    pub owner_view_id: Option<u32>,
-    pub text_note_type_id: Option<u32>,
+    pub owner_view_id: Option<crate::ElementId>,
+    pub text_note_type_id: Option<crate::ElementId>,
     pub text: Option<String>,
     /// Display width in feet. `0.0` means auto-width. `None` when not
     /// present in the schema shape.
@@ -199,10 +199,10 @@ impl TextNote {
         for (field_name, value) in &decoded.fields {
             match (normalise_field_name(field_name).as_str(), value) {
                 ("ownerviewid" | "viewid", InstanceField::ElementId { id, .. }) => {
-                    out.owner_view_id = Some(*id);
+                    out.owner_view_id = Some(crate::ElementId::from(*id));
                 }
                 ("textnotetypeid" | "typeid", InstanceField::ElementId { id, .. }) => {
-                    out.text_note_type_id = Some(*id);
+                    out.text_note_type_id = Some(crate::ElementId::from(*id));
                 }
                 ("text", InstanceField::String(s)) => out.text = Some(s.clone()),
                 ("width", InstanceField::Float { value, .. }) => {

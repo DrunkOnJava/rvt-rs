@@ -65,8 +65,12 @@ impl LevelStoreyBind {
 /// Extract a host-level ElementId from Floor / Room / Area / Space.
 pub fn level_id_from_decoded(decoded: &DecodedElement) -> Option<u32> {
     match decoded.class.as_str() {
-        "Floor" => Floor::from_decoded(decoded).level_id,
-        "Room" | "Area" | "Space" => Zone::from_decoded(decoded).level_id,
+        "Floor" => Floor::from_decoded(decoded)
+            .level_id
+            .and_then(crate::ElementId::as_u32),
+        "Room" | "Area" | "Space" => Zone::from_decoded(decoded)
+            .level_id
+            .and_then(crate::ElementId::as_u32),
         _ => None,
     }
 }

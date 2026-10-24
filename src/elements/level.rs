@@ -69,7 +69,7 @@ impl ElementDecoder for LevelDecoder {
 pub struct Level {
     pub name: Option<String>,
     pub elevation_feet: Option<f64>,
-    pub level_type_id: Option<u32>,
+    pub level_type_id: Option<crate::ElementId>,
     pub is_building_story: Option<bool>,
 }
 
@@ -97,7 +97,7 @@ impl Level {
                     out.elevation_feet = Some(*value);
                 }
                 ("leveltypeid", InstanceField::ElementId { id, .. }) => {
-                    out.level_type_id = Some(*id);
+                    out.level_type_id = Some(crate::ElementId::from(*id));
                 }
                 ("isbuildingstory", InstanceField::Bool(b)) => {
                     out.is_building_story = Some(*b);

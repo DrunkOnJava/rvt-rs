@@ -52,8 +52,8 @@ use crate::walker::{DecodedElement, InstanceField};
 #[non_exhaustive]
 pub struct Symbol {
     pub name: Option<String>,
-    pub family_id: Option<u32>,
-    pub category_id: Option<u32>,
+    pub family_id: Option<crate::ElementId>,
+    pub category_id: Option<crate::ElementId>,
     pub is_system_family: Option<bool>,
 }
 
@@ -64,10 +64,10 @@ impl Symbol {
             match (normalise_field_name(field_name).as_str(), value) {
                 ("name", InstanceField::String(s)) => out.name = Some(s.clone()),
                 ("familyid", InstanceField::ElementId { id, .. }) => {
-                    out.family_id = Some(*id);
+                    out.family_id = Some(crate::ElementId::from(*id));
                 }
                 ("categoryid", InstanceField::ElementId { id, .. }) => {
-                    out.category_id = Some(*id);
+                    out.category_id = Some(crate::ElementId::from(*id));
                 }
                 ("issystemfamily" | "systemfamily", InstanceField::Bool(b)) => {
                     out.is_system_family = Some(*b);
@@ -93,9 +93,9 @@ impl Symbol {
 #[derive(Debug, Clone, PartialEq, Default)]
 #[non_exhaustive]
 pub struct FamilyInstance {
-    pub symbol_id: Option<u32>,
-    pub level_id: Option<u32>,
-    pub host_id: Option<u32>,
+    pub symbol_id: Option<crate::ElementId>,
+    pub level_id: Option<crate::ElementId>,
+    pub host_id: Option<crate::ElementId>,
     pub location: Option<Point3>,
     pub rotation_radians: Option<f64>,
     pub mirror_x: Option<bool>,
@@ -112,12 +112,14 @@ impl FamilyInstance {
         for (field_name, value) in &decoded.fields {
             match (normalise_field_name(field_name).as_str(), value) {
                 ("symbolid" | "typeid" | "familysymbolid", InstanceField::ElementId { id, .. }) => {
-                    out.symbol_id = Some(*id);
+                    out.symbol_id = Some(crate::ElementId::from(*id));
                 }
                 ("levelid" | "hostlevelid", InstanceField::ElementId { id, .. }) => {
-                    out.level_id = Some(*id);
+                    out.level_id = Some(crate::ElementId::from(*id));
                 }
-                ("hostid", InstanceField::ElementId { id, .. }) => out.host_id = Some(*id),
+                ("hostid", InstanceField::ElementId { id, .. }) => {
+                    out.host_id = Some(crate::ElementId::from(*id))
+                }
                 ("locationx", InstanceField::Float { value, .. }) => lx = Some(*value),
                 ("locationy", InstanceField::Float { value, .. }) => ly = Some(*value),
                 ("locationz", InstanceField::Float { value, .. }) => lz = Some(*value),

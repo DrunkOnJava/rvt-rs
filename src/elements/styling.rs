@@ -22,12 +22,12 @@ pub struct Material {
     /// 0..1 — surface roughness (1/shininess).
     pub shininess: Option<f64>,
     /// IDs of per-view appearance / physical / thermal assets.
-    pub appearance_asset_id: Option<u32>,
-    pub physical_asset_id: Option<u32>,
-    pub thermal_asset_id: Option<u32>,
+    pub appearance_asset_id: Option<crate::ElementId>,
+    pub physical_asset_id: Option<crate::ElementId>,
+    pub thermal_asset_id: Option<crate::ElementId>,
     /// Surface + cut fill pattern IDs.
-    pub surface_pattern_id: Option<u32>,
-    pub cut_pattern_id: Option<u32>,
+    pub surface_pattern_id: Option<crate::ElementId>,
+    pub cut_pattern_id: Option<crate::ElementId>,
 }
 
 impl Material {
@@ -44,19 +44,19 @@ impl Material {
                     out.shininess = Some(*value);
                 }
                 ("appearanceassetid", InstanceField::ElementId { id, .. }) => {
-                    out.appearance_asset_id = Some(*id);
+                    out.appearance_asset_id = Some(crate::ElementId::from(*id));
                 }
                 ("physicalassetid", InstanceField::ElementId { id, .. }) => {
-                    out.physical_asset_id = Some(*id);
+                    out.physical_asset_id = Some(crate::ElementId::from(*id));
                 }
                 ("thermalassetid", InstanceField::ElementId { id, .. }) => {
-                    out.thermal_asset_id = Some(*id);
+                    out.thermal_asset_id = Some(crate::ElementId::from(*id));
                 }
                 ("surfacepatternid", InstanceField::ElementId { id, .. }) => {
-                    out.surface_pattern_id = Some(*id);
+                    out.surface_pattern_id = Some(crate::ElementId::from(*id));
                 }
                 ("cutpatternid", InstanceField::ElementId { id, .. }) => {
-                    out.cut_pattern_id = Some(*id);
+                    out.cut_pattern_id = Some(crate::ElementId::from(*id));
                 }
                 _ => {}
             }
@@ -140,7 +140,7 @@ pub struct LineStyle {
     pub weight: Option<u32>,
     /// Packed RGB.
     pub color: Option<u32>,
-    pub pattern_id: Option<u32>,
+    pub pattern_id: Option<crate::ElementId>,
 }
 
 impl LineStyle {
@@ -154,7 +154,7 @@ impl LineStyle {
                 }
                 ("color", InstanceField::Integer { value, .. }) => out.color = Some(*value as u32),
                 ("patternid" | "linepatternid", InstanceField::ElementId { id, .. }) => {
-                    out.pattern_id = Some(*id);
+                    out.pattern_id = Some(crate::ElementId::from(*id));
                 }
                 _ => {}
             }
