@@ -140,7 +140,8 @@ fn data_offsets(buf: &[u8], header: &[u8; 10], ids: &[u32]) -> BTreeMap<u32, usi
     for hit in memchr::memmem::find_iter(buf, header) {
         let Some(id) = buf
             .get(hit + header.len()..hit + header.len() + 8)
-            .map(|s| u64::from_le_bytes(s.try_into().expect("8 bytes")))
+            .and_then(|s| s.first_chunk::<8>())
+            .map(|b| u64::from_le_bytes(*b))
             .and_then(|id| u32::try_from(id).ok())
         else {
             continue;
@@ -721,7 +722,8 @@ fn scan_run_data<T: PartialEq>(
             let id_at = hit + header.len();
             let Some(id) = buf
                 .get(id_at..id_at + 8)
-                .map(|s| u64::from_le_bytes(s.try_into().expect("8 bytes")))
+                .and_then(|s| s.first_chunk::<8>())
+                .map(|b| u64::from_le_bytes(*b))
                 .and_then(|id| u32::try_from(id).ok())
                 .filter(|id| runs.contains(id))
             else {

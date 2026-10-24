@@ -506,8 +506,7 @@ fn extract_build(text: &str) -> Option<String> {
                 && hm.iter().all(u8::is_ascii_digit)
                 && sfx == suffix.as_bytes();
             if ok {
-                // Safe because window is all ASCII.
-                return Some(std::str::from_utf8(window).unwrap().to_string());
+                return Some(String::from_utf8_lossy(window).into_owned());
             }
         }
     }

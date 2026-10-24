@@ -53,9 +53,9 @@ impl Catalog {
 pub fn guid_string(raw: [u8; 16]) -> String {
     format!(
         "{:08x}-{:04x}-{:04x}-{:02x}{:02x}-{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}",
-        u32::from_le_bytes(raw[0..4].try_into().unwrap()),
-        u16::from_le_bytes(raw[4..6].try_into().unwrap()),
-        u16::from_le_bytes(raw[6..8].try_into().unwrap()),
+        u32::from_le_bytes([raw[0], raw[1], raw[2], raw[3]]),
+        u16::from_le_bytes([raw[4], raw[5]]),
+        u16::from_le_bytes([raw[6], raw[7]]),
         raw[8],
         raw[9],
         raw[10],
@@ -95,7 +95,7 @@ pub struct Inventory {
     pub owners: Vec<Owner>,
     pub diagnostics: Vec<String>,
 }
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct InventoryBuilder {
     entities: Vec<Entity>,
     owners: Vec<Owner>,

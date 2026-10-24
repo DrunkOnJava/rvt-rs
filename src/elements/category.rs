@@ -37,6 +37,7 @@ use crate::walker::{DecodedElement, ElementDecoder, HandleIndex, InstanceField};
 use crate::{Error, Result};
 
 /// Registered [`ElementDecoder`] for the `Category` class.
+#[derive(Debug)]
 pub struct CategoryDecoder;
 
 impl ElementDecoder for CategoryDecoder {
@@ -73,6 +74,7 @@ impl ElementDecoder for CategoryDecoder {
 }
 
 /// Registered [`ElementDecoder`] for the `Subcategory` class.
+#[derive(Debug)]
 pub struct SubcategoryDecoder;
 
 impl ElementDecoder for SubcategoryDecoder {

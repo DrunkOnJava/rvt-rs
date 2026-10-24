@@ -148,9 +148,13 @@ Configured on the repository, with the rulesets kept as code in
   Dependabot alerts and security updates are on. Dependabot opens weekly version
   updates for Cargo (the crate, the fuzz workspace and `tools/ci/witness-ifc-lite`),
   GitHub Actions (the workflows and the composite actions under
-  `.github/actions`), the viewer's npm packages and the release image's base in
-  `docker/Dockerfile`, with minor and patch updates grouped; major updates
-  arrive one at a time and are migrated by hand when they need it. A release
+  `.github/actions`), the viewer's npm packages, the Python packages CI pins in
+  `tools/ci/requirements-*.txt` and the Codespaces notebooks pin in
+  `.devcontainer/requirements-jupyter.txt`, the base images of
+  `docker/Dockerfile` and `.devcontainer/Dockerfile`, and the Dev Container
+  Features `.devcontainer/devcontainer.json` installs, with minor and patch
+  updates grouped; major updates arrive one at a time and are migrated by hand
+  when they need it. A release
   waits three days (seven for a major Cargo or npm one) before it is proposed, and commit
   titles read `build(deps): ...`. The witness's `ifc-lite-core` is never
   proposed: it is pinned to an exact version on purpose, as a different version
@@ -206,9 +210,10 @@ line names what to fix (its rulesets check needs an admin token). The list:
    issue to file with its cause, and a check that fails only because a service
    is down reports "not measured" rather than failing.
 5. Open Dependabot and code scanning alerts are triaged, each fixed or
-   dismissed with a reason, and Dependabot watches every lockfile, Dockerfile
-   and composite action in `.github/dependabot.yml` (the audit lists what is
-   missing).
+   dismissed with a reason, and Dependabot watches every lockfile (a pip
+   requirements file pinned with hashes among them), Dockerfile, composite
+   action and devcontainer in `.github/dependabot.yml` (the audit lists what
+   is missing).
 6. Discussions and community pull requests have an answer.
 7. The rulesets and settings still match their files.
 8. [`release-1.0-criteria.md`](release-1.0-criteria.md) agrees with the

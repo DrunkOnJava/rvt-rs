@@ -131,7 +131,8 @@ pub fn scan_edge_slopes(
             let id_at = hit + header.len();
             let Some(id) = buf
                 .get(id_at..id_at + 8)
-                .map(|s| u64::from_le_bytes(s.try_into().expect("8 bytes")))
+                .and_then(|s| s.first_chunk::<8>())
+                .map(|b| u64::from_le_bytes(*b))
                 .and_then(|id| u32::try_from(id).ok())
                 .filter(|id| lines.contains(id))
             else {
@@ -268,7 +269,8 @@ pub fn scan_arrow_heights(
             let id_at = hit + header.len();
             let Some(id) = buf
                 .get(id_at..id_at + 8)
-                .map(|s| u64::from_le_bytes(s.try_into().expect("8 bytes")))
+                .and_then(|s| s.first_chunk::<8>())
+                .map(|b| u64::from_le_bytes(*b))
                 .and_then(|id| u32::try_from(id).ok())
                 .filter(|id| lines.contains(id))
             else {
@@ -338,7 +340,8 @@ pub fn scan_fascia_depths(
             let id_at = hit + header.len();
             let Some(id) = buf
                 .get(id_at..id_at + 8)
-                .map(|s| u64::from_le_bytes(s.try_into().expect("8 bytes")))
+                .and_then(|s| s.first_chunk::<8>())
+                .map(|b| u64::from_le_bytes(*b))
                 .and_then(|id| u32::try_from(id).ok())
                 .filter(|id| roofs.contains(id))
             else {
