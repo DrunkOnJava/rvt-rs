@@ -8,7 +8,140 @@ fragments a release moves into this file.
 
 ## [Unreleased]
 
+## [0.7.0] — 2026-10-24
+
+0.7.0 draws more of a building the way Revit's own export does, and settles
+the API that 1.0 will keep. Gable, hip and slope-arrow roofs are drawn as
+their planes, Revit 2025 roofs slope (RE-199), and a Revit 2025 roof by
+extrusion is its sketch's section (RE-211). Revit 2025's tapered walls are
+tapered (RE-213), and a door's or window's overall size and opening are the
+outline its symbol cuts in its host (RE-215). Ports are placed at their
+pipe's or duct's ends, where they join a placed port, or through their
+family instance's transform, and they carry Revit's flow direction, name
+and description (RE-212). Family instances, mullions, columns and walls carry
+Revit's materials, read from their native records (RE-200 to RE-206), and
+`rvt-elements` and Python list each element's saved parameters (RE-207).
+`rvt-ifc` honours `SOURCE_DATE_EPOCH`, and CI checks that every writer gives
+the same bytes twice.
+
+The crate's API is now 27 stable modules, the ones `RELEASE.md` says 1.0
+keeps stable. The research readers moved to `rvt::research`, behind the
+`unstable-research` feature. `Error` and the stable modules' output types
+are `#[non_exhaustive]`, so a later release can add to them without breaking
+your code, and CI's semver checks compare the Rust API, the Python stubs,
+the wasm bindings and the JSON schemas with the base of every pull request.
+Code that uses the crate has to change (below). The CLIs and the viewer need
+nothing, and the Python package changes one exception.
+
+puzzbobb's pull requests draw roofs as their planes (#870), carry Revit's
+materials (#886), list each element's saved parameters (#887) and draw
+Revit 2025's tapered walls (#935). n3ur0m4n's reads saved graphics faster,
+with the same output (#882). Thank you.
+
+### Upgrading from 0.6
+
+- **The research readers need `unstable-research` (#873).** The partition,
+  native and element-record readers are under `rvt::research`:
+  `rvt::partition_element_records` is now
+  `rvt::research::partition_element_records`. The `RevitFile` accessors that
+  return their types (`element_names`, `design_options`,
+  `second_prologue_ids`, `partition_data_objects`), the linkers
+  `link_arcwall_element_ids` and `link_partition_element_ids`, and
+  `elements::arc_wall::decode_candidate` and `from_partition_arc_wall` need
+  the feature too. `EvidenceTier` is in `rvt::capability`, and
+  `relations::RelationDomain::for_edge_kind` is now
+  `relations::domain_for_edge_kind`.
+- **A `match` needs a wildcard arm.** `Error` and the stable modules' 62
+  public enums are `#[non_exhaustive]`. Code outside the crate can no longer
+  build the 135 structs that only rvt-rs produces with a struct literal.
+- **Errors say what failed (#898, #899).** `Error::Cfb` is now
+  `Cfb { op, path, source }`, and its `io::Error` is the error's source. A
+  file, buffer or stream over its limit is `Error::TooLarge`. The failures
+  that were reported as `BasicFileInfo` or `Cfb` without being about either
+  are now `SchemaMismatch`, `NoDecoder`, `MissingClass`, `Malformed` or
+  `NotLocated`. In Python, `RevitFile.read_adocument()` raises `ValueError`,
+  where it raised `OSError`, for a file whose schema declares no `ADocument`.
+- **One decoder type (#894).** The 67 unit decoder types (`mep::DuctDecoder`,
+  `generic::MassDecoder`, ...) are replaced by
+  `elements::SimpleDecoder::new("<class>")`. `all_decoders()` and
+  `decoder_for_class` return the same classes as before.
+- **The property set builders return a `Vec` (#827).** `from_decoded`'s
+  builders return IFC4's set and an `Rvt...` set, and
+  `ElementInput::property_set` is now `property_sets`. `RvtDocExporter`'s
+  exports do not use these builders.
+- **`ifc::pset_validate` is removed (#831).**
+- **The element walk fails closed (#852).** `walker::iter_elements` no
+  longer yields a `Global/Latest` row that has no ElementId, and it skips a
+  typed schema-path row its decoder rejects.
+- **Exports change.** An export names 0.7.0 in its IFC header and in its
+  `IfcApplication`. The geometry, materials, ports and properties below are
+  new, so the same file exported by 0.6 and by 0.7.0 gives different IFCs.
+
 ### Added
+
+- **A Revit 2025 roof by extrusion has its shape (RE-211, #883).** Its
+  sketch is a B-spline in a vertical plane, now read: its degree, weighted
+  control points and knots. That curve is the roof's top. The type's
+  thickness, square to it, gives the underside, both ends are cut plumb, and
+  the section runs across the record box, which it must reproduce. On
+  `11_RoofByExtrusion` in puzzbobb's Revit 2025 models every vertex of
+  Revit's body is within 0.001 ft of rvt-rs's (0.000124 ft at most), and the
+  volume within 0.03%, where it was the 7,665 ft³ record box. That makes 19
+  of the 19 roofs in those models. A roof by extrusion on another release,
+  or one whose sketch holds an arc, keeps its box. `roof_bodies_vs_ifc` also
+  measures Revit's vertices against rvt-rs's surface.
+
+- **A door's or window's opening is the outline its symbol cuts (RE-215,
+  #227).** On Revit 2024 and 2025, where its type gives no opening, a door
+  or window cuts its host along the outline the symbol that draws it cuts,
+  placed by the instance's transform (RE-87) and through the wall. 124 of
+  Core Interior's 132 doors, its 6 windows and RE1 Architecture's 4 doors
+  now cut Revit's opening within 0.001 ft; they were up to 0.26 ft off.
+  Core Interior's other 8 doors have no transform read and keep their box.
+
+- **`rvt-elements` and Python's `decoded_elements()` list each element's
+  saved parameters (#35, RE-207).** On Revit 2023 to 2027 files, an element's
+  `parameters` now also hold the values its native record saves: its typed
+  parameter sets, the family parameters of its own `FamilyParams`, and the
+  native fields read as built-in parameters, each named by the file's own
+  definition (family, shared, project and global parameters) with its
+  storage type, spec, group and value. A family instance's type parameters
+  follow its own, marked `"level": "type"`; a family's instance parameter is
+  taken only from the instance. Lengths, areas, volumes and angles also get
+  their SI value, a Yes/No value is a boolean, and a value naming a material
+  or a family type also gets that element's name. Built-in parameters keep
+  their negative id and no name. A family type parameter (`ParamDefFamType`,
+  a window's Muntin Pattern or trim) is now read as the ElementId it holds.
+  On the BIM4LCA office (Revit 2024), every parameter named `<set>.<property>`
+  holds the value Revit's export writes for that property on the element:
+  7,606 of 7,606 as built and 7,592 of 7,592 at building permit; on
+  puzzbobb's R2025 models a window's `Pset_WindowCommon.FireRating` is its
+  type's `Fire Rating`, 18 of 18. `tools/re/element_parameters_vs_ifc.py`
+  scores either output against Revit's export. Nothing new is written to IFC.
+  The library gives the same entries through
+  `elements::parameters::saved_parameters_lossy`. By puzzbobb (#887).
+
+- **On Revit 2025, every family-instance port is placed, joined or not
+  (#869).** A port no duct or pipe joins now stands at its connector: the
+  point and axis its connector entry gives in the symbol that draws the
+  instance (RE-215), through the instance's transform (RE-87). On Revit 2025
+  all 53 such ports of RE1 Electrical, 29 of Mechanical and 18 of Plumbing
+  are within 0.01 ft of Revit's, each with Revit's axis; they had no
+  placement. The type's symbol is not enough: fittings sized per instance
+  have symbols of their own, and it put 11 of those ports up to 0.81 ft off.
+  Ports joined to a duct or pipe stay at their partner's point (#922).
+
+- **The viewer's whole journey is tested on the six redistributable
+  reference models.** A browser test opens Einhoven, Core Interior and the
+  four RE1 models, inspects an element, downloads the schedule, the IFC, the
+  GLB, the plan SVG and the diagnostics, and checks them against each other:
+  the inspected element is in the schedule and in the IFC under its
+  ElementId, the schedule lists exactly the elements the diagnostics count by
+  type, and on Einhoven and Core Interior the export has the counts
+  `tests/project_count_fixtures.rs` pins for the CLI's export of the same
+  file. Deploy viewer fetches the RE1 models for it. The Einhoven demo card
+  gave 24 walls and 42 materials; it now gives the 26 walls, 9 curtain
+  panels, 2 windows and 36 materials the viewer shows.
 
 - **A door's and window's OverallWidth and OverallHeight are the outline the
   symbol that draws it cuts in its host (RE-215, #844).** A family instance
@@ -135,80 +268,14 @@ fragments a release moves into this file.
   without one (`missing_debug_implementations`), which CI's `-D warnings`
   makes an error.
 
-### Fixed
-
-- **A column record holding a NaN no longer panics the export.** The
-  column-cut grid sorted its edges with `partial_cmp(..).expect("finite")`,
-  so a NaN read from a damaged record box stopped the whole export. A
-  column or cutter with a non-finite coordinate now gets no cut box, and the
-  grid sorts with `f64::total_cmp`. 40 other `expect` and `unwrap` calls on file
-  bytes and fixed arrays are gone: those reads go through `first_chunk` or
-  the crate's checked little-endian reader instead.
-
-- **The PyPI page's links work, and it is written for Python users (#905).**
-  PyPI showed the repository README, whose links are relative and resolve
-  under `pypi.org/project/rvt/`, so none reached its document. The page is
-  now `rvt-py/README.md`: install, a short example, what to expect, and
-  absolute links to the Python guide, the support table and the changelog.
-  That file said PyPI shipped 0.1.2 and the crate was not on crates.io; it
-  names no version now. The package's Documentation link opens the Python
-  guide. CI reads the built wheel's description, checks that it is that
-  file with absolute links only, and runs its example.
-
-- **A mass whose "Export to IFC As" names an entity is written as it (#864).**
-  rvt-rs read no mass instances. The BIM4LCA office's two `VOLUME` masses
-  carry `IfcSpace`, and Revit's export writes them as `IfcSpace`. They now
-  are, as the 42 family instances of #763 are, and both office files' 308
-  `IfcSpace` pair with Revit's by GlobalId. A mass with no such value is
-  still not written, as Revit's exporter does not write the mass category
-  by default.
-
-- **A family instance whose "Export to IFC As" is `IfcSpace` is an
-  `IfcSpace` (#763).** The BIM4LCA office's 42 `Turning Free Space`
-  instances carry `IfcSpace` with `USERDEFINED` as their own predefined
-  type, and Revit's export writes them as `IfcSpace .USERDEFINED.`, typed by
-  an `IfcSpaceType` named after the family type, with `Pset_SpaceCommon`'s
-  `Reference` that type's name. rvt-rs wrote them as proxies contained in
-  the room around them. They are now spaces, each typed by an
-  `IfcSpaceType` and holding no furniture of its own. A room, area or
-  space keeps its own mapping. One difference from Revit's export
-  remains: Revit's places these spaces in no spatial structure, which
-  IFC4 rule `IfcSpatialStructureElement.WR41` does not allow, so rvt-rs
-  aggregates each under its storey, as it does rooms.
-
-- **A ceiling of separate loops is one `IfcCovering` (#823).** An element
-  whose sketch has separate loops was written as one entity per piece,
-  named `<name>:2`, `<name>:3` and so on (#331), as Revit's export writes
-  floors. Revit's export writes a ceiling as one `IfcCovering` whose body
-  holds every piece, as on the BIM4LCA office's compound ceilings (Measure
-  run 39240535083). A ceiling's pieces are now further items of its
-  `Body` representation, one `IfcExtrudedAreaSolid` each. Floors keep
-  their pieces. The pieces stay in the `IfcModel` (`IfcModel::body_pieces`
-  names them), so the glTF export and the viewer still draw them.
-
-- **The schema path's typed decoders fail closed (#852).** A `Global/Latest`
-  candidate of the seven `MVP_TYPED_CLASSES` became a `schema_typed` row,
-  at confidence 0.9, whatever its bytes held: each decoder rejected only a
-  wrong schema name. It is now skipped when a declared field did not read
-  as its schema type or its class's typed view reads nothing from it. The
-  typed path also takes the caller's `WalkerLimits`, through a new
-  `ElementDecoder::decode_with_limits` (its default decodes the bytes cut
-  to the cap), which every registered decoder implements by passing the
-  limits to `decode_instance_with_limits`, and
-  `elements::decode_typed_with_limits`. On the 76 files
-  Measure reads, no candidate of the seven classes reaches the production
-  score, so no export changes (Measure run 39364060825).
-
-- **`walker::iter_elements` yields no `Global/Latest` row without an
-  ElementId (#852).** Its documentation said a candidate with no ElementId
-  is yielded only by the diagnostic path, but the production threshold
-  yielded one too, undeduplicated and joined to nothing. It is now left
-  out unless the caller asks for a score below
-  `PRODUCTION_ELEMENT_MIN_SCORE`. On the 76 files Measure reads, every
-  production row comes from a partition record and the schema path yields
-  none, so no export changes (Measure run 39367864281).
-
 ### Changed
+
+- **Changelog entries are fragments under `changelog.d/` (#938).** Each
+  pull request writes its entry as `changelog.d/<section>/<name>.md`, and a
+  release step (`tools/release/changelog.py assemble`) moves them into this
+  file. Every pull request used to add its entry at the top of the same
+  section here, so each one that landed left the others in conflict with
+  `main`. CI checks that every fragment is in a section and starts an item.
 
 - **The user pages say what rvt-rs does now (#907).** `docs/README.md`
   indexes `docs/` as user pages, contributor pages and the research record.
@@ -377,6 +444,137 @@ fragments a release moves into this file.
   crates.io and PyPI show 0.6.0's and 0.6.1's as reading typed elements from
   Revit 2023 to 2025 projects with 2026 experimental; 2015 to 2022 and 2027 are
   experimental too since 0.6.0 (RE-179 to RE-181).
+
+### Fixed
+
+- **Family instances, mullions, columns and walls carry Revit's materials (#355).**
+  Read from the native records instead of byte offsets and scans
+  (RE-201 to RE-206):
+  - a mullion or curtain panel takes its type's `m_renderStyleId`;
+    RE-166's fixed offset moved on 10 of Snowdon Towers' 13 mullion types
+    (RE-201);
+  - an off-centre column takes the layer of the wall it was first joined
+    to on its side, or the exterior layer where it stands out past both
+    faces; rendered content (RPC, planting) is `<Unnamed>` (RE-202,
+    RE-205);
+  - a type's materials are its `m_geomTag2MaterialId` read by name, not
+    a nested component's; a material's name is its own `Material.m_name`
+    (RE-203);
+  - `<Unnamed>` only where the family's own document shows geometry with
+    no material, and a material only hidden forms have, nested families'
+    included, is left out (RE-204, RE-205, RE-206);
+  - a layer that takes its category's material takes the one the
+    category's graphics styles name where the object styles are unset or
+    not read, as on every Revit 2025 file (RE-206).
+  On the R2025 models every wall now has Revit's "Default Wall", 117 in
+  21 models, none before. RE1 Architecture 71 of 71 and RE1 Electrical 49
+  of 49 elements have Revit's set (70 and 47 before). Locally on Snowdon
+  Towers 5,134 of the 5,134 elements rvt-rs gives materials have Revit's
+  set (3,689 after RE-200). Core Interior exports as before. The material
+  names and category styles are memoised, and Snowdon's export takes
+  23 s against 20 s before. By puzzbobb (#886).
+
+- **A family instance takes the materials its own parameters name (#355).**
+  Where a family type's geometry-material map holds no material, #580
+  gave its columns and products `<Unnamed>`. Where the instance's own
+  material parameters (`FamilyInstance.m_pInstParams`) name materials,
+  Revit's export gives it those instead, and now so does rvt-rs (RE-200).
+  On the R2025 models 12 to 17, the 9 window trims and muntins of each now
+  have Revit's material set: all 13 elements rvt-rs gives materials have
+  Revit's set, 4 before.
+  Locally on Snowdon Towers, 232 more elements have Revit's set and none
+  fewer. Core Interior, the RE1 models and the other R2025 models export
+  as before. By puzzbobb (#886).
+
+- **Revit 2025's tapered walls are drawn tapered (RE-213, #358).** RE-86
+  read a wall type's face angles only on Revit 2024. Revit 2025 frames them
+  with twelve zero bytes after the frame's `u32 2`, where 2024 has eight, so
+  on a 2025 file every tapered wall fell back to its record box, up to
+  9.3 ft wider than the wall. On Snowdon Towers saved by Revit 2025, 19 of the
+  20 walls Revit tapers are now within 0.001 ft of Revit's body across the
+  wall at five heights (none within 0.1 ft before). 24 walls are closer to
+  Revit's in the GLB and none is further, and the 20 windows in them take
+  RE-89's cut. Every other 2025 file measured exports the same bytes.
+
+- **The viewer's downloaded diagnostics keep their per-type counts, and its
+  Shapes row appears.** The bindings hand a Rust map over as a JavaScript
+  `Map`, which `JSON.stringify` writes as `{}`. So `exported.by_ifc_type`,
+  `body_sources` and the other maps were empty in the diagnostics the viewer
+  showed and saved. The status panel's Shapes row, which says how many
+  bodies are bounding boxes (#409), summed an empty list and never appeared.
+  The viewer now turns the diagnostics' maps into objects when it receives
+  them, and `docs/viewer-api.md` no longer says results are plain JSON.
+
+- **A column record holding a NaN no longer panics the export.** The
+  column-cut grid sorted its edges with `partial_cmp(..).expect("finite")`,
+  so a NaN read from a damaged record box stopped the whole export. A
+  column or cutter with a non-finite coordinate now gets no cut box, and the
+  grid sorts with `f64::total_cmp`. 40 other `expect` and `unwrap` calls on file
+  bytes and fixed arrays are gone: those reads go through `first_chunk` or
+  the crate's checked little-endian reader instead.
+
+- **The PyPI page's links work, and it is written for Python users (#905).**
+  PyPI showed the repository README, whose links are relative and resolve
+  under `pypi.org/project/rvt/`, so none reached its document. The page is
+  now `rvt-py/README.md`: install, a short example, what to expect, and
+  absolute links to the Python guide, the support table and the changelog.
+  That file said PyPI shipped 0.1.2 and the crate was not on crates.io; it
+  names no version now. The package's Documentation link opens the Python
+  guide. CI reads the built wheel's description, checks that it is that
+  file with absolute links only, and runs its example.
+
+- **A mass whose "Export to IFC As" names an entity is written as it (#864).**
+  rvt-rs read no mass instances. The BIM4LCA office's two `VOLUME` masses
+  carry `IfcSpace`, and Revit's export writes them as `IfcSpace`. They now
+  are, as the 42 family instances of #763 are, and both office files' 308
+  `IfcSpace` pair with Revit's by GlobalId. A mass with no such value is
+  still not written, as Revit's exporter does not write the mass category
+  by default.
+
+- **A family instance whose "Export to IFC As" is `IfcSpace` is an
+  `IfcSpace` (#763).** The BIM4LCA office's 42 `Turning Free Space`
+  instances carry `IfcSpace` with `USERDEFINED` as their own predefined
+  type, and Revit's export writes them as `IfcSpace .USERDEFINED.`, typed by
+  an `IfcSpaceType` named after the family type, with `Pset_SpaceCommon`'s
+  `Reference` that type's name. rvt-rs wrote them as proxies contained in
+  the room around them. They are now spaces, each typed by an
+  `IfcSpaceType` and holding no furniture of its own. A room, area or
+  space keeps its own mapping. One difference from Revit's export
+  remains: Revit's places these spaces in no spatial structure, which
+  IFC4 rule `IfcSpatialStructureElement.WR41` does not allow, so rvt-rs
+  aggregates each under its storey, as it does rooms.
+
+- **A ceiling of separate loops is one `IfcCovering` (#823).** An element
+  whose sketch has separate loops was written as one entity per piece,
+  named `<name>:2`, `<name>:3` and so on (#331), as Revit's export writes
+  floors. Revit's export writes a ceiling as one `IfcCovering` whose body
+  holds every piece, as on the BIM4LCA office's compound ceilings (Measure
+  run 39240535083). A ceiling's pieces are now further items of its
+  `Body` representation, one `IfcExtrudedAreaSolid` each. Floors keep
+  their pieces. The pieces stay in the `IfcModel` (`IfcModel::body_pieces`
+  names them), so the glTF export and the viewer still draw them.
+
+- **The schema path's typed decoders fail closed (#852).** A `Global/Latest`
+  candidate of the seven `MVP_TYPED_CLASSES` became a `schema_typed` row,
+  at confidence 0.9, whatever its bytes held: each decoder rejected only a
+  wrong schema name. It is now skipped when a declared field did not read
+  as its schema type or its class's typed view reads nothing from it. The
+  typed path also takes the caller's `WalkerLimits`, through a new
+  `ElementDecoder::decode_with_limits` (its default decodes the bytes cut
+  to the cap), which every registered decoder implements by passing the
+  limits to `decode_instance_with_limits`, and
+  `elements::decode_typed_with_limits`. On the 76 files
+  Measure reads, no candidate of the seven classes reaches the production
+  score, so no export changes (Measure run 39364060825).
+
+- **`walker::iter_elements` yields no `Global/Latest` row without an
+  ElementId (#852).** Its documentation said a candidate with no ElementId
+  is yielded only by the diagnostic path, but the production threshold
+  yielded one too, undeduplicated and joined to nothing. It is now left
+  out unless the caller asks for a score below
+  `PRODUCTION_ELEMENT_MIN_SCORE`. On the 76 files Measure reads, every
+  production row comes from a partition record and the schema path yields
+  none, so no export changes (Measure run 39367864281).
 
 ### Removed
 
