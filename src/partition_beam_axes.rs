@@ -187,7 +187,8 @@ pub fn bounded_arc_at(buf: &[u8], at: usize) -> Option<BoundedArc> {
     }
     let kind = buf
         .get(at.checked_sub(8)?..at)
-        .map(|s| u64::from_le_bytes(s.try_into().expect("8 bytes")))?;
+        .and_then(|s| s.first_chunk::<8>())
+        .map(|b| u64::from_le_bytes(*b))?;
     if kind != 1 {
         return None;
     }
