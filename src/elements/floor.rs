@@ -139,12 +139,12 @@ impl ElementDecoder for FloorTypeDecoder {
 #[derive(Debug, Clone, PartialEq, Default)]
 #[non_exhaustive]
 pub struct Floor {
-    pub level_id: Option<u32>,
+    pub level_id: Option<crate::ElementId>,
     /// Offset from host level's elevation. Can be negative.
     pub height_offset_feet: Option<f64>,
     pub structural: Option<bool>,
     pub is_slab_edge: Option<bool>,
-    pub type_id: Option<u32>,
+    pub type_id: Option<crate::ElementId>,
     pub span_direction_radians: Option<f64>,
 }
 
@@ -154,7 +154,7 @@ impl Floor {
         for (field_name, value) in &decoded.fields {
             match (normalise_field_name(field_name).as_str(), value) {
                 ("levelid" | "hostlevelid", InstanceField::ElementId { id, .. }) => {
-                    out.level_id = Some(*id);
+                    out.level_id = Some(crate::ElementId::from(*id));
                 }
                 ("heightoffset" | "offset", InstanceField::Float { value, .. }) => {
                     out.height_offset_feet = Some(*value);
@@ -165,7 +165,9 @@ impl Floor {
                 ("isslabedge" | "slabedge", InstanceField::Bool(b)) => {
                     out.is_slab_edge = Some(*b);
                 }
-                ("typeid", InstanceField::ElementId { id, .. }) => out.type_id = Some(*id),
+                ("typeid", InstanceField::ElementId { id, .. }) => {
+                    out.type_id = Some(crate::ElementId::from(*id))
+                }
                 ("spandirection", InstanceField::Float { value, .. }) => {
                     out.span_direction_radians = Some(*value);
                 }

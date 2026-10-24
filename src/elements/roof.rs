@@ -156,14 +156,14 @@ impl ElementDecoder for RoofTypeDecoder {
 #[derive(Debug, Clone, PartialEq, Default)]
 #[non_exhaustive]
 pub struct Roof {
-    pub level_id: Option<u32>,
+    pub level_id: Option<crate::ElementId>,
     pub base_offset_feet: Option<f64>,
     /// `0` or `None` means the roof has no cutoff — it follows the
     /// sketched/extruded geometry all the way up.
-    pub cutoff_level_id: Option<u32>,
+    pub cutoff_level_id: Option<crate::ElementId>,
     pub cutoff_offset_feet: Option<f64>,
     pub kind: Option<RoofKind>,
-    pub type_id: Option<u32>,
+    pub type_id: Option<crate::ElementId>,
     pub rafter_cut: Option<RafterCut>,
 }
 
@@ -173,13 +173,13 @@ impl Roof {
         for (field_name, value) in &decoded.fields {
             match (normalise_field_name(field_name).as_str(), value) {
                 ("levelid" | "baselevelid", InstanceField::ElementId { id, .. }) => {
-                    out.level_id = Some(*id);
+                    out.level_id = Some(crate::ElementId::from(*id));
                 }
                 ("baseoffset", InstanceField::Float { value, .. }) => {
                     out.base_offset_feet = Some(*value);
                 }
                 ("cutofflevelid", InstanceField::ElementId { id, .. }) => {
-                    out.cutoff_level_id = Some(*id);
+                    out.cutoff_level_id = Some(crate::ElementId::from(*id));
                 }
                 ("cutoffoffset", InstanceField::Float { value, .. }) => {
                     out.cutoff_offset_feet = Some(*value);
@@ -187,7 +187,9 @@ impl Roof {
                 ("rooftype" | "kind", InstanceField::Integer { value, .. }) => {
                     out.kind = Some(RoofKind::from_code(*value as u32));
                 }
-                ("typeid", InstanceField::ElementId { id, .. }) => out.type_id = Some(*id),
+                ("typeid", InstanceField::ElementId { id, .. }) => {
+                    out.type_id = Some(crate::ElementId::from(*id))
+                }
                 ("raftercut", InstanceField::Integer { value, .. }) => {
                     out.rafter_cut = Some(RafterCut::from_code(*value as u32));
                 }
@@ -201,7 +203,7 @@ impl Roof {
     /// common case — "roof sketched freely, ridge at whatever height
     /// the slopes yield").
     pub fn has_cutoff(&self) -> bool {
-        !matches!(self.cutoff_level_id, None | Some(0))
+        !self.cutoff_level_id.is_none_or(|id| id.get() == 0)
     }
 }
 

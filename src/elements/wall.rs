@@ -235,19 +235,19 @@ impl ElementDecoder for WallTypeDecoder {
 /// Typed view of a decoded Wall instance.
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct Wall {
-    pub base_level_id: Option<u32>,
+    pub base_level_id: Option<crate::ElementId>,
     pub base_offset_feet: Option<f64>,
     /// `0` or `None` means the wall is "unconnected" at the top.
-    pub top_level_id: Option<u32>,
+    pub top_level_id: Option<crate::ElementId>,
     pub top_offset_feet: Option<f64>,
     pub unconnected_height_feet: Option<f64>,
     pub structural_usage: Option<StructuralUsage>,
     pub location_line: Option<LocationLine>,
-    pub type_id: Option<u32>,
-    pub host_id: Option<u32>,
+    pub type_id: Option<crate::ElementId>,
+    pub host_id: Option<crate::ElementId>,
     /// Handle into the document location-curve table when present.
     /// Geometry resolution is [`crate::geometry::recovery`].
-    pub location_curve_id: Option<u32>,
+    pub location_curve_id: Option<crate::ElementId>,
     /// Explicit location-curve start when schema fields carry XYZ/XY.
     pub location_start: Option<Point3>,
     /// Explicit location-curve end when schema fields carry XYZ/XY.
@@ -266,13 +266,13 @@ impl Wall {
         for (field_name, value) in &decoded.fields {
             match (normalise_field_name(field_name).as_str(), value) {
                 ("levelid" | "baselevelid", InstanceField::ElementId { id, .. }) => {
-                    out.base_level_id = Some(*id);
+                    out.base_level_id = Some(crate::ElementId::from(*id));
                 }
                 ("baseoffset", InstanceField::Float { value, .. }) => {
                     out.base_offset_feet = Some(*value);
                 }
                 ("toplevelid", InstanceField::ElementId { id, .. }) => {
-                    out.top_level_id = Some(*id);
+                    out.top_level_id = Some(crate::ElementId::from(*id));
                 }
                 ("topoffset", InstanceField::Float { value, .. }) => {
                     out.top_offset_feet = Some(*value);
@@ -288,14 +288,18 @@ impl Wall {
                 ("locationline", InstanceField::Integer { value, .. }) => {
                     out.location_line = Some(LocationLine::from_code(*value as u32));
                 }
-                ("typeid", InstanceField::ElementId { id, .. }) => out.type_id = Some(*id),
-                ("hostid", InstanceField::ElementId { id, .. }) => out.host_id = Some(*id),
+                ("typeid", InstanceField::ElementId { id, .. }) => {
+                    out.type_id = Some(crate::ElementId::from(*id))
+                }
+                ("hostid", InstanceField::ElementId { id, .. }) => {
+                    out.host_id = Some(crate::ElementId::from(*id))
+                }
                 (
                     "locationcurveid" | "locationcurve" | "curvelineid" | "curveline",
                     InstanceField::ElementId { id, .. },
                 ) => {
                     if *id != 0 {
-                        out.location_curve_id = Some(*id);
+                        out.location_curve_id = Some(crate::ElementId::from(*id));
                     }
                 }
                 (
@@ -340,7 +344,7 @@ impl Wall {
     /// `true` when the wall's top isn't bound to a level — in that case
     /// height comes from `unconnected_height_feet`.
     pub fn is_unconnected(&self) -> bool {
-        matches!(self.top_level_id, None | Some(0))
+        self.top_level_id.is_none_or(|id| id.get() == 0)
     }
 }
 

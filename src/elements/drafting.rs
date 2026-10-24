@@ -96,8 +96,8 @@ pub struct View {
     pub name: Option<String>,
     pub kind: Option<ViewKind>,
     pub scale: Option<u32>,
-    pub associated_level_id: Option<u32>,
-    pub phase_filter_id: Option<u32>,
+    pub associated_level_id: Option<crate::ElementId>,
+    pub phase_filter_id: Option<crate::ElementId>,
 }
 
 impl View {
@@ -113,10 +113,10 @@ impl View {
                     out.scale = Some(*value as u32);
                 }
                 ("associatedlevelid" | "levelid", InstanceField::ElementId { id, .. }) => {
-                    out.associated_level_id = Some(*id);
+                    out.associated_level_id = Some(crate::ElementId::from(*id));
                 }
                 ("phasefilterid", InstanceField::ElementId { id, .. }) => {
-                    out.phase_filter_id = Some(*id);
+                    out.phase_filter_id = Some(crate::ElementId::from(*id));
                 }
                 _ => {}
             }
@@ -138,7 +138,7 @@ impl View {
 pub struct Sheet {
     pub name: Option<String>,
     pub number: Option<String>,
-    pub titleblock_id: Option<u32>,
+    pub titleblock_id: Option<crate::ElementId>,
 }
 
 impl Sheet {
@@ -151,7 +151,7 @@ impl Sheet {
                     out.number = Some(s.clone());
                 }
                 ("titleblockid", InstanceField::ElementId { id, .. }) => {
-                    out.titleblock_id = Some(*id);
+                    out.titleblock_id = Some(crate::ElementId::from(*id));
                 }
                 _ => {}
             }
@@ -178,7 +178,7 @@ pub struct Schedule {
     pub name: Option<String>,
     /// The Revit category that this schedule aggregates ("Walls",
     /// "Doors", "Rooms"). Reference to a decoded Category.
-    pub category_id: Option<u32>,
+    pub category_id: Option<crate::ElementId>,
 }
 
 impl Schedule {
@@ -188,7 +188,7 @@ impl Schedule {
             match (normalise_field_name(field_name).as_str(), value) {
                 ("name", InstanceField::String(s)) => out.name = Some(s.clone()),
                 ("categoryid", InstanceField::ElementId { id, .. }) => {
-                    out.category_id = Some(*id);
+                    out.category_id = Some(crate::ElementId::from(*id));
                 }
                 _ => {}
             }

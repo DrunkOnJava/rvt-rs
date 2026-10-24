@@ -33,9 +33,9 @@ pub struct ArcWall {
     /// Optional singleton trailer fields (ElementId, type id, base Z).
     pub trailer: Option<ArcWallTrailer>,
     /// Convenience: trailer ElementId when validated.
-    pub element_id: Option<u32>,
+    pub element_id: Option<crate::ElementId>,
     /// Convenience: trailer WallType / symbol candidate.
-    pub type_id: Option<u32>,
+    pub type_id: Option<crate::ElementId>,
     /// Convenience: trailer base elevation in feet.
     pub base_elevation_feet: Option<f64>,
     /// Unconnected height from the core Z delta, when recoverable.
@@ -114,10 +114,10 @@ impl ArcWall {
                 },
             ),
         ];
-        if let Some(id) = self.element_id {
+        if let Some(id) = self.element_id.and_then(crate::ElementId::as_u32) {
             fields.push(("m_id".into(), InstanceField::ElementId { tag: 0, id }));
         }
-        if let Some(id) = self.type_id {
+        if let Some(id) = self.type_id.and_then(crate::ElementId::as_u32) {
             fields.push(("m_type_id".into(), InstanceField::ElementId { tag: 0, id }));
         }
         if let Some(elev) = self.base_elevation_feet {
@@ -149,7 +149,7 @@ impl ArcWall {
             0.85
         };
         DecodedElement {
-            id: self.element_id,
+            id: self.element_id.and_then(crate::ElementId::as_u32),
             class: "ArcWall".into(),
             fields,
             byte_range: offset..end,

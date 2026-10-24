@@ -116,7 +116,7 @@ impl ElementDecoder for SubcategoryDecoder {
 pub struct Category {
     pub name: Option<String>,
     pub builtin_id: Option<i64>,
-    pub parent_category_id: Option<u32>,
+    pub parent_category_id: Option<crate::ElementId>,
     pub is_cuttable: Option<bool>,
 }
 
@@ -135,7 +135,7 @@ impl Category {
                     out.builtin_id = Some(*value);
                 }
                 ("parentid" | "parentcategoryid", InstanceField::ElementId { id, .. }) => {
-                    out.parent_category_id = Some(*id);
+                    out.parent_category_id = Some(crate::ElementId::from(*id));
                 }
                 ("iscuttable", InstanceField::Bool(b)) => out.is_cuttable = Some(*b),
                 _ => {}
@@ -147,7 +147,7 @@ impl Category {
     /// `true` when this category has no parent — i.e. it's a top-level
     /// category like "Walls" or "Doors" rather than a subdivision.
     pub fn is_top_level(&self) -> bool {
-        matches!(self.parent_category_id, None | Some(0))
+        self.parent_category_id.is_none_or(|id| id.get() == 0)
     }
 }
 
@@ -156,13 +156,13 @@ impl Category {
 #[non_exhaustive]
 pub struct Subcategory {
     pub name: Option<String>,
-    pub parent_category_id: Option<u32>,
+    pub parent_category_id: Option<crate::ElementId>,
     /// Packed RGB color `0xAABBGGRR` — low byte is R.
     pub line_color: Option<u32>,
     pub line_weight_cut: Option<u32>,
     pub line_weight_projection: Option<u32>,
-    pub line_pattern_id: Option<u32>,
-    pub material_id: Option<u32>,
+    pub line_pattern_id: Option<crate::ElementId>,
+    pub material_id: Option<crate::ElementId>,
 }
 
 impl Subcategory {
@@ -180,7 +180,7 @@ impl Subcategory {
             match (normalise_field_name(field_name).as_str(), value) {
                 ("name", InstanceField::String(s)) => out.name = Some(s.clone()),
                 ("parentcategoryid" | "parentid", InstanceField::ElementId { id, .. }) => {
-                    out.parent_category_id = Some(*id)
+                    out.parent_category_id = Some(crate::ElementId::from(*id))
                 }
                 ("linecolor", InstanceField::Integer { value, .. }) => {
                     out.line_color = Some(*value as u32);
@@ -192,10 +192,10 @@ impl Subcategory {
                     out.line_weight_projection = Some(*value as u32);
                 }
                 ("linepatternid", InstanceField::ElementId { id, .. }) => {
-                    out.line_pattern_id = Some(*id);
+                    out.line_pattern_id = Some(crate::ElementId::from(*id));
                 }
                 ("materialid", InstanceField::ElementId { id, .. }) => {
-                    out.material_id = Some(*id);
+                    out.material_id = Some(crate::ElementId::from(*id));
                 }
                 _ => {}
             }
