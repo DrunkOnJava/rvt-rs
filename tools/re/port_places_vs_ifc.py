@@ -27,21 +27,37 @@ import re
 import ifcopenshell
 import ifcopenshell.util.placement as placement
 import ifcopenshell.util.unit as unit
+import numpy
 
 FT = 0.3048
 TOLERANCE_FT = 0.01
 PORT_NAME = re.compile(r"^(?:In|Out)?Port_(\d+)_(\d+)$")
 
 
+def site_local(model):
+    """The placement of an object in `model` relative to its `IfcSite`: Revit
+    writes the site at the shared coordinates (the BIM4LCA office's are far
+    from the origin), rvt-rs at its internal ones, so the two files compare
+    in each one's own site frame."""
+    sites = model.by_type("IfcSite")
+    inverse = numpy.linalg.inv(placement.get_local_placement(sites[0].ObjectPlacement)) if sites else numpy.eye(4)
+
+    def local(object_placement):
+        return inverse @ placement.get_local_placement(object_placement)
+
+    return local
+
+
 def pipe_axes(path):
     """Tag -> (first end, second end), feet, of each extruded flow segment."""
     model = ifcopenshell.open(path)
     scale = unit.calculate_unit_scale(model) / FT
+    in_site = site_local(model)
     out = {}
     for element in model.by_type("IfcFlowSegment"):
         if not element.Tag or not element.Representation:
             continue
-        world = placement.get_local_placement(element.ObjectPlacement)
+        world = in_site(element.ObjectPlacement)
         for representation in element.Representation.Representations:
             for item in representation.Items:
                 if not item.is_a("IfcExtrudedAreaSolid"):
@@ -61,12 +77,13 @@ def ports(path):
     """(ElementId, index, In/Out) -> (point in feet, Z axis) of each named port."""
     model = ifcopenshell.open(path)
     scale = unit.calculate_unit_scale(model) / FT
+    in_site = site_local(model)
     out = {}
     for port in model.by_type("IfcDistributionPort"):
         match = PORT_NAME.match(port.Name or "")
         if not match or not port.ObjectPlacement:
             continue
-        matrix = placement.get_local_placement(port.ObjectPlacement)
+        matrix = in_site(port.ObjectPlacement)
         point = [float(v) * scale for v in matrix[:3, 3]]
         axis = [float(matrix[i][2]) for i in range(3)]
         side = "In" if (port.Name or "").startswith("In") else "Out" if (port.Name or "").startswith("Out") else "-"
@@ -137,9 +154,10 @@ def main():
     # port, against that segment port.
     model = ifcopenshell.open(args.reference)
     scale = unit.calculate_unit_scale(model) / FT
+    in_site = site_local(model)
 
     def place(port):
-        matrix = placement.get_local_placement(port.ObjectPlacement)
+        matrix = in_site(port.ObjectPlacement)
         return [float(v) * scale for v in matrix[:3, 3]], [float(matrix[i][2]) for i in range(3)]
 
     def owner(port):
