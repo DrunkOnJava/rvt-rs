@@ -691,6 +691,15 @@ Built-in parameters have no name (the built-in catalog is not shipped,
 #255), a family's built-in slots such as a window type's Width are not
 resolved, and nothing new is written to IFC.
 
+**RE-215 (2026-10-24)** gives each door and window on Revit 2024 and 2025
+the `OverallWidth` and `OverallHeight` Revit's export writes: the extents of
+the outline the symbol that draws it cuts in its host, read from that
+symbol's `m_pCutLoops`. The instance names that symbol in its
+`InstanceInfo.m_symbolId`, and it is its own where the instance's parameters
+size the family. Equal to Revit's on 138 of 138 doors and windows on Core
+Interior (its six windows had `$`), on RE1 Architecture's 4 doors with one
+and on the R2025 models (`reports/element-framing/RE-215-symbol-cut-loops.md`).
+
 The public viewer's demo gallery leads with the two files this section
 measures, staged from the deploy workflow's `magnetar-io/revit-test-datasets`
 checkout and pinned by sha256 (#257): `Revit_IFC5_Einhoven.rvt` (2023,

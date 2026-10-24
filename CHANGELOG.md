@@ -8,27 +8,29 @@ All notable changes will be documented here. This project follows
 
 ### Added
 
-- **`rvt-elements` and Python's `decoded_elements()` list each element's
-  saved parameters (#35, RE-207).** On Revit 2023 to 2027 files, an element's
-  `parameters` now also hold the values its native record saves: its typed
-  parameter sets, the family parameters of its own `FamilyParams`, and the
-  native fields read as built-in parameters, each named by the file's own
-  definition (family, shared, project and global parameters) with its
-  storage type, spec, group and value. A family instance's type parameters
-  follow its own, marked `"level": "type"`; a family's instance parameter is
-  taken only from the instance. Lengths, areas, volumes and angles also get
-  their SI value, a Yes/No value is a boolean, and a value naming a material
-  or a family type also gets that element's name. Built-in parameters keep
-  their negative id and no name. A family type parameter (`ParamDefFamType`,
-  a window's Muntin Pattern or trim) is now read as the ElementId it holds.
-  On the BIM4LCA office (Revit 2024), every parameter named `<set>.<property>`
-  holds the value Revit's export writes for that property on the element:
-  7,606 of 7,606 as built and 7,592 of 7,592 at building permit; on
-  puzzbobb's R2025 models a window's `Pset_WindowCommon.FireRating` is its
-  type's `Fire Rating`, 18 of 18. `tools/re/element_parameters_vs_ifc.py`
-  scores either output against Revit's export. Nothing new is written to IFC.
-  The library gives the same entries through
-  `elements::parameters::saved_parameters_lossy`. By puzzbobb (#887).
+- **A door's and window's OverallWidth and OverallHeight are the outline
+  the symbol that draws it cuts in its host (RE-215, #844).** A family
+  instance names its type and, in its `InstanceInfo`, the symbol that draws
+  it. Where the instance's own parameters change the family's geometry, that
+  is a symbol of its own. Revit's exporter sizes a door or window from that
+  symbol, and the extents of the outline it cuts are Revit's `OverallWidth`
+  and `OverallHeight` on every door and window measured: Core Interior's 132
+  doors and 6 windows, RE1 Architecture's 4 doors, and each R2025 model's
+  door and 3 windows. Core Interior's windows, whose type is 1010 mm square,
+  had `$`; they now have Revit's 1500 by 2700 mm. Revit 2024 and 2025 only,
+  and loops of straight lines only. RE1's curtain-wall door has no outline
+  and keeps `$`.
+
+- **`rvt-ifc` honours `SOURCE_DATE_EPOCH`, and CI checks every writer is
+  deterministic (#873).** The time in an IFC's header and owner history was
+  the export's wall-clock time, so two exports of the same file differed.
+  With `SOURCE_DATE_EPOCH` set (Unix seconds, the reproducible-builds
+  convention) `rvt-ifc` records that time instead, and refuses a value that
+  is not a number. A CLI test runs `rvt-ifc`, `rvt-gltf`, `rvt-sheet` and
+  both `rvt-schedule` schedules twice on the same file and requires the same
+  bytes, on the tier-1 synthetic project and on Einhoven where the project
+  corpus is present. The `rvt-ifc` help no longer calls the export
+  document-level only.
 
 - **Every port has Revit's flow direction, name and description (RE-212,
   #834).** A family instance's HVAC or piping connector takes the Flow

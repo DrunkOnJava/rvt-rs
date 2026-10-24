@@ -131,6 +131,8 @@ mod re15_geometry_invariants;
 mod re19_door_window_wall_negative;
 #[path = "../reference_values.rs"]
 mod reference_values;
+#[path = "../reproducible_outputs.rs"]
+mod reproducible_outputs;
 #[path = "../revit_global_ids.rs"]
 mod revit_global_ids;
 #[path = "../rooms_floors_from_records_only.rs"]

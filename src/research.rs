@@ -78,6 +78,7 @@
 //! - [`native_saved_mesh`]: Tessellation of bounded saved planar and cylindrical BRep faces
 //! - [`native_saved_scene`]: Current native saved-graphics extraction with explicit shared-symbol closure
 //! - [`native_segments`]: Forward-only physical partition markers and continuation groups
+//! - [`native_symbol_cuts`]: The outline a door or window cuts in its host, from the native record of the symbol that draws it (RE-215)
 //! - [`native_wall_types`]: A wall's type Function, from the native records of the wall and its type (RE-185, RE-193)
 //!
 //! ## Other research
@@ -155,6 +156,8 @@ pub mod native_saved_mesh;
 pub mod native_saved_scene;
 #[path = "native_segments.rs"]
 pub mod native_segments;
+#[path = "native_symbol_cuts.rs"]
+pub mod native_symbol_cuts;
 #[path = "native_wall_types.rs"]
 pub mod native_wall_types;
 #[path = "partition_arc_walls.rs"]

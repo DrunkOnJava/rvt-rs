@@ -325,6 +325,14 @@ Export modes:
 If strict mode fails, read the diagnostics JSON. The failure may mean the file is
 valid Revit but outside the current rvt-rs support profile.
 
+Two exports of the same file are the same bytes except for the export time,
+which the IFC header and owner history record. Set `SOURCE_DATE_EPOCH` (Unix
+seconds) to fix it, for example to keep an exported IFC under version control:
+
+```bash
+SOURCE_DATE_EPOCH=1700000000 rvt-ifc model.rvt -o model.ifc
+```
+
 ## Understand Warnings
 
 The most important status words are:
