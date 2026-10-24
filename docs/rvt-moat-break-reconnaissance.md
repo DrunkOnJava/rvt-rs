@@ -2139,3 +2139,7 @@ A Sketch element's data names the element it sketches 77 bytes from its element-
 ## Addendum — RE-187 a door type's Width and Height are its overall size (2026-10-18)
 
 A door type's value block holds its Width (−1001301) and Height (−1001300), the BuiltInParameters RE-93 reads for windows, and Revit's IFC export writes them as the door's `OverallWidth` / `OverallHeight` wherever they are read: 136 of 136 doors on Core Interior and RE1 Architecture. A window's type size is not its overall size on Core Interior (1010 mm against Revit's 1500 × 2700 mm). Report: `reports/element-framing/RE-187-door-overall-sizes.md`; probe: `examples/probe_re187_door_window_sizes.rs`.
+
+## Addendum — RE-213 Revit 2025 frames a wall type's face angles with twelve zero bytes (2026-10-24)
+
+On Snowdon Towers saved by Revit 2025, RE-86's frame for a wall type's face angles (`u32 2`, eight zero bytes, `f64` 0.7, a count of 3) occurs in no element's data. The same frame with twelve zero bytes after the `u32 2` occurs in 58 elements' data, once each, followed by the angles RE-86 read on 2024: [0, 10 degrees, 0] on the three "Solar Wall" types and 703553, and [0, 0, 0] on the other 54. Read with it, the 20 walls Revit's 2025 export tapers are drawn as RE-86 draws them, 19 within 0.001 ft of Revit's body across the wall. Report: `reports/element-framing/RE-213-tapered-walls-2025.md`; probe: `examples/probe_re213_wall_face_angles_2025.rs`.
