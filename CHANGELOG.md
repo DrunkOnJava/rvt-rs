@@ -14,11 +14,22 @@ All notable changes will be documented here. This project follows
   thickness, square to it, gives the underside, both ends are cut plumb, and
   the section runs across the record box, which it must reproduce. On
   `11_RoofByExtrusion` in puzzbobb's Revit 2025 models every vertex of
-  Revit's body is within 0.001 ft of rvt-rs's (0.000541 ft at most), and the
+  Revit's body is within 0.001 ft of rvt-rs's (0.000524 ft at most), and the
   volume within 0.03%, where it was the 7,665 ft³ record box. That makes 19
   of the 19 roofs in those models. A roof by extrusion on another release,
   or one whose sketch holds an arc, keeps its box. `roof_bodies_vs_ifc` also
   measures Revit's vertices against rvt-rs's surface.
+
+- **`rvt-ifc` honours `SOURCE_DATE_EPOCH`, and CI checks every writer is
+  deterministic (#873).** The time in an IFC's header and owner history was
+  the export's wall-clock time, so two exports of the same file differed.
+  With `SOURCE_DATE_EPOCH` set (Unix seconds, the reproducible-builds
+  convention) `rvt-ifc` records that time instead, and refuses a value that
+  is not a number. A CLI test runs `rvt-ifc`, `rvt-gltf`, `rvt-sheet` and
+  both `rvt-schedule` schedules twice on the same file and requires the same
+  bytes, on the tier-1 synthetic project and on Einhoven where the project
+  corpus is present. The `rvt-ifc` help no longer calls the export
+  document-level only.
 
 - **Every port has Revit's flow direction, name and description (RE-212,
   #834).** A family instance's HVAC or piping connector takes the Flow
