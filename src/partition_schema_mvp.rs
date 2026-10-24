@@ -611,6 +611,9 @@ pub fn recover_partition_schema_mvp(
     attach_door_openings(rf, revit_version, &mut out.doors);
     // --- Each door's Width and Height from its type (RE-187, #759) ---
     attach_door_sizes(rf, revit_version, &mut out.doors);
+    // --- Each door's and window's size from the outline its symbol cuts
+    // (RE-215, #844) ---
+    attach_cut_loop_sizes(rf, revit_version, [&mut out.doors, &mut out.windows]);
     // --- Steel beams' and columns' I sections from their type (RE-103, RE-104) ---
     attach_beam_sections(rf, revit_version, &mut out.products);
     // --- A wall's and a curtain panel wall's type Function, from its native
@@ -2034,6 +2037,70 @@ fn attach_door_sizes(rf: &mut RevitFile, revit_version: u32, doors: &mut [Decode
         for (name, value) in DOOR_TYPE_SIZE_FIELDS
             .iter()
             .zip([size.width_feet, size.height_feet])
+        {
+            element
+                .fields
+                .push(((*name).into(), InstanceField::Float { value, size: 8 }));
+        }
+    }
+}
+
+/// Fields carrying the extent along X and along Z of the outline a door's
+/// or window's symbol cuts in its host (RE-215), feet.
+pub const CUT_LOOP_SIZE_FIELDS: [&str; 2] = ["m_cut_loop_width", "m_cut_loop_height"];
+
+/// Releases a door's or window's cut loop is measured on (RE-215): 2024
+/// (Core Interior) and 2025 (RE1 Architecture, the R2025 models).
+pub const CUT_LOOP_REVIT_VERSIONS: &[u32] = &[2024, 2025];
+
+/// The width and height [`CUT_LOOP_SIZE_FIELDS`] record, feet.
+pub fn cut_loop_size_from_fields(fields: &[(String, InstanceField)]) -> Option<[f64; 2]> {
+    let [width, height] = CUT_LOOP_SIZE_FIELDS.map(|wanted| {
+        fields.iter().find_map(|(name, value)| match value {
+            InstanceField::Float { value, .. } if name == wanted => Some(*value),
+            _ => None,
+        })
+    });
+    Some([width?, height?])
+}
+
+/// Give each door and window the extents of the outline the symbol that
+/// draws it cuts in its host
+/// ([`crate::native_symbol_cuts::instance_cut_loops`]), which Revit's export
+/// writes as its `OverallWidth` and `OverallHeight` (RE-215). A door that is
+/// an opening alone (RE-84) is written as that opening, and gets none.
+fn attach_cut_loop_sizes(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    groups: [&mut Vec<DecodedElement>; 2],
+) {
+    if !CUT_LOOP_REVIT_VERSIONS.contains(&revit_version) {
+        return;
+    }
+    let mut elements: Vec<&mut DecodedElement> = groups
+        .into_iter()
+        .flat_map(|group| group.iter_mut())
+        .filter(|element| {
+            !element
+                .fields
+                .iter()
+                .any(|(name, _)| name == TYPE_WITHOUT_GEOMETRY_FIELD)
+        })
+        .collect();
+    let ids: BTreeSet<u64> = elements
+        .iter()
+        .filter_map(|element| element.id.map(u64::from))
+        .collect();
+    let Ok(loops) = crate::native_symbol_cuts::instance_cut_loops(rf, &ids) else {
+        return;
+    };
+    for element in elements.iter_mut() {
+        let Some(cut) = element.id.and_then(|id| loops.get(&u64::from(id))) else {
+            continue;
+        };
+        for (name, value) in CUT_LOOP_SIZE_FIELDS
+            .iter()
+            .zip([cut.width_feet(), cut.height_feet()])
         {
             element
                 .fields
