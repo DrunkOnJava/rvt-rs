@@ -72,7 +72,7 @@ End to end against main (run 40114863653), the export changes on Core Interior, 
 
 ## 7. The opening (2026-10-24, #227)
 
-Revit places a door's or window's IFC frame at its opening's corner, so that frame says nothing of the loop's position. In the instance's own frame (RE-87) it does. `examples/probe_227_opening_frames.rs` prints each door's and window's loop and transform, and `tools/re/opening_frames_vs_ifc.py` moves Revit's opening into that frame (run [40118231668](https://github.com/DrunkOnJava/rvt-rs/actions/runs/40118231668), branch `re/227-opening-frames`):
+Revit places a door's or window's IFC frame at its opening's corner, so that frame says nothing of the loop's position. In the instance's own frame (RE-87) it does. `examples/probe_227_opening_frames.rs` prints each door's and window's loop and transform, and `tools/re/opening_frames_vs_ifc.py` moves Revit's opening into that frame (run [40118231668](https://github.com/DrunkOnJava/rvt-rs/actions/runs/40118231668), `examples/probe_227_opening_frames.rs`):
 
 | model | doors and windows with a loop and a transform | opening's X and Z ranges equal the loop's, within 0.001 ft |
 |---|---:|---:|
