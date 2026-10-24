@@ -20,7 +20,7 @@ if [ -z "${url:-}" ]; then
 fi
 mkdir -p "$TARGET/r2025"
 zip="$TARGET/r2025.zip"
-if ! curl -fsSL --retry 3 --retry-delay 5 --max-time 900 -o "$zip" "$url"; then
+if ! curl -fsSL --retry 3 --retry-all-errors --retry-delay 5 --max-time 900 -o "$zip" "$url"; then
   echo "could not download $url"
   exit 2
 fi

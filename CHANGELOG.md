@@ -8,6 +8,30 @@ All notable changes will be documented here. This project follows
 
 ### Added
 
+- **A door's and window's OverallWidth and OverallHeight are the outline
+  the symbol that draws it cuts in its host (RE-215, #844).** A family
+  instance names its type and, in its `InstanceInfo`, the symbol that draws
+  it. Where the instance's own parameters change the family's geometry, that
+  is a symbol of its own. Revit's exporter sizes a door or window from that
+  symbol, and the extents of the outline it cuts are Revit's `OverallWidth`
+  and `OverallHeight` on every door and window measured: Core Interior's 132
+  doors and 6 windows, RE1 Architecture's 4 doors, and each R2025 model's
+  door and 3 windows. Core Interior's windows, whose type is 1010 mm square,
+  had `$`; they now have Revit's 1500 by 2700 mm. Revit 2024 and 2025 only,
+  and loops of straight lines only. RE1's curtain-wall door has no outline
+  and keeps `$`.
+
+- **`rvt-ifc` honours `SOURCE_DATE_EPOCH`, and CI checks every writer is
+  deterministic (#873).** The time in an IFC's header and owner history was
+  the export's wall-clock time, so two exports of the same file differed.
+  With `SOURCE_DATE_EPOCH` set (Unix seconds, the reproducible-builds
+  convention) `rvt-ifc` records that time instead, and refuses a value that
+  is not a number. A CLI test runs `rvt-ifc`, `rvt-gltf`, `rvt-sheet` and
+  both `rvt-schedule` schedules twice on the same file and requires the same
+  bytes, on the tier-1 synthetic project and on Einhoven where the project
+  corpus is present. The `rvt-ifc` help no longer calls the export
+  document-level only.
+
 - **Every port has Revit's flow direction, name and description (RE-212,
   #834).** A family instance's HVAC or piping connector takes the Flow
   Direction its family sets in the connector's own parameters, or, where the
@@ -109,16 +133,6 @@ All notable changes will be documented here. This project follows
   makes an error.
 
 ### Fixed
-
-- **Revit 2025's tapered walls are drawn tapered (RE-213, #358).** RE-86
-  read a wall type's face angles only on Revit 2024. Revit 2025 frames them
-  with twelve zero bytes after the frame's `u32 2`, where 2024 has eight, so
-  on a 2025 file every tapered wall fell back to its record box, up to
-  9.3 ft wider than the wall. On Snowdon Towers saved by Revit 2025, 19 of the
-  20 walls Revit tapers are now within 0.001 ft of Revit's body across the
-  wall at five heights (none within 0.1 ft before). 24 walls are closer to
-  Revit's in the GLB and none is further, and the 20 windows in them take
-  RE-89's cut. Every other 2025 file measured exports the same bytes.
 
 - **A column record holding a NaN no longer panics the export.** The
   column-cut grid sorted its edges with `partial_cmp(..).expect("finite")`,

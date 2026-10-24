@@ -1,12 +1,16 @@
 //! RE-187: a door's `OverallWidth` and `OverallHeight` are its type's Width
-//! and Height, where no opening gives them (#759).
+//! and Height, where no opening gives them (#759). RE-215: before either,
+//! a door's or window's are the extents of the outline the symbol that
+//! draws it cuts in its host (#844).
 //!
 //! Revit's own IFC exports of `RE1-Architecture.rvt` (Revit 2025, MIT) and
 //! `2024_Core_Interior.rvt` (Revit 2024, MIT) write every door's type Width
 //! and Height as its `OverallWidth` / `OverallHeight`; the values below are
-//! Revit's, in metres. On main every door and window of both models had `$`.
-//! Windows keep `$`: Core Interior's type size (1010 mm) is not Revit's
-//! (1500 x 2700 mm). Corpus-gated through `RVT_PROJECT_CORPUS_DIR`.
+//! Revit's, in metres. Core Interior's six windows are of a type whose size
+//! is 1010 mm square and are drawn by a symbol of their own, whose cut is
+//! Revit's 1500 x 2700 mm; before RE-215 they had `$`. RE1's curtain-wall
+//! door has no cut and its type no size, and keeps `$`. Corpus-gated
+//! through `RVT_PROJECT_CORPUS_DIR`.
 
 use rvt::RevitFile;
 use rvt::ifc::{RvtDocExporter, write_step};
@@ -89,17 +93,17 @@ fn re1_doors_carry_their_types_size() {
             "{tag}: {h} x {w}"
         );
     }
-    // Its type holds no size: it fails closed.
+    // A curtain-wall door: no cut, and its type holds no size. It fails closed.
     assert_eq!(sizes.get("445975").map(|s| (s.1, s.2)), Some((None, None)));
 }
 
 #[test]
-fn core_interior_doors_carry_their_types_size_and_windows_stay_open() {
+fn core_interior_doors_and_windows_carry_revits_size() {
     let Some(sizes) = overall_sizes("2024_Core_Interior.rvt") else {
         return;
     };
     let mut doors: BTreeMap<String, usize> = BTreeMap::new();
-    let mut windows_unsized = 0;
+    let mut windows_sized = 0;
     for (entity, height, width) in sizes.values() {
         match entity.as_str() {
             "IFCDOOR" => {
@@ -119,7 +123,12 @@ fn core_interior_doors_carry_their_types_size_and_windows_stay_open() {
                 };
                 *doors.entry(size.to_string()).or_default() += 1;
             }
-            _ => windows_unsized += usize::from(height.is_none() && width.is_none()),
+            _ => {
+                windows_sized += usize::from(matches!(
+                    (height, width),
+                    (Some(h), Some(w)) if (h - 2.7).abs() <= TOLERANCE_M && (w - 1.5).abs() <= TOLERANCE_M
+                ))
+            }
         }
     }
     // Revit's 2024_Core_Interior_slim.ifc: 120 doors 8 x 3 ft, 12 doors 2134 x 915 mm.
@@ -130,5 +139,6 @@ fn core_interior_doors_carry_their_types_size_and_windows_stay_open() {
             ("2134 x 915 mm".to_string(), 12)
         ])
     );
-    assert_eq!(windows_unsized, 6, "windows keep failing closed");
+    // Revit's: all six windows 2700 x 1500 mm.
+    assert_eq!(windows_sized, 6, "windows sized as Revit's export");
 }
