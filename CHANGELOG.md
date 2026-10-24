@@ -2,7 +2,9 @@
 
 All notable changes will be documented here. This project follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
-[semver](https://semver.org/spec/v2.0.0.html).
+[semver](https://semver.org/spec/v2.0.0.html). Changes on `main` since the
+last release are also in [`changelog.d/`](changelog.d/README.md), as
+fragments a release moves into this file.
 
 ## [Unreleased]
 
