@@ -2272,7 +2272,8 @@ fn attach_family_instance_ports(
 }
 
 /// Releases a family instance's unjoined ports are placed on (#869): 2025,
-/// the RE1 models'.
+/// the RE1 models', and 2024, the BIM4LCA office's, where all 43 such ports
+/// are within 0.01 ft of Revit's with its axis.
 const PORT_PLACEMENT_REVIT_VERSIONS: &[u32] = &[2024, 2025];
 
 /// A duct, pipe or fitting connector that is bidirectional, joined to one
