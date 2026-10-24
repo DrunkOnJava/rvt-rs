@@ -210,6 +210,32 @@ pub(crate) fn read_preamble(file: &mut RevitFile) -> Result<Preamble> {
         es_catalog,
     })
 }
+/// The partition each of `ids` routes to by its stored revision
+/// (`native_index::route_episode`), the partition [`extract`] reads its
+/// current record from wherever that partition holds one (RE-145, #548). An
+/// id the element index does not hold, or whose revision does not route, is
+/// left out.
+pub(crate) fn routed_partitions(
+    file: &mut RevitFile,
+    ids: &BTreeSet<u64>,
+) -> Result<BTreeMap<u64, u32>> {
+    let preamble = file.native_preamble()?;
+    let present: BTreeSet<u32> = file
+        .stream_names()
+        .iter()
+        .filter_map(|name| name.strip_prefix("Partitions/")?.parse().ok())
+        .collect();
+    Ok(ids
+        .iter()
+        .filter_map(|id| {
+            let identity = preamble.index.identities.get(id)?;
+            native_index::route_episode(identity.stored_revision, &preamble.increments, &present)
+                .ok()
+                .map(|partition| (*id, partition))
+        })
+        .collect())
+}
+
 /// Extract selected current indexed records. Unsupported individual object
 /// graphs produce explicit records and do not discard other decoded owners.
 /// Framing, identity and routing errors abort instead of choosing a candidate.
