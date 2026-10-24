@@ -92,6 +92,7 @@ pub mod from_decoded;
 pub mod gltf;
 pub mod measure;
 pub mod pbr;
+pub mod revit_property_sets;
 pub mod saved_meshes;
 pub mod scene_graph;
 pub mod schedule_csv;
@@ -170,6 +171,12 @@ pub struct IfcModel {
     /// every element named `Family:Type` by an IFC type object of its type.
     #[serde(default)]
     pub element_type_ids: std::collections::BTreeMap<u32, u32>,
+    /// Further property sets of each type object, by its type's ElementId:
+    /// Revit's own sets of the type's parameters (RE-210,
+    /// [`revit_property_sets`]). The writer adds each to the type object's
+    /// `HasPropertySets`, merged into a set of the same name.
+    #[serde(default)]
+    pub type_property_sets: std::collections::BTreeMap<u32, Vec<entities::PropertySet>>,
     /// Material constituent sets (RE-82): an element without a layer,
     /// profile or single material gets the materials its type's geometry
     /// uses, written as IFC4 `IfcMaterialConstituentSet`, as Revit's
@@ -814,6 +821,7 @@ impl Exporter for PlaceholderExporter {
             material_layer_usages: Default::default(),
             element_type_materials: Default::default(),
             element_type_ids: Default::default(),
+            type_property_sets: Default::default(),
             material_constituent_sets: Vec::new(),
             opening_cuts: Default::default(),
             body_pieces: Default::default(),
@@ -1257,6 +1265,7 @@ fn export_rvt_doc(
         material_layer_usages,
         element_type_materials,
         element_type_ids,
+        type_property_sets: Default::default(),
         material_constituent_sets,
         opening_cuts,
         body_pieces,

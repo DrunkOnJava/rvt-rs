@@ -1148,7 +1148,10 @@ impl StepWriter {
     ///, describe the source model and stay out of it; the export
     /// diagnostics report them. A model with a thermal transmittance in any
     /// element's property set also gets kelvin and W/(m²·K), the derived unit
-    /// its values are in (RE-194), as Revit's export declares it.
+    /// its values are in (RE-194), as Revit's export declares it; one with a
+    /// pressure, power, voltage, current or volumetric flow rate, in an
+    /// element's or a type object's set, gets pascal, watt, volt, ampere or
+    /// m³/s (RE-210).
     // Tracker: IFC-40.
     fn emit_unit_assignment(&mut self, model: &IfcModel) -> Vec<usize> {
         let mut units: Vec<usize> = [
@@ -1166,27 +1169,39 @@ impl StepWriter {
             id
         })
         .collect();
-        fn thermal_value(value: &super::entities::PropertyValue) -> bool {
+        // Whether any value written in a property set, on an element or a
+        // type object, is of the kind `kind` tests.
+        fn any_value(
+            value: &super::entities::PropertyValue,
+            kind: fn(&super::entities::PropertyValue) -> bool,
+        ) -> bool {
             match value {
-                super::entities::PropertyValue::ThermalTransmittance(_) => true,
-                super::entities::PropertyValue::List(items) => items.iter().any(thermal_value),
-                _ => false,
+                super::entities::PropertyValue::List(items) => {
+                    items.iter().any(|item| any_value(item, kind))
+                }
+                value => kind(value),
             }
         }
-        let thermal = model.entities.iter().any(|entity| {
-            let set = match entity {
-                super::entities::IfcEntity::ElementPropertySet { set, .. } => Some(set),
-                super::entities::IfcEntity::BuildingElement { property_set, .. } => {
-                    property_set.as_ref()
-                }
-                _ => None,
-            };
-            set.is_some_and(|set| {
-                set.properties
-                    .iter()
-                    .any(|property| thermal_value(&property.value))
-            })
-        });
+        let uses = |kind: fn(&super::entities::PropertyValue) -> bool| {
+            model
+                .entities
+                .iter()
+                .filter_map(|entity| match entity {
+                    super::entities::IfcEntity::ElementPropertySet { set, .. } => Some(set),
+                    super::entities::IfcEntity::BuildingElement { property_set, .. } => {
+                        property_set.as_ref()
+                    }
+                    _ => None,
+                })
+                .chain(model.type_property_sets.values().flatten())
+                .any(|set| {
+                    set.properties
+                        .iter()
+                        .any(|property| any_value(&property.value, kind))
+                })
+        };
+        use super::entities::PropertyValue as V;
+        let thermal = uses(|v| matches!(v, V::ThermalTransmittance(_)));
         if thermal {
             let (kilogram, second) = (units[4], units[5]);
             let kelvin = self.id();
@@ -1215,6 +1230,52 @@ impl StepWriter {
                 ),
             );
             units.extend([kelvin, derived]);
+        }
+        // Revit's air flow, pressure, power, voltage and current parameters
+        // (RE-210), in the SI units Revit's export declares for them.
+        for (kind, unit_type, name) in [
+            (
+                (|v| matches!(v, V::Pressure(_))) as fn(&V) -> bool,
+                "PRESSUREUNIT",
+                "PASCAL",
+            ),
+            (|v| matches!(v, V::Power(_)), "POWERUNIT", "WATT"),
+            (
+                |v| matches!(v, V::ElectricVoltage(_)),
+                "ELECTRICVOLTAGEUNIT",
+                "VOLT",
+            ),
+            (
+                |v| matches!(v, V::ElectricCurrent(_)),
+                "ELECTRICCURRENTUNIT",
+                "AMPERE",
+            ),
+        ] {
+            if uses(kind) {
+                let id = self.id();
+                self.emit_entity(id, format!("IFCSIUNIT(*,.{unit_type}.,$,.{name}.)"));
+                units.push(id);
+            }
+        }
+        if uses(|v| matches!(v, V::VolumetricFlowRate(_))) {
+            let (metre, second) = (units[0], units[5]);
+            let elements: Vec<usize> = [(metre, 3), (second, -1)]
+                .into_iter()
+                .map(|(unit, exponent)| {
+                    let id = self.id();
+                    self.emit_entity(id, format!("IFCDERIVEDUNITELEMENT(#{unit},{exponent})"));
+                    id
+                })
+                .collect();
+            let derived = self.id();
+            self.emit_entity(
+                derived,
+                format!(
+                    "IFCDERIVEDUNIT((#{},#{}),.VOLUMETRICFLOWRATEUNIT.,$)",
+                    elements[0], elements[1]
+                ),
+            );
+            units.push(derived);
         }
         units
     }
@@ -3529,7 +3590,7 @@ impl StepWriter {
                 });
             }
             other.push(text("Family Name", family.clone()));
-            let type_sets = [
+            let mut type_sets = vec![
                 PropertySet {
                     name: super::export_content::REVIT_OTHER_SET.into(),
                     properties: other,
@@ -3539,6 +3600,20 @@ impl StepWriter {
                     properties: vec![text("Type Name", type_name.clone())],
                 },
             ];
+            // RE-210: Revit's own sets of the type's parameters, each into
+            // the set of its name, the properties it does not hold yet.
+            for extra in model.type_property_sets.get(type_id).into_iter().flatten() {
+                match type_sets.iter_mut().find(|set| set.name == extra.name) {
+                    Some(set) => {
+                        for property in &extra.properties {
+                            if !set.properties.iter().any(|p| p.name == property.name) {
+                                set.properties.push(property.clone());
+                            }
+                        }
+                    }
+                    None => type_sets.push(extra.clone()),
+                }
+            }
             let set_ids: Vec<String> = type_sets
                 .iter()
                 .map(|set| {

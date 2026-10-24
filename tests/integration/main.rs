@@ -135,6 +135,8 @@ mod reference_values;
 mod reproducible_outputs;
 #[path = "../revit_global_ids.rs"]
 mod revit_global_ids;
+#[path = "../revit_property_sets.rs"]
+mod revit_property_sets;
 #[path = "../rooms_floors_from_records_only.rs"]
 mod rooms_floors_from_records_only;
 #[path = "../rvt_dump_cli.rs"]

@@ -23,7 +23,7 @@ use std::path::{Path, PathBuf};
 
 /// A property value as Revit's export writes it.
 #[derive(Debug, Clone, PartialEq)]
-enum Written {
+pub(crate) enum Written {
     Boolean(bool),
     Integer(i64),
     Text(String),
@@ -33,7 +33,7 @@ enum Written {
 /// `Tag` -> `<set>.<property>` and plain property name -> value, for every
 /// element's own sets then its type's; an opening sharing its door's or
 /// window's `Tag` is left out. Measures with a unit are left out.
-fn revit_values(step: &str) -> BTreeMap<u64, BTreeMap<String, Written>> {
+pub(crate) fn revit_values(step: &str) -> BTreeMap<u64, BTreeMap<String, Written>> {
     let ents = entities(step);
     let reference = |field: &str| field.trim().strip_prefix('#')?.parse::<u64>().ok();
     let set_values = |set: u64| -> Vec<(String, Written)> {
@@ -198,7 +198,7 @@ fn pair(rvt: &Path, ifc: &Path, names: &[&str]) -> (usize, Vec<String>) {
     (paired, differ)
 }
 
-fn nordic_dir() -> Option<PathBuf> {
+pub(crate) fn nordic_dir() -> Option<PathBuf> {
     let Some(dir) = std::env::var_os("RVT_NORDIC_LCA_DIR").map(PathBuf::from) else {
         eprintln!("skipping: RVT_NORDIC_LCA_DIR is not set");
         return None;

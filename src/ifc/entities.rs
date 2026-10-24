@@ -1537,6 +1537,21 @@ pub enum PropertyValue {
     /// `IfcThermalTransmittanceMeasure`, which standard property sets such
     /// as `Pset_WallCommon` declare (RE-194).
     ThermalTransmittance(f64),
+    /// A volumetric flow rate in m³/s. Maps to
+    /// `IfcVolumetricFlowRateMeasure`, as Revit's export writes an air flow
+    /// parameter (RE-210).
+    VolumetricFlowRate(f64),
+    /// A pressure in pascals. Maps to `IfcPressureMeasure` (RE-210).
+    Pressure(f64),
+    /// A power in watts. Maps to `IfcPowerMeasure`, as Revit's export writes
+    /// an apparent or electrical power parameter (RE-210).
+    Power(f64),
+    /// An electric voltage in volts. Maps to `IfcElectricVoltageMeasure`
+    /// (RE-210).
+    ElectricVoltage(f64),
+    /// An electric current in amperes. Maps to `IfcElectricCurrentMeasure`
+    /// (RE-210).
+    ElectricCurrent(f64),
     /// A list of values: the writer emits an `IfcPropertyListValue`, as
     /// standard property sets declare for some properties.
     List(Vec<PropertyValue>),
@@ -1598,6 +1613,11 @@ impl PropertyValue {
             PropertyValue::ThermalTransmittance(u) => {
                 format!("IFCTHERMALTRANSMITTANCEMEASURE({u:.6})")
             }
+            PropertyValue::VolumetricFlowRate(q) => format!("IFCVOLUMETRICFLOWRATEMEASURE({q:.6})"),
+            PropertyValue::Pressure(p) => format!("IFCPRESSUREMEASURE({p:.6})"),
+            PropertyValue::Power(w) => format!("IFCPOWERMEASURE({w:.6})"),
+            PropertyValue::ElectricVoltage(v) => format!("IFCELECTRICVOLTAGEMEASURE({v:.6})"),
+            PropertyValue::ElectricCurrent(i) => format!("IFCELECTRICCURRENTMEASURE({i:.6})"),
             PropertyValue::List(items) => format!(
                 "({})",
                 items
