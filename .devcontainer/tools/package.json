@@ -1,0 +1,14 @@
+{
+  "name": "rvt-rs-devcontainer-tools",
+  "private": true,
+  "description": "The command-line tools .devcontainer/provision.sh installs, pinned with their dependencies by package-lock.json",
+  "dependencies": {
+    "@anthropic-ai/claude-code": "2.1.306",
+    "@openai/codex": "0.163.0",
+    "pnpm": "12.6.0"
+  },
+  "allowScripts": {
+    "@anthropic-ai/claude-code": true,
+    "pnpm": true
+  }
+}

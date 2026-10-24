@@ -69,6 +69,23 @@ jobs:
         with:
           repository: magnetar-io/revit-test-datasets
           path: _project_corpus
+      # W9: the viewer journey (viewer/tests/journey.spec.ts) also runs on the
+      # four RE1 models (Drshelden/IFC-ECS, MIT), pinned by commit and hash
+      # as ci.yml fetches them.
+      - name: Fetch the RE1 models (Drshelden/IFC-ECS, MIT)
+        run: |
+          set -euo pipefail
+          base=https://raw.githubusercontent.com/Drshelden/IFC-ECS/9e8b37175a0fba1397f7011aeee917fe52de7623/data/RE1
+          dir="${GITHUB_WORKSPACE}/_project_corpus/Revit"
+          while read -r name sum; do
+            curl -sSfL --retry 5 --retry-all-errors -o "${dir}/${name}" "${base}/${name}"
+            echo "${sum}  ${dir}/${name}" | sha256sum -c -
+          done <<'LIST'
+          RE1-Architecture.rvt 4a78bdd68e7f4dd7806060db07c222da9a810e20b3f303c17a443294b91c8ce4
+          RE1-Mechanical.rvt d559720177aa0ec435133f804e7c45d60da2deb9d5585bb3d55f4830139c014b
+          RE1-Plumbing.rvt 03689df2aa426031a216e65051b9f19d3265d6fe96884dd47373b17435f9e54c
+          RE1-Electrical.rvt 9875e765c9f47893808c47b845a8379b8777b92510e3e0284f763cb457c9630b
+          LIST
 
       - name: Install Rust toolchain
         shell: bash
@@ -79,13 +96,13 @@ jobs:
           echo CARGO_TERM_COLOR=always >> "$GITHUB_ENV"
           rustc --version
 
-      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6  # v2.9.2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0  # v2.9.3
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}
           shared-key: viewer-wasm
 
       - name: Install wasm-pack
-        uses: taiki-e/install-action@8cca0918f8471c33515202b73f56ab27f2bed283  # v2.87.29
+        uses: taiki-e/install-action@a4d3f3f761dcd95cce1b72cb61cb6d1963438177  # v2.87.30
         with:
           tool: wasm-pack@0.14.0
 
@@ -159,6 +176,7 @@ jobs:
         working-directory: viewer
         env:
           RVT_VIEWER_SAMPLE: ../_project_corpus/Revit/Revit_IFC5_Einhoven.rvt
+          RVT_VIEWER_REQUIRE_JOURNEYS: "1"
         run: pnpm run test:browser
 
       # The HTML report and each failed test's trace, kept for 14 days.
