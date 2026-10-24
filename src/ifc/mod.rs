@@ -2273,7 +2273,7 @@ fn attach_family_instance_ports(
 
 /// Releases a family instance's unjoined ports are placed on (#869): 2025,
 /// the RE1 models'.
-const PORT_PLACEMENT_REVIT_VERSIONS: &[u32] = &[2025];
+const PORT_PLACEMENT_REVIT_VERSIONS: &[u32] = &[2024, 2025];
 
 /// A duct, pipe or fitting connector that is bidirectional, joined to one
 /// with a direction, takes the opposite direction (RE-212). revit-ifc writes
