@@ -83,12 +83,13 @@ pub fn project(graph: &ObjectGraph) -> Result<Option<Definition>> {
             .transpose()
     };
     // Exact concrete classes, not inheritance: MaterialBrowse derives from
-    // ParamDefString but its value is an ElementId.
+    // ParamDefString but its value is an ElementId. A FamType parameter's
+    // value is the ElementId of a family type of its `m_categoryId`.
     let storage = match definition.class_name.as_str() {
         "ParamDefString" => Some("String"),
         "ParamDefValue" => Some("Double"),
         "ParamDefInt" | "ParamDefYesNo" => Some("Integer"),
-        "ParamDefMaterialBrowse" => Some("ElementId"),
+        "ParamDefMaterialBrowse" | "ParamDefFamType" => Some("ElementId"),
         _ => None,
     };
     let saved_spec = type_id("m_specTypeId")?;

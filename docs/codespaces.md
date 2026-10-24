@@ -17,19 +17,27 @@ Each assistant has its own account sign-in, permissions and chat history.
 2. Open the repository's **Code → Codespaces → New with options**. Select
    the branch containing this configuration, the `rvt-rs` dev container,
    and **2 cores / 8 GB**. Do not create a replacement for a peer's machine.
-3. Wait for the post-create command to finish. It installs the pinned CLI
-   snapshots, the `viewer/package.json` pnpm version, stable Rust, Python
+3. Wait for the post-create command to finish. It installs Codex, Claude
+   Code and the `viewer/package.json` pnpm version from
+   `.devcontainer/tools/package-lock.json`, stable Rust, Python
    3.12 from Ubuntu 24.04, and Chromium. It reuses `.cursor/install.sh` to
    build the native tools, Python binding and WASM viewer, then exercises
    a generated fixture through the CLI and browser.
 
 The native build uses `profile.ci` (no release LTO); WASM uses `--dev`.
 Cargo and Rayon default to two jobs in the container and SSH login shell.
-Node's feature installs npm 12.2.0; pnpm comes only from the repository pin.
+Node's feature installs npm 12.2.0; pnpm comes only from the repository pin,
+and provision.sh refuses a lock whose pnpm is not `viewer/package.json`'s.
+The tools' lock pins every dependency by hash and is installed with
+`npm ci`; its `allowScripts` lets only Claude Code's and pnpm's install
+scripts run. CI's env config lint job runs provision.sh on every pull
+request, and Dependabot updates the lock (pnpm by hand, with the
+packageManager).
 The wasm-pack 0.14.0 pin and Python hash-locked requirements remain shared
 with Cursor setup. No corpus downloads, prebuild fleet or unit tests run.
-The image digest and assistant CLI snapshots are deliberate reproducibility
-pins; refresh them with remote invocation evidence when maintaining the image.
+The image digest and the tools' lock are deliberate reproducibility pins;
+Dependabot proposes their updates, and a refresh is checked by a remote
+invocation when maintaining the image.
 Features track their official major release; Rust tracks stable and Node 24
 tracks its supported patch releases. Record the actual versions in evidence.
 

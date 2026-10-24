@@ -83,7 +83,9 @@ other recovery claim is measured against the oracle its report names, Revit's
 own IFC export of the same file wherever one exists; the measured tables are in the
 [README](../README.md#what-rvt-rs-reads-from-real-projects) and the four
 levels a file can reach (opened, elements identified, geometry, properties)
-are in the [supported profile](supported-profile.md).
+are in the [supported profile](supported-profile.md). On Revit 2023 to 2027
+files, `rvt-elements` and Python also list each element's saved parameters,
+named where the file defines them (RE-207); most are not written to IFC.
 
 It is not a converter for arbitrary models: most parameters, family
 geometry (except the experimental `--saved-meshes` option, which draws a
@@ -466,6 +468,32 @@ styles with each material. Its walls' single layers take their category's
 material, and since RE-91 they carry the one the document's object styles
 give walls, "Default Wall", as Revit's export does.
 
+**RE-200 to RE-206 (2026-10-21)** read family instances', mullions',
+curtain panels', off-centre columns' and walls' materials by name from the
+native records and the family's own embedded document, not from byte
+offsets (#355):
+- a type whose map holds no material: the instance's own material
+  parameters (RE-200);
+- a mullion's or panel's type: `m_renderStyleId` (RE-201);
+- an off-centre column: one layer of the first joined wall that overlaps
+  it, on its side of the wall (RE-202, RE-205);
+- rendered content (RPC, planting) is `<Unnamed>` (RE-202);
+- a type's geometry map and a material's name: `m_geomTag2MaterialId` and
+  `Material.m_name` (RE-203);
+- `<Unnamed>` only where the family shows a visible form with no material
+  (RE-204, RE-205);
+- a layer taking its category's material, where the object styles are
+  unset or not read (every 2025 file): the category's graphics style
+  (RE-206).
+
+Of the elements rvt-rs gives a material, all 5,134 on Snowdon Towers have
+Revit's set (3,457 of 4,042 before), 71 of 71 on RE1 Architecture and 49 of
+49 on RE1 Electrical. On the 22 R2025 models, 195 have Revit's set (24
+before) and none another. Core Interior is unchanged. Elements whose
+material is not read at all still get none: 407 on Snowdon (members,
+railings, stair flights), 12 slabs on Core Interior and a railing on RE1
+Architecture (`reports/element-framing/RE-200-…` to `RE-206-…`).
+
 **RE-59 (2026-09-23)** contains an element whose record names two Levels,
 its base and top constraint, in the base constraint: the higher of the two
 at or below the record's base, else the lower. That is the storey Revit's
@@ -598,6 +626,12 @@ thickness about its line at the top. Each is now that cross-section along
 its line: 19 of the 20 within 0.001 ft of Revit's body across the wall at
 five heights (none within 0.1 ft before), and 24 walls better in the GLB,
 none worse (`reports/element-framing/RE-86-tapered-walls.md`).
+**RE-213 (2026-10-24)** reads the same face angles on Revit 2025, which
+frames them with twelve zero bytes after the `u32 2` instead of eight. On
+Snowdon Towers saved by Revit 2025, 19 of the 20 walls Revit tapers are within
+0.001 ft of its body across the wall (none within 0.1 ft before), and 24 walls
+are better in the GLB, none worse
+(`reports/element-framing/RE-213-tapered-walls-2025.md`).
 **RE-87 (2026-09-28)** reads a family instance's transform: twelve `f64` in
 its data, a 3 x 3 rotation stored row by row and its origin. On Snowdon
 Towers, of the 1,956 upright transforms in Revit's export, 1,951 point X
@@ -672,6 +706,22 @@ Revit's area (`reports/element-framing/RE-99-shaft-openings.md`).
 the arc layout with both angles 0), which gives round shaft 903725 its
 outline; 154 of Snowdon's slabs now match Revit's area within 0.1%
 (`reports/element-framing/RE-100-sketch-circles.md`).
+
+**RE-207 (2026-10-22)** lists each element's saved parameters in
+`rvt-elements` and Python's `decoded_elements()`, on Revit 2023 to 2027
+files (#35). They are read from the element's native record: its typed
+parameter sets, the family slots of its own `FamilyParams` that a
+definition resolves, and the native fields read as built-in parameters,
+each named by the file's own definition (family, shared, project and
+global parameters). A family instance's type adds the type parameters the
+instance does not hold. On the BIM4LCA office every parameter named
+`<set>.<property>` holds the value Revit's export writes for that property
+on the element, 7,606 of 7,606 as built and 7,592 of 7,592 at building
+permit, and on the R2025 models a window's `FireRating` is its type's `Fire
+Rating`, 18 of 18 (`reports/element-framing/RE-207-element-parameters.md`).
+Built-in parameters have no name (the built-in catalog is not shipped,
+#255), a family's built-in slots such as a window type's Width are not
+resolved, and nothing new is written to IFC.
 
 **RE-215 (2026-10-24)** gives each door and window on Revit 2024 and 2025
 the `OverallWidth` and `OverallHeight` Revit's export writes: the extents of
