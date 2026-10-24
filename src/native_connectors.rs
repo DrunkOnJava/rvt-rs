@@ -106,7 +106,7 @@ pub fn flow_direction_of(direction: i64) -> Option<&'static str> {
 }
 
 /// A port Revit's export writes on a family instance.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct InstancePort {
     /// The connector's index in its symbol.
     pub index: u32,
@@ -115,6 +115,41 @@ pub struct InstancePort {
     /// The port's IFC4 `FlowDirection` ([`port_flow_direction`]), `None`
     /// where it is not read.
     pub flow_direction: Option<&'static str>,
+    /// Where the connector is in its symbol, `None` where it is not read.
+    pub frame: Option<ConnectorFrame>,
+}
+
+/// A connector's point and Z axis in its symbol's coordinates (#869): the
+/// `m_trf` of the symbol's `m_arrConnectorData` entry, whose `m_or` is the
+/// point and the third column of whose `m_3x3` is the axis. Through the
+/// instance's transform (RE-87) they are Revit's port point and Z axis on
+/// RE1's 55 of 56 family-instance ports no duct or pipe joins.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ConnectorFrame {
+    /// Feet.
+    pub origin: [f64; 3],
+    pub z_axis: [f64; 3],
+}
+
+fn triple(value: &serde_json::Value) -> Option<[f64; 3]> {
+    let [x, y, z] = value.as_array()?.as_slice() else {
+        return None;
+    };
+    let p = [x.as_f64()?, y.as_f64()?, z.as_f64()?];
+    p.iter().all(|v| v.is_finite()).then_some(p)
+}
+
+/// A `m_trf` value as a [`ConnectorFrame`]; `None` unless its point is
+/// finite and its axis a unit vector.
+fn connector_frame(trf: &serde_json::Value) -> Option<ConnectorFrame> {
+    let origin = triple(trf.get("m_or")?)?;
+    let [r0, r1, r2] = trf.get("m_3x3")?.as_array()?.as_slice() else {
+        return None;
+    };
+    let rows = [triple(r0)?, triple(r1)?, triple(r2)?];
+    let z_axis = rows.map(|row| row[2]);
+    let length = z_axis.iter().map(|v| v * v).sum::<f64>().sqrt();
+    ((length - 1.0).abs() <= 1e-6).then_some(ConnectorFrame { origin, z_axis })
 }
 
 /// The `m_id64` an ElementId-shaped field holds, as the native records keep
@@ -218,7 +253,7 @@ fn calculated_directions(graph: &crate::native_parameters::ObjectGraph) -> BTree
 }
 
 /// What [`connector_ports`] reads.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq)]
 pub struct ConnectorPorts {
     /// For each family instance whose symbol has connectors, the ports
     /// Revit's export writes for it, in the symbol's order: every connector
@@ -240,7 +275,7 @@ pub fn connector_ports(
     instances: &BTreeMap<u64, u64>,
     segments: &BTreeSet<u64>,
 ) -> anyhow::Result<ConnectorPorts> {
-    let mut connectors: BTreeMap<u64, (u64, Vec<i64>)> = BTreeMap::new();
+    let mut connectors: BTreeMap<u64, (u64, Vec<(i64, Option<ConnectorFrame>)>)> = BTreeMap::new();
     let mut cells: BTreeMap<u64, BTreeMap<i64, i64>> = BTreeMap::new();
     let mut family_directions: BTreeMap<u64, BTreeMap<i64, i64>> = BTreeMap::new();
     let mut calculated: BTreeMap<u64, BTreeMap<u32, i64>> = BTreeMap::new();
@@ -268,13 +303,16 @@ pub fn connector_ports(
                 let Some(root) = graph.objects.first() else {
                     return Ok(());
                 };
-                let indices: Vec<i64> = root
+                let indices: Vec<(i64, Option<ConnectorFrame>)> = root
                     .fields
                     .get("m_arrConnectorData")
                     .and_then(|entries| entries.as_array())
                     .into_iter()
                     .flatten()
-                    .filter_map(|entry| entry.get("m_index")?.as_i64())
+                    .filter_map(|entry| {
+                        let index = entry.get("m_index")?.as_i64()?;
+                        Some((index, entry.get("m_trf").and_then(connector_frame)))
+                    })
                     .collect();
                 if let (false, Some(family)) = (
                     indices.is_empty(),
@@ -318,7 +356,7 @@ pub fn connector_ports(
             let calculations = calculated.get(&instance);
             let ports: Vec<InstancePort> = indices
                 .iter()
-                .filter_map(|&index| {
+                .filter_map(|&(index, frame)| {
                     let domain = *domains.get(&index)?;
                     PORT_DOMAINS.contains(&domain).then_some(())?;
                     let index_u32 = u32::try_from(index).ok()?;
@@ -330,6 +368,7 @@ pub fn connector_ports(
                             directions.and_then(|d| d.get(&index).copied()),
                             calculations.and_then(|c| c.get(&index_u32).copied()),
                         ),
+                        frame,
                     })
                 })
                 .collect();
