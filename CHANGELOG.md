@@ -10,18 +10,20 @@ fragments a release moves into this file.
 
 ### Added
 
-- **A door's and window's OverallWidth and OverallHeight are the outline
-  the symbol that draws it cuts in its host (RE-215, #844).** A family
-  instance names its type and, in its `InstanceInfo`, the symbol that draws
-  it. Where the instance's own parameters change the family's geometry, that
-  is a symbol of its own. Revit's exporter sizes a door or window from that
+- **A door's and window's OverallWidth and OverallHeight are the outline the
+  symbol that draws it cuts in its host (RE-215, #844).** A family instance
+  names its type and, in its `InstanceInfo`, the symbol that draws it. Where
+  the instance's own parameters change the family's geometry, that is a
+  symbol of its own. Revit's exporter sizes a door or window from that
   symbol, and the extents of the outline it cuts are Revit's `OverallWidth`
-  and `OverallHeight` on every door and window measured: Core Interior's 132
-  doors and 6 windows, RE1 Architecture's 4 doors, and each R2025 model's
-  door and 3 windows. Core Interior's windows, whose type is 1010 mm square,
-  had `$`; they now have Revit's 1500 by 2700 mm. Revit 2024 and 2025 only,
-  and loops of straight lines only. RE1's curtain-wall door has no outline
-  and keeps `$`.
+  and `OverallHeight` on every door and window measured that has one: Core
+  Interior's 132 doors and 6 windows, RE1 Architecture's 4 doors, and each
+  R2025 model's door and 3 windows. Core Interior's windows, whose type is
+  1010 mm square, had `$`; they now have Revit's 1500 by 2700 mm. On the
+  BIM4LCA office, the 187 of its 269 doors that cut an outline have Revit's
+  sizes; its 269 windows and other 82 doors are drawn by symbols that cut
+  none and keep what they had (#810). Revit 2024 and 2025 only, and loops of
+  straight lines only. RE1's curtain-wall door has no outline and keeps `$`.
 
 - **`rvt-ifc` honours `SOURCE_DATE_EPOCH`, and CI checks every writer is
   deterministic (#873).** The time in an IFC's header and owner history was
@@ -112,20 +114,19 @@ fragments a release moves into this file.
   is joined to (RE-131, RE-138). Its Z axis points out of the pipe, or into
   it for a `SINK` port, as Revit's export writes them. On the RE1 Plumbing
   model all 124 of the ports Revit writes on pipes are within 0.01 ft of
-  Revit's. Their axes agree except on Revit's 57 `In` ports, whose flow
-  direction rvt-rs does not read (#834). A duct along one of the model's axes
-  has its ports placed the same way, at the centres of its box's faces across
-  its length: on RE1 Mechanical all 62 of the ports Revit writes on ducts and
-  pipes are within 0.01 ft of Revit's. A port joined to a placed duct or
-  pipe port, a family instance's included, is placed at that port's point
-  with its axis, as Revit's export places every port joined to a segment's
-  (#869): all 118 such ports of RE1 Plumbing and all 59 of RE1 Mechanical
-  are within 0.01 ft of Revit's, where none was placed before. Their Z axes,
-  taken from the segment port's, agree with Revit's on 51 and 26 and are
-  opposite on the other 67 and 33; the segment ports' own axes are opposite
-  to Revit's on its `In` ports, whose flow direction rvt-rs does not read
-  (#834). Other family-instance ports keep no placement, and the no-geometry
-  modes write none.
+  Revit's, and with RE-212's flow directions each has Revit's axis. A duct
+  along one of the model's axes has its ports placed the same way, at the
+  centres of its box's faces across its length: on RE1 Mechanical all 62 of
+  the ports Revit writes on ducts and pipes are within 0.01 ft of Revit's,
+  each with Revit's axis. A port joined to a placed duct or pipe port, a
+  family instance's included, is placed at that port's point with its axis,
+  as Revit's export places every port joined to a segment's (#869): all 118
+  such ports of RE1 Plumbing and all 59 of RE1 Mechanical are within
+  0.01 ft of Revit's, where none was placed before. Their Z axes, taken from
+  the segment port's, are Revit's on 108 and 53 and opposite on the other
+  10 and 6, where Revit's export turns the axis from the segment port's. On
+  Revit 2025 every other family-instance port is placed at its connector
+  too (#869), and the no-geometry modes write none.
 
 - **Every public type implements `Debug`, as the Rust API Guidelines ask (C-DEBUG).** The 14 element
   decoders, the three exporters, `corpus::Sample` and `RevitFile` did not.
