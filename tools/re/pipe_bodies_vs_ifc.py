@@ -22,6 +22,7 @@ import math
 import ifcopenshell
 import ifcopenshell.util.placement as placement
 import ifcopenshell.util.unit as unit
+import numpy
 
 FT = 0.3048
 END_TOLERANCE_FT = 0.01
@@ -33,11 +34,15 @@ def cylinders(path):
     """Tag -> (profile name, radius in feet or None, start, end, length in feet, Name)."""
     model = ifcopenshell.open(path)
     scale = unit.calculate_unit_scale(model) / FT
+    # Each file in its own site frame: Revit writes the BIM4LCA office's
+    # site at its shared coordinates, rvt-rs at its internal ones.
+    sites = model.by_type("IfcSite")
+    inverse = numpy.linalg.inv(placement.get_local_placement(sites[0].ObjectPlacement)) if sites else numpy.eye(4)
     out = {}
     for element in model.by_type("IfcFlowSegment"):
         if not element.Tag or not element.Representation:
             continue
-        world = placement.get_local_placement(element.ObjectPlacement)
+        world = inverse @ placement.get_local_placement(element.ObjectPlacement)
         for representation in element.Representation.Representations:
             for item in representation.Items:
                 if not item.is_a("IfcExtrudedAreaSolid"):
