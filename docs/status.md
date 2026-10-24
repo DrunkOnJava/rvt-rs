@@ -466,6 +466,32 @@ styles with each material. Its walls' single layers take their category's
 material, and since RE-91 they carry the one the document's object styles
 give walls, "Default Wall", as Revit's export does.
 
+**RE-200 to RE-206 (2026-10-21)** read family instances', mullions',
+curtain panels', off-centre columns' and walls' materials by name from the
+native records and the family's own embedded document, not from byte
+offsets (#355):
+- a type whose map holds no material: the instance's own material
+  parameters (RE-200);
+- a mullion's or panel's type: `m_renderStyleId` (RE-201);
+- an off-centre column: one layer of the first joined wall that overlaps
+  it, on its side of the wall (RE-202, RE-205);
+- rendered content (RPC, planting) is `<Unnamed>` (RE-202);
+- a type's geometry map and a material's name: `m_geomTag2MaterialId` and
+  `Material.m_name` (RE-203);
+- `<Unnamed>` only where the family shows a visible form with no material
+  (RE-204, RE-205);
+- a layer taking its category's material, where the object styles are
+  unset or not read (every 2025 file): the category's graphics style
+  (RE-206).
+
+Of the elements rvt-rs gives a material, all 5,134 on Snowdon Towers have
+Revit's set (3,457 of 4,042 before), 71 of 71 on RE1 Architecture and 49 of
+49 on RE1 Electrical. On the 22 R2025 models, 195 have Revit's set (24
+before) and none another. Core Interior is unchanged. Elements whose
+material is not read at all still get none: 407 on Snowdon (members,
+railings, stair flights), 12 slabs on Core Interior and a railing on RE1
+Architecture (`reports/element-framing/RE-200-…` to `RE-206-…`).
+
 **RE-59 (2026-09-23)** contains an element whose record names two Levels,
 its base and top constraint, in the base constraint: the higher of the two
 at or below the record's base, else the lower. That is the storey Revit's
