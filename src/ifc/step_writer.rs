@@ -2414,8 +2414,12 @@ impl StepWriter {
                 // RE-187: a door with no opening read takes its type's Width and
                 // Height, which Revit's export writes there too.
                 let [type_width, type_height] = super::export_content::DOOR_TYPE_SIZE_PROPERTIES;
-                let overall = property_length(height_key)
-                    .zip(property_length(width_key))
+                // RE-215: before either, the extents of the outline the symbol
+                // that draws it cuts, which Revit's exporter sizes it from.
+                let [cut_width, cut_height] = super::export_content::CUT_LOOP_SIZE_PROPERTIES;
+                let overall = property_length(cut_height)
+                    .zip(property_length(cut_width))
+                    .or_else(|| property_length(height_key).zip(property_length(width_key)))
                     .or_else(|| property_length(type_height).zip(property_length(type_width)));
                 let tail = element_attribute_tail(
                     &ifc_upper,
