@@ -1158,10 +1158,12 @@ jobs:
       - name: The docs list every wasm binding
         run: python3 tools/ci/wasm-api.py docs rvt-wasm/src/lib.rs README.md docs/viewer-api.md
 
-  # Guards the Cloud Agent development environment config itself: shellcheck
-  # the install script and validate `.cursor/environment.json` against the
-  # published Cursor environment schema. Cheap (~20s) and keeps the env setup
-  # from silently drifting into an invalid state on any PR.
+  # Guards the development environments' config: shellcheck the Cursor
+  # install script and the devcontainer's scripts, install the
+  # devcontainer's tools from their lock, and validate
+  # `.cursor/environment.json` against the published Cursor environment
+  # schema. Keeps the env setup from silently drifting into an invalid state
+  # on any PR.
   env-config:
     name: env config lint
     runs-on: ubuntu-24.04
@@ -1170,8 +1172,19 @@ jobs:
         with:
           persist-credentials: false
       # shellcheck is preinstalled on ubuntu-24.04 runners.
-      - name: ShellCheck .cursor/install.sh
-        run: shellcheck .cursor/install.sh
+      - name: ShellCheck .cursor/install.sh and the devcontainer's scripts
+        run: shellcheck .cursor/install.sh .devcontainer/*.sh
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+          package-manager-cache: false
+      # The devcontainer's onCreateCommand, run as Codespaces runs it: Codex,
+      # Claude Code and pnpm installed from their lock, each run, and pnpm
+      # checked against viewer/package.json. The runner's npm is older than
+      # the devcontainer's 12.2.0, so the `allowScripts` policy is not what
+      # is checked here; the lock, the install and the three tools are.
+      - name: Provision the devcontainer's tools from their lock
+        run: PATH="$HOME/.local/bin:$PATH" bash .devcontainer/provision.sh
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.12"
