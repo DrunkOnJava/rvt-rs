@@ -11,6 +11,11 @@ straight line to the nearest end of an unused line: its area and its
 Hausdorff distance from Revit's outline. The elevation whose ring is
 closest is reported.
 
+It then compares each landing's body heights: Revit's body's lowest and
+highest point, against the highest elevation the landing's lines lie at and
+the members of the `StairsLandingType` the landing's native record names
+(`native` lines).
+
 Needs IfcOpenShell and Shapely.
 
 Usage:
@@ -25,13 +30,18 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from plan_profiles_vs_ifc import tops  # noqa: E402
+from plan_profiles_vs_ifc import site_frame, tops  # noqa: E402
+
+import ifcopenshell  # noqa: E402
+import ifcopenshell.geom  # noqa: E402
+import numpy as np  # noqa: E402
 
 from shapely.geometry import Polygon  # noqa: E402
 
 
 def read_probe(path):
     boxes, lines, arcs = {}, collections.defaultdict(list), collections.defaultdict(list)
+    native = collections.defaultdict(dict)
     for raw in open(path, encoding="utf-8", errors="replace"):
         p = raw.split()
         if not p:
@@ -44,7 +54,60 @@ def read_probe(path):
         elif p[0] == "arc":
             v = [float(x) for x in p[2:12]]
             arcs[p[1]].append(v)
-    return boxes, lines, arcs
+        elif p[0] == "native" and len(p) >= 4 and p[2] == "0":
+            members = dict(m.split("=", 1) for m in p[4:] if "=" in m)
+            native[p[1]] = {"class": p[3].split("/")[0], **members}
+    return boxes, lines, arcs, native
+
+
+def heights(path, wanted):
+    """Tag -> (lowest, highest) z of Revit's body, internal feet."""
+    f = ifcopenshell.open(path)
+    frame = site_frame(f)
+    settings = ifcopenshell.geom.settings()
+    settings.set("use-world-coords", True)
+    out = {}
+    for element in f.by_type("IfcSlab"):
+        tag = getattr(element, "Tag", None)
+        if tag not in wanted or not element.Representation:
+            continue
+        try:
+            shape = ifcopenshell.geom.create_shape(settings, element)
+        except Exception:
+            continue
+        verts = np.array(shape.geometry.verts, dtype=float).reshape(-1, 3)
+        if not len(verts):
+            continue
+        z = frame(verts)[:, 2]
+        low, high = out.get(tag, (float("inf"), float("-inf")))
+        out[tag] = (min(low, float(z.min())), max(high, float(z.max())))
+    return out
+
+
+def vertical(boxes, lines, native, path):
+    revit = heights(path, set(boxes))
+    summary = collections.Counter()
+    print("body heights:")
+    for tag in sorted(boxes):
+        if tag not in revit:
+            continue
+        low, high = revit[tag]
+        levels = [s[0][2] for s in lines.get(tag, []) if abs(s[0][2] - s[1][2]) < 1e-3 and abs(s[0][2]) > 1e-3]
+        top = max(levels) if levels else None
+        record = native.get(tag, {})
+        types = [v[1:] for v in record.values() if isinstance(v, str) and v.startswith("@") and native.get(v[1:], {}).get("class") == "StairsLandingType"]
+        kind = native.get(types[0], {}) if len(types) == 1 else {}
+        thickness = float(kind["m_thickness"]) if "m_thickness" in kind else None
+        top_ok = top is not None and abs(top - high) <= 1e-3
+        thick_ok = thickness is not None and abs(thickness - (high - low)) <= 1e-3
+        summary[f"top {'=' if top_ok else '!='} lines' elevation"] += 1
+        summary[f"thickness {'=' if thick_ok else '!='} type m_thickness"] += 1
+        print(
+            f"  {tag}: Revit z {low:.4f} to {high:.4f} ({high - low:.4f} ft); lines' highest z {top}; "
+            f"box z {boxes[tag][2]:.4f} to {boxes[tag][2] + boxes[tag][5]:.4f}; type {types} "
+            + " ".join(f"{k}={v}" for k, v in sorted(kind.items()) if k != "class" and not v.startswith("@"))
+        )
+    print("summary: " + ", ".join(f"{k} {v}" for k, v in sorted(summary.items())))
 
 
 def arc_ends(a):
@@ -91,7 +154,7 @@ def main():
     ap.add_argument("reference")
     ap.add_argument("--list", action="store_true")
     args = ap.parse_args()
-    boxes, lines, arcs = read_probe(args.probe)
+    boxes, lines, arcs, native = read_probe(args.probe)
     revit = tops(args.reference, ["IfcSlab", "IfcStair", "IfcStairFlight", "IfcBuildingElementProxy", "IfcCovering"])
     print(f"landings: {len(boxes)}, with lines: {len(lines)}, with arcs: {len(arcs)}, in Revit's export: {sum(1 for t in boxes if t in revit)}")
     summary = collections.Counter()
@@ -132,6 +195,7 @@ def main():
                 f"{ours:.2f} ft2, outline {distance:.4f} ft from Revit's"
             )
     print("summary: " + ", ".join(f"{k} {v}" for k, v in summary.most_common()))
+    vertical(boxes, lines, native, args.reference)
 
 
 if __name__ == "__main__":

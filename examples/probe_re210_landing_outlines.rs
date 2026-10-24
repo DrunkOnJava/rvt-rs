@@ -11,14 +11,22 @@
 //!   landing <id> box <x> <y> <z> <w> <d> <h>
 //!   line <id> <x0> <y0> <z0> <x1> <y1> <z1>
 //!   arc <id> <cx> <cy> <cz> <radius> <start> <end> <xx> <xy> <yx> <yy>
+//!   native <id> <index> <class> <member=value ...>
+//!
+//! The `native` lines are each landing's and each `StairsLandingType`'s
+//! native record objects, read by member name: every number, flag and
+//! element id (`@id`) they hold at their top level, for the landing's top
+//! and thickness to be found by name.
 //!
 //! Usage:
 //!   cargo run --profile ci --example probe_re210_landing_outlines -- FILE.rvt
 
 use rvt::RevitFile;
+use rvt::research::native_document::{Options, extract_graphs};
 use rvt::research::partition_beam_axes::{BOUNDED_LINE_TAG, bounded_arc_at, bounded_line_at};
 use rvt::research::partition_names::element_data_header;
 use rvt::walker::{InstanceField, iter_elements};
+use serde_json::Value;
 use std::collections::BTreeSet;
 
 fn field(fields: &[(String, InstanceField)], name: &str) -> f64 {
@@ -55,6 +63,40 @@ fn main() {
         );
         landings.insert(id);
     }
+    let options = Options {
+        selected_ids: landings.iter().map(|&id| u64::from(id)).collect(),
+        selected_classes: ["StairsLandingType".to_string()].into(),
+        ..Options::default()
+    };
+    extract_graphs(&mut rf, &options, |record| {
+        let (Some(class), Some(graph)) = (record.class_name.as_deref(), record.graph.as_ref())
+        else {
+            return Ok(());
+        };
+        let id = record.identity.element_id;
+        for (index, object) in graph.objects.iter().enumerate() {
+            let members: Vec<String> = object
+                .fields
+                .as_object()
+                .into_iter()
+                .flat_map(|members| members.iter())
+                .filter_map(|(name, value)| match value {
+                    Value::Number(_) | Value::Bool(_) => Some(format!("{name}={value}")),
+                    _ => value
+                        .get("m_id")?
+                        .get("m_id64")
+                        .map(|id| format!("{name}=@{id}")),
+                })
+                .collect();
+            println!(
+                "native {id} {index} {class}/{} {}",
+                object.class_name,
+                members.join(" ")
+            );
+        }
+        Ok(())
+    })
+    .expect("native records");
     let Some(header) = element_data_header(version) else {
         println!("no element data header for {version}");
         return;
