@@ -1659,7 +1659,9 @@ fn attach_original_symbols<const N: usize>(
                 if at < p {
                     continue;
                 }
-                let value = u32::from_le_bytes(buf[at..at + 4].try_into().expect("4 bytes"));
+                let Some(value) = crate::le_bytes::u32_at(buf, at) else {
+                    continue;
+                };
                 held.entry(object.element_id)
                     .or_default()
                     .entry(partition)
@@ -6164,7 +6166,8 @@ fn scan_curtain_grid_walls(
     };
     let u64_at = |buf: &[u8], at: usize| {
         buf.get(at..at.checked_add(8)?)
-            .map(|b| u64::from_le_bytes(b.try_into().expect("8 bytes")))
+            .and_then(|b| b.first_chunk::<8>())
+            .map(|b| u64::from_le_bytes(*b))
     };
     let mut found: BTreeMap<u32, Option<u32>> = BTreeMap::new();
     for stream in rf.partition_stream_names() {

@@ -50,6 +50,7 @@ function findGenFixture() {
   const binName = process.platform === 'win32' ? 'gen-fixture.exe' : 'gen-fixture';
   const candidates = [
     path.join(repoRoot, 'target', 'release', binName),
+    path.join(repoRoot, 'target', 'ci', binName),
     path.join(repoRoot, 'target', 'debug', binName),
   ];
   for (const candidate of candidates) {

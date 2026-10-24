@@ -1,0 +1,66 @@
+{
+  "version": "2.0.0",
+  "options": {
+    "cwd": "${workspaceFolder}",
+    "env": { "CARGO_BUILD_JOBS": "2", "RAYON_NUM_THREADS": "2", "RVT_BUILD_PROFILE": "ci", "RVT_WASM_PROFILE": "dev" }
+  },
+  "presentation": { "reveal": "always", "panel": "dedicated", "clear": false },
+  "tasks": [
+    {
+      "label": "rvt: build", "type": "process", "command": "cargo",
+      "args": ["build", "--locked", "--profile", "ci"],
+      "group": { "kind": "build", "isDefault": true }, "problemMatcher": ["$rustc"]
+    },
+    {
+      "label": "rvt: debug build", "type": "process", "command": "cargo",
+      "args": ["build", "--locked", "--bin", "rvt-inspect"], "problemMatcher": ["$rustc"]
+    },
+    {
+      "label": "rvt: clippy", "type": "process", "command": "cargo",
+      "args": ["clippy", "--locked", "--profile", "ci", "--workspace", "--all-targets", "--all-features", "--", "-D", "warnings"],
+      "problemMatcher": ["$rustc"]
+    },
+    {
+      "label": "rvt: format check", "type": "process", "command": "cargo",
+      "args": ["fmt", "--all", "--", "--check"], "problemMatcher": []
+    },
+    {
+      "label": "rvt: Python binding", "type": "process", "command": "${workspaceFolder}/.venv/bin/maturin",
+      "args": ["develop", "--locked", "--manifest-path", "rvt-py/Cargo.toml", "--profile", "ci"],
+      "options": { "env": { "VIRTUAL_ENV": "${workspaceFolder}/.venv" } }, "problemMatcher": ["$rustc"]
+    },
+    {
+      "label": "rvt: WASM", "type": "process", "command": "wasm-pack",
+      "args": ["build", "rvt-wasm", "--dev", "--target", "web", "--out-dir", "../viewer/pkg", "--out-name", "rvt", "--", "--locked"],
+      "problemMatcher": ["$rustc"]
+    },
+    {
+      "label": "viewer: build", "type": "process", "command": "pnpm", "args": ["run", "build"],
+      "options": { "cwd": "${workspaceFolder}/viewer" }, "dependsOn": ["rvt: WASM"], "problemMatcher": []
+    },
+    {
+      "label": "viewer: dev", "type": "process", "command": "pnpm", "args": ["run", "dev", "--host", "0.0.0.0"],
+      "options": { "cwd": "${workspaceFolder}/viewer" }, "dependsOn": ["rvt: WASM"], "isBackground": true,
+      "problemMatcher": {
+        "owner": "rvt-viewer",
+        "pattern": { "regexp": "^(.*):(\\d+):(\\d+): (.*)$", "file": 1, "line": 2, "column": 3, "message": 4 },
+        "background": { "activeOnStart": true, "beginsPattern": ".*VITE.*", "endsPattern": ".*Local:.*5173.*" }
+      }
+    },
+    {
+      "label": "rvt: smoke", "type": "process", "command": "bash", "args": [".devcontainer/verify.sh"],
+      "dependsOn": ["rvt: build", "rvt: Python binding", "viewer: build"], "dependsOrder": "sequence", "problemMatcher": []
+    },
+    {
+      "label": "rvt: verify real files", "type": "process", "command": "bash",
+      "args": ["tools/ci/verify-real-files.sh", "--profile", "ci"], "dependsOn": ["rvt: build"],
+      "group": { "kind": "test", "isDefault": true }, "problemMatcher": ["$rustc"]
+    },
+    {
+      "label": "viewer: browser checks", "type": "process", "command": "pnpm",
+      "args": ["exec", "playwright", "test", "--config", "playwright.config.ts", "--workers=1"],
+      "options": { "cwd": "${workspaceFolder}/viewer", "env": { "CI": "1" } },
+      "dependsOn": ["viewer: build"], "problemMatcher": []
+    }
+  ]
+}
