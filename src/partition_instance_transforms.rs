@@ -120,11 +120,13 @@ pub fn instance_transform(data: &[u8]) -> Option<InstanceTransform> {
 /// an instance's copies in different partitions disagree, the copy taken is
 /// the one in the partition its current record is in: the partition its
 /// stored revision routes to, or the latest one holding a copy where that
-/// one holds none, as `native_document` reads records (RE-145, #548). On
-/// Core Interior 8 stacked doors have a copy one inch off across their host
-/// in an earlier partition; the current copy places Revit's opening exactly
-/// (#227). An instance whose current copy cannot be told is dropped. Empty
-/// on a release without a measured element-data header.
+/// one holds none, as `native_document` reads records (RE-145, #548); a
+/// partition holds a copy wherever its element data names the instance,
+/// whether or not a transform is read there. On Core Interior 8 stacked
+/// doors have a copy one inch off across their host in an earlier partition;
+/// the current copy places Revit's opening exactly (#227). An instance whose
+/// current copy cannot be told, or holds no transform that is read, is
+/// dropped. Empty on a release without a measured element-data header.
 pub fn scan_instance_transforms(
     rf: &mut RevitFile,
     revit_version: u32,
@@ -134,6 +136,7 @@ pub fn scan_instance_transforms(
         return Ok(BTreeMap::new());
     };
     let mut found: BTreeMap<u32, Vec<(u32, InstanceTransform)>> = BTreeMap::new();
+    let mut holders: BTreeMap<u32, BTreeSet<u32>> = BTreeMap::new();
     for stream in rf.partition_stream_names() {
         let Some(partition) = stream
             .strip_prefix("Partitions/")
@@ -157,6 +160,7 @@ pub fn scan_instance_transforms(
             else {
                 continue;
             };
+            holders.entry(id).or_default().insert(partition);
             let end = hits
                 .get(index + 1)
                 .copied()
@@ -186,7 +190,7 @@ pub fn scan_instance_transforms(
             if copies.iter().all(|(_, t)| *t == first) {
                 return Some((id, first));
             }
-            let held: BTreeSet<u32> = copies.iter().map(|(p, _)| *p).collect();
+            let held = holders.get(&id)?;
             let routed = *routed.get(&u64::from(id))?;
             let current = if held.contains(&routed) {
                 routed
