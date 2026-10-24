@@ -293,9 +293,8 @@ When you discover something new about the file format:
    (the scorers under `tools/re/` compare an export with Revit's) and update
    the public status in the same pull request: `docs/status.md`,
    `docs/support-matrix.json`, the README and a changelog fragment under
-   [`changelog.d/`](changelog.d/README.md) (not `CHANGELOG.md` itself). The
-   Measure
-   workflow runs every scorer on the licensed reference models for you,
+   [`changelog.d/`](changelog.d/README.md) (not `CHANGELOG.md` itself).
+   The Measure workflow runs every scorer on the licensed reference models for you,
    before and after, on GitHub's runners, and can run your probe on them
    too; the differences land in the run summary:
 
