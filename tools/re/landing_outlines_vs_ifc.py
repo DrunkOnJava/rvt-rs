@@ -5,9 +5,11 @@
 Takes the output of `examples/probe_re210_landing_outlines.rs` (every bounded
 line and arc in each landing's data) and Revit's export. For each landing it
 reports Revit's top-surface outline (from `plan_profiles_vs_ifc.tops`, in
-Revit's internal feet), how far each of Revit's outline vertices is from the
-nearest end of the landing's lines and arcs, whether the lines at the top's
-elevation close into a loop, and that loop's area against Revit's.
+Revit's internal feet), and, for each elevation the landing's lines lie at,
+the plan ring they make end to end, a gap where one chain stops bridged by a
+straight line to the nearest end of an unused line: its area and its
+Hausdorff distance from Revit's outline. The elevation whose ring is
+closest is reported.
 
 Needs IfcOpenShell and Shapely.
 
@@ -53,23 +55,34 @@ def arc_ends(a):
     return out
 
 
-def loop_area(segments):
-    """The area of the loop the segments make, end to end, or None."""
+def ring(segments):
+    """The closed plan ring the segments make end to end, with the number of
+    gaps bridged by a straight line from where one chain stops to the
+    nearest end of an unused segment; None for fewer than three segments."""
     if len(segments) < 3:
         return None
-    remaining = list(segments)
-    first = remaining.pop(0)
-    loop, here = [first[0][:2], first[1][:2]], first[1][:2]
+    remaining = [(s[0][:2], s[1][:2]) for s in segments]
+    a, b = remaining.pop(0)
+    points, here, gaps = [a, b], b, 0
     while remaining:
-        nxt = next((s for s in remaining if math.dist(s[0][:2], here) < 1e-3 or math.dist(s[1][:2], here) < 1e-3), None)
-        if nxt is None:
-            return None
-        remaining.remove(nxt)
-        here = nxt[1][:2] if math.dist(nxt[0][:2], here) < 1e-3 else nxt[0][:2]
-        loop.append(here)
-    if math.dist(loop[0], loop[-1]) > 1e-3:
-        return None
-    return Polygon(loop[:-1]).area
+        best = min(
+            ((math.dist(seg[0], here), i, False) for i, seg in enumerate(remaining)),
+            default=None,
+        )
+        best_rev = min(((math.dist(seg[1], here), i, True) for i, seg in enumerate(remaining)), default=None)
+        distance, index, reverse = min(best, best_rev)
+        seg = remaining.pop(index)
+        near, far = (seg[1], seg[0]) if reverse else (seg[0], seg[1])
+        if distance > 1e-3:
+            gaps += 1
+            points.append(near)
+        points.append(far)
+        here = far
+    if math.dist(points[0], here) > 1e-3:
+        gaps += 1
+    else:
+        points.pop()
+    return Polygon(points), gaps
 
 
 def main():
@@ -87,22 +100,36 @@ def main():
             summary["not in Revit's export"] += 1
             continue
         area, points, cls, surface = revit[tag]
-        ends = [e for seg in lines.get(tag, []) for e in seg] + [e for a in arcs.get(tag, []) for e in arc_ends(a)]
-        if not ends:
-            summary["no lines or arcs"] += 1
-            print(f"  {tag} {cls}: Revit {area:.2f} ft2, nothing in the data")
+        if not lines.get(tag):
+            summary["no lines"] += 1
+            print(f"  {tag} {cls}: Revit {area:.2f} ft2, no lines in the data")
             continue
-        exterior = list(surface.exterior.coords) if hasattr(surface, "exterior") else []
-        worst = max((min(math.dist(v[:2], e[:2]) for e in ends) for v in exterior), default=float("nan"))
-        top_z = max(e[2] for e in ends)
-        level_segments = [s for s in lines.get(tag, []) if abs(s[0][2] - top_z) < 1e-3 and abs(s[1][2] - top_z) < 1e-3]
-        ours = loop_area(level_segments)
-        verdict = "vertices within 0.01 ft" if worst <= 0.01 else "vertices off"
-        summary[verdict] += 1
-        if args.list or worst > 0.01:
+        by_z = collections.defaultdict(list)
+        for seg in lines[tag]:
+            if abs(seg[0][2] - seg[1][2]) < 1e-3:
+                by_z[round(seg[0][2], 3)].append(seg)
+        best = None
+        for z, segments in sorted(by_z.items()):
+            made = ring(segments)
+            if made is None:
+                continue
+            polygon, gaps = made
+            if not polygon.is_valid:
+                continue
+            distance = polygon.hausdorff_distance(surface)
+            if best is None or distance < best[0]:
+                best = (distance, z, len(segments), gaps, polygon.area)
+        if best is None:
+            summary["no ring"] += 1
+            print(f"  {tag} {cls}: Revit {area:.2f} ft2; no group of lines makes a ring")
+            continue
+        distance, z, count, gaps, ours = best
+        band = next((f"within {b} ft" for b in (0.001, 0.01, 0.1) if distance <= b), "over 0.1 ft")
+        summary[f"outline {band}, {'closed' if gaps == 0 else 'gaps bridged'}"] += 1
+        if args.list or distance > 0.01:
             print(
-                f"  {tag} {cls}: Revit {area:.2f} ft2, {len(exterior) - 1} vertices; data {len(lines.get(tag, []))} lines, "
-                f"{len(arcs.get(tag, []))} arcs; worst vertex {worst:.4f} ft; loop at the top {'none' if ours is None else f'{ours:.2f} ft2'}"
+                f"  {tag} {cls}: Revit {area:.2f} ft2; ring of {count} lines at z {z} with {gaps} gaps bridged, "
+                f"{ours:.2f} ft2, outline {distance:.4f} ft from Revit's"
             )
     print("summary: " + ", ".join(f"{k} {v}" for k, v in summary.most_common()))
 
