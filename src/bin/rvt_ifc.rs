@@ -1,18 +1,18 @@
 //! `rvt-ifc` — convert a Revit file to IFC4.
 //!
-//! This is the first end-to-end `rvt → ifc` pipeline. Current scope:
-//! document-level metadata export (IfcProject, framework entities,
-//! units, geometric context). Element-level geometry is pending walker
-//! expansion; this command's output is spec-valid IFC4 that readers
-//! (IfcOpenShell, BlenderBIM) accept — just sparse until more of the
-//! schema is walked.
+//! Writes the project, its storeys and the elements rvt-rs decodes as typed
+//! IFC4 entities, each with its body where the geometry is recovered and its
+//! bounding box where it is not (`docs/support-matrix.json` rates each
+//! category). The same input gives the same bytes, apart from the time in
+//! the header and the owner history, which `SOURCE_DATE_EPOCH` fixes.
 
 use clap::{Parser, ValueEnum};
 use rvt::{
     RevitFile,
     ifc::{
         DiagnosticRvtDocExporter, ExportDiagnostics, ExportQualityMode, PlaceholderExporter,
-        RvtDocExporter, write_step,
+        RvtDocExporter,
+        step_writer::{StepOptions, write_step_with_options},
     },
     walker::WalkerLimits,
 };
@@ -41,11 +41,13 @@ impl From<CliExportQualityMode> for ExportQualityMode {
 #[derive(Parser)]
 #[command(
     version,
-    about = "Convert a Revit file to IFC4 (document-level export)",
+    about = "Convert a Revit file to IFC4",
     after_help = "Examples:\n  \
         rvt-ifc model.rvt                     writes model.ifc next to the input\n  \
         rvt-ifc model.rvt -o out.ifc --diagnostics out.diagnostics.json\n  \
-        rvt-ifc model.rvt --mode geometry"
+        rvt-ifc model.rvt --mode geometry\n\n\
+        SOURCE_DATE_EPOCH (Unix seconds) sets the time the IFC header and owner\n\
+        history record, so two exports of the same file are the same bytes."
 )]
 struct Args {
     /// Path to a `.rvt` / `.rfa` / `.rte` / `.rft` file.
@@ -129,6 +131,7 @@ fn main() -> std::process::ExitCode {
 }
 
 fn run(args: Args) -> anyhow::Result<()> {
+    let timestamp = source_date_epoch()?;
     let mut rf = RevitFile::open(&args.input)?;
     let quality_mode = ExportQualityMode::from(args.mode);
     let walker_limits = walker_limits_from_args(&args);
@@ -176,7 +179,7 @@ fn run(args: Args) -> anyhow::Result<()> {
 
     warn_about_export_quality(&diagnostics);
 
-    let step = write_step(&model);
+    let step = write_step_with_options(&model, &StepOptions { timestamp });
     std::fs::write(&out_path, step.as_bytes())?;
     eprintln!(
         "rvt-ifc: wrote {} bytes to {}",
@@ -225,6 +228,22 @@ fn walker_limits_from_args(args: &Args) -> WalkerLimits {
         max_container_records: args
             .max_walker_container_records
             .unwrap_or(defaults.max_container_records),
+    }
+}
+
+/// The time `SOURCE_DATE_EPOCH` sets for the header, or `None` when it is
+/// unset or empty (reproducible-builds.org).
+fn source_date_epoch() -> anyhow::Result<Option<i64>> {
+    match std::env::var("SOURCE_DATE_EPOCH") {
+        Ok(value) if value.is_empty() => Ok(None),
+        Ok(value) => value
+            .parse()
+            .map(Some)
+            .map_err(|_| anyhow::anyhow!("SOURCE_DATE_EPOCH must be Unix seconds, not {value:?}")),
+        Err(std::env::VarError::NotPresent) => Ok(None),
+        Err(std::env::VarError::NotUnicode(value)) => Err(anyhow::anyhow!(
+            "SOURCE_DATE_EPOCH must be Unix seconds, not {value:?}"
+        )),
     }
 }
 
