@@ -87,7 +87,8 @@ when a release ships.
   requests.
 - Every measured claim in a pull request links the run or command that
   produced it, and what is not established is stated. `docs/status.md`, the
-  support matrix, the README and the CHANGELOG change in the same pull request
+  support matrix, the README and a changelog fragment
+  ([`changelog.d/`](../changelog.d/README.md)) change in the same pull request
   as the capability they describe.
 
 ## Dependencies and the MSRV
