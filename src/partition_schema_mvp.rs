@@ -7540,8 +7540,11 @@ pub const ROOF_EXTRUSION_AXIS_FIELD: &str = "m_roof_extrusion_axis";
 /// feet (RE-211).
 pub const ROOF_EXTRUSION_BOX_TOLERANCE_FEET: f64 = 1e-3;
 /// Chords a sketch's B-spline is drawn with in a roof by extrusion's
-/// section (RE-211).
+/// section (RE-211), shared among its knot spans by their lengths.
 pub const ROOF_EXTRUSION_SPLINE_SEGMENTS: usize = 256;
+/// The fewest chords any knot span of a sketch's B-spline is drawn with, so
+/// a short span is never skipped (RE-211).
+pub const ROOF_EXTRUSION_MIN_SPAN_SEGMENTS: usize = 4;
 /// The share of a sketch spline's span its second and last but one points
 /// lie in from its ends (RE-211).
 pub const ROOF_EXTRUSION_END_SHARE: f64 = 1e-4;
@@ -7582,19 +7585,44 @@ pub fn roof_extrusion_from_fields(fields: &[(String, InstanceField)]) -> Option<
     })
 }
 
-/// A sketch spline's points for a roof by extrusion's top (RE-211):
-/// [`ROOF_EXTRUSION_SPLINE_SEGMENTS`] chords, and a point
-/// [`ROOF_EXTRUSION_END_SHARE`] of its span in from each end, so the first and
-/// last chords lie along the curve's ends, which the plumb cuts follow.
+/// A sketch spline's points for a roof by extrusion's top (RE-211): each
+/// knot span inside the curve's domain cut into its share of
+/// [`ROOF_EXTRUSION_SPLINE_SEGMENTS`] chords, at least
+/// [`ROOF_EXTRUSION_MIN_SPAN_SEGMENTS`], with the knots among the points, and
+/// a point [`ROOF_EXTRUSION_END_SHARE`] of its span in from each end, so the
+/// first and last chords lie along the curve's ends, which the plumb cuts
+/// follow.
 fn roof_extrusion_spline_points(
     spline: &crate::partition_beam_axes::BoundedSpline,
 ) -> Option<Vec<[f64; 3]>> {
     let (start, end) = (spline.start_parameter, spline.end_parameter);
     let span = end - start;
-    let segments = ROOF_EXTRUSION_SPLINE_SEGMENTS;
-    let mut parameters = vec![start, start + span * ROOF_EXTRUSION_END_SHARE];
-    parameters.extend((1..segments).map(|i| start + span * i as f64 / segments as f64));
-    parameters.extend([end - span * ROOF_EXTRUSION_END_SHARE, end]);
+    if !(span.is_finite() && span > 0.0) {
+        return None;
+    }
+    let mut breaks = vec![start];
+    breaks.extend(
+        spline
+            .knots
+            .iter()
+            .copied()
+            .filter(|&k| k > start && k < end),
+    );
+    breaks.push(end);
+    breaks.dedup();
+    let mut parameters = vec![
+        start + span * ROOF_EXTRUSION_END_SHARE,
+        end - span * ROOF_EXTRUSION_END_SHARE,
+    ];
+    for pair in breaks.windows(2) {
+        let (a, b) = (pair[0], pair[1]);
+        let share = (ROOF_EXTRUSION_SPLINE_SEGMENTS as f64 * (b - a) / span).ceil() as usize;
+        let segments = share.max(ROOF_EXTRUSION_MIN_SPAN_SEGMENTS);
+        parameters.extend((0..segments).map(|i| a + (b - a) * i as f64 / segments as f64));
+    }
+    parameters.push(end);
+    parameters.sort_by(f64::total_cmp);
+    parameters.dedup();
     parameters.into_iter().map(|p| spline.point(p)).collect()
 }
 
