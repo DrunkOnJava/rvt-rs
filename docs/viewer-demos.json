@@ -13,9 +13,9 @@
       "format": "rvt",
       "size_bytes": 913408,
       "sha256": "d3a0c6d37d3f47a1726bc5aa7fe3880ed3c13bbe819b5e64680f6710b15aa948",
-      "element_count_hint": 24,
+      "element_count_hint": 37,
       "thumbnail": "demos/thumbnails/einhoven_2023.svg",
-      "description": "Real Revit 2023 project from magnetar-io/revit-test-datasets (MIT). Decodes 24/24 ArcWalls with bodies across four elevation-derived storeys plus 42 materials; floors, doors, windows and rooms remain open on this file. This is the file the CI browser regression gates.",
+      "description": "Real Revit 2023 project from magnetar-io/revit-test-datasets (MIT). Decodes 26 walls, 9 curtain panels, 2 windows and 36 materials. The 24 ArcWalls have bodies on four elevation-derived storeys; the other 13 elements are their 2023 records' boxes, on no storey. Floors, doors and rooms remain open on this file. This is the file the CI browser regression gates.",
       "tags": [
         "real-project",
         "magnetar",
@@ -23,7 +23,7 @@
       ],
       "loadable": true,
       "expected_quality": "Geometry",
-      "expected_quality_note": "Real-project wall geometry (decoder baseline in tests/fixtures/project-counts/revit-ifc5-einhoven.json). Not a full typed model: no floors, doors, windows or rooms yet.",
+      "expected_quality_note": "Real-project wall geometry (decoder baseline in tests/fixtures/project-counts/revit-ifc5-einhoven.json). Not a full typed model: no floors, doors or rooms yet.",
       "license": "MIT (magnetar-io/revit-test-datasets)",
       "provenance": "magnetar-io/revit-test-datasets: Revit/Revit_IFC5_Einhoven.rvt",
       "source_candidates": [

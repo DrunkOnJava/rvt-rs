@@ -67,5 +67,33 @@ End to end against main (run 40114863653), the export changes on Core Interior, 
 - **Arcs.** A loop with an arc, such as an arched window's, is not read. None of the measured loops has one, and how Revit's `GetMinSymbolHeight` measures one is not known.
 - **Snowdon Towers.** Snowdon is local only and was not re-measured. RE-93 sizes 56 of its windows and RE-94 57 of its doors from their type, both equal to Revit's. Where a loop is read it now comes first, and whether it equals those type sizes on Snowdon is **NOT MEASURED**.
 - **The BIM4LCA office (#810).** Its doors' `OverallWidth` is 10 mm over their type's Width. The loop may account for that, but the office's host times out, so it is **NOT MEASURED**.
-- **The opening's body (#227).** The opening is still cut from the type's sizes or the element's box. Revit places a door's or window's IFC frame at its opening's corner: in that frame the opening runs 0 to `OverallWidth`, 0 to the wall's thickness and 0 to `OverallHeight`. Comparing it with the loop's position needs the instance transform (RE-87) and is the next step.
+- **The opening's body (#227)** is in §7.
 - **RE1's curtain-wall door** keeps `$` (#844's remaining case).
+
+## 7. The opening (2026-10-24, #227)
+
+Revit places a door's or window's IFC frame at its opening's corner, so that frame says nothing of the loop's position. In the instance's own frame (RE-87) it does. `examples/probe_227_opening_frames.rs` prints each door's and window's loop and transform, and `tools/re/opening_frames_vs_ifc.py` moves Revit's opening into that frame (run [40118231668](https://github.com/DrunkOnJava/rvt-rs/actions/runs/40118231668), `examples/probe_227_opening_frames.rs`):
+
+| model | doors and windows with a loop and a transform | opening's X and Z ranges equal the loop's, within 0.001 ft |
+|---|---:|---:|
+| Core Interior | 130 (124 doors, 6 windows) | 130 |
+| RE1 Architecture | 4 | 4 |
+| R2025 models 12 to 17, each | 4 | 4 |
+
+Across the wall Revit's opening runs from the loop's plane `y0` to its mirror `−y0`: the host's thickness (0.5 and 0.6667 ft on Core Interior), centred on the instance's origin.
+
+`partition_schema_mvp::attach_cut_loop_sizes` now gives each door and window that has a loop and a transform, but no opening read from its type (RE-93, RE-94), the opening RE-93's fields describe:
+
+- centred on the loop's middle along the instance's X axis;
+- starting at the loop's bottom;
+- the loop's width and height;
+- across the host's band, as before.
+
+The exporter cuts it as it cuts RE-93's. Against main (run [40118849373](https://github.com/DrunkOnJava/rvt-rs/actions/runs/40118849373)), `opening_boxes_vs_ifc` gives:
+
+- 124 of Core Interior's 132 doors within 0.001 ft of Revit's opening, against all 132 within 0.26 ft before;
+- its 6 windows within 0.001 ft, against 0.1 ft before;
+- RE1 Architecture's 4 doors within 0.001 ft, against 0.26 ft before.
+
+The R2025 models' doors and windows already had RE-93's openings and are unchanged. Core Interior's other 8 doors have no transform RE-87 reads and keep their box opening.
+

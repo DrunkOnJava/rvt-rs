@@ -1838,6 +1838,7 @@ fn attach_window_openings(rf: &mut RevitFile, revit_version: u32, windows: &mut 
         push_filler_opening(
             element,
             transform,
+            0.0,
             opening.default_sill_feet,
             opening.width_feet,
             opening.height_feet,
@@ -2006,6 +2007,7 @@ fn attach_door_openings(rf: &mut RevitFile, revit_version: u32, doors: &mut [Dec
             element,
             transform,
             0.0,
+            0.0,
             opening.rough_width_feet,
             opening.rough_height_feet,
         );
@@ -2128,13 +2130,49 @@ fn attach_cut_loop_sizes(
                 .push(((*name).into(), InstanceField::Float { value, size: 8 }));
         }
     }
+    // #227: where no opening is read yet, the opening is the loop, carried
+    // by the instance's transform (RE-87); across the wall it keeps the
+    // host's band, which the loop's plane and its mirror bound.
+    let has_opening =
+        |element: &DecodedElement| filler_opening_from_fields(&element.fields).is_some();
+    let open: BTreeSet<u32> = elements
+        .iter()
+        .filter(|element| !has_opening(element))
+        .filter_map(|element| element.id)
+        .filter(|id| loops.contains_key(&u64::from(*id)))
+        .collect();
+    if open.is_empty() {
+        return;
+    }
+    let Ok(transforms) =
+        crate::partition_instance_transforms::scan_instance_transforms(rf, revit_version, &open)
+    else {
+        return;
+    };
+    for element in elements.iter_mut() {
+        let Some(id) = element.id.filter(|id| open.contains(id)) else {
+            continue;
+        };
+        let (Some(cut), Some(transform)) = (loops.get(&u64::from(id)), transforms.get(&id)) else {
+            continue;
+        };
+        push_filler_opening(
+            element,
+            transform,
+            (cut.min[0] + cut.max[0]) / 2.0,
+            cut.min[2],
+            cut.width_feet(),
+            cut.height_feet(),
+        );
+    }
 }
 
-/// Record on an upright door or window the opening centred on its origin
-/// along its X axis, `base` above the origin ([`FILLER_OPENING_FIELDS`]).
+/// Record on an upright door or window the opening centred `along` its X
+/// axis from its origin, `base` above the origin ([`FILLER_OPENING_FIELDS`]).
 fn push_filler_opening(
     element: &mut DecodedElement,
     transform: &crate::partition_instance_transforms::InstanceTransform,
+    along: f64,
     base: f64,
     width: f64,
     height: f64,
@@ -2146,7 +2184,15 @@ fn push_filler_opening(
         return;
     };
     let [ox, oy, oz] = transform.origin;
-    let values = [ox, oy, ax, ay, oz + base, width, height];
+    let values = [
+        ox + ax * along,
+        oy + ay * along,
+        ax,
+        ay,
+        oz + base,
+        width,
+        height,
+    ];
     for (name, value) in FILLER_OPENING_FIELDS.iter().zip(values) {
         element
             .fields
