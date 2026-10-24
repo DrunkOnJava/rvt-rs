@@ -220,7 +220,7 @@ pub(crate) use research::{
     native_graphics_traversal, native_index, native_instance_materials, native_metadata,
     native_parameter_definitions, native_parameters, native_parametric_mesh,
     native_parametric_surface, native_rendered_content, native_saved_glb, native_saved_materials,
-    native_saved_mesh, native_saved_scene, native_segments, native_symbol_cuts,
+    native_saved_mesh, native_saved_scene, native_segments, native_stairs, native_symbol_cuts,
     native_type_materials, native_wall_types, partition_arc_walls, partition_area_records,
     partition_beam_axes, partition_column_nodes, partition_compound_structure,
     partition_connector_pairs, partition_curtain_materials, partition_curve_fields,
