@@ -54,9 +54,15 @@
           "items": { "$ref": "#/$defs/field" }
         },
         "parameters": {
-          "description": "AProperty* value carriers for this row; empty for host elements until host↔parameter joins recover (#35).",
+          "description": "AProperty* value carriers for this row, then, on Revit 2023 to 2027 files, the saved parameters of the element's native record and its type's (#35, RE-207).",
           "type": "array",
-          "items": { "type": "object", "additionalProperties": true }
+          "items": {
+            "type": "object",
+            "anyOf": [
+              { "$ref": "#/$defs/savedParameter" },
+              { "type": "object", "required": ["name", "source_class"], "additionalProperties": true }
+            ]
+          }
         },
         "provenance": { "$ref": "#/$defs/provenance" },
         "typed": {
@@ -65,6 +71,43 @@
           "additionalProperties": true
         }
       }
+    },
+    "savedParameter": {
+      "description": "research::native_element_parameters::ElementParameter: one saved value, in Revit's internal units, named by its definition's caption (null for a built-in or undefined id).",
+      "type": "object",
+      "required": [
+        "name",
+        "parameter_id",
+        "kind",
+        "storage_type",
+        "spec_type_id",
+        "group_type_id",
+        "value",
+        "si_value",
+        "si_unit",
+        "target_name",
+        "target_family",
+        "level",
+        "source_element_id",
+        "source_class"
+      ],
+      "properties": {
+        "name": { "type": ["string", "null"] },
+        "parameter_id": { "type": "integer" },
+        "kind": { "type": "string", "enum": ["built_in", "family", "shared", "global", "project", "undefined"] },
+        "storage_type": { "type": "string", "enum": ["String", "Integer", "Double", "ElementId"] },
+        "spec_type_id": { "type": ["string", "null"] },
+        "group_type_id": { "type": ["string", "null"] },
+        "value": { "type": ["string", "integer", "number", "boolean"] },
+        "si_value": { "type": ["number", "null"] },
+        "si_unit": { "type": ["string", "null"], "enum": ["m", "m2", "m3", "rad", null] },
+        "target_name": { "type": ["string", "null"] },
+        "target_family": { "type": ["string", "null"] },
+        "level": { "type": "string", "enum": ["instance", "type"] },
+        "source_element_id": { "type": "integer" },
+        "source_class": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
     },
     "provenance": {
       "type": "object",

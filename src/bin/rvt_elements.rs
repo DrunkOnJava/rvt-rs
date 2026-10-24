@@ -62,8 +62,8 @@ struct ElementOut {
     class_name: String,
     byte_range: ByteRange,
     fields: Vec<serde_json::Value>,
-    /// AProperty* values when this element is a value carrier; empty
-    /// for host elements until host↔parameter joins recover (#35).
+    /// AProperty* values when this element is a value carrier, then the
+    /// saved parameters of its native record and its type's (#35, RE-207).
     parameters: Vec<serde_json::Value>,
     /// Decode confidence and provenance.
     provenance: serde_json::Value,
@@ -120,6 +120,13 @@ fn run(cli: Cli) -> anyhow::Result<()> {
         return Ok(());
     }
 
+    // Revit 2023 to 2027 only; other files keep their AProperty* entries.
+    let saved = rvt::elements::parameters::saved_parameters_lossy(&mut rf, &elements);
+    for warning in &saved.diagnostics.warnings {
+        eprintln!("warning: {}", warning.message);
+    }
+    let saved = saved.value;
+
     let out: Vec<ElementOut> = elements
         .iter()
         .map(|element| {
@@ -143,6 +150,7 @@ fn run(cli: Cli) -> anyhow::Result<()> {
                 parameters: rvt::elements::parameters::parameter_entries_from_decoded(element)
                     .iter()
                     .map(|e| e.to_json_value())
+                    .chain(saved.entries_for(element))
                     .collect(),
                 provenance: element.provenance.to_json_value(),
                 typed,
