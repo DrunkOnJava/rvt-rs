@@ -1,7 +1,8 @@
 # 1.0.0 release criteria
 
 Measured 2026-10-21, on `main` at `e56245fc`; the stability rows S1, S2 and S4
-were measured again on 2026-10-23, in the pull requests that changed them.
+and the viewer row W9 were measured again on 2026-10-23, in the pull requests
+that changed them.
 
 1.0.0 is the first release with a stability commitment
 ([`RELEASE.md`](../RELEASE.md#versioning)). Its milestone states the goal: a
