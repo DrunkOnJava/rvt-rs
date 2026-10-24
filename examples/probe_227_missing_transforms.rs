@@ -4,8 +4,10 @@
 //! FACT under test: `scan_instance_transforms` takes the first nine `f64`
 //! within 4 KiB of an instance's element-data header that form a rotation
 //! (orthonormal, determinant 1), followed by its origin, and drops an
-//! instance whose copies disagree. 8 of Core Interior's 132 doors have a cut
-//! loop and no transform, so their opening stays the element's box. For each
+//! instance whose copies disagree. Before RE-216, 8 of Core Interior's 132
+//! doors had a cut loop and no transform, so their opening stayed the
+//! element's box; since RE-216 the scan takes the current copy, and the probe
+//! reports none there. For each
 //! such door or window this prints every header hit with its id, the first
 //! orthonormal matrix after it of either determinant within 16 KiB, and the
 //! transform `instance_transform` reads there, and its FamilyInstance's

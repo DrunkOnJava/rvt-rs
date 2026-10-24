@@ -95,5 +95,5 @@ The exporter cuts it as it cuts RE-93's. Against main (run [40118849373](https:/
 - its 6 windows within 0.001 ft, against 0.1 ft before;
 - RE1 Architecture's 4 doors within 0.001 ft, against 0.26 ft before.
 
-The R2025 models' doors and windows already had RE-93's openings and are unchanged. Core Interior's other 8 doors have no transform RE-87 reads and keep their box opening.
+The R2025 models' doors and windows already had RE-93's openings and are unchanged. Core Interior's other 8 doors have no transform RE-87 reads and keep their box opening. RE-216 (#227) found why: their element data has two copies that disagree by an inch across the host, and the scan dropped both. It now takes the copy their current record is in, and all 132 doors are within 0.001 ft.
 
