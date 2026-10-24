@@ -218,6 +218,36 @@ fn framed_patch_bytes(p: &StreamPatch) -> Result<Vec<u8>> {
     Ok(data)
 }
 
+/// Write `src` to `dst` with each patch's stream replaced by its
+/// `new_decompressed` bytes, framed as its [`StreamFraming`] says, and every
+/// other stream copied byte for byte. With no patches the file is copied
+/// byte for byte. The write is atomic ([Atomicity](crate::writer#atomicity)).
+///
+/// # Errors
+///
+/// [`crate::Error::StreamNotFound`] for a patch naming a stream the file does
+/// not have, and [`crate::Error::WriteRefused`] for one whose stored bytes
+/// would span a checksummed page, both before anything is written; otherwise
+/// the errors of reading `src` and writing `dst`.
+///
+/// ```
+/// use rvt::RevitFile;
+/// use rvt::writer::{StreamFraming, StreamPatch, write_with_patches};
+/// use std::path::Path;
+///
+/// let src = Path::new("corpus/tier1/architectural-2024/architectural-2024.rvt");
+/// let dst = std::env::temp_dir().join(format!("rvt-patch-doc-{}.rvt", std::process::id()));
+/// let current = RevitFile::open(src)?.read_stream("BasicFileInfo")?;
+/// let patches = vec![StreamPatch {
+///     stream_name: "BasicFileInfo".into(),
+///     new_decompressed: current.clone(),
+///     framing: StreamFraming::Verbatim,
+/// }];
+/// write_with_patches(src, &dst, &patches)?;
+/// assert_eq!(RevitFile::open(&dst)?.read_stream("BasicFileInfo")?, current);
+/// std::fs::remove_file(&dst)?;
+/// # Ok::<(), Box<dyn std::error::Error>>(())
+/// ```
 pub fn write_with_patches(src: &Path, dst: &Path, patches: &[StreamPatch]) -> Result<()> {
     let mut rf = RevitFile::open(src)?;
     let streams = rf.stream_names();

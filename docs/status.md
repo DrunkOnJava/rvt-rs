@@ -823,22 +823,22 @@ prints it from any installed build.
 
 ## Roadmap Position
 
-- **v0.6.1** (2026-10-19) is the latest release: crates.io and docs.rs,
+- **v0.7.0** (2026-10-24) is the latest release: crates.io and docs.rs,
   the `rvt` wheels on PyPI, GitHub Release archives for Linux, macOS and
   Windows, and the container image, each checked from its published
-  artifacts ([`install.md`](install.md)). It is 0.6.0 with an export panic
-  on 32-bit targets fixed (#836) and a README whose support table says
-  what is measured, built from 0.6.0 because `main` holds a breaking change
-  for the next minor release (#841).
-- **v0.6.0** (2026-10-19) is the release before. It carries
-  everything under `[0.6.0]` in [`CHANGELOG.md`](../CHANGELOG.md): IFC4's
-  own property sets where 0.5 wrote some of IFC2X3's, more of the values
-  Revit's exporter writes (parameters named for a standard set's property,
-  `IsExternal`, Fire Rating, door sizes, Revit 2024 Areas as spaces, port
-  types), and the elements of Revit 2015 to 2022 and 2027 projects, as
-  experimental. Its "Upgrading from 0.5" section lists the changes a 0.5
-  user will notice.
-- `main` has everything v0.6.1 has, and is ahead of it by what is under
+  artifacts ([`install.md`](install.md)). It carries everything under
+  `[0.7.0]` in [`CHANGELOG.md`](../CHANGELOG.md): roofs drawn as their
+  planes and Revit 2025 roofs by extrusion as their sketch's section,
+  Revit 2025's tapered walls, door and window sizes and openings from the
+  outline their symbol cuts on Revit 2024 and 2025, placed ports with Revit's flow directions,
+  Revit's materials from the native records, each element's saved
+  parameters in `rvt-elements` and Python, reproducible exports, and the
+  stable API 1.0 keeps. Its "Upgrading from 0.6" section lists what a 0.6
+  user has to change.
+- **v0.6.1** (2026-10-19) is the release before: 0.6.0 with an export
+  panic on 32-bit targets fixed (#836) and a README whose support table
+  says what is measured.
+- `main` has everything v0.7.0 has, and is ahead of it by what is under
   `[Unreleased]`.
 
 Open work is tracked as GitHub issues; [`TODO.md`](../TODO.md) is the older
