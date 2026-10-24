@@ -1,6 +1,6 @@
 # Roadmap
 
-Last reviewed: 2026-10-21
+Last reviewed: 2026-10-24
 
 This roadmap is the public, contributor-facing view of where rvt-rs is headed.
 The support boundary lives in [`docs/status.md`](docs/status.md) and the
@@ -32,8 +32,8 @@ IFC export of the same model wherever one is measured, and for 2015 to 2018,
 sample projects saved by Revit
 2019, 2023 and 2026 (but 2015's `rst_basic`, another model than its 2019 copy).
 What is not decoded
-(most parameters, family geometry, roofs by extrusion, opening profiles,
-phase filtering) is listed in [`docs/status.md`](docs/status.md), and
+(most parameters in IFC, family geometry, roofs by extrusion outside
+Revit 2025, openings whose symbol cuts no outline, phase filtering) is listed in [`docs/status.md`](docs/status.md), and
 the four levels a file can reach are in the
 [supported profile](docs/supported-profile.md).
 
@@ -44,9 +44,9 @@ the four levels a file can reach are in the
 | Container, compression, metadata | Verified | MS-CFB container, Revit's truncated-gzip streams, PartAtom and previews open on every release from 2016 to 2026; 2015 and 2027 project files open on Autodesk's sample projects, where PartAtom and previews are not measured. | Maintain compatibility and bounds checks against hostile input. |
 | `Formats/Latest` schema | Verified | The whole schema is read (#410: 4,126 classes on Revit 2024, where 395 were read before). A class's tag is its definition ordinal (#154), and element records name their class by it (RE-76). | Classify the 9 to 12 residual field encodings per release, only with byte evidence. |
 | ADocument walker | Partial | Document-level metadata for triage; the root ADocument walk is validated on 2024 to 2026. | Expand confidence across project releases and older files. |
-| Typed project elements | Partial | Elements come from their partition element records, typed by `BuiltInCategory` and matched against Revit's own exports. On Revit 2024 walls, doors, windows, columns, floor slabs and building pads match element for element (verified, RE-21); 2025 and 2023 are partial; 2026 is experimental (one local model), and so are 2015 to 2022 and 2027, measured against the same sample projects saved by Revit 2019, 2023 and 2026 (RE-181, RE-180, RE-179), but 2015's `rst_basic`, another model. Schema-field walls and opening-index doors and windows stay unsupported (RE-19). | A Revit export of a 2015 to 2022 or 2027 project to measure against (#421), parameters (0.7.0), held-out models (#408). |
-| IFC writer | Partial | IFC4 with storeys, IFC type objects, material layer sets, materials and stable generated GlobalIds. Bodies are exact where the element's data is decoded and the record's bounding box elsewhere, and the diagnostics count each (#409). | The geometry issues open under the 0.6.x milestone (below). |
-| Browser viewer | Partial | Zero-upload WebAssembly viewer over the same decode; its file status shows how much of a model is a stand-in box. | The viewer journey verified end to end on the reference pack (0.7.0). |
+| Typed project elements | Partial | Elements come from their partition element records, typed by `BuiltInCategory` and matched against Revit's own exports. On Revit 2024 walls, doors, windows, columns, floor slabs and building pads match element for element (verified, RE-21); 2025 and 2023 are partial; 2026 is experimental (one local model), and so are 2015 to 2022 and 2027, measured against the same sample projects saved by Revit 2019, 2023 and 2026 (RE-181, RE-180, RE-179), but 2015's `rst_basic`, another model. Schema-field walls and opening-index doors and windows stay unsupported (RE-19). | A Revit export of a 2015 to 2022 or 2027 project to measure against (#421), parameters in IFC (0.8.0), held-out models (#408). |
+| IFC writer | Partial | IFC4 with storeys, IFC type objects, material layer sets, materials and stable generated GlobalIds. Bodies are exact where the element's data is decoded and the record's bounding box elsewhere, and the diagnostics count each (#409). | The geometry issues open under the 0.8.0 milestone (below). |
+| Browser viewer | Partial | Zero-upload WebAssembly viewer over the same decode; its file status shows how much of a model is a stand-in box. | Keep the journey test, which since 0.7.0 opens, inspects, schedules, exports and checks the diagnostics of the six redistributable reference models, green as the viewer grows. |
 | Python and CLI | Partial | The `rvt` wheel on PyPI and prebuilt CLI archives on GitHub Releases, sharing the core's honesty bounds. | Stabilize JSON schemas and the one-shot inspect workflow. |
 | Write path | Partial | Stream-level patching only. Field-level semantic writes are unsupported and gated by [ADR-002](docs/decisions/ADR-002-semantic-write-api-gate.md). | Stay gated until openability can be proven. |
 
@@ -90,35 +90,36 @@ the four levels a file can reach are in the
 - **0.6.1, 2026-10-19.** 0.6.0 with an export panic on 32-bit targets fixed
   (#836) and a README whose support table says what is measured, built
   from 0.6.0 because `main` holds a breaking change (#841).
+- **0.7.0, 2026-10-24.** Gable, hip and slope-arrow roofs drawn as their
+  planes, Revit 2025 roofs with their slopes and roofs by extrusion as their
+  sketch's section; Revit 2025's tapered walls; doors' and windows' overall
+  sizes and openings from the outline their symbol cuts, on Revit 2024 and
+  2025; ports placed, with
+  Revit's flow directions, names and descriptions on HVAC and piping ports;
+  Revit's materials on family instances, mullions, columns and walls; each
+  element's saved parameters in `rvt-elements` and Python; reproducible
+  exports; and the stable API 1.0 keeps, with the research readers behind
+  `unstable-research`.
 
-### 0.6.x: IFC geometry, remaining slices
+### 0.8.0: IFC geometry and element data
 
-v0.4.0 shipped part of the geometry beta. The milestone of that name is closed,
-and the slices still open moved to this one, named 0.6.x since 0.6.0 shipped. Each slice records a baseline, an
-improvement and a residual against Revit's own exports on the reference pack
-(#407), approximations stay labelled (#409), and a slice ships in the next
-release that contains it. Open now: wall bodies thicker or thinner
-than their type's layers (#358), stair flights (#357) and aggregates (#323),
-roofs by extrusion and over T or U footprints (#883, #884), element materials (#355),
-the opening cut from the wall location curve (#227), room boundaries whose
-solid does not close (#90), beams (#94), MEP equipment and routes (#96), the
-sketch-to-solid pipeline (#156), and the Snowdon slabs that are not in Revit's
-export: six in the Legends phase (#328) and one more (#309).
-
-### 0.7.0: element data (parameters) and viewer journey
-
-Make rvt-rs a data source, not only a viewer: instance and type parameters with
-units and precedence (#35, #155), the element-record fields that carry them
-(#223), shown consistently in Rust, Python, CLI schedules, IFC property sets
-and the viewer, with the viewer journey (open, inspect, schedule, export,
-diagnostics) verified end to end on the reference pack. 0.5.0 shipped the
-first of it: the levels, category, family, type and phase that Revit's export
-writes (RE-172, RE-177), more of the common property sets, and the record's
-reference slots (#228). 0.6.0 shipped more: parameters named for a standard
-set's property (RE-194), `IsExternal` on every class but curtain mullions
-and panels (RE-193), type Fire
-Ratings, door sizes (#759) and port types (RE-197). The parameter store
-itself is open.
+The geometry and element-data work that continues after 0.7.0, from the
+0.6.x geometry line and the 0.7.0 milestone, both closed when 0.7.0 shipped.
+Each slice records a baseline, an improvement and a residual against Revit's
+own exports on the reference pack (#407), approximations stay labelled
+(#409), and a slice ships in the next release that contains it. Geometry
+open now: wall bodies thicker or thinner than their type's layers (#358),
+stair flights (#357) and aggregates (#323), hip roofs over T and U footprints
+and roof cases with no oracle (#884, #885), the openings of doors with no
+instance transform read and of releases other than 2024 and 2025 (#227),
+the office's slab tops (#824), room boundaries whose solid does not close
+(#90), beams (#94), MEP equipment and routes (#96) and ports outside Revit
+2025 (#869), the sketch-to-solid pipeline (#156), and the Snowdon slabs that
+are not in Revit's export: six in the Legends phase (#328) and one more
+(#309). Element data: instance and type parameters with units and precedence
+(#35, #155) and the element-record fields that carry them (#223), written to
+IFC property sets and shown in the viewer; door and window sizes where the
+symbol cuts no outline (#810, #844); and ports' system classification (#834).
 
 ### 1.0.0: first-class utility
 
