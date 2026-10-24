@@ -2190,8 +2190,62 @@ fn attach_family_instance_ports(
                 crate::native_connectors::flow_direction_of(direction).map(str::to_string);
         }
     }
+    // #869: a connector no placed duct or pipe port joins is at its point in
+    // its symbol, through the instance's transform (RE-87).
+    let placed: std::collections::BTreeSet<(u32, u32)> = entities
+        .iter()
+        .filter_map(|entity| match entity {
+            entities::IfcEntity::Port {
+                id,
+                index,
+                location_feet: Some(_),
+                ..
+            } => Some((*id, *index)),
+            _ => None,
+        })
+        .collect();
+    let mut joined_to_placed = std::collections::BTreeSet::new();
+    for entity in entities.iter() {
+        if let entities::IfcEntity::PortConnection {
+            a_id,
+            a_index,
+            b_id,
+            b_index,
+            ..
+        } = entity
+        {
+            if placed.contains(&(*a_id, *a_index)) {
+                joined_to_placed.insert((*b_id, *b_index));
+            }
+            if placed.contains(&(*b_id, *b_index)) {
+                joined_to_placed.insert((*a_id, *a_index));
+            }
+        }
+    }
+    let revit_version = rf.basic_file_info().map(|info| info.version).unwrap_or(0);
+    let transforms = if PORT_PLACEMENT_REVIT_VERSIONS.contains(&revit_version) {
+        let ids = instances.iter().map(|(_, id, _)| *id).collect();
+        crate::partition_instance_transforms::scan_instance_transforms(rf, revit_version, &ids)
+            .unwrap_or_default()
+    } else {
+        std::collections::BTreeMap::new()
+    };
     for (element, id, _) in instances {
+        let transform = transforms.get(&id);
         for port in read.instances.get(&u64::from(id)).into_iter().flatten() {
+            let place = transform
+                .zip(port.frame)
+                .filter(|_| !joined_to_placed.contains(&(id, port.index)))
+                .map(|(transform, frame)| {
+                    let through = |v: [f64; 3]| {
+                        [0, 1, 2].map(|i| (0..3).map(|j| transform.axes[j][i] * v[j]).sum::<f64>())
+                    };
+                    let offset = through(frame.origin);
+                    (
+                        [0, 1, 2].map(|i| transform.origin[i] + offset[i]),
+                        through(frame.z_axis),
+                    )
+                });
             entities.push(entities::IfcEntity::Port {
                 element,
                 id,
@@ -2200,13 +2254,17 @@ fn attach_family_instance_ports(
                     crate::native_connectors::port_type_of_domain(port.domain).to_string(),
                 ),
                 flow_direction: port.flow_direction.map(str::to_string),
-                location_feet: None,
-                direction: None,
+                location_feet: place.map(|(point, _)| point),
+                direction: place.map(|(_, axis)| axis),
             });
         }
     }
     apply_partner_directions(entities);
 }
+
+/// Releases a family instance's unjoined ports are placed on (#869): 2025,
+/// the RE1 models'.
+const PORT_PLACEMENT_REVIT_VERSIONS: &[u32] = &[2025];
 
 /// A duct, pipe or fitting connector that is bidirectional, joined to one
 /// with a direction, takes the opposite direction (RE-212). revit-ifc writes
