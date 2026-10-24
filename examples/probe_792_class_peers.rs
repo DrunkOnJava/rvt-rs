@@ -11,8 +11,14 @@
 //! `tools/re/class_peers_vs_ifc.py` to split by what Revit's export does with
 //! each element.
 //!
+//! A second pass prints the same for each element's type (`m_masterSymbolId`)
+//! and that type's family (`m_familyId`), and every element's whole graph is
+//! printed too, for the fields nested below the root.
+//!
 //! Output:
 //!   element <ifc class> <id> <native class> <root scalar fields as JSON> <InstanceInfo scalar fields as JSON | null>
+//!   owner <ifc class> <element id> <type|family> <id> <native class> <root scalar fields as JSON>
+//!   full <id> <every object's class and fields as JSON, at most 20000 characters>
 //!
 //! Usage:
 //!   cargo run --profile ci --example probe_792_class_peers -- MODEL.rvt
@@ -53,6 +59,32 @@ fn scalars(fields: &Value) -> Value {
     Value::Object(out)
 }
 
+/// The element id a field holds, as `{"m_id": {"m_id64": n}}`.
+fn id_of(fields: &Value, name: &str) -> Option<u64> {
+    fields.get(name)?.get("m_id")?.get("m_id64")?.as_u64()
+}
+
+fn print_full(
+    id: u64,
+    graph: &rvt::research::native_parameters::ObjectGraph,
+) -> anyhow::Result<()> {
+    let objects: Vec<Value> = graph
+        .objects
+        .iter()
+        .map(|o| serde_json::json!({"class": o.class_name, "fields": o.fields}))
+        .collect();
+    let mut text = serde_json::to_string(&objects)?;
+    if text.len() > 20000 {
+        let mut cut = 20000;
+        while !text.is_char_boundary(cut) {
+            cut -= 1;
+        }
+        text.truncate(cut);
+    }
+    println!("full {id} {text}");
+    Ok(())
+}
+
 fn main() -> anyhow::Result<()> {
     let path = std::env::args().nth(1).expect("usage: MODEL.rvt");
     let mut rf = RevitFile::open(&path)?;
@@ -82,6 +114,7 @@ fn main() -> anyhow::Result<()> {
         eprintln!("no element of {CLASSES:?}");
         return Ok(());
     }
+    let mut type_of: BTreeMap<u64, u64> = BTreeMap::new();
     extract_graphs(&mut rf, &options, |record| {
         let Some(class) = class_of.get(&record.identity.element_id) else {
             return Ok(());
@@ -105,8 +138,81 @@ fn main() -> anyhow::Result<()> {
             serde_json::to_string(&scalars(&root.fields))?,
             serde_json::to_string(&info)?
         );
+        if let Some(symbol) = id_of(&root.fields, "m_masterSymbolId") {
+            type_of.insert(record.identity.element_id, symbol);
+        }
+        print_full(record.identity.element_id, graph)?;
         Ok(())
     })?;
+    // The elements' types, then the types' families.
+    let mut family_of: BTreeMap<u64, u64> = BTreeMap::new();
+    let types: BTreeSet<u64> = type_of.values().copied().collect();
+    let options = Options {
+        selected_ids: types.clone(),
+        selected_classes: BTreeSet::new(),
+        ..Options::default()
+    };
+    let mut type_fields: BTreeMap<u64, (String, Value)> = BTreeMap::new();
+    if !types.is_empty() {
+        extract_graphs(&mut rf, &options, |record| {
+            let Some(root) = record.graph.as_ref().and_then(|g| g.objects.first()) else {
+                return Ok(());
+            };
+            if let Some(family) = id_of(&root.fields, "m_familyId") {
+                family_of.insert(record.identity.element_id, family);
+            }
+            type_fields.insert(
+                record.identity.element_id,
+                (
+                    record.class_name.clone().unwrap_or_default(),
+                    scalars(&root.fields),
+                ),
+            );
+            Ok(())
+        })?;
+    }
+    let families: BTreeSet<u64> = family_of.values().copied().collect();
+    let options = Options {
+        selected_ids: families.clone(),
+        selected_classes: BTreeSet::new(),
+        ..Options::default()
+    };
+    let mut family_fields: BTreeMap<u64, (String, Value)> = BTreeMap::new();
+    if !families.is_empty() {
+        extract_graphs(&mut rf, &options, |record| {
+            let Some(root) = record.graph.as_ref().and_then(|g| g.objects.first()) else {
+                return Ok(());
+            };
+            family_fields.insert(
+                record.identity.element_id,
+                (
+                    record.class_name.clone().unwrap_or_default(),
+                    scalars(&root.fields),
+                ),
+            );
+            Ok(())
+        })?;
+    }
+    for (element, symbol) in &type_of {
+        let Some(class) = class_of.get(element) else {
+            continue;
+        };
+        if let Some((native, fields)) = type_fields.get(symbol) {
+            println!(
+                "owner {class} {element} type {symbol} {native} {}",
+                serde_json::to_string(fields)?
+            );
+        }
+        if let Some((family, (native, fields))) = family_of
+            .get(symbol)
+            .and_then(|f| family_fields.get(f).map(|v| (f, v)))
+        {
+            println!(
+                "owner {class} {element} family {family} {native} {}",
+                serde_json::to_string(fields)?
+            );
+        }
+    }
     eprintln!("{} elements of {CLASSES:?}", class_of.len());
     Ok(())
 }

@@ -22,11 +22,42 @@ import re
 import sys
 
 
+def deep_diff(a, b, path=""):
+    """(path, a, b) where two JSON values differ, ids and offsets aside."""
+    if isinstance(a, dict) and isinstance(b, dict):
+        for key in sorted(set(a) | set(b)):
+            if key in ("m_id", "start", "token", "offset"):
+                continue
+            yield from deep_diff(a.get(key), b.get(key), f"{path}.{key}" if path else key)
+    elif isinstance(a, list) and isinstance(b, list):
+        if len(a) != len(b):
+            yield path + "[len]", len(a), len(b)
+        for i, (x, y) in enumerate(zip(a, b)):
+            yield from deep_diff(x, y, f"{path}[{i}]")
+    elif a != b:
+        yield path, a, b
+
+
 def main():
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
     listing = "--list" in sys.argv
     elements = collections.defaultdict(dict)
+    owners = collections.defaultdict(dict)
+    full = {}
     for line in open(args[0], encoding="utf-8", errors="replace"):
+        if line.startswith("owner "):
+            _, cls, eid, kind, oid, native, rest = line.rstrip("\n").split(" ", 6)
+            fields = {f"{kind}.{k}": v for k, v in json.loads(rest).items()}
+            fields[f"{kind} native class"] = native
+            owners[eid].update(fields)
+            continue
+        if line.startswith("full "):
+            _, eid, rest = line.rstrip("\n").split(" ", 2)
+            try:
+                full[eid] = json.loads(rest)
+            except json.JSONDecodeError:
+                pass
+            continue
         if not line.startswith("element "):
             continue
         _, cls, eid, native, rest = line.rstrip("\n").split(" ", 4)
@@ -38,6 +69,9 @@ def main():
         for k, v in (info or {}).items():
             fields[f"InstanceInfo.{k}"] = v
         elements[cls][eid] = fields
+    for cls, members in elements.items():
+        for eid, fields in members.items():
+            fields.update(owners.get(eid, {}))
     revit = {}
     for line in open(args[1], encoding="utf-8", errors="replace"):
         m = re.match(r"#\d+=\s*(IFC[A-Z0-9]+)\('[0-9A-Za-z_$]{22}',(.*)\);\s*$", line)
@@ -66,6 +100,14 @@ def main():
         for name, odd_values, peer_values in apart:
             common = ", ".join(f"{v} x{n}" for v, n in peer_values.most_common(4))
             print(f"    {name}: odd {sorted(odd_values)}; peers {common}{' ...' if len(peer_values) > 4 else ''}")
+        for eid in odd:
+            twins = [e for e in same if members[e].get("root.m_masterSymbolId") == members[eid].get("root.m_masterSymbolId")]
+            twin = twins[0] if twins else same[0]
+            if eid in full and twin in full:
+                paths = list(deep_diff(full[eid], full[twin]))
+                print(f"  odd {eid} against peer {twin} ({'same type' if twins else 'another type'}): {len(paths)} paths differ")
+                for path, a, b in paths[:40]:
+                    print(f"    {path}: {json.dumps(a)[:120]} | peer {json.dumps(b)[:120]}")
         if listing:
             for eid in odd:
                 print(f"  odd {eid} fields: {json.dumps(members[eid])[:1500]}")
