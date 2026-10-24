@@ -1147,6 +1147,10 @@ jobs:
             exit 1
           fi
           echo "Conflict-marker guard: clean."
+      # Changelog entries are fragments (#938); a malformed one would be
+      # lost or misplaced when a release assembles them.
+      - name: Changelog fragments are in a section and start an item
+        run: python3 tools/release/changelog.py check
       # The crate root tells docs.rs readers that every `RE-NN` is a report
       # under reports/, and that RE and issue numbers are the only tracker
       # ids the docs use; this keeps both true for the Rust and Python API
