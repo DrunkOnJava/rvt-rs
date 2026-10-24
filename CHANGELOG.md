@@ -14,15 +14,17 @@ fragments a release moves into this file.
 the API that 1.0 will keep. Gable, hip and slope-arrow roofs are drawn as
 their planes, Revit 2025 roofs slope (RE-199), and a Revit 2025 roof by
 extrusion is its sketch's section (RE-211). Revit 2025's tapered walls are
-tapered (RE-213), and a door's or window's overall size and opening are the
-outline its symbol cuts in its host (RE-215). Ports are placed at their
-pipe's or duct's ends, where they join a placed port, or through their
-family instance's transform, and they carry Revit's flow direction, name
-and description (RE-212). Family instances, mullions, columns and walls carry
-Revit's materials, read from their native records (RE-200 to RE-206), and
-`rvt-elements` and Python list each element's saved parameters (RE-207).
-`rvt-ifc` honours `SOURCE_DATE_EPOCH`, and CI checks that every writer gives
-the same bytes twice.
+tapered (RE-213). On Revit 2024 and 2025, a door's or window's overall size
+is the outline its symbol cuts in its host where it cuts one, and so is its
+opening where its type gives none (RE-215). Ports are placed at a pipe's
+ends and at a duct's along a model axis, where they join a placed port and,
+on Revit 2025, at their connector through the family instance's transform;
+HVAC and piping ports carry Revit's flow direction, name and description
+(RE-212). Family instances, mullions, columns and walls carry Revit's
+materials, read from their native records (RE-200 to RE-206), and
+`rvt-elements` and Python list each element's saved parameters on Revit 2023
+to 2027 files (RE-207). `rvt-ifc` honours `SOURCE_DATE_EPOCH`, and CI checks
+that every writer gives the same bytes twice.
 
 The crate's API is now 27 stable modules, the ones `RELEASE.md` says 1.0
 keeps stable. The research readers moved to `rvt::research`, behind the
