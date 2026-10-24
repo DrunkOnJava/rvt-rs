@@ -18,7 +18,8 @@
 //!   hit <id> <stream> <offset> <bytes to the next hit> <first orthonormal: offset det | -> <transform | ->
 //!   copy <id> <stream> <loop min> <loop max> <axes> <origin>   each copy's transform, for
 //!     `tools/re/opening_copies_vs_ifc.py`
-//!   place <id> <m_instOrigin, m_RefDir, m_zAxis, m_flippedX, m_flippedY, m_mirrored, m_insertOrientation>
+//!   place <id> <the stream native_document reads its current record from> <m_instOrigin,
+//!     m_RefDir, m_zAxis, m_flippedX, m_flippedY, m_mirrored, m_insertOrientation>
 //!
 //! Usage:
 //!   cargo run --profile ci --example probe_227_missing_transforms -- MODEL.rvt
@@ -191,8 +192,9 @@ fn main() -> anyhow::Result<()> {
         .filter_map(|name| Some((name.to_string(), root.fields.get(*name)?.clone())))
         .collect();
         println!(
-            "place {} {}",
+            "place {} {} {}",
             record.identity.element_id,
+            record.source.stream,
             serde_json::to_string(&place)?
         );
         Ok(())
