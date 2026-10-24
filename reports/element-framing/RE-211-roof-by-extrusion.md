@@ -49,12 +49,12 @@ The vertices off by more than 0.0001 ft are on the curved faces, where Revit's m
 - `partition_schema_mvp::attach_extrusion_roofs` reads each roof whose sketch lines are all flat along one horizontal axis, at one place. It joins the lines end to end into a profile rising along the plane's other horizontal axis, each a B-spline or a straight line within its record box. A B-spline is drawn with 256 chords shared among its knot spans by their lengths, at least 4 to a span, with the knots among the points, so a short span is never skipped; each chord is then halved until the curve at its quarter, half and three-quarter points lies within 0.0001 ft of it, so a span short in parameter but long on the curve is followed too. A curve that needs more than 4,096 points, or whose chords stop converging, is left out. It offsets the profile by the type's layers and cuts its ends plumb. It keeps the section only where it reproduces the roof's record box across the plane, to 0.001 ft.
 - `export_content::roof_extrusion_solid` writes the section over the record box along the axis as a closed faceted brep, with `BodySource` `partition_roof_extrusion`.
 
-The export, measured against `main` in Measure run [40114365447](https://github.com/DrunkOnJava/rvt-rs/actions/runs/40114365447) (`-f r2025=true`):
+The export, measured against `main` in Measure run [40126110706](https://github.com/DrunkOnJava/rvt-rs/actions/runs/40126110706) (`-f r2025=true`):
 
 | | `main` | this change |
 |---|---:|---:|
-| roof 4262's volume against Revit's 411.9355 ft³ | 7,665.40 ft³ (the record box) | 412.0524 ft³ (1.00028) |
-| Revit's vertices within 0.001 ft of rvt-rs's surface | | 1,187 of 1,187 (worst 0.000524 ft) |
+| roof 4262's volume against Revit's 411.9355 ft³ | 7,665.40 ft³ (the record box) | 412.0539 ft³ (1.00029) |
+| Revit's vertices within 0.001 ft of rvt-rs's surface | | 1,187 of 1,187 (worst 0.000124 ft) |
 
 `roof_bodies_vs_ifc` now also measures each of Revit's vertices against rvt-rs's surface. Its vertex test pairs each of Revit's vertices with rvt-rs's nearest vertex, and a body swept along a straight run needs no vertices between its ends, where Revit's mesh has them, so that test reports 9.11 ft here: half the run. On the other 18 roofs of the R2025 models both tests pass as before. No other output of any model Measure scores changed.
 
