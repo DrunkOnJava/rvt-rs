@@ -7662,7 +7662,20 @@ pub fn roof_extrusion_bottom(top: &[(f64, f64)], thickness: f64) -> Option<Vec<(
             v + thickness * (a.1 + b.1) / scale,
         ));
     }
-    let carried = |a: (f64, f64), b: (f64, f64)| (b.0 + 1e3 * (b.0 - a.0), b.1 + 1e3 * (b.1 - a.1));
+    // An end carried along its tangent past the plumb line through the top's
+    // end, however short its last chord: twice the profile's run and
+    // thickness, divided by how far the tangent leans along `u`.
+    let reach = 2.0 * ((top[top.len() - 1].0 - top[0].0).abs() + thickness);
+    let carried = |a: (f64, f64), b: (f64, f64)| {
+        let (du, dv) = (b.0 - a.0, b.1 - a.1);
+        let length = du.hypot(dv);
+        if length > 0.0 {
+            let distance = reach / (du.abs() / length).max(1e-3);
+            (b.0 + distance * du / length, b.1 + distance * dv / length)
+        } else {
+            b
+        }
+    };
     let mut chain = vec![carried(offset[1], offset[0])];
     chain.extend(offset.iter().copied());
     chain.push(carried(offset[offset.len() - 2], offset[offset.len() - 1]));

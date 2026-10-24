@@ -2764,28 +2764,45 @@ fn roof_extrusion_solid(
     let n = outline.len();
     let mut vertices: Vec<[f64; 3]> = outline.iter().map(|&p| place(p, start)).collect();
     vertices.extend(outline.iter().map(|&p| place(p, end)));
-    // Cap triangles between the top (outline 0..m) and the underside
-    // (outline n-1 down to m), sweeping along `u`.
-    let m = top.len();
-    let bottom_index = |j: usize| n - 1 - j;
-    let mut cap: Vec<[usize; 3]> = Vec::new();
-    let (mut i, mut j) = (0, 0);
-    while i + 1 < m || j + 1 < bottom.len() {
-        let next_top = (i + 1 < m).then(|| top[i + 1].0);
-        let next_bottom = (j + 1 < bottom.len()).then(|| bottom[j + 1].0);
-        let advance_top = match (next_top, next_bottom) {
-            (Some(a), Some(b)) => a <= b,
-            (Some(_), None) => true,
-            _ => false,
-        };
-        if advance_top {
-            cap.push([i, i + 1, bottom_index(j)]);
-            i += 1;
-        } else {
-            cap.push([i, bottom_index(j + 1), bottom_index(j)]);
-            j += 1;
-        }
+    // Cap triangles: the outline cut into ears, since the section may be
+    // concave, kept only where they cover its area exactly.
+    let points: Vec<[f64; 2]> = outline.iter().map(|&(u, v)| [u, v]).collect();
+    let no_holes: [u32; 0] = [];
+    let mut flat: Vec<u32> = Vec::new();
+    earcut::Earcut::new().earcut(points.iter().copied(), &no_holes, &mut flat);
+    if flat.len() != 3 * (n - 2) || flat.iter().any(|&k| k as usize >= n) {
+        return None;
     }
+    let twice_area = |a: [f64; 2], b: [f64; 2], c: [f64; 2]| {
+        (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0])
+    };
+    let section = (0..n)
+        .map(|k| {
+            let (a, b) = (points[k], points[(k + 1) % n]);
+            a[0] * b[1] - b[0] * a[1]
+        })
+        .sum::<f64>()
+        .abs();
+    let covered: f64 = flat
+        .chunks_exact(3)
+        .map(|t| {
+            twice_area(
+                points[t[0] as usize],
+                points[t[1] as usize],
+                points[t[2] as usize],
+            )
+            .abs()
+        })
+        .sum();
+    if !(section.is_finite() && section > 0.0)
+        || (covered - section).abs() > 1e-9 * section.max(1.0)
+    {
+        return None;
+    }
+    let cap: Vec<[usize; 3]> = flat
+        .chunks_exact(3)
+        .map(|t| [t[0] as usize, t[1] as usize, t[2] as usize])
+        .collect();
     let mut triangles: Vec<[usize; 3]> = Vec::new();
     // The outward side of a triangle: the caps face away from each other,
     // a side away from the section (its outline runs clockwise across the
