@@ -40,7 +40,7 @@
       "IFCPRODUCTDEFINITIONSHAPE": 1171,
       "IFCPROJECT": 1,
       "IFCPROPERTYSET": 6466,
-      "IFCPROPERTYSINGLEVALUE": 27358,
+      "IFCPROPERTYSINGLEVALUE": 27634,
       "IFCRECTANGLEPROFILEDEF": 892,
       "IFCRELAGGREGATES": 13,
       "IFCRELASSOCIATESMATERIAL": 412,
@@ -699,7 +699,7 @@
       ]
     }
   },
-  "observation_hash_sha256": "896151feca31debe55f34ffc8ccaeca0ddafb5d5e2b76a51ab1c8f9dee0a3393",
+  "observation_hash_sha256": "e04a3de50f1e387b8d2c091efdf475ea3b080011d1349a6054a217fe6ed5d155",
   "schema_version": "1.1.0",
   "semantic_surface_covered": [
     "entity_counts",
