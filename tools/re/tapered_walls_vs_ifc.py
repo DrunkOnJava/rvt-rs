@@ -67,8 +67,14 @@ def meshes(f, walls, frame):
     settings.set("use-world-coords", True)
     out = {}
     for wall in walls:
+        # Revit 2025's IFC4X3 export lists the Axis before the Body, and
+        # IfcOpenShell meshes the first representation it is given.
+        body = next(
+            (r for r in wall.Representation.Representations if r.RepresentationIdentifier == "Body"),
+            None,
+        ) if wall.Representation else None
         try:
-            shape = ifcopenshell.geom.create_shape(settings, wall)
+            shape = ifcopenshell.geom.create_shape(settings, wall, body)
         except Exception:
             continue
         verts = np.array(shape.geometry.verts, dtype=float).reshape(-1, 3)

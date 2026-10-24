@@ -77,7 +77,7 @@ In plan the body covers the rectangle from the interior face to the exterior fac
 
 - A wall with word 2 is taken as tapered only where its type's first and third angles are 0 and its middle angle lies between 0 and 45 degrees. That is the one combination measured.
 - A tapered wall on an arc is not measured, and keeps its box.
-- The reader runs only on Revit 2024. No 2025 file measured stores the frame.
+- The reader runs only on Revit 2024. No 2025 file measured stores the frame. (2026-10-24: Revit 2025 stores it with twelve zero bytes, not eight, and RE-213 reads it there.)
 - A tapered wall is drawn whole, not in layers: a vertical layer band would not follow its leaning face. The GLB draws each as one mesh.
 - As on main, a tapered wall has no material association in the IFC. Revit's export gives each an `IfcMaterialConstituentSet` of its type's layers (§4).
 
