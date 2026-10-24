@@ -37,7 +37,7 @@ milestone is for.
 | [#328](https://github.com/DrunkOnJava/rvt-rs/issues/328) | Snowdon: 6 slabs in the Legends phase are not in Revit's export (phase filtering) |
 | [#323](https://github.com/DrunkOnJava/rvt-rs/issues/323) | Stairs, stair runs, landings, stringers and roofs as IFC aggregates |
 | [#309](https://github.com/DrunkOnJava/rvt-rs/issues/309) | Snowdon: one record-backed slab (ElementId 2062318) is not in Revit's export |
-| [#227](https://github.com/DrunkOnJava/rvt-rs/issues/227) | Opening geometry: 8 Core Interior doors with no instance transform read keep their box opening, and releases other than 2024 and 2025 are not cut from the symbol's outline |
+| [#227](https://github.com/DrunkOnJava/rvt-rs/issues/227) | Opening geometry from the symbol's cut loop on releases other than 2024 and 2025: no Revit export of another release's openings is in CI |
 | [#223](https://github.com/DrunkOnJava/rvt-rs/issues/223) | Element record +0x46: the flag word is unread (+0x4a is the schema class, RE-76) |
 | [#156](https://github.com/DrunkOnJava/rvt-rs/issues/156) | RE: Reproduce sketch-to-solid geometry reconstruction pipeline |
 | [#155](https://github.com/DrunkOnJava/rvt-rs/issues/155) | RE: Decode parameter-store wire formats and exact Revit unit encodings |
@@ -56,7 +56,6 @@ The requirements these serve, each with its bar, status and evidence, are in
 | [#879](https://github.com/DrunkOnJava/rvt-rs/issues/879) | Revit 2015 BIMcollab example: 3 air terminals Revit's export leaves out, and 16 footings on no storey |
 | [#878](https://github.com/DrunkOnJava/rvt-rs/issues/878) | Revit 2015: Revit's own GlobalIds are not rebuilt (0 of 241 on BIMcollab's structural example) |
 | [#874](https://github.com/DrunkOnJava/rvt-rs/issues/874) | 1.0: practitioner workflow reports folded into the supported profile |
-| [#873](https://github.com/DrunkOnJava/rvt-rs/issues/873) | 1.0: name the surfaces the stability commitment covers, and check each for breaking changes |
 | [#872](https://github.com/DrunkOnJava/rvt-rs/issues/872) | 1.0: documented Rust and Python APIs whose examples run in CI |
 | [#792](https://github.com/DrunkOnJava/rvt-rs/issues/792) | BIM4LCA office: fixture 3095244 is IfcSanitaryTerminal where Revit writes IfcFlowTerminal, and the permit model writes a column Revit's export leaves out |
 | [#421](https://github.com/DrunkOnJava/rvt-rs/issues/421) | Element records beyond 2024/2025: derive the marker from the schema and measure the older envelope (RE-80 follow-up) |
