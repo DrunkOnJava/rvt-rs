@@ -8070,6 +8070,12 @@ pub const ROOF_EXTRUSION_MIN_SPAN_SEGMENTS: usize = 4;
 /// The share of a sketch spline's span its second and last but one points
 /// lie in from its ends (RE-211).
 pub const ROOF_EXTRUSION_END_SHARE: f64 = 1e-4;
+/// How far a sketch spline may stray from the chords it is drawn with in a
+/// roof by extrusion's section, feet (RE-211).
+pub const ROOF_EXTRUSION_CHORD_FEET: f64 = 1e-4;
+/// The most points a sketch's B-spline is drawn with in a roof by
+/// extrusion's section; a curve that needs more is left out (RE-211).
+pub const ROOF_EXTRUSION_MAX_SPLINE_POINTS: usize = 4096;
 /// How far apart two sketch curves' ends may be and still join in a roof by
 /// extrusion's profile, feet (RE-211).
 pub const ROOF_EXTRUSION_JOIN_FEET: f64 = 1e-4;
@@ -8113,7 +8119,11 @@ pub fn roof_extrusion_from_fields(fields: &[(String, InstanceField)]) -> Option<
 /// [`ROOF_EXTRUSION_MIN_SPAN_SEGMENTS`], with the knots among the points, and
 /// a point [`ROOF_EXTRUSION_END_SHARE`] of its span in from each end, so the
 /// first and last chords lie along the curve's ends, which the plumb cuts
-/// follow.
+/// follow. Each chord is then halved until the curve at its quarter, half
+/// and three-quarter points lies within [`ROOF_EXTRUSION_CHORD_FEET`] of it,
+/// so a span short in parameter but long on the curve is still followed.
+/// `None` where that takes more than [`ROOF_EXTRUSION_MAX_SPLINE_POINTS`]
+/// points or halving no longer moves the parameter.
 fn roof_extrusion_spline_points(
     spline: &crate::partition_beam_axes::BoundedSpline,
 ) -> Option<Vec<[f64; 3]>> {
@@ -8145,7 +8155,54 @@ fn roof_extrusion_spline_points(
     parameters.push(end);
     parameters.sort_by(f64::total_cmp);
     parameters.dedup();
-    parameters.into_iter().map(|p| spline.point(p)).collect()
+    let mut points = vec![spline.point(start)?];
+    let mut done = (start, points[0]);
+    for &target in &parameters[1..] {
+        let mut pending = vec![(target, spline.point(target)?)];
+        while let Some(&(b, to)) = pending.last() {
+            let (a, from) = done;
+            let mut straight = true;
+            for share in [0.25, 0.5, 0.75] {
+                let on = spline.point(a + (b - a) * share)?;
+                if chord_distance(on, from, to) > ROOF_EXTRUSION_CHORD_FEET {
+                    straight = false;
+                    break;
+                }
+            }
+            if straight {
+                points.push(to);
+                if points.len() > ROOF_EXTRUSION_MAX_SPLINE_POINTS {
+                    return None;
+                }
+                done = (b, to);
+                pending.pop();
+            } else {
+                let middle = a + (b - a) / 2.0;
+                if !(middle > a && middle < b) {
+                    return None;
+                }
+                pending.push((middle, spline.point(middle)?));
+            }
+        }
+    }
+    Some(points)
+}
+
+/// How far `point` lies from the segment `from`..`to`.
+fn chord_distance(point: [f64; 3], from: [f64; 3], to: [f64; 3]) -> f64 {
+    let along = [to[0] - from[0], to[1] - from[1], to[2] - from[2]];
+    let off = [point[0] - from[0], point[1] - from[1], point[2] - from[2]];
+    let length = along.iter().map(|v| v * v).sum::<f64>();
+    let t = if length > 0.0 {
+        (off.iter().zip(&along).map(|(o, a)| o * a).sum::<f64>() / length).clamp(0.0, 1.0)
+    } else {
+        0.0
+    };
+    off.iter()
+        .zip(&along)
+        .map(|(o, a)| (o - t * a).powi(2))
+        .sum::<f64>()
+        .sqrt()
 }
 
 /// The underside of a roof whose top is `top` (`(u, z)`, `u` rising) and
