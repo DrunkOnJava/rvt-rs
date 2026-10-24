@@ -90,7 +90,7 @@ named where the file defines them (RE-207); most are not written to IFC.
 It is not a converter for arbitrary models: most parameters, family
 geometry (except the experimental `--saved-meshes` option, which draws a
 Revit 2024, 2025 or 2026 family instance from the mesh Revit saved for its
-display, RE-78), roofs by extrusion or over a T or U footprint, the boundaries of
+display, RE-78), roofs over a T or U footprint and roofs by extrusion outside Revit 2025, the boundaries of
 rooms whose stored solid does not close, opening profiles and phase
 filtering are not decoded, and rvt-rs does not edit
 Revit model data.

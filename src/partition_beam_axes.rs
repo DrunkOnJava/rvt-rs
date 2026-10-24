@@ -369,6 +369,178 @@ pub fn scan_sketch_bounded_lines(
     scan_first_bounded_lines(rf, revit_version, ids)
 }
 
+/// Releases where a sketch line's B-spline ([`BoundedSpline`]) is measured
+/// (RE-211).
+pub const SKETCH_SPLINE_SUPPORTED_REVIT_VERSIONS: &[u32] = &[2025];
+
+/// The most control points a [`BoundedSpline`] is read with.
+pub const MAX_SPLINE_CONTROL_POINTS: usize = 4096;
+
+/// A B-spline curve record (RE-211): after the [`BOUNDED_LINE_TAG`], as an
+/// arc's is (RE-96),
+///
+/// ```text
+/// +4   f64           start parameter
+/// +12  f64           end parameter
+/// +20  u32           degree p
+/// +24  u8 × 2        flags (0 on the spline measured)
+/// +26  u32           n, the number of control points
+/// +30  n × f64 × 4   each control point's weight, then x, y, z, model feet
+///      u32           n + p + 1, the number of knots
+///      f64 × (n+p+1) the knots, rising
+/// ```
+///
+/// Measured on the sketch of `11_RoofByExtrusion` in puzzbobb's R2025
+/// models: a cubic with 6 control points, every weight 1, whose curve
+/// Revit's export of the roof draws its top along.
+#[derive(Debug, Clone, PartialEq)]
+pub struct BoundedSpline {
+    pub start_parameter: f64,
+    pub end_parameter: f64,
+    pub degree: usize,
+    /// Each control point as `[weight, x, y, z]`.
+    pub control_points: Vec<[f64; 4]>,
+    pub knots: Vec<f64>,
+}
+
+impl BoundedSpline {
+    /// The point at `parameter`, clamped to the curve's domain (Cox-de Boor,
+    /// rational); `None` where the knots and control points do not fit the
+    /// degree.
+    pub fn point(&self, parameter: f64) -> Option<[f64; 3]> {
+        let p = self.degree;
+        let n = self.control_points.len();
+        if n <= p || self.knots.len() != n + p + 1 {
+            return None;
+        }
+        let knot = |i: usize| self.knots.get(i).copied();
+        let (low, high) = (knot(p)?, knot(n)?);
+        let u = parameter.clamp(low, high);
+        let span = if u >= high {
+            n - 1
+        } else {
+            (p..n).rev().find(|&i| knot(i).is_some_and(|k| k <= u))?
+        };
+        let mut basis = vec![0.0; p + 1];
+        let mut left = vec![0.0; p + 1];
+        let mut right = vec![0.0; p + 1];
+        basis[0] = 1.0;
+        for j in 1..=p {
+            left[j] = u - knot(span + 1 - j)?;
+            right[j] = knot(span + j)? - u;
+            let mut saved = 0.0;
+            for r in 0..j {
+                let denominator = right[r + 1] + left[j - r];
+                let temp = if denominator == 0.0 {
+                    0.0
+                } else {
+                    basis[r] / denominator
+                };
+                basis[r] = saved + right[r + 1] * temp;
+                saved = left[j - r] * temp;
+            }
+            basis[j] = saved;
+        }
+        let mut sum = [0.0; 4];
+        for (k, b) in basis.iter().enumerate() {
+            let [w, x, y, z] = *self.control_points.get(span - p + k)?;
+            sum[0] += b * w;
+            sum[1] += b * w * x;
+            sum[2] += b * w * y;
+            sum[3] += b * w * z;
+        }
+        (sum[0] != 0.0).then(|| [sum[1] / sum[0], sum[2] / sum[0], sum[3] / sum[0]])
+    }
+
+    /// The curve from its start to its end parameter as `segments` chords'
+    /// `segments + 1` points.
+    pub fn points(&self, segments: usize) -> Option<Vec<[f64; 3]>> {
+        let segments = segments.max(1);
+        (0..=segments)
+            .map(|i| {
+                let t = i as f64 / segments as f64;
+                self.point(self.start_parameter + (self.end_parameter - self.start_parameter) * t)
+            })
+            .collect()
+    }
+}
+
+/// The B-spline whose tag starts at `at`, where its values are finite, its
+/// degree 1 to 9, its control points more than its degree and at most
+/// [`MAX_SPLINE_CONTROL_POINTS`], its weights positive, its knots as many as
+/// the control points and degree need and rising, and its parameters within
+/// them.
+pub fn bounded_spline_at(buf: &[u8], at: usize) -> Option<BoundedSpline> {
+    if buf.get(at..at.checked_add(4)?)? != BOUNDED_LINE_TAG {
+        return None;
+    }
+    let start_parameter = le_bytes::f64_at(buf, at.checked_add(4)?)?;
+    let end_parameter = le_bytes::f64_at(buf, at.checked_add(12)?)?;
+    let degree = usize::try_from(le_bytes::u32_at(buf, at.checked_add(20)?)?).ok()?;
+    let count = usize::try_from(le_bytes::u32_at(buf, at.checked_add(26)?)?).ok()?;
+    if !(1..=9).contains(&degree) || count <= degree || count > MAX_SPLINE_CONTROL_POINTS {
+        return None;
+    }
+    let points_at = at.checked_add(30)?;
+    let control_points = (0..count)
+        .map(|i| {
+            let base = points_at.checked_add(32 * i)?;
+            let mut point = [0.0; 4];
+            for (k, value) in point.iter_mut().enumerate() {
+                *value = le_bytes::f64_at(buf, base.checked_add(8 * k)?)?;
+            }
+            (point.iter().all(|v| v.is_finite()) && point[0] > 0.0).then_some(point)
+        })
+        .collect::<Option<Vec<_>>>()?;
+    let knots_at = points_at.checked_add(32 * count)?;
+    let knot_count = usize::try_from(le_bytes::u32_at(buf, knots_at)?).ok()?;
+    if knot_count != count + degree + 1 {
+        return None;
+    }
+    let knots = (0..knot_count)
+        .map(|i| le_bytes::f64_at(buf, knots_at.checked_add(4 + 8 * i)?))
+        .collect::<Option<Vec<_>>>()?;
+    let rising = knots.windows(2).all(|pair| pair[0] <= pair[1]);
+    let (low, high) = (knots[degree], knots[count]);
+    if !(knots.iter().all(|k| k.is_finite())
+        && rising
+        && low < high
+        && start_parameter.is_finite()
+        && end_parameter.is_finite()
+        && low <= start_parameter
+        && start_parameter < end_parameter
+        && end_parameter <= high)
+    {
+        return None;
+    }
+    Some(BoundedSpline {
+        start_parameter,
+        end_parameter,
+        degree,
+        control_points,
+        knots,
+    })
+}
+
+/// The first [`BoundedSpline`] in `data`.
+pub fn first_bounded_spline(data: &[u8]) -> Option<BoundedSpline> {
+    memchr::memmem::find_iter(data, &BOUNDED_LINE_TAG).find_map(|at| bounded_spline_at(data, at))
+}
+
+/// Each sketch line's B-spline ([`first_bounded_spline`]), read as
+/// [`scan_bounded_lines`] reads lines, on the releases in
+/// [`SKETCH_SPLINE_SUPPORTED_REVIT_VERSIONS`]; empty on others.
+pub fn scan_sketch_splines(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    ids: &BTreeSet<u32>,
+) -> Result<BTreeMap<u32, BoundedSpline>> {
+    if !SKETCH_SPLINE_SUPPORTED_REVIT_VERSIONS.contains(&revit_version) {
+        return Ok(BTreeMap::new());
+    }
+    scan_first_records(rf, revit_version, ids, first_bounded_spline)
+}
+
 /// [`scan_bounded_lines`] without its release gate, for callers that
 /// measured the layout on other releases (a wall's location line on 2025,
 /// RE-55). Empty where the element-data header is not known.
