@@ -80,7 +80,8 @@ impl EpisodeHistory {
             if entry[16] != EPISODE_TERMINATOR {
                 return None;
             }
-            guids.push(entry[..16].try_into().expect("16 bytes"));
+            let guid = entry.first_chunk::<16>()?;
+            guids.push(*guid);
         }
         Some(Self { guids })
     }
@@ -173,7 +174,7 @@ pub fn sub_element_global_id(global_id: &str, index: u16) -> Option<String> {
 /// whose GUID is `episode_guid` (Windows byte order).
 pub fn revit_ifc_global_id(episode_guid: [u8; 16], element_id: u32) -> String {
     let mut value = canonical_guid(episode_guid);
-    let low = u32::from_be_bytes(value[12..16].try_into().expect("4 bytes")) ^ element_id;
+    let low = u32::from_be_bytes([value[12], value[13], value[14], value[15]]) ^ element_id;
     value[12..16].copy_from_slice(&low.to_be_bytes());
     compress_ifc_guid(value)
 }

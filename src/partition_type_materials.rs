@@ -254,7 +254,10 @@ const MAX_GEOMETRY_TAG: u32 = 0xffff;
 fn opens_unset_map(buf: &[u8], start: usize, end: usize, materials: &BTreeSet<u32>) -> bool {
     let mut at = start;
     while at + 4 <= end {
-        let count = u32::from_le_bytes(buf[at..at + 4].try_into().expect("4 bytes")) as usize;
+        let Some(count) = crate::le_bytes::u32_at(buf, at) else {
+            return false;
+        };
+        let count = count as usize;
         // The count is checked before it sizes the map: on a 32-bit target a
         // count read from arbitrary bytes would overflow `count * 12` (#836).
         if (1..=MAX_ENTRIES).contains(&count) && at + 4 + count * 12 <= end {
@@ -262,10 +265,12 @@ fn opens_unset_map(buf: &[u8], start: usize, end: usize, materials: &BTreeSet<u3
             let (mut unset, mut material) = (0usize, 0usize);
             for entry in 0..count {
                 let e = at + 4 + entry * 12;
-                keys.push(u32::from_le_bytes(
-                    buf[e..e + 4].try_into().expect("4 bytes"),
-                ));
-                let value = &buf[e + 4..e + 12];
+                let (Some(key), Some(value)) =
+                    (crate::le_bytes::u32_at(buf, e), buf.get(e + 4..e + 12))
+                else {
+                    return false;
+                };
+                keys.push(key);
                 if value.iter().all(|&b| b == 0xff) {
                     unset += 1;
                 } else if id_at(value, 0, 8).is_some_and(|id| materials.contains(&id)) {

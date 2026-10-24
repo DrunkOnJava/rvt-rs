@@ -57,6 +57,19 @@ impl Default for SheetOptions {
 ///
 /// Elements without a body or a `location_feet` are skipped
 /// (nothing to draw).
+///
+/// # Examples
+///
+/// ```
+/// use rvt::RevitFile;
+/// use rvt::ifc::sheet::{SheetOptions, render_plan_svg};
+/// use rvt::ifc::{Exporter, RvtDocExporter};
+///
+/// let mut rf = RevitFile::open("corpus/tier1/architectural-2024/architectural-2024.rvt")?;
+/// let svg = render_plan_svg(&RvtDocExporter.export(&mut rf)?, &SheetOptions::default());
+/// assert!(svg.contains("<svg"));
+/// # Ok::<(), rvt::Error>(())
+/// ```
 // Tracker: VW1-11.
 pub fn render_plan_svg(model: &IfcModel, options: &SheetOptions) -> String {
     let footprints = collect_footprints(model);

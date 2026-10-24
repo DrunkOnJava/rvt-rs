@@ -8,52 +8,42 @@ All notable changes will be documented here. This project follows
 
 ### Added
 
-- **`rvt-ifc --revit-property-sets` writes Revit's own property sets (#35,
-  RE-210).** With the option, an export writes each element's named saved
-  parameters (RE-207) as Revit's exporter does with "Export Revit property
-  sets": one set per parameter group, named for the group (`Dimensions`,
-  `Identity Data`, `Materials and Finishes`, ..., `Other` for none), and the
-  type's parameters in such sets on its type object, or on its elements with
-  `(Type)` added where it has none. Following revit-ifc's `Release_25.x.x`
-  branch, the IFC group is left out, a Yes/No is a Boolean, an integer with
-  a spec an integer, a non-empty text a text, a length, pipe or duct size,
-  area, volume, angle or number its measure, an air flow, HVAC or piping
-  pressure, apparent or electrical power, electrical potential or current
-  its measure in SI units (whose units the export then declares), a
-  material its name and a family type `<family> : <type>`. Built-in
-  parameters, enumerations and other specs are left out and counted.
-  Against Revit 2025's export of Autodesk's Snowdon Towers HVAC with
-  "Export Revit property sets" (measured locally, not committed), all
-  28,906 properties written (counted per element) are in the set of the
-  same name with Revit's value (`tools/re/revit_property_sets_vs_ifc.py`);
-  Revit writes 79,907 more, nearly all built-in parameters. On Snowdon
-  Architectural, 58,346 of 58,733 are; Revit names the sets of 13 of its
-  type objects with `(Type)`, which follows from the order of its export. On the BIM4LCA office
-  as built, `FireExit`, written in `Identity Data`, equals Revit's
-  `Pset_DoorCommon` and `Pset_WindowCommon.FireExit` on 498 of 498 doors and
-  windows. Without the option the export is unchanged.
+- **A door's and window's OverallWidth and OverallHeight are the outline
+  the symbol that draws it cuts in its host (RE-215, #844).** A family
+  instance names its type and, in its `InstanceInfo`, the symbol that draws
+  it. Where the instance's own parameters change the family's geometry, that
+  is a symbol of its own. Revit's exporter sizes a door or window from that
+  symbol, and the extents of the outline it cuts are Revit's `OverallWidth`
+  and `OverallHeight` on every door and window measured: Core Interior's 132
+  doors and 6 windows, RE1 Architecture's 4 doors, and each R2025 model's
+  door and 3 windows. Core Interior's windows, whose type is 1010 mm square,
+  had `$`; they now have Revit's 1500 by 2700 mm. Revit 2024 and 2025 only,
+  and loops of straight lines only. RE1's curtain-wall door has no outline
+  and keeps `$`.
 
-- **`rvt-elements` and Python's `decoded_elements()` list each element's
-  saved parameters (#35, RE-207).** On Revit 2023 to 2027 files, an element's
-  `parameters` now also hold the values its native record saves: its typed
-  parameter sets, the family parameters of its own `FamilyParams`, and the
-  native fields read as built-in parameters, each named by the file's own
-  definition (family, shared, project and global parameters) with its
-  storage type, spec, group and value. A family instance's type parameters
-  follow its own, marked `"level": "type"`; a family's instance parameter is
-  taken only from the instance. Lengths, areas, volumes and angles also get
-  their SI value, a Yes/No value is a boolean, and a value naming a material
-  or a family type also gets that element's name. Built-in parameters keep
-  their negative id and no name. A family type parameter (`ParamDefFamType`,
-  a window's Muntin Pattern or trim) is now read as the ElementId it holds.
-  On the BIM4LCA office (Revit 2024), every parameter named `<set>.<property>`
-  holds the value Revit's export writes for that property on the element:
-  7,606 of 7,606 as built and 7,592 of 7,592 at building permit; on
-  puzzbobb's R2025 models a window's `Pset_WindowCommon.FireRating` is its
-  type's `Fire Rating`, 18 of 18. `tools/re/element_parameters_vs_ifc.py`
-  scores either output against Revit's export. Nothing new is written to IFC.
-  The library gives the same entries through
-  `elements::parameters::saved_parameters_lossy`. By puzzbobb (#887).
+- **`rvt-ifc` honours `SOURCE_DATE_EPOCH`, and CI checks every writer is
+  deterministic (#873).** The time in an IFC's header and owner history was
+  the export's wall-clock time, so two exports of the same file differed.
+  With `SOURCE_DATE_EPOCH` set (Unix seconds, the reproducible-builds
+  convention) `rvt-ifc` records that time instead, and refuses a value that
+  is not a number. A CLI test runs `rvt-ifc`, `rvt-gltf`, `rvt-sheet` and
+  both `rvt-schedule` schedules twice on the same file and requires the same
+  bytes, on the tier-1 synthetic project and on Einhoven where the project
+  corpus is present. The `rvt-ifc` help no longer calls the export
+  document-level only.
+
+- **Every port has Revit's flow direction, name and description (RE-212,
+  #834).** A family instance's HVAC or piping connector takes the Flow
+  Direction its family sets in the connector's own parameters, or, where the
+  family leaves it bidirectional, the direction Revit calculated for the
+  instance's connector. A duct's or pipe's connector takes its calculated
+  direction. A bidirectional connector joined to one with a direction takes
+  the opposite one. On RE1 Plumbing, Mechanical and Electrical that is every
+  one of Revit's 463 ports, where rvt-rs wrote `NOTDEFINED` on all 408 HVAC
+  and piping ports before. Ports are now named `InPort_`, `OutPort_` or
+  `Port_` by their direction and described `Flow`, as Revit names them, and
+  a sink placed at a pipe's end points into it. `SystemType` is still not
+  written.
 
 - **Each GitHub release carries the CLI archives' build provenance as a
   file (#891).** The release workflow already attested the archives; the
@@ -124,10 +114,33 @@ All notable changes will be documented here. This project follows
   direction rvt-rs does not read (#834). A duct along one of the model's axes
   has its ports placed the same way, at the centres of its box's faces across
   its length: on RE1 Mechanical all 62 of the ports Revit writes on ducts and
-  pipes are within 0.01 ft of Revit's. Family-instance ports keep no
-  placement, and the no-geometry modes write none.
+  pipes are within 0.01 ft of Revit's. A port joined to a placed duct or
+  pipe port, a family instance's included, is placed at that port's point
+  with its axis, as Revit's export places every port joined to a segment's
+  (#869): all 118 such ports of RE1 Plumbing and all 59 of RE1 Mechanical
+  are within 0.01 ft of Revit's, where none was placed before. Their Z axes,
+  taken from the segment port's, agree with Revit's on 51 and 26 and are
+  opposite on the other 67 and 33; the segment ports' own axes are opposite
+  to Revit's on its `In` ports, whose flow direction rvt-rs does not read
+  (#834). Other family-instance ports keep no placement, and the no-geometry
+  modes write none.
+
+- **Every public type implements `Debug`, as the Rust API Guidelines ask (C-DEBUG).** The 14 element
+  decoders, the three exporters, `corpus::Sample` and `RevitFile` did not.
+  `RevitFile`'s shows the limits it was opened with and how many streams it
+  has inflated, not the file's bytes. The crate now warns on a public type
+  without one (`missing_debug_implementations`), which CI's `-D warnings`
+  makes an error.
 
 ### Fixed
+
+- **A column record holding a NaN no longer panics the export.** The
+  column-cut grid sorted its edges with `partial_cmp(..).expect("finite")`,
+  so a NaN read from a damaged record box stopped the whole export. A
+  column or cutter with a non-finite coordinate now gets no cut box, and the
+  grid sorts with `f64::total_cmp`. 40 other `expect` and `unwrap` calls on file
+  bytes and fixed arrays are gone: those reads go through `first_chunk` or
+  the crate's checked little-endian reader instead.
 
 - **The PyPI page's links work, and it is written for Python users (#905).**
   PyPI showed the repository README, whose links are relative and resolve

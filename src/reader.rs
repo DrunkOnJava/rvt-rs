@@ -16,7 +16,7 @@ use crate::{
 use cfb::CompoundFile;
 use serde::{Deserialize, Serialize};
 use std::{
-    collections::BTreeSet,
+    collections::{BTreeMap, BTreeSet},
     fs::File,
     io::{Cursor, Read},
     path::Path,
@@ -117,6 +117,23 @@ pub struct RevitFile {
     /// the schema, the element index and the increments again.
     // Tracker: B82.
     native_preamble: Option<Arc<crate::native_document::Preamble>>,
+    /// Memoised material names (RE-58, RE-203), by release and the hash of
+    /// the declared ids they were read for: half a dozen material steps of
+    /// an export each asked for them.
+    material_names: std::collections::HashMap<(u32, u64), Arc<BTreeMap<u32, String>>>,
+    /// Memoised materials each category's graphics styles name (RE-206).
+    category_style_materials: Option<Arc<BTreeMap<i64, BTreeSet<u32>>>>,
+}
+
+/// The limits it was opened with and how many streams it has inflated so
+/// far; the container's bytes and the caches are left out.
+impl std::fmt::Debug for RevitFile {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RevitFile")
+            .field("limits", &self.limits)
+            .field("inflated_streams", &self.inflated.len())
+            .finish_non_exhaustive()
+    }
 }
 
 /// A partition stream's data objects, each at its offset (RE-153).
@@ -182,15 +199,24 @@ impl RevitFile {
     /// `OpenLimits::default()` (2 GiB file, 256 MiB per stream, 256
     /// MiB per inflate).
     ///
-    /// ```no_run
-    /// use rvt::reader::{RevitFile, OpenLimits};
+    /// ```
+    /// use rvt::reader::{OpenLimits, RevitFile};
     ///
     /// // Only accept files up to 100 MB.
     /// let limits = OpenLimits {
     ///     max_file_bytes: 100 * 1024 * 1024,
     ///     ..OpenLimits::default()
     /// };
-    /// let mut rf = RevitFile::open_with_limits("your-project.rfa", limits)?;
+    /// let path = "corpus/tier1/architectural-2024/architectural-2024.rvt";
+    /// let rf = RevitFile::open_with_limits(path, limits)?;
+    /// assert!(!rf.stream_names().is_empty());
+    ///
+    /// // A file over the limit is refused before it is read.
+    /// let tiny = OpenLimits { max_file_bytes: 1024, ..OpenLimits::default() };
+    /// assert!(matches!(
+    ///     RevitFile::open_with_limits(path, tiny),
+    ///     Err(rvt::Error::TooLarge { .. })
+    /// ));
     /// # Ok::<(), rvt::Error>(())
     /// ```
     pub fn open_with_limits(path: impl AsRef<Path>, limits: OpenLimits) -> Result<Self> {
@@ -255,6 +281,22 @@ impl RevitFile {
     /// has already been done by the caller if they came through
     /// [`Self::open_with_limits`]; here it's repeated for in-memory
     /// paths that skip disk stat.
+    ///
+    /// ```
+    /// use rvt::reader::{OpenLimits, RevitFile};
+    ///
+    /// let bytes = std::fs::read("corpus/tier1/architectural-2024/architectural-2024.rvt")?;
+    /// let rf = RevitFile::open_bytes_with_limits(bytes.clone(), OpenLimits::default())?;
+    /// assert!(!rf.stream_names().is_empty());
+    ///
+    /// // Bytes over the limit are refused before they are parsed.
+    /// let tiny = OpenLimits { max_file_bytes: 1024, ..OpenLimits::default() };
+    /// assert!(matches!(
+    ///     RevitFile::open_bytes_with_limits(bytes, tiny),
+    ///     Err(rvt::Error::TooLarge { .. })
+    /// ));
+    /// # Ok::<(), Box<dyn std::error::Error>>(())
+    /// ```
     pub fn open_bytes_with_limits(bytes: Vec<u8>, limits: OpenLimits) -> Result<Self> {
         if (bytes.len() as u64) > limits.max_file_bytes {
             return Err(Error::TooLarge {
@@ -282,6 +324,8 @@ impl RevitFile {
             walk: None,
             data_objects: std::collections::HashMap::new(),
             native_preamble: None,
+            material_names: std::collections::HashMap::new(),
+            category_style_materials: None,
         })
     }
 
@@ -373,6 +417,38 @@ impl RevitFile {
             Arc::new(crate::partition_element_records::compute_second_prologue_ids(self));
         self.second_prologue_ids = Some(Arc::clone(&computed));
         computed
+    }
+
+    /// The memoised material names for `key` (RE-203).
+    pub(crate) fn cached_material_names(
+        &self,
+        key: (u32, u64),
+    ) -> Option<Arc<BTreeMap<u32, String>>> {
+        self.material_names.get(&key).cloned()
+    }
+
+    /// Memoise the material names for `key` (RE-203).
+    pub(crate) fn cache_material_names(
+        &mut self,
+        key: (u32, u64),
+        names: Arc<BTreeMap<u32, String>>,
+    ) {
+        self.material_names.insert(key, names);
+    }
+
+    /// The memoised materials each category's graphics styles name (RE-206).
+    pub(crate) fn cached_category_style_materials(
+        &self,
+    ) -> Option<Arc<BTreeMap<i64, BTreeSet<u32>>>> {
+        self.category_style_materials.clone()
+    }
+
+    /// Memoise the materials each category's graphics styles name (RE-206).
+    pub(crate) fn cache_category_style_materials(
+        &mut self,
+        materials: Arc<BTreeMap<i64, BTreeSet<u32>>>,
+    ) {
+        self.category_style_materials = Some(materials);
     }
 
     /// Family and type names from the partition name entries, with each

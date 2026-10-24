@@ -23,6 +23,7 @@ use crate::walker::{DecodedElement, ElementDecoder, HandleIndex, InstanceField};
 use crate::{Error, Result};
 
 /// Registered [`ElementDecoder`] for the `Level` class.
+#[derive(Debug)]
 pub struct LevelDecoder;
 
 impl ElementDecoder for LevelDecoder {

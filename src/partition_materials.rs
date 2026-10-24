@@ -187,7 +187,8 @@ pub fn scan_material_appearances(
             let id_at = at + 4;
             let Some(id) = buf
                 .get(id_at..id_at + 8)
-                .map(|s| u64::from_le_bytes(s.try_into().expect("8 bytes")))
+                .and_then(|s| s.first_chunk::<8>())
+                .map(|b| u64::from_le_bytes(*b))
                 .and_then(|id| u32::try_from(id).ok())
                 .filter(|id| declared.contains(id))
             else {
@@ -369,6 +370,24 @@ pub fn scan_material_names(
     revit_version: u32,
     declared: &BTreeSet<u32>,
 ) -> Result<BTreeMap<u32, String>> {
+    use std::hash::{Hash, Hasher};
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    declared.hash(&mut hasher);
+    let key = (revit_version, hasher.finish());
+    if let Some(cached) = rf.cached_material_names(key) {
+        return Ok((*cached).clone());
+    }
+    let names = scan_material_names_uncached(rf, revit_version, declared)?;
+    rf.cache_material_names(key, std::sync::Arc::new(names.clone()));
+    Ok(names)
+}
+
+/// [`scan_material_names`], read afresh.
+fn scan_material_names_uncached(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    declared: &BTreeSet<u32>,
+) -> Result<BTreeMap<u32, String>> {
     let (Some(tag), Some(_)) = (
         material_object_tag(revit_version),
         material_name_frame_tag(revit_version),
@@ -385,7 +404,8 @@ pub fn scan_material_names(
             let id_at = at + 4;
             let Some(id) = buf
                 .get(id_at..id_at + 8)
-                .map(|s| u64::from_le_bytes(s.try_into().expect("8 bytes")))
+                .and_then(|s| s.first_chunk::<8>())
+                .map(|b| u64::from_le_bytes(*b))
                 .and_then(|id| u32::try_from(id).ok())
                 .filter(|id| declared.contains(id))
             else {
@@ -410,10 +430,22 @@ pub fn scan_material_names(
             }
         }
     }
-    let names: BTreeMap<u32, String> = found
+    let mut names: BTreeMap<u32, String> = found
         .into_iter()
         .filter_map(|(id, name)| name.map(|n| (id, n)))
         .collect();
+    // The material's own `Material.m_name`, where its native record is read
+    // (RE-203): the scan takes another string for one of Snowdon Towers'
+    // 220 materials ("1/4\" Head" for "Bronze, Architectural") and agrees
+    // on the other 514 materials of Snowdon Towers, Core Interior, RE1 and
+    // the R2025 models measured.
+    if let Ok(native) = native_material_names(rf, &names.keys().copied().collect()) {
+        for (id, name) in native {
+            if let Some(held) = names.get_mut(&id) {
+                *held = name;
+            }
+        }
+    }
     let mut uses: BTreeMap<&str, usize> = BTreeMap::new();
     for name in names.values() {
         *uses.entry(name.as_str()).or_default() += 1;
@@ -427,6 +459,41 @@ pub fn scan_material_names(
         .into_iter()
         .filter(|(_, name)| !shared.contains(name))
         .collect())
+}
+
+/// Each of `ids` that is a material's ElementId, with its native record's
+/// `Material.m_name`. Errs where the native record path does not read the
+/// file's release.
+fn native_material_names(
+    rf: &mut RevitFile,
+    ids: &BTreeSet<u32>,
+) -> anyhow::Result<BTreeMap<u32, String>> {
+    let mut out = BTreeMap::new();
+    if ids.is_empty() {
+        return Ok(out);
+    }
+    let options = crate::native_document::Options {
+        selected_ids: ids.iter().map(|id| u64::from(*id)).collect(),
+        ..crate::native_document::Options::default()
+    };
+    crate::native_document::extract_graphs(rf, &options, |record| {
+        let name = record.graph.as_ref().and_then(|graph| {
+            graph
+                .objects
+                .iter()
+                .find(|object| object.class_name == "Material")?
+                .fields
+                .get("m_name")?
+                .as_str()
+                .map(str::to_string)
+        });
+        let name = name.filter(|name| !name.is_empty());
+        if let (Ok(id), Some(name)) = (u32::try_from(record.identity.element_id), name) {
+            out.insert(id, name);
+        }
+        Ok(())
+    })?;
+    Ok(out)
 }
 
 /// Releases a category's material (RE-91) is read on. Measured on Revit
@@ -468,10 +535,85 @@ pub const CATEGORY_MATERIAL_FRAME: [u8; 20] = [
 /// own export writes for their layers that take their category's material
 /// (RE-115).
 ///
-/// `None` on a release outside [`CATEGORY_MATERIAL_SUPPORTED_REVIT_VERSIONS`],
-/// without the entry, where it is unset (0 or all ones), or where copies
-/// disagree.
+/// Where the entry is not read, the category's material is the one its
+/// graphics styles name ([`native_category_material`], RE-206).
+///
+/// `None` without the entry or a graphics style naming one, where the entry
+/// is unset (0 or all ones), or where copies disagree.
 pub fn scan_category_material(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    category: i64,
+) -> Result<Option<u32>> {
+    let entry = scan_category_material_entry(rf, revit_version, category)?;
+    if entry.is_some() {
+        return Ok(entry);
+    }
+    Ok(native_category_material(rf, category).unwrap_or(None))
+}
+
+/// The material a category's graphics styles name (RE-206): the
+/// `GStyle.m_materialElemId` of each `GStyleElem` whose `m_categoryId` is
+/// `category`, where they name exactly one. On Snowdon Towers (2025), whose
+/// object-styles Walls entry holds 0 (RE-91), the Walls styles name
+/// "Default Wall", the material Revit's IFC4 export writes for the layers
+/// that take their category's material. Errs where the native record path
+/// does not read the file's release.
+pub fn native_category_material(rf: &mut RevitFile, category: i64) -> anyhow::Result<Option<u32>> {
+    let styles = match rf.cached_category_style_materials() {
+        Some(cached) => cached,
+        None => {
+            let read = std::sync::Arc::new(category_style_materials(rf)?);
+            rf.cache_category_style_materials(std::sync::Arc::clone(&read));
+            read
+        }
+    };
+    let mut values = styles.get(&category).into_iter().flatten();
+    Ok(match (values.next(), values.next()) {
+        (Some(material), None) => Some(*material),
+        _ => None,
+    })
+}
+
+/// The materials each category's graphics styles name, by the category's
+/// ElementId (RE-206).
+fn category_style_materials(rf: &mut RevitFile) -> anyhow::Result<BTreeMap<i64, BTreeSet<u32>>> {
+    let options = crate::native_document::Options {
+        selected_classes: BTreeSet::from(["GStyleElem".to_string()]),
+        ..crate::native_document::Options::default()
+    };
+    let mut out: BTreeMap<i64, BTreeSet<u32>> = BTreeMap::new();
+    crate::native_document::extract_graphs(rf, &options, |record| {
+        let Some(graph) = record.graph.as_ref() else {
+            return Ok(());
+        };
+        let id = |value: Option<&serde_json::Value>| {
+            value
+                .and_then(|v| v.pointer("/m_id/m_id64"))
+                .and_then(serde_json::Value::as_i64)
+        };
+        let Some(category) = graph
+            .objects
+            .first()
+            .and_then(|root| id(root.fields.get("m_categoryId")))
+        else {
+            return Ok(());
+        };
+        for object in graph.objects.iter().filter(|o| o.class_name == "GStyle") {
+            if let Some(material) =
+                id(object.fields.get("m_materialElemId")).and_then(|m| u32::try_from(m).ok())
+            {
+                out.entry(category).or_default().insert(material);
+            }
+        }
+        Ok(())
+    })?;
+    Ok(out)
+}
+
+/// [`scan_category_material`]'s object-styles entry alone. `None` on a
+/// release outside [`CATEGORY_MATERIAL_SUPPORTED_REVIT_VERSIONS`].
+fn scan_category_material_entry(
     rf: &mut RevitFile,
     revit_version: u32,
     category: i64,
@@ -493,7 +635,8 @@ pub fn scan_category_material(
         for at in memchr::memmem::find_iter(buf, &pattern) {
             if let Some(material) = buf
                 .get(at + pattern.len()..at + pattern.len() + 8)
-                .map(|b| u64::from_le_bytes(b.try_into().expect("8 bytes")))
+                .and_then(|b| b.first_chunk::<8>())
+                .map(|b| u64::from_le_bytes(*b))
             {
                 found.insert(material);
             }
@@ -661,7 +804,9 @@ fn scan_category_material_2023(
         let buf = inflated.bytes();
         for at in memchr::memmem::find_iter(buf, &pattern) {
             let entry = |offset: usize, len: usize| buf.get(at + offset..at + offset + len);
-            let word = entry(8, 4).map(|b| u32::from_le_bytes(b.try_into().expect("4 bytes")));
+            let word = entry(8, 4)
+                .and_then(|b| b.first_chunk::<4>())
+                .map(|b| u32::from_le_bytes(*b));
             if !matches!(word, Some(1 | 2))
                 || entry(12, 4) != Some(&[1, 0, 0, 0][..])
                 || entry(16, 6) != Some(&frame[..])
