@@ -116,9 +116,15 @@ pub fn instance_transform(data: &[u8]) -> Option<InstanceTransform> {
     })
 }
 
-/// Each instance in `ids` whose data holds a transform, by ElementId; an
-/// instance whose copies disagree is dropped. Empty on a release without a
-/// measured element-data header.
+/// Each instance in `ids` whose data holds a transform, by ElementId. Where
+/// an instance's copies in different partitions disagree, the copy taken is
+/// the one in the partition its current record is in: the partition its
+/// stored revision routes to, or the latest one holding a copy where that
+/// one holds none, as `native_document` reads records (RE-145, #548). On
+/// Core Interior 8 stacked doors have a copy one inch off across their host
+/// in an earlier partition; the current copy places Revit's opening exactly
+/// (#227). An instance whose current copy cannot be told is dropped. Empty
+/// on a release without a measured element-data header.
 pub fn scan_instance_transforms(
     rf: &mut RevitFile,
     revit_version: u32,
@@ -127,8 +133,14 @@ pub fn scan_instance_transforms(
     let Some(header) = crate::partition_names::element_data_header(revit_version) else {
         return Ok(BTreeMap::new());
     };
-    let mut found: BTreeMap<u32, Option<InstanceTransform>> = BTreeMap::new();
+    let mut found: BTreeMap<u32, Vec<(u32, InstanceTransform)>> = BTreeMap::new();
     for stream in rf.partition_stream_names() {
+        let Some(partition) = stream
+            .strip_prefix("Partitions/")
+            .and_then(|n| n.parse::<u32>().ok())
+        else {
+            continue;
+        };
         let Ok(inflated) = rf.inflated_partition(&stream) else {
             continue;
         };
@@ -154,20 +166,39 @@ pub fn scan_instance_transforms(
             let Some(transform) = buf.get(id_at + 8..end).and_then(instance_transform) else {
                 continue;
             };
-            match found.get_mut(&id) {
-                None => {
-                    found.insert(id, Some(transform));
-                }
-                Some(held) => {
-                    if *held != Some(transform) {
-                        *held = None;
-                    }
-                }
-            }
+            found.entry(id).or_default().push((partition, transform));
         }
     }
+    let disagreeing: BTreeSet<u64> = found
+        .iter()
+        .filter(|(_, copies)| copies.iter().any(|(_, t)| *t != copies[0].1))
+        .map(|(id, _)| u64::from(*id))
+        .collect();
+    let routed = if disagreeing.is_empty() {
+        BTreeMap::new()
+    } else {
+        crate::native_document::routed_partitions(rf, &disagreeing).unwrap_or_default()
+    };
     Ok(found
         .into_iter()
-        .filter_map(|(id, transform)| transform.map(|t| (id, t)))
+        .filter_map(|(id, copies)| {
+            let first = copies[0].1;
+            if copies.iter().all(|(_, t)| *t == first) {
+                return Some((id, first));
+            }
+            let held: BTreeSet<u32> = copies.iter().map(|(p, _)| *p).collect();
+            let routed = *routed.get(&u64::from(id))?;
+            let current = if held.contains(&routed) {
+                routed
+            } else {
+                *held.last()?
+            };
+            let mut in_current = copies
+                .iter()
+                .filter(|(p, _)| *p == current)
+                .map(|(_, t)| *t);
+            let pick = in_current.next()?;
+            in_current.all(|t| t == pick).then_some((id, pick))
+        })
         .collect())
 }
