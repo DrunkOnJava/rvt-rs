@@ -2139,3 +2139,7 @@ A Sketch element's data names the element it sketches 77 bytes from its element-
 ## Addendum — RE-187 a door type's Width and Height are its overall size (2026-10-18)
 
 A door type's value block holds its Width (−1001301) and Height (−1001300), the BuiltInParameters RE-93 reads for windows, and Revit's IFC export writes them as the door's `OverallWidth` / `OverallHeight` wherever they are read: 136 of 136 doors on Core Interior and RE1 Architecture. A window's type size is not its overall size on Core Interior (1010 mm against Revit's 1500 × 2700 mm). Report: `reports/element-framing/RE-187-door-overall-sizes.md`; probe: `examples/probe_re187_door_window_sizes.rs`.
+
+## Addendum — RE-215 a door's or window's overall size is the outline its symbol cuts (2026-10-24)
+
+A `FamilySymbol` record's `m_pCutLoops` points at one `CurveLoop` of `GLine`s in the symbol's XZ plane, the outline it cuts in its host. A `FamilyInstance` names its type in `m_masterSymbolId` and the symbol that draws it in its `InstanceInfo` object's `m_symbolId`, which revit-ifc's exporter sizes it from (`ExporterIFCUtils.GetOriginalSymbol`). That symbol's loop's extent along X and Z is Revit's `OverallWidth` and `OverallHeight` on every door and window measured with one: 138 of 138 on Core Interior, including the six windows whose type's size is not Revit's, 4 of 5 on RE1 Architecture (the fifth a curtain-wall door with no loop), and each R2025 model's door and 3 windows. Report: `reports/element-framing/RE-215-symbol-cut-loops.md`; probe: `examples/probe_re215_symbol_cuts.rs`.

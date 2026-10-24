@@ -8,6 +8,19 @@ All notable changes will be documented here. This project follows
 
 ### Added
 
+- **A door's and window's OverallWidth and OverallHeight are the outline
+  the symbol that draws it cuts in its host (RE-215, #844).** A family
+  instance names its type and, in its `InstanceInfo`, the symbol that draws
+  it. Where the instance's own parameters change the family's geometry, that
+  is a symbol of its own. Revit's exporter sizes a door or window from that
+  symbol, and the extents of the outline it cuts are Revit's `OverallWidth`
+  and `OverallHeight` on every door and window measured: Core Interior's 132
+  doors and 6 windows, RE1 Architecture's 4 doors, and each R2025 model's
+  door and 3 windows. Core Interior's windows, whose type is 1010 mm square,
+  had `$`; they now have Revit's 1500 by 2700 mm. Revit 2024 and 2025 only,
+  and loops of straight lines only. RE1's curtain-wall door has no outline
+  and keeps `$`.
+
 - **`rvt-ifc` honours `SOURCE_DATE_EPOCH`, and CI checks every writer is
   deterministic (#873).** The time in an IFC's header and owner history was
   the export's wall-clock time, so two exports of the same file differed.
