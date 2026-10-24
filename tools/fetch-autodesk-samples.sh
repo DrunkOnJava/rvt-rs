@@ -31,7 +31,7 @@ while IFS=$'\t' read -r year file url sha bytes; do
     continue
   fi
   echo "  [fetch]     $year-$file <- $url"
-  curl -fsSL --retry 3 --retry-delay 5 --max-time 900 -o "$path" "$url"
+  curl -fsSL --retry 3 --retry-all-errors --retry-delay 5 --max-time 900 -o "$path" "$url"
   got_sha="$(sha256sum "$path" | cut -d' ' -f1)"
   got_bytes="$(wc -c < "$path" | tr -d ' ')"
   if [ "$got_sha" != "$sha" ] || [ "$got_bytes" != "$bytes" ]; then
