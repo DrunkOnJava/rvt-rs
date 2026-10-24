@@ -170,10 +170,10 @@ pub mod native_saved_mesh;
 pub mod native_saved_scene;
 #[path = "native_segments.rs"]
 pub mod native_segments;
-#[path = "native_symbol_cuts.rs"]
-pub mod native_symbol_cuts;
 #[path = "native_stairs.rs"]
 pub mod native_stairs;
+#[path = "native_symbol_cuts.rs"]
+pub mod native_symbol_cuts;
 #[path = "native_type_materials.rs"]
 pub mod native_type_materials;
 #[path = "native_wall_types.rs"]
