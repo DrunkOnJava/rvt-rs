@@ -49,6 +49,7 @@ real      elem_table_corpus         skip=declared_element_ids_returns_sorted_ded
 real      elem_table_frame
 real      element_materials
 real      element_names
+real      element_parameters
 real      element_records_2025
 real      family_instance_ports
 real      fitting_nominal_diameter
