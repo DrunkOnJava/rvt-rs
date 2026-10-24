@@ -16,6 +16,8 @@
 //! Output:
 //!   missing <id>   a door or window with a cut loop and no transform
 //!   hit <id> <stream> <offset> <bytes to the next hit> <first orthonormal: offset det | -> <transform | ->
+//!   copy <id> <stream> <loop min> <loop max> <axes> <origin>   each copy's transform, for
+//!     `tools/re/opening_copies_vs_ifc.py`
 //!   place <id> <m_instOrigin, m_RefDir, m_zAxis, m_flippedX, m_flippedY, m_mirrored, m_insertOrientation>
 //!
 //! Usage:
@@ -100,6 +102,13 @@ fn main() -> anyhow::Result<()> {
     for id in &missing {
         println!("missing {id}");
     }
+    eprintln!(
+        "{} doors and windows, {} with a cut loop, {} with a transform, {} with a loop and no transform",
+        ids.len(),
+        loops.len(),
+        transforms.len(),
+        missing.len()
+    );
     let Some(header) = element_data_header(version) else {
         eprintln!("no element-data header for Revit {version}");
         return Ok(());
@@ -129,18 +138,31 @@ fn main() -> anyhow::Result<()> {
                 .unwrap_or_default();
             let first = first_orthonormal(data)
                 .map_or("-".to_string(), |(at, det)| format!("{at} {det:.6}"));
-            let transform = instance_transform(data)
-                .map_or("-".to_string(), |t| format!("{:?} {:?}", t.axes, t.origin));
+            let read = instance_transform(data);
+            let transform =
+                read.map_or("-".to_string(), |t| format!("{:?} {:?}", t.axes, t.origin));
             println!(
                 "hit {id} {stream} {hit} {} {first} {transform}",
                 next.saturating_sub(id_at + 8)
             );
+            if let (Some(t), Some(cut)) = (read, loops.get(&u64::from(id))) {
+                println!(
+                    "copy {id} {stream} {} {} {} {}",
+                    serde_json::to_string(&cut.min)?,
+                    serde_json::to_string(&cut.max)?,
+                    serde_json::to_string(&t.axes)?,
+                    serde_json::to_string(&t.origin)?
+                );
+            }
         }
     }
     for id in &missing {
         if !hit_counts.contains_key(id) {
             println!("hit {id} - - - no element-data header names it");
         }
+    }
+    if missing.is_empty() {
+        return Ok(());
     }
     let options = Options {
         selected_ids: missing.iter().map(|&id| u64::from(id)).collect(),
@@ -175,12 +197,5 @@ fn main() -> anyhow::Result<()> {
         );
         Ok(())
     })?;
-    eprintln!(
-        "{} doors and windows, {} with a cut loop, {} with a transform, {} with a loop and no transform",
-        ids.len(),
-        loops.len(),
-        transforms.len(),
-        missing.len()
-    );
     Ok(())
 }
