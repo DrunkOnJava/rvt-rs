@@ -759,6 +759,12 @@ office, 187 of its 269 doors cut one and have Revit's sizes; its 269 windows
 and other 82 doors are drawn by symbols with no cut loop and keep what they
 had (#810).
 
+**RE-216 (2026-10-24)** gives a family instance whose element data sits in
+two partitions, with transforms that disagree, the copy its current record is
+in instead of no transform. That opens Core Interior's last 8 doors as Revit
+does: all 132 of its door openings are within 0.001 ft of Revit's
+(`reports/element-framing/RE-216-current-instance-copies.md`).
+
 The public viewer's demo gallery leads with the two files this section
 measures, staged from the deploy workflow's `magnetar-io/revit-test-datasets`
 checkout and pinned by sha256 (#257): `Revit_IFC5_Einhoven.rvt` (2023,
