@@ -115,15 +115,16 @@ pub struct InstancePort {
     /// The port's IFC4 `FlowDirection` ([`port_flow_direction`]), `None`
     /// where it is not read.
     pub flow_direction: Option<&'static str>,
-    /// Where the connector is in its symbol, `None` where it is not read.
+    /// Where the connector is in the symbol that draws the instance
+    /// (`InstanceInfo.m_symbolId`), `None` where it is not read.
     pub frame: Option<ConnectorFrame>,
 }
 
-/// A connector's point and Z axis in its symbol's coordinates (#869): the
-/// `m_trf` of the symbol's `m_arrConnectorData` entry, whose `m_or` is the
-/// point and the third column of whose `m_3x3` is the axis. Through the
-/// instance's transform (RE-87) they are Revit's port point and Z axis on
-/// RE1's 55 of 56 family-instance ports no duct or pipe joins.
+/// A connector's point and Z axis in the coordinates of the symbol that
+/// draws its instance (#869, RE-215): the `m_trf` of that symbol's
+/// `m_arrConnectorData` entry, whose `m_or` is the point and the third
+/// column of whose `m_3x3` is the axis. Through the instance's transform
+/// (RE-87) they give the port's point and Z axis.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ConnectorFrame {
     /// Feet.
@@ -275,7 +276,9 @@ pub fn connector_ports(
     instances: &BTreeMap<u64, u64>,
     segments: &BTreeSet<u64>,
 ) -> anyhow::Result<ConnectorPorts> {
-    let mut connectors: BTreeMap<u64, (u64, Vec<(i64, Option<ConnectorFrame>)>)> = BTreeMap::new();
+    let mut connectors: BTreeMap<u64, (u64, Vec<i64>)> = BTreeMap::new();
+    let mut frames: BTreeMap<u64, BTreeMap<i64, ConnectorFrame>> = BTreeMap::new();
+    let mut drawn_by: BTreeMap<u64, u64> = BTreeMap::new();
     let mut cells: BTreeMap<u64, BTreeMap<i64, i64>> = BTreeMap::new();
     let mut family_directions: BTreeMap<u64, BTreeMap<i64, i64>> = BTreeMap::new();
     let mut calculated: BTreeMap<u64, BTreeMap<u32, i64>> = BTreeMap::new();
@@ -290,7 +293,7 @@ pub fn connector_ports(
     selected.extend(segments.iter().copied());
     let options = native_document::Options {
         selected_ids: selected,
-        selected_classes: BTreeSet::from(["Family".to_string()]),
+        selected_classes: BTreeSet::from(["Family".to_string(), "FamilySymbol".to_string()]),
         ..native_document::Options::default()
     };
     native_document::extract_graphs(rf, &options, |record| {
@@ -303,17 +306,27 @@ pub fn connector_ports(
                 let Some(root) = graph.objects.first() else {
                     return Ok(());
                 };
-                let indices: Vec<(i64, Option<ConnectorFrame>)> = root
+                let entries: Vec<&serde_json::Value> = root
                     .fields
                     .get("m_arrConnectorData")
                     .and_then(|entries| entries.as_array())
                     .into_iter()
                     .flatten()
+                    .collect();
+                let indices: Vec<i64> = entries
+                    .iter()
+                    .filter_map(|entry| entry.get("m_index")?.as_i64())
+                    .collect();
+                let symbol_frames: BTreeMap<i64, ConnectorFrame> = entries
+                    .iter()
                     .filter_map(|entry| {
                         let index = entry.get("m_index")?.as_i64()?;
-                        Some((index, entry.get("m_trf").and_then(connector_frame)))
+                        Some((index, connector_frame(entry.get("m_trf")?)?))
                     })
                     .collect();
+                if !symbol_frames.is_empty() {
+                    frames.insert(id, symbol_frames);
+                }
                 if let (false, Some(family)) = (
                     indices.is_empty(),
                     root.fields.get("m_familyId").and_then(element_id),
@@ -337,6 +350,17 @@ pub fn connector_ports(
             }
             Some("FamilyInstance") if instances.contains_key(&id) => {
                 calculated.insert(id, calculated_directions(graph));
+                // The symbol that draws the instance (RE-215), whose
+                // connectors are where the instance's are.
+                if let Some(symbol) = graph
+                    .objects
+                    .iter()
+                    .find(|object| object.class_name == "InstanceInfo")
+                    .and_then(|object| object.fields.get("m_symbolId"))
+                    .and_then(element_id)
+                {
+                    drawn_by.insert(id, symbol);
+                }
             }
             _ if segments.contains(&id) => {
                 for (index, direction) in calculated_directions(graph) {
@@ -354,9 +378,12 @@ pub fn connector_ports(
             let domains = cells.get(family)?;
             let directions = family_directions.get(family);
             let calculations = calculated.get(&instance);
+            let drawn_frames = drawn_by
+                .get(&instance)
+                .and_then(|symbol| frames.get(symbol));
             let ports: Vec<InstancePort> = indices
                 .iter()
-                .filter_map(|&(index, frame)| {
+                .filter_map(|&index| {
                     let domain = *domains.get(&index)?;
                     PORT_DOMAINS.contains(&domain).then_some(())?;
                     let index_u32 = u32::try_from(index).ok()?;
@@ -368,7 +395,7 @@ pub fn connector_ports(
                             directions.and_then(|d| d.get(&index).copied()),
                             calculations.and_then(|c| c.get(&index_u32).copied()),
                         ),
-                        frame,
+                        frame: drawn_frames.and_then(|f| f.get(&index)).copied(),
                     })
                 })
                 .collect();
