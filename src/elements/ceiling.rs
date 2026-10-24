@@ -27,6 +27,7 @@ use crate::walker::{DecodedElement, ElementDecoder, HandleIndex, InstanceField};
 use crate::{Error, Result};
 
 /// Registered decoder for the `Ceiling` class.
+#[derive(Debug)]
 pub struct CeilingDecoder;
 
 impl ElementDecoder for CeilingDecoder {
@@ -63,6 +64,7 @@ impl ElementDecoder for CeilingDecoder {
 }
 
 /// Registered decoder for the `CeilingType` class.
+#[derive(Debug)]
 pub struct CeilingTypeDecoder;
 
 impl ElementDecoder for CeilingTypeDecoder {

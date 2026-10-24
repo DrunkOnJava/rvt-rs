@@ -65,7 +65,16 @@ updates:
     cooldown:
       default-days: 3
   - package-ecosystem: npm
-    directory: /viewer
+    # The viewer's packages, and the tools the devcontainer installs from
+    # .devcontainer/tools/package-lock.json.
+    directories:
+      - /viewer
+      - /.devcontainer/tools
+    # The devcontainer's pnpm is the viewer's packageManager, which Dependabot
+    # does not move; provision.sh refuses the two apart, so it is updated by
+    # hand with the packageManager.
+    ignore:
+      - dependency-name: pnpm
     schedule:
       interval: weekly
     groups:
@@ -84,8 +93,11 @@ updates:
       default-days: 3
       semver-major-days: 7
   - package-ecosystem: docker
-    # The release container image's base, pinned by digest in docker/Dockerfile.
-    directory: /docker
+    # The release container image's base, pinned by digest in docker/Dockerfile,
+    # and the Codespaces image's, in .devcontainer/Dockerfile.
+    directories:
+      - /docker
+      - /.devcontainer
     schedule:
       interval: weekly
     labels:
@@ -100,8 +112,12 @@ updates:
       default-days: 3
   - package-ecosystem: pip
     # The Python packages CI installs: tools/ci/requirements-*.in name them,
-    # and requirements-*.txt pin them and their dependencies with hashes.
-    directory: /tools/ci
+    # and requirements-*.txt pin them and their dependencies with hashes. The
+    # Codespaces notebooks' JupyterLab is pinned the same way, in
+    # .devcontainer/requirements-jupyter.txt.
+    directories:
+      - /tools/ci
+      - /.devcontainer
     # IfcOpenShell is a witness and Measure's scorers run on it: an update
     # lands as tools/ci/requirements-ifc.in says (#773).
     schedule:
@@ -114,6 +130,19 @@ updates:
     labels:
       - dependencies
       - area:python
+    commit-message:
+      prefix: build
+      include: scope
+    cooldown:
+      default-days: 3
+  - package-ecosystem: devcontainers
+    # The Dev Container Features .devcontainer/devcontainer.json installs
+    # (Rust, Node, the GitHub CLI, SSH), pinned by major version.
+    directory: /
+    schedule:
+      interval: weekly
+    labels:
+      - dependencies
     commit-message:
       prefix: build
       include: scope

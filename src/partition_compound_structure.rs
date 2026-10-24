@@ -658,9 +658,9 @@ pub fn scan_wall_joined_entries(
         .collect())
 }
 
-/// Releases a wall type's face angles are read on (RE-86). Only Snowdon
-/// Towers (Revit 2024) stores them; no 2025 file measured holds the record.
-pub const WALL_FACE_ANGLES_SUPPORTED_REVIT_VERSIONS: &[u32] = &[2024];
+/// Releases a wall type's face angles are read on (RE-86, RE-213): Snowdon
+/// Towers stores them on 2024 and on 2025, its two releases measured.
+pub const WALL_FACE_ANGLES_SUPPORTED_REVIT_VERSIONS: &[u32] = &[2024, 2025];
 
 /// The bytes a wall type's three face angles follow (RE-86): `u32 2`, eight
 /// zero bytes, an `f64` 0.7 and a count of 3. The word before them varies
@@ -669,6 +669,23 @@ pub const WALL_FACE_ANGLES_FRAME: [u8; 24] = [
     0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x66, 0x66, 0x66, 0x66,
     0x66, 0x66, 0xe6, 0x3f, 0x03, 0x00, 0x00, 0x00,
 ];
+
+/// [`WALL_FACE_ANGLES_FRAME`] as Revit 2025 writes it (RE-213): twelve zero
+/// bytes after the `u32 2`, not eight.
+pub const WALL_FACE_ANGLES_FRAME_2025: [u8; 28] = [
+    0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x66, 0x66, 0x66, 0x66, 0x66, 0x66, 0xe6, 0x3f, 0x03, 0x00, 0x00, 0x00,
+];
+
+/// The frame a wall type's face angles follow on `revit_version`; `None`
+/// outside [`WALL_FACE_ANGLES_SUPPORTED_REVIT_VERSIONS`].
+pub fn wall_face_angles_frame(revit_version: u32) -> Option<&'static [u8]> {
+    match revit_version {
+        2024 => Some(&WALL_FACE_ANGLES_FRAME),
+        2025 => Some(&WALL_FACE_ANGLES_FRAME_2025),
+        _ => None,
+    }
+}
 
 /// The three `f64` a wall type's data stores after
 /// [`WALL_FACE_ANGLES_FRAME`], radians. On Snowdon Towers all three are 0
@@ -682,14 +699,21 @@ pub const WALL_FACE_ANGLES_FRAME: [u8; 24] = [
 /// is neither 0 nor between 1e-9 radians and a right angle either way (the
 /// frame's bytes also occur by chance in other elements' data).
 pub fn wall_type_face_angles(data: &[u8]) -> Option<[f64; 3]> {
-    let mut frames = memchr::memmem::find_iter(data, &WALL_FACE_ANGLES_FRAME);
-    let at = frames.next()? + WALL_FACE_ANGLES_FRAME.len();
+    wall_type_face_angles_after(data, &WALL_FACE_ANGLES_FRAME)
+}
+
+/// [`wall_type_face_angles`] after `frame`
+/// ([`wall_face_angles_frame`]).
+pub fn wall_type_face_angles_after(data: &[u8], frame: &[u8]) -> Option<[f64; 3]> {
+    let mut frames = memchr::memmem::find_iter(data, frame);
+    let at = frames.next()? + frame.len();
     if frames.next().is_some() {
         return None;
     }
     let angle = |index: usize| {
         data.get(at + 8 * index..at + 8 * index + 8)
-            .map(|b| f64::from_le_bytes(b.try_into().expect("8 bytes")))
+            .and_then(|b| b.first_chunk::<8>())
+            .map(|b| f64::from_le_bytes(*b))
             .filter(|value| {
                 *value == 0.0 || (1e-9..std::f64::consts::FRAC_PI_2).contains(&value.abs())
             })
@@ -705,9 +729,10 @@ pub fn scan_wall_type_face_angles(
     revit_version: u32,
     types: &BTreeSet<u32>,
 ) -> Result<BTreeMap<u32, [f64; 3]>> {
-    let Some(header) = crate::partition_names::element_data_header(revit_version)
-        .filter(|_| WALL_FACE_ANGLES_SUPPORTED_REVIT_VERSIONS.contains(&revit_version))
-    else {
+    let (Some(header), Some(frame)) = (
+        crate::partition_names::element_data_header(revit_version),
+        wall_face_angles_frame(revit_version),
+    ) else {
         return Ok(BTreeMap::new());
     };
     let mut found: BTreeMap<u32, Option<[f64; 3]>> = BTreeMap::new();
@@ -731,7 +756,10 @@ pub fn scan_wall_type_face_angles(
                 .unwrap_or(buf.len())
                 .min(hit.saturating_add(LAYER_WINDOW))
                 .min(buf.len());
-            let Some(angles) = buf.get(id_at + 8..end).and_then(wall_type_face_angles) else {
+            let Some(angles) = buf
+                .get(id_at + 8..end)
+                .and_then(|data| wall_type_face_angles_after(data, frame))
+            else {
                 continue;
             };
             match found.get_mut(&id) {

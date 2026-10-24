@@ -308,7 +308,7 @@ pub fn extract_graphs(
 /// 4-byte (Revit 2023) or 8-byte id, a header, the body and its length
 /// repeated after it. The group's declared object count and body bytes must
 /// agree with what is read.
-fn group_records(
+pub(crate) fn group_records(
     source: &GroupSource,
     bytes: &[u8],
     version: u32,

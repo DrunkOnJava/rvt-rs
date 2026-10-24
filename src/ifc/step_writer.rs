@@ -2414,8 +2414,12 @@ impl StepWriter {
                 // RE-187: a door with no opening read takes its type's Width and
                 // Height, which Revit's export writes there too.
                 let [type_width, type_height] = super::export_content::DOOR_TYPE_SIZE_PROPERTIES;
-                let overall = property_length(height_key)
-                    .zip(property_length(width_key))
+                // RE-215: before either, the extents of the outline the symbol
+                // that draws it cuts, which Revit's exporter sizes it from.
+                let [cut_width, cut_height] = super::export_content::CUT_LOOP_SIZE_PROPERTIES;
+                let overall = property_length(cut_height)
+                    .zip(property_length(cut_width))
+                    .or_else(|| property_length(height_key).zip(property_length(width_key)))
                     .or_else(|| property_length(type_height).zip(property_length(type_width)));
                 let tail = element_attribute_tail(
                     &ifc_upper,
@@ -2957,8 +2961,37 @@ impl StepWriter {
                 .map_or(".NOTDEFINED.,$", String::as_str)
                 .to_string()
         };
+        // RE-212: Revit names a port by its flow, `InPort_` for a sink,
+        // `OutPort_` for a source and `Port_` otherwise (revit-ifc
+        // `ConnectorExporter`).
+        let port_prefixes: HashMap<(u32, u32), &'static str> = model
+            .entities
+            .iter()
+            .filter_map(|entity| match entity {
+                super::entities::IfcEntity::Port {
+                    id,
+                    index,
+                    flow_direction: Some(flow),
+                    ..
+                } => Some((
+                    (*id, *index),
+                    match flow.to_ascii_uppercase().as_str() {
+                        "SINK" => "In",
+                        "SOURCE" => "Out",
+                        _ => "",
+                    },
+                )),
+                _ => None,
+            })
+            .collect();
+        let port_name = |id: u32, index: u32| {
+            format!(
+                "{}Port_{id}_{index}",
+                port_prefixes.get(&(id, index)).copied().unwrap_or("")
+            )
+        };
         // #847: where each connector is, by its element, when it is read.
-        let port_points: HashMap<(u32, u32), PortPoint> = model
+        let mut port_points: HashMap<(u32, u32), PortPoint> = model
             .entities
             .iter()
             .filter_map(|entity| match entity {
@@ -2982,6 +3015,34 @@ impl StepWriter {
                 _ => None,
             })
             .collect();
+        // #869: a connector joined to a placed connector of a duct or pipe is
+        // at the same point, with the same axis, as Revit's export writes
+        // every port joined to a segment's (RE1: 118 of 118 on Plumbing, 59
+        // of 59 on Mechanical, at the point).
+        for entity in &model.entities {
+            let super::entities::IfcEntity::PortConnection {
+                a,
+                a_id,
+                a_index,
+                b,
+                b_id,
+                b_index,
+            } = entity
+            else {
+                continue;
+            };
+            for (placed, element, open) in [
+                ((*a_id, *a_index), *b, (*b_id, *b_index)),
+                ((*b_id, *b_index), *a, (*a_id, *a_index)),
+            ] {
+                if port_points.contains_key(&open) {
+                    continue;
+                }
+                if let Some(&(_, point, direction)) = port_points.get(&placed) {
+                    port_points.insert(open, (element, point, direction));
+                }
+            }
+        }
         let element_frames: HashMap<usize, (Option<[f64; 3]>, Option<f64>)> = model
             .entities
             .iter()
@@ -3034,8 +3095,9 @@ impl StepWriter {
                 self.emit_entity(
                     port,
                     format!(
-                        "IFCDISTRIBUTIONPORT('{}',#{owner_hist},'Port_{id}_{index}',$,$,{placement},$,{},$)",
+                        "IFCDISTRIBUTIONPORT('{}',#{owner_hist},'{}','Flow',$,{placement},$,{},$)",
                         gid(&["port", &id_text, &index_text]),
+                        port_name(id, index),
                         port_attribute(id, index),
                     ),
                 );
@@ -3094,8 +3156,9 @@ impl StepWriter {
             self.emit_entity(
                 port,
                 format!(
-                    "IFCDISTRIBUTIONPORT('{}',#{owner_hist},'Port_{id}_{index}',$,$,{placement},$,{},$)",
+                    "IFCDISTRIBUTIONPORT('{}',#{owner_hist},'{}','Flow',$,{placement},$,{},$)",
                     gid(&["port", &id_text, &index_text]),
+                    port_name(*id, *index),
                     port_attribute(*id, *index),
                 ),
             );

@@ -83,11 +83,14 @@ version. The maintainer chose these surfaces on 2026-10-23 (#873).
 | The `rvt` crate | The 27 modules the crate root's module overview lists: reading and identity, typed elements and the element walk, export, and the byte-preserving writer. Their public items keep their names, signatures and meaning | `rvt::research` and everything else behind the `unstable-research` feature: the partition, native and element-record readers behind the format findings, which change whenever a finding does. `rvt::cli`, which exists for the shipped CLIs and is hidden from the docs |
 | The 19 CLIs | Their names, flags and the JSON they print, as [`docs/schemas/`](docs/schemas/) describes it | Text meant for people to read |
 | The Python package `rvt` | The classes and functions in [`python/rvt/__init__.pyi`](python/rvt/__init__.pyi) | |
-| Output formats | Valid IFC4 (ISO 10303-21), binary glTF 2.0, plan SVG and CSV, written deterministically | Their content. A finding that recovers more elements, properties or geometry is a minor release |
-| The viewer's wasm API | The JSON shapes in [`docs/viewer-api.md`](docs/viewer-api.md) | `rvt-wasm` is not published, so code outside this repository builds it from source |
+| Output formats | Valid IFC4 (ISO 10303-21), binary glTF 2.0, plan SVG and CSV, written deterministically: the same file gives the same bytes, once `SOURCE_DATE_EPOCH` fixes the time an IFC records | Their content. A finding that recovers more elements, properties or geometry is a minor release |
+| The viewer's wasm API | The 22 JavaScript bindings [`docs/viewer-api.md`](docs/viewer-api.md) lists, with their arguments and the JSON shapes they return | `rvt-wasm` is not published, so code outside this repository builds it from source |
 
 A minor release may add public items, research modules and recovered
-content. A research module that moves into the stable modules is named in
+content. It may also add a variant to a public enum, which is why they are
+`#[non_exhaustive]`, and a value to a list of values in the JSON the CLIs
+print, such as a status or a reason code: code that reads one handles a
+value it does not know. A research module that moves into the stable modules is named in
 `CHANGELOG.md` and from then on follows the table above. The writer is stable
 as an API; what it can patch is rated in
 [`docs/support-matrix.json`](docs/support-matrix.json) (`stream-level-writer`).

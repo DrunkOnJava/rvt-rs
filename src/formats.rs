@@ -106,7 +106,7 @@ pub struct SchemaDiagnostics {
     /// usually means the full schema for that class lives in another
     /// stream or is implicit.
     pub parent_only_class_count: usize,
-    /// Classes that carry a non-zero `ancestor_tag` (the Q4 addendum read
+    /// Classes that carry a non-zero `ancestor_tag` (the §Q4 addendum read
     /// it as a reference distinct from `parent`; not reproduced, RE-137).
     pub ancestor_tag_count: usize,
     /// Parse candidates skipped for validation reasons. Copied from
@@ -253,7 +253,7 @@ pub struct ClassEntry {
     /// count): the tag of the base's base, the class's grandparent, on
     /// every class that has one on 53 files of 2016 to 2027 (RE-146, #154,
     /// reported by puzzbobb). The parser lands on the base's own base
-    /// reference when the base is defined inline. The Q4 addendum read it
+    /// reference when the base is defined inline. The §Q4 addendum read it
     /// as a distinct ancestor (RE-137 did not reproduce that); see the §Q4
     /// addendum in `docs/rvt-moat-break-reconnaissance.md`.
     ///
@@ -274,7 +274,7 @@ pub struct FieldEntry {
 
 /// Best-effort classification of a field's type encoding (the byte block
 /// that follows a field name in `Formats/Latest`). Derived from the
-/// 2026-04-19 Layer 4c.2 sweeps (Q5 + Q5.1) — see the §Q5 / §Q5.1
+/// 2026-04-19 Layer 4c.2 sweeps — see the §Q5 / §Q5.1
 /// addenda in `docs/rvt-moat-break-reconnaissance.md` for evidence.
 ///
 /// The primary discriminator is the first byte of the encoding:
@@ -609,7 +609,7 @@ pub fn parse_schema_with_scan_limit(decompressed: &[u8], scan_limit: usize) -> R
         // Got a class-name candidate. Parse its fields until we hit
         // another likely class boundary (another length-prefixed name
         // matching our heuristic).
-        let class_name = std::str::from_utf8(name_bytes).unwrap().to_string();
+        let class_name = String::from_utf8_lossy(name_bytes).into_owned();
         let class_offset = i;
 
         // Move cursor past the class name header.
@@ -662,7 +662,7 @@ pub fn parse_schema_with_scan_limit(decompressed: &[u8], scan_limit: usize) -> R
                                     data[preamble_at + 9],
                                 ]);
                                 if flag & 0x8000 == 0 && fc == fc2 && fc <= 200 {
-                                    parent = Some(std::str::from_utf8(p).unwrap().to_string());
+                                    parent = Some(String::from_utf8_lossy(p).into_owned());
                                     declared_field_count = Some(fc);
                                     if flag != 0 {
                                         ancestor_tag = Some(flag);
@@ -842,7 +842,7 @@ fn scan_fields_until_next_class_bounded(
         if (2..=60).contains(&u32_len) && i + 4 + u32_len <= hard_stop {
             let slice = &data[i + 4..i + 4 + u32_len];
             if looks_like_field_name(slice) {
-                let field_name = std::str::from_utf8(slice).unwrap().to_string();
+                let field_name = String::from_utf8_lossy(slice).into_owned();
                 let post_name = i + 4 + u32_len;
 
                 // Optional C++ type follows. Try u32 prefix first, then u16.

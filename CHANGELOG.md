@@ -8,6 +8,43 @@ All notable changes will be documented here. This project follows
 
 ### Added
 
+- **A door's and window's OverallWidth and OverallHeight are the outline
+  the symbol that draws it cuts in its host (RE-215, #844).** A family
+  instance names its type and, in its `InstanceInfo`, the symbol that draws
+  it. Where the instance's own parameters change the family's geometry, that
+  is a symbol of its own. Revit's exporter sizes a door or window from that
+  symbol, and the extents of the outline it cuts are Revit's `OverallWidth`
+  and `OverallHeight` on every door and window measured: Core Interior's 132
+  doors and 6 windows, RE1 Architecture's 4 doors, and each R2025 model's
+  door and 3 windows. Core Interior's windows, whose type is 1010 mm square,
+  had `$`; they now have Revit's 1500 by 2700 mm. Revit 2024 and 2025 only,
+  and loops of straight lines only. RE1's curtain-wall door has no outline
+  and keeps `$`.
+
+- **`rvt-ifc` honours `SOURCE_DATE_EPOCH`, and CI checks every writer is
+  deterministic (#873).** The time in an IFC's header and owner history was
+  the export's wall-clock time, so two exports of the same file differed.
+  With `SOURCE_DATE_EPOCH` set (Unix seconds, the reproducible-builds
+  convention) `rvt-ifc` records that time instead, and refuses a value that
+  is not a number. A CLI test runs `rvt-ifc`, `rvt-gltf`, `rvt-sheet` and
+  both `rvt-schedule` schedules twice on the same file and requires the same
+  bytes, on the tier-1 synthetic project and on Einhoven where the project
+  corpus is present. The `rvt-ifc` help no longer calls the export
+  document-level only.
+
+- **Every port has Revit's flow direction, name and description (RE-212,
+  #834).** A family instance's HVAC or piping connector takes the Flow
+  Direction its family sets in the connector's own parameters, or, where the
+  family leaves it bidirectional, the direction Revit calculated for the
+  instance's connector. A duct's or pipe's connector takes its calculated
+  direction. A bidirectional connector joined to one with a direction takes
+  the opposite one. On RE1 Plumbing, Mechanical and Electrical that is every
+  one of Revit's 463 ports, where rvt-rs wrote `NOTDEFINED` on all 408 HVAC
+  and piping ports before. Ports are now named `InPort_`, `OutPort_` or
+  `Port_` by their direction and described `Flow`, as Revit names them, and
+  a sink placed at a pipe's end points into it. `SystemType` is still not
+  written.
+
 - **Each GitHub release carries the CLI archives' build provenance as a
   file (#891).** The release workflow already attested the archives; the
   attestation bundle is now also attached as `rvt-rs-vX.Y.Z.intoto.jsonl`,
@@ -77,10 +114,43 @@ All notable changes will be documented here. This project follows
   direction rvt-rs does not read (#834). A duct along one of the model's axes
   has its ports placed the same way, at the centres of its box's faces across
   its length: on RE1 Mechanical all 62 of the ports Revit writes on ducts and
-  pipes are within 0.01 ft of Revit's. Family-instance ports keep no
-  placement, and the no-geometry modes write none.
+  pipes are within 0.01 ft of Revit's. A port joined to a placed duct or
+  pipe port, a family instance's included, is placed at that port's point
+  with its axis, as Revit's export places every port joined to a segment's
+  (#869): all 118 such ports of RE1 Plumbing and all 59 of RE1 Mechanical
+  are within 0.01 ft of Revit's, where none was placed before. Their Z axes,
+  taken from the segment port's, agree with Revit's on 51 and 26 and are
+  opposite on the other 67 and 33; the segment ports' own axes are opposite
+  to Revit's on its `In` ports, whose flow direction rvt-rs does not read
+  (#834). Other family-instance ports keep no placement, and the no-geometry
+  modes write none.
+
+- **Every public type implements `Debug`, as the Rust API Guidelines ask (C-DEBUG).** The 14 element
+  decoders, the three exporters, `corpus::Sample` and `RevitFile` did not.
+  `RevitFile`'s shows the limits it was opened with and how many streams it
+  has inflated, not the file's bytes. The crate now warns on a public type
+  without one (`missing_debug_implementations`), which CI's `-D warnings`
+  makes an error.
 
 ### Fixed
+
+- **A column record holding a NaN no longer panics the export.** The
+  column-cut grid sorted its edges with `partial_cmp(..).expect("finite")`,
+  so a NaN read from a damaged record box stopped the whole export. A
+  column or cutter with a non-finite coordinate now gets no cut box, and the
+  grid sorts with `f64::total_cmp`. 40 other `expect` and `unwrap` calls on file
+  bytes and fixed arrays are gone: those reads go through `first_chunk` or
+  the crate's checked little-endian reader instead.
+
+- **The PyPI page's links work, and it is written for Python users (#905).**
+  PyPI showed the repository README, whose links are relative and resolve
+  under `pypi.org/project/rvt/`, so none reached its document. The page is
+  now `rvt-py/README.md`: install, a short example, what to expect, and
+  absolute links to the Python guide, the support table and the changelog.
+  That file said PyPI shipped 0.1.2 and the crate was not on crates.io; it
+  names no version now. The package's Documentation link opens the Python
+  guide. CI reads the built wheel's description, checks that it is that
+  file with absolute links only, and runs its example.
 
 - **A mass whose "Export to IFC As" names an entity is written as it (#864).**
   rvt-rs read no mass instances. The BIM4LCA office's two `VOLUME` masses
@@ -137,19 +207,16 @@ All notable changes will be documented here. This project follows
 
 ### Changed
 
-- **Breaking: element ids are an `rvt::ElementId` (#873).** The ids the
-  element structs carry (`level_id`, `host_id`, `type_id`, `symbol_id` and
-  the rest, 95 fields), `OpeningHostRelationship::host_element_id` and the
-  arc-wall record's ids are `Option<rvt::ElementId>` where they were
-  `Option<u32>`. `ElementId` wraps the `i64` the Revit API's
-  `ElementId.Value` is, and serialises as the bare number, so the JSON the
-  CLIs print and the Python values are the same integers. `ElementId::from`
-  takes a `u32`, `from_raw` a file's 64-bit slot (0 and values from
-  `u32::MAX` up name no element), `get` gives the value and `as_u32` the
-  stored form. The wire-level views keep the `u32` the file stores:
-  `walker::DecodedElement::id`, `walker::InstanceField::ElementId` and
-  `elem_table::ElemRecord`; `DecodedElement::element_id()` gives the typed
-  id.
+- **The user pages say what rvt-rs does now (#907).** `docs/README.md`
+  indexes `docs/` as user pages, contributor pages and the research record.
+  The user pages lost their backlog ids and planning labels, and the claims
+  those labels sat on are corrected. `validation-evidence.md` described an
+  `ifc-smoke` job that does not exist and unit tests that no longer run; it
+  now describes the IfcOpenShell job's checks, the cross-witness verdict and
+  Measure. `compatibility.md`, `demos.md` and `benchmarks.md` said
+  per-element geometry was not implemented; they now say where it is exact
+  and where a body is a bounding box. The API doc check also reads every
+  user page the index lists.
 
 - **The Python guide's examples run in CI (#872).** The three runnable
   blocks of `docs/python.md` run in order against the synthetic project file
@@ -324,6 +391,15 @@ All notable changes will be documented here. This project follows
   minor one.
 
 ### Research
+
+- **Revit 2015's element GlobalIds are not in the file (RE-208, #878).**
+  On BIMcollab's 2015 example, every element GlobalId in Revit's export has
+  an episode prefix of its own (241 in 241, where Core Interior's 854 fall
+  in 5), so RE-48's history rule cannot rebuild them. A stored IfcGUID
+  parameter holds the last 21 characters of 229 of the 241; their first
+  character, the top two bits, differs every time, and nothing tested in the
+  file sets it. The project, site, building and five storeys are stored
+  exactly, which is the lead for the storeys' GlobalIds.
 
 - **Revit 2015 is scored against Revit 2015's own export (RE-198, #421).**
   BIMcollab's example structural model, a Revit 2015 project, comes with

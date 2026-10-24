@@ -50,10 +50,15 @@ fn refs(args: &str) -> Vec<u64> {
         .collect()
 }
 
-/// The `ElementId` a port's name `Port_<ElementId>_<index>` gives.
+/// The `ElementId` a port's name `InPort_`, `OutPort_` or
+/// `Port_<ElementId>_<index>` gives (RE-212).
 fn port_element(args: &str) -> Option<u32> {
     let name = args.split('\'').nth(3)?;
-    name.strip_prefix("Port_")?.split_once('_')?.0.parse().ok()
+    let rest = name
+        .strip_prefix("InPort_")
+        .or_else(|| name.strip_prefix("OutPort_"))
+        .or_else(|| name.strip_prefix("Port_"))?;
+    rest.split_once('_')?.0.parse().ok()
 }
 
 fn check(rvt: &Path, failures: &mut Vec<String>) -> usize {

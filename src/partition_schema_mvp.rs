@@ -578,7 +578,11 @@ pub fn recover_partition_schema_mvp(
     }
 
     // --- The materials each family type's geometry uses (RE-82, #355) ---
-    let type_materials = crate::partition_type_materials::type_material_names(rf, revit_version);
+    let mut type_materials =
+        crate::partition_type_materials::type_material_names(rf, revit_version);
+    // The map read by name, where the scan also takes a nested component's
+    // materials (RE-203).
+    let partly_unset = refine_type_materials(rf, revit_version, &mut type_materials, &out);
     if !type_materials.is_empty() {
         for elements in [
             &mut out.walls,
@@ -591,18 +595,35 @@ pub fn recover_partition_schema_mvp(
             attach_type_materials(&type_materials, elements);
         }
     }
+    if !partly_unset.is_empty() {
+        let instance_materials =
+            instance_parameter_material_names(rf, revit_version, &partly_unset, &out);
+        for elements in [&mut out.columns, &mut out.products] {
+            attach_partly_unset_materials(&partly_unset, &instance_materials, elements);
+        }
+    }
 
     // --- Family instances whose type draws with no material (RE-149, #355) ---
+    // An instance whose own material parameters name its materials takes
+    // them instead (RE-200).
     let unset_types = crate::partition_type_materials::unset_material_types(rf, revit_version);
     if !unset_types.is_empty() {
+        let instance_materials =
+            instance_parameter_material_names(rf, revit_version, &unset_types, &out);
         for elements in [&mut out.columns, &mut out.products] {
-            attach_unnamed_materials(&unset_types, elements);
+            attach_unnamed_materials(&unset_types, &instance_materials, elements);
         }
+        // The first joined wall's layer on the column's side (RE-202), then
+        // the joined walls' one shared set (#580).
+        attach_first_join_materials(rf, &mut out.columns, &out.walls);
         attach_joined_wall_materials(&mut out.columns, &out.walls);
     }
 
     // --- Curtain mullions' and panels' materials, from their types (RE-166, B66) ---
     attach_curtain_materials(rf, revit_version, &mut out.products);
+
+    // --- Rendered content (RPC, planting) is `<Unnamed>` (RE-202, #355) ---
+    attach_rendered_content_materials(rf, &mut out.products);
 
     // --- Each window's opening from its type and transform (RE-93, #227) ---
     attach_window_openings(rf, revit_version, &mut out.windows);
@@ -611,6 +632,9 @@ pub fn recover_partition_schema_mvp(
     attach_door_openings(rf, revit_version, &mut out.doors);
     // --- Each door's Width and Height from its type (RE-187, #759) ---
     attach_door_sizes(rf, revit_version, &mut out.doors);
+    // --- Each door's and window's size from the outline its symbol cuts
+    // (RE-215, #844) ---
+    attach_cut_loop_sizes(rf, revit_version, [&mut out.doors, &mut out.windows]);
     // --- Steel beams' and columns' I sections from their type (RE-103, RE-104) ---
     attach_beam_sections(rf, revit_version, &mut out.products);
     // --- A wall's and a curtain panel wall's type Function, from its native
@@ -1638,7 +1662,9 @@ fn attach_original_symbols<const N: usize>(
                 if at < p {
                     continue;
                 }
-                let value = u32::from_le_bytes(buf[at..at + 4].try_into().expect("4 bytes"));
+                let Some(value) = crate::le_bytes::u32_at(buf, at) else {
+                    continue;
+                };
                 held.entry(object.element_id)
                     .or_default()
                     .entry(partition)
@@ -1812,6 +1838,7 @@ fn attach_window_openings(rf: &mut RevitFile, revit_version: u32, windows: &mut 
         push_filler_opening(
             element,
             transform,
+            0.0,
             opening.default_sill_feet,
             opening.width_feet,
             opening.height_feet,
@@ -1980,6 +2007,7 @@ fn attach_door_openings(rf: &mut RevitFile, revit_version: u32, doors: &mut [Dec
             element,
             transform,
             0.0,
+            0.0,
             opening.rough_width_feet,
             opening.rough_height_feet,
         );
@@ -2040,11 +2068,111 @@ fn attach_door_sizes(rf: &mut RevitFile, revit_version: u32, doors: &mut [Decode
     }
 }
 
-/// Record on an upright door or window the opening centred on its origin
-/// along its X axis, `base` above the origin ([`FILLER_OPENING_FIELDS`]).
+/// Fields carrying the extent along X and along Z of the outline a door's
+/// or window's symbol cuts in its host (RE-215), feet.
+pub const CUT_LOOP_SIZE_FIELDS: [&str; 2] = ["m_cut_loop_width", "m_cut_loop_height"];
+
+/// Releases a door's or window's cut loop is measured on (RE-215): 2024
+/// (Core Interior) and 2025 (RE1 Architecture, the R2025 models).
+pub const CUT_LOOP_REVIT_VERSIONS: &[u32] = &[2024, 2025];
+
+/// The width and height [`CUT_LOOP_SIZE_FIELDS`] record, feet.
+pub fn cut_loop_size_from_fields(fields: &[(String, InstanceField)]) -> Option<[f64; 2]> {
+    let [width, height] = CUT_LOOP_SIZE_FIELDS.map(|wanted| {
+        fields.iter().find_map(|(name, value)| match value {
+            InstanceField::Float { value, .. } if name == wanted => Some(*value),
+            _ => None,
+        })
+    });
+    Some([width?, height?])
+}
+
+/// Give each door and window the extents of the outline the symbol that
+/// draws it cuts in its host
+/// ([`crate::native_symbol_cuts::instance_cut_loops`]), which Revit's export
+/// writes as its `OverallWidth` and `OverallHeight` (RE-215). A door that is
+/// an opening alone (RE-84) is written as that opening, and gets none.
+fn attach_cut_loop_sizes(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    groups: [&mut Vec<DecodedElement>; 2],
+) {
+    if !CUT_LOOP_REVIT_VERSIONS.contains(&revit_version) {
+        return;
+    }
+    let mut elements: Vec<&mut DecodedElement> = groups
+        .into_iter()
+        .flat_map(|group| group.iter_mut())
+        .filter(|element| {
+            !element
+                .fields
+                .iter()
+                .any(|(name, _)| name == TYPE_WITHOUT_GEOMETRY_FIELD)
+        })
+        .collect();
+    let ids: BTreeSet<u64> = elements
+        .iter()
+        .filter_map(|element| element.id.map(u64::from))
+        .collect();
+    let Ok(loops) = crate::native_symbol_cuts::instance_cut_loops(rf, &ids) else {
+        return;
+    };
+    for element in elements.iter_mut() {
+        let Some(cut) = element.id.and_then(|id| loops.get(&u64::from(id))) else {
+            continue;
+        };
+        for (name, value) in CUT_LOOP_SIZE_FIELDS
+            .iter()
+            .zip([cut.width_feet(), cut.height_feet()])
+        {
+            element
+                .fields
+                .push(((*name).into(), InstanceField::Float { value, size: 8 }));
+        }
+    }
+    // #227: where no opening is read yet, the opening is the loop, carried
+    // by the instance's transform (RE-87); across the wall it keeps the
+    // host's band, which the loop's plane and its mirror bound.
+    let has_opening =
+        |element: &DecodedElement| filler_opening_from_fields(&element.fields).is_some();
+    let open: BTreeSet<u32> = elements
+        .iter()
+        .filter(|element| !has_opening(element))
+        .filter_map(|element| element.id)
+        .filter(|id| loops.contains_key(&u64::from(*id)))
+        .collect();
+    if open.is_empty() {
+        return;
+    }
+    let Ok(transforms) =
+        crate::partition_instance_transforms::scan_instance_transforms(rf, revit_version, &open)
+    else {
+        return;
+    };
+    for element in elements.iter_mut() {
+        let Some(id) = element.id.filter(|id| open.contains(id)) else {
+            continue;
+        };
+        let (Some(cut), Some(transform)) = (loops.get(&u64::from(id)), transforms.get(&id)) else {
+            continue;
+        };
+        push_filler_opening(
+            element,
+            transform,
+            (cut.min[0] + cut.max[0]) / 2.0,
+            cut.min[2],
+            cut.width_feet(),
+            cut.height_feet(),
+        );
+    }
+}
+
+/// Record on an upright door or window the opening centred `along` its X
+/// axis from its origin, `base` above the origin ([`FILLER_OPENING_FIELDS`]).
 fn push_filler_opening(
     element: &mut DecodedElement,
     transform: &crate::partition_instance_transforms::InstanceTransform,
+    along: f64,
     base: f64,
     width: f64,
     height: f64,
@@ -2056,7 +2184,15 @@ fn push_filler_opening(
         return;
     };
     let [ox, oy, oz] = transform.origin;
-    let values = [ox, oy, ax, ay, oz + base, width, height];
+    let values = [
+        ox + ax * along,
+        oy + ay * along,
+        ax,
+        ay,
+        oz + base,
+        width,
+        height,
+    ];
     for (name, value) in FILLER_OPENING_FIELDS.iter().zip(values) {
         element
             .fields
@@ -2145,12 +2281,198 @@ fn attach_type_materials(materials: &BTreeMap<u32, Vec<String>>, elements: &mut 
     }
 }
 
+/// Replace each family type's scanned materials with those its native
+/// `m_geomTag2MaterialId` names ([`crate::native_type_materials`], RE-203)
+/// where that names any and every one is named, for the types of columns,
+/// doors, windows and products. The scanned order is kept where the two
+/// name the same set. Returns the replaced types that also map geometry to
+/// no material that their family shows ([`crate::native_family_forms`]),
+/// whose instances take their own material parameters' or
+/// `<Unnamed>` for it ([`attach_partly_unset_materials`]). Left as scanned
+/// where the native record path or the material names are not read.
+fn refine_type_materials(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    type_materials: &mut BTreeMap<u32, Vec<String>>,
+    out: &PartitionSchemaMvp,
+) -> BTreeSet<u32> {
+    let mut partly_unset = BTreeSet::new();
+    if type_materials.is_empty() {
+        return partly_unset;
+    }
+    let types: BTreeSet<u64> = out
+        .columns
+        .iter()
+        .chain(&out.doors)
+        .chain(&out.windows)
+        .chain(&out.products)
+        .filter_map(|element| {
+            element.fields.iter().find_map(|(name, value)| match value {
+                InstanceField::ElementId { id, .. } if name == TYPE_ID_FIELD => {
+                    Some(u64::from(*id))
+                }
+                _ => None,
+            })
+        })
+        .collect();
+    let Ok(records) = crate::elem_table::parse_records(rf) else {
+        return partly_unset;
+    };
+    let declared = crate::elem_table::declared_ids(&records);
+    let Ok(names) = crate::partition_materials::scan_material_names(rf, revit_version, &declared)
+    else {
+        return partly_unset;
+    };
+    let materials: BTreeSet<u32> = names.keys().copied().collect();
+    let Ok(found) = crate::native_type_materials::geometry_materials(rf, &types, &materials) else {
+        return partly_unset;
+    };
+    // A family whose geometry with no material is all hidden or void has
+    // no `<Unnamed>` in Revit's export (RE-204), and a material only its
+    // hidden forms have is not exported (RE-205).
+    let families: BTreeSet<u64> = found.values().filter_map(|found| found.family).collect();
+    let forms = crate::native_family_forms::family_forms(rf, &families).unwrap_or_default();
+    for (type_id, found) in found {
+        let Ok(type_id) = u32::try_from(type_id) else {
+            continue;
+        };
+        let family = found.family.and_then(|family| forms.get(&family));
+        let ids: Vec<u32> = found
+            .materials
+            .iter()
+            .copied()
+            .filter(|id| !family.is_some_and(|family| family.hidden_only.contains(id)))
+            .collect();
+        let shown = family.and_then(|family| family.shows_unset).unwrap_or(true);
+        if ids.is_empty() {
+            // Only hidden forms had materials: what is shown is the
+            // geometry with none (RE-206).
+            if found.unset && shown {
+                type_materials.insert(
+                    type_id,
+                    vec![crate::partition_type_materials::UNNAMED_MATERIAL.to_string()],
+                );
+            }
+            continue;
+        }
+        let resolved: Vec<String> = ids.iter().filter_map(|id| names.get(id).cloned()).collect();
+        if resolved.len() != ids.len() {
+            continue;
+        }
+        let scanned = type_materials.entry(type_id).or_default();
+        let same: BTreeSet<&String> = scanned.iter().collect();
+        if found.unset && shown {
+            partly_unset.insert(type_id);
+        }
+        if found.unset || same != resolved.iter().collect::<BTreeSet<_>>() {
+            *scanned = resolved;
+        }
+    }
+    partly_unset
+}
+
+/// Give each instance of a type in `partly_unset`, which maps some geometry
+/// to no material, the materials its own material parameters name
+/// (`instance_materials`, RE-200), or else `<Unnamed>` (RE-149), alongside
+/// its type's (RE-203): Revit's export does, on Snowdon Towers' 31 "Sink
+/// Vanity-Round", 21 refrigerators, 21 washer-dryers and RE1
+/// Architecture's microwave.
+fn attach_partly_unset_materials(
+    partly_unset: &BTreeSet<u32>,
+    instance_materials: &BTreeMap<u32, Vec<String>>,
+    elements: &mut [DecodedElement],
+) {
+    for element in elements.iter_mut() {
+        let type_id = element.fields.iter().find_map(|(name, value)| match value {
+            InstanceField::ElementId { id, .. } if name == TYPE_ID_FIELD => Some(*id),
+            _ => None,
+        });
+        if !type_id.is_some_and(|id| partly_unset.contains(&id)) {
+            continue;
+        }
+        let names = element
+            .id
+            .and_then(|id| instance_materials.get(&id))
+            .cloned()
+            .unwrap_or_else(|| vec![crate::partition_type_materials::UNNAMED_MATERIAL.into()]);
+        for name in names {
+            let present = element.fields.iter().any(|(field, value)| {
+                field == TYPE_MATERIAL_FIELD
+                    && matches!(value, InstanceField::String(s) if *s == name)
+            });
+            if !present {
+                element
+                    .fields
+                    .push((TYPE_MATERIAL_FIELD.into(), InstanceField::String(name)));
+            }
+        }
+    }
+}
+
+/// The material names the instance parameters of each column and product
+/// whose type is one of `unset_types` give it, by the instance's ElementId
+/// ([`crate::native_instance_materials`], RE-200). Empty where the native
+/// record path or the material names are not read.
+fn instance_parameter_material_names(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    unset_types: &BTreeSet<u32>,
+    out: &PartitionSchemaMvp,
+) -> BTreeMap<u32, Vec<String>> {
+    let instances: BTreeSet<u64> = out
+        .columns
+        .iter()
+        .chain(&out.products)
+        .filter(|element| {
+            element.fields.iter().any(|(name, value)| {
+                matches!(value, InstanceField::ElementId { id, .. }
+                    if name == TYPE_ID_FIELD && unset_types.contains(id))
+            })
+        })
+        .filter_map(|element| element.id.map(u64::from))
+        .collect();
+    if instances.is_empty() {
+        return BTreeMap::new();
+    }
+    let Ok(records) = crate::elem_table::parse_records(rf) else {
+        return BTreeMap::new();
+    };
+    let declared = crate::elem_table::declared_ids(&records);
+    let Ok(names) = crate::partition_materials::scan_material_names(rf, revit_version, &declared)
+    else {
+        return BTreeMap::new();
+    };
+    let materials: BTreeSet<u32> = names.keys().copied().collect();
+    let Ok(found) =
+        crate::native_instance_materials::instance_parameter_materials(rf, &instances, &materials)
+    else {
+        return BTreeMap::new();
+    };
+    found
+        .into_iter()
+        .filter_map(|(instance, ids)| {
+            let instance = u32::try_from(instance).ok()?;
+            let resolved: Vec<String> =
+                ids.iter().filter_map(|id| names.get(id).cloned()).collect();
+            // Every value named, or none taken: a set missing a material
+            // would be a wrong set, where `<Unnamed>` is Revit's fallback.
+            (resolved.len() == ids.len()).then_some((instance, resolved))
+        })
+        .collect()
+}
+
 /// Give each element whose type draws its geometry with no material of its
-/// own, and that has no type material yet, the material Revit's export
-/// writes for such geometry, [`crate::partition_type_materials::UNNAMED_MATERIAL`]
-/// (RE-149). Doors, windows, walls and slabs are left alone: a door or
-/// window type without a material map is written as its opening (RE-84).
-fn attach_unnamed_materials(unset_types: &BTreeSet<u32>, elements: &mut [DecodedElement]) {
+/// own, and that has no type material yet, the materials its own material
+/// parameters name (`instance_materials`, RE-200), or else the material
+/// Revit's export writes for such geometry,
+/// [`crate::partition_type_materials::UNNAMED_MATERIAL`] (RE-149). Doors,
+/// windows, walls and slabs are left alone: a door or window type without a
+/// material map is written as its opening (RE-84).
+fn attach_unnamed_materials(
+    unset_types: &BTreeSet<u32>,
+    instance_materials: &BTreeMap<u32, Vec<String>>,
+    elements: &mut [DecodedElement],
+) {
     for element in elements.iter_mut() {
         if element
             .fields
@@ -2171,10 +2493,16 @@ fn attach_unnamed_materials(unset_types: &BTreeSet<u32>, elements: &mut [Decoded
             element
                 .fields
                 .retain(|(name, _)| name != TYPE_WITHOUT_GEOMETRY_FIELD);
-            element.fields.push((
-                TYPE_MATERIAL_FIELD.into(),
-                InstanceField::String(crate::partition_type_materials::UNNAMED_MATERIAL.into()),
-            ));
+            let names = element
+                .id
+                .and_then(|id| instance_materials.get(&id))
+                .cloned()
+                .unwrap_or_else(|| vec![crate::partition_type_materials::UNNAMED_MATERIAL.into()]);
+            for name in names {
+                element
+                    .fields
+                    .push((TYPE_MATERIAL_FIELD.into(), InstanceField::String(name)));
+            }
         }
     }
 }
@@ -2206,11 +2534,12 @@ fn attach_curtain_materials(
         return;
     };
     for element in products.iter_mut().filter(|element| is_part(element)) {
-        if element
-            .fields
-            .iter()
-            .any(|(name, _)| name == TYPE_MATERIAL_FIELD)
-        {
+        // A part whose type's map holds only unset values has `<Unnamed>`
+        // (#580); its type's own material replaces it (RE-201).
+        if element.fields.iter().any(|(name, value)| {
+            name == TYPE_MATERIAL_FIELD
+                && !matches!(value, InstanceField::String(s) if s == crate::partition_type_materials::UNNAMED_MATERIAL)
+        }) {
             continue;
         }
         let type_id = element.fields.iter().find_map(|(name, value)| match value {
@@ -2223,10 +2552,205 @@ fn attach_curtain_materials(
         else {
             continue;
         };
+        element
+            .fields
+            .retain(|(field, _)| field != TYPE_MATERIAL_FIELD);
         element.fields.push((
             TYPE_MATERIAL_FIELD.into(),
             InstanceField::String(name.clone()),
         ));
+    }
+}
+
+/// Whether `element`'s only type material is
+/// [`crate::partition_type_materials::UNNAMED_MATERIAL`].
+fn has_unnamed_material_only(element: &DecodedElement) -> bool {
+    use crate::partition_type_materials::UNNAMED_MATERIAL;
+    let mut materials = element
+        .fields
+        .iter()
+        .filter(|(name, _)| name == TYPE_MATERIAL_FIELD)
+        .peekable();
+    materials.peek().is_some()
+        && materials
+            .all(|(_, value)| matches!(value, InstanceField::String(s) if s == UNNAMED_MATERIAL))
+}
+
+/// Replace `element`'s type materials with `names`.
+fn set_type_materials(element: &mut DecodedElement, names: Vec<String>) {
+    element
+        .fields
+        .retain(|(name, _)| name != TYPE_MATERIAL_FIELD);
+    for name in names {
+        element
+            .fields
+            .push((TYPE_MATERIAL_FIELD.into(), InstanceField::String(name)));
+    }
+}
+
+/// A column with only `<Unnamed>` takes a layer of the wall it was first
+/// joined to (RE-202, #355; [`crate::native_column_joins`]): the first join
+/// among the walls that overlap it ([`COLUMN_JOINED_WALL_FIELD`]) where any
+/// do, so that a foundation wall below it is passed over (RE-205). Its
+/// exterior layer where the column stands out past both of the wall's faces
+/// or its box centre is on the wall's exterior side, the interior layer
+/// otherwise. Revit's export gives all 108 of Snowdon Towers' off-centre
+/// columns that layer. The rule for a column past both faces rests on one
+/// column whose wall's two faces differ (1366814): the other 50 such columns
+/// are in walls with the same material on both faces. A column whose wall is
+/// not straight, or whose layer on that side has no named material, is left
+/// alone.
+///
+/// [`COLUMN_JOINED_WALL_FIELD`]: crate::element_record_column_cuts::COLUMN_JOINED_WALL_FIELD
+fn attach_first_join_materials(
+    rf: &mut RevitFile,
+    columns: &mut [DecodedElement],
+    walls: &[DecodedElement],
+) {
+    use crate::element_record_column_cuts::COLUMN_JOINED_WALL_FIELD;
+    use crate::element_record_wall_joins::WALL_THICKNESS_FIELD;
+    use crate::native_column_joins as joins;
+    let float = |element: &DecodedElement, wanted: &str| {
+        element.fields.iter().find_map(|(name, value)| match value {
+            InstanceField::Float { value, .. } if name == wanted => Some(*value),
+            _ => None,
+        })
+    };
+    let ids: BTreeSet<u64> = columns
+        .iter()
+        .filter(|column| has_unnamed_material_only(column))
+        .filter_map(|column| column.id.map(u64::from))
+        .collect();
+    let Ok(joined) = joins::joins(rf, &ids) else {
+        return;
+    };
+    let first: BTreeMap<u64, u64> = columns
+        .iter()
+        .filter_map(|column| {
+            let id = u64::from(column.id?);
+            let order = joined.get(&id)?;
+            let overlapping: BTreeSet<u64> = column
+                .fields
+                .iter()
+                .filter_map(|(name, value)| match value {
+                    InstanceField::ElementId { id, .. } if name == COLUMN_JOINED_WALL_FIELD => {
+                        Some(u64::from(*id))
+                    }
+                    _ => None,
+                })
+                .collect();
+            let wall = order
+                .iter()
+                .find(|wall| overlapping.contains(wall))
+                .or_else(|| order.first())?;
+            Some((id, *wall))
+        })
+        .collect();
+    // Each wall's layers, thickness and centreline point (RE-54).
+    struct WallData {
+        layers: Vec<Option<String>>,
+        thickness: Option<f64>,
+        axis: Option<[f64; 2]>,
+    }
+    let wall_data: BTreeMap<u64, WallData> = walls
+        .iter()
+        .filter_map(|wall| {
+            let id = u64::from(wall.id?);
+            if !first.values().any(|joined| *joined == id) {
+                return None;
+            }
+            let bands = wall
+                .fields
+                .iter()
+                .find_map(|(name, value)| (name == WALL_LAYERS_FIELD).then_some(value))
+                .and_then(layer_bands_from_field)?;
+            let names: Vec<Option<String>> = bands.into_iter().map(|band| band.name).collect();
+            let [ax, ay] = WALL_AXIS_START_FIELDS.map(|name| float(wall, name));
+            let axis = ax.zip(ay).map(|(x, y)| [x, y]);
+            (!names.is_empty()).then_some((
+                id,
+                WallData {
+                    layers: names,
+                    thickness: float(wall, WALL_THICKNESS_FIELD),
+                    axis,
+                },
+            ))
+        })
+        .collect();
+    let Ok(sides) = joins::wall_sides(rf, &wall_data.keys().copied().collect()) else {
+        return;
+    };
+    for column in columns.iter_mut() {
+        let Some(id) = column.id.map(u64::from) else {
+            continue;
+        };
+        let Some(wall) = first.get(&id) else {
+            continue;
+        };
+        let (Some(x), Some(y)) = (float(column, "m_locationX"), float(column, "m_locationY"))
+        else {
+            continue;
+        };
+        let (Some(data), Some(side)) = (wall_data.get(wall), sides.get(wall)) else {
+            continue;
+        };
+        let (layers, thickness, axis) = (&data.layers, data.thickness, data.axis);
+        // How far the column's box reaches each way across the wall.
+        let reach = match (float(column, "m_bboxWidth"), float(column, "m_bboxDepth")) {
+            (Some(width), Some(depth)) => {
+                (side.exterior[0].abs() * width + side.exterior[1].abs() * depth) / 2.0
+            }
+            _ => 0.0,
+        };
+        let centre = side.offset([x, y], axis.unwrap_or(side.origin));
+        let past_both = thickness.is_some_and(|thickness| {
+            axis.is_some() && centre - reach < -thickness / 2.0 && centre + reach > thickness / 2.0
+        });
+        let layer = if past_both || side.is_exterior([x, y]) {
+            layers.first()
+        } else {
+            layers.last()
+        };
+        if let Some(Some(layer)) = layer {
+            set_type_materials(column, vec![layer.clone()]);
+        }
+    }
+}
+
+/// An instance of rendered content (a family whose
+/// `Family.m_eRenderModelType` is 4: RPC people and plants, Snowdon Towers'
+/// Honey-Locust trees) has the one material `<Unnamed>`, as Revit's export
+/// writes it (RE-202, #355; [`crate::native_rendered_content`]).
+fn attach_rendered_content_materials(rf: &mut RevitFile, products: &mut [DecodedElement]) {
+    use crate::partition_type_materials::UNNAMED_MATERIAL;
+    let type_of = |element: &DecodedElement| {
+        element.fields.iter().find_map(|(name, value)| match value {
+            InstanceField::ElementId { id, .. } if name == TYPE_ID_FIELD => Some(u64::from(*id)),
+            _ => None,
+        })
+    };
+    let types: BTreeSet<u64> = products
+        .iter()
+        .filter(|element| {
+            element
+                .fields
+                .iter()
+                .any(|(name, _)| name == TYPE_MATERIAL_FIELD)
+        })
+        .filter_map(type_of)
+        .collect();
+    let Ok(rendered) = crate::native_rendered_content::rendered_content_types(rf, &types) else {
+        return;
+    };
+    for element in products.iter_mut() {
+        if type_of(element).is_some_and(|id| rendered.contains(&id))
+            && element
+                .fields
+                .iter()
+                .any(|(name, _)| name == TYPE_MATERIAL_FIELD)
+        {
+            set_type_materials(element, vec![UNNAMED_MATERIAL.to_string()]);
+        }
     }
 }
 
@@ -5755,7 +6279,8 @@ fn scan_curtain_grid_walls(
     };
     let u64_at = |buf: &[u8], at: usize| {
         buf.get(at..at.checked_add(8)?)
-            .map(|b| u64::from_le_bytes(b.try_into().expect("8 bytes")))
+            .and_then(|b| b.first_chunk::<8>())
+            .map(|b| u64::from_le_bytes(*b))
     };
     let mut found: BTreeMap<u32, Option<u32>> = BTreeMap::new();
     for stream in rf.partition_stream_names() {

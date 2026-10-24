@@ -148,6 +148,7 @@
 //! advice.
 
 #![warn(rust_2024_compatibility)]
+#![warn(missing_debug_implementations)]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 // SEC-11 + SEC-12 + SEC-13: forbid `unsafe` in the core library.
 // Revit files come from untrusted sources, so any raw-pointer or
@@ -213,21 +214,23 @@ mod research;
 pub(crate) use research::{
     class_tag_map, compound_framing, element_record_beam_cuts, element_record_column_cuts,
     element_record_level_refs, element_record_plan_profiles, element_record_storeys,
-    element_record_wall_joins, es_refs, evidence, identity, native_connectors, native_document,
-    native_duct_shapes, native_element, native_empty_faces, native_es_catalog,
-    native_extensible_storage, native_graphics_traversal, native_index, native_metadata,
+    element_record_wall_joins, es_refs, evidence, identity, native_column_joins, native_connectors,
+    native_document, native_duct_shapes, native_element, native_element_parameters,
+    native_empty_faces, native_es_catalog, native_extensible_storage, native_family_forms,
+    native_graphics_traversal, native_index, native_instance_materials, native_metadata,
     native_parameter_definitions, native_parameters, native_parametric_mesh,
-    native_parametric_surface, native_saved_glb, native_saved_materials, native_saved_mesh,
-    native_saved_scene, native_segments, native_wall_types, partition_arc_walls,
-    partition_area_records, partition_beam_axes, partition_column_nodes,
-    partition_compound_structure, partition_connector_pairs, partition_curtain_materials,
-    partition_curve_fields, partition_design_options, partition_element_records,
-    partition_element_records_2023, partition_fitting_sizes, partition_id_objects,
-    partition_ifc_export_overrides, partition_instance_transforms, partition_level_parameters,
-    partition_level_records, partition_materials, partition_mep_systems, partition_name_candidates,
-    partition_names, partition_phases, partition_pipe_axes, partition_roof_slopes,
-    partition_room_boundaries, partition_room_parameters, partition_scanner, partition_schema_mvp,
-    partition_stairs, partition_type_materials, partition_type_parameters, partition_type_records,
+    native_parametric_surface, native_rendered_content, native_saved_glb, native_saved_materials,
+    native_saved_mesh, native_saved_scene, native_segments, native_symbol_cuts,
+    native_type_materials, native_wall_types, partition_arc_walls, partition_area_records,
+    partition_beam_axes, partition_column_nodes, partition_compound_structure,
+    partition_connector_pairs, partition_curtain_materials, partition_curve_fields,
+    partition_design_options, partition_element_records, partition_element_records_2023,
+    partition_fitting_sizes, partition_id_objects, partition_ifc_export_overrides,
+    partition_instance_transforms, partition_level_parameters, partition_level_records,
+    partition_materials, partition_mep_systems, partition_name_candidates, partition_names,
+    partition_phases, partition_pipe_axes, partition_roof_slopes, partition_room_boundaries,
+    partition_room_parameters, partition_scanner, partition_schema_mvp, partition_stairs,
+    partition_type_materials, partition_type_parameters, partition_type_records,
     rect_opening_index, relations, revit_global_ids, schema_registry,
 };
 

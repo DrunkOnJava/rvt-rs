@@ -159,6 +159,7 @@ impl WallFunction {
 }
 
 /// Registered decoder for the `Wall` class.
+#[derive(Debug)]
 pub struct WallDecoder;
 
 impl ElementDecoder for WallDecoder {
@@ -195,6 +196,7 @@ impl ElementDecoder for WallDecoder {
 }
 
 /// Registered decoder for the `WallType` class.
+#[derive(Debug)]
 pub struct WallTypeDecoder;
 
 impl ElementDecoder for WallTypeDecoder {

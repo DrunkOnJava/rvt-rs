@@ -45,6 +45,7 @@ use crate::walker::{DecodedElement, ElementDecoder, HandleIndex, InstanceField};
 use crate::{Error, Result};
 
 /// Registered decoder for the `Door` class.
+#[derive(Debug)]
 pub struct DoorDecoder;
 
 impl ElementDecoder for DoorDecoder {
@@ -81,6 +82,7 @@ impl ElementDecoder for DoorDecoder {
 }
 
 /// Registered decoder for the `Window` class.
+#[derive(Debug)]
 pub struct WindowDecoder;
 
 impl ElementDecoder for WindowDecoder {

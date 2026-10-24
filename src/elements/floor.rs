@@ -62,6 +62,7 @@ impl FloorFunction {
 }
 
 /// Registered decoder for the `Floor` class.
+#[derive(Debug)]
 pub struct FloorDecoder;
 
 impl ElementDecoder for FloorDecoder {
@@ -98,6 +99,7 @@ impl ElementDecoder for FloorDecoder {
 }
 
 /// Registered decoder for the `FloorType` class.
+#[derive(Debug)]
 pub struct FloorTypeDecoder;
 
 impl ElementDecoder for FloorTypeDecoder {

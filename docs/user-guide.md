@@ -222,6 +222,43 @@ where its outline was read from the solid Revit stores for it (RE-101); a
 room that keeps its bounding box has an empty area, since the area of a box
 is not the area of a room.
 
+The columns, in order. Lengths are in feet; with `--metric` they are in
+metres and `_ft` in a column's name becomes `_m`. A later release may add
+columns after these, but will not rename, drop or reorder one without
+calling it a breaking change.
+
+<!-- element-columns -->
+| Column | What it holds |
+|---|---|
+| `revit_element_id` | The element's Revit ElementId |
+| `ifc_type` | The IFC entity it is exported as, as the STEP file spells it, such as `IFCWALL` |
+| `predefined_type` | The IFC predefined type, where one is set |
+| `name` | The element's name |
+| `level` | The name of its level |
+| `level_elevation_ft` | That level's elevation |
+| `material` | Its material's name; for a layered wall, floor, roof or ceiling, the name of its layer set (its `Family:Type`); for a family instance of several materials, their names separated by `; ` |
+| `x_ft` | Placement, x |
+| `y_ft` | Placement, y |
+| `z_ft` | Placement, z |
+| `rotation_deg` | Its rotation in plan, in degrees |
+| `width_ft` | Width of a body written as a plain extrusion of a rectangle; empty for every other body, placed extrusions such as stair runs, sloped beams and turned boxes included |
+| `depth_ft` | Depth of the same rectangle |
+| `height_ft` | Height of a body written as a plain extrusion; empty otherwise |
+| `host_revit_element_id` | The ElementId of a door's or window's host |
+| `body_source` | Where the body came from, such as `partition_element_record_bbox` (the record's box) or `partition_wall_centreline` |
+| `profile_resolved` | `true` where the body's shape was read from the file (a sketch, a type's section, a beam's or pipe's axis, a stair run, a wall's centreline or arc, an I-column's section), `false` where none of those did. A `false` body can still be cut: a joined column's top or bottom moves to the cut |
+
+<!-- room-columns -->
+| Column | What it holds |
+|---|---|
+| `revit_element_id` | The room's Revit ElementId |
+| `number` | The room number |
+| `name` | The room name |
+| `level` | The name of its level |
+| `level_elevation_ft` | That level's elevation |
+| `area_ft2` | Plan area, where the room's outline was read |
+| `body_source` | Where the room's solid came from |
+
 What the schedules contain is exactly what rvt-rs decodes, so check
 `rvt-inspect model.rvt` first: Revit 2024 project files with element
 records give walls, doors, windows, columns, slabs and rooms; other files
@@ -287,6 +324,14 @@ Export modes:
 
 If strict mode fails, read the diagnostics JSON. The failure may mean the file is
 valid Revit but outside the current rvt-rs support profile.
+
+Two exports of the same file are the same bytes except for the export time,
+which the IFC header and owner history record. Set `SOURCE_DATE_EPOCH` (Unix
+seconds) to fix it, for example to keep an exported IFC under version control:
+
+```bash
+SOURCE_DATE_EPOCH=1700000000 rvt-ifc model.rvt -o model.ifc
+```
 
 ## Understand Warnings
 

@@ -250,9 +250,11 @@ pub fn solid_headers_by_id(buf: &[u8]) -> BTreeMap<u64, Vec<usize>> {
         let direct = tag.checked_sub(8);
         let after_ff = tag
             .checked_sub(12)
-            .filter(|&header| buf[header + 8..tag] == [0xff; 4]);
+            .filter(|&header| buf.get(header + 8..tag) == Some(&[0xff; 4][..]));
         for header in [direct, after_ff].into_iter().flatten() {
-            let id = u64::from_le_bytes(buf[header..header + 8].try_into().expect("8 bytes"));
+            let Some(id) = crate::le_bytes::u64_at(buf, header) else {
+                continue;
+            };
             out.entry(id).or_default().push(header);
         }
     }
