@@ -8,17 +8,18 @@ All notable changes will be documented here. This project follows
 
 ### Added
 
-- **A Revit 2025 roof by extrusion has its shape (RE-211, #883).** Its
-  sketch is a B-spline in a vertical plane, now read: its degree, weighted
-  control points and knots. That curve is the roof's top. The type's
-  thickness, square to it, gives the underside, both ends are cut plumb, and
-  the section runs across the record box, which it must reproduce. On
-  `11_RoofByExtrusion` in puzzbobb's Revit 2025 models every vertex of
-  Revit's body is within 0.001 ft of rvt-rs's (0.000524 ft at most), and the
-  volume within 0.03%, where it was the 7,665 ft³ record box. That makes 19
-  of the 19 roofs in those models. A roof by extrusion on another release,
-  or one whose sketch holds an arc, keeps its box. `roof_bodies_vs_ifc` also
-  measures Revit's vertices against rvt-rs's surface.
+- **A door's and window's OverallWidth and OverallHeight are the outline
+  the symbol that draws it cuts in its host (RE-215, #844).** A family
+  instance names its type and, in its `InstanceInfo`, the symbol that draws
+  it. Where the instance's own parameters change the family's geometry, that
+  is a symbol of its own. Revit's exporter sizes a door or window from that
+  symbol, and the extents of the outline it cuts are Revit's `OverallWidth`
+  and `OverallHeight` on every door and window measured: Core Interior's 132
+  doors and 6 windows, RE1 Architecture's 4 doors, and each R2025 model's
+  door and 3 windows. Core Interior's windows, whose type is 1010 mm square,
+  had `$`; they now have Revit's 1500 by 2700 mm. Revit 2024 and 2025 only,
+  and loops of straight lines only. RE1's curtain-wall door has no outline
+  and keeps `$`.
 
 - **`rvt-ifc` honours `SOURCE_DATE_EPOCH`, and CI checks every writer is
   deterministic (#873).** The time in an IFC's header and owner history was

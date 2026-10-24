@@ -21,7 +21,7 @@ mkdir -p "$TARGET/bimcollab"
 while IFS=$'\t' read -r kind name source sha bytes; do
   case "$kind" in
     archive)
-      if ! curl -fsSL --retry 3 --retry-delay 5 --max-time 900 -o "$work/$name.zip" "$source"; then
+      if ! curl -fsSL --retry 3 --retry-all-errors --retry-delay 5 --max-time 900 -o "$work/$name.zip" "$source"; then
         echo "could not download $source"
         exit 2
       fi
