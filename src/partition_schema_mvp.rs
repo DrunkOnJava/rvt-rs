@@ -2078,6 +2078,21 @@ fn attach_door_sizes(rf: &mut RevitFile, revit_version: u32, doors: &mut [Decode
 /// or window's symbol cuts in its host (RE-215), feet.
 pub const CUT_LOOP_SIZE_FIELDS: [&str; 2] = ["m_cut_loop_width", "m_cut_loop_height"];
 
+/// Fields carrying a door's or window's record box extent along its own X
+/// axis and its height, where its symbol cuts no loop (#810), feet.
+pub const INSTANCE_BOX_SIZE_FIELDS: [&str; 2] = ["m_instance_box_width", "m_instance_box_height"];
+
+/// The width and height [`INSTANCE_BOX_SIZE_FIELDS`] record, feet.
+pub fn instance_box_size_from_fields(fields: &[(String, InstanceField)]) -> Option<[f64; 2]> {
+    let [width, height] = INSTANCE_BOX_SIZE_FIELDS.map(|wanted| {
+        fields.iter().find_map(|(name, value)| match value {
+            InstanceField::Float { value, .. } if name == wanted => Some(*value),
+            _ => None,
+        })
+    });
+    Some([width?, height?])
+}
+
 /// Releases a door's or window's cut loop is measured on (RE-215): 2024
 /// (Core Interior) and 2025 (RE1 Architecture, the R2025 models).
 pub const CUT_LOOP_REVIT_VERSIONS: &[u32] = &[2024, 2025];
@@ -2147,14 +2162,57 @@ fn attach_cut_loop_sizes(
         .filter_map(|element| element.id)
         .filter(|id| loops.contains_key(&u64::from(*id)))
         .collect();
-    if open.is_empty() {
+    let loopless: BTreeSet<u32> = elements
+        .iter()
+        .filter_map(|element| element.id)
+        .filter(|id| !loops.contains_key(&u64::from(*id)))
+        .collect();
+    if open.is_empty() && loopless.is_empty() {
         return;
     }
-    let Ok(transforms) =
-        crate::partition_instance_transforms::scan_instance_transforms(rf, revit_version, &open)
-    else {
+    let Ok(transforms) = crate::partition_instance_transforms::scan_instance_transforms(
+        rf,
+        revit_version,
+        &open.union(&loopless).copied().collect(),
+    ) else {
         return;
     };
+    // #810: a door or window whose symbol cuts no loop is sized by its
+    // record box, along its own X axis and through its height, as Revit's
+    // export sizes it: all 269 windows of the BIM4LCA office. An instance
+    // turned off the model's axes, whose box is not along its own, gets no
+    // size.
+    for element in elements.iter_mut() {
+        let Some(id) = element.id.filter(|id| loopless.contains(id)) else {
+            continue;
+        };
+        let (Some(transform), Some(bbox)) = (transforms.get(&id), element_record_bbox(element))
+        else {
+            continue;
+        };
+        if !transform.is_upright() {
+            continue;
+        }
+        let Some([ax, ay]) = transform.plan_axis() else {
+            continue;
+        };
+        let width = if (ax.abs() - 1.0).abs() <= INSTANCE_AXIS_TOLERANCE {
+            bbox[3] - bbox[0]
+        } else if (ay.abs() - 1.0).abs() <= INSTANCE_AXIS_TOLERANCE {
+            bbox[4] - bbox[1]
+        } else {
+            continue;
+        };
+        let height = bbox[5] - bbox[2];
+        if !(width > 0.0 && height > 0.0) {
+            continue;
+        }
+        for (name, value) in INSTANCE_BOX_SIZE_FIELDS.iter().zip([width, height]) {
+            element
+                .fields
+                .push(((*name).into(), InstanceField::Float { value, size: 8 }));
+        }
+    }
     for element in elements.iter_mut() {
         let Some(id) = element.id.filter(|id| open.contains(id)) else {
             continue;
@@ -2172,6 +2230,10 @@ fn attach_cut_loop_sizes(
         );
     }
 }
+
+/// How closely an instance's plan X axis must lie along a model axis for
+/// its record box to be along its own axes (#810).
+pub const INSTANCE_AXIS_TOLERANCE: f64 = 1e-6;
 
 /// Record on an upright door or window the opening centred `along` its X
 /// axis from its origin, `base` above the origin ([`FILLER_OPENING_FIELDS`]).
