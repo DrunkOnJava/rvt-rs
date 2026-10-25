@@ -4,11 +4,15 @@ rvt-rs draws as its record box, per IFC class (W6 census).
 
 For each element of an rvt-rs IFC whose `BodySource` is
 `partition_element_record_bbox`, the element with the same `Tag` in
-Revit's export is meshed (world coordinates) and its volume divided by the
-volume of its axis-aligned box. A fill of 100% means Revit's body is a box
-along the model axes, so a record box with Revit's extents is already its
-shape; less means the shape is not decoded. The ratio needs no coordinate
-transform, so it also reads exports in shared coordinates.
+Revit's export is meshed in its own placement's frame and its volume
+divided by the volume of its bounding box in that frame. A fill of 100%
+means Revit's body is a box along the element's own axes, so a record box
+with Revit's extents is already its shape (for an element whose axes are
+the model's, as most are; RE-106 turns the others); less means the shape
+is not decoded. The element's own frame keeps the ratio independent of
+the export's coordinate system: an export in shared coordinates turns
+every element, and a box's world-axis bounding box then holds far more
+than the box.
 
 Buckets: `box` (fill within 0.5% of 100%), `90%`, `50%`, `<50%`, `>100%`
 (a fill over 100.5%: overlapping solids or an open mesh, so the volume is
@@ -48,7 +52,6 @@ def fills(path, tags):
     """Tag -> volume / bounding-box volume of Revit's body."""
     model = ifcopenshell.open(path)
     settings = ifcopenshell.geom.settings()
-    settings.set("use-world-coords", True)
     elements = [
         e
         for e in model.by_type("IfcElement")
