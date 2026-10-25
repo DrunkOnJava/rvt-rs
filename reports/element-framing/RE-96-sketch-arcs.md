@@ -55,3 +55,12 @@ python3 tools/re/plan_profiles_vs_ifc.py model.ifc "Snowdon Towers Sample Archit
 - **Snowdon Towers:** only the 17 `IfcSlab` bodies above change.
 - **Snowdon Towers structural:** only slab 935216 changes.
 - **Core Interior, the four RE1 models, Einhoven, the MIT house (2024, 2025), Projeto1 and `teste_export_2025`:** byte-identical to main's apart from the timestamp. No witness observation changes.
+
+## 4. Addendum (2026-10-25): a quarter arc closed by its chord (#824)
+
+A quarter arc's ends are two corners of its sketch line's record box. RE-25's box solve, which runs before the lines' own curves are read, takes that diagonal as a straight edge, and on the BIM4LCA office it closes roof 1461758's sketch with its two corner arcs drawn as their chords: 10 vertices and 2,760.07 ft², against Revit's 2,812.60 ft². The 52.53 ft² missing are the two circular segments of radius 9.596457 ft, π r²/4 − r²/2 each. Read from its curves, as `probe_824_slab_arcs` lists them on the research branch `re/824-slab-arcs`, each of the two lines is an arc whose every point lies in its record box and whose line reading does not, with Revit's centre and radius.
+
+`sketch_plan_profiles` now re-reads, from its lines' curves, any element whose box-solved outline uses a line whose record box is not flat in plan and whose curve reads as an arc and not as a line. That element then goes through the exact path, where an outline with an arc must still span its record box.
+
+Measure run [40170355982](https://github.com/DrunkOnJava/rvt-rs/actions/runs/40170355982), this change against `main` (eb369d9f), default models plus `-f nordic=true -f r2025=true`: `plan_profiles_vs_ifc` slabs with Revit's outline within 0.01 ft go from 60 to 61 of 63 as built and from 58 to 59 at building permit, and with Revit's area within 0.1% from 60 to 61 and 59 to 60. Only the two office files' IFC changes, and no other scorer's output. Snowdon Towers is not re-measured (local only).
+

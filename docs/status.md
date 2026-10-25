@@ -687,7 +687,10 @@ layout without the marker a curved wall's has, and keeps an arc outline
 only where it spans its element's record box. On Snowdon Towers 149 of
 199 slabs carry an outline (132 before), and 87 match Revit's area
 within 0.1% (73 before)
-(`reports/element-framing/RE-96-sketch-arcs.md`).
+(`reports/element-framing/RE-96-sketch-arcs.md`). Its addendum reads a
+sketch with a quarter arc from its curves, where RE-25's box solve had
+closed it with the arc's chord: the BIM4LCA office's roof 1461758 then has
+Revit's outline, its two 9.6 ft corner arcs included (#824).
 **RE-97 (2026-09-28)** takes a sketch's lines from its Sketch element's
 curve list, which names the sketched element, where a line's own owner
 reference names another element after an edit. 176 of Snowdon's 199
