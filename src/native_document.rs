@@ -238,10 +238,10 @@ pub(crate) fn routed_partitions(
 
 /// For each id of `holders`, which maps an element to the partitions that
 /// hold a copy of its data, the partition whose copy is current: the one its
-/// stored revision routes to ([`routed_partitions`]) where that holds a copy,
-/// else the latest that does, as [`extract`] reads records (RE-145, RE-216).
-/// An id the element index does not route is left out.
-pub(crate) fn current_partitions(
+/// stored revision routes to where that holds a copy, else the latest that
+/// does, as [`extract`] reads records (RE-145, RE-216). An id the element
+/// index does not route is left out.
+pub fn current_partitions(
     file: &mut RevitFile,
     holders: &BTreeMap<u32, BTreeSet<u32>>,
 ) -> BTreeMap<u32, u32> {
