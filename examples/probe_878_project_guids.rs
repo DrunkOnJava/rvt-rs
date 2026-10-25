@@ -10,6 +10,8 @@
 //! Output:
 //!   category <id> <BuiltInCategory>   every record of OST_ProjectInformation
 //!   rgid <id> <GlobalId>              RE-48's GlobalId of every declared element
+//!   episode <index> <GlobalId>        each Global/History episode's GUID as a
+//!                                     GlobalId with nothing XORed in
 //!
 //! `tools/re/project_guids_vs_ifc.py` finds Revit's three GlobalIds in it.
 //!
@@ -39,6 +41,26 @@ fn main() -> rvt::Result<()> {
     }
     for (id, global_id) in rvt::research::revit_global_ids::revit_global_ids(&mut rf)? {
         println!("rgid {id} {global_id}");
+    }
+    let stored = rf.read_stream(rvt::streams::GLOBAL_HISTORY)?;
+    let prepared =
+        rvt::compression::prepare_stream_for_inflate(rvt::streams::GLOBAL_HISTORY, &stored);
+    let history = [0usize, 4, 8, 16]
+        .iter()
+        .filter(|&&at| rvt::compression::has_gzip_magic(prepared.as_ref(), at))
+        .find_map(|&at| rvt::compression::inflate_at(prepared.as_ref(), at).ok());
+    if let Some(episodes) = history
+        .as_deref()
+        .and_then(rvt::research::revit_global_ids::EpisodeHistory::parse)
+    {
+        for index in 0..episodes.len() as u32 {
+            if let Some(guid) = episodes.episode_guid(index) {
+                println!(
+                    "episode {index} {}",
+                    rvt::research::revit_global_ids::revit_ifc_global_id(guid, 0)
+                );
+            }
+        }
     }
     Ok(())
 }

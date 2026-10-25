@@ -36,11 +36,13 @@ def compress(value):
 
 
 def main():
-    by_guid, info = {}, []
+    by_guid, info, episodes = {}, [], {}
     for line in open(sys.argv[1], encoding="utf-8", errors="replace"):
         parts = line.split()
         if len(parts) == 3 and parts[0] == "rgid":
             by_guid[parts[2]] = parts[1]
+        elif len(parts) == 3 and parts[0] == "episode":
+            episodes[expand(parts[2]) >> 32] = (parts[1], expand(parts[2]) & 0xFFFFFFFF)
         elif len(parts) == 3 and parts[0] == "category":
             info.append(parts[1])
     print(f"RE-48 GlobalIds {len(by_guid)}; project information records {sorted(set(info))}")
@@ -54,6 +56,14 @@ def main():
                 if owner:
                     hits.append(f"xor {xor} -> element {owner}{' (project information)' if owner in info else ''}")
             print(f"{entity} {element.GlobalId}: {'; '.join(hits) or 'no element'}")
+            prefix = episodes.get(value >> 32)
+            if prefix:
+                index, low = prefix
+                print(f"  high 96 bits are episode {index}'s; low 32 bits XOR the episode's = {(value & 0xFFFFFFFF) ^ low}")
+            else:
+                closest = min(episodes, key=lambda h: bin(h ^ (value >> 32)).count("1"), default=None)
+                if closest is not None:
+                    print(f"  no episode's high 96 bits; the closest of {len(episodes)} differs in {bin(closest ^ (value >> 32)).count('1')} bits")
 
 
 if __name__ == "__main__":
