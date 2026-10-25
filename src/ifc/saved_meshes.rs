@@ -59,6 +59,7 @@ pub fn attach(rf: &mut crate::RevitFile, model: &mut IfcModel) -> anyhow::Result
             continue;
         }
         let IfcEntity::BuildingElement {
+            ifc_type,
             type_guid: Some(tag),
             property_set: Some(set),
             location_feet: Some(_),
@@ -67,6 +68,8 @@ pub fn attach(rf: &mut crate::RevitFile, model: &mut IfcModel) -> anyhow::Result
         else {
             continue;
         };
+        // Research (W6): a wall's saved mesh against Revit's wall body.
+        let wall = ifc_type == "IfcWall";
         let text = |name: &str| {
             set.properties.iter().find_map(|p| match &p.value {
                 PropertyValue::Text(t) if p.name == name => Some(t.as_str()),
@@ -76,7 +79,7 @@ pub fn attach(rf: &mut crate::RevitFile, model: &mut IfcModel) -> anyhow::Result
         let profile_resolved = set.properties.iter().any(|p| {
             p.name == "ProfileResolved" && matches!(p.value, PropertyValue::Boolean(true))
         });
-        if text("BodySource") != Some(RECORD_BBOX_BODY_SOURCE) || profile_resolved {
+        if !wall && (text("BodySource") != Some(RECORD_BBOX_BODY_SOURCE) || profile_resolved) {
             continue;
         }
         let Ok(id) = tag.parse::<u64>() else {
