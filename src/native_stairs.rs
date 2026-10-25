@@ -35,6 +35,10 @@
 //! predefined type in Revit's export ([`native_run_shapes`], #323). A spiral
 //! run's treads give the spiral's centre and each tread's radii and angles
 //! ([`native_spiral_runs`], #357).
+//!
+//! A stair's, a run's and a stringer's type, its name and the family Revit's
+//! export names it after come from the same records on Revit 2025
+//! ([`native_stair_parts`], #323), where RE-65's byte anchors are absent.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -553,4 +557,206 @@ pub fn native_landings(
             ))
         })
         .collect())
+}
+
+/// Releases a stair's and its parts' names are read from their native
+/// records on: the R2025 stair models (#323).
+pub const NATIVE_STAIR_NAME_REVIT_VERSIONS: &[u32] = &[2025];
+
+/// A stair's or a stair part's type, and the stair and family Revit's export
+/// names it after (#323).
+#[derive(Debug, Clone, PartialEq)]
+pub struct NativeStairPart {
+    /// The stair it is part of; a stair's own id for a stair.
+    pub stair: u64,
+    /// Its type's ElementId.
+    pub type_id: u64,
+    /// Its type's `SymbolInfo.m_name`.
+    pub type_name: String,
+    /// The family Revit's export names it after.
+    pub family: &'static str,
+}
+
+fn element_id(v: &Value, name: &str) -> Option<u64> {
+    v.get(name)?.get("m_id")?.get("m_id64")?.as_u64()
+}
+
+/// The stair, type and family of each stair, run and support in `parts`,
+/// from their native records, as Revit's export names them (RE-65) on all
+/// five R2025 stair models:
+///
+/// - a `StairsElement`'s type is its `m_typeId`, a `StairsType`, whose
+///   `m_constructionMethod` names the family: 0 `Assembled Stair`, 1
+///   `Cast-In-Place Stair`;
+/// - a `StairsRun`'s stair is its `m_stairsId` and its type the one `runs`
+///   gives (its element record's, as for [`native_runs`]), a
+///   `StairsRunType` whose `m_hasMonolithicSupport` names the family
+///   `Monolithic Run` or `Non-Monolithic Run`;
+/// - a `StairsSupport`'s stair is its host's (`m_hostCompId`, a run) and its
+///   type its `m_typeId`; its family is `Stringer` where every side of its
+///   stair's type that uses that type (`m_leftSideSupportTypeId`,
+///   `m_rightSideSupportTypeId`) has support style 1.
+///
+/// Each type's name is its `SymbolInfo.m_name`. Any other construction or
+/// support style, a landing, and a part whose stair or type is not read is
+/// left out: none is measured.
+pub fn native_stair_parts(
+    rf: &mut RevitFile,
+    parts: &BTreeSet<u64>,
+    runs: &BTreeMap<u64, u64>,
+) -> anyhow::Result<BTreeMap<u64, NativeStairPart>> {
+    if parts.is_empty() {
+        return Ok(BTreeMap::new());
+    }
+    let mut stairs: BTreeMap<u64, u64> = BTreeMap::new();
+    let mut run_stairs: BTreeMap<u64, u64> = BTreeMap::new();
+    let mut supports: BTreeMap<u64, (u64, u64)> = BTreeMap::new();
+    let options = Options {
+        selected_ids: parts.clone(),
+        ..Options::default()
+    };
+    extract_graphs(rf, &options, |record| {
+        let (Some(class), Some(root)) = (
+            record.class_name.as_deref(),
+            record
+                .graph
+                .as_ref()
+                .and_then(|graph| graph.objects.first()),
+        ) else {
+            return Ok(());
+        };
+        let id = record.identity.element_id;
+        match class {
+            "StairsElement" => {
+                if let Some(type_id) = element_id(&root.fields, "m_typeId") {
+                    stairs.insert(id, type_id);
+                }
+            }
+            "StairsRun" => {
+                if let Some(stair) = element_id(&root.fields, "m_stairsId") {
+                    run_stairs.insert(id, stair);
+                }
+            }
+            "StairsSupport" => {
+                if let (Some(host), Some(type_id)) = (
+                    element_id(&root.fields, "m_hostCompId"),
+                    element_id(&root.fields, "m_typeId"),
+                ) {
+                    supports.insert(id, (host, type_id));
+                }
+            }
+            _ => {}
+        }
+        Ok(())
+    })?;
+    let type_ids: BTreeSet<u64> = stairs
+        .values()
+        .copied()
+        .chain(runs.values().copied())
+        .chain(supports.values().map(|(_, type_id)| *type_id))
+        .collect();
+    let mut names: BTreeMap<u64, String> = BTreeMap::new();
+    let mut constructions: BTreeMap<u64, i64> = BTreeMap::new();
+    let mut sides: BTreeMap<u64, [(Option<u64>, Option<i64>); 2]> = BTreeMap::new();
+    let mut monolithic: BTreeMap<u64, bool> = BTreeMap::new();
+    let options = Options {
+        selected_ids: type_ids,
+        ..Options::default()
+    };
+    extract_graphs(rf, &options, |record| {
+        let (Some(class), Some(graph)) = (record.class_name.as_deref(), record.graph.as_ref())
+        else {
+            return Ok(());
+        };
+        let Some(root) = graph.objects.first() else {
+            return Ok(());
+        };
+        let id = record.identity.element_id;
+        if let Some(name) = graph
+            .objects
+            .iter()
+            .find(|o| o.class_name == "SymbolInfo")
+            .and_then(|o| o.fields.get("m_name")?.as_str())
+        {
+            names.insert(id, name.to_string());
+        }
+        let style = |name: &str| root.fields.get(name).and_then(Value::as_i64);
+        match class {
+            "StairsType" => {
+                if let Some(method) = style("m_constructionMethod") {
+                    constructions.insert(id, method);
+                }
+                sides.insert(
+                    id,
+                    [
+                        (
+                            element_id(&root.fields, "m_leftSideSupportTypeId"),
+                            style("m_leftSupportStyle"),
+                        ),
+                        (
+                            element_id(&root.fields, "m_rightSideSupportTypeId"),
+                            style("m_rightSupportStyle"),
+                        ),
+                    ],
+                );
+            }
+            "StairsRunType" => {
+                if let Some(flag) = flag(&root.fields, "m_hasMonolithicSupport") {
+                    monolithic.insert(id, flag);
+                }
+            }
+            _ => {}
+        }
+        Ok(())
+    })?;
+    let mut out = BTreeMap::new();
+    let mut part = |id: u64, stair: u64, type_id: u64, family: Option<&'static str>| {
+        if let (Some(family), Some(type_name)) = (family, names.get(&type_id)) {
+            out.insert(
+                id,
+                NativeStairPart {
+                    stair,
+                    type_id,
+                    type_name: type_name.clone(),
+                    family,
+                },
+            );
+        }
+    };
+    for (&id, &type_id) in &stairs {
+        let family = match constructions.get(&type_id) {
+            Some(0) => Some("Assembled Stair"),
+            Some(1) => Some("Cast-In-Place Stair"),
+            _ => None,
+        };
+        part(id, id, type_id, family);
+    }
+    for (&id, &stair) in &run_stairs {
+        let Some(&type_id) = runs.get(&id) else {
+            continue;
+        };
+        let family = match monolithic.get(&type_id) {
+            Some(true) => Some("Monolithic Run"),
+            Some(false) => Some("Non-Monolithic Run"),
+            None => None,
+        };
+        part(id, stair, type_id, family);
+    }
+    for (&id, &(host, type_id)) in &supports {
+        let Some(&stair) = run_stairs.get(&host) else {
+            continue;
+        };
+        let styles: Vec<Option<i64>> = stairs
+            .get(&stair)
+            .and_then(|stair_type| sides.get(stair_type))
+            .into_iter()
+            .flatten()
+            .filter(|(side_type, _)| *side_type == Some(type_id))
+            .map(|(_, style)| *style)
+            .collect();
+        let family = (!styles.is_empty() && styles.iter().all(|style| *style == Some(1)))
+            .then_some("Stringer");
+        part(id, stair, type_id, family);
+    }
+    Ok(out)
 }
