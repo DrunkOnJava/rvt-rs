@@ -342,6 +342,11 @@ pub struct ExportDiagnostics {
     pub formats_latest_integrity: Option<crate::compression::FormatsLatestIntegrity>,
 }
 
+/// Where the warning about "Export to IFC As" values the export does not
+/// apply begins listing them (#792). The values are the project's own text,
+/// so [`ExportDiagnostics::anonymize`] cuts the list there.
+const UNAPPLIED_EXPORT_VALUES: &str = "so each keeps its category's entity (#792):";
+
 /// The shortest name [`ExportDiagnostics::anonymize`] replaces inside a
 /// warning, so a level named "1" does not rewrite every digit of it.
 const ANONYMIZED_MIN_NAME_CHARS: usize = 3;
@@ -353,7 +358,9 @@ impl ExportDiagnostics {
     /// names `Level 1`, `Material 1` and so on in their order, and each
     /// skipped element's sample name, which can name its family and type,
     /// `element-<ElementId>`. A warning that quotes one of those names
-    /// quotes its placeholder. Counts, releases, body sources and
+    /// quotes its placeholder, and the warning listing "Export to IFC As"
+    /// values the export does not apply keeps their count and drops the
+    /// values, which the project writes. Counts, releases, body sources and
     /// ElementIds are kept.
     pub fn anonymize(&mut self) {
         use crate::redact::{ANONYMIZED, anonymize_file_name};
@@ -398,6 +405,10 @@ impl ExportDiagnostics {
         names.retain(|(name, _)| name.chars().count() >= ANONYMIZED_MIN_NAME_CHARS);
         names.sort_by_key(|(name, _)| std::cmp::Reverse(name.len()));
         for warning in &mut self.warnings {
+            if let Some(at) = warning.find(UNAPPLIED_EXPORT_VALUES) {
+                warning.truncate(at + UNAPPLIED_EXPORT_VALUES.len() - 1);
+                warning.push('.');
+            }
             for (name, replacement) in &names {
                 if warning.contains(name.as_str()) {
                     *warning = warning.replace(name.as_str(), replacement);
@@ -3671,7 +3682,7 @@ pub fn build_export_diagnostics_with_limits(
             .map(|(value, n)| format!("{value} {n}"))
             .collect();
         warnings.push(format!(
-            "{total} element(s) carry an \"Export to IFC As\" value the export does not apply, so each keeps its category's entity (#792): {}.",
+            "{total} element(s) carry an \"Export to IFC As\" value the export does not apply, {UNAPPLIED_EXPORT_VALUES} {}.",
             listed.join(", ")
         ));
     }

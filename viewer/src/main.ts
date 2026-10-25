@@ -3026,9 +3026,14 @@ function anonymizedDiagnostics(diagnostics: ExportDiagnostics): ExportDiagnostic
   const quoted = names
     .filter(([name]) => name.length >= 3)
     .sort((a, b) => b[0].length - a[0].length);
-  copy.warnings = (copy.warnings ?? []).map((warning) =>
-    quoted.reduce((text, [name, replacement]) => text.split(name).join(replacement), warning),
-  );
+  // The "Export to IFC As" values the export does not apply are the
+  // project's own text: keep their count, drop the list (#792).
+  const unapplied = "so each keeps its category's entity (#792):";
+  copy.warnings = (copy.warnings ?? []).map((warning) => {
+    const at = warning.indexOf(unapplied);
+    const cut = at >= 0 ? `${warning.slice(0, at + unapplied.length - 1)}.` : warning;
+    return quoted.reduce((text, [name, replacement]) => text.split(name).join(replacement), cut);
+  });
   return copy;
 }
 
