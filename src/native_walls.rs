@@ -146,6 +146,43 @@ pub fn native_walls(
     Ok(native_walls_and_top_joins(rf, walls)?.0)
 }
 
+/// The name of each curtain wall type in `types` whose native record is a
+/// `NewCurtainWallType`: its `SymbolInfo.m_name`. A curtain wall type's
+/// serialised data gives no name where a basic wall type's does (#322), and
+/// on the BIM4LCA office these names are the type half of Revit's name for
+/// all 220 curtain walls (RE-230).
+pub fn curtain_wall_type_names(
+    rf: &mut RevitFile,
+    types: &BTreeSet<u64>,
+) -> anyhow::Result<BTreeMap<u64, String>> {
+    let mut out = BTreeMap::new();
+    if types.is_empty() {
+        return Ok(out);
+    }
+    let options = Options {
+        selected_ids: types.clone(),
+        ..Options::default()
+    };
+    extract_graphs(rf, &options, |record| {
+        if record.class_name.as_deref() != Some("NewCurtainWallType") {
+            return Ok(());
+        }
+        if let Some(name) = record.graph.as_ref().and_then(|graph| {
+            graph
+                .objects
+                .iter()
+                .find(|o| o.class_name == "SymbolInfo")?
+                .fields
+                .get("m_name")?
+                .as_str()
+        }) {
+            out.insert(record.identity.element_id, name.to_string());
+        }
+        Ok(())
+    })?;
+    Ok(out)
+}
+
 /// [`native_walls`], and for every one of `walls` whose `SWall` or `ArcWall`
 /// record is read, whether its top is joined to a roof or floor: one of its
 /// `JoinToRoofGStep` objects has `m_baseOrTop` 1 (a wall attached at its
