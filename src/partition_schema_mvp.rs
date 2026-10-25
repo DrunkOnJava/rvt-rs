@@ -4842,6 +4842,13 @@ fn attach_stair_run_bodies(
         .filter_map(|(&id, lines)| Some((id, ps::run_sketch(lines)?)))
         .collect();
     let ends = ps::scan_run_ends(rf, revit_version, &sketches).unwrap_or_default();
+    // Where each run's underside is cut, from its native record (#357); a
+    // run that does not give it is cut at its base, as RE-92 measured.
+    let base_cuts = crate::native_stairs::native_run_base_cuts(
+        rf,
+        &sketches.keys().map(|&id| u64::from(id)).collect(),
+    )
+    .unwrap_or_default();
     for index in run_indices {
         let element = &mut products[index];
         let Some(run_type) = type_of.get(&index).and_then(|id| types.get(id)) else {
@@ -4874,18 +4881,22 @@ fn attach_stair_run_bodies(
             .and_then(|id| ends.get(&id))
             .map(|ends| ends.end_with_riser);
         let riser_lines = risers + i64::from(end_with_riser == Some(false));
-        let Some(sketch) = element
+        let Some(mut sketch) = element
             .id
             .and_then(|id| sketches.get(&id))
             .filter(|sketch| i64::try_from(sketch.risers.len()) == Ok(riser_lines))
+            .cloned()
         else {
             continue;
         };
-        let Some(profile) = ps::run_side_profile(sketch, run_type, riser_height, end_with_riser)
+        if let Some(cut) = element.id.and_then(|id| base_cuts.get(&u64::from(id))) {
+            sketch.base_cut_feet = *cut;
+        }
+        let Some(profile) = ps::run_side_profile(&sketch, run_type, riser_height, end_with_riser)
         else {
             continue;
         };
-        push_stair_run_body(element, sketch, &profile);
+        push_stair_run_body(element, &sketch, &profile);
     }
 }
 

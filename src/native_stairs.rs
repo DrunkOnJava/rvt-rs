@@ -27,7 +27,7 @@
 //! run that is not straight, does not begin with a riser, or whose treads
 //! do not share one depth, one riser height and one direction is left out.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use serde_json::Value;
 
@@ -89,6 +89,54 @@ fn run_type(fields: &Value, name: Option<String>) -> Option<RunType> {
     })
 }
 
+/// Where the run's underside is cut ([`RunSketch::base_cut_feet`]): at its
+/// `m_extendBelowBase` below its base where it starts at its stair's base
+/// (`m_baseRiserIndex` 0), not at all where it starts on a landing. On the
+/// BIM4LCA office the five flights at their stair's base with no extension
+/// are cut at the base, as RE-92 draws them; those 300 mm extended
+/// (`m_extendBelowBase` -0.98425 ft) and those that start on a landing run
+/// their underside on to their first riser line (#357).
+fn base_cut(run: &Value) -> Option<Option<f64>> {
+    Some(match run.get("m_baseRiserIndex")?.as_i64()? {
+        0 => Some(number(run, "m_extendBelowBase")?),
+        _ => None,
+    })
+}
+
+/// Each run in `runs` whose native `StairsRun` record gives where its
+/// underside is cut ([`base_cut`]), for runs drawn from their byte anchors
+/// (RE-52), whose sketch does not carry it.
+pub fn native_run_base_cuts(
+    rf: &mut RevitFile,
+    runs: &BTreeSet<u64>,
+) -> anyhow::Result<BTreeMap<u64, Option<f64>>> {
+    if runs.is_empty() {
+        return Ok(BTreeMap::new());
+    }
+    let options = Options {
+        selected_ids: runs.clone(),
+        ..Options::default()
+    };
+    let mut out = BTreeMap::new();
+    extract_graphs(rf, &options, |record| {
+        if record.class_name.as_deref() != Some("StairsRun") {
+            return Ok(());
+        }
+        let Some(root) = record
+            .graph
+            .as_ref()
+            .and_then(|graph| graph.objects.first())
+        else {
+            return Ok(());
+        };
+        if let Some(cut) = base_cut(&root.fields) {
+            out.insert(record.identity.element_id, cut);
+        }
+        Ok(())
+    })?;
+    Ok(out)
+}
+
 /// The run's sketch and riser height from its root and its treads, in
 /// climbing order.
 fn sketch(run: &Value, treads: &[Value]) -> Option<(RunSketch, f64)> {
@@ -144,6 +192,7 @@ fn sketch(run: &Value, treads: &[Value]) -> Option<(RunSketch, f64)> {
             across,
             width_feet: width,
             risers,
+            base_cut_feet: base_cut(run)?,
         },
         height,
     ))

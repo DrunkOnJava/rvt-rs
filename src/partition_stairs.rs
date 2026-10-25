@@ -247,6 +247,12 @@ pub struct RunSketch {
     /// Distance along `climb` from `origin` to each riser line, ascending,
     /// the first 0.
     pub risers: Vec<f64>,
+    /// Height relative to the run's base, feet, where a monolithic run's
+    /// underside is cut by the floor it starts on: 0, as RE-92 measured, or
+    /// the run's `StairsRun.m_extendBelowBase` where its native record gives
+    /// it; `None` for a run that starts on a landing, whose soffit runs on to
+    /// its first riser line (#357, RE-217 §8).
+    pub base_cut_feet: Option<f64>,
 }
 
 fn plan(a: [f64; 3], b: [f64; 3]) -> [f64; 2] {
@@ -328,6 +334,7 @@ pub fn run_sketch(lines: &[BoundedLine]) -> Option<RunSketch> {
         across,
         width_feet,
         risers,
+        base_cut_feet: Some(0.0),
     })
 }
 
@@ -876,8 +883,12 @@ pub fn run_side_profile(
 /// its nosing to the next inner corner; the last runs to the last riser
 /// line. The underside is parallel to the line through the inner corners,
 /// the type's structural depth below it measured square to the pitch, and
-/// is cut off by the floor the run starts on. The last riser line closes
-/// the run with a vertical face.
+/// is cut off by the floor the run starts on, at the sketch's
+/// `base_cut_feet`. Where that is lower than the underside reaches, or the
+/// run starts on a landing (`None`), the underside runs on to the first
+/// riser line, which closes the run's start with a vertical face below its
+/// first riser (#357). The last riser line closes the run with a vertical
+/// face.
 ///
 /// `None` unless the type is monolithic with no separate treads or risers,
 /// and its risers are slanted or it has no nosing, so that each riser runs
@@ -919,12 +930,31 @@ pub fn monolithic_side_profile(
         ring.push([u[k - 1], rise(k)]);
     }
     ring.push([u[count], rise(count)]);
-    let end = (u[count] - u[0] - n) * pitch - drop;
-    if end > 0.0 {
+    // The underside's height at `along`, and where the floor cuts it.
+    let soffit = |along: f64| (along - u[0] - n) * pitch - drop;
+    let floor = sketch.base_cut_feet.unwrap_or(f64::NEG_INFINITY);
+    if floor.is_nan() || floor > 0.0 {
+        return None;
+    }
+    // The run's first point is its start at its base, so a cut at the base
+    // closes on it.
+    let start = u[0] + n;
+    let end = soffit(u[count]);
+    if end > floor {
         ring.push([u[count], end]);
-        ring.push([u[0] + n + drop / pitch, 0.0]);
+        if soffit(start) >= floor {
+            ring.push([start, soffit(start)]);
+        } else {
+            ring.push([start + (floor + drop) / pitch, floor]);
+            if floor < 0.0 {
+                ring.push([start, floor]);
+            }
+        }
     } else {
-        ring.push([u[count], 0.0]);
+        ring.push([u[count], floor]);
+        if floor < 0.0 {
+            ring.push([start, floor]);
+        }
     }
     let area: f64 = ring
         .iter()
