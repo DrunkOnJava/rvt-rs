@@ -3,7 +3,10 @@
 
 revit-ifc's `OpeningUtil.CreateOpeningGUID` (CLEANROOM.md source 5) hashes
 `Opening:<opening index>Solid:<solid index>`, then the host's and the
-cutting element's export GUIDs in IFC form, as a .NET GUID of the MD5. For
+cutting element's export GUIDs in IFC form, as a .NET GUID of the MD5;
+`OpeningUtil` hashes `IfcOpeningElement:<opening number>:<host GlobalId>` for
+the openings its host's own extrusion data carries. This tries the second
+with opening numbers 1 to 256, then the first. For
 every opening Revit's export cuts in a host that is not a wall, this tries
 every door and window of the export as the cutting element, opening indices
 1 to 8 and solid indices 1 to 4, and prints the key that gives the opening's
@@ -44,6 +47,16 @@ def main():
         opening = rel.RelatedOpeningElement
         total += 1
         match = None
+        # revit-ifc's `OpeningUtil` for openings its host's own extrusion data
+        # carries: `IfcOpeningElement:<opening number>:<host GlobalId>`.
+        for i in range(1, 257):
+            if hashed(f"IfcOpeningElement:{i}:{host.GlobalId}") == opening.GlobalId:
+                found += 1
+                print(f"opening {opening.GlobalId} '{opening.Name}' in {host.Tag}: host key, opening number {i}")
+                match = "host"
+                break
+        if match:
+            continue
         for cutter in cutters:
             for i in range(1, 9):
                 for s in range(1, 5):
