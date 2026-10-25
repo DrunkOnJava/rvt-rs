@@ -777,15 +777,18 @@ record, as on 2024, which is Revit's on all 75 runs measured. On
 puzzbobb's R2025 stair models 13 and 14 each flight now has Revit's volume
 and every vertex of Revit's body lies on rvt-rs's, and so do the riserless
 run (15), drawn as its separate treads, and the monolithic one (16); the
-spiral run (17) keeps its box
+monolithic spiral run (17) keeps its box
 (`reports/element-framing/RE-217-stair-runs-2025.md`). Its addendum draws a
 monolithic run with upright risers and no nosing as RE-92 draws one with
 slanted risers: model 16's flight then has Revit's volume. A second
 addendum cuts a monolithic run's underside where Revit does: at its
 `m_extendBelowBase` below its base where it starts at its stair's base, not
 at all where it starts on a landing. On the BIM4LCA office 34 of 35 flights
-then have Revit's volume, with every vertex of Revit's on rvt-rs's; the
-spiral one keeps its box. A third addendum gives each flight the
+then have Revit's volume, with every vertex of Revit's on rvt-rs's. The
+office's spiral run is drawn as its 18 treads, each an extrusion of two
+arcs about the spiral's centre and two lines, as Revit writes it, from
+the centre, radii and angles its treads' native records hold: Revit's
+volume and height (RE-217 §11). A third addendum gives each flight the
 predefined type its treads' `m_runType` names, `STRAIGHT` or `SPIRAL`:
 Revit's on all 35 office flights of each file and on the 5 R2025 stair
 models, where none had one (#323).
