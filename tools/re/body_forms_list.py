@@ -31,10 +31,19 @@ def describe(item, scale):
             if isinstance(value, float):
                 attrs.append(f"{name}={value * scale / FT:.6f}")
         if profile.is_a("IfcArbitraryClosedProfileDef"):
-            curve = profile.OuterCurve
-            points = getattr(curve, "Points", None)
-            count = len(points.CoordList) if points is not None and hasattr(points, "CoordList") else len(getattr(curve, "Points", []) or [])
-            attrs.append(f"curve={curve.is_a()} points={count}")
+            curves = [("outer", profile.OuterCurve)] + [
+                ("inner", c) for c in (getattr(profile, "InnerCurves", None) or [])
+            ]
+            for label, curve in curves:
+                points = getattr(curve, "Points", None)
+                coords = list(points.CoordList) if points is not None and hasattr(points, "CoordList") else []
+                xs = [p[0] * scale / FT for p in coords]
+                ys = [p[1] * scale / FT for p in coords]
+                segs = [s.is_a() for s in (getattr(curve, "Segments", None) or [])]
+                extent = (
+                    f" x {min(xs):.6f}..{max(xs):.6f} y {min(ys):.6f}..{max(ys):.6f}" if coords else ""
+                )
+                attrs.append(f"{label}={curve.is_a()} points={len(coords)}{extent} segments={segs}")
         direction = tuple(round(v, 6) for v in item.ExtrudedDirection.DirectionRatios)
         return f"extrusion {profile.is_a()} {' '.join(attrs)} depth={item.Depth * scale / FT:.6f} dir={direction}"
     return item.is_a()
