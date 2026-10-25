@@ -879,8 +879,10 @@ pub fn run_side_profile(
 /// is cut off by the floor the run starts on. The last riser line closes
 /// the run with a vertical face.
 ///
-/// `None` unless the type is monolithic with slanted risers and no separate
-/// treads or risers, the one construction measured, or for dimensions a
+/// `None` unless the type is monolithic with no separate treads or risers,
+/// and its risers are slanted or it has no nosing, so that each riser runs
+/// up its riser line either way (#357: the upright-riser "Monolithic Run" of
+/// the R2025 stair model 16 and the BIM4LCA office), or for dimensions a
 /// real run cannot have.
 pub fn monolithic_side_profile(
     sketch: &RunSketch,
@@ -893,7 +895,7 @@ pub fn monolithic_side_profile(
         run_type.structural_depth_feet,
     );
     if !run_type.monolithic
-        || !run_type.slanted_risers
+        || !(run_type.slanted_risers || n == 0.0)
         || run_type.treads
         || run_type.risers
         || !(h.is_finite() && h > 0.0)
