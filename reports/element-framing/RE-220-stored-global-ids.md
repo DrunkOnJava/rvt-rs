@@ -26,9 +26,9 @@ Every model measured agrees with the fake ids: in Revit's export the site's Glob
 | an element's RE-48 GlobalId, any XOR of the last 8 bits | 0 of 30 |
 | a `Global/History` episode GUID (high 96 bits) | 0 of 30; the nearest differs in 30 to 42 bits |
 | BasicFileInfo's `Unique Document GUID` | 0 of 30 |
-TEXT_GUIDS_ROW
+| any GUID the file holds as text (8-4-4-4-12 hex, ASCII or UTF-16, in any stream, raw or inflated), read in text or .NET byte order | 0 of 30; 10 to 354 such GUIDs per file |
 
-All 23 R2025 models share one project GlobalId, so the base is constant across files saved from one template. Measure runs [40171223280](https://github.com/DrunkOnJava/rvt-rs/actions/runs/40171223280), [40172100995](https://github.com/DrunkOnJava/rvt-rs/actions/runs/40172100995), [40175317537](https://github.com/DrunkOnJava/rvt-rs/actions/runs/40175317537) and TEXT_GUIDS_RUN.
+All 23 R2025 models share one project GlobalId, so the base is constant across files saved from one template. Measure runs [40171223280](https://github.com/DrunkOnJava/rvt-rs/actions/runs/40171223280), [40172100995](https://github.com/DrunkOnJava/rvt-rs/actions/runs/40172100995), [40175317537](https://github.com/DrunkOnJava/rvt-rs/actions/runs/40175317537) and [40176521028](https://github.com/DrunkOnJava/rvt-rs/actions/runs/40176521028) (`examples/probe_878_text_guids.rs` with `tools/re/text_guids_vs_ifc.py`, on `re/878-stored-guids`).
 
 ## 2. Where a file stores them
 
@@ -47,7 +47,7 @@ Core Interior, Einhoven, the RE1 models and the R2025 models store none of them.
 
 ## 4. Measured
 
-Measure run MEASURE_RUN, this change against `main`, default models plus `-f nordic=true -f r2025=true -f bimcollab=true`, `global_ids_vs_ifc`:
+Measure run [40176601924](https://github.com/DrunkOnJava/rvt-rs/actions/runs/40176601924), this change against `main` (fa7e56b6), default models plus `-f nordic=true -f r2025=true -f bimcollab=true`, `global_ids_vs_ifc`:
 
 | model | project, site, building equal to Revit's | storeys with one of Revit's GlobalIds |
 |---|---|---|
