@@ -29,12 +29,12 @@ milestone is for.
 | [#884](https://github.com/DrunkOnJava/rvt-rs/issues/884) | Hip roofs over T and U footprints stay level blocks: straight-skeleton split events (RE-199 follow-up) |
 | [#869](https://github.com/DrunkOnJava/rvt-rs/issues/869) | MEP ports and pipe cylinders outside Revit 2024 and 2025: no 2026 or 2027 MEP model has a Revit export to measure against |
 | [#834](https://github.com/DrunkOnJava/rvt-rs/issues/834) | A port's SystemType (its connector's system classification) and an electrical port's Flow=Source/Sink description are not written (RE-212 follow-up) |
-| [#824](https://github.com/DrunkOnJava/rvt-rs/issues/824) | BIM4LCA office: 2 slabs' top surfaces still differ from Revit's (a non-monolithic landing's arc, a roof's four openings), and the permit file's slab 1384047 |
-| [#810](https://github.com/DrunkOnJava/rvt-rs/issues/810) | BIM4LCA office: 11 doors' OverallWidth/OverallHeight still differ from Revit's (roof hatches sized across their own Z axis, two 0.1137 ft wide) |
+| [#824](https://github.com/DrunkOnJava/rvt-rs/issues/824) | BIM4LCA office: roof 2991742's four hatch openings are not cut (face-hosted hatches; their symbol's cut geometry is unread) |
+| [#810](https://github.com/DrunkOnJava/rvt-rs/issues/810) | BIM4LCA office: 2 doors' OverallWidth is 0.1137 ft wider than Revit's (1756089, 1765267) |
 | [#358](https://github.com/DrunkOnJava/rvt-rs/issues/358) | Wall bodies thicker or thinner than their type's layers: 165 Snowdon walls drawn whole (RE-53) |
 | [#357](https://github.com/DrunkOnJava/rvt-rs/issues/357) | Stair flights not yet drawn: monolithic spiral runs, riserless runs with a nosing, and nosing profiles |
 | [#328](https://github.com/DrunkOnJava/rvt-rs/issues/328) | Snowdon: 6 slabs in the Legends phase are not in Revit's export (phase filtering) |
-| [#323](https://github.com/DrunkOnJava/rvt-rs/issues/323) | Stairs, stair runs, landings, stringers and roofs as IFC aggregates |
+| [#323](https://github.com/DrunkOnJava/rvt-rs/issues/323) | Roofs Revit's export decomposes into IfcSlab .ROOF. parts (7 of Snowdon's 20) are written whole |
 | [#309](https://github.com/DrunkOnJava/rvt-rs/issues/309) | Snowdon: one record-backed slab (ElementId 2062318) is not in Revit's export |
 | [#227](https://github.com/DrunkOnJava/rvt-rs/issues/227) | Opening geometry from the symbol's cut loop on releases other than 2024 and 2025: no Revit export of another release's openings is in CI |
 | [#223](https://github.com/DrunkOnJava/rvt-rs/issues/223) | Element record +0x46: the flag word is unread (+0x4a is the schema class, RE-76) |
@@ -53,7 +53,7 @@ The requirements these serve, each with its bar, status and evidence, are in
 | Issue | Remainder |
 |---|---|
 | [#879](https://github.com/DrunkOnJava/rvt-rs/issues/879) | Revit 2015 BIMcollab example: 3 air terminals Revit's export leaves out, and 16 footings on no storey |
-| [#878](https://github.com/DrunkOnJava/rvt-rs/issues/878) | Revit 2015: Revit's own GlobalIds are not rebuilt (0 of 241 on BIMcollab's structural example) |
+| [#878](https://github.com/DrunkOnJava/rvt-rs/issues/878) | Revit 2015: the elements' own GlobalIds are not rebuilt (0 of 241 on BIMcollab's structural example; project, site, building and storeys are) |
 | [#874](https://github.com/DrunkOnJava/rvt-rs/issues/874) | 1.0: practitioner workflow reports folded into the supported profile |
 | [#872](https://github.com/DrunkOnJava/rvt-rs/issues/872) | 1.0: documented Rust and Python APIs whose examples run in CI |
 | [#792](https://github.com/DrunkOnJava/rvt-rs/issues/792) | BIM4LCA office: fixture 3095244 is IfcSanitaryTerminal where Revit writes IfcFlowTerminal, and the permit model writes a column Revit's export leaves out |
