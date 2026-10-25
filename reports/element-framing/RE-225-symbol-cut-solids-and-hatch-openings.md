@@ -49,6 +49,6 @@ Measure [40237486226](https://github.com/DrunkOnJava/rvt-rs/actions/runs/4023748
 ## 7. Reproduce
 
 ```bash
-gh workflow run measure.yml --ref feat/824-hatch-openings -f ref=feat/824-hatch-openings -f base=main \
+gh workflow run measure.yml --ref main -f ref=45bedecc04f5ddcdc72d50d121794cb3acfa6ae8 -f base=32f12e8522d275d397f41277e571b7c4682721e0 \
   -f nordic=true -f keep_ifc=true -f probe=basics_inspect -f probe_scorer=host_openings_list
 ```

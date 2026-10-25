@@ -26,5 +26,5 @@ Why Revit leaves 442378 out stays open. Testing the phase hypothesis needs the n
 ## 5. Reproduce
 
 ```text
-gh workflow run measure.yml --ref re/re160-phase-entries -f base=none -f probe=probe_re160_phase_entries
+gh workflow run measure.yml --ref main -f ref=6fed0c4b034b1cf742ae781698752e12a1595ee6 -f base=none -f probe=probe_re160_phase_entries
 ```

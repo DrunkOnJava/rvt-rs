@@ -38,5 +38,5 @@ For every `(set, property)` Revit writes, the probe takes up to three distinct v
 ## 5. Reproduce
 
 ```text
-gh workflow run measure.yml --ref re/re156-serial-numbers -f base=none -f probe=probe_re156_value_sources
+gh workflow run measure.yml --ref main -f ref=6e062f7c70bc0cd16b747177138cfd743b6053a9 -f base=none -f probe=probe_re156_value_sources
 ```

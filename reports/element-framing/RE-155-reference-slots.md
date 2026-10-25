@@ -69,5 +69,5 @@ The leading 3 is left unattributed. It is absent from every RE1 Architecture rec
 ## 5. Reproduce
 
 ```text
-gh workflow run measure.yml --ref re/re155-reference-slots -f base=none -f probe=probe_re155_reference_slots
+gh workflow run measure.yml --ref main -f ref=c53e36e0dd1c0f7276e86bc6bbd5b88b592070a9 -f base=none -f probe=probe_re155_reference_slots
 ```

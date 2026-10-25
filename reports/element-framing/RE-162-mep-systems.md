@@ -52,5 +52,5 @@ Every MEP system can be written: find the objects of `RbsHvacSystem`, `RbsPiping
 ## 5. Reproduce
 
 ```text
-gh workflow run measure.yml --ref re/re162-mep-systems -f base=none -f probe=probe_re162_mep_systems
+gh workflow run measure.yml --ref main -f ref=7e67411630ba85116073fe7ffe7a543774e7c2b8 -f base=none -f probe=probe_re162_mep_systems
 ```

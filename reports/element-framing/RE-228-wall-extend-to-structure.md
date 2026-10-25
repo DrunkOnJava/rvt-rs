@@ -43,7 +43,7 @@ Core Interior's walls carry it too. Revit's export of Core Interior writes no pr
 ## 5. Reproduce
 
 ```bash
-gh workflow run measure.yml --ref feat/wall-extend-to-structure -f ref=feat/wall-extend-to-structure -f base=none \
+gh workflow run measure.yml --ref main -f ref=68ef71e1a49a2ed8490b13fb1bc848bcae1ea2b1 -f base=none \
   -f nordic=true -f probe=probe_re228_wall_record_scalars -f probe_scorer=record_scalars_vs_ifc
-gh workflow run measure.yml --ref main -f ref=feat/wall-extend-to-structure -f base=main -f nordic=true
+gh workflow run measure.yml --ref main -f ref=68ef71e1a49a2ed8490b13fb1bc848bcae1ea2b1 -f base=d3fafe6f8f4802915cb3367d645a9cf8c07d2fc2 -f nordic=true
 ```

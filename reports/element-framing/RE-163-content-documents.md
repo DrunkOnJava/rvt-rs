@@ -46,6 +46,6 @@ rvt-rs reads no keyed block today: `native_document` skips every group with a co
 ## 5. Reproduce
 
 ```text
-gh workflow run measure.yml --ref re/re163-content-documents -f base=none \
+gh workflow run measure.yml --ref main -f ref=98e23816c3602fa6bf17d47622c67e9ba721fd62 -f base=none \
   -f probe=probe_re163_content_documents -f samples=true
 ```

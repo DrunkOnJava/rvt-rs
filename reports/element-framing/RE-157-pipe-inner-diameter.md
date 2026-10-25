@@ -33,5 +33,5 @@ Eleven distinct inner diameters, from 7.48 mm (a 9.52 mm pipe) to 102.26 mm (a 1
 ## 5. Reproduce
 
 ```text
-gh workflow run measure.yml --ref re/re157-pipe-inner-diameter -f base=none -f probe=probe_re157_pipe_inner_diameter
+gh workflow run measure.yml --ref main -f ref=0c7e71c27eacb72a35bfefec76f9804225f0e4bd -f base=none -f probe=probe_re157_pipe_inner_diameter
 ```
