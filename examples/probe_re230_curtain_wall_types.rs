@@ -10,6 +10,10 @@
 //!   summary <IFC class> records=<n> no_record=<n> type_refs=<0|1|2+ counts>
 //!   cw <tag> stream=<s> offset=<o> types=[<id>...] refs=[<id>:<mark>...]
 //!   type <id> definition=<bool> names=[...]
+//!   at <type id> <stream> <offset> before=<16 bytes hex> strings=[<+delta>:<tag>:<text> ...]
+//! for up to 12 places each type's `u64` ElementId occurs, with the framed
+//! UTF-16 strings (`ff ff ff ff · u16 tag · u32 n · n units`) in the
+//! 0x800 bytes after it.
 //! where a reference's mark is `D` for a wall type-definition record, `T`
 //! for any other wall type record, `W` for another wall, `-` otherwise.
 //!
@@ -153,5 +157,70 @@ fn main() -> anyhow::Result<()> {
             names.get(id).cloned().unwrap_or_default()
         );
     }
+    let mut shown: BTreeMap<u32, usize> = BTreeMap::new();
+    for stream in rf.partition_stream_names() {
+        let Ok(inflated) = rf.inflated_partition(&stream) else {
+            continue;
+        };
+        let buf = inflated.bytes();
+        for id in &wanted {
+            let needle = u64::from(*id).to_le_bytes();
+            for at in memchr::memmem::find_iter(buf, &needle) {
+                let count = shown.entry(*id).or_default();
+                if *count >= 12 {
+                    break;
+                }
+                *count += 1;
+                let before: String = buf[at.saturating_sub(16)..at]
+                    .iter()
+                    .map(|b| format!("{b:02x}"))
+                    .collect();
+                let strings = framed_strings(buf, at + 8, (at + 0x800).min(buf.len()));
+                println!(
+                    "at {id} {stream} {at} before={before} strings=[{}]",
+                    strings
+                        .iter()
+                        .take(6)
+                        .map(|(p, tag, text)| format!(
+                            "+{}:{tag:#06x}:{}",
+                            p - at,
+                            text.replace(' ', "_")
+                        ))
+                        .collect::<Vec<_>>()
+                        .join(" ")
+                );
+            }
+        }
+    }
     Ok(())
+}
+
+fn framed_strings(buf: &[u8], from: usize, to: usize) -> Vec<(usize, u16, String)> {
+    let mut out = Vec::new();
+    let mut p = from;
+    while p + 10 <= to {
+        if buf[p..p + 4] != [0xff; 4] {
+            p += 1;
+            continue;
+        }
+        let tag = u16::from_le_bytes([buf[p + 4], buf[p + 5]]);
+        let n = u32::from_le_bytes([buf[p + 6], buf[p + 7], buf[p + 8], buf[p + 9]]) as usize;
+        let end = p + 10 + 2 * n;
+        if tag == 0xffff || n == 0 || n > 128 || end > buf.len() {
+            p += 1;
+            continue;
+        }
+        let units: Vec<u16> = buf[p + 10..end]
+            .chunks_exact(2)
+            .map(|c| u16::from_le_bytes([c[0], c[1]]))
+            .collect();
+        match String::from_utf16(&units) {
+            Ok(text) if text.chars().all(|c| !c.is_control()) => {
+                out.push((p, tag, text));
+                p = end;
+            }
+            _ => p += 1,
+        }
+    }
+    out
 }
