@@ -866,6 +866,29 @@ jobs:
       - name: Research modules carry the unstable-research banner
         run: grep -q 'unstable-research</code>' target/doc/rvt/research/index.html
 
+  # The fuzz targets are a workspace of their own that no other job builds,
+  # so a field added to a type a target constructs broke the nightly run
+  # after merge, twice (#236 -> #259, #934 -> #965).
+  fuzz-check:
+    name: fuzz targets build
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install Rust nightly-2026-10-01
+        shell: bash
+        run: |
+          rustup toolchain install nightly-2026-10-01 --profile minimal --no-self-update
+          echo CARGO_INCREMENTAL=0 >> "$GITHUB_ENV"
+          echo CARGO_TERM_COLOR=always >> "$GITHUB_ENV"
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+          shared-key: ci-fuzz-check
+          workspaces: fuzz
+      - run: cargo +nightly-2026-10-01 check --manifest-path fuzz/Cargo.toml --bins
+
   python-wheel:
     name: Python wheel / ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
@@ -1227,6 +1250,7 @@ jobs:
       - doc
       - bench-build
       - docs-rs-preview
+      - fuzz-check
       - python-wheel
       - deny
       - audit

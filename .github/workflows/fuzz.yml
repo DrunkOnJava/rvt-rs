@@ -126,6 +126,14 @@ jobs:
           cp corpus/tier1/*/*.rvt tests/fixtures/synthetic-*.ifc "fuzz/corpus/${TARGET}/"
           echo "corpus: $(find "fuzz/corpus/${TARGET}" -type f | wc -l) inputs"
 
+      # Built on its own, so a target that no longer compiles fails here and
+      # is reported as a build failure, not a crash (#965).
+      - name: Build ${{ matrix.target }}
+        working-directory: fuzz
+        env:
+          TARGET: ${{ matrix.target }}
+        run: cargo +"$NIGHTLY" fuzz build --target "$FUZZ_TARGET_TRIPLE" "$TARGET"
+
       - name: Run ${{ matrix.target }}
         id: run
         working-directory: fuzz
@@ -167,7 +175,9 @@ jobs:
           retention-days: 30
 
   # A nightly crash opens a `fuzz-crash` issue, or comments on the open one,
-  # with the run that found it (C4).
+  # with the run that found it (C4). A run in which no target crashed but one
+  # failed to build opens a `fuzz-build` issue instead (#965): only a target
+  # whose run step failed uploads a `crash-` artifact.
   report:
     needs: fuzz
     if: failure() && github.event_name == 'schedule'
@@ -180,12 +190,23 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          RUN_ID: ${{ github.run_id }}
         run: |
-          body="The nightly fuzz run ${RUN_URL} found a crash. Each failed target's job uploads \`crash-<target>-<run>\` with the crashing input; reproduce it with \`cargo +nightly fuzz run <target> <input>\` in \`fuzz/\`, then add the input to \`tests/fuzz_regressions.rs\`."
-          gh label create fuzz-crash --color B60205 --description "A crash found by the nightly fuzz run" 2>/dev/null || true
-          existing=$(gh issue list --label fuzz-crash --state open --json number --jq '.[0].number // empty')
+          crashes=$(gh api "repos/${GH_REPO}/actions/runs/${RUN_ID}/artifacts" --paginate --jq '[.artifacts[].name | select(startswith("crash-"))] | length')
+          if [ "${crashes:-0}" -gt 0 ]; then
+            label=fuzz-crash
+            title="Nightly fuzz run found a crash"
+            body="The nightly fuzz run ${RUN_URL} found a crash. Each failed target's job uploads \`crash-<target>-<run>\` with the crashing input; reproduce it with \`cargo +nightly fuzz run <target> <input>\` in \`fuzz/\`, then add the input to \`tests/fuzz_regressions.rs\`."
+            gh label create fuzz-crash --color B60205 --description "A crash found by the nightly fuzz run" 2>/dev/null || true
+          else
+            label=fuzz-build
+            title="Nightly fuzz targets failed to build"
+            body="The nightly fuzz run ${RUN_URL} found no crash, but a target failed before fuzzing, most often because it no longer compiles against the crate (a field added to a type it builds). Reproduce with \`cargo +nightly check --manifest-path fuzz/Cargo.toml\`."
+            gh label create fuzz-build --color FBCA04 --description "A fuzz target the nightly run could not build" 2>/dev/null || true
+          fi
+          existing=$(gh issue list --label "$label" --state open --json number --jq '.[0].number // empty')
           if [ -n "$existing" ]; then
             gh issue comment "$existing" --body "$body"
           else
-            gh issue create --title "Nightly fuzz run found a crash" --label fuzz-crash --body "$body"
+            gh issue create --title "$title" --label "$label" --body "$body"
           fi
