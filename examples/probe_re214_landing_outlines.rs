@@ -123,7 +123,7 @@ fn main() {
         let Some(id) = element.id else { continue };
         let f = &element.fields;
         println!(
-            "landing {id} box {:.4} {:.4} {:.4} {:.4} {:.4} {:.4}",
+            "landing {id} box {} {} {} {} {} {}",
             field(f, "m_locationX"),
             field(f, "m_locationY"),
             field(f, "m_locationZ"),

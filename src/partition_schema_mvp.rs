@@ -5023,7 +5023,8 @@ pub const LANDING_BODY_TOP_FIELD: &str = "m_landing_body_top";
 /// landing outline read from the lines in its own element data (#824).
 pub const LANDING_OUTLINE_SOURCE: &str = "partition_landing_lines";
 /// How closely a landing's lines must lie at its top and meet each other,
-/// and lie in its record box, feet.
+/// feet. Its outline and slab must lie in its record box to
+/// [`SKETCH_BOX_TOLERANCE_FEET`], as a sketched outline must.
 pub const LANDING_LINE_TOLERANCE_FEET: f64 = 1e-6;
 
 /// The plan outline a landing's own lines at `top_feet` make (#824): the
@@ -5116,7 +5117,7 @@ fn landing_outline(
 fn attach_landing_slabs(rf: &mut RevitFile, revit_version: u32, products: &mut [DecodedElement]) {
     use crate::element_record_plan_profiles as erpp;
     use crate::partition_type_records as ptr;
-    const TOL: f64 = LANDING_LINE_TOLERANCE_FEET;
+    const BOX: f64 = SKETCH_BOX_TOLERANCE_FEET;
     if !crate::native_stairs::NATIVE_LANDING_REVIT_VERSIONS.contains(&revit_version) {
         return;
     }
@@ -5182,17 +5183,17 @@ fn attach_landing_slabs(rf: &mut RevitFile, revit_version: u32, products: &mut [
             continue;
         }
         let bottom = landing.top_feet - landing.thickness_feet;
-        if landing.top_feet > bbox[5] + TOL || bottom < bbox[2] - TOL {
+        if landing.top_feet > bbox[5] + BOX || bottom < bbox[2] - BOX {
             continue;
         }
         let Some(outline) = landing_outline(lines, landing.top_feet) else {
             continue;
         };
         if !outline.iter().all(|p| {
-            p[0] >= bbox[0] - TOL
-                && p[0] <= bbox[3] + TOL
-                && p[1] >= bbox[1] - TOL
-                && p[1] <= bbox[4] + TOL
+            p[0] >= bbox[0] - BOX
+                && p[0] <= bbox[3] + BOX
+                && p[1] >= bbox[1] - BOX
+                && p[1] <= bbox[4] + BOX
         }) {
             continue;
         }
