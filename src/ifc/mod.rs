@@ -254,7 +254,7 @@ pub struct RevitGlobalIds {
     #[serde(default)]
     pub element_types: std::collections::BTreeMap<u32, String>,
     /// The project's, site's and building's GlobalIds, where the file gives
-    /// them (#878, [`crate::revit_global_ids::stored_global_ids`]).
+    /// them (#878, `revit_global_ids::stored_global_ids`).
     #[serde(default)]
     pub project: Option<String>,
     #[serde(default)]

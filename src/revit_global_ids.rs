@@ -244,7 +244,7 @@ fn stored_global_id(buf: &[u8], at: usize) -> Option<String> {
 ///   flipped and the site's with the one before it (Core Interior, the
 ///   BIM4LCA office and the R2025 models all relate theirs so);
 /// - a storey's under [`IFC_GUID_PARAMETER`], where its Level's id stands
-///   twice, [`LEVEL_ID_REPEAT`] bytes apart, in the 512 bytes before it, as
+///   twice, 58 bytes apart, in the 512 bytes before it, as
 ///   on BIMcollab's Revit 2015 example. A Level given two values gets none.
 ///
 /// Measured on BIMcollab's Revit 2015 example (project, site, building and
