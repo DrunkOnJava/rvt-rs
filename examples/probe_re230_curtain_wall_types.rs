@@ -13,7 +13,10 @@
 //!   at <type id> <stream> <offset> before=<16 bytes hex> strings=[<+delta>:<tag>:<text> ...]
 //! for up to 12 places each type's `u64` ElementId occurs, with the framed
 //! UTF-16 strings (`ff ff ff ff · u16 tag · u32 n · n units`) in the
-//! 0x800 bytes after it.
+//! 0x800 bytes after it, and
+//!   native <type id> <record class> <object>.<member>=<text> ...
+//! every string member of the first 40 objects of the type's native record
+//! (RE-230 §2: the strings near the ids are all references).
 //! where a reference's mark is `D` for a wall type-definition record, `T`
 //! for any other wall type record, `W` for another wall, `-` otherwise.
 //!
@@ -25,6 +28,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use rvt::RevitFile;
 use rvt::ifc::RvtDocExporter;
 use rvt::ifc::entities::IfcEntity;
+use rvt::research::native_document::{Options, extract_graphs};
 use rvt::research::partition_element_records::{
     OST_WALLS, PartitionElementRecord, file_bbox_marker, find_category_records_assigned,
 };
@@ -157,6 +161,40 @@ fn main() -> anyhow::Result<()> {
             names.get(id).cloned().unwrap_or_default()
         );
     }
+    extract_graphs(
+        &mut rf,
+        &Options {
+            selected_ids: wanted.iter().map(|id| u64::from(*id)).collect(),
+            ..Options::default()
+        },
+        |record| {
+            let Some(graph) = record.graph.as_ref() else {
+                return Ok(());
+            };
+            let mut texts = Vec::new();
+            for object in graph.objects.iter().take(40) {
+                let Some(fields) = object.fields.as_object() else {
+                    continue;
+                };
+                for (name, value) in fields {
+                    if let Some(text) = value.as_str() {
+                        texts.push(format!(
+                            "{}.{name}={}",
+                            object.class_name,
+                            text.replace(' ', "_")
+                        ));
+                    }
+                }
+            }
+            println!(
+                "native {} {} {}",
+                record.identity.element_id,
+                record.class_name.as_deref().unwrap_or("-"),
+                texts.join(" ")
+            );
+            Ok(())
+        },
+    )?;
     let mut shown: BTreeMap<u32, usize> = BTreeMap::new();
     for stream in rf.partition_stream_names() {
         let Ok(inflated) = rf.inflated_partition(&stream) else {
