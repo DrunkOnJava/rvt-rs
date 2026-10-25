@@ -30,6 +30,9 @@
 //! A landing's top is its `StairsLanding.m_baseElevation`, and a monolithic
 //! landing type's thickness its `StairsLandingType.m_thickness`
 //! ([`native_landings`], #824).
+//!
+//! A run's treads all give one `m_runType`, which names the flight's
+//! predefined type in Revit's export ([`native_run_shapes`], #323).
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -202,6 +205,56 @@ fn sketch(run: &Value, treads: &[Value]) -> Option<(RunSketch, f64)> {
         },
         height,
     ))
+}
+
+/// Releases a run's shape is measured on: the BIM4LCA office (2024) and
+/// the R2025 stair models (#323).
+pub const NATIVE_RUN_SHAPE_REVIT_VERSIONS: &[u32] = &[2024, 2025];
+
+/// The `IfcStairFlightTypeEnum` value Revit's export writes for a run whose
+/// treads' `m_runType` is `run_type`: `STRAIGHT` for 0 and `SPIRAL` for 2,
+/// the two values measured (#323).
+pub fn flight_predefined_type(run_type: i64) -> Option<&'static str> {
+    match run_type {
+        0 => Some("STRAIGHT"),
+        2 => Some("SPIRAL"),
+        _ => None,
+    }
+}
+
+/// Each run in `runs` whose native `StairsTreadInfo` records all give one
+/// `m_runType`, with that value (#323).
+pub fn native_run_shapes(
+    rf: &mut RevitFile,
+    runs: &BTreeSet<u64>,
+) -> anyhow::Result<BTreeMap<u64, i64>> {
+    if runs.is_empty() {
+        return Ok(BTreeMap::new());
+    }
+    let options = Options {
+        selected_ids: runs.clone(),
+        ..Options::default()
+    };
+    let mut out = BTreeMap::new();
+    extract_graphs(rf, &options, |record| {
+        if record.class_name.as_deref() != Some("StairsRun") {
+            return Ok(());
+        }
+        let Some(graph) = record.graph.as_ref() else {
+            return Ok(());
+        };
+        let shapes: BTreeSet<Option<i64>> = graph
+            .objects
+            .iter()
+            .filter(|o| o.class_name == "StairsTreadInfo")
+            .map(|o| o.fields.get("m_runType").and_then(Value::as_i64))
+            .collect();
+        if let [Some(shape)] = shapes.into_iter().collect::<Vec<_>>().as_slice() {
+            out.insert(record.identity.element_id, *shape);
+        }
+        Ok(())
+    })?;
+    Ok(out)
 }
 
 /// Each run in `runs`, keyed by its id with its own run type's id, whose
