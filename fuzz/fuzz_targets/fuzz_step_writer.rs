@@ -373,17 +373,9 @@ fuzz_target!(|input: FuzzInput| {
         units,
         building_storeys,
         materials,
-        material_layer_sets: Vec::new(),
-        material_profile_sets: Vec::new(),
-        representation_maps: Vec::new(),
-        global_ids: Default::default(),
-        element_layers: Default::default(),
-        material_layer_usages: Default::default(),
-        element_type_materials: Default::default(),
-            element_type_ids: Default::default(),
-        material_constituent_sets: Vec::new(),
-        opening_cuts: Default::default(),
-        body_pieces: Default::default(),
+        // Every other field empty, so a field added to `IfcModel` does not
+        // stop this target building (#965).
+        ..IfcModel::default()
     };
 
     let opts = StepOptions {
