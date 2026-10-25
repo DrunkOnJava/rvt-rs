@@ -16,7 +16,9 @@ objects rvt-rs does not write at all.
 
 It prints the totals, then a line per (set, property): how many values
 Revit writes on objects rvt-rs also writes, how many are equal, how many
-differ, and how many are missing.
+differ, and how many are missing. Then, for the 40 properties most often
+missing, the values Revit writes for them most often, so what a missing
+property would take is visible without opening Revit's export (W7).
 
 Usage:
 
@@ -202,6 +204,7 @@ def main(argv):
             for (key, pset, prop), value in theirs.items()
         }
     rows = collections.defaultdict(lambda: [0, 0, 0, 0])
+    missing_values = collections.defaultdict(collections.Counter)
     worst = []
     as_quantities = 0
     twice = 0
@@ -225,6 +228,7 @@ def main(argv):
             row[1] += 1
         elif mine == "missing":
             row[3] += 1
+            missing_values[(pset, prop)][repr(value)[:60]] += 1
         else:
             row[2] += 1
             if len(worst) < listing:
@@ -250,6 +254,10 @@ def main(argv):
     print("rvt-rs values Revit does not write, on objects Revit writes and on others:")
     for (pset, prop), (written, other) in sorted(only.items()):
         print(f"  {pset}.{prop}: {written}, {other}")
+    print("Revit's most common values where rvt-rs writes none:")
+    for (pset, prop), values in sorted(missing_values.items(), key=lambda kv: -sum(kv[1].values()))[:40]:
+        common = ", ".join(f"{v} x{n}" for v, n in values.most_common(4))
+        print(f"  {pset}.{prop}: {common}")
     for line in worst:
         print(line)
     return 0
