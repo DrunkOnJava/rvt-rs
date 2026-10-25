@@ -6598,7 +6598,12 @@ fn attach_is_external(
 /// Give each element of `groups` the values of the project or shared
 /// parameters named `<property set>.<property>` for a property of a standard
 /// set ([`crate::ifc::standard_property_sets`]) that its own data object holds
-/// (RE-194), each as a field [`NAMED_PARAMETER_FIELD_PREFIX`]`<name>`: a
+/// (RE-194), and, for each such property the element holds no
+/// `<property set>.<property>` parameter for, of one named for the property
+/// alone, as revit-ifc's `PropertySetEntryMap` looks the qualified name up
+/// before the bare one (CLEANROOM.md source 5; RE-227: the BIM4LCA office's
+/// `FireExit`, which Revit's export writes as `Pset_DoorCommon.FireExit`),
+/// each as a field [`NAMED_PARAMETER_FIELD_PREFIX`]`<set>.<property>`: a
 /// Yes/No's 0 or 1 as a boolean, an integer, a text of one or more
 /// characters, a positive length in feet, or a length or thermal
 /// transmittance as stored. The latest partition's copy decides, so a text
@@ -6613,15 +6618,28 @@ fn attach_named_parameters(
 ) {
     use crate::ifc::standard_property_sets::{self as sps, StandardPropertyKind as Kind};
     use crate::partition_room_parameters::{self as prp, EntryKind, EntryValue};
-    let parameters: Vec<(String, i64, Kind)> = prp::find_parameter_definitions(rf, revit_version)
-        .into_iter()
+    let definitions = prp::find_parameter_definitions(rf, revit_version);
+    // Qualified names first: an element's bare-named value only fills a
+    // property its qualified one leaves empty.
+    let mut parameters: Vec<(String, i64, Kind)> = definitions
+        .iter()
         .filter_map(|(name, id)| {
             let (set, property) = name.split_once('.')?;
             let kind = sps::property_kind(set, property)
                 .filter(|_| property != IS_EXTERNAL_PARAMETER_NAME)?;
-            Some((name, i64::from(id), kind))
+            Some((name.clone(), i64::from(*id), kind))
         })
         .collect();
+    for (name, id) in &definitions {
+        if name.contains('.') || name == IS_EXTERNAL_PARAMETER_NAME {
+            continue;
+        }
+        for set in sps::STANDARD_PROPERTY_SETS {
+            if let Some(kind) = set.property_kind(name) {
+                parameters.push((format!("{}.{name}", set.name), i64::from(*id), kind));
+            }
+        }
+    }
     if parameters.is_empty() {
         return;
     }
@@ -6630,8 +6648,11 @@ fn attach_named_parameters(
         Kind::Identifier | Kind::Label | Kind::Text => EntryKind::Text,
         Kind::Length | Kind::PositiveLength | Kind::ThermalTransmittance => EntryKind::Real,
     };
+    // A bare name several sets hold is one parameter: scan it once.
+    let mut scanned = BTreeSet::new();
     let wanted: Vec<(i64, EntryKind)> = parameters
         .iter()
+        .filter(|(_, id, _)| scanned.insert(*id))
         .map(|(_, id, kind)| (*id, entry_kind(*kind)))
         .collect();
     let owners: BTreeSet<u32> = groups
@@ -6648,6 +6669,10 @@ fn attach_named_parameters(
             let Some(value) = found.get(parameter).and_then(|values| values.get(&id)) else {
                 continue;
             };
+            let field_name = format!("{NAMED_PARAMETER_FIELD_PREFIX}{name}");
+            if element.fields.iter().any(|(held, _)| *held == field_name) {
+                continue;
+            }
             let field = match (kind, value) {
                 (Kind::Boolean, EntryValue::Word(word @ (0 | 1))) => {
                     InstanceField::Bool(*word == 1)
@@ -6674,9 +6699,7 @@ fn attach_named_parameters(
                 }
                 _ => continue,
             };
-            element
-                .fields
-                .push((format!("{NAMED_PARAMETER_FIELD_PREFIX}{name}"), field));
+            element.fields.push((field_name, field));
         }
     }
 }
