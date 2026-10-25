@@ -17,6 +17,9 @@
 //!     in ElemTable) of the categories below, found by its category at +0x12
 //!   gid <stream> <offset> <i32 before the length> <u32 length> <string>
 //!     every UTF-16 string of 22 GlobalId characters
+//!   holder <stream> <offset> <id|none>
+//!     the element whose data the string is in: the id after the nearest
+//!     element-data header before it (`partition_names::element_data_layout`)
 //!   near <stream> <offset> <distance>=<id> ...
 //!     the declared ElementIds (u32, any alignment) in the 4096 bytes
 //!     before each such string, nearest first, up to 12
@@ -84,11 +87,20 @@ fn main() -> rvt::Result<()> {
         .into_iter()
         .filter(|n| n.starts_with("Partitions/"))
         .collect();
+    let layout = rvt::research::partition_names::element_data_layout(version);
     for name in names {
         let Ok(inflated) = rf.inflated_partition(&name) else {
             continue;
         };
         let data = inflated.bytes();
+        let headers: Vec<(usize, Option<u32>)> = layout
+            .as_ref()
+            .map(|layout| {
+                memchr::memmem::find_iter(data, &layout.header)
+                    .map(|hit| (hit, layout.id_at(data, hit + layout.header.len())))
+                    .collect()
+            })
+            .unwrap_or_default();
         for category in categories.iter().copied().filter(|_| !thirty_two) {
             let needle = (category as u64).to_le_bytes();
             for hit in memchr::memmem::find_iter(data, &needle) {
@@ -124,6 +136,14 @@ fn main() -> rvt::Result<()> {
                         "gid {name} {start} {} {} {text}",
                         param.map_or("-".into(), |p| p.to_string()),
                         length.map_or("-".into(), |l| l.to_string())
+                    );
+                    let holder = headers
+                        .partition_point(|(hit, _)| *hit < start)
+                        .checked_sub(1)
+                        .and_then(|index| headers[index].1);
+                    println!(
+                        "holder {name} {start} {}",
+                        holder.map_or("none".into(), |id| id.to_string())
                     );
                     let near: Vec<String> = (4..=4096usize)
                         .filter_map(|distance| {
