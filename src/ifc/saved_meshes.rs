@@ -35,12 +35,15 @@ pub struct SavedMeshReport {
     pub candidates: usize,
     /// Of those, elements now drawn from their saved mesh.
     pub replaced: usize,
+    /// Of those, elements keeping their box because part of their saved
+    /// graphics did not decode (RE-224).
+    pub partial: usize,
     /// Triangles written in all.
     pub triangles: usize,
 }
 
 /// Replace each bounding-box body with the element's saved mesh, where the
-/// file holds one.
+/// file holds one and all of it decodes.
 pub fn attach(rf: &mut crate::RevitFile, model: &mut IfcModel) -> anyhow::Result<SavedMeshReport> {
     let mut report = SavedMeshReport::default();
     let mut by_id: BTreeMap<u64, Vec<usize>> = BTreeMap::new();
@@ -106,6 +109,19 @@ pub fn attach(rf: &mut crate::RevitFile, model: &mut IfcModel) -> anyhow::Result
         };
         let primitives = &element.meshes.primitives;
         if primitives.is_empty() {
+            continue;
+        }
+        // RE-224: a mesh some face or branch of which did not decode is only
+        // part of the body (on the BIM4LCA office 357 such meshes, none of
+        // them Revit's body). Only branches left out for their view semantics
+        // leave it whole.
+        let partial = element.meshes.diagnostics.iter().any(|diagnostic| {
+            !diagnostic.ends_with(crate::native_graphics_traversal::NESTED_DETAIL_FILTER_DIAGNOSTIC)
+                && !diagnostic
+                    .ends_with(crate::native_graphics_traversal::VIEW_COMPONENT_DIAGNOSTIC)
+        });
+        if partial {
+            report.partial += 1;
             continue;
         }
         let IfcEntity::BuildingElement {
