@@ -876,6 +876,67 @@ pub fn run_side_profile(
     Some(ring)
 }
 
+/// The side views of a run's solids: [`run_side_profile`]'s one where it
+/// draws the run, or else, for a run with treads and no risers,
+/// [`riserless_tread_profiles`]' one per tread.
+pub fn run_side_pieces(
+    sketch: &RunSketch,
+    run_type: &RunType,
+    riser_height_feet: f64,
+    end_with_riser: Option<bool>,
+) -> Option<Vec<Vec<[f64; 2]>>> {
+    run_side_profile(sketch, run_type, riser_height_feet, end_with_riser)
+        .map(|profile| vec![profile])
+        .or_else(|| riserless_tread_profiles(sketch, run_type, riser_height_feet, end_with_riser))
+}
+
+/// The side view of each tread of a run with treads and no risers (#357):
+/// a separate solid per tread, from its riser line to the next, its top at
+/// its riser's height and the type's tread thickness deep; the run's top
+/// riser line has no tread, the floor or landing above taking it. On the
+/// R2025 stair model 15 that is Revit's body: 9 treads, 9 times the tread
+/// depth, width and thickness, 4.449648 ft³.
+///
+/// `None` unless the type has treads and no risers and is not monolithic,
+/// with no nosing (a riserless tread with a nosing profile is shaped by the
+/// profile family, which is not decoded, #357) and ending with a riser, the
+/// construction measured, or for dimensions a real run cannot have.
+pub fn riserless_tread_profiles(
+    sketch: &RunSketch,
+    run_type: &RunType,
+    riser_height_feet: f64,
+    end_with_riser: Option<bool>,
+) -> Option<Vec<Vec<[f64; 2]>>> {
+    let (h, t) = (riser_height_feet, run_type.tread_thickness_feet);
+    if run_type.monolithic
+        || !run_type.treads
+        || run_type.risers
+        || run_type.nosing_length_feet != 0.0
+        || end_with_riser != Some(true)
+        || !(h.is_finite() && h > 0.0)
+        || !(t > 0.0 && t < h)
+    {
+        return None;
+    }
+    let u = &sketch.risers;
+    if u.len() < 2 || u.windows(2).any(|pair| pair[1] <= pair[0]) {
+        return None;
+    }
+    Some(
+        (1..u.len())
+            .map(|k| {
+                let top = k as f64 * h;
+                vec![
+                    [u[k - 1], top - t],
+                    [u[k], top - t],
+                    [u[k], top],
+                    [u[k - 1], top],
+                ]
+            })
+            .collect(),
+    )
+}
+
 /// The side view of a monolithic run (RE-92), as [`run_side_profile`]
 /// draws one: a riser less than riser lines, whichever way the run ends.
 /// Each riser leans from the step's inner corner, the nosing length behind
