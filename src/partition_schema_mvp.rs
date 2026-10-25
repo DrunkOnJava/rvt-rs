@@ -2142,7 +2142,8 @@ fn attach_cut_loop_sizes(
         .iter()
         .filter_map(|element| element.id.map(u64::from))
         .collect();
-    let Ok(loops) = crate::native_symbol_cuts::instance_cut_loops(rf, &ids) else {
+    let Ok((loops, uncut)) = crate::native_symbol_cuts::instance_cut_loops_and_uncut(rf, &ids)
+    else {
         return;
     };
     for element in elements.iter_mut() {
@@ -2169,10 +2170,12 @@ fn attach_cut_loop_sizes(
         .filter_map(|element| element.id)
         .filter(|id| loops.contains_key(&u64::from(*id)))
         .collect();
+    // Only where the symbol cuts no outline at all: one whose outline is not
+    // read (an arc, several loops) keeps the sizes it had.
     let loopless: BTreeSet<u32> = elements
         .iter()
         .filter_map(|element| element.id)
-        .filter(|id| !loops.contains_key(&u64::from(*id)))
+        .filter(|id| uncut.contains(&u64::from(*id)))
         .collect();
     if open.is_empty() && loopless.is_empty() {
         return;
