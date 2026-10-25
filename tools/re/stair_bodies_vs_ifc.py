@@ -3,8 +3,9 @@
 
 For every `IfcStairFlight` both exports hold (same `Tag`, the run's
 ElementId), and every `IfcStair` with its aggregated parts, this meshes the
-body in world space with IfcOpenShell and compares, in feet, as
-`roof_bodies_vs_ifc.py` does for roofs:
+body with IfcOpenShell, in each file's own site frame (Revit writes the
+BIM4LCA office's site at its shared coordinates, rvt-rs at its internal
+ones), and compares, in feet, as `roof_bodies_vs_ifc.py` does for roofs:
 
 - the volume of the two meshes;
 - how far each vertex of Revit's body lies from the nearest vertex of
@@ -34,9 +35,11 @@ import sys
 
 import ifcopenshell
 import ifcopenshell.geom
+import numpy
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from roof_bodies_vs_ifc import FT, VERTEX_TOLERANCE_FT, VOLUME_TOLERANCE, farthest, shapes_of, surface_distances  # noqa: E402
+from opening_boxes_vs_ifc import site_frame  # noqa: E402
+from roof_bodies_vs_ifc import VERTEX_TOLERANCE_FT, VOLUME_TOLERANCE, farthest, shapes_of, surface_distances  # noqa: E402
 
 CLASSES = ("IfcStairFlight", "IfcStair")
 
@@ -44,6 +47,7 @@ CLASSES = ("IfcStairFlight", "IfcStair")
 def bodies(path, cls):
     """Tag -> (unique vertices, volume, triangles) of each `cls`, in feet and cubic feet."""
     model = ifcopenshell.open(path)
+    frame = site_frame(model)
     settings = ifcopenshell.geom.settings()
     settings.set("use-world-coords", True)
     out = {}
@@ -61,9 +65,9 @@ def bodies(path, cls):
                 continue
             verts = shape.geometry.verts
             faces = shape.geometry.faces
-            points = [(verts[i] / FT, verts[i + 1] / FT, verts[i + 2] / FT) for i in range(0, len(verts), 3)]
-            if not points:
+            if not len(verts):
                 continue
+            points = [tuple(float(c) for c in p) for p in frame(numpy.array(verts, dtype=float).reshape(-1, 3))]
             meshed = True
             vertices.update(tuple(round(c, 6) for c in p) for p in points)
             for i in range(0, len(faces), 3):
