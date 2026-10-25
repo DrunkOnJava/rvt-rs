@@ -1470,6 +1470,12 @@ pub const CURTAIN_AXES_FIELDS: [&str; 9] = [
 /// Classes whose turned or tilted instances carry [`CURTAIN_AXES_FIELDS`] (RE-106).
 pub const CURTAIN_AXES_CLASSES: [&str; 2] = ["CurtainWallMullion", "CurtainWallPanel"];
 
+/// Field holding the model axis (0 for X, 1 for Y, 2 for Z) a curtain
+/// mullion on the model's axes runs along: the one its transform's Z axis
+/// lies on (RE-226). A turned or tilted mullion carries
+/// [`CURTAIN_AXES_FIELDS`] instead.
+pub const CURTAIN_MULLION_ALONG_FIELD: &str = "m_curtain_mullion_along";
+
 /// The three axes [`CURTAIN_AXES_FIELDS`] record, X, Y and Z.
 pub fn curtain_axes_from_fields(fields: &[(String, InstanceField)]) -> Option<[[f64; 3]; 3]> {
     let values = CURTAIN_AXES_FIELDS.map(|wanted| {
@@ -1487,7 +1493,8 @@ pub fn curtain_axes_from_fields(fields: &[(String, InstanceField)]) -> Option<[[
 
 /// Give each curtain mullion and panel whose transform (RE-87) turns or
 /// tilts it off the model's axes its three axes (RE-106). One on the
-/// model's axes gets nothing: its record box is already its body's box.
+/// model's axes keeps its record box as its body's box; a mullion there gets
+/// the model axis it runs along ([`CURTAIN_MULLION_ALONG_FIELD`]).
 fn attach_curtain_axes(rf: &mut RevitFile, revit_version: u32, products: &mut [DecodedElement]) {
     let ids: BTreeSet<u32> = products
         .iter()
@@ -1515,6 +1522,21 @@ fn attach_curtain_axes(rf: &mut RevitFile, revit_version: u32, products: &mut [D
                 == 1
         });
         if on_axes {
+            if element.class == "CurtainWallMullion" {
+                if let Some(along) = transform.axes[2]
+                    .iter()
+                    .position(|v| v.abs() > INSTANCE_TURN_MIN_RADIANS)
+                {
+                    element.fields.push((
+                        CURTAIN_MULLION_ALONG_FIELD.into(),
+                        InstanceField::Integer {
+                            value: along as i64,
+                            signed: false,
+                            size: 4,
+                        },
+                    ));
+                }
+            }
             continue;
         }
         let values = transform.axes.iter().flatten().copied();
