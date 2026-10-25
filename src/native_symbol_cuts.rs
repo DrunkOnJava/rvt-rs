@@ -198,3 +198,131 @@ pub fn instance_cut_loops_and_uncut(
         .collect();
     Ok((loops, uncut))
 }
+
+/// A family instance hosted on a face of another element through a
+/// sketch plane, and the solid the symbol that draws it cuts (#824).
+#[derive(Debug, Clone, PartialEq)]
+pub struct HostedCut {
+    /// The instance's ElementId.
+    pub instance: u64,
+    /// The element whose face its sketch plane lies on.
+    pub host: u64,
+    /// The vertices of the cut solid's bounded faces, in the symbol's
+    /// coordinates, feet.
+    pub vertices: Vec<[f64; 3]>,
+}
+
+/// The vertices of the bounded faces of the solid a `FamilySymbol` graph
+/// cuts where it cuts no loop: the `Geometry` objects its `m_complexCutGeoms`
+/// names (RE-225). A face with no boundary (an unbounded plane) adds
+/// nothing; one that does not mesh leaves the symbol with none.
+fn cut_solid_vertices(graph: &crate::native_parameters::ObjectGraph) -> Option<Vec<[f64; 3]>> {
+    let root = graph.objects.first()?;
+    if !root.fields.get("m_pCutLoops")?.as_array()?.is_empty() {
+        return None;
+    }
+    let mut vertices = Vec::new();
+    for solid in root.fields.get("m_complexCutGeoms")?.as_array()? {
+        let index = pointer(graph, 0, solid).ok()??;
+        let geometry = graph.objects.get(index)?;
+        if geometry.class_name != "Geometry" {
+            return None;
+        }
+        for face in geometry.fields.get("m_pFaces")?.as_array()? {
+            let face = pointer(graph, index, face).ok()??;
+            if let Some(mesh) = crate::native_saved_mesh::face(graph, face).ok()? {
+                vertices.extend(mesh.vertices);
+            }
+        }
+    }
+    (!vertices.is_empty()).then_some(vertices)
+}
+
+/// For each of `instances` (family instances' ElementIds) whose `m_hostId`
+/// is a `SketchPlane` lying on a face of another element (the plane's
+/// `GeomOnPlaneRef.m_geomRef.m_elemId`), and whose symbol (its
+/// `InstanceInfo.m_symbolId`) cuts a solid rather than a loop, that element
+/// and the solid's vertices (#824): the BIM4LCA office's four roof hatches,
+/// on roof 2991742, each cutting a 600 mm square through it. Two passes:
+/// the instances, then the planes and symbols they name.
+pub fn face_hosted_cuts(
+    rf: &mut RevitFile,
+    instances: &BTreeSet<u64>,
+) -> anyhow::Result<Vec<HostedCut>> {
+    if instances.is_empty() {
+        return Ok(Vec::new());
+    }
+    let mut named: BTreeMap<u64, (u64, u64)> = BTreeMap::new();
+    let options = native_document::Options {
+        selected_ids: instances.clone(),
+        ..native_document::Options::default()
+    };
+    native_document::extract_graphs(rf, &options, |record| {
+        let Some(graph) = record.graph.as_ref() else {
+            return Ok(());
+        };
+        let plane = graph
+            .objects
+            .first()
+            .and_then(|root| root.fields.get("m_hostId"))
+            .and_then(element_id);
+        let symbol = graph
+            .objects
+            .iter()
+            .find(|object| object.class_name == "InstanceInfo")
+            .and_then(|object| object.fields.get("m_symbolId"))
+            .and_then(element_id);
+        if let (Some(plane), Some(symbol)) = (plane, symbol) {
+            named.insert(record.identity.element_id, (plane, symbol));
+        }
+        Ok(())
+    })?;
+    if named.is_empty() {
+        return Ok(Vec::new());
+    }
+    let mut hosts: BTreeMap<u64, u64> = BTreeMap::new();
+    let mut solids: BTreeMap<u64, Vec<[f64; 3]>> = BTreeMap::new();
+    let options = native_document::Options {
+        selected_ids: named
+            .values()
+            .flat_map(|(plane, symbol)| [*plane, *symbol])
+            .collect(),
+        ..native_document::Options::default()
+    };
+    native_document::extract_graphs(rf, &options, |record| {
+        let Some(graph) = record.graph.as_ref() else {
+            return Ok(());
+        };
+        let id = record.identity.element_id;
+        match record.class_name.as_deref() {
+            Some("SketchPlane") => {
+                if let Some(host) = graph
+                    .objects
+                    .iter()
+                    .find(|object| object.class_name == "GeomOnPlaneRef")
+                    .and_then(|object| object.fields.pointer("/m_geomRef/m_elemId"))
+                    .and_then(element_id)
+                {
+                    hosts.insert(id, host);
+                }
+            }
+            Some("FamilySymbol") => {
+                if let Some(vertices) = cut_solid_vertices(graph) {
+                    solids.insert(id, vertices);
+                }
+            }
+            _ => {}
+        }
+        Ok(())
+    })?;
+    Ok(named
+        .into_iter()
+        .filter_map(|(instance, (plane, symbol))| {
+            Some(HostedCut {
+                instance,
+                host: *hosts.get(&plane)?,
+                vertices: solids.get(&symbol)?.clone(),
+            })
+        })
+        .collect())
+}
