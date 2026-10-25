@@ -22,12 +22,13 @@
 //! one included, each with the end it joins by (`m_joinedEnd`: 0 its start,
 //! 1 its end, 2 or 3 its middle, a T joint), in an order the record keeps.
 //! Where another wall meets this wall's end with its middle, Revit's body of
-//! this wall stops at that wall's core: half its thickness short of the
-//! curve's end, less the layers outside its core on this wall's side
-//! ([`tee_reach`], RE-223). A wall type's `CompoundStructure` lists its
-//! layers exterior first (`m_layers`, `m_layerWidth`) and how many lie
-//! outside its core on its exterior and its interior side
-//! (`m_numShellLayersExt`, `m_numShellLayersInt`).
+//! this wall stops half that wall's thickness short of its curve's end
+//! ([`tee_reach`]), where the wall is one layer. A wall type's
+//! `CompoundStructure` lists its layers exterior first (`m_layers`,
+//! `m_layerWidth`) and how many lie outside its core on its exterior and its
+//! interior side (`m_numShellLayersExt`, `m_numShellLayersInt`): a layered
+//! wall's core runs on through the other wall's layers outside its core
+//! (RE-223, [`crate::element_record_wall_joins::tee_join`]).
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -218,40 +219,28 @@ pub fn native_walls(
 
 /// How far past the `end` (0 its start, 1 its end) of wall `id`'s curve its
 /// body reaches where the join there is a T joint: another wall, the host,
-/// meets that end with its middle. Revit's body stops at the host's core:
-/// half the host's thickness short of the curve's end, less the host's
-/// layers outside its core on the side this wall comes from (RE-222,
-/// RE-223). Where the host's type has no compound structure, or which of
-/// its sides this wall is on is not known, it stops at the host's face.
-/// `None` where the join is not a T joint with exactly one host, or the
-/// host's thickness is not known.
+/// meets that end with its middle, and Revit's body stops half the host's
+/// thickness short of the curve's end. Against Revit's bodies this is
+/// Revit's end on 315 of the 396 such ends of the BIM4LCA office as built,
+/// where the join lists' reach (RE-70, RE-73) gave 289, and on all 269 of
+/// Core Interior's (RE-222). `None` where the join is not a T joint with
+/// exactly one host, or the host's thickness is not known.
 pub fn tee_reach(
     id: u64,
     end: usize,
     walls: &BTreeMap<u64, NativeWall>,
     thickness: impl Fn(u64) -> Option<f64>,
 ) -> Option<f64> {
-    let wall = walls.get(&id)?;
-    let join = wall.joins.get(end)?.as_ref()?;
+    let join = walls.get(&id)?.joins.get(end)?.as_ref()?;
     let tees: Vec<u64> = join
         .iter()
         .filter(|(other, joined)| *other != id && matches!(joined, 2 | 3))
         .map(|(other, _)| *other)
         .collect();
-    let [host_id] = tees.as_slice() else {
+    let [host] = tees.as_slice() else {
         return None;
     };
-    let half = thickness(*host_id).filter(|t| t.is_finite() && *t > 0.0)? / 2.0;
-    // The host's exterior side: right of its curve's direction where it is
-    // flipped (RE-53), and the side this wall's other end lies on.
-    let shell = walls.get(host_id).and_then(|host| {
-        let [exterior, interior] = host.shells?;
-        let (dx, dy) = (host.end[0] - host.start[0], host.end[1] - host.start[1]);
-        let normal = if host.flipped? { [dy, -dx] } else { [-dy, dx] };
-        let far = if end == 0 { wall.end } else { wall.start };
-        let side = (far[0] - host.start[0]) * normal[0] + (far[1] - host.start[1]) * normal[1];
-        (side.abs() > 1e-9).then_some(if side > 0.0 { exterior } else { interior })
-    });
-    let shell = shell.filter(|shell| *shell < half).unwrap_or(0.0);
-    Some(shell - half)
+    thickness(*host)
+        .filter(|t| t.is_finite() && *t > 0.0)
+        .map(|t| -t / 2.0)
 }

@@ -4761,7 +4761,7 @@ fn attach_wall_layers(rf: &mut RevitFile, revit_version: u32, walls: &mut [Decod
         wall.fields.push((WALL_LAYERS_FIELD.into(), bands));
     }
     if centreline_bodies {
-        attach_wall_butt_joins(rf, revit_version, walls, &layers);
+        attach_wall_butt_joins(rf, revit_version, walls, &layers, &native);
         attach_native_tee_reaches(walls, &native);
     }
 }
@@ -4771,8 +4771,8 @@ fn attach_wall_layers(rf: &mut RevitFile, revit_version: u32, walls: &mut [Decod
 const NATIVE_WALL_LINE_TOLERANCE_FEET: f64 = 1e-4;
 
 /// At each end of a wall with a centreline where its native record says
-/// another wall meets that end with its middle, the body stops at that
-/// wall's core ([`crate::native_walls::tee_reach`], RE-222, RE-223),
+/// another wall meets that end with its middle, the body stops half that
+/// wall's thickness short ([`crate::native_walls::tee_reach`], RE-222),
 /// in place of the reach its join lists give. An end whose layers each end
 /// on their own line (RE-71, RE-74) keeps them, and so does one whose other
 /// wall's thickness is not known: its type's, or its record box's thin
@@ -4862,6 +4862,7 @@ fn attach_wall_butt_joins(
     revit_version: u32,
     walls: &mut [DecodedElement],
     type_layers: &BTreeMap<u32, Vec<crate::partition_compound_structure::CompoundLayer>>,
+    native: &BTreeMap<u64, crate::native_walls::NativeWall>,
 ) {
     use crate::element_record_wall_joins as joins;
     let float = |wall: &DecodedElement, wanted: &str| {
@@ -4897,6 +4898,9 @@ fn attach_wall_butt_joins(
                 exterior: [ex, ey],
                 base_feet: base,
                 top_feet: base + float(wall, "m_bboxHeight")?,
+                shells: native
+                    .get(&u64::from(wall.id?))
+                    .and_then(|native| native.shells),
             })
         })
         .collect();
