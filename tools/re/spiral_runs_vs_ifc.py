@@ -88,6 +88,16 @@ def main():
                     elif curve is not None and curve.is_a("IfcIndexedPolyCurve"):
                         parts = [f"{len(curve.Points.CoordList)} points", f"segments {[s.is_a() for s in (curve.Segments or [])]}"]
                     print(f"  item {item.is_a()} depth {item.Depth} profile {profile.is_a()} curve {curve.is_a() if curve else None} {parts}")
+                    print(f"    solid {item}")
+                    print(f"    position {item.Position} location {item.Position.Location} axis {item.Position.Axis} ref {item.Position.RefDirection}")
+                    print(f"    direction {item.ExtrudedDirection}")
+                    print(f"    profile {profile}")
+                    if curve is not None:
+                        print(f"    curve {curve}")
+                        if curve.is_a("IfcIndexedPolyCurve"):
+                            print(f"    points {curve.Points}")
+                    placement = flight.ObjectPlacement
+                    print(f"    flight placement {placement} {placement.RelativePlacement} {placement.RelativePlacement.Location}")
                     if curve is not None and curve.is_a("IfcCompositeCurve"):
                         for seg in curve.Segments:
                             pc = seg.ParentCurve
