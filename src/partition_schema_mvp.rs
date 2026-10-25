@@ -4609,6 +4609,14 @@ fn attach_wall_layers(rf: &mut RevitFile, revit_version: u32, walls: &mut [Decod
     ) else {
         return;
     };
+    // W6: a wall its partition data gives no line, where its copies there
+    // disagree (RE-216), takes the curve its native record holds.
+    let native = if centreline_bodies {
+        let ids: BTreeSet<u64> = wall_ids.iter().map(|&id| u64::from(id)).collect();
+        crate::native_walls::native_walls(rf, &ids).unwrap_or_default()
+    } else {
+        BTreeMap::new()
+    };
     // RE-91: a layer that takes its category's material takes the one the
     // document's object styles give walls, where it is set and named.
     let category_material = crate::partition_materials::scan_category_material(
@@ -4656,8 +4664,19 @@ fn attach_wall_layers(rf: &mut RevitFile, revit_version: u32, walls: &mut [Decod
         let float = |value: f64| InstanceField::Float { value, size: 8 };
         // The direction the exterior side is taken from: the line's, or the
         // arc's tangent at its middle (RE-75).
-        let (dx, dy) = if let Some(line) = lines.get(&id) {
-            let (start, end) = (line.start(), line.end());
+        let line = lines
+            .get(&id)
+            .map(|line| {
+                let (start, end) = (line.start(), line.end());
+                ([start[0], start[1]], [end[0], end[1]])
+            })
+            .or_else(|| {
+                native
+                    .get(&u64::from(id))
+                    .filter(|_| !arcs.contains_key(&id))
+                    .map(|wall| (wall.start, wall.end))
+            });
+        let (dx, dy) = if let Some((start, end)) = line {
             let (dx, dy) = (end[0] - start[0], end[1] - start[1]);
             let length = dx.hypot(dy);
             if !length.is_finite() || length <= 1e-9 {
@@ -4750,6 +4769,73 @@ fn attach_wall_layers(rf: &mut RevitFile, revit_version: u32, walls: &mut [Decod
     }
     if centreline_bodies {
         attach_wall_butt_joins(rf, revit_version, walls, &layers);
+        attach_native_tee_reaches(walls, &native);
+    }
+}
+
+/// How close a wall's native curve's ends must be to its centreline's to be
+/// taken as the same line, feet.
+const NATIVE_WALL_LINE_TOLERANCE_FEET: f64 = 1e-4;
+
+/// At each end of a wall with a centreline that its join lists leave
+/// undecided, where its native record says another wall meets that end with
+/// its middle, the body stops half that wall's thickness short
+/// ([`crate::native_walls::tee_reach`], W6).
+fn attach_native_tee_reaches(
+    walls: &mut [DecodedElement],
+    native: &BTreeMap<u64, crate::native_walls::NativeWall>,
+) {
+    let thickness: BTreeMap<u64, f64> = walls
+        .iter()
+        .filter_map(|wall| {
+            let id = u64::from(wall.id?);
+            wall.fields.iter().find_map(|(name, value)| match value {
+                InstanceField::Float { value, .. }
+                    if name == crate::element_record_wall_joins::WALL_THICKNESS_FIELD =>
+                {
+                    Some((id, *value))
+                }
+                _ => None,
+            })
+        })
+        .collect();
+    let near = |a: [f64; 2], b: [f64; 2]| {
+        (a[0] - b[0]).hypot(a[1] - b[1]) <= NATIVE_WALL_LINE_TOLERANCE_FEET
+    };
+    for wall in walls.iter_mut() {
+        let Some(id) = wall.id.map(u64::from) else {
+            continue;
+        };
+        let (Some(axis), Some(curve)) = (wall_axis_from_fields(&wall.fields), native.get(&id))
+        else {
+            continue;
+        };
+        let ends = if near(curve.start, axis.start) && near(curve.end, axis.end) {
+            [0, 1]
+        } else if near(curve.start, axis.end) && near(curve.end, axis.start) {
+            [1, 0]
+        } else {
+            continue;
+        };
+        for (slot, end) in ends.into_iter().enumerate() {
+            if axis.join_reach_feet[slot].is_some() {
+                continue;
+            }
+            let Some(Some(join)) = curve.joins.get(end) else {
+                continue;
+            };
+            if let Some(reach) =
+                crate::native_walls::tee_reach(id, join, |other| thickness.get(&other).copied())
+            {
+                wall.fields.push((
+                    WALL_JOIN_REACH_FIELDS[slot].into(),
+                    InstanceField::Float {
+                        value: reach,
+                        size: 8,
+                    },
+                ));
+            }
+        }
     }
 }
 
