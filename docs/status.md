@@ -772,8 +772,9 @@ riser height and ends are read by member name from its native records
 puzzbobb's `m_endWithRiser` (#357), and its run type from its element
 record, as on 2024, which is Revit's on all 75 runs measured. On
 puzzbobb's R2025 stair models 13 and 14 each flight now has Revit's volume
-and every vertex of Revit's body lies on rvt-rs's; the riserless,
-monolithic and spiral runs (15 to 17) keep their box
+and every vertex of Revit's body lies on rvt-rs's, and so do the riserless
+run (15), drawn as its separate treads, and the monolithic one (16); the
+spiral run (17) keeps its box
 (`reports/element-framing/RE-217-stair-runs-2025.md`). Its addendum draws a
 monolithic run with upright risers and no nosing as RE-92 draws one with
 slanted risers: model 16's flight then has Revit's volume. A second

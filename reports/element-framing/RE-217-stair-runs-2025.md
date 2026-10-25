@@ -82,7 +82,7 @@ Core Interior, Einhoven, the four RE1 models, the other 21 R2025 models and both
 
 ## 6. What it does not cover
 
-- Riserless and spiral runs (§5). Monolithic runs with upright risers are drawn since §7.
+- Spiral runs (§5). Monolithic runs with upright risers are drawn since §7, riserless ones without a nosing since §9.
 - A run whose own type differs from its stairs' default: none was measured (§3). rvt-rs takes the run's own, which is the one Revit stores per run.
 - Releases other than 2025. The members are the same on 2024: on the BIM4LCA office, `native_runs` reads the sketch of 34 of its 35 runs (the probe's `native` lines). All 34 are monolithic with upright risers, as model 16 is, so the profile draws none of them, and 2024 runs are still drawn by RE-52 from its byte anchors, measured on Snowdon Towers. Those 35 office flights, with model 16, are the oracle for drawing a monolithic run with upright risers.
 
@@ -128,3 +128,11 @@ Measure run [40155621830](https://github.com/DrunkOnJava/rvt-rs/actions/runs/401
 Every other model's IFC is byte-identical: Core Interior, Einhoven, the four RE1 models and the 23 R2025 models (model 16's run starts at its base with no extension, so it is cut at its base as before).
 
 **Not re-measured: Snowdon Towers** (local only, never measured on CI). RE-92's 4 monolithic Snowdon flights that equal Revit's were drawn with the underside cut at the base. By this rule a flight drawn exactly that way starts at its stair's base with no extension, so it is expected to stay the same, and a Snowdon flight that starts on a landing or extends below its base changes. That is an inference from the office, not a measurement of Snowdon.
+
+## 9. Addendum (2026-10-24): runs with treads and no risers
+
+Model 15's run type has treads and no risers (`m_hasRiser` false, `m_hasTread` true, tread thickness 0.16404 ft, no nosing). Revit's flight is 9 separate boxes, 72 vertices, 4.449648 ft³: exactly 9 times the tread depth (0.91864 ft), the run width (3.28084 ft) and the tread thickness. Each tread spans one riser line to the next, its top at its riser's height. The run's top riser line has no tread, the floor above taking it, as #357 found on Snowdon's riserless type 1557288.
+
+`partition_stairs::riserless_tread_profiles` draws that: one side view per tread, for a type with treads and no risers, not monolithic, with no nosing, on a run ending with a riser. `run_side_pieces` returns it where `run_side_profile` draws nothing. The run's solids are written as one `IfcTriangulatedFaceSet` of their prisms (`StairRunBody::pieces`, field `m_stair_run_pieces`), each prism's faces turned outward.
+
+Measure run [40158238799](https://github.com/DrunkOnJava/rvt-rs/actions/runs/40158238799), this change against `main` (b7990d37): model 15's flight goes from its box, 355.97 ft³, to Revit's 4.449648 ft³, every vertex within 2.3e-6 ft of Revit's and every Revit vertex on rvt-rs's surface (`stair_bodies_vs_ifc`: match). The flight now also carries its type's name (`type_objects_vs_ifc` TypeName equal to Revit's 21 to 22 of 25) and Revit's material set (`element_materials_vs_ifc` 18 to 19 of 19). Every other model's IFC is byte-identical, the BIM4LCA office's included. Snowdon's riserless type has a 3 in nosing shaped by its nosing profile family, which is not decoded, so its runs keep their box; Snowdon is not re-measured (local only).

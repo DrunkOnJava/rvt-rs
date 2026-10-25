@@ -4715,6 +4715,9 @@ pub const STAIR_RUN_WIDTH_FIELD: &str = "m_stair_run_width";
 /// Field holding a stair run's side view, `[along, up]` feet from its
 /// sketch origin (RE-52).
 pub const STAIR_RUN_PROFILE_FIELD: &str = "m_stair_run_profile";
+/// Field carrying the side views of a run's further solids, after the first
+/// in [`STAIR_RUN_PROFILE_FIELD`]: a riserless run's treads (#357).
+pub const STAIR_RUN_PIECES_FIELD: &str = "m_stair_run_pieces";
 
 /// A stair run's treads and risers as [`STAIR_RUN_PROFILE_FIELD`] and its
 /// companions record them (RE-52).
@@ -4730,6 +4733,9 @@ pub struct StairRunBody {
     pub width_feet: f64,
     /// Side view, `[along, up]` feet from `origin`, counter-clockwise.
     pub profile: Vec<[f64; 2]>,
+    /// The side views of the run's further solids, where it is several
+    /// (a riserless run's treads, #357); empty for one.
+    pub pieces: Vec<Vec<[f64; 2]>>,
 }
 
 /// The run body recorded in `fields`, when every part of it is.
@@ -4740,8 +4746,8 @@ pub fn stair_run_body_from_fields(fields: &[(String, InstanceField)]) -> Option<
             _ => None,
         })
     };
-    let profile = fields.iter().find_map(|(name, value)| match value {
-        InstanceField::Vector(points) if name == STAIR_RUN_PROFILE_FIELD => points
+    let ring = |points: &[InstanceField]| {
+        points
             .iter()
             .map(|point| match point {
                 InstanceField::Vector(pair) => match pair.as_slice() {
@@ -4753,9 +4759,26 @@ pub fn stair_run_body_from_fields(fields: &[(String, InstanceField)]) -> Option<
                 },
                 _ => None,
             })
-            .collect::<Option<Vec<[f64; 2]>>>(),
+            .collect::<Option<Vec<[f64; 2]>>>()
+    };
+    let profile = fields.iter().find_map(|(name, value)| match value {
+        InstanceField::Vector(points) if name == STAIR_RUN_PROFILE_FIELD => ring(points),
         _ => None,
     })?;
+    let pieces = match fields
+        .iter()
+        .find(|(name, _)| name == STAIR_RUN_PIECES_FIELD)
+    {
+        Some((_, InstanceField::Vector(rings))) => rings
+            .iter()
+            .map(|r| match r {
+                InstanceField::Vector(points) => ring(points).filter(|p| p.len() >= 3),
+                _ => None,
+            })
+            .collect::<Option<Vec<_>>>()?,
+        Some(_) => return None,
+        None => Vec::new(),
+    };
     let [ox, oy, oz] = STAIR_RUN_ORIGIN_FIELDS.map(float);
     let [cx, cy] = STAIR_RUN_CLIMB_FIELDS.map(float);
     let [ax, ay] = STAIR_RUN_ACROSS_FIELDS.map(float);
@@ -4765,6 +4788,7 @@ pub fn stair_run_body_from_fields(fields: &[(String, InstanceField)]) -> Option<
         across: [ax?, ay?],
         width_feet: float(STAIR_RUN_WIDTH_FIELD)?,
         profile: (profile.len() >= 3).then_some(profile)?,
+        pieces,
     })
 }
 
@@ -4894,11 +4918,11 @@ fn attach_stair_run_bodies(
         if let Some(cut) = element.id.and_then(|id| base_cuts.get(&u64::from(id))) {
             sketch.base_cut_feet = *cut;
         }
-        let Some(profile) = ps::run_side_profile(&sketch, run_type, riser_height, end_with_riser)
+        let Some(pieces) = ps::run_side_pieces(&sketch, run_type, riser_height, end_with_riser)
         else {
             continue;
         };
-        push_stair_run_body(element, &sketch, &profile);
+        push_stair_run_body(element, &sketch, &pieces);
     }
 }
 
@@ -4907,9 +4931,20 @@ fn attach_stair_run_bodies(
 fn push_stair_run_body(
     element: &mut DecodedElement,
     sketch: &crate::partition_stairs::RunSketch,
-    profile: &[[f64; 2]],
+    pieces: &[Vec<[f64; 2]>],
 ) {
     let scalar = |value: f64| InstanceField::Float { value, size: 8 };
+    let ring = |points: &[[f64; 2]]| {
+        InstanceField::Vector(
+            points
+                .iter()
+                .map(|&[u, z]| InstanceField::Vector(vec![scalar(u), scalar(z)]))
+                .collect(),
+        )
+    };
+    let Some((profile, rest)) = pieces.split_first() else {
+        return;
+    };
     for (name, value) in STAIR_RUN_ORIGIN_FIELDS.iter().zip(sketch.origin) {
         element.fields.push(((*name).into(), scalar(value)));
     }
@@ -4922,15 +4957,15 @@ fn push_stair_run_body(
     element
         .fields
         .push((STAIR_RUN_WIDTH_FIELD.into(), scalar(sketch.width_feet)));
-    element.fields.push((
-        STAIR_RUN_PROFILE_FIELD.into(),
-        InstanceField::Vector(
-            profile
-                .iter()
-                .map(|&[u, z]| InstanceField::Vector(vec![scalar(u), scalar(z)]))
-                .collect(),
-        ),
-    ));
+    element
+        .fields
+        .push((STAIR_RUN_PROFILE_FIELD.into(), ring(profile)));
+    if !rest.is_empty() {
+        element.fields.push((
+            STAIR_RUN_PIECES_FIELD.into(),
+            InstanceField::Vector(rest.iter().map(|r| ring(r)).collect()),
+        ));
+    }
 }
 
 /// Give each Revit 2025 stair run the treads and risers its native records
@@ -4981,7 +5016,7 @@ fn attach_native_stair_run_bodies(
         let Some(run) = element.id.and_then(|id| native.get(&u64::from(id))) else {
             continue;
         };
-        let Some(profile) = crate::partition_stairs::run_side_profile(
+        let Some(pieces) = crate::partition_stairs::run_side_pieces(
             &run.sketch,
             &run.run_type,
             run.riser_height_feet,
@@ -5009,7 +5044,7 @@ fn attach_native_stair_run_bodies(
                 .fields
                 .push((TYPE_NAME_FIELD.into(), InstanceField::String(name.clone())));
         }
-        push_stair_run_body(element, &run.sketch, &profile);
+        push_stair_run_body(element, &run.sketch, &pieces);
     }
 }
 
