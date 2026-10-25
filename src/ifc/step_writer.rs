@@ -2871,17 +2871,26 @@ impl StepWriter {
         // RE-151 (#227): an opening nothing fills, a hole in a floor's sketch.
         // As in Revit's export it is placed in its host's frame, its outline
         // extruded up through the host, and it voids the host without being
-        // contained in a storey.
+        // contained in a storey. #824: so is the opening a face-hosted door
+        // or window cuts in its host, numbered among the host's openings.
         for entity in &model.entities {
-            let super::entities::IfcEntity::VoidOpening {
-                host,
-                tag,
-                name,
-                outline_feet,
-                depth_feet,
-            } = entity
-            else {
-                continue;
+            let (host, tag, name, outline_feet, depth_feet, number) = match entity {
+                super::entities::IfcEntity::VoidOpening {
+                    host,
+                    tag,
+                    name,
+                    outline_feet,
+                    depth_feet,
+                } => (host, tag, name, outline_feet, depth_feet, None),
+                super::entities::IfcEntity::HostedCutOpening {
+                    host,
+                    number,
+                    tag,
+                    name,
+                    outline_feet,
+                    depth_feet,
+                } => (host, tag, name, outline_feet, depth_feet, Some(*number)),
+                _ => continue,
             };
             let (Some(Some(host_el_id)), Some(Some(host_placement))) = (
                 entity_index_to_el_id.get(*host),
@@ -2935,7 +2944,15 @@ impl StepWriter {
                 format!("IFCLOCALPLACEMENT(#{host_placement},#{opening_axis})"),
             );
             let host_gid = el_id_to_gid.get(host_el_id).copied().unwrap_or_default();
-            let opening_gid = gid(&["void-opening", host_gid, tag]);
+            // #824: Revit's own GlobalId, revit-ifc `OpeningUtil`'s hash of
+            // `IfcOpeningElement:<number>:<host GlobalId>` (CLEANROOM.md
+            // source 5): all four of the BIM4LCA office roof's (RE-225).
+            let opening_gid = match number {
+                Some(number) => crate::revit_global_ids::hashed_global_id(&format!(
+                    "IfcOpeningElement:{number}:{host_gid}"
+                )),
+                None => gid(&["void-opening", host_gid, tag]),
+            };
             let opening_id = self.id();
             self.emit_entity(
                 opening_id,
