@@ -18,7 +18,7 @@ and then the same on the element's type. RE-194 reads the second on the element.
 
 ## 2. What the office defines
 
-`probe_re227_parameter_names` lists every project and shared parameter definition and marks those named for a standard property: 836 definitions, of which the qualified names RE-194 already reads (`Pset_DoorCommon.HandicapAccessible`, `Pset_SlabCommon.LoadBearing`, `Pset_DoorWindowGlazingType.IsLaminated` and 50 more), one bare name, `FireExit` (ElementId 1104147), and seven display names (`Acoustic Rating`, `Ceiling Covering`, `Fire Rating`, `Floor Covering`, `Frame Thickness`, `Nominal height`, `Nominal width`).
+`probe_re227_parameter_names` lists every project and shared parameter definition and marks those named for a standard property. Of the as-built file's 836 definitions, 58 are qualified names RE-194 already reads (`Pset_DoorCommon.HandicapAccessible`, `Pset_SlabCommon.LoadBearing`, `Pset_DoorWindowGlazingType.IsLaminated`, ...), five are bare property names (`Category`, `Description`, `Finish`, `FireExit` with ElementId 1104147, `Name`) and nine display names (`Acoustic Rating`, `Ceiling Covering`, `Fire Rating`, `Floor Covering`, `Frame Thickness`, `Nominal height`, `Nominal width`, `Skirting Board`, `Wall Covering`). The permit file has one qualified definition fewer.
 
 Revit's export writes `Pset_DoorCommon.FireExit` false on all 266 of the office's doors that carry the parameter, and rvt-rs wrote none (#992's listing of the values Revit writes where rvt-rs writes none).
 
@@ -35,7 +35,7 @@ Revit's export writes `Pset_DoorCommon.FireExit` false on all 266 of the office'
 | office as built | 32,167 → 32,433: `Pset_DoorCommon.FireExit` 266 of 266 | 55, unchanged | 495, unchanged |
 | office at permit | 32,339 → 32,605: the same 266 | 55, unchanged | 496, unchanged |
 
-Core Interior, Einhoven and the four RE1 models export byte for byte as before: none of them defines such a parameter.
+Of the five bare names only `FireExit` gives a value on an element Revit's export writes; the other four change nothing. Core Interior, Einhoven and the four RE1 models export byte for byte as before: none of them defines such a parameter.
 
 ## 5. Next
 
