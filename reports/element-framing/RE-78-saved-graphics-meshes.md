@@ -46,5 +46,24 @@ Snowdon Towers: 3,789 of 4,744 bounding-box bodies replaced, 2.55 M triangles, 3
 ## Not claimed
 
 - Default export: the option is off because of time and size.
-- Revit 2025: the reader declines the file ("native record framing is unvalidated for Revit 2025", RE1 Architecture), and the export goes ahead with its boxes and says so. Older releases are not measured.
+- Revit 2025: when this report was written the reader declined the file ("native record framing is unvalidated for Revit 2025", RE1 Architecture). It reads RE1's four Revit 2025 models now (Measure run 37231768480; §Shapes below). Older releases are not measured.
 - The opening a door or window cuts is still its box (#227).
+
+## Shapes against Revit's export (2026-10-25)
+
+A world box can agree while the shape inside it does not. `tools/re/mesh_bodies_vs_ifc.py` meshes each body drawn from a saved mesh and Revit's body for the same Tag with IfcOpenShell, each in its file's own site frame in internal feet, and compares the volume and how far each body's vertices lie from the other's surface, both ways. A class with more than 300 such bodies is scored on an even stride of 300 by Tag, and at most 400 vertices of a body are tested. Measure run [40192112285](https://github.com/DrunkOnJava/rvt-rs/actions/runs/40192112285), `main` at a1b1e24c with `--saved-meshes`, `-f nordic=true`. "Exact" is every tested vertex of each body within 0.001 ft of the other's surface; the volume of nearly all of those agrees to 0.01%.
+
+| file | bodies scored | exact | by class (exact of scored) |
+|---|---:|---:|---|
+| Core Interior (2024) | 138 | 138 | IfcDoor 132/132, IfcWindow 6/6 |
+| BIM4LCA office as built (2024) | 1,709 | 1,294 | IfcWindow 269/269, IfcPlate 260/260, IfcColumn 199/199, IfcMember 294/294 of 9,678, IfcElectricAppliance 50/50, IfcFireSuppressionTerminal 40/40, IfcBuildingElementProxy 12/12, IfcCovering 12/12, IfcRamp 4/4, IfcFurniture 68/83, IfcDoor 48/269, IfcSanitaryTerminal 34/100, IfcWasteTerminal 0/51, IfcLightFixture 0/43, IfcRailing 0/18 |
+| BIM4LCA office at building permit (2024) | 1,797 | 1,376 | the same pattern |
+| RE1 Architecture (2025) | 56 | 45 | IfcDoor 5/5, IfcMember 10/10, IfcPlate 2/2, IfcFurnishingElement 18/23, IfcBuildingElementProxy 8/9, IfcFlowTerminal 2/7 |
+| RE1 Electrical (2025) | 49 | 31 | IfcDistributionControlElement 5/5, IfcBuildingElementProxy 22/30, IfcFlowTerminal 4/14 |
+| RE1 Mechanical (2025) | 68 | 65 | IfcFlowSegment 25/25, IfcFlowTerminal 7/7, IfcFlowFitting 32/35 |
+| RE1 Plumbing (2025) | 41 | 7 | IfcFlowTerminal 6/6 (volume within 0.05%), IfcFlowFitting 1/35 (median volume 1.22 times Revit's) |
+
+Where a saved mesh is exact it is Revit's body to the export's own precision: the Core Interior doors agree to 0.000003 ft both ways. The office's windows are exact on all 269, where Snowdon's differed (§Residuals); that difference is the families', not the reader's.
+
+Where a mesh is not exact, it is mostly part of the body: its own vertices lie on Revit's surface while Revit's reach well past it, and its volume is a fraction of Revit's (the office's `Sense_Public_allas` sinks 0.3%, `WC-istuin` toilets 9.5%, RE1's dining chairs 6.4%). Nothing in the file found so far tells such a mesh from a complete one before comparing it with Revit's export, so the option stays opt-in and experimental.
+

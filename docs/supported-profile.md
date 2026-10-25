@@ -66,7 +66,7 @@ OLE/CFB Revit container is refused with an error, never a partial model.
 | Rooms | `IfcSpace` with number, name and the outline of the room's stored solid (RE-101) | Revit's own area and outline on all 116 Core Interior and 11 RE1 Architecture rooms; 45 of 54 Snowdon Towers rooms at the area its VIM export gives, the other 7 whose solids do not close keeping their box (#90); on Revit 2023, all 9 of Exemplo_data's (RE-102) |
 | Areas | `IfcSpace` with number, name and storey; no body | all 30 of Revit's area spaces on the BIM4LCA office, as built and at building permit (RE-191); Revit 2024 only |
 | Furniture, fixtures, equipment, MEP devices, site | the element's bounding box, turned with the instance where it is turned (RE-87) | placement and extent only; no family geometry. MEP devices and equipment are measured on RE1 Electrical and Mechanical only (RE-79) |
-| Family instances with `--saved-meshes` | the mesh Revit saved for the element's display | within 0.01 ft of Revit's export: Core Interior 158 of 158, RE1 (2025) 207 of 214, Snowdon Towers 3,332 of 3,736 (RE-78) |
+| Family instances with `--saved-meshes` | the mesh Revit saved for the element's display | within 0.01 ft of Revit's export: Core Interior 158 of 158, RE1 (2025) 207 of 214, Snowdon Towers 3,332 of 3,736. Revit's own shape, every vertex within 0.001 ft: Core Interior 138 of 138 doors and windows, the BIM4LCA office 1,294 of 1,709 scored (all its windows; 48 of 269 doors), RE1 148 of 214; a mesh that is not exact is part of the body (RE-78) |
 
 ## Properties on Revit 2024 and 2025 projects
 
