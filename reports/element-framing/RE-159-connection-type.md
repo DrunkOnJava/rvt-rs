@@ -31,5 +31,5 @@ On RE1 Plumbing, for pipe 443719 (type 191045):
 ## 5. Reproduce
 
 ```text
-gh workflow run measure.yml --ref re/re159-connection-type -f base=none -f probe=probe_re156_value_sources
+gh workflow run measure.yml --ref main -f ref=64e7e55f23e2291476fef9859c8ca7245788b1e9 -f base=none -f probe=probe_re156_value_sources
 ```

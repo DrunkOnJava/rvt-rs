@@ -37,5 +37,5 @@ Nothing in code. #228's remaining open part is which internal element ElementId 
 ## 5. Reproduce
 
 ```text
-gh workflow run measure.yml --ref re/re161-leading-slot -f base=none -f probe=probe_re161_leading_slot
+gh workflow run measure.yml --ref main -f ref=ce43d9f955a324570ad7edcea5b92e7781fdc531 -f base=none -f probe=probe_re161_leading_slot
 ```

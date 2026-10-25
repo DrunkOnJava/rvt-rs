@@ -59,7 +59,7 @@ No bit of `+0x46` is a wall's, slab's, door's, window's or curtain wall's `LoadB
 ## 5. Reproduce
 
 ```bash
-gh workflow run measure.yml --ref re/223-flag-census -f ref=re/223-flag-census -f base=none \
+gh workflow run measure.yml --ref main -f ref=d7ec5a15c7e1942b68934365ecf699ff84cd3fbb -f base=none \
   -f nordic=true -f r2025=true -f probe=probe_223_flag_census -f probe_scorer=flag_bits_vs_ifc
 gh run download <run id>   # measure-head/<model>/probe.txt and probe_score.txt
 ```

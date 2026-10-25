@@ -51,7 +51,7 @@ rvt-rs's length is Revit's `Span` on 9,984 mullions, more than the 9,796 whose `
 ## 6. Reproduce
 
 ```bash
-gh workflow run measure.yml --ref feat/mullion-span -f ref=feat/mullion-span -f base=none \
+gh workflow run measure.yml --ref main -f ref=567f2ccc5d4f43b528cb9be488e04aa946b5a253 -f base=none \
   -f nordic=true -f keep_ifc=true -f probe=probe_re226_mullion_hosts -f probe_scorer=member_hosts_vs_ifc
-gh workflow run measure.yml --ref main -f ref=feat/mullion-span -f base=main -f nordic=true
+gh workflow run measure.yml --ref main -f ref=567f2ccc5d4f43b528cb9be488e04aa946b5a253 -f base=95f791854fa72705db82fd7a78547af141e05e5b -f nordic=true
 ```

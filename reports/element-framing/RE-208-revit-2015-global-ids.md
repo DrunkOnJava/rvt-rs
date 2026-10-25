@@ -75,7 +75,7 @@ What the file does give:
 ## 5. Reproduce
 
 ```bash
-gh workflow run measure.yml --ref re/878-2015-episodes -f ref=re/878-2015-episodes -f base=none \
+gh workflow run measure.yml --ref main -f ref=76c8a1724e57ba370ebf131939708d3e01f9b6ca -f base=none \
   -f bimcollab=true -f probe=probe_re208_episodes_2015 -f probe_scorer=episodes_vs_ifc
 gh run download <run id>   # measure-head/<model>/probe_score.txt
 python3 tools/re/episodes_first_char.py measure-head/bimcollab-str-2015/probe.txt 02_BIMcollab_Example_STR_optimized.ifc
