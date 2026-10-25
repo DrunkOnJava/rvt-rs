@@ -5,7 +5,8 @@ Research tool for `reports/element-framing/RE-108-global-ids-2023.md`
 (RE-48 on Revit 2023). Elements are paired by Tag (the Revit ElementId),
 leaving out opening elements, which carry their door's or window's Tag but
 a GlobalId of Revit's own making. Storeys are paired by name, and spaces by
-GlobalId.
+GlobalId. Storeys are also counted by GlobalId, for a model renamed after
+its export, and the project, site and building compared.
 
 Usage:
 
