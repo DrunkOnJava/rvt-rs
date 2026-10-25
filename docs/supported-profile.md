@@ -78,7 +78,8 @@ derived from the document and their own identity, stable between exports,
 exporter sets it (a parameter named for its property set, its type's
 Function, else its class's rule; none on curtain mullions and panels, RE-193),
 the project and shared parameters named for a property of one of IFC4's
-property sets (`Pset_WallCommon.FireRating`), from buildingSMART's
+property sets (`Pset_WallCommon.FireRating`, or `FireExit` alone where no
+qualified one gives it, RE-227), from buildingSMART's
 definitions of the 278 sets that apply to an entity, written in that set
 where IFC4 applies it to the entity written or one of its supertypes, with
 the predefined type a scoped set needs (booleans, text, counts and integers,
