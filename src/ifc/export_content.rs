@@ -570,20 +570,38 @@ pub fn append_typed_production_elements(
                     .flatten()
             })
             .or_else(|| {
-                // #323: a stair takes the type its runs and landings give.
+                // #323: a stair takes the type its own export parameters set,
+                // and only a stair that sets none the type its runs and
+                // landings give, as revit-ifc's `StairsExporter` decides it
+                // (CLEANROOM.md source 5). A value that is no
+                // `IfcStairTypeEnum` keeps the default.
                 (effective.ifc_type == "IFCSTAIR")
                     .then(|| {
-                        decoded.fields.iter().find_map(|(name, value)| match value {
-                            InstanceField::String(text)
-                                if name == crate::partition_schema_mvp::STAIR_TYPE_FIELD =>
-                            {
-                                crate::native_stairs::STAIR_TYPES
-                                    .iter()
-                                    .copied()
-                                    .find(|kind| *kind == text.as_str())
-                            }
-                            _ => None,
-                        })
+                        let explicit =
+                            decoded.fields.iter().find_map(|(name, value)| match value {
+                                InstanceField::String(text)
+                                    if name
+                                        == crate::partition_schema_mvp::IFC_PREDEFINED_TYPE_FIELD
+                                        && !text.trim().is_empty() =>
+                                {
+                                    Some(text.as_str())
+                                }
+                                _ => None,
+                            });
+                        match explicit {
+                            Some(text) => category_map::stair_predefined_type_for(text),
+                            None => decoded.fields.iter().find_map(|(name, value)| match value {
+                                InstanceField::String(text)
+                                    if name == crate::partition_schema_mvp::STAIR_TYPE_FIELD =>
+                                {
+                                    crate::native_stairs::STAIR_TYPES
+                                        .iter()
+                                        .copied()
+                                        .find(|kind| *kind == text.as_str())
+                                }
+                                _ => None,
+                            }),
+                        }
                     })
                     .flatten()
             })
