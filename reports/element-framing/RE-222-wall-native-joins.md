@@ -79,15 +79,15 @@ The partition data gives no line for a wall whose data copies disagree (RE-216):
 
 ## 6. Orientation
 
-13 of the office's 17 US-1 walls, 12 of the 24 of type 1753279 and both of 1760031 have a partition line and their type's layers but no partition orientation (run 40204859227), so they were drawn as their record box cut back at their joins. Such a wall now takes its native word and flip, so it is drawn from its centreline, takes part in the join lists (RE-70, RE-71) and is drawn in its layers.
+13 of the office's 17 US-1 walls, 12 of the 24 of type 1753279 and both of 1760031 have a partition line and their type's layers but no partition orientation (run 40204859227): none is found, or the wall's copies disagree on it. So they were drawn as their record box cut back at their joins. Such a wall now takes its native word and flip, so it is drawn from its centreline, takes part in the join lists (RE-70, RE-71) and is drawn in its layers.
 
 ## 7. What rvt-rs does
 
-`native_walls::native_walls` reads each wall's curve, word, flip and end joins in one pass over the walls' records. It drops a wall whose records in several partitions disagree.
+`native_walls::native_walls` reads each wall's curve, word, flip and end joins in one pass over the walls' records. The record it reads is the wall's current copy, the one the document routes to (RE-216).
 
 `attach_wall_layers`:
 - takes the native word and flip where the partition data gives no orientation;
-- after the join lists, at each end where exactly one other wall meets the end with its middle, sets the end's reach to half that wall's thickness short (`native_walls::tee_reach`). This replaces the join lists' reach there.
+- after the join lists, at each end where exactly one other wall meets the end with its middle, sets the end's reach to half that wall's type thickness short (`native_walls::tee_reach`). This replaces the join lists' reach there. A wall whose type thickness is not read gives no reach: its record box's thin extent is its thickness only along the model's axes.
 
 An end whose layers each end on their own line (RE-71, RE-74) keeps them.
 

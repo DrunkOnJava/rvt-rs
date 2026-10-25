@@ -4772,9 +4772,10 @@ const NATIVE_WALL_LINE_TOLERANCE_FEET: f64 = 1e-4;
 
 /// At each end of a wall with a centreline where its native record says
 /// another wall meets that end with its middle, the body stops half that
-/// wall's thickness short ([`crate::native_walls::tee_reach`], W6), in place
-/// of the reach its join lists give. An end whose layers each end on their
-/// own line (RE-71, RE-74) keeps them.
+/// wall's type thickness short ([`crate::native_walls::tee_reach`], RE-222),
+/// in place of the reach its join lists give. An end whose layers each end
+/// on their own line (RE-71, RE-74) keeps them, and so does one whose other
+/// wall has no type thickness.
 fn attach_native_tee_reaches(
     walls: &mut [DecodedElement],
     native: &BTreeMap<u64, crate::native_walls::NativeWall>,
@@ -4784,9 +4785,7 @@ fn attach_native_tee_reaches(
         .filter_map(|wall| {
             let id = u64::from(wall.id?);
             wall.fields.iter().find_map(|(name, value)| match value {
-                InstanceField::Float { value, .. }
-                    if name == crate::element_record_wall_joins::WALL_THICKNESS_FIELD =>
-                {
+                InstanceField::Float { value, .. } if name == WALL_TYPE_THICKNESS_FIELD => {
                     Some((id, *value))
                 }
                 _ => None,

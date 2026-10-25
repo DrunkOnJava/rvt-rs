@@ -7,12 +7,15 @@
 //! the same line, and the record's `m_isFlipped` and `m_wallCrossSection`
 //! are the partition data's flip and orientation word (RE-54), on every
 //! wall of Core Interior, RE1 Architecture and both BIM4LCA office files.
-//! Where the partition data gives a wall a line but no orientation (13 of
-//! the office's 17 US-1 exterior walls), the record's word and flip stand
-//! in, so the wall is drawn from its centreline and its joins read. The
-//! partition data drops a wall whose copies disagree (RE-216); the record's
-//! curve is not used for those, as the current copy's line misses 7 of Core
-//! Interior's walls by 0.333 ft that their record box draws exactly.
+//! The record is the wall's current copy (RE-216). Where the partition data
+//! gives a wall a line but no orientation, because none is found or its
+//! copies disagree (13 of the office's 17 US-1 exterior walls), the record's
+//! word and flip stand in, so the wall is drawn from its centreline and its
+//! joins read; every such wall's layer set and layer centres are then
+//! Revit's (RE-222 §8). The partition data drops a wall whose line copies
+//! disagree (RE-216); the record's curve is not used for those, as the
+//! current copy's line misses 7 of Core Interior's walls by 0.333 ft that
+//! their record box draws exactly.
 //!
 //! The record's `VWallDriver.m_controlJoinsSet` lists the joins at the
 //! wall's ends. Each `m_JoinInfo.m_info` lists the walls in one join, this
@@ -102,10 +105,11 @@ fn end_join(wall: u64, controls: &[Value], end: u32) -> Option<Vec<(u64, u32)>> 
     }
 }
 
-/// The curve and end joins of each of `walls` from its native `SWall`
-/// record. A wall whose record has not exactly one curve, or whose curve is
-/// not a level line, is left out, and so is one whose records in several
-/// partitions disagree.
+/// The curve, word, flip and end joins of each of `walls` from its native
+/// `SWall` record: the current copy, the one the document routes to
+/// (RE-216), whatever the partition data's copies say. A wall whose record
+/// has not exactly one curve, or whose curve is not a level line, is left
+/// out.
 pub fn native_walls(
     rf: &mut RevitFile,
     walls: &BTreeSet<u64>,
@@ -117,7 +121,7 @@ pub fn native_walls(
         selected_ids: walls.clone(),
         ..Options::default()
     };
-    let mut found: BTreeMap<u64, Option<NativeWall>> = BTreeMap::new();
+    let mut found: BTreeMap<u64, NativeWall> = BTreeMap::new();
     extract_graphs(rf, &options, |record| {
         let (Some("SWall"), Some(graph)) = (record.class_name.as_deref(), record.graph.as_ref())
         else {
@@ -154,21 +158,12 @@ pub fn native_walls(
                 joins: [0, 1].map(|end| end_join(id, &controls, end)),
             }
         });
-        match found.get(&id) {
-            None => {
-                found.insert(id, read);
-            }
-            Some(seen) if *seen != read => {
-                found.insert(id, None);
-            }
-            Some(_) => {}
+        if let Some(wall) = read {
+            found.insert(id, wall);
         }
         Ok(())
     })?;
-    Ok(found
-        .into_iter()
-        .filter_map(|(id, wall)| Some((id, wall?)))
-        .collect())
+    Ok(found)
 }
 
 /// How far past `wall`'s end its body reaches where the join there is a T
