@@ -509,6 +509,7 @@ pub fn recover_partition_schema_mvp(
     );
     // --- Stairs and their parts named as Revit names them (RE-65) ---
     attach_stair_names(rf, revit_version, &mut out.products);
+    attach_native_stair_names(rf, revit_version, &mut out.products);
     // --- IFC export overrides, the element's own or its type's (RE-45) ---
     attach_ifc_export_overrides(
         rf,
@@ -5495,6 +5496,135 @@ fn landing_outline(
         }
     }
     Some(points)
+}
+
+/// Name Revit 2025 stairs, runs and stringers as Revit's export names them
+/// (RE-65), from their native records
+/// ([`crate::native_stairs::native_stair_parts`], #323): each takes its
+/// type, its type's name and its family, a stair the name
+/// `Family:Stair:ElementId` and a part `<stair> Run 2`, numbered in
+/// ElementId order among the exported parts of its kind on its stair. A
+/// run's type is the one `OST_StairsRuns` type definition its element
+/// record names (RE-28). Measured on the five R2025 stair models.
+fn attach_native_stair_names(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    products: &mut [DecodedElement],
+) {
+    use crate::partition_type_records as ptr;
+    if !crate::native_stairs::NATIVE_STAIR_NAME_REVIT_VERSIONS.contains(&revit_version) {
+        return;
+    }
+    let classes = ["Stair", "StairsRun", "StairsStringer"];
+    let parts: BTreeSet<u64> = products
+        .iter()
+        .filter(|element| classes.contains(&element.class.as_str()))
+        .filter_map(|element| element.id.map(u64::from))
+        .collect();
+    if parts.is_empty() {
+        return;
+    }
+    let declared: BTreeSet<u32> = match crate::elem_table::parse_records(rf) {
+        Ok(records) => crate::elem_table::declared_ids(&records),
+        Err(_) => return,
+    };
+    let run_types = ptr::type_definition_ids(
+        &ptr::scan_type_records(
+            rf,
+            revit_version,
+            crate::partition_element_records::OST_STAIRS_RUNS,
+            &declared,
+        )
+        .unwrap_or_default(),
+    );
+    let mut runs: BTreeMap<u64, u64> = BTreeMap::new();
+    for element in products
+        .iter()
+        .filter(|element| element.class == "StairsRun")
+    {
+        let (Some(id), Some((references, _))) = (element.id, record_references(rf, element)) else {
+            continue;
+        };
+        if let Some(type_id) = ptr::unique_type_reference(&references, &run_types) {
+            runs.insert(u64::from(id), u64::from(type_id));
+        }
+    }
+    let Ok(native) = crate::native_stairs::native_stair_parts(rf, &parts, &runs) else {
+        return;
+    };
+    let mut members: BTreeMap<(u64, &'static str), BTreeSet<u64>> = BTreeMap::new();
+    for element in products.iter() {
+        let (Some(id), Some(word)) = (element.id.map(u64::from), stair_part_word(&element.class))
+        else {
+            continue;
+        };
+        if let Some(part) = native.get(&id) {
+            members.entry((part.stair, word)).or_default().insert(id);
+        }
+    }
+    let stair_names: BTreeMap<u64, String> = native
+        .iter()
+        .filter(|(id, part)| part.stair == **id)
+        .map(|(id, part)| (*id, format!("{}:Stair:{id}", part.family)))
+        .collect();
+    for element in products.iter_mut() {
+        let Some(id) = element.id.map(u64::from) else {
+            continue;
+        };
+        let Some(part) = native.get(&id) else {
+            continue;
+        };
+        let has = |field: &str| element.fields.iter().any(|(name, _)| name == field);
+        if has(FAMILY_NAME_FIELD) {
+            continue;
+        }
+        let (has_type_id, has_type_name, has_name) = (
+            has(TYPE_ID_FIELD),
+            has(TYPE_NAME_FIELD),
+            has(ELEMENT_NAME_FIELD),
+        );
+        let name = match stair_part_word(&element.class) {
+            None => stair_names.get(&id).cloned(),
+            Some(word) => stair_names.get(&part.stair).and_then(|stair| {
+                let rank = members
+                    .get(&(part.stair, word))?
+                    .iter()
+                    .position(|m| *m == id)?;
+                Some(format!("{stair} {word} {}", rank + 1))
+            }),
+        };
+        let Ok(type_id) = u32::try_from(part.type_id) else {
+            continue;
+        };
+        if !has_type_id {
+            element.fields.push((
+                TYPE_ID_FIELD.into(),
+                InstanceField::ElementId {
+                    tag: 0,
+                    id: type_id,
+                },
+            ));
+        }
+        if !has_type_name {
+            element.fields.push((
+                TYPE_NAME_FIELD.into(),
+                InstanceField::String(part.type_name.clone()),
+            ));
+        }
+        element.fields.push((
+            FAMILY_NAME_FIELD.into(),
+            InstanceField::String(part.family.into()),
+        ));
+        element.fields.push((
+            FAMILY_NAME_SOURCE_FIELD.into(),
+            InstanceField::String(TYPE_KIND_FAMILY_SOURCE.into()),
+        ));
+        if let (Some(name), false) = (name, has_name) {
+            element
+                .fields
+                .push((ELEMENT_NAME_FIELD.into(), InstanceField::String(name)));
+        }
+    }
 }
 
 /// Field carrying the `m_runType` a stair run's treads all give
