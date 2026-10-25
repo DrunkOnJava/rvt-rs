@@ -2190,13 +2190,15 @@ fn attach_cut_loop_sizes(
         return;
     };
     // #810: a door or window whose symbol cuts no loop is sized by its
-    // record box, along its own X axis and through its height, as Revit's
-    // export sizes it: all 269 windows of the BIM4LCA office, 71 of its
-    // doors and RE1's curtain-wall door. Only one whose element record names
-    // a wall or a curtain wall: the office's doors that name neither take
-    // their height along a horizontal axis in Revit's export. An instance
-    // turned off the model's axes, whose box is not along its own, gets no
-    // size.
+    // record box, as Revit's export sizes it: its width along its own X
+    // axis and, in a wall or a curtain wall that its element record names,
+    // its height through the box: all 269 windows of the BIM4LCA office, 71
+    // of its doors and RE1's curtain-wall door. Any other's height is the
+    // box's extent along its own Y axis, as revit-ifc's
+    // `GetDoorWindowDimensionFromSymbol` measures the height of a family not
+    // hosted by a wall (CLEANROOM.md source 5): the office's four roof
+    // hatches and four doors of type 3267242. An instance turned off the
+    // model's axes, whose box is not along its own, gets no size.
     let mut in_wall: BTreeSet<u32> = BTreeSet::new();
     for element in elements.iter() {
         let Some(id) = element.id.filter(|id| loopless.contains(id)) else {
@@ -2212,7 +2214,7 @@ fn attach_cut_loop_sizes(
         }
     }
     for element in elements.iter_mut() {
-        let Some(id) = element.id.filter(|id| in_wall.contains(id)) else {
+        let Some(id) = element.id.filter(|id| loopless.contains(id)) else {
             continue;
         };
         let (Some(transform), Some(bbox)) = (transforms.get(&id), element_record_bbox(element))
@@ -2225,14 +2227,19 @@ fn attach_cut_loop_sizes(
         let Some([ax, ay]) = transform.plan_axis() else {
             continue;
         };
-        let width = if (ax.abs() - 1.0).abs() <= INSTANCE_AXIS_TOLERANCE {
-            bbox[3] - bbox[0]
+        let (across_x, across_y) = (bbox[3] - bbox[0], bbox[4] - bbox[1]);
+        let (width, along_y) = if (ax.abs() - 1.0).abs() <= INSTANCE_AXIS_TOLERANCE {
+            (across_x, across_y)
         } else if (ay.abs() - 1.0).abs() <= INSTANCE_AXIS_TOLERANCE {
-            bbox[4] - bbox[1]
+            (across_y, across_x)
         } else {
             continue;
         };
-        let height = bbox[5] - bbox[2];
+        let height = if in_wall.contains(&id) {
+            bbox[5] - bbox[2]
+        } else {
+            along_y
+        };
         if !(width > 0.0 && height > 0.0) {
             continue;
         }
