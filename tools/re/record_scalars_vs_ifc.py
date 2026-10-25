@@ -3,9 +3,12 @@
 (RE-228, #35, W7).
 
 Reads a probe's `rec <tag> <record class> <object>.<field>=<value> ...`
-lines (`examples/probe_re228_wall_record_scalars.rs`) and Revit's IFC
+lines (`examples/probe_re228_wall_record_scalars.rs`,
+`examples/probe_re233_column_record_scalars.rs`) and Revit's IFC
 export. For every boolean property of every property set Revit writes on
-those elements (by Tag), and every field the probe printed, it takes the
+those elements (by Tag), and for whether Revit writes a property at all
+where it writes it on some of them only (`present:<set>.<property>`), and
+every field the probe printed, it takes the
 one value of the field whose presence best predicts the property (the
 property is true exactly where the field has that value, or exactly where
 it has not) and counts how many elements that gets right. A field missing
@@ -48,14 +51,25 @@ def main():
     rows = read_probe(args[0])
     revit = ifcopenshell.open(args[1])
     truths = collections.defaultdict(dict)
+    seen = set()
+    present = collections.defaultdict(set)
     for element in revit.by_type("IfcElement"):
         tag = str(element.Tag) if element.Tag else None
         if tag not in rows:
             continue
+        seen.add(tag)
         for pset, props in ifcopenshell.util.element.get_psets(element, psets_only=True).items():
             for prop, value in props.items():
+                if prop == "id":
+                    continue
+                present[f"{pset}.{prop}"].add(tag)
                 if isinstance(value, bool):
                     truths[f"{pset}.{prop}"][tag] = value
+    # Whether Revit writes a property at all, where it writes it on some of
+    # the probe's elements and not on others (RE-233).
+    for prop, tags in present.items():
+        if 0 < len(tags) < len(seen):
+            truths[f"present:{prop}"] = {t: t in tags for t in seen}
     print(f"probe: {len(rows)} records; boolean properties Revit writes on them: {len(truths)}")
     names = sorted({name for fields in rows.values() for name in fields})
     for prop, by_tag in sorted(truths.items()):
