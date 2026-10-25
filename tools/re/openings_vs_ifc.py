@@ -6,10 +6,12 @@ Research tool for `reports/element-framing/RE-83-openings-through-walls.md`
 keyed by the `Tag` of the door or window that fills it
 (`IfcRelFillsElement`), which is the element's ElementId in both exports.
 For each filler present in both, it reports the largest difference between
-the two openings' world-space bounding boxes, in feet.
+the two openings' bounding boxes, in feet, each in its own file's site
+frame: Revit writes the BIM4LCA office's site at its shared coordinates and
+rvt-rs at its internal ones.
 
-Revit writes Snowdon Towers in shared coordinates; rvt-rs writes internal
-ones. `--shared DEG,DX,DY,DZ` maps rvt-rs's boxes into Revit's frame (a
+Where Revit's site placement does not carry the shared transform (Snowdon
+Towers), `--shared DEG,DX,DY,DZ` maps rvt-rs's boxes into Revit's frame (a
 rotation about Z by DEG, then a translation in feet) before comparing.
 
 Usage:
@@ -23,15 +25,20 @@ import collections
 import math
 import sys
 
+import os
+
 import ifcopenshell
 import ifcopenshell.geom
+import numpy
 
-FT = 0.3048
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from opening_boxes_vs_ifc import site_frame  # noqa: E402
 
 
 def openings(path):
     """Filler Tag -> (world box in feet, filler class, host class)."""
     f = ifcopenshell.open(path)
+    frame = site_frame(f)
     settings = ifcopenshell.geom.settings()
     settings.set("use-world-coords", True)
     out = {}
@@ -46,12 +53,10 @@ def openings(path):
         except Exception:
             continue
         verts = shape.geometry.verts
-        pts = [verts[i : i + 3] for i in range(0, len(verts), 3)]
-        if not pts or not fill.Tag:
+        if not len(verts) or not fill.Tag:
             continue
-        box = [min(p[k] for p in pts) / FT for k in range(3)] + [
-            max(p[k] for p in pts) / FT for k in range(3)
-        ]
+        pts = frame(numpy.array(verts, dtype=float).reshape(-1, 3))
+        box = [float(pts[:, k].min()) for k in range(3)] + [float(pts[:, k].max()) for k in range(3)]
         out[fill.Tag] = (box, fill.is_a(), host.is_a() if host else None)
     return out
 
