@@ -69,5 +69,25 @@ A landing that was its box took the storey its box's top met, the storey above. 
 ## 6. What it does not cover
 
 - The underside where a flight meets a landing (§3). It follows the flight's soffit, which needs the flight drawn first: the office's 35 flights are monolithic with upright risers, still boxes (#357).
-- 3058084, the one landing that is not monolithic, whose outline has an arc.
+- 3058084, the one landing that is not monolithic, whose outline has an arc: drawn since, as one tread (§7).
 - Releases other than 2024: no other model with landings has a Revit export to measure against.
+
+## 7. Addendum (2026-10-25): a landing that is one tread (#824)
+
+The office's landing 3058084 sits beside the spiral run 3057703 (RE-217 §11), and Revit's export draws it 0.0984 ft thick with an arc in its outline. Its native records give both (`examples/probe_824_landing_loops.rs`, Measure runs [40179086934](https://github.com/DrunkOnJava/rvt-rs/actions/runs/40179086934) and [40179920379](https://github.com/DrunkOnJava/rvt-rs/actions/runs/40179920379)):
+
+- **Outline.** Its `StairsLanding` record holds `CurveLoop`s at its top (`m_baseElevation` 249.0814 ft): four `GLine`s (`m_origin`, `m_dirVec`, `m_endParams`) and a `GArc` (`m_center`, `m_xVec`, `m_yVec`, `m_radius`, `m_endParams`) of radius 0.259402 ft about (305.5719, 59.6613), the spiral run's inner circle. Each curve starts where the one before ends. That is Revit's outline, the arc where the landing meets the spiral.
+- **Thickness.** Its type, 141731 ("Non-Monolithic Landing"), is not monolithic (`m_hasMonolithicSupport` false), has a tread (`m_hasTread`) and takes it from its runs (`m_useSameTriserAsRun`), so its own `m_treadThickness` (0.164 ft) does not apply. Its stair's one run type, 3051881, has `m_treadThickness` 0.0984 ft, Revit's thickness.
+
+`native_stairs::native_tread_landings` reads that for a landing whose type is not monolithic, has a tread and takes it from its runs, when its stair's runs (`StairsRun.m_stairsId`) all name one tread thickness; `partition_schema_mvp::attach_landing_slabs` records the loop (`LANDING_TREAD_OUTLINE_FIELD`), and the IFC writer draws it as one `IfcExtrudedAreaSolid` over an `IfcIndexedPolyCurve` of its lines and three-point arc, from its top down that thickness, `BodySource` `native_landing_tread`, as Revit writes a tread. A landing whose stair's runs name more than one tread thickness, or whose type takes its own tread, keeps its box: neither is measured.
+
+Measure run [40181002275](https://github.com/DrunkOnJava/rvt-rs/actions/runs/40181002275), this change against `main` (ba38971f), `-f nordic=true -f r2025=true`:
+
+| | before | after |
+|---|---|---|
+| 3058084's body (`stair_bodies_vs_ifc`), both files | its record box, 196.06 ft³ | 1.462462 ft³, Revit's 1.462462; every vertex of Revit's within 0.0000022 ft of rvt-rs's surface |
+| slabs with Revit's outline within 0.01 ft (`plan_profiles_vs_ifc`), as built | 61 of 63 | 62 of 63 |
+| the same, at building permit | 59 of 63 | 60 of 63 |
+
+The as-built file's last slab outline off is roof 2991742, whose four hatch openings are not cut (#824). Only the office's IFC changes for this; that run's R2025 differences are #974, which the branch predated.
+

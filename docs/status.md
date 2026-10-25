@@ -813,7 +813,10 @@ Revit's top and outline, and the office's slab outlines within 0.01 ft of
 Revit's go from 40 to 60 of 63. Revit's underside also follows a flight's
 soffit where the flight meets the landing, which is drawn flat: the slabs
 are 100.4% to 104.7% of Revit's volume
-(`reports/element-framing/RE-214-landing-slabs.md`).
+(`reports/element-framing/RE-214-landing-slabs.md`). Its addendum draws the
+office's one landing that is not monolithic, beside its spiral run, as the
+tread it is: its native outline loop, arc and all, one run tread thick,
+Revit's body to 0.0000022 ft (RE-214 §7).
 
 **RE-220 (2026-10-25)** gives the project, site and building the
 GlobalIds the file stores, which Revit's export writes: under the project
