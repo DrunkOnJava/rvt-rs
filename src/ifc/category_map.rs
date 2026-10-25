@@ -575,12 +575,11 @@ pub fn space_predefined_type_for(value: &str) -> Option<&'static str> {
 /// `IfcCoveringTypeEnum`, `IfcShadingDeviceTypeEnum`, `IfcRoofTypeEnum`,
 /// `IfcWasteTerminalTypeEnum`, `IfcElectricApplianceTypeEnum`,
 /// `IfcFireSuppressionTerminalTypeEnum`, `IfcSanitaryTerminalTypeEnum`,
-/// `IfcAirTerminalTypeEnum`). `IfcDoor`, honoured as a target since #792,
-/// is not listed, because listing it would apply every door's own
-/// predefined type as well, which is not measured; an element exported as
-/// a door through its value takes the door default. `IfcStair`'s values are
-/// matched by [`stair_predefined_type_for`] instead: a stair's own value
-/// comes before the type its runs and landings give (#323).
+/// `IfcAirTerminalTypeEnum`). `IfcStair` and `IfcDoor`, honoured as targets
+/// since #792, are not listed, because listing them would apply every door's
+/// and stair's own predefined type as well, which is not measured. An
+/// element exported as either through its value takes the target's
+/// default, the one Revit writes on the elements measured.
 const PREDEFINED_TYPE_ENUMERATORS: &[(&str, &[&str])] = &[
     (
         "IFCSLAB",
@@ -712,37 +711,6 @@ const PREDEFINED_TYPE_ENUMERATORS: &[(&str, &[&str])] = &[
         ],
     ),
 ];
-
-/// IFC4 `IfcStairTypeEnum`, every value a stair's own export parameters can
-/// name (#323).
-pub const STAIR_TYPE_ENUMERATORS: &[&str] = &[
-    "STRAIGHT_RUN_STAIR",
-    "TWO_STRAIGHT_RUN_STAIR",
-    "QUARTER_WINDING_STAIR",
-    "QUARTER_TURN_STAIR",
-    "HALF_WINDING_STAIR",
-    "HALF_TURN_STAIR",
-    "TWO_QUARTER_WINDING_STAIR",
-    "TWO_QUARTER_TURN_STAIR",
-    "THREE_QUARTER_WINDING_STAIR",
-    "THREE_QUARTER_TURN_STAIR",
-    "SPIRAL_STAIR",
-    "DOUBLE_RETURN_STAIR",
-    "CURVED_RUN_STAIR",
-    "TWO_CURVED_RUN_STAIR",
-    "USERDEFINED",
-    "NOTDEFINED",
-];
-
-/// The `IfcStairTypeEnum` value `value` names, compared case-insensitively
-/// as [`predefined_type_for`] compares (#323).
-pub fn stair_predefined_type_for(value: &str) -> Option<&'static str> {
-    let value = value.trim();
-    STAIR_TYPE_ENUMERATORS
-        .iter()
-        .copied()
-        .find(|enumerator| enumerator.eq_ignore_ascii_case(value))
-}
 
 /// The IFC4 enumerator `value` names for `ifc_type`'s `PredefinedType`
 /// (RE-45), compared case-insensitively because the Revit parameter is
