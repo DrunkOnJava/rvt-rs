@@ -116,19 +116,30 @@ def main():
                 min(v[2] for v in ref_vertices),
                 max(v[2] for v in ref_vertices),
             )
-            rows.append((tag, matches, len(ref_vertices), distance, max(surface), our_volume, ref_volume, heights))
+            far = None
+            if not matches and our_vertices:
+                worst = max(ref_vertices, key=lambda p: min(math.dist(p, q) for q in our_vertices))
+                nearest = min(our_vertices, key=lambda q: math.dist(worst, q))
+                far = (worst, nearest, len(our_vertices))
+            rows.append((tag, matches, len(ref_vertices), distance, max(surface), our_volume, ref_volume, heights, far))
         print(
             f"  vertices within {VERTEX_TOLERANCE_FT} ft and volume within {VOLUME_TOLERANCE:g} of Revit's: "
             f"{ok} of {len(both)}"
         )
         print(f"  every vertex of Revit's body within {VERTEX_TOLERANCE_FT} ft of rvt-rs's surface: {on_surface} of {len(both)}")
-        for tag, matches, count, distance, surface, our_volume, ref_volume, (lo, hi, ref_lo, ref_hi) in rows:
+        for tag, matches, count, distance, surface, our_volume, ref_volume, (lo, hi, ref_lo, ref_hi), far in rows:
             print(
                 f"    {tag}: {'match' if matches else 'differs'}, Revit {count} vertices, "
                 f"farthest {distance:.3g} ft, from rvt-rs's surface at most {surface:.3g} ft, "
                 f"volume rvt-rs {our_volume:.6f} ft3, Revit {ref_volume:.6f} ft3, "
                 f"z rvt-rs {lo:.4f} to {hi:.4f}, Revit {ref_lo:.4f} to {ref_hi:.4f}"
             )
+            if far:
+                worst, nearest, ours_count = far
+                print(
+                    f"      farthest Revit vertex {tuple(round(c, 4) for c in worst)}, nearest rvt-rs vertex "
+                    f"{tuple(round(c, 4) for c in nearest)} of {ours_count}"
+                )
 
 
 if __name__ == "__main__":
