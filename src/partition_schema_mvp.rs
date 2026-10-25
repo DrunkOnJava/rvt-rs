@@ -8082,6 +8082,47 @@ fn sketch_plan_profiles(
     let mut profiles = erpp::plan_profiles_from_sketch_line_records(sketch_lines);
     profiles.retain(|owner, profile| !relisted.contains(owner) || spans_box(*owner, profile));
     profiles.retain(|owner, _| owners.contains_key(owner));
+    // RE-96: a quarter arc's ends are two corners of its record box, so the
+    // box solve closes its sketch with the arc's chord. An owner with a line
+    // whose box is not flat in plan and whose curve reads as an arc, not as a
+    // line, is read from its lines' curves below instead (#824).
+    let eps = erpp::VERTEX_EPS_FEET;
+    let diagonal: BTreeMap<u32, (u32, [f64; 6])> = sketch_lines
+        .iter()
+        .filter(|record| {
+            let b = record.bbox_feet;
+            b[3] - b[0] > eps && b[4] - b[1] > eps
+        })
+        .filter_map(|record| {
+            let owner = record
+                .owner_reference
+                .filter(|owner| profiles.contains_key(owner))?;
+            Some((record.element_id, (owner, record.bbox_feet)))
+        })
+        .collect();
+    if !diagonal.is_empty() {
+        let ids: BTreeSet<u32> = diagonal.keys().copied().collect();
+        let curves = crate::partition_beam_axes::scan_sketch_curves(rf, revit_version, &ids)
+            .unwrap_or_default();
+        for (id, (owner, bbox)) in &diagonal {
+            let Some(curve) = curves.get(id) else {
+                continue;
+            };
+            let inside = |p: [f64; 3]| {
+                (0..3).all(|axis| p[axis] >= bbox[axis] - eps && p[axis] <= bbox[axis + 3] + eps)
+            };
+            let line = curve
+                .line
+                .as_ref()
+                .is_some_and(|line| inside(line.start()) && inside(line.end()));
+            let arc = curve.arc.as_ref().is_some_and(|arc| {
+                erpp::arc_points(arc).is_some_and(|points| points.iter().all(|&p| inside(p)))
+            });
+            if arc && !line {
+                profiles.remove(owner);
+            }
+        }
+    }
     let mut unsolved: BTreeMap<u32, BTreeMap<u32, [f64; 6]>> = BTreeMap::new();
     for record in sketch_lines {
         let Some(owner) = record.owner_reference else {
@@ -8112,7 +8153,6 @@ fn sketch_plan_profiles(
         .iter()
         .filter_map(|(&id, curve)| Some((id, curve.arc?)))
         .collect();
-    let eps = erpp::VERTEX_EPS_FEET;
     // RE-95: a sketch line whose box is a single point is a zero-length
     // segment with no line of its own. It adds no edge, and is dropped where
     // its point ends another of the sketch's lines.
