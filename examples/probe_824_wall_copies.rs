@@ -33,8 +33,8 @@ fn main() -> rvt::Result<()> {
             .map(|r| r.element_id)
             .collect();
     // Each wall's copies: the partition and the line's two ends.
-    type Copy = (u32, [f64; 3], [f64; 3]);
-    let mut copies: BTreeMap<u32, Vec<Copy>> = BTreeMap::new();
+    type WallCopy = (u32, [f64; 3], [f64; 3]);
+    let mut copies: BTreeMap<u32, Vec<WallCopy>> = BTreeMap::new();
     let mut holders: BTreeMap<u32, BTreeSet<u32>> = BTreeMap::new();
     for stream in rf.partition_stream_names() {
         let Some(partition) = stream
