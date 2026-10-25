@@ -34,7 +34,7 @@
 
 use crate::le_bytes;
 use crate::{Result, RevitFile, compression, elem_table, streams};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 /// Offset of the episode count in `Global/History`.
 pub const EPISODE_COUNT_OFFSET: usize = 0x0e;
@@ -196,6 +196,148 @@ fn inflate_history(rf: &mut RevitFile) -> Result<Vec<u8>> {
         Some(error) => Err(error),
         None => compression::inflate_at_auto(data).map(|(_, out)| out),
     }
+}
+
+/// Built-in parameter under which Revit's exporter stores an element's
+/// IfcGUID (RE-208 §3).
+pub const IFC_GUID_PARAMETER: i32 = -1_019_000;
+/// Built-in parameter holding the project's stored IfcGUID (#878).
+pub const IFC_PROJECT_GUID_PARAMETER: i32 = -1_019_002;
+/// Built-in parameter holding the building's stored IfcGUID (#878).
+pub const IFC_BUILDING_GUID_PARAMETER: i32 = -1_019_003;
+/// Built-in parameter holding the site's stored IfcGUID (#878).
+pub const IFC_SITE_GUID_PARAMETER: i32 = -1_019_004;
+/// How far before a stored storey GlobalId its Level's id is looked for.
+const LEVEL_ID_WINDOW: usize = 512;
+/// The distance between the two copies of a Level's id before its stored
+/// GlobalId, bytes.
+const LEVEL_ID_REPEAT: usize = 58;
+
+/// GlobalIds a file stores for its project, site and building, and for its
+/// Levels, which Revit's export writes as they are (#878).
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct StoredGlobalIds {
+    pub project: Option<String>,
+    pub site: Option<String>,
+    pub building: Option<String>,
+    /// By the Level's ElementId: its storey's GlobalId.
+    pub levels: BTreeMap<u32, String>,
+}
+
+/// The 22-character GlobalId stored in UTF-16 at `at`, when it is one.
+fn stored_global_id(buf: &[u8], at: usize) -> Option<String> {
+    let units = buf.get(at..at.checked_add(44)?)?;
+    let text: String = units
+        .chunks_exact(2)
+        .map(|unit| (unit[1] == 0).then_some(char::from(unit[0])))
+        .collect::<Option<_>>()?;
+    expand_ifc_guid(&text).map(|_| text)
+}
+
+/// The GlobalIds a file stores (#878), each read where a built-in
+/// parameter's id and the length 22 precede a GlobalId in UTF-16:
+///
+/// - the project's, site's and building's under their own parameters, each
+///   where the file holds one value; else, where values are stored under
+///   no parameter id (`-1`), the one triple of them that Revit's export
+///   derives from one GUID, the building's the project's with the last bit
+///   flipped and the site's with the one before it (Core Interior, the
+///   BIM4LCA office and the R2025 models all relate theirs so);
+/// - a storey's under [`IFC_GUID_PARAMETER`], where its Level's id stands
+///   twice, [`LEVEL_ID_REPEAT`] bytes apart, in the 512 bytes before it, as
+///   on BIMcollab's Revit 2015 example. A Level given two values gets none.
+///
+/// Measured on BIMcollab's Revit 2015 example (project, site, building and
+/// 5 of 5 storeys) and both BIM4LCA office files (project, site and
+/// building).
+pub fn stored_global_ids(rf: &mut RevitFile, level_ids: &BTreeSet<u32>) -> StoredGlobalIds {
+    let mut by_parameter: BTreeMap<i32, BTreeSet<String>> = BTreeMap::new();
+    let mut levels: BTreeMap<u32, BTreeSet<String>> = BTreeMap::new();
+    let parameters = [
+        IFC_GUID_PARAMETER,
+        IFC_PROJECT_GUID_PARAMETER,
+        IFC_BUILDING_GUID_PARAMETER,
+        IFC_SITE_GUID_PARAMETER,
+        -1,
+    ];
+    for stream in rf.partition_stream_names() {
+        let Ok(inflated) = rf.inflated_partition(&stream) else {
+            continue;
+        };
+        let buf = inflated.bytes();
+        for parameter in parameters {
+            let mut needle = [0u8; 8];
+            needle[..4].copy_from_slice(&parameter.to_le_bytes());
+            needle[4..].copy_from_slice(&22u32.to_le_bytes());
+            for hit in memchr::memmem::find_iter(buf, &needle) {
+                let at = hit + needle.len();
+                let Some(value) = stored_global_id(buf, at) else {
+                    continue;
+                };
+                if parameter == IFC_GUID_PARAMETER {
+                    let from = hit.saturating_sub(LEVEL_ID_WINDOW);
+                    let level = (from..hit.saturating_sub(4))
+                        .rev()
+                        .filter_map(|p| Some((p, le_bytes::u32_at(buf, p)?)))
+                        .find(|(p, id)| {
+                            level_ids.contains(id)
+                                && p.checked_sub(LEVEL_ID_REPEAT)
+                                    .filter(|q| *q >= from)
+                                    .and_then(|q| le_bytes::u32_at(buf, q))
+                                    == Some(*id)
+                        })
+                        .map(|(_, id)| id);
+                    if let Some(level) = level {
+                        levels.entry(level).or_default().insert(value);
+                    }
+                } else {
+                    by_parameter.entry(parameter).or_default().insert(value);
+                }
+            }
+        }
+    }
+    let one = |parameter: i32| {
+        by_parameter
+            .get(&parameter)
+            .and_then(|values| match values.len() {
+                1 => values.iter().next().cloned(),
+                _ => None,
+            })
+    };
+    let mut out = StoredGlobalIds {
+        project: one(IFC_PROJECT_GUID_PARAMETER),
+        site: one(IFC_SITE_GUID_PARAMETER),
+        building: one(IFC_BUILDING_GUID_PARAMETER),
+        levels: levels
+            .into_iter()
+            .filter_map(|(id, values)| match values.len() {
+                1 => Some((id, values.into_iter().next()?)),
+                _ => None,
+            })
+            .collect(),
+    };
+    if out.project.is_none() && out.site.is_none() && out.building.is_none() {
+        let untagged = by_parameter.get(&-1).cloned().unwrap_or_default();
+        let flipped = |value: &str, bit: u8| {
+            let mut bytes = expand_ifc_guid(value)?;
+            bytes[15] ^= bit;
+            Some(compress_ifc_guid(bytes))
+        };
+        let triples: Vec<(String, String, String)> = untagged
+            .iter()
+            .filter_map(|project| {
+                let building = flipped(project, 1).filter(|v| untagged.contains(v))?;
+                let site = flipped(project, 2).filter(|v| untagged.contains(v))?;
+                Some((project.clone(), site, building))
+            })
+            .collect();
+        if let [(project, site, building)] = triples.as_slice() {
+            out.project = Some(project.clone());
+            out.site = Some(site.clone());
+            out.building = Some(building.clone());
+        }
+    }
+    out
 }
 
 /// The GlobalId Revit's exporter gives each element `Global/ElemTable`
