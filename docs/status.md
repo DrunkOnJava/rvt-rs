@@ -863,6 +863,16 @@ unchanged. A corner rule from the join order and the native line for walls
 whose copies disagree were measured and are not used
 (`reports/element-framing/RE-222-wall-native-joins.md`).
 
+**RE-223 (2026-10-25)** reads a wall type's core from its native
+`CompoundStructure` (`m_numShellLayersExt`, `m_numShellLayersInt`). At a T
+joint a layered wall's core now runs through the other wall's layers outside
+its core and stops at that core, as Revit's does, where RE-73's layer
+priorities stopped it at the face of partition walls whose layers are all
+marked structure. On the BIM4LCA office as built 482 of 607 walls end where
+Revit's do (428 before), and 422 of 589 at building permit (377); Core
+Interior, RE1 and the R2025 models are unchanged
+(`reports/element-framing/RE-223-wall-tee-cores.md`).
+
 The public viewer's demo gallery leads with the two files this section
 measures, staged from the deploy workflow's `magnetar-io/revit-test-datasets`
 checkout and pinned by sha256 (#257): `Revit_IFC5_Einhoven.rvt` (2023,
