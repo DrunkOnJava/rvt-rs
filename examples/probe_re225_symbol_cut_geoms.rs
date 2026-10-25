@@ -91,9 +91,9 @@ fn walk(
                     Ok(Some(mesh)) => {
                         cut.faces_meshed += 1;
                         for v in &mesh.vertices {
-                            for k in 0..3 {
-                                cut.min[k] = cut.min[k].min(v[k]);
-                                cut.max[k] = cut.max[k].max(v[k]);
+                            for (k, &value) in v.iter().enumerate() {
+                                cut.min[k] = cut.min[k].min(value);
+                                cut.max[k] = cut.max[k].max(value);
                             }
                         }
                     }
