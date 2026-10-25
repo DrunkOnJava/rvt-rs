@@ -5028,8 +5028,9 @@ pub const LANDING_OUTLINE_SOURCE: &str = "partition_landing_lines";
 pub const LANDING_LINE_TOLERANCE_FEET: f64 = 1e-6;
 
 /// The plan outline a landing's own lines at `top_feet` make (#824): the
-/// lines end to end, and where one chain of them stops, a straight edge to
-/// the nearest end of an unused line, closed back to the first point. On the
+/// chains of lines that meet end to end, each joined to the chain with the
+/// end nearest where the outline has reached by a straight edge, and closed
+/// back to the first point. On the
 /// BIM4LCA office a landing's lines at its top stop where its flights meet
 /// it, and Revit's outline runs straight across there: the outline is
 /// Revit's within 0.001 ft on all 21 monolithic landings. `None` for fewer
@@ -5051,24 +5052,57 @@ fn landing_outline(
     if remaining.len() < 3 {
         return None;
     }
-    let (first, second) = remaining.remove(0);
-    let mut points = vec![first, second];
-    let mut here = second;
+    // The lines that meet end to end, as chains of points.
+    let mut chains: Vec<Vec<[f64; 2]>> = Vec::new();
     while !remaining.is_empty() {
-        let (index, reverse, _) = remaining
+        let (a, b) = remaining.remove(0);
+        let mut chain = vec![a, b];
+        loop {
+            let tail = *chain.last()?;
+            let head = chain[0];
+            if let Some(i) = remaining
+                .iter()
+                .position(|(a, b)| gap(*a, tail) <= TOL || gap(*b, tail) <= TOL)
+            {
+                let (a, b) = remaining.remove(i);
+                chain.push(if gap(a, tail) <= TOL { b } else { a });
+            } else if let Some(i) = remaining
+                .iter()
+                .position(|(a, b)| gap(*a, head) <= TOL || gap(*b, head) <= TOL)
+            {
+                let (a, b) = remaining.remove(i);
+                chain.insert(0, if gap(b, head) <= TOL { a } else { b });
+            } else {
+                break;
+            }
+        }
+        chains.push(chain);
+    }
+    // Each chain after the first is the one with an end nearest where the
+    // outline has reached, joined by a straight edge across the gap.
+    let mut points = chains.remove(0);
+    while !chains.is_empty() {
+        let here = *points.last()?;
+        let (index, reverse, _) = chains
             .iter()
             .enumerate()
-            .flat_map(|(i, (a, b))| [(i, false, gap(*a, here)), (i, true, gap(*b, here))])
+            .flat_map(|(i, chain)| {
+                [
+                    (i, false, gap(chain[0], here)),
+                    (i, true, gap(*chain.last().unwrap_or(&chain[0]), here)),
+                ]
+            })
             .min_by(|x, y| x.2.total_cmp(&y.2))?;
-        let (a, b) = remaining.remove(index);
-        let (from, to) = if reverse { (b, a) } else { (a, b) };
-        if gap(from, here) > TOL {
-            points.push(from);
+        let mut chain = chains.remove(index);
+        if reverse {
+            chain.reverse();
         }
-        points.push(to);
-        here = to;
+        if gap(chain[0], here) <= TOL {
+            chain.remove(0);
+        }
+        points.extend(chain);
     }
-    if gap(points[0], here) <= TOL {
+    if points.len() > 1 && gap(points[0], *points.last()?) <= TOL {
         points.pop();
     }
     let n = points.len();
