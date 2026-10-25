@@ -603,8 +603,17 @@ pub fn native_landings(
     rf: &mut RevitFile,
     landings: &BTreeMap<u64, u64>,
 ) -> anyhow::Result<BTreeMap<u64, NativeLanding>> {
+    Ok(native_landings_and_type_names(rf, landings)?.0)
+}
+
+/// [`native_landings`], with each landing type's name (its
+/// `SymbolInfo.m_name`), monolithic or not, from the same pass.
+pub fn native_landings_and_type_names(
+    rf: &mut RevitFile,
+    landings: &BTreeMap<u64, u64>,
+) -> anyhow::Result<(BTreeMap<u64, NativeLanding>, BTreeMap<u64, String>)> {
     if landings.is_empty() {
-        return Ok(BTreeMap::new());
+        return Ok(Default::default());
     }
     let options = Options {
         selected_ids: landings.keys().chain(landings.values()).copied().collect(),
@@ -612,6 +621,7 @@ pub fn native_landings(
     };
     let mut tops: BTreeMap<u64, f64> = BTreeMap::new();
     let mut thicknesses: BTreeMap<u64, f64> = BTreeMap::new();
+    let mut names: BTreeMap<u64, String> = BTreeMap::new();
     extract_graphs(rf, &options, |record| {
         let (Some(class), Some(graph)) = (record.class_name.as_deref(), record.graph.as_ref())
         else {
@@ -627,8 +637,19 @@ pub fn native_landings(
                     tops.insert(id, top);
                 }
             }
-            "StairsLandingType" if flag(&root.fields, "m_hasMonolithicSupport") == Some(true) => {
-                if let Some(thickness) = number(&root.fields, "m_thickness").filter(|t| *t > 0.0) {
+            "StairsLandingType" => {
+                if let Some(name) = graph
+                    .objects
+                    .iter()
+                    .find(|o| o.class_name == "SymbolInfo")
+                    .and_then(|o| o.fields.get("m_name")?.as_str())
+                {
+                    names.insert(id, name.to_string());
+                }
+                let monolithic = flag(&root.fields, "m_hasMonolithicSupport") == Some(true);
+                if let Some(thickness) =
+                    number(&root.fields, "m_thickness").filter(|t| monolithic && *t > 0.0)
+                {
                     thicknesses.insert(id, thickness);
                 }
             }
@@ -636,7 +657,7 @@ pub fn native_landings(
         }
         Ok(())
     })?;
-    Ok(tops
+    let found = tops
         .into_iter()
         .filter_map(|(id, top_feet)| {
             let thickness_feet = *thicknesses.get(&landings[&id])?;
@@ -648,7 +669,8 @@ pub fn native_landings(
                 },
             ))
         })
-        .collect())
+        .collect();
+    Ok((found, names))
 }
 
 /// Releases a stair's and its parts' names are read from their native

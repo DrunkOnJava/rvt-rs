@@ -329,6 +329,7 @@ pub fn recover_partition_schema_mvp(
     attach_stair_dimensions(rf, revit_version, &mut out.products);
     // --- Stair runs' treads and risers, and their run type (RE-52) ---
     attach_stair_run_bodies(rf, revit_version, &mut out.products);
+    attach_stair_nosing_lengths(&mut out.products);
     // --- Spiral runs as their treads (#357) ---
     attach_spiral_run_bodies(rf, revit_version, &mut out.products);
     // --- Monolithic landings as their slabs (#824) ---
@@ -3609,6 +3610,14 @@ pub const STAIR_RISER_COUNT_FIELD: &str = "m_stair_riser_count";
 pub const STAIR_RISER_HEIGHT_FIELD: &str = "m_stair_riser_height";
 /// Field holding a stair's or flight's tread depth, feet (RE-47).
 pub const STAIR_TREAD_DEPTH_FIELD: &str = "m_stair_tread_depth";
+/// Field holding a flight's number of treads: its risers, one fewer when it
+/// begins and ends with a riser, one more for each end that is a tread
+/// (RE-92).
+pub const STAIR_TREAD_COUNT_FIELD: &str = "m_stair_tread_count";
+/// Field holding how far a flight's treads overhang its risers, its run
+/// type's nosing length, feet; on a stair, the one every run of it has
+/// (RE-52).
+pub const STAIR_NOSING_LENGTH_FIELD: &str = "m_stair_nosing_length";
 
 /// Give each stair its riser height, tread depth and number of risers, and
 /// each of its runs the same riser height and tread depth and, where
@@ -5212,16 +5221,34 @@ fn attach_stair_run_bodies(
                 .fields
                 .push((TYPE_NAME_FIELD.into(), InstanceField::String(name.clone())));
         }
+        element.fields.push((
+            STAIR_NOSING_LENGTH_FIELD.into(),
+            InstanceField::Float {
+                value: run_type.nosing_length_feet,
+                size: 8,
+            },
+        ));
         let (Some(riser_height), Some(risers)) = (
             float(element, STAIR_RISER_HEIGHT_FIELD),
             integer(element, STAIR_RISER_COUNT_FIELD),
         ) else {
             continue;
         };
-        let end_with_riser = element
-            .id
-            .and_then(|id| ends.get(&id))
-            .map(|ends| ends.end_with_riser);
+        let run_ends = element.id.and_then(|id| ends.get(&id)).copied();
+        if let Some(run_ends) = run_ends {
+            let treads = risers - 1
+                + i64::from(!run_ends.begin_with_riser)
+                + i64::from(!run_ends.end_with_riser);
+            element.fields.push((
+                STAIR_TREAD_COUNT_FIELD.into(),
+                InstanceField::Integer {
+                    value: treads,
+                    signed: false,
+                    size: 4,
+                },
+            ));
+        }
+        let end_with_riser = run_ends.map(|ends| ends.end_with_riser);
         let riser_lines = risers + i64::from(end_with_riser == Some(false));
         let Some(mut sketch) = element
             .id
@@ -5239,6 +5266,50 @@ fn attach_stair_run_bodies(
             continue;
         };
         push_stair_run_body(element, &sketch, &pieces);
+    }
+}
+
+/// Give each stair the nosing length every one of its runs has, where they
+/// all have one and it is the same: revit-ifc's `NosingLengthCalculator`
+/// (CLEANROOM.md source 5) takes a stair's from the type of its first run.
+fn attach_stair_nosing_lengths(products: &mut [DecodedElement]) {
+    let float = |element: &DecodedElement, wanted: &str| {
+        element.fields.iter().find_map(|(name, value)| match value {
+            InstanceField::Float { value, .. } if name == wanted => Some(*value),
+            _ => None,
+        })
+    };
+    let whole_of = |element: &DecodedElement| {
+        element.fields.iter().find_map(|(name, value)| match value {
+            InstanceField::ElementId { id, .. } if name == AGGREGATE_WHOLE_FIELD => Some(*id),
+            _ => None,
+        })
+    };
+    let mut lengths: BTreeMap<u32, Vec<Option<f64>>> = BTreeMap::new();
+    for element in products.iter().filter(|e| e.class == "StairsRun") {
+        if let Some(stair) = whole_of(element) {
+            lengths
+                .entry(stair)
+                .or_default()
+                .push(float(element, STAIR_NOSING_LENGTH_FIELD));
+        }
+    }
+    for element in products.iter_mut().filter(|e| e.class == "Stair") {
+        let Some(found) = element.id.and_then(|id| lengths.get(&id)) else {
+            continue;
+        };
+        let Some(Some(first)) = found.first().copied() else {
+            continue;
+        };
+        if found.iter().all(|length| *length == Some(first)) {
+            element.fields.push((
+                STAIR_NOSING_LENGTH_FIELD.into(),
+                InstanceField::Float {
+                    value: first,
+                    size: 8,
+                },
+            ));
+        }
     }
 }
 
@@ -6047,9 +6118,40 @@ fn attach_landing_slabs(rf: &mut RevitFile, revit_version: u32, products: &mut [
             landings.insert(u64::from(id), u64::from(type_id));
         }
     }
-    let Ok(native) = crate::native_stairs::native_landings(rf, &landings) else {
+    let Ok((native, type_names)) =
+        crate::native_stairs::native_landings_and_type_names(rf, &landings)
+    else {
         return;
     };
+    // Each landing's type and its name, as for a run (RE-28).
+    for element in products
+        .iter_mut()
+        .filter(|element| element.class == "StairsLanding")
+    {
+        let Some(type_id) = element.id.and_then(|id| landings.get(&u64::from(id))) else {
+            continue;
+        };
+        let (Some(name), Ok(type_id)) = (type_names.get(type_id), u32::try_from(*type_id)) else {
+            continue;
+        };
+        if element
+            .fields
+            .iter()
+            .any(|(field, _)| field == TYPE_NAME_FIELD)
+        {
+            continue;
+        }
+        element.fields.push((
+            TYPE_ID_FIELD.into(),
+            InstanceField::ElementId {
+                tag: 0,
+                id: type_id,
+            },
+        ));
+        element
+            .fields
+            .push((TYPE_NAME_FIELD.into(), InstanceField::String(name.clone())));
+    }
     let ids: BTreeSet<u32> = native
         .keys()
         .filter_map(|id| u32::try_from(*id).ok())

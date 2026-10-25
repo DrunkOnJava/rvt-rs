@@ -57,7 +57,8 @@ PartAtom are not measured. On Revit 2024 and 2025 project files it reads
 the building: each element's ElementId, category, name, type (written as
 an IFC type object of its Revit type, RE-110), storey, materials, layers,
 GlobalId, `IsExternal` (RE-193), curtain mullions' `Span` (RE-226), walls'
-`ExtendToStructure` (RE-228) and the parameters named for a standard property
+`ExtendToStructure` (RE-228), stair flights' treads, nosing and run type
+and landings' type (RE-92) and the parameters named for a standard property
 set's property (RE-194), and a body that is exact where the element's
 data is decoded and its bounding box where it is not. It writes that as IFC4,
 glTF, plan SVG and CSV, from the CLIs, Python and the zero-upload browser
