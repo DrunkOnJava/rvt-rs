@@ -81,6 +81,11 @@ def main():
         ranked.sort(key=lambda r: (-r[0], r[1]))
         for score, name, sense, value, distinct in ranked[:12]:
             print(f"  {score}/{len(tags)}  true where {name} {sense} {value}  ({distinct} values)")
+        # The best field's values against the property, for a rule on a value.
+        for _, name, _, _, _ in ranked[:3]:
+            table = collections.Counter((rows[t].get(name, "-"), by_tag[t]) for t in tags)
+            cells = ", ".join(f"{v}:{'T' if truth else 'F'} {n}" for (v, truth), n in sorted(table.items()))
+            print(f"    {name}: {cells[:400]}")
     if "--list" in sys.argv:
         for prop, by_tag in sorted(truths.items()):
             for tag in sorted(by_tag)[:40]:

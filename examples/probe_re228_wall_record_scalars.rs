@@ -11,7 +11,7 @@
 //!
 //! Output, one line per wall the export writes:
 //!   rec <tag> <record class> <object class>.<field>=<value> ...
-//! for every number, boolean and short string of the first 40 objects of
+//! for every number, boolean and short string of the first 400 objects of
 //! the record, an ElementId as its number.
 //!
 //! Usage:
@@ -25,7 +25,7 @@ use rvt::ifc::entities::IfcEntity;
 use rvt::research::native_document::{Options, extract_graphs};
 use serde_json::Value;
 
-const OBJECTS: usize = 40;
+const OBJECTS: usize = 400;
 
 fn scalar(value: &Value) -> Option<String> {
     match value {
