@@ -173,16 +173,12 @@ pub fn scan_instance_transforms(
             found.entry(id).or_default().push((partition, transform));
         }
     }
-    let disagreeing: BTreeSet<u64> = found
+    let disagreeing: BTreeMap<u32, BTreeSet<u32>> = found
         .iter()
         .filter(|(_, copies)| copies.iter().any(|(_, t)| *t != copies[0].1))
-        .map(|(id, _)| u64::from(*id))
+        .filter_map(|(id, _)| Some((*id, holders.get(id)?.clone())))
         .collect();
-    let routed = if disagreeing.is_empty() {
-        BTreeMap::new()
-    } else {
-        crate::native_document::routed_partitions(rf, &disagreeing).unwrap_or_default()
-    };
+    let current_partitions = crate::native_document::current_partitions(rf, &disagreeing);
     Ok(found
         .into_iter()
         .filter_map(|(id, copies)| {
@@ -190,13 +186,7 @@ pub fn scan_instance_transforms(
             if copies.iter().all(|(_, t)| *t == first) {
                 return Some((id, first));
             }
-            let held = holders.get(&id)?;
-            let routed = *routed.get(&u64::from(id))?;
-            let current = if held.contains(&routed) {
-                routed
-            } else {
-                *held.last()?
-            };
+            let current = *current_partitions.get(&id)?;
             let mut in_current = copies
                 .iter()
                 .filter(|(p, _)| *p == current)

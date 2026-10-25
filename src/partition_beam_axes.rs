@@ -564,7 +564,9 @@ pub fn scan_first_bounded_arcs(
 }
 
 /// What `read` finds in the element data of each id in `ids`, from every
-/// partition. An id whose copies disagree is dropped.
+/// partition. An id whose copies disagree takes its current partition's copy
+/// (RE-216, [`crate::native_document`]); one whose current copy cannot be
+/// told, or holds copies that disagree, is dropped.
 fn scan_first_records<T: PartialEq>(
     rf: &mut RevitFile,
     revit_version: u32,
@@ -575,8 +577,15 @@ fn scan_first_records<T: PartialEq>(
         return Ok(BTreeMap::new());
     };
     let header = layout.header;
-    let mut found: BTreeMap<u32, Option<T>> = BTreeMap::new();
+    let mut found: BTreeMap<u32, Vec<(u32, T)>> = BTreeMap::new();
+    let mut holders: BTreeMap<u32, BTreeSet<u32>> = BTreeMap::new();
     for stream in rf.partition_stream_names() {
+        let Some(partition) = stream
+            .strip_prefix("Partitions/")
+            .and_then(|n| n.parse::<u32>().ok())
+        else {
+            continue;
+        };
         let Ok(inflated) = rf.inflated_partition(&stream) else {
             continue;
         };
@@ -590,6 +599,7 @@ fn scan_first_records<T: PartialEq>(
             if !ids.contains(&id) {
                 continue;
             }
+            holders.entry(id).or_default().insert(partition);
             let end = hits
                 .get(index + 1)
                 .copied()
@@ -599,21 +609,30 @@ fn scan_first_records<T: PartialEq>(
             let Some(line) = buf.get(id_at + 8..end).and_then(read) else {
                 continue;
             };
-            match found.get_mut(&id) {
-                None => {
-                    found.insert(id, Some(line));
-                }
-                Some(held) => {
-                    if held.as_ref() != Some(&line) {
-                        *held = None;
-                    }
-                }
-            }
+            found.entry(id).or_default().push((partition, line));
         }
     }
+    // RE-216: where an element's copies in different partitions disagree,
+    // the copy taken is its current partition's (#824).
+    let disagreeing: BTreeMap<u32, BTreeSet<u32>> = found
+        .iter()
+        .filter(|(_, copies)| copies.iter().any(|(_, line)| *line != copies[0].1))
+        .filter_map(|(id, _)| Some((*id, holders.get(id)?.clone())))
+        .collect();
+    let current_partitions = crate::native_document::current_partitions(rf, &disagreeing);
     Ok(found
         .into_iter()
-        .filter_map(|(id, line)| line.map(|line| (id, line)))
+        .filter_map(|(id, copies)| {
+            if !disagreeing.contains_key(&id) {
+                return copies.into_iter().next().map(|(_, line)| (id, line));
+            }
+            let current = *current_partitions.get(&id)?;
+            let mut in_current = copies.into_iter().filter(|(p, _)| *p == current);
+            let (_, pick) = in_current.next()?;
+            in_current
+                .all(|(_, line)| line == pick)
+                .then_some((id, pick))
+        })
         .collect())
 }
 

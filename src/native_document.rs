@@ -236,6 +236,34 @@ pub(crate) fn routed_partitions(
         .collect())
 }
 
+/// For each id of `holders`, which maps an element to the partitions that
+/// hold a copy of its data, the partition whose copy is current: the one its
+/// stored revision routes to ([`routed_partitions`]) where that holds a copy,
+/// else the latest that does, as [`extract`] reads records (RE-145, RE-216).
+/// An id the element index does not route is left out.
+pub(crate) fn current_partitions(
+    file: &mut RevitFile,
+    holders: &BTreeMap<u32, BTreeSet<u32>>,
+) -> BTreeMap<u32, u32> {
+    if holders.is_empty() {
+        return BTreeMap::new();
+    }
+    let ids: BTreeSet<u64> = holders.keys().map(|&id| u64::from(id)).collect();
+    let routed = routed_partitions(file, &ids).unwrap_or_default();
+    holders
+        .iter()
+        .filter_map(|(&id, held)| {
+            let routed = *routed.get(&u64::from(id))?;
+            let current = if held.contains(&routed) {
+                routed
+            } else {
+                *held.last()?
+            };
+            Some((id, current))
+        })
+        .collect()
+}
+
 /// Extract selected current indexed records. Unsupported individual object
 /// graphs produce explicit records and do not discard other decoded owners.
 /// Framing, identity and routing errors abort instead of choosing a candidate.
