@@ -238,6 +238,21 @@ pub enum IfcEntity {
         outline_feet: Vec<(f64, f64)>,
         depth_feet: f64,
     },
+    /// The opening a face-hosted door's or window's symbol cuts in the
+    /// element whose face hosts it (#824, RE-225), voiding the building
+    /// element at `host` as Revit's export writes it: the `number`th of the
+    /// host's openings, 1 first, named `<host name>:<number>`, tagged with
+    /// the host's ElementId, its `outline_feet` in the host's frame extruded
+    /// up `depth_feet`. Its GlobalId is Revit's: the hash revit-ifc's
+    /// `OpeningUtil` makes of `IfcOpeningElement:<number>:<host GlobalId>`.
+    HostedCutOpening {
+        host: usize,
+        number: u32,
+        tag: String,
+        name: String,
+        outline_feet: Vec<(f64, f64)>,
+        depth_feet: f64,
+    },
     /// The opening a wall's edited elevation profile cuts: voiding the
     /// wall at `host` (an index into `IfcModel::entities`), placed in its
     /// frame. `outline_feet` lies in the wall's vertical plane, along the
