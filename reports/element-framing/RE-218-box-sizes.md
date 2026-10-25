@@ -69,11 +69,26 @@ RE1 Architecture's fifth door is its curtain-wall door 445975, whose type cuts n
 The 6 office doors that still differ were wrong on `main` too:
 
 - 1756089 and 1765267 (types 1106810, 1106812): 5.9766 by 4.3570 ft against Revit's 5.8629 by 4.3570. Their records name a wall, so the box sizes them; its height is Revit's, and its width 0.1137 ft over Revit's (on `main` both were the type's 3.1168 by 4.2717).
-- 3269270, 3270587, 3270669 and 3270703 (type 3267242): their records name no wall, so they keep the type's 5.2165 by 4.4948 ft, against Revit's 5.2165 by 5.2665.
+- 3269270, 3270587, 3270669 and 3270703 (type 3267242): their records name no wall, so they keep the type's 5.2165 by 4.4948 ft, against Revit's 5.2165 by 5.2665. §6 sizes them.
 
-The 5 with `$` are the four doors of type 1107673 and one more, which had `$` on `main` too.
+The 5 with `$` are the four doors of type 1107673 and one more, which had `$` on `main` too. §6 sizes the four.
 
 ## 5. What it does not cover
 
 - A door or window turned off the model's axes, whose record box is not along its own axes.
 - A window's opening. Where its symbol cuts no loop, its opening stays what it was. Against Revit's on the office (`tools/re/window_openings_vs_box.py`, Measure run [40163933374](https://github.com/DrunkOnJava/rvt-rs/actions/runs/40163933374)), it is exact along the wall and at the top on all 269. Revit's runs 0.059 ft (18 mm) lower at the bottom, and 0.328 ft (100 mm) past the host wall's band on each side, 2.0833 ft through a 1.4272 ft wall. Those are the families' own void geometry, which is not decoded.
+
+## 6. Addendum (2026-10-25): a door no wall hosts takes its height along its own Y axis
+
+revit-ifc states the rule §2 measured for the eight doors whose records name no wall. `FamilyInstanceExporter.GetDoorWindowDimensionFromSymbol` (CLEANROOM.md source 5) takes a door's or window's width from `ExporterIFCUtils.GetMinSymbolWidth` and, where its host is a `Wall` or a `FaceWall`, its height from `GetMinSymbolHeight`; for any other host, "the height of the non-wall hosted families is measured in Y direction", as the extent along Y of the bounding box of the symbol's geometry. A curtain wall is a `Wall` there, so the doors set in one keep their height through the box.
+
+`attach_cut_loop_sizes` now sizes every door and window whose symbol cuts no loop, upright and along a model axis, by its record box: its width along its own X axis, as before, and its height through the box where its record names a wall or a curtain wall, else along its own Y axis. The office's four roof hatches (type 1107673) stand upright like every other door; their height is a plan extent because their Y axis is horizontal, not because they lie down. A first attempt that took every such door's height along its own Z axis gave the hatches their box's 1.6562 ft and type 3267242 its 3.3531 ft, both wrong (Measure run [40176316442](https://github.com/DrunkOnJava/rvt-rs/actions/runs/40176316442)).
+
+`door_window_sizes_vs_ifc`, Measure run [40177398023](https://github.com/DrunkOnJava/rvt-rs/actions/runs/40177398023), this change against `main` (9afafa7a), default models plus `-f nordic=true -f r2025=true`:
+
+| model | IfcDoor equal before / after | differ before / after | `$` before / after |
+|---|---:|---:|---:|
+| BIM4LCA office as built | 258 / 266 | 6 / 2 | 5 / 1 |
+| BIM4LCA office at building permit | 258 / 266 | 6 / 2 | 5 / 1 |
+
+The four hatches go from `$` to Revit's 2.2966 ft square, and the four doors of type 3267242 from the type's 5.2165 by 4.4948 ft to Revit's 5.2165 by 5.2665. The two that still differ are 1756089 and 1765267, 0.1137 ft wider than Revit's (§4). Every window stays equal, only the two office files' IFC changes, and no other scorer's output does.

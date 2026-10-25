@@ -763,9 +763,10 @@ office, 187 of its 269 doors cut one and have Revit's sizes. **RE-218
 box, along its own X axis and through its height, where its element record
 names a wall or a curtain wall: all 269 of the office's windows and 71 more
 of its doors now have Revit's `OverallWidth` and `OverallHeight`, and so
-does RE1 Architecture's curtain-wall door. Ten office doors still do not:
-eight whose records name no wall, whose height Revit takes along a
-horizontal axis, and two 0.1137 ft wider than Revit's
+does RE1 Architecture's curtain-wall door. Its addendum sizes one whose
+record names no wall along its own Y axis, as revit-ifc measures the
+height of a family no wall hosts: 266 of the office's 269 doors are then
+Revit's, and two are 0.1137 ft wider than Revit's
 (`reports/element-framing/RE-218-box-sizes.md`, #810).
 
 **RE-216 (2026-10-24)** gives a family instance whose element data sits in
