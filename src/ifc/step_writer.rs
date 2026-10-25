@@ -731,6 +731,39 @@ impl StepWriter {
                     format!("IFCARBITRARYCLOSEDPROFILEDEF(.AREA.,$,#{polyline_id})"),
                 );
             }
+            Some(ProfileDef::IndexedPolyCurve { points, segments }) => {
+                use super::entities::CurveSegment;
+                let coords = points
+                    .iter()
+                    .map(|(x, y)| format!("({:.6},{:.6})", x * 0.3048, y * 0.3048))
+                    .collect::<Vec<_>>()
+                    .join(",");
+                let list_id = self.id();
+                self.emit_entity(list_id, format!("IFCCARTESIANPOINTLIST2D(({coords}))"));
+                // IFC indices count from 1.
+                let index = |i: usize| (i + 1).to_string();
+                let segments = segments
+                    .iter()
+                    .map(|segment| match segment {
+                        CurveSegment::Line(ends) => {
+                            format!("IFCLINEINDEX(({}))", ends.map(index).join(","))
+                        }
+                        CurveSegment::Arc(points) => {
+                            format!("IFCARCINDEX(({}))", points.map(index).join(","))
+                        }
+                    })
+                    .collect::<Vec<_>>()
+                    .join(",");
+                let curve_id = self.id();
+                self.emit_entity(
+                    curve_id,
+                    format!("IFCINDEXEDPOLYCURVE(#{list_id},({segments}),.F.)"),
+                );
+                self.emit_entity(
+                    profile_id,
+                    format!("IFCARBITRARYCLOSEDPROFILEDEF(.AREA.,$,#{curve_id})"),
+                );
+            }
             Some(ProfileDef::ArbitraryWithVoids { points, voids }) => {
                 let outer_id = self.emit_closed_polyline(points);
                 let inner_ids: Vec<usize> = voids
@@ -807,6 +840,37 @@ impl StepWriter {
     /// the element-local frame — every rvt-rs path does — pass the
     /// project-level identity placement.
     // Tracker: IFC-18, IFC-19, IFC-20.
+    /// The representation items of `shape`: each of a
+    /// [`SolidShape::Compound`]'s solids, else the one solid
+    /// [`Self::emit_solid_shape`] writes, with the representation type.
+    fn emit_solid_items(
+        &mut self,
+        shape: &SolidShape,
+        solid_position: usize,
+        z_axis: usize,
+    ) -> (Vec<usize>, &'static str) {
+        match shape {
+            SolidShape::Compound(items) if !items.is_empty() => {
+                let mut ids = Vec::with_capacity(items.len());
+                let mut kinds = std::collections::BTreeSet::new();
+                for item in items {
+                    let (id, kind) = self.emit_solid_shape(item, solid_position, z_axis);
+                    ids.push(id);
+                    kinds.insert(kind);
+                }
+                let kind = match kinds.into_iter().collect::<Vec<_>>().as_slice() {
+                    [one] => *one,
+                    _ => "CSG",
+                };
+                (ids, kind)
+            }
+            _ => {
+                let (id, kind) = self.emit_solid_shape(shape, solid_position, z_axis);
+                (vec![id], kind)
+            }
+        }
+    }
+
     fn emit_solid_shape(
         &mut self,
         shape: &SolidShape,
@@ -899,6 +963,35 @@ impl StepWriter {
                     ),
                 );
                 (solid_id, "SweptSolid")
+            }
+            SolidShape::Compound(items) => {
+                // Nested in another solid, the items are one: their union.
+                let mut ids = items
+                    .iter()
+                    .map(|item| self.emit_solid_shape(item, solid_position, z_axis).0);
+                let Some(mut solid_id) = ids.next() else {
+                    return self.emit_solid_shape(
+                        &SolidShape::TriangulatedFaceSet {
+                            vertices_feet: Vec::new(),
+                            triangles: Vec::new(),
+                        },
+                        solid_position,
+                        z_axis,
+                    );
+                };
+                let rest: Vec<usize> = ids.collect();
+                if rest.is_empty() {
+                    return (solid_id, "SweptSolid");
+                }
+                for other in rest {
+                    let union = self.id();
+                    self.emit_entity(
+                        union,
+                        format!("IFCBOOLEANRESULT(.UNION.,#{solid_id},#{other})"),
+                    );
+                    solid_id = union;
+                }
+                (solid_id, "CSG")
             }
             SolidShape::BooleanResult {
                 op,
@@ -1948,11 +2041,16 @@ impl StepWriter {
             // inverse rather than compounding. `origin_feet` is
             // `[0,0,0]` on every map rvt-rs builds today, which makes
             // the two placements the same identity frame anyway.
-            let (solid_id, rep_type) = self.emit_solid_shape(&rmap.shape, map_placement, z_axis);
+            let (solid_ids, rep_type) = self.emit_solid_items(&rmap.shape, map_placement, z_axis);
+            let items = solid_ids
+                .iter()
+                .map(|id| format!("#{id}"))
+                .collect::<Vec<_>>()
+                .join(",");
             let body_rep_id = self.id();
             self.emit_entity(
                 body_rep_id,
-                format!("IFCSHAPEREPRESENTATION(#{geom_ctx},'Body','{rep_type}',(#{solid_id}))"),
+                format!("IFCSHAPEREPRESENTATION(#{geom_ctx},'Body','{rep_type}',({items}))"),
             );
             // IFCREPRESENTATIONMAP(MappingOrigin, MappedRepresentation).
             let rep_map_id = self.id();
@@ -2257,12 +2355,18 @@ impl StepWriter {
                         prod_shape_id
                     })
                 } else if let Some(shape) = solid_shape {
-                    let (solid_id, rep_type) = self.emit_solid_shape(shape, solid_position, z_axis);
+                    let (solid_ids, rep_type) =
+                        self.emit_solid_items(shape, solid_position, z_axis);
+                    let items = solid_ids
+                        .iter()
+                        .map(|id| format!("#{id}"))
+                        .collect::<Vec<_>>()
+                        .join(",");
                     let rep_id = self.id();
                     self.emit_entity(
                         rep_id,
                         format!(
-                            "IFCSHAPEREPRESENTATION(#{geom_ctx},'Body','{rep_type}',(#{solid_id}))"
+                            "IFCSHAPEREPRESENTATION(#{geom_ctx},'Body','{rep_type}',({items}))"
                         ),
                     );
                     let prod_shape_id = self.id();

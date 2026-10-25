@@ -704,6 +704,10 @@ pub enum SolidShape {
         /// Extrusion depth along `axis`, feet.
         depth_feet: f64,
     },
+    /// Several solids written as the items of one body representation, each
+    /// placed in the element's frame: a spiral run's treads, one extrusion
+    /// each at its own height (#357).
+    Compound(Vec<SolidShape>),
 }
 
 /// Named cross-sections for an extrusion. Feeds one of
@@ -806,6 +810,26 @@ pub enum ProfileDef {
         points: Vec<(f64, f64)>,
         voids: Vec<Vec<(f64, f64)>>,
     },
+    /// `IFCArbitraryClosedProfileDef` whose outer curve is an
+    /// `IFCIndexedPolyCurve` over `points` (local 2D feet): straight lines
+    /// and three-point circular arcs, which close the curve in turn, as
+    /// Revit's export writes a spiral stair's treads (#357).
+    IndexedPolyCurve {
+        points: Vec<(f64, f64)>,
+        segments: Vec<CurveSegment>,
+    },
+}
+
+/// One segment of a [`ProfileDef::IndexedPolyCurve`], by 0-based indices
+/// into its points.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[non_exhaustive]
+pub enum CurveSegment {
+    /// `IFCLINEINDEX`: a straight line from the first point to the second.
+    Line([usize; 2]),
+    /// `IFCARCINDEX`: a circular arc from the first point through the
+    /// second to the third.
+    Arc([usize; 3]),
 }
 
 /// One layer of a compound building-element material assembly
