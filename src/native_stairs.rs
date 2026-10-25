@@ -29,7 +29,9 @@
 //!
 //! A landing's top is its `StairsLanding.m_baseElevation`, and a monolithic
 //! landing type's thickness its `StairsLandingType.m_thickness`
-//! ([`native_landings`], #824).
+//! ([`native_landings`], #824). A landing that is not monolithic and whose
+//! type takes its tread from its runs is its outline's `CurveLoop`, arcs and
+//! all, one tread of its runs' type thick ([`native_tread_landings`]).
 //!
 //! A run's treads all give one `m_runType`, which names the flight's
 //! predefined type in Revit's export ([`native_run_shapes`], #323). A spiral
@@ -761,4 +763,214 @@ pub fn native_stair_parts(
         part(id, stair, type_id, family);
     }
     Ok(out)
+}
+
+/// One curve of a landing's plan outline, model feet.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum LandingCurve {
+    /// A straight edge from the first point to the second.
+    Line([f64; 2], [f64; 2]),
+    /// A circular arc from the first point through the second to the third.
+    Arc([f64; 2], [f64; 2], [f64; 2]),
+}
+
+impl LandingCurve {
+    /// Where the curve starts.
+    pub fn start(&self) -> [f64; 2] {
+        match self {
+            LandingCurve::Line(a, _) | LandingCurve::Arc(a, _, _) => *a,
+        }
+    }
+
+    /// Where the curve ends.
+    pub fn end(&self) -> [f64; 2] {
+        match self {
+            LandingCurve::Line(_, b) | LandingCurve::Arc(_, _, b) => *b,
+        }
+    }
+}
+
+/// A landing drawn as one tread: its outline, its top and its thickness,
+/// feet (#824).
+#[derive(Debug, Clone, PartialEq)]
+pub struct NativeTreadLanding {
+    pub outline: Vec<LandingCurve>,
+    pub top_feet: f64,
+    pub thickness_feet: f64,
+}
+
+/// How far a landing outline's curves may miss each other's ends, or its
+/// top, and still close, feet.
+pub const LANDING_LOOP_TOLERANCE_FEET: f64 = 1e-5;
+
+/// The landing's outline: the first closed `CurveLoop` of its record whose
+/// curves (`GLine`, `GArc`) all lie at `top` and each start where the one
+/// before ends.
+fn landing_loop(
+    graph: &crate::native_parameters::ObjectGraph,
+    top: f64,
+) -> Option<Vec<LandingCurve>> {
+    let eps = LANDING_LOOP_TOLERANCE_FEET;
+    graph
+        .objects
+        .iter()
+        .enumerate()
+        .filter(|(_, object)| object.class_name == "CurveLoop")
+        .find_map(|(index, object)| {
+            if flag(&object.fields, "m_open") != Some(false) {
+                return None;
+            }
+            let curves = object.fields.get("m_curves")?.as_array()?;
+            let mut out = Vec::new();
+            for curve in curves {
+                let target = crate::native_saved_mesh::pointer(graph, index, curve).ok()??;
+                let curve = graph.objects.get(target)?;
+                let params = curve.fields.get("m_endParams")?.as_array()?;
+                let [t0, t1] = params.as_slice() else {
+                    return None;
+                };
+                let (t0, t1) = (t0.as_f64()?, t1.as_f64()?);
+                let points: Vec<[f64; 3]> = match curve.class_name.as_str() {
+                    "GLine" => {
+                        let origin = point(&curve.fields, "m_origin")?;
+                        let direction = point(&curve.fields, "m_dirVec")?;
+                        [t0, t1]
+                            .iter()
+                            .map(|t| [0, 1, 2].map(|i| origin[i] + direction[i] * t))
+                            .collect()
+                    }
+                    "GArc" => {
+                        let centre = point(&curve.fields, "m_center")?;
+                        let x = point(&curve.fields, "m_xVec")?;
+                        let y = point(&curve.fields, "m_yVec")?;
+                        let radius = number(&curve.fields, "m_radius")?;
+                        [t0, (t0 + t1) / 2.0, t1]
+                            .iter()
+                            .map(|t| {
+                                [0, 1, 2]
+                                    .map(|i| centre[i] + radius * (t.cos() * x[i] + t.sin() * y[i]))
+                            })
+                            .collect()
+                    }
+                    _ => return None,
+                };
+                if points.iter().any(|p| (p[2] - top).abs() > eps) {
+                    return None;
+                }
+                let plan: Vec<[f64; 2]> = points.iter().map(|p| [p[0], p[1]]).collect();
+                out.push(match plan.as_slice() {
+                    [a, b] => LandingCurve::Line(*a, *b),
+                    [a, m, b] => LandingCurve::Arc(*a, *m, *b),
+                    _ => return None,
+                });
+            }
+            let joined = |a: [f64; 2], b: [f64; 2]| (a[0] - b[0]).hypot(a[1] - b[1]) <= eps;
+            (out.len() >= 3
+                && (0..out.len()).all(|i| joined(out[i].end(), out[(i + 1) % out.len()].start())))
+            .then_some(out)
+        })
+}
+
+/// Each landing in `landings`, keyed by its id with its own landing type's
+/// id, whose type is not monolithic (`m_hasMonolithicSupport`), has a tread
+/// (`m_hasTread`) and takes it from its runs (`m_useSameTriserAsRun`), drawn
+/// as that tread: its outline is its record's `CurveLoop` at its top
+/// (`m_baseElevation`), arcs and all, and its thickness the
+/// `m_treadThickness` of its stair's runs' type, the runs in `runs` (keyed
+/// by id with their own run type's id) whose `m_stairsId` is the landing's.
+/// On the BIM4LCA office's landing 3058084, beside a spiral run, that is
+/// Revit's outline, its arc on the spiral's inner circle, and Revit's
+/// 0.0984 ft. A landing whose stair's runs name more than one tread
+/// thickness, or whose type takes its own tread, is left out: neither is
+/// measured.
+pub fn native_tread_landings(
+    rf: &mut RevitFile,
+    landings: &BTreeMap<u64, u64>,
+    runs: &BTreeMap<u64, u64>,
+) -> anyhow::Result<BTreeMap<u64, NativeTreadLanding>> {
+    if landings.is_empty() {
+        return Ok(BTreeMap::new());
+    }
+    let options = Options {
+        selected_ids: landings
+            .keys()
+            .chain(landings.values())
+            .chain(runs.keys())
+            .chain(runs.values())
+            .copied()
+            .collect(),
+        ..Options::default()
+    };
+    // Each landing's stair, top and outline.
+    type Found = (u64, f64, Vec<LandingCurve>);
+    let mut found: BTreeMap<u64, Found> = BTreeMap::new();
+    let mut tread_types: BTreeSet<u64> = BTreeSet::new();
+    let mut run_stairs: BTreeMap<u64, u64> = BTreeMap::new();
+    let mut treads: BTreeMap<u64, f64> = BTreeMap::new();
+    extract_graphs(rf, &options, |record| {
+        let (Some(class), Some(graph)) = (record.class_name.as_deref(), record.graph.as_ref())
+        else {
+            return Ok(());
+        };
+        let Some(root) = graph.objects.first() else {
+            return Ok(());
+        };
+        let id = record.identity.element_id;
+        match class {
+            "StairsLanding" if landings.contains_key(&id) => {
+                if let (Some(stair), Some(top)) = (
+                    element_id(&root.fields, "m_stairsId"),
+                    number(&root.fields, "m_baseElevation"),
+                ) {
+                    if let Some(outline) = landing_loop(graph, top) {
+                        found.insert(id, (stair, top, outline));
+                    }
+                }
+            }
+            "StairsLandingType"
+                if flag(&root.fields, "m_hasMonolithicSupport") == Some(false)
+                    && flag(&root.fields, "m_hasTread") == Some(true)
+                    && flag(&root.fields, "m_useSameTriserAsRun") == Some(true) =>
+            {
+                tread_types.insert(id);
+            }
+            "StairsRun" if runs.contains_key(&id) => {
+                if let Some(stair) = element_id(&root.fields, "m_stairsId") {
+                    run_stairs.insert(id, stair);
+                }
+            }
+            "StairsRunType" => {
+                if let Some(thickness) =
+                    number(&root.fields, "m_treadThickness").filter(|t| *t > 0.0)
+                {
+                    treads.insert(id, thickness);
+                }
+            }
+            _ => {}
+        }
+        Ok(())
+    })?;
+    Ok(found
+        .into_iter()
+        .filter(|(id, _)| landings.get(id).is_some_and(|t| tread_types.contains(t)))
+        .filter_map(|(id, (stair, top_feet, outline))| {
+            let thicknesses: Vec<f64> = run_stairs
+                .iter()
+                .filter(|(_, run_stair)| **run_stair == stair)
+                .map(|(run, _)| runs.get(run).and_then(|t| treads.get(t)).copied())
+                .collect::<Option<_>>()?;
+            let thickness_feet = *thicknesses.first()?;
+            thicknesses
+                .iter()
+                .all(|t| (t - thickness_feet).abs() <= NATIVE_RUN_TOLERANCE_FEET)
+                .then_some((
+                    id,
+                    NativeTreadLanding {
+                        outline,
+                        top_feet,
+                        thickness_feet,
+                    },
+                ))
+        })
+        .collect())
 }
