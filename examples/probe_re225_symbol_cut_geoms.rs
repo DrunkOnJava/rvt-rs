@@ -21,6 +21,7 @@
 //!   cut <instance> <IFC class> <symbol> loops=<n> complex=<n>
 //!     loop=<width>x<height>|- geom=<x0>,<y0>,<z0>,<x1>,<y1>,<z1>|-
 //!     faces=<meshed>/<seen> classes=<class:count,...>|-
+//!     failed=<surface class>:<why face() declined it>,...|-
 //!
 //! Usage:
 //!   cargo run --profile ci --example probe_re225_symbol_cut_geoms -- MODEL.rvt
@@ -44,6 +45,7 @@ struct CutGeometry {
     classes: BTreeMap<String, usize>,
     faces_seen: usize,
     faces_meshed: usize,
+    failures: BTreeSet<String>,
     min: [f64; 3],
     max: [f64; 3],
 }
@@ -78,13 +80,29 @@ fn walk(
                     continue;
                 };
                 cut.faces_seen += 1;
-                if let Ok(Some(mesh)) = face(graph, fi) {
-                    cut.faces_meshed += 1;
-                    for v in &mesh.vertices {
-                        for k in 0..3 {
-                            cut.min[k] = cut.min[k].min(v[k]);
-                            cut.max[k] = cut.max[k].max(v[k]);
+                let surface = graph
+                    .objects
+                    .get(fi)
+                    .and_then(|f| f.fields.get("m_pSurf"))
+                    .and_then(|s| pointer(graph, fi, s).ok().flatten())
+                    .and_then(|si| graph.objects.get(si))
+                    .map_or("-".to_string(), |s| s.class_name.clone());
+                match face(graph, fi) {
+                    Ok(Some(mesh)) => {
+                        cut.faces_meshed += 1;
+                        for v in &mesh.vertices {
+                            for k in 0..3 {
+                                cut.min[k] = cut.min[k].min(v[k]);
+                                cut.max[k] = cut.max[k].max(v[k]);
+                            }
                         }
+                    }
+                    Ok(None) => {
+                        cut.failures.insert(format!("{surface}:unbounded"));
+                    }
+                    Err(e) => {
+                        let reason = format!("{e:#}").replace(' ', "_");
+                        cut.failures.insert(format!("{surface}:{reason}"));
                     }
                 }
             }
@@ -221,8 +239,15 @@ fn main() -> anyhow::Result<()> {
                 .join(",")
         };
         println!(
-            "cut {instance} {class} {symbol} loops={loop_count} complex={} loop={loop_text} geom={geom} faces={}/{} classes={class_text}",
-            cut.complex, cut.faces_meshed, cut.faces_seen
+            "cut {instance} {class} {symbol} loops={loop_count} complex={} loop={loop_text} geom={geom} faces={}/{} classes={class_text} failed={}",
+            cut.complex,
+            cut.faces_meshed,
+            cut.faces_seen,
+            if cut.failures.is_empty() {
+                "-".to_string()
+            } else {
+                cut.failures.iter().cloned().collect::<Vec<_>>().join(",")
+            }
         );
     }
     eprintln!(
