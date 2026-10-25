@@ -2179,11 +2179,23 @@ fn attach_cut_loop_sizes(
     };
     // #810: a door or window whose symbol cuts no loop is sized by its
     // record box, along its own X axis and through its height, as Revit's
-    // export sizes it: all 269 windows of the BIM4LCA office. An instance
-    // turned off the model's axes, whose box is not along its own, gets no
-    // size.
+    // export sizes it: all 269 windows of the BIM4LCA office, 71 of its
+    // doors and RE1's curtain-wall door. Only one set in a wall or a curtain
+    // wall: the office's doors in floors take their height along a
+    // horizontal axis in Revit's export. An instance turned off the model's
+    // axes, whose box is not along its own, gets no size.
+    let in_wall = |element: &DecodedElement| {
+        element
+            .fields
+            .iter()
+            .any(|(name, _)| name == OPENING_HOST_FIELD || name == AGGREGATE_WHOLE_FIELD)
+    };
     for element in elements.iter_mut() {
-        let Some(id) = element.id.filter(|id| loopless.contains(id)) else {
+        let Some(id) = element
+            .id
+            .filter(|id| loopless.contains(id))
+            .filter(|_| in_wall(element))
+        else {
             continue;
         };
         let (Some(transform), Some(bbox)) = (transforms.get(&id), element_record_bbox(element))
