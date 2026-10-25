@@ -6573,6 +6573,23 @@ fn attach_is_external(
     }
 }
 
+/// A standard property's name split into words at its capitals, as
+/// Revit's English display names read (`FireExit` to `Fire Exit`, RE-227).
+fn display_name(property: &str) -> String {
+    let mut out = String::new();
+    let mut previous: Option<char> = None;
+    for c in property.chars() {
+        if c.is_ascii_uppercase()
+            && previous.is_some_and(|p| p.is_ascii_lowercase() || p.is_ascii_digit())
+        {
+            out.push(' ');
+        }
+        out.push(c);
+        previous = Some(c);
+    }
+    out
+}
+
 /// Give each element of `groups` the values of the project or shared
 /// parameters named `<property set>.<property>` for a property of a standard
 /// set ([`crate::ifc::standard_property_sets`]) that its own data object holds
@@ -6597,17 +6614,30 @@ fn attach_named_parameters(
     use crate::ifc::standard_property_sets::{self as sps, StandardPropertyKind as Kind};
     use crate::partition_room_parameters::{self as prp, EntryKind, EntryValue};
     let definitions = prp::find_parameter_definitions(rf, revit_version);
-    // Qualified names first: an element's bare-named value only fills a
-    // property its qualified one leaves empty.
-    let mut parameters: Vec<(String, i64, Kind)> = definitions
-        .iter()
-        .filter_map(|(name, id)| {
-            let (set, property) = name.split_once('.')?;
-            let kind = sps::property_kind(set, property)
-                .filter(|_| property != IS_EXTERNAL_PARAMETER_NAME)?;
-            Some((name.clone(), i64::from(*id), kind))
-        })
-        .collect();
+    // Display names first, then qualified names, then bare ones: an element's
+    // value under a later name only fills a property the earlier ones leave
+    // empty, as Revit's export reads them (RE-227).
+    let mut parameters: Vec<(String, i64, Kind)> = Vec::new();
+    for set in sps::STANDARD_PROPERTY_SETS {
+        for (property, kind) in set.properties {
+            if *property == IS_EXTERNAL_PARAMETER_NAME {
+                continue;
+            }
+            let display = display_name(property);
+            if display == *property {
+                continue;
+            }
+            if let Some(id) = definitions.get(&display) {
+                parameters.push((format!("{}.{property}", set.name), i64::from(*id), *kind));
+            }
+        }
+    }
+    parameters.extend(definitions.iter().filter_map(|(name, id)| {
+        let (set, property) = name.split_once('.')?;
+        let kind =
+            sps::property_kind(set, property).filter(|_| property != IS_EXTERNAL_PARAMETER_NAME)?;
+        Some((name.clone(), i64::from(*id), kind))
+    }));
     for (name, id) in &definitions {
         if name.contains('.') || name == IS_EXTERNAL_PARAMETER_NAME {
             continue;
