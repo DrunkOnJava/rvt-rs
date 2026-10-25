@@ -3,7 +3,9 @@
 rvt-rs draws as its record box, per IFC class (W6 census).
 
 For each element of an rvt-rs IFC whose `BodySource` is
-`partition_element_record_bbox`, the element with the same `Tag` in
+`partition_element_record_bbox` and whose plan profile was not recovered
+(`ProfileResolved` false: a slab drawn from its sketch keeps that
+`BodySource`), the element with the same `Tag` in
 Revit's export is meshed in its own placement's frame and its volume
 divided by the volume of its bounding box in that frame. A fill of 100%
 means Revit's body is a box along the element's own axes, so a record box
@@ -40,12 +42,25 @@ from saved_meshes_vs_ifc import body_sources  # noqa: E402
 BOX_SOURCE = "partition_element_record_bbox"
 
 
+def profile_resolved(element):
+    for rel in element.IsDefinedBy:
+        if not rel.is_a("IfcRelDefinesByProperties"):
+            continue
+        for prop in getattr(rel.RelatingPropertyDefinition, "HasProperties", None) or []:
+            if prop.Name == "ProfileResolved" and prop.NominalValue is not None:
+                return bool(prop.NominalValue.wrappedValue)
+    return False
+
+
 def boxed_tags(path):
     model = ifcopenshell.open(path)
     return {
         e.Tag: e.is_a()
         for e in model.by_type("IfcElement")
-        if e.Tag and not e.is_a("IfcOpeningElement") and body_sources(e) == BOX_SOURCE
+        if e.Tag
+        and not e.is_a("IfcOpeningElement")
+        and body_sources(e) == BOX_SOURCE
+        and not profile_resolved(e)
     }
 
 
