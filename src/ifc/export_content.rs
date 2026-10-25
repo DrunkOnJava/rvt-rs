@@ -865,6 +865,8 @@ pub fn append_typed_production_elements(
             .unwrap_or_default();
         add_is_external(&mut reference_sets, &ifc_type, &decoded, opening_only);
         add_covering_finish(&mut reference_sets, &ifc_type, &decoded);
+        add_mullion_span(&mut reference_sets, &ifc_type, &decoded);
+        add_extend_to_structure(&mut reference_sets, &ifc_type, &decoded);
         let mut serial_sets = serial_number_property_sets(&decoded);
         serial_sets.extend(revit_parameter_property_sets(&decoded));
         let named = named_parameter_properties(&decoded);
@@ -1786,6 +1788,87 @@ fn add_is_external(
         Some(set) => set.properties.push(property),
         None => sets.push(PropertySet {
             name: common.into(),
+            properties: vec![property],
+        }),
+    }
+}
+
+/// Add `ExtendToStructure` (`IfcBoolean`) to a wall's `Pset_WallCommon`
+/// among `sets`: whether its top is joined to a roof or floor, as its native
+/// record says (RE-228). Nothing where the record is not read.
+fn add_extend_to_structure(sets: &mut Vec<PropertySet>, ifc_type: &str, decoded: &DecodedElement) {
+    if !matches!(ifc_type, "IFCWALL" | "IFCWALLSTANDARDCASE") {
+        return;
+    }
+    let Some(joined) = decoded.fields.iter().find_map(|(name, value)| match value {
+        InstanceField::Bool(flag) if name == crate::partition_schema_mvp::WALL_TOP_JOINED_FIELD => {
+            Some(*flag)
+        }
+        _ => None,
+    }) else {
+        return;
+    };
+    let property = Property {
+        name: "ExtendToStructure".into(),
+        value: PropertyValue::Boolean(joined),
+    };
+    match sets.iter_mut().find(|set| set.name == "Pset_WallCommon") {
+        Some(set) => set.properties.push(property),
+        None => sets.push(PropertySet {
+            name: "Pset_WallCommon".into(),
+            properties: vec![property],
+        }),
+    }
+}
+
+/// Add `Span` (`IfcPositiveLengthMeasure`) to a curtain mullion's
+/// `Pset_MemberCommon` among `sets`: its length, which revit-ifc's
+/// `SpanCalculator` (CLEANROOM.md source 5) takes from the depth of the
+/// mullion's body extrusion where no parameter gives it. A mullion runs along
+/// its own Z axis (RE-226): on the model's axes, its record box's extent
+/// along the model axis that Z lies on; turned or tilted, the extent along Z
+/// of the box along its own axes (RE-106). Nothing where neither is read.
+fn add_mullion_span(sets: &mut Vec<PropertySet>, ifc_type: &str, decoded: &DecodedElement) {
+    use crate::partition_schema_mvp as mvp;
+    if ifc_type != "IFCMEMBER" || decoded.class != "CurtainWallMullion" {
+        return;
+    }
+    let float = |wanted: &str| {
+        decoded.fields.iter().find_map(|(name, value)| match value {
+            InstanceField::Float { value, .. } if name == wanted => Some(*value),
+            _ => None,
+        })
+    };
+    let (Some(width), Some(depth), Some(height)) = (
+        float("m_bboxWidth"),
+        float("m_bboxDepth"),
+        float("m_bboxHeight"),
+    ) else {
+        return;
+    };
+    let size = [width, depth, height];
+    let along = decoded.fields.iter().find_map(|(name, value)| match value {
+        InstanceField::Integer { value, .. } if name == mvp::CURTAIN_MULLION_ALONG_FIELD => {
+            usize::try_from(*value).ok()
+        }
+        _ => None,
+    });
+    let span = match (mvp::curtain_axes_from_fields(&decoded.fields), along) {
+        (Some(axes), _) => oriented_box(axes, size).map(|(_, half)| 2.0 * half[2]),
+        (None, Some(axis)) => size.get(axis).copied(),
+        (None, None) => None,
+    };
+    let Some(span) = span.filter(|span| span.is_finite() && *span > 0.0) else {
+        return;
+    };
+    let property = Property {
+        name: "Span".into(),
+        value: PropertyValue::PositiveLengthFeet(span),
+    };
+    match sets.iter_mut().find(|set| set.name == "Pset_MemberCommon") {
+        Some(set) => set.properties.push(property),
+        None => sets.push(PropertySet {
+            name: "Pset_MemberCommon".into(),
             properties: vec![property],
         }),
     }
