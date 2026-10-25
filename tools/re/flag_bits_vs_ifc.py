@@ -6,7 +6,7 @@ Revit's element of the same Tag, and reads that element's
 `Pset_*Common.LoadBearing` and `IsExternal`. Per IFC entity and property,
 it prints, for each of the 32 bits, how many paired elements have the bit
 equal to the property, and names every bit that equals it on all of them
-(or is its exact negation). It also tallies the distinct flag words per
+(or is its exact negation), where the property takes both values. It also tallies the distinct flag words per
 entity.
 
 Usage:
@@ -51,6 +51,10 @@ def main():
             if not known:
                 continue
             truth = collections.Counter(value for _, value in known)
+            if len(truth) < 2:
+                # A property with one value matches every constant bit.
+                print(f"  {prop}: {len(known)} with a value, all {next(iter(truth))}; not tested")
+                continue
             exact, partial = [], []
             for bit in range(32):
                 mask = 1 << bit
