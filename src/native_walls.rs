@@ -1,5 +1,5 @@
 //! A wall's location curve and the walls joined at its ends, from its
-//! native `SWall` record (W6).
+//! native `SWall` record (RE-222).
 //!
 //! The record holds the curve the wall is drawn along, a `GLine`:
 //! `m_origin`, the unit `m_dirVec` and `m_endParams`, its start and end
@@ -174,9 +174,9 @@ pub fn native_walls(
 /// How far past `wall`'s end its body reaches where the join there is a T
 /// joint: another wall meets that end with its middle, and Revit's body
 /// stops half that wall's thickness short of the curve's end. Against
-/// Revit's bodies this is Revit's end on 293 of the 374 such ends of the
+/// Revit's bodies this is Revit's end on 315 of the 396 such ends of the
 /// BIM4LCA office as built, where the join lists' reach (RE-70, RE-73) gave
-/// 268, and on all 137 of Core Interior's (W6). `None` where the join is not
+/// 289, and on all 269 of Core Interior's (RE-222). `None` where the join is not
 /// a T joint with exactly one such wall, or that wall's thickness is not
 /// known.
 pub fn tee_reach(
