@@ -381,11 +381,16 @@ pub struct NativeSpiralRun {
 /// a spiral run (`m_runType` 2) holds the spiral's centre in its `m_origin`,
 /// at its own top, and its plan extent in `m_bndBox`, as `[radius, angle]`
 /// corners: from its inner to its outer radius, the run's width, and between
-/// the angles of its two riser lines. `None` unless every tread is a spiral
+/// the angles of its two riser lines, which wrap by a turn where the run
+/// passes -pi. `None` unless every tread is a spiral
 /// tread about one centre, between the same two radii, and each tread lies
 /// next to the one before it and above it.
 fn spiral(run: &Value, treads: &[Value]) -> Option<([f64; 2], [f64; 2], Vec<SpiralTread>)> {
     let close = |a: f64, b: f64| (a - b).abs() <= NATIVE_RUN_TOLERANCE_FEET;
+    // The stored angles wrap by a turn where a run passes -pi (the BIM4LCA
+    // office's run 3057703: -3.44719 then 2.836).
+    let turn = std::f64::consts::TAU;
+    let wrapped = |a: f64| a - turn * (a / turn).round();
     let mut centre: Option<[f64; 2]> = None;
     let mut radii: Option<[f64; 2]> = None;
     let mut out: Vec<SpiralTread> = Vec::with_capacity(treads.len());
@@ -425,7 +430,8 @@ fn spiral(run: &Value, treads: &[Value]) -> Option<([f64; 2], [f64; 2], Vec<Spir
             }
         }
         if let Some(before) = out.last() {
-            let next_to = close(before.angles[0], a1) || close(before.angles[1], a0);
+            let next_to = close(wrapped(before.angles[0] - a1), 0.0)
+                || close(wrapped(before.angles[1] - a0), 0.0);
             if !(next_to && origin[2] > before.top_feet) {
                 return None;
             }
@@ -439,7 +445,7 @@ fn spiral(run: &Value, treads: &[Value]) -> Option<([f64; 2], [f64; 2], Vec<Spir
     let (centre, radii) = (centre?, radii?);
     let turns: BTreeSet<bool> = out
         .windows(2)
-        .map(|pair| pair[1].angles[0] < pair[0].angles[0])
+        .map(|pair| wrapped(pair[1].angles[0] - pair[0].angles[0]) < 0.0)
         .collect();
     let width = number(run, "m_actualRunWidth")?;
     (out.len() >= 2 && turns.len() == 1 && close(width, radii[1] - radii[0]))
