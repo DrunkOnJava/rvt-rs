@@ -159,7 +159,7 @@ def main():
         to_ours = surface_distance(sample(ref_triangles), our_triangles)
         to_ref = surface_distance(sample(our_triangles), ref_triangles)
         far = max(to_ours, to_ref)
-        for key in ("", object_type):
+        for key in ("", object_type) if object_type else ("",):
             row = rows[cls][key]
             row["n"] += 1
             row["vol 1%"] += abs(ratio - 1) <= 0.01
