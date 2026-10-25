@@ -4609,6 +4609,13 @@ fn attach_wall_layers(rf: &mut RevitFile, revit_version: u32, walls: &mut [Decod
     ) else {
         return;
     };
+    // W6: each wall's native record, for the walls its ends meet.
+    let native = if centreline_bodies {
+        let ids: BTreeSet<u64> = wall_ids.iter().map(|&id| u64::from(id)).collect();
+        crate::native_walls::native_walls(rf, &ids).unwrap_or_default()
+    } else {
+        BTreeMap::new()
+    };
     // RE-91: a layer that takes its category's material takes the one the
     // document's object styles give walls, where it is set and named.
     let category_material = crate::partition_materials::scan_category_material(
@@ -4636,8 +4643,17 @@ fn attach_wall_layers(rf: &mut RevitFile, revit_version: u32, walls: &mut [Decod
         let (Some(id), Some(type_id)) = (wall.id, type_of(wall)) else {
             continue;
         };
-        let (Some(type_layers), Some(orientation)) = (layers.get(&type_id), orientations.get(&id))
-        else {
+        // W6: a wall its partition data gives no orientation takes its
+        // native record's word and flip, which equal the partition data's on
+        // every wall that has both.
+        let orientation = orientations
+            .get(&id)
+            .map(|orientation| (orientation.word, orientation.flip))
+            .or_else(|| {
+                let wall = native.get(&u64::from(id))?;
+                Some((u32::try_from(wall.cross_section?).ok()?, wall.flipped?))
+            });
+        let (Some(type_layers), Some((word, flip))) = (layers.get(&type_id), orientation) else {
             continue;
         };
         let thickness: f64 = type_layers.iter().map(|layer| layer.width_feet).sum();
@@ -4647,12 +4663,12 @@ fn attach_wall_layers(rf: &mut RevitFile, revit_version: u32, walls: &mut [Decod
         // straight tapered wall is measured.
         let taper = face_angles
             .get(&type_id)
-            .filter(|_| orientation.word == 2 && lines.contains_key(&id))
+            .filter(|_| word == 2 && lines.contains_key(&id))
             .and_then(|&[first, exterior, third]| {
                 (first == 0.0 && third == 0.0 && exterior > 0.0 && exterior < FRAC_PI_4)
                     .then_some(exterior)
             });
-        let centred = centreline_bodies && measured && (orientation.word == 1 || taper.is_some());
+        let centred = centreline_bodies && measured && (word == 1 || taper.is_some());
         let float = |value: f64| InstanceField::Float { value, size: 8 };
         // The direction the exterior side is taken from: the line's, or the
         // arc's tangent at its middle (RE-75).
@@ -4713,11 +4729,7 @@ fn attach_wall_layers(rf: &mut RevitFile, revit_version: u32, walls: &mut [Decod
                     .push((WALL_EXTERIOR_FACE_ANGLE_FIELD.into(), float(angle)));
             }
         }
-        let exterior = if orientation.flip {
-            [dy, -dx]
-        } else {
-            [-dy, dx]
-        };
+        let exterior = if flip { [dy, -dx] } else { [-dy, dx] };
         let bands = layer_bands_field(type_layers, &appearances, &names);
         if matches!(&bands, InstanceField::Vector(items) if items.is_empty()) {
             continue;
@@ -4750,6 +4762,97 @@ fn attach_wall_layers(rf: &mut RevitFile, revit_version: u32, walls: &mut [Decod
     }
     if centreline_bodies {
         attach_wall_butt_joins(rf, revit_version, walls, &layers);
+        attach_native_tee_reaches(walls, &native);
+    }
+}
+
+/// How close a wall's native curve's ends must be to its centreline's to be
+/// taken as the same line, feet.
+const NATIVE_WALL_LINE_TOLERANCE_FEET: f64 = 1e-4;
+
+/// At each end of a wall with a centreline where its native record says
+/// another wall meets that end with its middle, the body stops half that
+/// wall's type thickness short ([`crate::native_walls::tee_reach`], RE-222),
+/// in place of the reach its join lists give. An end whose layers each end
+/// on their own line (RE-71, RE-74) keeps them, and so does one whose other
+/// wall's thickness is not known: its type's, or its record box's thin
+/// extent where it runs along a model axis.
+fn attach_native_tee_reaches(
+    walls: &mut [DecodedElement],
+    native: &BTreeMap<u64, crate::native_walls::NativeWall>,
+) {
+    // A wall's type thickness, or, for a wall along a model axis, its record
+    // box's thin extent, which is its thickness there (RE-26).
+    let along_axis = |id: u64| {
+        native.get(&id).is_some_and(|curve| {
+            let (dx, dy) = (curve.end[0] - curve.start[0], curve.end[1] - curve.start[1]);
+            dx.abs() <= 1e-9 || dy.abs() <= 1e-9
+        })
+    };
+    let thickness: BTreeMap<u64, f64> = walls
+        .iter()
+        .filter_map(|wall| {
+            let id = u64::from(wall.id?);
+            let float = |wanted: &str| {
+                wall.fields.iter().find_map(|(name, value)| match value {
+                    InstanceField::Float { value, .. } if name == wanted => Some(*value),
+                    _ => None,
+                })
+            };
+            let thickness = float(WALL_TYPE_THICKNESS_FIELD).or_else(|| {
+                float(crate::element_record_wall_joins::WALL_THICKNESS_FIELD)
+                    .filter(|_| along_axis(id))
+            })?;
+            Some((id, thickness))
+        })
+        .collect();
+    let near = |a: [f64; 2], b: [f64; 2]| {
+        (a[0] - b[0]).hypot(a[1] - b[1]) <= NATIVE_WALL_LINE_TOLERANCE_FEET
+    };
+    for wall in walls.iter_mut() {
+        let Some(id) = wall.id.map(u64::from) else {
+            continue;
+        };
+        let (Some(axis), Some(curve)) = (wall_axis_from_fields(&wall.fields), native.get(&id))
+        else {
+            continue;
+        };
+        let ends = if near(curve.start, axis.start) && near(curve.end, axis.end) {
+            [0, 1]
+        } else if near(curve.start, axis.end) && near(curve.end, axis.start) {
+            [1, 0]
+        } else {
+            continue;
+        };
+        for (slot, end) in ends.into_iter().enumerate() {
+            let layered = [
+                WALL_JOIN_LAYER_REACH_FIELDS[slot],
+                WALL_JOIN_LAYER_EDGE_REACH_FIELDS[slot],
+            ];
+            if wall
+                .fields
+                .iter()
+                .any(|(name, _)| layered.contains(&name.as_str()))
+            {
+                continue;
+            }
+            let Some(Some(join)) = curve.joins.get(end) else {
+                continue;
+            };
+            if let Some(reach) =
+                crate::native_walls::tee_reach(id, join, |other| thickness.get(&other).copied())
+            {
+                wall.fields
+                    .retain(|(name, _)| name != WALL_JOIN_REACH_FIELDS[slot]);
+                wall.fields.push((
+                    WALL_JOIN_REACH_FIELDS[slot].into(),
+                    InstanceField::Float {
+                        value: reach,
+                        size: 8,
+                    },
+                ));
+            }
+        }
     }
 }
 

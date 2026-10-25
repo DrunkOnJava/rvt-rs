@@ -178,6 +178,8 @@ pub mod native_symbol_cuts;
 pub mod native_type_materials;
 #[path = "native_wall_types.rs"]
 pub mod native_wall_types;
+#[path = "native_walls.rs"]
+pub mod native_walls;
 #[path = "partition_arc_walls.rs"]
 pub mod partition_arc_walls;
 #[path = "partition_area_records.rs"]

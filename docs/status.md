@@ -849,6 +849,20 @@ rectangular or turned hollow section, or one whose family names its
 parameters otherwise, keeps its box
 (`reports/element-framing/RE-221-hollow-section-columns.md`).
 
+**RE-222 (2026-10-25)** reads a wall's T joints from its native record: where
+another wall meets a wall's end with its middle, the body stops half that
+wall's thickness short, as Revit's does on 315 of the BIM4LCA office's 396
+such ends against 289 for the join lists. A wall the partition data gives a
+line but no orientation (13 of the office's 17 US-1 exterior walls) takes the
+native record's word and flip, which equal the partition data's on every wall
+that has both, and is drawn from its centreline and in its layers. On the
+office as built 428 of 607 walls now end where Revit's do (412 before), and
+22 more walls carry Revit's layer set and layer bands; at building permit
+377 of 589 (374) and 32 more. Core Interior, RE1 and the R2025 models are
+unchanged. A corner rule from the join order and the native line for walls
+whose copies disagree were measured and are not used
+(`reports/element-framing/RE-222-wall-native-joins.md`).
+
 The public viewer's demo gallery leads with the two files this section
 measures, staged from the deploy workflow's `magnetar-io/revit-test-datasets`
 checkout and pinned by sha256 (#257): `Revit_IFC5_Einhoven.rvt` (2023,
