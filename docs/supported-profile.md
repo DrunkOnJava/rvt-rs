@@ -77,6 +77,7 @@ derived from the document and their own identity, stable between exports,
 #400), stair riser and tread dimensions, each element's `IsExternal` as Revit's
 exporter sets it (a parameter named for its property set, its type's
 Function, else its class's rule; none on curtain mullions and panels, RE-193),
+each wall's `ExtendToStructure`, whether its top is joined to a roof or floor (RE-228),
 the project and shared parameters named for a property of one of IFC4's
 property sets (`Pset_WallCommon.FireRating`), from buildingSMART's
 definitions of the 278 sets that apply to an entity, written in that set
