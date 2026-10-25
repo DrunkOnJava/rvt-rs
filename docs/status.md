@@ -782,7 +782,10 @@ addendum cuts a monolithic run's underside where Revit does: at its
 `m_extendBelowBase` below its base where it starts at its stair's base, not
 at all where it starts on a landing. On the BIM4LCA office 34 of 35 flights
 then have Revit's volume, with every vertex of Revit's on rvt-rs's; the
-spiral one keeps its box.
+spiral one keeps its box. A third addendum gives each flight the
+predefined type its treads' `m_runType` names, `STRAIGHT` or `SPIRAL`:
+Revit's on all 35 office flights of each file and on the 5 R2025 stair
+models, where none had one (#323).
 
 **RE-214 (2026-10-24)** draws a monolithic stair landing on Revit 2024 as
 its slab instead of a box the height of its storey. Its outline is the
