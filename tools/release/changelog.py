@@ -11,8 +11,10 @@ A fragment is the entry exactly as it reads in the changelog: one or more
     python3 tools/release/changelog.py check
     python3 tools/release/changelog.py assemble
 
-`check` fails on a fragment outside a known section, an empty one, or one
-whose first line does not start an item. `assemble`, a release step
+`check` fails on a fragment outside a known section, an empty one, one
+whose first line does not start an item, or one holding an item a released
+section of CHANGELOG.md already has, as a fragment made from a branch's
+old changelog entry can. `assemble`, a release step
 (RELEASE.md), moves every fragment into CHANGELOG.md's `[Unreleased]`, at
 the top of its section's heading (made if missing), in name order, one
 blank line apart, and deletes the fragments.
@@ -35,10 +37,33 @@ SECTIONS = {
 }
 
 
+def items(text):
+    """Each `- **...**` item of `text`, its whitespace collapsed."""
+    out, current = [], None
+    for line in text.splitlines():
+        if line.startswith("- **"):
+            current = [line]
+            out.append(current)
+        elif current is not None and line.strip():
+            current.append(line)
+        else:
+            current = None
+    return [" ".join(" ".join(item).split()) for item in out]
+
+
+def released_items():
+    """Every item of CHANGELOG.md below its `[Unreleased]` section."""
+    text = CHANGELOG.read_text(encoding="utf-8")
+    start = text.find("## [Unreleased]")
+    after = text.find("\n## [", start + 1) if start >= 0 else -1
+    return set(items(text[after:])) if after >= 0 else set()
+
+
 def fragments():
     """(section heading, path, entry text) of every fragment, by section and
     name; the problems with any that is malformed."""
     found, problems = [], []
+    released = released_items()
     for path in sorted(FRAGMENTS.rglob("*.md")):
         relative = path.relative_to(FRAGMENTS)
         if relative.parts == ("README.md",):
@@ -52,6 +77,12 @@ def fragments():
             continue
         if not text.startswith("- **"):
             problems.append(f"{path.relative_to(ROOT)}: the first line does not start an item (`- **`)")
+            continue
+        repeated = [item for item in items(text) if item in released]
+        if repeated:
+            problems.append(
+                f"{path.relative_to(ROOT)}: already released: {repeated[0][:90]}..."
+            )
             continue
         found.append((SECTIONS[relative.parts[0]], path, text))
     order = list(SECTIONS.values())
@@ -103,7 +134,7 @@ def main(argv):
     if problems:
         return 1
     if argv[1] == "check":
-        print(f"changelog.d: {len(found)} fragment(s), each in a section and starting an item")
+        print(f"changelog.d: {len(found)} fragment(s), each in a section, starting an item and not yet released")
         return 0
     assemble(found)
     return 0
