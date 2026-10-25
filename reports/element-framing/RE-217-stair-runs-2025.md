@@ -78,7 +78,7 @@ The other three keep their box, each for its own reason:
 - 16: a monolithic run with upright risers. RE-92 draws a monolithic run only with slanted risers.
 - 17: a spiral run (`m_runType` 2), whose sketch the straight-run rule rejects.
 
-Core Interior, Einhoven, the four RE1 models and the other 21 R2025 models are byte-identical, as are their diagnostics. The BIM4LCA office's two files differ only by the 12 pipes #954 added to `main` after this branch was cut (`partition_pipe_axis` 12 on `main`, none here), so the change does not touch them: their runs are Revit 2024, drawn by RE-52 or kept as boxes, as before.
+Core Interior, Einhoven, the four RE1 models, the other 21 R2025 models and both BIM4LCA office files are byte-identical, as are their diagnostics (Measure run [40149007983](https://github.com/DrunkOnJava/rvt-rs/actions/runs/40149007983), this change rebased onto `main` at cc7051b3; models 13 and 14 give the same export as in run 40148021632). The office's runs are Revit 2024 and are drawn by RE-52 or kept as boxes, as before.
 
 ## 6. What it does not cover
 
