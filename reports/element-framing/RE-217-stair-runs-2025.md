@@ -101,3 +101,30 @@ RE-92's monolithic profile draws each riser from the step's inner corner, the no
 The five that match are 1440878, 1503045, 2598348, 2861134 and 2867922. On each of the other 29 a vertex of Revit's body lies 0.544 to 0.612 ft from rvt-rs's surface, which is the run's structural depth over the cosine of its pitch on each storey (0.5436, 0.5475, 0.5543, 0.5577 and 0.6124 ft): the vertical depth of its soffit below the inner corners. Which part of those 29 bodies differs is not measured yet. It is the same depth by which Revit's landing underside follows a flight's soffit below the landing's slab (RE-214 §3), so the likely remainder is the soffit where a flight meets a floor or a landing, which RE-92's profile cuts at the run's base and its last riser line.
 
 Model 16's `IfcStair` is 14.75 ft³ against Revit's 15.29: Revit's stair holds 0.54 ft³ more than its flight, in a part rvt-rs does not draw. Every other model's IFC is byte-identical: Core Interior, Einhoven, the four RE1 models and the other 22 R2025 models.
+
+## 8. Addendum (2026-10-24): where a monolithic run's underside ends
+
+§7 left 29 office flights at 94.1% to 96.4% of Revit's volume. `tools/re/flight_junctions_vs_ifc.py` (research branch `re/357-flight-junctions`, Measure run [40153963831](https://github.com/DrunkOnJava/rvt-rs/actions/runs/40153963831)) lists every vertex of Revit's body off rvt-rs's surface. On each short flight they are at its start. Revit's start face reaches below the run's base: 2859204's to 181.5323 ft, its base 182.0866 less 0.5543 ft, which is the run's structural depth over the cosine of its pitch, where its underside meets its first riser line. RE-92's profile cuts the underside at the base instead. The flights that matched are cut at their base, as RE-92 draws them.
+
+Two members of each run's `StairsRun` record, read by name (`examples/probe_357_native_runs.rs`, Measure run [40154688351](https://github.com/DrunkOnJava/rvt-rs/actions/runs/40154688351)), tell them apart:
+
+| office flights | `m_baseRiserIndex` | `m_extendBelowBase` | Revit's underside |
+|---:|---|---|---|
+| 5 | 0 (start at the stair's base) | 0 | cut at the base |
+| 8 | 0 | −0.98425 ft (300 mm) | runs on to the first riser line, 0.548 to 0.558 ft below the base, above the cut |
+| 21 | 8, 10 or 19 (start on a landing) | 0 | runs on to the first riser line |
+
+The 35th, the spiral run 3057703, starts at its base with no extension and is not drawn (§5).
+
+So the floor a run starts on cuts its underside at `m_extendBelowBase` below its base, and a run that starts on a landing is not cut. `RunSketch::base_cut_feet` carries that cut. `native_stairs` reads it for a 2025 run from its record; for a 2024 run drawn from RE-52's byte anchors, `native_run_base_cuts` reads the same two members, and a run that does not give them is cut at its base, as before.
+
+Measure run [40155621830](https://github.com/DrunkOnJava/rvt-rs/actions/runs/40155621830), this change against `main` (25de971b), `stair_bodies_vs_ifc`:
+
+| model | before | after |
+|---|---|---|
+| BIM4LCA office as built | 5 of 35 flights with Revit's volume | 34 of 35, every vertex of Revit's body on rvt-rs's surface; the spiral run 3057703 its box |
+| BIM4LCA office at building permit | 5 of 35 | 34 of 35 |
+
+Every other model's IFC is byte-identical: Core Interior, Einhoven, the four RE1 models and the 23 R2025 models (model 16's run starts at its base with no extension, so it is cut at its base as before).
+
+**Not re-measured: Snowdon Towers** (local only, never measured on CI). RE-92's 4 monolithic Snowdon flights that equal Revit's were drawn with the underside cut at the base. By this rule a flight drawn exactly that way starts at its stair's base with no extension, so it is expected to stay the same, and a Snowdon flight that starts on a landing or extends below its base changes. That is an inference from the office, not a measurement of Snowdon.
