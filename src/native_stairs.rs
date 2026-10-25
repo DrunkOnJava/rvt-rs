@@ -309,13 +309,14 @@ pub const STAIR_TYPES: &[&str] = &[
 /// three straight runs each square to the one before, with two landings,
 /// are `DOUBLE_RETURN_STAIR`; four such runs and three landings are
 /// `THREE_QUARTER_TURN_STAIR`. revit-ifc calls three runs
-/// `DOUBLE_RETURN_STAIR` only where two of their stairs paths start at one
+/// `DOUBLE_RETURN_STAIR` only where two of their flight paths start at one
 /// height, else `TWO_QUARTER_TURN_STAIR`; Revit's export writes
 /// `DOUBLE_RETURN_STAIR` for all ten of the BIM4LCA office's such stairs,
 /// whose runs start at three heights each, so a run's path does not start
-/// at its own bottom, and the test always holds there. `None` for any other stair, and for one
-/// with a run that is neither straight nor spiral (winders and sketched
-/// runs are not measured), which Revit writes `.NOTDEFINED.`.
+/// at its own bottom, and the test always holds there. `None` for any
+/// other stair, and for one with a run that is neither straight nor spiral
+/// (winders and sketched runs are not measured), which Revit writes
+/// `.NOTDEFINED.`.
 pub fn stair_predefined_type(runs: &[RunShape], landings: usize) -> Option<&'static str> {
     const EPS: f64 = 1e-6;
     if runs.is_empty()

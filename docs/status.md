@@ -801,7 +801,11 @@ the centre, radii and angles its treads' native records hold: Revit's
 volume and height (RE-217 §11). A third addendum gives each flight the
 predefined type its treads' `m_runType` names, `STRAIGHT` or `SPIRAL`:
 Revit's on all 35 office flights of each file and on the 5 R2025 stair
-models, where none had one (#323).
+models, where none had one (#323). A fourth gives each stair the
+predefined type its runs and landings make, by revit-ifc's rule: Revit's
+on all 16 stairs of each office file, where 2 had it, and on the 5 R2025
+stair models, and ten more office stair type objects then take Revit's
+GlobalId (RE-217 §12).
 
 **RE-214 (2026-10-24)** draws a monolithic stair landing on Revit 2024 as
 its slab instead of a box the height of its storey. Its outline is the
