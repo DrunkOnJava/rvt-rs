@@ -776,9 +776,12 @@ and every vertex of Revit's body lies on rvt-rs's; the riserless,
 monolithic and spiral runs (15 to 17) keep their box
 (`reports/element-framing/RE-217-stair-runs-2025.md`). Its addendum draws a
 monolithic run with upright risers and no nosing as RE-92 draws one with
-slanted risers: model 16's flight then has Revit's volume, and on the
-BIM4LCA office 5 of 35 flights are Revit's and 29 are within 6% of its
-volume; where those 29 differ is not measured yet.
+slanted risers: model 16's flight then has Revit's volume. A second
+addendum cuts a monolithic run's underside where Revit does: at its
+`m_extendBelowBase` below its base where it starts at its stair's base, not
+at all where it starts on a landing. On the BIM4LCA office 34 of 35 flights
+then have Revit's volume, with every vertex of Revit's on rvt-rs's; the
+spiral one keeps its box.
 
 The public viewer's demo gallery leads with the two files this section
 measures, staged from the deploy workflow's `magnetar-io/revit-test-datasets`
