@@ -1470,6 +1470,12 @@ pub const CURTAIN_AXES_FIELDS: [&str; 9] = [
 /// Classes whose turned or tilted instances carry [`CURTAIN_AXES_FIELDS`] (RE-106).
 pub const CURTAIN_AXES_CLASSES: [&str; 2] = ["CurtainWallMullion", "CurtainWallPanel"];
 
+/// Field holding the model axis (0 for X, 1 for Y, 2 for Z) a curtain
+/// mullion on the model's axes runs along: the one its transform's Z axis
+/// lies on (RE-226). A turned or tilted mullion carries
+/// [`CURTAIN_AXES_FIELDS`] instead.
+pub const CURTAIN_MULLION_ALONG_FIELD: &str = "m_curtain_mullion_along";
+
 /// The three axes [`CURTAIN_AXES_FIELDS`] record, X, Y and Z.
 pub fn curtain_axes_from_fields(fields: &[(String, InstanceField)]) -> Option<[[f64; 3]; 3]> {
     let values = CURTAIN_AXES_FIELDS.map(|wanted| {
@@ -1487,7 +1493,8 @@ pub fn curtain_axes_from_fields(fields: &[(String, InstanceField)]) -> Option<[[
 
 /// Give each curtain mullion and panel whose transform (RE-87) turns or
 /// tilts it off the model's axes its three axes (RE-106). One on the
-/// model's axes gets nothing: its record box is already its body's box.
+/// model's axes keeps its record box as its body's box; a mullion there gets
+/// the model axis it runs along ([`CURTAIN_MULLION_ALONG_FIELD`]).
 fn attach_curtain_axes(rf: &mut RevitFile, revit_version: u32, products: &mut [DecodedElement]) {
     let ids: BTreeSet<u32> = products
         .iter()
@@ -1515,6 +1522,21 @@ fn attach_curtain_axes(rf: &mut RevitFile, revit_version: u32, products: &mut [D
                 == 1
         });
         if on_axes {
+            if element.class == "CurtainWallMullion" {
+                if let Some(along) = transform.axes[2]
+                    .iter()
+                    .position(|v| v.abs() > INSTANCE_TURN_MIN_RADIANS)
+                {
+                    element.fields.push((
+                        CURTAIN_MULLION_ALONG_FIELD.into(),
+                        InstanceField::Integer {
+                            value: along as i64,
+                            signed: false,
+                            size: 4,
+                        },
+                    ));
+                }
+            }
             continue;
         }
         let values = transform.axes.iter().flatten().copied();
@@ -6583,7 +6605,12 @@ fn attach_is_external(
 /// Give each element of `groups` the values of the project or shared
 /// parameters named `<property set>.<property>` for a property of a standard
 /// set ([`crate::ifc::standard_property_sets`]) that its own data object holds
-/// (RE-194), each as a field [`NAMED_PARAMETER_FIELD_PREFIX`]`<name>`: a
+/// (RE-194), and, for each such property the element holds no
+/// `<property set>.<property>` parameter for, of one named for the property
+/// alone, as revit-ifc's `PropertySetEntryMap` looks the qualified name up
+/// before the bare one (CLEANROOM.md source 5; RE-227: the BIM4LCA office's
+/// `FireExit`, which Revit's export writes as `Pset_DoorCommon.FireExit`),
+/// each as a field [`NAMED_PARAMETER_FIELD_PREFIX`]`<set>.<property>`: a
 /// Yes/No's 0 or 1 as a boolean, an integer, a text of one or more
 /// characters, a positive length in feet, or a length or thermal
 /// transmittance as stored. The latest partition's copy decides, so a text
@@ -6598,15 +6625,28 @@ fn attach_named_parameters(
 ) {
     use crate::ifc::standard_property_sets::{self as sps, StandardPropertyKind as Kind};
     use crate::partition_room_parameters::{self as prp, EntryKind, EntryValue};
-    let parameters: Vec<(String, i64, Kind)> = prp::find_parameter_definitions(rf, revit_version)
-        .into_iter()
+    let definitions = prp::find_parameter_definitions(rf, revit_version);
+    // Qualified names first: an element's bare-named value only fills a
+    // property its qualified one leaves empty.
+    let mut parameters: Vec<(String, i64, Kind)> = definitions
+        .iter()
         .filter_map(|(name, id)| {
             let (set, property) = name.split_once('.')?;
             let kind = sps::property_kind(set, property)
                 .filter(|_| property != IS_EXTERNAL_PARAMETER_NAME)?;
-            Some((name, i64::from(id), kind))
+            Some((name.clone(), i64::from(*id), kind))
         })
         .collect();
+    for (name, id) in &definitions {
+        if name.contains('.') || name == IS_EXTERNAL_PARAMETER_NAME {
+            continue;
+        }
+        for set in sps::STANDARD_PROPERTY_SETS {
+            if let Some(kind) = set.property_kind(name) {
+                parameters.push((format!("{}.{name}", set.name), i64::from(*id), kind));
+            }
+        }
+    }
     if parameters.is_empty() {
         return;
     }
@@ -6615,8 +6655,11 @@ fn attach_named_parameters(
         Kind::Identifier | Kind::Label | Kind::Text => EntryKind::Text,
         Kind::Length | Kind::PositiveLength | Kind::ThermalTransmittance => EntryKind::Real,
     };
+    // A bare name several sets hold is one parameter: scan it once.
+    let mut scanned = BTreeSet::new();
     let wanted: Vec<(i64, EntryKind)> = parameters
         .iter()
+        .filter(|(_, id, _)| scanned.insert(*id))
         .map(|(_, id, kind)| (*id, entry_kind(*kind)))
         .collect();
     let owners: BTreeSet<u32> = groups
@@ -6633,6 +6676,10 @@ fn attach_named_parameters(
             let Some(value) = found.get(parameter).and_then(|values| values.get(&id)) else {
                 continue;
             };
+            let field_name = format!("{NAMED_PARAMETER_FIELD_PREFIX}{name}");
+            if element.fields.iter().any(|(held, _)| *held == field_name) {
+                continue;
+            }
             let field = match (kind, value) {
                 (Kind::Boolean, EntryValue::Word(word @ (0 | 1))) => {
                     InstanceField::Bool(*word == 1)
@@ -6659,9 +6706,7 @@ fn attach_named_parameters(
                 }
                 _ => continue,
             };
-            element
-                .fields
-                .push((format!("{NAMED_PARAMETER_FIELD_PREFIX}{name}"), field));
+            element.fields.push((field_name, field));
         }
     }
 }
