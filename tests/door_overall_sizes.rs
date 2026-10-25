@@ -9,8 +9,9 @@
 //! Revit's, in metres. Core Interior's six windows are of a type whose size
 //! is 1010 mm square and are drawn by a symbol of their own, whose cut is
 //! Revit's 1500 x 2700 mm; before RE-215 they had `$`. RE1's curtain-wall
-//! door has no cut and its type no size, and keeps `$`. Corpus-gated
-//! through `RVT_PROJECT_CORPUS_DIR`.
+//! door has no cut and its type no size; RE-218 gives it its record box's
+//! extent along its own X axis and its height, Revit's 1831.87 x 2339.86 mm
+//! (#844). Corpus-gated through `RVT_PROJECT_CORPUS_DIR`.
 
 use rvt::RevitFile;
 use rvt::ifc::{RvtDocExporter, write_step};
@@ -82,6 +83,9 @@ fn re1_doors_carry_their_types_size() {
         ("416703", 2.4, 1.5),
         ("416909", 2.4, 0.75),
         ("417097", 2.4, 0.75),
+        // The curtain-wall door: no cut and no type size, sized by its
+        // record box (RE-218).
+        ("445975", 2.339855, 1.831871),
     ];
     for (tag, height, width) in revit {
         let (_, h, w) = sizes
@@ -93,8 +97,6 @@ fn re1_doors_carry_their_types_size() {
             "{tag}: {h} x {w}"
         );
     }
-    // A curtain-wall door: no cut, and its type holds no size. It fails closed.
-    assert_eq!(sizes.get("445975").map(|s| (s.1, s.2)), Some((None, None)));
 }
 
 #[test]

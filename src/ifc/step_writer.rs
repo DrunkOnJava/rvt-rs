@@ -2582,9 +2582,15 @@ impl StepWriter {
                 // RE-215: before either, the extents of the outline the symbol
                 // that draws it cuts, which Revit's exporter sizes it from.
                 let [cut_width, cut_height] = super::export_content::CUT_LOOP_SIZE_PROPERTIES;
+                // #810: where the symbol cuts no loop and no opening is read,
+                // the record box along its own X axis and its height, ahead
+                // of the type's size, which on the BIM4LCA office is 10 mm
+                // short of Revit's.
+                let [box_width, box_height] = super::export_content::INSTANCE_BOX_SIZE_PROPERTIES;
                 let overall = property_length(cut_height)
                     .zip(property_length(cut_width))
                     .or_else(|| property_length(height_key).zip(property_length(width_key)))
+                    .or_else(|| property_length(box_height).zip(property_length(box_width)))
                     .or_else(|| property_length(type_height).zip(property_length(type_width)));
                 let tail = element_attribute_tail(
                     &ifc_upper,

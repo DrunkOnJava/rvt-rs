@@ -758,9 +758,15 @@ instance's parameters size the family. Equal to Revit's on 138 of 138 doors
 and windows on Core Interior (its six windows had `$`), on RE1
 Architecture's 4 doors with one and on the R2025 models
 (`reports/element-framing/RE-215-symbol-cut-loops.md`). On the BIM4LCA
-office, 187 of its 269 doors cut one and have Revit's sizes; its 269 windows
-and other 82 doors are drawn by symbols with no cut loop and keep what they
-had (#810).
+office, 187 of its 269 doors cut one and have Revit's sizes. **RE-218
+(2026-10-25)** sizes a door or window whose symbol cuts no loop by its record
+box, along its own X axis and through its height, where its element record
+names a wall or a curtain wall: all 269 of the office's windows and 71 more
+of its doors now have Revit's `OverallWidth` and `OverallHeight`, and so
+does RE1 Architecture's curtain-wall door. Ten office doors still do not:
+eight whose records name no wall, whose height Revit takes along a
+horizontal axis, and two 0.1137 ft wider than Revit's
+(`reports/element-framing/RE-218-box-sizes.md`, #810).
 
 **RE-216 (2026-10-24)** gives a family instance whose element data sits in
 two partitions, with transforms that disagree, the copy its current record is

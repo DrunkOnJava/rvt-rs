@@ -76,9 +76,9 @@ def score_export(ours_path, revit_path, listing):
     for entity in sorted(seen):
         print(f"{entity}: {seen[entity]} matched by Tag, OverallWidth and OverallHeight "
               f"equal {tally[(entity, 'equal')]}  differ {tally[(entity, 'differs')]}  $ {tally[(entity, '$')]}")
-    if listing:
-        for tag, entity, width, height, w, h in worst[:60]:
-            print(f"  {entity} {tag}: Revit {width:.4f} x {height:.4f} ft, rvt-rs {w:.4f} x {h:.4f} ft")
+    # The first few that differ always, every one with --list.
+    for tag, entity, width, height, w, h in worst[: 60 if listing else 12]:
+        print(f"  {entity} {tag}: Revit {width:.4f} x {height:.4f} ft, rvt-rs {w:.4f} x {h:.4f} ft")
 
 
 def main():

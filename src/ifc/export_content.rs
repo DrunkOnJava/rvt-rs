@@ -2586,6 +2586,11 @@ pub const DOOR_TYPE_SIZE_PROPERTIES: [&str; 2] = ["TypeWidth", "TypeHeight"];
 /// `crate::partition_schema_mvp::CUT_LOOP_SIZE_FIELDS`), feet.
 pub const CUT_LOOP_SIZE_PROPERTIES: [&str; 2] = ["CutWidth", "CutHeight"];
 
+/// Properties holding a door's or window's record box extent along its own
+/// X axis and its height, where its symbol cuts no loop (#810,
+/// `crate::partition_schema_mvp::INSTANCE_BOX_SIZE_FIELDS`), feet.
+pub const INSTANCE_BOX_SIZE_PROPERTIES: [&str; 2] = ["BoxWidth", "BoxHeight"];
+
 /// Classes whose body another rule draws, which a family instance's turn
 /// leaves alone: columns (their type's section), beams (their line), and
 /// curtain-wall panels and mullions (their grid).
@@ -4312,6 +4317,17 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
     // symbol cuts in its host.
     if let Some(size) = crate::partition_schema_mvp::cut_loop_size_from_fields(&decoded.fields) {
         for (name, feet) in CUT_LOOP_SIZE_PROPERTIES.iter().zip(size) {
+            properties.push(Property {
+                name: (*name).into(),
+                value: PropertyValue::PositiveLengthFeet(feet),
+            });
+        }
+    }
+    // #810: one whose symbol cuts none, its record box along its own X axis
+    // and its height.
+    if let Some(size) = crate::partition_schema_mvp::instance_box_size_from_fields(&decoded.fields)
+    {
+        for (name, feet) in INSTANCE_BOX_SIZE_PROPERTIES.iter().zip(size) {
             properties.push(Property {
                 name: (*name).into(),
                 value: PropertyValue::PositiveLengthFeet(feet),

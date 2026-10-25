@@ -135,11 +135,23 @@ pub fn instance_cut_loops(
     rf: &mut RevitFile,
     instances: &BTreeSet<u64>,
 ) -> anyhow::Result<BTreeMap<u64, CutLoop>> {
+    Ok(instance_cut_loops_and_uncut(rf, instances)?.0)
+}
+
+/// [`instance_cut_loops`], and the instances in `instances` whose symbol
+/// cuts no outline at all: its `m_pCutLoops` is an empty list (#810). An
+/// instance whose symbol's loop is read but not supported (an arc, several
+/// loops, a pointer that does not resolve) is in neither.
+pub fn instance_cut_loops_and_uncut(
+    rf: &mut RevitFile,
+    instances: &BTreeSet<u64>,
+) -> anyhow::Result<(BTreeMap<u64, CutLoop>, BTreeSet<u64>)> {
     if instances.is_empty() {
-        return Ok(BTreeMap::new());
+        return Ok((BTreeMap::new(), BTreeSet::new()));
     }
     let mut drawn_by: BTreeMap<u64, u64> = BTreeMap::new();
     let mut loops: BTreeMap<u64, CutLoop> = BTreeMap::new();
+    let mut uncut_symbols: BTreeSet<u64> = BTreeSet::new();
     let options = native_document::Options {
         selected_ids: instances.clone(),
         selected_classes: BTreeSet::from(["FamilySymbol".to_string()]),
@@ -153,6 +165,14 @@ pub fn instance_cut_loops(
         if record.class_name.as_deref() == Some("FamilySymbol") {
             if let Some(cut) = cut_loop(graph) {
                 loops.insert(id, cut);
+            } else if graph
+                .objects
+                .first()
+                .and_then(|root| root.fields.get("m_pCutLoops"))
+                .and_then(serde_json::Value::as_array)
+                .is_some_and(Vec::is_empty)
+            {
+                uncut_symbols.insert(id);
             }
         } else if instances.contains(&id) {
             if let Some(symbol) = graph
@@ -167,8 +187,14 @@ pub fn instance_cut_loops(
         }
         Ok(())
     })?;
-    Ok(drawn_by
+    let uncut = drawn_by
+        .iter()
+        .filter(|(_, symbol)| uncut_symbols.contains(symbol))
+        .map(|(instance, _)| *instance)
+        .collect();
+    let loops = drawn_by
         .into_iter()
         .filter_map(|(instance, symbol)| Some((instance, *loops.get(&symbol)?)))
-        .collect())
+        .collect();
+    Ok((loops, uncut))
 }
