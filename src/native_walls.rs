@@ -1,14 +1,16 @@
 //! A wall's location curve and the walls joined at its ends, from its
 //! native `SWall` record (W6).
 //!
-//! The partition data gives most walls their centreline (RE-53, RE-54), not
-//! all: a wall whose data copies disagree between partitions is dropped
-//! (RE-216). On the BIM4LCA office that leaves the exterior walls of type
-//! US-1 drawn as their record box cut back at their joins, 1.33 ft short of
-//! Revit's body at each corner. The wall's native record holds one current
-//! copy of the curve the wall is drawn along, a `GLine`: `m_origin`, the
-//! unit `m_dirVec` and `m_endParams`, its start and end along it. Where the
-//! partition data gives a line it is the same line.
+//! The record holds the curve the wall is drawn along, a `GLine`:
+//! `m_origin`, the unit `m_dirVec` and `m_endParams`, its start and end
+//! along it. Where the partition data gives the wall a line (RE-53) it is
+//! the same line, and the record's `m_isFlipped` and `m_wallCrossSection`
+//! are the partition data's flip and orientation word (RE-54), on every
+//! wall of Core Interior, RE1 Architecture and both BIM4LCA office files.
+//! The partition data drops a wall whose copies disagree (RE-216); the
+//! record's curve is not used for those, as the current copy's line misses
+//! 7 of Core Interior's walls by 0.333 ft that their record box draws
+//! exactly.
 //!
 //! The record's `VWallDriver.m_controlJoinsSet` lists the joins at the
 //! wall's ends. Each `m_JoinInfo.m_info` lists the walls in one join, this
@@ -32,11 +34,6 @@ pub struct NativeWall {
     pub start: [f64; 2],
     /// The curve's end, plan model feet.
     pub end: [f64; 2],
-    /// `m_isFlipped`: set puts the wall's exterior to the right of the
-    /// curve's direction, as the partition data's flip does (RE-53).
-    pub flipped: Option<bool>,
-    /// `m_wallCrossSection`, the partition data's orientation word (RE-54).
-    pub cross_section: Option<i64>,
     /// The walls in the join at the curve's start and at its end, in the
     /// record's order and this wall included, each with the end it joins
     /// by. Empty where no join lists that end; `None` where several do.
@@ -141,12 +138,9 @@ pub fn native_walls(
                 .and_then(Value::as_array)
                 .cloned()
                 .unwrap_or_default();
-            let root = graph.objects.first().map(|object| &object.fields);
             NativeWall {
                 start,
                 end,
-                flipped: root.and_then(|f| f.get("m_isFlipped")?.as_bool()),
-                cross_section: root.and_then(|f| f.get("m_wallCrossSection")?.as_i64()),
                 joins: [0, 1].map(|end| end_join(id, &controls, end)),
             }
         });
@@ -169,10 +163,12 @@ pub fn native_walls(
 
 /// How far past `wall`'s end its body reaches where the join there is a T
 /// joint: another wall meets that end with its middle, and Revit's body
-/// stops half that wall's thickness short of the curve's end. On the BIM4LCA
-/// office this is Revit's end on 293 of 374 such ends as built, where
-/// rvt-rs's own join solver had 268 (W6). `None` where the join is not a T
-/// joint with exactly one such wall, or that wall's thickness is not known.
+/// stops half that wall's thickness short of the curve's end. Against
+/// Revit's bodies this is Revit's end on 293 of the 374 such ends of the
+/// BIM4LCA office as built, where the join lists' reach (RE-70, RE-73) gave
+/// 268, and on all 137 of Core Interior's (W6). `None` where the join is not
+/// a T joint with exactly one such wall, or that wall's thickness is not
+/// known.
 pub fn tee_reach(
     wall: u64,
     join: &[(u64, u32)],

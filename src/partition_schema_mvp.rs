@@ -4609,8 +4609,7 @@ fn attach_wall_layers(rf: &mut RevitFile, revit_version: u32, walls: &mut [Decod
     ) else {
         return;
     };
-    // W6: a wall its partition data gives no line, where its copies there
-    // disagree (RE-216), takes the curve its native record holds.
+    // W6: each wall's native record, for the walls its ends meet.
     let native = if centreline_bodies {
         let ids: BTreeSet<u64> = wall_ids.iter().map(|&id| u64::from(id)).collect();
         crate::native_walls::native_walls(rf, &ids).unwrap_or_default()
@@ -4664,19 +4663,8 @@ fn attach_wall_layers(rf: &mut RevitFile, revit_version: u32, walls: &mut [Decod
         let float = |value: f64| InstanceField::Float { value, size: 8 };
         // The direction the exterior side is taken from: the line's, or the
         // arc's tangent at its middle (RE-75).
-        let line = lines
-            .get(&id)
-            .map(|line| {
-                let (start, end) = (line.start(), line.end());
-                ([start[0], start[1]], [end[0], end[1]])
-            })
-            .or_else(|| {
-                native
-                    .get(&u64::from(id))
-                    .filter(|_| !arcs.contains_key(&id))
-                    .map(|wall| (wall.start, wall.end))
-            });
-        let (dx, dy) = if let Some((start, end)) = line {
+        let (dx, dy) = if let Some(line) = lines.get(&id) {
+            let (start, end) = (line.start(), line.end());
             let (dx, dy) = (end[0] - start[0], end[1] - start[1]);
             let length = dx.hypot(dy);
             if !length.is_finite() || length <= 1e-9 {
@@ -4777,10 +4765,11 @@ fn attach_wall_layers(rf: &mut RevitFile, revit_version: u32, walls: &mut [Decod
 /// taken as the same line, feet.
 const NATIVE_WALL_LINE_TOLERANCE_FEET: f64 = 1e-4;
 
-/// At each end of a wall with a centreline that its join lists leave
-/// undecided, where its native record says another wall meets that end with
-/// its middle, the body stops half that wall's thickness short
-/// ([`crate::native_walls::tee_reach`], W6).
+/// At each end of a wall with a centreline where its native record says
+/// another wall meets that end with its middle, the body stops half that
+/// wall's thickness short ([`crate::native_walls::tee_reach`], W6), in place
+/// of the reach its join lists give. An end whose layers each end on their
+/// own line (RE-71, RE-74) keeps them.
 fn attach_native_tee_reaches(
     walls: &mut [DecodedElement],
     native: &BTreeMap<u64, crate::native_walls::NativeWall>,
@@ -4818,7 +4807,15 @@ fn attach_native_tee_reaches(
             continue;
         };
         for (slot, end) in ends.into_iter().enumerate() {
-            if axis.join_reach_feet[slot].is_some() {
+            let layered = [
+                WALL_JOIN_LAYER_REACH_FIELDS[slot],
+                WALL_JOIN_LAYER_EDGE_REACH_FIELDS[slot],
+            ];
+            if wall
+                .fields
+                .iter()
+                .any(|(name, _)| layered.contains(&name.as_str()))
+            {
                 continue;
             }
             let Some(Some(join)) = curve.joins.get(end) else {
@@ -4827,6 +4824,8 @@ fn attach_native_tee_reaches(
             if let Some(reach) =
                 crate::native_walls::tee_reach(id, join, |other| thickness.get(&other).copied())
             {
+                wall.fields
+                    .retain(|(name, _)| name != WALL_JOIN_REACH_FIELDS[slot]);
                 wall.fields.push((
                     WALL_JOIN_REACH_FIELDS[slot].into(),
                     InstanceField::Float {
