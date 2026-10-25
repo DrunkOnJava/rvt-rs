@@ -11,6 +11,8 @@
 //!   elem <id>                              up to 3 columns per hollow-section type
 //!   type <type id> <family>:<type name> columns <n>
 //!   param <type id> <parameter> <value, feet>
+//!   native <parameter> <object index> <record class>/<object class> <scalar members>
+//!                                          the element of every positive parameter id
 //!                                          every `f64 · ff×8 · i64` entry in its blocks
 //!
 //! `tools/re/body_forms_list.py` prints Revit's body of each `elem`.
@@ -21,6 +23,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use rvt::RevitFile;
+use rvt::research::native_document::{Options, extract_graphs};
 use rvt::research::partition_schema_mvp::{
     FAMILY_NAME_FIELD, TYPE_ID_FIELD, TYPE_NAME_FIELD, recover_partition_schema_mvp,
 };
@@ -34,7 +37,7 @@ fn text(element: &DecodedElement, wanted: &str) -> Option<String> {
     })
 }
 
-fn main() -> rvt::Result<()> {
+fn main() -> anyhow::Result<()> {
     let path = std::env::args().nth(1).expect("usage: MODEL.rvt");
     let mut rf = RevitFile::open(&path)?;
     let version = rf.basic_file_info()?.version;
@@ -91,9 +94,42 @@ fn main() -> rvt::Result<()> {
             }
         }
     }
+    let mut elements: BTreeSet<u64> = BTreeSet::new();
     for ((owner, parameter), values) in found {
         let values: Vec<String> = values.into_iter().collect();
         println!("param {owner} {parameter} {}", values.join(" "));
+        if let Ok(id) = u64::try_from(parameter) {
+            if id > 1000 && id < u64::from(u32::MAX) {
+                elements.insert(id);
+            }
+        }
     }
+    let options = Options {
+        selected_ids: elements,
+        ..Options::default()
+    };
+    extract_graphs(&mut rf, &options, |record| {
+        let (Some(class), Some(graph)) = (record.class_name.as_deref(), record.graph.as_ref())
+        else {
+            return Ok(());
+        };
+        let id = record.identity.element_id;
+        for (index, object) in graph.objects.iter().enumerate().take(6) {
+            let members: Vec<String> = object
+                .fields
+                .as_object()
+                .into_iter()
+                .flat_map(|fields| fields.iter())
+                .filter(|(_, v)| v.is_number() || v.is_boolean() || v.is_string())
+                .map(|(name, v)| format!("{name}={v}"))
+                .collect();
+            println!(
+                "native {id} {index} {class}/{} {}",
+                object.class_name,
+                members.join(" ")
+            );
+        }
+        Ok(())
+    })?;
     Ok(())
 }

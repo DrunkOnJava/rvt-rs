@@ -43,7 +43,8 @@ def describe(item, scale):
                 extent = (
                     f" x {min(xs):.6f}..{max(xs):.6f} y {min(ys):.6f}..{max(ys):.6f}" if coords else ""
                 )
-                attrs.append(f"{label}={curve.is_a()} points={len(coords)}{extent} segments={segs}")
+                pts = " ".join(f"({p[0] * scale / FT:.6f},{p[1] * scale / FT:.6f})" for p in coords)
+                attrs.append(f"{label}={curve.is_a()} points={len(coords)}{extent} segments={segs} coords={pts}")
         direction = tuple(round(v, 6) for v in item.ExtrudedDirection.DirectionRatios)
         return f"extrusion {profile.is_a()} {' '.join(attrs)} depth={item.Depth * scale / FT:.6f} dir={direction}"
     return item.is_a()
