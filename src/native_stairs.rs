@@ -332,13 +332,9 @@ pub fn native_landings(
                     tops.insert(id, top);
                 }
             }
-            "StairsLandingType" => {
-                if flag(&root.fields, "m_hasMonolithicSupport") == Some(true) {
-                    if let Some(thickness) =
-                        number(&root.fields, "m_thickness").filter(|t| *t > 0.0)
-                    {
-                        thicknesses.insert(id, thickness);
-                    }
+            "StairsLandingType" if flag(&root.fields, "m_hasMonolithicSupport") == Some(true) => {
+                if let Some(thickness) = number(&root.fields, "m_thickness").filter(|t| *t > 0.0) {
+                    thicknesses.insert(id, thickness);
                 }
             }
             _ => {}
