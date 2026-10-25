@@ -22,7 +22,7 @@ The probe prints every scalar of the first 400 objects of each column's native r
 | `CoverSettingsCell.m_active` = false | 233 of 279 | |
 | `FamilyLevelRef.m_offset` | 233 of 279 | 271 of 345 |
 
-None is close. Every column's record holds a `CopyGeomToInstGStep`, so every one has geometry of its own rather than its symbol's; the cut and clean steps after it (`CutPairGStep`, `CleanPairGStep`) come in the same combinations with and without `Slope`.
+None is close. Every column's record holds a `CopyGeomToInstGStep`, so every one has geometry of its own rather than its symbol's; the counts of cut and clean steps after it (`CutPairGStep`, `CleanPairGStep`) do not separate them either: the four most common combinations, 261 of the 279 columns, each occur with `Slope` and without.
 
 ## 3. Conclusion
 
