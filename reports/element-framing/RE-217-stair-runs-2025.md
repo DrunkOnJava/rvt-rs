@@ -111,8 +111,10 @@ Two members of each run's `StairsRun` record, read by name (`examples/probe_357_
 | office flights | `m_baseRiserIndex` | `m_extendBelowBase` | Revit's underside |
 |---:|---|---|---|
 | 5 | 0 (start at the stair's base) | 0 | cut at the base |
-| 10 | 0 | −0.98425 ft (300 mm) | runs on to the first riser line, 0.544 to 0.612 ft below the base, above the cut |
-| 19 | 8 or 19 (start on a landing) | 0 | runs on to the first riser line |
+| 8 | 0 | −0.98425 ft (300 mm) | runs on to the first riser line, 0.548 to 0.558 ft below the base, above the cut |
+| 21 | 8, 10 or 19 (start on a landing) | 0 | runs on to the first riser line |
+
+The 35th, the spiral run 3057703, starts at its base with no extension and is not drawn (§5).
 
 So the floor a run starts on cuts its underside at `m_extendBelowBase` below its base, and a run that starts on a landing is not cut. `RunSketch::base_cut_feet` carries that cut. `native_stairs` reads it for a 2025 run from its record; for a 2024 run drawn from RE-52's byte anchors, `native_run_base_cuts` reads the same two members, and a run that does not give them is cut at its base, as before.
 
