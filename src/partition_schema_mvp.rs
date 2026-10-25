@@ -509,6 +509,7 @@ pub fn recover_partition_schema_mvp(
     );
     // --- Stairs and their parts named as Revit names them (RE-65) ---
     attach_stair_names(rf, revit_version, &mut out.products);
+    attach_native_stair_names(rf, revit_version, &mut out.products);
     // --- IFC export overrides, the element's own or its type's (RE-45) ---
     attach_ifc_export_overrides(
         rf,
@@ -2190,13 +2191,15 @@ fn attach_cut_loop_sizes(
         return;
     };
     // #810: a door or window whose symbol cuts no loop is sized by its
-    // record box, along its own X axis and through its height, as Revit's
-    // export sizes it: all 269 windows of the BIM4LCA office, 71 of its
-    // doors and RE1's curtain-wall door. Only one whose element record names
-    // a wall or a curtain wall: the office's doors that name neither take
-    // their height along a horizontal axis in Revit's export. An instance
-    // turned off the model's axes, whose box is not along its own, gets no
-    // size.
+    // record box, as Revit's export sizes it: its width along its own X
+    // axis and, in a wall or a curtain wall that its element record names,
+    // its height through the box: all 269 windows of the BIM4LCA office, 71
+    // of its doors and RE1's curtain-wall door. Any other's height is the
+    // box's extent along its own Y axis, as revit-ifc's
+    // `GetDoorWindowDimensionFromSymbol` measures the height of a family not
+    // hosted by a wall (CLEANROOM.md source 5): the office's four roof
+    // hatches and four doors of type 3267242. An instance turned off the
+    // model's axes, whose box is not along its own, gets no size.
     let mut in_wall: BTreeSet<u32> = BTreeSet::new();
     for element in elements.iter() {
         let Some(id) = element.id.filter(|id| loopless.contains(id)) else {
@@ -2212,7 +2215,7 @@ fn attach_cut_loop_sizes(
         }
     }
     for element in elements.iter_mut() {
-        let Some(id) = element.id.filter(|id| in_wall.contains(id)) else {
+        let Some(id) = element.id.filter(|id| loopless.contains(id)) else {
             continue;
         };
         let (Some(transform), Some(bbox)) = (transforms.get(&id), element_record_bbox(element))
@@ -2225,14 +2228,19 @@ fn attach_cut_loop_sizes(
         let Some([ax, ay]) = transform.plan_axis() else {
             continue;
         };
-        let width = if (ax.abs() - 1.0).abs() <= INSTANCE_AXIS_TOLERANCE {
-            bbox[3] - bbox[0]
+        let (across_x, across_y) = (bbox[3] - bbox[0], bbox[4] - bbox[1]);
+        let (width, along_y) = if (ax.abs() - 1.0).abs() <= INSTANCE_AXIS_TOLERANCE {
+            (across_x, across_y)
         } else if (ay.abs() - 1.0).abs() <= INSTANCE_AXIS_TOLERANCE {
-            bbox[4] - bbox[1]
+            (across_y, across_x)
         } else {
             continue;
         };
-        let height = bbox[5] - bbox[2];
+        let height = if in_wall.contains(&id) {
+            bbox[5] - bbox[2]
+        } else {
+            along_y
+        };
         if !(width > 0.0 && height > 0.0) {
             continue;
         }
@@ -5488,6 +5496,135 @@ fn landing_outline(
         }
     }
     Some(points)
+}
+
+/// Name Revit 2025 stairs, runs and stringers as Revit's export names them
+/// (RE-65), from their native records
+/// ([`crate::native_stairs::native_stair_parts`], #323): each takes its
+/// type, its type's name and its family, a stair the name
+/// `Family:Stair:ElementId` and a part `<stair> Run 2`, numbered in
+/// ElementId order among the exported parts of its kind on its stair. A
+/// run's type is the one `OST_StairsRuns` type definition its element
+/// record names (RE-28). Measured on the five R2025 stair models.
+fn attach_native_stair_names(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    products: &mut [DecodedElement],
+) {
+    use crate::partition_type_records as ptr;
+    if !crate::native_stairs::NATIVE_STAIR_NAME_REVIT_VERSIONS.contains(&revit_version) {
+        return;
+    }
+    let classes = ["Stair", "StairsRun", "StairsStringer"];
+    let parts: BTreeSet<u64> = products
+        .iter()
+        .filter(|element| classes.contains(&element.class.as_str()))
+        .filter_map(|element| element.id.map(u64::from))
+        .collect();
+    if parts.is_empty() {
+        return;
+    }
+    let declared: BTreeSet<u32> = match crate::elem_table::parse_records(rf) {
+        Ok(records) => crate::elem_table::declared_ids(&records),
+        Err(_) => return,
+    };
+    let run_types = ptr::type_definition_ids(
+        &ptr::scan_type_records(
+            rf,
+            revit_version,
+            crate::partition_element_records::OST_STAIRS_RUNS,
+            &declared,
+        )
+        .unwrap_or_default(),
+    );
+    let mut runs: BTreeMap<u64, u64> = BTreeMap::new();
+    for element in products
+        .iter()
+        .filter(|element| element.class == "StairsRun")
+    {
+        let (Some(id), Some((references, _))) = (element.id, record_references(rf, element)) else {
+            continue;
+        };
+        if let Some(type_id) = ptr::unique_type_reference(&references, &run_types) {
+            runs.insert(u64::from(id), u64::from(type_id));
+        }
+    }
+    let Ok(native) = crate::native_stairs::native_stair_parts(rf, &parts, &runs) else {
+        return;
+    };
+    let mut members: BTreeMap<(u64, &'static str), BTreeSet<u64>> = BTreeMap::new();
+    for element in products.iter() {
+        let (Some(id), Some(word)) = (element.id.map(u64::from), stair_part_word(&element.class))
+        else {
+            continue;
+        };
+        if let Some(part) = native.get(&id) {
+            members.entry((part.stair, word)).or_default().insert(id);
+        }
+    }
+    let stair_names: BTreeMap<u64, String> = native
+        .iter()
+        .filter(|(id, part)| part.stair == **id)
+        .map(|(id, part)| (*id, format!("{}:Stair:{id}", part.family)))
+        .collect();
+    for element in products.iter_mut() {
+        let Some(id) = element.id.map(u64::from) else {
+            continue;
+        };
+        let Some(part) = native.get(&id) else {
+            continue;
+        };
+        let has = |field: &str| element.fields.iter().any(|(name, _)| name == field);
+        if has(FAMILY_NAME_FIELD) {
+            continue;
+        }
+        let (has_type_id, has_type_name, has_name) = (
+            has(TYPE_ID_FIELD),
+            has(TYPE_NAME_FIELD),
+            has(ELEMENT_NAME_FIELD),
+        );
+        let name = match stair_part_word(&element.class) {
+            None => stair_names.get(&id).cloned(),
+            Some(word) => stair_names.get(&part.stair).and_then(|stair| {
+                let rank = members
+                    .get(&(part.stair, word))?
+                    .iter()
+                    .position(|m| *m == id)?;
+                Some(format!("{stair} {word} {}", rank + 1))
+            }),
+        };
+        let Ok(type_id) = u32::try_from(part.type_id) else {
+            continue;
+        };
+        if !has_type_id {
+            element.fields.push((
+                TYPE_ID_FIELD.into(),
+                InstanceField::ElementId {
+                    tag: 0,
+                    id: type_id,
+                },
+            ));
+        }
+        if !has_type_name {
+            element.fields.push((
+                TYPE_NAME_FIELD.into(),
+                InstanceField::String(part.type_name.clone()),
+            ));
+        }
+        element.fields.push((
+            FAMILY_NAME_FIELD.into(),
+            InstanceField::String(part.family.into()),
+        ));
+        element.fields.push((
+            FAMILY_NAME_SOURCE_FIELD.into(),
+            InstanceField::String(TYPE_KIND_FAMILY_SOURCE.into()),
+        ));
+        if let (Some(name), false) = (name, has_name) {
+            element
+                .fields
+                .push((ELEMENT_NAME_FIELD.into(), InstanceField::String(name)));
+        }
+    }
 }
 
 /// Field carrying the `m_runType` a stair run's treads all give

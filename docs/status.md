@@ -541,7 +541,10 @@ runs, landings and supports after them ("Assembled Stair:Stair:620883 Run
 1"), with `ObjectType` from each type's name and a flag in its own object
 (Assembled or Cast-In-Place Stair, Monolithic or Non-Monolithic Run,
 Stringer or Carriage). On Snowdon all 256 stair elements carry Revit's name
-and `ObjectType`. Measured on Snowdon only, as no other oracle has stairs
+and `ObjectType`. On Revit 2025 the same names come from the stairs' native
+records (RE-65 §6): on puzzbobb's five R2025 stair models every stair,
+flight and stringer has Revit's name and `ObjectType` and a type object
+with Revit's GlobalId, where none had either
 (`reports/element-framing/RE-65-stair-names.md`).
 **RE-66 (2026-09-24)** reads a railing type's name from its type object
 when the type has no element data. On Snowdon all 131 railings now carry
@@ -763,9 +766,10 @@ office, 187 of its 269 doors cut one and have Revit's sizes. **RE-218
 box, along its own X axis and through its height, where its element record
 names a wall or a curtain wall: all 269 of the office's windows and 71 more
 of its doors now have Revit's `OverallWidth` and `OverallHeight`, and so
-does RE1 Architecture's curtain-wall door. Ten office doors still do not:
-eight whose records name no wall, whose height Revit takes along a
-horizontal axis, and two 0.1137 ft wider than Revit's
+does RE1 Architecture's curtain-wall door. Its addendum sizes one whose
+record names no wall along its own Y axis, as revit-ifc measures the
+height of a family no wall hosts: 266 of the office's 269 doors are then
+Revit's, and two are 0.1137 ft wider than Revit's
 (`reports/element-framing/RE-218-box-sizes.md`, #810).
 
 **RE-216 (2026-10-24)** gives a family instance whose element data sits in
