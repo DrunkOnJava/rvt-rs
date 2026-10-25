@@ -6118,9 +6118,40 @@ fn attach_landing_slabs(rf: &mut RevitFile, revit_version: u32, products: &mut [
             landings.insert(u64::from(id), u64::from(type_id));
         }
     }
-    let Ok(native) = crate::native_stairs::native_landings(rf, &landings) else {
+    let Ok((native, type_names)) =
+        crate::native_stairs::native_landings_and_type_names(rf, &landings)
+    else {
         return;
     };
+    // Each landing's type and its name, as for a run (RE-28).
+    for element in products
+        .iter_mut()
+        .filter(|element| element.class == "StairsLanding")
+    {
+        let Some(type_id) = element.id.and_then(|id| landings.get(&u64::from(id))) else {
+            continue;
+        };
+        let (Some(name), Ok(type_id)) = (type_names.get(type_id), u32::try_from(*type_id)) else {
+            continue;
+        };
+        if element
+            .fields
+            .iter()
+            .any(|(field, _)| field == TYPE_NAME_FIELD)
+        {
+            continue;
+        }
+        element.fields.push((
+            TYPE_ID_FIELD.into(),
+            InstanceField::ElementId {
+                tag: 0,
+                id: type_id,
+            },
+        ));
+        element
+            .fields
+            .push((TYPE_NAME_FIELD.into(), InstanceField::String(name.clone())));
+    }
     let ids: BTreeSet<u32> = native
         .keys()
         .filter_map(|id| u32::try_from(*id).ok())

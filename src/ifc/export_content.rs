@@ -626,8 +626,9 @@ pub fn append_typed_production_elements(
             .flatten();
         // The Reference is the type's name however Revit names the element:
         // electrical equipment named by its panel name has one too (B29).
-        // A stair run named for its stair (RE-65) still has its run type's.
-        let run_type = (decoded.class == "StairsRun")
+        // A stair run or landing named for its stair (RE-65) still has its
+        // own type's.
+        let run_type = matches!(decoded.class.as_str(), "StairsRun" | "StairsLanding")
             .then(|| {
                 decoded.fields.iter().find_map(|(name, value)| match value {
                     InstanceField::String(text)
