@@ -17,7 +17,8 @@ than the box.
 Buckets: `box` (fill within 0.5% of 100%), `90%`, `50%`, `<50%`, `>100%`
 (a fill over 100.5%: overlapping solids or an open mesh, so the volume is
 not the body's), and `no ref` (no element with that Tag, or no body). Every class is listed, most
-numerous first, with its median fill.
+numerous first, with its median fill, and under it the three Revit types
+(`ObjectType`) most of its bodies that are not boxes belong to.
 
 Usage:
 
@@ -49,7 +50,7 @@ def boxed_tags(path):
 
 
 def fills(path, tags):
-    """Tag -> volume / bounding-box volume of Revit's body."""
+    """Tag -> (volume / bounding-box volume of Revit's body, its ObjectType)."""
     model = ifcopenshell.open(path)
     settings = ifcopenshell.geom.settings()
     elements = [
@@ -79,9 +80,10 @@ def fills(path, tags):
                 ) / 6.0
             extent = [max(p[k] for p in points) - min(p[k] for p in points) for k in range(3)]
             box = extent[0] * extent[1] * extent[2]
-            tag = model.by_id(shape.id).Tag
+            element = model.by_id(shape.id)
             if box > 0:
-                out[tag] = out.get(tag, 0.0) + abs(volume) / box
+                held = out.get(element.Tag, (0.0, None))[0]
+                out[element.Tag] = (held + abs(volume) / box, element.ObjectType)
         if not it.next():
             break
     return out
@@ -95,14 +97,17 @@ def main():
     fill = fills(sys.argv[2], set(boxed))
     rows = collections.defaultdict(lambda: collections.Counter())
     medians = collections.defaultdict(list)
+    kinds = collections.defaultdict(collections.Counter)
     for tag, cls in boxed.items():
-        f = fill.get(tag)
+        f, kind = fill.get(tag, (None, None))
         row = rows[cls]
         row["n"] += 1
         if f is None:
             row["no ref"] += 1
             continue
         medians[cls].append(f)
+        if not 0.995 <= f <= 1.005:
+            kinds[cls][kind or "-"] += 1
         row[
             ">100%"
             if f > 1.005
@@ -121,6 +126,8 @@ def main():
     for cls, row in sorted(rows.items(), key=lambda kv: -kv[1]["n"]):
         med = statistics.median(medians[cls]) if medians[cls] else float("nan")
         print(f"{cls:28}" + "".join(f"{row[h]:>8}" for h in heads) + f"{med:>9.3f}")
+        for kind, count in kinds[cls].most_common(3):
+            print(f"    {count:>6}  {kind}")
         total.update(row)
     print(f"{'total':28}" + "".join(f"{total[h]:>8}" for h in heads))
     return 0
