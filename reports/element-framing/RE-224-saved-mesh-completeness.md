@@ -67,8 +67,17 @@ On the office 1,294 of the 1,352 bodies drawn from a saved mesh are now Revit's,
 
 ## 5. Reproduce
 
+§2 needs an export that draws every saved mesh, rejected ones included: with this change in place `attach` keeps those elements' boxes, and the scorer, which scores the meshes the export draws, never sees them. Run it at commit 14325427 (`re/saved-mesh-status`), from before the gate:
+
 ```bash
-gh workflow run measure.yml --ref feat/saved-mesh-partial-gate -f ref=feat/saved-mesh-partial-gate -f base=none \
+gh workflow run measure.yml --ref 14325427 -f ref=14325427 -f base=none \
   -f nordic=true -f keep_ifc=true -f ifc_flags=--saved-meshes \
   -f probe=probe_re224_saved_mesh_status -f probe_scorer=saved_mesh_status_vs_ifc
+```
+
+§3's table is the gate against `main`, both with `--saved-meshes`:
+
+```bash
+gh workflow run measure.yml --ref main -f ref=<this change> -f base=main \
+  -f nordic=true -f keep_ifc=true -f ifc_flags=--saved-meshes
 ```

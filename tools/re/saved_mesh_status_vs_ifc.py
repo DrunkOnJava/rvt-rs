@@ -9,6 +9,11 @@ with the same `Tag` as `mesh_bodies_vs_ifc.py` does: exact when every tested
 vertex of each lies within 0.001 ft of the other's surface. A class with more
 than 300 such bodies is scored on an even stride of 300 by Tag.
 
+It scores only the meshes the export draws, so the export must draw every
+saved mesh: one made with RE-224's gate in `saved_meshes::attach` keeps the
+box for each mesh carrying a decode failure, and those are never scored. Run
+it on an export from before the gate (commit 14325427, `re/saved-mesh-status`).
+
 Then, for each signal the probe prints (the scene's status, unbounded faces,
 rejected filters, hidden branches, curve-only branches, and each kind of
 diagnostic), how many bodies with and without it are exact. A signal that
