@@ -2473,6 +2473,11 @@ type ProfileOpening = (u32, Vec<(f64, f64)>, f64, f64, f64);
 /// box at id-48 of its geometry node (RE-178).
 pub const COLUMN_CUT_BODY_HEIGHT_SOURCE: &str = "partition_geometry_node_after_joins";
 
+/// `BodyHeightSource` of a monolithic stair landing drawn as its slab: from
+/// its top (`StairsLanding.m_baseElevation`) down its landing type's
+/// thickness (`StairsLandingType.m_thickness`, #824).
+pub const LANDING_SLAB_BODY_HEIGHT_SOURCE: &str = "native_landing_top_and_type_thickness";
+
 /// `BodySource` of a body that is the element record's bounding box, where
 /// no carrier refines it (#409).
 pub const RECORD_BBOX_BODY_SOURCE: &str = "partition_element_record_bbox";
@@ -4070,9 +4075,14 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
         },
     ];
     if column_body_z.0.is_some() && (height - record_height).abs() > 1e-9 {
+        let source = if landing_slab {
+            LANDING_SLAB_BODY_HEIGHT_SOURCE
+        } else {
+            COLUMN_CUT_BODY_HEIGHT_SOURCE
+        };
         properties.push(Property {
             name: "BodyHeightSource".into(),
-            value: PropertyValue::Text(COLUMN_CUT_BODY_HEIGHT_SOURCE.into()),
+            value: PropertyValue::Text(source.into()),
         });
     }
     // #219 / RE-27: the host Level the record's counted reference list
