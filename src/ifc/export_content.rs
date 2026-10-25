@@ -626,10 +626,24 @@ pub fn append_typed_production_elements(
             .flatten();
         // The Reference is the type's name however Revit names the element:
         // electrical equipment named by its panel name has one too (B29).
+        // A stair run named for its stair (RE-65) still has its run type's.
+        let run_type = (decoded.class == "StairsRun")
+            .then(|| {
+                decoded.fields.iter().find_map(|(name, value)| match value {
+                    InstanceField::String(text)
+                        if name == crate::partition_schema_mvp::TYPE_NAME_FIELD =>
+                    {
+                        Some(text.clone())
+                    }
+                    _ => None,
+                })
+            })
+            .flatten();
         let reference_type = family_and_type(&decoded)
             .filter(|_| own_name.is_none() && !opening_only)
             .map(|(_, type_name)| type_name)
-            .or(duct_type);
+            .or(duct_type)
+            .or(run_type);
         let name = match (
             own_name,
             decoded.id,
@@ -1526,16 +1540,50 @@ fn level_parameter_property_set(decoded: &DecodedElement, ifc_type: &str) -> Opt
 /// flight, holding the number of risers, riser height and tread length
 /// their data records (RE-47), with the measure types those standard sets
 /// declare. `None` when nothing was read.
+///
+/// As revit-ifc's calculators give them (CLEANROOM.md source 5): a flight's
+/// number of treads and nosing length are its own (RE-92, RE-52), and a
+/// stair's nosing length the one its runs share; `TreadLengthAtOffset` is
+/// the stair's tread depth, which a flight carries, and so is a flight's
+/// `TreadLengthAtInnerSide`, since its run type has no inside-boundary
+/// width. A stair's `TreadLengthAtInnerSide` is its stair type's
+/// inside-boundary width where that is set, which is not read, so it is not
+/// written; nor is `WalkingLineOffset`, which revit-ifc gives as half the
+/// run's width in feet and the export scales as millimetres.
 fn stair_property_set(decoded: &DecodedElement) -> Option<PropertySet> {
     use crate::partition_schema_mvp as mvp;
-    let name = match decoded.class.as_str() {
-        "Stair" => "Pset_StairCommon",
-        "StairsRun" => "Pset_StairFlightCommon",
+    let (name, flight) = match decoded.class.as_str() {
+        "Stair" => ("Pset_StairCommon", false),
+        "StairsRun" => ("Pset_StairFlightCommon", true),
         _ => return None,
     };
     let mut properties = Vec::new();
     for (field, value) in &decoded.fields {
+        if let (mvp::STAIR_TREAD_DEPTH_FIELD, InstanceField::Float { value, .. }) =
+            (field.as_str(), value)
+        {
+            properties.push(Property {
+                name: "TreadLengthAtOffset".into(),
+                value: PropertyValue::PositiveLengthFeet(*value),
+            });
+            if flight {
+                properties.push(Property {
+                    name: "TreadLengthAtInnerSide".into(),
+                    value: PropertyValue::PositiveLengthFeet(*value),
+                });
+            }
+        }
         let property = match (field.as_str(), value) {
+            (mvp::STAIR_TREAD_COUNT_FIELD, InstanceField::Integer { value, .. }) if flight => {
+                Property {
+                    name: "NumberOfTreads".into(),
+                    value: PropertyValue::CountValue(*value),
+                }
+            }
+            (mvp::STAIR_NOSING_LENGTH_FIELD, InstanceField::Float { value, .. }) => Property {
+                name: "NosingLength".into(),
+                value: PropertyValue::LengthFeet(*value),
+            },
             (mvp::STAIR_RISER_COUNT_FIELD, InstanceField::Integer { value, .. }) => Property {
                 name: "NumberOfRiser".into(),
                 value: PropertyValue::CountValue(*value),
