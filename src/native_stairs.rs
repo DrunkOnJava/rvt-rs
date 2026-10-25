@@ -453,7 +453,7 @@ fn spiral(run: &Value, treads: &[Value]) -> Option<([f64; 2], [f64; 2], Vec<Spir
 }
 
 /// Each spiral run in `runs`, keyed by its id with its own run type's id,
-/// whose native records give its treads ([`spiral`]) and whose type's record
+/// whose native records give its treads (see [`NativeSpiralRun`]) and whose type's record
 /// gives its construction (#357).
 pub fn native_spiral_runs(
     rf: &mut RevitFile,
