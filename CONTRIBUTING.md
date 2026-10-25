@@ -288,7 +288,9 @@ When you discover something new about the file format:
    (positive or negative), the files and their sha256, the reference export
    measured against, and counts against Revit's own export (matches,
    misses, tolerance). A negative result is worth reporting; it keeps the
-   next person from repeating the search.
+   next person from repeating the search. Its reproduce commands name a
+   commit (`--ref main -f ref=<sha>`), never a branch: branches are
+   deleted when they land, and a probe that landed runs from `main`.
 3. If the finding changes what rvt-rs outputs, measure the change end to end
    (the scorers under `tools/re/` compare an export with Revit's) and update
    the public status in the same pull request: `docs/status.md`,

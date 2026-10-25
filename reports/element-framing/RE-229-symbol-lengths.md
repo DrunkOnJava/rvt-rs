@@ -32,6 +32,6 @@ A symbol's stored lengths add no source: where they give the width, the cut loop
 ## 4. Reproduce
 
 ```bash
-gh workflow run measure.yml --ref docs/re229-symbol-lengths -f ref=docs/re229-symbol-lengths -f base=none \
+gh workflow run measure.yml --ref main -f ref=d07dea1d80de9a3c142453cbdad68725a4800a32 -f base=none \
   -f nordic=true -f r2025=true -f probe=probe_re229_symbol_lengths -f probe_scorer=symbol_lengths_vs_ifc
 ```

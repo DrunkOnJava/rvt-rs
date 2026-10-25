@@ -36,5 +36,5 @@ A door's and a floor's `IsExternal` can be written from its type's Function (B28
 ## 5. Reproduce
 
 ```text
-gh workflow run measure.yml --ref re/re158-value-entries -f base=none -f probe=probe_re158_value_entries
+gh workflow run measure.yml --ref main -f ref=ba4494f3782c4641feeaa05bf6929ff6d883a0f9 -f base=none -f probe=probe_re158_value_entries
 ```

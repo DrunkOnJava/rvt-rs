@@ -44,7 +44,7 @@ The display names (`Floor Covering`, `Ceiling Covering`, `Acoustic Rating`, ...)
 ## 6. Reproduce
 
 ```bash
-gh workflow run measure.yml --ref feat/bare-named-parameters -f ref=feat/bare-named-parameters -f base=none \
+gh workflow run measure.yml --ref main -f ref=d3fafe6f8f4802915cb3367d645a9cf8c07d2fc2 -f base=none \
   -f nordic=true -f probe=probe_re227_parameter_names
-gh workflow run measure.yml --ref main -f ref=feat/bare-named-parameters -f base=main -f nordic=true
+gh workflow run measure.yml --ref main -f ref=d3fafe6f8f4802915cb3367d645a9cf8c07d2fc2 -f base=567f2ccc5d4f43b528cb9be488e04aa946b5a253 -f nordic=true
 ```
