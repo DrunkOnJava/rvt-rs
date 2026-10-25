@@ -5743,8 +5743,9 @@ fn attach_stair_run_shapes(
             _ => None,
         })
     };
-    let mut parts: BTreeMap<u32, (Vec<(u32, Option<crate::native_stairs::RunShape>)>, usize)> =
-        BTreeMap::new();
+    // Each stair's runs, by id with their shapes, and its landing count.
+    type StairParts = (Vec<(u32, Option<crate::native_stairs::RunShape>)>, usize);
+    let mut parts: BTreeMap<u32, StairParts> = BTreeMap::new();
     for element in products.iter() {
         let (Some(stair), Some(id)) = (whole(element), element.id) else {
             continue;
