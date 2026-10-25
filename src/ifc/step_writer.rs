@@ -1464,7 +1464,11 @@ impl StepWriter {
             project_id,
             format!(
                 "IFCPROJECT('{}',#{owner_hist},'{}',{},$,$,$,(#{geom_ctx}),#{unit_assignment})",
-                gid(&["project"]),
+                model
+                    .global_ids
+                    .project
+                    .clone()
+                    .unwrap_or_else(|| gid(&["project"])),
                 project_name,
                 quoted_or_dollar(&project_desc),
             ),
@@ -1495,7 +1499,11 @@ impl StepWriter {
             site_id,
             format!(
                 "IFCSITE('{}',#{owner_hist},'Default Site',$,$,#{site_placement},$,'Default Site',.ELEMENT.,$,$,$,$,$)",
-                gid(&["site"]),
+                model
+                    .global_ids
+                    .site
+                    .clone()
+                    .unwrap_or_else(|| gid(&["site"])),
             ),
         );
 
@@ -1509,7 +1517,11 @@ impl StepWriter {
             building_id,
             format!(
                 "IFCBUILDING('{}',#{owner_hist},'Default Building',$,$,#{building_placement},$,'Default Building',.ELEMENT.,$,$,$)",
-                gid(&["building"]),
+                model
+                    .global_ids
+                    .building
+                    .clone()
+                    .unwrap_or_else(|| gid(&["building"])),
             ),
         );
 

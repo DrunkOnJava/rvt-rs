@@ -815,6 +815,16 @@ soffit where the flight meets the landing, which is drawn flat: the slabs
 are 100.4% to 104.7% of Revit's volume
 (`reports/element-framing/RE-214-landing-slabs.md`).
 
+**RE-220 (2026-10-25)** gives the project, site and building the
+GlobalIds the file stores, which Revit's export writes: under the project
+information's IfcGUID parameters on BIMcollab's Revit 2015 example, and as
+a triple related as revit-ifc's fake ElementIds -16, -15 and -14 relate
+them on the BIM4LCA office. All three are Revit's on those three files,
+where none were, and the 2015 example's five storeys take their stored
+values, Revit's. A file that stores none keeps generated ones: the GUID
+Revit derives them from is not found
+(`reports/element-framing/RE-220-stored-global-ids.md`).
+
 The public viewer's demo gallery leads with the two files this section
 measures, staged from the deploy workflow's `magnetar-io/revit-test-datasets`
 checkout and pinned by sha256 (#257): `Revit_IFC5_Einhoven.rvt` (2023,
