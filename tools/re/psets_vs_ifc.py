@@ -17,8 +17,9 @@ objects rvt-rs does not write at all.
 It prints the totals, then a line per (set, property): how many values
 Revit writes on objects rvt-rs also writes, how many are equal, how many
 differ, and how many are missing. Then, for the 40 properties most often
-missing, the values Revit writes for them most often, so what a missing
-property would take is visible without opening Revit's export (W7).
+missing, the values Revit writes for them most often and the entities it
+writes them on, so what a missing property would take is visible without
+opening Revit's export (W7).
 
 Usage:
 
@@ -186,7 +187,7 @@ def main(argv):
     if len(args) != 2:
         print(__doc__, file=sys.stderr)
         return 2
-    (ours, our_objects, our_entities, _), (theirs, their_objects, _, their_ifc2x3) = (
+    (ours, our_objects, our_entities, _), (theirs, their_objects, their_entities, their_ifc2x3) = (
         properties(args[0]),
         properties(args[1]),
     )
@@ -205,6 +206,7 @@ def main(argv):
         }
     rows = collections.defaultdict(lambda: [0, 0, 0, 0])
     missing_values = collections.defaultdict(collections.Counter)
+    missing_classes = collections.defaultdict(collections.Counter)
     worst = []
     as_quantities = 0
     twice = 0
@@ -229,6 +231,7 @@ def main(argv):
         elif mine == "missing":
             row[3] += 1
             missing_values[(pset, prop)][repr(value)[:60]] += 1
+            missing_classes[(pset, prop)][their_entities.get(key, "-")] += 1
         else:
             row[2] += 1
             if len(worst) < listing:
@@ -257,7 +260,8 @@ def main(argv):
     print("Revit's most common values where rvt-rs writes none:")
     for (pset, prop), values in sorted(missing_values.items(), key=lambda kv: -sum(kv[1].values()))[:40]:
         common = ", ".join(f"{v} x{n}" for v, n in values.most_common(4))
-        print(f"  {pset}.{prop}: {common}")
+        classes = ", ".join(f"{c} x{n}" for c, n in missing_classes[(pset, prop)].most_common(4))
+        print(f"  {pset}.{prop}: {common}; on {classes}")
     for line in worst:
         print(line)
     return 0
