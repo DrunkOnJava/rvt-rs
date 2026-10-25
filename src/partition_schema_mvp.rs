@@ -5158,7 +5158,7 @@ fn attach_landing_slabs(rf: &mut RevitFile, revit_version: u32, products: &mut [
         .filter_map(|id| u32::try_from(*id).ok())
         .collect();
     let lines =
-        crate::partition_stairs::scan_run_lines(rf, revit_version, &ids).unwrap_or_default();
+        crate::partition_stairs::scan_landing_lines(rf, revit_version, &ids).unwrap_or_default();
     let scalar = |value: f64| InstanceField::Float { value, size: 8 };
     for element in products
         .iter_mut()

@@ -704,6 +704,30 @@ pub fn scan_run_lines(
     })
 }
 
+/// How far into a landing's data its outline lines are read (#824,
+/// RE-214): the window the outline was measured in on the BIM4LCA office,
+/// where every landing's data holds more lines further on.
+pub const LANDING_DATA_WINDOW: usize = 0x4000;
+
+/// Every bounded line in the first [`LANDING_DATA_WINDOW`] bytes of the data
+/// of each landing in `landings`, in data order, where every copy of the
+/// data holds the same lines. Empty for a release this layout is not
+/// measured on.
+pub fn scan_landing_lines(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    landings: &BTreeSet<u32>,
+) -> Result<BTreeMap<u32, Vec<BoundedLine>>> {
+    use crate::partition_beam_axes::{BOUNDED_LINE_TAG, bounded_line_at};
+    scan_run_data(rf, revit_version, landings, |_, data| {
+        let data = &data[..data.len().min(LANDING_DATA_WINDOW)];
+        let lines: Vec<BoundedLine> = memchr::memmem::find_iter(data, &BOUNDED_LINE_TAG)
+            .filter_map(|at| bounded_line_at(data, at))
+            .collect();
+        (!lines.is_empty()).then_some(lines)
+    })
+}
+
 /// What `read` finds in each run of `runs`, from every partition's copy of
 /// the run's data. A run whose copies disagree is dropped; the map is empty
 /// for a release this layout is not measured on.

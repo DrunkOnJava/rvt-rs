@@ -12,6 +12,7 @@
 //!   line <id> <x0> <y0> <z0> <x1> <y1> <z1>
 //!   arc <id> <cx> <cy> <cz> <radius> <start> <end> <xx> <xy> <yx> <yy>
 //!   landing-type <id> own <id|None>
+//!   data-line <id> <x0> <y0> <z0> <x1> <y1> <z1>   (every line, 64 KiB window)
 //!   gate <id> native <top and thickness|None> lines <n> nearest-to-top <ft>
 //!   native <id> <index> <class> <member=value ...>
 //!
@@ -32,7 +33,7 @@ use rvt::research::partition_element_records::{
     OST_STAIRS_LANDINGS, REFERENCE_LIST_OFFSET, decode_reference_list,
 };
 use rvt::research::partition_names::element_data_header;
-use rvt::research::partition_stairs::scan_run_lines;
+use rvt::research::partition_stairs::{scan_landing_lines, scan_run_lines};
 use rvt::research::partition_type_records::{
     scan_type_records, type_definition_ids, unique_type_reference,
 };
@@ -162,7 +163,16 @@ fn main() {
     // monolithic thickness, and every line of its data, with how far each
     // line's ends lie from the top.
     let native = native_landings(&mut rf, &own_types).expect("native landings");
-    let lines = scan_run_lines(&mut rf, version, &landings).expect("landing lines");
+    let lines = scan_landing_lines(&mut rf, version, &landings).expect("landing lines");
+    for (id, held) in scan_run_lines(&mut rf, version, &landings).expect("run lines") {
+        for line in held {
+            let (s, e) = (line.start(), line.end());
+            println!(
+                "data-line {id} {:.4} {:.4} {:.4} {:.4} {:.4} {:.4}",
+                s[0], s[1], s[2], e[0], e[1], e[2]
+            );
+        }
+    }
     for id in &landings {
         let landing = native.get(&u64::from(*id));
         let held = lines.get(id);
