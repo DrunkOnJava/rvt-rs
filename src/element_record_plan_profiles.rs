@@ -960,7 +960,7 @@ pub fn scan_sketch_curve_lists(
     for (sketch, partition, _) in found.values().flatten() {
         holders.entry(*sketch).or_default().insert(*partition);
     }
-    let sketch_of = |copies: &[(u32, u32, Vec<u32>)]| {
+    let sketch_of = |copies: &[SketchListCopy]| {
         let first = copies.first()?.0;
         copies
             .iter()
