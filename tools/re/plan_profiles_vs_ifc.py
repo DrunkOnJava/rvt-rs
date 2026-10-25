@@ -19,6 +19,9 @@ faces of the two bodies:
   edge wherever the element bounding it changes, so a room's outline can
   be the same shape with more vertices.
 
+Where at most ten elements are off in area or outline, each is listed by
+Tag; `--list N` lists the N farthest besides.
+
 Usage:
 
     python3 tools/re/plan_profiles_vs_ifc.py <rvt-rs.ifc> <revit-export.ifc> [--class IfcSlab,IfcShadingDevice] [--list N] [--match centroid]
@@ -173,7 +176,9 @@ def main(argv):
         counts[(cls, "outline within 0.01 ft" if edge <= 0.01 else "outline off")] += 1
     for (cls, what), count in sorted(counts.items()):
         print(f"  {cls} {what}: {count}")
-    for rel, dist, tag, cls, area, o_area, edge in sorted(rows, reverse=True)[:listing]:
+    off = [row for row in rows if row[0] > 1e-3 or row[6] > 0.01]
+    shown = sorted(off, reverse=True) if len(off) <= 10 else []
+    for rel, dist, tag, cls, area, o_area, edge in shown + sorted(rows, reverse=True)[:listing]:
         print(
             f"  {tag} {cls}: area {o_area:.2f} vs {area:.2f} ft2 ({rel:.2%}),"
             f" vertices {dist:.3f} ft, outline {edge:.3f} ft"

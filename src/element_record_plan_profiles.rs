@@ -881,29 +881,33 @@ pub const SKETCH_MAX_CURVES: usize = 4096;
 /// or 2 is too easily met by chance.
 pub const SKETCH_MIN_CURVES: usize = 3;
 
-/// The sketch lines of each sketched element, from its Sketch element's
-/// data (RE-97): the sketched element's ElementId at
-/// [`SKETCH_OWNER_OFFSET`], and a counted list `u32 n · n × (u64 ElementId ·
-/// u32 index)` of at least [`SKETCH_MIN_CURVES`] whose indices rise (a
-/// sketch edited to drop curves leaves gaps) and whose ids are all in
-/// `sketch_lines`. A sketch line's own owner reference names another element
-/// where the sketch was edited, so the list is the sketch's membership. An
-/// element whose copies disagree, or a line two sketches list, is dropped.
-/// Empty for a release this layout is not measured on: Revit 2024, and 2025
-/// (RE-199, the edited roof sketches of #356's `R2025_Models.zip`).
-pub fn scan_sketch_curve_lists(
+/// One copy of a Sketch's curve list ([`scan_sketch_curve_lists`]): the
+/// Sketch's own ElementId, the partition that holds the copy, and the
+/// curves it lists.
+pub type SketchListCopy = (u32, u32, Vec<u32>);
+
+/// Every copy of every Sketch's curve list in the file, by the element it
+/// sketches, in partition order: what [`scan_sketch_curve_lists`] chooses
+/// from. Empty for a release that layout is not measured on.
+pub fn sketch_curve_list_copies(
     rf: &mut crate::RevitFile,
     revit_version: u32,
     sketch_lines: &std::collections::BTreeSet<u32>,
-) -> BTreeMap<u32, Vec<u32>> {
+) -> BTreeMap<u32, Vec<SketchListCopy>> {
+    let mut found: BTreeMap<u32, Vec<SketchListCopy>> = BTreeMap::new();
     if !matches!(revit_version, 2024 | 2025) || sketch_lines.is_empty() {
-        return BTreeMap::new();
+        return found;
     }
     let Some(header) = crate::partition_names::element_data_header(revit_version) else {
-        return BTreeMap::new();
+        return found;
     };
-    let mut found: BTreeMap<u32, Option<Vec<u32>>> = BTreeMap::new();
     for stream in rf.partition_stream_names() {
+        let Some(partition) = stream
+            .strip_prefix("Partitions/")
+            .and_then(|n| n.parse::<u32>().ok())
+        else {
+            continue;
+        };
         let Ok(inflated) = rf.inflated_partition(&stream) else {
             continue;
         };
@@ -918,23 +922,83 @@ pub fn scan_sketch_curve_lists(
             let Some(data) = buf.get(hit..end) else {
                 continue;
             };
-            let Some((owner, curves)) = sketch_curve_list(data, header.len(), sketch_lines) else {
+            let Some((sketch, owner, curves)) = sketch_curve_list(data, header.len(), sketch_lines)
+            else {
                 continue;
             };
-            match found.get(&owner) {
-                None => {
-                    found.insert(owner, Some(curves));
-                }
-                Some(held) if held.as_ref() != Some(&curves) => {
-                    found.insert(owner, None);
-                }
-                _ => {}
-            }
+            found
+                .entry(owner)
+                .or_default()
+                .push((sketch, partition, curves));
         }
     }
+    found
+}
+
+/// The sketch lines of each sketched element, from its Sketch element's
+/// data (RE-97): the sketched element's ElementId at
+/// [`SKETCH_OWNER_OFFSET`], and a counted list `u32 n · n × (u64 ElementId ·
+/// u32 index)` of at least [`SKETCH_MIN_CURVES`] whose indices rise (a
+/// sketch edited to drop curves leaves gaps) and whose ids are all in
+/// `sketch_lines`. A sketch line's own owner reference names another element
+/// where the sketch was edited, so the list is the sketch's membership.
+/// Where the Sketch's copies in different partitions disagree, the copy
+/// taken is its current partition's (RE-216, #824: a sketch edited after
+/// its first save keeps its older list in an older partition). An element
+/// whose current copy cannot be told, or a line two sketches list, is
+/// dropped.
+/// Empty for a release this layout is not measured on: Revit 2024, and 2025
+/// (RE-199, the edited roof sketches of #356's `R2025_Models.zip`).
+pub fn scan_sketch_curve_lists(
+    rf: &mut crate::RevitFile,
+    revit_version: u32,
+    sketch_lines: &std::collections::BTreeSet<u32>,
+) -> BTreeMap<u32, Vec<u32>> {
+    use std::collections::BTreeSet;
+    let found = sketch_curve_list_copies(rf, revit_version, sketch_lines);
+    let mut holders: BTreeMap<u32, BTreeSet<u32>> = BTreeMap::new();
+    for (sketch, partition, _) in found.values().flatten() {
+        holders.entry(*sketch).or_default().insert(*partition);
+    }
+    let sketch_of = |copies: &[SketchListCopy]| {
+        let first = copies.first()?.0;
+        copies
+            .iter()
+            .all(|(sketch, _, _)| *sketch == first)
+            .then_some(first)
+    };
+    let disagreeing: BTreeMap<u32, BTreeSet<u32>> = found
+        .values()
+        .filter(|copies| copies.iter().any(|(_, _, curves)| *curves != copies[0].2))
+        .filter_map(|copies| {
+            let sketch = sketch_of(copies.as_slice())?;
+            Some((sketch, holders.get(&sketch)?.clone()))
+        })
+        .collect();
+    let current = if disagreeing.is_empty() {
+        BTreeMap::new()
+    } else {
+        crate::native_document::current_partitions(rf, &disagreeing)
+    };
     let lists: BTreeMap<u32, Vec<u32>> = found
         .into_iter()
-        .filter_map(|(owner, curves)| Some((owner, curves?)))
+        .filter_map(|(owner, copies)| {
+            if copies.iter().all(|(_, _, curves)| *curves == copies[0].2) {
+                return copies
+                    .into_iter()
+                    .next()
+                    .map(|(_, _, curves)| (owner, curves));
+            }
+            let partition = *current.get(&sketch_of(copies.as_slice())?)?;
+            let mut in_current = copies
+                .into_iter()
+                .filter(|(_, held, _)| *held == partition)
+                .map(|(_, _, curves)| curves);
+            let pick = in_current.next()?;
+            in_current
+                .all(|curves| curves == pick)
+                .then_some((owner, pick))
+        })
         .collect();
     let mut listed: BTreeMap<u32, usize> = BTreeMap::new();
     for curves in lists.values() {
@@ -948,13 +1012,14 @@ pub fn scan_sketch_curve_lists(
         .collect()
 }
 
-/// The sketched element and curve list in one element's data, `data`
-/// starting at its element-data header of `header_len` bytes.
+/// The Sketch's own ElementId, the sketched element and the curve list in
+/// one element's data, `data` starting at its element-data header of
+/// `header_len` bytes.
 fn sketch_curve_list(
     data: &[u8],
     header_len: usize,
     sketch_lines: &std::collections::BTreeSet<u32>,
-) -> Option<(u32, Vec<u32>)> {
+) -> Option<(u32, u32, Vec<u32>)> {
     let u64_at = |at: usize| {
         data.get(at..at.checked_add(8)?)
             .and_then(|s| s.first_chunk::<8>())
@@ -988,7 +1053,7 @@ fn sketch_curve_list(
                 Some(id)
             })
             .collect();
-        Some((owner, curves?))
+        Some((own, owner, curves?))
     })
 }
 

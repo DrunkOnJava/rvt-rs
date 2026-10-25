@@ -8603,16 +8603,26 @@ pub fn slabs_from_partition_category_records(
         .filter(|record| record.builtin_category == per::OST_SKETCH_LINES)
         .cloned()
         .collect();
-    let mut plates: BTreeMap<u32, [f64; 4]> = Default::default();
-    for record in scanned.iter().filter(|record| {
-        record.builtin_category == per::OST_FLOORS
-            || record.builtin_category == per::OST_BUILDING_PAD
-    }) {
+    // Each plate's box is the record its element is built from (RE-26: the
+    // newest, tallest copy), not the first copy found: an outline is held
+    // to it, and an edited slab keeps its older box in an older partition
+    // (#824).
+    let plates: BTreeMap<u32, [f64; 4]> = select_instance_records(
+        scanned
+            .iter()
+            .filter(|record| {
+                record.builtin_category == per::OST_FLOORS
+                    || record.builtin_category == per::OST_BUILDING_PAD
+            })
+            .cloned()
+            .collect(),
+    )
+    .into_iter()
+    .map(|(id, record)| {
         let b = record.bbox_feet;
-        plates
-            .entry(record.element_id)
-            .or_insert([b[0], b[1], b[3], b[4]]);
-    }
+        (id, [b[0], b[1], b[3], b[4]])
+    })
+    .collect();
     let profiles =
         sketch_plan_profiles(rf, revit_version, &sketch_lines, &plates, &BTreeSet::new());
 
@@ -8666,6 +8676,8 @@ fn sketch_plan_profiles(
 ) -> BTreeMap<u32, crate::element_record_plan_profiles::PlanProfile> {
     use crate::element_record_plan_profiles as erpp;
     use std::collections::BTreeMap;
+    let sketch_lines = current_sketch_records(rf, sketch_lines);
+    let sketch_lines = sketch_lines.as_slice();
     // RE-97: where an element's Sketch lists its curves, that list is the
     // sketch's membership; a line's own owner reference names another
     // element where the sketch was edited.
@@ -8885,6 +8897,52 @@ fn sketch_plan_profiles(
         }
     }
     profiles
+}
+
+/// `records` with each sketch line whose records in different partitions
+/// disagree on its box kept only in its current partition (RE-216,
+/// [`crate::native_document`]), or left out where that cannot be told (#824).
+/// Copies that agree are kept as they are.
+fn current_sketch_records(
+    rf: &mut RevitFile,
+    records: &[crate::partition_element_records::PartitionElementRecord],
+) -> Vec<crate::partition_element_records::PartitionElementRecord> {
+    let partition = |record: &crate::partition_element_records::PartitionElementRecord| {
+        record
+            .stream
+            .strip_prefix("Partitions/")
+            .and_then(|n| n.parse::<u32>().ok())
+    };
+    let mut boxes: BTreeMap<u32, Vec<[f64; 6]>> = BTreeMap::new();
+    let mut holders: BTreeMap<u32, BTreeSet<u32>> = BTreeMap::new();
+    for record in records {
+        boxes
+            .entry(record.element_id)
+            .or_default()
+            .push(record.bbox_feet);
+        if let Some(p) = partition(record) {
+            holders.entry(record.element_id).or_default().insert(p);
+        }
+    }
+    let disagreeing: BTreeMap<u32, BTreeSet<u32>> = boxes
+        .iter()
+        .filter(|(_, b)| b.iter().any(|bbox| *bbox != b[0]))
+        .filter_map(|(id, _)| Some((*id, holders.get(id)?.clone())))
+        .collect();
+    if disagreeing.is_empty() {
+        return records.to_vec();
+    }
+    let current = crate::native_document::current_partitions(rf, &disagreeing);
+    records
+        .iter()
+        .filter(|record| match disagreeing.get(&record.element_id) {
+            None => true,
+            Some(_) => current
+                .get(&record.element_id)
+                .is_some_and(|&p| partition(record) == Some(p)),
+        })
+        .cloned()
+        .collect()
 }
 
 /// A sketch read from its lines' exact ends: the chords, whether any is an
