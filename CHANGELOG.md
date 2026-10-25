@@ -8,6 +8,320 @@ fragments a release moves into this file.
 
 ## [Unreleased]
 
+## [0.8.0] — 2026-10-25
+
+0.8.0 draws more of a Revit model as Revit's own IFC export does, and every
+number below is measured against that export.
+
+Revit 2025 stair runs are drawn as their treads and risers, read by member
+name from their native records. Monolithic runs with upright risers,
+riserless runs and spiral runs are drawn as their steps or treads, arcs and
+all. A monolithic landing on Revit 2024 is its slab, and a landing that is
+one tread is that tread. Each stair and flight carries the `PredefinedType`
+Revit gives it, and Revit 2025 stairs carry Revit's names and type objects.
+
+Walls end where Revit's do at T joints, read from each wall's native record,
+and a layered wall's core runs through the other wall's finishes to its core
+(RE-222, RE-223): on the BIM4LCA office 482 of 607 walls end where Revit's
+do, against 412 in 0.7.0. Doors and windows whose symbols cut no outline
+take their own extents as their overall size. Square hollow-section columns
+are drawn as their section, rounded corners and all (RE-221). Revit 2024
+pipes are cylinders, and where a file stores its project's, site's,
+building's and storeys' GlobalIds, the export writes them (RE-220).
+
+`rvt-ifc --revit-property-sets` writes each element's saved parameters as
+Revit's "Export Revit property sets" does (RE-210). `--anonymize` on
+`rvt-ifc --diagnostics` and `rvt-inspect --json` replaces every name the
+output takes from the project with a placeholder, so the files can be
+posted publicly; the viewer's diagnostics download is anonymized.
+
+puzzbobb's pull request writes Revit's property sets (#934), and their
+R2025 stair, roof and opening models measured most of this release. Thank
+you.
+
+### Upgrading from 0.7
+
+- **Element ids are an `rvt::ElementId` (#873, #923).** The ids the element
+  structs carry (`level_id`, `host_id`, `type_id`, `symbol_id` and the rest)
+  are `Option<rvt::ElementId>` where they were `Option<u32>`. `ElementId`
+  wraps the `i64` Revit's API uses and serialises as the bare number, so the
+  CLIs' JSON and the Python values are the same integers. `ElementId::from`
+  takes a `u32`, `get` gives the value. The wire-level views
+  (`walker::DecodedElement::id`, `walker::InstanceField::ElementId`,
+  `elem_table::ElemRecord`) keep the `u32` the file stores.
+- **`IfcModel` gains `type_property_sets` (#934).** Code that builds an
+  `IfcModel` with a struct literal needs `type_property_sets:
+  Default::default()` or `..Default::default()`.
+- **`ifc::RevitGlobalIds` gains `project`, `site` and `building` (#878).**
+  Code that builds a `RevitGlobalIds` with a struct literal needs the new
+  fields or `..Default::default()`.
+
+The CLIs, the viewer and the Python package need nothing.
+
+### Added
+
+- **`--anonymize` for diagnostics you post publicly.** `rvt-ifc --diagnostics`
+  and `rvt-inspect --json` name things the project names: the file and
+  project names, the levels, a sample of the materials and of skipped
+  elements, and, in `rvt-inspect`'s report, the folder path Revit stored for
+  the file, of which only a `\Users\<name>\` part and Autodesk build and
+  project-id folders were replaced. With
+  `--anonymize` each is replaced with a placeholder (`<redacted>.rvt`,
+  `Level 1`, `Material 1`, `element-<ElementId>`), the "Export to IFC As"
+  values a warning lists are dropped, and counts, releases and ElementIds
+  stay. The browser viewer's Download
+  diagnostics now gives the anonymized file, named `rvt-diagnostics.json`.
+  `ExportDiagnostics::anonymize` and `redact::anonymize_file_name` do it
+  for library callers.
+
+- **A door or window whose symbol cuts no outline carries its overall size
+  (#810, #844).** Such a door or window was written with `$`, or with its
+  type's Width and Height, which on the BIM4LCA office are 10 mm short of
+  Revit's. Its `OverallWidth` and `OverallHeight` are now its own extents:
+  along its axis and, where it is set in a wall or a curtain wall, through
+  its height, or else along its own Y axis, as Revit's export measures a
+  family no wall hosts, such as a roof hatch. On the office all 269 windows
+  and 266 of 269 doors are now Revit's (none and 187 before), and so is RE1
+  Architecture's curtain-wall door.
+
+- **A stair flight's PredefinedType is STRAIGHT or SPIRAL, as Revit's
+  export writes it (#323).** Every flight was `.NOTDEFINED.` or unset. A
+  run's treads name its shape in their native records (`m_runType`, 0 for a
+  straight run, 2 for a spiral one), and the flight and its type object now
+  take it, on Revit 2024 and 2025. On the BIM4LCA office all 35 flights of
+  each file have Revit's predefined type, and so do the flights of the 5
+  R2025 stair models.
+
+- **A column whose type is a square hollow section is drawn as it (W6,
+  RE-221).** Such a column was a solid box. Its section's outside, wall
+  thickness and corner radius are now read from its family's own
+  parameters, and it is drawn as Revit's export draws it: an
+  `IfcArbitraryProfileDefWithVoids` of two `IfcIndexedPolyCurve`s, each four
+  lines and four quarter arcs, extruded through its height (`BodySource`
+  `family_type_hollow_section`). On the BIM4LCA office all 79 such columns
+  as built and 55 at building permit are Revit's body, every vertex within
+  0.001 ft. The IFC model gains `ProfileDef::IndexedPolyCurveWithVoids` and
+  `IndexedCurve` for it.
+
+- **A monolithic stair landing is drawn as its slab (#824).** Each landing
+  was its record box, which spans its stair's storey, 12.5 to 14.2 ft tall.
+  On Revit 2024 a monolithic landing is now its slab: the outline the lines
+  at its top in its own data make, from its top down its landing type's
+  thickness. On the BIM4LCA office all 21 monolithic landings have Revit's
+  top and outline, and 60 of its 63 slabs now have Revit's outline, against
+  40. Where a flight meets a landing, Revit's underside follows the flight's
+  soffit and rvt-rs draws it flat, so the slabs are 100.4% to 104.7% of
+  Revit's volume. The body says so: `BodySource` `partition_landing_slab`.
+
+- **A monolithic stair run with upright risers is drawn as its steps, its
+  underside ending where Revit's does (#357).** Monolithic runs were drawn
+  only with slanted risers, their underside cut flat at their base. With no
+  nosing an upright riser runs up its riser line as a slanted one does, so
+  such a run is now drawn the same way. The underside is cut at the run's
+  extension below its base where it starts at its stair's base, and runs
+  on to its first riser where it starts on a landing. The flight of
+  puzzbobb's R2025 model 16 has Revit's volume, 14.75 ft3 where its box was
+  237, and so do 34 of the 35 flights of the BIM4LCA office, a Revit 2024
+  project, where every one was its box.
+
+- **A Revit 2024 pipe is drawn as its cylinder (#869).** Pipe cylinders and
+  the ports at their ends were read on Revit 2025 only. On the BIM4LCA
+  office, a Revit 2024 project, all 12 pipes on each of its two files are
+  now Revit's cylinder, with its radius, axis ends and length, where they
+  were boxes, and their 24 ports sit at their ends with Revit's axis. A
+  2024 pipe's inner diameter is not read, so it writes no `InvertElevation`
+  rather than one from its axis alone. `pipe_bodies_vs_ifc` compares each
+  file in its own site frame and reads a profile Revit writes as four arcs.
+
+- **A Revit 2024 family instance's ports are placed too (#869).** Placing a
+  port no duct or pipe joins at its connector, through the instance's
+  transform, ran on Revit 2025 only, the release the RE1 models measured.
+  The BIM4LCA office, a Revit 2024 project with Revit's IFC4 export, is the
+  oracle for 2024: all 43 of its such ports are now within 0.01 ft of
+  Revit's, with Revit's axis, where none was placed. `port_places_vs_ifc`
+  now compares each file in its own site frame, since Revit writes the
+  office's site at its shared coordinates; the RE1 scores do not change.
+
+- **`rvt-ifc --revit-property-sets` writes Revit's own property sets (#35,
+  RE-210).** With the option, an export writes each element's named saved
+  parameters (RE-207) as Revit's exporter does with "Export Revit property
+  sets": one set per parameter group, named for the group (`Dimensions`,
+  `Identity Data`, `Materials and Finishes`, ..., `Other` for none), and the
+  type's parameters in such sets on its type object, or on its elements with
+  `(Type)` added where it has none. Following revit-ifc's `Release_25.x.x`
+  branch, the IFC group is left out, a Yes/No is a Boolean, an integer with
+  a spec an integer, a non-empty text a text, a length, pipe or duct size,
+  area, volume, angle or number its measure, an air flow, HVAC or piping
+  pressure, apparent or electrical power, electrical potential or current
+  its measure in SI units (whose units the export then declares), a
+  material its name and a family type `<family> : <type>`. Built-in
+  parameters, enumerations and other specs are left out and counted.
+  Against Revit 2025's export of Autodesk's Snowdon Towers HVAC with
+  "Export Revit property sets" (measured locally, not committed), all
+  28,906 properties written (counted per element) are in the set of the
+  same name with Revit's value (`tools/re/revit_property_sets_vs_ifc.py`);
+  Revit writes 79,907 more, nearly all built-in parameters. On Snowdon
+  Architectural, 58,346 of 58,733 are; Revit names the sets of 13 of its
+  type objects with `(Type)`, which follows from the order of its export. On the BIM4LCA office
+  as built, `FireExit`, written in `Identity Data`, equals Revit's
+  `Pset_DoorCommon` and `Pset_WindowCommon.FireExit` on 498 of 498 doors and
+  windows. Without the option the export is unchanged.
+
+- **A stair run with treads and no risers is drawn as its separate
+  treads (#357).** Such a run was its record box. Each tread is now its own
+  solid, from its riser line to the next, its top at its riser's height and
+  its type's tread thickness deep. The flight of puzzbobb's R2025 model 15
+  is Revit's: 9 treads, 4.45 ft3 where its box was 356, every vertex within
+  0.00001 ft. A riserless type with a nosing, shaped by its nosing profile
+  family, keeps its box.
+
+- **A spiral stair run with treads and no risers is drawn as its treads
+  (#357).** Such a run was its record box. Each tread's native record holds
+  the spiral's centre, its two radii and the angles of its riser lines, and
+  each tread is now written as Revit writes it: an extrusion of a profile
+  with two arcs about the centre and two lines, the nosing carrying it on
+  under the tread above, as an `IfcIndexedPolyCurve`. On the BIM4LCA
+  office the spiral flight's 18 treads have Revit's volume, 4.540 ft3 where
+  the box was 1,307, and its height. A monolithic spiral run keeps its box.
+
+- **Revit 2025 stairs, flights and stringers are named and typed as Revit's
+  export names them (#323).** RE-65 read a stair's and its parts' names
+  from byte offsets measured on Revit 2024, so on Revit 2025 they had no
+  name and no type object. They now come from the native records: the stair
+  type's construction (`Assembled Stair`, `Cast-In-Place Stair`), each
+  type's name, the run type's monolithic flag and the stair type's support
+  style. On puzzbobb's five R2025 stair models every stair, flight and
+  stringer has Revit's `Name` and `ObjectType`, and a type object with
+  Revit's GlobalId.
+
+- **A stair's PredefinedType is the one Revit's export gives it, from its
+  runs and landings (#323).** Every stair was `.NOTDEFINED.` or unset. A
+  stair with a spiral run is now `SPIRAL_STAIR`, one straight run
+  `STRAIGHT_RUN_STAIR`, two runs and a landing `TWO_STRAIGHT_RUN_STAIR`,
+  `QUARTER_TURN_STAIR` or `HALF_TURN_STAIR` as the second turns, and three
+  or four runs each square to the one before `DOUBLE_RETURN_STAIR` or
+  `THREE_QUARTER_TURN_STAIR`, on Revit 2024 and 2025. On the BIM4LCA office
+  all 16 stairs of each file have Revit's predefined type, where 2 did, and
+  so do the 5 R2025 stair models; ten more of the office's stair type
+  objects take Revit's GlobalId with it.
+
+- **A Revit 2025 stair run is drawn as its treads and risers (#357).**
+  Revit 2024's byte anchors for a run's riser height, tread depth and ends
+  are not found on Revit 2025, so every 2025 flight was its record box. A
+  run's sketch, riser height and ends are now read by member name from its
+  native records, with `StairsRun.m_endWithRiser` as puzzbobb found it, and
+  its run type from its own element record, as on 2024. On puzzbobb's R2025
+  stair models 13 and 14 each flight's volume is Revit's, 4.49 and
+  4.43 ft3 where the box was 317, with every vertex of Revit's body on
+  rvt-rs's, and the flight carries its type's name. The riserless,
+  monolithic and spiral runs keep their box.
+
+- **The project, site, building and storeys take the GlobalIds the file
+  stores (#878, RE-220).** rvt-rs generated the project's, site's and
+  building's GlobalIds on every file. Revit's export takes them from the
+  project information's stored IfcGUID values where it has them, and so
+  does rvt-rs now: on BIMcollab's Revit 2015 example and both BIM4LCA office
+  files all three are Revit's, where none were. On the 2015 example the five
+  storeys take their stored values too, Revit's, where none matched. A file
+  that stores none keeps generated ones.
+
+- **A landing that is one tread is drawn as it (#824).** A stair landing
+  that is not monolithic, has a tread and takes it from its runs was its
+  record box, the height of its storey. It is now its native outline loop,
+  arc and all, from its top down its runs' tread thickness, written as an
+  `IfcIndexedPolyCurve` extrusion as Revit writes it. The BIM4LCA office's
+  landing beside its spiral stair now has Revit's body, volume and every
+  vertex.
+
+### Changed
+
+- **Breaking: element ids are an `rvt::ElementId` (#873).** The ids the
+  element structs carry (`level_id`, `host_id`, `type_id`, `symbol_id` and
+  the rest, 95 fields), `OpeningHostRelationship::host_element_id` and the
+  arc-wall record's ids are `Option<rvt::ElementId>` where they were
+  `Option<u32>`. `ElementId` wraps the `i64` the Revit API's
+  `ElementId.Value` is, and serialises as the bare number, so the JSON the
+  CLIs print and the Python values are the same integers. `ElementId::from`
+  takes a `u32`, `from_raw` a file's 64-bit slot (0 and values from
+  `u32::MAX` up name no element), `get` gives the value and `as_u32` the
+  stored form. The wire-level views keep the `u32` the file stores:
+  `walker::DecodedElement::id`, `walker::InstanceField::ElementId` and
+  `elem_table::ElemRecord`; `DecodedElement::element_id()` gives the typed
+  id.
+
+- **`ifc::RevitGlobalIds` gains `project`, `site` and `building` (#878).**
+  They carry the GlobalIds a file stores for the project, site and
+  building (RE-220). Code that builds a `RevitGlobalIds` with a struct
+  literal needs the new fields or `..Default::default()`; they deserialise
+  as `None` when absent.
+
+### Fixed
+
+- **An instance whose data copies disagree takes its current copy's
+  transform (RE-216, #227).** A family instance can have its element data
+  in more than one partition. Where the copies' transforms differed, the
+  instance had no transform at all, so its turned box, facing, opening and
+  ports fell back to what needs none. It now takes the copy in the partition
+  its current record is in, as the native reader picks records (RE-145). On
+  Core Interior 8 stacked doors had two copies an inch apart across their
+  host wall; the current one places Revit's opening exactly, and all 132
+  doors' openings are now within 0.001 ft of Revit's, where 8 were within
+  0.26 ft. On the BIM4LCA office at building permit 10 more door types take
+  Revit's GlobalId, since their flip comes from the transform. No other
+  measured model's export changes.
+
+- **A slab edited after its first save keeps Revit's outline (#824,
+  RE-216).** Where a sketch line's ends, a sketch's curve list or the slab's
+  own record box differ between partitions, the copy in the partition the
+  element's current record is in is taken, where such a sketch was dropped
+  and its slab drawn as its box. On the BIM4LCA office at building permit
+  two slabs take Revit's outline, holes and all, and with the
+  tread landing (#824) 62 of 63 slabs now have it, as on the as-built file.
+
+- **A sketch with a quarter arc keeps its arc (#824, RE-96).** A quarter
+  arc's ends are two corners of its sketch line's box, so the box solve
+  closed the sketch with the arc's chord, and the arc was lost. Such a
+  sketch is now read from its lines' own curves. The BIM4LCA office's roof
+  1461758 has Revit's outline and area, its two 9.6 ft corner arcs
+  included, where it was 52.5 ft² short. 61 of the office's 63 slab
+  outlines now match Revit's (59 at building permit), against 60 and 58.
+
+- **A wall stops where Revit's does at a T joint, and a wall with no
+  orientation in its partition data is drawn from its centreline (W6,
+  RE-222).** Where another wall meets a wall's end with its middle, the
+  wall's native record says so, and the body now stops half that wall's
+  thickness short, as Revit's does. A wall whose partition data gives a line
+  but no orientation, such as 13 of the BIM4LCA office's 17 exterior walls
+  of type US-1, takes its native record's orientation, so it is drawn from
+  its centreline and in its layers instead of its record box. On the office
+  as built 428 of 607 walls now end where Revit's do (412 before), and 22
+  more walls carry Revit's layer set; at building permit 377 of 589 (374)
+  and 32 more. Core Interior, RE1 and the R2025 models are unchanged.
+
+- **At a T joint a layered wall's core runs through the other wall's
+  finishes, as Revit's does (W6, RE-223).** A wall type's core is read from
+  its native compound structure, and where a layered wall meets another
+  wall's side its core now stops at that wall's core rather than its face.
+  On the BIM4LCA office as built 482 of 607 walls end where Revit's do (428
+  before), and 422 of 589 at building permit (377). Core Interior, RE1 and
+  the R2025 models are unchanged.
+
+- **`writer::write_with_patches` is documented, with an example CI runs
+  (#872).** It had no doc comment, so docs.rs showed it with no description,
+  no errors and no example. It now says what it writes and when it refuses,
+  and shows a patch written and read back.
+
+### Research
+
+- **Saved display meshes scored by shape (RE-78, W6).** A new scorer,
+  `tools/re/mesh_bodies_vs_ifc.py`, compares each body `--saved-meshes`
+  draws with Revit's body for the same element, by volume and by how far
+  each body's vertices lie from the other's surface. Every vertex is within
+  0.001 ft on all 138 of Core Interior's doors and windows, on 1,294 of 1,709
+  bodies scored on the BIM4LCA office (all 269 windows) and on 148 of 214 on
+  RE1's Revit 2025 models. A mesh that is not exact is part of the body, and
+  nothing in the file yet tells it apart, so the option stays opt-in.
+
 ## [0.7.0] — 2026-10-24
 
 0.7.0 draws more of a building the way Revit's own export does, and settles
