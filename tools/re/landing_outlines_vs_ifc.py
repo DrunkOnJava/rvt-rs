@@ -79,10 +79,21 @@ def heights(path, wanted):
         verts = np.array(shape.geometry.verts, dtype=float).reshape(-1, 3)
         if not len(verts):
             continue
-        z = frame(verts)[:, 2]
+        v = frame(verts)
+        z = v[:, 2]
         low, high = out.get(tag, (float("inf"), float("-inf")))
         out[tag] = (min(low, float(z.min())), max(high, float(z.max())))
+        if tag in SHOWN:
+            faces = np.array(shape.geometry.faces, dtype=int).reshape(-1, 3)
+            print(f"revit {tag} vertices {len(v)} triangles {len(faces)}")
+            for x, y, h in np.unique(np.round(v, 4), axis=0):
+                print(f"  vertex {tag} {x:.4f} {y:.4f} {h:.4f}")
     return out
+
+
+# Landings whose whole body is printed: one of each storey height, the
+# landing with another riser height and the one that is not monolithic.
+SHOWN = {"2859208", "2861138", "3202702", "3058084"}
 
 
 def vertical(boxes, lines, native, path, args_list=True):
