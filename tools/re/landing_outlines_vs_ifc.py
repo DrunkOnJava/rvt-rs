@@ -13,8 +13,9 @@ closest is reported.
 
 It then compares each landing's body heights: Revit's body's lowest and
 highest point, against the highest elevation the landing's lines lie at and
-the members of the `StairsLandingType` the landing's native record names
-(`native` lines).
+the members of its landing type, which its stairs' type names
+(`StairsLanding.m_stairsId` -> `StairsElement.m_typeId` ->
+`StairsType.m_landingTypeId`, the `native` lines).
 
 Needs IfcOpenShell and Shapely.
 
@@ -84,7 +85,7 @@ def heights(path, wanted):
     return out
 
 
-def vertical(boxes, lines, native, path):
+def vertical(boxes, lines, native, path, args_list=True):
     revit = heights(path, set(boxes))
     summary = collections.Counter()
     print("body heights:")
@@ -95,8 +96,12 @@ def vertical(boxes, lines, native, path):
         levels = [s[0][2] for s in lines.get(tag, []) if abs(s[0][2] - s[1][2]) < 1e-3 and abs(s[0][2]) > 1e-3]
         top = max(levels) if levels else None
         record = native.get(tag, {})
-        types = [v[1:] for v in record.values() if isinstance(v, str) and v.startswith("@") and native.get(v[1:], {}).get("class") == "StairsLandingType"]
-        kind = native.get(types[0], {}) if len(types) == 1 else {}
+        # landing -> its stairs -> the stairs' type -> that type's landing type
+        stairs = native.get(record.get("m_stairsId", "@")[1:], {})
+        stairs_type = native.get(stairs.get("m_typeId", "@")[1:], {})
+        landing_type = stairs_type.get("m_landingTypeId", "@")[1:]
+        types = [landing_type] if landing_type in native else []
+        kind = native.get(landing_type, {})
         thickness = float(kind["m_thickness"]) if "m_thickness" in kind else None
         top_ok = top is not None and abs(top - high) <= 1e-3
         thick_ok = thickness is not None and abs(thickness - (high - low)) <= 1e-3
@@ -107,6 +112,9 @@ def vertical(boxes, lines, native, path):
             f"box z {boxes[tag][2]:.4f} to {boxes[tag][2] + boxes[tag][5]:.4f}; type {types} "
             + " ".join(f"{k}={v}" for k, v in sorted(kind.items()) if k != "class" and not v.startswith("@"))
         )
+        if args_list:
+            print("    stairs: " + " ".join(f"{k}={v}" for k, v in sorted(stairs.items()) if not v.startswith("@")))
+            print("    stairs type: " + " ".join(f"{k}={v}" for k, v in sorted(stairs_type.items()) if not v.startswith("@")))
     print("summary: " + ", ".join(f"{k} {v}" for k, v in sorted(summary.items())))
 
 

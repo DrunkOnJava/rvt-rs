@@ -13,10 +13,11 @@
 //!   arc <id> <cx> <cy> <cz> <radius> <start> <end> <xx> <xy> <yx> <yy>
 //!   native <id> <index> <class> <member=value ...>
 //!
-//! The `native` lines are each landing's and each `StairsLandingType`'s
-//! native record objects, read by member name: every number, flag and
-//! element id (`@id`) they hold at their top level, for the landing's top
-//! and thickness to be found by name.
+//! The `native` lines are the native record objects of each landing, each
+//! `StairsElement`, `StairsType` and `StairsLandingType`, and each landing
+//! type a `StairsType` names (`m_landingTypeId`), read by member name: every
+//! number, flag, string and element id (`@id`) they hold at their top level,
+//! for the landing's top and thickness to be found by name.
 //!
 //! Usage:
 //!   cargo run --profile ci --example probe_re210_landing_outlines -- FILE.rvt
@@ -37,6 +38,57 @@ fn field(fields: &[(String, InstanceField)], name: &str) -> f64 {
             _ => None,
         })
         .unwrap_or(f64::NAN)
+}
+
+/// Prints every object of each selected record's graph as a `native` line,
+/// and returns the landing types its `StairsType` records name.
+fn print_native(
+    rf: &mut RevitFile,
+    options: &Options,
+    printed: &mut BTreeSet<u64>,
+) -> BTreeSet<u64> {
+    let mut landing_types = BTreeSet::new();
+    extract_graphs(rf, options, |record| {
+        let (Some(class), Some(graph)) = (record.class_name.as_deref(), record.graph.as_ref())
+        else {
+            return Ok(());
+        };
+        let id = record.identity.element_id;
+        printed.insert(id);
+        for (index, object) in graph.objects.iter().enumerate() {
+            if index == 0 && class == "StairsType" {
+                if let Some(t) = object
+                    .fields
+                    .get("m_landingTypeId")
+                    .and_then(|v| v.get("m_id")?.get("m_id64")?.as_u64())
+                {
+                    landing_types.insert(t);
+                }
+            }
+            let members: Vec<String> = object
+                .fields
+                .as_object()
+                .into_iter()
+                .flat_map(|members| members.iter())
+                .filter_map(|(name, value)| match value {
+                    Value::Number(_) | Value::Bool(_) => Some(format!("{name}={value}")),
+                    Value::String(text) => Some(format!("{name}={}", text.replace(' ', "_"))),
+                    _ => value
+                        .get("m_id")?
+                        .get("m_id64")
+                        .map(|id| format!("{name}=@{id}")),
+                })
+                .collect();
+            println!(
+                "native {id} {index} {class}/{} {}",
+                object.class_name,
+                members.join(" ")
+            );
+        }
+        Ok(())
+    })
+    .expect("native records");
+    landing_types
 }
 
 fn main() {
@@ -65,38 +117,20 @@ fn main() {
     }
     let options = Options {
         selected_ids: landings.iter().map(|&id| u64::from(id)).collect(),
-        selected_classes: ["StairsLandingType".to_string()].into(),
+        selected_classes: ["StairsLandingType", "StairsType", "StairsElement"]
+            .map(String::from)
+            .into(),
         ..Options::default()
     };
-    extract_graphs(&mut rf, &options, |record| {
-        let (Some(class), Some(graph)) = (record.class_name.as_deref(), record.graph.as_ref())
-        else {
-            return Ok(());
-        };
-        let id = record.identity.element_id;
-        for (index, object) in graph.objects.iter().enumerate() {
-            let members: Vec<String> = object
-                .fields
-                .as_object()
-                .into_iter()
-                .flat_map(|members| members.iter())
-                .filter_map(|(name, value)| match value {
-                    Value::Number(_) | Value::Bool(_) => Some(format!("{name}={value}")),
-                    _ => value
-                        .get("m_id")?
-                        .get("m_id64")
-                        .map(|id| format!("{name}=@{id}")),
-                })
-                .collect();
-            println!(
-                "native {id} {index} {class}/{} {}",
-                object.class_name,
-                members.join(" ")
-            );
-        }
-        Ok(())
-    })
-    .expect("native records");
+    let mut printed = BTreeSet::new();
+    let landing_types = print_native(&mut rf, &options, &mut printed);
+    let options = Options {
+        selected_ids: landing_types.difference(&printed).copied().collect(),
+        ..Options::default()
+    };
+    if !options.selected_ids.is_empty() {
+        print_native(&mut rf, &options, &mut printed);
+    }
     let Some(header) = element_data_header(version) else {
         println!("no element data header for {version}");
         return;
