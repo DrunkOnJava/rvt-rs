@@ -32,7 +32,9 @@
 //! ([`native_landings`], #824).
 //!
 //! A run's treads all give one `m_runType`, which names the flight's
-//! predefined type in Revit's export ([`native_run_shapes`], #323).
+//! predefined type in Revit's export ([`native_run_shapes`], #323). A spiral
+//! run's treads give the spiral's centre and each tread's radii and angles
+//! ([`native_spiral_runs`], #357).
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -257,16 +259,12 @@ pub fn native_run_shapes(
     Ok(out)
 }
 
-/// Each run in `runs`, keyed by its id with its own run type's id, whose
-/// native records give its sketch and whose type's record gives its
-/// construction.
-pub fn native_runs(
-    rf: &mut RevitFile,
-    runs: &BTreeMap<u64, u64>,
-) -> anyhow::Result<BTreeMap<u64, NativeRun>> {
-    if runs.is_empty() {
-        return Ok(BTreeMap::new());
-    }
+/// The run types, and each run's `StairsRun` fields with its treads'
+/// `StairsTreadInfo` fields in riser order, of the runs in `runs` and their
+/// types.
+type RunGraphs = (BTreeMap<u64, RunType>, BTreeMap<u64, (Value, Vec<Value>)>);
+
+fn run_graphs(rf: &mut RevitFile, runs: &BTreeMap<u64, u64>) -> anyhow::Result<RunGraphs> {
     let options = Options {
         selected_ids: runs.keys().chain(runs.values()).copied().collect(),
         ..Options::default()
@@ -318,6 +316,20 @@ pub fn native_runs(
         }
         Ok(())
     })?;
+    Ok((types, found))
+}
+
+/// Each run in `runs`, keyed by its id with its own run type's id, whose
+/// native records give its sketch and whose type's record gives its
+/// construction.
+pub fn native_runs(
+    rf: &mut RevitFile,
+    runs: &BTreeMap<u64, u64>,
+) -> anyhow::Result<BTreeMap<u64, NativeRun>> {
+    if runs.is_empty() {
+        return Ok(BTreeMap::new());
+    }
+    let (types, found) = run_graphs(rf, runs)?;
     Ok(found
         .into_iter()
         .filter_map(|(id, (run, treads))| {
@@ -331,6 +343,134 @@ pub fn native_runs(
                     run_type,
                     riser_height_feet,
                     end_with_riser: flag(&run, "m_endWithRiser"),
+                    type_id,
+                },
+            ))
+        })
+        .collect())
+}
+
+/// Releases a spiral run's treads are measured on: the BIM4LCA office
+/// (2024, #357).
+pub const NATIVE_SPIRAL_RUN_REVIT_VERSIONS: &[u32] = &[2024];
+
+/// One tread of a spiral run: its top, feet, and the angles about the
+/// spiral's centre, radians, of the two riser lines it lies between.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct SpiralTread {
+    pub top_feet: f64,
+    pub angles: [f64; 2],
+}
+
+/// A spiral run's treads and type, from its native records (#357).
+#[derive(Debug, Clone, PartialEq)]
+pub struct NativeSpiralRun {
+    /// The spiral's centre, model feet.
+    pub centre: [f64; 2],
+    /// The treads' inner and outer radius, feet.
+    pub radii_feet: [f64; 2],
+    /// In riser order, each one riser higher than the one before.
+    pub treads: Vec<SpiralTread>,
+    /// `StairsRun.m_isMirrored`.
+    pub mirrored: bool,
+    pub run_type: RunType,
+    pub type_id: u64,
+}
+
+/// A spiral run's centre, radii and treads (#357). Each `StairsTreadInfo` of
+/// a spiral run (`m_runType` 2) holds the spiral's centre in its `m_origin`,
+/// at its own top, and its plan extent in `m_bndBox`, as `[radius, angle]`
+/// corners: from its inner to its outer radius, the run's width, and between
+/// the angles of its two riser lines. `None` unless every tread is a spiral
+/// tread about one centre, between the same two radii, and each tread lies
+/// next to the one before it and above it.
+fn spiral(run: &Value, treads: &[Value]) -> Option<([f64; 2], [f64; 2], Vec<SpiralTread>)> {
+    let close = |a: f64, b: f64| (a - b).abs() <= NATIVE_RUN_TOLERANCE_FEET;
+    let mut centre: Option<[f64; 2]> = None;
+    let mut radii: Option<[f64; 2]> = None;
+    let mut out: Vec<SpiralTread> = Vec::with_capacity(treads.len());
+    for tread in treads {
+        if tread.get("m_runType")?.as_i64()? != 2 {
+            return None;
+        }
+        let origin = point(tread, "m_origin")?;
+        let corners = tread.get("m_bndBox")?.get("m_corners")?.as_array()?;
+        let corner = |index: usize| -> Option<[f64; 2]> {
+            let pair = corners.get(index)?.as_array()?;
+            match pair.as_slice() {
+                [a, b] => {
+                    Some([a.as_f64()?, b.as_f64()?]).filter(|p| p.iter().all(|c| c.is_finite()))
+                }
+                _ => None,
+            }
+        };
+        let ([r0, a0], [r1, a1]) = (corner(0)?, corner(1)?);
+        if !(0.0 <= r0 && r0 < r1 && a0 < a1) {
+            return None;
+        }
+        let here = [origin[0], origin[1]];
+        match (centre, radii) {
+            (Some(c), Some(r)) => {
+                if !(close(c[0], here[0])
+                    && close(c[1], here[1])
+                    && close(r[0], r0)
+                    && close(r[1], r1))
+                {
+                    return None;
+                }
+            }
+            _ => {
+                centre = Some(here);
+                radii = Some([r0, r1]);
+            }
+        }
+        if let Some(before) = out.last() {
+            let next_to = close(before.angles[0], a1) || close(before.angles[1], a0);
+            if !(next_to && origin[2] > before.top_feet) {
+                return None;
+            }
+        }
+        out.push(SpiralTread {
+            top_feet: origin[2],
+            angles: [a0, a1],
+        });
+    }
+    // Every tread climbs the same way round, and the radii span the run.
+    let (centre, radii) = (centre?, radii?);
+    let turns: BTreeSet<bool> = out
+        .windows(2)
+        .map(|pair| pair[1].angles[0] < pair[0].angles[0])
+        .collect();
+    let width = number(run, "m_actualRunWidth")?;
+    (out.len() >= 2 && turns.len() == 1 && close(width, radii[1] - radii[0]))
+        .then_some((centre, radii, out))
+}
+
+/// Each spiral run in `runs`, keyed by its id with its own run type's id,
+/// whose native records give its treads ([`spiral`]) and whose type's record
+/// gives its construction (#357).
+pub fn native_spiral_runs(
+    rf: &mut RevitFile,
+    runs: &BTreeMap<u64, u64>,
+) -> anyhow::Result<BTreeMap<u64, NativeSpiralRun>> {
+    if runs.is_empty() {
+        return Ok(BTreeMap::new());
+    }
+    let (types, found) = run_graphs(rf, runs)?;
+    Ok(found
+        .into_iter()
+        .filter_map(|(id, (run, treads))| {
+            let type_id = runs[&id];
+            let run_type = types.get(&type_id)?.clone();
+            let (centre, radii_feet, treads) = spiral(&run, &treads)?;
+            Some((
+                id,
+                NativeSpiralRun {
+                    centre,
+                    radii_feet,
+                    treads,
+                    mirrored: flag(&run, "m_isMirrored")?,
+                    run_type,
                     type_id,
                 },
             ))
