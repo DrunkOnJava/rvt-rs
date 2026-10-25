@@ -21,7 +21,9 @@ Measure fetches all of them and stores none.
 - [40204859227](https://github.com/DrunkOnJava/rvt-rs/actions/runs/40204859227): the wall types whose walls get no centreline;
 - [40204804355](https://github.com/DrunkOnJava/rvt-rs/actions/runs/40204804355): the native line for walls whose copies disagree (§5, a measured negative);
 - [40206135950](https://github.com/DrunkOnJava/rvt-rs/actions/runs/40206135950): the T rule alone against `main`;
-- [40206225586](https://github.com/DrunkOnJava/rvt-rs/actions/runs/40206225586): this change against `main` (0e8ed49e).
+- [40206225586](https://github.com/DrunkOnJava/rvt-rs/actions/runs/40206225586): the T rule and the orientation against `main` (0e8ed49e);
+- [40209281572](https://github.com/DrunkOnJava/rvt-rs/actions/runs/40209281572): the T rule with the other wall's type thickness only (§7);
+- [40210616684](https://github.com/DrunkOnJava/rvt-rs/actions/runs/40210616684): this change against `main` (0e8ed49e).
 
 **Status:** positive at T ends and for walls the partition data gives no orientation. Negative for a corner rule from the join order (§4) and for the native line where a wall's copies disagree (§5).
 
@@ -87,13 +89,13 @@ The partition data gives no line for a wall whose data copies disagree (RE-216):
 
 `attach_wall_layers`:
 - takes the native word and flip where the partition data gives no orientation;
-- after the join lists, at each end where exactly one other wall meets the end with its middle, sets the end's reach to half that wall's thickness short (`native_walls::tee_reach`). This replaces the join lists' reach there. The thickness is the other wall's type thickness or, where its native curve runs along a model axis, its record box's thin extent (RE-26); any other wall gives no reach.
+- after the join lists, at each end where exactly one other wall meets the end with its middle, sets the end's reach to half that wall's thickness short (`native_walls::tee_reach`). This replaces the join lists' reach there. The thickness is the other wall's type thickness or, where its native curve runs along a model axis, its record box's thin extent (RE-26); any other wall gives no reach. With the type thickness alone, six ends of the as-built file whose other wall has none stay as the join lists put them (run 40209281572).
 
 An end whose layers each end on their own line (RE-71, RE-74) keeps them.
 
 ## 8. Measured
 
-Run [40206225586](https://github.com/DrunkOnJava/rvt-rs/actions/runs/40206225586), this change against `main`:
+Run [40210616684](https://github.com/DrunkOnJava/rvt-rs/actions/runs/40210616684), this change against `main`:
 
 | | office as built | | office at building permit | |
 |---|---:|---:|---:|---:|
