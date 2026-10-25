@@ -643,6 +643,7 @@ interface ExportDiagnostics {
   mode?: string;
   input?: {
     revit_version?: number;
+    original_path?: string;
     project_name?: string;
     stream_count?: number;
     has_basic_file_info?: boolean;
@@ -694,6 +695,7 @@ interface ExportDiagnostics {
     bounding_box_bodies?: number;
   };
   unsupported_features?: string[];
+  skipped?: { reason?: string; count?: number; sample_names?: string[] }[];
   warnings?: string[];
   formats_latest_integrity?: {
     stream?: string;
@@ -2977,13 +2979,66 @@ exportSvgBtn.addEventListener('click', () => {
   })();
 });
 
+/**
+ * The diagnostics with every name they take from the project replaced, as
+ * `ExportDiagnostics::anonymize` does for `rvt-ifc --anonymize`: the file
+ * and project names, levels (`Level 1`...), the material sample
+ * (`Material 1`...) and skipped elements' sample names (`element-<id>`), in
+ * any warning that quotes them too. Counts and ElementIds stay, so the
+ * download can be posted publicly.
+ */
+function anonymizedDiagnostics(diagnostics: ExportDiagnostics): ExportDiagnostics {
+  const copy = plainJson(diagnostics);
+  const redacted = '<redacted>';
+  const names: [string, string][] = [];
+  const input = copy.input;
+  if (input?.original_path) {
+    const fileName = input.original_path.split(/[\\/]/).pop() ?? input.original_path;
+    const dot = fileName.lastIndexOf('.');
+    const replacement = dot > 0 ? `${redacted}${fileName.slice(dot)}` : redacted;
+    if (dot > 0) names.push([fileName.slice(0, dot), redacted]);
+    names.push([input.original_path, replacement]);
+    input.original_path = replacement;
+  }
+  if (input?.project_name) {
+    names.push([input.project_name, redacted]);
+    input.project_name = redacted;
+  }
+  const exported = copy.exported;
+  if (exported) {
+    exported.storey_names = (exported.storey_names ?? []).map((name, index) => {
+      names.push([name, `Level ${index + 1}`]);
+      return `Level ${index + 1}`;
+    });
+    exported.material_names_sample = (exported.material_names_sample ?? []).map((name, index) => {
+      names.push([name, `Material ${index + 1}`]);
+      return `Material ${index + 1}`;
+    });
+  }
+  for (const item of copy.skipped ?? []) {
+    item.sample_names = (item.sample_names ?? []).map((name) => {
+      const id = /(\d+)$/.exec(name)?.[1];
+      const replacement = id ? `element-${id}` : redacted;
+      names.push([name, replacement]);
+      return replacement;
+    });
+  }
+  const quoted = names
+    .filter(([name]) => name.length >= 3)
+    .sort((a, b) => b[0].length - a[0].length);
+  copy.warnings = (copy.warnings ?? []).map((warning) =>
+    quoted.reduce((text, [name, replacement]) => text.split(name).join(replacement), warning),
+  );
+  return copy;
+}
+
 downloadDiagnosticsBtn.addEventListener('click', () => {
   if (!currentDiagnostics) return;
-  const json = JSON.stringify(currentDiagnostics, null, 2);
+  const json = JSON.stringify(anonymizedDiagnostics(currentDiagnostics), null, 2);
   const blob = new Blob([json], { type: 'application/json' });
-  download(`${lastFileStem}.diagnostics.json`, blob);
-  setStatus(`Exported ${lastFileStem}.diagnostics.json`);
-  toast(`Downloaded ${lastFileStem}.diagnostics.json`, 'ok');
+  download('rvt-diagnostics.json', blob);
+  setStatus('Exported rvt-diagnostics.json, project names replaced');
+  toast('Downloaded rvt-diagnostics.json, project names replaced so it can be posted', 'ok');
 });
 
 /** Whether the schedule lists a building element of `ifcType` (any type for null). */

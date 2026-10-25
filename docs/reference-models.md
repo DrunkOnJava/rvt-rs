@@ -140,11 +140,18 @@ the observations you checked) and open a pull request with the entry only.
 See [`corpus-intake.md`](corpus-intake.md) for the three intake lanes.
 
 If you cannot share the file, share what rvt-rs says about it:
-`rvt-inspect model.rvt --json` (paths are redacted by default) and
-`rvt-ifc model.rvt -o /tmp/out.ifc --diagnostics diag.json` (post the
-`diag.json`, not the IFC). They hold counts, Revit class and category names,
-and a few sample names such as storeys and materials, but no geometry; read
-both before posting and remove any name you would not publish.
+`rvt-inspect model.rvt --json --anonymize` and
+`rvt-ifc model.rvt -o /tmp/out.ifc --diagnostics diag.json --anonymize`
+(post the `diag.json`, not the IFC). They hold counts, releases and Revit
+class and category names, and no geometry. Without `--anonymize` they also
+hold the names the project gives things: the file and project names, the
+levels, a sample of the materials and of skipped elements, and, in
+`rvt-inspect`'s report, the folder path Revit stored for the file (by default it
+replaces only a path's `\Users\<name>\` part and Autodesk build and
+project-id folders). `--anonymize`
+replaces those with placeholders such as `Level 1`, keeping counts and
+ElementIds; the browser viewer's Download diagnostics does the same. Read
+both before posting.
 
 ## Tiny models anyone with Revit can make
 

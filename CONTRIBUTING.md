@@ -147,8 +147,8 @@ per-area starting points are in
   every claim is measured on (`tools/fetch-reference-models.sh` fetches the
   licensed ones), five tiny models anyone with Revit can make for the open
   geometry questions, and how to report a problem with a model you cannot
-  share: send `rvt-inspect --json` and `rvt-ifc --diagnostics` output, never
-  the building.
+  share: send `rvt-inspect --json --anonymize` and
+  `rvt-ifc --diagnostics <file> --anonymize` output, never the building.
 - **Decoder research.** A byte probe under `examples/` plus a dated evidence
   table for one class or partition pattern (decoder issue form; the reports
   under `reports/element-framing/` show the shape). Typed extraction works on Revit 2023 to 2025 projects, and

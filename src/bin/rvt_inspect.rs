@@ -19,7 +19,8 @@ const INSPECT_SCHEMA_VERSION: u32 = 1;
     about = "Summarize Revit file health, decoded model coverage, and IFC export readiness",
     after_help = "Examples:\n  \
         rvt-inspect model.rvt\n  \
-        rvt-inspect model.rvt --json > model.inspect.json"
+        rvt-inspect model.rvt --json > model.inspect.json\n  \
+        rvt-inspect model.rvt --json --anonymize > inspect.json   to post publicly"
 )]
 struct Cli {
     /// Path to a `.rvt` / `.rfa` / `.rte` / `.rft` file.
@@ -33,6 +34,12 @@ struct Cli {
     /// so support output is safe to share.
     #[arg(long)]
     no_redact: bool,
+    /// Replace every name the report takes from the project with a
+    /// placeholder: paths and file names, the project name, levels,
+    /// materials and sample element names. Counts and ElementIds stay, so
+    /// the report can be posted publicly.
+    #[arg(long, conflicts_with = "no_redact")]
+    anonymize: bool,
     /// Maximum decompressed Global/Latest / Partitions bytes scanned.
     #[arg(long)]
     max_walker_scan_bytes: Option<usize>,
@@ -140,7 +147,12 @@ fn main() -> ExitCode {
 }
 
 fn run(cli: &Cli) -> anyhow::Result<()> {
-    let report = build_report(&cli.file, !cli.no_redact, walker_limits_from_cli(cli))?;
+    let report = build_report(
+        &cli.file,
+        !cli.no_redact,
+        cli.anonymize,
+        walker_limits_from_cli(cli),
+    )?;
     if cli.json {
         println!("{}", serde_json::to_string_pretty(&report)?);
     } else {
@@ -152,6 +164,7 @@ fn run(cli: &Cli) -> anyhow::Result<()> {
 fn build_report(
     path: &std::path::Path,
     redact: bool,
+    anonymize: bool,
     walker_limits: WalkerLimits,
 ) -> anyhow::Result<InspectReport> {
     let file_size_bytes = std::fs::metadata(path)?.len();
@@ -163,9 +176,20 @@ fn build_report(
     let schema_parsed = rf.schema().is_ok();
     let export_result =
         RvtDocExporter.export_with_diagnostics_and_limits(&mut rf, walker_limits)?;
-    let diagnostics = export_result.diagnostics;
+    let mut diagnostics = export_result.diagnostics;
+    if anonymize {
+        diagnostics.anonymize();
+        summary.original_path = summary
+            .original_path
+            .as_deref()
+            .map(rvt::redact::anonymize_file_name);
+    }
     let warnings = diagnostics.warnings.clone();
-    let input_path = display_path(path, redact);
+    let input_path = if anonymize {
+        rvt::redact::anonymize_file_name(&path.display().to_string())
+    } else {
+        display_path(path, redact)
+    };
     // The releases rvt-rs reads, 2015 to 2022 and 2027 experimentally (RE-179
     // to RE-181).
     let supported_revit_version = matches!(summary.version, 2015..=2027);

@@ -45,6 +45,7 @@ impl From<CliExportQualityMode> for ExportQualityMode {
     after_help = "Examples:\n  \
         rvt-ifc model.rvt                     writes model.ifc next to the input\n  \
         rvt-ifc model.rvt -o out.ifc --diagnostics out.diagnostics.json\n  \
+        rvt-ifc model.rvt --diagnostics out.diagnostics.json --anonymize   to post publicly\n  \
         rvt-ifc model.rvt --mode geometry\n\n\
         SOURCE_DATE_EPOCH (Unix seconds) sets the time the IFC header and owner\n\
         history record, so two exports of the same file are the same bytes."
@@ -94,6 +95,12 @@ struct Args {
     /// an export confidence summary.
     #[arg(long, value_name = "PATH")]
     diagnostics: Option<PathBuf>,
+    /// Replace every name the diagnostics sidecar takes from the project
+    /// with a placeholder: the file and project names, levels, materials and
+    /// sample element names. Counts and ElementIds stay, so the sidecar can
+    /// be posted publicly.
+    #[arg(long, requires = "diagnostics")]
+    anonymize: bool,
     /// Witness mode: write an OctetProof observation of this input.
     ///
     /// The observation (docs/octetproof-spec.md §6.2) records the
@@ -194,7 +201,7 @@ fn run(args: Args) -> anyhow::Result<()> {
 
     if let Err(err) = quality_mode.validate(&diagnostics) {
         if let Some(diagnostics_path) = &args.diagnostics {
-            write_diagnostics_sidecar(diagnostics_path, &diagnostics)?;
+            write_diagnostics_sidecar(diagnostics_path, &diagnostics, args.anonymize)?;
         }
         anyhow::bail!("{err}");
     }
@@ -212,7 +219,7 @@ fn run(args: Args) -> anyhow::Result<()> {
         eprintln!("{line}");
     }
     if let Some(diagnostics_path) = &args.diagnostics {
-        write_diagnostics_sidecar(diagnostics_path, &diagnostics)?;
+        write_diagnostics_sidecar(diagnostics_path, &diagnostics, args.anonymize)?;
     }
     if let Some(observation_path) = &args.observation {
         write_observation(
@@ -272,8 +279,15 @@ fn source_date_epoch() -> anyhow::Result<Option<i64>> {
 fn write_diagnostics_sidecar(
     path: &std::path::Path,
     diagnostics: &ExportDiagnostics,
+    anonymize: bool,
 ) -> anyhow::Result<()> {
-    let json = serde_json::to_vec_pretty(diagnostics)?;
+    let json = if anonymize {
+        let mut anonymized = diagnostics.clone();
+        anonymized.anonymize();
+        serde_json::to_vec_pretty(&anonymized)?
+    } else {
+        serde_json::to_vec_pretty(diagnostics)?
+    };
     std::fs::write(path, &json)?;
     eprintln!(
         "rvt-ifc: wrote diagnostics {} bytes to {}",

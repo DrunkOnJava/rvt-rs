@@ -119,6 +119,13 @@ for (const journey of journeys) {
     const diagnostics = JSON.parse(await text(await downloadOf(page, '#download-diagnostics')));
     expect(diagnostics.schema_version).toBe(1);
     expect(diagnostics.input.revit_version).toBe(journey.release);
+    // The download names nothing the project names: its file, levels and
+    // materials are placeholders, so it can be posted publicly.
+    if (diagnostics.input.project_name) expect(diagnostics.input.project_name).toBe('<redacted>');
+    for (const name of diagnostics.exported.storey_names ?? []) expect(name).toMatch(/^Level \d+$/);
+    for (const name of diagnostics.exported.material_names_sample ?? []) {
+      expect(name).toMatch(/^Material \d+$/);
+    }
     const byType: Record<string, number> = diagnostics.exported.by_ifc_type;
     // The schedule lists every element the diagnostics count, by type.
     expect(Object.fromEntries(scheduled)).toEqual(byType);

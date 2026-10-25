@@ -99,6 +99,29 @@ fn redact_autodesk_project_ids(s: &str) -> String {
     out
 }
 
+/// What an anonymized report puts in place of a name it takes from the
+/// project: a file, the project, a family or a type.
+pub const ANONYMIZED: &str = "<redacted>";
+
+/// `path` as an anonymized file name: its folders and stem replaced by
+/// [`ANONYMIZED`], its extension kept, so the kind of file still shows.
+///
+/// ```
+/// use rvt::redact::anonymize_file_name;
+///
+/// assert_eq!(anonymize_file_name("C:\\Projects\\Client\\Tower.rvt"), "<redacted>.rvt");
+/// assert_eq!(anonymize_file_name("model"), "<redacted>");
+/// ```
+pub fn anonymize_file_name(path: &str) -> String {
+    let name = path.rsplit(['\\', '/']).next().unwrap_or(path);
+    match name.rsplit_once('.') {
+        Some((stem, extension)) if !stem.is_empty() && !extension.is_empty() => {
+            format!("{ANONYMIZED}.{extension}")
+        }
+        _ => ANONYMIZED.to_string(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
