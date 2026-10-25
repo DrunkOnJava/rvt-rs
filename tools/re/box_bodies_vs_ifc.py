@@ -10,8 +10,9 @@ along the model axes, so a record box with Revit's extents is already its
 shape; less means the shape is not decoded. The ratio needs no coordinate
 transform, so it also reads exports in shared coordinates.
 
-Buckets: `box` (fill at least 99.5%), `90%`, `50%`, `<50%`, and `no ref`
-(no element with that Tag, or no closed body). Every class is listed, most
+Buckets: `box` (fill within 0.5% of 100%), `90%`, `50%`, `<50%`, `>100%`
+(a fill over 100.5%: overlapping solids or an open mesh, so the volume is
+not the body's), and `no ref` (no element with that Tag, or no body). Every class is listed, most
 numerous first, with its median fill.
 
 Usage:
@@ -99,8 +100,18 @@ def main():
             row["no ref"] += 1
             continue
         medians[cls].append(f)
-        row["box" if f >= 0.995 else "90%" if f >= 0.9 else "50%" if f >= 0.5 else "<50%"] += 1
-    heads = ("n", "box", "90%", "50%", "<50%", "no ref")
+        row[
+            ">100%"
+            if f > 1.005
+            else "box"
+            if f >= 0.995
+            else "90%"
+            if f >= 0.9
+            else "50%"
+            if f >= 0.5
+            else "<50%"
+        ] += 1
+    heads = ("n", "box", "90%", "50%", "<50%", ">100%", "no ref")
     print(f"record-box bodies: {len(boxed)}; fill = Revit's body volume / its bounding box")
     print(f"{'class':28}" + "".join(f"{h:>8}" for h in heads) + f"{'median':>9}")
     total = collections.Counter()
