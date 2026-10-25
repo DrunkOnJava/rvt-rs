@@ -87,7 +87,7 @@ The partition data gives no line for a wall whose data copies disagree (RE-216):
 
 `attach_wall_layers`:
 - takes the native word and flip where the partition data gives no orientation;
-- after the join lists, at each end where exactly one other wall meets the end with its middle, sets the end's reach to half that wall's type thickness short (`native_walls::tee_reach`). This replaces the join lists' reach there. A wall whose type thickness is not read gives no reach: its record box's thin extent is its thickness only along the model's axes.
+- after the join lists, at each end where exactly one other wall meets the end with its middle, sets the end's reach to half that wall's thickness short (`native_walls::tee_reach`). This replaces the join lists' reach there. The thickness is the other wall's type thickness or, where its native curve runs along a model axis, its record box's thin extent (RE-26); any other wall gives no reach.
 
 An end whose layers each end on their own line (RE-71, RE-74) keeps them.
 

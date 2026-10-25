@@ -4775,21 +4775,35 @@ const NATIVE_WALL_LINE_TOLERANCE_FEET: f64 = 1e-4;
 /// wall's type thickness short ([`crate::native_walls::tee_reach`], RE-222),
 /// in place of the reach its join lists give. An end whose layers each end
 /// on their own line (RE-71, RE-74) keeps them, and so does one whose other
-/// wall has no type thickness.
+/// wall's thickness is not known: its type's, or its record box's thin
+/// extent where it runs along a model axis.
 fn attach_native_tee_reaches(
     walls: &mut [DecodedElement],
     native: &BTreeMap<u64, crate::native_walls::NativeWall>,
 ) {
+    // A wall's type thickness, or, for a wall along a model axis, its record
+    // box's thin extent, which is its thickness there (RE-26).
+    let along_axis = |id: u64| {
+        native.get(&id).is_some_and(|curve| {
+            let (dx, dy) = (curve.end[0] - curve.start[0], curve.end[1] - curve.start[1]);
+            dx.abs() <= 1e-9 || dy.abs() <= 1e-9
+        })
+    };
     let thickness: BTreeMap<u64, f64> = walls
         .iter()
         .filter_map(|wall| {
             let id = u64::from(wall.id?);
-            wall.fields.iter().find_map(|(name, value)| match value {
-                InstanceField::Float { value, .. } if name == WALL_TYPE_THICKNESS_FIELD => {
-                    Some((id, *value))
-                }
-                _ => None,
-            })
+            let float = |wanted: &str| {
+                wall.fields.iter().find_map(|(name, value)| match value {
+                    InstanceField::Float { value, .. } if name == wanted => Some(*value),
+                    _ => None,
+                })
+            };
+            let thickness = float(WALL_TYPE_THICKNESS_FIELD).or_else(|| {
+                float(crate::element_record_wall_joins::WALL_THICKNESS_FIELD)
+                    .filter(|_| along_axis(id))
+            })?;
+            Some((id, thickness))
         })
         .collect();
     let near = |a: [f64; 2], b: [f64; 2]| {
