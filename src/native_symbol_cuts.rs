@@ -24,14 +24,11 @@ use std::collections::{BTreeMap, BTreeSet};
 const JOIN_TOLERANCE_FEET: f64 = 1e-6;
 
 /// The box of the outline a family symbol cuts in its host, in the symbol's
-/// own coordinates, feet: its width runs along X and its height along Z, or
-/// along Y for an outline flat in the symbol's XY plane, as a hatch cuts its
-/// floor or ceiling (`horizontal`, #810).
+/// own coordinates, feet: its width runs along X and its height along Z.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct CutLoop {
     pub min: [f64; 3],
     pub max: [f64; 3],
-    pub horizontal: bool,
 }
 
 impl CutLoop {
@@ -40,14 +37,9 @@ impl CutLoop {
         self.max[0] - self.min[0]
     }
 
-    /// The loop's extent along the symbol's Z axis, or along its Y axis for
-    /// a horizontal loop, feet.
+    /// The loop's extent along the symbol's Z axis, feet.
     pub fn height_feet(&self) -> f64 {
-        if self.horizontal {
-            self.max[1] - self.min[1]
-        } else {
-            self.max[2] - self.min[2]
-        }
+        self.max[2] - self.min[2]
     }
 }
 
@@ -74,8 +66,7 @@ fn distance(a: [f64; 3], b: [f64; 3]) -> f64 {
 
 /// The cut loop of a `FamilySymbol` graph: one loop, every curve a `GLine`,
 /// each line's start the previous line's end, closed, flat in the symbol's
-/// XZ plane, or its XY plane, and with some width and height. Anything else
-/// is `None`.
+/// XZ plane and with some width and height. Anything else is `None`.
 fn cut_loop(graph: &crate::native_parameters::ObjectGraph) -> Option<CutLoop> {
     let root = graph.objects.first()?;
     let [loop_pointer] = root.fields.get("m_pCutLoops")?.as_array()?.as_slice() else {
@@ -120,18 +111,9 @@ fn cut_loop(graph: &crate::native_parameters::ObjectGraph) -> Option<CutLoop> {
             *high = high.max(*v);
         }
     }
-    let flat = |axis: usize| max[axis] - min[axis] <= JOIN_TOLERANCE_FEET;
-    let horizontal = match (flat(1), flat(2)) {
-        (true, false) => false,
-        (false, true) => true,
-        _ => return None,
-    };
-    let cut = CutLoop {
-        min,
-        max,
-        horizontal,
-    };
-    (cut.width_feet() > 0.0 && cut.height_feet() > 0.0).then_some(cut)
+    let cut = CutLoop { min, max };
+    (max[1] - min[1] <= JOIN_TOLERANCE_FEET && cut.width_feet() > 0.0 && cut.height_feet() > 0.0)
+        .then_some(cut)
 }
 
 fn point2(value: Option<&serde_json::Value>) -> Option<[f64; 2]> {
