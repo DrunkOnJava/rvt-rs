@@ -1872,7 +1872,7 @@ fn add_extend_to_structure(sets: &mut Vec<PropertySet>, ifc_type: &str, decoded:
 }
 
 /// Add `Height` (`IfcPositiveLengthMeasure`) to a railing's
-/// `Pset_RailingCommon` among `sets`: its type's top rail height (RE-232).
+/// `Pset_RailingCommon` among `sets`: its type's top rail height (RE-231).
 fn add_railing_height(sets: &mut Vec<PropertySet>, ifc_type: &str, decoded: &DecodedElement) {
     if ifc_type != "IFCRAILING" {
         return;

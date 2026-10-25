@@ -673,13 +673,13 @@ pub fn native_landings_and_type_names(
     Ok((found, names))
 }
 
-/// Releases a railing type's top rail height is read on (RE-232).
+/// Releases a railing type's top rail height is read on (RE-231).
 pub const RAILING_HEIGHT_REVIT_VERSIONS: &[u32] = &[2024, 2025];
 
 /// Each railing type in `types` whose native record's `StairsRailingAttr`
 /// gives its top rail height (`m_topRailHeight`), feet: Revit's
 /// `Pset_RailingCommon.Height` on all 41 railings of the BIM4LCA office
-/// (Revit 2024) and RE1 Architecture's one (Revit 2025) (RE-232).
+/// (Revit 2024) and RE1 Architecture's one (Revit 2025) (RE-231).
 pub fn railing_type_heights(
     rf: &mut RevitFile,
     types: &BTreeSet<u64>,
