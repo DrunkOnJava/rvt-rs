@@ -4780,6 +4780,9 @@ fn attach_stair_run_bodies(
     use crate::partition_stairs as ps;
     use crate::partition_type_records as ptr;
     if !ps::supports_revit_version(revit_version) {
+        if crate::native_stairs::NATIVE_RUN_REVIT_VERSIONS.contains(&revit_version) {
+            attach_native_stair_run_bodies(rf, revit_version, products);
+        }
         return;
     }
     let float = |element: &DecodedElement, wanted: &str| {
@@ -4882,28 +4885,118 @@ fn attach_stair_run_bodies(
         else {
             continue;
         };
-        let scalar = |value: f64| InstanceField::Float { value, size: 8 };
-        for (name, value) in STAIR_RUN_ORIGIN_FIELDS.iter().zip(sketch.origin) {
-            element.fields.push(((*name).into(), scalar(value)));
+        push_stair_run_body(element, sketch, &profile);
+    }
+}
+
+/// Record a run's sketch and side view in its fields, where
+/// [`stair_run_body_from_fields`] reads them (RE-52).
+fn push_stair_run_body(
+    element: &mut DecodedElement,
+    sketch: &crate::partition_stairs::RunSketch,
+    profile: &[[f64; 2]],
+) {
+    let scalar = |value: f64| InstanceField::Float { value, size: 8 };
+    for (name, value) in STAIR_RUN_ORIGIN_FIELDS.iter().zip(sketch.origin) {
+        element.fields.push(((*name).into(), scalar(value)));
+    }
+    for (name, value) in STAIR_RUN_CLIMB_FIELDS.iter().zip(sketch.climb) {
+        element.fields.push(((*name).into(), scalar(value)));
+    }
+    for (name, value) in STAIR_RUN_ACROSS_FIELDS.iter().zip(sketch.across) {
+        element.fields.push(((*name).into(), scalar(value)));
+    }
+    element
+        .fields
+        .push((STAIR_RUN_WIDTH_FIELD.into(), scalar(sketch.width_feet)));
+    element.fields.push((
+        STAIR_RUN_PROFILE_FIELD.into(),
+        InstanceField::Vector(
+            profile
+                .iter()
+                .map(|&[u, z]| InstanceField::Vector(vec![scalar(u), scalar(z)]))
+                .collect(),
+        ),
+    ));
+}
+
+/// Give each Revit 2025 stair run the treads and risers its native records
+/// describe (#357, RE-217): its own run type, the one `OST_StairsRuns` type
+/// definition its element record's reference list names (RE-28), as
+/// [`attach_stair_run_bodies`] reads it on Revit 2024; its sketch and that
+/// type's construction from [`crate::native_stairs::native_runs`]; drawn as
+/// RE-92 draws a 2024 run ([`crate::partition_stairs::run_side_profile`]). A
+/// run whose record names no one run type, whose records do not give its
+/// sketch, or whose type the profile does not draw, keeps its box.
+fn attach_native_stair_run_bodies(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    products: &mut [DecodedElement],
+) {
+    use crate::partition_type_records as ptr;
+    let declared: BTreeSet<u32> = match crate::elem_table::parse_records(rf) {
+        Ok(records) => crate::elem_table::declared_ids(&records),
+        Err(_) => return,
+    };
+    let type_records = ptr::scan_type_records(
+        rf,
+        revit_version,
+        crate::partition_element_records::OST_STAIRS_RUNS,
+        &declared,
+    )
+    .unwrap_or_default();
+    let run_types = ptr::type_definition_ids(&type_records);
+    let mut runs: BTreeMap<u64, u64> = BTreeMap::new();
+    for element in products
+        .iter()
+        .filter(|element| element.class == "StairsRun")
+    {
+        let (Some(id), Some((references, _))) = (element.id, record_references(rf, element)) else {
+            continue;
+        };
+        if let Some(type_id) = ptr::unique_type_reference(&references, &run_types) {
+            runs.insert(u64::from(id), u64::from(type_id));
         }
-        for (name, value) in STAIR_RUN_CLIMB_FIELDS.iter().zip(sketch.climb) {
-            element.fields.push(((*name).into(), scalar(value)));
-        }
-        for (name, value) in STAIR_RUN_ACROSS_FIELDS.iter().zip(sketch.across) {
-            element.fields.push(((*name).into(), scalar(value)));
-        }
-        element
+    }
+    let Ok(native) = crate::native_stairs::native_runs(rf, &runs) else {
+        return;
+    };
+    for element in products
+        .iter_mut()
+        .filter(|element| element.class == "StairsRun")
+    {
+        let Some(run) = element.id.and_then(|id| native.get(&u64::from(id))) else {
+            continue;
+        };
+        let Some(profile) = crate::partition_stairs::run_side_profile(
+            &run.sketch,
+            &run.run_type,
+            run.riser_height_feet,
+            run.end_with_riser,
+        ) else {
+            continue;
+        };
+        let has_type_name = element
             .fields
-            .push((STAIR_RUN_WIDTH_FIELD.into(), scalar(sketch.width_feet)));
-        element.fields.push((
-            STAIR_RUN_PROFILE_FIELD.into(),
-            InstanceField::Vector(
-                profile
-                    .iter()
-                    .map(|&[u, z]| InstanceField::Vector(vec![scalar(u), scalar(z)]))
-                    .collect(),
-            ),
-        ));
+            .iter()
+            .any(|(name, _)| name == TYPE_NAME_FIELD);
+        if let (Some(name), false, Ok(type_id)) = (
+            &run.run_type.name,
+            has_type_name,
+            u32::try_from(run.type_id),
+        ) {
+            element.fields.push((
+                TYPE_ID_FIELD.into(),
+                InstanceField::ElementId {
+                    tag: 0,
+                    id: type_id,
+                },
+            ));
+            element
+                .fields
+                .push((TYPE_NAME_FIELD.into(), InstanceField::String(name.clone())));
+        }
+        push_stair_run_body(element, &run.sketch, &profile);
     }
 }
 

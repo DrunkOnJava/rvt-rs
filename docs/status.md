@@ -765,6 +765,17 @@ in instead of no transform. That opens Core Interior's last 8 doors as Revit
 does: all 132 of its door openings are within 0.001 ft of Revit's
 (`reports/element-framing/RE-216-current-instance-copies.md`).
 
+**RE-217 (2026-10-24)** draws a Revit 2025 stair run as its treads and
+risers. RE-52's and RE-92's byte anchors are absent on 2025, so its sketch,
+riser height and ends are read by member name from its native records
+(`StairsRun`, one `StairsTreadInfo` per tread, its `StairsRunType`), with
+puzzbobb's `m_endWithRiser` (#357), and its run type from its element
+record, as on 2024, which is Revit's on all 75 runs measured. On
+puzzbobb's R2025 stair models 13 and 14 each flight now has Revit's volume
+and every vertex of Revit's body lies on rvt-rs's; the riserless,
+monolithic and spiral runs (15 to 17) keep their box
+(`reports/element-framing/RE-217-stair-runs-2025.md`).
+
 The public viewer's demo gallery leads with the two files this section
 measures, staged from the deploy workflow's `magnetar-io/revit-test-datasets`
 checkout and pinned by sha256 (#257): `Revit_IFC5_Einhoven.rvt` (2023,

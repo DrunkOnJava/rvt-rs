@@ -83,6 +83,7 @@
 //! - [`native_saved_scene`]: Current native saved-graphics extraction with explicit shared-symbol closure
 //! - [`native_segments`]: Forward-only physical partition markers and continuation groups
 //! - [`native_symbol_cuts`]: The outline a door or window cuts in its host, from the native record of the symbol that draws it (RE-215)
+//! - [`native_stairs`]: A Revit 2025 stair run's sketch and type, read by member name from its native records (#357)
 //! - [`native_type_materials`]: The materials a family type's geometry is drawn in (RE-203, #355)
 //! - [`native_wall_types`]: A wall's type Function, from the native records of the wall and its type (RE-185, RE-193)
 //!
@@ -169,6 +170,8 @@ pub mod native_saved_mesh;
 pub mod native_saved_scene;
 #[path = "native_segments.rs"]
 pub mod native_segments;
+#[path = "native_stairs.rs"]
+pub mod native_stairs;
 #[path = "native_symbol_cuts.rs"]
 pub mod native_symbol_cuts;
 #[path = "native_type_materials.rs"]
