@@ -11,6 +11,7 @@
 //!   landing <id> box <x> <y> <z> <w> <d> <h>
 //!   line <id> <x0> <y0> <z0> <x1> <y1> <z1>
 //!   arc <id> <cx> <cy> <cz> <radius> <start> <end> <xx> <xy> <yx> <yy>
+//!   landing-type <id> own <id|None>
 //!   native <id> <index> <class> <member=value ...>
 //!
 //! The `native` lines are the native record objects of each landing, each
@@ -25,7 +26,13 @@
 use rvt::RevitFile;
 use rvt::research::native_document::{Options, extract_graphs};
 use rvt::research::partition_beam_axes::{BOUNDED_LINE_TAG, bounded_arc_at, bounded_line_at};
+use rvt::research::partition_element_records::{
+    OST_STAIRS_LANDINGS, REFERENCE_LIST_OFFSET, decode_reference_list,
+};
 use rvt::research::partition_names::element_data_header;
+use rvt::research::partition_type_records::{
+    scan_type_records, type_definition_ids, unique_type_reference,
+};
 use rvt::walker::{InstanceField, iter_elements};
 use serde_json::Value;
 use std::collections::BTreeSet;
@@ -98,10 +105,16 @@ fn main() {
     let mut rf = RevitFile::open(&path).expect("open");
     let version = rf.basic_file_info().map(|info| info.version).unwrap_or(0);
     let mut landings = BTreeSet::new();
-    for element in iter_elements(&mut rf).expect("elements") {
-        if element.class != "StairsLanding" {
-            continue;
-        }
+    let elements: Vec<_> = iter_elements(&mut rf)
+        .expect("elements")
+        .filter(|element| element.class == "StairsLanding")
+        .collect();
+    let declared =
+        rvt::elem_table::declared_ids(&rvt::elem_table::parse_records(&mut rf).expect("ElemTable"));
+    let landing_types = type_definition_ids(
+        &scan_type_records(&mut rf, version, OST_STAIRS_LANDINGS, &declared).expect("type records"),
+    );
+    for element in elements {
         let Some(id) = element.id else { continue };
         let f = &element.fields;
         println!(
@@ -113,6 +126,29 @@ fn main() {
             field(f, "m_bboxDepth"),
             field(f, "m_bboxHeight")
         );
+        let mut stream = None;
+        let mut offset = None;
+        for (name, value) in f {
+            match (name.as_str(), value) {
+                ("m_source_stream", InstanceField::String(v)) => stream = Some(v.clone()),
+                ("m_source_offset", InstanceField::Integer { value, .. }) => {
+                    offset = usize::try_from(*value).ok();
+                }
+                _ => {}
+            }
+        }
+        let references = match (stream, offset) {
+            (Some(stream), Some(offset)) => rf
+                .inflated_partition(&stream)
+                .ok()
+                .and_then(|inflated| {
+                    decode_reference_list(inflated.bytes(), offset + REFERENCE_LIST_OFFSET)
+                })
+                .unwrap_or_default(),
+            _ => Vec::new(),
+        };
+        let own = unique_type_reference(&references, &landing_types);
+        println!("landing-type {id} own {own:?}");
         landings.insert(id);
     }
     let options = Options {

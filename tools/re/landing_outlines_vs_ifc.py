@@ -43,6 +43,7 @@ from shapely.geometry import Polygon  # noqa: E402
 def read_probe(path):
     boxes, lines, arcs = {}, collections.defaultdict(list), collections.defaultdict(list)
     native = collections.defaultdict(dict)
+    own = {}
     for raw in open(path, encoding="utf-8", errors="replace"):
         p = raw.split()
         if not p:
@@ -55,10 +56,12 @@ def read_probe(path):
         elif p[0] == "arc":
             v = [float(x) for x in p[2:12]]
             arcs[p[1]].append(v)
+        elif p[0] == "landing-type" and len(p) == 4:
+            own[p[1]] = p[3][5:-1] if p[3].startswith("Some(") else None
         elif p[0] == "native" and len(p) >= 4 and p[2] == "0":
             members = dict(m.split("=", 1) for m in p[4:] if "=" in m)
             native[p[1]] = {"class": p[3].split("/")[0], **members}
-    return boxes, lines, arcs, native
+    return boxes, lines, arcs, native, own
 
 
 def heights(path, wanted):
@@ -96,7 +99,7 @@ def heights(path, wanted):
 SHOWN = {"2859208", "2861138", "3202702", "3058084"}
 
 
-def vertical(boxes, lines, native, path, args_list=True):
+def vertical(boxes, lines, native, own, path, args_list=True):
     revit = heights(path, set(boxes))
     summary = collections.Counter()
     print("body heights:")
@@ -116,11 +119,12 @@ def vertical(boxes, lines, native, path, args_list=True):
         thickness = float(kind["m_thickness"]) if "m_thickness" in kind else None
         top_ok = top is not None and abs(top - high) <= 1e-3
         thick_ok = thickness is not None and abs(thickness - (high - low)) <= 1e-3
+        summary[f"own record type {'=' if own.get(tag) == landing_type else '!='} stairs' landing type"] += 1
         summary[f"top {'=' if top_ok else '!='} lines' elevation"] += 1
         summary[f"thickness {'=' if thick_ok else '!='} type m_thickness"] += 1
         print(
             f"  {tag}: Revit z {low:.4f} to {high:.4f} ({high - low:.4f} ft); lines' highest z {top}; "
-            f"box z {boxes[tag][2]:.4f} to {boxes[tag][2] + boxes[tag][5]:.4f}; type {types} "
+            f"box z {boxes[tag][2]:.4f} to {boxes[tag][2] + boxes[tag][5]:.4f}; own type {own.get(tag)}; type {types} "
             + " ".join(f"{k}={v}" for k, v in sorted(kind.items()) if k != "class" and not v.startswith("@"))
         )
         if args_list:
@@ -173,7 +177,7 @@ def main():
     ap.add_argument("reference")
     ap.add_argument("--list", action="store_true")
     args = ap.parse_args()
-    boxes, lines, arcs, native = read_probe(args.probe)
+    boxes, lines, arcs, native, own = read_probe(args.probe)
     revit = tops(args.reference, ["IfcSlab", "IfcStair", "IfcStairFlight", "IfcBuildingElementProxy", "IfcCovering"])
     print(f"landings: {len(boxes)}, with lines: {len(lines)}, with arcs: {len(arcs)}, in Revit's export: {sum(1 for t in boxes if t in revit)}")
     summary = collections.Counter()
@@ -214,7 +218,7 @@ def main():
                 f"{ours:.2f} ft2, outline {distance:.4f} ft from Revit's"
             )
     print("summary: " + ", ".join(f"{k} {v}" for k, v in summary.most_common()))
-    vertical(boxes, lines, native, args.reference)
+    vertical(boxes, lines, native, own, args.reference)
 
 
 if __name__ == "__main__":
