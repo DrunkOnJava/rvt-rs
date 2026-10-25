@@ -1,6 +1,6 @@
 # Roadmap
 
-Last reviewed: 2026-10-24
+Last reviewed: 2026-10-25
 
 This roadmap is the public, contributor-facing view of where rvt-rs is headed.
 The support boundary lives in [`docs/status.md`](docs/status.md) and the
@@ -44,8 +44,8 @@ the four levels a file can reach are in the
 | Container, compression, metadata | Verified | MS-CFB container, Revit's truncated-gzip streams, PartAtom and previews open on every release from 2016 to 2026; 2015 and 2027 project files open on Autodesk's sample projects, where PartAtom and previews are not measured. | Maintain compatibility and bounds checks against hostile input. |
 | `Formats/Latest` schema | Verified | The whole schema is read (#410: 4,126 classes on Revit 2024, where 395 were read before). A class's tag is its definition ordinal (#154), and element records name their class by it (RE-76). | Classify the 9 to 12 residual field encodings per release, only with byte evidence. |
 | ADocument walker | Partial | Document-level metadata for triage; the root ADocument walk is validated on 2024 to 2026. | Expand confidence across project releases and older files. |
-| Typed project elements | Partial | Elements come from their partition element records, typed by `BuiltInCategory` and matched against Revit's own exports. On Revit 2024 walls, doors, windows, columns, floor slabs and building pads match element for element (verified, RE-21); 2025 and 2023 are partial; 2026 is experimental (one local model), and so are 2015 to 2022 and 2027, measured against the same sample projects saved by Revit 2019, 2023 and 2026 (RE-181, RE-180, RE-179), but 2015's `rst_basic`, another model. Schema-field walls and opening-index doors and windows stay unsupported (RE-19). | A Revit export of a 2015 to 2022 or 2027 project to measure against (#421), parameters in IFC (0.8.0), held-out models (#408). |
-| IFC writer | Partial | IFC4 with storeys, IFC type objects, material layer sets, materials and stable generated GlobalIds. Bodies are exact where the element's data is decoded and the record's bounding box elsewhere, and the diagnostics count each (#409). | The geometry issues open under the 0.8.0 milestone (below). |
+| Typed project elements | Partial | Elements come from their partition element records, typed by `BuiltInCategory` and matched against Revit's own exports. On Revit 2024 walls, doors, windows, columns, floor slabs and building pads match element for element (verified, RE-21); 2025 and 2023 are partial; 2026 is experimental (one local model), and so are 2015 to 2022 and 2027, measured against the same sample projects saved by Revit 2019, 2023 and 2026 (RE-181, RE-180, RE-179), but 2015's `rst_basic`, another model. Schema-field walls and opening-index doors and windows stay unsupported (RE-19). | A Revit export of a 2015 to 2022 or 2027 project to measure against (#421), parameters in IFC (0.9.0), held-out models (#408). |
+| IFC writer | Partial | IFC4 with storeys, IFC type objects, material layer sets, materials and stable generated GlobalIds. Bodies are exact where the element's data is decoded and the record's bounding box elsewhere, and the diagnostics count each (#409). | The geometry issues open under the 0.9.0 milestone (below). |
 | Browser viewer | Partial | Zero-upload WebAssembly viewer over the same decode; its file status shows how much of a model is a stand-in box. | Keep the journey test, which since 0.7.0 opens, inspects, schedules, exports and checks the diagnostics of the six redistributable reference models, green as the viewer grows. |
 | Python and CLI | Partial | The `rvt` wheel on PyPI and prebuilt CLI archives on GitHub Releases, sharing the core's honesty bounds. | Stabilize JSON schemas and the one-shot inspect workflow. |
 | Write path | Partial | Stream-level patching only. Field-level semantic writes are unsupported and gated by [ADR-002](docs/decisions/ADR-002-semantic-write-api-gate.md). | Stay gated until openability can be proven. |
@@ -100,11 +100,21 @@ the four levels a file can reach are in the
   element's saved parameters in `rvt-elements` and Python; reproducible
   exports; and the stable API 1.0 keeps, with the research readers behind
   `unstable-research`.
+- **0.8.0, 2026-10-25.** Revit 2025 stair runs drawn as their treads and
+  risers from their native records, spiral, riserless and monolithic runs
+  as their steps or treads, and landings as their slabs or their one tread,
+  with Revit's predefined types, names and type objects; walls that end
+  where Revit's do at T joints (482 of 607 on the BIM4LCA office, from
+  412); square hollow-section columns as their section; door and window
+  sizes where the symbol cuts no outline; Revit 2024 pipes as cylinders;
+  the project's, site's, building's and storeys' stored GlobalIds; Revit's
+  property sets (`--revit-property-sets`); and `--anonymize` for
+  diagnostics posted publicly.
 
-### 0.8.0: IFC geometry and element data
+### 0.9.0: IFC geometry and element data
 
-The geometry and element-data work that continues after 0.7.0, from the 0.6.x
-geometry line and the 0.7.0 milestone, both closed when 0.7.0 shipped. Each
+The geometry and element-data work that continues after 0.8.0, moved from the
+0.8.0 milestone when 0.8.0 shipped. Each
 slice records a baseline, an improvement and a residual against Revit's own
 exports on the reference pack (#407), approximations stay labelled (#409), and
 a slice ships in the next release that contains it. Geometry open now: wall
