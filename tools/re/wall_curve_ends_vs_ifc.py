@@ -43,6 +43,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from wall_layers_vs_ifc import site_to_internal  # noqa: E402
 
 TOLERANCE_FT = 0.001
+TYPES = {}
 CURVE = re.compile(
     r"^curve (\d+) GLine start (\S+) (\S+) end (\S+) (\S+) z (\S+) thickness (\S+) type (\S+) keyref (\S+) keyoffset (\S+) flipped (\S+)"
 )
@@ -60,8 +61,13 @@ def parse(path):
                 "t": None if g[6] == "-" else float(g[6]),
                 "type": g[7],
                 "keyref": g[8],
+                "flipped": g[10] == "true",
                 "control": [],
             }
+        elif line.startswith("walltype "):
+            parts = line.split()
+            layers = [float(w) for w in parts[3].split(",") if w]
+            TYPES[parts[1]] = (layers, int(parts[5]) if parts[5].isdigit() else 0, int(parts[7]) if parts[7].isdigit() else 0)
         elif line.startswith("driver "):
             _, tag, _, _, _, control = line.rstrip("\n").split(" ", 5)
             if tag in walls:
@@ -129,6 +135,35 @@ def rule(tag, end, walls):
     return -thickness[0] / 2, f"later of {size}"
 
 
+def core_tee(tag, end, walls, reach, kind):
+    """The tee rule, stopping at the host's core: the stem runs through the
+    host's shell layers on its side (`m_numShellLayersExt` / `Int`). Tested
+    on every T end; RE-223 applies it to a layered wall's core layers only,
+    as a single-layer wall stops at the host's face (RE-73)."""
+    if kind != "tee" or reach is None:
+        return reach
+    w = walls[tag]
+    join = [
+        j
+        for j in w["control"]
+        if any(str(i["m_elemId"]) == tag and i["m_joinedEnd"] == end for i in j["m_JoinInfo"]["m_info"])
+    ][0]
+    host = next(str(i["m_elemId"]) for i in join["m_JoinInfo"]["m_info"] if str(i["m_elemId"]) != tag and i["m_joinedEnd"] in (2, 3))
+    h = walls.get(host)
+    shells = TYPES.get(h["type"]) if h else None
+    if not shells:
+        return None
+    layers, ext, inner = shells
+    (sx, sy), (ex, ey) = h["start"], h["end"]
+    length = math.hypot(ex - sx, ey - sy)
+    dx, dy = (ex - sx) / length, (ey - sy) / length
+    exterior = (dy, -dx) if h["flipped"] else (-dy, dx)
+    other = w["start"] if end == 1 else w["end"]
+    side = (other[0] - sx) * exterior[0] + (other[1] - sy) * exterior[1]
+    shell = sum(layers[:ext]) if side > 0 else sum(layers[len(layers) - inner:]) if inner else 0.0
+    return reach + shell
+
+
 def main():
     args = sys.argv[1:]
     if len(args) < 2:
@@ -144,6 +179,7 @@ def main():
         w = walls[tag]
         for end in (0, 1):
             reach, kind = rule(tag, end, walls)
+            reach = core_tee(tag, end, walls, reach, kind)
             key = f"{kind}, keyref {w['keyref']}"
             ok_rule = reach is not None and abs(reach - theirs[end]) <= TOLERANCE_FT
             ok_ours = tag in ours and abs(ours[tag][end] - theirs[end]) <= TOLERANCE_FT

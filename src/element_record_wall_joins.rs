@@ -340,6 +340,10 @@ pub struct WallLine {
     pub base_feet: f64,
     /// Top of the wall's record box, feet.
     pub top_feet: f64,
+    /// How thick its type's layers outside its core are on its exterior
+    /// and its interior side, feet, where its type's native record gives
+    /// them (RE-223).
+    pub shells: Option<[f64; 2]>,
 }
 
 /// How one end of a wall meets another wall: a butt join its join lists
@@ -563,6 +567,11 @@ fn joined_stop(
 /// meets, and stops at the first of equal or higher priority. So a core
 /// passes the other wall's finishes and stops at its core, and a finish
 /// stops at its face. A single-layer wall stops at the other wall's face.
+/// A layer inside `wall`'s core also runs on through the other wall's
+/// layers outside its core on the side `wall` meets, whatever their
+/// priority, so it reaches at least the other wall's core (RE-223): on the
+/// BIM4LCA office, where every layer of the partition types is marked
+/// structure, that is where Revit ends the wall.
 /// On Snowdon Towers that is every layer's end on 280 of the 313 T joints
 /// measured against Revit's IFC4 bodies; 16 of the rest Revit draws as a
 /// clean stop at the face, as it does at all three on RE1 (Revit 2025).
@@ -645,16 +654,34 @@ pub fn tee_join(
     } else {
         host.layers.iter().rev().copied().collect()
     };
+    // RE-223: the other wall's layers outside its core on the near side.
+    let near_shell = host.shells.map(|[exterior, interior]| {
+        if dot(host.exterior, into) > 0.0 {
+            exterior
+        } else {
+            interior
+        }
+    });
+    let mut from_exterior = 0.0;
     let reaches: Vec<f64> = wall
         .layers
         .iter()
-        .map(|(_, function)| {
-            -half
+        .map(|(width, function)| {
+            let by_priority = -half
                 + near_first
                     .iter()
                     .take_while(|(_, other)| other > function)
                     .map(|(width, _)| width)
-                    .sum::<f64>()
+                    .sum::<f64>();
+            let core = wall.shells.is_some_and(|[exterior, interior]| {
+                from_exterior >= exterior - JOIN_EPS_FEET
+                    && from_exterior + width <= wall.thickness_feet - interior + JOIN_EPS_FEET
+            });
+            from_exterior += width;
+            match near_shell {
+                Some(shell) if core => by_priority.max(shell - half),
+                _ => by_priority,
+            }
         })
         .collect();
     Some(ButtJoin {

@@ -16,6 +16,7 @@
 //!   driver <id> nojoin <json> control <json>
 //!   joinend <id> <end> real <bool> realjoined <json> geomjoined <json> omitted <json> flags <n>
 //!   cdjoin <id> type <n> info <json>
+//!   walltype <id> layers <ft,...> ext <n> int <n>
 //!
 //! Usage:
 //!   cargo run --profile ci --example probe_wall_curves -- MODEL.rvt
@@ -79,7 +80,7 @@ fn main() -> anyhow::Result<()> {
         })
         .collect();
     let options = Options {
-        selected_classes: BTreeSet::from(["SWall".to_string()]),
+        selected_classes: BTreeSet::from(["SWall".to_string(), "BasicWallType".to_string()]),
         ..Options::default()
     };
     extract_graphs(&mut rf, &options, |record| {
@@ -87,6 +88,38 @@ fn main() -> anyhow::Result<()> {
             return Ok(());
         };
         let id = record.identity.element_id;
+        if record.class_name.as_deref() == Some("BasicWallType") {
+            // The type's layers, exterior first, and how many of them lie
+            // outside its core on each side (RE-222).
+            if let Some(structure) = graph
+                .objects
+                .iter()
+                .find(|object| object.class_name == "CompoundStructure")
+            {
+                let widths: Vec<String> = structure
+                    .fields
+                    .get("m_layers")
+                    .and_then(Value::as_array)
+                    .into_iter()
+                    .flatten()
+                    .filter_map(|layer| layer.get("m_layerWidth")?.as_f64())
+                    .map(|w| format!("{w:.6}"))
+                    .collect();
+                println!(
+                    "walltype {id} layers {} ext {} int {}",
+                    widths.join(","),
+                    structure
+                        .fields
+                        .get("m_numShellLayersExt")
+                        .unwrap_or(&Value::Null),
+                    structure
+                        .fields
+                        .get("m_numShellLayersInt")
+                        .unwrap_or(&Value::Null),
+                );
+            }
+            return Ok(());
+        }
         let Some(root) = graph.objects.first() else {
             return Ok(());
         };

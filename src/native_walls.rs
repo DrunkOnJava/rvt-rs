@@ -23,7 +23,12 @@
 //! 1 its end, 2 or 3 its middle, a T joint), in an order the record keeps.
 //! Where another wall meets this wall's end with its middle, Revit's body of
 //! this wall stops half that wall's thickness short of its curve's end
-//! ([`tee_reach`]).
+//! ([`tee_reach`]), where the wall is one layer. A wall type's
+//! `CompoundStructure` lists its layers exterior first (`m_layers`,
+//! `m_layerWidth`) and how many lie outside its core on its exterior and its
+//! interior side (`m_numShellLayersExt`, `m_numShellLayersInt`): a layered
+//! wall's core runs on through the other wall's layers outside its core
+//! (RE-223, [`crate::element_record_wall_joins::tee_join`]).
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -48,6 +53,30 @@ pub struct NativeWall {
     /// record's order and this wall included, each with the end it joins
     /// by. Empty where no join lists that end; `None` where several do.
     pub joins: [Option<Vec<(u64, u32)>>; 2],
+    /// How thick the layers outside its type's core are on its exterior and
+    /// its interior side, feet; `None` where its type is not a basic wall
+    /// type with a compound structure.
+    pub shells: Option<[f64; 2]>,
+}
+
+/// The widths of a `CompoundStructure`'s layers outside its core, on its
+/// exterior and its interior side.
+fn shell_widths(structure: &Value) -> Option<[f64; 2]> {
+    let widths: Vec<f64> = structure
+        .get("m_layers")?
+        .as_array()?
+        .iter()
+        .map(|layer| layer.get("m_layerWidth")?.as_f64())
+        .collect::<Option<_>>()?;
+    let count = |name: &str| usize::try_from(structure.get(name)?.as_u64()?).ok();
+    let (exterior, interior) = (count("m_numShellLayersExt")?, count("m_numShellLayersInt")?);
+    if exterior + interior > widths.len() || widths.iter().any(|w| !w.is_finite() || *w < 0.0) {
+        return None;
+    }
+    Some([
+        widths[..exterior].iter().sum(),
+        widths[widths.len() - interior..].iter().sum(),
+    ])
 }
 
 fn element_id(value: &Value) -> Option<u64> {
@@ -105,11 +134,11 @@ fn end_join(wall: u64, controls: &[Value], end: u32) -> Option<Vec<(u64, u32)>> 
     }
 }
 
-/// The curve, word, flip and end joins of each of `walls` from its native
-/// `SWall` record: the current copy, the one the document routes to
-/// (RE-216), whatever the partition data's copies say. A wall whose record
-/// has not exactly one curve, or whose curve is not a level line, is left
-/// out.
+/// The curve, word, flip, end joins and type shells of each of `walls` from
+/// its native `SWall` record and its type's `BasicWallType` record, read in
+/// one pass: the current copy, the one the document routes to (RE-216),
+/// whatever the partition data's copies say. A wall whose record has not
+/// exactly one curve, or whose curve is not a level line, is left out.
 pub fn native_walls(
     rf: &mut RevitFile,
     walls: &BTreeSet<u64>,
@@ -119,16 +148,29 @@ pub fn native_walls(
     }
     let options = Options {
         selected_ids: walls.clone(),
+        selected_classes: BTreeSet::from(["BasicWallType".to_string()]),
         ..Options::default()
     };
-    let mut found: BTreeMap<u64, NativeWall> = BTreeMap::new();
+    let mut found: BTreeMap<u64, (NativeWall, Option<u64>)> = BTreeMap::new();
+    let mut types: BTreeMap<u64, [f64; 2]> = BTreeMap::new();
     extract_graphs(rf, &options, |record| {
-        let (Some("SWall"), Some(graph)) = (record.class_name.as_deref(), record.graph.as_ref())
+        let (Some(class), Some(graph)) = (record.class_name.as_deref(), record.graph.as_ref())
         else {
             return Ok(());
         };
         let id = record.identity.element_id;
-        if !walls.contains(&id) {
+        if class == "BasicWallType" {
+            if let Some(shells) = graph
+                .objects
+                .iter()
+                .find(|object| object.class_name == "CompoundStructure")
+                .and_then(|structure| shell_widths(&structure.fields))
+            {
+                types.insert(id, shells);
+            }
+            return Ok(());
+        }
+        if class != "SWall" || !walls.contains(&id) {
             return Ok(());
         }
         let curves: Vec<_> = graph
@@ -150,44 +192,55 @@ pub fn native_walls(
                 .cloned()
                 .unwrap_or_default();
             let root = graph.objects.first().map(|object| &object.fields);
-            NativeWall {
+            let wall = NativeWall {
                 start,
                 end,
                 flipped: root.and_then(|fields| fields.get("m_isFlipped")?.as_bool()),
                 cross_section: root.and_then(|fields| fields.get("m_wallCrossSection")?.as_i64()),
                 joins: [0, 1].map(|end| end_join(id, &controls, end)),
-            }
+                shells: None,
+            };
+            let type_id = root.and_then(|fields| element_id(fields.get("m_WallAttributesId")?));
+            (wall, type_id)
         });
-        if let Some(wall) = read {
-            found.insert(id, wall);
+        if let Some(read) = read {
+            found.insert(id, read);
         }
         Ok(())
     })?;
-    Ok(found)
+    Ok(found
+        .into_iter()
+        .map(|(id, (mut wall, type_id))| {
+            wall.shells = type_id.and_then(|type_id| types.get(&type_id).copied());
+            (id, wall)
+        })
+        .collect())
 }
 
-/// How far past `wall`'s end its body reaches where the join there is a T
-/// joint: another wall meets that end with its middle, and Revit's body
-/// stops half that wall's thickness short of the curve's end. Against
-/// Revit's bodies this is Revit's end on 315 of the 396 such ends of the
-/// BIM4LCA office as built, where the join lists' reach (RE-70, RE-73) gave
-/// 289, and on all 269 of Core Interior's (RE-222). `None` where the join is not
-/// a T joint with exactly one such wall, or that wall's thickness is not
-/// known.
+/// How far past the `end` (0 its start, 1 its end) of wall `id`'s curve its
+/// body reaches where the join there is a T joint: another wall, the host,
+/// meets that end with its middle, and Revit's body stops half the host's
+/// thickness short of the curve's end. Against Revit's bodies this is
+/// Revit's end on 315 of the 396 such ends of the BIM4LCA office as built,
+/// where the join lists' reach (RE-70, RE-73) gave 289, and on all 269 of
+/// Core Interior's (RE-222). `None` where the join is not a T joint with
+/// exactly one host, or the host's thickness is not known.
 pub fn tee_reach(
-    wall: u64,
-    join: &[(u64, u32)],
+    id: u64,
+    end: usize,
+    walls: &BTreeMap<u64, NativeWall>,
     thickness: impl Fn(u64) -> Option<f64>,
 ) -> Option<f64> {
+    let join = walls.get(&id)?.joins.get(end)?.as_ref()?;
     let tees: Vec<u64> = join
         .iter()
-        .filter(|(id, joined)| *id != wall && matches!(joined, 2 | 3))
-        .map(|(id, _)| *id)
+        .filter(|(other, joined)| *other != id && matches!(joined, 2 | 3))
+        .map(|(other, _)| *other)
         .collect();
-    let [tee] = tees.as_slice() else {
+    let [host] = tees.as_slice() else {
         return None;
     };
-    thickness(*tee)
+    thickness(*host)
         .filter(|t| t.is_finite() && *t > 0.0)
         .map(|t| -t / 2.0)
 }
