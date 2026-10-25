@@ -2320,8 +2320,11 @@ fn attach_hosted_cut_openings(rf: &mut crate::RevitFile, entities: &mut Vec<enti
     };
     let mut openings = Vec::new();
     // Revit's export names each after its host and its place among the
-    // host's openings: `Basic Roof:YP-1:2991742:1` to `:4`.
+    // host's openings, the cutting instance with the highest ElementId first:
+    // `Basic Roof:YP-1:2991742:1` is hatch 2896992's, `:4` hatch 2053330's.
     let mut cut_counts: std::collections::BTreeMap<usize, usize> = Default::default();
+    let mut cuts = cuts;
+    cuts.sort_by(|a, b| b.instance.cmp(&a.instance));
     for cut in cuts {
         let Some(transform) = u32::try_from(cut.instance)
             .ok()
