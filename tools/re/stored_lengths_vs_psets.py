@@ -87,8 +87,13 @@ def revit_lengths(path):
             ),
             metres,
         )
+        # IFC4 relates an element to its type through IsTypedBy, IFC2X3
+        # through IsDefinedBy.
+        type_rels = list(getattr(element, "IsTypedBy", None) or ()) + [
+            rel for rel in element.IsDefinedBy or () if rel.is_a("IfcRelDefinesByType")
+        ]
         typed = {}
-        for rel in getattr(element, "IsTypedBy", None) or ():
+        for rel in type_rels:
             typed.update(length_properties(rel.RelatingType.HasPropertySets or (), metres))
         for key, value in typed.items():
             own.setdefault(key, value)
