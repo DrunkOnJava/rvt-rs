@@ -5131,7 +5131,15 @@ fn landing_outline(
             let (r, s) = (points[j], points[(j + 1) % n]);
             let (d1, d2) = (cross(r, s, p), cross(r, s, q));
             let (d3, d4) = (cross(p, q, r), cross(p, q, s));
-            if d1 * d2 <= 0.0 && d3 * d4 <= 0.0 {
+            let crosses = if d1 == 0.0 && d2 == 0.0 {
+                // On one line: they meet only where their extents overlap.
+                (0..2).all(|k| {
+                    p[k].min(q[k]).max(r[k].min(s[k])) <= p[k].max(q[k]).min(r[k].max(s[k]))
+                })
+            } else {
+                d1 * d2 <= 0.0 && d3 * d4 <= 0.0
+            };
+            if crosses {
                 return None;
             }
         }
