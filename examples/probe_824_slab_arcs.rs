@@ -10,6 +10,8 @@
 //! Output, per owner in `RVT_PROBE_OWNERS` (default 1461758, 2991742,
 //! 1384047, 3058084) that owns sketch lines:
 //!   owner <id> lines <n>
+//!   copy <id> <stream> box <min x y z> <max x y z> current <partition|none>
+//!     every record copy of a line with several, and its routed partition
 //!   line <owner> <id> box <min x y z> <max x y z>
 //!     as-line <start> <end> in-box <bool> | as-line none
 //!     as-arc centre <c> radius <r> angles <a0> <a1> start <p> end <p> in-box <bool> | as-arc none
@@ -62,6 +64,36 @@ fn main() -> rvt::Result<()> {
         }
     }
     let ids: BTreeSet<u32> = owners.values().flat_map(|l| l.keys().copied()).collect();
+    // Every record copy of each line, and the partition its current record
+    // routes to (RE-216).
+    let mut copies: BTreeMap<u32, Vec<(String, [f64; 6])>> = BTreeMap::new();
+    let mut holders: BTreeMap<u32, BTreeSet<u32>> = BTreeMap::new();
+    for record in records.iter().filter(|r| ids.contains(&r.element_id)) {
+        copies
+            .entry(record.element_id)
+            .or_default()
+            .push((record.stream.clone(), record.bbox_feet));
+        if let Some(p) = record
+            .stream
+            .strip_prefix("Partitions/")
+            .and_then(|n| n.parse::<u32>().ok())
+        {
+            holders.entry(record.element_id).or_default().insert(p);
+        }
+    }
+    let current = rvt::research::native_document::current_partitions(&mut rf, &holders);
+    for (id, list) in &copies {
+        if list.len() > 1 {
+            for (stream, b) in list {
+                println!(
+                    "copy {id} {stream} box {} {} current {}",
+                    fmt([b[0], b[1], b[2]]),
+                    fmt([b[3], b[4], b[5]]),
+                    current.get(id).map_or("none".into(), |p| p.to_string())
+                );
+            }
+        }
+    }
     let curves = scan_sketch_curves(&mut rf, version, &ids)?;
     for (owner, lines) in &owners {
         println!("owner {owner} lines {}", lines.len());
