@@ -73,10 +73,8 @@ fn main() -> rvt::Result<()> {
                 }
             }
         } else {
-            let prepared = rvt::compression::prepare_stream_for_inflate(
-                &name,
-                &rf.read_stream(&name).unwrap_or_default(),
-            );
+            let stored = rf.read_stream(&name).unwrap_or_default();
+            let prepared = rvt::compression::prepare_stream_for_inflate(&name, &stored);
             if let Ok((_, out)) = rvt::compression::inflate_at_auto(prepared.as_ref()) {
                 guids(&out, 1, &mut found);
                 guids(&out, 2, &mut found);
