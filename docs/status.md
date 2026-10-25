@@ -960,22 +960,26 @@ prints it from any installed build.
 
 ## Roadmap Position
 
-- **v0.7.0** (2026-10-24) is the latest release: crates.io and docs.rs,
+- **v0.8.0** (2026-10-25) is the latest release: crates.io and docs.rs,
   the `rvt` wheels on PyPI, GitHub Release archives for Linux, macOS and
   Windows, and the container image, each checked from its published
   artifacts ([`install.md`](install.md)). It carries everything under
-  `[0.7.0]` in [`CHANGELOG.md`](../CHANGELOG.md): roofs drawn as their
-  planes and Revit 2025 roofs by extrusion as their sketch's section,
-  Revit 2025's tapered walls, door and window sizes and openings from the
-  outline their symbol cuts on Revit 2024 and 2025, placed ports with Revit's flow directions,
-  Revit's materials from the native records, each element's saved
-  parameters in `rvt-elements` and Python, reproducible exports, and the
-  stable API 1.0 keeps. Its "Upgrading from 0.6" section lists what a 0.6
-  user has to change.
-- **v0.6.1** (2026-10-19) is the release before: 0.6.0 with an export
-  panic on 32-bit targets fixed (#836) and a README whose support table
-  says what is measured.
-- `main` has everything v0.7.0 has, and is ahead of it by what is under
+  `[0.8.0]` in [`CHANGELOG.md`](../CHANGELOG.md): Revit 2025 stair runs
+  drawn as their treads and risers from their native records, spiral,
+  riserless and monolithic runs and landings, with Revit's predefined
+  types, names and type objects; walls that end where Revit's do at T
+  joints (RE-222, RE-223); square hollow-section columns as their section;
+  door and window sizes where the symbol cuts no outline; Revit 2024 pipes
+  as cylinders; the stored project, site, building and storey GlobalIds;
+  Revit's property sets with `rvt-ifc --revit-property-sets`; and
+  `--anonymize` for diagnostics that are posted publicly. Its "Upgrading
+  from 0.7" section lists what a 0.7 user has to change.
+- **v0.7.0** (2026-10-24) is the release before: roofs drawn as their
+  planes, Revit 2025's tapered walls, door and window openings from the
+  outline their symbol cuts, placed ports, Revit's materials, each
+  element's saved parameters, reproducible exports, and the stable API 1.0
+  keeps.
+- `main` has everything v0.8.0 has, and is ahead of it by what is under
   `[Unreleased]`.
 
 Open work is tracked as GitHub issues; [`TODO.md`](../TODO.md) is the older
