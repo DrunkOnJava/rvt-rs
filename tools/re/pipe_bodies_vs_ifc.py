@@ -30,6 +30,30 @@ RADIUS_TOLERANCE_FT = 0.001
 LENGTH_TOLERANCE_FT = 0.01
 
 
+def profile_radius(profile):
+    """A circular profile's radius in the file's units: a circle's, or a
+    closed polyline's whose points all lie within 0.1% of one distance from
+    their centroid (Revit's IFC2X3 export writes some pipes that way); None
+    for any other profile."""
+    if profile.is_a("IfcCircleProfileDef"):
+        return float(profile.Radius)
+    curve = getattr(profile, "OuterCurve", None)
+    if curve is None or not curve.is_a("IfcPolyline"):
+        return None
+    points = [tuple(float(c) for c in p.Coordinates[:2]) for p in curve.Points]
+    if len(points) > 1 and points[0] == points[-1]:
+        points = points[:-1]
+    if len(points) < 8:
+        return None
+    cx = sum(p[0] for p in points) / len(points)
+    cy = sum(p[1] for p in points) / len(points)
+    distances = [math.dist(p, (cx, cy)) for p in points]
+    mean = sum(distances) / len(distances)
+    if mean <= 0 or max(abs(d - mean) for d in distances) > 1e-3 * mean:
+        return None
+    return mean
+
+
 def cylinders(path):
     """Tag -> (profile name, radius in feet or None, start, end, length in feet, Name)."""
     model = ifcopenshell.open(path)
@@ -56,9 +80,9 @@ def cylinders(path):
                 length = float(item.Depth) * scale
                 end = [start[i] + direction[i] * length for i in range(3)]
                 profile = item.SweptArea
-                radius = None
-                if profile.is_a("IfcCircleProfileDef"):
-                    radius = float(profile.Radius) * scale
+                radius = profile_radius(profile)
+                if radius is not None:
+                    radius *= scale
                 out[element.Tag] = (profile.is_a(), radius, start, end, length, element.Name or "")
     return out
 
@@ -86,10 +110,16 @@ def main():
     for tag in both:
         profiles[ours[tag][0]] = profiles.get(ours[tag][0], 0) + 1
     print("rvt-rs profiles on those:", dict(sorted(profiles.items())))
+    theirs = {}
+    for tag in both:
+        key = f"{ref[tag][0]}{'' if ref[tag][1] is not None else ' (not circular)'}"
+        theirs[key] = theirs.get(key, 0) + 1
+    print("Revit's profiles on those:", dict(sorted(theirs.items())))
     if not both:
         return
     circle = radius_ok = ends_ok = length_ok = all_ok = 0
     worst_radius = worst_end = 0.0
+    worst_radii = None
     misses = []
     for tag in both:
         a, b = ours[tag], ref[tag]
@@ -108,14 +138,17 @@ def main():
             and l_err <= LENGTH_TOLERANCE_FT
         )
         all_ok += good
-        if r_err is not None:
-            worst_radius = max(worst_radius, r_err)
+        if r_err is not None and r_err > worst_radius:
+            worst_radius, worst_radii = r_err, (tag, a[1], b[1])
         worst_end = max(worst_end, e_err)
         if not good:
             misses.append((tag, a[0], r_err, e_err, l_err))
     n = len(both)
     print(f"circle profile: {circle} of {n}")
     print(f"radius within {RADIUS_TOLERANCE_FT} ft of Revit's: {radius_ok} of {n} (worst {worst_radius:.5f} ft)")
+    if worst_radii is not None and worst_radius > RADIUS_TOLERANCE_FT:
+        tag, mine, theirs = worst_radii
+        print(f"  worst radius: {tag}, rvt-rs {mine:.5f} ft, Revit {theirs:.5f} ft")
     print(f"axis ends within {END_TOLERANCE_FT} ft of Revit's: {ends_ok} of {n} (worst {worst_end:.5f} ft)")
     print(f"length within {LENGTH_TOLERANCE_FT} ft of Revit's: {length_ok} of {n}")
     print(f"all four: {all_ok} of {n}")
