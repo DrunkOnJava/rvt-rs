@@ -56,7 +56,7 @@ def main():
             if abs(value - width) <= TOLERANCE_FEET:
                 t["width"] += 1
                 hit = True
-            if abs(value - height) <= TOLERANCE_FEET:
+            if height is not None and abs(value - height) <= TOLERANCE_FEET:
                 t["height"] += 1
         if not hit:
             unexplained.append((tag, cls, symbol, width, height, lengths))
@@ -69,7 +69,8 @@ def main():
     print(f"no stored length is Revit's width: {len(unexplained)}")
     for tag, cls, symbol, width, height, lengths in unexplained[:30]:
         text = " ".join(f"{k}={v:.4f}" for k, v in sorted(lengths.items()))
-        print(f"  {tag} {cls} symbol {symbol} Revit {width:.4f}x{height:.4f}: {text}")
+        tall = "-" if height is None else f"{height:.4f}"
+        print(f"  {tag} {cls} symbol {symbol} Revit {width:.4f}x{tall}: {text}")
     return 0
 
 
