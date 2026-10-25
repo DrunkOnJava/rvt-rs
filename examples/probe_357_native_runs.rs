@@ -10,6 +10,12 @@
 //!   run <id> treads <n> refs <member=id ...> types <id ...>
 //!   check <id> <name> <value>
 //!   native <id> read|absent [profile <points>|no profile]
+//!   typeref <run> <object index> <class> <path> <type id>
+//!   stairs <id> <class> refs <member=id ...>
+//!
+//! A `typeref` line is every place in the run's whole graph that holds a
+//! `StairsRunType`'s id; a `stairs` line is the record the run's
+//! `m_stairsId` names, and each `StairsType`, with their top-level ids.
 //!
 //! Usage:
 //!   cargo run --profile ci --example probe_357_native_runs -- MODEL.rvt
@@ -31,6 +37,29 @@ fn ids(fields: &Value) -> Vec<(String, i64)> {
         .collect()
 }
 
+fn find_ids(value: &Value, wanted: &BTreeSet<u64>, path: String, out: &mut Vec<(String, u64)>) {
+    match value {
+        Value::Object(members) => {
+            if let Some(id) = members
+                .get("m_id64")
+                .and_then(Value::as_u64)
+                .filter(|id| wanted.contains(id))
+            {
+                out.push((path.clone(), id));
+            }
+            for (name, member) in members {
+                find_ids(member, wanted, format!("{path}.{name}"), out);
+            }
+        }
+        Value::Array(items) => {
+            for (index, item) in items.iter().enumerate() {
+                find_ids(item, wanted, format!("{path}[{index}]"), out);
+            }
+        }
+        _ => {}
+    }
+}
+
 fn main() -> anyhow::Result<()> {
     let path = std::env::args().nth(1).expect("usage: MODEL.rvt");
     let mut rf = RevitFile::open(&path)?;
@@ -40,6 +69,7 @@ fn main() -> anyhow::Result<()> {
     };
     let mut types: BTreeSet<u64> = BTreeSet::new();
     let mut runs: BTreeMap<u64, (Value, Vec<Value>)> = BTreeMap::new();
+    let mut graphs: BTreeMap<u64, Vec<(String, Value)>> = BTreeMap::new();
     extract_graphs(&mut rf, &options, |record| {
         let (Some(class), Some(graph)) = (record.class_name.as_deref(), record.graph.as_ref())
         else {
@@ -77,6 +107,14 @@ fn main() -> anyhow::Result<()> {
                     .map(|o| o.fields.clone())
                     .collect();
                 runs.insert(id, (root.fields.clone(), treads));
+                graphs.insert(
+                    id,
+                    graph
+                        .objects
+                        .iter()
+                        .map(|o| (o.class_name.clone(), o.fields.clone()))
+                        .collect(),
+                );
             }
             _ => {}
         }
@@ -124,6 +162,44 @@ fn main() -> anyhow::Result<()> {
             );
         }
     }
+    for (id, objects) in &graphs {
+        for (index, (class, fields)) in objects.iter().enumerate() {
+            let mut found = Vec::new();
+            find_ids(fields, &types, String::new(), &mut found);
+            for (at, type_id) in found {
+                println!("typeref {id} {index} {class} {at} {type_id}");
+            }
+        }
+    }
+    let stairs: BTreeSet<u64> = runs
+        .values()
+        .filter_map(|(run, _)| run.get("m_stairsId")?.get("m_id")?.get("m_id64")?.as_u64())
+        .collect();
+    let options = Options {
+        selected_ids: stairs,
+        selected_classes: ["StairsType".to_string()].into(),
+        ..Options::default()
+    };
+    extract_graphs(&mut rf, &options, |record| {
+        let (Some(class), Some(graph)) = (record.class_name.as_deref(), record.graph.as_ref())
+        else {
+            return Ok(());
+        };
+        let Some(root) = graph.objects.first() else {
+            return Ok(());
+        };
+        println!(
+            "stairs {} {class} refs {}",
+            record.identity.element_id,
+            ids(&root.fields)
+                .iter()
+                .filter(|(_, t)| *t >= 0)
+                .map(|(n, t)| format!("{n}={t}"))
+                .collect::<Vec<_>>()
+                .join(" ")
+        );
+        Ok(())
+    })?;
     let native = native_runs(&mut rf, &runs.keys().copied().collect())?;
     for id in runs.keys() {
         match native.get(id) {
