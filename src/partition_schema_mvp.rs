@@ -8552,16 +8552,26 @@ pub fn slabs_from_partition_category_records(
         .filter(|record| record.builtin_category == per::OST_SKETCH_LINES)
         .cloned()
         .collect();
-    let mut plates: BTreeMap<u32, [f64; 4]> = Default::default();
-    for record in scanned.iter().filter(|record| {
-        record.builtin_category == per::OST_FLOORS
-            || record.builtin_category == per::OST_BUILDING_PAD
-    }) {
+    // Each plate's box is the record its element is built from (RE-26: the
+    // newest, tallest copy), not the first copy found: an outline is held
+    // to it, and an edited slab keeps its older box in an older partition
+    // (#824).
+    let plates: BTreeMap<u32, [f64; 4]> = select_instance_records(
+        scanned
+            .iter()
+            .filter(|record| {
+                record.builtin_category == per::OST_FLOORS
+                    || record.builtin_category == per::OST_BUILDING_PAD
+            })
+            .cloned()
+            .collect(),
+    )
+    .into_iter()
+    .map(|(id, record)| {
         let b = record.bbox_feet;
-        plates
-            .entry(record.element_id)
-            .or_insert([b[0], b[1], b[3], b[4]]);
-    }
+        (id, [b[0], b[1], b[3], b[4]])
+    })
+    .collect();
     let profiles =
         sketch_plan_profiles(rf, revit_version, &sketch_lines, &plates, &BTreeSet::new());
 
