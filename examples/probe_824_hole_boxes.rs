@@ -50,8 +50,9 @@ fn main() -> rvt::Result<()> {
         per::OST_PIPE_CURVES,
         per::OST_PIPE_FITTING,
         per::OST_SHAFT_OPENING,
-        -2_000_999, // OST_RoofOpening
-        -2_000_997, // OST_FloorOpening
+        -2_000_997, // the floor, roof and ceiling opening categories
+        -2_000_998,
+        -2_000_999,
         -2_000_151, // OST_GenericModel
         -2_001_140, // OST_MechanicalEquipment
     ] {
