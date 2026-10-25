@@ -657,7 +657,9 @@ pub fn native_stair_parts(
         .collect();
     let mut names: BTreeMap<u64, String> = BTreeMap::new();
     let mut constructions: BTreeMap<u64, i64> = BTreeMap::new();
-    let mut sides: BTreeMap<u64, [(Option<u64>, Option<i64>); 2]> = BTreeMap::new();
+    // Each stair type's left and right support: its type and its style.
+    type Side = (Option<u64>, Option<i64>);
+    let mut sides: BTreeMap<u64, [Side; 2]> = BTreeMap::new();
     let mut monolithic: BTreeMap<u64, bool> = BTreeMap::new();
     let options = Options {
         selected_ids: type_ids,
