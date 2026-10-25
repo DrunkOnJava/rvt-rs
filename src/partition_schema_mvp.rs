@@ -331,8 +331,6 @@ pub fn recover_partition_schema_mvp(
     attach_stair_run_bodies(rf, revit_version, &mut out.products);
     // --- Spiral runs as their treads (#357) ---
     attach_spiral_run_bodies(rf, revit_version, &mut out.products);
-    // --- Stair runs' shape, from their treads (#323) ---
-    attach_stair_run_shapes(rf, revit_version, &mut out.products);
     // --- Monolithic landings as their slabs (#824) ---
     attach_landing_slabs(rf, revit_version, &mut out.products);
     // --- Beams along their location lines (RE-49) ---
@@ -510,6 +508,9 @@ pub fn recover_partition_schema_mvp(
     // --- Stairs and their parts named as Revit names them (RE-65) ---
     attach_stair_names(rf, revit_version, &mut out.products);
     attach_native_stair_names(rf, revit_version, &mut out.products);
+    // --- Stair runs' shape, from their treads, and each stair's type from
+    // its runs and landings, once every part names its stair (#323) ---
+    attach_stair_run_shapes(rf, revit_version, &mut out.products);
     // --- IFC export overrides, the element's own or its type's (RE-45) ---
     attach_ifc_export_overrides(
         rf,
