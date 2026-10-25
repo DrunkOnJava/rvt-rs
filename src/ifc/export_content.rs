@@ -2764,6 +2764,10 @@ pub const STAIR_RUN_BODY_SOURCE: &str = "partition_stair_run_sketch";
 /// records (#357).
 pub const SPIRAL_RUN_BODY_SOURCE: &str = "native_spiral_run_treads";
 
+/// `BodySource` of a landing drawn as the one tread it is: its outline's
+/// curve loop, arcs and all, one run tread thick (#824).
+pub const LANDING_TREAD_BODY_SOURCE: &str = "native_landing_tread";
+
 /// `BodySource` of a monolithic stair landing drawn as its slab, its outline
 /// from its top down its type's thickness (#824).
 pub const LANDING_SLAB_BODY_SOURCE: &str = "partition_landing_slab";
@@ -3551,6 +3555,67 @@ fn stair_run_solid(
 /// extrusion per tread, up its thickness from its bottom, of a profile of
 /// two arcs and two lines about the run's centre, as an `IfcIndexedPolyCurve`
 /// so a reader draws the arcs as it draws Revit's.
+/// A tread landing's body (#824): its outline, lines and three-point arcs,
+/// as one `IfcIndexedPolyCurve` extruded up from its underside to its top.
+fn landing_tread_solid(
+    tread: &crate::partition_schema_mvp::LandingTreadBody,
+    location: [f64; 3],
+) -> entities::SolidShape {
+    use crate::native_stairs::LandingCurve;
+    let mut curves = tread.outline.clone();
+    // Counter-clockwise, as IFC wants a profile's outer curve.
+    let area: f64 = curves
+        .iter()
+        .map(|curve| {
+            let (p, q) = (curve.start(), curve.end());
+            p[0] * q[1] - q[0] * p[1]
+        })
+        .sum();
+    if area < 0.0 {
+        curves.reverse();
+        for curve in &mut curves {
+            *curve = match *curve {
+                LandingCurve::Line(a, b) => LandingCurve::Line(b, a),
+                LandingCurve::Arc(a, m, b) => LandingCurve::Arc(b, m, a),
+            };
+        }
+    }
+    let origin = curves.first().map_or([0.0, 0.0], |curve| curve.start());
+    let local = |p: [f64; 2]| (p[0] - origin[0], p[1] - origin[1]);
+    let mut points = Vec::new();
+    let mut starts = Vec::new();
+    for curve in &curves {
+        starts.push(points.len());
+        points.push(local(curve.start()));
+        if let LandingCurve::Arc(_, m, _) = curve {
+            points.push(local(*m));
+        }
+    }
+    let segments = curves
+        .iter()
+        .enumerate()
+        .map(|(i, curve)| {
+            let start = starts[i];
+            let end = starts.get(i + 1).copied().unwrap_or(0);
+            match curve {
+                LandingCurve::Line(..) => entities::CurveSegment::Line([start, end]),
+                LandingCurve::Arc(..) => entities::CurveSegment::Arc([start, start + 1, end]),
+            }
+        })
+        .collect();
+    entities::SolidShape::PlacedExtrusion {
+        profile: entities::ProfileDef::IndexedPolyCurve { points, segments },
+        origin_feet: [
+            origin[0] - location[0],
+            origin[1] - location[1],
+            tread.bottom_feet - location[2],
+        ],
+        axis: [0.0, 0.0, 1.0],
+        ref_direction: [1.0, 0.0, 0.0],
+        depth_feet: tread.top_feet - tread.bottom_feet,
+    }
+}
+
 fn spiral_run_solid(
     run: &crate::partition_schema_mvp::SpiralRunBody,
     location: [f64; 3],
@@ -3894,6 +3959,12 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
     } else {
         None
     };
+    // #824: a landing that is one tread is drawn as it.
+    let landing_tread = if class == "StairsLanding" {
+        crate::partition_schema_mvp::landing_tread_body_from_fields(&decoded.fields)
+    } else {
+        None
+    };
     // RE-54: a wall whose centreline and type thickness are known is that
     // thickness either side of the line. It replaces the box only where the
     // two differ, so a wall the box already drew right is unchanged.
@@ -3973,6 +4044,7 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
         || profile_override.is_some()
         || stair_run.is_some()
         || spiral_run.is_some()
+        || landing_tread.is_some()
         || beam.is_some()
         || matches!(type_profile, (Some(_), Some(_)))
     {
@@ -4128,6 +4200,11 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
                     .or_else(|| pipe.map(|_| PIPE_AXIS_BODY_SOURCE.into()))
                     .or_else(|| stair_run.as_ref().map(|_| STAIR_RUN_BODY_SOURCE.into()))
                     .or_else(|| spiral_run.as_ref().map(|_| SPIRAL_RUN_BODY_SOURCE.into()))
+                    .or_else(|| {
+                        landing_tread
+                            .as_ref()
+                            .map(|_| LANDING_TREAD_BODY_SOURCE.into())
+                    })
                     .or_else(|| roof_slope.as_ref().map(|_| ROOF_SLOPE_BODY_SOURCE.into()))
                     .or_else(|| {
                         roof_extrusion
@@ -4149,6 +4226,7 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
                     || pipe.is_some()
                     || stair_run.is_some()
                     || spiral_run.is_some()
+                    || landing_tread.is_some()
                     || wall_centreline.is_some()
                     || wall_arc.is_some()
                     || i_column.is_some(),
@@ -4625,6 +4703,11 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
                                 spiral_run
                                     .as_ref()
                                     .map(|run| spiral_run_solid(run, [x, y, z]))
+                            })
+                            .or_else(|| {
+                                landing_tread
+                                    .as_ref()
+                                    .map(|tread| landing_tread_solid(tread, [x, y, z]))
                             })
                             .or(roof_slope);
                         (None, record_body, solid)
