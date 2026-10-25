@@ -104,8 +104,10 @@ fn base_cut(run: &Value) -> Option<Option<f64>> {
 }
 
 /// Each run in `runs` whose native `StairsRun` record gives where its
-/// underside is cut ([`base_cut`]), for runs drawn from their byte anchors
-/// (RE-52), whose sketch does not carry it.
+/// underside is cut ([`RunSketch::base_cut_feet`]: at its
+/// `m_extendBelowBase` where `m_baseRiserIndex` is 0, not at all otherwise),
+/// for runs drawn from their byte anchors (RE-52), whose sketch does not
+/// carry it.
 pub fn native_run_base_cuts(
     rf: &mut RevitFile,
     runs: &BTreeSet<u64>,
