@@ -15,6 +15,7 @@ It comes as command-line tools, a Rust library, Python bindings and a browser vi
 | Work with files in Python | The [Python guide](docs/python.md) (`pip install rvt`). |
 | Check what your file will give | [What you can rely on, by input](#what-you-can-rely-on-by-input) below, then the [user guide](docs/user-guide.md). |
 | Use the Rust library | The [examples](examples/README.md) (open a file, list its elements, export it), [Library surface](#library-surface) below and the [API documentation](https://docs.rs/rvt). |
+| Tell us how it went on your own models | [Discussion #982](https://github.com/DrunkOnJava/rvt-rs/discussions/982): your diagnostics are enough, never the building. |
 | Ask a question, report a problem or contribute | [Discussions](https://github.com/DrunkOnJava/rvt-rs/discussions) for questions, and the [contribution guide](CONTRIBUTING.md) for everything else. |
 
 ## Support and evidence

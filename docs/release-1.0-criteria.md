@@ -54,7 +54,7 @@ only in a pull request that links the new evidence.
 
 | | Requirement | Bar | Measured now | Status |
 |---|---|---|---|---|
-| P1 | Practitioners' reports are part of the supported profile ([#874](https://github.com/DrunkOnJava/rvt-rs/issues/874)) | *Proposed:* at least three BIM or AEC practitioners have run the documented workflows on their own models and reported, and each finding is an issue or a line in the supported profile | None. Outside activity so far is format research (Discussion #112, #421), code contributions (0.5.0, 0.6.0) and one show-and-tell (Discussion #393) | **failed** |
+| P1 | Practitioners' reports are part of the supported profile ([#874](https://github.com/DrunkOnJava/rvt-rs/issues/874)) | At least three BIM or AEC practitioners have run the documented workflows on their own models and reported, and each finding is an issue or a line in the supported profile | None yet. The request for reports went out on 2026-10-25 ([Discussion #982](https://github.com/DrunkOnJava/rvt-rs/discussions/982), pinned). Outside activity before it was format research (Discussion #112, #421), code contributions (0.5.0, 0.6.0) and one show-and-tell (Discussion #393) | **failed** |
 
 ## Limitations
 
