@@ -4781,7 +4781,7 @@ fn attach_stair_run_bodies(
     use crate::partition_type_records as ptr;
     if !ps::supports_revit_version(revit_version) {
         if crate::native_stairs::NATIVE_RUN_REVIT_VERSIONS.contains(&revit_version) {
-            attach_native_stair_run_bodies(rf, products);
+            attach_native_stair_run_bodies(rf, revit_version, products);
         }
         return;
     }
@@ -4921,16 +4921,43 @@ fn push_stair_run_body(
 }
 
 /// Give each Revit 2025 stair run the treads and risers its native records
-/// describe (#357): its sketch and type from
-/// [`crate::native_stairs::native_runs`], drawn as RE-92 draws a 2024 run
-/// ([`crate::partition_stairs::run_side_profile`]). A run whose records do
-/// not give them, or whose type the profile does not draw, keeps its box.
-fn attach_native_stair_run_bodies(rf: &mut RevitFile, products: &mut [DecodedElement]) {
-    let runs: BTreeSet<u64> = products
+/// describe (#357, RE-217): its own run type, the one `OST_StairsRuns` type
+/// definition its element record's reference list names (RE-28), as
+/// [`attach_stair_run_bodies`] reads it on Revit 2024; its sketch and that
+/// type's construction from [`crate::native_stairs::native_runs`]; drawn as
+/// RE-92 draws a 2024 run ([`crate::partition_stairs::run_side_profile`]). A
+/// run whose record names no one run type, whose records do not give its
+/// sketch, or whose type the profile does not draw, keeps its box.
+fn attach_native_stair_run_bodies(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    products: &mut [DecodedElement],
+) {
+    use crate::partition_type_records as ptr;
+    let declared: BTreeSet<u32> = match crate::elem_table::parse_records(rf) {
+        Ok(records) => crate::elem_table::declared_ids(&records),
+        Err(_) => return,
+    };
+    let type_records = ptr::scan_type_records(
+        rf,
+        revit_version,
+        crate::partition_element_records::OST_STAIRS_RUNS,
+        &declared,
+    )
+    .unwrap_or_default();
+    let run_types = ptr::type_definition_ids(&type_records);
+    let mut runs: BTreeMap<u64, u64> = BTreeMap::new();
+    for element in products
         .iter()
         .filter(|element| element.class == "StairsRun")
-        .filter_map(|element| element.id.map(u64::from))
-        .collect();
+    {
+        let (Some(id), Some((references, _))) = (element.id, record_references(rf, element)) else {
+            continue;
+        };
+        if let Some(type_id) = ptr::unique_type_reference(&references, &run_types) {
+            runs.insert(u64::from(id), u64::from(type_id));
+        }
+    }
     let Ok(native) = crate::native_stairs::native_runs(rf, &runs) else {
         return;
     };

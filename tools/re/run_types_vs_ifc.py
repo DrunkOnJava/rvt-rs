@@ -3,11 +3,10 @@
 
 Takes the output of `examples/probe_357_native_runs.rs`, whose `record`
 lines give each run's own type (the one `OST_StairsRuns` type definition its
-element record's reference list names, RE-28) and the type
-`native_stairs::native_runs` takes through the run's stairs
+element record's reference list names, RE-28, which `native_runs` is given),
+and whose `run` and `stairs` lines give its stairs' default run type
 (`StairsRun.m_stairsId` -> `StairsElement.m_typeId` ->
-`StairsType.m_runTypeId`, from its `run` and `stairs` lines), and Revit's
-IFC export. For every `IfcStairFlight` whose Tag is a run the probe printed, it
+`StairsType.m_runTypeId`, "chain" below), and Revit's IFC export. For every `IfcStairFlight` whose Tag is a run the probe printed, it
 counts how often each of the two equals the Tag of the `IfcStairFlightType`
 Revit relates the flight to, and lists every flight where they differ.
 

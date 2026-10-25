@@ -12,16 +12,16 @@
 //!   native <id> read|absent [profile <points>|no profile]
 //!   typeref <run> <object index> <class> <path> <type id>
 //!   stairs <id> <class> refs <member=id ...>
-//!   record <id> refs <ids> own-type <id|none> chain-type <id|none>
+//!   record <id> refs <ids> own-type <id|none>
 //!
 //! A `typeref` line is every place in the run's whole graph that holds a
 //! `StairsRunType`'s id; a `stairs` line is the record the run's
 //! `m_stairsId` names, and each `StairsType`, with their top-level ids.
-//! A `record` line is the run's element record's reference list (RE-28),
-//! the one `OST_StairsRuns` type definition it names, which is the run's
-//! own type on Revit 2024, and the type `native_runs` takes through the
-//! run's stairs, for a run whose own type is not its stairs' default to
-//! show as two different ids.
+//! A `record` line is the run's element record's reference list (RE-28) and
+//! the one `OST_StairsRuns` type definition it names, the run's own type,
+//! which `native_runs` is given; `tools/re/run_types_vs_ifc.py` follows the
+//! `run` and `stairs` lines to the stairs' default run type, so a run whose
+//! own type is not that default shows as two different ids.
 //!
 //! Usage:
 //!   cargo run --profile ci --example probe_357_native_runs -- MODEL.rvt
@@ -213,24 +213,6 @@ fn main() -> anyhow::Result<()> {
         );
         Ok(())
     })?;
-    let native = native_runs(&mut rf, &runs.keys().copied().collect())?;
-    for id in runs.keys() {
-        match native.get(id) {
-            Some(run) => {
-                let profile = run_side_profile(
-                    &run.sketch,
-                    &run.run_type,
-                    run.riser_height_feet,
-                    run.end_with_riser,
-                );
-                match profile {
-                    Some(points) => println!("native {id} read profile {}", points.len()),
-                    None => println!("native {id} read no profile {:?}", run.run_type),
-                }
-            }
-            None => println!("native {id} absent"),
-        }
-    }
     let version = rf.basic_file_info()?.version;
     let declared = rvt::elem_table::declared_ids(&rvt::elem_table::parse_records(&mut rf)?);
     let run_types = type_definition_ids(&scan_type_records(
@@ -240,6 +222,7 @@ fn main() -> anyhow::Result<()> {
         &declared,
     )?);
     println!("run-type-definitions {run_types:?}");
+    let mut own_types: BTreeMap<u64, u64> = BTreeMap::new();
     let elements: Vec<_> = iter_elements(&mut rf)?
         .filter(|element| element.class == "StairsRun")
         .collect();
@@ -267,8 +250,28 @@ fn main() -> anyhow::Result<()> {
             _ => Vec::new(),
         };
         let own = unique_type_reference(&references, &run_types);
-        let chain = native.get(&u64::from(id)).map(|run| run.type_id);
-        println!("record {id} refs {references:?} own-type {own:?} chain-type {chain:?}");
+        println!("record {id} refs {references:?} own-type {own:?}");
+        if let Some(own) = own {
+            own_types.insert(u64::from(id), u64::from(own));
+        }
+    }
+    let native = native_runs(&mut rf, &own_types)?;
+    for id in runs.keys() {
+        match native.get(id) {
+            Some(run) => {
+                let profile = run_side_profile(
+                    &run.sketch,
+                    &run.run_type,
+                    run.riser_height_feet,
+                    run.end_with_riser,
+                );
+                match profile {
+                    Some(points) => println!("native {id} read profile {}", points.len()),
+                    None => println!("native {id} read no profile {:?}", run.run_type),
+                }
+            }
+            None => println!("native {id} absent"),
+        }
     }
     Ok(())
 }

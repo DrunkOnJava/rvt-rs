@@ -11,11 +11,12 @@
 //!   riser meets the run's centre line, at the riser's top; `m_actDepth`;
 //!   `m_runDirProj`, the plan direction the run climbs in; `m_riserDir`,
 //!   along the riser; and `m_runType`, 0 for a straight run;
-//! - its run type, which the run does not name itself: its `m_stairsId`
-//!   names its `StairsElement`, whose `m_typeId` names a `StairsType`,
-//!   whose `m_runTypeId` names the `StairsRunType`. That is the type
-//!   Revit's export gives the flight on all five R2025 stair models;
-//! - that `StairsRunType`: `m_treadThickness`, `m_riserThickness`,
+//! - the `StairsRunType` of the run's own type, which its native record does
+//!   not name: the caller reads it from the run's element record, the one
+//!   `OST_StairsRuns` type definition its reference list names (RE-28), as
+//!   on Revit 2024. That is the type Revit's export gives the flight on all
+//!   five R2025 stair models and all 35 runs of each BIM4LCA office file
+//!   (RE-217): `m_treadThickness`, `m_riserThickness`,
 //!   `m_nosingLength`, `m_structuralDepth`, `m_hasMonolithicSupport`,
 //!   `m_hasTread`, `m_hasRiser`, `m_riserIsSlanted` and
 //!   `m_riserTreadConnection` (1: the tread runs under the riser, Revit's
@@ -26,7 +27,7 @@
 //! run that is not straight, does not begin with a riser, or whose treads
 //! do not share one depth, one riser height and one direction is left out.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 
 use serde_json::Value;
 
@@ -71,11 +72,6 @@ fn unit_plan(p: [f64; 3]) -> Option<[f64; 2]> {
     let length = p[0].hypot(p[1]);
     (length > 0.5 && p[2].abs() <= NATIVE_RUN_TOLERANCE_FEET)
         .then_some([p[0] / length, p[1] / length])
-}
-
-/// The element id `fields` holds as `name`, `{"m_id": {"m_id64": n}}`.
-fn element_id(fields: &Value, name: &str) -> Option<u64> {
-    fields.get(name)?.get("m_id")?.get("m_id64")?.as_u64()
 }
 
 fn run_type(fields: &Value, name: Option<String>) -> Option<RunType> {
@@ -153,24 +149,21 @@ fn sketch(run: &Value, treads: &[Value]) -> Option<(RunSketch, f64)> {
     ))
 }
 
-/// Each run in `runs` whose native records give its sketch and type.
+/// Each run in `runs`, keyed by its id with its own run type's id, whose
+/// native records give its sketch and whose type's record gives its
+/// construction.
 pub fn native_runs(
     rf: &mut RevitFile,
-    runs: &BTreeSet<u64>,
+    runs: &BTreeMap<u64, u64>,
 ) -> anyhow::Result<BTreeMap<u64, NativeRun>> {
     if runs.is_empty() {
         return Ok(BTreeMap::new());
     }
     let options = Options {
-        selected_ids: runs.clone(),
-        selected_classes: ["StairsRunType", "StairsType", "StairsElement"]
-            .map(String::from)
-            .into(),
+        selected_ids: runs.keys().chain(runs.values()).copied().collect(),
         ..Options::default()
     };
     let mut types: BTreeMap<u64, RunType> = BTreeMap::new();
-    let mut stairs_types: BTreeMap<u64, u64> = BTreeMap::new();
-    let mut stairs_run_types: BTreeMap<u64, u64> = BTreeMap::new();
     let mut found: BTreeMap<u64, (Value, Vec<Value>)> = BTreeMap::new();
     extract_graphs(rf, &options, |record| {
         let (Some(class), Some(graph)) = (record.class_name.as_deref(), record.graph.as_ref())
@@ -192,17 +185,7 @@ pub fn native_runs(
                     types.insert(id, run_type);
                 }
             }
-            "StairsElement" => {
-                if let Some(type_id) = element_id(&root.fields, "m_typeId") {
-                    stairs_types.insert(id, type_id);
-                }
-            }
-            "StairsType" => {
-                if let Some(run_type_id) = element_id(&root.fields, "m_runTypeId") {
-                    stairs_run_types.insert(id, run_type_id);
-                }
-            }
-            "StairsRun" if runs.contains(&id) => {
+            "StairsRun" if runs.contains_key(&id) => {
                 let mut treads: Vec<(i64, Value)> = graph
                     .objects
                     .iter()
@@ -230,8 +213,7 @@ pub fn native_runs(
     Ok(found
         .into_iter()
         .filter_map(|(id, (run, treads))| {
-            let stairs = element_id(&run, "m_stairsId")?;
-            let type_id = *stairs_run_types.get(stairs_types.get(&stairs)?)?;
+            let type_id = runs[&id];
             let run_type = types.get(&type_id)?.clone();
             let (sketch, riser_height_feet) = sketch(&run, &treads)?;
             Some((
