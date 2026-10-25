@@ -1280,7 +1280,7 @@ fn export_rvt_doc(
     attach_family_instance_ports(rf, &mut entities, &element_type_ids);
     // #824: the openings a face-hosted door's or window's symbol cuts in the
     // element whose face hosts it.
-    attach_hosted_cut_openings(rf, &mut entities, &element_type_ids);
+    attach_hosted_cut_openings(rf, &mut entities);
 
     if !policy.include_geometry {
         export_content::strip_building_element_geometry(&mut entities);
@@ -2290,11 +2290,7 @@ fn prism_footprint(
 /// prism standing upright through the host's whole thickness and the host is
 /// one element drawn as an extrusion; any other cut is left out. On the
 /// BIM4LCA office, roof 2991742's four 600 mm hatch openings.
-fn attach_hosted_cut_openings(
-    rf: &mut crate::RevitFile,
-    entities: &mut Vec<entities::IfcEntity>,
-    element_type_ids: &std::collections::BTreeMap<u32, u32>,
-) {
+fn attach_hosted_cut_openings(rf: &mut crate::RevitFile, entities: &mut Vec<entities::IfcEntity>) {
     let candidates: std::collections::BTreeSet<u64> = entities
         .iter()
         .filter_map(|entity| match entity {
@@ -2323,6 +2319,9 @@ fn attach_hosted_cut_openings(
         return;
     };
     let mut openings = Vec::new();
+    // Revit's export names each after its host and its place among the
+    // host's openings: `Basic Roof:YP-1:2991742:1` to `:4`.
+    let mut cut_counts: std::collections::BTreeMap<usize, usize> = Default::default();
     for cut in cuts {
         let Some(transform) = u32::try_from(cut.instance)
             .ok()
@@ -2367,19 +2366,12 @@ fn attach_hosted_cut_openings(
                 (dx * cos - dy * sin, dx * sin + dy * cos)
             })
             .collect();
-        let opening_name = match (
-            name.rsplit_once(':'),
-            u32::try_from(cut.host)
-                .ok()
-                .and_then(|id| element_type_ids.get(&id)),
-        ) {
-            (Some((family_and_type, _)), Some(type_id)) => format!("{family_and_type}:{type_id}"),
-            _ => format!("Opening for {name}"),
-        };
+        let count = cut_counts.entry(host).or_insert(0);
+        *count += 1;
         openings.push(entities::IfcEntity::VoidOpening {
             host,
             tag,
-            name: opening_name,
+            name: format!("{name}:{count}"),
             outline_feet,
             depth_feet: depth,
         });

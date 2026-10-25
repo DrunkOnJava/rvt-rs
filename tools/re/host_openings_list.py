@@ -7,7 +7,8 @@ probe scorer. For Revit's export, and then for the rvt-rs export beside the
 probe output (`model.ifc`, kept by Measure's `keep_ifc`) where there is one,
 it prints every `IfcOpeningElement` that voids an element other than a
 wall: the opening's Tag, Name and GlobalId, its host's class, Tag and Name,
-its world box in the export's units, and each body item: its class and, for
+its box in the file's site frame in Revit's internal feet (so two exports in
+different coordinates compare), and each body item: its class and, for
 an extrusion, its profile, depth and direction.
 
 Usage:
@@ -21,6 +22,9 @@ import sys
 import ifcopenshell
 import ifcopenshell.geom
 import numpy as np
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from opening_boxes_vs_ifc import site_frame  # noqa: E402
 
 
 def describe(item):
@@ -39,6 +43,7 @@ def describe(item):
 
 def listing(label, path):
     model = ifcopenshell.open(path)
+    frame = site_frame(model)
     settings = ifcopenshell.geom.settings()
     settings.set("use-world-coords", True)
     count = 0
@@ -52,9 +57,9 @@ def listing(label, path):
         box = "-"
         try:
             shape = ifcopenshell.geom.create_shape(settings, opening)
-            verts = np.array(shape.geometry.verts).reshape(-1, 3)
+            verts = frame(np.array(shape.geometry.verts).reshape(-1, 3))
             lo, hi = verts.min(axis=0), verts.max(axis=0)
-            box = f"({lo[0]:.4f}, {lo[1]:.4f}, {lo[2]:.4f})..({hi[0]:.4f}, {hi[1]:.4f}, {hi[2]:.4f})"
+            box = f"({lo[0]:.4f}, {lo[1]:.4f}, {lo[2]:.4f})..({hi[0]:.4f}, {hi[1]:.4f}, {hi[2]:.4f}) ft"
         except RuntimeError:
             pass
         items = []
