@@ -646,7 +646,7 @@ pub fn recover_partition_schema_mvp(
         .chain(
             out.products
                 .iter()
-                .filter(|element| element.class == "Roof"),
+                .filter(|element| matches!(element.class.as_str(), "Roof" | "Ceiling")),
         )
         .filter_map(|element| element.id)
         .collect();
@@ -2197,7 +2197,7 @@ fn attach_cut_loop_sizes(
     // record box, along its own X axis and through its height, as Revit's
     // export sizes it: all 269 windows of the BIM4LCA office, 71 of its
     // doors and RE1's curtain-wall door. Not one whose element record names
-    // a floor or roof: a door set in a floor takes its height along a
+    // a floor, roof or ceiling: a hatch set in one takes its height along a
     // horizontal axis in Revit's export. An instance turned off the model's
     // axes, whose box is not along its own, gets no size.
     let mut in_floor: BTreeSet<u32> = BTreeSet::new();
