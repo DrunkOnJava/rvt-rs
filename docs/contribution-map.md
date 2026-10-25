@@ -13,7 +13,7 @@ AEC users without overstating current capability.
 | Tests | Add fixture assertions that prevent false-positive decode claims | `tests/project_corpus_smoke.rs`, `tests/walker_to_ifc_integration.rs` |
 | Viewer UX | Make unsupported-file states clearer and accessible | `viewer/`, [`docs/viewer-privacy-posture.md`](viewer-privacy-posture.md) |
 
-## Open Remainders (as of 2026-10-24)
+## Open Remainders (as of 2026-10-25)
 
 The issue tracker is the source of truth; this is its state today, by
 milestone, with each issue's own title. Pick one rather than re-opening a
@@ -27,13 +27,12 @@ milestone is for.
 |---|---|
 | [#885](https://github.com/DrunkOnJava/rvt-rs/issues/885) | Roof cases with no oracle: 2024 gables and hips, a square two-cut with a fascia, a slope arrow stopping short (RE-199 follow-up) |
 | [#884](https://github.com/DrunkOnJava/rvt-rs/issues/884) | Hip roofs over T and U footprints stay level blocks: straight-skeleton split events (RE-199 follow-up) |
-| [#869](https://github.com/DrunkOnJava/rvt-rs/issues/869) | A family instance's IfcDistributionPort that no duct or pipe joins has no placement outside Revit 2025: no other release's MEP model has a Revit export to measure against |
-| [#844](https://github.com/DrunkOnJava/rvt-rs/issues/844) | RE1's curtain-wall door 445975 writes no OverallWidth/OverallHeight: its symbol cuts no outline and its type stores no size |
+| [#869](https://github.com/DrunkOnJava/rvt-rs/issues/869) | MEP ports and pipe cylinders outside Revit 2024 and 2025: no 2026 or 2027 MEP model has a Revit export to measure against |
 | [#834](https://github.com/DrunkOnJava/rvt-rs/issues/834) | A port's SystemType (its connector's system classification) and an electrical port's Flow=Source/Sink description are not written (RE-212 follow-up) |
-| [#824](https://github.com/DrunkOnJava/rvt-rs/issues/824) | BIM4LCA office: 31 of 63 slabs' top surfaces differ from Revit's (8 at twice the area, 20 at +0.35%, holes missing) |
-| [#810](https://github.com/DrunkOnJava/rvt-rs/issues/810) | BIM4LCA office: 269 windows and 82 doors whose symbols hold no cut loop get no OverallWidth/OverallHeight or exact opening |
+| [#824](https://github.com/DrunkOnJava/rvt-rs/issues/824) | BIM4LCA office: 2 slabs' top surfaces still differ from Revit's (a non-monolithic landing's arc, a roof's four openings), and the permit file's slab 1384047 |
+| [#810](https://github.com/DrunkOnJava/rvt-rs/issues/810) | BIM4LCA office: 11 doors' OverallWidth/OverallHeight still differ from Revit's (roof hatches sized across their own Z axis, two 0.1137 ft wide) |
 | [#358](https://github.com/DrunkOnJava/rvt-rs/issues/358) | Wall bodies thicker or thinner than their type's layers: 165 Snowdon walls drawn whole (RE-53) |
-| [#357](https://github.com/DrunkOnJava/rvt-rs/issues/357) | Stair flights not yet drawn: monolithic (end-with-riser flag), riserless, spiral, and nosing profiles |
+| [#357](https://github.com/DrunkOnJava/rvt-rs/issues/357) | Stair flights not yet drawn: monolithic spiral runs, riserless runs with a nosing, and nosing profiles |
 | [#328](https://github.com/DrunkOnJava/rvt-rs/issues/328) | Snowdon: 6 slabs in the Legends phase are not in Revit's export (phase filtering) |
 | [#323](https://github.com/DrunkOnJava/rvt-rs/issues/323) | Stairs, stair runs, landings, stringers and roofs as IFC aggregates |
 | [#309](https://github.com/DrunkOnJava/rvt-rs/issues/309) | Snowdon: one record-backed slab (ElementId 2062318) is not in Revit's export |

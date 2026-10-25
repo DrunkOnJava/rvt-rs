@@ -118,7 +118,7 @@ that are not in Revit's export: six in the Legends phase (#328) and one more
 (#309). Element data: instance and type parameters with units and precedence
 (#35, #155) and the element-record fields that carry them (#223), written to
 IFC property sets and shown in the viewer; door and window sizes where the
-symbol cuts no outline (#810, #844); and ports' system classification (#834).
+symbol cuts no outline (#810); and ports' system classification (#834).
 
 ### 1.0.0: first-class utility
 
