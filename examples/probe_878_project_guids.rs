@@ -12,6 +12,7 @@
 //!   rgid <id> <GlobalId>              RE-48's GlobalId of every declared element
 //!   episode <index> <GlobalId>        each Global/History episode's GUID as a
 //!                                     GlobalId with nothing XORed in
+//!   document <GUID text>              BasicFileInfo's Unique Document GUID
 //!
 //! `tools/re/project_guids_vs_ifc.py` finds Revit's three GlobalIds in it.
 //!
@@ -38,6 +39,9 @@ fn main() -> rvt::Result<()> {
         .filter(|r| r.builtin_category == OST_PROJECT_INFORMATION)
     {
         println!("category {} {}", record.element_id, record.builtin_category);
+    }
+    if let Some(guid) = rf.basic_file_info()?.document_guid() {
+        println!("document {guid}");
     }
     for (id, global_id) in rvt::research::revit_global_ids::revit_global_ids(&mut rf)? {
         println!("rgid {id} {global_id}");

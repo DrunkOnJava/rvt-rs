@@ -36,17 +36,30 @@ def compress(value):
 
 
 def main():
-    by_guid, info, episodes = {}, [], {}
+    by_guid, info, episodes, documents = {}, [], {}, []
     for line in open(sys.argv[1], encoding="utf-8", errors="replace"):
         parts = line.split()
         if len(parts) == 3 and parts[0] == "rgid":
             by_guid[parts[2]] = parts[1]
+        elif len(parts) == 2 and parts[0] == "document":
+            documents.append(parts[1])
         elif len(parts) == 3 and parts[0] == "episode":
             episodes[expand(parts[2]) >> 32] = (parts[1], expand(parts[2]) & 0xFFFFFFFF)
         elif len(parts) == 3 and parts[0] == "category":
             info.append(parts[1])
     print(f"RE-48 GlobalIds {len(by_guid)}; project information records {sorted(set(info))}")
     model = ifcopenshell.open(sys.argv[2])
+    # revit-ifc GUIDUtil.CreateGUIDString: ExportUtils.GetExportId of the
+    # fake ElementIds -16 (project), -15 (building) and -14 (site).
+    for text in documents:
+        try:
+            value = int(text.replace("-", ""), 16)
+        except ValueError:
+            continue
+        for entity, fake in (("IfcProject", 0xFFFFFFF0), ("IfcBuilding", 0xFFFFFFF1), ("IfcSite", 0xFFFFFFF2)):
+            candidate = compress(value ^ fake)
+            revit = [e.GlobalId for e in model.by_type(entity)]
+            print(f"document {text}: {entity} candidate {candidate}, Revit {revit}, equal {candidate in revit}")
     for entity in ("IfcProject", "IfcSite", "IfcBuilding"):
         for element in model.by_type(entity):
             value = expand(element.GlobalId)
