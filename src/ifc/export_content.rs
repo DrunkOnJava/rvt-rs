@@ -3484,6 +3484,9 @@ fn stair_run_solid(
     run: &crate::partition_schema_mvp::StairRunBody,
     location: [f64; 3],
 ) -> entities::SolidShape {
+    if !run.pieces.is_empty() {
+        return stair_run_pieces_solid(run, location);
+    }
     let y_axis = [run.across[1], -run.across[0]];
     let along = if y_axis[0] * run.climb[0] + y_axis[1] * run.climb[1] >= 0.0 {
         1.0
@@ -3509,6 +3512,66 @@ fn stair_run_solid(
         axis: [run.across[0], run.across[1], 0.0],
         ref_direction: [0.0, 0.0, 1.0],
         depth_feet: run.width_feet,
+    }
+}
+
+/// A run of several solids (a riserless run's treads, #357) as one
+/// triangulated face set: each side view extruded across the run, a closed
+/// prism, its faces turned outward.
+fn stair_run_pieces_solid(
+    run: &crate::partition_schema_mvp::StairRunBody,
+    location: [f64; 3],
+) -> entities::SolidShape {
+    let point = |u: f64, up: f64, a: f64| {
+        [
+            run.origin[0] + run.climb[0] * u + run.across[0] * a - location[0],
+            run.origin[1] + run.climb[1] * u + run.across[1] * a - location[1],
+            run.origin[2] + up - location[2],
+        ]
+    };
+    let mut vertices_feet: Vec<[f64; 3]> = Vec::new();
+    let mut triangles: Vec<entities::BrepTriangle> = Vec::new();
+    for ring in std::iter::once(&run.profile).chain(run.pieces.iter()) {
+        let n = ring.len();
+        let base = vertices_feet.len() as u32;
+        for &[u, up] in ring {
+            vertices_feet.push(point(u, up, 0.0));
+        }
+        for &[u, up] in ring {
+            vertices_feet.push(point(u, up, run.width_feet));
+        }
+        let near = |i: usize| base + i as u32;
+        let far = |i: usize| base + (n + i) as u32;
+        let mut faces: Vec<entities::BrepTriangle> = Vec::new();
+        for i in 1..n - 1 {
+            faces.push(entities::BrepTriangle(near(0), near(i + 1), near(i)));
+            faces.push(entities::BrepTriangle(far(0), far(i), far(i + 1)));
+        }
+        for i in 0..n {
+            let j = (i + 1) % n;
+            faces.push(entities::BrepTriangle(near(i), near(j), far(j)));
+            faces.push(entities::BrepTriangle(near(i), far(j), far(i)));
+        }
+        // Turn the prism's faces outward: its signed volume is positive.
+        let volume: f64 = faces
+            .iter()
+            .map(|t| {
+                let [a, b, c] = [t.0, t.1, t.2].map(|k| vertices_feet[k as usize]);
+                (a[0] * (b[1] * c[2] - b[2] * c[1]) - a[1] * (b[0] * c[2] - b[2] * c[0])
+                    + a[2] * (b[0] * c[1] - b[1] * c[0]))
+                    / 6.0
+            })
+            .sum();
+        if volume < 0.0 {
+            for t in &mut faces {
+                std::mem::swap(&mut t.1, &mut t.2);
+            }
+        }
+        triangles.extend(faces);
+    }
+    entities::SolidShape::TriangulatedFaceSet {
+        vertices_feet,
+        triangles,
     }
 }
 
