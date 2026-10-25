@@ -6662,18 +6662,30 @@ fn attach_named_parameters(
         .filter(|(_, id, _)| scanned.insert(*id))
         .map(|(_, id, kind)| (*id, entry_kind(*kind)))
         .collect();
+    let type_of = |element: &DecodedElement| {
+        element.fields.iter().find_map(|(name, value)| match value {
+            InstanceField::ElementId { id, .. } if name == TYPE_ID_FIELD => Some(*id),
+            _ => None,
+        })
+    };
     let owners: BTreeSet<u32> = groups
         .iter()
         .flat_map(|elements| elements.iter())
-        .filter_map(|element| element.id)
+        .flat_map(|element| [element.id, type_of(element)])
+        .flatten()
         .collect();
     let found = prp::scan_parameter_entries(rf, revit_version, &owners, &wanted);
+    // Every name on the element first, then every name on its type, as
+    // revit-ifc's `CreatePropertyFromElementOrSymbol` falls back to the type.
     for element in groups.into_iter().flat_map(|elements| elements.iter_mut()) {
-        let Some(id) = element.id else {
-            continue;
-        };
-        for (name, parameter, kind) in &parameters {
-            let Some(value) = found.get(parameter).and_then(|values| values.get(&id)) else {
+        let owners = [element.id, type_of(element)];
+        for (owner, parameter_spec) in owners
+            .into_iter()
+            .flatten()
+            .flat_map(|owner| parameters.iter().map(move |spec| (owner, spec)))
+        {
+            let (name, parameter, kind) = parameter_spec;
+            let Some(value) = found.get(parameter).and_then(|values| values.get(&owner)) else {
                 continue;
             };
             let field_name = format!("{NAMED_PARAMETER_FIELD_PREFIX}{name}");
