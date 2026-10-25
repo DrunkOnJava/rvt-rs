@@ -776,7 +776,12 @@ Revit's, and two are 0.1137 ft wider than Revit's
 two partitions, with transforms that disagree, the copy its current record is
 in instead of no transform. That opens Core Interior's last 8 doors as Revit
 does: all 132 of its door openings are within 0.001 ft of Revit's
-(`reports/element-framing/RE-216-current-instance-copies.md`).
+(`reports/element-framing/RE-216-current-instance-copies.md`). Its
+addendum does the same for a sketch's lines, its curve list and its slab's
+box: the BIM4LCA office's permit-stage slabs 1384047 (a box before) and
+1474132 take Revit's outline, 61 of 63 slabs then. Walls keep dropping
+disagreeing copies, as their current copy misses 7 of Core Interior's
+walls by 0.333 ft (RE-216 §8).
 
 **RE-217 (2026-10-24)** draws a Revit 2025 stair run as its treads and
 risers. RE-52's and RE-92's byte anchors are absent on 2025, so its sketch,

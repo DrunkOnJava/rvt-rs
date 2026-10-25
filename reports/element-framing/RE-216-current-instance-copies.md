@@ -69,3 +69,26 @@ gh workflow run measure.yml -f ref=<branch> -f base=none \
   -f probe=probe_227_missing_transforms -f probe_scorer=opening_copies_vs_ifc
 gh run download <run id>   # measure-head/core-interior/probe.txt and probe_score.txt
 ```
+
+## 8. Addendum (2026-10-25): sketches whose copies disagree (#824)
+
+The same copies hold sketches back. On the BIM4LCA office at building permit, slab 1384047 was its record box and slab 1474132 was 0.070 ft off Revit's outline, both edited after their first save:
+
+- **Sketch lines.** 11 of 1384047's 37 lines and lines of 1474132 have their data in two or three partitions with different ends (line 2598714's x is 121.534 ft in `Partitions/278` and `/313`, 122.322 ft in `/370`). `partition_beam_axes::scan_first_records` dropped any element whose copies disagree; for sketch lines it now takes the copy in the partition its current record is in (`Copies::Current`, `native_document::current_partitions`, as §4 does for an instance's transform), and `partition_schema_mvp::current_sketch_records` keeps only that copy of each line's record box. The current copies are Revit's outline (`examples/probe_824_slab_arcs.rs`, Measure run [40176709762](https://github.com/DrunkOnJava/rvt-rs/actions/runs/40176709762)).
+- **Sketch curve lists.** 1384047's Sketch (1384046) lists its curves in three partitions: 18 in `/278`, 40 in `/313` and `/370`, after its holes were drawn. `element_record_plan_profiles::scan_sketch_curve_lists` dropped a sketch whose copies disagree; it now takes the list in the Sketch's current partition, `/370` (`examples/probe_824_sketch_lists.rs`, Measure run [40180433379](https://github.com/DrunkOnJava/rvt-rs/actions/runs/40180433379)). Three of the outline's lines name another element as their owner, so the list is their only tie to the slab (RE-97).
+- **The slab's own box.** An outline whose list differs from the lines naming its element must span the element's record box (RE-96). That box was the first copy found, 121.534 ft wide of the outline in `/278`; it is now the record the element is built from (RE-26: the tallest, then the newest), as the slab's body already was.
+
+Walls and beams keep dropping disagreeing copies (`Copies::Agreeing`). Taking their current copy too (Measure run [40170636127](https://github.com/DrunkOnJava/rvt-rs/actions/runs/40170636127)) drew 7 of Core Interior's walls 0.333 ft off Revit's ends, where their record box draws them exactly; of its 41 walls whose copies disagree only 6 differ in their line's length, so the trim comes from the join lists' copies, not read here (`examples/probe_824_wall_copies.rs`, `tools/re/wall_copies_vs_ifc.py`, Measure run [40171461889](https://github.com/DrunkOnJava/rvt-rs/actions/runs/40171461889)).
+
+Measure run [40181361898](https://github.com/DrunkOnJava/rvt-rs/actions/runs/40181361898), this change against `main` (0304c038), `-f nordic=true -f r2025=true`:
+
+| BIM4LCA office at building permit | before | after |
+|---|---|---|
+| slabs with Revit's outline within 0.01 ft (`plan_profiles_vs_ifc`) | 59 of 63 | 61 of 63 |
+| slab top area within 0.1% of Revit's | 60 of 63 | 61 of 63 |
+| 1384047 | its record box, 9.06% over Revit's area, outline 29.05 ft off | Revit's outline and holes |
+| 1474132 | outline 0.070 ft off | Revit's |
+| unfilled openings rvt-rs writes that are one of Revit's (`opening_boxes_vs_ifc`) | 25 of 37 | 27 of 43 |
+
+The two slabs' holes add six unfilled openings: two are Revit's own openings, within 0.001 ft, and four are holes Revit's export cuts in the slab's profile instead, so the slabs' top surfaces are Revit's either way. Every other model's IFC is byte-identical, the office as built among them: none of its sketches has disagreeing copies.
+
