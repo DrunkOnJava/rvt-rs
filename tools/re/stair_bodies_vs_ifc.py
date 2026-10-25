@@ -2,7 +2,8 @@
 """Score rvt-rs stair bodies against Revit's own IFC export, per flight (#357).
 
 For every `IfcStairFlight` both exports hold (same `Tag`, the run's
-ElementId), and every `IfcStair` with its aggregated parts, this meshes the
+ElementId), every `IfcStair` with its aggregated parts, and every landing
+(`IfcSlab` `.LANDING.`), this meshes the
 body with IfcOpenShell, in each file's own site frame (Revit writes the
 BIM4LCA office's site at its shared coordinates, rvt-rs at its internal
 ones), and compares, in feet, as `roof_bodies_vs_ifc.py` does for roofs:
@@ -41,7 +42,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from opening_boxes_vs_ifc import site_frame  # noqa: E402
 from roof_bodies_vs_ifc import VERTEX_TOLERANCE_FT, VOLUME_TOLERANCE, farthest, shapes_of, surface_distances  # noqa: E402
 
-CLASSES = ("IfcStairFlight", "IfcStair")
+# A landing is an IfcSlab of PredefinedType LANDING in both exports (#824).
+CLASSES = ("IfcStairFlight", "IfcStair", "IfcSlab")
 
 
 def bodies(path, cls):
@@ -53,6 +55,8 @@ def bodies(path, cls):
     out = {}
     for element in model.by_type(cls):
         if not element.Tag or element.is_a() != cls:
+            continue
+        if cls == "IfcSlab" and getattr(element, "PredefinedType", None) != "LANDING":
             continue
         vertices = set()
         triangles = []
@@ -92,7 +96,8 @@ def main():
         ours = bodies(args.ours, cls)
         ref = bodies(args.reference, cls)
         both = sorted(set(ours) & set(ref), key=lambda t: (len(t), t))
-        print(f"{cls} in Revit's export with a body: {len(ref)}; rvt-rs writes one for {len(both)} of them")
+        label = "IfcSlab .LANDING." if cls == "IfcSlab" else cls
+        print(f"{label} in Revit's export with a body: {len(ref)}; rvt-rs writes one for {len(both)} of them")
         if not both:
             continue
         ok = on_surface = 0
@@ -105,17 +110,24 @@ def main():
             relative = abs(our_volume - ref_volume) / ref_volume if ref_volume > 0 else math.inf
             matches = distance <= VERTEX_TOLERANCE_FT and relative <= VOLUME_TOLERANCE
             ok += matches
-            rows.append((tag, matches, len(ref_vertices), distance, max(surface), our_volume, ref_volume))
+            heights = (
+                min(v[2] for v in our_vertices),
+                max(v[2] for v in our_vertices),
+                min(v[2] for v in ref_vertices),
+                max(v[2] for v in ref_vertices),
+            )
+            rows.append((tag, matches, len(ref_vertices), distance, max(surface), our_volume, ref_volume, heights))
         print(
             f"  vertices within {VERTEX_TOLERANCE_FT} ft and volume within {VOLUME_TOLERANCE:g} of Revit's: "
             f"{ok} of {len(both)}"
         )
         print(f"  every vertex of Revit's body within {VERTEX_TOLERANCE_FT} ft of rvt-rs's surface: {on_surface} of {len(both)}")
-        for tag, matches, count, distance, surface, our_volume, ref_volume in rows:
+        for tag, matches, count, distance, surface, our_volume, ref_volume, (lo, hi, ref_lo, ref_hi) in rows:
             print(
                 f"    {tag}: {'match' if matches else 'differs'}, Revit {count} vertices, "
                 f"farthest {distance:.3g} ft, from rvt-rs's surface at most {surface:.3g} ft, "
-                f"volume rvt-rs {our_volume:.6f} ft3, Revit {ref_volume:.6f} ft3"
+                f"volume rvt-rs {our_volume:.6f} ft3, Revit {ref_volume:.6f} ft3, "
+                f"z rvt-rs {lo:.4f} to {hi:.4f}, Revit {ref_lo:.4f} to {ref_hi:.4f}"
             )
 
 

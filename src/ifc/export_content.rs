@@ -2736,6 +2736,10 @@ fn beam_i_solid(
 /// `BodySource` of a stair run drawn as its treads and risers (RE-52).
 pub const STAIR_RUN_BODY_SOURCE: &str = "partition_stair_run_sketch";
 
+/// `BodySource` of a monolithic stair landing drawn as its slab, its outline
+/// from its top down its type's thickness (#824).
+pub const LANDING_SLAB_BODY_SOURCE: &str = "partition_landing_slab";
+
 /// `BodySource` of a shed roof drawn along its slope (RE-56).
 pub const ROOF_SLOPE_BODY_SOURCE: &str = "partition_roof_slope";
 
@@ -3531,6 +3535,7 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
     let mut beam_body_source = None;
     let mut column_cut_walls = None;
     let mut column_body_z = (None, None);
+    let mut landing_slab = false;
     let mut type_symbol_id = None;
     let mut type_profile = (None, None);
     let mut level_id = None;
@@ -3623,6 +3628,19 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
             ) => column_body_z.0 = Some(*value),
             (
                 crate::partition_schema_mvp::COLUMN_BODY_TOP_FIELD,
+                InstanceField::Float { value, .. },
+            ) => column_body_z.1 = Some(*value),
+            // A landing's slab is placed the same way, between its own
+            // bottom and top (#824).
+            (
+                crate::partition_schema_mvp::LANDING_BODY_BOTTOM_FIELD,
+                InstanceField::Float { value, .. },
+            ) => {
+                column_body_z.0 = Some(*value);
+                landing_slab = true;
+            }
+            (
+                crate::partition_schema_mvp::LANDING_BODY_TOP_FIELD,
                 InstanceField::Float { value, .. },
             ) => column_body_z.1 = Some(*value),
             ("m_locationX", InstanceField::Float { value, .. }) => x = Some(*value),
@@ -3947,6 +3965,9 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
                     .or_else(|| wall_arc.as_ref().map(|_| WALL_ARC_BODY_SOURCE.into()))
                     .or_else(|| wall_body_source.clone())
                     .or_else(|| column_body_source.clone())
+                    .or_else(|| {
+                        (landing_slab && profile.is_some()).then(|| LANDING_SLAB_BODY_SOURCE.into())
+                    })
                     .or_else(|| beam_body_source.clone())
                     .or_else(|| beam.map(|_| BEAM_AXIS_BODY_SOURCE.into()))
                     .or_else(|| pipe.map(|_| PIPE_AXIS_BODY_SOURCE.into()))

@@ -329,6 +329,8 @@ pub fn recover_partition_schema_mvp(
     attach_stair_dimensions(rf, revit_version, &mut out.products);
     // --- Stair runs' treads and risers, and their run type (RE-52) ---
     attach_stair_run_bodies(rf, revit_version, &mut out.products);
+    // --- Monolithic landings as their slabs (#824) ---
+    attach_landing_slabs(rf, revit_version, &mut out.products);
     // --- Beams along their location lines (RE-49) ---
     attach_beam_axes(rf, revit_version, &mut out.products);
     // --- Pipes as cylinders along their ends (RE-131) ---
@@ -5008,6 +5010,216 @@ fn attach_native_stair_run_bodies(
                 .push((TYPE_NAME_FIELD.into(), InstanceField::String(name.clone())));
         }
         push_stair_run_body(element, &run.sketch, &profile);
+    }
+}
+
+/// Bottom, feet, of a stair landing's body (#824): its type's thickness
+/// below its top. The landing's own fields (`m_locationZ`, `m_bboxHeight`)
+/// keep its record box, which spans its stair's storey.
+pub const LANDING_BODY_BOTTOM_FIELD: &str = "m_landing_body_bottom";
+/// Top, feet, of a stair landing's body (#824).
+pub const LANDING_BODY_TOP_FIELD: &str = "m_landing_body_top";
+/// [`crate::element_record_plan_profiles::PLAN_PROFILE_SOURCE_FIELD`] of a
+/// landing outline read from the lines in its own element data (#824).
+pub const LANDING_OUTLINE_SOURCE: &str = "partition_landing_lines";
+/// How closely a landing's lines must lie at its top and meet each other,
+/// and lie in its record box, feet.
+pub const LANDING_LINE_TOLERANCE_FEET: f64 = 1e-6;
+
+/// The plan outline a landing's own lines at `top_feet` make (#824): the
+/// lines end to end, and where one chain of them stops, a straight edge to
+/// the nearest end of an unused line, closed back to the first point. On the
+/// BIM4LCA office a landing's lines at its top stop where its flights meet
+/// it, and Revit's outline runs straight across there: the outline is
+/// Revit's within 0.001 ft on all 21 monolithic landings. `None` for fewer
+/// than three lines, or an outline that crosses itself or has no area.
+fn landing_outline(
+    lines: &[crate::partition_beam_axes::BoundedLine],
+    top_feet: f64,
+) -> Option<Vec<[f64; 2]>> {
+    const TOL: f64 = LANDING_LINE_TOLERANCE_FEET;
+    let gap = |a: [f64; 2], b: [f64; 2]| (a[0] - b[0]).hypot(a[1] - b[1]);
+    let mut remaining: Vec<([f64; 2], [f64; 2])> = lines
+        .iter()
+        .filter_map(|line| {
+            let (s, e) = (line.start(), line.end());
+            ((s[2] - top_feet).abs() <= TOL && (e[2] - top_feet).abs() <= TOL)
+                .then_some(([s[0], s[1]], [e[0], e[1]]))
+        })
+        .collect();
+    if remaining.len() < 3 {
+        return None;
+    }
+    let (first, second) = remaining.remove(0);
+    let mut points = vec![first, second];
+    let mut here = second;
+    while !remaining.is_empty() {
+        let (index, reverse, _) = remaining
+            .iter()
+            .enumerate()
+            .flat_map(|(i, (a, b))| [(i, false, gap(*a, here)), (i, true, gap(*b, here))])
+            .min_by(|x, y| x.2.total_cmp(&y.2))?;
+        let (a, b) = remaining.remove(index);
+        let (from, to) = if reverse { (b, a) } else { (a, b) };
+        if gap(from, here) > TOL {
+            points.push(from);
+        }
+        points.push(to);
+        here = to;
+    }
+    if gap(points[0], here) <= TOL {
+        points.pop();
+    }
+    let n = points.len();
+    if n < 3 {
+        return None;
+    }
+    let area: f64 = (0..n)
+        .map(|i| {
+            let (a, b) = (points[i], points[(i + 1) % n]);
+            a[0] * b[1] - b[0] * a[1]
+        })
+        .sum::<f64>()
+        / 2.0;
+    if area.abs() <= TOL {
+        return None;
+    }
+    let cross = |o: [f64; 2], a: [f64; 2], b: [f64; 2]| {
+        (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0])
+    };
+    for i in 0..n {
+        for j in (i + 1)..n {
+            if j == i + 1 || (i == 0 && j == n - 1) {
+                continue;
+            }
+            let (p, q) = (points[i], points[(i + 1) % n]);
+            let (r, s) = (points[j], points[(j + 1) % n]);
+            let (d1, d2) = (cross(r, s, p), cross(r, s, q));
+            let (d3, d4) = (cross(p, q, r), cross(p, q, s));
+            if d1 * d2 <= 0.0 && d3 * d4 <= 0.0 {
+                return None;
+            }
+        }
+    }
+    Some(points)
+}
+
+/// Give each monolithic stair landing the slab Revit draws (#824): its own
+/// outline (`landing_outline`), from its top (`StairsLanding.m_baseElevation`)
+/// down its type's thickness (`StairsLandingType.m_thickness`). The type is
+/// the one `OST_StairsLandings` type definition its element record's
+/// reference list names (RE-28), its stairs' landing type on all 22 of the
+/// BIM4LCA office's. Revit's underside also follows the soffit of a flight
+/// where it meets the landing, which is not drawn. A landing whose type is
+/// not monolithic, whose lines do not make an outline in its record box, or
+/// whose slab leaves its record box keeps its box.
+fn attach_landing_slabs(rf: &mut RevitFile, revit_version: u32, products: &mut [DecodedElement]) {
+    use crate::element_record_plan_profiles as erpp;
+    use crate::partition_type_records as ptr;
+    const TOL: f64 = LANDING_LINE_TOLERANCE_FEET;
+    if !crate::native_stairs::NATIVE_LANDING_REVIT_VERSIONS.contains(&revit_version) {
+        return;
+    }
+    if !products
+        .iter()
+        .any(|element| element.class == "StairsLanding")
+    {
+        return;
+    }
+    let declared: BTreeSet<u32> = match crate::elem_table::parse_records(rf) {
+        Ok(records) => crate::elem_table::declared_ids(&records),
+        Err(_) => return,
+    };
+    let type_records = ptr::scan_type_records(
+        rf,
+        revit_version,
+        crate::partition_element_records::OST_STAIRS_LANDINGS,
+        &declared,
+    )
+    .unwrap_or_default();
+    let landing_types = ptr::type_definition_ids(&type_records);
+    let mut landings: BTreeMap<u64, u64> = BTreeMap::new();
+    for element in products
+        .iter()
+        .filter(|element| element.class == "StairsLanding")
+    {
+        let (Some(id), Some((references, _))) = (element.id, record_references(rf, element)) else {
+            continue;
+        };
+        if let Some(type_id) = ptr::unique_type_reference(&references, &landing_types) {
+            landings.insert(u64::from(id), u64::from(type_id));
+        }
+    }
+    let Ok(native) = crate::native_stairs::native_landings(rf, &landings) else {
+        return;
+    };
+    let ids: BTreeSet<u32> = native
+        .keys()
+        .filter_map(|id| u32::try_from(*id).ok())
+        .collect();
+    let lines =
+        crate::partition_stairs::scan_run_lines(rf, revit_version, &ids).unwrap_or_default();
+    let scalar = |value: f64| InstanceField::Float { value, size: 8 };
+    for element in products
+        .iter_mut()
+        .filter(|element| element.class == "StairsLanding")
+    {
+        let Some(id) = element.id else {
+            continue;
+        };
+        let (Some(landing), Some(lines), Some(bbox)) = (
+            native.get(&u64::from(id)),
+            lines.get(&id),
+            element_record_bbox(element),
+        ) else {
+            continue;
+        };
+        if element
+            .fields
+            .iter()
+            .any(|(name, _)| name == erpp::PLAN_PROFILE_OUTER_FIELD)
+        {
+            continue;
+        }
+        let bottom = landing.top_feet - landing.thickness_feet;
+        if landing.top_feet > bbox[5] + TOL || bottom < bbox[2] - TOL {
+            continue;
+        }
+        let Some(outline) = landing_outline(lines, landing.top_feet) else {
+            continue;
+        };
+        if !outline.iter().all(|p| {
+            p[0] >= bbox[0] - TOL
+                && p[0] <= bbox[3] + TOL
+                && p[1] >= bbox[1] - TOL
+                && p[1] <= bbox[4] + TOL
+        }) {
+            continue;
+        }
+        let segments: Vec<[f64; 4]> = (0..outline.len())
+            .map(|i| {
+                let (a, b) = (outline[i], outline[(i + 1) % outline.len()]);
+                [a[0], a[1], b[0], b[1]]
+            })
+            .collect();
+        let Some(profile) = erpp::plan_profile_from_lines(&segments) else {
+            continue;
+        };
+        element
+            .fields
+            .extend(profile.fields().into_iter().map(|(name, value)| {
+                if name == erpp::PLAN_PROFILE_SOURCE_FIELD {
+                    (name, InstanceField::String(LANDING_OUTLINE_SOURCE.into()))
+                } else {
+                    (name, value)
+                }
+            }));
+        element
+            .fields
+            .push((LANDING_BODY_BOTTOM_FIELD.into(), scalar(bottom)));
+        element
+            .fields
+            .push((LANDING_BODY_TOP_FIELD.into(), scalar(landing.top_feet)));
     }
 }
 
