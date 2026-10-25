@@ -136,3 +136,20 @@ Model 15's run type has treads and no risers (`m_hasRiser` false, `m_hasTread` t
 `partition_stairs::riserless_tread_profiles` draws that: one side view per tread, for a type with treads and no risers, not monolithic, with no nosing, on a run ending with a riser. `run_side_pieces` returns it where `run_side_profile` draws nothing. The run's solids are written as one `IfcTriangulatedFaceSet` of their prisms (`StairRunBody::pieces`, field `m_stair_run_pieces`), each prism's faces turned outward.
 
 Measure run [40158238799](https://github.com/DrunkOnJava/rvt-rs/actions/runs/40158238799), this change against `main` (b7990d37): model 15's flight goes from its box, 355.97 ft³, to Revit's 4.449648 ft³, every vertex within 2.3e-6 ft of Revit's and every Revit vertex on rvt-rs's surface (`stair_bodies_vs_ifc`: match). The flight now also carries its type's name (`type_objects_vs_ifc` TypeName equal to Revit's 21 to 22 of 25) and Revit's material set (`element_materials_vs_ifc` 18 to 19 of 19). Every other model's IFC is byte-identical, the BIM4LCA office's included. Snowdon's riserless type has a 3 in nosing shaped by its nosing profile family, which is not decoded, so its runs keep their box; Snowdon is not re-measured (local only).
+
+## 10. Addendum (2026-10-25): the flight's predefined type (#323)
+
+Every `StairsTreadInfo` of a run carries `m_runType`: 0 on the straight runs of R2025 models 13 to 16 and on 34 of the BIM4LCA office's 35 runs, 2 on model 17's spiral run and the office's spiral run 3057703, the same value on every tread of a run. Revit's export writes each of those flights' `PredefinedType` as `.STRAIGHT.` where it is 0 and `.SPIRAL.` where it is 2, and the flight's `IfcStairFlightType` with the same value.
+
+`native_stairs::native_run_shapes` reads it on Revit 2024 and 2025 (`NATIVE_RUN_SHAPE_REVIT_VERSIONS`), for every run whose treads agree, and `flight_predefined_type` names the two values measured; the IFC writer takes it for an `IfcStairFlight` after a predefined type the element's own export parameters set (RE-45). Any other value names nothing, and the flight keeps `.NOTDEFINED.`.
+
+Measure run [40168694898](https://github.com/DrunkOnJava/rvt-rs/actions/runs/40168694898), this change against `main` (eb369d9f), default models plus `-f nordic=true -f r2025=true`, `tools/re/predefined_types_vs_ifc.py`:
+
+| model | flights with Revit's PredefinedType | `IfcStairFlightType` values |
+|---|---|---|
+| BIM4LCA office as built | 0 → 35 of 35 (34 `STRAIGHT`, 1 `SPIRAL`) | `NOTDEFINED` ×2 → `STRAIGHT`, `SPIRAL`, as Revit's |
+| BIM4LCA office at building permit | 0 → 35 of 35 | the same |
+| R2025 models 13 to 17 | 0 → 5 of 5 (4 `STRAIGHT`, 1 `SPIRAL`) | rvt-rs writes no flight type object on these, as before |
+
+No other scorer's output changes, and only these seven models' IFC does. The stair's own `PredefinedType` (`STRAIGHT_RUN_STAIR`, `HALF_TURN_STAIR`, `DOUBLE_RETURN_STAIR`, `SPIRAL_STAIR` in Revit's export of the office) is not read: rvt-rs writes `.NOTDEFINED.` on all 16 office stairs, which is Revit's on 2.
+

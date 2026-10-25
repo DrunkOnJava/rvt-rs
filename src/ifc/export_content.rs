@@ -554,6 +554,21 @@ pub fn append_typed_production_elements(
                 }
                 _ => None,
             })
+            .or_else(|| {
+                // #323: a flight takes the shape its treads give.
+                (effective.ifc_type == "IFCSTAIRFLIGHT")
+                    .then(|| {
+                        decoded.fields.iter().find_map(|(name, value)| match value {
+                            InstanceField::Integer { value, .. }
+                                if name == crate::partition_schema_mvp::STAIR_RUN_SHAPE_FIELD =>
+                            {
+                                crate::native_stairs::flight_predefined_type(*value)
+                            }
+                            _ => None,
+                        })
+                    })
+                    .flatten()
+            })
             .or(effective.predefined_type);
 
         // RE-65: a stair and its parts carry the name Revit gives them.

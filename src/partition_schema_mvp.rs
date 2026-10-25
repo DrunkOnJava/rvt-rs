@@ -329,6 +329,8 @@ pub fn recover_partition_schema_mvp(
     attach_stair_dimensions(rf, revit_version, &mut out.products);
     // --- Stair runs' treads and risers, and their run type (RE-52) ---
     attach_stair_run_bodies(rf, revit_version, &mut out.products);
+    // --- Stair runs' shape, from their treads (#323) ---
+    attach_stair_run_shapes(rf, revit_version, &mut out.products);
     // --- Monolithic landings as their slabs (#824) ---
     attach_landing_slabs(rf, revit_version, &mut out.products);
     // --- Beams along their location lines (RE-49) ---
@@ -5180,6 +5182,47 @@ fn landing_outline(
         }
     }
     Some(points)
+}
+
+/// Field carrying the `m_runType` a stair run's treads all give
+/// ([`crate::native_stairs::native_run_shapes`], #323), which names its
+/// flight's predefined type
+/// ([`crate::native_stairs::flight_predefined_type`]).
+pub const STAIR_RUN_SHAPE_FIELD: &str = "m_stair_run_shape";
+
+/// Give each stair run the shape its treads' native records give
+/// ([`STAIR_RUN_SHAPE_FIELD`], #323).
+fn attach_stair_run_shapes(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    products: &mut [DecodedElement],
+) {
+    if !crate::native_stairs::NATIVE_RUN_SHAPE_REVIT_VERSIONS.contains(&revit_version) {
+        return;
+    }
+    let runs: BTreeSet<u64> = products
+        .iter()
+        .filter(|element| element.class == "StairsRun")
+        .filter_map(|element| element.id.map(u64::from))
+        .collect();
+    let Ok(shapes) = crate::native_stairs::native_run_shapes(rf, &runs) else {
+        return;
+    };
+    for element in products
+        .iter_mut()
+        .filter(|element| element.class == "StairsRun")
+    {
+        if let Some(&shape) = element.id.and_then(|id| shapes.get(&u64::from(id))) {
+            element.fields.push((
+                STAIR_RUN_SHAPE_FIELD.into(),
+                InstanceField::Integer {
+                    value: shape,
+                    signed: true,
+                    size: 4,
+                },
+            ));
+        }
+    }
 }
 
 /// Give each monolithic stair landing the slab Revit draws (#824): its own
