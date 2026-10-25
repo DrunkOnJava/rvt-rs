@@ -881,34 +881,26 @@ pub const SKETCH_MAX_CURVES: usize = 4096;
 /// or 2 is too easily met by chance.
 pub const SKETCH_MIN_CURVES: usize = 3;
 
-/// The sketch lines of each sketched element, from its Sketch element's
-/// data (RE-97): the sketched element's ElementId at
-/// [`SKETCH_OWNER_OFFSET`], and a counted list `u32 n · n × (u64 ElementId ·
-/// u32 index)` of at least [`SKETCH_MIN_CURVES`] whose indices rise (a
-/// sketch edited to drop curves leaves gaps) and whose ids are all in
-/// `sketch_lines`. A sketch line's own owner reference names another element
-/// where the sketch was edited, so the list is the sketch's membership.
-/// Where the Sketch's copies in different partitions disagree, the copy
-/// taken is its current partition's (RE-216, #824: a sketch edited after
-/// its first save keeps its older list in an older partition). An element
-/// whose current copy cannot be told, or a line two sketches list, is
-/// dropped.
-/// Empty for a release this layout is not measured on: Revit 2024, and 2025
-/// (RE-199, the edited roof sketches of #356's `R2025_Models.zip`).
-pub fn scan_sketch_curve_lists(
+/// One copy of a Sketch's curve list ([`scan_sketch_curve_lists`]): the
+/// Sketch's own ElementId, the partition that holds the copy, and the
+/// curves it lists.
+pub type SketchListCopy = (u32, u32, Vec<u32>);
+
+/// Every copy of every Sketch's curve list in the file, by the element it
+/// sketches, in partition order: what [`scan_sketch_curve_lists`] chooses
+/// from. Empty for a release that layout is not measured on.
+pub fn sketch_curve_list_copies(
     rf: &mut crate::RevitFile,
     revit_version: u32,
     sketch_lines: &std::collections::BTreeSet<u32>,
-) -> BTreeMap<u32, Vec<u32>> {
+) -> BTreeMap<u32, Vec<SketchListCopy>> {
+    let mut found: BTreeMap<u32, Vec<SketchListCopy>> = BTreeMap::new();
     if !matches!(revit_version, 2024 | 2025) || sketch_lines.is_empty() {
-        return BTreeMap::new();
+        return found;
     }
     let Some(header) = crate::partition_names::element_data_header(revit_version) else {
-        return BTreeMap::new();
+        return found;
     };
-    use std::collections::BTreeSet;
-    let mut found: BTreeMap<u32, Vec<(u32, u32, Vec<u32>)>> = BTreeMap::new();
-    let mut holders: BTreeMap<u32, BTreeSet<u32>> = BTreeMap::new();
     for stream in rf.partition_stream_names() {
         let Some(partition) = stream
             .strip_prefix("Partitions/")
@@ -934,12 +926,39 @@ pub fn scan_sketch_curve_lists(
             else {
                 continue;
             };
-            holders.entry(sketch).or_default().insert(partition);
             found
                 .entry(owner)
                 .or_default()
                 .push((sketch, partition, curves));
         }
+    }
+    found
+}
+
+/// The sketch lines of each sketched element, from its Sketch element's
+/// data (RE-97): the sketched element's ElementId at
+/// [`SKETCH_OWNER_OFFSET`], and a counted list `u32 n · n × (u64 ElementId ·
+/// u32 index)` of at least [`SKETCH_MIN_CURVES`] whose indices rise (a
+/// sketch edited to drop curves leaves gaps) and whose ids are all in
+/// `sketch_lines`. A sketch line's own owner reference names another element
+/// where the sketch was edited, so the list is the sketch's membership.
+/// Where the Sketch's copies in different partitions disagree, the copy
+/// taken is its current partition's (RE-216, #824: a sketch edited after
+/// its first save keeps its older list in an older partition). An element
+/// whose current copy cannot be told, or a line two sketches list, is
+/// dropped.
+/// Empty for a release this layout is not measured on: Revit 2024, and 2025
+/// (RE-199, the edited roof sketches of #356's `R2025_Models.zip`).
+pub fn scan_sketch_curve_lists(
+    rf: &mut crate::RevitFile,
+    revit_version: u32,
+    sketch_lines: &std::collections::BTreeSet<u32>,
+) -> BTreeMap<u32, Vec<u32>> {
+    use std::collections::BTreeSet;
+    let found = sketch_curve_list_copies(rf, revit_version, sketch_lines);
+    let mut holders: BTreeMap<u32, BTreeSet<u32>> = BTreeMap::new();
+    for (sketch, partition, _) in found.values().flatten() {
+        holders.entry(*sketch).or_default().insert(*partition);
     }
     let sketch_of = |copies: &[(u32, u32, Vec<u32>)]| {
         let first = copies.first()?.0;
