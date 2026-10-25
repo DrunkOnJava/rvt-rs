@@ -34,6 +34,11 @@ from saved_meshes_vs_ifc import body_sources  # noqa: E402
 
 SOURCE = "saved_graphics_mesh"
 PAIR_BUDGET = 1_000_000
+# Most elements scored per class (an even stride through them by Tag), and
+# most vertices of a body tested against the other's surface, so a file
+# with thousands of mullions is scored in the time Measure allows.
+CLASS_CAP = 300
+VERTEX_CAP = 400
 
 
 def meshes(path, tags=None, source=None):
@@ -112,13 +117,32 @@ def surface_distance(points, triangles):
     return worst
 
 
+def sample(triangles):
+    points = np.unique(triangles.reshape(-1, 3), axis=0)
+    step = max(1, -(-len(points) // VERTEX_CAP))
+    return points[::step]
+
+
 def main():
     if len(sys.argv) != 3:
         print(__doc__)
         return 2
-    ours = meshes(sys.argv[1], source=SOURCE)
+    model = ifcopenshell.open(sys.argv[1])
+    by_class = collections.defaultdict(list)
+    for element in model.by_type("IfcElement"):
+        if element.Tag and not element.is_a("IfcOpeningElement") and body_sources(element) == SOURCE:
+            by_class[element.is_a()].append(element.Tag)
+    chosen = set()
+    for cls, tags in by_class.items():
+        tags = sorted(set(tags), key=lambda t: (len(t), t))
+        step = max(1, -(-len(tags) // CLASS_CAP))
+        chosen.update(tags[::step])
+        if step > 1:
+            print(f"{cls}: {len(tags)} bodies, every {step}th scored")
+    del model
+    ours = meshes(sys.argv[1], tags=chosen, source=SOURCE)
     ref = meshes(sys.argv[2], tags=set(ours))
-    print(f"{SOURCE} bodies: {len(ours)}; in Revit's export {len(ref)}")
+    print(f"{SOURCE} bodies scored: {len(ours)}; in Revit's export {len(ref)}")
     rows = collections.defaultdict(lambda: collections.defaultdict(collections.Counter))
     ratios = collections.defaultdict(list)
     scored = []
@@ -127,8 +151,8 @@ def main():
         cls, object_type, ref_triangles = ref[tag]
         ref_volume, our_volume = volume(ref_triangles), volume(our_triangles)
         ratio = our_volume / ref_volume if ref_volume > 0 else float("inf")
-        to_ours = surface_distance(np.unique(ref_triangles.reshape(-1, 3), axis=0), our_triangles)
-        to_ref = surface_distance(np.unique(our_triangles.reshape(-1, 3), axis=0), ref_triangles)
+        to_ours = surface_distance(sample(ref_triangles), our_triangles)
+        to_ref = surface_distance(sample(our_triangles), ref_triangles)
         far = max(to_ours, to_ref)
         for key in ("", object_type):
             row = rows[cls][key]
