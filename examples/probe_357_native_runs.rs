@@ -153,6 +153,9 @@ fn main() -> anyhow::Result<()> {
             "m_endWithRiser",
             "m_actualRunWidth",
             "m_bottomElevation",
+            "m_extendBelowBase",
+            "m_extendBelowTreadBase",
+            "m_baseRiserIndex",
         ] {
             println!(
                 "check {id} {name} {}",
