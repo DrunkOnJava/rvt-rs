@@ -50,7 +50,13 @@ def boxed_tags(path):
 
 
 def fills(path, tags):
-    """Tag -> (volume / bounding-box volume of Revit's body, its ObjectType)."""
+    """Tag -> (volume / bounding-box volume of Revit's body, its ObjectType).
+
+    Where several products share a Tag (a floor exported as stacked slabs),
+    their volumes and their boxes' volumes are each summed before dividing,
+    so disjoint box-shaped pieces still fill 100%. Vertices are taken
+    relative to the body's first one, so the signed-volume sum does not lose
+    precision far from the origin."""
     model = ifcopenshell.open(path)
     settings = ifcopenshell.geom.settings()
     elements = [
@@ -58,17 +64,17 @@ def fills(path, tags):
         for e in model.by_type("IfcElement")
         if e.Tag in tags and not e.is_a("IfcOpeningElement") and e.Representation
     ]
-    out = {}
+    sums = {}
     if not elements:
-        return out
+        return {}
     it = ifcopenshell.geom.iterator(settings, model, multiprocessing.cpu_count(), include=elements)
     if not it.initialize():
-        return out
+        return {}
     while True:
         shape = it.get()
         v = shape.geometry.verts
         f = shape.geometry.faces
-        points = [(v[i], v[i + 1], v[i + 2]) for i in range(0, len(v), 3)]
+        points = [(v[i] - v[0], v[i + 1] - v[1], v[i + 2] - v[2]) for i in range(0, len(v), 3)]
         if points and f:
             volume = 0.0
             for i in range(0, len(f), 3):
@@ -82,11 +88,11 @@ def fills(path, tags):
             box = extent[0] * extent[1] * extent[2]
             element = model.by_id(shape.id)
             if box > 0:
-                held = out.get(element.Tag, (0.0, None))[0]
-                out[element.Tag] = (held + abs(volume) / box, element.ObjectType)
+                held_volume, held_box, _ = sums.get(element.Tag, (0.0, 0.0, None))
+                sums[element.Tag] = (held_volume + abs(volume), held_box + box, element.ObjectType)
         if not it.next():
             break
-    return out
+    return {tag: (volume / box, kind) for tag, (volume, box, kind) in sums.items()}
 
 
 def main():
