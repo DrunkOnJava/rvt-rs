@@ -546,6 +546,13 @@ pub fn profile_rings(profile: &ProfileDef) -> Option<(Ring, Vec<Ring>)> {
         ProfileDef::IndexedPolyCurve { points, segments } => {
             (indexed_poly_curve_ring(points, segments)?, Vec::new())
         }
+        ProfileDef::IndexedPolyCurveWithVoids { outer, voids } => (
+            indexed_poly_curve_ring(&outer.points, &outer.segments)?,
+            voids
+                .iter()
+                .map(|void| indexed_poly_curve_ring(&void.points, &void.segments))
+                .collect::<Option<Vec<_>>>()?,
+        ),
     };
     Some(rings)
 }
