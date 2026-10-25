@@ -3,7 +3,8 @@
 Revit's export writes (RE-231, #35, W7).
 
 Reads `examples/probe_re231_stored_lengths.rs`'s output and Revit's IFC
-export. For each IFC class and property of a length measure, over the
+export. For each IFC class and property of a length or count measure (a
+count compared as it is), over the
 elements of that class the probe lists and Revit's export gives the
 property, it counts, for each stored parameter, how many of those elements
 store it and how many store Revit's value within 0.001 ft, and prints the
@@ -32,6 +33,8 @@ LENGTH_MEASURES = {
     "IfcPositiveLengthMeasure",
     "IfcNonNegativeLengthMeasure",
 }
+# Counts are compared as they are, with no unit.
+COUNT_MEASURES = {"IfcCountMeasure", "IfcInteger"}
 
 
 def read_probe(path):
@@ -59,9 +62,11 @@ def length_properties(definitions, metres):
         for prop in pset.HasProperties or ():
             if not prop.is_a("IfcPropertySingleValue") or prop.NominalValue is None:
                 continue
-            if prop.NominalValue.is_a() not in LENGTH_MEASURES:
-                continue
-            out[f"{pset.Name}.{prop.Name}"] = prop.NominalValue.wrappedValue * metres / FEET
+            kind = prop.NominalValue.is_a()
+            if kind in LENGTH_MEASURES:
+                out[f"{pset.Name}.{prop.Name}"] = prop.NominalValue.wrappedValue * metres / FEET
+            elif kind in COUNT_MEASURES:
+                out[f"{pset.Name}.{prop.Name}"] = float(prop.NominalValue.wrappedValue)
     return out
 
 

@@ -8,7 +8,8 @@
 //! native record or of its type's (a railing type's height, a beam's cut
 //! length, a pipe's invert).
 //!
-//! Output, one line per railing, beam and pipe the export writes, in the
+//! Output, one line per railing, beam, pipe, stair and flight the export
+//! writes, in the
 //! format `tools/re/stored_lengths_vs_psets.py` reads:
 //!   len <tag> <IFC class> <type|-> <owner>:<object>.<member>=<number> ...
 //! `owner` `i` for the element's own record and `t` for its type's; the
@@ -28,7 +29,13 @@ use rvt::research::partition_schema_mvp::{TYPE_ID_FIELD, recover_partition_schem
 use rvt::walker::{InstanceField, WalkerLimits};
 use serde_json::Value;
 
-const CLASSES: [&str; 3] = ["IFCRAILING", "IFCBEAM", "IFCPIPESEGMENT"];
+const CLASSES: [&str; 5] = [
+    "IFCRAILING",
+    "IFCBEAM",
+    "IFCPIPESEGMENT",
+    "IFCSTAIR",
+    "IFCSTAIRFLIGHT",
+];
 const OBJECTS: usize = 200;
 
 fn main() -> anyhow::Result<()> {
