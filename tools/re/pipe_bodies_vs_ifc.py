@@ -31,16 +31,23 @@ LENGTH_TOLERANCE_FT = 0.01
 
 
 def profile_radius(profile):
-    """A circular profile's radius in the file's units: a circle's, or a
-    closed polyline's whose points all lie within 0.1% of one distance from
-    their centroid (Revit's IFC2X3 export writes some pipes that way); None
-    for any other profile."""
+    """A circular profile's radius in the file's units: a circle's, or that
+    of a closed polyline, or of an indexed curve of arcs only (Revit writes
+    the BIM4LCA office's pipes as four arcs through eight points), whose
+    points all lie within 0.1% of one distance from their centroid; None for
+    any other profile."""
     if profile.is_a("IfcCircleProfileDef"):
         return float(profile.Radius)
     curve = getattr(profile, "OuterCurve", None)
-    if curve is None or not curve.is_a("IfcPolyline"):
+    if curve is None:
         return None
-    points = [tuple(float(c) for c in p.Coordinates[:2]) for p in curve.Points]
+    if curve.is_a("IfcPolyline"):
+        points = [tuple(float(c) for c in p.Coordinates[:2]) for p in curve.Points]
+    elif curve.is_a("IfcIndexedPolyCurve") and curve.Segments and all(seg.is_a("IfcArcIndex") for seg in curve.Segments):
+        # Arcs through points of the list: every point is on the circle.
+        points = [tuple(float(c) for c in p[:2]) for p in curve.Points.CoordList]
+    else:
+        return None
     if len(points) > 1 and points[0] == points[-1]:
         points = points[:-1]
     if len(points) < 8:
