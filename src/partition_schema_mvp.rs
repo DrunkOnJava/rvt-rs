@@ -838,6 +838,23 @@ fn attach_system_type_names(
     }
     let wanted: BTreeSet<u32> = picks.iter().map(|(_, id)| *id).collect();
     let mut names = type_data_names(rf, &header, &wanted);
+    // RE-230: a curtain wall type's data gives no name; its native record
+    // does.
+    let unread: BTreeSet<u64> = wanted
+        .iter()
+        .filter(|id| !names.contains_key(id))
+        .map(|id| u64::from(*id))
+        .collect();
+    let curtain_names = if unread.is_empty() {
+        BTreeMap::new()
+    } else {
+        crate::native_walls::curtain_wall_type_names(rf, &unread).unwrap_or_default()
+    };
+    for (id, name) in curtain_names {
+        if let Ok(id) = u32::try_from(id) {
+            names.insert(id, Some(name));
+        }
+    }
     // A railing type with no element data keeps its name in its type object
     // (RE-66, measured on Revit 2024, and B45's RE1 railing on 2025).
     let railing_types: BTreeSet<u32> = picks

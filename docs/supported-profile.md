@@ -80,6 +80,7 @@ and each landing's type as its `Reference`, each element's `IsExternal` as Revit
 exporter sets it (a parameter named for its property set, its type's
 Function, else its class's rule; none on curtain mullions and panels, RE-193),
 each curtain mullion's `Span`, its length along its own axis (RE-226),
+each curtain wall's type, named as its type's native record names it (RE-230),
 each wall's `ExtendToStructure`, whether its top is joined to a roof or floor (RE-228),
 each railing's `Height`, its type's top rail height (RE-231),
 the project and shared parameters named for a property of one of IFC4's
