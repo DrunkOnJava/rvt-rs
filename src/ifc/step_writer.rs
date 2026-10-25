@@ -732,36 +732,27 @@ impl StepWriter {
                 );
             }
             Some(ProfileDef::IndexedPolyCurve { points, segments }) => {
-                use super::entities::CurveSegment;
-                let coords = points
-                    .iter()
-                    .map(|(x, y)| format!("({:.6},{:.6})", x * 0.3048, y * 0.3048))
-                    .collect::<Vec<_>>()
-                    .join(",");
-                let list_id = self.id();
-                self.emit_entity(list_id, format!("IFCCARTESIANPOINTLIST2D(({coords}))"));
-                // IFC indices count from 1.
-                let index = |i: usize| (i + 1).to_string();
-                let segments = segments
-                    .iter()
-                    .map(|segment| match segment {
-                        CurveSegment::Line(ends) => {
-                            format!("IFCLINEINDEX(({}))", ends.map(index).join(","))
-                        }
-                        CurveSegment::Arc(points) => {
-                            format!("IFCARCINDEX(({}))", points.map(index).join(","))
-                        }
-                    })
-                    .collect::<Vec<_>>()
-                    .join(",");
-                let curve_id = self.id();
-                self.emit_entity(
-                    curve_id,
-                    format!("IFCINDEXEDPOLYCURVE(#{list_id},({segments}),.F.)"),
-                );
+                let curve_id = self.emit_indexed_poly_curve(points, segments);
                 self.emit_entity(
                     profile_id,
                     format!("IFCARBITRARYCLOSEDPROFILEDEF(.AREA.,$,#{curve_id})"),
+                );
+            }
+            Some(ProfileDef::IndexedPolyCurveWithVoids { outer, voids }) => {
+                let outer_id = self.emit_indexed_poly_curve(&outer.points, &outer.segments);
+                let inner_refs = voids
+                    .iter()
+                    .map(|void| {
+                        format!(
+                            "#{}",
+                            self.emit_indexed_poly_curve(&void.points, &void.segments)
+                        )
+                    })
+                    .collect::<Vec<_>>()
+                    .join(",");
+                self.emit_entity(
+                    profile_id,
+                    format!("IFCARBITRARYPROFILEDEFWITHVOIDS(.AREA.,$,#{outer_id},({inner_refs}))"),
                 );
             }
             Some(ProfileDef::ArbitraryWithVoids { points, voids }) => {
@@ -785,6 +776,44 @@ impl StepWriter {
             }
         }
         profile_id
+    }
+
+    /// Emit an `IFCINDEXEDPOLYCURVE` over `points` (feet in, metres out)
+    /// with `segments`, and its `IFCCARTESIANPOINTLIST2D`. Returns the
+    /// curve's entity id.
+    fn emit_indexed_poly_curve(
+        &mut self,
+        points: &[(f64, f64)],
+        segments: &[super::entities::CurveSegment],
+    ) -> usize {
+        use super::entities::CurveSegment;
+        let coords = points
+            .iter()
+            .map(|(x, y)| format!("({:.6},{:.6})", x * 0.3048, y * 0.3048))
+            .collect::<Vec<_>>()
+            .join(",");
+        let list_id = self.id();
+        self.emit_entity(list_id, format!("IFCCARTESIANPOINTLIST2D(({coords}))"));
+        // IFC indices count from 1.
+        let index = |i: usize| (i + 1).to_string();
+        let segments = segments
+            .iter()
+            .map(|segment| match segment {
+                CurveSegment::Line(ends) => {
+                    format!("IFCLINEINDEX(({}))", ends.map(index).join(","))
+                }
+                CurveSegment::Arc(points) => {
+                    format!("IFCARCINDEX(({}))", points.map(index).join(","))
+                }
+            })
+            .collect::<Vec<_>>()
+            .join(",");
+        let curve_id = self.id();
+        self.emit_entity(
+            curve_id,
+            format!("IFCINDEXEDPOLYCURVE(#{list_id},({segments}),.F.)"),
+        );
+        curve_id
     }
 
     /// Emit one `IFCCARTESIANPOINT` per vertex plus the

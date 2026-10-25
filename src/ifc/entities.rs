@@ -818,6 +818,25 @@ pub enum ProfileDef {
         points: Vec<(f64, f64)>,
         segments: Vec<CurveSegment>,
     },
+    /// `IFCArbitraryProfileDefWithVoids` whose outer and inner curves are
+    /// `IFCIndexedPolyCurve`s of lines and three-point arcs, as Revit's
+    /// export writes a hollow structural section with rounded corners.
+    /// IFC4 expects the outer curve counter-clockwise and each inner curve
+    /// clockwise; the writer emits the point order it is given.
+    IndexedPolyCurveWithVoids {
+        outer: IndexedCurve,
+        voids: Vec<IndexedCurve>,
+    },
+}
+
+/// One closed `IFCIndexedPolyCurve`: its points (local 2D feet) and the
+/// lines and arcs that join them in turn
+/// ([`ProfileDef::IndexedPolyCurveWithVoids`]).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[non_exhaustive]
+pub struct IndexedCurve {
+    pub points: Vec<(f64, f64)>,
+    pub segments: Vec<CurveSegment>,
 }
 
 /// One segment of a [`ProfileDef::IndexedPolyCurve`], by 0-based indices

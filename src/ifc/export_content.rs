@@ -2717,6 +2717,77 @@ fn pipe_cylinder_solid(
 /// (RE-104).
 pub const COLUMN_I_SECTION_BODY_SOURCE: &str = "family_type_i_section";
 
+/// `BodySource` of a column drawn as its type's square hollow section,
+/// rounded corners and all, from its family's parameters (W6).
+pub const COLUMN_HOLLOW_SECTION_BODY_SOURCE: &str = "family_type_hollow_section";
+
+/// How closely a hollow-section column's record box must equal its
+/// section's outside to be drawn as it, feet.
+pub const HOLLOW_SECTION_BOX_TOLERANCE_FEET: f64 = 1e-3;
+
+/// A square hollow section's profile, centred: the outside and the inside,
+/// each four lines and four quarter arcs about the corners' common centres,
+/// as Revit's export writes one (`IfcIndexedPolyCurve`s, W6).
+fn hollow_section_profile(
+    section: &crate::partition_type_parameters::HollowSection,
+) -> entities::ProfileDef {
+    use entities::{CurveSegment, IndexedCurve};
+    let (x, y) = (section.width_feet / 2.0, section.height_feet / 2.0);
+    let ring = |half_x: f64, half_y: f64, radius: f64, clockwise: bool| {
+        let (cx, cy) = (half_x - radius, half_y - radius);
+        let diagonal = radius * std::f64::consts::FRAC_1_SQRT_2;
+        // Counter-clockwise from the bottom edge's left end.
+        let mut points = vec![
+            (-cx, -half_y),
+            (cx, -half_y),
+            (cx + diagonal, -cy - diagonal),
+            (half_x, -cy),
+            (half_x, cy),
+            (cx + diagonal, cy + diagonal),
+            (cx, half_y),
+            (-cx, half_y),
+            (-cx - diagonal, cy + diagonal),
+            (-half_x, cy),
+            (-half_x, -cy),
+            (-cx - diagonal, -cy - diagonal),
+        ];
+        if clockwise {
+            points.reverse();
+        }
+        let segments = if clockwise {
+            // The same curves, reversed: point i is the counter-clockwise
+            // ring's point 11 - i.
+            vec![
+                CurveSegment::Line([1, 2]),
+                CurveSegment::Arc([2, 3, 4]),
+                CurveSegment::Line([4, 5]),
+                CurveSegment::Arc([5, 6, 7]),
+                CurveSegment::Line([7, 8]),
+                CurveSegment::Arc([8, 9, 10]),
+                CurveSegment::Line([10, 11]),
+                CurveSegment::Arc([11, 0, 1]),
+            ]
+        } else {
+            vec![
+                CurveSegment::Line([0, 1]),
+                CurveSegment::Arc([1, 2, 3]),
+                CurveSegment::Line([3, 4]),
+                CurveSegment::Arc([4, 5, 6]),
+                CurveSegment::Line([6, 7]),
+                CurveSegment::Arc([7, 8, 9]),
+                CurveSegment::Line([9, 10]),
+                CurveSegment::Arc([10, 11, 0]),
+            ]
+        };
+        IndexedCurve { points, segments }
+    };
+    let t = section.wall_feet;
+    entities::ProfileDef::IndexedPolyCurveWithVoids {
+        outer: ring(x, y, section.outer_radius_feet, false),
+        voids: vec![ring(x - t, y - t, section.outer_radius_feet - t, true)],
+    }
+}
+
 /// How closely an I-section column's section, turned to its X axis, must
 /// fill its record box in plan (RE-104), feet.
 pub const COLUMN_SECTION_TOLERANCE_FEET: f64 = 0.01;
@@ -3964,6 +4035,20 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
     } else {
         None
     };
+    // W6: a column whose type is a square hollow section is drawn as it,
+    // where its record box is the section's outside.
+    let hollow_column = if crate::partition_schema_mvp::HOLLOW_SECTION_CLASSES.contains(&class)
+        && i_column.is_none()
+    {
+        crate::partition_schema_mvp::hollow_section_from_fields(&decoded.fields).filter(|section| {
+            let near = |a: f64, b: f64| (a - b).abs() <= HOLLOW_SECTION_BOX_TOLERANCE_FEET;
+            near(section.width_feet, section.height_feet)
+                && near(width, section.width_feet)
+                && near(depth, section.height_feet)
+        })
+    } else {
+        None
+    };
     // RE-52: a straight run with separate treads and risers is drawn as
     // them.
     let stair_run = if class == "StairsRun" {
@@ -4230,6 +4315,11 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
                             .map(|_| ROOF_EXTRUSION_BODY_SOURCE.into())
                     })
                     .or_else(|| i_column.map(|_| COLUMN_I_SECTION_BODY_SOURCE.into()))
+                    .or_else(|| {
+                        hollow_column
+                            .as_ref()
+                            .map(|_| COLUMN_HOLLOW_SECTION_BODY_SOURCE.into())
+                    })
                     .or_else(|| turned.map(|_| INSTANCE_TURNED_BODY_SOURCE.into()))
                     .or_else(|| oriented.map(|_| INSTANCE_ORIENTED_BODY_SOURCE.into()))
                     .unwrap_or_else(|| RECORD_BBOX_BODY_SOURCE.into()),
@@ -4247,7 +4337,8 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
                     || landing_tread.is_some()
                     || wall_centreline.is_some()
                     || wall_arc.is_some()
-                    || i_column.is_some(),
+                    || i_column.is_some()
+                    || hollow_column.is_some(),
             ),
         },
         Property {
@@ -4691,6 +4782,17 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
                     record_body,
                     oriented.map(|(axes, half)| oriented_box_solid(axes, half, height)),
                 ),
+                None if hollow_column.is_some() => {
+                    let section = hollow_column.as_ref().expect("checked above");
+                    (
+                        None,
+                        Extrusion {
+                            profile_override: Some(hollow_section_profile(section)),
+                            ..Extrusion::rectangle(section.width_feet, section.height_feet, height)
+                        },
+                        None,
+                    )
+                }
                 None if i_column.is_some() => {
                     let (angle, section) = i_column.expect("checked above");
                     (

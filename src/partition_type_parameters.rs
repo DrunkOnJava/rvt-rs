@@ -443,6 +443,159 @@ pub fn type_i_sections(
         .collect()
 }
 
+/// Every `f64 · ff×8 · i64` entry in `buf` (a length value and the
+/// parameter it is stored under, BuiltInParameter or not), by the declared
+/// ElementId of the value block it follows: what [`scan_partition_lengths`]
+/// reads for a given set of parameters, here for all of them, for probes.
+pub fn partition_length_entries(
+    buf: &[u8],
+    declared_ids: &BTreeSet<u32>,
+) -> BTreeMap<u32, Vec<(i64, f64)>> {
+    let blocks = value_blocks(buf, declared_ids);
+    let mut out: BTreeMap<u32, Vec<(i64, f64)>> = BTreeMap::new();
+    for at in memchr::memmem::find_iter(buf, &[0xff; 8]) {
+        if at < 8 || buf[at - 1] == 0xff {
+            continue;
+        }
+        let (Some(value), Some(parameter)) = (
+            buf.get(at - 8..at)
+                .and_then(|b| b.first_chunk::<8>().copied())
+                .map(f64::from_le_bytes)
+                .filter(|v| v.is_finite() && v.abs() <= MAX_LENGTH_FEET),
+            buf.get(at + 8..at + 16)
+                .and_then(|b| b.first_chunk::<8>().copied())
+                .map(i64::from_le_bytes),
+        ) else {
+            continue;
+        };
+        let index = blocks.partition_point(|(start, _)| *start < at);
+        if let Some(&(_, Some(owner))) = index.checked_sub(1).and_then(|i| blocks.get(i)) {
+            out.entry(owner).or_default().push((parameter, value));
+        }
+    }
+    out
+}
+
+/// A rectangular hollow structural section with rounded corners (W6), feet:
+/// its outside width and height, its wall thickness, and its outside
+/// corner radius; the inside corners' radius is the outside's less the wall.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct HollowSection {
+    pub width_feet: f64,
+    pub height_feet: f64,
+    pub wall_feet: f64,
+    pub outer_radius_feet: f64,
+}
+
+/// The family parameters a hollow section type holds its width, height,
+/// wall thickness and outside corner radius under, by the names
+/// (`ParamDefValue.m_caption`) their `ParamElemFamily` elements carry: the
+/// BIM4LCA office's `Rectangular and Square Hollow Sections-Column` family.
+pub const HOLLOW_SECTION_PARAMETER_NAMES: [&str; 4] = ["b", "Ht", "t", "kr"];
+
+/// The hollow section of each type in `types` whose family parameters
+/// named [`HOLLOW_SECTION_PARAMETER_NAMES`] it holds, every partition's
+/// value agreeing, where they make a section with walls and rounded corners
+/// (`t` positive and under half of `b` and of `Ht`, `kr` over `t` and at
+/// most half of each). On the BIM4LCA office the three such column types'
+/// values are Revit's profiles exactly: outside `b` by `Ht` with corners of
+/// radius `kr`, inside `t` in with corners of radius `kr - t`.
+pub fn type_hollow_sections(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    types: &BTreeSet<u32>,
+) -> BTreeMap<u32, HollowSection> {
+    if bbox_marker(revit_version).is_none() || types.is_empty() {
+        return BTreeMap::new();
+    }
+    let Ok(records) = crate::elem_table::parse_records(rf) else {
+        return BTreeMap::new();
+    };
+    let declared = crate::elem_table::declared_ids(&records);
+    let mut values: BTreeMap<(u32, i64), Option<f64>> = BTreeMap::new();
+    for stream in rf.partition_stream_names() {
+        let Ok(inflated) = rf.inflated_partition(&stream) else {
+            continue;
+        };
+        for (owner, entries) in partition_length_entries(inflated.bytes(), &declared) {
+            if !types.contains(&owner) {
+                continue;
+            }
+            for (parameter, value) in entries {
+                values
+                    .entry((owner, parameter))
+                    .and_modify(|seen| {
+                        if *seen != Some(value) {
+                            *seen = None;
+                        }
+                    })
+                    .or_insert(Some(value));
+            }
+        }
+    }
+    let parameters: BTreeSet<u64> = values
+        .keys()
+        .filter_map(|(_, parameter)| u64::try_from(*parameter).ok())
+        .filter(|id| *id > 0 && *id < u64::from(u32::MAX))
+        .collect();
+    let mut names: BTreeMap<i64, String> = BTreeMap::new();
+    if !parameters.is_empty() {
+        let options = crate::native_document::Options {
+            selected_ids: parameters,
+            ..crate::native_document::Options::default()
+        };
+        let read = crate::native_document::extract_graphs(rf, &options, |record| {
+            let (Some("ParamElemFamily"), Some(graph)) =
+                (record.class_name.as_deref(), record.graph.as_ref())
+            else {
+                return Ok(());
+            };
+            let caption = graph
+                .objects
+                .iter()
+                .find(|object| object.class_name == "ParamDefValue")
+                .and_then(|object| object.fields.get("m_caption")?.as_str());
+            if let (Some(caption), Ok(id)) = (caption, i64::try_from(record.identity.element_id)) {
+                names.insert(id, caption.to_string());
+            }
+            Ok(())
+        });
+        if read.is_err() {
+            return BTreeMap::new();
+        }
+    }
+    let mut held: BTreeMap<u32, BTreeMap<&str, f64>> = BTreeMap::new();
+    for ((owner, parameter), value) in &values {
+        let (Some(value), Some(name)) = (value, names.get(parameter)) else {
+            continue;
+        };
+        if let Some(wanted) = HOLLOW_SECTION_PARAMETER_NAMES
+            .iter()
+            .find(|wanted| **wanted == name.as_str())
+        {
+            held.entry(*owner).or_default().insert(*wanted, *value);
+        }
+    }
+    held.into_iter()
+        .filter_map(|(owner, by_name)| {
+            let [b, h, t, r] =
+                HOLLOW_SECTION_PARAMETER_NAMES.map(|name| by_name.get(name).copied());
+            let section = HollowSection {
+                width_feet: b?,
+                height_feet: h?,
+                wall_feet: t?,
+                outer_radius_feet: r?,
+            };
+            let narrow = section.width_feet.min(section.height_feet);
+            (section.wall_feet > 0.0
+                && 2.0 * section.wall_feet < narrow
+                && section.outer_radius_feet > section.wall_feet
+                && 2.0 * section.outer_radius_feet <= narrow)
+                .then_some((owner, section))
+        })
+        .collect()
+}
+
 /// The values of `parameters` held by each type in `types`, where every
 /// partition's value agrees.
 fn type_lengths(

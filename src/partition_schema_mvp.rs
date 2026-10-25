@@ -653,6 +653,8 @@ pub fn recover_partition_schema_mvp(
     );
     // --- Steel beams' and columns' I sections from their type (RE-103, RE-104) ---
     attach_beam_sections(rf, revit_version, &mut out.products);
+    // --- Hollow structural sections from their type's family parameters (W6) ---
+    attach_hollow_sections(rf, revit_version, [&mut out.columns, &mut out.products]);
     // --- A wall's and a curtain panel wall's type Function, from its native
     // type record (RE-185), after RE-72 has relabelled the panels ---
     attach_wall_type_functions(
@@ -1896,6 +1898,85 @@ pub fn beam_i_section_from_fields(
         web_feet: web?,
         flange_feet: flange?,
     })
+}
+
+/// Fields carrying a hollow-section column's outside width and height, wall
+/// thickness and outside corner radius, feet
+/// ([`crate::partition_type_parameters::type_hollow_sections`], W6).
+pub const HOLLOW_SECTION_FIELDS: [&str; 4] = [
+    "m_hollow_section_width",
+    "m_hollow_section_height",
+    "m_hollow_section_wall",
+    "m_hollow_section_radius",
+];
+
+/// The hollow section [`HOLLOW_SECTION_FIELDS`] record.
+pub fn hollow_section_from_fields(
+    fields: &[(String, InstanceField)],
+) -> Option<crate::partition_type_parameters::HollowSection> {
+    let [width, height, wall, radius] = HOLLOW_SECTION_FIELDS.map(|wanted| {
+        fields.iter().find_map(|(name, value)| match value {
+            InstanceField::Float { value, .. } if name == wanted => Some(*value),
+            _ => None,
+        })
+    });
+    Some(crate::partition_type_parameters::HollowSection {
+        width_feet: width?,
+        height_feet: height?,
+        wall_feet: wall?,
+        outer_radius_feet: radius?,
+    })
+}
+
+/// Classes whose type's hollow section is read (W6).
+pub const HOLLOW_SECTION_CLASSES: [&str; 2] = ["StructuralColumn", "Column"];
+
+/// Give each column whose type is a hollow structural section
+/// ([`crate::partition_type_parameters::type_hollow_sections`]) and holds no
+/// I section that section (W6). The exporter draws it only where its record
+/// box is the section's outside.
+fn attach_hollow_sections(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    groups: [&mut Vec<DecodedElement>; 2],
+) {
+    let type_of = |element: &DecodedElement| {
+        element.fields.iter().find_map(|(name, value)| match value {
+            InstanceField::ElementId { id, .. } if name == TYPE_ID_FIELD => Some(*id),
+            _ => None,
+        })
+    };
+    let mut elements: Vec<&mut DecodedElement> = groups
+        .into_iter()
+        .flat_map(|group| group.iter_mut())
+        .filter(|element| HOLLOW_SECTION_CLASSES.contains(&element.class.as_str()))
+        .filter(|element| beam_i_section_from_fields(&element.fields).is_none())
+        .collect();
+    let types: BTreeSet<u32> = elements
+        .iter()
+        .filter_map(|element| type_of(element))
+        .collect();
+    if types.is_empty() {
+        return;
+    }
+    let sections =
+        crate::partition_type_parameters::type_hollow_sections(rf, revit_version, &types);
+    for element in elements.iter_mut() {
+        let Some(section) = type_of(element).and_then(|id| sections.get(&id)).copied() else {
+            continue;
+        };
+        let values = [
+            section.width_feet,
+            section.height_feet,
+            section.wall_feet,
+            section.outer_radius_feet,
+        ];
+        for (name, value) in HOLLOW_SECTION_FIELDS.iter().zip(values) {
+            element
+                .fields
+                .push(((*name).into(), InstanceField::Float { value, size: 8 }));
+        }
+    }
 }
 
 /// Fields carrying the plan direction of an I-section structural column's

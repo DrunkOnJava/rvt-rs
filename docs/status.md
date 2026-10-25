@@ -837,6 +837,18 @@ values, Revit's. A file that stores none keeps generated ones: the GUID
 Revit derives them from is not found
 (`reports/element-framing/RE-220-stored-global-ids.md`).
 
+**RE-221 (2026-10-25)** draws a column whose type is a square hollow
+section as that section, rounded corners and all, where it was a solid
+box. The section's outside, wall and corner radius are the family's own
+parameters `b`, `Ht`, `t` and `kr`, named by their `ParamElemFamily`
+records; the profile is written as Revit writes it, an
+`IfcArbitraryProfileDefWithVoids` over `IfcIndexedPolyCurve`s. On the
+BIM4LCA office all 79 such columns as built and 55 at building permit are
+Revit's body, vertices within 0.001 ft and volume within 0.0001. A
+rectangular or turned hollow section, or one whose family names its
+parameters otherwise, keeps its box
+(`reports/element-framing/RE-221-hollow-section-columns.md`).
+
 The public viewer's demo gallery leads with the two files this section
 measures, staged from the deploy workflow's `magnetar-io/revit-test-datasets`
 checkout and pinned by sha256 (#257): `Revit_IFC5_Einhoven.rvt` (2023,
