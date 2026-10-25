@@ -543,8 +543,59 @@ pub fn profile_rings(profile: &ProfileDef) -> Option<(Ring, Vec<Ring>)> {
         }
         ProfileDef::ArbitraryClosed { points } => (points.clone(), Vec::new()),
         ProfileDef::ArbitraryWithVoids { points, voids } => (points.clone(), voids.clone()),
+        ProfileDef::IndexedPolyCurve { points, segments } => {
+            (indexed_poly_curve_ring(points, segments)?, Vec::new())
+        }
     };
     Some(rings)
+}
+
+/// An indexed poly-curve's ring: each line's start, and each arc from its
+/// start towards its end in steps of at most a [`CIRCLE_SEGMENTS`]th of a
+/// turn about the circle through its three points.
+fn indexed_poly_curve_ring(
+    points: &[Point2],
+    segments: &[super::entities::CurveSegment],
+) -> Option<Ring> {
+    use super::entities::CurveSegment;
+    let mut ring = Ring::new();
+    for segment in segments {
+        match *segment {
+            CurveSegment::Line([a, _]) => ring.push(*points.get(a)?),
+            CurveSegment::Arc([a, m, b]) => {
+                let (p, q, r) = (*points.get(a)?, *points.get(m)?, *points.get(b)?);
+                // The circle through p, q and r.
+                let d = 2.0 * (p.0 * (q.1 - r.1) + q.0 * (r.1 - p.1) + r.0 * (p.1 - q.1));
+                if d.abs() < 1e-12 {
+                    ring.push(p);
+                    continue;
+                }
+                let n = |v: Point2| v.0 * v.0 + v.1 * v.1;
+                let c = (
+                    (n(p) * (q.1 - r.1) + n(q) * (r.1 - p.1) + n(r) * (p.1 - q.1)) / d,
+                    (n(p) * (r.0 - q.0) + n(q) * (p.0 - r.0) + n(r) * (q.0 - p.0)) / d,
+                );
+                let angle = |v: Point2| (v.1 - c.1).atan2(v.0 - c.0);
+                let radius = (p.0 - c.0).hypot(p.1 - c.1);
+                // Anticlockwise when r lies to the left of p to q.
+                let turn = std::f64::consts::TAU;
+                let anticlockwise = d > 0.0;
+                let sweep = |from: f64, to: f64| {
+                    let s = (to - from).rem_euclid(turn);
+                    if anticlockwise { s } else { s - turn }
+                };
+                let total = sweep(angle(p), angle(r));
+                let steps =
+                    ((total.abs() / (turn / CIRCLE_SEGMENTS as f64)).ceil() as usize).max(1);
+                let start = angle(p);
+                for i in 0..steps {
+                    let a = start + total * i as f64 / steps as f64;
+                    ring.push((c.0 + radius * a.cos(), c.1 + radius * a.sin()));
+                }
+            }
+        }
+    }
+    (ring.len() >= 3).then_some(ring)
 }
 
 /// The rings of an extrusion's profile: its override, else its width ×
@@ -1151,6 +1202,14 @@ pub fn solid_mesh(shape: &SolidShape) -> Option<Mesh> {
             axis_direction,
             angle_radians,
         } => revolved_mesh(profile, *axis_origin_feet, *axis_direction, *angle_radians),
+        SolidShape::Compound(items) => {
+            let mut meshes = items.iter().filter_map(solid_mesh);
+            let mut mesh = meshes.next()?;
+            for other in meshes {
+                mesh.append(other);
+            }
+            Some(mesh)
+        }
         SolidShape::BooleanResult {
             op,
             operand_a,

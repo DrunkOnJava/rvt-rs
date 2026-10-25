@@ -2760,6 +2760,9 @@ fn beam_i_solid(
 
 /// `BodySource` of a stair run drawn as its treads and risers (RE-52).
 pub const STAIR_RUN_BODY_SOURCE: &str = "partition_stair_run_sketch";
+/// `BodySource` of a spiral stair run drawn as its treads, from its native
+/// records (#357).
+pub const SPIRAL_RUN_BODY_SOURCE: &str = "native_spiral_run_treads";
 
 /// `BodySource` of a monolithic stair landing drawn as its slab, its outline
 /// from its top down its type's thickness (#824).
@@ -3544,6 +3547,63 @@ fn stair_run_solid(
     }
 }
 
+/// A spiral run's treads (#357), as Revit's export writes them: one
+/// extrusion per tread, up its thickness from its bottom, of a profile of
+/// two arcs and two lines about the run's centre, as an `IfcIndexedPolyCurve`
+/// so a reader draws the arcs as it draws Revit's.
+fn spiral_run_solid(
+    run: &crate::partition_schema_mvp::SpiralRunBody,
+    location: [f64; 3],
+) -> entities::SolidShape {
+    let [r0, r1] = run.radii_feet;
+    let at = |radius: f64, angle: f64| (radius * angle.cos(), radius * angle.sin());
+    let items = run
+        .treads
+        .iter()
+        .map(|tread| {
+            let [outer, inner] = tread.up_angles;
+            let d = tread.down_angle;
+            let mut points = vec![
+                at(r1, d),
+                at(r1, (d + outer) / 2.0),
+                at(r1, outer),
+                at(r0, inner),
+                at(r0, (inner + d) / 2.0),
+                at(r0, d),
+            ];
+            // Counter-clockwise, as IFC wants a profile's outer curve.
+            let area: f64 = points
+                .iter()
+                .zip(points.iter().cycle().skip(1))
+                .map(|(p, q)| p.0 * q.1 - q.0 * p.1)
+                .sum();
+            if area < 0.0 {
+                points.reverse();
+            }
+            entities::SolidShape::PlacedExtrusion {
+                profile: entities::ProfileDef::IndexedPolyCurve {
+                    points,
+                    segments: vec![
+                        entities::CurveSegment::Arc([0, 1, 2]),
+                        entities::CurveSegment::Line([2, 3]),
+                        entities::CurveSegment::Arc([3, 4, 5]),
+                        entities::CurveSegment::Line([5, 0]),
+                    ],
+                },
+                origin_feet: [
+                    run.centre[0] - location[0],
+                    run.centre[1] - location[1],
+                    tread.bottom_feet - location[2],
+                ],
+                axis: [0.0, 0.0, 1.0],
+                ref_direction: [1.0, 0.0, 0.0],
+                depth_feet: tread.top_feet - tread.bottom_feet,
+            }
+        })
+        .collect();
+    entities::SolidShape::Compound(items)
+}
+
 /// A run of several solids (a riserless run's treads, #357) as one
 /// triangulated face set: each side view extruded across the run, a closed
 /// prism, its faces turned outward.
@@ -3828,6 +3888,12 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
     } else {
         None
     };
+    // #357: a spiral run is drawn as its treads.
+    let spiral_run = if class == "StairsRun" && stair_run.is_none() {
+        crate::partition_schema_mvp::spiral_run_body_from_fields(&decoded.fields)
+    } else {
+        None
+    };
     // RE-54: a wall whose centreline and type thickness are known is that
     // thickness either side of the line. It replaces the box only where the
     // two differ, so a wall the box already drew right is unchanged.
@@ -3906,6 +3972,7 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
     let turned = if TURNED_BOX_EXCLUDED_CLASSES.contains(&class)
         || profile_override.is_some()
         || stair_run.is_some()
+        || spiral_run.is_some()
         || beam.is_some()
         || matches!(type_profile, (Some(_), Some(_)))
     {
@@ -4060,6 +4127,7 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
                     .or_else(|| beam.map(|_| BEAM_AXIS_BODY_SOURCE.into()))
                     .or_else(|| pipe.map(|_| PIPE_AXIS_BODY_SOURCE.into()))
                     .or_else(|| stair_run.as_ref().map(|_| STAIR_RUN_BODY_SOURCE.into()))
+                    .or_else(|| spiral_run.as_ref().map(|_| SPIRAL_RUN_BODY_SOURCE.into()))
                     .or_else(|| roof_slope.as_ref().map(|_| ROOF_SLOPE_BODY_SOURCE.into()))
                     .or_else(|| {
                         roof_extrusion
@@ -4080,6 +4148,7 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
                     || beam.is_some()
                     || pipe.is_some()
                     || stair_run.is_some()
+                    || spiral_run.is_some()
                     || wall_centreline.is_some()
                     || wall_arc.is_some()
                     || i_column.is_some(),
@@ -4552,6 +4621,11 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
                         let solid = stair_run
                             .as_ref()
                             .map(|run| stair_run_solid(run, [x, y, z]))
+                            .or_else(|| {
+                                spiral_run
+                                    .as_ref()
+                                    .map(|run| spiral_run_solid(run, [x, y, z]))
+                            })
                             .or(roof_slope);
                         (None, record_body, solid)
                     }

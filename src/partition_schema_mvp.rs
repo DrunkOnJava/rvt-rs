@@ -329,6 +329,8 @@ pub fn recover_partition_schema_mvp(
     attach_stair_dimensions(rf, revit_version, &mut out.products);
     // --- Stair runs' treads and risers, and their run type (RE-52) ---
     attach_stair_run_bodies(rf, revit_version, &mut out.products);
+    // --- Spiral runs as their treads (#357) ---
+    attach_spiral_run_bodies(rf, revit_version, &mut out.products);
     // --- Stair runs' shape, from their treads (#323) ---
     attach_stair_run_shapes(rf, revit_version, &mut out.products);
     // --- Monolithic landings as their slabs (#824) ---
@@ -5136,6 +5138,221 @@ fn attach_native_stair_run_bodies(
                 .push((TYPE_NAME_FIELD.into(), InstanceField::String(name.clone())));
         }
         push_stair_run_body(element, &run.sketch, &pieces);
+    }
+}
+
+/// Fields holding a spiral run's centre, model feet (#357).
+pub const SPIRAL_RUN_CENTRE_FIELDS: [&str; 2] = ["m_spiral_run_centre_x", "m_spiral_run_centre_y"];
+/// Fields holding a spiral run's inner and outer radius, feet (#357).
+pub const SPIRAL_RUN_RADII_FIELDS: [&str; 2] =
+    ["m_spiral_run_inner_radius", "m_spiral_run_outer_radius"];
+/// Field holding a spiral run's treads, each `[bottom, top, down-run angle,
+/// up-run angle at the outer radius, up-run angle at the inner radius]`, feet
+/// and radians about the centre (#357).
+pub const SPIRAL_RUN_TREADS_FIELD: &str = "m_spiral_run_treads";
+
+/// One tread of a [`SpiralRunBody`]: its bottom and top, feet, the angle of
+/// the riser line it starts at, below, and the angles at which its other edge
+/// meets the outer and inner circles, radians about the centre.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct SpiralTreadBody {
+    pub bottom_feet: f64,
+    pub top_feet: f64,
+    pub down_angle: f64,
+    pub up_angles: [f64; 2],
+}
+
+/// A spiral run's treads as [`SPIRAL_RUN_TREADS_FIELD`] and its companions
+/// record them (#357).
+#[derive(Debug, Clone, PartialEq)]
+pub struct SpiralRunBody {
+    pub centre: [f64; 2],
+    /// Inner and outer radius, feet.
+    pub radii_feet: [f64; 2],
+    pub treads: Vec<SpiralTreadBody>,
+}
+
+/// The spiral run body recorded in `fields`, when every part of it is.
+pub fn spiral_run_body_from_fields(fields: &[(String, InstanceField)]) -> Option<SpiralRunBody> {
+    let float = |wanted: &str| {
+        fields.iter().find_map(|(name, value)| match value {
+            InstanceField::Float { value, .. } if name == wanted => Some(*value),
+            _ => None,
+        })
+    };
+    let treads = fields.iter().find_map(|(name, value)| match value {
+        InstanceField::Vector(treads) if name == SPIRAL_RUN_TREADS_FIELD => Some(treads),
+        _ => None,
+    })?;
+    let treads = treads
+        .iter()
+        .map(|tread| {
+            let InstanceField::Vector(values) = tread else {
+                return None;
+            };
+            let values: Vec<f64> = values
+                .iter()
+                .map(|value| match value {
+                    InstanceField::Float { value, .. } => Some(*value),
+                    _ => None,
+                })
+                .collect::<Option<_>>()?;
+            match values.as_slice() {
+                [bottom, top, down, outer, inner] => Some(SpiralTreadBody {
+                    bottom_feet: *bottom,
+                    top_feet: *top,
+                    down_angle: *down,
+                    up_angles: [*outer, *inner],
+                }),
+                _ => None,
+            }
+        })
+        .collect::<Option<Vec<_>>>()?;
+    let [cx, cy] = SPIRAL_RUN_CENTRE_FIELDS.map(float);
+    let [r0, r1] = SPIRAL_RUN_RADII_FIELDS.map(float);
+    (!treads.is_empty()).then_some(SpiralRunBody {
+        centre: [cx?, cy?],
+        radii_feet: [r0?, r1?],
+        treads,
+    })
+}
+
+/// The angle past a riser line, about a spiral's centre, at which a line
+/// parallel to it at `offset` feet meets the circle of `radius`.
+fn offset_angle(radius: f64, offset: f64) -> Option<f64> {
+    (radius > offset && offset >= 0.0).then(|| (offset / radius).asin())
+}
+
+/// Give each spiral stair run of a type with treads and no risers, not
+/// monolithic, its treads (#357), from its native records
+/// ([`crate::native_stairs::native_spiral_runs`]) and its own run type, the
+/// one `OST_StairsRuns` type definition its element record names (RE-28).
+/// Each tread is an annular sector between the run's two radii, from the
+/// riser line it starts at to the next, its top the tread's own, its type's
+/// tread thickness deep. On the BIM4LCA office's run 3057703, a mirrored run
+/// climbing clockwise, Revit's export runs each tread on past the next riser
+/// line, under the tread above, to a line parallel to it at the type's
+/// nosing length; a run with a nosing that is not measured so keeps its box.
+fn attach_spiral_run_bodies(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    products: &mut [DecodedElement],
+) {
+    use crate::partition_type_records as ptr;
+    if !crate::native_stairs::NATIVE_SPIRAL_RUN_REVIT_VERSIONS.contains(&revit_version) {
+        return;
+    }
+    let unbodied: Vec<usize> = products
+        .iter()
+        .enumerate()
+        .filter(|(_, element)| {
+            element.class == "StairsRun"
+                && element.id.is_some()
+                && !element
+                    .fields
+                    .iter()
+                    .any(|(name, _)| name == STAIR_RUN_PROFILE_FIELD)
+        })
+        .map(|(index, _)| index)
+        .collect();
+    if unbodied.is_empty() {
+        return;
+    }
+    let declared: BTreeSet<u32> = match crate::elem_table::parse_records(rf) {
+        Ok(records) => crate::elem_table::declared_ids(&records),
+        Err(_) => return,
+    };
+    let type_records = ptr::scan_type_records(
+        rf,
+        revit_version,
+        crate::partition_element_records::OST_STAIRS_RUNS,
+        &declared,
+    )
+    .unwrap_or_default();
+    let run_types = ptr::type_definition_ids(&type_records);
+    let mut runs: BTreeMap<u64, u64> = BTreeMap::new();
+    for &index in &unbodied {
+        let element = &products[index];
+        let (Some(id), Some((references, _))) = (element.id, record_references(rf, element)) else {
+            continue;
+        };
+        if let Some(type_id) = ptr::unique_type_reference(&references, &run_types) {
+            runs.insert(u64::from(id), u64::from(type_id));
+        }
+    }
+    let Ok(spirals) = crate::native_stairs::native_spiral_runs(rf, &runs) else {
+        return;
+    };
+    let scalar = |value: f64| InstanceField::Float { value, size: 8 };
+    for index in unbodied {
+        let element = &mut products[index];
+        let Some(run) = element.id.and_then(|id| spirals.get(&u64::from(id))) else {
+            continue;
+        };
+        let kind = &run.run_type;
+        if !(kind.treads && !kind.risers && !kind.monolithic && kind.tread_thickness_feet > 0.0) {
+            continue;
+        }
+        // The way round the run climbs: towards smaller angles when the
+        // second tread lies at smaller angles than the first.
+        let clockwise = run.treads.windows(2).next().is_some_and(|pair| {
+            let turn = std::f64::consts::TAU;
+            let d = pair[1].angles[0] - pair[0].angles[0];
+            d - turn * (d / turn).round() < 0.0
+        });
+        let nosing = kind.nosing_length_feet;
+        if nosing > 0.0 && !(run.mirrored && clockwise) {
+            continue;
+        }
+        let [r0, r1] = run.radii_feet;
+        let (Some(inner), Some(outer)) = (offset_angle(r0, nosing), offset_angle(r1, nosing))
+        else {
+            continue;
+        };
+        let sign = if clockwise { -1.0 } else { 1.0 };
+        let treads: Vec<InstanceField> = run
+            .treads
+            .iter()
+            .map(|tread| {
+                let [a0, a1] = tread.angles;
+                let (down, up) = if clockwise { (a1, a0) } else { (a0, a1) };
+                InstanceField::Vector(vec![
+                    scalar(tread.top_feet - kind.tread_thickness_feet),
+                    scalar(tread.top_feet),
+                    scalar(down),
+                    scalar(up + sign * outer),
+                    scalar(up + sign * inner),
+                ])
+            })
+            .collect();
+        let has_type_name = element
+            .fields
+            .iter()
+            .any(|(name, _)| name == TYPE_NAME_FIELD);
+        if let (Some(name), false, Ok(type_id)) =
+            (&kind.name, has_type_name, u32::try_from(run.type_id))
+        {
+            element.fields.push((
+                TYPE_ID_FIELD.into(),
+                InstanceField::ElementId {
+                    tag: 0,
+                    id: type_id,
+                },
+            ));
+            element
+                .fields
+                .push((TYPE_NAME_FIELD.into(), InstanceField::String(name.clone())));
+        }
+        for (name, value) in SPIRAL_RUN_CENTRE_FIELDS.iter().zip(run.centre) {
+            element.fields.push(((*name).into(), scalar(value)));
+        }
+        for (name, value) in SPIRAL_RUN_RADII_FIELDS.iter().zip(run.radii_feet) {
+            element.fields.push(((*name).into(), scalar(value)));
+        }
+        element.fields.push((
+            SPIRAL_RUN_TREADS_FIELD.into(),
+            InstanceField::Vector(treads),
+        ));
     }
 }
 
