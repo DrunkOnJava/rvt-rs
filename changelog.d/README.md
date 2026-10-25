@@ -15,6 +15,10 @@ measured, user-facing wording as the entries already in `CHANGELOG.md`.
     python3 tools/release/changelog.py check      # CI runs this on every pull request
     python3 tools/release/changelog.py assemble   # a release step (RELEASE.md)
 
+`check` also fails on an item a released section of `CHANGELOG.md` already
+has: an entry a branch carried over from before a release belongs to the
+release that shipped it.
+
 `assemble` moves every fragment into `CHANGELOG.md`'s `[Unreleased]`, at
 the top of its section, and deletes the fragments. Until a release runs it,
 the changes on `main` since the last release are in `CHANGELOG.md`'s
