@@ -143,9 +143,24 @@ pub fn native_walls(
     rf: &mut RevitFile,
     walls: &BTreeSet<u64>,
 ) -> anyhow::Result<BTreeMap<u64, NativeWall>> {
+    Ok(native_walls_and_top_joins(rf, walls)?.0)
+}
+
+/// [`native_walls`], and for every one of `walls` whose `SWall` or `ArcWall`
+/// record is read, whether its top is joined to a roof or floor: one of its
+/// `JoinToRoofGStep` objects has `m_baseOrTop` 1 (a wall attached at its
+/// base only has 0). That is Revit's `Pset_WallCommon.ExtendToStructure`,
+/// which revit-ifc's `ExtendToStructureCalculator` takes from Revit's
+/// `IsWallJoinedToTop` (CLEANROOM.md source 5): on all 607 walls of the
+/// BIM4LCA office as built and 589 at building permit (RE-228).
+pub fn native_walls_and_top_joins(
+    rf: &mut RevitFile,
+    walls: &BTreeSet<u64>,
+) -> anyhow::Result<(BTreeMap<u64, NativeWall>, BTreeMap<u64, bool>)> {
     if walls.is_empty() {
-        return Ok(BTreeMap::new());
+        return Ok((BTreeMap::new(), BTreeMap::new()));
     }
+    let mut top_joined: BTreeMap<u64, bool> = BTreeMap::new();
     let options = Options {
         selected_ids: walls.clone(),
         selected_classes: BTreeSet::from(["BasicWallType".to_string()]),
@@ -170,7 +185,17 @@ pub fn native_walls(
             }
             return Ok(());
         }
-        if class != "SWall" || !walls.contains(&id) {
+        if !matches!(class, "SWall" | "ArcWall") || !walls.contains(&id) {
+            return Ok(());
+        }
+        top_joined.insert(
+            id,
+            graph.objects.iter().any(|object| {
+                object.class_name == "JoinToRoofGStep"
+                    && object.fields.get("m_baseOrTop").and_then(Value::as_i64) == Some(1)
+            }),
+        );
+        if class != "SWall" {
             return Ok(());
         }
         let curves: Vec<_> = graph
@@ -208,13 +233,14 @@ pub fn native_walls(
         }
         Ok(())
     })?;
-    Ok(found
+    let walls = found
         .into_iter()
         .map(|(id, (mut wall, type_id))| {
             wall.shells = type_id.and_then(|type_id| types.get(&type_id).copied());
             (id, wall)
         })
-        .collect())
+        .collect();
+    Ok((walls, top_joined))
 }
 
 /// How far past the `end` (0 its start, 1 its end) of wall `id`'s curve its
