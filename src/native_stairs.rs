@@ -238,12 +238,10 @@ pub struct RunShape {
     pub run_type: i64,
     /// The plan direction it climbs in, its first tread's `m_runDirProj`.
     pub direction: Option<[f64; 2]>,
-    /// `StairsRun.m_bottomElevation`, feet.
-    pub bottom_feet: Option<f64>,
 }
 
 /// Each run in `runs` whose native `StairsTreadInfo` records all give one
-/// `m_runType`, with that value, its climb direction and its bottom (#323).
+/// `m_runType`, with that value and its climb direction (#323).
 pub fn native_run_shapes(
     rf: &mut RevitFile,
     runs: &BTreeSet<u64>,
@@ -282,10 +280,6 @@ pub fn native_run_shapes(
                         .first()
                         .and_then(|t| point(t, "m_runDirProj"))
                         .and_then(unit_plan),
-                    bottom_feet: graph
-                        .objects
-                        .first()
-                        .and_then(|root| number(&root.fields, "m_bottomElevation")),
                 },
             );
         }
@@ -302,7 +296,6 @@ pub const STAIR_TYPES: &[&str] = &[
     "QUARTER_TURN_STAIR",
     "HALF_TURN_STAIR",
     "DOUBLE_RETURN_STAIR",
-    "TWO_QUARTER_TURN_STAIR",
     "THREE_QUARTER_TURN_STAIR",
 ];
 
@@ -314,9 +307,13 @@ pub const STAIR_TYPES: &[&str] = &[
 /// `TWO_STRAIGHT_RUN_STAIR`, `QUARTER_TURN_STAIR` or `HALF_TURN_STAIR` as
 /// the second climbs the same way as the first, square to it or back;
 /// three straight runs each square to the one before, with two landings,
-/// are `DOUBLE_RETURN_STAIR` where two of them start at one elevation and
-/// `TWO_QUARTER_TURN_STAIR` otherwise; four such runs and three landings
-/// are `THREE_QUARTER_TURN_STAIR`. `None` for any other stair, and for one
+/// are `DOUBLE_RETURN_STAIR`; four such runs and three landings are
+/// `THREE_QUARTER_TURN_STAIR`. revit-ifc calls three runs
+/// `DOUBLE_RETURN_STAIR` only where two of their stairs paths start at one
+/// height, else `TWO_QUARTER_TURN_STAIR`; Revit's export writes
+/// `DOUBLE_RETURN_STAIR` for all ten of the BIM4LCA office's such stairs,
+/// whose runs start at three heights each, so a run's path does not start
+/// at its own bottom, and the test always holds there. `None` for any other stair, and for one
 /// with a run that is neither straight nor spiral (winders and sketched
 /// runs are not measured), which Revit writes `.NOTDEFINED.`.
 pub fn stair_predefined_type(runs: &[RunShape], landings: usize) -> Option<&'static str> {
@@ -351,19 +348,7 @@ pub fn stair_predefined_type(runs: &[RunShape], landings: usize) -> Option<&'sta
                 None
             }
         }
-        ([_, _, _], 2) if square(&directions) => {
-            let bottoms: Vec<f64> = runs
-                .iter()
-                .map(|run| run.bottom_feet)
-                .collect::<Option<_>>()?;
-            let shared =
-                (0..3).any(|i| ((i + 1)..3).any(|j| (bottoms[i] - bottoms[j]).abs() <= EPS));
-            Some(if shared {
-                "DOUBLE_RETURN_STAIR"
-            } else {
-                "TWO_QUARTER_TURN_STAIR"
-            })
-        }
+        ([_, _, _], 2) if square(&directions) => Some("DOUBLE_RETURN_STAIR"),
         ([_, _, _, _], 3) if square(&directions) => Some("THREE_QUARTER_TURN_STAIR"),
         _ => None,
     }
