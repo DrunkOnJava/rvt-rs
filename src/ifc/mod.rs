@@ -2220,6 +2220,9 @@ const INSTANCE_AS_TYPE: u16 = 2048;
 /// and its ends from the host's faces (#824).
 const HOSTED_CUT_TOLERANCE_FEET: f64 = 1e-6;
 
+/// A prism's plan outline, counter-clockwise, with its lowest and highest Z.
+type PrismFootprint = (Vec<(f64, f64)>, f64, f64);
+
 /// The plan footprint of a cut solid placed by `transform`, where the solid
 /// is a prism standing upright: the convex hull of its vertices in plan,
 /// counter-clockwise, when every vertex lies on one of its corners, with the
@@ -2227,7 +2230,7 @@ const HOSTED_CUT_TOLERANCE_FEET: f64 = 1e-6;
 fn prism_footprint(
     vertices: &[[f64; 3]],
     transform: &crate::partition_instance_transforms::InstanceTransform,
-) -> Option<(Vec<(f64, f64)>, f64, f64)> {
+) -> Option<PrismFootprint> {
     let placed: Vec<[f64; 3]> = vertices
         .iter()
         .map(|v| {
@@ -2324,7 +2327,7 @@ fn attach_hosted_cut_openings(rf: &mut crate::RevitFile, entities: &mut Vec<enti
     // `Basic Roof:YP-1:2991742:1` is hatch 2896992's, `:4` hatch 2053330's.
     let mut cut_counts: std::collections::BTreeMap<usize, u32> = Default::default();
     let mut cuts = cuts;
-    cuts.sort_by(|a, b| b.instance.cmp(&a.instance));
+    cuts.sort_by_key(|cut| std::cmp::Reverse(cut.instance));
     for cut in cuts {
         let Some(transform) = u32::try_from(cut.instance)
             .ok()
