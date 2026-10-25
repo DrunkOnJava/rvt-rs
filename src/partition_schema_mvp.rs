@@ -5373,6 +5373,74 @@ pub const LANDING_BODY_TOP_FIELD: &str = "m_landing_body_top";
 /// [`crate::element_record_plan_profiles::PLAN_PROFILE_SOURCE_FIELD`] of a
 /// landing outline read from the lines in its own element data (#824).
 pub const LANDING_OUTLINE_SOURCE: &str = "partition_landing_lines";
+
+/// Field holding a tread landing's outline (#824): each curve `[0, start x,
+/// start y, end x, end y]` for a line or `[1, start, middle, end]` for an
+/// arc through its middle point, model feet, in loop order.
+pub const LANDING_TREAD_OUTLINE_FIELD: &str = "m_landing_tread_outline";
+/// Field holding a tread landing's underside, feet (#824).
+pub const LANDING_TREAD_BOTTOM_FIELD: &str = "m_landing_tread_bottom";
+/// Field holding a tread landing's top, feet (#824).
+pub const LANDING_TREAD_TOP_FIELD: &str = "m_landing_tread_top";
+
+/// A tread landing as [`LANDING_TREAD_OUTLINE_FIELD`] and its companions
+/// record it (#824).
+#[derive(Debug, Clone, PartialEq)]
+pub struct LandingTreadBody {
+    pub outline: Vec<crate::native_stairs::LandingCurve>,
+    pub bottom_feet: f64,
+    pub top_feet: f64,
+}
+
+/// The tread landing body recorded in `fields`, when every part of it is.
+pub fn landing_tread_body_from_fields(
+    fields: &[(String, InstanceField)],
+) -> Option<LandingTreadBody> {
+    use crate::native_stairs::LandingCurve;
+    let float = |wanted: &str| {
+        fields.iter().find_map(|(name, value)| match value {
+            InstanceField::Float { value, .. } if name == wanted => Some(*value),
+            _ => None,
+        })
+    };
+    let curves = fields.iter().find_map(|(name, value)| match value {
+        InstanceField::Vector(curves) if name == LANDING_TREAD_OUTLINE_FIELD => Some(curves),
+        _ => None,
+    })?;
+    let outline = curves
+        .iter()
+        .map(|curve| {
+            let InstanceField::Vector(values) = curve else {
+                return None;
+            };
+            let values: Vec<f64> = values
+                .iter()
+                .map(|value| match value {
+                    InstanceField::Float { value, .. } => Some(*value),
+                    _ => None,
+                })
+                .collect::<Option<_>>()?;
+            match values.as_slice() {
+                [kind, ax, ay, bx, by] if *kind == 0.0 => {
+                    Some(LandingCurve::Line([*ax, *ay], [*bx, *by]))
+                }
+                [kind, ax, ay, mx, my, bx, by] if *kind == 1.0 => {
+                    Some(LandingCurve::Arc([*ax, *ay], [*mx, *my], [*bx, *by]))
+                }
+                _ => None,
+            }
+        })
+        .collect::<Option<Vec<_>>>()?;
+    let (bottom_feet, top_feet) = (
+        float(LANDING_TREAD_BOTTOM_FIELD)?,
+        float(LANDING_TREAD_TOP_FIELD)?,
+    );
+    (outline.len() >= 3 && top_feet > bottom_feet).then_some(LandingTreadBody {
+        outline,
+        bottom_feet,
+        top_feet,
+    })
+}
 /// How closely a landing's lines must lie at its top and meet each other,
 /// feet. Its outline and slab must lie in its record box to
 /// [`SKETCH_BOX_TOLERANCE_FEET`], as a sketched outline must.
@@ -5784,6 +5852,92 @@ fn attach_landing_slabs(rf: &mut RevitFile, revit_version: u32, products: &mut [
         element
             .fields
             .push((LANDING_BODY_TOP_FIELD.into(), scalar(landing.top_feet)));
+    }
+    // #824: a landing that is not monolithic and takes its tread from its
+    // runs is that tread, its outline arcs and all.
+    let run_types = ptr::type_definition_ids(
+        &ptr::scan_type_records(
+            rf,
+            revit_version,
+            crate::partition_element_records::OST_STAIRS_RUNS,
+            &declared,
+        )
+        .unwrap_or_default(),
+    );
+    let mut runs: BTreeMap<u64, u64> = BTreeMap::new();
+    for element in products
+        .iter()
+        .filter(|element| element.class == "StairsRun")
+    {
+        let (Some(id), Some((references, _))) = (element.id, record_references(rf, element)) else {
+            continue;
+        };
+        if let Some(type_id) = ptr::unique_type_reference(&references, &run_types) {
+            runs.insert(u64::from(id), u64::from(type_id));
+        }
+    }
+    let rest: BTreeMap<u64, u64> = landings
+        .iter()
+        .filter(|(id, _)| !native.contains_key(id))
+        .map(|(id, type_id)| (*id, *type_id))
+        .collect();
+    let Ok(treads) = crate::native_stairs::native_tread_landings(rf, &rest, &runs) else {
+        return;
+    };
+    for element in products
+        .iter_mut()
+        .filter(|element| element.class == "StairsLanding")
+    {
+        let (Some(landing), Some(bbox)) = (
+            element.id.and_then(|id| treads.get(&u64::from(id))),
+            element_record_bbox(element),
+        ) else {
+            continue;
+        };
+        let bottom = landing.top_feet - landing.thickness_feet;
+        let inside = |p: [f64; 2]| {
+            p[0] >= bbox[0] - BOX
+                && p[0] <= bbox[3] + BOX
+                && p[1] >= bbox[1] - BOX
+                && p[1] <= bbox[4] + BOX
+        };
+        if landing.top_feet > bbox[5] + BOX
+            || bottom < bbox[2] - BOX
+            || !landing.outline.iter().all(|curve| match curve {
+                crate::native_stairs::LandingCurve::Line(a, b) => inside(*a) && inside(*b),
+                crate::native_stairs::LandingCurve::Arc(a, m, b) => {
+                    inside(*a) && inside(*m) && inside(*b)
+                }
+            })
+        {
+            continue;
+        }
+        let float = |value: f64| InstanceField::Float { value, size: 8 };
+        let curves = landing
+            .outline
+            .iter()
+            .map(|curve| {
+                let values: Vec<f64> = match curve {
+                    crate::native_stairs::LandingCurve::Line(a, b) => {
+                        vec![0.0, a[0], a[1], b[0], b[1]]
+                    }
+                    crate::native_stairs::LandingCurve::Arc(a, m, b) => {
+                        vec![1.0, a[0], a[1], m[0], m[1], b[0], b[1]]
+                    }
+                };
+                InstanceField::Vector(values.into_iter().map(float).collect())
+            })
+            .collect();
+        element.fields.push((
+            LANDING_TREAD_OUTLINE_FIELD.into(),
+            InstanceField::Vector(curves),
+        ));
+        element
+            .fields
+            .push((LANDING_TREAD_BOTTOM_FIELD.into(), float(bottom)));
+        element
+            .fields
+            .push((LANDING_TREAD_TOP_FIELD.into(), float(landing.top_feet)));
     }
 }
 

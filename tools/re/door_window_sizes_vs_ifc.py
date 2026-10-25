@@ -11,7 +11,8 @@ each candidate pair equals, within 0.001 ft.
 
 Given an rvt-rs export instead of the probe's output, it scores the
 `OverallWidth` and `OverallHeight` rvt-rs writes against Revit's, joined the
-same way: per class, how many are equal, differ, or are `$`.
+same way: per class, how many are equal, differ, or are `$`, and the
+first of those that differ and of those that are `$`.
 
 Usage:
 
@@ -61,6 +62,7 @@ def score_export(ours_path, revit_path, listing):
     tally = collections.Counter()
     seen = collections.Counter()
     worst = []
+    unset = []
     for tag, (entity, width, height) in revit.items():
         if width is None or height is None or tag not in ours:
             continue
@@ -68,6 +70,7 @@ def score_export(ours_path, revit_path, listing):
         _, w, h = ours[tag]
         if w is None or h is None:
             tally[(entity, "$")] += 1
+            unset.append((tag, entity, width, height))
         elif abs(w - width) <= TOLERANCE_FEET and abs(h - height) <= TOLERANCE_FEET:
             tally[(entity, "equal")] += 1
         else:
@@ -79,6 +82,8 @@ def score_export(ours_path, revit_path, listing):
     # The first few that differ always, every one with --list.
     for tag, entity, width, height, w, h in worst[: 60 if listing else 12]:
         print(f"  {entity} {tag}: Revit {width:.4f} x {height:.4f} ft, rvt-rs {w:.4f} x {h:.4f} ft")
+    for tag, entity, width, height in unset[: 60 if listing else 12]:
+        print(f"  {entity} {tag}: Revit {width:.4f} x {height:.4f} ft, rvt-rs $")
 
 
 def main():
