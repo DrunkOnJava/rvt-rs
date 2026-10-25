@@ -347,72 +347,47 @@ pub struct ExportDiagnostics {
 /// so [`ExportDiagnostics::anonymize`] cuts the list there.
 const UNAPPLIED_EXPORT_VALUES: &str = "so each keeps its category's entity (#792):";
 
-/// The shortest name [`ExportDiagnostics::anonymize`] replaces inside a
-/// warning, so a level named "1" does not rewrite every digit of it.
-const ANONYMIZED_MIN_NAME_CHARS: usize = 3;
-
 impl ExportDiagnostics {
     /// Replace every name these diagnostics take from the project, so they
     /// can be posted publicly: the file name and the project name become
     /// [`crate::redact::ANONYMIZED`], the levels' and the material sample's
     /// names `Level 1`, `Material 1` and so on in their order, and each
     /// skipped element's sample name, which can name its family and type,
-    /// `element-<ElementId>`. A warning that quotes one of those names
-    /// quotes its placeholder, and the warning listing "Export to IFC As"
-    /// values the export does not apply keeps their count and drops the
-    /// values, which the project writes. Counts, releases, body sources and
-    /// ElementIds are kept.
+    /// `element-<ElementId>`. The warning listing "Export to IFC As" values
+    /// the export does not apply keeps their count and drops the values,
+    /// which the project writes; no other warning carries project text
+    /// (counts, releases, type ElementIds, unit identifiers), so none is
+    /// rewritten. Counts, releases, body sources and ElementIds are kept.
     pub fn anonymize(&mut self) {
         use crate::redact::{ANONYMIZED, anonymize_file_name};
-        let mut names: Vec<(String, String)> = Vec::new();
         if let Some(path) = self.input.original_path.as_mut() {
-            let replacement = anonymize_file_name(path);
-            if let Some((stem, _)) = path
-                .rsplit(['\\', '/'])
-                .next()
-                .and_then(|n| n.rsplit_once('.'))
-            {
-                names.push((stem.to_string(), ANONYMIZED.to_string()));
-            }
-            names.push((std::mem::replace(path, replacement.clone()), replacement));
+            *path = anonymize_file_name(path);
         }
         if let Some(project) = self.input.project_name.as_mut() {
-            names.push((
-                std::mem::replace(project, ANONYMIZED.to_string()),
-                ANONYMIZED.to_string(),
-            ));
+            *project = ANONYMIZED.to_string();
         }
         for (prefix, list) in [
             ("Level", &mut self.exported.storey_names),
             ("Material", &mut self.exported.material_names_sample),
         ] {
             for (index, name) in list.iter_mut().enumerate() {
-                let replacement = format!("{prefix} {}", index + 1);
-                names.push((std::mem::replace(name, replacement.clone()), replacement));
+                *name = format!("{prefix} {}", index + 1);
             }
         }
         for item in &mut self.skipped {
             for name in &mut item.sample_names {
                 let id = &name[name.trim_end_matches(|c: char| c.is_ascii_digit()).len()..];
-                let replacement = if id.is_empty() {
+                *name = if id.is_empty() {
                     ANONYMIZED.to_string()
                 } else {
                     format!("element-{id}")
                 };
-                names.push((std::mem::replace(name, replacement.clone()), replacement));
             }
         }
-        names.retain(|(name, _)| name.chars().count() >= ANONYMIZED_MIN_NAME_CHARS);
-        names.sort_by_key(|(name, _)| std::cmp::Reverse(name.len()));
         for warning in &mut self.warnings {
             if let Some(at) = warning.find(UNAPPLIED_EXPORT_VALUES) {
                 warning.truncate(at + UNAPPLIED_EXPORT_VALUES.len() - 1);
                 warning.push('.');
-            }
-            for (name, replacement) in &names {
-                if warning.contains(name.as_str()) {
-                    *warning = warning.replace(name.as_str(), replacement);
-                }
             }
         }
     }

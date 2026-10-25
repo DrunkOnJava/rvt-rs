@@ -2983,56 +2983,40 @@ exportSvgBtn.addEventListener('click', () => {
  * The diagnostics with every name they take from the project replaced, as
  * `ExportDiagnostics::anonymize` does for `rvt-ifc --anonymize`: the file
  * and project names, levels (`Level 1`...), the material sample
- * (`Material 1`...) and skipped elements' sample names (`element-<id>`), in
- * any warning that quotes them too. Counts and ElementIds stay, so the
- * download can be posted publicly.
+ * (`Material 1`...) and skipped elements' sample names (`element-<id>`),
+ * and the "Export to IFC As" values a warning lists. Counts and ElementIds
+ * stay, so the download can be posted publicly.
  */
 function anonymizedDiagnostics(diagnostics: ExportDiagnostics): ExportDiagnostics {
   const copy = plainJson(diagnostics);
   const redacted = '<redacted>';
-  const names: [string, string][] = [];
   const input = copy.input;
   if (input?.original_path) {
     const fileName = input.original_path.split(/[\\/]/).pop() ?? input.original_path;
     const dot = fileName.lastIndexOf('.');
-    const replacement = dot > 0 ? `${redacted}${fileName.slice(dot)}` : redacted;
-    if (dot > 0) names.push([fileName.slice(0, dot), redacted]);
-    names.push([input.original_path, replacement]);
-    input.original_path = replacement;
+    input.original_path = dot > 0 ? `${redacted}${fileName.slice(dot)}` : redacted;
   }
-  if (input?.project_name) {
-    names.push([input.project_name, redacted]);
-    input.project_name = redacted;
-  }
+  if (input?.project_name) input.project_name = redacted;
   const exported = copy.exported;
   if (exported) {
-    exported.storey_names = (exported.storey_names ?? []).map((name, index) => {
-      names.push([name, `Level ${index + 1}`]);
-      return `Level ${index + 1}`;
-    });
-    exported.material_names_sample = (exported.material_names_sample ?? []).map((name, index) => {
-      names.push([name, `Material ${index + 1}`]);
-      return `Material ${index + 1}`;
-    });
+    exported.storey_names = (exported.storey_names ?? []).map((_, index) => `Level ${index + 1}`);
+    exported.material_names_sample = (exported.material_names_sample ?? []).map(
+      (_, index) => `Material ${index + 1}`,
+    );
   }
   for (const item of copy.skipped ?? []) {
     item.sample_names = (item.sample_names ?? []).map((name) => {
       const id = /(\d+)$/.exec(name)?.[1];
-      const replacement = id ? `element-${id}` : redacted;
-      names.push([name, replacement]);
-      return replacement;
+      return id ? `element-${id}` : redacted;
     });
   }
-  const quoted = names
-    .filter(([name]) => name.length >= 3)
-    .sort((a, b) => b[0].length - a[0].length);
   // The "Export to IFC As" values the export does not apply are the
-  // project's own text: keep their count, drop the list (#792).
+  // project's own text: keep their count, drop the list (#792). No other
+  // warning carries project text.
   const unapplied = "so each keeps its category's entity (#792):";
   copy.warnings = (copy.warnings ?? []).map((warning) => {
     const at = warning.indexOf(unapplied);
-    const cut = at >= 0 ? `${warning.slice(0, at + unapplied.length - 1)}.` : warning;
-    return quoted.reduce((text, [name, replacement]) => text.split(name).join(replacement), cut);
+    return at >= 0 ? `${warning.slice(0, at + unapplied.length - 1)}.` : warning;
   });
   return copy;
 }

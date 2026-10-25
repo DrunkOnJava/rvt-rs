@@ -126,11 +126,16 @@ fn main() -> ExitCode {
         Ok(()) => ExitCode::SUCCESS,
         Err(err) => {
             let failure_mode = corrupt_or_unreadable_failure_mode();
+            let error = if cli.anonymize {
+                anonymize_input_path(&err.to_string(), &cli.file)
+            } else {
+                err.to_string()
+            };
             if cli.json {
                 let report = InspectErrorReport {
                     schema_version: INSPECT_SCHEMA_VERSION,
                     failure_mode,
-                    error: err.to_string(),
+                    error,
                 };
                 match serde_json::to_string_pretty(&report) {
                     Ok(json) => println!("{json}"),
@@ -139,7 +144,7 @@ fn main() -> ExitCode {
             } else {
                 eprintln!("failure mode: {}", failure_mode.title);
                 eprintln!("{}", failure_mode.summary);
-                eprintln!("error: {err}");
+                eprintln!("error: {error}");
             }
             ExitCode::from(1)
         }
@@ -359,6 +364,23 @@ fn redact_summary(summary: &mut rvt::reader::Summary) {
     if let Some(path) = &summary.original_path {
         summary.original_path = Some(rvt::redact::redact_sensitive(path));
     }
+}
+
+/// `text` with the input path, its file name and its stem replaced by the
+/// anonymized file name, for an error that names the file it could not read.
+fn anonymize_input_path(text: &str, path: &std::path::Path) -> String {
+    let raw = path.display().to_string();
+    let replacement = rvt::redact::anonymize_file_name(&raw);
+    let mut out = text.replace(&raw, &replacement);
+    for part in [path.file_name(), path.file_stem()]
+        .into_iter()
+        .flatten()
+        .filter_map(|part| part.to_str())
+        .filter(|part| part.chars().count() >= 3)
+    {
+        out = out.replace(part, &replacement);
+    }
+    out
 }
 
 fn display_path(path: &std::path::Path, redact: bool) -> String {
