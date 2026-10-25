@@ -5,8 +5,9 @@ Takes the output of `examples/probe_357_native_runs.rs`, whose `record`
 lines give each run's own type (the one `OST_StairsRuns` type definition its
 element record's reference list names, RE-28) and the type
 `native_stairs::native_runs` takes through the run's stairs
-(`StairsElement.m_typeId` -> `StairsType.m_runTypeId`), and Revit's IFC
-export. For every `IfcStairFlight` whose Tag is a run the probe printed, it
+(`StairsRun.m_stairsId` -> `StairsElement.m_typeId` ->
+`StairsType.m_runTypeId`, from its `run` and `stairs` lines), and Revit's
+IFC export. For every `IfcStairFlight` whose Tag is a run the probe printed, it
 counts how often each of the two equals the Tag of the `IfcStairFlightType`
 Revit relates the flight to, and lists every flight where they differ.
 
@@ -24,12 +25,27 @@ import ifcopenshell
 
 
 def read_probe(path):
-    out = {}
+    """Run Tag -> (own type, type through its stairs), from the `record`,
+    `run` and `stairs` lines; the second is followed here, so it is there
+    whether or not `native_runs` read the run's sketch."""
+    own, run_stairs, stairs_type, run_type = {}, {}, {}, {}
     for line in open(path, encoding="utf-8", errors="replace"):
-        m = re.match(r"record (\d+) refs .* own-type (?:Some\((\d+)\)|None) chain-type (?:Some\((\d+)\)|None)", line)
+        m = re.match(r"record (\d+) refs .* own-type (?:Some\((\d+)\)|None)", line)
         if m:
-            out[m.group(1)] = (m.group(2), m.group(3))
-    return out
+            own[m.group(1)] = m.group(2)
+        m = re.match(r"run (\d+) .*\bm_stairsId=(\d+)", line)
+        if m:
+            run_stairs[m.group(1)] = m.group(2)
+        m = re.match(r"stairs (\d+) StairsElement refs .*\bm_typeId=(\d+)", line)
+        if m:
+            stairs_type[m.group(1)] = m.group(2)
+        m = re.match(r"stairs (\d+) StairsType refs .*\bm_runTypeId=(\d+)", line)
+        if m:
+            run_type[m.group(1)] = m.group(2)
+    return {
+        tag: (mine, run_type.get(stairs_type.get(run_stairs.get(tag))))
+        for tag, mine in own.items()
+    }
 
 
 def flight_types(path):
