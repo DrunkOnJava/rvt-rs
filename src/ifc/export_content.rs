@@ -2051,12 +2051,20 @@ const PIPE_AXIS_TOLERANCE_FEET: f64 = 1e-6;
 
 /// A pipe's invert in model height, feet (RE-157): the lower end of a
 /// vertical pipe, or a horizontal pipe's axis less half its inner diameter.
-/// `None` for a sloped pipe, or a horizontal one whose inner diameter was not
-/// read.
+/// `None` for a sloped pipe, or one whose inner diameter was not read: the
+/// diameters are read on the release RE-157 measured the invert on (2025),
+/// and a 2024 pipe's axis alone gives an invert Revit's export does not
+/// (the BIM4LCA office's 12, #869).
 fn pipe_invert_height(fields: &[(String, InstanceField)]) -> Option<f64> {
     use crate::partition_schema_mvp as mvp;
     let pipe = mvp::pipe_body_from_fields(fields)?;
     let (start, end) = (pipe.start, pipe.end);
+    let inner = fields.iter().find_map(|(name, value)| match value {
+        InstanceField::Float { value, .. } if name == mvp::PIPE_INNER_DIAMETER_FIELD => {
+            Some(*value)
+        }
+        _ => None,
+    })?;
     let near = |a: f64, b: f64| (a - b).abs() <= PIPE_AXIS_TOLERANCE_FEET;
     let level = near(start[2], end[2]);
     if !level && near(start[0], end[0]) && near(start[1], end[1]) {
@@ -2065,12 +2073,6 @@ fn pipe_invert_height(fields: &[(String, InstanceField)]) -> Option<f64> {
     if !level {
         return None;
     }
-    let inner = fields.iter().find_map(|(name, value)| match value {
-        InstanceField::Float { value, .. } if name == mvp::PIPE_INNER_DIAMETER_FIELD => {
-            Some(*value)
-        }
-        _ => None,
-    })?;
     Some(start[2] - inner / 2.0)
 }
 

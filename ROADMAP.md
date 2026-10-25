@@ -112,8 +112,8 @@ bodies thicker or thinner than their type's layers (#358), stair flights
 (#357) and aggregates (#323), hip roofs over T and U footprints and roof cases
 with no oracle (#884, #885), the openings on releases other than 2024 and 2025
 (#227), the office's slab tops (#824), room boundaries whose solid does not
-close (#90), beams (#94), MEP equipment and routes (#96) and ports outside
-Revit 2025 (#869), the sketch-to-solid pipeline (#156), and the Snowdon slabs
+close (#90), beams (#94), MEP equipment and routes (#96) and ports and pipes outside
+Revit 2024 and 2025 (#869), the sketch-to-solid pipeline (#156), and the Snowdon slabs
 that are not in Revit's export: six in the Legends phase (#328) and one more
 (#309). Element data: instance and type parameters with units and precedence
 (#35, #155) and the element-record fields that carry them (#223), written to
