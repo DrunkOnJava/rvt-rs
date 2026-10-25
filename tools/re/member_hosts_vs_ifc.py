@@ -73,14 +73,20 @@ def extrusion_depths(element, scale):
 
 
 def box_sides(element, scale):
+    """(XDim, YDim, Depth) of each rectangle extrusion the body is."""
     sides = []
     for depth_item in element.Representation.Representations if element.Representation else []:
         for item in depth_item.Items:
             if item.is_a("IfcExtrudedAreaSolid") and item.SweptArea.is_a("IfcRectangleProfileDef"):
-                sides.append(
-                    max(item.SweptArea.XDim * scale, item.SweptArea.YDim * scale, item.Depth * scale)
-                )
+                sides.append((item.SweptArea.XDim * scale, item.SweptArea.YDim * scale, item.Depth * scale))
     return sides
+
+
+def body_source(element):
+    for props in ifcopenshell.util.element.get_psets(element).values():
+        if "BodySource" in props:
+            return props["BodySource"]
+    return "-"
 
 
 def main():
@@ -137,9 +143,11 @@ def main():
         for element in ours.by_type("IfcMember"):
             if element.Tag:
                 sides = box_sides(element, our_scale)
-                if sides:
-                    ours_sides[str(element.Tag)] = max(sides)
+                if len(sides) == 1:
+                    ours_sides[str(element.Tag)] = (sides[0], body_source(element))
     spans = collections.Counter()
+    by_source = collections.Counter()
+    span_misses = []
     for tag, (entity, _, span, depths) in members.items():
         if span is None:
             continue
@@ -147,9 +155,22 @@ def main():
         if depths and any(abs(d - span) <= TOLERANCE_FEET for d in depths):
             spans["Span = Revit's extrusion depth"] += 1
         if tag in ours_sides:
+            (x, y, depth), source = ours_sides[tag]
             spans["rvt-rs box"] += 1
-            spans["Span = rvt-rs box's longest side"] += abs(ours_sides[tag] - span) <= TOLERANCE_FEET
+            spans["Span = rvt-rs box's longest side"] += abs(max(x, y, depth) - span) <= TOLERANCE_FEET
+            spans["Span = rvt-rs extrusion depth"] += abs(depth - span) <= TOLERANCE_FEET
+            spans["Span = rvt-rs XDim"] += abs(x - span) <= TOLERANCE_FEET
+            spans["Span = rvt-rs YDim"] += abs(y - span) <= TOLERANCE_FEET
+            by_source[(source, abs(depth - span) <= TOLERANCE_FEET)] += 1
+            if abs(depth - span) > TOLERANCE_FEET and len(span_misses) < 40:
+                span_misses.append((tag, span, x, y, depth, source, depths))
     print("Span: " + ", ".join(f"{k} {v}" for k, v in spans.items()))
+    print("Span = rvt-rs extrusion depth, by rvt-rs BodySource: " + ", ".join(f"{k[0]} {k[1]} {v}" for k, v in sorted(by_source.items())))
+    for tag, span, x, y, depth, source, revit_depths in span_misses:
+        print(
+            f"  span miss {tag}: Revit {span:.4f} (its depths {','.join(f'{d:.4f}' for d in revit_depths)}),"
+            f" rvt-rs {x:.4f} x {y:.4f} x {depth:.4f} {source}"
+        )
     if "--list" in sys.argv:
         # Every member the host rule gets wrong, up to 300, then 50 it gets right.
         shown = collections.Counter()
@@ -165,7 +186,7 @@ def main():
             print(
                 f"row {kind} {tag} {entity} external={revit_external} host={row['host'] or '-'}"
                 f" hostexternal={external_by_tag.get(row['host']) if row['host'] else '-'}"
-                f" span={span_text} depths={depth_text} ours={ours_sides.get(tag, '-')} {row['fields']}"
+                f" span={span_text} depths={depth_text} ours={ours_sides.get(tag, ('-',))[0]} {row['fields']}"
             )
     return 0
 
