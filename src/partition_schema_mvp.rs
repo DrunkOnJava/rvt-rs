@@ -5575,10 +5575,14 @@ fn attach_native_stair_names(
             continue;
         };
         let has = |field: &str| element.fields.iter().any(|(name, _)| name == field);
-        if has(FAMILY_NAME_FIELD) || has(TYPE_NAME_FIELD) {
+        if has(FAMILY_NAME_FIELD) {
             continue;
         }
-        let (has_type_id, has_name) = (has(TYPE_ID_FIELD), has(ELEMENT_NAME_FIELD));
+        let (has_type_id, has_type_name, has_name) = (
+            has(TYPE_ID_FIELD),
+            has(TYPE_NAME_FIELD),
+            has(ELEMENT_NAME_FIELD),
+        );
         let name = match stair_part_word(&element.class) {
             None => stair_names.get(&id).cloned(),
             Some(word) => stair_names.get(&part.stair).and_then(|stair| {
@@ -5601,10 +5605,12 @@ fn attach_native_stair_names(
                 },
             ));
         }
-        element.fields.push((
-            TYPE_NAME_FIELD.into(),
-            InstanceField::String(part.type_name.clone()),
-        ));
+        if !has_type_name {
+            element.fields.push((
+                TYPE_NAME_FIELD.into(),
+                InstanceField::String(part.type_name.clone()),
+            ));
+        }
         element.fields.push((
             FAMILY_NAME_FIELD.into(),
             InstanceField::String(part.family.into()),
