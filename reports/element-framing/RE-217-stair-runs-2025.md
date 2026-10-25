@@ -151,7 +151,7 @@ Measure run [40168694898](https://github.com/DrunkOnJava/rvt-rs/actions/runs/401
 | BIM4LCA office at building permit | 0 → 35 of 35 | the same |
 | R2025 models 13 to 17 | 0 → 5 of 5 (4 `STRAIGHT`, 1 `SPIRAL`) | rvt-rs writes no flight type object on these, as before |
 
-No other scorer's output changes, and only these seven models' IFC does. The stair's own `PredefinedType` (`STRAIGHT_RUN_STAIR`, `HALF_TURN_STAIR`, `DOUBLE_RETURN_STAIR`, `SPIRAL_STAIR` in Revit's export of the office) is not read: rvt-rs writes `.NOTDEFINED.` on all 16 office stairs, which is Revit's on 2.
+No other scorer's output changes, and only these seven models' IFC does. The stair's own `PredefinedType` (`STRAIGHT_RUN_STAIR`, `HALF_TURN_STAIR`, `DOUBLE_RETURN_STAIR`, `SPIRAL_STAIR` in Revit's export of the office) is not read: rvt-rs writes `.NOTDEFINED.` on all 16 office stairs, which is Revit's on 2. §12 reads it.
 
 ## 11. Addendum (2026-10-25): spiral runs with treads and no risers (#357)
 
@@ -164,4 +164,23 @@ Revit's export writes each tread as an `IfcExtrudedAreaSolid` 30 mm deep, up fro
 Measure run [40172394814](https://github.com/DrunkOnJava/rvt-rs/actions/runs/40172394814), this change against `main`, `-f nordic=true -f r2025=true`, `stair_bodies_vs_ifc` on both office files: run 3057703's volume is 4.540283 ft³ against Revit's 4.540287, where its box was 1,307.12; its height 236.5503 to 248.3907 ft, Revit's; every vertex of Revit's body lies within 0.00075 ft of rvt-rs's surface. The scorer still reads the run as differing on its vertex test: Revit's mesh has 444 vertices to rvt-rs's 432, and its farthest, 0.0328 ft from rvt-rs's nearest vertex, lies on the outer circle at a tread's riser line, one nosing length from the arc's end, and so on rvt-rs's surface: Revit's mesh has 12 more points on the same arcs, not a different shape. Only the two office files' IFC changes, and no other scorer's output.
 
 Model 17's spiral run is monolithic (type 2338) and Revit writes it as one `IfcPolygonalFaceSet` of 912 vertices: it keeps its box.
+
+## 12. Addendum (2026-10-25): the stair's predefined type (#323)
+
+Revit's export gives each `IfcStair` a `PredefinedType` from its runs and landings. revit-ifc's `StairsExporter.GetValidatedStairType` (CLEANROOM.md source 5) states the rule: a stair with a spiral run is `SPIRAL_STAIR`; one straight run is `STRAIGHT_RUN_STAIR`; two straight runs and one landing are `TWO_STRAIGHT_RUN_STAIR`, `QUARTER_TURN_STAIR` or `HALF_TURN_STAIR` as the second climbs the same way as the first, square to it or back; three straight runs each square to the one before, with two landings, are `DOUBLE_RETURN_STAIR` where two of their flight paths start at one height and `TWO_QUARTER_TURN_STAIR` where none do; four such runs with three landings are `THREE_QUARTER_TURN_STAIR`; anything else is `NOTDEFINED`.
+
+Every three-run stair of the BIM4LCA office is a `DOUBLE_RETURN_STAIR` in Revit's export, all ten, although each one's runs start at three heights (`StairsRun.m_bottomElevation`): the paths revit-ifc compares do not start at the runs' own bottoms, and the test holds on all ten. A first rule that compared the runs' bottoms wrote all ten `TWO_QUARTER_TURN_STAIR`, so rvt-rs writes `DOUBLE_RETURN_STAIR` for three square runs and two landings and does not read the path test.
+
+`native_stairs::native_run_shapes` reads each run's `m_runType` and its climb direction, its first tread's `m_runDirProj`, on Revit 2024 and 2025. `partition_schema_mvp::attach_stair_run_shapes` groups the runs and landings by the stair whose aggregate they are part of, the runs in ElementId order, and `stair_predefined_type` applies the rule; the IFC writer takes the value for the `IfcStair` after a predefined type its own export parameters set (RE-45). A stair with a run that is neither straight nor spiral (winders and sketched runs are not measured), or a layout the rule does not name, keeps `.NOTDEFINED.`. A value the stair's own export parameters hold is not taken before the rule: the office's ten double-return stairs hold `TWO_QUARTER_TURN_STAIR` there, and Revit's export writes them `DOUBLE_RETURN_STAIR` (taking it first turned those ten wrong, Measure run [40182122458](https://github.com/DrunkOnJava/rvt-rs/actions/runs/40182122458)).
+
+Measure run [40175841982](https://github.com/DrunkOnJava/rvt-rs/actions/runs/40175841982), this change against `main` (51287f2f), default models plus `-f nordic=true -f r2025=true`, `tools/re/predefined_types_vs_ifc.py` and `type_objects_vs_ifc.py`:
+
+| model | stairs with Revit's PredefinedType | Revit's values |
+|---|---|---|
+| BIM4LCA office as built | 2 → 16 of 16 | 10 `DOUBLE_RETURN_STAIR`, 2 `STRAIGHT_RUN_STAIR`, 1 `HALF_TURN_STAIR`, 1 `SPIRAL_STAIR`, 2 `NOTDEFINED` |
+| BIM4LCA office at building permit | 2 → 16 of 16 | the same |
+| R2025 models 13 to 16 | 0 → 4 of 4 | `STRAIGHT_RUN_STAIR` |
+| R2025 model 17 | 0 → 1 of 1 | `SPIRAL_STAIR` |
+
+The office's two `NOTDEFINED` stairs were already Revit's and stay so. Revit writes a type object per type, entity and predefined type and keys all but the first by the predefined type (B73), so with each stair's value the office's stair type objects split as Revit's do and ten more take Revit's GlobalId: 12,029 → 12,039 of 12,358 type objects on the as-built file. No other scorer's output changes, and only these seven models' IFC does.
 
