@@ -74,3 +74,25 @@ python3 tools/re/names_vs_ifc.py --any-copy model.ifc REVIT_EXPORT.ifc
 ```
 
 The witness observations do not change.
+
+## 6. Addendum (2026-10-25): Revit 2025, from the native records (#323)
+
+RE-65's type flags sit at byte offsets measured on Revit 2024 (`partition_stairs::STAIR_DIMENSIONS_SUPPORTED_REVIT_VERSIONS`), so on Revit 2025 stairs, runs and stringers kept no name and no type object. Their native records, read by member name (`native_document::extract_graphs`), hold everything the names are made of. On puzzbobb's five R2025 stair models (`examples/probe_323_stair_names_2025.rs` with `tools/re/stair_names_list.py`, Measure run [40177908506](https://github.com/DrunkOnJava/rvt-rs/actions/runs/40177908506)):
+
+- a `StairsElement`'s `m_typeId` names its `StairsType`, whose `m_constructionMethod` is 0 on the three models Revit names `Assembled Stair:Stair:<id>` (13, 14, 15) and 1 on the two it names `Cast-In-Place Stair:Stair:<id>` (16, 17), RE-65's encoding;
+- each type's name is its `SymbolInfo.m_name` ("Stairs 1", "Cast-In-Place Stair", "50 mm Tread 10 mm Riser", "Stringer - 50 mm Width"), the part after the family in Revit's `ObjectType`;
+- a `StairsRun` names its stair (`m_stairsId`) and its run type's `m_hasMonolithicSupport` its family, `Monolithic Run` or `Non-Monolithic Run`; its type is the one `OST_StairsRuns` type definition its element record names (RE-28), as RE-217 reads it;
+- a `StairsSupport` names the run it carries (`m_hostCompId`) and its type (`m_typeId`); the stair type's `m_leftSideSupportTypeId` and `m_rightSideSupportTypeId` both name that type with `m_leftSupportStyle` and `m_rightSupportStyle` 1 on the three Assembled models, whose supports Revit names `Stringer`. The two Cast-In-Place models have no supports (styles 0).
+
+The same rule holds on the BIM4LCA office (Revit 2024, Measure run [40178166596](https://github.com/DrunkOnJava/rvt-rs/actions/runs/40178166596)): `m_constructionMethod` 1 on its 13 stairs Revit names Cast-In-Place and 0 on the one it names Assembled, every stair type's `SymbolInfo.m_name` its `ObjectType`'s. RE-65's byte path keeps naming Revit 2024 files.
+
+`native_stairs::native_stair_parts` reads those records on Revit 2025 (`NATIVE_STAIR_NAME_REVIT_VERSIONS`), and `partition_schema_mvp::attach_native_stair_names` gives each stair, run and stringer its type, its type's name and its family, a stair the name `Family:Stair:ElementId` and a part `<stair> Run 1` or `<stair> Stringer 2`, numbered in ElementId order among the exported parts of its kind on its stair. Another construction (2, precast) or support style, and landings, are not measured on Revit 2025 and stay unnamed.
+
+Measure run [40179287273](https://github.com/DrunkOnJava/rvt-rs/actions/runs/40179287273), this change against `main`, `-f r2025=true -f nordic=true`, `names_vs_ifc` and `type_objects_vs_ifc`:
+
+| R2025 model | stair, flight and stringers with Revit's `Name` and `ObjectType` | elements typed as Revit types them | type objects with Revit's GlobalId |
+|---|---|---|---|
+| 13, 14, 15 (Assembled) | 0 → 4 of 4 each | 21 → 25 of 25 each | 17 of 21 → 21 of 25 each |
+| 16, 17 (Cast-In-Place, no supports) | 0 → 2 of 2 each | 21 → 23 of 23 each | 17 of 21 → 19 of 23 each |
+
+Each model gains its `IfcStairType`, `IfcStairFlightType` (with #962's `STRAIGHT` or `SPIRAL`) and, on 13 to 15, its `IfcMemberType`, each with Revit's name and GlobalId (RE-167). No other R2025 model changes, nor Core Interior, Einhoven or the RE1 models; the office's door sizes differ in that run only because the branch predated #972.

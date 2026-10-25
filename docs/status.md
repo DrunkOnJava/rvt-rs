@@ -541,7 +541,10 @@ runs, landings and supports after them ("Assembled Stair:Stair:620883 Run
 1"), with `ObjectType` from each type's name and a flag in its own object
 (Assembled or Cast-In-Place Stair, Monolithic or Non-Monolithic Run,
 Stringer or Carriage). On Snowdon all 256 stair elements carry Revit's name
-and `ObjectType`. Measured on Snowdon only, as no other oracle has stairs
+and `ObjectType`. On Revit 2025 the same names come from the stairs' native
+records (RE-65 §6): on puzzbobb's five R2025 stair models every stair,
+flight and stringer has Revit's name and `ObjectType` and a type object
+with Revit's GlobalId, where none had either
 (`reports/element-framing/RE-65-stair-names.md`).
 **RE-66 (2026-09-24)** reads a railing type's name from its type object
 when the type has no element data. On Snowdon all 131 railings now carry
@@ -811,6 +814,16 @@ Revit's go from 40 to 60 of 63. Revit's underside also follows a flight's
 soffit where the flight meets the landing, which is drawn flat: the slabs
 are 100.4% to 104.7% of Revit's volume
 (`reports/element-framing/RE-214-landing-slabs.md`).
+
+**RE-220 (2026-10-25)** gives the project, site and building the
+GlobalIds the file stores, which Revit's export writes: under the project
+information's IfcGUID parameters on BIMcollab's Revit 2015 example, and as
+a triple related as revit-ifc's fake ElementIds -16, -15 and -14 relate
+them on the BIM4LCA office. All three are Revit's on those three files,
+where none were, and the 2015 example's five storeys take their stored
+values, Revit's. A file that stores none keeps generated ones: the GUID
+Revit derives them from is not found
+(`reports/element-framing/RE-220-stored-global-ids.md`).
 
 The public viewer's demo gallery leads with the two files this section
 measures, staged from the deploy workflow's `magnetar-io/revit-test-datasets`

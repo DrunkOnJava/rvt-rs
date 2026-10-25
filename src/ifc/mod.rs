@@ -253,6 +253,14 @@ pub struct RevitGlobalIds {
     /// GlobalId of the instance's original symbol (RE-167).
     #[serde(default)]
     pub element_types: std::collections::BTreeMap<u32, String>,
+    /// The project's, site's and building's GlobalIds, where the file gives
+    /// them (#878, `revit_global_ids::stored_global_ids`).
+    #[serde(default)]
+    pub project: Option<String>,
+    #[serde(default)]
+    pub site: Option<String>,
+    #[serde(default)]
+    pub building: Option<String>,
     /// The file's Revit release, which picks the form of the GlobalId keys
     /// Revit's exporter hashes.
     // Tracker: B73.
@@ -2039,24 +2047,37 @@ fn revit_model_global_ids(
         ..RevitGlobalIds::default()
     };
     out.revit_version = rf.basic_file_info().ok().map(|info| info.version);
+    let levels = match out.revit_version {
+        Some(version) => crate::partition_level_records::recover_partition_levels(rf, version)
+            .unwrap_or_default(),
+        None => Vec::new(),
+    };
+    // #878: the GlobalIds the file stores, which Revit's export writes.
+    let stored = crate::revit_global_ids::stored_global_ids(
+        rf,
+        &levels.iter().map(|level| level.element_id).collect(),
+    );
+    out.project = stored.project.clone();
+    out.site = stored.site.clone();
+    out.building = stored.building.clone();
     let Ok(ids) = crate::revit_global_ids::revit_global_ids(rf) else {
         return out;
     };
     let revit_version = rf.basic_file_info().map(|info| info.version).unwrap_or(0);
-    if ids.is_empty() {
-        return out;
-    }
-    if let Ok(version) = rf.basic_file_info().map(|info| info.version) {
-        let levels = crate::partition_level_records::recover_partition_levels(rf, version)
-            .unwrap_or_default();
-        for (index, storey) in storeys.iter().enumerate() {
-            let mut named = levels.iter().filter(|level| level.name == storey.name);
-            if let (Some(level), None) = (named.next(), named.next()) {
-                if let Some(global_id) = ids.get(&level.element_id) {
-                    out.storeys.insert(index, global_id.clone());
-                }
+    for (index, storey) in storeys.iter().enumerate() {
+        let mut named = levels.iter().filter(|level| level.name == storey.name);
+        if let (Some(level), None) = (named.next(), named.next()) {
+            if let Some(global_id) = stored
+                .levels
+                .get(&level.element_id)
+                .or_else(|| ids.get(&level.element_id))
+            {
+                out.storeys.insert(index, global_id.clone());
             }
         }
+    }
+    if ids.is_empty() {
+        return out;
     }
     let mut seen = std::collections::BTreeSet::new();
     for (index, entity) in entities.iter().enumerate() {
