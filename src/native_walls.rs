@@ -7,10 +7,12 @@
 //! the same line, and the record's `m_isFlipped` and `m_wallCrossSection`
 //! are the partition data's flip and orientation word (RE-54), on every
 //! wall of Core Interior, RE1 Architecture and both BIM4LCA office files.
-//! The partition data drops a wall whose copies disagree (RE-216); the
-//! record's curve is not used for those, as the current copy's line misses
-//! 7 of Core Interior's walls by 0.333 ft that their record box draws
-//! exactly.
+//! Where the partition data gives a wall a line but no orientation (13 of
+//! the office's 17 US-1 exterior walls), the record's word and flip stand
+//! in, so the wall is drawn from its centreline and its joins read. The
+//! partition data drops a wall whose copies disagree (RE-216); the record's
+//! curve is not used for those, as the current copy's line misses 7 of Core
+//! Interior's walls by 0.333 ft that their record box draws exactly.
 //!
 //! The record's `VWallDriver.m_controlJoinsSet` lists the joins at the
 //! wall's ends. Each `m_JoinInfo.m_info` lists the walls in one join, this
@@ -34,6 +36,11 @@ pub struct NativeWall {
     pub start: [f64; 2],
     /// The curve's end, plan model feet.
     pub end: [f64; 2],
+    /// `m_isFlipped`: set puts the wall's exterior to the right of the
+    /// curve's direction, as the partition data's flip does (RE-53).
+    pub flipped: Option<bool>,
+    /// `m_wallCrossSection`, the partition data's orientation word (RE-54).
+    pub cross_section: Option<i64>,
     /// The walls in the join at the curve's start and at its end, in the
     /// record's order and this wall included, each with the end it joins
     /// by. Empty where no join lists that end; `None` where several do.
@@ -138,9 +145,12 @@ pub fn native_walls(
                 .and_then(Value::as_array)
                 .cloned()
                 .unwrap_or_default();
+            let root = graph.objects.first().map(|object| &object.fields);
             NativeWall {
                 start,
                 end,
+                flipped: root.and_then(|fields| fields.get("m_isFlipped")?.as_bool()),
+                cross_section: root.and_then(|fields| fields.get("m_wallCrossSection")?.as_i64()),
                 joins: [0, 1].map(|end| end_join(id, &controls, end)),
             }
         });

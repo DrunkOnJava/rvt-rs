@@ -4643,8 +4643,17 @@ fn attach_wall_layers(rf: &mut RevitFile, revit_version: u32, walls: &mut [Decod
         let (Some(id), Some(type_id)) = (wall.id, type_of(wall)) else {
             continue;
         };
-        let (Some(type_layers), Some(orientation)) = (layers.get(&type_id), orientations.get(&id))
-        else {
+        // W6: a wall its partition data gives no orientation takes its
+        // native record's word and flip, which equal the partition data's on
+        // every wall that has both.
+        let orientation = orientations
+            .get(&id)
+            .map(|orientation| (orientation.word, orientation.flip))
+            .or_else(|| {
+                let wall = native.get(&u64::from(id))?;
+                Some((u32::try_from(wall.cross_section?).ok()?, wall.flipped?))
+            });
+        let (Some(type_layers), Some((word, flip))) = (layers.get(&type_id), orientation) else {
             continue;
         };
         let thickness: f64 = type_layers.iter().map(|layer| layer.width_feet).sum();
@@ -4654,12 +4663,12 @@ fn attach_wall_layers(rf: &mut RevitFile, revit_version: u32, walls: &mut [Decod
         // straight tapered wall is measured.
         let taper = face_angles
             .get(&type_id)
-            .filter(|_| orientation.word == 2 && lines.contains_key(&id))
+            .filter(|_| word == 2 && lines.contains_key(&id))
             .and_then(|&[first, exterior, third]| {
                 (first == 0.0 && third == 0.0 && exterior > 0.0 && exterior < FRAC_PI_4)
                     .then_some(exterior)
             });
-        let centred = centreline_bodies && measured && (orientation.word == 1 || taper.is_some());
+        let centred = centreline_bodies && measured && (word == 1 || taper.is_some());
         let float = |value: f64| InstanceField::Float { value, size: 8 };
         // The direction the exterior side is taken from: the line's, or the
         // arc's tangent at its middle (RE-75).
@@ -4720,11 +4729,7 @@ fn attach_wall_layers(rf: &mut RevitFile, revit_version: u32, walls: &mut [Decod
                     .push((WALL_EXTERIOR_FACE_ANGLE_FIELD.into(), float(angle)));
             }
         }
-        let exterior = if orientation.flip {
-            [dy, -dx]
-        } else {
-            [-dy, dx]
-        };
+        let exterior = if flip { [dy, -dx] } else { [-dy, dx] };
         let bands = layer_bands_field(type_layers, &appearances, &names);
         if matches!(&bands, InstanceField::Vector(items) if items.is_empty()) {
             continue;
