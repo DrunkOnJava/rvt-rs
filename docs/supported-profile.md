@@ -77,6 +77,7 @@ derived from the document and their own identity, stable between exports,
 #400), stair riser and tread dimensions, each element's `IsExternal` as Revit's
 exporter sets it (a parameter named for its property set, its type's
 Function, else its class's rule; none on curtain mullions and panels, RE-193),
+each curtain mullion's `Span`, its length along its own axis (RE-226),
 the project and shared parameters named for a property of one of IFC4's
 property sets (`Pset_WallCommon.FireRating`, or `FireExit` alone where no
 qualified one gives it, RE-227), from buildingSMART's
