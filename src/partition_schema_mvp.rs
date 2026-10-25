@@ -4771,8 +4771,8 @@ fn attach_wall_layers(rf: &mut RevitFile, revit_version: u32, walls: &mut [Decod
 const NATIVE_WALL_LINE_TOLERANCE_FEET: f64 = 1e-4;
 
 /// At each end of a wall with a centreline where its native record says
-/// another wall meets that end with its middle, the body stops half that
-/// wall's type thickness short ([`crate::native_walls::tee_reach`], RE-222),
+/// another wall meets that end with its middle, the body stops at that
+/// wall's core ([`crate::native_walls::tee_reach`], RE-222, RE-223),
 /// in place of the reach its join lists give. An end whose layers each end
 /// on their own line (RE-71, RE-74) keeps them, and so does one whose other
 /// wall's thickness is not known: its type's, or its record box's thin
@@ -4836,12 +4836,9 @@ fn attach_native_tee_reaches(
             {
                 continue;
             }
-            let Some(Some(join)) = curve.joins.get(end) else {
-                continue;
-            };
-            if let Some(reach) =
-                crate::native_walls::tee_reach(id, join, |other| thickness.get(&other).copied())
-            {
+            if let Some(reach) = crate::native_walls::tee_reach(id, end, native, |other| {
+                thickness.get(&other).copied()
+            }) {
                 wall.fields
                     .retain(|(name, _)| name != WALL_JOIN_REACH_FIELDS[slot]);
                 wall.fields.push((
