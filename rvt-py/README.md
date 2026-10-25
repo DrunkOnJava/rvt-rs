@@ -35,7 +35,7 @@ diagnostics = f.export_diagnostics()
 
 ## What to expect
 
-Support depends on the Revit release, the file type and the feature. Opening a file and reading its metadata does not mean its elements or geometry can be recovered. `RevitFile.decoded_elements()` lists each element's saved parameters on Revit 2023 to 2027 files, but most of them are not written to IFC exports yet. What each release gives is in the [support table](https://github.com/DrunkOnJava/rvt-rs#what-you-can-rely-on-by-input), and every export comes with the diagnostics above.
+Support depends on the Revit release, the file type and the feature. Opening a file and reading its metadata does not mean its elements or geometry can be recovered. `RevitFile.decoded_elements()` lists each element's saved parameters on Revit 2023 to 2027 files; the CLI `rvt-ifc --revit-property-sets` writes them into IFC exports as Revit's property sets, and a default export leaves most of them out. What each release gives is in the [support table](https://github.com/DrunkOnJava/rvt-rs#what-you-can-rely-on-by-input), and every export comes with the diagnostics above.
 
 ## Documentation
 
