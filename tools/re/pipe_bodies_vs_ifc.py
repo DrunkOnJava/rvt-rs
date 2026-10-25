@@ -54,8 +54,27 @@ def profile_radius(profile):
     return mean
 
 
+def describe(profile):
+    """What a profile is, for one that profile_radius does not read."""
+    curve = getattr(profile, "OuterCurve", None)
+    if curve is None:
+        return profile.is_a()
+    text = f"{profile.is_a()} {curve.is_a()}"
+    if curve.is_a("IfcPolyline"):
+        points = [tuple(float(c) for c in p.Coordinates[:2]) for p in curve.Points]
+        cx = sum(p[0] for p in points) / len(points)
+        cy = sum(p[1] for p in points) / len(points)
+        d = [math.dist(p, (cx, cy)) for p in points]
+        text += f" {len(points)} points, from their centroid {min(d):.5f} to {max(d):.5f}"
+    elif curve.is_a("IfcIndexedPolyCurve"):
+        text += f" {len(curve.Points.CoordList)} points, segments {[s.is_a() for s in (curve.Segments or [])][:4]}"
+    elif curve.is_a("IfcCompositeCurve"):
+        text += f" {[seg.ParentCurve.is_a() for seg in curve.Segments][:6]}"
+    return text
+
+
 def cylinders(path):
-    """Tag -> (profile name, radius in feet or None, start, end, length in feet, Name)."""
+    """Tag -> (profile name, radius in feet or None, start, end, length in feet, Name, profile)."""
     model = ifcopenshell.open(path)
     scale = unit.calculate_unit_scale(model) / FT
     # Each file in its own site frame: Revit writes the BIM4LCA office's
@@ -83,7 +102,7 @@ def cylinders(path):
                 radius = profile_radius(profile)
                 if radius is not None:
                     radius *= scale
-                out[element.Tag] = (profile.is_a(), radius, start, end, length, element.Name or "")
+                out[element.Tag] = (profile.is_a(), radius, start, end, length, element.Name or "", profile)
     return out
 
 
@@ -115,6 +134,9 @@ def main():
         key = f"{ref[tag][0]}{'' if ref[tag][1] is not None else ' (not circular)'}"
         theirs[key] = theirs.get(key, 0) + 1
     print("Revit's profiles on those:", dict(sorted(theirs.items())))
+    other = next((ref[tag][6] for tag in both if ref[tag][1] is None), None)
+    if other is not None:
+        print("  one that is not read as a circle:", describe(other))
     if not both:
         return
     circle = radius_ok = ends_ok = length_ok = all_ok = 0
