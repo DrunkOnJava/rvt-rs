@@ -3,8 +3,8 @@
 
 Takes the output of `examples/probe_357_run_graphics.rs` (each run's
 primitives' vertices, by the `Geometry` object they come from, in Revit's
-internal feet) and Revit's IFC export. For every `IfcStairFlight` whose Tag
-is a run the probe printed, Revit's body is meshed with IfcOpenShell and
+internal feet) and Revit's IFC export. For every `IfcStairFlight`, or landing's
+`IfcSlab`, whose Tag is a run or landing the probe printed, Revit's body is meshed with IfcOpenShell and
 moved into Revit's internal frame through the export's site placement. For
 each of the run's `Geometry` objects, and for all of them together, this
 reports, in feet:
@@ -53,7 +53,8 @@ def main():
     print(f"runs with graphics: {len(vertices)}; runs printed: {len(summary)}")
     for tag, line in sorted(summary.items()):
         print(f"  {tag}: {line[:200]}")
-    for flight in model.by_type("IfcStairFlight"):
+    # A landing is an IfcSlab in Revit's export (#824).
+    for flight in list(model.by_type("IfcStairFlight")) + list(model.by_type("IfcSlab")):
         tag = str(flight.Tag or "")
         if tag not in vertices:
             continue
@@ -68,7 +69,7 @@ def main():
         revit = numpy.unique(numpy.round(revit, 6), axis=0)
         objects = dict(vertices[tag])
         objects["all"] = [v for vs in vertices[tag].values() for v in vs]
-        print(f"flight {tag}: Revit {len(revit)} vertices")
+        print(f"{flight.is_a()} {tag}: Revit {len(revit)} vertices, z {revit[:, 2].min():.4f} to {revit[:, 2].max():.4f}")
         for name, points in objects.items():
             ours = numpy.array(points)
             d = numpy.linalg.norm(revit[:, None, :] - ours[None, :, :], axis=2)
