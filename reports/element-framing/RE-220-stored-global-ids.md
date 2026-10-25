@@ -13,7 +13,7 @@
 | `ARK_NordicLCA_Office_Concrete_BuildingPermit.rvt` (Revit 2024) and Revit's IFC4 export | `1c12c2058128315edbd65a8bf97f60da971aee8625f21233b8477d9c6165c1d1`, `bc3bd3366a3c413ce74840300a590f59102b740118ef37898e906253b6b7c08d` | CC BY-SA 4.0 |
 | `2024_Core_Interior.rvt` and the RE1 and R2025 models with Revit's exports | as RE-48 and `research/r2025-models.tsv` | MIT, Apache-2.0 |
 
-**Probes:** `examples/probe_878_stored_guids.rs`, `examples/probe_878_project_guids.rs`. **Scorers:** `tools/re/stored_guids_vs_ifc.py`, `tools/re/project_guids_vs_ifc.py`, `tools/re/global_ids_vs_ifc.py`.
+**Probes:** `examples/probe_878_stored_guids.rs`, `examples/probe_878_project_guids.rs`, `examples/probe_878_text_guids.rs`. **Scorers:** `tools/re/stored_guids_vs_ifc.py`, `tools/re/project_guids_vs_ifc.py`, `tools/re/text_guids_vs_ifc.py`, `tools/re/global_ids_vs_ifc.py`.
 
 ## 1. How Revit's export names the project, site and building
 
@@ -28,7 +28,7 @@ Every model measured agrees with the fake ids: in Revit's export the site's Glob
 | BasicFileInfo's `Unique Document GUID` | 0 of 30 |
 | any GUID the file holds as text (8-4-4-4-12 hex, ASCII or UTF-16, in any stream, raw or inflated), read in text or .NET byte order | 0 of 30; 10 to 354 such GUIDs per file |
 
-All 23 R2025 models share one project GlobalId, so the base is constant across files saved from one template. Measure runs [40171223280](https://github.com/DrunkOnJava/rvt-rs/actions/runs/40171223280), [40172100995](https://github.com/DrunkOnJava/rvt-rs/actions/runs/40172100995), [40175317537](https://github.com/DrunkOnJava/rvt-rs/actions/runs/40175317537) and [40176521028](https://github.com/DrunkOnJava/rvt-rs/actions/runs/40176521028) (`examples/probe_878_text_guids.rs` with `tools/re/text_guids_vs_ifc.py`, on `re/878-stored-guids`).
+All 23 R2025 models share one project GlobalId, so the base is constant across files saved from one template. Measure runs [40171223280](https://github.com/DrunkOnJava/rvt-rs/actions/runs/40171223280), [40172100995](https://github.com/DrunkOnJava/rvt-rs/actions/runs/40172100995), [40175317537](https://github.com/DrunkOnJava/rvt-rs/actions/runs/40175317537) and [40176521028](https://github.com/DrunkOnJava/rvt-rs/actions/runs/40176521028).
 
 ## 2. Where a file stores them
 
@@ -68,4 +68,6 @@ The project's, site's and building's GlobalIds of a file that stores none keep r
 gh workflow run measure.yml --ref <branch> -f ref=<branch> -f base=main -f nordic=true -f r2025=true -f bimcollab=true
 gh workflow run measure.yml --ref <branch> -f ref=<branch> -f base=none -f bimcollab=true -f nordic=true \
   -f probe=probe_878_stored_guids -f probe_scorer=stored_guids_vs_ifc
+gh workflow run measure.yml --ref <branch> -f ref=<branch> -f base=none -f bimcollab=true -f nordic=true -f r2025=true \
+  -f probe=probe_878_text_guids -f probe_scorer=text_guids_vs_ifc
 ```
