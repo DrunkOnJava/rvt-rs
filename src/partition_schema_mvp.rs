@@ -640,22 +640,7 @@ pub fn recover_partition_schema_mvp(
     attach_door_sizes(rf, revit_version, &mut out.doors);
     // --- Each door's and window's size from the outline its symbol cuts
     // (RE-215, #844) ---
-    let floors: BTreeSet<u32> = out
-        .slabs
-        .iter()
-        .chain(
-            out.products
-                .iter()
-                .filter(|element| matches!(element.class.as_str(), "Roof" | "Ceiling")),
-        )
-        .filter_map(|element| element.id)
-        .collect();
-    attach_cut_loop_sizes(
-        rf,
-        revit_version,
-        [&mut out.doors, &mut out.windows],
-        &floors,
-    );
+    attach_cut_loop_sizes(rf, revit_version, [&mut out.doors, &mut out.windows]);
     // --- Steel beams' and columns' I sections from their type (RE-103, RE-104) ---
     attach_beam_sections(rf, revit_version, &mut out.products);
     // --- A wall's and a curtain panel wall's type Function, from its native
@@ -2132,7 +2117,6 @@ fn attach_cut_loop_sizes(
     rf: &mut RevitFile,
     revit_version: u32,
     groups: [&mut Vec<DecodedElement>; 2],
-    floors: &BTreeSet<u32>,
 ) {
     if !CUT_LOOP_REVIT_VERSIONS.contains(&revit_version) {
         return;
@@ -2176,7 +2160,11 @@ fn attach_cut_loop_sizes(
         .iter()
         .filter(|element| !has_opening(element))
         .filter_map(|element| element.id)
-        .filter(|id| loops.contains_key(&u64::from(*id)))
+        .filter(|id| {
+            loops
+                .get(&u64::from(*id))
+                .is_some_and(|cut| !cut.horizontal)
+        })
         .collect();
     let loopless: BTreeSet<u32> = elements
         .iter()
@@ -2196,29 +2184,12 @@ fn attach_cut_loop_sizes(
     // #810: a door or window whose symbol cuts no loop is sized by its
     // record box, along its own X axis and through its height, as Revit's
     // export sizes it: all 269 windows of the BIM4LCA office, 71 of its
-    // doors and RE1's curtain-wall door. Not one whose element record names
-    // a floor, roof or ceiling: a hatch set in one takes its height along a
-    // horizontal axis in Revit's export. An instance turned off the model's
-    // axes, whose box is not along its own, gets no size.
-    let mut in_floor: BTreeSet<u32> = BTreeSet::new();
-    for element in elements.iter() {
-        let Some(id) = element.id.filter(|id| loopless.contains(id)) else {
-            continue;
-        };
-        if let Some((references, _)) = record_references(rf, element) {
-            if references
-                .iter()
-                .any(|r| u32::try_from(*r).is_ok_and(|r| floors.contains(&r)))
-            {
-                in_floor.insert(id);
-            }
-        }
-    }
+    // doors and RE1's curtain-wall door. A hatch, whose symbol cuts a
+    // horizontal loop, takes that loop's size above instead. An instance
+    // turned off the model's axes, whose box is not along its own, gets no
+    // size.
     for element in elements.iter_mut() {
-        let Some(id) = element
-            .id
-            .filter(|id| loopless.contains(id) && !in_floor.contains(id))
-        else {
+        let Some(id) = element.id.filter(|id| loopless.contains(id)) else {
             continue;
         };
         let (Some(transform), Some(bbox)) = (transforms.get(&id), element_record_bbox(element))
