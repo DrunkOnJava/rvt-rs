@@ -15,6 +15,8 @@ Usage:
 import os
 import sys
 
+import ifcopenshell
+
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from plan_profiles_vs_ifc import tops  # noqa: E402
 
@@ -30,6 +32,12 @@ def rings(surface):
 def main():
     owners = [line.split()[1] for line in open(sys.argv[1], encoding="utf-8", errors="replace") if line.startswith("owner ")]
     revit = tops(sys.argv[2], ["IfcSlab", "IfcRoof", "IfcShadingDevice"])
+    model = ifcopenshell.open(sys.argv[2])
+    by_tag = {}
+    for cls in ("IfcSlab", "IfcRoof"):
+        for element in model.by_type(cls):
+            if element.Tag:
+                by_tag.setdefault(str(element.Tag), []).append(element)
     for tag in owners:
         if tag not in revit:
             print(f"owner {tag}: not in Revit's export")
@@ -42,6 +50,14 @@ def main():
             for (x0, y0), (x1, y1) in zip(coords, coords[1:]):
                 length = ((x1 - x0) ** 2 + (y1 - y0) ** 2) ** 0.5
                 print(f"    {x0:.4f} {y0:.4f} -> {x1:.4f} {y1:.4f} ({length:.4f})")
+        for element in by_tag.get(tag, []):
+            for rel in element.HasOpenings or []:
+                opening = rel.RelatedOpeningElement
+                fills = [f.RelatedBuildingElement for f in (opening.HasFillings or [])]
+                print(
+                    f"  opening {opening.Tag} {opening.Name!r} {opening.ObjectType!r}"
+                    f" filled by {[(f.is_a(), f.Tag, f.Name) for f in fills]}"
+                )
 
 
 if __name__ == "__main__":
