@@ -784,6 +784,18 @@ at all where it starts on a landing. On the BIM4LCA office 34 of 35 flights
 then have Revit's volume, with every vertex of Revit's on rvt-rs's; the
 spiral one keeps its box.
 
+**RE-214 (2026-10-24)** draws a monolithic stair landing on Revit 2024 as
+its slab instead of a box the height of its storey. Its outline is the
+lines at its top in its own data, joined straight across where its flights
+meet it; its top is `StairsLanding.m_baseElevation`; its thickness is its
+landing type's `m_thickness`, the type its own element record names. On
+the BIM4LCA office all 21 monolithic landings on each file are slabs with
+Revit's top and outline, and the office's slab outlines within 0.01 ft of
+Revit's go from 40 to 60 of 63. Revit's underside also follows a flight's
+soffit where the flight meets the landing, which is drawn flat: the slabs
+are 100.4% to 104.7% of Revit's volume
+(`reports/element-framing/RE-214-landing-slabs.md`).
+
 The public viewer's demo gallery leads with the two files this section
 measures, staged from the deploy workflow's `magnetar-io/revit-test-datasets`
 checkout and pinned by sha256 (#257): `Revit_IFC5_Einhoven.rvt` (2023,

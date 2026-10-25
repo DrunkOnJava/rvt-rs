@@ -26,6 +26,10 @@
 //! [`crate::partition_stairs::RunType`], which RE-92 draws the run from. A
 //! run that is not straight, does not begin with a riser, or whose treads
 //! do not share one depth, one riser height and one direction is left out.
+//!
+//! A landing's top is its `StairsLanding.m_baseElevation`, and a monolithic
+//! landing type's thickness its `StairsLandingType.m_thickness`
+//! ([`native_landings`], #824).
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -275,6 +279,77 @@ pub fn native_runs(
                     riser_height_feet,
                     end_with_riser: flag(&run, "m_endWithRiser"),
                     type_id,
+                },
+            ))
+        })
+        .collect())
+}
+
+/// Releases a landing's top and thickness are measured on: the BIM4LCA
+/// office (2024, #824).
+pub const NATIVE_LANDING_REVIT_VERSIONS: &[u32] = &[2024];
+
+/// A monolithic landing's top elevation and its type's thickness, feet.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct NativeLanding {
+    pub top_feet: f64,
+    pub thickness_feet: f64,
+}
+
+/// Each landing in `landings`, keyed by its id with its own landing type's
+/// id, whose `StairsLanding` record gives its top (`m_baseElevation`) and
+/// whose `StairsLandingType` is monolithic (`m_hasMonolithicSupport`) with a
+/// thickness (`m_thickness`). On the BIM4LCA office the top is Revit's on
+/// all 22 landings, and a monolithic landing's underside is that thickness
+/// below it but where a flight's soffit meets it. A landing whose type is
+/// not monolithic is left out: the office's one is 0.0984 ft thick in
+/// Revit's export against its type's 0.995 ft.
+pub fn native_landings(
+    rf: &mut RevitFile,
+    landings: &BTreeMap<u64, u64>,
+) -> anyhow::Result<BTreeMap<u64, NativeLanding>> {
+    if landings.is_empty() {
+        return Ok(BTreeMap::new());
+    }
+    let options = Options {
+        selected_ids: landings.keys().chain(landings.values()).copied().collect(),
+        ..Options::default()
+    };
+    let mut tops: BTreeMap<u64, f64> = BTreeMap::new();
+    let mut thicknesses: BTreeMap<u64, f64> = BTreeMap::new();
+    extract_graphs(rf, &options, |record| {
+        let (Some(class), Some(graph)) = (record.class_name.as_deref(), record.graph.as_ref())
+        else {
+            return Ok(());
+        };
+        let Some(root) = graph.objects.first() else {
+            return Ok(());
+        };
+        let id = record.identity.element_id;
+        match class {
+            "StairsLanding" if landings.contains_key(&id) => {
+                if let Some(top) = number(&root.fields, "m_baseElevation") {
+                    tops.insert(id, top);
+                }
+            }
+            "StairsLandingType" if flag(&root.fields, "m_hasMonolithicSupport") == Some(true) => {
+                if let Some(thickness) = number(&root.fields, "m_thickness").filter(|t| *t > 0.0) {
+                    thicknesses.insert(id, thickness);
+                }
+            }
+            _ => {}
+        }
+        Ok(())
+    })?;
+    Ok(tops
+        .into_iter()
+        .filter_map(|(id, top_feet)| {
+            let thickness_feet = *thicknesses.get(&landings[&id])?;
+            Some((
+                id,
+                NativeLanding {
+                    top_feet,
+                    thickness_feet,
                 },
             ))
         })
