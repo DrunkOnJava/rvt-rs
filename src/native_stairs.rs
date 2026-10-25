@@ -230,12 +230,24 @@ pub fn flight_predefined_type(run_type: i64) -> Option<&'static str> {
     }
 }
 
+/// A run's shape and path, from its native records (#323).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct RunShape {
+    /// The `m_runType` every one of its treads gives: 0 on a straight run,
+    /// 2 on a spiral one.
+    pub run_type: i64,
+    /// The plan direction it climbs in, its first tread's `m_runDirProj`.
+    pub direction: Option<[f64; 2]>,
+    /// `StairsRun.m_bottomElevation`, feet.
+    pub bottom_feet: Option<f64>,
+}
+
 /// Each run in `runs` whose native `StairsTreadInfo` records all give one
-/// `m_runType`, with that value (#323).
+/// `m_runType`, with that value, its climb direction and its bottom (#323).
 pub fn native_run_shapes(
     rf: &mut RevitFile,
     runs: &BTreeSet<u64>,
-) -> anyhow::Result<BTreeMap<u64, i64>> {
+) -> anyhow::Result<BTreeMap<u64, RunShape>> {
     if runs.is_empty() {
         return Ok(BTreeMap::new());
     }
@@ -251,18 +263,110 @@ pub fn native_run_shapes(
         let Some(graph) = record.graph.as_ref() else {
             return Ok(());
         };
-        let shapes: BTreeSet<Option<i64>> = graph
+        let treads: Vec<&Value> = graph
             .objects
             .iter()
             .filter(|o| o.class_name == "StairsTreadInfo")
-            .map(|o| o.fields.get("m_runType").and_then(Value::as_i64))
+            .map(|o| &o.fields)
             .collect();
-        if let [Some(shape)] = shapes.into_iter().collect::<Vec<_>>().as_slice() {
-            out.insert(record.identity.element_id, *shape);
+        let shapes: BTreeSet<Option<i64>> = treads
+            .iter()
+            .map(|t| t.get("m_runType").and_then(Value::as_i64))
+            .collect();
+        if let [Some(run_type)] = shapes.into_iter().collect::<Vec<_>>().as_slice() {
+            out.insert(
+                record.identity.element_id,
+                RunShape {
+                    run_type: *run_type,
+                    direction: treads
+                        .first()
+                        .and_then(|t| point(t, "m_runDirProj"))
+                        .and_then(unit_plan),
+                    bottom_feet: graph
+                        .objects
+                        .first()
+                        .and_then(|root| number(&root.fields, "m_bottomElevation")),
+                },
+            );
         }
         Ok(())
     })?;
     Ok(out)
+}
+
+/// The `IfcStairTypeEnum` values [`stair_predefined_type`] gives.
+pub const STAIR_TYPES: &[&str] = &[
+    "SPIRAL_STAIR",
+    "STRAIGHT_RUN_STAIR",
+    "TWO_STRAIGHT_RUN_STAIR",
+    "QUARTER_TURN_STAIR",
+    "HALF_TURN_STAIR",
+    "DOUBLE_RETURN_STAIR",
+    "TWO_QUARTER_TURN_STAIR",
+    "THREE_QUARTER_TURN_STAIR",
+];
+
+/// The `IfcStairTypeEnum` value Revit's export gives a stair from its runs,
+/// in ElementId order, and its number of landings, as revit-ifc's
+/// `StairsExporter.GetValidatedStairType` decides it (CLEANROOM.md source
+/// 5): a stair with a spiral run is `SPIRAL_STAIR`; one straight run is
+/// `STRAIGHT_RUN_STAIR`; two straight runs and one landing are
+/// `TWO_STRAIGHT_RUN_STAIR`, `QUARTER_TURN_STAIR` or `HALF_TURN_STAIR` as
+/// the second climbs the same way as the first, square to it or back;
+/// three straight runs each square to the one before, with two landings,
+/// are `DOUBLE_RETURN_STAIR` where two of them start at one elevation and
+/// `TWO_QUARTER_TURN_STAIR` otherwise; four such runs and three landings
+/// are `THREE_QUARTER_TURN_STAIR`. `None` for any other stair, and for one
+/// with a run that is neither straight nor spiral (winders and sketched
+/// runs are not measured), which Revit writes `.NOTDEFINED.`.
+pub fn stair_predefined_type(runs: &[RunShape], landings: usize) -> Option<&'static str> {
+    const EPS: f64 = 1e-6;
+    if runs.is_empty()
+        || runs
+            .iter()
+            .any(|run| run.run_type != 0 && run.run_type != 2)
+    {
+        return None;
+    }
+    if runs.iter().any(|run| run.run_type == 2) {
+        return Some("SPIRAL_STAIR");
+    }
+    let directions: Vec<[f64; 2]> = runs
+        .iter()
+        .map(|run| run.direction)
+        .collect::<Option<_>>()?;
+    let dot = |a: [f64; 2], b: [f64; 2]| a[0] * b[0] + a[1] * b[1];
+    let square = |pairs: &[[f64; 2]]| pairs.windows(2).all(|w| dot(w[0], w[1]).abs() <= EPS);
+    match (directions.as_slice(), landings) {
+        ([_], _) => Some("STRAIGHT_RUN_STAIR"),
+        ([a, b], 1) => {
+            let d = dot(*a, *b);
+            if (d - 1.0).abs() <= EPS {
+                Some("TWO_STRAIGHT_RUN_STAIR")
+            } else if d.abs() <= EPS {
+                Some("QUARTER_TURN_STAIR")
+            } else if (d + 1.0).abs() <= EPS {
+                Some("HALF_TURN_STAIR")
+            } else {
+                None
+            }
+        }
+        ([_, _, _], 2) if square(&directions) => {
+            let bottoms: Vec<f64> = runs
+                .iter()
+                .map(|run| run.bottom_feet)
+                .collect::<Option<_>>()?;
+            let shared =
+                (0..3).any(|i| ((i + 1)..3).any(|j| (bottoms[i] - bottoms[j]).abs() <= EPS));
+            Some(if shared {
+                "DOUBLE_RETURN_STAIR"
+            } else {
+                "TWO_QUARTER_TURN_STAIR"
+            })
+        }
+        ([_, _, _, _], 3) if square(&directions) => Some("THREE_QUARTER_TURN_STAIR"),
+        _ => None,
+    }
 }
 
 /// The run types, and each run's `StairsRun` fields with its treads'
