@@ -331,8 +331,6 @@ pub fn recover_partition_schema_mvp(
     attach_stair_run_bodies(rf, revit_version, &mut out.products);
     // --- Spiral runs as their treads (#357) ---
     attach_spiral_run_bodies(rf, revit_version, &mut out.products);
-    // --- Stair runs' shape, from their treads (#323) ---
-    attach_stair_run_shapes(rf, revit_version, &mut out.products);
     // --- Monolithic landings as their slabs (#824) ---
     attach_landing_slabs(rf, revit_version, &mut out.products);
     // --- Beams along their location lines (RE-49) ---
@@ -510,6 +508,9 @@ pub fn recover_partition_schema_mvp(
     // --- Stairs and their parts named as Revit names them (RE-65) ---
     attach_stair_names(rf, revit_version, &mut out.products);
     attach_native_stair_names(rf, revit_version, &mut out.products);
+    // --- Stair runs' shape, from their treads, and each stair's type from
+    // its runs and landings, once every part names its stair (#323) ---
+    attach_stair_run_shapes(rf, revit_version, &mut out.products);
     // --- IFC export overrides, the element's own or its type's (RE-45) ---
     attach_ifc_export_overrides(
         rf,
@@ -5723,18 +5724,68 @@ fn attach_stair_run_shapes(
         .iter_mut()
         .filter(|element| element.class == "StairsRun")
     {
-        if let Some(&shape) = element.id.and_then(|id| shapes.get(&u64::from(id))) {
+        if let Some(shape) = element.id.and_then(|id| shapes.get(&u64::from(id))) {
             element.fields.push((
                 STAIR_RUN_SHAPE_FIELD.into(),
                 InstanceField::Integer {
-                    value: shape,
+                    value: shape.run_type,
                     signed: true,
                     size: 4,
                 },
             ));
         }
     }
+    // Each stair's type from its runs, in ElementId order, and its landings
+    // (#323).
+    let whole = |element: &DecodedElement| {
+        element.fields.iter().find_map(|(name, value)| match value {
+            InstanceField::ElementId { id, .. } if name == AGGREGATE_WHOLE_FIELD => Some(*id),
+            _ => None,
+        })
+    };
+    // Each stair's runs, by id with their shapes, and its landing count.
+    type StairParts = (Vec<(u32, Option<crate::native_stairs::RunShape>)>, usize);
+    let mut parts: BTreeMap<u32, StairParts> = BTreeMap::new();
+    for element in products.iter() {
+        let (Some(stair), Some(id)) = (whole(element), element.id) else {
+            continue;
+        };
+        match element.class.as_str() {
+            "StairsRun" => parts
+                .entry(stair)
+                .or_default()
+                .0
+                .push((id, shapes.get(&u64::from(id)).copied())),
+            "StairsLanding" => parts.entry(stair).or_default().1 += 1,
+            _ => {}
+        }
+    }
+    for element in products
+        .iter_mut()
+        .filter(|element| element.class == "Stair")
+    {
+        let Some((runs, landings)) = element.id.and_then(|id| parts.get_mut(&id)) else {
+            continue;
+        };
+        runs.sort_by_key(|(id, _)| *id);
+        let Some(shapes) = runs
+            .iter()
+            .map(|(_, shape)| *shape)
+            .collect::<Option<Vec<_>>>()
+        else {
+            continue;
+        };
+        if let Some(kind) = crate::native_stairs::stair_predefined_type(&shapes, *landings) {
+            element
+                .fields
+                .push((STAIR_TYPE_FIELD.into(), InstanceField::String(kind.into())));
+        }
+    }
 }
+
+/// Field naming the `IfcStairTypeEnum` value a stair's runs and landings
+/// give it ([`crate::native_stairs::stair_predefined_type`], #323).
+pub const STAIR_TYPE_FIELD: &str = "m_stair_type";
 
 /// Give each monolithic stair landing the slab Revit draws (#824): its own
 /// outline (`landing_outline`), from its top (`StairsLanding.m_baseElevation`)
