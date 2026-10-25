@@ -673,6 +673,43 @@ pub fn native_landings_and_type_names(
     Ok((found, names))
 }
 
+/// Releases a railing type's top rail height is read on (RE-232).
+pub const RAILING_HEIGHT_REVIT_VERSIONS: &[u32] = &[2024, 2025];
+
+/// Each railing type in `types` whose native record's `StairsRailingAttr`
+/// gives its top rail height (`m_topRailHeight`), feet: Revit's
+/// `Pset_RailingCommon.Height` on all 41 railings of the BIM4LCA office
+/// (Revit 2024) and RE1 Architecture's one (Revit 2025) (RE-232).
+pub fn railing_type_heights(
+    rf: &mut RevitFile,
+    types: &BTreeSet<u64>,
+) -> anyhow::Result<BTreeMap<u64, f64>> {
+    if types.is_empty() {
+        return Ok(BTreeMap::new());
+    }
+    let options = Options {
+        selected_ids: types.clone(),
+        ..Options::default()
+    };
+    let mut out = BTreeMap::new();
+    extract_graphs(rf, &options, |record| {
+        let Some(graph) = record.graph.as_ref() else {
+            return Ok(());
+        };
+        if let Some(height) = graph
+            .objects
+            .iter()
+            .find(|o| o.class_name == "StairsRailingAttr")
+            .and_then(|o| number(&o.fields, "m_topRailHeight"))
+            .filter(|h| *h > 0.0)
+        {
+            out.insert(record.identity.element_id, height);
+        }
+        Ok(())
+    })?;
+    Ok(out)
+}
+
 /// Releases a stair's and its parts' names are read from their native
 /// records on: the R2025 stair models (#323).
 pub const NATIVE_STAIR_NAME_REVIT_VERSIONS: &[u32] = &[2025];
