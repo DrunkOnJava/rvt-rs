@@ -109,16 +109,16 @@ slice records a baseline, an improvement and a residual against Revit's own
 exports on the reference pack (#407), approximations stay labelled (#409), and
 a slice ships in the next release that contains it. Geometry open now: wall
 bodies thicker or thinner than their type's layers (#358), stair flights
-(#357) and aggregates (#323), hip roofs over T and U footprints and roof cases
+(#357), roofs Revit splits into slab parts (#323), hip roofs over T and U footprints and roof cases
 with no oracle (#884, #885), the openings on releases other than 2024 and 2025
-(#227), the office's slab tops (#824), room boundaries whose solid does not
+(#227), the office roof's hatch openings (#824), room boundaries whose solid does not
 close (#90), beams (#94), MEP equipment and routes (#96) and ports and pipes outside
 Revit 2024 and 2025 (#869), the sketch-to-solid pipeline (#156), and the Snowdon slabs
 that are not in Revit's export: six in the Legends phase (#328) and one more
 (#309). Element data: instance and type parameters with units and precedence
 (#35, #155) and the element-record fields that carry them (#223), written to
 IFC property sets and shown in the viewer; door and window sizes where the
-symbol cuts no outline (#810); and ports' system classification (#834).
+symbol cuts no outline, two doors still wide (#810); and ports' system classification (#834).
 
 ### 1.0.0: first-class utility
 
