@@ -2871,7 +2871,11 @@ impl StepWriter {
         // RE-151 (#227): an opening nothing fills, a hole in a floor's sketch.
         // As in Revit's export it is placed in its host's frame, its outline
         // extruded up through the host, and it voids the host without being
-        // contained in a storey.
+        // contained in a storey. Openings sharing a host and a Tag (#824: a
+        // roof's hatch openings all carry the roof's) are told apart by
+        // their order after the first, whose GlobalId stays the host's and
+        // Tag's alone.
+        let mut void_repeats: BTreeMap<(String, String), usize> = BTreeMap::new();
         for entity in &model.entities {
             let super::entities::IfcEntity::VoidOpening {
                 host,
@@ -2935,7 +2939,15 @@ impl StepWriter {
                 format!("IFCLOCALPLACEMENT(#{host_placement},#{opening_axis})"),
             );
             let host_gid = el_id_to_gid.get(host_el_id).copied().unwrap_or_default();
-            let opening_gid = gid(&["void-opening", host_gid, tag]);
+            let repeat = void_repeats
+                .entry((host_gid.to_string(), tag.clone()))
+                .or_insert(0);
+            let opening_gid = if *repeat == 0 {
+                gid(&["void-opening", host_gid, tag])
+            } else {
+                gid(&["void-opening", host_gid, tag, &repeat.to_string()])
+            };
+            *repeat += 1;
             let opening_id = self.id();
             self.emit_entity(
                 opening_id,

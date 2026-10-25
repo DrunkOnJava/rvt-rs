@@ -1278,6 +1278,9 @@ fn export_rvt_doc(
     export_content::contain_in_spaces(&mut entities);
     // B54: a family instance's connectors are ports, joined or not.
     attach_family_instance_ports(rf, &mut entities, &element_type_ids);
+    // #824: the openings a face-hosted door's or window's symbol cuts in the
+    // element whose face hosts it.
+    attach_hosted_cut_openings(rf, &mut entities, &element_type_ids);
 
     if !policy.include_geometry {
         export_content::strip_building_element_geometry(&mut entities);
@@ -2213,6 +2216,177 @@ const INSTANCE_AS_TYPE: u16 = 2048;
 /// joined pair is given Revit's directions ([`apply_partner_directions`]). A
 /// file whose release the native record path does not read keeps the ports
 /// of its joins only, with no direction.
+/// How far, in feet, a cut solid's corner may lie from its plan footprint's
+/// and its ends from the host's faces (#824).
+const HOSTED_CUT_TOLERANCE_FEET: f64 = 1e-6;
+
+/// The plan footprint of a cut solid placed by `transform`, where the solid
+/// is a prism standing upright: the convex hull of its vertices in plan,
+/// counter-clockwise, when every vertex lies on one of its corners, with the
+/// solid's lowest and highest Z. `None` for any other solid.
+fn prism_footprint(
+    vertices: &[[f64; 3]],
+    transform: &crate::partition_instance_transforms::InstanceTransform,
+) -> Option<(Vec<(f64, f64)>, f64, f64)> {
+    let placed: Vec<[f64; 3]> = vertices
+        .iter()
+        .map(|v| {
+            [0, 1, 2].map(|i| {
+                transform.origin[i] + (0..3).map(|j| transform.axes[j][i] * v[j]).sum::<f64>()
+            })
+        })
+        .collect();
+    let low = placed.iter().map(|p| p[2]).fold(f64::INFINITY, f64::min);
+    let high = placed
+        .iter()
+        .map(|p| p[2])
+        .fold(f64::NEG_INFINITY, f64::max);
+    let mut points: Vec<(f64, f64)> = placed.iter().map(|p| (p[0], p[1])).collect();
+    points.sort_by(|a, b| a.0.total_cmp(&b.0).then(a.1.total_cmp(&b.1)));
+    points.dedup_by(|a, b| {
+        (a.0 - b.0).abs() <= HOSTED_CUT_TOLERANCE_FEET
+            && (a.1 - b.1).abs() <= HOSTED_CUT_TOLERANCE_FEET
+    });
+    if points.len() < 3 {
+        return None;
+    }
+    let cross = |o: (f64, f64), a: (f64, f64), b: (f64, f64)| {
+        (a.0 - o.0) * (b.1 - o.1) - (a.1 - o.1) * (b.0 - o.0)
+    };
+    // Andrew's monotone chain, lower then upper.
+    let mut hull: Vec<(f64, f64)> = Vec::new();
+    for pass in [false, true] {
+        let start = hull.len();
+        let ordered: Vec<(f64, f64)> = if pass {
+            points.iter().rev().copied().collect()
+        } else {
+            points.clone()
+        };
+        for point in ordered {
+            while hull.len() >= start + 2
+                && cross(hull[hull.len() - 2], hull[hull.len() - 1], point) <= 0.0
+            {
+                hull.pop();
+            }
+            hull.push(point);
+        }
+        hull.pop();
+    }
+    let on_corner = |p: &(f64, f64)| {
+        hull.iter().any(|c| {
+            (c.0 - p.0).abs() <= HOSTED_CUT_TOLERANCE_FEET
+                && (c.1 - p.1).abs() <= HOSTED_CUT_TOLERANCE_FEET
+        })
+    };
+    (hull.len() >= 3 && points.iter().all(on_corner)).then_some((hull, low, high))
+}
+
+/// Write the opening each face-hosted door or window cuts in the element
+/// whose face hosts it (#824), as Revit's export writes it: the plan
+/// footprint of the solid its symbol cuts
+/// ([`crate::native_symbol_cuts::face_hosted_cuts`]), placed by the
+/// instance's transform (RE-87), extruded up through the host in the host's
+/// frame and tagged with the host's ElementId. Only where that solid is a
+/// prism standing upright through the host's whole thickness and the host is
+/// one element drawn as an extrusion; any other cut is left out. On the
+/// BIM4LCA office, roof 2991742's four 600 mm hatch openings.
+fn attach_hosted_cut_openings(
+    rf: &mut crate::RevitFile,
+    entities: &mut Vec<entities::IfcEntity>,
+    element_type_ids: &std::collections::BTreeMap<u32, u32>,
+) {
+    let candidates: std::collections::BTreeSet<u64> = entities
+        .iter()
+        .filter_map(|entity| match entity {
+            entities::IfcEntity::BuildingElement {
+                ifc_type,
+                type_guid: Some(tag),
+                ..
+            } if ifc_type == "IFCDOOR" || ifc_type == "IFCWINDOW" => tag.parse().ok(),
+            _ => None,
+        })
+        .collect();
+    let Ok(cuts) = crate::native_symbol_cuts::face_hosted_cuts(rf, &candidates) else {
+        return;
+    };
+    if cuts.is_empty() {
+        return;
+    }
+    let revit_version = rf.basic_file_info().map(|info| info.version).unwrap_or(0);
+    let ids = cuts
+        .iter()
+        .filter_map(|cut| u32::try_from(cut.instance).ok())
+        .collect();
+    let Ok(transforms) =
+        crate::partition_instance_transforms::scan_instance_transforms(rf, revit_version, &ids)
+    else {
+        return;
+    };
+    let mut openings = Vec::new();
+    for cut in cuts {
+        let Some(transform) = u32::try_from(cut.instance)
+            .ok()
+            .and_then(|id| transforms.get(&id))
+        else {
+            continue;
+        };
+        let Some((footprint, low, high)) = prism_footprint(&cut.vertices, transform) else {
+            continue;
+        };
+        let tag = cut.host.to_string();
+        let mut hosts = entities.iter().enumerate().filter(|(_, entity)| {
+            matches!(entity, entities::IfcEntity::BuildingElement { type_guid: Some(held), .. } if *held == tag)
+        });
+        let (Some((host, entity)), None) = (hosts.next(), hosts.next()) else {
+            continue;
+        };
+        let entities::IfcEntity::BuildingElement {
+            name,
+            location_feet: Some([x, y, z]),
+            rotation_radians,
+            extrusion: Some(body),
+            solid_shape: None,
+            ..
+        } = entity
+        else {
+            continue;
+        };
+        let depth = body.height_feet;
+        if !depth.is_finite()
+            || depth <= 0.0
+            || low > z + HOSTED_CUT_TOLERANCE_FEET
+            || high < z + depth - HOSTED_CUT_TOLERANCE_FEET
+        {
+            continue;
+        }
+        let (sin, cos) = (-rotation_radians.unwrap_or(0.0)).sin_cos();
+        let outline_feet = footprint
+            .iter()
+            .map(|(px, py)| {
+                let (dx, dy) = (px - x, py - y);
+                (dx * cos - dy * sin, dx * sin + dy * cos)
+            })
+            .collect();
+        let opening_name = match (
+            name.rsplit_once(':'),
+            u32::try_from(cut.host)
+                .ok()
+                .and_then(|id| element_type_ids.get(&id)),
+        ) {
+            (Some((family_and_type, _)), Some(type_id)) => format!("{family_and_type}:{type_id}"),
+            _ => format!("Opening for {name}"),
+        };
+        openings.push(entities::IfcEntity::VoidOpening {
+            host,
+            tag,
+            name: opening_name,
+            outline_feet,
+            depth_feet: depth,
+        });
+    }
+    entities.extend(openings);
+}
+
 fn attach_family_instance_ports(
     rf: &mut crate::RevitFile,
     entities: &mut Vec<entities::IfcEntity>,
