@@ -3,7 +3,8 @@
 
 Reads `examples/probe_878_stored_guids.rs`'s output. For the project, site,
 building and every storey of Revit's export, it finds the stored string
-equal to the GlobalId, and for every element with a Tag the one with its
+equal to the GlobalId (the storeys in elevation order beside the Levels by
+elevation, since the model's Levels were renamed after its export), and for every element with a Tag the one with its
 last 21 characters (RE-208 §3). It names each string's owner: the nearest
 `frame` before it in the same stream. For a storey it also names the Level
 of the storey's name. It counts how often the owner is the element itself
@@ -26,8 +27,8 @@ def main():
     levels, frames, gids = {}, collections.defaultdict(list), []
     for line in open(sys.argv[1], encoding="utf-8", errors="replace"):
         parts = line.rstrip("\n").split(" ")
-        if parts[0] == "level" and len(parts) >= 3:
-            levels.setdefault(" ".join(parts[2:]), parts[1])
+        if parts[0] == "level" and len(parts) >= 4:
+            levels.setdefault(parts[1], (float(parts[2]), " ".join(parts[3:])))
         elif parts[0] == "frame" and len(parts) == 5:
             frames[parts[1]].append((int(parts[2]), parts[3], parts[4]))
         elif parts[0] == "gid" and len(parts) == 6:
@@ -49,19 +50,25 @@ def main():
     print(f"levels {len(levels)}, frames {sum(len(v) for v in frames.values())}, stored strings {len(gids)}")
     tally = collections.Counter()
     params = collections.Counter()
+    storeys = sorted(model.by_type("IfcBuildingStorey"), key=lambda s: s.Elevation or 0.0)
+    level_order = [lid for lid, _ in sorted(levels.items(), key=lambda kv: kv[1][0])]
     for entity in ("IfcProject", "IfcSite", "IfcBuilding", "IfcBuildingStorey"):
-        for element in model.by_type(entity):
+        for element in (storeys if entity == "IfcBuildingStorey" else model.by_type(entity)):
             hits = by_text.get(element.GlobalId, [])
             if not hits:
                 print(f"{entity} {element.Name!r} {element.GlobalId}: no stored string")
                 continue
             for stream, offset, param, length, text in hits:
                 o = owner(stream, offset)
-                level = levels.get(element.Name) if entity == "IfcBuildingStorey" else None
+                level = (
+                    level_order[storeys.index(element)]
+                    if entity == "IfcBuildingStorey" and len(level_order) == len(storeys)
+                    else None
+                )
                 print(
                     f"{entity} {element.Name!r} {element.GlobalId}: {stream} +{offset} param {param} len {length}; "
                     f"owner {o[1] + ' cat ' + o[2] + ' at +' + str(o[0]) if o else 'none'}"
-                    + (f"; Level of that name {level}" if entity == "IfcBuildingStorey" else "")
+                    + (f"; Level at that elevation rank {level} {levels.get(level, ('', ''))[1]!r}, owner is it: {bool(o and o[1] == level)}" if entity == "IfcBuildingStorey" else "")
                 )
     for element in model.by_type("IfcElement"):
         tag = str(element.Tag or "")

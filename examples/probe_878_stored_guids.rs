@@ -9,10 +9,12 @@
 //! building's.
 //!
 //! Output:
-//!   level <id> <name>
+//!   level <id> <elevation ft> <name>
 //!   frame <stream> <offset> <id> <BuiltInCategory>
-//!     every first-prologue frame (its ElementId at +0x00, declared in
-//!     ElemTable) of the categories below, found by its category at +0x12
+//!     every element record frame: on Revit 2015 to 2023 every one
+//!     `partition_element_records_2023::scan_records` reads, on later
+//!     releases every first-prologue frame (its ElementId at +0x00, declared
+//!     in ElemTable) of the categories below, found by its category at +0x12
 //!   gid <stream> <offset> <i32 before the length> <u32 length> <string>
 //!     every UTF-16 string of 22 GlobalId characters
 //!
@@ -45,7 +47,10 @@ fn main() -> rvt::Result<()> {
     let mut rf = RevitFile::open(&path)?;
     let version = rf.basic_file_info()?.version;
     for level in recover_partition_levels(&mut rf, version).unwrap_or_default() {
-        println!("level {} {}", level.element_id, level.name);
+        println!(
+            "level {} {:.6} {}",
+            level.element_id, level.elevation_feet, level.name
+        );
     }
     let declared = rvt::elem_table::declared_ids(&rvt::elem_table::parse_records(&mut rf)?);
     let categories = [
@@ -61,6 +66,16 @@ fn main() -> rvt::Result<()> {
         per::OST_DOORS,
         per::OST_WINDOWS,
     ];
+    let thirty_two = rvt::research::partition_element_records_2023::is_32bit_release(version);
+    if thirty_two {
+        for record in rvt::research::partition_element_records_2023::scan_records(&mut rf, version)
+        {
+            println!(
+                "frame {} {} {} {}",
+                record.stream, record.offset, record.element_id, record.builtin_category
+            );
+        }
+    }
     let names: Vec<String> = rf
         .stream_names()
         .into_iter()
@@ -71,7 +86,7 @@ fn main() -> rvt::Result<()> {
             continue;
         };
         let data = inflated.bytes();
-        for category in categories {
+        for category in categories.iter().copied().filter(|_| !thirty_two) {
             let needle = (category as u64).to_le_bytes();
             for hit in memchr::memmem::find_iter(data, &needle) {
                 let Some(start) = hit.checked_sub(per::CATEGORY_OFFSET) else {
