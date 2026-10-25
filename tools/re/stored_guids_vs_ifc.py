@@ -24,13 +24,17 @@ import ifcopenshell
 
 
 def main():
-    levels, frames, gids = {}, collections.defaultdict(list), []
+    levels, frames, gids, nears = {}, collections.defaultdict(list), [], {}
     for line in open(sys.argv[1], encoding="utf-8", errors="replace"):
         parts = line.rstrip("\n").split(" ")
         if parts[0] == "level" and len(parts) >= 4:
             levels.setdefault(parts[1], (float(parts[2]), " ".join(parts[3:])))
         elif parts[0] == "frame" and len(parts) == 5:
             frames[parts[1]].append((int(parts[2]), parts[3], parts[4]))
+        elif parts[0] == "near" and len(parts) >= 3:
+            nears[(parts[1], int(parts[2]))] = [
+                (int(d), i) for d, i in (p.split("=") for p in parts[3:] if "=" in p)
+            ]
         elif parts[0] == "gid" and len(parts) == 6:
             gids.append((parts[1], int(parts[2]), parts[3], parts[4], parts[5]))
     for stream in frames:
@@ -85,6 +89,25 @@ def main():
             if "--list" in sys.argv and (not o or o[1] != tag):
                 print(f"  {element.is_a()} {tag}: {stream} +{offset} owner {o}")
     print(f"elements: {dict(tally)}; parameter ids before the strings: {dict(params)}")
+    # The distance before its string at which an element's own id sits.
+    distances = collections.Counter()
+    matched = 0
+    for element in model.by_type("IfcElement"):
+        tag = str(element.Tag or "")
+        for stream, offset, *_ in by_tail.get(element.GlobalId[1:], []):
+            hits = [d for d, i in nears.get((stream, offset), []) if i == tag]
+            if hits:
+                matched += 1
+                distances[hits[0]] += 1
+    print(f"elements whose own id is within 4096 bytes before their string: {matched}; distances {distances.most_common(8)}")
+    best = distances.most_common(1)[0][0] if distances else None
+    if best is not None:
+        for entity in ("IfcProject", "IfcSite", "IfcBuilding", "IfcBuildingStorey"):
+            for element in (storeys if entity == "IfcBuildingStorey" else model.by_type(entity)):
+                for stream, offset, *_ in by_text.get(element.GlobalId, []):
+                    at = [i for d, i in nears.get((stream, offset), []) if d == best]
+                    named = levels.get(at[0], ("", "?"))[1] if at else None
+                    print(f"  {entity} {element.Name!r}: id at distance {best}: {at[0] if at else None} {named!r}")
 
 
 if __name__ == "__main__":

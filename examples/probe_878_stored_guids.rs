@@ -17,6 +17,9 @@
 //!     in ElemTable) of the categories below, found by its category at +0x12
 //!   gid <stream> <offset> <i32 before the length> <u32 length> <string>
 //!     every UTF-16 string of 22 GlobalId characters
+//!   near <stream> <offset> <distance>=<id> ...
+//!     the declared ElementIds (u32, any alignment) in the 4096 bytes
+//!     before each such string, nearest first, up to 12
 //!
 //! `tools/re/stored_guids_vs_ifc.py` ties Revit's GlobalIds to them.
 //!
@@ -122,6 +125,16 @@ fn main() -> rvt::Result<()> {
                         param.map_or("-".into(), |p| p.to_string()),
                         length.map_or("-".into(), |l| l.to_string())
                     );
+                    let near: Vec<String> = (4..=4096usize)
+                        .filter_map(|distance| {
+                            let at = start.checked_sub(distance)?;
+                            let id = u32_at(data, at)?;
+                            (id > 1000 && declared.contains(&id))
+                                .then(|| format!("{distance}={id}"))
+                        })
+                        .take(12)
+                        .collect();
+                    println!("near {name} {start} {}", near.join(" "));
                 }
             }
         }
