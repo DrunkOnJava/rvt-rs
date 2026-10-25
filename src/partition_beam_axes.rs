@@ -294,7 +294,7 @@ pub fn scan_sketch_circles(
     if !supports_revit_version(revit_version) {
         return Ok(BTreeMap::new());
     }
-    scan_first_records(rf, revit_version, ids, first_circle)
+    scan_first_records(rf, revit_version, ids, first_circle, Copies::Current)
 }
 
 /// A sketch line's curve (RE-96): the first [`BOUNDED_LINE_TAG`] record in
@@ -331,7 +331,7 @@ pub fn scan_sketch_curves(
     if !supports_revit_version(revit_version) {
         return Ok(BTreeMap::new());
     }
-    scan_first_records(rf, revit_version, ids, first_sketch_curve)
+    scan_first_records(rf, revit_version, ids, first_sketch_curve, Copies::Current)
 }
 
 /// The first bounded line in the element data of each id in `ids` (a
@@ -356,8 +356,9 @@ pub fn scan_bounded_lines(
 pub const SKETCH_LINE_SUPPORTED_REVIT_VERSIONS: &[u32] = &[2024, 2025];
 
 /// Each sketch line's segment, read as [`scan_bounded_lines`] reads a beam's
-/// line, on the releases in [`SKETCH_LINE_SUPPORTED_REVIT_VERSIONS`]; empty
-/// on others.
+/// line except that a line whose copies disagree takes its current
+/// partition's (RE-216, #824), on the releases in
+/// [`SKETCH_LINE_SUPPORTED_REVIT_VERSIONS`]; empty on others.
 pub fn scan_sketch_bounded_lines(
     rf: &mut RevitFile,
     revit_version: u32,
@@ -366,7 +367,7 @@ pub fn scan_sketch_bounded_lines(
     if !SKETCH_LINE_SUPPORTED_REVIT_VERSIONS.contains(&revit_version) {
         return Ok(BTreeMap::new());
     }
-    scan_first_bounded_lines(rf, revit_version, ids)
+    scan_first_records(rf, revit_version, ids, first_bounded_line, Copies::Current)
 }
 
 /// Releases where a sketch line's B-spline ([`BoundedSpline`]) is measured
@@ -538,7 +539,13 @@ pub fn scan_sketch_splines(
     if !SKETCH_SPLINE_SUPPORTED_REVIT_VERSIONS.contains(&revit_version) {
         return Ok(BTreeMap::new());
     }
-    scan_first_records(rf, revit_version, ids, first_bounded_spline)
+    scan_first_records(
+        rf,
+        revit_version,
+        ids,
+        first_bounded_spline,
+        Copies::Current,
+    )
 }
 
 /// [`scan_bounded_lines`] without its release gate, for callers that
@@ -549,7 +556,7 @@ pub fn scan_first_bounded_lines(
     revit_version: u32,
     ids: &BTreeSet<u32>,
 ) -> Result<BTreeMap<u32, BoundedLine>> {
-    scan_first_records(rf, revit_version, ids, first_bounded_line)
+    scan_first_records(rf, revit_version, ids, first_bounded_line, Copies::Agreeing)
 }
 
 /// The arc in the element data of each id in `ids` whose first curve record
@@ -560,18 +567,33 @@ pub fn scan_first_bounded_arcs(
     revit_version: u32,
     ids: &BTreeSet<u32>,
 ) -> Result<BTreeMap<u32, BoundedArc>> {
-    scan_first_records(rf, revit_version, ids, first_bounded_arc)
+    scan_first_records(rf, revit_version, ids, first_bounded_arc, Copies::Agreeing)
+}
+
+/// Which of an element's data copies [`scan_first_records`] takes where they
+/// disagree.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Copies {
+    /// None: the element is dropped.
+    Agreeing,
+    /// Its current partition's (RE-216, [`crate::native_document`]): a
+    /// sketch line's (#824). Walls and beams keep [`Copies::Agreeing`]: on
+    /// Core Interior 7 of the 41 walls whose copies disagree are drawn
+    /// 0.333 ft off Revit's ends from their current copy's line, where
+    /// their record box draws them exactly.
+    Current,
 }
 
 /// What `read` finds in the element data of each id in `ids`, from every
-/// partition. An id whose copies disagree takes its current partition's copy
-/// (RE-216, [`crate::native_document`]); one whose current copy cannot be
+/// partition. An id whose copies disagree is dropped, or takes its current
+/// partition's copy where `copies` says so; one whose current copy cannot be
 /// told, or holds copies that disagree, is dropped.
 fn scan_first_records<T: PartialEq>(
     rf: &mut RevitFile,
     revit_version: u32,
     ids: &BTreeSet<u32>,
     read: fn(&[u8]) -> Option<T>,
+    copies: Copies,
 ) -> Result<BTreeMap<u32, T>> {
     let Some(layout) = crate::partition_names::element_data_layout(revit_version) else {
         return Ok(BTreeMap::new());
@@ -616,10 +638,13 @@ fn scan_first_records<T: PartialEq>(
     // the copy taken is its current partition's (#824).
     let disagreeing: BTreeMap<u32, BTreeSet<u32>> = found
         .iter()
-        .filter(|(_, copies)| copies.iter().any(|(_, line)| *line != copies[0].1))
+        .filter(|(_, found)| found.iter().any(|(_, line)| *line != found[0].1))
         .filter_map(|(id, _)| Some((*id, holders.get(id)?.clone())))
         .collect();
-    let current_partitions = crate::native_document::current_partitions(rf, &disagreeing);
+    let current_partitions = match copies {
+        Copies::Current => crate::native_document::current_partitions(rf, &disagreeing),
+        Copies::Agreeing => BTreeMap::new(),
+    };
     Ok(found
         .into_iter()
         .filter_map(|(id, copies)| {
