@@ -774,7 +774,11 @@ record, as on 2024, which is Revit's on all 75 runs measured. On
 puzzbobb's R2025 stair models 13 and 14 each flight now has Revit's volume
 and every vertex of Revit's body lies on rvt-rs's; the riserless,
 monolithic and spiral runs (15 to 17) keep their box
-(`reports/element-framing/RE-217-stair-runs-2025.md`).
+(`reports/element-framing/RE-217-stair-runs-2025.md`). Its addendum draws a
+monolithic run with upright risers and no nosing as RE-92 draws one with
+slanted risers: model 16's flight then has Revit's volume, and on the
+BIM4LCA office 5 of 35 flights are Revit's and 29 are within 6% of its
+volume; where those 29 differ is not measured yet.
 
 The public viewer's demo gallery leads with the two files this section
 measures, staged from the deploy workflow's `magnetar-io/revit-test-datasets`

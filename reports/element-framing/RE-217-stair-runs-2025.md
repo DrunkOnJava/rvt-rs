@@ -82,6 +82,22 @@ Core Interior, Einhoven, the four RE1 models, the other 21 R2025 models and both
 
 ## 6. What it does not cover
 
-- Riserless, monolithic with upright risers, and spiral runs (§5).
+- Riserless and spiral runs (§5). Monolithic runs with upright risers are drawn since §7.
 - A run whose own type differs from its stairs' default: none was measured (§3). rvt-rs takes the run's own, which is the one Revit stores per run.
 - Releases other than 2025. The members are the same on 2024: on the BIM4LCA office, `native_runs` reads the sketch of 34 of its 35 runs (the probe's `native` lines). All 34 are monolithic with upright risers, as model 16 is, so the profile draws none of them, and 2024 runs are still drawn by RE-52 from its byte anchors, measured on Snowdon Towers. Those 35 office flights, with model 16, are the oracle for drawing a monolithic run with upright risers.
+
+## 7. Addendum (2026-10-24): monolithic runs with upright risers
+
+RE-92's monolithic profile draws each riser from the step's inner corner, the nosing length behind the riser line, up to its nosing on the line. With no nosing the riser runs straight up the riser line whether the type calls it slanted or upright, so the profile is the same. `monolithic_side_profile` now also takes a monolithic type with upright risers where its nosing is 0. Every monolithic run measured has no nosing: model 16's "Monolithic Run" (type 2338) and the BIM4LCA office's 35 "Monolithic Run" flights, all with a structural depth of 0.4921 ft.
+
+`stair_bodies_vs_ifc`, Measure run [40150690633](https://github.com/DrunkOnJava/rvt-rs/actions/runs/40150690633), against `main` (beb01811):
+
+| model | flights | before | now |
+|---|---:|---|---|
+| R2025 model 16 (Revit 2025, native path) | 1 | box, 237.31 ft³ | 14.748815 ft³ against Revit's 14.748816, every Revit vertex within 2.2e-6 ft of rvt-rs's surface |
+| BIM4LCA office as built (Revit 2024, RE-52 path) | 35 | every flight its box | 5 with Revit's volume and every Revit vertex on rvt-rs's surface; 29 at 94.1% to 96.4% of Revit's volume; the spiral run 3057703 its box |
+| BIM4LCA office at building permit | 35 | every flight its box | the same |
+
+The five that match are 1440878, 1503045, 2598348, 2861134 and 2867922. On each of the other 29 a vertex of Revit's body lies 0.544 to 0.612 ft from rvt-rs's surface, which is the run's structural depth over the cosine of its pitch on each storey (0.5436, 0.5475, 0.5543, 0.5577 and 0.6124 ft): the vertical depth of its soffit below the inner corners. Which part of those 29 bodies differs is not measured yet. It is the same depth by which Revit's landing underside follows a flight's soffit below the landing's slab (RE-214 §3), so the likely remainder is the soffit where a flight meets a floor or a landing, which RE-92's profile cuts at the run's base and its last riser line.
+
+Model 16's `IfcStair` is 14.75 ft³ against Revit's 15.29: Revit's stair holds 0.54 ft³ more than its flight, in a part rvt-rs does not draw. Every other model's IFC is byte-identical: Core Interior, Einhoven, the four RE1 models and the other 22 R2025 models.
