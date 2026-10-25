@@ -12,6 +12,10 @@
 //!   loop <id> <object index> open <bool> curves <n>
 //!   curve <id> <loop index> GLine <start x y z> <end x y z>
 //!   curve <id> <loop index> <class> <fields as JSON>
+//!   type <id> <object index> <class> <member=value ...>
+//!     the scalar members of each record in `RVT_PROBE_TYPES` (default
+//!     141731, 3058084's landing type, and 3051881, its stair's spiral run
+//!     type), for where Revit's 0.0984 ft landing thickness comes from
 //!
 //! `tools/re/slab_outlines_list.py` prints Revit's outline of each owner.
 //!
@@ -101,6 +105,38 @@ fn main() -> anyhow::Result<()> {
                     ),
                 }
             }
+        }
+        Ok(())
+    })?;
+    let types: BTreeSet<u64> = std::env::var("RVT_PROBE_TYPES")
+        .unwrap_or_else(|_| "141731,3051881".into())
+        .split(',')
+        .filter_map(|id| id.trim().parse().ok())
+        .collect();
+    let options = Options {
+        selected_ids: types,
+        ..Options::default()
+    };
+    extract_graphs(&mut rf, &options, |record| {
+        let (Some(class), Some(graph)) = (record.class_name.as_deref(), record.graph.as_ref())
+        else {
+            return Ok(());
+        };
+        let id = record.identity.element_id;
+        for (index, object) in graph.objects.iter().enumerate() {
+            let members: Vec<String> = object
+                .fields
+                .as_object()
+                .into_iter()
+                .flat_map(|fields| fields.iter())
+                .filter(|(_, value)| value.is_number() || value.is_boolean() || value.is_string())
+                .map(|(name, value)| format!("{name}={value}"))
+                .collect();
+            println!(
+                "type {id} {index} {class}/{} {}",
+                object.class_name,
+                members.join(" ")
+            );
         }
         Ok(())
     })?;
