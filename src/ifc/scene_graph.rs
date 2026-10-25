@@ -683,6 +683,7 @@ fn profile_label(profile: Option<&super::entities::ProfileDef>) -> String {
         Some(ProfileDef::CircleHollow { .. }) => "Round tube".into(),
         Some(ProfileDef::ArbitraryClosed { .. }) => "Arbitrary closed".into(),
         Some(ProfileDef::ArbitraryWithVoids { .. }) => "Arbitrary with voids".into(),
+        Some(ProfileDef::IndexedPolyCurve { .. }) => "Lines and arcs".into(),
     }
 }
 
