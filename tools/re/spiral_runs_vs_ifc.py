@@ -75,6 +75,25 @@ def main():
             points.extend(tuple(round(float(c), 4) for c in p) for p in pts)
         unique = sorted(set(points))
         print(f"run {tag}: PredefinedType {flight.PredefinedType} items {' '.join(items)} vertices {len(unique)} volume {abs(volume):.6f}")
+        for rep in (flight.Representation.Representations if flight.Representation else []):
+            for item in rep.Items[:2]:
+                if item.is_a("IfcExtrudedAreaSolid"):
+                    profile = item.SweptArea
+                    curve = getattr(profile, "OuterCurve", None)
+                    parts = []
+                    if curve is not None and curve.is_a("IfcCompositeCurve"):
+                        parts = [seg.ParentCurve.is_a() + ("(" + seg.ParentCurve.BasisCurve.is_a() + ")" if seg.ParentCurve.is_a("IfcTrimmedCurve") else "") for seg in curve.Segments]
+                    elif curve is not None and curve.is_a("IfcPolyline"):
+                        parts = [f"{len(curve.Points)} points"]
+                    elif curve is not None and curve.is_a("IfcIndexedPolyCurve"):
+                        parts = [f"{len(curve.Points.CoordList)} points", f"segments {[s.is_a() for s in (curve.Segments or [])]}"]
+                    print(f"  item {item.is_a()} depth {item.Depth} profile {profile.is_a()} curve {curve.is_a() if curve else None} {parts}")
+                    if curve is not None and curve.is_a("IfcCompositeCurve"):
+                        for seg in curve.Segments:
+                            pc = seg.ParentCurve
+                            if pc.is_a("IfcTrimmedCurve") and pc.BasisCurve.is_a("IfcCircle"):
+                                c = pc.BasisCurve
+                                print(f"    circle radius {c.Radius} trims {pc.Trim1} {pc.Trim2} sense {pc.SenseAgreement}")
         if not unique:
             continue
         xs, ys, zs = zip(*unique)
