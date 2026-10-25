@@ -10,8 +10,8 @@
 //! Output:
 //!   elem <id>                              up to 3 columns per hollow-section type
 //!   type <type id> <family>:<type name> columns <n>
-//!   param <type id> <BuiltInParameter> <value, feet>
-//!                                          every entry from -1005600 to -1005480
+//!   param <type id> <parameter> <value, feet>
+//!                                          every `f64 · ff×8 · i64` entry in its blocks
 //!
 //! `tools/re/body_forms_list.py` prints Revit's body of each `elem`.
 //!
@@ -24,7 +24,7 @@ use rvt::RevitFile;
 use rvt::research::partition_schema_mvp::{
     FAMILY_NAME_FIELD, TYPE_ID_FIELD, TYPE_NAME_FIELD, recover_partition_schema_mvp,
 };
-use rvt::research::partition_type_parameters::scan_partition_lengths;
+use rvt::research::partition_type_parameters::partition_length_entries;
 use rvt::walker::{DecodedElement, InstanceField, WalkerLimits};
 
 fn text(element: &DecodedElement, wanted: &str) -> Option<String> {
@@ -73,18 +73,17 @@ fn main() -> rvt::Result<()> {
         }
     }
     let declared = rvt::elem_table::declared_ids(&rvt::elem_table::parse_records(&mut rf)?);
-    let parameters: BTreeSet<i64> = (-1_005_600..=-1_005_480).collect();
     let types: BTreeSet<u32> = by_type.keys().copied().collect();
     let mut found: BTreeMap<(u32, i64), BTreeSet<String>> = BTreeMap::new();
     for stream in rf.partition_stream_names() {
         let Ok(inflated) = rf.inflated_partition(&stream) else {
             continue;
         };
-        for (owner, held) in scan_partition_lengths(inflated.bytes(), &declared, &parameters) {
+        for (owner, entries) in partition_length_entries(inflated.bytes(), &declared) {
             if !types.contains(&owner) {
                 continue;
             }
-            for (parameter, value) in held {
+            for (parameter, value) in entries {
                 found
                     .entry((owner, parameter))
                     .or_default()

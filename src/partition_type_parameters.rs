@@ -443,6 +443,39 @@ pub fn type_i_sections(
         .collect()
 }
 
+/// Every `f64 · ff×8 · i64` entry in `buf` (a length value and the
+/// parameter it is stored under, BuiltInParameter or not), by the declared
+/// ElementId of the value block it follows: what [`scan_partition_lengths`]
+/// reads for a given set of parameters, here for all of them, for probes.
+pub fn partition_length_entries(
+    buf: &[u8],
+    declared_ids: &BTreeSet<u32>,
+) -> BTreeMap<u32, Vec<(i64, f64)>> {
+    let blocks = value_blocks(buf, declared_ids);
+    let mut out: BTreeMap<u32, Vec<(i64, f64)>> = BTreeMap::new();
+    for at in memchr::memmem::find_iter(buf, &[0xff; 8]) {
+        if at < 8 || buf[at - 1] == 0xff {
+            continue;
+        }
+        let (Some(value), Some(parameter)) = (
+            buf.get(at - 8..at)
+                .and_then(|b| b.first_chunk::<8>().copied())
+                .map(f64::from_le_bytes)
+                .filter(|v| v.is_finite() && v.abs() <= MAX_LENGTH_FEET),
+            buf.get(at + 8..at + 16)
+                .and_then(|b| b.first_chunk::<8>().copied())
+                .map(i64::from_le_bytes),
+        ) else {
+            continue;
+        };
+        let index = blocks.partition_point(|(start, _)| *start < at);
+        if let Some(&(_, Some(owner))) = index.checked_sub(1).and_then(|i| blocks.get(i)) {
+            out.entry(owner).or_default().push((parameter, value));
+        }
+    }
+    out
+}
+
 /// The values of `parameters` held by each type in `types`, where every
 /// partition's value agrees.
 fn type_lengths(
