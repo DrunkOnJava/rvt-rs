@@ -169,8 +169,8 @@ fn run(args: Args) -> anyhow::Result<()> {
             Ok(report) => {
                 rvt::ifc::recount_exported(&mut diagnostics, &model);
                 eprintln!(
-                    "rvt-ifc: {} of {} bounding-box bodies drawn from their saved graphics ({} triangles)",
-                    report.replaced, report.candidates, report.triangles
+                    "rvt-ifc: {} of {} bounding-box bodies drawn from their saved graphics ({} triangles); {} kept their box, their saved graphics not decoding whole",
+                    report.replaced, report.candidates, report.triangles, report.partial
                 );
             }
             Err(e) => eprintln!("rvt-ifc: saved graphics not read, bodies unchanged: {e}"),

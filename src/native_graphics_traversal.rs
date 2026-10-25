@@ -92,6 +92,18 @@ fn edge_index(graph: &ObjectGraph) -> EdgeIndex {
     }
     index
 }
+/// The diagnostic of a nested detail-family filter, a branch whose
+/// visibility depends on the view: the mesh without it is mostly the body
+/// (RE-224: on the BIM4LCA office 271 of the 306 such saved meshes are
+/// Revit's body exactly).
+pub const NESTED_DETAIL_FILTER_DIAGNOSTIC: &str =
+    "nested detail-family filter requires view semantics";
+/// The diagnostic of a component reference whose visibility depends on its
+/// owner and the view (RE-224: on RE1 Electrical all 21 such saved meshes
+/// are exact).
+pub const VIEW_COMPONENT_DIAGNOSTIC: &str =
+    "surface-bearing component requires qualified owner/view visibility";
+
 struct Walker<'a, 'r> {
     edge_indexes: HashMap<usize, EdgeIndex>,
     graph: &'a ObjectGraph,
@@ -195,7 +207,7 @@ impl Walker<'_, '_> {
                         return Ok(());
                     }
                     if obj.fields["m_bIsNestedDetailFamily"].as_bool() == Some(true) {
-                        return Err("nested detail-family filter requires view semantics".into());
+                        return Err(NESTED_DETAIL_FILTER_DIAGNOSTIC.into());
                     }
                     let conditions = obj.fields["m_oConditions"]
                         .as_array()
@@ -283,9 +295,7 @@ impl Walker<'_, '_> {
                 if curves_only {
                     self.result.excluded_non_surface_branches += 1;
                 } else {
-                    return Err(
-                        "surface-bearing component requires qualified owner/view visibility".into(),
-                    );
+                    return Err(VIEW_COMPONENT_DIAGNOSTIC.into());
                 }
             }
             "GInstance" => {
