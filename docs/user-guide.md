@@ -370,9 +370,16 @@ rooms, materials, and common parameters. See
 1. Run:
 
    ```bash
-   rvt-inspect model.rvt --json > model.inspect.json
-   rvt-ifc model.rvt -o model.ifc --mode strict --diagnostics model.diagnostics.json
+   rvt-inspect model.rvt --json --anonymize > model.inspect.json
+   rvt-ifc model.rvt -o model.ifc --mode strict --diagnostics model.diagnostics.json --anonymize
    ```
+
+   `--anonymize` replaces every name the output takes from the project (the
+   file and project names, levels, materials, sample element names, stored
+   folder paths) with a placeholder, keeping counts and ElementIds, so the
+   files can be attached to a public issue. Without it, `rvt-inspect`
+   replaces only a path's `\Users\<name>\` part and Autodesk build and
+   project-id folders.
 
 2. Open a GitHub issue and include:
 

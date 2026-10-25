@@ -643,6 +643,7 @@ interface ExportDiagnostics {
   mode?: string;
   input?: {
     revit_version?: number;
+    original_path?: string;
     project_name?: string;
     stream_count?: number;
     has_basic_file_info?: boolean;
@@ -694,6 +695,7 @@ interface ExportDiagnostics {
     bounding_box_bodies?: number;
   };
   unsupported_features?: string[];
+  skipped?: { reason?: string; count?: number; sample_names?: string[] }[];
   warnings?: string[];
   formats_latest_integrity?: {
     stream?: string;
@@ -2977,13 +2979,55 @@ exportSvgBtn.addEventListener('click', () => {
   })();
 });
 
+/**
+ * The diagnostics with every name they take from the project replaced, as
+ * `ExportDiagnostics::anonymize` does for `rvt-ifc --anonymize`: the file
+ * and project names, levels (`Level 1`...), the material sample
+ * (`Material 1`...) and skipped elements' sample names (`element-<id>`),
+ * and the "Export to IFC As" values a warning lists. Counts and ElementIds
+ * stay, so the download can be posted publicly.
+ */
+function anonymizedDiagnostics(diagnostics: ExportDiagnostics): ExportDiagnostics {
+  const copy = plainJson(diagnostics);
+  const redacted = '<redacted>';
+  const input = copy.input;
+  if (input?.original_path) {
+    const fileName = input.original_path.split(/[\\/]/).pop() ?? input.original_path;
+    const dot = fileName.lastIndexOf('.');
+    input.original_path = dot > 0 ? `${redacted}${fileName.slice(dot)}` : redacted;
+  }
+  if (input?.project_name) input.project_name = redacted;
+  const exported = copy.exported;
+  if (exported) {
+    exported.storey_names = (exported.storey_names ?? []).map((_, index) => `Level ${index + 1}`);
+    exported.material_names_sample = (exported.material_names_sample ?? []).map(
+      (_, index) => `Material ${index + 1}`,
+    );
+  }
+  for (const item of copy.skipped ?? []) {
+    item.sample_names = (item.sample_names ?? []).map((name) => {
+      const id = /(\d+)$/.exec(name)?.[1];
+      return id ? `element-${id}` : redacted;
+    });
+  }
+  // The "Export to IFC As" values the export does not apply are the
+  // project's own text: keep their count, drop the list (#792). No other
+  // warning carries project text.
+  const unapplied = "so each keeps its category's entity (#792):";
+  copy.warnings = (copy.warnings ?? []).map((warning) => {
+    const at = warning.indexOf(unapplied);
+    return at >= 0 ? `${warning.slice(0, at + unapplied.length - 1)}.` : warning;
+  });
+  return copy;
+}
+
 downloadDiagnosticsBtn.addEventListener('click', () => {
   if (!currentDiagnostics) return;
-  const json = JSON.stringify(currentDiagnostics, null, 2);
+  const json = JSON.stringify(anonymizedDiagnostics(currentDiagnostics), null, 2);
   const blob = new Blob([json], { type: 'application/json' });
-  download(`${lastFileStem}.diagnostics.json`, blob);
-  setStatus(`Exported ${lastFileStem}.diagnostics.json`);
-  toast(`Downloaded ${lastFileStem}.diagnostics.json`, 'ok');
+  download('rvt-diagnostics.json', blob);
+  setStatus('Exported rvt-diagnostics.json, project names replaced');
+  toast('Downloaded rvt-diagnostics.json, project names replaced so it can be posted', 'ok');
 });
 
 /** Whether the schedule lists a building element of `ifcType` (any type for null). */

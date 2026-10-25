@@ -342,6 +342,57 @@ pub struct ExportDiagnostics {
     pub formats_latest_integrity: Option<crate::compression::FormatsLatestIntegrity>,
 }
 
+/// Where the warning about "Export to IFC As" values the export does not
+/// apply begins listing them (#792). The values are the project's own text,
+/// so [`ExportDiagnostics::anonymize`] cuts the list there.
+const UNAPPLIED_EXPORT_VALUES: &str = "so each keeps its category's entity (#792):";
+
+impl ExportDiagnostics {
+    /// Replace every name these diagnostics take from the project, so they
+    /// can be posted publicly: the file name and the project name become
+    /// [`crate::redact::ANONYMIZED`], the levels' and the material sample's
+    /// names `Level 1`, `Material 1` and so on in their order, and each
+    /// skipped element's sample name, which can name its family and type,
+    /// `element-<ElementId>`. The warning listing "Export to IFC As" values
+    /// the export does not apply keeps their count and drops the values,
+    /// which the project writes; no other warning carries project text
+    /// (counts, releases, type ElementIds, unit identifiers), so none is
+    /// rewritten. Counts, releases, body sources and ElementIds are kept.
+    pub fn anonymize(&mut self) {
+        use crate::redact::{ANONYMIZED, anonymize_file_name};
+        if let Some(path) = self.input.original_path.as_mut() {
+            *path = anonymize_file_name(path);
+        }
+        if let Some(project) = self.input.project_name.as_mut() {
+            *project = ANONYMIZED.to_string();
+        }
+        for (prefix, list) in [
+            ("Level", &mut self.exported.storey_names),
+            ("Material", &mut self.exported.material_names_sample),
+        ] {
+            for (index, name) in list.iter_mut().enumerate() {
+                *name = format!("{prefix} {}", index + 1);
+            }
+        }
+        for item in &mut self.skipped {
+            for name in &mut item.sample_names {
+                let id = &name[name.trim_end_matches(|c: char| c.is_ascii_digit()).len()..];
+                *name = if id.is_empty() {
+                    ANONYMIZED.to_string()
+                } else {
+                    format!("element-{id}")
+                };
+            }
+        }
+        for warning in &mut self.warnings {
+            if let Some(at) = warning.find(UNAPPLIED_EXPORT_VALUES) {
+                warning.truncate(at + UNAPPLIED_EXPORT_VALUES.len() - 1);
+                warning.push('.');
+            }
+        }
+    }
+}
+
 /// A10 export source-coverage block (measured when denominators exist).
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[non_exhaustive]
@@ -3606,7 +3657,7 @@ pub fn build_export_diagnostics_with_limits(
             .map(|(value, n)| format!("{value} {n}"))
             .collect();
         warnings.push(format!(
-            "{total} element(s) carry an \"Export to IFC As\" value the export does not apply, so each keeps its category's entity (#792): {}.",
+            "{total} element(s) carry an \"Export to IFC As\" value the export does not apply, {UNAPPLIED_EXPORT_VALUES} {}.",
             listed.join(", ")
         ));
     }
