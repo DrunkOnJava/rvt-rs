@@ -10,7 +10,8 @@ those elements (by Tag), and for whether Revit writes a property at all
 where it writes it on some of them only (`present:<set>.<property>`), and
 for whether Revit writes the element's body as anything but extruded solids
 (`body:not-extruded`, through mapped items: a mullion with cut ends), and
-every field the probe printed, it takes the
+for whether Revit writes each base quantity (`present:<Qto set>.<quantity>`)
+in the same way, and every field the probe printed, it takes the
 one value of the field whose presence best predicts the property (the
 property is true exactly where the field has that value, or exactly where
 it has not) and counts how many elements that gets right. A field missing
@@ -81,12 +82,14 @@ def main():
     revit = ifcopenshell.open(args[1])
     truths = collections.defaultdict(dict)
     seen = set()
+    entity_of = {}
     present = collections.defaultdict(set)
     for element in revit.by_type("IfcElement"):
         tag = str(element.Tag) if element.Tag else None
         if tag not in rows:
             continue
         seen.add(tag)
+        entity_of[tag] = element.is_a()
         extruded = extruded_only(element)
         if extruded is not None:
             truths["body:not-extruded"][tag] = not extruded
@@ -97,11 +100,18 @@ def main():
                 present[f"{pset}.{prop}"].add(tag)
                 if isinstance(value, bool):
                     truths[f"{pset}.{prop}"][tag] = value
-    # Whether Revit writes a property at all, where it writes it on some of
-    # the probe's elements and not on others (RE-233).
+        for qset, quantities in ifcopenshell.util.element.get_psets(element, qtos_only=True).items():
+            for name in quantities:
+                if name != "id":
+                    present[f"{qset}.{name}"].add(tag)
+    # Whether Revit writes a property or quantity at all, where it writes it
+    # on some of the probe's elements of an entity and not on others (RE-233,
+    # RE-247): among the elements of the entities it is on.
     for prop, tags in present.items():
-        if 0 < len(tags) < len(seen):
-            truths[f"present:{prop}"] = {t: t in tags for t in seen}
+        entities = {entity_of[t] for t in tags}
+        universe = {t for t in seen if entity_of[t] in entities}
+        if 0 < len(tags) < len(universe):
+            truths[f"present:{prop}"] = {t: t in tags for t in universe}
     print(f"probe: {len(rows)} records; boolean properties Revit writes on them: {len(truths)}")
     names = sorted({name for fields in rows.values() for name in fields})
     for prop, by_tag in sorted(truths.items()):
