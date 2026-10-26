@@ -117,6 +117,9 @@ pub struct RevitFile {
     /// the schema, the element index and the increments again.
     // Tracker: B82.
     native_preamble: Option<Arc<crate::native_document::Preamble>>,
+    /// Memoised index of every native record's partitions (#1032): each
+    /// native pass walked every partition again to find its records.
+    native_record_index: Option<Arc<crate::native_document::RecordIndex>>,
     /// Memoised material names (RE-58, RE-203), by release and the hash of
     /// the declared ids they were read for: half a dozen material steps of
     /// an export each asked for them.
@@ -324,6 +327,7 @@ impl RevitFile {
             walk: None,
             data_objects: std::collections::HashMap::new(),
             native_preamble: None,
+            native_record_index: None,
             material_names: std::collections::HashMap::new(),
             category_style_materials: None,
         })
@@ -393,6 +397,20 @@ impl RevitFile {
         let preamble = Arc::new(crate::native_document::read_preamble(self)?);
         self.native_preamble = Some(Arc::clone(&preamble));
         Ok(preamble)
+    }
+
+    /// Where every native record is (`crate::native_document::RecordIndex`),
+    /// once a native pass has recorded it (#1032).
+    pub(crate) fn native_record_index(&self) -> Option<Arc<crate::native_document::RecordIndex>> {
+        self.native_record_index.clone()
+    }
+
+    /// Keep the record index a native pass recorded (#1032).
+    pub(crate) fn remember_native_record_index(
+        &mut self,
+        index: crate::native_document::RecordIndex,
+    ) {
+        self.native_record_index = Some(Arc::new(index));
     }
 
     /// ElementIds `research::partition_element_records::assign_second_prologue_ids`

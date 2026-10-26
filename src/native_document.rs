@@ -339,6 +339,22 @@ pub fn extract(
     summary.definition_diagnostics = diagnostics;
     Ok(summary)
 }
+/// Every current or historical record of every partition in [`Options`]'
+/// default channels (#1032): its channel, ElementId, partition and the class
+/// tag its body opens with. The first pass with the default channels and
+/// budgets records it while it walks every partition for its own records,
+/// and the handle keeps it; every later such pass finds the partitions
+/// holding its selected records from it, rather than walking every
+/// partition for them, and walks only those partitions.
+#[derive(Debug)]
+pub struct RecordIndex {
+    records: Vec<IndexedRecord>,
+}
+
+/// One record of a [`RecordIndex`]: its channel, ElementId, partition and
+/// the class tag its body opens with.
+type IndexedRecord = (u64, u64, u32, Option<u16>);
+
 /// Extract selected current indexed records' object graphs without the
 /// parameter-definition pass [`extract`] makes over every definition owner
 /// first, for callers that read objects' fields rather than saved parameter
@@ -496,7 +512,33 @@ fn extract_records(
     // `rac_advanced`). A first pass finds the partitions that hold each
     // selected element's records.
     let mut holders: BTreeMap<(u64, u64), BTreeSet<u32>> = BTreeMap::new();
-    for name in &names {
+    // #1032: with the default budgets the handle's record index answers
+    // this without a walk, and the walk below visits only the partitions
+    // holding a selected record.
+    let defaults = Options::default();
+    let indexable = options.max_stream_bytes == defaults.max_stream_bytes
+        && options.max_group_bytes == defaults.max_group_bytes
+        && options.channels == defaults.channels;
+    let record_index = indexable.then(|| file.native_record_index()).flatten();
+    let mut indexed: Option<Vec<IndexedRecord>> =
+        (indexable && record_index.is_none()).then(Vec::new);
+    let walked: Option<BTreeSet<u32>> = record_index.as_ref().map(|record_index| {
+        for &(channel, id, partition, tag) in &record_index.records {
+            if !options.channels.contains(&channel) {
+                continue;
+            }
+            let by_class = !options.selected_classes.is_empty()
+                && index.identities.contains_key(&id)
+                && tag
+                    .and_then(|tag| registry.class(tag))
+                    .is_some_and(|class| options.selected_classes.contains(&class.name));
+            if selected.contains(&id) || by_class {
+                holders.entry((channel, id)).or_default().insert(partition);
+            }
+        }
+        holders.values().flatten().copied().collect()
+    });
+    for name in names.iter().filter(|_| walked.is_none()) {
         let partition: u32 = name[11..].parse()?;
         let stored = file.read_stream_with_limit(name, options.max_stream_bytes)?;
         let prepared = compression::prepare_stream_for_inflate(name, &stored);
@@ -511,7 +553,12 @@ fn extract_records(
                     return Ok(());
                 }
                 for (id, _, start, end) in group_records(source, bytes, version)? {
-                    if is_selected(id, &bytes[start..end]) {
+                    let body = &bytes[start..end];
+                    if let Some(indexed) = indexed.as_mut() {
+                        let tag = body.get(..2).map(|b| u16::from_le_bytes([b[0], b[1]]));
+                        indexed.push((source.channel, id, partition, tag));
+                    }
+                    if is_selected(id, body) {
                         holders
                             .entry((source.channel, id))
                             .or_default()
@@ -522,10 +569,19 @@ fn extract_records(
             },
         )?;
     }
+    if let Some(records) = indexed {
+        file.remember_native_record_index(RecordIndex { records });
+    }
     let mut seen = BTreeSet::new();
     let mut seen_ids = BTreeSet::new();
     for name in names {
         let partition: u32 = name[11..].parse()?;
+        if walked
+            .as_ref()
+            .is_some_and(|walked| !walked.contains(&partition))
+        {
+            continue;
+        }
         let stored = file.read_stream_with_limit(&name, options.max_stream_bytes)?;
         let prepared = compression::prepare_stream_for_inflate(&name, &stored);
         let inflated = file.inflated_partition(&name).ok();
