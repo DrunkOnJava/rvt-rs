@@ -93,6 +93,7 @@ pub mod gltf;
 pub mod measure;
 pub mod pbr;
 pub mod revit_property_sets;
+pub mod revit_set_placement;
 pub mod saved_meshes;
 pub mod scene_graph;
 pub mod schedule_csv;

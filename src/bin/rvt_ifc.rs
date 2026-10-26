@@ -88,6 +88,16 @@ struct Args {
     /// Revit 2023 to 2027 files. Slower on large files.
     #[arg(long, conflicts_with = "placeholder")]
     revit_property_sets: bool,
+    /// Also write properties where Revit's own exporter writes them and
+    /// IFC4's definitions do not: a standard set whose entity's name begins
+    /// with the element's (`Pset_StairFlightCommon` on a stair,
+    /// `Pset_SpaceHeaterTypeCommon` on a space), its `Reference` only, and a
+    /// text parameter named `<set>.<property>` for a property the set's IFC4
+    /// definition lacks (`Pset_SpaceCommon.FloorCovering`) (RE-235). By
+    /// default every property is in the set buildingSMART's IFC4 definitions
+    /// put it in.
+    #[arg(long, conflicts_with = "placeholder")]
+    revit_set_placement: bool,
     /// Write a JSON diagnostics sidecar for bug reports and support.
     ///
     /// The sidecar includes input metadata, decoded/exported element counts,
@@ -190,6 +200,20 @@ fn run(args: Args) -> anyhow::Result<()> {
                 report.left_out
             ),
             Err(e) => eprintln!("rvt-ifc: Revit property sets not written: {e:#}"),
+        }
+    }
+
+    if args.revit_set_placement {
+        // Like Revit's property sets, this only adds to the export: when the
+        // parameters cannot be read, it goes ahead without them, and says so.
+        match rvt::ifc::revit_set_placement::attach(&mut rf, &mut model) {
+            Ok(report) => eprintln!(
+                "rvt-ifc: {} properties on {} elements written where Revit's exporter writes them ({} parameters of a kind not written left out)",
+                report.properties, report.elements, report.left_out
+            ),
+            Err(e) => {
+                eprintln!("rvt-ifc: properties not placed as Revit's exporter places them: {e:#}")
+            }
         }
     }
 
