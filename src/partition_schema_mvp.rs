@@ -620,6 +620,16 @@ pub fn recover_partition_schema_mvp(
         }
     }
 
+    // --- Every column's joins, in one native pass (RE-202, RE-247) ---
+    let column_ids: BTreeSet<u64> = out
+        .columns
+        .iter()
+        .chain(out.products.iter())
+        .filter(|element| is_column_class(&element.class))
+        .filter_map(|element| element.id.map(u64::from))
+        .collect();
+    let column_joins = crate::native_column_joins::joins(rf, &column_ids).ok();
+
     // --- Family instances whose type draws with no material (RE-149, #355) ---
     // An instance whose own material parameters name its materials takes
     // them instead (RE-200).
@@ -632,8 +642,28 @@ pub fn recover_partition_schema_mvp(
         }
         // The first joined wall's layer on the column's side (RE-202), then
         // the joined walls' one shared set (#580).
-        attach_first_join_materials(rf, &mut out.columns, &out.walls);
+        attach_first_join_materials(
+            rf,
+            column_joins.as_ref().map(|joins| &joins.order),
+            &mut out.columns,
+            &out.walls,
+        );
         attach_joined_wall_materials(&mut out.columns, &out.walls);
+    }
+    // --- Columns no `CleanPairGStep` joins, which Revit's export draws as
+    // an extrusion (RE-247) ---
+    if let Some(joins) = &column_joins {
+        for element in out.columns.iter_mut().chain(out.products.iter_mut()) {
+            if is_column_class(&element.class)
+                && element
+                    .id
+                    .is_some_and(|id| joins.without_clean_steps.contains(&u64::from(id)))
+            {
+                element
+                    .fields
+                    .push((COLUMN_UNJOINED_FIELD.into(), InstanceField::Bool(true)));
+            }
+        }
     }
 
     // --- Curtain mullions' and panels' materials, from their types (RE-166, B66) ---
@@ -1156,11 +1186,6 @@ fn attach_wall_sweep_types(
     }
 }
 
-/// Give each pipe, wall sweep and ramp still without a type, or a name of
-/// its own, the type its native record names
-/// ([`crate::native_element_types::system_type_names`], RE-240). Its family
-/// is then its class's system family ([`system_family`]), and a sweep's is
-/// Wall Sweep, as RE-69 names it.
 /// Mark each curtain mullion that stands on a straight curtain wall with an
 /// unedited profile and whose type has its own rectangular section
 /// ([`crate::native_mullion_hosts::mullions_on_plain_hosts`], RE-243) with
@@ -1185,6 +1210,11 @@ fn attach_mullion_plain_hosts(rf: &mut RevitFile, products: &mut [DecodedElement
     }
 }
 
+/// Give each pipe, wall sweep and ramp still without a type, or a name of
+/// its own, the type its native record names
+/// ([`crate::native_element_types::system_type_names`], RE-240). Its family
+/// is then its class's system family ([`system_family`]), and a sweep's is
+/// Wall Sweep, as RE-69 names it.
 fn attach_native_type_names(rf: &mut RevitFile, products: &mut [DecodedElement]) {
     let has = |element: &DecodedElement, field: &str| {
         element.fields.iter().any(|(name, _)| name == field)
@@ -2062,6 +2092,17 @@ pub fn hollow_section_from_fields(
         wall_feet: wall?,
         outer_radius_feet: radius?,
     })
+}
+
+/// Set on a column whose record holds no `CleanPairGStep`
+/// ([`crate::native_column_joins::ColumnJoins::without_clean_steps`]):
+/// Revit's export draws it as an extrusion, and gives it the extrusion's
+/// depth as its `Qto_ColumnBaseQuantities.Length` (RE-247).
+pub const COLUMN_UNJOINED_FIELD: &str = "m_column_unjoined";
+
+/// Whether `class` is a column's, architectural or structural.
+fn is_column_class(class: &str) -> bool {
+    matches!(class, "Column" | "StructuralColumn")
 }
 
 /// Classes whose type's hollow section is read (W6).
@@ -3011,6 +3052,7 @@ fn set_type_materials(element: &mut DecodedElement, names: Vec<String>) {
 /// [`COLUMN_JOINED_WALL_FIELD`]: crate::element_record_column_cuts::COLUMN_JOINED_WALL_FIELD
 fn attach_first_join_materials(
     rf: &mut RevitFile,
+    joined: Option<&BTreeMap<u64, Vec<u64>>>,
     columns: &mut [DecodedElement],
     walls: &[DecodedElement],
 ) {
@@ -3023,16 +3065,12 @@ fn attach_first_join_materials(
             _ => None,
         })
     };
-    let ids: BTreeSet<u64> = columns
-        .iter()
-        .filter(|column| has_unnamed_material_only(column))
-        .filter_map(|column| column.id.map(u64::from))
-        .collect();
-    let Ok(joined) = joins::joins(rf, &ids) else {
+    let Some(joined) = joined else {
         return;
     };
     let first: BTreeMap<u64, u64> = columns
         .iter()
+        .filter(|column| has_unnamed_material_only(column))
         .filter_map(|column| {
             let id = u64::from(column.id?);
             let order = joined.get(&id)?;
@@ -5341,6 +5379,10 @@ pub const STAIR_RUN_PROFILE_FIELD: &str = "m_stair_run_profile";
 /// Field carrying the side views of a run's further solids, after the first
 /// in [`STAIR_RUN_PROFILE_FIELD`]: a riserless run's treads (#357).
 pub const STAIR_RUN_PIECES_FIELD: &str = "m_stair_run_pieces";
+/// Field holding the distance along a stair run's climb from its first
+/// riser line to its last, feet: its flight's `Length` as Revit's export
+/// gives it, with or without a riser at its top (#1016, RE-247).
+pub const STAIR_RUN_LENGTH_FIELD: &str = "m_stair_run_length";
 
 /// A stair run's treads and risers as [`STAIR_RUN_PROFILE_FIELD`] and its
 /// companions record them (RE-52).
@@ -5645,6 +5687,11 @@ fn push_stair_run_body(
     element
         .fields
         .push((STAIR_RUN_PROFILE_FIELD.into(), ring(profile)));
+    if let Some(&last) = sketch.risers.last() {
+        element
+            .fields
+            .push((STAIR_RUN_LENGTH_FIELD.into(), scalar(last)));
+    }
     if !rest.is_empty() {
         element.fields.push((
             STAIR_RUN_PIECES_FIELD.into(),

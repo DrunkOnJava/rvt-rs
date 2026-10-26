@@ -892,6 +892,14 @@ pub fn append_typed_production_elements(
         add_mullion_span(&mut reference_sets, &ifc_type, &decoded);
         add_door_window_quantities(&mut reference_sets, &ifc_type, &decoded);
         add_wall_quantities(&mut reference_sets, &ifc_type, &decoded);
+        add_body_quantities(
+            &mut reference_sets,
+            &ifc_type,
+            &decoded,
+            extrusion.as_ref(),
+            solid_shape.as_ref(),
+        );
+        add_stair_flight_quantities(&mut reference_sets, &ifc_type, &decoded);
         add_railing_height(&mut reference_sets, &ifc_type, &decoded);
         add_extend_to_structure(&mut reference_sets, &ifc_type, &decoded);
         let mut serial_sets = serial_number_property_sets(&decoded);
@@ -1115,13 +1123,37 @@ pub fn append_typed_production_elements(
             "IFCDUCTSEGMENT" => Some(("Qto_DuctSegmentBaseQuantities", None)),
             _ => None,
         };
+        // RE-247: a pipe's cross-section and outer surface are those of the
+        // cylinder it is drawn as (RE-131), as Revit's export writes them.
+        let pipe_radius = (decoded.class == "Pipe")
+            .then(|| crate::partition_schema_mvp::pipe_body_from_fields(&decoded.fields))
+            .flatten()
+            .map(|pipe| pipe.radius_feet)
+            .filter(|radius| radius.is_finite() && *radius > 0.0);
         if let Some((quantities, occurrence)) = segment_sets {
-            let quantities = segment_length.map(|length| PropertySet {
-                name: quantities.into(),
-                properties: vec![Property {
+            let quantities = segment_length.map(|length| {
+                let mut properties = vec![Property {
                     name: "Length".into(),
                     value: PropertyValue::PositiveLengthFeet(length),
-                }],
+                }];
+                if let Some(radius) = pipe_radius {
+                    properties.push(Property {
+                        name: "GrossCrossSectionArea".into(),
+                        value: PropertyValue::AreaSquareFeet(
+                            std::f64::consts::PI * radius * radius,
+                        ),
+                    });
+                    properties.push(Property {
+                        name: "OuterSurfaceArea".into(),
+                        value: PropertyValue::AreaSquareFeet(
+                            2.0 * std::f64::consts::PI * radius * length,
+                        ),
+                    });
+                }
+                PropertySet {
+                    name: quantities.into(),
+                    properties,
+                }
             });
             if let Some(set) = quantities {
                 entities.push(entities::IfcEntity::ElementPropertySet {
@@ -2009,6 +2041,112 @@ fn add_door_window_quantities(
                 value: PropertyValue::AreaSquareFeet(width * height),
             },
         ],
+    });
+}
+
+/// Add the base quantity a column's body gives to `sets` (#1016, RE-247):
+/// its `Length`, the depth of the extrusion it is drawn as, on a column
+/// joined by no `CleanPairGStep`
+/// ([`crate::partition_schema_mvp::COLUMN_UNJOINED_FIELD`]), which Revit's
+/// export draws as that extrusion. A joined column's Length is left out:
+/// Revit's export draws 18 of the BIM4LCA office's at permit as a cut mesh
+/// and gives them none, and no field tells them from the others. None where
+/// another solid draws it. A curtain panel's `Width`, its box's larger side
+/// wherever Revit writes it, is left out too: Revit's export writes none on
+/// 3 of the office's panels that no field tells apart.
+fn add_body_quantities(
+    sets: &mut Vec<PropertySet>,
+    ifc_type: &str,
+    decoded: &DecodedElement,
+    extrusion: Option<&Extrusion>,
+    solid_shape: Option<&entities::SolidShape>,
+) {
+    let unjoined = decoded.fields.iter().any(|(name, value)| {
+        name == crate::partition_schema_mvp::COLUMN_UNJOINED_FIELD
+            && matches!(value, InstanceField::Bool(true))
+    });
+    if !unjoined {
+        return;
+    }
+    let (set, quantity) = match (ifc_type, extrusion, solid_shape) {
+        ("IFCCOLUMN", Some(body), None) => {
+            ("Qto_ColumnBaseQuantities", ("Length", body.height_feet))
+        }
+        ("IFCCOLUMN", _, Some(entities::SolidShape::PlacedExtrusion { depth_feet, .. })) => {
+            ("Qto_ColumnBaseQuantities", ("Length", *depth_feet))
+        }
+        _ => return,
+    };
+    let (name, feet) = quantity;
+    if !(feet.is_finite() && feet > 0.0) {
+        return;
+    }
+    sets.push(PropertySet {
+        name: set.into(),
+        properties: vec![Property {
+            name: name.into(),
+            value: PropertyValue::PositiveLengthFeet(feet),
+        }],
+    });
+}
+
+/// Add a stair run's `Qto_StairFlightBaseQuantities` to `sets` (#1016,
+/// RE-247): its `Length`, the distance from its first riser line to its last
+/// ([`crate::partition_schema_mvp::STAIR_RUN_LENGTH_FIELD`]), and its
+/// `NetVolume`, its side views' areas times the run's width, the solids
+/// [`STAIR_RUN_BODY_SOURCE`] draws (one, or a riserless run's treads). None
+/// for a run not drawn from its sketch.
+fn add_stair_flight_quantities(
+    sets: &mut Vec<PropertySet>,
+    ifc_type: &str,
+    decoded: &DecodedElement,
+) {
+    if ifc_type != "IFCSTAIRFLIGHT" || decoded.class != "StairsRun" {
+        return;
+    }
+    let Some(run) = crate::partition_schema_mvp::stair_run_body_from_fields(&decoded.fields)
+        .filter(|run| run.profile.len() >= 3)
+    else {
+        return;
+    };
+    let length = decoded.fields.iter().find_map(|(name, value)| match value {
+        InstanceField::Float { value, .. }
+            if name == crate::partition_schema_mvp::STAIR_RUN_LENGTH_FIELD =>
+        {
+            Some(*value)
+        }
+        _ => None,
+    });
+    let area: f64 = std::iter::once(&run.profile)
+        .chain(&run.pieces)
+        .map(|ring| {
+            ring.iter()
+                .zip(ring.iter().cycle().skip(1))
+                .map(|(p, q)| p[0] * q[1] - q[0] * p[1])
+                .sum::<f64>()
+                .abs()
+                / 2.0
+        })
+        .sum();
+    let volume = area * run.width_feet;
+    if !(volume.is_finite() && volume > 0.0) {
+        return;
+    }
+    let mut properties: Vec<Property> = length
+        .filter(|length| length.is_finite() && *length > 0.0)
+        .map(|length| Property {
+            name: "Length".into(),
+            value: PropertyValue::PositiveLengthFeet(length),
+        })
+        .into_iter()
+        .collect();
+    properties.push(Property {
+        name: "NetVolume".into(),
+        value: PropertyValue::VolumeCubicFeet(volume),
+    });
+    sets.push(PropertySet {
+        name: "Qto_StairFlightBaseQuantities".into(),
+        properties,
     });
 }
 
