@@ -2886,7 +2886,12 @@ impl StepWriter {
                                 name_esc = escape(name),
                             ),
                         );
-                        if let Some(&width) = wall_widths.get(h_idx) {
+                        // RE-244: only where its symbol cuts an outline
+                        // (RE-215), which Revit's export draws the opening
+                        // as an extrusion of; with no cut loop it writes no
+                        // quantities on the opening.
+                        let extruded = property_length(cut_width).is_some();
+                        if let (true, Some(&width)) = (extruded, wall_widths.get(h_idx)) {
                             let quantities = PropertySet {
                                 name: "Qto_OpeningElementBaseQuantities".into(),
                                 properties: vec![super::entities::Property {
