@@ -4352,9 +4352,41 @@ fn production_walker_stats(
     stats
 }
 
+/// Each element's type name, the `Reference` in any of its `Pset_` sets, by
+/// its index in `model.entities`: what an opening of the element's own
+/// geometry (a floor's sketch void, a face-hosted cut) carries as its
+/// `Pset_OpeningElementCommon.Reference`, as Revit's export writes it
+/// (RE-237).
+pub(crate) fn host_references(model: &IfcModel) -> std::collections::HashMap<usize, String> {
+    let mut out = std::collections::HashMap::new();
+    for entity in &model.entities {
+        let entities::IfcEntity::ElementPropertySet { element, set } = entity else {
+            continue;
+        };
+        if !set.name.starts_with("Pset_") || out.contains_key(element) {
+            continue;
+        }
+        let reference = set.properties.iter().find_map(|property| {
+            match (&property.name[..], &property.value) {
+                (
+                    "Reference",
+                    entities::PropertyValue::Identifier(text)
+                    | entities::PropertyValue::Label(text),
+                ) if !text.is_empty() => Some(text.clone()),
+                _ => None,
+            }
+        });
+        if let Some(reference) = reference {
+            out.insert(*element, reference);
+        }
+    }
+    out
+}
+
 /// The property values `write_step` writes in `Pset_` sets, counted as it
 /// emits them: every building element's own set and further sets, then each
-/// storey's sets and the building's when the model has a storey.
+/// storey's sets and the building's when the model has a storey, and an
+/// opening of its host's own geometry's `Reference` (RE-237).
 fn pset_property_value_count(model: &IfcModel) -> usize {
     let values = |set: &entities::PropertySet| {
         if set.name.starts_with("Pset_") {
@@ -4385,6 +4417,16 @@ fn pset_property_value_count(model: &IfcModel) -> usize {
             _ => 0,
         })
         .sum();
+    let references = host_references(model);
+    let openings = model
+        .entities
+        .iter()
+        .filter(|entity| match entity {
+            entities::IfcEntity::VoidOpening { host, .. }
+            | entities::IfcEntity::HostedCutOpening { host, .. } => references.contains_key(host),
+            _ => false,
+        })
+        .count();
     let storeys: usize = model
         .building_storeys
         .iter()
@@ -4398,7 +4440,7 @@ fn pset_property_value_count(model: &IfcModel) -> usize {
             model.building_storeys.len(),
         ))
     };
-    elements + storeys + building
+    elements + storeys + building + openings
 }
 
 fn export_confidence_summary(
