@@ -766,6 +766,13 @@ pub fn append_typed_production_elements(
                 .as_ref()
                 .map(|body| plan_axis_turn(rotation_radians, body)),
         });
+        let level_slab = level_slab(
+            &ifc_type,
+            &decoded,
+            extrusion.as_ref(),
+            solid_shape.is_some(),
+            property_set.as_ref(),
+        );
         let opening_host = pending_host_id;
         if !policy.include_geometry {
             location_feet = None;
@@ -1141,6 +1148,9 @@ pub fn append_typed_production_elements(
                     }],
                 },
             });
+        }
+        if level_slab {
+            add_level_slab_pitch(&mut reference_sets);
         }
         // RE-154: the common property sets' Reference, the type's name;
         // RE-156: the shared parameter Serial Number.
@@ -1868,6 +1878,63 @@ fn add_extend_to_structure(sets: &mut Vec<PropertySet>, ifc_type: &str, decoded:
         Some(set) => set.properties.push(property),
         None => sets.push(PropertySet {
             name: "Pset_WallCommon".into(),
+            properties: vec![property],
+        }),
+    }
+}
+
+/// Whether a slab's top is known to lie level, so that it gets `PitchAngle`
+/// 0 in its `Pset_SlabCommon`: revit-ifc's `SlopeCalculator` (CLEANROOM.md
+/// source 5) gives a slab with no sloped extrusion and no location curve
+/// the slope of its largest upward face (RE-238). A stair landing drawn from
+/// its top down its type's thickness (RE-214) is level, and so is a slab
+/// drawn as an extrusion whose depth is its type's layers' total
+/// thickness, as a sloped or shape-edited slab's record box is deeper than
+/// its layers. Any other slab gets nothing: on the BIM4LCA office the
+/// record boxes of 8 sloped floors are drawn level, and Revit gives them
+/// 1.9 to 24 degrees.
+fn level_slab(
+    ifc_type: &str,
+    decoded: &DecodedElement,
+    extrusion: Option<&Extrusion>,
+    has_solid_shape: bool,
+    property_set: Option<&PropertySet>,
+) -> bool {
+    const TOLERANCE_FEET: f64 = 1e-3;
+    if ifc_type != "IFCSLAB" {
+        return false;
+    }
+    let landing = property_set
+        .iter()
+        .flat_map(|set| &set.properties)
+        .any(|property| {
+            property.name == "BodySource"
+                && matches!(&property.value, PropertyValue::Text(text) if text == LANDING_SLAB_BODY_SOURCE)
+        });
+    let layered = !has_solid_shape
+        && extrusion.is_some_and(|body| {
+            crate::partition_schema_mvp::element_layers_from_fields(&decoded.fields)
+                .filter(|layers| layers.stacked && !layers.layers.is_empty())
+                .is_some_and(|layers| {
+                    let total: f64 = layers.layers.iter().map(|layer| layer.width_feet).sum();
+                    (total - body.height_feet).abs() <= TOLERANCE_FEET
+                })
+        });
+    landing || layered
+}
+
+/// Add `PitchAngle` 0 to the `Pset_SlabCommon` among `sets` of a slab
+/// [`level_slab`] finds level, read before a mode without geometry strips
+/// its body.
+fn add_level_slab_pitch(sets: &mut Vec<PropertySet>) {
+    let property = Property {
+        name: "PitchAngle".into(),
+        value: PropertyValue::AngleRadians(0.0),
+    };
+    match sets.iter_mut().find(|set| set.name == "Pset_SlabCommon") {
+        Some(set) => set.properties.push(property),
+        None => sets.push(PropertySet {
+            name: "Pset_SlabCommon".into(),
             properties: vec![property],
         }),
     }

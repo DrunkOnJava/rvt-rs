@@ -9,8 +9,8 @@ Revit's export relates to an object is keyed by the object (an element by its `T
 `Name`, a storey by its `Name`, the building as `building`), the set's name
 and the property's name. For each key Revit writes, the rvt-rs export either
 has the same value (value type and value as written, numbers within a
-relative 1e-5, lengths in metres from each file's own length unit), a
-different one, or none. rvt-rs's own sets
+relative 1e-5, lengths in metres from each file's own length unit, plane
+angles in radians from its angle unit), a different one, or none. rvt-rs's own sets
 (`RvtElementRecordGeometry` and other non-`Pset_` sets) are left out, as are
 objects rvt-rs does not write at all.
 
@@ -49,12 +49,14 @@ def key_of(obj):
     return f"tag:{tag}" if tag else None
 
 
-def value_of(value, metres_per_unit):
+def value_of(value, metres_per_unit, radians_per_unit=1.0):
     if value is None:
         return None
     raw = value.wrappedValue
     if "LengthMeasure" in value.is_a():
         raw = raw * metres_per_unit
+    elif value.is_a("IfcPlaneAngleMeasure"):
+        raw = raw * radians_per_unit
     if isinstance(raw, (tuple, list)):
         raw = tuple(raw)
     return (value.is_a(), raw)
@@ -139,6 +141,8 @@ def properties(path):
     f = ifcopenshell.open(path)
     ifc2x3 = f.schema == "IFC2X3"
     metres_per_unit = ifcopenshell.util.unit.calculate_unit_scale(f)
+    # A plane angle is compared in radians, whatever unit each file writes.
+    radians_per_unit = ifcopenshell.util.unit.calculate_unit_scale(f, "PLANEANGLEUNIT")
     out = {}
     objects = set()
     entities = {}
@@ -170,14 +174,14 @@ def properties(path):
                 if ifc2x3 and (name, prop.Name) in IFC2X3_OWN_SET:
                     name = "own:" + name
                 if prop.is_a("IfcPropertySingleValue"):
-                    out[(key, name, prop.Name)] = value_of(prop.NominalValue, metres_per_unit)
+                    out[(key, name, prop.Name)] = value_of(prop.NominalValue, metres_per_unit, radians_per_unit)
                 elif prop.is_a("IfcPropertyEnumeratedValue"):
                     values = tuple(
-                        value_of(v, metres_per_unit) for v in prop.EnumerationValues or ()
+                        value_of(v, metres_per_unit, radians_per_unit) for v in prop.EnumerationValues or ()
                     )
                     out[(key, name, prop.Name)] = ("enumerated", values)
                 elif prop.is_a("IfcPropertyListValue"):
-                    values = tuple(value_of(v, metres_per_unit) for v in prop.ListValues or ())
+                    values = tuple(value_of(v, metres_per_unit, radians_per_unit) for v in prop.ListValues or ())
                     out[(key, name, prop.Name)] = ("list", values)
     return out, objects, entities, ifc2x3
 
