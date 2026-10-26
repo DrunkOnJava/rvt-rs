@@ -18,7 +18,9 @@ left out. Where Revit's export writes no base quantities at all (no
 `Qto_` IfcElementQuantity, nor IFC2X3's `BaseQuantities`), its export setup
 had "Export base quantities" off (RE-242), and the quantities rvt-rs writes
 are counted apart, not as values Revit does not write: `rvt-ifc
---no-base-quantities` leaves them out.
+--no-base-quantities` leaves them out. A quantity Revit's export writes that
+is known to be wrong (RE-235 §5, `REVIT_DEFECTS`) is left out of rvt-rs's
+export and counted apart here, not as missing.
 
 It prints the totals, a line per (set, quantity): how many values Revit
 writes on objects rvt-rs also writes, how many are equal, how many differ
@@ -50,6 +52,14 @@ IFC4_LENGTH_QUANTITY = {
     "IfcDuctSegment": "Qto_DuctSegmentBaseQuantities",
 }
 
+# Quantities Revit's export writes that are known to be wrong (RE-235 §5), by
+# set and quantity, with the predefined type of Revit's object they are wrong
+# on: a curtain mullion's CrossSectionArea grows with its length and is never
+# its section's area.
+REVIT_DEFECTS = {
+    ("Qto_MemberBaseQuantities", "CrossSectionArea"): "MULLION",
+}
+
 KINDS = {
     "IfcQuantityLength": ("LengthValue", "LENGTHUNIT"),
     "IfcQuantityArea": ("AreaValue", "AREAUNIT"),
@@ -71,6 +81,19 @@ def scales(f):
     return out
 
 
+def predefined_type(product):
+    """An object's predefined type, or its type object's where its own is
+    unset, NOTDEFINED or USERDEFINED."""
+    own = getattr(product, "PredefinedType", None)
+    if own not in (None, "NOTDEFINED", "USERDEFINED"):
+        return own
+    for rel in getattr(product, "IsTypedBy", None) or ():
+        typed = getattr(rel.RelatingType, "PredefinedType", None)
+        if typed not in (None, "NOTDEFINED", "USERDEFINED"):
+            return typed
+    return own
+
+
 def quantities(path, entities_of=None):
     """(object key, set, quantity) -> (entity, SI value), the keys of every
     object, each object's entity by key, and how many quantities carry
@@ -82,6 +105,7 @@ def quantities(path, entities_of=None):
     out = {}
     objects = set()
     entities = {}
+    predefined = {}
     own_unit = 0
     if f.schema == "IFC2X3" and entities_of is not None:
         for rel in f.by_type("IfcRelDefinesByProperties"):
@@ -104,6 +128,7 @@ def quantities(path, entities_of=None):
         if key:
             objects.add(key)
             entities[key] = product.is_a()
+            predefined[key] = predefined_type(product)
     for rel in f.by_type("IfcRelDefinesByProperties"):
         definition = rel.RelatingPropertyDefinition
         if not definition.is_a("IfcElementQuantity") or not (definition.Name or "").startswith("Qto_"):
@@ -127,7 +152,7 @@ def quantities(path, entities_of=None):
     base = any(
         (q.Name or "").startswith("Qto_") or q.Name == "BaseQuantities" for q in f.by_type("IfcElementQuantity")
     )
-    return out, objects, entities, own_unit, base
+    return out, objects, entities, own_unit, base, predefined
 
 
 def relative(a, b):
@@ -149,13 +174,17 @@ def main(argv):
     if len(args) != 2:
         print(__doc__, file=sys.stderr)
         return 2
-    ours, our_objects, our_entities, our_own, _ = quantities(args[0])
-    theirs, their_objects, their_entities, their_own, their_base = quantities(args[1], our_entities)
+    ours, our_objects, our_entities, our_own, _, _ = quantities(args[0])
+    theirs, _, their_entities, their_own, their_base, their_predefined = quantities(args[1], our_entities)
     rows = collections.defaultdict(lambda: [0, 0, 0, 0])
     missing_classes = collections.defaultdict(collections.Counter)
     differences = []
+    defects = collections.Counter()
     for (key, qset, name), value in sorted(theirs.items()):
         if key not in our_objects:
+            continue
+        if REVIT_DEFECTS.get((qset, name), False) == their_predefined.get(key):
+            defects[(qset, name)] += 1
             continue
         row = rows[(qset, name)]
         row[0] += 1
@@ -184,6 +213,8 @@ def main(argv):
         )
         for (qset, name), n in sorted(setting_off.items()):
             print(f"  {qset}.{name}: {n}")
+    for (qset, name), n in sorted(defects.items()):
+        print(f"Revit values known to be wrong, left out (RE-235 §5): {qset}.{name} {n}")
     if our_own or their_own:
         print(f"quantities with their own unit, not scored: rvt-rs {our_own}, Revit {their_own}")
     for (qset, name), (n, equal, different, missing) in sorted(rows.items()):
