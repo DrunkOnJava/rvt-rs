@@ -9,8 +9,9 @@ both files write, it takes rvt-rs's body as a world-space box (IfcOpenShell's
 geometry), its axis the box side equal to Revit's `Length`, and counts the
 ends free of every other member's box (an end is covered where a point just
 past its centre lies in another member's box, a 1 mm margin). It tallies
-Revit's count of ends against the free ends rvt-rs finds, and lists up to 30
-where they differ.
+Revit's count of ends against the free ends rvt-rs finds, and against the
+world axis the member runs along and its type, and lists up to 30 where the
+count and the free ends differ.
 
 Usage:
 
@@ -86,6 +87,9 @@ def main(argv):
         return False
 
     tally = collections.Counter()
+    by_axis = collections.Counter()
+    by_type = collections.Counter()
+    types = {f"tag:{m.Tag}": (getattr(m, "ObjectType", None) or "-").replace(" ", "_") for m in ifcopenshell.open(args[1]).by_type("IfcMember") if m.Tag}
     differ = []
     for i, k in enumerate(keys):
         r = revit.get(k, {})
@@ -113,11 +117,19 @@ def main(argv):
             point[axis] = (hi[i][axis] if sign > 0 else lo[i][axis]) + sign * 2 * MARGIN
             free += not covered(point, i)
         tally[(revit_ends, free)] += 1
+        by_axis[("xyz"[axis], revit_ends)] += 1
+        by_type[(types.get(k, "-"), "z" if axis == 2 else "xy", revit_ends)] += 1
         if revit_ends != free:
             differ.append((k, revit_ends, free, axis, size))
     print("Revit's ends counted, free ends rvt-rs finds: members")
     for (a, b), n in sorted(tally.items(), key=lambda kv: -kv[1]):
         print(f"  {a} {b}: {n}")
+    print("world axis, Revit's ends counted: members")
+    for (a, b), n in sorted(by_axis.items()):
+        print(f"  {a} {b}: {n}")
+    print("Revit's type, vertical (z) or not, Revit's ends counted: members")
+    for (t, a, b), n in sorted(by_type.items(), key=lambda kv: -kv[1])[:30]:
+        print(f"  {t} {a} {b}: {n}")
     print("differing:")
     for k, a, b, axis, size in differ[:30]:
         print(f"  {k} Revit {a} free {b} axis {'xyz'[axis]} size {np.round(size, 4).tolist()}")
