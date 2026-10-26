@@ -7,7 +7,9 @@ Reads `examples/probe_re251_wall_numbers.rs`'s `rec <tag> <class>
 `Qto_WallBaseQuantities` Revit writes, in feet, square feet or cubic feet as
 its kind is a length, area or volume, it counts the walls on which each field
 holds that number (a relative 1e-6), and prints, per quantity, how many walls
-carry it and the 8 fields equal on the most; then, for each quantity whose
+carry it, on how many any field holds it (and, for the face planes'
+envelopes, `Plane#k.m_Envelope`, on how many any of them does), and the 8
+fields equal on the most; then, for each quantity whose
 best field holds on some walls but not all, ranks every field's value against
 whether that best field is the quantity (`record_scalars_vs_ifc.py`'s
 ranking), to tell the walls it holds on.
@@ -73,7 +75,9 @@ def main():
     print(f"probe: {len(rows)} walls")
     for name, n in sorted(totals.items()):
         best = ", ".join(f"{f} {k}" for f, k in hits[name].most_common(8)) or "none"
-        print(f"{name}: {n} walls; {best}")
+        tags = {t for (q, _), by in equal.items() if q == name for t, ok in by.items() if ok}
+        planes = {t for (q, f), by in equal.items() if q == name and f.split(".")[0].split("#")[0] == "Plane" and ".m_Envelope." in f for t, ok in by.items() if ok}
+        print(f"{name}: {n} walls, {len(tags)} with some field equal, {len(planes)} with a face plane's envelope; {best}")
     truths = {}
     for name, n in totals.items():
         if not hits[name]:
