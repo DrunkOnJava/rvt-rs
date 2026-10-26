@@ -5,9 +5,10 @@ Research tool for #35 (parameters), `reports/element-framing/RE-153-room-finishe
 and `RE-154-pset-parameters.md`.
 
 Every single-value, enumerated and list property of every property set
-Revit's export relates to an object is keyed by the object (an element by its `Tag`, a space by its
-`Name`, a storey by its `Name`, the building as `building`), the set's name
-and the property's name. For each key Revit writes, the rvt-rs export either
+Revit's export relates to an object, or a type object holds itself
+(`HasPropertySets`), is keyed by the object (an element by its `Tag`, a space by its
+`Name`, a storey by its `Name`, the building as `building`, a type object as
+`type:<Tag>`), the set's name and the property's name. For each key Revit writes, the rvt-rs export either
 has the same value (value type and value as written, numbers within a
 relative 1e-5, lengths in metres from each file's own length unit, plane
 angles in radians from its angle unit), a different one, or none. rvt-rs's own sets
@@ -114,7 +115,7 @@ IFC4_TYPE_SETS = {
 # Pset_PipeSegmentOccurrence; a segment's length, and IFC2X3's
 # Pset_DuctSegmentTypeCommon.Length, is in IFC4's base quantities, an
 # IfcElementQuantity this scorer does not read, so those lengths are counted
-# apart rather than scored.
+# apart here and scored by qtos_vs_ifc.py (#1016).
 IFC2X3_INVERT = ("Pset_FlowSegmentPipeSegment", "InvertElevation")
 IFC2X3_LENGTHS = {
     ("Pset_FlowSegmentPipeSegment", "Length"),
@@ -151,38 +152,55 @@ def properties(path):
         if key:
             objects.add(key)
             entities[key] = product.is_a()
+    def add(key, pset):
+        for prop in pset.HasProperties or ():
+            name = pset.Name
+            if ifc2x3 and name == "Pset_SpaceCommon" and prop.Name in IFC2X3_SPACE_COVERINGS:
+                name = "Pset_SpaceCoveringRequirements"
+            if ifc2x3 and name == IFC2X3_QUANTITY_TAKE_OFF and prop.Name == "Reference":
+                name = "Pset_EnvironmentalImpactIndicators"
+            if ifc2x3 and (name, prop.Name) == IFC2X3_INVERT:
+                name = "Pset_PipeSegmentOccurrence"
+            if ifc2x3 and (name, prop.Name) in IFC2X3_LENGTHS:
+                name = "quantities:" + name
+            if ifc2x3 and (name, prop.Name) in IFC2X3_TWICE:
+                name = "twice:" + name
+            if ifc2x3 and (name, prop.Name) in IFC2X3_OWN_SET:
+                name = "own:" + name
+            if prop.is_a("IfcPropertySingleValue"):
+                out[(key, name, prop.Name)] = value_of(prop.NominalValue, metres_per_unit, radians_per_unit)
+            elif prop.is_a("IfcPropertyEnumeratedValue"):
+                values = tuple(
+                    value_of(v, metres_per_unit, radians_per_unit) for v in prop.EnumerationValues or ()
+                )
+                out[(key, name, prop.Name)] = ("enumerated", values)
+            elif prop.is_a("IfcPropertyListValue"):
+                values = tuple(value_of(v, metres_per_unit, radians_per_unit) for v in prop.ListValues or ())
+                out[(key, name, prop.Name)] = ("list", values)
+
+    def standard(pset):
+        return pset.is_a("IfcPropertySet") and (pset.Name or "").startswith("Pset_")
+
     for rel in f.by_type("IfcRelDefinesByProperties"):
         pset = rel.RelatingPropertyDefinition
-        if not pset.is_a("IfcPropertySet") or not (pset.Name or "").startswith("Pset_"):
+        if not standard(pset):
             continue
         for obj in rel.RelatedObjects:
             key = key_of(obj)
-            if not key:
-                continue
-            for prop in pset.HasProperties or ():
-                name = pset.Name
-                if ifc2x3 and name == "Pset_SpaceCommon" and prop.Name in IFC2X3_SPACE_COVERINGS:
-                    name = "Pset_SpaceCoveringRequirements"
-                if ifc2x3 and name == IFC2X3_QUANTITY_TAKE_OFF and prop.Name == "Reference":
-                    name = "Pset_EnvironmentalImpactIndicators"
-                if ifc2x3 and (name, prop.Name) == IFC2X3_INVERT:
-                    name = "Pset_PipeSegmentOccurrence"
-                if ifc2x3 and (name, prop.Name) in IFC2X3_LENGTHS:
-                    name = "quantities:" + name
-                if ifc2x3 and (name, prop.Name) in IFC2X3_TWICE:
-                    name = "twice:" + name
-                if ifc2x3 and (name, prop.Name) in IFC2X3_OWN_SET:
-                    name = "own:" + name
-                if prop.is_a("IfcPropertySingleValue"):
-                    out[(key, name, prop.Name)] = value_of(prop.NominalValue, metres_per_unit, radians_per_unit)
-                elif prop.is_a("IfcPropertyEnumeratedValue"):
-                    values = tuple(
-                        value_of(v, metres_per_unit, radians_per_unit) for v in prop.EnumerationValues or ()
-                    )
-                    out[(key, name, prop.Name)] = ("enumerated", values)
-                elif prop.is_a("IfcPropertyListValue"):
-                    values = tuple(value_of(v, metres_per_unit, radians_per_unit) for v in prop.ListValues or ())
-                    out[(key, name, prop.Name)] = ("list", values)
+            if key:
+                add(key, pset)
+    # A type object holds its sets itself (HasPropertySets, RE-210 §2), keyed
+    # by its Tag, the type's ElementId (#1018).
+    for kind in f.by_type("IfcTypeObject"):
+        tag = getattr(kind, "Tag", None)
+        if not tag:
+            continue
+        key = f"type:{tag}"
+        objects.add(key)
+        entities[key] = kind.is_a()
+        for pset in kind.HasPropertySets or ():
+            if standard(pset):
+                add(key, pset)
     return out, objects, entities, ifc2x3
 
 
