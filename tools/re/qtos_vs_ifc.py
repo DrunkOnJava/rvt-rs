@@ -53,11 +53,16 @@ IFC4_LENGTH_QUANTITY = {
 }
 
 # Quantities Revit's export writes that are known to be wrong (RE-235 §5), by
-# set and quantity, with the predefined type of Revit's object they are wrong
-# on: a curtain mullion's CrossSectionArea grows with its length and is never
-# its section's area.
+# set and quantity, with what they are wrong on: a predefined type of Revit's
+# object, or a class of an object of the same key. A curtain mullion's
+# CrossSectionArea grows with its length and is never its section's area; a
+# door's opening's Width is its vertical extent and its Height its horizontal
+# one, where IFC4 defines a wall opening's the other way (RE-244). An
+# opening is keyed by the Tag of the door filling it.
 REVIT_DEFECTS = {
     ("Qto_MemberBaseQuantities", "CrossSectionArea"): "MULLION",
+    ("Qto_OpeningElementBaseQuantities", "Width"): "IfcDoor",
+    ("Qto_OpeningElementBaseQuantities", "Height"): "IfcDoor",
 }
 
 KINDS = {
@@ -128,7 +133,7 @@ def quantities(path, entities_of=None):
         if key:
             objects.add(key)
             entities[key] = product.is_a()
-            predefined[key] = predefined_type(product)
+            predefined.setdefault(key, set()).update({predefined_type(product), product.is_a()})
     for rel in f.by_type("IfcRelDefinesByProperties"):
         definition = rel.RelatingPropertyDefinition
         if not definition.is_a("IfcElementQuantity") or not (definition.Name or "").startswith("Qto_"):
@@ -183,7 +188,8 @@ def main(argv):
     for (key, qset, name), value in sorted(theirs.items()):
         if key not in our_objects:
             continue
-        if REVIT_DEFECTS.get((qset, name), False) == their_predefined.get(key):
+        scope = REVIT_DEFECTS.get((qset, name))
+        if scope is not None and scope in their_predefined.get(key, ()):
             defects[(qset, name)] += 1
             continue
         row = rows[(qset, name)]
