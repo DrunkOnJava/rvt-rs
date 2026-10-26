@@ -119,6 +119,14 @@ wanted() { # step
   done
   return 1
 }
+# Whether a step is in a scorer list or is one of the steps run by name.
+listed() { # step
+  local s
+  for s in $IFC_SCORERS $GLB_SCORERS info gltf schema witness none; do
+    [ "$s" = "$1" ] && return 0
+  done
+  return 1
+}
 wanted_glb() {
   local s
   wanted gltf && return 0
@@ -240,9 +248,7 @@ measure_model() { # name rvt ref
       score "$dir/$s.txt" "$SCORERS/$s.py" "$dir/model.glb" "$MODELS/$ref"
     done
     for s in "${STEPS[@]}"; do
-      case " $IFC_SCORERS $GLB_SCORERS info gltf schema witness none " in
-        *" $s "*) continue ;;
-      esac
+      listed "$s" && continue
       [ -f "$SCORERS/$s.py" ] || continue
       score "$dir/$s.txt" "$SCORERS/$s.py" "$dir/model.ifc" "$MODELS/$ref"
     done
