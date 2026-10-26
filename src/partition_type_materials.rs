@@ -18,7 +18,7 @@
 //! is the type's ([`type_material_names_2023`]).
 
 use crate::RevitFile;
-use crate::partition_element_records::bbox_marker;
+use crate::partition_element_records::supports_revit_version;
 use std::collections::{BTreeMap, BTreeSet};
 
 /// Largest map entry count read.
@@ -193,7 +193,7 @@ fn map_at(
 /// map is present with no names (RE-84). Empty for a release whose
 /// element records are not decoded, or whose material names are not read.
 pub fn type_material_names(rf: &mut RevitFile, revit_version: u32) -> BTreeMap<u32, Vec<String>> {
-    if bbox_marker(revit_version).is_none() {
+    if !supports_revit_version(revit_version) {
         return BTreeMap::new();
     }
     let Ok(records) = crate::elem_table::parse_records(rf) else {

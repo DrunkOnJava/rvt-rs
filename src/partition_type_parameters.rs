@@ -26,7 +26,7 @@
 //! (RE-103).
 
 use crate::RevitFile;
-use crate::partition_element_records::bbox_marker;
+use crate::partition_element_records::supports_revit_version;
 use std::collections::{BTreeMap, BTreeSet};
 
 /// The type parameters read, by BuiltInParameter id, with the name Revit
@@ -91,7 +91,7 @@ pub fn type_text_parameters(
     rf: &mut RevitFile,
     revit_version: u32,
 ) -> BTreeMap<u32, BTreeMap<&'static str, String>> {
-    if bbox_marker(revit_version).is_none() {
+    if !supports_revit_version(revit_version) {
         return BTreeMap::new();
     }
     let Ok(records) = crate::elem_table::parse_records(rf) else {
@@ -235,7 +235,7 @@ pub fn type_window_openings(
     revit_version: u32,
     types: &BTreeSet<u32>,
 ) -> BTreeMap<u32, WindowTypeOpening> {
-    if bbox_marker(revit_version).is_none() || types.is_empty() {
+    if !supports_revit_version(revit_version) || types.is_empty() {
         return BTreeMap::new();
     }
     let Ok(records) = crate::elem_table::parse_records(rf) else {
@@ -299,7 +299,7 @@ pub fn type_door_openings(
     revit_version: u32,
     types: &BTreeSet<u32>,
 ) -> BTreeMap<u32, DoorTypeOpening> {
-    if bbox_marker(revit_version).is_none() || types.is_empty() {
+    if !supports_revit_version(revit_version) || types.is_empty() {
         return BTreeMap::new();
     }
     let Ok(records) = crate::elem_table::parse_records(rf) else {
@@ -339,7 +339,7 @@ pub fn type_door_sizes(
     revit_version: u32,
     types: &BTreeSet<u32>,
 ) -> BTreeMap<u32, DoorTypeSize> {
-    if bbox_marker(revit_version).is_none() || types.is_empty() {
+    if !supports_revit_version(revit_version) || types.is_empty() {
         return BTreeMap::new();
     }
     let Ok(records) = crate::elem_table::parse_records(rf) else {
@@ -398,7 +398,7 @@ pub fn type_i_sections(
     revit_version: u32,
     types: &BTreeSet<u32>,
 ) -> BTreeMap<u32, ISection> {
-    if bbox_marker(revit_version).is_none() || types.is_empty() {
+    if !supports_revit_version(revit_version) || types.is_empty() {
         return BTreeMap::new();
     }
     let Ok(records) = crate::elem_table::parse_records(rf) else {
@@ -505,7 +505,7 @@ pub fn type_hollow_sections(
     revit_version: u32,
     types: &BTreeSet<u32>,
 ) -> BTreeMap<u32, HollowSection> {
-    if bbox_marker(revit_version).is_none() || types.is_empty() {
+    if !supports_revit_version(revit_version) || types.is_empty() {
         return BTreeMap::new();
     }
     let Ok(records) = crate::elem_table::parse_records(rf) else {

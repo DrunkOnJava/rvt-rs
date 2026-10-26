@@ -3779,7 +3779,7 @@ fn attach_stair_names(rf: &mut RevitFile, revit_version: u32, products: &mut [De
     if stair_names.is_empty() {
         return;
     }
-    let Some(marker) = per::bbox_marker(revit_version) else {
+    let Some(marker) = per::file_bbox_marker(rf, revit_version) else {
         return;
     };
     let assigned = rf.memoised_second_prologue_ids();

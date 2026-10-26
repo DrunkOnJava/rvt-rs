@@ -498,8 +498,9 @@ pub const BBOX_MARKER_2026: [u8; 8] = [0x61, 0x01, 0xff, 0xff, 0xff, 0xff, 0xf1,
 /// Autodesk's 2027 sample files (RE-179).
 pub const BBOX_MARKER_2027: [u8; 8] = [0x64, 0x01, 0xff, 0xff, 0xff, 0xff, 0x10, 0x06];
 
-/// The bbox marker of `revit_version`, or `None` where the record shape
-/// is not proven (fail closed).
+/// The bbox marker measured on `revit_version`'s files, or `None` where no
+/// constant is recorded. A scan takes its marker from the file's own schema
+/// ([`file_bbox_marker`]); these constants are the cross-check.
 pub fn bbox_marker(revit_version: u32) -> Option<[u8; 8]> {
     match revit_version {
         2024 => Some(BBOX_MARKER),
@@ -518,16 +519,21 @@ pub fn schema_bbox_marker(rf: &mut RevitFile) -> Option<[u8; 8]> {
 }
 
 /// The bbox marker to scan `rf` with, on a release whose record shape is
-/// proven: the release's measured constant ([`bbox_marker`]), confirmed by
-/// the file's own schema ([`schema_bbox_marker`]). A file whose schema
-/// gives another marker is not scanned (fail closed); one whose schema
-/// does not parse keeps the measured constant. On every 2024 and 2025 file
-/// measured the two agree (#421).
+/// proven: the one the file's own schema gives ([`schema_bbox_marker`]),
+/// cross-checked against the release's measured constant ([`bbox_marker`]).
+/// A file whose schema gives another marker than the constant is not
+/// scanned (fail closed). One whose schema does not parse keeps the
+/// constant, and a release with no constant needs the schema. On every
+/// 2024 to 2027 file measured the two agree (#421).
 pub fn file_bbox_marker(rf: &mut RevitFile, revit_version: u32) -> Option<[u8; 8]> {
-    let measured = bbox_marker(revit_version).filter(|_| supports_revit_version(revit_version))?;
-    match schema_bbox_marker(rf) {
-        Some(schema) if schema != measured => None,
-        _ => Some(measured),
+    if !supports_revit_version(revit_version) {
+        return None;
+    }
+    let measured = bbox_marker(revit_version);
+    match (schema_bbox_marker(rf), measured) {
+        (Some(schema), Some(measured)) if schema != measured => None,
+        (Some(schema), _) => Some(schema),
+        (None, measured) => measured,
     }
 }
 
@@ -759,10 +765,11 @@ pub fn is_family_local_bbox(bbox: &[f64; 6]) -> bool {
     (bbox[0] + bbox[3]).abs() < 1e-6 && (bbox[1] + bbox[4]).abs() < 1e-6
 }
 
-/// Whether this release's partition element-record shape is proven.
+/// Whether this release's partition element-record shape is proven. The
+/// marker comes from each file's schema ([`file_bbox_marker`]), so this does
+/// not depend on a measured constant.
 pub fn supports_revit_version(revit_version: u32) -> bool {
     PARTITION_ELEMENT_RECORD_SUPPORTED_REVIT_VERSIONS.contains(&revit_version)
-        && bbox_marker(revit_version).is_some()
 }
 
 /// Decode the counted reference list whose `u32` length prefix sits
@@ -965,6 +972,10 @@ pub const PARTITION_RECORD_TRAILER_LEN: usize = 16;
 /// The `u16` at `+0x0c` of every partition record header: the release
 /// constant plus 28 (`0x059f` on 2024, `0x05c7` on 2025), which is 12
 /// below the constant the release's [`bbox_marker`] ends with.
+///
+/// The schema's `ElementHeader` tag is 12 below its `ElementParents` tag
+/// on every file of 2019 to 2027 measured, but 9 below on 2016 to 2018
+/// (#421), so this does not hold for a marker of those releases.
 pub fn record_prologue_constant(marker: &[u8; 8]) -> u16 {
     u16::from_le_bytes([marker[6], marker[7]]).wrapping_sub(12)
 }

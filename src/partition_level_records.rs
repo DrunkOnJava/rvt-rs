@@ -886,12 +886,12 @@ fn level_records(
         }
         return records;
     }
-    let (Some(marker), Some(bbox_marker)) = (
-        record_marker(revit_version),
-        crate::partition_element_records::bbox_marker(revit_version),
-    ) else {
+    let Some(bbox_marker) = crate::partition_element_records::file_bbox_marker(rf, revit_version)
+    else {
         return Vec::new();
     };
+    let mut marker = [0u8; 6];
+    marker.copy_from_slice(&bbox_marker[2..]);
     let mut records = Vec::new();
     for stream in rf.partition_stream_names() {
         let Ok(inflated) = rf.inflated_partition(&stream) else {

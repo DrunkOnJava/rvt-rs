@@ -275,7 +275,8 @@ fn owner_ids_are_declared_element_ids() {
 #[test]
 fn declared_element_ids_returns_sorted_deduped_set() {
     // Project 2023 declares ~2615 ids; we expect at least 2000 unique
-    // sequential ids starting at 1.
+    // sequential ids starting at 0, the table's first record at 0x06
+    // (#152, #553).
     let Some(p) = project_file("Revit_IFC5_Einhoven.rvt") else {
         return;
     };
@@ -291,6 +292,7 @@ fn declared_element_ids_returns_sorted_deduped_set() {
         ids.windows(2).all(|w| w[0] < w[1]),
         "ids not strictly sorted"
     );
-    // First declared id is 1 on this file.
-    assert_eq!(ids[0], 1);
+    // The first record, all zeros but its owner, declares id 0; the
+    // sequential ids follow it from 1.
+    assert_eq!(&ids[..2], &[0, 1]);
 }

@@ -151,6 +151,8 @@ mod rvt_inspect_cli;
 mod rvt_schedule_cli;
 #[path = "../samples.rs"]
 mod samples;
+#[path = "../schema_bbox_marker.rs"]
+mod schema_bbox_marker;
 #[path = "../schema_registry_catalogs.rs"]
 mod schema_registry_catalogs;
 #[path = "../segment_length.rs"]
