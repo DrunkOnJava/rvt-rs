@@ -2868,30 +2868,9 @@ impl StepWriter {
             }
         }
 
-        // RE-237: each element's type name, its `Reference` in any of its
-        // standard sets, for the openings of its own geometry below.
-        let mut host_references: HashMap<usize, String> = HashMap::new();
-        for entity in &model.entities {
-            let super::entities::IfcEntity::ElementPropertySet { element, set } = entity else {
-                continue;
-            };
-            if !set.name.starts_with("Pset_") || host_references.contains_key(element) {
-                continue;
-            }
-            let reference = set.properties.iter().find_map(|property| {
-                match (&property.name[..], &property.value) {
-                    (
-                        "Reference",
-                        super::entities::PropertyValue::Identifier(text)
-                        | super::entities::PropertyValue::Label(text),
-                    ) if !text.is_empty() => Some(text.clone()),
-                    _ => None,
-                }
-            });
-            if let Some(reference) = reference {
-                host_references.insert(*element, reference);
-            }
-        }
+        // RE-237: each element's type name, for the openings of its own
+        // geometry below.
+        let host_references = super::host_references(model);
 
         // RE-151 (#227): an opening nothing fills, a hole in a floor's sketch.
         // As in Revit's export it is placed in its host's frame, its outline
@@ -3008,7 +2987,7 @@ impl StepWriter {
                     ]),
                     &gid(&[
                         "defines-by-properties",
-                        &opening_gid,
+                        opening_gid.as_str(),
                         "Pset_OpeningElementCommon",
                     ]),
                 );
