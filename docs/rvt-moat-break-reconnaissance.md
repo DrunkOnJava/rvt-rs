@@ -2211,3 +2211,7 @@ On the BIM4LCA office Revit's export draws 9,796 of 10,003 curtain mullions as o
 ## Addendum — RE-245 a door's or window's native record names its host (2026-10-26)
 
 A door's or window's current native record (RE-216) names the element it is set in, in its `FamilyInstance` object's `m_hostId`. Where its partition element record's reference list names several walls, the nearest one RE-85 takes is not always it: on the BIM4LCA office 11 doors were set in a neighbouring wall of the same kind. Taking the native host where it is an exported wall other than a curtain wall puts every one of the office's 463 doors and windows set in a wall in the wall Revit's export voids. Report: `reports/element-framing/RE-245-opening-native-host.md`.
+
+## Addendum — RE-244 a door's opening's quantities (2026-10-26)
+
+Revit's export gives the opening of a door or window whose symbol cuts an outline `Qto_OpeningElementBaseQuantities`: its `Depth` is the `Width` of the wall it voids on every one measured (187 office openings as built and at permit, 4 on R2025), and its `Width` and `Height` are its profile's extents along the profile's X and Y axes, which on every door opening measured put the opening's height in `Width`, against IFC4's definition (a wall opening's `Width` is horizontal). Where the symbol cuts no outline it writes the opening without quantities. rvt-rs writes the `Depth` and leaves the swapped values out. Report: `reports/element-framing/RE-244-opening-quantities.md`; tools: `tools/re/opening_axes_list.py`, `tools/re/opening_depth_list.py`.

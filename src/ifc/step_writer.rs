@@ -2151,6 +2151,30 @@ impl StepWriter {
         // contained in a storey — IFC4 treats them as "virtual"
         // elements that only live through IfcRelVoidsElement.
         let mut void_fill_triples: Vec<(usize, usize, Option<usize>, String)> = Vec::new();
+        // #1016 (RE-244): each wall's `Qto_WallBaseQuantities.Width`, the
+        // `Depth` of the openings its doors and windows cut, as Revit's export
+        // gives every one of them.
+        let wall_widths: HashMap<usize, f64> = model
+            .entities
+            .iter()
+            .filter_map(|entity| match entity {
+                super::entities::IfcEntity::ElementPropertySet { element, set }
+                    if set.name == "Qto_WallBaseQuantities" =>
+                {
+                    set.properties
+                        .iter()
+                        .find_map(|property| match &property.value {
+                            super::entities::PropertyValue::PositiveLengthFeet(width)
+                                if property.name == "Width" =>
+                            {
+                                Some((*element, *width))
+                            }
+                            _ => None,
+                        })
+                }
+                _ => None,
+            })
+            .collect();
         // #323: parts of an aggregate whose whole is a building element
         // reach the spatial structure through that whole, so they are left
         // out of the storey containment below.
@@ -2862,6 +2886,31 @@ impl StepWriter {
                                 name_esc = escape(name),
                             ),
                         );
+                        // RE-244: only where its symbol cuts an outline
+                        // (RE-215), which Revit's export draws the opening
+                        // as an extrusion of; with no cut loop it writes no
+                        // quantities on the opening.
+                        let extruded = property_length(cut_width).is_some();
+                        if let (true, Some(&width)) = (extruded, wall_widths.get(h_idx)) {
+                            let quantities = PropertySet {
+                                name: "Qto_OpeningElementBaseQuantities".into(),
+                                properties: vec![super::entities::Property {
+                                    name: "Depth".into(),
+                                    value: super::entities::PropertyValue::PositiveLengthFeet(
+                                        width,
+                                    ),
+                                }],
+                            };
+                            let set_key = [opening_gid.as_str(), quantities.name.as_str(), "0"]
+                                .join("\u{1f}");
+                            self.emit_property_set(
+                                owner_hist,
+                                opening_id,
+                                &quantities,
+                                &gid(&["property-set", &set_key]),
+                                &gid(&["defines-by-properties", &set_key]),
+                            );
+                        }
                         void_fill_triples.push((*h_idx, opening_id, Some(el_id), opening_gid));
                     }
                 }
