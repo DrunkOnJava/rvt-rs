@@ -1,27 +1,29 @@
-//! RE-252 (#1046, W7): each wall's centreline and the joins its native
-//! record names at its ends, for finding how Revit's wall Length follows
+//! RE-252 (#1046, W7): each wall's centreline, faces and the walls its native
+//! record joins at its ends, for finding how Revit's wall Length follows
 //! from them.
 //!
 //! FACT under test: revit-ifc's `LengthCalculator` (CLEANROOM.md source 5)
 //! takes a wall's `Qto_WallBaseQuantities.Length` from its Length
 //! parameter, which on the BIM4LCA office differs from the centreline's
 //! length on about 186 of 607 walls and is stored nowhere in the wall's
-//! record (RE-251). The record's `CDJoinInfo` objects each pair one of this
-//! wall's ends (`m_joinedEnd` 0 or 1, 3 where another wall meets its middle)
-//! with another element and that element's end, and each `JoinEndGStep` holds
-//! one end's join step. Hypothesis: the Length is the centreline less, or
-//! plus, a share of the thickness of the walls joined at its ends.
-//! `tools/re/wall_length_vs_ends.py` tests it against Revit's export.
+//! record (RE-251). `VWallDriver.m_controlJoinsSet` names, per end
+//! (`m_index`), the walls joined there and their ends; `CDJoinInfo` pairs a
+//! wall's side (`m_joinedEnd` 2 or 3) with the ends of walls that meet it.
+//! Hypothesis: the Length runs along the wall to where its body meets a face
+//! of a wall joined at each end. `tools/re/wall_length_vs_ends.py` tests it
+//! against Revit's export.
 //!
-//! Output, one JSON object per wall with a centreline:
-//! `id`, plan `start` and `end` and the type's `thickness` (feet), and
-//! `joins`, each `CDJoinInfo` as `[[this end, other id, other end], ...,
-//! wallJoinType]`, and `ends`, each `JoinEndGStep` as `[end, weakIdx,
-//! omitted id, omitted end]`; `control`, `VWallDriver.m_controlJoinsSet` as
-//! `[m_index, [[id, end], ...]]`; `keyref`, `SWall.m_wallKeyRef`,
-//! `m_locLineOffset` and `m_keyRefOffset`; `exterior`, the unit plan direction
-//! to the exterior face (RE-53); and `tweaks`, the ElementIds
-//! `WallJoinTweakGStep`'s `m_affectedEdgesTags` name.
+//! Output, one JSON object per `SWall` record: `id`; plan `start` and `end`
+//! and the type's `thickness` (feet), null where the partition reader gives
+//! the wall no centreline; `joins`, each `CDJoinInfo` as `[[id, end], ...,
+//! wallJoinType]`; `ends`, each `JoinEndGStep` as `[end, weakIdx, omitted
+//! id, omitted end]`; `keyref`, `SWall.m_wallKeyRef`, `m_locLineOffset` and
+//! `m_keyRefOffset`; `exterior`, the unit plan direction to the exterior
+//! face (RE-53); `control`, `VWallDriver.m_controlJoinsSet` as `[m_index,
+//! [[id, end], ...]]`; `tweaks`, the ElementIds `WallJoinTweakGStep`'s
+//! `m_affectedEdgesTags` name; `gline`, the record's `GLine` as `[origin x,
+//! origin y, direction x, direction y, start parameter, end parameter]`; and
+//! `planes`, each `Plane` as `[origin x, origin y, x axis x, x axis y]`.
 //!
 //! Usage:
 //!   cargo run --profile ci --example probe_re252_wall_ends -- MODEL.rvt > ends.jsonl
@@ -74,17 +76,37 @@ fn main() -> anyhow::Result<()> {
         })
         .collect();
     let ids: BTreeSet<u64> = axes.keys().copied().collect();
-    type Row = (Vec<String>, Vec<String>, String, BTreeSet<i64>, Vec<String>);
+    #[derive(Clone, Default)]
+    struct Row {
+        joins: Vec<String>,
+        ends: Vec<String>,
+        keyref: String,
+        tweaks: BTreeSet<i64>,
+        control: Vec<String>,
+        gline: Option<String>,
+        planes: Vec<String>,
+    }
     let mut rows: BTreeMap<u64, Row> = BTreeMap::new();
     extract_graphs(
         &mut rf,
         &Options {
-            selected_ids: ids.clone(),
+            selected_ids: ids,
+            selected_classes: BTreeSet::from(["SWall".to_string()]),
             ..Options::default()
         },
         |record| {
             let Some(graph) = record.graph.as_ref() else {
                 return Ok(());
+            };
+            let mut gline = None;
+            let mut planes = Vec::new();
+            let numbers = |value: Option<&Value>| -> Vec<f64> {
+                value
+                    .and_then(Value::as_array)
+                    .into_iter()
+                    .flatten()
+                    .filter_map(Value::as_f64)
+                    .collect()
             };
             let mut joins = Vec::new();
             let mut ends = Vec::new();
@@ -173,6 +195,24 @@ fn main() -> anyhow::Result<()> {
                             ));
                         }
                     }
+                    "GLine" if gline.is_none() => {
+                        let origin = numbers(object.fields.get("m_origin"));
+                        let dir = numbers(object.fields.get("m_dirVec"));
+                        let params = numbers(object.fields.get("m_endParams"));
+                        if origin.len() >= 2 && dir.len() >= 2 && params.len() == 2 {
+                            gline = Some(format!(
+                                "[{},{},{},{},{},{}]",
+                                origin[0], origin[1], dir[0], dir[1], params[0], params[1]
+                            ));
+                        }
+                    }
+                    "Plane" => {
+                        let origin = numbers(object.fields.get("m_origin"));
+                        let x = numbers(object.fields.get("m_xVec"));
+                        if origin.len() >= 2 && x.len() >= 2 {
+                            planes.push(format!("[{},{},{},{}]", origin[0], origin[1], x[0], x[1]));
+                        }
+                    }
                     "WallJoinTweakGStep" => {
                         if let Some(tags) = object
                             .fields
@@ -191,30 +231,45 @@ fn main() -> anyhow::Result<()> {
             }
             rows.insert(
                 record.identity.element_id,
-                (joins, ends, keyref, tweaks, control),
+                Row {
+                    joins,
+                    ends,
+                    keyref,
+                    tweaks,
+                    control,
+                    gline,
+                    planes,
+                },
             );
             Ok(())
         },
     )?;
-    for (id, (axis, exterior)) in &axes {
-        let (joins, ends, keyref, tweaks, control) = rows.get(id).cloned().unwrap_or_default();
-        let keyref = if keyref.is_empty() {
+    let every: BTreeSet<u64> = axes.keys().chain(rows.keys()).copied().collect();
+    for id in &every {
+        let row = rows.get(id).cloned().unwrap_or_default();
+        let (start, end, thickness, exterior) = match axes.get(id) {
+            Some((axis, exterior)) => (
+                format!("[{},{}]", axis.start[0], axis.start[1]),
+                format!("[{},{}]", axis.end[0], axis.end[1]),
+                axis.thickness_feet.to_string(),
+                exterior.clone(),
+            ),
+            None => ("null".into(), "null".into(), "null".into(), "null".into()),
+        };
+        let keyref = if row.keyref.is_empty() {
             "null".into()
         } else {
-            keyref
+            row.keyref
         };
-        let tweaks: Vec<String> = tweaks.iter().map(i64::to_string).collect();
+        let tweaks: Vec<String> = row.tweaks.iter().map(i64::to_string).collect();
         println!(
-            "{{\"id\":{id},\"start\":[{},{}],\"end\":[{},{}],\"thickness\":{},\"joins\":[{}],\"ends\":[{}],\"keyref\":{keyref},\"exterior\":{exterior},\"control\":[{}],\"tweaks\":[{}]}}",
-            axis.start[0],
-            axis.start[1],
-            axis.end[0],
-            axis.end[1],
-            axis.thickness_feet,
-            joins.join(","),
-            ends.join(","),
-            control.join(","),
-            tweaks.join(",")
+            "{{\"id\":{id},\"start\":{start},\"end\":{end},\"thickness\":{thickness},\"joins\":[{}],\"ends\":[{}],\"keyref\":{keyref},\"exterior\":{exterior},\"control\":[{}],\"tweaks\":[{}],\"gline\":{},\"planes\":[{}]}}",
+            row.joins.join(","),
+            row.ends.join(","),
+            row.control.join(","),
+            tweaks.join(","),
+            row.gline.as_deref().unwrap_or("null"),
+            row.planes.join(",")
         );
     }
     eprintln!(
