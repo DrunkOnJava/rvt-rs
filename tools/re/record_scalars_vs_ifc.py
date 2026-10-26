@@ -70,6 +70,40 @@ def extruded_only(element):
     return all(kinds) if kinds else None
 
 
+def report(rows, truths):
+    """Rank every probe field against each of `truths` (property -> tag -> bool)."""
+    print(f"probe: {len(rows)} records; boolean properties Revit writes on them: {len(truths)}")
+    names = sorted({name for fields in rows.values() for name in fields})
+    for prop, by_tag in sorted(truths.items()):
+        tags = sorted(by_tag)
+        trues = sum(by_tag[t] for t in tags)
+        print(f"{prop}: {len(tags)} elements, true {trues}, false {len(tags) - trues}")
+        if trues in (0, len(tags)):
+            print("  constant: no field needed")
+            continue
+        ranked = []
+        for name in names:
+            values = collections.Counter(rows[t].get(name, "-") for t in tags)
+            if len(values) < 2:
+                continue
+            best = None
+            for value in values:
+                hits = sum((rows[t].get(name, "-") == value) == by_tag[t] for t in tags)
+                score = max(hits, len(tags) - hits)
+                sense = "=" if hits >= len(tags) - hits else "!="
+                if best is None or score > best[0]:
+                    best = (score, sense, value)
+            ranked.append((best[0], name, best[1], best[2], len(values)))
+        ranked.sort(key=lambda r: (-r[0], r[1]))
+        for score, name, sense, value, distinct in ranked[:12]:
+            print(f"  {score}/{len(tags)}  true where {name} {sense} {value}  ({distinct} values)")
+        # The best field's values against the property, for a rule on a value.
+        for _, name, _, _, _ in ranked[:3]:
+            table = collections.Counter((rows[t].get(name, "-"), by_tag[t]) for t in tags)
+            cells = ", ".join(f"{v}:{'T' if truth else 'F'} {n}" for (v, truth), n in sorted(table.items()))
+            print(f"    {name}: {cells[:400]}")
+
+
 def main():
     args = [a for a in sys.argv[1:] if a != "--list"]
     if len(args) != 2:
@@ -112,36 +146,7 @@ def main():
         universe = {t for t in seen if entity_of[t] in entities}
         if 0 < len(tags) < len(universe):
             truths[f"present:{prop}"] = {t: t in tags for t in universe}
-    print(f"probe: {len(rows)} records; boolean properties Revit writes on them: {len(truths)}")
-    names = sorted({name for fields in rows.values() for name in fields})
-    for prop, by_tag in sorted(truths.items()):
-        tags = sorted(by_tag)
-        trues = sum(by_tag[t] for t in tags)
-        print(f"{prop}: {len(tags)} elements, true {trues}, false {len(tags) - trues}")
-        if trues in (0, len(tags)):
-            print("  constant: no field needed")
-            continue
-        ranked = []
-        for name in names:
-            values = collections.Counter(rows[t].get(name, "-") for t in tags)
-            if len(values) < 2:
-                continue
-            best = None
-            for value in values:
-                hits = sum((rows[t].get(name, "-") == value) == by_tag[t] for t in tags)
-                score = max(hits, len(tags) - hits)
-                sense = "=" if hits >= len(tags) - hits else "!="
-                if best is None or score > best[0]:
-                    best = (score, sense, value)
-            ranked.append((best[0], name, best[1], best[2], len(values)))
-        ranked.sort(key=lambda r: (-r[0], r[1]))
-        for score, name, sense, value, distinct in ranked[:12]:
-            print(f"  {score}/{len(tags)}  true where {name} {sense} {value}  ({distinct} values)")
-        # The best field's values against the property, for a rule on a value.
-        for _, name, _, _, _ in ranked[:3]:
-            table = collections.Counter((rows[t].get(name, "-"), by_tag[t]) for t in tags)
-            cells = ", ".join(f"{v}:{'T' if truth else 'F'} {n}" for (v, truth), n in sorted(table.items()))
-            print(f"    {name}: {cells[:400]}")
+    report(rows, truths)
     if "--list" in sys.argv:
         for prop, by_tag in sorted(truths.items()):
             for tag in sorted(by_tag)[:40]:
