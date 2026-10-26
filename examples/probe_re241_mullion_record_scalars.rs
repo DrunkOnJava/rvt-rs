@@ -17,8 +17,11 @@
 //! the element's record, then those of the first 60 objects of its type's
 //! record and the first 20 of its host's, prefixed `T.` and `H.`; an
 //! ElementId as its sign; the type's and host's ElementIds as `ID.type`
-//! and `ID.host`; and the host's saved parameters (RE-207) as
-//! `HP.<parameter id>` and its type's Function (RE-185) as `HF.function`.
+//! and `ID.host`; the host's saved parameters (RE-207) as
+//! `HP.<parameter id>` and its type's Function (RE-185) as `HF.function`;
+//! and the element's own saved metadata: parameter sets `MP.`, raw-field
+//! `MR.` and resolved family `MF.` values, declared custom parameters
+//! `MC.<id>=<has value>`, and `MD.complete`.
 //!
 //! Usage:
 //!   cargo run --profile ci --example probe_re241_mullion_record_scalars -- MODEL.rvt
@@ -175,6 +178,49 @@ fn main() -> anyhow::Result<()> {
         ));
         parts
     };
+    // The members' and plates' own saved metadata (the RE-207 reader returns
+    // no parameter for any office mullion): their parameter sets, raw-field
+    // and resolved family parameters, and declared custom parameters.
+    let mut metadata: BTreeMap<u64, Vec<String>> = BTreeMap::new();
+    rvt::research::native_document::extract(
+        &mut rf,
+        &Options {
+            selected_ids: ids.clone(),
+            ..Options::default()
+        },
+        |record| {
+            let Some(saved) = record.saved_metadata.as_ref() else {
+                return Ok(());
+            };
+            let mut parts = Vec::new();
+            for set in &saved.parameter_sets {
+                for parameter in &set.parameters {
+                    if let Some(value) = scalar(&parameter.raw_value) {
+                        parts.push(format!("MP.{}={value}", parameter.serialized_parameter_id));
+                    }
+                }
+            }
+            for parameter in &saved.raw_field_parameters {
+                if let Some(value) = scalar(&parameter.raw_value) {
+                    parts.push(format!("MR.{}={value}", parameter.parameter_id));
+                }
+            }
+            for parameter in &saved.resolved_family_parameters {
+                if let Some(value) = scalar(&parameter.raw_value) {
+                    parts.push(format!("MF.{}={value}", parameter.parameter_id));
+                }
+            }
+            for parameter in &saved.declared_custom_parameters {
+                parts.push(format!(
+                    "MC.{}={}",
+                    parameter.parameter_id, parameter.has_value
+                ));
+            }
+            parts.push(format!("MD.complete={}", saved.complete_element_metadata));
+            metadata.insert(record.identity.element_id, parts);
+            Ok(())
+        },
+    )?;
     for id in &ids {
         let Some((class, parts)) = lines.get(id) else {
             println!("rec {id} -");
@@ -198,6 +244,10 @@ fn main() -> anyhow::Result<()> {
         }
         if let Some(host) = host {
             all.extend(host_parts(host));
+        }
+        match metadata.get(id) {
+            Some(parts) => all.extend(parts.iter().cloned()),
+            None => all.push("MD.complete=-".into()),
         }
         println!("rec {id} {class} {}", all.join(" "));
     }
