@@ -646,9 +646,7 @@ pub fn recover_partition_schema_mvp(
     // marks the doors that are openings alone ---
     attach_door_openings(rf, revit_version, &mut out.doors);
     // --- Each door's Width and Height from its type (RE-187, #759) ---
-    attach_door_sizes(rf, revit_version, &mut out.doors, DOOR_TYPE_SIZE_FIELDS);
-    // --- Each window's, for its base quantities only (#1016) ---
-    attach_door_sizes(rf, revit_version, &mut out.windows, WINDOW_TYPE_SIZE_FIELDS);
+    attach_door_sizes(rf, revit_version, &mut out.doors);
     // --- Each door's and window's size from the outline its symbol cuts
     // (RE-215, #844) ---
     let walls: BTreeSet<u32> = out.walls.iter().filter_map(|wall| wall.id).collect();
@@ -2214,18 +2212,15 @@ fn attach_door_openings(rf: &mut RevitFile, revit_version: u32, doors: &mut [Dec
 /// Fields carrying a door's Width and Height from its type (RE-187), feet.
 pub const DOOR_TYPE_SIZE_FIELDS: [&str; 2] = ["m_door_type_width", "m_door_type_height"];
 
-/// Fields carrying a window's Width and Height from its type, feet: its
-/// `Qto_WindowBaseQuantities` (#1016), kept apart from
-/// [`DOOR_TYPE_SIZE_FIELDS`], which also size a door's `OverallWidth`.
-pub const WINDOW_TYPE_SIZE_FIELDS: [&str; 2] = ["m_window_type_width", "m_window_type_height"];
+/// Fields carrying the Width and Height of the symbol that draws a door or
+/// window (its `InstanceInfo.m_symbolId`): its type's, or the symbol its own
+/// parameters make, which revit-ifc's `WidthCalculator`, `HeightCalculator`
+/// and `AreaCalculator` read for its base quantities (#1016), feet.
+pub const DRAWN_SIZE_FIELDS: [&str; 2] = ["m_drawn_symbol_width", "m_drawn_symbol_height"];
 
-/// The Width and Height `fields` hold under the two names of `names`
-/// ([`DOOR_TYPE_SIZE_FIELDS`], [`WINDOW_TYPE_SIZE_FIELDS`]), feet.
-pub fn type_size_from_fields(
-    fields: &[(String, InstanceField)],
-    names: [&str; 2],
-) -> Option<[f64; 2]> {
-    let [width, height] = names.map(|wanted| {
+/// The Width and Height [`DRAWN_SIZE_FIELDS`] record, feet.
+pub fn drawn_size_from_fields(fields: &[(String, InstanceField)]) -> Option<[f64; 2]> {
+    let [width, height] = DRAWN_SIZE_FIELDS.map(|wanted| {
         fields.iter().find_map(|(name, value)| match value {
             InstanceField::Float { value, .. } if name == wanted => Some(*value),
             _ => None,
@@ -2250,17 +2245,11 @@ pub fn door_type_size_from_fields(
     })
 }
 
-/// Give each door or window whose type's Width and Height are read
-/// ([`crate::partition_type_parameters::type_door_sizes`], the parameters a
-/// door's and a window's type share) that size in `names` (RE-187), whether
-/// or not its opening is read. A door that is an opening alone (RE-84) is
-/// written as that opening, and gets none.
-fn attach_door_sizes(
-    rf: &mut RevitFile,
-    revit_version: u32,
-    doors: &mut [DecodedElement],
-    names: [&str; 2],
-) {
+/// Give each door whose type's Width and Height are read
+/// ([`crate::partition_type_parameters::type_door_sizes`]) that size (RE-187),
+/// whether or not its opening is read. A door that is an opening alone
+/// (RE-84) is written as that opening, and gets none.
+fn attach_door_sizes(rf: &mut RevitFile, revit_version: u32, doors: &mut [DecodedElement]) {
     let type_of = |element: &DecodedElement| {
         element.fields.iter().find_map(|(name, value)| match value {
             InstanceField::ElementId { id, .. } if name == TYPE_ID_FIELD => Some(*id),
@@ -2280,7 +2269,10 @@ fn attach_door_sizes(
         let Some(size) = type_of(element).and_then(|id| sizes.get(&id)).copied() else {
             continue;
         };
-        for (name, value) in names.iter().zip([size.width_feet, size.height_feet]) {
+        for (name, value) in DOOR_TYPE_SIZE_FIELDS
+            .iter()
+            .zip([size.width_feet, size.height_feet])
+        {
             element
                 .fields
                 .push(((*name).into(), InstanceField::Float { value, size: 8 }));
@@ -2350,7 +2342,8 @@ fn attach_cut_loop_sizes(
         .iter()
         .filter_map(|element| element.id.map(u64::from))
         .collect();
-    let Ok((loops, uncut)) = crate::native_symbol_cuts::instance_cut_loops_and_uncut(rf, &ids)
+    let Ok((loops, uncut, drawn_by)) =
+        crate::native_symbol_cuts::instance_cuts_and_symbols(rf, &ids)
     else {
         return;
     };
@@ -2361,6 +2354,31 @@ fn attach_cut_loop_sizes(
         for (name, value) in CUT_LOOP_SIZE_FIELDS
             .iter()
             .zip([cut.width_feet(), cut.height_feet()])
+        {
+            element
+                .fields
+                .push(((*name).into(), InstanceField::Float { value, size: 8 }));
+        }
+    }
+    // #1016: the Width and Height of the symbol that draws each, its base
+    // quantities' size.
+    let symbols: BTreeSet<u32> = drawn_by
+        .values()
+        .filter_map(|symbol| u32::try_from(*symbol).ok())
+        .collect();
+    let sizes = crate::partition_type_parameters::type_door_sizes(rf, revit_version, &symbols);
+    for element in elements.iter_mut() {
+        let Some(size) = element
+            .id
+            .and_then(|id| drawn_by.get(&u64::from(id)))
+            .and_then(|symbol| u32::try_from(*symbol).ok())
+            .and_then(|symbol| sizes.get(&symbol))
+        else {
+            continue;
+        };
+        for (name, value) in DRAWN_SIZE_FIELDS
+            .iter()
+            .zip([size.width_feet, size.height_feet])
         {
             element
                 .fields

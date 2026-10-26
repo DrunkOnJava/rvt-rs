@@ -1971,24 +1971,25 @@ fn add_railing_height(sets: &mut Vec<PropertySet>, ifc_type: &str, decoded: &Dec
 }
 
 /// Add a door's `Qto_DoorBaseQuantities` or a window's
-/// `Qto_WindowBaseQuantities` to `sets`: its type's Width and Height
-/// (RE-187), and their product as its Area. revit-ifc's `WidthCalculator`,
-/// `HeightCalculator` and `AreaCalculator` (CLEANROOM.md source 5) read a
-/// door's or window's Width and Height parameters, its own or its type's,
-/// where no opening profile gives them (#1016). Nothing where the type's
-/// size is not read.
+/// `Qto_WindowBaseQuantities` to `sets`: the Width and Height of the symbol
+/// that draws it, and their product as its Area. revit-ifc's
+/// `WidthCalculator`, `HeightCalculator` and `AreaCalculator` (CLEANROOM.md
+/// source 5) read a door's or window's Width and Height parameters, its own
+/// or its type's, where no opening profile gives them (#1016); an instance
+/// whose own parameters change its size is drawn by a symbol of its own,
+/// which holds them (RE-215). Nothing where that symbol's size is not read.
 fn add_door_window_quantities(
     sets: &mut Vec<PropertySet>,
     ifc_type: &str,
     decoded: &DecodedElement,
 ) {
     use crate::partition_schema_mvp as mvp;
-    let (set, names) = match ifc_type {
-        "IFCDOOR" => ("Qto_DoorBaseQuantities", mvp::DOOR_TYPE_SIZE_FIELDS),
-        "IFCWINDOW" => ("Qto_WindowBaseQuantities", mvp::WINDOW_TYPE_SIZE_FIELDS),
+    let set = match ifc_type {
+        "IFCDOOR" => "Qto_DoorBaseQuantities",
+        "IFCWINDOW" => "Qto_WindowBaseQuantities",
         _ => return,
     };
-    let Some([width, height]) = mvp::type_size_from_fields(&decoded.fields, names) else {
+    let Some([width, height]) = mvp::drawn_size_from_fields(&decoded.fields) else {
         return;
     };
     sets.push(PropertySet {
