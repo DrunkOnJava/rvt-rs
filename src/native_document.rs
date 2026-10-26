@@ -339,12 +339,6 @@ pub fn extract(
     summary.definition_diagnostics = diagnostics;
     Ok(summary)
 }
-/// Extract selected current indexed records' object graphs without the
-/// parameter-definition pass [`extract`] makes over every definition owner
-/// first, for callers that read objects' fields rather than saved parameter
-/// values. Each record's saved metadata is read against no
-/// definitions.
-// Tracker: B80.
 /// Every current or historical record of every partition in [`Options`]'
 /// default channels (#1032): its channel, ElementId, partition and the class
 /// tag its body opens with. The first pass with the default channels and
@@ -354,9 +348,19 @@ pub fn extract(
 /// partition for them, and walks only those partitions.
 #[derive(Debug)]
 pub struct RecordIndex {
-    records: Vec<(u64, u64, u32, Option<u16>)>,
+    records: Vec<IndexedRecord>,
 }
 
+/// One record of a [`RecordIndex`]: its channel, ElementId, partition and
+/// the class tag its body opens with.
+type IndexedRecord = (u64, u64, u32, Option<u16>);
+
+/// Extract selected current indexed records' object graphs without the
+/// parameter-definition pass [`extract`] makes over every definition owner
+/// first, for callers that read objects' fields rather than saved parameter
+/// values. Each record's saved metadata is read against no
+/// definitions.
+// Tracker: B80.
 pub fn extract_graphs(
     file: &mut RevitFile,
     options: &Options,
@@ -516,7 +520,7 @@ fn extract_records(
         && options.max_group_bytes == defaults.max_group_bytes
         && options.channels == defaults.channels;
     let record_index = indexable.then(|| file.native_record_index()).flatten();
-    let mut indexed: Option<Vec<(u64, u64, u32, Option<u16>)>> =
+    let mut indexed: Option<Vec<IndexedRecord>> =
         (indexable && record_index.is_none()).then(Vec::new);
     let walked: Option<BTreeSet<u32>> = record_index.as_ref().map(|record_index| {
         for &(channel, id, partition, tag) in &record_index.records {
