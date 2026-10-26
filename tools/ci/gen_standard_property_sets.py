@@ -10,10 +10,12 @@ hierarchy comes from IfcOpenShell's IFC4 schema, at the version
 tools/ci/requirements-ifc.txt pins.
 
 The table keeps, of each set that applies to an entity, the single-value
-properties of the kinds a parameter's value is read as (RE-194), and the
+properties of the kinds a parameter's value is read as (RE-194), the names
+of its other properties (RE-235), and the
 supertype of every IFC4 entity, so that a set applies to its entities'
-subtypes. A property the CSV gives no type takes the type the other sets give
-a property of that name, where they all agree. Sets of performance history and
+subtypes. A property the CSV gives no type takes the type most of the other
+sets give a property of that name: `Reference` in four sets, `IfcIdentifier`
+in 103 sets and `IfcLabel` in 6. Sets of performance history and
 sets without an entity are left out.
 
 Usage:
@@ -88,12 +90,12 @@ def main(argv):
         value = prop.get("data_type")
         return value.get("instance") if isinstance(value, dict) else None
 
-    # A property's type where the CSV gives none: the one every set gives it.
-    named = collections.defaultdict(set)
+    # A property's type where the CSV gives none: the one most sets give it.
+    named = collections.defaultdict(collections.Counter)
     for row in rows:
         for prop in definitions(row):
             if prop["property_type"] == "IfcPropertySingleValue" and data_type(prop):
-                named[prop["property_name"]].add(data_type(prop))
+                named[prop["property_name"]][data_type(prop)] += 1
 
     schema = wrapper.schema_by_name("IFC4")
     supertypes = {}
@@ -120,12 +122,22 @@ def main(argv):
             if prop["property_type"] != "IfcPropertySingleValue":
                 continue
             kind = data_type(prop)
-            if kind is None and len(named[prop["property_name"]]) == 1:
-                (kind,) = named[prop["property_name"]]
+            types = named[prop["property_name"]]
+            if kind is None and types:
+                ((common, count),) = types.most_common(1)
+                if 2 * count > sum(types.values()):
+                    kind = common
             if kind in KINDS:
                 properties.append((prop["property_name"], KINDS[kind]))
+        listed = {name for name, _ in properties}
+        others = []
+        for prop in definitions(row):
+            if prop["property_name"] not in listed and prop["property_name"] not in others:
+                others.append(prop["property_name"])
         if properties:
-            sets.append((row["Name"], sorted(set(applies), key=lambda a: (a[0], a[1] or "")), properties))
+            sets.append(
+                (row["Name"], sorted(set(applies), key=lambda a: (a[0], a[1] or "")), properties, others)
+            )
 
     out = sys.stdout
     out.write(
@@ -144,10 +156,11 @@ def main(argv):
     out.write("];\n\n")
     out.write(
         "/// IFC4's property sets that apply to an entity, by name, with their\n"
-        "/// single-value properties of the kinds a parameter's value is read as.\n"
+        "/// single-value properties of the kinds a parameter's value is read as\n"
+        "/// and the names of their other properties.\n"
         "pub(super) const SETS: &[StandardPropertySet] = &[\n"
     )
-    for name, applies, properties in sets:
+    for name, applies, properties, others in sets:
         out.write("    StandardPropertySet {\n")
         out.write(f'        name: "{name}",\n')
         out.write("        applies: &[\n")
@@ -158,6 +171,10 @@ def main(argv):
         out.write("        properties: &[\n")
         for prop, kind in properties:
             out.write(f'            ("{prop}", {kind}),\n')
+        out.write("        ],\n")
+        out.write("        other_properties: &[\n")
+        for prop in others:
+            out.write(f'            "{prop}",\n')
         out.write("        ],\n")
         out.write("    },\n")
     out.write("];\n")
