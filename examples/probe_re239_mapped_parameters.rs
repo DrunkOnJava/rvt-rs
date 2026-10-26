@@ -10,10 +10,12 @@
 //! puts there. An export-time user-defined property set file maps a
 //! parameter to such a set. Hypothesis: each value is one of the element's
 //! saved parameters (RE-207), and the file, which the model does not store,
-//! only places it.
+//! only places it. Members and plates are printed too: Revit's export gives
+//! the office's curtain mullions and panels an `IsExternal` neither their
+//! host nor their type decides (RE-226 §2).
 //!
-//! Output, one line per wall, curtain wall, covering and room the export
-//! writes:
+//! Output, one line per wall, curtain wall, covering, member, plate and room
+//! the export writes:
 //!   par <tag> <IFC class> <parameter id>:<name|->=<value> ...
 //! every Yes/No and text value of its saved parameters and its type's,
 //! spaces as `_`; then, for each of `MARKERS` (a user-defined property set
@@ -32,7 +34,14 @@ use rvt::ifc::entities::IfcEntity;
 use rvt::research::native_element_parameters;
 use serde_json::Value;
 
-const CLASSES: [&str; 4] = ["IFCWALL", "IFCCURTAINWALL", "IFCCOVERING", "IFCSPACE"];
+const CLASSES: [&str; 6] = [
+    "IFCWALL",
+    "IFCCURTAINWALL",
+    "IFCCOVERING",
+    "IFCMEMBER",
+    "IFCPLATE",
+    "IFCSPACE",
+];
 const MARKERS: [&str; 3] = [
     "PropertySet:",
     "ExportUserDefinedPsets",
