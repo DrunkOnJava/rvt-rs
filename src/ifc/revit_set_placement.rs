@@ -22,7 +22,7 @@
 //!   as Revit's export writes it; and one named for a set matched by name
 //!   and `Reference`, which comes before the copied `Reference`. The BIM4LCA office's rooms hold
 //!   `Pset_SpaceCommon.FloorCovering`, `WallCovering` and `CeilingCovering`,
-//!   which IFC4 moved to `Pset_SpaceCoveringRequirements` (RE-234). A value
+//!   which IFC4 moved to `Pset_SpaceCoveringRequirements` (RE-235). A value
 //!   of another kind is left out and counted.
 //!
 //! What a project's own user-defined property set file adds to Revit's
