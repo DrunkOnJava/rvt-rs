@@ -93,6 +93,7 @@ pub mod gltf;
 pub mod measure;
 pub mod pbr;
 pub mod revit_property_sets;
+pub mod revit_set_placement;
 pub mod saved_meshes;
 pub mod scene_graph;
 pub mod schedule_csv;
@@ -3926,6 +3927,7 @@ pub fn build_export_diagnostics_with_limits(
 /// [`saved_meshes::attach`] does.
 pub fn recount_exported(diagnostics: &mut ExportDiagnostics, model: &IfcModel) {
     diagnostics.exported = exported_model_diagnostics(model);
+    diagnostics.decoded.parameter_value_count = pset_property_value_count(model);
 }
 
 fn exported_model_diagnostics(model: &IfcModel) -> ExportedModelDiagnostics {
