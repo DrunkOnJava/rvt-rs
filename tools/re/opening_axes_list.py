@@ -81,6 +81,26 @@ def directions(f):
     return out
 
 
+def host_widths(f):
+    """filler key -> its opening's host's Qto_WallBaseQuantities.Width, SI."""
+    lengths = ifcopenshell.util.unit.calculate_unit_scale(f, "LENGTHUNIT")
+    width_of = {}
+    for rel in f.by_type("IfcRelDefinesByProperties"):
+        d = rel.RelatingPropertyDefinition
+        if d.is_a("IfcElementQuantity") and d.Name == "Qto_WallBaseQuantities":
+            for q in d.Quantities or ():
+                if q.Name == "Width" and q.is_a("IfcQuantityLength"):
+                    for obj in rel.RelatedObjects:
+                        width_of[obj.id()] = float(q.LengthValue) * lengths
+    host_of = {rel.RelatedOpeningElement.id(): rel.RelatingBuildingElement for rel in f.by_type("IfcRelVoidsElement")}
+    out = {}
+    for rel in f.by_type("IfcRelFillsElement"):
+        host = host_of.get(rel.RelatingOpeningElement.id())
+        if rel.RelatedBuildingElement.Tag and host is not None:
+            out[f"tag:{rel.RelatedBuildingElement.Tag}"] = (host.is_a(), width_of.get(host.id()))
+    return out
+
+
 def same(a, b):
     return a is not None and b is not None and abs(a - b) <= max(1e-6, 1e-5 * max(abs(a), abs(b)))
 
@@ -113,6 +133,16 @@ def main(argv):
                 agree[(name, bool(set(theirs_role) & set(ours_role)))] += 1
         elif len(differ) < 12:
             differ.append(f"{k} {cls}: Revit W {qto['Width']:.5g} H {qto['Height']:.5g} D {qto['Depth']:.5g}; rvt-rs " + " x ".join(f"{v:.5g}" for v in ours_sizes.values()))
+    revit_hosts, ours_hosts = host_widths(theirs_f), host_widths(ours_f)
+    depth_vs = collections.Counter()
+    for k, (_, _, qto, _) in sorted(rows.items()):
+        host, width = revit_hosts.get(k, ("-", None))
+        _, our_width = ours_hosts.get(k, ("-", None))
+        depth_vs[(host, "Revit's host Width", same(qto["Depth"], width))] += 1
+        depth_vs[(host, "rvt-rs's host Width", same(qto["Depth"], our_width))] += 1
+    print("Depth = the host's Qto_WallBaseQuantities.Width (host class, whose, equal):")
+    for key, n in sorted(depth_vs.items(), key=str):
+        print(f"    {key[0]} {key[1]} {key[2]} x{n}")
     print("which of Revit's body extents each quantity is (class, quantity, direction):")
     for key, n in sorted(role_of.items()):
         print(f"    {key[0]} {key[1]}: {key[2]} x{n}")
