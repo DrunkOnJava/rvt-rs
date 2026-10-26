@@ -25,10 +25,15 @@ Usage:
 
     python3 tools/re/psets_vs_ifc.py <rvt-rs.ifc> <revit-export.ifc> [--list N]
 
+With `PSETS_MISSING=<set>.<property>[,...]` in the environment it also
+lists, for each such property, every object Revit writes it on and rvt-rs
+does not: its key, Revit's entity and value, and rvt-rs's entity and Name.
+
 Needs IfcOpenShell (the version tools/ci/requirements-ifc.txt pins).
 """
 
 import collections
+import os
 import sys
 
 import ifcopenshell
@@ -264,7 +269,21 @@ def main(argv):
         print(f"  {pset}.{prop}: {common}; on {classes}")
     for line in worst:
         print(line)
+    wanted = [w for w in os.environ.get("PSETS_MISSING", "").split(",") if w]
+    if wanted:
+        names = object_names(args[0])
+        for (key, pset, prop), value in sorted(theirs.items()):
+            if f"{pset}.{prop}" in wanted and key in our_objects and (key, pset, prop) not in ours:
+                print(
+                    f"  missing {pset}.{prop} {key} Revit {their_entities.get(key, '-')} {value}"
+                    f" rvt-rs {our_entities.get(key, '-')} {names.get(key, '-')!r}"
+                )
     return 0
+
+
+def object_names(path):
+    f = ifcopenshell.open(path)
+    return {key_of(o): o.Name for o in f.by_type("IfcObject") if key_of(o)}
 
 
 if __name__ == "__main__":
