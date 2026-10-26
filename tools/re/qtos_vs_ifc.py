@@ -25,9 +25,8 @@ export and counted apart here, not as missing.
 It prints the totals, a line per (set, quantity): how many values Revit
 writes on objects rvt-rs also writes, how many are equal, how many differ
 and how many are missing; the entities each missing quantity is on; the
-values rvt-rs writes and Revit does not, with up to 10 of their objects
-each and whether Revit's export writes the object and which of the set's
-quantities it gives it; and up to 40 differences, the largest relative ones
+values rvt-rs writes and Revit does not on objects both write, with up to
+10 of their objects each and which of the set's quantities Revit gives it; and up to 40 differences, the largest relative ones
 first.
 
 Usage:
@@ -182,7 +181,7 @@ def main(argv):
         print(__doc__, file=sys.stderr)
         return 2
     ours, our_objects, our_entities, our_own, _, _ = quantities(args[0])
-    theirs, _, their_entities, their_own, their_base, their_predefined = quantities(args[1], our_entities)
+    theirs, their_objects, their_entities, their_own, their_base, their_predefined = quantities(args[1], our_entities)
     rows = collections.defaultdict(lambda: [0, 0, 0, 0])
     missing_classes = collections.defaultdict(collections.Counter)
     differences = []
@@ -206,7 +205,9 @@ def main(argv):
             row[2] += 1
             differences.append((relative(mine, value), key, qset, name, mine, value))
     totals = [sum(r[i] for r in rows.values()) for i in range(4)]
-    extra = collections.Counter((qset, name) for key, qset, name in ours if (key, qset, name) not in theirs)
+    extra = collections.Counter(
+        (qset, name) for key, qset, name in ours if key in their_objects and (key, qset, name) not in theirs
+    )
     setting_off = collections.Counter() if their_base else extra
     if not their_base:
         extra = collections.Counter()
@@ -237,11 +238,10 @@ def main(argv):
         their_sets[(key, qset)].add(name)
     for (qset, name), n in sorted(extra.items()):
         print(f"  {qset}.{name}: {n}")
-        keys = sorted(key for key, s, q in ours if (s, q) == (qset, name) and (key, s, q) not in theirs)
+        keys = sorted(
+            key for key, s, q in ours if (s, q) == (qset, name) and key in their_objects and (key, s, q) not in theirs
+        )
         for key in keys[:10]:
-            if key not in their_entities:
-                print(f"    {key}: not in Revit's export")
-                continue
             given = ", ".join(sorted(their_sets.get((key, qset), ()))) or "none"
             print(f"    {key} {their_entities[key]}: Revit's {qset}: {given}")
     print("largest differences (rvt-rs, Revit; SI units):")

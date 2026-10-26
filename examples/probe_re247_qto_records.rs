@@ -17,7 +17,9 @@
 //! the record, an ElementId as its sign, each object class of the record
 //! its `m_hostId` names, and for each pair step (`CutPairGStep`,
 //! `CleanPairGStep`, ...) the number of them whose `m_otherId` names an
-//! element rvt-rs exports as that IFC entity (else its record class).
+//! element rvt-rs exports as that IFC entity (else its record class), a
+//! slab as `IFCSLAB.level` where rvt-rs finds its top level (its
+//! `Pset_SlabCommon.PitchAngle` 0, RE-238) and `IFCSLAB.unknown` where not.
 //!
 //! Usage:
 //!   cargo run --profile ci --example probe_re247_qto_records -- MODEL.rvt
@@ -61,6 +63,25 @@ fn main() -> anyhow::Result<()> {
                 .parse()
                 .ok()
                 .map(|id| (id, ifc_type.to_ascii_uppercase())),
+            _ => None,
+        })
+        .collect();
+    let level: BTreeSet<u64> = model
+        .entities
+        .iter()
+        .filter_map(|entity| match entity {
+            IfcEntity::ElementPropertySet { element, set }
+                if set.name == "Pset_SlabCommon"
+                    && set.properties.iter().any(|p| p.name == "PitchAngle") =>
+            {
+                match model.entities.get(*element) {
+                    Some(IfcEntity::BuildingElement {
+                        type_guid: Some(tag),
+                        ..
+                    }) => tag.parse().ok(),
+                    _ => None,
+                }
+            }
             _ => None,
         })
         .collect();
@@ -190,6 +211,11 @@ fn main() -> anyhow::Result<()> {
                         .get(other)
                         .or_else(|| record_class.get(other))
                         .map_or("-", String::as_str);
+                    let kind = match kind {
+                        "IFCSLAB" if level.contains(other) => "IFCSLAB.level".to_string(),
+                        "IFCSLAB" => "IFCSLAB.unknown".to_string(),
+                        other => other.to_string(),
+                    };
                     *by.entry(format!("by.{step}.{kind}")).or_default() += 1;
                 }
                 let by: String = by.iter().map(|(name, n)| format!(" {name}={n}")).collect();
