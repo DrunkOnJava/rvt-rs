@@ -352,6 +352,7 @@ pub fn extract(
 /// A pass with those budgets finds the partitions holding its selected
 /// records from it, rather than walking every partition for them, and walks
 /// only those partitions.
+#[derive(Debug)]
 pub struct RecordIndex {
     records: Vec<(u64, u64, u32, Option<u16>)>,
 }
