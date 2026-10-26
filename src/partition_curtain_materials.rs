@@ -102,7 +102,7 @@ fn native_render_styles(
 /// object, by the type's ElementId.
 fn scan_offsets(rf: &mut RevitFile, materials: &BTreeSet<u32>) -> Result<BTreeMap<u32, u32>> {
     let mut out = BTreeMap::new();
-    let classes = rf.schema_classes()?;
+    let classes = rf.memoised_schema_classes()?;
     let tags: Vec<(u32, usize)> = MATERIAL_AT
         .iter()
         .filter_map(|(name, at)| {

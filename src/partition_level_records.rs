@@ -214,7 +214,7 @@ pub fn elevation_marker(revit_version: u32) -> Option<[u8; 6]> {
 /// per release is that tag: `0x0248` on 2024, `0x025d` on 2025, and
 /// `0x0235` on 2023, where no release constant is recorded.
 pub fn schema_elevation_marker(rf: &mut RevitFile) -> Option<[u8; 6]> {
-    let classes = rf.schema_classes().ok()?;
+    let classes = rf.memoised_schema_classes().ok()?;
     let plane = classes.classes.iter().find(|c| c.name == "Plane")?.tag;
     let mut marker = [0x05, 0x00, 0x00, 0x00, 0x00, 0x00];
     marker[4..].copy_from_slice(&plane.to_le_bytes());

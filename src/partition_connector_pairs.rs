@@ -186,7 +186,7 @@ pub fn scan_connector_pairs(
     if curves.is_empty() || !supports_revit_version(rf.basic_file_info()?.version) {
         return Ok(Vec::new());
     }
-    let classes = rf.schema_classes()?;
+    let classes = rf.memoised_schema_classes()?;
     let Some(tag) = classes
         .classes
         .iter()

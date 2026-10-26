@@ -122,7 +122,7 @@ const MAX_REFERENCES: usize = 1024;
 /// The element-record marker of a file, from its schema (RE-80), or `None`
 /// when the schema has no `Outline` or `ElementParents` class.
 pub fn record_marker(rf: &mut RevitFile) -> Option<([u8; 8], u16)> {
-    let classes = rf.schema_classes().ok()?;
+    let classes = rf.memoised_schema_classes().ok()?;
     let tag = |name: &str| {
         classes
             .classes

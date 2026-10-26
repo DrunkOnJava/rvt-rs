@@ -120,6 +120,9 @@ pub struct RevitFile {
     /// Memoised index of every native record's partitions (#1032): each
     /// native pass walked every partition again to find its records.
     native_record_index: Option<Arc<crate::native_document::RecordIndex>>,
+    /// Memoised `Formats/Latest` classes: a dozen partition readers each
+    /// read and parsed the schema again for a few class tags.
+    schema_classes_memo: Option<Arc<crate::formats::SchemaClasses>>,
     /// Memoised material names (RE-58, RE-203), by release and the hash of
     /// the declared ids they were read for: half a dozen material steps of
     /// an export each asked for them.
@@ -328,6 +331,7 @@ impl RevitFile {
             data_objects: std::collections::HashMap::new(),
             native_preamble: None,
             native_record_index: None,
+            schema_classes_memo: None,
             material_names: std::collections::HashMap::new(),
             category_style_materials: None,
         })
@@ -737,6 +741,16 @@ impl RevitFile {
         let bytes = self.read_stream(FORMATS_LATEST)?;
         let decompressed = compression::inflate_stream_at(FORMATS_LATEST, &bytes, 0)?;
         crate::formats::parse_schema(&decompressed)
+    }
+
+    /// [`Self::schema_classes`], memoised for the crate's own readers.
+    pub(crate) fn memoised_schema_classes(&mut self) -> Result<Arc<crate::formats::SchemaClasses>> {
+        if let Some(cached) = &self.schema_classes_memo {
+            return Ok(Arc::clone(cached));
+        }
+        let classes = Arc::new(self.schema_classes()?);
+        self.schema_classes_memo = Some(Arc::clone(&classes));
+        Ok(classes)
     }
 
     /// Every class of the embedded schema with its serialization tag, read by
