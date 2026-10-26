@@ -6,7 +6,10 @@ Reads Revit's IFC export (the probe's output is ignored). For each set name
 it prints how many objects carry it, how many values it holds on them, the
 entities it is on and whether buildingSMART names it (`Pset_`, `Qto_`) or
 the export does (any other name: a user-defined property set file's sets,
-Revit property sets named for parameter groups, the exporter's own).
+Revit property sets named for parameter groups, the exporter's own). The
+objects are occurrences, through IfcRelDefinesByProperties, and type
+objects, through their own HasPropertySets; the entity list tells them
+apart.
 
 Usage:
 
@@ -28,19 +31,27 @@ def main():
     objects = collections.Counter()
     values = collections.Counter()
     entities = collections.defaultdict(collections.Counter)
-    for rel in f.by_type("IfcRelDefinesByProperties"):
-        definition = rel.RelatingPropertyDefinition
+
+    def count(definition, holders):
         if definition.is_a("IfcPropertySet"):
             held = len(definition.HasProperties or ())
         elif definition.is_a("IfcElementQuantity"):
             held = len(definition.Quantities or ())
         else:
-            continue
+            return
         name = definition.Name or "-"
-        for obj in rel.RelatedObjects:
+        for obj in holders:
             objects[name] += 1
             values[name] += held
             entities[name][obj.is_a()] += 1
+
+    for rel in f.by_type("IfcRelDefinesByProperties"):
+        count(rel.RelatingPropertyDefinition, rel.RelatedObjects)
+    # A type object holds its sets itself (`HasPropertySets`), with no
+    # IfcRelDefinesByProperties (RE-210 §2).
+    for kind in f.by_type("IfcTypeObject"):
+        for definition in kind.HasPropertySets or ():
+            count(definition, [kind])
     for kind in ("Pset_", "Qto_", "other"):
         names = [
             n for n in values

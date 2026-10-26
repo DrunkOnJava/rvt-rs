@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Which saved parameter is each value Revit's export writes on walls,
-curtain walls and spaces (RE-239, #35, W7).
+curtain walls, coverings, members, plates and spaces (RE-239, #35, W7).
 
 Reads `examples/probe_re239_mapped_parameters.rs`'s output and Revit's IFC
-export. Elements are matched by Tag; a space by its Name, the room number.
+export. Elements are matched by Tag; a space by its Name, the room number,
+or the ElementId after the last `:` of the Name of a room with no number.
 For each boolean or text property Revit writes, it counts, per parameter,
 how many of those elements hold it and how many hold Revit's value, and
 prints the three equal most often.
@@ -18,6 +19,8 @@ import sys
 
 import ifcopenshell
 import ifcopenshell.util.element
+
+ROOM_NUMBER = "-1006901:-"
 
 
 def main():
@@ -35,11 +38,22 @@ def main():
             key, _, value = part.partition("=")
             values[key] = value.replace("_", " ")
         rows[parts[1]] = (parts[2], values)
+    # A space has no Tag: Revit's export names it by its number (Revit's
+    # parameter -1006901), or by `<name>:<ElementId>` where it has none.
+    by_number = {
+        values[ROOM_NUMBER]: tag
+        for tag, (cls, values) in rows.items()
+        if cls == "IFCSPACE" and values.get(ROOM_NUMBER)
+    }
     f = ifcopenshell.open(args[1])
     tally = collections.defaultdict(lambda: collections.defaultdict(collections.Counter))
     totals = collections.Counter()
     for element in f.by_type("IfcElement") + f.by_type("IfcSpace"):
-        tag = getattr(element, "Tag", None) if not element.is_a("IfcSpace") else None
+        if element.is_a("IfcSpace"):
+            name = element.Name or ""
+            tag = by_number.get(name) or name.rpartition(":")[2]
+        else:
+            tag = getattr(element, "Tag", None)
         if tag not in rows:
             continue
         cls, values = rows[tag]
