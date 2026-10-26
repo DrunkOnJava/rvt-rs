@@ -28,5 +28,5 @@ The 11 missing are 10 slabs drawn otherwise or in several pieces and one opening
 ## 4. Reproduce
 
 ```bash
-gh workflow run measure.yml --ref main -f ref=99883ac9a0d8afb5f9486e0b8d382257877c74fb -f base=main -f nordic=true -f r2025=true
+gh workflow run measure.yml --ref main -f ref=a7a90826bd34cf818daa62dbd76c45d32df55c58 -f base=main -f nordic=true -f r2025=true
 ```
