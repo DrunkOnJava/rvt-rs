@@ -2360,20 +2360,36 @@ fn attach_cut_loop_sizes(
                 .push(((*name).into(), InstanceField::Float { value, size: 8 }));
         }
     }
-    // #1016: the Width and Height of the symbol that draws each, its base
-    // quantities' size.
+    // #1016: its base quantities' size, where the symbol that draws it and
+    // its type have the same Width and Height. revit-ifc reads the
+    // instance's own Width and Height parameters before its type's; where
+    // its own parameters make a symbol of its own, which of them that
+    // symbol's size stands for is not read (2 office doors take theirs from
+    // it, 5 from their type), so those get none.
+    let type_of = |element: &DecodedElement| {
+        element.fields.iter().find_map(|(name, value)| match value {
+            InstanceField::ElementId { id, .. } if name == TYPE_ID_FIELD => Some(*id),
+            _ => None,
+        })
+    };
     let symbols: BTreeSet<u32> = drawn_by
         .values()
         .filter_map(|symbol| u32::try_from(*symbol).ok())
+        .chain(elements.iter().filter_map(|element| type_of(element)))
         .collect();
     let sizes = crate::partition_type_parameters::type_door_sizes(rf, revit_version, &symbols);
     for element in elements.iter_mut() {
-        let Some(size) = element
+        let drawn = element
             .id
             .and_then(|id| drawn_by.get(&u64::from(id)))
             .and_then(|symbol| u32::try_from(*symbol).ok())
-            .and_then(|symbol| sizes.get(&symbol))
-        else {
+            .and_then(|symbol| sizes.get(&symbol));
+        let typed = type_of(element).and_then(|id| sizes.get(&id));
+        let Some(size) = drawn.zip(typed).and_then(|(drawn, typed)| {
+            ((drawn.width_feet - typed.width_feet).abs() < 1e-9
+                && (drawn.height_feet - typed.height_feet).abs() < 1e-9)
+                .then_some(drawn)
+        }) else {
             continue;
         };
         for (name, value) in DRAWN_SIZE_FIELDS
