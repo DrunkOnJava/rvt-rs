@@ -4,7 +4,8 @@ Revit's export writes (RE-241, #35, W7).
 
 Reads a probe's `rec <tag> <record class> <field>=<value> ...` lines and
 Revit's IFC export. For every boolean property Revit writes on those
-elements (by Tag) and every field with at most 2,000 distinct values, it
+elements (by Tag) and every field with at most 2,000 distinct values (a
+field missing from a record counts as the value `-`), it
 gives each value the label most of its elements carry and counts how many
 elements that gets right: 100% means the property is constant within each
 of the field's groups (a field such as the host's ElementId then says the
@@ -45,10 +46,13 @@ def main():
                 if isinstance(value, bool):
                     truths[f"{pset}.{prop}"][tag] = value
     for prop, labels in sorted(truths.items()):
+        # A field missing from a record is the value `-`, as in
+        # record_scalars_vs_ifc.py, so its presence is a group of its own.
+        names = {field for tag in labels for field in rows[tag]}
         fields = collections.defaultdict(lambda: collections.defaultdict(collections.Counter))
         for tag, label in labels.items():
-            for field, value in rows[tag].items():
-                fields[field][value][label] += 1
+            for field in names:
+                fields[field][rows[tag].get(field, "-")][label] += 1
         scored = []
         for field, groups in fields.items():
             if len(groups) > 2000:
