@@ -19,12 +19,17 @@ from a record counts as the value `-`.
 It prints, per property, the true and false counts and the 12 best fields
 with their accuracy, perfect ones first.
 
+`RECORD_FILTER=<field>=<value>[,<field>=<value>...]` keeps only the records
+whose fields have those values (`-` for a field missing from the record),
+to rank the fields within a group.
+
 Usage:
 
     python3 tools/re/record_scalars_vs_ifc.py <probe.txt> <revit.ifc> [--list]
 """
 
 import collections
+import os
 import sys
 
 import ifcopenshell
@@ -70,6 +75,9 @@ def main():
         print(__doc__)
         return 2
     rows = read_probe(args[0])
+    for wanted in filter(None, os.environ.get("RECORD_FILTER", "").split(",")):
+        name, _, value = wanted.partition("=")
+        rows = {tag: fields for tag, fields in rows.items() if fields.get(name, "-") == value}
     revit = ifcopenshell.open(args[1])
     truths = collections.defaultdict(dict)
     seen = set()
