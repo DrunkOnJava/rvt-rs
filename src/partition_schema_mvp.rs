@@ -5341,6 +5341,10 @@ pub const STAIR_RUN_PROFILE_FIELD: &str = "m_stair_run_profile";
 /// Field carrying the side views of a run's further solids, after the first
 /// in [`STAIR_RUN_PROFILE_FIELD`]: a riserless run's treads (#357).
 pub const STAIR_RUN_PIECES_FIELD: &str = "m_stair_run_pieces";
+/// Field holding the distance along a stair run's climb from its first
+/// riser line to its last, feet: its flight's `Length` as Revit's export
+/// gives it, with or without a riser at its top (#1016, RE-247).
+pub const STAIR_RUN_LENGTH_FIELD: &str = "m_stair_run_length";
 
 /// A stair run's treads and risers as [`STAIR_RUN_PROFILE_FIELD`] and its
 /// companions record them (RE-52).
@@ -5645,6 +5649,11 @@ fn push_stair_run_body(
     element
         .fields
         .push((STAIR_RUN_PROFILE_FIELD.into(), ring(profile)));
+    if let Some(&last) = sketch.risers.last() {
+        element
+            .fields
+            .push((STAIR_RUN_LENGTH_FIELD.into(), scalar(last)));
+    }
     if !rest.is_empty() {
         element.fields.push((
             STAIR_RUN_PIECES_FIELD.into(),
