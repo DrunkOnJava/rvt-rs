@@ -19,7 +19,8 @@
 //! - a project or shared parameter named `<set>.<property>` (RE-194) whose
 //!   set applies to the element but whose property buildingSMART's
 //!   definition of the set does not have, in that set: a text as `IfcText`,
-//!   as Revit's export writes it. The BIM4LCA office's rooms hold
+//!   as Revit's export writes it; and one named for a set matched by name
+//!   and `Reference`, which comes before the copied `Reference`. The BIM4LCA office's rooms hold
 //!   `Pset_SpaceCommon.FloorCovering`, `WallCovering` and `CeilingCovering`,
 //!   which IFC4 moved to `Pset_SpaceCoveringRequirements` (RE-234). A value
 //!   of another kind is left out and counted.
@@ -29,7 +30,7 @@
 
 use super::IfcModel;
 use super::entities::{IfcEntity, Property, PropertySet, PropertyValue};
-use super::standard_property_sets::STANDARD_PROPERTY_SETS;
+use super::standard_property_sets::{STANDARD_PROPERTY_SETS, StandardPropertySet};
 use crate::RevitFile;
 use anyhow::Result;
 use std::collections::{BTreeMap, BTreeSet};
@@ -47,15 +48,34 @@ pub struct Report {
     pub left_out: usize,
 }
 
-/// The standard set and property a parameter named `<set>.<property>`
-/// names, where the set applies to an element written as `ifc_type` with
-/// `predefined_type` and buildingSMART's definition of it lacks the
-/// property.
-fn undefined_property<'a>(
+/// Whether `set` is one revit-ifc matches to an element written as
+/// `ifc_type` by the start of one of its entities' names, and IFC4 does not
+/// apply to it.
+fn matched_by_name(
+    set: &StandardPropertySet,
+    ifc_type: &str,
+    predefined_type: Option<&str>,
+) -> bool {
+    !set.applies_to(ifc_type, predefined_type)
+        && set.applies.iter().any(|(entity, scoped)| {
+            scoped.is_none() && *entity != ifc_type && entity.starts_with(ifc_type)
+        })
+}
+
+/// A parameter's set, its property and the value type it is written as.
+type Placement<'a> = (&'static str, &'a str, fn(String) -> PropertyValue);
+
+/// Where a text parameter named `<set>.<property>` goes on an element
+/// written as `ifc_type` with `predefined_type`: in a set that applies to it
+/// whose definition lacks the property, as `IfcText`; or, for `Reference`,
+/// in a set matched to it by name, as `IfcIdentifier`, before the
+/// `Reference` its other sets hold, as revit-ifc reads `<set>.<property>`
+/// first (RE-194).
+fn parameter_placement<'a>(
     name: &'a str,
     ifc_type: &str,
     predefined_type: Option<&str>,
-) -> Option<(&'static str, &'a str)> {
+) -> Option<Placement<'a>> {
     let (set_name, property) = name.split_once('.')?;
     if property.is_empty() || property.contains('.') {
         return None;
@@ -63,8 +83,14 @@ fn undefined_property<'a>(
     let set = STANDARD_PROPERTY_SETS
         .iter()
         .find(|set| set.name == set_name)?;
-    (set.applies_to(ifc_type, predefined_type) && !set.defines(property))
-        .then_some((set.name, property))
+    if set.applies_to(ifc_type, predefined_type) && !set.defines(property) {
+        return Some((set.name, property, PropertyValue::Text));
+    }
+    (property == "Reference" && matched_by_name(set, ifc_type, predefined_type)).then_some((
+        set.name,
+        property,
+        PropertyValue::Identifier,
+    ))
 }
 
 /// The sets and properties Revit's export writes on an element written as
@@ -76,12 +102,7 @@ fn revit_placements(
 ) -> Vec<(&'static str, Vec<&'static str>)> {
     STANDARD_PROPERTY_SETS
         .iter()
-        .filter(|set| !set.applies_to(ifc_type, predefined_type))
-        .filter(|set| {
-            set.applies.iter().any(|(entity, scoped)| {
-                scoped.is_none() && *entity != ifc_type && entity.starts_with(ifc_type)
-            })
-        })
+        .filter(|set| matched_by_name(set, ifc_type, predefined_type))
         .map(|set| {
             (
                 set.name,
@@ -101,7 +122,8 @@ fn revit_placements(
 /// parameter gives it, otherwise the value the element already has under
 /// the property's name in another set.
 pub fn attach(file: &mut RevitFile, model: &mut IfcModel) -> Result<Report> {
-    let mut by_id: BTreeMap<u64, usize> = BTreeMap::new();
+    // Every piece an element is written as carries its ElementId.
+    let mut by_id: BTreeMap<u64, Vec<usize>> = BTreeMap::new();
     for (index, entity) in model.entities.iter().enumerate() {
         if let IfcEntity::BuildingElement {
             type_guid: Some(tag),
@@ -109,7 +131,7 @@ pub fn attach(file: &mut RevitFile, model: &mut IfcModel) -> Result<Report> {
         } = entity
         {
             if let Ok(id) = tag.parse::<u64>() {
-                by_id.entry(id).or_insert(index);
+                by_id.entry(id).or_default().push(index);
             }
         }
     }
@@ -144,41 +166,44 @@ pub fn attach(file: &mut RevitFile, model: &mut IfcModel) -> Result<Report> {
     }
     let mut additions: Vec<(usize, &'static str, Vec<Property>)> = Vec::new();
     let mut left_out = 0;
-    for (id, &index) in &by_id {
-        let (
-            Some(IfcEntity::BuildingElement {
+    for (id, indices) in &by_id {
+        let Some(parameters) = saved.elements.get(id) else {
+            continue;
+        };
+        for (piece, &index) in indices.iter().enumerate() {
+            let Some(IfcEntity::BuildingElement {
                 ifc_type,
                 predefined_type,
                 ..
-            }),
-            Some(parameters),
-        ) = (model.entities.get(index), saved.elements.get(id))
-        else {
-            continue;
-        };
-        let mut seen: BTreeSet<&str> = BTreeSet::new();
-        for parameter in parameters {
-            let Some(name) = parameter.name.as_deref() else {
-                continue;
-            };
-            let Some((set, property)) =
-                undefined_property(name, ifc_type, predefined_type.as_deref())
+            }) = model.entities.get(index)
             else {
                 continue;
             };
-            if !seen.insert(name) {
-                continue;
-            }
-            match parameter.value.as_str().filter(|text| !text.is_empty()) {
-                Some(text) => additions.push((
-                    index,
-                    set,
-                    vec![Property {
-                        name: property.to_string(),
-                        value: PropertyValue::Text(text.to_string()),
-                    }],
-                )),
-                None => left_out += 1,
+            let mut seen: BTreeSet<&str> = BTreeSet::new();
+            for parameter in parameters {
+                let Some(name) = parameter.name.as_deref() else {
+                    continue;
+                };
+                let Some((set, property, kind)) =
+                    parameter_placement(name, ifc_type, predefined_type.as_deref())
+                else {
+                    continue;
+                };
+                if !seen.insert(name) {
+                    continue;
+                }
+                match parameter.value.as_str().filter(|text| !text.is_empty()) {
+                    Some(text) => additions.push((
+                        index,
+                        set,
+                        vec![Property {
+                            name: property.to_string(),
+                            value: kind(text.to_string()),
+                        }],
+                    )),
+                    None if piece == 0 => left_out += 1,
+                    None => {}
+                }
             }
         }
     }

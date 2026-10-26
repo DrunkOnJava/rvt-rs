@@ -3927,6 +3927,7 @@ pub fn build_export_diagnostics_with_limits(
 /// [`saved_meshes::attach`] does.
 pub fn recount_exported(diagnostics: &mut ExportDiagnostics, model: &IfcModel) {
     diagnostics.exported = exported_model_diagnostics(model);
+    diagnostics.decoded.parameter_value_count = pset_property_value_count(model);
 }
 
 fn exported_model_diagnostics(model: &IfcModel) -> ExportedModelDiagnostics {

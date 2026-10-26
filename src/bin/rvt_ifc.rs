@@ -207,10 +207,13 @@ fn run(args: Args) -> anyhow::Result<()> {
         // Like Revit's property sets, this only adds to the export: when the
         // parameters cannot be read, it goes ahead without them, and says so.
         match rvt::ifc::revit_set_placement::attach(&mut rf, &mut model) {
-            Ok(report) => eprintln!(
-                "rvt-ifc: {} properties on {} elements written where Revit's exporter writes them ({} parameters of a kind not written left out)",
-                report.properties, report.elements, report.left_out
-            ),
+            Ok(report) => {
+                rvt::ifc::recount_exported(&mut diagnostics, &model);
+                eprintln!(
+                    "rvt-ifc: {} properties on {} elements written where Revit's exporter writes them ({} parameters of a kind not written left out)",
+                    report.properties, report.elements, report.left_out
+                );
+            }
             Err(e) => {
                 eprintln!("rvt-ifc: properties not placed as Revit's exporter places them: {e:#}")
             }
