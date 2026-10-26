@@ -8,7 +8,8 @@
 //! kind in a field, the same on every file.
 //!
 //! Output, one line per mullion type and one per family its types name:
-//!   type <type id> family=<family id> name=<SymbolInfo.m_name>
+//!   type <type id> family=<family id> name=<SymbolInfo.m_name> classes=<class,...>
+//!   typefields <type id> <object>.<field>=<value> ...
 //!   family <family id> <record class> <object>.<field>=<value> ...
 //! every number, boolean and short string of the family record's first 40
 //! objects, spaces as `_`.
@@ -91,11 +92,24 @@ fn main() -> anyhow::Result<()> {
                 .and_then(Value::as_str)
                 .unwrap_or("-")
                 .replace(' ', "_");
+            let classes: BTreeSet<&str> = graph
+                .objects
+                .iter()
+                .map(|object| object.class_name.as_str())
+                .collect();
             println!(
-                "type {} family={} name={name}",
+                "type {} family={} name={name} classes={}",
                 record.identity.element_id,
-                family.map_or("-".into(), |f| f.to_string())
+                family.map_or("-".into(), |f| f.to_string()),
+                classes.into_iter().collect::<Vec<_>>().join(",")
             );
+            if name != "-" {
+                println!(
+                    "typefields {} {}",
+                    record.identity.element_id,
+                    scalars(graph).join(" ")
+                );
+            }
             families.extend(family);
             Ok(())
         },
