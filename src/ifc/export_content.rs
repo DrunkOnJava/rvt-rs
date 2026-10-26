@@ -626,20 +626,22 @@ pub fn append_typed_production_elements(
             .flatten();
         // The Reference is the type's name however Revit names the element:
         // electrical equipment named by its panel name has one too (B29).
-        // A stair run or landing named for its stair (RE-65) still has its
-        // own type's.
-        let run_type = matches!(decoded.class.as_str(), "StairsRun" | "StairsLanding")
-            .then(|| {
-                decoded.fields.iter().find_map(|(name, value)| match value {
-                    InstanceField::String(text)
-                        if name == crate::partition_schema_mvp::TYPE_NAME_FIELD =>
-                    {
-                        Some(text.clone())
-                    }
-                    _ => None,
-                })
+        // A stair, run or landing named by RE-65 still has its own type's.
+        let run_type = matches!(
+            decoded.class.as_str(),
+            "Stair" | "StairsRun" | "StairsLanding"
+        )
+        .then(|| {
+            decoded.fields.iter().find_map(|(name, value)| match value {
+                InstanceField::String(text)
+                    if name == crate::partition_schema_mvp::TYPE_NAME_FIELD =>
+                {
+                    Some(text.clone())
+                }
+                _ => None,
             })
-            .flatten();
+        })
+        .flatten();
         let reference_type = family_and_type(&decoded)
             .filter(|_| own_name.is_none() && !opening_only)
             .map(|(_, type_name)| type_name)
