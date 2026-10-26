@@ -125,7 +125,8 @@ def main(argv):
             theirs[key][name] = value
     walls = {k: v for k, v in theirs.items() if k in mine}
     extend = {}
-    for wall in ifcopenshell.open(args[1]).by_type("IfcWall"):
+    revit_file = ifcopenshell.open(args[1])
+    for wall in revit_file.by_type("IfcWall"):
         if wall.Tag:
             common = ifcopenshell.util.element.get_psets(wall, psets_only=True).get("Pset_WallCommon", {})
             extend[f"tag:{wall.Tag}"] = common.get("ExtendToStructure")
