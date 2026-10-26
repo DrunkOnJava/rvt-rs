@@ -400,16 +400,17 @@ impl RevitFile {
     }
 
     /// Where every native record is (`crate::native_document::RecordIndex`),
-    /// memoised (#1032).
-    pub(crate) fn native_record_index(
+    /// once a native pass has recorded it (#1032).
+    pub(crate) fn native_record_index(&self) -> Option<Arc<crate::native_document::RecordIndex>> {
+        self.native_record_index.clone()
+    }
+
+    /// Keep the record index a native pass recorded (#1032).
+    pub(crate) fn remember_native_record_index(
         &mut self,
-    ) -> anyhow::Result<Arc<crate::native_document::RecordIndex>> {
-        if let Some(cached) = &self.native_record_index {
-            return Ok(Arc::clone(cached));
-        }
-        let index = Arc::new(crate::native_document::build_record_index(self)?);
-        self.native_record_index = Some(Arc::clone(&index));
-        Ok(index)
+        index: crate::native_document::RecordIndex,
+    ) {
+        self.native_record_index = Some(Arc::new(index));
     }
 
     /// ElementIds `research::partition_element_records::assign_second_prologue_ids`

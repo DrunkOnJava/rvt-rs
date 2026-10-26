@@ -347,59 +347,14 @@ pub fn extract(
 // Tracker: B80.
 /// Every current or historical record of every partition in [`Options`]'
 /// default channels (#1032): its channel, ElementId, partition and the class
-/// tag its body opens with, sorted, read in one walk with the default stream
-/// and group budgets and memoised on the handle (`RevitFile::native_record_index`).
-/// A pass with those budgets finds the partitions holding its selected
-/// records from it, rather than walking every partition for them, and walks
-/// only those partitions.
+/// tag its body opens with. The first pass with the default channels and
+/// budgets records it while it walks every partition for its own records,
+/// and the handle keeps it; every later such pass finds the partitions
+/// holding its selected records from it, rather than walking every
+/// partition for them, and walks only those partitions.
 #[derive(Debug)]
 pub struct RecordIndex {
     records: Vec<(u64, u64, u32, Option<u16>)>,
-}
-
-/// The [`RecordIndex`] of `file`.
-pub(crate) fn build_record_index(file: &mut RevitFile) -> Result<RecordIndex> {
-    let version = file.basic_file_info()?.version;
-    ensure!(
-        matches!(version, 2023..=2027),
-        "native record framing is unvalidated for Revit {version}"
-    );
-    let preamble = file.native_preamble()?;
-    let defaults = Options::default();
-    let mut names: Vec<_> = file
-        .stream_names()
-        .iter()
-        .filter(|n| n.starts_with("Partitions/"))
-        .cloned()
-        .collect();
-    names.sort();
-    let mut records = Vec::new();
-    for name in &names {
-        let partition: u32 = name[11..].parse()?;
-        let stored = file.read_stream_with_limit(name, defaults.max_stream_bytes)?;
-        let prepared = compression::prepare_stream_for_inflate(name, &stored);
-        let inflated = file.inflated_partition(name).ok();
-        native_segments::walk_inflated(
-            &prepared,
-            inflated.as_deref(),
-            &preamble.registry,
-            defaults.max_group_bytes,
-            |source, bytes| {
-                if source.content_key.is_some() || !defaults.channels.contains(&source.channel) {
-                    return Ok(());
-                }
-                for (id, _, start, end) in group_records(source, bytes, version)? {
-                    let tag = bytes[start..end]
-                        .get(..2)
-                        .map(|b| u16::from_le_bytes([b[0], b[1]]));
-                    records.push((source.channel, id, partition, tag));
-                }
-                Ok(())
-            },
-        )?;
-    }
-    records.sort_unstable();
-    Ok(RecordIndex { records })
 }
 
 pub fn extract_graphs(
@@ -557,11 +512,12 @@ fn extract_records(
     // this without a walk, and the walk below visits only the partitions
     // holding a selected record.
     let defaults = Options::default();
-    let record_index = (options.max_stream_bytes == defaults.max_stream_bytes
+    let indexable = options.max_stream_bytes == defaults.max_stream_bytes
         && options.max_group_bytes == defaults.max_group_bytes
-        && options.channels == defaults.channels)
-        .then(|| file.native_record_index().ok())
-        .flatten();
+        && options.channels == defaults.channels;
+    let record_index = indexable.then(|| file.native_record_index()).flatten();
+    let mut indexed: Option<Vec<(u64, u64, u32, Option<u16>)>> =
+        (indexable && record_index.is_none()).then(Vec::new);
     let walked: Option<BTreeSet<u32>> = record_index.as_ref().map(|record_index| {
         for &(channel, id, partition, tag) in &record_index.records {
             if !options.channels.contains(&channel) {
@@ -593,7 +549,12 @@ fn extract_records(
                     return Ok(());
                 }
                 for (id, _, start, end) in group_records(source, bytes, version)? {
-                    if is_selected(id, &bytes[start..end]) {
+                    let body = &bytes[start..end];
+                    if let Some(indexed) = indexed.as_mut() {
+                        let tag = body.get(..2).map(|b| u16::from_le_bytes([b[0], b[1]]));
+                        indexed.push((source.channel, id, partition, tag));
+                    }
+                    if is_selected(id, body) {
                         holders
                             .entry((source.channel, id))
                             .or_default()
@@ -603,6 +564,9 @@ fn extract_records(
                 Ok(())
             },
         )?;
+    }
+    if let Some(records) = indexed {
+        file.remember_native_record_index(RecordIndex { records });
     }
     let mut seen = BTreeSet::new();
     let mut seen_ids = BTreeSet::new();
