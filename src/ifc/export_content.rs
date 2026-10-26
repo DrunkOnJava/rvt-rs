@@ -1142,6 +1142,7 @@ pub fn append_typed_production_elements(
                 },
             });
         }
+        add_level_slab_pitch(&mut reference_sets, &ifc_type, entities.get(entity_index));
         // RE-154: the common property sets' Reference, the type's name;
         // RE-156: the shared parameter Serial Number.
         for set in reference_sets.into_iter().chain(serial_sets) {
@@ -1868,6 +1869,55 @@ fn add_extend_to_structure(sets: &mut Vec<PropertySet>, ifc_type: &str, decoded:
         Some(set) => set.properties.push(property),
         None => sets.push(PropertySet {
             name: "Pset_WallCommon".into(),
+            properties: vec![property],
+        }),
+    }
+}
+
+/// Add `PitchAngle` 0 to a slab's `Pset_SlabCommon` among `sets` where its
+/// body is an extrusion of its own outline, so its top lies level: revit-ifc's
+/// `SlopeCalculator` (CLEANROOM.md source 5) gives a slab with no sloped
+/// extrusion and no location curve the slope of its largest upward face
+/// (RE-238). A body that is the record's box, or a solid, gets nothing.
+fn add_level_slab_pitch(
+    sets: &mut Vec<PropertySet>,
+    ifc_type: &str,
+    entity: Option<&entities::IfcEntity>,
+) {
+    if ifc_type != "IFCSLAB" {
+        return;
+    }
+    let Some(entities::IfcEntity::BuildingElement {
+        extrusion: Some(_),
+        solid_shape: None,
+        property_set,
+        ..
+    }) = entity
+    else {
+        return;
+    };
+    let mut boxed = false;
+    let mut resolved = false;
+    for property in property_set.iter().flat_map(|set| &set.properties) {
+        match (property.name.as_str(), &property.value) {
+            ("BodySource", PropertyValue::Text(text)) => {
+                boxed = text == RECORD_BBOX_BODY_SOURCE;
+            }
+            ("ProfileResolved", PropertyValue::Boolean(true)) => resolved = true,
+            _ => {}
+        }
+    }
+    if boxed && !resolved {
+        return;
+    }
+    let property = Property {
+        name: "PitchAngle".into(),
+        value: PropertyValue::AngleRadians(0.0),
+    };
+    match sets.iter_mut().find(|set| set.name == "Pset_SlabCommon") {
+        Some(set) => set.properties.push(property),
+        None => sets.push(PropertySet {
+            name: "Pset_SlabCommon".into(),
             properties: vec![property],
         }),
     }
