@@ -34,6 +34,15 @@
 #     BIN_DIR/examples: its output on the model, ending with its exit status;
 #   - probe_score.txt, when PROBE_SCORER also names a scorer in
 #     PROBE_SCORER_DIR taking <probe output> <revit-export.ifc>.
+# PROBE may name several probes and PROBE_SCORER a scorer for each, in the
+# same order ("-" for none); each probe then writes probe-<probe>.txt and
+# probe_score-<probe>.txt.
+# MEASURE_MODELS, when set, keeps only the models whose names match one of
+# its patterns (e.g. "nordic-office-* core-interior"). MEASURE_SCORERS, when
+# set, runs on the models only the steps it names: tools/re scorers, and
+# info, gltf, schema and witness ("none" for none of them; rvt-gltf runs
+# when a .glb scorer or gltf is named). Every model is still exported and
+# hashed.
 # When FAMILY_DIR names the Autodesk family corpus, each of its .rfa files gets
 # OUT_DIR/family-<file>/ with the same info.json and info.exit (a family
 # carries its Atom entry in a PartAtom stream) and, when PROBE is built, the
@@ -89,6 +98,34 @@ material_colours_vs_ifc openings_vs_ifc opening_hosts_vs_ifc opening_boxes_vs_if
 door_bodies_vs_ifc door_window_sizes_vs_ifc oriented_boxes_vs_ifc plan_profiles_vs_ifc
 pipe_bodies_vs_ifc duct_bodies_vs_ifc roof_bodies_vs_ifc stair_bodies_vs_ifc ports_vs_ifc psets_vs_ifc qtos_vs_ifc saved_meshes_vs_ifc tagged_spaces_vs_ifc port_places_vs_ifc predefined_types_vs_ifc box_bodies_vs_ifc column_bodies_vs_ifc mesh_bodies_vs_ifc wall_ends_list"
 GLB_SCORERS="wall_bodies_vs_ifc wall_ends_cv_vs_ifc wall_layers_vs_ifc slab_layers_vs_ifc glb_material_colours_vs_ifc"
+
+read -ra MODEL_PATTERNS <<< "${MEASURE_MODELS:-}"
+read -ra STEPS <<< "${MEASURE_SCORERS:-}"
+wanted_model() { # name
+  local pattern
+  [ "${#MODEL_PATTERNS[@]}" -gt 0 ] || return 0
+  for pattern in "${MODEL_PATTERNS[@]}"; do
+    # shellcheck disable=SC2254 # each is a pattern
+    case "$1" in $pattern) return 0 ;; esac
+  done
+  return 1
+}
+wanted() { # step
+  local step
+  [ "${#STEPS[@]}" -gt 0 ] || return 0
+  for step in "${STEPS[@]}"; do
+    [ "$step" = "$1" ] && return 0
+  done
+  return 1
+}
+wanted_glb() {
+  local s
+  wanted gltf && return 0
+  for s in $GLB_SCORERS; do
+    wanted "$s" && return 0
+  done
+  return 1
+}
 
 # Witness artifacts (research/witness/<id>/observations/rvt-rs.json) per model.
 witness_artifacts() {
@@ -171,28 +208,36 @@ measure_model() { # name rvt ref
   local name="$1" rvt="$2" ref="$3" dir item_started artifact s
   item_started=$(date +%s%N)
   dir=$(model_dir "$name"); mkdir -p "$dir"
-  timed "$dir" rvt-gltf "$BIN/rvt-gltf" "$MODELS/$rvt" -o "$dir/model.glb" > "$dir/rvt-gltf.log" 2>&1
-  echo "exit $?" >> "$dir/rvt-gltf.log"
-  timed "$dir" rvt-info info "$MODELS/$rvt" "$dir"
+  if wanted_glb; then
+    timed "$dir" rvt-gltf "$BIN/rvt-gltf" "$MODELS/$rvt" -o "$dir/model.glb" > "$dir/rvt-gltf.log" 2>&1
+    echo "exit $?" >> "$dir/rvt-gltf.log"
+  fi
+  wanted info && timed "$dir" rvt-info info "$MODELS/$rvt" "$dir"
   grep -v -E '^FILE_NAME\(|IFCOWNERHISTORY' "$dir/model.ifc" | sha256sum | cut -d' ' -f1 > "$dir/ifc.sha256"
   # A writer path only these models reach, such as the office files'
   # thermal transmittance unit (RE-194), is checked here.
-  [ -s "$dir/model.ifc" ] && schema "$dir" 125829120
+  [ -s "$dir/model.ifc" ] && wanted schema && schema "$dir" 125829120
   # The witness observations committed for this model (research/witness/),
   # regenerated so a change to its IFC can commit them from the results.
-  for artifact in $(witness_artifacts "$name"); do
-    timed "$dir" "witness-$artifact" "$BIN/rvt-ifc" "$MODELS/$rvt" -o "$dir/witness.ifc" --observation "$dir/witness-$artifact.json" --artifact-id "$artifact" > /dev/null 2>&1
-    rm -f "$dir/witness.ifc"
-  done
+  if wanted witness; then
+    for artifact in $(witness_artifacts "$name"); do
+      timed "$dir" "witness-$artifact" "$BIN/rvt-ifc" "$MODELS/$rvt" -o "$dir/witness.ifc" --observation "$dir/witness-$artifact.json" --artifact-id "$artifact" > /dev/null 2>&1
+      rm -f "$dir/witness.ifc"
+    done
+  fi
   if [ "$ref" != "-" ]; then
     for s in $IFC_SCORERS; do
+      wanted "$s" || continue
       # ports_vs_ifc reads the findings the schema step's validation wrote,
       # rather than validating the export again.
       extra=()
       [ "$s" = ports_vs_ifc ] && [ -f "$dir/validation.jsonl" ] && extra=(--validation "$dir/validation.jsonl")
       score "$dir/$s.txt" "$SCORERS/$s.py" "$dir/model.ifc" "$MODELS/$ref" "${extra[@]}"
     done
-    for s in $GLB_SCORERS; do score "$dir/$s.txt" "$SCORERS/$s.py" "$dir/model.glb" "$MODELS/$ref"; done
+    for s in $GLB_SCORERS; do
+      wanted "$s" || continue
+      score "$dir/$s.txt" "$SCORERS/$s.py" "$dir/model.glb" "$MODELS/$ref"
+    done
   fi
   # The bulky outputs stay out of the uploaded results.
   rm -f "$dir/model.glb" "$dir/validation.jsonl"
@@ -247,31 +292,40 @@ measure_sample() { # sample
 # Every probe runs after the items, alone, one at a time: a probe is cut off
 # after 20 minutes, and items running beside it would slow it by up to about
 # 2x, so a probe would stop sooner than it always has.
-probe() { # dir out args...
-  local dir="$1" out="$2" step; shift 2
+read -ra PROBES <<< "${PROBE:-}"
+read -ra PROBE_SCORERS <<< "${PROBE_SCORER:-}"
+# A run of one probe writes probe.txt (probe_score.txt, probe-pair.txt), a
+# run of several probe-<probe>.txt (probe_score-<probe>.txt, ...).
+probe_out() { # dir stem probe
+  if [ "${#PROBES[@]}" -gt 1 ]; then echo "$1/$2-$3.txt"; else echo "$1/$2.txt"; fi
+}
+probe() { # probe dir out args...
+  local name="$1" dir="$2" out="$3" step; shift 3
   step=$(basename "$out" .txt)
-  timed "$dir" "$step" timeout 1200 "$BIN/examples/$PROBE" "$@" > "$out" 2>&1
+  timed "$dir" "$step" timeout 1200 "$BIN/examples/$name" "$@" > "$out" 2>&1
   echo "exit $?" >> "$out"
 }
-probe_model() { # name rvt ref
-  local dir
-  dir=$(model_dir "$1")
-  probe "$dir" "$dir/probe.txt" "$MODELS/$2"
-  if [ "$3" != "-" ] && [ -n "${PROBE_SCORER:-}" ] && [ -f "${PROBE_SCORER_DIR:-$SCORERS}/$PROBE_SCORER.py" ]; then
-    score "$dir/probe_score.txt" "${PROBE_SCORER_DIR:-$SCORERS}/$PROBE_SCORER.py" "$dir/probe.txt" "$MODELS/$3" --list
+probe_model() { # probe scorer name rvt ref
+  local dir scorer="${PROBE_SCORER_DIR:-$SCORERS}/$2.py"
+  dir=$(model_dir "$3")
+  probe "$1" "$dir" "$(probe_out "$dir" probe "$1")" "$MODELS/$4"
+  if [ "$5" != "-" ] && [ "$2" != "-" ] && [ -f "$scorer" ]; then
+    score "$(probe_out "$dir" probe_score "$1")" "$scorer" "$(probe_out "$dir" probe "$1")" "$MODELS/$5" --list
   fi
 }
-probe_family() { # family
-  probe "$(family_dir "$1")" "$(family_dir "$1")/probe.txt" "$1"
+probe_family() { # probe family
+  local dir
+  dir=$(family_dir "$2")
+  probe "$1" "$dir" "$(probe_out "$dir" probe "$1")" "$2"
 }
-probe_sample() { # sample
-  local sample="$1" dir copy
+probe_sample() { # probe sample
+  local sample="$2" dir copy
   dir=$(sample_dir "$sample")
-  probe "$dir" "$dir/probe.txt" "$sample" --records
+  probe "$1" "$dir" "$(probe_out "$dir" probe "$1")" "$sample" --records
   if [ -n "${PROBE_PAIR_RELEASE:-}" ] && [ "$(basename "$sample" | cut -c1-4)" != "$PROBE_PAIR_RELEASE" ]; then
     for copy in "$SAMPLE_DIR/$PROBE_PAIR_RELEASE"-*.rvt; do
       [ -f "$copy" ] && [ "$(pair_key "$copy")" = "$(pair_key "$sample")" ] || continue
-      probe "$dir" "$dir/probe-pair.txt" "$sample" "$copy"
+      probe "$1" "$dir" "$(probe_out "$dir" probe-pair "$1")" "$sample" "$copy"
     done
   fi
 }
@@ -301,6 +355,7 @@ while IFS='|' read -r name rvt ref; do
     echo "skipping $name: $rvt absent"
     continue
   fi
+  wanted_model "$name" || continue
   rank=$(stat -c %s "$MODELS/$rvt")
   [ "$ref" = "-" ] || rank=$(( rank + 1000000000000 ))
   items="$items
@@ -332,12 +387,15 @@ while IFS='|' read -r _ run first second third; do
   spawn "$run" "$first" "$second" "$third"
 done <<< "$items"
 wait
-if [ -n "${PROBE:-}" ] && [ -x "$BIN/examples/$PROBE" ]; then
+for i in "${!PROBES[@]}"; do
+  name=${PROBES[$i]}
+  scorer=${PROBE_SCORERS[$i]:--}
+  [ -x "$BIN/examples/$name" ] || continue
   while IFS='|' read -r _ run first second third; do
     case "$run" in
-      measure_model) probe_model "$first" "$second" "$third" ;;
-      measure_family) probe_family "$first" ;;
-      measure_sample) probe_sample "$first" ;;
+      measure_model) probe_model "$name" "$scorer" "$first" "$second" "$third" ;;
+      measure_family) probe_family "$name" "$first" ;;
+      measure_sample) probe_sample "$name" "$first" ;;
     esac
   done <<< "$items"
-fi
+done
