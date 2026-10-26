@@ -98,6 +98,12 @@ struct Args {
     /// put it in.
     #[arg(long, conflicts_with = "placeholder")]
     revit_set_placement: bool,
+    /// Leave out the base quantities (the `Qto_` sets: lengths, areas and
+    /// widths), as Revit's exporter does when its export setup's "Export
+    /// base quantities" is off. Revit's built-in IFC4 setups turn it on, and
+    /// so does rvt-ifc by default (RE-242).
+    #[arg(long)]
+    no_base_quantities: bool,
     /// Write a JSON diagnostics sidecar for bug reports and support.
     ///
     /// The sidecar includes input metadata, decoded/exported element counts,
@@ -218,6 +224,12 @@ fn run(args: Args) -> anyhow::Result<()> {
                 eprintln!("rvt-ifc: properties not placed as Revit's exporter places them: {e:#}")
             }
         }
+    }
+
+    if args.no_base_quantities {
+        let left_out = rvt::ifc::leave_out_base_quantities(&mut model);
+        rvt::ifc::recount_exported(&mut diagnostics, &model);
+        eprintln!("rvt-ifc: {left_out} base quantities left out");
     }
 
     let out_path = args.output.clone().unwrap_or_else(|| {
