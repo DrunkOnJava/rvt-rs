@@ -1142,7 +1142,7 @@ pub fn append_typed_production_elements(
                 },
             });
         }
-        add_level_slab_pitch(&mut reference_sets, entities.get(entity_index));
+        add_level_slab_pitch(&mut reference_sets, &decoded, entities.get(entity_index));
         // RE-154: the common property sets' Reference, the type's name;
         // RE-156: the shared parameter Serial Number.
         for set in reference_sets.into_iter().chain(serial_sets) {
@@ -1875,15 +1875,25 @@ fn add_extend_to_structure(sets: &mut Vec<PropertySet>, ifc_type: &str, decoded:
 }
 
 /// Add `PitchAngle` 0 to a slab's `Pset_SlabCommon` among `sets` where its
-/// body is an extrusion of its own outline, so its top lies level: revit-ifc's
-/// `SlopeCalculator` (CLEANROOM.md source 5) gives a slab with no sloped
-/// extrusion and no location curve the slope of its largest upward face
-/// (RE-238). A body that is the record's box, or a solid, gets nothing.
-fn add_level_slab_pitch(sets: &mut Vec<PropertySet>, entity: Option<&entities::IfcEntity>) {
+/// top is known to lie level: revit-ifc's `SlopeCalculator` (CLEANROOM.md
+/// source 5) gives a slab with no sloped extrusion and no location curve
+/// the slope of its largest upward face (RE-238). A stair landing drawn from
+/// its top down its type's thickness (RE-214) is level, and so is a slab
+/// drawn as an extrusion whose depth is its type's layers' total
+/// thickness, as a sloped or shape-edited slab's record box is deeper than
+/// its layers. Any other slab gets nothing: on the BIM4LCA office the
+/// record boxes of 8 sloped floors are drawn level, and Revit gives them
+/// 1.9 to 24 degrees.
+fn add_level_slab_pitch(
+    sets: &mut Vec<PropertySet>,
+    decoded: &DecodedElement,
+    entity: Option<&entities::IfcEntity>,
+) {
+    const TOLERANCE_FEET: f64 = 1e-3;
     let Some(entities::IfcEntity::BuildingElement {
         ifc_type,
-        extrusion: Some(_),
-        solid_shape: None,
+        extrusion,
+        solid_shape,
         property_set,
         ..
     }) = entity
@@ -1893,18 +1903,25 @@ fn add_level_slab_pitch(sets: &mut Vec<PropertySet>, entity: Option<&entities::I
     if ifc_type != "IFCSLAB" {
         return;
     }
-    let mut boxed = false;
-    let mut resolved = false;
-    for property in property_set.iter().flat_map(|set| &set.properties) {
-        match (property.name.as_str(), &property.value) {
-            ("BodySource", PropertyValue::Text(text)) => {
-                boxed = text == RECORD_BBOX_BODY_SOURCE;
-            }
-            ("ProfileResolved", PropertyValue::Boolean(true)) => resolved = true,
-            _ => {}
+    let landing = property_set
+        .iter()
+        .flat_map(|set| &set.properties)
+        .any(|property| {
+            property.name == "BodySource"
+                && matches!(&property.value, PropertyValue::Text(text) if text == LANDING_SLAB_BODY_SOURCE)
+        });
+    let layered = match (extrusion, solid_shape) {
+        (Some(body), None) => {
+            crate::partition_schema_mvp::element_layers_from_fields(&decoded.fields)
+                .filter(|layers| layers.stacked && !layers.layers.is_empty())
+                .is_some_and(|layers| {
+                    let total: f64 = layers.layers.iter().map(|layer| layer.width_feet).sum();
+                    (total - body.height_feet).abs() <= TOLERANCE_FEET
+                })
         }
-    }
-    if boxed && !resolved {
+        _ => false,
+    };
+    if !(landing || layered) {
         return;
     }
     let property = Property {
