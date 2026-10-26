@@ -36,5 +36,5 @@ The office's quantities equal go from 20,188 to 20,247 as built (20,096 to 20,15
 ## 4. Reproduce
 
 ```bash
-gh workflow run measure.yml --ref main -f ref=2d77b8d16e6e8c0fc2e6c3c5ab84c0d804128fda -f base=main -f nordic=true -f r2025=true
+gh workflow run measure.yml --ref main -f ref=2ee27bb22e24f77524ec413ee4a6e32ad8cda867 -f base=main -f nordic=true -f r2025=true
 ```
