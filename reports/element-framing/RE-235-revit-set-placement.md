@@ -4,8 +4,8 @@
 **Issues:** #35 (parameters), W7 of [`docs/release-1.0-criteria.md`](../../docs/release-1.0-criteria.md)
 **Decision:** Griffin, 2026-10-25: the default output follows buildingSMART's IFC4 definitions; Revit's placements are written with an option, and W7 is measured with it on. A value Revit's export writes that is known to be wrong is left out.
 **Artefacts:** the BIM4LCA office as built and at building permit (Revit 2024, Revit's IFC4 exports), RE1 Architecture (Revit 2025, Revit's IFC2X3 export) and puzzbobb's R2025 models (Revit 2025, Revit's IFC4 exports), as Measure fetches them
-**Runs:** Measure [40243309751](https://github.com/DrunkOnJava/rvt-rs/actions/runs/40243309751) (the entities each missing property is on), [40253819602](https://github.com/DrunkOnJava/rvt-rs/actions/runs/40253819602) (`examples/probe_re235_room_text_parameters.rs`), [40254025441](https://github.com/DrunkOnJava/rvt-rs/actions/runs/40254025441) (a first rule, §3) and [40255914190](https://github.com/DrunkOnJava/rvt-rs/actions/runs/40255914190) (`--revit-set-placement` on)
-**Result:** positive: with `--revit-set-placement`, 947 more of the values Revit's export writes on the office are written, none different, and none Revit's export does not write.
+**Runs:** Measure [40243309751](https://github.com/DrunkOnJava/rvt-rs/actions/runs/40243309751) (the entities each missing property is on), [40253819602](https://github.com/DrunkOnJava/rvt-rs/actions/runs/40253819602) (`examples/probe_re235_room_text_parameters.rs`), [40254025441](https://github.com/DrunkOnJava/rvt-rs/actions/runs/40254025441) (a first rule, §3) and [40259011277](https://github.com/DrunkOnJava/rvt-rs/actions/runs/40259011277) (`--revit-set-placement` on, against `main` at ab0ff87a in [40258827136](https://github.com/DrunkOnJava/rvt-rs/actions/runs/40258827136))
+**Result:** positive: with `--revit-set-placement`, 961 more of the values Revit's export writes on the office are written, none different, and none Revit's export does not write.
 
 ## 1. Values in a set IFC4 does not hold them in
 
@@ -25,8 +25,8 @@ The probe printed every text parameter of each office room: each holds project p
 
 By default nothing changes. `rvt-ifc --revit-set-placement` (`ifc::revit_set_placement`) adds, merged into a set of the same name the element has:
 
-- a text parameter named `<set>.<property>` whose set applies to the element and whose property buildingSMART's definition of the set lacks altogether (`StandardPropertySet::defines`), as `IfcText`;
-- each standard set one of whose entities' names begins with the element's, with the element's `Reference`.
+- a text parameter named `<set>.<property>` whose set applies to the element and whose property buildingSMART's definition of the set lacks altogether (`StandardPropertySet::defines`), as `IfcText`, on every piece the element is written as;
+- each standard set one of whose entities' names begins with the element's, with a parameter named for that set's `Reference` if the element has one, else the element's `Reference`.
 
 ## 3. A set matched by name holds only `Reference`
 
@@ -34,15 +34,15 @@ A first rule wrote every property of such a set the element holds under the same
 
 ## 4. Measured
 
-`psets_vs_ifc` with the option on, against the same code without it:
+`psets_vs_ifc` with the option on, against `main` without it:
 
 | file | equal, off | on | different | Revit does not write |
 |---|---:|---:|---:|---:|
-| office as built | 43,906 | 44,853 | 56, both | 495, both |
-| office at permit | 44,088 | 45,035 | 56, both | 496, both |
-| R2025 Rooms_Stairs | 98 | 100 | 1, both | 0, both |
+| office as built | 43,934 | 44,895 | 56, both | 495, both |
+| office at permit | 44,116 | 45,077 | 56, both | 496, both |
+| R2025 Rooms_Stairs | 100 | 103 | 1, both | 0, both |
 
-The 947: 646 coverings, 298 `Pset_SpaceHeaterTypeCommon.Reference`, one air terminal box's `Pset_AirTerminalBoxTypeCommon.Reference` and two stairs' `Pset_StairFlightCommon.Reference` (14 once stairs carry their `Reference`). RE1 Architecture's IFC2X3 export writes neither name-matched set on its 11 spaces, so on RE1 they count as values Revit does not write; rvt-rs writes IFC4.
+The 961: 646 coverings, 298 `Pset_SpaceHeaterTypeCommon.Reference`, one air terminal box's `Pset_AirTerminalBoxTypeCommon.Reference` and the 16 stairs' `Pset_StairFlightCommon.Reference`. The diagnostics' `parameter_value_count` counts them. RE1 Architecture's IFC2X3 export writes neither name-matched set on its 11 spaces, so on RE1 they count as values Revit does not write; rvt-rs writes IFC4.
 
 ## 5. Revit values left out
 
