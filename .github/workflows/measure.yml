@@ -130,7 +130,7 @@ on:
         required: false
         default: ""
       scorers:
-        description: Only these steps on the models, tools/re scorers and info, gltf, schema, witness (e.g. "qtos_vs_ifc witness"), none for none, empty for all; every model is still exported and hashed
+        description: Only these steps on the models, tools/re scorers and info, gltf, schema, witness (e.g. "qtos_vs_ifc witness"; a tools/re script in no scorer list runs as an IFC scorer), none for none, empty for all; every model is still exported and hashed
         required: false
         default: ""
   # A change to the measurement itself measures its own PR against main.

@@ -117,6 +117,15 @@ IFC4_TYPE_SETS = {
 # IfcElementQuantity this scorer does not read, so those lengths are counted
 # apart here and scored by qtos_vs_ifc.py (#1016).
 IFC2X3_INVERT = ("Pset_FlowSegmentPipeSegment", "InvertElevation")
+# Values Revit's export writes that are known to be wrong (RE-235 §5): left out
+# of rvt-rs's export, so counted apart here, not as missing. A stair's or
+# flight's WalkingLineOffset is half the run's width in feet read as
+# millimetres.
+REVIT_DEFECTS = {
+    ("Pset_StairFlightCommon", "WalkingLineOffset"),
+    ("Pset_StairCommon", "WalkingLineOffset"),
+}
+
 IFC2X3_LENGTHS = {
     ("Pset_FlowSegmentPipeSegment", "Length"),
     ("Pset_FlowSegmentDuctSegment", "Length"),
@@ -238,6 +247,7 @@ def main(argv):
     as_quantities = 0
     twice = 0
     in_own_set = 0
+    defects = collections.Counter()
     for (key, pset, prop), value in sorted(theirs.items()):
         if key not in our_objects:
             continue
@@ -249,6 +259,9 @@ def main(argv):
             continue
         if pset.startswith("own:"):
             in_own_set += 1
+            continue
+        if (pset, prop) in REVIT_DEFECTS:
+            defects[(pset, prop)] += 1
             continue
         row = rows[(pset, prop)]
         row[0] += 1
@@ -271,6 +284,8 @@ def main(argv):
     )
     for (pset, prop), (n, equal, different, missing) in sorted(rows.items()):
         print(f"  {pset}.{prop}: {n}, equal {equal}, different {different}, missing {missing}")
+    for (pset, prop), n in sorted(defects.items()):
+        print(f"Revit values known to be wrong, left out (RE-235 §5): {pset}.{prop} {n}")
     if as_quantities:
         print(f"IFC2X3 lengths IFC4 holds as quantities, not scored here: {as_quantities}")
     if twice:

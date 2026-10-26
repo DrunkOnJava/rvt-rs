@@ -46,11 +46,12 @@ The 961: 646 coverings, 298 `Pset_SpaceHeaterTypeCommon.Reference`, one air term
 
 ## 5. Revit values left out
 
-A value Revit's export writes that is known to be wrong is not written, with or without the option:
+A value Revit's export writes that is known to be wrong is not written, with or without the option, and `tools/re/psets_vs_ifc.py` and `tools/re/qtos_vs_ifc.py` count it apart (`REVIT_DEFECTS`), not as missing: 63 `WalkingLineOffset` values and 10,003 mullions' `CrossSectionArea` on the office as built (Measure 40306633673):
 
 | property | Revit's value | why it is wrong |
 |---|---|---|
 | `Pset_StairFlightCommon.WalkingLineOffset`, `Pset_StairCommon.WalkingLineOffset` | half the run's width in feet, read as millimetres (0.00204 m on the office, 0.00164 m on the R2025 models' 1 m runs) | revit-ifc's `WalkingLineOffsetCalculator` returns feet unscaled |
+| `Qto_MemberBaseQuantities.CrossSectionArea` on curtain mullions (`IfcMember` `.MULLION.`) | an area that grows with the mullion's length: half its surface on 4,413 of the office's 10,003 mullions as built (0.3625 m² on a 3.6 m mullion of 50 × 50 mm, whose section is 0.0025 m²), never its section's area (0 of 10,003; Measure 40298992508, `tools/re/member_qtos_list.py` at 64fc4405) | IFC4 defines it as the area of the member's cross section. revit-ifc's `CrossSectionAreaCalculator` takes a parameter, then the extrusion data of the body it writes, then Revit's computed area (`HOST_AREA_COMPUTED`), a total area by the calculator's own comment; which of them gives the mullions' value is not read |
 
 ## 6. Reproduce
 
