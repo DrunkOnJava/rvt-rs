@@ -7,7 +7,10 @@ Reads `examples/probe_re251_wall_numbers.rs`'s `rec <tag> <class>
 `Qto_WallBaseQuantities` Revit writes, in feet, square feet or cubic feet as
 its kind is a length, area or volume, it counts the walls on which each field
 holds that number (a relative 1e-6), and prints, per quantity, how many walls
-carry it and the 8 fields equal on the most.
+carry it and the 8 fields equal on the most; then, for each quantity whose
+best field holds on some walls but not all, ranks every field's value against
+whether that best field is the quantity (`record_scalars_vs_ifc.py`'s
+ranking), to tell the walls it holds on.
 
 Usage:
 
@@ -20,6 +23,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from qtos_vs_ifc import quantities  # noqa: E402
+import record_scalars_vs_ifc  # noqa: E402
 
 FOOT = 0.3048
 TO_FEET = {
@@ -54,6 +58,7 @@ def main():
     rows = read_probe(args[0])
     totals = collections.Counter()
     hits = collections.defaultdict(collections.Counter)
+    equal = collections.defaultdict(dict)
     for (key, qset, name), (kind, value) in quantities(args[1])[0].items():
         tag = key.removeprefix("tag:")
         if qset != "Qto_WallBaseQuantities" or value is None or tag not in rows or kind not in TO_FEET:
@@ -61,12 +66,23 @@ def main():
         target = value * TO_FEET[kind]
         totals[name] += 1
         for field, numbers in rows[tag].items():
-            if any(abs(n - target) <= 1e-6 * max(1.0, abs(target)) for n in numbers):
+            ok = any(abs(n - target) <= 1e-6 * max(1.0, abs(target)) for n in numbers)
+            if ok:
                 hits[name][field] += 1
+            equal[(name, field)][tag] = ok
     print(f"probe: {len(rows)} walls")
     for name, n in sorted(totals.items()):
         best = ", ".join(f"{f} {k}" for f, k in hits[name].most_common(8)) or "none"
         print(f"{name}: {n} walls; {best}")
+    truths = {}
+    for name, n in totals.items():
+        if not hits[name]:
+            continue
+        field, k = hits[name].most_common(1)[0]
+        if 0 < k < n:
+            truths[f"{name}={field}"] = equal[(name, field)]
+    if truths:
+        record_scalars_vs_ifc.report(record_scalars_vs_ifc.read_probe(args[0]), truths)
     return 0
 
 
