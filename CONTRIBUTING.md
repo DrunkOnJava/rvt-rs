@@ -316,6 +316,24 @@ When you discover something new about the file format:
    a workflow file that is not yet on `main`, dispatch with `--ref <branch with
    the workflow> -f ref=<branch to measure>`.
 
+   A probe needs neither every model nor the full scorer suite, which takes
+   about 11 minutes on each office model. `models` keeps the models whose
+   names match its patterns, `scorers` runs only the steps it names (tools/re
+   scorers, and `info`, `gltf`, `schema`, `witness`; `none` for none), and
+   `probe` and `probe_scorer` take several, in the same order:
+
+   ```bash
+   gh workflow run measure.yml --ref <branch> -f base=none -f nordic=true \
+     -f models="nordic-office-*" -f scorers=none \
+     -f probe="<probe> <probe>" -f probe_scorer="<scorer> -"
+   ```
+
+   Every model kept is still exported and hashed, and each probe then writes
+   `probe-<probe>.txt` and `probe_score-<probe>.txt`. A run on a pull
+   request's head commit with `-f scorers=witness` writes the rvt-rs
+   witness observations its CI job will compare, so a change that moves
+   Core Interior's export can commit them before CI runs.
+
    The summary's `rvt-ifc` wall times come from the base and head jobs, which
    run on different runners; runner speed alone moves them by up to about
    1.7x. For a speed claim, add `-f timing=true`: one runner then builds both

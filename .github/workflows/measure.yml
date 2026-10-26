@@ -47,6 +47,15 @@
 # comparisons of #740 and #742:
 #
 #   gh workflow run measure.yml -f ref=my-branch -f base=none -f samples=true -f sample_years="2026 2027" -f probe=probe_re179_revit_2027 -f probe_pair_release=2026
+#
+# `models` keeps only the models whose names match its patterns, and
+# `scorers` runs only the steps it names on them (tools/re scorers, and info,
+# gltf, schema and witness; "none" for none), so a probe's run spends nothing
+# on the full scorer suite. `probe` and `probe_scorer` may each name several,
+# in the same order ("-" for no scorer); each probe then writes
+# probe-<probe>.txt and probe_score-<probe>.txt:
+#
+#   gh workflow run measure.yml -f ref=my-branch -f base=none -f nordic=true -f models="nordic-office-*" -f scorers=none -f probe="probe_a probe_b" -f probe_scorer="a_vs_ifc -"
 
 name: Measure
 
@@ -62,7 +71,7 @@ on:
         required: false
         default: main
       probe:
-        description: examples/ probe to run on each model as well (e.g. probe_re70_wall_join_lists), empty for none
+        description: examples/ probes to run on each model as well (e.g. probe_re70_wall_join_lists), space-separated, empty for none
         required: false
         default: ""
       keep_ifc:
@@ -71,7 +80,7 @@ on:
         required: false
         default: false
       probe_scorer:
-        description: tools/re scorer (no .py) to run on the probe's output and Revit's export, from the measured ref, empty for none
+        description: tools/re scorer (no .py) for each probe, in the same order ("-" for none), run on its output and Revit's export, from the measured ref; empty for none
         required: false
         default: ""
       probe_pair_release:
@@ -116,6 +125,14 @@ on:
         type: boolean
         required: false
         default: false
+      models:
+        description: Only the models whose names match these patterns (e.g. "nordic-office-* core-interior"), empty for every model fetched
+        required: false
+        default: ""
+      scorers:
+        description: Only these steps on the models, tools/re scorers and info, gltf, schema, witness (e.g. "qtos_vs_ifc witness"), none for none, empty for all; every model is still exported and hashed
+        required: false
+        default: ""
   # A change to the measurement itself measures its own PR against main.
   pull_request:
     paths:
@@ -177,9 +194,15 @@ jobs:
         run: |
           git log -1 --format='%H %s' > ../measured-commit.txt
           cargo build --profile ci --bin rvt-ifc --bin rvt-gltf --bin rvt-info
-          # A base older than the probe has no such example; it is skipped there.
-          if [ -n "$PROBE" ] && [ -f "examples/$PROBE.rs" ]; then
-            cargo build --profile ci --example "$PROBE"
+          # A base older than a probe has no such example; it is skipped there.
+          examples=()
+          for probe in $PROBE; do
+            if [ -f "examples/$probe.rs" ]; then
+              examples+=(--example "$probe")
+            fi
+          done
+          if [ "${#examples[@]}" -gt 0 ]; then
+            cargo build --profile ci "${examples[@]}"
           fi
         env:
           PROBE: ${{ inputs.probe }}
@@ -255,6 +278,8 @@ jobs:
           PROBE_SCORER: ${{ inputs.probe_scorer }}
           PROBE_PAIR_RELEASE: ${{ inputs.probe_pair_release }}
           PROBE_SCORER_DIR: measured/tools/re
+          MEASURE_MODELS: ${{ inputs.models }}
+          MEASURE_SCORERS: ${{ inputs.scorers }}
           KEEP_IFC: ${{ inputs.keep_ifc && '1' || '' }}
           FAMILY_DIR: ${{ (inputs.families || github.event_name == 'pull_request') && format('{0}/_corpus/examples/Autodesk', github.workspace) || '' }}
           SAMPLE_DIR: ${{ inputs.samples && format('{0}/_samples', github.workspace) || '' }}
