@@ -8,6 +8,291 @@ fragments a release moves into this file.
 
 ## [Unreleased]
 
+## [0.9.0] — 2026-10-26
+
+0.9.0 writes more of the property sets and base quantities Revit's own IFC
+export writes, and every number below is measured against that export.
+
+Base quantities are new. Curtain mullions' `Length` and, where Revit draws
+the mullion as an extrusion of its section, its `NetVolume`; doors' and
+windows' `Width`, `Height` and `Area`; walls' `Width` and the `Depth` of the
+openings their doors and windows cut; stair flights' `Length` and
+`NetVolume`; pipes' cross-section and outer surface; and the `Length` of
+columns joined to nothing are written as Revit writes them: 20,157 of the
+quantities Revit's export writes on the BIM4LCA office as built, one
+different (a mullion whose `Span` differs) and none that Revit's export
+leaves out. They are on by default, as in each of Revit's built-in IFC4
+export setups, and `rvt-ifc --no-base-quantities` leaves them out (RE-242).
+
+Elements carry more of Revit's properties: curtain mullions' `Span`, walls'
+`ExtendToStructure`, railings' `Height`, slabs' `PitchAngle` where their top
+is known to be level, stair flights' treads, tread lengths and nosing on
+Revit 2024 and 2025, and the `Reference` of stairs, runs, landings, openings
+and furniture. Curtain walls, pipes, wall sweeps and ramps take the type
+their native record names, and doors and windows are set in the wall their
+native record names. A project or shared parameter named for a standard
+property (`FireExit`) fills it where IFC4's set applies.
+
+`rvt-ifc --revit-set-placement` writes properties where Revit's exporter
+does and IFC4's definitions do not, such as a room's
+`Pset_SpaceCommon.FloorCovering` (RE-235); the default output follows
+buildingSMART's definitions. A value Revit's export writes that is known to
+be wrong (a stair's `WalkingLineOffset`, a curtain mullion's
+`CrossSectionArea`, a door opening's swapped `Width` and `Height`) is left
+out either way. `--saved-meshes` keeps an element's box where its saved mesh
+is only part of its body. Exports of Revit 2023 to 2027 files are faster:
+the native records are found through one index per file.
+
+puzzbobb's pull request takes each 2024 to 2027 file's record marker from its
+own schema (#1033). Thank you.
+
+### Upgrading from 0.8
+
+- No code change is needed: the stable API breaks nothing (`SavedMeshReport`
+  gains a field; it is `#[non_exhaustive]`).
+- An export now carries more property values and base quantities. For an
+  export without base quantities, as from a Revit setup with "Export base
+  quantities" off, pass `rvt-ifc --no-base-quantities`.
+
+### Added
+
+- **Parameters named for a standard property alone.** A project or shared
+  parameter named for a standard property set's property alone (`FireExit`)
+  now fills that property in each set that applies, where no
+  `<set>.<property>` parameter does, as Revit's export reads them: the
+  BIM4LCA office's `Pset_DoorCommon.FireExit` on all 266 doors, where none
+  was written before (RE-227).
+
+- **Base quantities from a stair flight's, pipe's and column's body (#1016,
+  RE-247).** Each stair flight drawn from its sketch carries
+  `Qto_StairFlightBaseQuantities.Length`, the span of its riser lines, and
+  `NetVolume`; each pipe whose cylinder is read carries its
+  `GrossCrossSectionArea` and `OuterSurfaceArea`; and each column joined to
+  nothing carries its `Length`, each as Revit's export writes it. On the
+  BIM4LCA office the quantities equal to Revit's go from 19,972 to 20,157 as
+  built, none different and none that Revit's export leaves out. A joined
+  column's `Length` and a curtain panel's `Width` are left out: Revit's
+  export gives none on 18 meshed columns and 3 panels that nothing in the
+  model tells apart.
+
+- **Curtain walls' types.** A curtain wall type whose serialised data gives no
+  name takes the one its native record holds, so each curtain wall is named
+  `Curtain Wall:<type>:<ElementId>`, typed, and carries its type's name as its
+  `Reference`, as Revit's export does: all 220 curtain walls of the BIM4LCA
+  office as built and at building permit, where none was before (RE-230).
+
+- **Doors and windows carry their base quantities (#1016).**
+  `Qto_DoorBaseQuantities` and `Qto_WindowBaseQuantities` hold `Width`,
+  `Height` and `Area`, the size revit-ifc reads from the door's or window's
+  Width and Height parameters. They are written where the symbol that draws
+  the element and its type agree on that size: on the BIM4LCA office as
+  built that is 196 of 269 doors and all 269 windows, each value as Revit
+  writes it, and none different.
+
+- **Openings face-hosted doors and windows cut.** A door or window hosted on
+  a face of another element, such as a roof hatch, cuts the opening its
+  symbol's solid makes in that element, as Revit's export writes it: on the
+  BIM4LCA office, roof 2991742's four 600 mm hatch openings, each at Revit's
+  place, through the roof's thickness, with Revit's name and GlobalId
+  (RE-225, #824).
+
+- **Curtain mullions carry `Qto_MemberBaseQuantities.Length` (#1016).**
+  It is the mullion's `Span` (RE-226), which Revit's export writes as its
+  length on all 10,003 of the BIM4LCA office's mullions: 9,984 of them as
+  built, and 10,012 of 10,031 at building permit, are now written as Revit
+  writes them, the first of the office's 50,580 base quantities after the
+  pipes' lengths.
+
+- **Curtain mullions' `NetVolume` (#1016, RE-243).** A mullion whose type
+  has its own rectangular or square section, standing on a straight curtain
+  wall whose profile is not edited, carries `Qto_MemberBaseQuantities.NetVolume`:
+  its section times its length, the volume of the extrusion Revit's export
+  draws it as. On the BIM4LCA office that is 7,795 of 10,003 mullions as
+  built and 7,823 of 10,031 at building permit, each Revit's value. Mullions
+  on curved curtain walls or ones with an edited profile, some of which
+  Revit draws as cut meshes, get none.
+
+- **Curtain mullions' `Span`.** Each curtain mullion carries
+  `Pset_MemberCommon.Span`, its length along its own axis, as Revit's export
+  writes it: Revit's value on 9,984 of the BIM4LCA office's 10,003 mullions as
+  built and 10,012 of 10,031 at building permit, where none was written
+  before (RE-226).
+
+- **Pipes, wall sweeps and ramps take the type their own record names
+  (RE-240, #35).** Where neither RE-130's stored pipe-type layout nor RE-69's
+  reference list types one, a pipe's `RbsPipeCurve.m_idType`, a wall sweep's
+  `WallSweep.m_typeId` or a ramp's `Ramp.m_rampAttrId` names its type, and the
+  type's record its name. On both BIM4LCA office files the 12 pipes, 9 wall
+  sweeps and 5 ramps that had neither now carry Revit's Name, ObjectType and
+  type object, and 52 more of Revit's property values (their types'
+  `Reference`) are written, none different.
+
+- **`rvt-ifc --no-base-quantities` (#1016).** Leaves out every base
+  quantity (the `Qto_` sets: lengths, widths, heights and areas), as
+  Revit's exporter does when its export setup's "Export base quantities" is
+  off. They stay on by default, as in each of Revit's built-in IFC4 setups
+  (RE-242). The quantity census counts the quantities rvt-rs writes apart
+  where Revit's reference export writes none, instead of as values Revit
+  does not write.
+
+- **Openings' `Depth` (#1016, RE-244).** The opening a door or window cuts
+  in a wall carries `Qto_OpeningElementBaseQuantities.Depth`, the wall's
+  thickness, where the symbol that draws it cuts an outline, as Revit's
+  export writes it: 184 of the BIM4LCA office's openings as built and 159 at
+  permit, each Revit's value. Their `Width` and `Height`, which Revit's
+  export swaps on every door opening (its `Width` is the opening's height),
+  are left out.
+
+- **Openings' `Reference`.** An opening of its host's own geometry, a floor's
+  sketch void or a hatch's cut in a roof, carries its host's type name as
+  `Pset_OpeningElementCommon.Reference`, as Revit's export writes it: 28
+  openings on the BIM4LCA office, none different (RE-237).
+
+- **Railings' `Height`.** Each railing's `Pset_RailingCommon` carries its
+  `Height`, its type's top rail height, as Revit's export writes it: on all
+  41 railings of the BIM4LCA office as built and at building permit, RE1
+  Architecture's one and both railings of each R2025 stair model, where none
+  was written before (RE-231).
+
+- **`rvt-ifc --revit-set-placement`.** Writes properties where Revit's own
+  exporter writes them and IFC4's definitions do not: a text parameter named
+  `<set>.<property>` for a property the set's IFC4 definition lacks (a room's
+  `Pset_SpaceCommon.FloorCovering`), and the `Reference` of a set Revit
+  matches to the element by the start of its entity's name
+  (`Pset_SpaceHeaterTypeCommon` on a space). On the BIM4LCA office 961 more of
+  Revit's values, none different. The default output still follows
+  buildingSMART's IFC4 definitions (RE-235).
+
+- **Slabs' `PitchAngle`.** A slab whose top is known to be level, a stair
+  landing or a slab whose body is as deep as its type's layers, carries
+  `Pset_SlabCommon.PitchAngle` 0, as Revit's export writes it: 54 of the 62
+  slabs Revit's export gives it on the BIM4LCA office, none different; the
+  eight sloped ones are left out (RE-238).
+
+- **Revit 2025 stairs' and flights' dimensions.** On Revit 2025 projects each
+  stair's `Pset_StairCommon` and each flight's `Pset_StairFlightCommon` carry
+  their risers, riser height, tread lengths, number of treads and nosing
+  length, from the stair's and run's native records: Revit's values on the
+  five R2025 stair models, none different, where none was written before
+  (RE-236).
+
+- **Stair flights' treads, tread lengths, nosing and run type.** On Revit
+  2024 projects each flight's `Pset_StairFlightCommon` carries its number of
+  treads (its risers, one fewer when it begins and ends with a riser),
+  `TreadLengthAtOffset` and `TreadLengthAtInnerSide` (the stair's tread
+  depth), its run type's nosing length and the run type's name as its
+  `Reference`, each landing its landing type's name as its `Reference`, and
+  each stair's `Pset_StairCommon` its `TreadLengthAtOffset` and the nosing
+  length its runs share. On the BIM4LCA office these are Revit's on 34 or 35
+  of the 35 flights rvt-rs writes, 22 of 22 landings and 14 of 14 stairs,
+  none different. `WalkingLineOffset` is not written: Revit's export gives it
+  as half the run's width in feet read as millimetres.
+
+- **Stairs' `Reference`.** A stair named as Revit names it (RE-65) carries its
+  stair type's name as its `Pset_StairCommon.Reference`, as its runs and
+  landings carry theirs: all 16 of the BIM4LCA office's as built and at
+  building permit and each R2025 stair model's one, where 2 of the office's
+  had it before.
+
+- **Walls' `ExtendToStructure`.** Each wall's `Pset_WallCommon` carries
+  `ExtendToStructure`, true where its native record joins its top to a roof
+  or floor, as Revit's export writes it: Revit's value on all 607 walls of the
+  BIM4LCA office as built, 589 at building permit and RE1 Architecture's 7,
+  where none was written before (RE-228).
+
+- **Walls carry `Qto_WallBaseQuantities.Width` (#1016).** It is the
+  wall type's thickness, the Width parameter revit-ifc reads: 602 of the
+  BIM4LCA office's 607 walls as built, and 519 of 589 at building permit,
+  each as Revit writes it. A wall's `Length` is not written yet: Revit's is
+  its Length parameter, not its location line's length.
+
+### Changed
+
+- **Faster exports of Revit 2023 to 2027 files (#1032).** Each read of the
+  native records walked every partition twice; the first one now records
+  where every record is, and the later ones decode only the partitions
+  holding the records they need. On one runner, the BIM4LCA office exports
+  7 to 11% faster, Core Interior 14%, Autodesk's 2024 samples 2 to 8%, with
+  every export byte for byte as before.
+
+- **The element-record marker of Revit 2024 to 2027 files comes from each
+  file's own schema (#421, puzzbobb, #1033).** Every scan that needs it (element names, stair
+  names, type records, Level records) takes the `[Outline][0xFF x4]
+  [ElementParents]` marker from the file's `Formats/Latest` (RE-80), and the
+  release's measured constant (`bbox_marker`) is the cross-check: a file
+  whose schema gives another marker is not scanned, one whose schema does
+  not parse keeps the constant. On all 84 2024 to 2027 files measured (5,
+  68, 4 and 7) the two agree, and the marker's `ElementParents` tag less 12
+  is the schema's `ElementHeader` tag. On 2016 to 2018 that gap is 9, not
+  12, so `record_prologue_constant` holds only from 2019
+  (`tests/schema_bbox_marker.rs`).
+
+- **One parse of the schema per file (#1032).** A dozen of the partition
+  readers an export runs each read and parsed `Formats/Latest` again for a
+  few class tags; the file handle now keeps the parsed classes for all of
+  them, with every export byte for byte as before.
+
+### Fixed
+
+- **Furniture's `Reference`.** buildingSMART's IFC4 definitions list
+  `Reference` in `Pset_FurnitureTypeCommon` with no type, as they do in three
+  other sets, and the property-set table left it out. The table generator now
+  gives such a property the type most sets give it (`IfcIdentifier`), and
+  lists every other property a set defines, so each piece of furniture
+  carries its type's name there, as Revit's export does: all 98 of the
+  BIM4LCA office's as built and at building permit.
+
+- **Curtain mullions' `NetVolume` in any language (#1016, RE-246).** Which
+  mullions have a rectangular section is now read from the class of their
+  type's section object rather than from their family's English name, so a
+  model made in another language gets the same `NetVolume`: Autodesk's MEP
+  sample projects, whose rectangular mullion family is named in German, now
+  carry it. Every export of the reference models is unchanged.
+
+- **Doors and windows are set in the wall their native record names
+  (RE-245).** Where a door's or window's reference list names several walls,
+  the nearest one was taken as its host, which on the BIM4LCA office put 11
+  doors in a wall next to Revit's. On Revit 2024 and 2025 the host is now
+  the wall the element's current native record names: all 463 of the
+  office's doors and windows set in a wall are in Revit's, their 11 openings
+  move to within 0.001 ft of Revit's, and 7 more door types carry Revit's
+  GlobalId.
+
+- **`--saved-meshes` keeps the box where a saved mesh is partial.** An element
+  some face or branch of whose saved graphics does not decode keeps its record
+  box instead of a mesh that is only part of its body, and `rvt-ifc` counts
+  them. On the BIM4LCA office 357 such meshes, none of them Revit's body, keep
+  their box, and 1,294 of the 1,352 bodies drawn from a saved mesh are Revit's,
+  against 1,294 of 1,709 before (RE-224).
+
+### Research
+
+- **Which columns Revit's export gives a `Slope` (RE-233, #35).** A probe of
+  columns' native records, and `tools/re/record_scalars_vs_ifc.py` now ranks
+  record fields against whether Revit writes a property at all. No field
+  tells the 73 of the BIM4LCA office's 279 columns Revit writes
+  `Pset_ColumnCommon.Slope` on: revit-ifc takes it from the last object of
+  each column's exported geometry.
+
+- **Values a project's own property set file places are out of 1.0's
+  scope (RE-239, #35).** On the BIM4LCA office, Revit's export writes
+  `Pset_DoorWindowGlazingType` on walls, curtain walls and coverings and
+  takes rooms' `OccupancyType` from their `RoomTypeCode` parameter, neither of
+  which revit-ifc's own definitions do: the export's user-defined property set
+  file chose them, and the model does not store that file. A probe and
+  `tools/re/mapped_parameters_vs_psets.py` trace each value to the element's
+  saved parameter; W7 of the 1.0 criteria now leaves these values out and
+  RE-239 lists them per reference model (the maintainer's decision,
+  2026-10-26).
+
+- **Stored symbol lengths against Revit's door and window sizes (RE-229,
+  #810).** A probe and scorer, `examples/probe_re229_symbol_lengths.rs` and
+  `tools/re/symbol_lengths_vs_ifc.py`, compare every length a door's or
+  window's symbol stores with the sizes Revit's export writes. The width is a
+  family's own parameter on the BIM4LCA office and a built-in one on Core
+  Interior and RE1, and no stored length is the width of the office's two
+  doors #810 still leaves unsized.
+
 ## [0.8.0] — 2026-10-25
 
 0.8.0 draws more of a Revit model as Revit's own IFC export does, and every
