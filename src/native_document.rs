@@ -345,10 +345,10 @@ pub fn extract(
 /// values. Each record's saved metadata is read against no
 /// definitions.
 // Tracker: B80.
-/// Every current or historical record of every partition (#1032): its
-/// channel, ElementId, partition and the class tag its body opens with,
-/// sorted, read in one walk with [`Options`]' default stream and group
-/// budgets and memoised on the handle (`RevitFile::native_record_index`).
+/// Every current or historical record of every partition in [`Options`]'
+/// default channels (#1032): its channel, ElementId, partition and the class
+/// tag its body opens with, sorted, read in one walk with the default stream
+/// and group budgets and memoised on the handle (`RevitFile::native_record_index`).
 /// A pass with those budgets finds the partitions holding its selected
 /// records from it, rather than walking every partition for them, and walks
 /// only those partitions.
@@ -385,7 +385,7 @@ pub(crate) fn build_record_index(file: &mut RevitFile) -> Result<RecordIndex> {
             &preamble.registry,
             defaults.max_group_bytes,
             |source, bytes| {
-                if source.content_key.is_some() {
+                if source.content_key.is_some() || !defaults.channels.contains(&source.channel) {
                     return Ok(());
                 }
                 for (id, _, start, end) in group_records(source, bytes, version)? {
@@ -558,7 +558,8 @@ fn extract_records(
     // holding a selected record.
     let defaults = Options::default();
     let record_index = (options.max_stream_bytes == defaults.max_stream_bytes
-        && options.max_group_bytes == defaults.max_group_bytes)
+        && options.max_group_bytes == defaults.max_group_bytes
+        && options.channels == defaults.channels)
         .then(|| file.native_record_index().ok())
         .flatten();
     let walked: Option<BTreeSet<u32>> = record_index.as_ref().map(|record_index| {
