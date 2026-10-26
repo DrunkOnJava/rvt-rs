@@ -5,18 +5,21 @@
 //! FACT under test: Revit's export writes `Pset_DoorWindowGlazingType`
 //! (`IsLaminated`, `IsTempered`) on 604 walls, 151 curtain walls, the 70
 //! openings curtain walls cut (tagged with the curtain wall) and 21
-//! coverings, and
-//! `Pset_SpaceOccupancyRequirements.OccupancyType` on 234 spaces, neither of
-//! which revit-ifc's own definitions (CLEANROOM.md source 5) puts there. An
-//! export-time user-defined property set file maps a parameter to such a
-//! set. Hypothesis: each value is one of the element's saved parameters
-//! (RE-207), named by the file's own definitions, and the file only maps it.
+//! coverings, and `Pset_SpaceOccupancyRequirements.OccupancyType` on 234
+//! spaces, none of which revit-ifc's own definitions (CLEANROOM.md source 5)
+//! puts there. An export-time user-defined property set file maps a
+//! parameter to such a set. Hypothesis: each value is one of the element's
+//! saved parameters (RE-207), and the file, which the model does not store,
+//! only places it.
 //!
 //! Output, one line per wall, curtain wall, covering and room the export
 //! writes:
 //!   par <tag> <IFC class> <parameter id>:<name|->=<value> ...
 //! every Yes/No and text value of its saved parameters and its type's,
-//! spaces as `_`.
+//! spaces as `_`; then, for each of `MARKERS` (a user-defined property set
+//! file's keyword and revit-ifc's names for the export setting that names
+//! the file), how often it occurs in every stream, stored and inflated:
+//!   scan <marker> <utf8|utf16> <stream|total> <count>
 //!
 //! Usage:
 //!   cargo run --profile ci --example probe_re239_mapped_parameters -- MODEL.rvt
@@ -30,6 +33,11 @@ use rvt::research::native_element_parameters;
 use serde_json::Value;
 
 const CLASSES: [&str; 4] = ["IFCWALL", "IFCCURTAINWALL", "IFCCOVERING", "IFCSPACE"];
+const MARKERS: [&str; 3] = [
+    "PropertySet:",
+    "ExportUserDefinedPsets",
+    "IFCExportConfiguration",
+];
 
 fn main() -> anyhow::Result<()> {
     let path = std::env::args().nth(1).expect("usage: MODEL.rvt");
@@ -79,5 +87,37 @@ fn main() -> anyhow::Result<()> {
         classes.len(),
         read.elements.len()
     );
+    let needles: Vec<(&str, &str, Vec<u8>)> = MARKERS
+        .iter()
+        .flat_map(|marker| {
+            let utf16 = marker.encode_utf16().flat_map(u16::to_le_bytes).collect();
+            [
+                (*marker, "utf8", marker.as_bytes().to_vec()),
+                (*marker, "utf16", utf16),
+            ]
+        })
+        .collect();
+    let mut totals = vec![0usize; needles.len()];
+    for name in rf.stream_names() {
+        let Ok(stored) = rf.read_stream(&name) else {
+            println!("scan unreadable - {name} 0");
+            continue;
+        };
+        let mut chunks = rvt::compression::inflate_all_chunks_for_stream(&name, &stored);
+        chunks.push(stored);
+        for ((marker, encoding, needle), total) in needles.iter().zip(totals.iter_mut()) {
+            let count: usize = chunks
+                .iter()
+                .map(|chunk| memchr::memmem::find_iter(chunk, needle).count())
+                .sum();
+            if count > 0 {
+                println!("scan {marker} {encoding} {name} {count}");
+            }
+            *total += count;
+        }
+    }
+    for ((marker, encoding, _), total) in needles.iter().zip(&totals) {
+        println!("scan {marker} {encoding} total {total}");
+    }
     Ok(())
 }
