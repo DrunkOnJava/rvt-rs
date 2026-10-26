@@ -83,6 +83,7 @@ each curtain mullion's `Span`, its length along its own axis (RE-226), which is 
 each door's and window's `Width`, `Height` and `Area` base quantities, its type's size where the symbol that draws it has the same (#1016),
 each curtain wall's type, named as its type's native record names it (RE-230),
 each wall's `Qto_WallBaseQuantities.Width`, its type's thickness (#1016),
+each of these base quantities left out by `rvt-ifc --no-base-quantities`, as Revit's exporter leaves them out with "Export base quantities" off; Revit's built-in IFC4 setups turn it on, so rvt-ifc does by default (RE-242),
 the type of each pipe, wall sweep and ramp that neither its stored layout nor its reference list types, the one its own native record names (RE-240),
 each wall's `ExtendToStructure`, whether its top is joined to a roof or floor (RE-228),
 each railing's `Height`, its type's top rail height (RE-231),
