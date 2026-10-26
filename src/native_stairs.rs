@@ -446,6 +446,121 @@ pub fn native_runs(
         .collect())
 }
 
+/// A Revit 2025 stair's actual number of risers, riser height and tread
+/// depth, feet: its `StairsElement`'s `m_actualNumberOfRisers`,
+/// `m_actualRiserHeight` and `m_actualTreadDepth`.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct NativeStairCounts {
+    pub risers: i64,
+    pub riser_height_feet: f64,
+    pub tread_depth_feet: f64,
+}
+
+/// A Revit 2025 run's stair (`m_stairsId`), its risers (`m_topRiserIndex`
+/// less `m_baseRiserIndex`), its height (`m_topElevation` less
+/// `m_bottomElevation`, feet) and whether it begins and ends with a riser.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct NativeRunCounts {
+    pub stair: u64,
+    pub risers: i64,
+    pub height_feet: f64,
+    pub begin_with_riser: bool,
+    pub end_with_riser: bool,
+}
+
+/// The counts of each stair in `stairs` and each run in `runs` from their
+/// native records, in one pass. On all five R2025 stair models they give the
+/// `Pset_StairCommon` and `Pset_StairFlightCommon` values Revit's export
+/// writes, as revit-ifc's calculators take them (CLEANROOM.md source 5): a
+/// stair's actual risers, riser height and tread depth; a run's risers, its
+/// height over its risers and its stair's tread depth.
+pub fn native_stair_counts(
+    rf: &mut RevitFile,
+    stairs: &BTreeSet<u64>,
+    runs: &BTreeSet<u64>,
+) -> anyhow::Result<(
+    BTreeMap<u64, NativeStairCounts>,
+    BTreeMap<u64, NativeRunCounts>,
+)> {
+    let mut stair_counts = BTreeMap::new();
+    let mut run_counts = BTreeMap::new();
+    if stairs.is_empty() && runs.is_empty() {
+        return Ok((stair_counts, run_counts));
+    }
+    let options = Options {
+        selected_ids: stairs.union(runs).copied().collect(),
+        ..Options::default()
+    };
+    extract_graphs(rf, &options, |record| {
+        let (Some(class), Some(root)) = (
+            record.class_name.as_deref(),
+            record
+                .graph
+                .as_ref()
+                .and_then(|graph| graph.objects.first()),
+        ) else {
+            return Ok(());
+        };
+        let fields = &root.fields;
+        let id = record.identity.element_id;
+        match class {
+            "StairsElement" if stairs.contains(&id) => {
+                if let (Some(risers), Some(riser_height_feet), Some(tread_depth_feet)) = (
+                    fields.get("m_actualNumberOfRisers").and_then(Value::as_i64),
+                    number(fields, "m_actualRiserHeight").filter(|h| *h > 0.0),
+                    number(fields, "m_actualTreadDepth").filter(|d| *d > 0.0),
+                ) {
+                    stair_counts.insert(
+                        id,
+                        NativeStairCounts {
+                            risers,
+                            riser_height_feet,
+                            tread_depth_feet,
+                        },
+                    );
+                }
+            }
+            "StairsRun" if runs.contains(&id) => {
+                let index = |name: &str| fields.get(name).and_then(Value::as_i64);
+                if let (
+                    Some(stair),
+                    Some(top),
+                    Some(base),
+                    Some(top_elevation),
+                    Some(bottom_elevation),
+                    Some(begin_with_riser),
+                    Some(end_with_riser),
+                ) = (
+                    element_id(fields, "m_stairsId"),
+                    index("m_topRiserIndex"),
+                    index("m_baseRiserIndex"),
+                    number(fields, "m_topElevation"),
+                    number(fields, "m_bottomElevation"),
+                    flag(fields, "m_beginWithRiser"),
+                    flag(fields, "m_endWithRiser"),
+                ) {
+                    let height_feet = top_elevation - bottom_elevation;
+                    if top > base && height_feet > 0.0 {
+                        run_counts.insert(
+                            id,
+                            NativeRunCounts {
+                                stair,
+                                risers: top - base,
+                                height_feet,
+                                begin_with_riser,
+                                end_with_riser,
+                            },
+                        );
+                    }
+                }
+            }
+            _ => {}
+        }
+        Ok(())
+    })?;
+    Ok((stair_counts, run_counts))
+}
+
 /// Releases a spiral run's treads are measured on: the BIM4LCA office
 /// (2024, #357).
 pub const NATIVE_SPIRAL_RUN_REVIT_VERSIONS: &[u32] = &[2024];

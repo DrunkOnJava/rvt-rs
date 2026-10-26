@@ -3638,6 +3638,63 @@ pub const STAIR_TREAD_COUNT_FIELD: &str = "m_stair_tread_count";
 /// (RE-52).
 pub const STAIR_NOSING_LENGTH_FIELD: &str = "m_stair_nosing_length";
 
+/// Give each Revit 2025 stair its actual risers, riser height and tread
+/// depth, and each run its risers, its height over its risers, its stair's
+/// tread depth and its number of treads, from their native records
+/// ([`crate::native_stairs::native_stair_counts`]).
+fn attach_native_stair_dimensions(rf: &mut RevitFile, products: &mut [DecodedElement]) {
+    let ids = |class: &str| -> BTreeSet<u64> {
+        products
+            .iter()
+            .filter(|element| element.class == class)
+            .filter_map(|element| element.id.map(u64::from))
+            .collect()
+    };
+    let (stairs, runs) = (ids("Stair"), ids("StairsRun"));
+    let Ok((stair_counts, run_counts)) =
+        crate::native_stairs::native_stair_counts(rf, &stairs, &runs)
+    else {
+        return;
+    };
+    let integer = |value: i64| InstanceField::Integer {
+        value,
+        signed: false,
+        size: 4,
+    };
+    let scalar = |value: f64| InstanceField::Float { value, size: 8 };
+    for element in products.iter_mut() {
+        let Some(id) = element.id.map(u64::from) else {
+            continue;
+        };
+        let mut fields = Vec::new();
+        if element.class == "Stair" {
+            if let Some(found) = stair_counts.get(&id) {
+                fields.push((STAIR_RISER_COUNT_FIELD, integer(found.risers)));
+                fields.push((STAIR_RISER_HEIGHT_FIELD, scalar(found.riser_height_feet)));
+                fields.push((STAIR_TREAD_DEPTH_FIELD, scalar(found.tread_depth_feet)));
+            }
+        } else if element.class == "StairsRun" {
+            if let Some(run) = run_counts.get(&id) {
+                fields.push((STAIR_RISER_COUNT_FIELD, integer(run.risers)));
+                fields.push((
+                    STAIR_RISER_HEIGHT_FIELD,
+                    scalar(run.height_feet / run.risers as f64),
+                ));
+                if let Some(stair) = stair_counts.get(&run.stair) {
+                    fields.push((STAIR_TREAD_DEPTH_FIELD, scalar(stair.tread_depth_feet)));
+                }
+                let treads = run.risers - 1
+                    + i64::from(!run.begin_with_riser)
+                    + i64::from(!run.end_with_riser);
+                fields.push((STAIR_TREAD_COUNT_FIELD, integer(treads)));
+            }
+        }
+        element
+            .fields
+            .extend(fields.into_iter().map(|(name, value)| (name.into(), value)));
+    }
+}
+
 /// Give each stair its riser height, tread depth and number of risers, and
 /// each of its runs the same riser height and tread depth and, where
 /// [`crate::partition_stairs::flight_riser_counts`] can tell, its own number
@@ -3648,6 +3705,10 @@ fn attach_stair_dimensions(
     products: &mut [DecodedElement],
 ) {
     use crate::partition_stairs as ps;
+    if crate::native_stairs::NATIVE_RUN_REVIT_VERSIONS.contains(&revit_version) {
+        attach_native_stair_dimensions(rf, products);
+        return;
+    }
     if !ps::supports_revit_version(revit_version) {
         return;
     }
@@ -5462,6 +5523,13 @@ fn attach_native_stair_run_bodies(
         let Some(run) = element.id.and_then(|id| native.get(&u64::from(id))) else {
             continue;
         };
+        element.fields.push((
+            STAIR_NOSING_LENGTH_FIELD.into(),
+            InstanceField::Float {
+                value: run.run_type.nosing_length_feet,
+                size: 8,
+            },
+        ));
         let Some(pieces) = crate::partition_stairs::run_side_pieces(
             &run.sketch,
             &run.run_type,
