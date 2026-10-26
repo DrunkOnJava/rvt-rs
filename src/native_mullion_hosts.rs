@@ -9,10 +9,19 @@
 //! on one whose record holds an edited profile (an `ExtrusionGStep`). A
 //! mullion's host is the `m_hostId` and its type the `m_masterSymbolId` its
 //! native record names; a type whose `SysMullionFamSym.m_profileId` is set
-//! draws a profile family's section rather than its own.
+//! draws a profile family's section rather than its own. A type's record
+//! holds one section object whose class names its shape (RE-246), the same
+//! in every language: [`BOX_SECTION_CLASSES`] are those whose section is a
+//! full rectangle, which the mullion's box gives.
 
 use crate::{RevitFile, native_document};
 use std::collections::{BTreeMap, BTreeSet};
+
+/// The section classes of a rectangular mullion type and a quad corner
+/// mullion type's square (RE-246); the others are `SysCircMullionProfile`,
+/// `SysLMullionProfile`, `SysVMullionProfile`, `SysTrapMullionProfile` and,
+/// for a profile family's section, `SysCustMullionProfile`.
+pub const BOX_SECTION_CLASSES: [&str; 2] = ["SysRectMullionProfile", "SysQuadMullionProfile"];
 
 /// `{"m_id":{"m_id64":n}}` as `n`, signed.
 fn element_id(value: &serde_json::Value) -> Option<i64> {
@@ -33,7 +42,8 @@ fn linked(graph: &crate::native_parameters::ObjectGraph, field: &str) -> Option<
 /// The mullions of `mullions` whose host, the curtain wall their native
 /// record names, is a straight wall (`SWall`) whose record holds neither an
 /// `ArcWall` nor an `ExtrusionGStep`, and whose type's record
-/// (`SysMullionFamSym`) sets no profile, read in one pass. A mullion, host
+/// (`SysMullionFamSym`) sets no profile and holds a
+/// [`BOX_SECTION_CLASSES`] section, read in one pass. A mullion, host
 /// or type whose copies disagree is left out.
 pub fn mullions_on_plain_hosts(
     rf: &mut RevitFile,
@@ -73,7 +83,11 @@ pub fn mullions_on_plain_hosts(
                     .find(|object| object.class_name == "SysMullionFamSym")
                     .and_then(|object| object.fields.get("m_profileId").and_then(element_id))
                     .map(|profile| profile < 0);
-                agree(&mut plain, id, own);
+                let boxed = graph
+                    .objects
+                    .iter()
+                    .any(|object| BOX_SECTION_CLASSES.contains(&object.class_name.as_str()));
+                agree(&mut plain, id, own.map(|own| own && boxed));
             }
             _ => {}
         }
