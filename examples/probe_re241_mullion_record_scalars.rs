@@ -16,7 +16,8 @@
 //! for every number, boolean and short string of the first 400 objects of
 //! the element's record, then those of the first 60 objects of its type's
 //! record and the first 20 of its host's, prefixed `T.` and `H.`; an
-//! ElementId as its sign.
+//! ElementId as its sign; and the type's and host's ElementIds as `ID.type`
+//! and `ID.host`.
 //!
 //! Usage:
 //!   cargo run --profile ci --example probe_re241_mullion_record_scalars -- MODEL.rvt
@@ -152,6 +153,8 @@ fn main() -> anyhow::Result<()> {
         };
         let [kind, host] = links.get(id).copied().unwrap_or([None, None]);
         let mut all = parts.clone();
+        all.push(format!("ID.type={}", kind.map_or("-".into(), |k| k.to_string())));
+        all.push(format!("ID.host={}", host.map_or("-".into(), |h| h.to_string())));
         if let Some((typed, _)) = kind.and_then(|k| other_scalars.get(&k)) {
             all.extend(typed.iter().cloned());
         }
