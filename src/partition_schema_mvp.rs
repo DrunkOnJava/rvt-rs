@@ -346,7 +346,7 @@ pub fn recover_partition_schema_mvp(
     attach_shaft_voids(rf, revit_version, [&mut out.slabs, &mut out.products]);
 
     // --- The Revit class each record names at +0x4a (RE-76, #154) ---
-    if let Ok(classes) = rf.schema_classes() {
+    if let Ok(classes) = rf.memoised_schema_classes() {
         for elements in [
             &mut out.walls,
             &mut out.columns,
@@ -876,7 +876,7 @@ fn attach_system_type_names(
         .map(|(_, id)| *id)
         .collect();
     let railing_tags = rf
-        .schema_classes()
+        .memoised_schema_classes()
         .ok()
         .and_then(|classes| crate::partition_names::RailingTypeTags::from_classes(&classes));
     if let Some(tags) = railing_tags.filter(|_| revit_version >= 2024 && !railing_types.is_empty())
@@ -922,7 +922,7 @@ fn railing_type_picks(
     rf: &mut RevitFile,
     railings: &[(usize, u32)],
 ) -> (Vec<(usize, u32)>, BTreeMap<u32, String>) {
-    let Ok(classes) = rf.schema_classes() else {
+    let Ok(classes) = rf.memoised_schema_classes() else {
         return Default::default();
     };
     let tag_of = |name: &str| {
@@ -1770,7 +1770,7 @@ fn attach_original_symbols<const N: usize>(
     if instances.is_empty() {
         return;
     }
-    let Ok(classes) = rf.schema_classes() else {
+    let Ok(classes) = rf.memoised_schema_classes() else {
         return;
     };
     let tag_of = |name: &str| {
@@ -8747,7 +8747,7 @@ fn recover_2023_records(rf: &mut RevitFile, revit_version: u32, out: &mut Partit
     // Only a family instance can be nested; a host wall and the doors it
     // hosts name each other too (RE-76's class tag, at the same place on
     // 2023).
-    let family_instance = rf.schema_classes().ok().and_then(|classes| {
+    let family_instance = rf.memoised_schema_classes().ok().and_then(|classes| {
         classes
             .classes
             .iter()

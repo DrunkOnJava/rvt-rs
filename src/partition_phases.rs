@@ -110,7 +110,7 @@ pub fn phase_names(rf: &mut RevitFile) -> Result<BTreeMap<u32, String>> {
     else {
         return Ok(BTreeMap::new());
     };
-    let phase_tag = rf.schema_classes().ok().and_then(|classes| {
+    let phase_tag = rf.memoised_schema_classes().ok().and_then(|classes| {
         classes
             .classes
             .iter()

@@ -139,7 +139,7 @@ pub fn scan_pipe_diameters(
     if !supports_revit_version(revit_version) || pipes.is_empty() {
         return Ok(BTreeMap::new());
     }
-    let classes = rf.schema_classes()?;
+    let classes = rf.memoised_schema_classes()?;
     let Some(tag) = classes
         .classes
         .iter()
@@ -202,7 +202,7 @@ pub fn scan_curve_fields(
     if !supports_revit_version(revit_version) || curves.is_empty() {
         return Ok(BTreeMap::new());
     }
-    let classes = rf.schema_classes()?;
+    let classes = rf.memoised_schema_classes()?;
     let Some(manager) = classes
         .classes
         .iter()

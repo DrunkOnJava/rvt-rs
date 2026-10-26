@@ -106,7 +106,7 @@ pub fn scan_mep_systems(
     if !supports_revit_version(revit_version) {
         return Ok(Vec::new());
     }
-    let classes = rf.schema_classes()?;
+    let classes = rf.memoised_schema_classes()?;
     let tags: BTreeMap<u32, String> = classes
         .classes
         .iter()
