@@ -146,8 +146,25 @@ pub fn instance_cut_loops_and_uncut(
     rf: &mut RevitFile,
     instances: &BTreeSet<u64>,
 ) -> anyhow::Result<(BTreeMap<u64, CutLoop>, BTreeSet<u64>)> {
+    let (loops, uncut, _) = instance_cuts_and_symbols(rf, instances)?;
+    Ok((loops, uncut))
+}
+
+/// An instance's cut loop, the instances whose symbol cuts none, and the
+/// symbol that draws each instance, as [`instance_cuts_and_symbols`] reads
+/// them.
+pub type InstanceCuts = (BTreeMap<u64, CutLoop>, BTreeSet<u64>, BTreeMap<u64, u64>);
+
+/// [`instance_cut_loops_and_uncut`], and the symbol that draws each of
+/// `instances` (its `InstanceInfo.m_symbolId`), read in the same pass:
+/// the type where the instance's own parameters change nothing, else the
+/// symbol its parameters make.
+pub fn instance_cuts_and_symbols(
+    rf: &mut RevitFile,
+    instances: &BTreeSet<u64>,
+) -> anyhow::Result<InstanceCuts> {
     if instances.is_empty() {
-        return Ok((BTreeMap::new(), BTreeSet::new()));
+        return Ok((BTreeMap::new(), BTreeSet::new(), BTreeMap::new()));
     }
     let mut drawn_by: BTreeMap<u64, u64> = BTreeMap::new();
     let mut loops: BTreeMap<u64, CutLoop> = BTreeMap::new();
@@ -193,10 +210,10 @@ pub fn instance_cut_loops_and_uncut(
         .map(|(instance, _)| *instance)
         .collect();
     let loops = drawn_by
-        .into_iter()
-        .filter_map(|(instance, symbol)| Some((instance, *loops.get(&symbol)?)))
+        .iter()
+        .filter_map(|(instance, symbol)| Some((*instance, *loops.get(symbol)?)))
         .collect();
-    Ok((loops, uncut))
+    Ok((loops, uncut, drawn_by))
 }
 
 /// A family instance hosted on a face of another element through a

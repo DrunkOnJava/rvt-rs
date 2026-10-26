@@ -890,6 +890,7 @@ pub fn append_typed_production_elements(
         add_is_external(&mut reference_sets, &ifc_type, &decoded, opening_only);
         add_covering_finish(&mut reference_sets, &ifc_type, &decoded);
         add_mullion_span(&mut reference_sets, &ifc_type, &decoded);
+        add_door_window_quantities(&mut reference_sets, &ifc_type, &decoded);
         add_railing_height(&mut reference_sets, &ifc_type, &decoded);
         add_extend_to_structure(&mut reference_sets, &ifc_type, &decoded);
         let mut serial_sets = serial_number_property_sets(&decoded);
@@ -1967,6 +1968,47 @@ fn add_railing_height(sets: &mut Vec<PropertySet>, ifc_type: &str, decoded: &Dec
             properties: vec![property],
         }),
     }
+}
+
+/// Add a door's `Qto_DoorBaseQuantities` or a window's
+/// `Qto_WindowBaseQuantities` to `sets`: the Width and Height of the symbol
+/// that draws it, and their product as its Area. revit-ifc's
+/// `WidthCalculator`, `HeightCalculator` and `AreaCalculator` (CLEANROOM.md
+/// source 5) read a door's or window's Width and Height parameters, its own
+/// or its type's, where no opening profile gives them (#1016); an instance
+/// whose own parameters change its size is drawn by a symbol of its own,
+/// which holds them (RE-215). Nothing where that symbol's size is not read.
+fn add_door_window_quantities(
+    sets: &mut Vec<PropertySet>,
+    ifc_type: &str,
+    decoded: &DecodedElement,
+) {
+    use crate::partition_schema_mvp as mvp;
+    let set = match ifc_type {
+        "IFCDOOR" => "Qto_DoorBaseQuantities",
+        "IFCWINDOW" => "Qto_WindowBaseQuantities",
+        _ => return,
+    };
+    let Some([width, height]) = mvp::drawn_size_from_fields(&decoded.fields) else {
+        return;
+    };
+    sets.push(PropertySet {
+        name: set.into(),
+        properties: vec![
+            Property {
+                name: "Width".into(),
+                value: PropertyValue::PositiveLengthFeet(width),
+            },
+            Property {
+                name: "Height".into(),
+                value: PropertyValue::PositiveLengthFeet(height),
+            },
+            Property {
+                name: "Area".into(),
+                value: PropertyValue::AreaSquareFeet(width * height),
+            },
+        ],
+    });
 }
 
 /// Add `Span` (`IfcPositiveLengthMeasure`) to a curtain mullion's

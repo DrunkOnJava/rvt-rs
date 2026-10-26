@@ -2212,6 +2212,23 @@ fn attach_door_openings(rf: &mut RevitFile, revit_version: u32, doors: &mut [Dec
 /// Fields carrying a door's Width and Height from its type (RE-187), feet.
 pub const DOOR_TYPE_SIZE_FIELDS: [&str; 2] = ["m_door_type_width", "m_door_type_height"];
 
+/// Fields carrying the Width and Height of the symbol that draws a door or
+/// window (its `InstanceInfo.m_symbolId`): its type's, or the symbol its own
+/// parameters make, which revit-ifc's `WidthCalculator`, `HeightCalculator`
+/// and `AreaCalculator` read for its base quantities (#1016), feet.
+pub const DRAWN_SIZE_FIELDS: [&str; 2] = ["m_drawn_symbol_width", "m_drawn_symbol_height"];
+
+/// The Width and Height [`DRAWN_SIZE_FIELDS`] record, feet.
+pub fn drawn_size_from_fields(fields: &[(String, InstanceField)]) -> Option<[f64; 2]> {
+    let [width, height] = DRAWN_SIZE_FIELDS.map(|wanted| {
+        fields.iter().find_map(|(name, value)| match value {
+            InstanceField::Float { value, .. } if name == wanted => Some(*value),
+            _ => None,
+        })
+    });
+    Some([width?, height?])
+}
+
 /// The size [`DOOR_TYPE_SIZE_FIELDS`] record.
 pub fn door_type_size_from_fields(
     fields: &[(String, InstanceField)],
@@ -2325,7 +2342,8 @@ fn attach_cut_loop_sizes(
         .iter()
         .filter_map(|element| element.id.map(u64::from))
         .collect();
-    let Ok((loops, uncut)) = crate::native_symbol_cuts::instance_cut_loops_and_uncut(rf, &ids)
+    let Ok((loops, uncut, drawn_by)) =
+        crate::native_symbol_cuts::instance_cuts_and_symbols(rf, &ids)
     else {
         return;
     };
@@ -2336,6 +2354,47 @@ fn attach_cut_loop_sizes(
         for (name, value) in CUT_LOOP_SIZE_FIELDS
             .iter()
             .zip([cut.width_feet(), cut.height_feet()])
+        {
+            element
+                .fields
+                .push(((*name).into(), InstanceField::Float { value, size: 8 }));
+        }
+    }
+    // #1016: its base quantities' size, where the symbol that draws it and
+    // its type have the same Width and Height. revit-ifc reads the
+    // instance's own Width and Height parameters before its type's; where
+    // its own parameters make a symbol of its own, which of them that
+    // symbol's size stands for is not read (2 office doors take theirs from
+    // it, 5 from their type), so those get none.
+    let type_of = |element: &DecodedElement| {
+        element.fields.iter().find_map(|(name, value)| match value {
+            InstanceField::ElementId { id, .. } if name == TYPE_ID_FIELD => Some(*id),
+            _ => None,
+        })
+    };
+    let symbols: BTreeSet<u32> = drawn_by
+        .values()
+        .filter_map(|symbol| u32::try_from(*symbol).ok())
+        .chain(elements.iter().filter_map(|element| type_of(element)))
+        .collect();
+    let sizes = crate::partition_type_parameters::type_door_sizes(rf, revit_version, &symbols);
+    for element in elements.iter_mut() {
+        let drawn = element
+            .id
+            .and_then(|id| drawn_by.get(&u64::from(id)))
+            .and_then(|symbol| u32::try_from(*symbol).ok())
+            .and_then(|symbol| sizes.get(&symbol));
+        let typed = type_of(element).and_then(|id| sizes.get(&id));
+        let Some(size) = drawn.zip(typed).and_then(|(drawn, typed)| {
+            ((drawn.width_feet - typed.width_feet).abs() < 1e-9
+                && (drawn.height_feet - typed.height_feet).abs() < 1e-9)
+                .then_some(drawn)
+        }) else {
+            continue;
+        };
+        for (name, value) in DRAWN_SIZE_FIELDS
+            .iter()
+            .zip([size.width_feet, size.height_feet])
         {
             element
                 .fields
