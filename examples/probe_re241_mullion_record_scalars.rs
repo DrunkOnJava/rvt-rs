@@ -16,8 +16,9 @@
 //! for every number, boolean and short string of the first 400 objects of
 //! the element's record, then those of the first 60 objects of its type's
 //! record and the first 20 of its host's, prefixed `T.` and `H.`; an
-//! ElementId as its sign; and the type's and host's ElementIds as `ID.type`
-//! and `ID.host`.
+//! ElementId as its sign; the type's and host's ElementIds as `ID.type`
+//! and `ID.host`; and the host's saved parameters (RE-207) as
+//! `HP.<parameter id>` and its type's Function (RE-185) as `HF.function`.
 //!
 //! Usage:
 //!   cargo run --profile ci --example probe_re241_mullion_record_scalars -- MODEL.rvt
@@ -29,6 +30,7 @@ use rvt::ifc::RvtDocExporter;
 use rvt::ifc::entities::IfcEntity;
 use rvt::research::native_document::{Options, extract_graphs};
 use rvt::research::native_parameters::ObjectGraph;
+use rvt::research::{native_element_parameters, native_wall_types};
 use serde_json::Value;
 
 const OBJECTS: usize = 400;
@@ -146,6 +148,33 @@ fn main() -> anyhow::Result<()> {
             Ok(())
         },
     )?;
+    // The hosts' own saved Yes/No and text parameters (RE-207) and their
+    // type's Function (RE-185).
+    let hosts: BTreeSet<u64> = links.values().filter_map(|[_, host]| *host).collect();
+    let saved = native_element_parameters::read(&mut rf, &hosts)?;
+    let functions = native_wall_types::wall_type_functions(&mut rf, &hosts).unwrap_or_default();
+    let host_parts = |host: u64| -> Vec<String> {
+        let mut parts: Vec<String> = saved
+            .elements
+            .get(&host)
+            .into_iter()
+            .flatten()
+            .filter_map(|parameter| {
+                let value = match &parameter.value {
+                    Value::Bool(b) => b.to_string(),
+                    Value::String(text) if text.len() <= 40 => text.replace(' ', "_"),
+                    Value::Number(n) => n.to_string(),
+                    _ => return None,
+                };
+                Some(format!("HP.{}={value}", parameter.parameter_id))
+            })
+            .collect();
+        parts.push(format!(
+            "HF.function={}",
+            functions.get(&host).map_or("-".into(), |f| f.to_string())
+        ));
+        parts
+    };
     for id in &ids {
         let Some((class, parts)) = lines.get(id) else {
             println!("rec {id} -");
@@ -153,13 +182,22 @@ fn main() -> anyhow::Result<()> {
         };
         let [kind, host] = links.get(id).copied().unwrap_or([None, None]);
         let mut all = parts.clone();
-        all.push(format!("ID.type={}", kind.map_or("-".into(), |k| k.to_string())));
-        all.push(format!("ID.host={}", host.map_or("-".into(), |h| h.to_string())));
+        all.push(format!(
+            "ID.type={}",
+            kind.map_or("-".into(), |k| k.to_string())
+        ));
+        all.push(format!(
+            "ID.host={}",
+            host.map_or("-".into(), |h| h.to_string())
+        ));
         if let Some((typed, _)) = kind.and_then(|k| other_scalars.get(&k)) {
             all.extend(typed.iter().cloned());
         }
         if let Some((_, hosted)) = host.and_then(|h| other_scalars.get(&h)) {
             all.extend(hosted.iter().cloned());
+        }
+        if let Some(host) = host {
+            all.extend(host_parts(host));
         }
         println!("rec {id} {class} {}", all.join(" "));
     }
