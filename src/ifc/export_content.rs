@@ -895,6 +895,7 @@ pub fn append_typed_production_elements(
         add_body_quantities(
             &mut reference_sets,
             &ifc_type,
+            &decoded,
             extrusion.as_ref(),
             solid_shape.as_ref(),
         );
@@ -2044,17 +2045,29 @@ fn add_door_window_quantities(
 }
 
 /// Add the base quantity a column's body gives to `sets` (#1016, RE-247):
-/// its `Length`, the depth of the extrusion it is drawn as, as Revit's
-/// export writes it. None where another solid draws it. A curtain panel's
-/// `Width`, its box's larger side wherever Revit writes it, is left out:
-/// Revit's export writes none on 3 of the BIM4LCA office's panels that no
-/// field tells apart.
+/// its `Length`, the depth of the extrusion it is drawn as, on a column
+/// joined by no `CleanPairGStep`
+/// ([`crate::partition_schema_mvp::COLUMN_UNJOINED_FIELD`]), which Revit's
+/// export draws as that extrusion. A joined column's Length is left out:
+/// Revit's export draws 18 of the BIM4LCA office's at permit as a cut mesh
+/// and gives them none, and no field tells them from the others. None where
+/// another solid draws it. A curtain panel's `Width`, its box's larger side
+/// wherever Revit writes it, is left out too: Revit's export writes none on
+/// 3 of the office's panels that no field tells apart.
 fn add_body_quantities(
     sets: &mut Vec<PropertySet>,
     ifc_type: &str,
+    decoded: &DecodedElement,
     extrusion: Option<&Extrusion>,
     solid_shape: Option<&entities::SolidShape>,
 ) {
+    let unjoined = decoded.fields.iter().any(|(name, value)| {
+        name == crate::partition_schema_mvp::COLUMN_UNJOINED_FIELD
+            && matches!(value, InstanceField::Bool(true))
+    });
+    if !unjoined {
+        return;
+    }
     let (set, quantity) = match (ifc_type, extrusion, solid_shape) {
         ("IFCCOLUMN", Some(body), None) => {
             ("Qto_ColumnBaseQuantities", ("Length", body.height_feet))

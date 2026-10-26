@@ -11,6 +11,11 @@
 //! columns). Revit's export gives an architectural column whose type draws
 //! with no material the layer of its first joined wall on the side the
 //! column stands: 106 of Snowdon Towers' 108 off-centre columns (RE-202).
+//!
+//! A column whose record holds no `CleanPairGStep` is one Revit's export
+//! draws as an extrusion on every BIM4LCA office column: 92 as built and 70
+//! at building permit; the 18 columns it draws as a cut mesh at permit each
+//! hold one or more (RE-247).
 
 use crate::{RevitFile, native_document};
 use std::collections::{BTreeMap, BTreeSet};
@@ -44,17 +49,24 @@ impl WallSide {
     }
 }
 
-/// The elements each of `columns` is joined to, in the order the joins were
-/// made (its `CutPairGStep` objects by `m_id`), by the column's ElementId. A
-/// column with no join is left out. Errs where the native record path does
-/// not read the file's release.
-pub fn joins(
-    rf: &mut RevitFile,
-    columns: &BTreeSet<u64>,
-) -> anyhow::Result<BTreeMap<u64, Vec<u64>>> {
+/// What [`joins`] reads of each column.
+#[derive(Debug, Default)]
+pub struct ColumnJoins {
+    /// The elements each column is joined to, in the order the joins were
+    /// made (its `CutPairGStep` objects by `m_id`), by the column's
+    /// ElementId. A column with no join is left out.
+    pub order: BTreeMap<u64, Vec<u64>>,
+    /// The columns none of whose records holds a `CleanPairGStep` (RE-247).
+    pub without_clean_steps: BTreeSet<u64>,
+}
+
+/// The joins of each of `columns`, read in one pass. Errs where the native
+/// record path does not read the file's release.
+pub fn joins(rf: &mut RevitFile, columns: &BTreeSet<u64>) -> anyhow::Result<ColumnJoins> {
     let mut out = BTreeMap::new();
+    let mut cleaned: BTreeMap<u64, bool> = BTreeMap::new();
     if columns.is_empty() {
-        return Ok(out);
+        return Ok(ColumnJoins::default());
     }
     let options = native_document::Options {
         selected_ids: columns.clone(),
@@ -64,6 +76,11 @@ pub fn joins(
         let Some(graph) = record.graph.as_ref() else {
             return Ok(());
         };
+        let clean = graph
+            .objects
+            .iter()
+            .any(|object| object.class_name == "CleanPairGStep");
+        *cleaned.entry(record.identity.element_id).or_default() |= clean;
         let mut steps: Vec<(i64, u64)> = graph
             .objects
             .iter()
@@ -82,7 +99,13 @@ pub fn joins(
         }
         Ok(())
     })?;
-    Ok(out)
+    Ok(ColumnJoins {
+        order: out,
+        without_clean_steps: cleaned
+            .into_iter()
+            .filter_map(|(id, clean)| (!clean).then_some(id))
+            .collect(),
+    })
 }
 
 /// Each of `walls` whose location curve is a line, by the wall's ElementId.
