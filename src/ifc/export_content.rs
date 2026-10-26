@@ -891,6 +891,7 @@ pub fn append_typed_production_elements(
         add_covering_finish(&mut reference_sets, &ifc_type, &decoded);
         add_mullion_span(&mut reference_sets, &ifc_type, &decoded);
         add_door_window_quantities(&mut reference_sets, &ifc_type, &decoded);
+        add_wall_quantities(&mut reference_sets, &ifc_type, &decoded);
         add_railing_height(&mut reference_sets, &ifc_type, &decoded);
         add_extend_to_structure(&mut reference_sets, &ifc_type, &decoded);
         let mut serial_sets = serial_number_property_sets(&decoded);
@@ -2008,6 +2009,33 @@ fn add_door_window_quantities(
                 value: PropertyValue::AreaSquareFeet(width * height),
             },
         ],
+    });
+}
+
+/// Add a wall's `Qto_WallBaseQuantities` `Width` to `sets`: its type's
+/// thickness, the wall's Width parameter revit-ifc's `WidthCalculator`
+/// (CLEANROOM.md source 5) reads (#1016). Its `Length` is not written: the
+/// wall's Length parameter `LengthCalculator` reads first is not its
+/// location line's length, which is longer on 186 of the BIM4LCA office's
+/// 607 walls by about a joined wall's thickness. Nothing where the
+/// thickness is not read.
+fn add_wall_quantities(sets: &mut Vec<PropertySet>, ifc_type: &str, decoded: &DecodedElement) {
+    use crate::partition_schema_mvp as mvp;
+    if !matches!(ifc_type, "IFCWALL" | "IFCWALLSTANDARDCASE") {
+        return;
+    }
+    let thickness = mvp::wall_axis_from_fields(&decoded.fields)
+        .map(|axis| axis.thickness_feet)
+        .or_else(|| mvp::wall_arc_from_fields(&decoded.fields).map(|arc| arc.thickness_feet));
+    let Some(thickness) = thickness.filter(|t| t.is_finite() && *t > 0.0) else {
+        return;
+    };
+    sets.push(PropertySet {
+        name: "Qto_WallBaseQuantities".into(),
+        properties: vec![Property {
+            name: "Width".into(),
+            value: PropertyValue::PositiveLengthFeet(thickness),
+        }],
     });
 }
 
