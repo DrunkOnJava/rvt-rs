@@ -146,27 +146,39 @@ pub fn instance_cut_loops_and_uncut(
     rf: &mut RevitFile,
     instances: &BTreeSet<u64>,
 ) -> anyhow::Result<(BTreeMap<u64, CutLoop>, BTreeSet<u64>)> {
-    let (loops, uncut, _) = instance_cuts_and_symbols(rf, instances)?;
+    let (loops, uncut, _, _) = instance_cuts_and_symbols(rf, instances)?;
     Ok((loops, uncut))
 }
 
-/// An instance's cut loop, the instances whose symbol cuts none, and the
-/// symbol that draws each instance, as [`instance_cuts_and_symbols`] reads
-/// them.
-pub type InstanceCuts = (BTreeMap<u64, CutLoop>, BTreeSet<u64>, BTreeMap<u64, u64>);
+/// An instance's cut loop, the instances whose symbol cuts none, the
+/// symbol that draws each instance and the element hosting it, as
+/// [`instance_cuts_and_symbols`] reads them.
+pub type InstanceCuts = (
+    BTreeMap<u64, CutLoop>,
+    BTreeSet<u64>,
+    BTreeMap<u64, u64>,
+    BTreeMap<u64, u64>,
+);
 
 /// [`instance_cut_loops_and_uncut`], and the symbol that draws each of
 /// `instances` (its `InstanceInfo.m_symbolId`), read in the same pass:
 /// the type where the instance's own parameters change nothing, else the
-/// symbol its parameters make.
+/// symbol its parameters make; and the element hosting it, the `m_hostId`
+/// its current record names (RE-245).
 pub fn instance_cuts_and_symbols(
     rf: &mut RevitFile,
     instances: &BTreeSet<u64>,
 ) -> anyhow::Result<InstanceCuts> {
     if instances.is_empty() {
-        return Ok((BTreeMap::new(), BTreeSet::new(), BTreeMap::new()));
+        return Ok((
+            BTreeMap::new(),
+            BTreeSet::new(),
+            BTreeMap::new(),
+            BTreeMap::new(),
+        ));
     }
     let mut drawn_by: BTreeMap<u64, u64> = BTreeMap::new();
+    let mut hosts: BTreeMap<u64, u64> = BTreeMap::new();
     let mut loops: BTreeMap<u64, CutLoop> = BTreeMap::new();
     let mut uncut_symbols: BTreeSet<u64> = BTreeSet::new();
     let options = native_document::Options {
@@ -201,6 +213,13 @@ pub fn instance_cuts_and_symbols(
             {
                 drawn_by.insert(id, symbol);
             }
+            if let Some(host) = graph
+                .objects
+                .iter()
+                .find_map(|object| object.fields.get("m_hostId").and_then(element_id))
+            {
+                hosts.insert(id, host);
+            }
         }
         Ok(())
     })?;
@@ -213,7 +232,7 @@ pub fn instance_cuts_and_symbols(
         .iter()
         .filter_map(|(instance, symbol)| Some((*instance, *loops.get(symbol)?)))
         .collect();
-    Ok((loops, uncut, drawn_by))
+    Ok((loops, uncut, drawn_by, hosts))
 }
 
 /// A family instance hosted on a face of another element through a
