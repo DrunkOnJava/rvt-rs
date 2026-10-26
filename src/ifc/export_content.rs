@@ -2082,9 +2082,9 @@ fn add_body_quantities(
 /// Add a stair run's `Qto_StairFlightBaseQuantities` to `sets` (#1016,
 /// RE-247): its `Length`, the distance from its first riser line to its last
 /// ([`crate::partition_schema_mvp::STAIR_RUN_LENGTH_FIELD`]), and its
-/// `NetVolume`, its side view's area times the run's width, the solid
-/// [`STAIR_RUN_BODY_SOURCE`] draws. None for a run of several solids
-/// (`pieces`) or one not drawn from its sketch.
+/// `NetVolume`, its side views' areas times the run's width, the solids
+/// [`STAIR_RUN_BODY_SOURCE`] draws (one, or a riserless run's treads). None
+/// for a run not drawn from its sketch.
 fn add_stair_flight_quantities(
     sets: &mut Vec<PropertySet>,
     ifc_type: &str,
@@ -2094,7 +2094,7 @@ fn add_stair_flight_quantities(
         return;
     }
     let Some(run) = crate::partition_schema_mvp::stair_run_body_from_fields(&decoded.fields)
-        .filter(|run| run.pieces.is_empty() && run.profile.len() >= 3)
+        .filter(|run| run.profile.len() >= 3)
     else {
         return;
     };
@@ -2106,14 +2106,17 @@ fn add_stair_flight_quantities(
         }
         _ => None,
     });
-    let area = run
-        .profile
-        .iter()
-        .zip(run.profile.iter().cycle().skip(1))
-        .map(|(p, q)| p[0] * q[1] - q[0] * p[1])
-        .sum::<f64>()
-        .abs()
-        / 2.0;
+    let area: f64 = std::iter::once(&run.profile)
+        .chain(&run.pieces)
+        .map(|ring| {
+            ring.iter()
+                .zip(ring.iter().cycle().skip(1))
+                .map(|(p, q)| p[0] * q[1] - q[0] * p[1])
+                .sum::<f64>()
+                .abs()
+                / 2.0
+        })
+        .sum();
     let volume = area * run.width_feet;
     if !(volume.is_finite() && volume > 0.0) {
         return;
