@@ -8,6 +8,8 @@ lines (`examples/probe_re228_wall_record_scalars.rs`,
 export. For every boolean property of every property set Revit writes on
 those elements (by Tag), and for whether Revit writes a property at all
 where it writes it on some of them only (`present:<set>.<property>`), and
+for whether Revit writes the element's body as anything but extruded solids
+(`body:not-extruded`, through mapped items: a mullion with cut ends), and
 every field the probe printed, it takes the
 one value of the field whose presence best predicts the property (the
 property is true exactly where the field has that value, or exactly where
@@ -17,12 +19,17 @@ from a record counts as the value `-`.
 It prints, per property, the true and false counts and the 12 best fields
 with their accuracy, perfect ones first.
 
+`RECORD_FILTER=<field>=<value>[,<field>=<value>...]` keeps only the records
+whose fields have those values (`-` for a field missing from the record),
+to rank the fields within a group.
+
 Usage:
 
     python3 tools/re/record_scalars_vs_ifc.py <probe.txt> <revit.ifc> [--list]
 """
 
 import collections
+import os
 import sys
 
 import ifcopenshell
@@ -43,12 +50,34 @@ def read_probe(path):
     return rows
 
 
+def extruded_only(element):
+    """Whether every item of the element's Body is an IfcExtrudedAreaSolid,
+    through mapped items; None without a Body."""
+    if element.Representation is None:
+        return None
+    kinds = []
+    for rep in element.Representation.Representations:
+        if rep.RepresentationIdentifier != "Body":
+            continue
+        items = list(rep.Items)
+        while items:
+            item = items.pop()
+            if item.is_a("IfcMappedItem"):
+                items.extend(item.MappingSource.MappedRepresentation.Items)
+            else:
+                kinds.append(item.is_a("IfcExtrudedAreaSolid"))
+    return all(kinds) if kinds else None
+
+
 def main():
     args = [a for a in sys.argv[1:] if a != "--list"]
     if len(args) != 2:
         print(__doc__)
         return 2
     rows = read_probe(args[0])
+    for wanted in filter(None, os.environ.get("RECORD_FILTER", "").split(",")):
+        name, _, value = wanted.partition("=")
+        rows = {tag: fields for tag, fields in rows.items() if fields.get(name, "-") == value}
     revit = ifcopenshell.open(args[1])
     truths = collections.defaultdict(dict)
     seen = set()
@@ -58,6 +87,9 @@ def main():
         if tag not in rows:
             continue
         seen.add(tag)
+        extruded = extruded_only(element)
+        if extruded is not None:
+            truths["body:not-extruded"][tag] = not extruded
         for pset, props in ifcopenshell.util.element.get_psets(element, psets_only=True).items():
             for prop, value in props.items():
                 if prop == "id":

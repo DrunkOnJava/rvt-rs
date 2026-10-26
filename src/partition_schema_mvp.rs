@@ -487,6 +487,8 @@ pub fn recover_partition_schema_mvp(
     attach_wall_sweep_types(rf, revit_version, &mut out.products);
     // --- Pipes, wall sweeps and ramps typed in their own record (RE-240) ---
     attach_native_type_names(rf, &mut out.products);
+    // --- Curtain mullions drawn as an extrusion of their section (RE-243) ---
+    attach_mullion_plain_hosts(rf, &mut out.products);
     // --- Walls' layers and exterior side (RE-53) ---
     attach_wall_layers(rf, revit_version, &mut out.walls);
     // --- The openings a wall's edited elevation profile cuts (B55) ---
@@ -1152,6 +1154,30 @@ fn attach_wall_sweep_types(
 /// ([`crate::native_element_types::system_type_names`], RE-240). Its family
 /// is then its class's system family ([`system_family`]), and a sweep's is
 /// Wall Sweep, as RE-69 names it.
+/// Mark each curtain mullion that stands on a straight curtain wall with an
+/// unedited profile and whose type sets no profile
+/// ([`crate::native_mullion_hosts::mullions_on_plain_hosts`], RE-243) with
+/// [`MULLION_PLAIN_HOST_FIELD`].
+fn attach_mullion_plain_hosts(rf: &mut RevitFile, products: &mut [DecodedElement]) {
+    let mullions: BTreeSet<u64> = products
+        .iter()
+        .filter(|element| element.class == "CurtainWallMullion")
+        .filter_map(|element| Some(u64::from(element.id?)))
+        .collect();
+    let Ok(plain) = crate::native_mullion_hosts::mullions_on_plain_hosts(rf, &mullions) else {
+        return;
+    };
+    for element in products.iter_mut() {
+        if element.class == "CurtainWallMullion"
+            && element.id.is_some_and(|id| plain.contains(&u64::from(id)))
+        {
+            element
+                .fields
+                .push((MULLION_PLAIN_HOST_FIELD.into(), InstanceField::Bool(true)));
+        }
+    }
+}
+
 fn attach_native_type_names(rf: &mut RevitFile, products: &mut [DecodedElement]) {
     let has = |element: &DecodedElement, field: &str| {
         element.fields.iter().any(|(name, _)| name == field)
@@ -1551,6 +1577,10 @@ pub const CURTAIN_AXES_CLASSES: [&str; 2] = ["CurtainWallMullion", "CurtainWallP
 /// lies on (RE-226). A turned or tilted mullion carries
 /// [`CURTAIN_AXES_FIELDS`] instead.
 pub const CURTAIN_MULLION_ALONG_FIELD: &str = "m_curtain_mullion_along";
+/// Set on a curtain mullion that stands on a straight curtain wall with an
+/// unedited profile and whose type sets no profile: Revit's export draws it
+/// as an extrusion of its section along its length (RE-243).
+pub const MULLION_PLAIN_HOST_FIELD: &str = "m_mullion_plain_host";
 
 /// The three axes [`CURTAIN_AXES_FIELDS`] record, X, Y and Z.
 pub fn curtain_axes_from_fields(fields: &[(String, InstanceField)]) -> Option<[[f64; 3]; 3]> {

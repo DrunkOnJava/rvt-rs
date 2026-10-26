@@ -2074,12 +2074,19 @@ fn add_mullion_span(sets: &mut Vec<PropertySet>, ifc_type: &str, decoded: &Decod
         }
         _ => None,
     });
-    let span = match (mvp::curtain_axes_from_fields(&decoded.fields), along) {
-        (Some(axes), _) => oriented_box(axes, size).map(|(_, half)| 2.0 * half[2]),
-        (None, Some(axis)) => size.get(axis).copied(),
-        (None, None) => None,
+    // The box's two sides across the mullion, then its length along it.
+    let sides = match (mvp::curtain_axes_from_fields(&decoded.fields), along) {
+        (Some(axes), _) => oriented_box(axes, size).map(|(_, half)| half.map(|h| 2.0 * h)),
+        (None, Some(axis)) if axis < 3 => {
+            let across: Vec<f64> = (0..3).filter(|i| *i != axis).map(|i| size[i]).collect();
+            Some([across[0], across[1], size[axis]])
+        }
+        _ => None,
     };
-    let Some(span) = span.filter(|span| span.is_finite() && *span > 0.0) else {
+    let Some(span) = sides
+        .map(|sides| sides[2])
+        .filter(|span| span.is_finite() && *span > 0.0)
+    else {
         return;
     };
     let property = Property {
@@ -2093,13 +2100,44 @@ fn add_mullion_span(sets: &mut Vec<PropertySet>, ifc_type: &str, decoded: &Decod
             properties: vec![property],
         }),
     }
+    let mut quantities = vec![Property {
+        name: "Length".into(),
+        value: PropertyValue::PositiveLengthFeet(span),
+    }];
+    if let Some(volume) = mullion_box_volume(decoded, sides, span) {
+        quantities.push(Property {
+            name: "NetVolume".into(),
+            value: PropertyValue::VolumeCubicFeet(volume),
+        });
+    }
     sets.push(PropertySet {
         name: "Qto_MemberBaseQuantities".into(),
-        properties: vec![Property {
-            name: "Length".into(),
-            value: PropertyValue::PositiveLengthFeet(span),
-        }],
+        properties: quantities,
     });
+}
+
+/// Mullion families whose section is a full rectangle: a Rectangular
+/// Mullion's, and a Quad Corner Mullion's square.
+const BOX_MULLION_FAMILIES: [&str; 2] = ["Rectangular Mullion", "Quad Corner Mullion"];
+
+/// A curtain mullion's `NetVolume` (#1016, RE-243): its box's two sides across
+/// it times its length, where Revit's export draws it as an extrusion of
+/// that section, a mullion of a [`BOX_MULLION_FAMILIES`] family with its own
+/// section on a straight curtain wall with an unedited profile
+/// ([`crate::partition_schema_mvp::MULLION_PLAIN_HOST_FIELD`]). revit-ifc's
+/// `NetVolumeCalculator` (CLEANROOM.md source 5) takes the volume of the
+/// solid it writes.
+fn mullion_box_volume(decoded: &DecodedElement, sides: Option<[f64; 3]>, span: f64) -> Option<f64> {
+    use crate::partition_schema_mvp as mvp;
+    let plain = decoded.fields.iter().any(|(name, value)| {
+        name == mvp::MULLION_PLAIN_HOST_FIELD && matches!(value, InstanceField::Bool(true))
+    });
+    let boxed = decoded.fields.iter().any(|(name, value)| {
+        name == mvp::FAMILY_NAME_FIELD
+            && matches!(value, InstanceField::String(family) if BOX_MULLION_FAMILIES.contains(&family.as_str()))
+    });
+    let [a, b, _] = sides?;
+    (plain && boxed && a.is_finite() && b.is_finite() && a > 0.0 && b > 0.0).then_some(a * b * span)
 }
 
 /// Add `Finish` (`IfcText`) to a covering's `Pset_CoveringCommon` among
