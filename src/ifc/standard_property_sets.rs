@@ -56,6 +56,9 @@ pub struct StandardPropertySet {
     pub applies: &'static [(&'static str, Option<&'static str>)],
     /// Its properties and their kinds.
     pub properties: &'static [(&'static str, StandardPropertyKind)],
+    /// The names of its other properties: those of another kind, and those
+    /// that are not single values.
+    pub other_properties: &'static [&'static str],
 }
 
 impl StandardPropertySet {
@@ -75,6 +78,12 @@ impl StandardPropertySet {
             entity = supertype(current);
         }
         false
+    }
+
+    /// Whether IFC4's definition of the set has a property named `property`,
+    /// of any kind.
+    pub fn defines(&self, property: &str) -> bool {
+        self.property_kind(property).is_some() || self.other_properties.contains(&property)
     }
 
     /// The kind of the set's property `property`, `None` for one not listed.
