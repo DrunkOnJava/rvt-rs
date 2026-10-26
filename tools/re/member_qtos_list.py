@@ -70,6 +70,29 @@ def main():
         for _, revit, mine in members:
             for name in NAMES:
                 equal[name] += same(revit.get(name), mine.get(name))
+        half = sum(
+            1
+            for _, revit, _ in members
+            if same(revit.get("CrossSectionArea"), (revit.get("NetSurfaceArea") or 0) / 2)
+        )
+        caps = collections.Counter()
+        volume_misses = []
+        for t, revit, mine in members:
+            length, section = mine.get("Length"), mine.get("CrossSectionArea")
+            surf, theirs_surf = mine.get("NetSurfaceArea"), revit.get("NetSurfaceArea")
+            if length and section and surf and theirs_surf:
+                sides = surf - 2 * section
+                caps[round((theirs_surf - sides) / section, 2)] += 1
+            if not same(revit.get("NetVolume"), mine.get("NetVolume")) and len(volume_misses) < 8:
+                volume_misses.append(
+                    f"{t}: Revit L {revit.get('Length', float('nan')):.6g} V {revit.get('NetVolume', float('nan')):.6g}"
+                    f" S {revit.get('NetSurfaceArea', float('nan')):.6g}; rvt-rs L {mine.get('Length', float('nan')):.6g}"
+                    f" V {mine.get('NetVolume', float('nan')):.6g} A {mine.get('CrossSectionArea', float('nan')):.6g}"
+                )
+        print(f"    CrossSectionArea = NetSurfaceArea / 2 on {half} of {len(members)}")
+        print("    end caps in Revit's surface: " + ", ".join(f"{k} x{v}" for k, v in caps.most_common(6)))
+        for line in volume_misses:
+            print(f"    volume differs {line}")
         tag, revit, mine = members[0]
         length = revit.get("Length")
         area = revit.get("CrossSectionArea")
