@@ -21,6 +21,7 @@ import os
 import sys
 
 import ifcopenshell
+import ifcopenshell.util.element
 import ifcopenshell.util.unit
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -123,6 +124,11 @@ def main(argv):
         if qset == SET and value is not None:
             theirs[key][name] = value
     walls = {k: v for k, v in theirs.items() if k in mine}
+    extend = {}
+    for wall in ifcopenshell.open(args[1]).by_type("IfcWall"):
+        if wall.Tag:
+            common = ifcopenshell.util.element.get_psets(wall, psets_only=True).get("Pset_WallCommon", {})
+            extend[f"tag:{wall.Tag}"] = common.get("ExtendToStructure")
     print(f"walls with {SET} in Revit's export that rvt-rs writes: {len(walls)} (of {len(theirs)})")
 
     def rvt(key, name):
@@ -157,6 +163,8 @@ def main(argv):
         pairs = [(k, a, b) for k, a, b in pairs if a is not None and b is not None]
         equal = [p for p in pairs if same(p[1], p[2])]
         print(f"{label}: {len(equal)} of {len(pairs)}")
+        by_extend = collections.Counter((extend.get(k), same(a, b)) for k, a, b in pairs)
+        print("    by Revit's ExtendToStructure (value, equal): " + ", ".join(f"{v} {e} x{n}" for (v, e), n in sorted(by_extend.items(), key=str)))
         for k, a, b in [p for p in pairs if not same(p[1], p[2])][:8]:
             print(f"    {k}: Revit {a:.6g}, other {b:.6g} (solids {mine[k]['solids']})")
     return 0
