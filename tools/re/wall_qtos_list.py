@@ -75,6 +75,13 @@ def solids(item):
         yield from solids(item.FirstOperand)
 
 
+def body_source(wall):
+    for props in ifcopenshell.util.element.get_psets(wall).values():
+        if "BodySource" in props:
+            return str(props["BodySource"])
+    return "-"
+
+
 def ours(path):
     f = ifcopenshell.open(path)
     scale = ifcopenshell.util.unit.calculate_unit_scale(f)
@@ -84,9 +91,11 @@ def ours(path):
             continue
         depth = area = extent = axis = None
         items = 0
+        kinds = []
         for rep in wall.Representation.Representations:
             if rep.RepresentationIdentifier == "Body":
                 for item in rep.Items:
+                    kinds.append(item.is_a())
                     for solid in solids(item):
                         items += 1
                         d = solid.Depth * scale
@@ -105,6 +114,8 @@ def ours(path):
             "profile extent": extent,
             "axis length": axis,
             "solids": items,
+            "kinds": "+".join(sorted(set(kinds))) or "-",
+            "source": body_source(wall),
         }
     return out
 
@@ -119,6 +130,7 @@ def main(argv):
         print(__doc__, file=sys.stderr)
         return 2
     mine = ours(args[0])
+    revit_bodies = ours(args[1])
     theirs = collections.defaultdict(dict)
     for (key, qset, name), (_, value) in quantities(args[1])[0].items():
         if qset == SET and value is not None:
@@ -139,6 +151,7 @@ def main(argv):
         return walls[key].get(name)
 
     checks = [
+        ("Height = Revit's body depth", "Height", lambda k: revit_bodies.get(k, {}).get("depth")),
         ("Height = rvt-rs body depth", "Height", lambda k: rvt(k, "depth")),
         ("Length = rvt-rs axis length", "Length", lambda k: rvt(k, "axis length")),
         ("Length = rvt-rs profile extent", "Length", lambda k: rvt(k, "profile extent")),
@@ -166,6 +179,10 @@ def main(argv):
         print(f"{label}: {len(equal)} of {len(pairs)}")
         by_extend = collections.Counter((extend.get(k), same(a, b)) for k, a, b in pairs)
         print("    by Revit's ExtendToStructure (value, equal): " + ", ".join(f"{v} {e} x{n}" for (v, e), n in sorted(by_extend.items(), key=str)))
+        by_source = collections.Counter((mine[k]["source"], same(a, b)) for k, a, b in pairs)
+        print("    by rvt-rs's BodySource (value, equal): " + ", ".join(f"{v} {e} x{n}" for (v, e), n in sorted(by_source.items(), key=str)))
+        by_kind = collections.Counter((revit_bodies.get(k, {}).get("kinds", "-"), same(a, b)) for k, a, b in pairs)
+        print("    by Revit's body items (value, equal): " + ", ".join(f"{v} {e} x{n}" for (v, e), n in sorted(by_kind.items(), key=str)))
         for k, a, b in [p for p in pairs if not same(p[1], p[2])][:8]:
             print(f"    {k}: Revit {a:.6g}, other {b:.6g} (solids {mine[k]['solids']})")
     return 0
