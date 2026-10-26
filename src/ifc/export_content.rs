@@ -906,7 +906,7 @@ pub fn append_typed_production_elements(
             extrusion.as_ref(),
             solid_shape.is_none() && piece_bodies.is_empty(),
         );
-        add_ceiling_quantities(
+        add_ceiling_width(
             &mut reference_sets,
             &ifc_type,
             &decoded,
@@ -2150,14 +2150,13 @@ fn profile_area(body: &Extrusion) -> Option<f64> {
     (area.is_finite() && area > 0.0).then_some(area)
 }
 
-/// Add a ceiling's `Qto_CoveringBaseQuantities` to `sets` (#1016, RE-250):
-/// its `Width`, the depth of the extrusion it is drawn as where that is its
-/// type's layers' total thickness (as RE-238 tells a level slab), and its
-/// `GrossArea`, the area of the profile its sketch gives it, each as Revit's
-/// export writes it. A ceiling drawn as its record box has no `GrossArea`
-/// written: the box's area is its sketch's only where the sketch is a
-/// rectangle filling it.
-fn add_ceiling_quantities(
+/// Add a ceiling's `Qto_CoveringBaseQuantities.Width` to `sets` (#1016,
+/// RE-250): the depth of the extrusion it is drawn as, where that is its
+/// type's layers' total thickness (as RE-238 tells a level slab), as Revit's
+/// export writes it. Its `GrossArea` is left out: the area of the profile its
+/// sketch gives it differs from Revit's on 2 of the BIM4LCA office's ceilings
+/// as built and 9 at permit.
+fn add_ceiling_width(
     sets: &mut Vec<PropertySet>,
     ifc_type: &str,
     decoded: &DecodedElement,
@@ -2171,31 +2170,22 @@ fn add_ceiling_quantities(
     let Some(body) = extrusion else {
         return;
     };
-    let mut properties = Vec::new();
     let layered = crate::partition_schema_mvp::element_layers_from_fields(&decoded.fields)
         .filter(|layers| layers.stacked && !layers.layers.is_empty())
         .is_some_and(|layers| {
             let total: f64 = layers.layers.iter().map(|layer| layer.width_feet).sum();
             (total - body.height_feet).abs() <= TOLERANCE_FEET
         });
-    if layered && body.height_feet.is_finite() && body.height_feet > 0.0 {
-        properties.push(Property {
+    if !(layered && body.height_feet.is_finite() && body.height_feet > 0.0) {
+        return;
+    }
+    sets.push(PropertySet {
+        name: "Qto_CoveringBaseQuantities".into(),
+        properties: vec![Property {
             name: "Width".into(),
             value: PropertyValue::PositiveLengthFeet(body.height_feet),
-        });
-    }
-    if let Some(area) = body.profile_override.as_ref().and(profile_area(body)) {
-        properties.push(Property {
-            name: "GrossArea".into(),
-            value: PropertyValue::AreaSquareFeet(area),
-        });
-    }
-    if !properties.is_empty() {
-        sets.push(PropertySet {
-            name: "Qto_CoveringBaseQuantities".into(),
-            properties,
-        });
-    }
+        }],
+    });
 }
 
 /// Add a stair run's `Qto_StairFlightBaseQuantities` to `sets` (#1016,
