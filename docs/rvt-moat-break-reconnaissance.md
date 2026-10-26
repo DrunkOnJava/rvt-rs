@@ -2235,3 +2235,7 @@ Revit's export writes a floor's `Qto_SlabBaseQuantities.GrossArea` as the area o
 ## Addendum — RE-250 a ceiling's Width (2026-10-26)
 
 Revit's export writes a compound ceiling's `Qto_CoveringBaseQuantities.Width` as its type's thickness: on the BIM4LCA office, all 78 compound ceilings as built and 75 at permit have it equal to the depth of their record box. rvt-rs writes it where that depth is the type's layers' total, as RE-238 tells a level slab. The ceiling's `GrossArea` is its sketch's area on most but larger by about 1% on 11, and is left out. Report: `reports/element-framing/RE-250-ceiling-width.md`.
+
+## Addendum — RE-251 a wall's record does not keep Revit's wall quantities (2026-10-26)
+
+No number in a wall's native record or its saved parameters is Revit's wall side area, footprint area or volume on the BIM4LCA office: Revit computes those when it exports. A wall's `Height` is its saved parameter -1001101 on 496 of 579 walls (478 of 565 at permit); the rest are mostly walls whose top is joined to a roof or floor, and no field read tells them apart (the best, the `JoinToRoofGStep` it holds, is right on 529). Not written. Report: `reports/element-framing/RE-251-wall-saved-dimensions.md`.
