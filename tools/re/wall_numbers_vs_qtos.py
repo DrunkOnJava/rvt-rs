@@ -61,12 +61,14 @@ def main():
     totals = collections.Counter()
     hits = collections.defaultdict(collections.Counter)
     equal = collections.defaultdict(dict)
+    eligible = collections.defaultdict(set)
     for (key, qset, name), (kind, value) in quantities(args[1])[0].items():
         tag = key.removeprefix("tag:")
         if qset != "Qto_WallBaseQuantities" or value is None or tag not in rows or kind not in TO_FEET:
             continue
         target = value * TO_FEET[kind]
         totals[name] += 1
+        eligible[name].add(tag)
         for field, numbers in rows[tag].items():
             ok = any(abs(n - target) <= 1e-6 * max(1.0, abs(target)) for n in numbers)
             if ok:
@@ -84,7 +86,9 @@ def main():
             continue
         field, k = hits[name].most_common(1)[0]
         if 0 < k < n:
-            truths[f"{name}={field}"] = equal[(name, field)]
+            # A wall without the field is one it does not give the quantity on.
+            by = equal[(name, field)]
+            truths[f"{name}={field}"] = {tag: by.get(tag, False) for tag in eligible[name]}
     if truths:
         record_scalars_vs_ifc.report(record_scalars_vs_ifc.read_probe(args[0]), truths)
     return 0
