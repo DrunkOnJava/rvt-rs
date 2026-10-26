@@ -2043,10 +2043,12 @@ fn add_door_window_quantities(
     });
 }
 
-/// Add the base quantities a column's or curtain panel's body gives to `sets`
-/// (#1016, RE-247): a column's `Length`, the depth of the extrusion it is
-/// drawn as, and a panel's `Width`, the larger side of its box's profile,
-/// as Revit's export writes them. None where another solid draws it.
+/// Add the base quantity a column's body gives to `sets` (#1016, RE-247):
+/// its `Length`, the depth of the extrusion it is drawn as, as Revit's
+/// export writes it. None where another solid draws it. A curtain panel's
+/// `Width`, its box's larger side wherever Revit writes it, is left out:
+/// Revit's export writes none on 3 of the BIM4LCA office's panels that no
+/// field tells apart.
 fn add_body_quantities(
     sets: &mut Vec<PropertySet>,
     ifc_type: &str,
@@ -2060,10 +2062,6 @@ fn add_body_quantities(
         ("IFCCOLUMN", _, Some(entities::SolidShape::PlacedExtrusion { depth_feet, .. })) => {
             ("Qto_ColumnBaseQuantities", ("Length", *depth_feet))
         }
-        ("IFCPLATE", Some(body), None) if body.profile_override.is_none() => (
-            "Qto_PlateBaseQuantities",
-            ("Width", body.width_feet.max(body.depth_feet)),
-        ),
         _ => return,
     };
     let (name, feet) = quantity;
