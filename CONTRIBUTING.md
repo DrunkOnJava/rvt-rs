@@ -335,6 +335,9 @@ When you discover something new about the file format:
    request's head commit with `-f scorers=witness` writes the rvt-rs
    witness observations its CI job will compare, so a change that moves
    Core Interior's export can commit them before CI runs.
+   A filtered run says which exports changed, not which values moved:
+   before a change to any export merges, run Measure without `models` or
+   `scorers`, so every scorer scores it on every model.
 
    The summary's `rvt-ifc` wall times come from the base and head jobs, which
    run on different runners; runner speed alone moves them by up to about
