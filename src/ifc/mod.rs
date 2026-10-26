@@ -3930,6 +3930,40 @@ pub fn recount_exported(diagnostics: &mut ExportDiagnostics, model: &IfcModel) {
     diagnostics.decoded.parameter_value_count = pset_property_value_count(model);
 }
 
+/// Leave every base quantity out of `model`: each [`entities::PropertySet`]
+/// named `Qto_`, as Revit's exporter leaves them out when its export
+/// setup's "Export base quantities" is off (RE-242). Returns how many
+/// quantities were left out.
+pub fn leave_out_base_quantities(model: &mut IfcModel) -> usize {
+    fn is_quantities(set: &entities::PropertySet) -> bool {
+        set.name.starts_with("Qto_")
+    }
+    let mut left_out = 0;
+    for entity in &mut model.entities {
+        let set = match entity {
+            entities::IfcEntity::BuildingElement {
+                property_set: Some(set),
+                ..
+            } => set,
+            entities::IfcEntity::ElementPropertySet { set, .. } => set,
+            _ => continue,
+        };
+        if is_quantities(set) {
+            left_out += set.properties.len();
+            set.properties.clear();
+        }
+    }
+    for sets in model.type_property_sets.values_mut() {
+        for set in sets.iter() {
+            if is_quantities(set) {
+                left_out += set.properties.len();
+            }
+        }
+        sets.retain(|set| !is_quantities(set));
+    }
+    left_out
+}
+
 fn exported_model_diagnostics(model: &IfcModel) -> ExportedModelDiagnostics {
     let mut by_ifc_type = std::collections::BTreeMap::<String, usize>::new();
     let mut building_elements = 0usize;
