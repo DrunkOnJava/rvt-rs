@@ -4,10 +4,9 @@ Revit's export writes (RE-231, #35, W7).
 
 Reads `examples/probe_re231_stored_lengths.rs`'s or
 `examples/probe_re231_record_lengths.rs`'s output and Revit's IFC
-export. For each IFC class and property of a length or count measure, or
-length base quantity (a
-count compared as it is), over the
-elements of that class the probe lists and Revit's export gives the
+export. For each IFC class and property of a length or count measure (a
+count compared as it is), or length base quantity, over the elements of
+that class the probe lists and Revit's export gives the
 property, it counts, for each stored parameter, how many of those elements
 store it and how many store Revit's value within 0.001 ft, and prints the
 three parameters equal most often. A property on the element's type object
