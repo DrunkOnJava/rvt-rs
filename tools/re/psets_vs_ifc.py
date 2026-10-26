@@ -269,7 +269,7 @@ def main(argv):
         print(f"  {pset}.{prop}: {common}; on {classes}")
     for line in worst:
         print(line)
-    wanted = [w for w in os.environ.get("PSETS_MISSING", "").split(",") if w]
+    wanted = [w for w in os.environ.get("PSETS_MISSING", "Pset_SpaceOccupancyRequirements.OccupancyType").split(",") if w]
     if wanted:
         names = object_names(args[0])
         for (key, pset, prop), value in sorted(theirs.items()):
