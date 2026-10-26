@@ -79,7 +79,7 @@ number of treads and nosing length (RE-92, RE-236), on Revit 2024 its run type a
 and each landing's type as its `Reference`, each element's `IsExternal` as Revit's
 exporter sets it (a parameter named for its property set, its type's
 Function, else its class's rule; none on curtain mullions and panels, RE-193),
-each curtain mullion's `Span`, its length along its own axis (RE-226),
+each curtain mullion's `Span`, its length along its own axis (RE-226), which is also its `Qto_MemberBaseQuantities.Length` (#1016),
 each curtain wall's type, named as its type's native record names it (RE-230),
 the type of each pipe, wall sweep and ramp that neither its stored layout nor its reference list types, the one its own native record names (RE-240),
 each wall's `ExtendToStructure`, whether its top is joined to a roof or floor (RE-228),
