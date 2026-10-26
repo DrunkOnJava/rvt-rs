@@ -37,10 +37,10 @@ Nothing changes: a wall's `Height`, side areas and volumes stay unwritten. Writi
 ## 5. Reproduce
 
 ```bash
-gh workflow run measure.yml --ref main -f ref=aeb2eb21abde2e69df7ef64bf1c390bec7d5b38e -f base=none -f nordic=true \
+gh workflow run measure.yml --ref main -f ref=dec4d43d32d78c726a871cc3795c8204670321d4 -f base=none -f nordic=true \
   -f models="nordic-office-*" -f scorers=none \
   -f probe=probe_re251_wall_numbers -f probe_scorer=wall_numbers_vs_qtos
-gh workflow run measure.yml --ref main -f ref=aeb2eb21abde2e69df7ef64bf1c390bec7d5b38e -f base=none -f nordic=true \
+gh workflow run measure.yml --ref main -f ref=dec4d43d32d78c726a871cc3795c8204670321d4 -f base=none -f nordic=true \
   -f models="nordic-office-as-built" -f scorers=none \
   -f probe=probe_re70_wall_join_lists -f probe_scorer=wall_length_vs_joins
 ```
