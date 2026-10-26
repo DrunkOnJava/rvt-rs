@@ -19,9 +19,13 @@
 //!   par <tag> <IFC class> <parameter id>:<name|->=<value> ...
 //! every Yes/No and text value of its saved parameters and its type's,
 //! spaces as `_`; then, for each of `MARKERS` (a user-defined property set
-//! file's keyword and revit-ifc's names for the export setting that names
-//! the file), how often it occurs in every stream, stored and inflated:
+//! file's keyword, the name of a set only the office's file defines, and
+//! revit-ifc's names for its export setup and the setting that names the
+//! file), how often it occurs in every stream, stored and inflated:
 //!   scan <marker> <utf8|utf16> <stream|total> <count>
+//! and the text after each UTF-16 `ExportUserDefinedPsets`, each path cut
+//! to its file name:
+//!   ctx <stream> <text>
 //!
 //! Usage:
 //!   cargo run --profile ci --example probe_re239_mapped_parameters -- MODEL.rvt
@@ -42,8 +46,9 @@ const CLASSES: [&str; 6] = [
     "IFCPLATE",
     "IFCSPACE",
 ];
-const MARKERS: [&str; 3] = [
+const MARKERS: [&str; 4] = [
     "PropertySet:",
+    "FI_Kohde",
     "ExportUserDefinedPsets",
     "IFCExportConfiguration",
 ];
@@ -122,6 +127,13 @@ fn main() -> anyhow::Result<()> {
             if count > 0 {
                 println!("scan {marker} {encoding} {name} {count}");
             }
+            if *encoding == "utf16" && *marker == "ExportUserDefinedPsets" {
+                for chunk in &chunks {
+                    for at in memchr::memmem::find_iter(chunk, needle) {
+                        println!("ctx {name} {}", context(chunk, at));
+                    }
+                }
+            }
             *total += count;
         }
     }
@@ -129,4 +141,22 @@ fn main() -> anyhow::Result<()> {
         println!("scan {marker} {encoding} total {total}");
     }
     Ok(())
+}
+
+/// The UTF-16 text at `at` in `chunk`, up to 160 code units or the first
+/// control character, with every path between quotes cut to its file name.
+fn context(chunk: &[u8], at: usize) -> String {
+    let text: String = chunk[at..]
+        .chunks_exact(2)
+        .take(160)
+        .map(|pair| u16::from_le_bytes([pair[0], pair[1]]))
+        .map_while(|unit| char::from_u32(u32::from(unit)).filter(|c| !c.is_control()))
+        .collect();
+    text.split('"')
+        .map(|part| match part.rfind(['\\', '/']) {
+            Some(cut) => &part[cut + 1..],
+            None => part,
+        })
+        .collect::<Vec<_>>()
+        .join("\"")
 }
