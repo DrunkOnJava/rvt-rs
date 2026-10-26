@@ -2868,11 +2868,17 @@ impl StepWriter {
             }
         }
 
+        // RE-237: each element's type name, for the openings of its own
+        // geometry below.
+        let host_references = super::host_references(model);
+
         // RE-151 (#227): an opening nothing fills, a hole in a floor's sketch.
         // As in Revit's export it is placed in its host's frame, its outline
         // extruded up through the host, and it voids the host without being
         // contained in a storey. #824: so is the opening a face-hosted door
         // or window cuts in its host, numbered among the host's openings.
+        // RE-237: either is the host's own geometry, so, as Revit's export
+        // writes it, its Pset_OpeningElementCommon.Reference is the host's.
         for entity in &model.entities {
             let (host, tag, name, outline_feet, depth_feet, number) = match entity {
                 super::entities::IfcEntity::VoidOpening {
@@ -2962,6 +2968,30 @@ impl StepWriter {
                     escape(tag),
                 ),
             );
+            if let Some(reference) = host_references.get(host) {
+                let set = PropertySet {
+                    name: "Pset_OpeningElementCommon".into(),
+                    properties: vec![super::entities::Property {
+                        name: "Reference".into(),
+                        value: super::entities::PropertyValue::Identifier(reference.clone()),
+                    }],
+                };
+                self.emit_property_set(
+                    owner_hist,
+                    opening_id,
+                    &set,
+                    &gid(&[
+                        "property-set",
+                        opening_gid.as_str(),
+                        "Pset_OpeningElementCommon",
+                    ]),
+                    &gid(&[
+                        "defines-by-properties",
+                        opening_gid.as_str(),
+                        "Pset_OpeningElementCommon",
+                    ]),
+                );
+            }
             void_fill_triples.push((*host, opening_id, None, opening_gid));
         }
 
