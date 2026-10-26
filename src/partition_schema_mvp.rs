@@ -1162,7 +1162,7 @@ fn attach_wall_sweep_types(
 /// is then its class's system family ([`system_family`]), and a sweep's is
 /// Wall Sweep, as RE-69 names it.
 /// Mark each curtain mullion that stands on a straight curtain wall with an
-/// unedited profile and whose type sets no profile
+/// unedited profile and whose type has its own rectangular section
 /// ([`crate::native_mullion_hosts::mullions_on_plain_hosts`], RE-243) with
 /// [`MULLION_PLAIN_HOST_FIELD`].
 fn attach_mullion_plain_hosts(rf: &mut RevitFile, products: &mut [DecodedElement]) {
@@ -1585,8 +1585,9 @@ pub const CURTAIN_AXES_CLASSES: [&str; 2] = ["CurtainWallMullion", "CurtainWallP
 /// [`CURTAIN_AXES_FIELDS`] instead.
 pub const CURTAIN_MULLION_ALONG_FIELD: &str = "m_curtain_mullion_along";
 /// Set on a curtain mullion that stands on a straight curtain wall with an
-/// unedited profile and whose type sets no profile: Revit's export draws it
-/// as an extrusion of its section along its length (RE-243).
+/// unedited profile and whose type has its own rectangular section (RE-246):
+/// Revit's export draws it as an extrusion of its box's section along its
+/// length (RE-243).
 pub const MULLION_PLAIN_HOST_FIELD: &str = "m_mullion_plain_host";
 
 /// The three axes [`CURTAIN_AXES_FIELDS`] record, X, Y and Z.

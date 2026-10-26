@@ -2116,14 +2116,10 @@ fn add_mullion_span(sets: &mut Vec<PropertySet>, ifc_type: &str, decoded: &Decod
     });
 }
 
-/// Mullion families whose section is a full rectangle: a Rectangular
-/// Mullion's, and a Quad Corner Mullion's square.
-const BOX_MULLION_FAMILIES: [&str; 2] = ["Rectangular Mullion", "Quad Corner Mullion"];
-
 /// A curtain mullion's `NetVolume` (#1016, RE-243): its box's two sides across
 /// it times its length, where Revit's export draws it as an extrusion of
-/// that section, a mullion of a [`BOX_MULLION_FAMILIES`] family with its own
-/// section on a straight curtain wall with an unedited profile
+/// that section, a mullion whose type has its own rectangular section
+/// (RE-246) on a straight curtain wall with an unedited profile
 /// ([`crate::partition_schema_mvp::MULLION_PLAIN_HOST_FIELD`]). revit-ifc's
 /// `NetVolumeCalculator` (CLEANROOM.md source 5) takes the volume of the
 /// solid it writes.
@@ -2132,12 +2128,8 @@ fn mullion_box_volume(decoded: &DecodedElement, sides: Option<[f64; 3]>, span: f
     let plain = decoded.fields.iter().any(|(name, value)| {
         name == mvp::MULLION_PLAIN_HOST_FIELD && matches!(value, InstanceField::Bool(true))
     });
-    let boxed = decoded.fields.iter().any(|(name, value)| {
-        name == mvp::FAMILY_NAME_FIELD
-            && matches!(value, InstanceField::String(family) if BOX_MULLION_FAMILIES.contains(&family.as_str()))
-    });
     let [a, b, _] = sides?;
-    (plain && boxed && a.is_finite() && b.is_finite() && a > 0.0 && b > 0.0).then_some(a * b * span)
+    (plain && a.is_finite() && b.is_finite() && a > 0.0 && b > 0.0).then_some(a * b * span)
 }
 
 /// Add `Finish` (`IfcText`) to a covering's `Pset_CoveringCommon` among
