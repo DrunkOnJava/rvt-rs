@@ -319,7 +319,9 @@ When you discover something new about the file format:
    A probe needs neither every model nor the full scorer suite, which takes
    about 11 minutes on each office model. `models` keeps the models whose
    names match its patterns, `scorers` runs only the steps it names (tools/re
-   scorers, and `info`, `gltf`, `schema`, `witness`; `none` for none), and
+   scorers, and `info`, `gltf`, `schema`, `witness`; `none` for none; a
+   tools/re script in neither scorer list runs as an IFC scorer, so a
+   research lister needs no place in every run), and
    `probe` and `probe_scorer` take several, in the same order:
 
    ```bash
