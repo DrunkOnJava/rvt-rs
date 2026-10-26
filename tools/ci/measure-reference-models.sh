@@ -41,8 +41,9 @@
 # its patterns (e.g. "nordic-office-* core-interior"). MEASURE_SCORERS, when
 # set, runs on the models only the steps it names: tools/re scorers, and
 # info, gltf, schema and witness ("none" for none of them; rvt-gltf runs
-# when a .glb scorer or gltf is named). Every model is still exported and
-# hashed.
+# when a .glb scorer or gltf is named). A tools/re script it names that is
+# in neither scorer list runs as an IFC scorer, so a research lister needs no
+# place in every run. Every model is still exported and hashed.
 # When FAMILY_DIR names the Autodesk family corpus, each of its .rfa files gets
 # OUT_DIR/family-<file>/ with the same info.json and info.exit (a family
 # carries its Atom entry in a PartAtom stream) and, when PROBE is built, the
@@ -237,6 +238,13 @@ measure_model() { # name rvt ref
     for s in $GLB_SCORERS; do
       wanted "$s" || continue
       score "$dir/$s.txt" "$SCORERS/$s.py" "$dir/model.glb" "$MODELS/$ref"
+    done
+    for s in "${STEPS[@]}"; do
+      case " $IFC_SCORERS $GLB_SCORERS info gltf schema witness none " in
+        *" $s "*) continue ;;
+      esac
+      [ -f "$SCORERS/$s.py" ] || continue
+      score "$dir/$s.txt" "$SCORERS/$s.py" "$dir/model.ifc" "$MODELS/$ref"
     done
   fi
   # The bulky outputs stay out of the uploaded results.
