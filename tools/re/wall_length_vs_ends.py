@@ -4,13 +4,14 @@
 
 Reads `examples/probe_re252_wall_ends.rs`'s JSON lines and Revit's IFC
 export. For each wall it takes the centreline's length less Revit's `Length`
-(feet) and, per end of the wall (`CDJoinInfo` pairs naming this wall's end 0
-or 1), looks for that difference among the sums of one term per end: none,
+(feet) and, per end of the wall, looks for that difference among the sums of one term per end: none,
 or plus or minus half or the whole of the thickness of a wall joined there,
-or half the wall's own (within 1e-4 ft). It tallies the walls by the kinds of
-join at each end (`-` none, `L` another wall's end, `T` another wall's
-middle, `x` more than one) and whether a sum gives the difference, by the
-terms that do, and lists up to 40 walls nothing gives.
+or half the wall's own (within 1e-4 ft). A wall's `CDJoinInfo` records the
+walls whose end meets one of its sides (its own entry 2 or 3, theirs 0 or 1),
+so the walls joined at a wall's end are those whose records name that end.
+It tallies the walls by the number of walls joined at each end and whether a
+sum gives the difference, by the terms that do, and lists up to 40 walls
+nothing gives.
 
 Usage:
 
@@ -31,26 +32,21 @@ FOOT = 0.3048
 TOL = 1e-4
 
 
-def ends_of(wall):
-    """End (0 or 1) -> [(other id, other end)] of the walls joined there."""
-    out = {0: [], 1: []}
-    for join in wall.get("joins", []):
-        pairs = [p for p in join[:-1] if isinstance(p, list)]
-        mine = [e for i, e in pairs if i == wall["id"]]
-        if not mine or mine[0] not in (0, 1):
-            continue
-        for other, end in pairs:
-            if other != wall["id"]:
-                out[mine[0]].append((other, end))
+def joined_ends(walls):
+    """(wall id, end 0 or 1) -> [(id of the wall it meets, that wall's side)]."""
+    out = collections.defaultdict(list)
+    for host in walls.values():
+        for join in host.get("joins", []):
+            pairs = [p for p in join[:-1] if isinstance(p, list)]
+            side = [e for i, e in pairs if i == host["id"]]
+            for other, end in pairs:
+                if other != host["id"] and end in (0, 1):
+                    out[(other, end)].append((host["id"], side[0] if side else None))
     return out
 
 
 def kind(joined):
-    if not joined:
-        return "-"
-    if len(joined) > 1:
-        return "x"
-    return "T" if joined[0][1] not in (0, 1) else "L"
+    return str(len(joined)) if joined else "-"
 
 
 def main(argv):
@@ -70,6 +66,7 @@ def main(argv):
             tag = key.removeprefix("tag:")
             if tag.isdigit():
                 revit[int(tag)] = value / FOOT
+    meets = joined_ends(walls)
     by_kind = collections.Counter()
     by_terms = collections.Counter()
     unmatched = []
@@ -78,7 +75,7 @@ def main(argv):
         if w is None:
             continue
         diff = math.dist(w["start"], w["end"]) - length
-        joined = ends_of(w)
+        joined = {end: meets.get((i, end), []) for end in (0, 1)}
         own = w["thickness"]
         options = []
         for end in (0, 1):
