@@ -11,11 +11,14 @@ set and quantity it prints how many objects carry it and the three
 candidates equal (a relative 1e-5, or 1e-6 absolute in SI units) on the most
 of them, so a quantity rvt-rs's own body already gives can be written from
 it. With `--by-source` each count is split by the `BodySource` rvt-rs gives
-the object, so a rule can be narrowed to the bodies drawn exactly.
+the object, so a rule can be narrowed to the bodies drawn exactly. With
+`--misses` (which implies `--by-source`), each group whose best candidate
+holds on 90% or more of its objects but not all lists the objects it misses
+(at most 20): Tag, Revit's value and rvt-rs's.
 
 Usage:
 
-    python3 tools/re/qto_candidates_list.py <rvt-rs.ifc> <revit-export.ifc> [--by-source]
+    python3 tools/re/qto_candidates_list.py <rvt-rs.ifc> <revit-export.ifc> [--by-source] [--misses]
 """
 
 import collections
@@ -121,8 +124,9 @@ def same(a, b):
 
 
 def main(argv):
-    by_source = "--by-source" in argv
-    args = [a for a in argv[1:] if a not in ("--list", "--by-source")]
+    misses = "--misses" in argv
+    by_source = misses or "--by-source" in argv
+    args = [a for a in argv[1:] if a not in ("--list", "--by-source", "--misses")]
     if len(args) != 2:
         print(__doc__, file=sys.stderr)
         return 2
@@ -132,11 +136,13 @@ def main(argv):
     theirs, _, entities, *_ = quantities(args[1])
     rows = collections.defaultdict(lambda: collections.Counter())
     totals = collections.Counter()
+    members = collections.defaultdict(list)
     for (key, qset, name), (_, value) in theirs.items():
         if value is None or key not in ours:
             continue
         group = (entities.get(key, "-"), qset, name) + ((sources.get(key, "-"),) if sources is not None else ())
         totals[group] += 1
+        members[group].append((key, value))
         for candidate, v in ours[key].items():
             if same(value, v):
                 rows[group][candidate] += 1
@@ -145,6 +151,14 @@ def main(argv):
         best = ", ".join(f"{c} {n}" for c, n in rows[group].most_common(3)) or "none"
         source = f" [{group[3]}]" if len(group) > 3 else ""
         print(f"  {group[0]} {group[1]}.{group[2]}{source}: {totals[group]}; {best}")
+        if not misses or not rows[group]:
+            continue
+        candidate, hits = rows[group].most_common(1)[0]
+        if hits == totals[group] or hits < 0.9 * totals[group]:
+            continue
+        missed = [(k, v) for k, v in members[group] if not same(v, ours[k][candidate])]
+        for k, v in sorted(missed, key=str)[:20]:
+            print(f"    miss {k}: Revit {v:.6g}, {candidate} {ours[k][candidate]:.6g}")
     return 0
 
 
