@@ -890,6 +890,7 @@ pub fn append_typed_production_elements(
         add_is_external(&mut reference_sets, &ifc_type, &decoded, opening_only);
         add_covering_finish(&mut reference_sets, &ifc_type, &decoded);
         add_mullion_span(&mut reference_sets, &ifc_type, &decoded);
+        add_wall_quantities(&mut reference_sets, &ifc_type, &decoded);
         add_railing_height(&mut reference_sets, &ifc_type, &decoded);
         add_extend_to_structure(&mut reference_sets, &ifc_type, &decoded);
         let mut serial_sets = serial_number_property_sets(&decoded);
@@ -1967,6 +1968,51 @@ fn add_railing_height(sets: &mut Vec<PropertySet>, ifc_type: &str, decoded: &Dec
             properties: vec![property],
         }),
     }
+}
+
+/// Add a wall's `Qto_WallBaseQuantities` `Length` and `Width`, or a
+/// curtain wall's `Qto_CurtainWallQuantities` `Length`, to `sets`: the
+/// length of its location line or arc, which revit-ifc's `LengthCalculator`
+/// (CLEANROOM.md source 5) takes for a wall, and its type's thickness, the
+/// wall's Width parameter `WidthCalculator` reads (#1016). Nothing where
+/// the line is not read.
+fn add_wall_quantities(sets: &mut Vec<PropertySet>, ifc_type: &str, decoded: &DecodedElement) {
+    use crate::partition_schema_mvp as mvp;
+    let set = match ifc_type {
+        "IFCWALL" | "IFCWALLSTANDARDCASE" => "Qto_WallBaseQuantities",
+        "IFCCURTAINWALL" => "Qto_CurtainWallQuantities",
+        _ => return,
+    };
+    let (length, thickness) = if let Some(axis) = mvp::wall_axis_from_fields(&decoded.fields) {
+        (
+            wall_segment_length_feet(axis.start, axis.end),
+            axis.thickness_feet,
+        )
+    } else if let Some(arc) = mvp::wall_arc_from_fields(&decoded.fields) {
+        (
+            arc.radius * (arc.angles[1] - arc.angles[0]).abs(),
+            arc.thickness_feet,
+        )
+    } else {
+        return;
+    };
+    if !(length.is_finite() && length > 0.0) {
+        return;
+    }
+    let mut properties = vec![Property {
+        name: "Length".into(),
+        value: PropertyValue::PositiveLengthFeet(length),
+    }];
+    if set == "Qto_WallBaseQuantities" && thickness.is_finite() && thickness > 0.0 {
+        properties.push(Property {
+            name: "Width".into(),
+            value: PropertyValue::PositiveLengthFeet(thickness),
+        });
+    }
+    sets.push(PropertySet {
+        name: set.into(),
+        properties,
+    });
 }
 
 /// Add `Span` (`IfcPositiveLengthMeasure`) to a curtain mullion's
