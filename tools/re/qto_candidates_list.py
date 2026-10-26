@@ -13,7 +13,7 @@ of them, so a quantity rvt-rs's own body already gives can be written from
 it. With `--by-source` each count is split by the `BodySource` rvt-rs gives
 the object, so a rule can be narrowed to the bodies drawn exactly. With
 `--misses` (which implies `--by-source`), each group whose best candidate
-holds on 90% or more of its objects but not all lists the objects it misses
+holds on 80% or more of its objects but not all lists the objects it misses
 (at most 20): Tag, Revit's value and rvt-rs's; and a group of three objects
 or fewer that no candidate gives on all prints each object's value and every
 candidate.
@@ -163,7 +163,7 @@ def main(argv):
         if not rows[group]:
             continue
         candidate, hits = rows[group].most_common(1)[0]
-        if hits == totals[group] or hits < 0.9 * totals[group]:
+        if hits == totals[group] or hits < 0.8 * totals[group]:
             continue
         missed = [(k, v) for k, v in members[group] if not same(v, ours[k][candidate])]
         for k, v in sorted(missed, key=str)[:20]:

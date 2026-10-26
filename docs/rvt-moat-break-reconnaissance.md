@@ -2231,3 +2231,7 @@ Revit's export writes a mullion's `NetSurfaceArea` as the sum of its Revit solid
 ## Addendum — RE-249 a floor's GrossArea (2026-10-26)
 
 Revit's export writes a floor's `Qto_SlabBaseQuantities.GrossArea` as the area of the profile its slab extrudes, its sketch outline less its holes: equal to rvt-rs's profile on all 40 of the BIM4LCA office's slabs drawn from their record box, where the slab's other quantities follow its body less often (a sloped slab's record box is deeper than its layers). Stair landings' slabs get none. rvt-rs writes it on each floor drawn as one extrusion: 31 equal on the office, none different. Report: `reports/element-framing/RE-249-slab-gross-area.md`.
+
+## Addendum — RE-250 a ceiling's Width (2026-10-26)
+
+Revit's export writes a compound ceiling's `Qto_CoveringBaseQuantities.Width` as its type's thickness: on the BIM4LCA office, all 78 compound ceilings as built and 75 at permit have it equal to the depth of their record box. rvt-rs writes it where that depth is the type's layers' total, as RE-238 tells a level slab. The ceiling's `GrossArea` is its sketch's area on most but larger by about 1% on 11, and is left out. Report: `reports/element-framing/RE-250-ceiling-width.md`.

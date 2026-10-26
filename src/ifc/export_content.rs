@@ -906,6 +906,13 @@ pub fn append_typed_production_elements(
             extrusion.as_ref(),
             solid_shape.is_none() && piece_bodies.is_empty(),
         );
+        add_ceiling_width(
+            &mut reference_sets,
+            &ifc_type,
+            &decoded,
+            extrusion.as_ref(),
+            solid_shape.is_none() && piece_bodies.is_empty(),
+        );
         add_stair_flight_quantities(&mut reference_sets, &ifc_type, &decoded);
         add_railing_height(&mut reference_sets, &ifc_type, &decoded);
         add_extend_to_structure(&mut reference_sets, &ifc_type, &decoded);
@@ -2109,13 +2116,25 @@ fn add_slab_gross_area(
     extrusion: Option<&Extrusion>,
     single: bool,
 ) {
-    use crate::ifc::from_decoded::polygon_area_sqft;
     if ifc_type != "IFCSLAB" || decoded.class != "Floor" || !single {
         return;
     }
-    let Some(body) = extrusion else {
+    let Some(area) = extrusion.and_then(profile_area) else {
         return;
     };
+    sets.push(PropertySet {
+        name: "Qto_SlabBaseQuantities".into(),
+        properties: vec![Property {
+            name: "GrossArea".into(),
+            value: PropertyValue::AreaSquareFeet(area),
+        }],
+    });
+}
+
+/// The area of the profile `body` extrudes, its rectangle or its outline less
+/// its holes; `None` for another profile or an area that is not positive.
+fn profile_area(body: &Extrusion) -> Option<f64> {
+    use crate::ifc::from_decoded::polygon_area_sqft;
     let area = match &body.profile_override {
         None => body.width_feet * body.depth_feet,
         Some(entities::ProfileDef::Rectangle {
@@ -2126,16 +2145,45 @@ fn add_slab_gross_area(
         Some(entities::ProfileDef::ArbitraryWithVoids { points, voids }) => {
             polygon_area_sqft(points) - voids.iter().map(|v| polygon_area_sqft(v)).sum::<f64>()
         }
-        Some(_) => return,
+        Some(_) => return None,
     };
-    if !(area.is_finite() && area > 0.0) {
+    (area.is_finite() && area > 0.0).then_some(area)
+}
+
+/// Add a ceiling's `Qto_CoveringBaseQuantities.Width` to `sets` (#1016,
+/// RE-250): the depth of the extrusion it is drawn as, where that is its
+/// type's layers' total thickness (as RE-238 tells a level slab), as Revit's
+/// export writes it. Its `GrossArea` is left out: the area of the profile its
+/// sketch gives it differs from Revit's on 2 of the BIM4LCA office's ceilings
+/// as built and 9 at permit.
+fn add_ceiling_width(
+    sets: &mut Vec<PropertySet>,
+    ifc_type: &str,
+    decoded: &DecodedElement,
+    extrusion: Option<&Extrusion>,
+    single: bool,
+) {
+    const TOLERANCE_FEET: f64 = 1e-3;
+    if ifc_type != "IFCCOVERING" || decoded.class != "Ceiling" || !single {
+        return;
+    }
+    let Some(body) = extrusion else {
+        return;
+    };
+    let layered = crate::partition_schema_mvp::element_layers_from_fields(&decoded.fields)
+        .filter(|layers| layers.stacked && !layers.layers.is_empty())
+        .is_some_and(|layers| {
+            let total: f64 = layers.layers.iter().map(|layer| layer.width_feet).sum();
+            (total - body.height_feet).abs() <= TOLERANCE_FEET
+        });
+    if !(layered && body.height_feet.is_finite() && body.height_feet > 0.0) {
         return;
     }
     sets.push(PropertySet {
-        name: "Qto_SlabBaseQuantities".into(),
+        name: "Qto_CoveringBaseQuantities".into(),
         properties: vec![Property {
-            name: "GrossArea".into(),
-            value: PropertyValue::AreaSquareFeet(area),
+            name: "Width".into(),
+            value: PropertyValue::PositiveLengthFeet(body.height_feet),
         }],
     });
 }
