@@ -14,7 +14,9 @@ it. With `--by-source` each count is split by the `BodySource` rvt-rs gives
 the object, so a rule can be narrowed to the bodies drawn exactly. With
 `--misses` (which implies `--by-source`), each group whose best candidate
 holds on 90% or more of its objects but not all lists the objects it misses
-(at most 20): Tag, Revit's value and rvt-rs's.
+(at most 20): Tag, Revit's value and rvt-rs's; and a group of three objects
+or fewer that no candidate gives on all prints each object's value and every
+candidate.
 
 Usage:
 
@@ -151,7 +153,14 @@ def main(argv):
         best = ", ".join(f"{c} {n}" for c, n in rows[group].most_common(3)) or "none"
         source = f" [{group[3]}]" if len(group) > 3 else ""
         print(f"  {group[0]} {group[1]}.{group[2]}{source}: {totals[group]}; {best}")
-        if not misses or not rows[group]:
+        if not misses:
+            continue
+        if totals[group] <= 3 and (not rows[group] or rows[group].most_common(1)[0][1] < totals[group]):
+            for k, v in sorted(members[group], key=str):
+                values = ", ".join(f"{c} {x:.6g}" for c, x in ours[k].items())
+                print(f"    value {k}: Revit {v:.6g}; {values}")
+            continue
+        if not rows[group]:
             continue
         candidate, hits = rows[group].most_common(1)[0]
         if hits == totals[group] or hits < 0.9 * totals[group]:

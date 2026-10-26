@@ -898,6 +898,7 @@ pub fn append_typed_production_elements(
             extrusion.as_ref(),
             solid_shape.as_ref(),
         );
+        add_stair_flight_quantities(&mut reference_sets, &ifc_type, &decoded);
         add_railing_height(&mut reference_sets, &ifc_type, &decoded);
         add_extend_to_structure(&mut reference_sets, &ifc_type, &decoded);
         let mut serial_sets = serial_number_property_sets(&decoded);
@@ -2075,6 +2076,57 @@ fn add_body_quantities(
             name: name.into(),
             value: PropertyValue::PositiveLengthFeet(feet),
         }],
+    });
+}
+
+/// Add a stair run's `Qto_StairFlightBaseQuantities` to `sets` (#1016,
+/// RE-247): its `Length`, the extent of its side view along the run, and its
+/// `NetVolume`, that side view's area times the run's width, the solid
+/// [`STAIR_RUN_BODY_SOURCE`] draws. None for a run of several solids
+/// (`pieces`) or one not drawn from its sketch.
+fn add_stair_flight_quantities(
+    sets: &mut Vec<PropertySet>,
+    ifc_type: &str,
+    decoded: &DecodedElement,
+) {
+    if ifc_type != "IFCSTAIRFLIGHT" || decoded.class != "StairsRun" {
+        return;
+    }
+    let Some(run) = crate::partition_schema_mvp::stair_run_body_from_fields(&decoded.fields)
+        .filter(|run| run.pieces.is_empty() && run.profile.len() >= 3)
+    else {
+        return;
+    };
+    let (low, high) = run
+        .profile
+        .iter()
+        .fold((f64::INFINITY, f64::NEG_INFINITY), |(low, high), p| {
+            (low.min(p[0]), high.max(p[0]))
+        });
+    let area = run
+        .profile
+        .iter()
+        .zip(run.profile.iter().cycle().skip(1))
+        .map(|(p, q)| p[0] * q[1] - q[0] * p[1])
+        .sum::<f64>()
+        .abs()
+        / 2.0;
+    let (length, volume) = (high - low, area * run.width_feet);
+    if !(length.is_finite() && length > 0.0 && volume.is_finite() && volume > 0.0) {
+        return;
+    }
+    sets.push(PropertySet {
+        name: "Qto_StairFlightBaseQuantities".into(),
+        properties: vec![
+            Property {
+                name: "Length".into(),
+                value: PropertyValue::PositiveLengthFeet(length),
+            },
+            Property {
+                name: "NetVolume".into(),
+                value: PropertyValue::VolumeCubicFeet(volume),
+            },
+        ],
     });
 }
 

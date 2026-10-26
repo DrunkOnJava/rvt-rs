@@ -25,8 +25,10 @@ export and counted apart here, not as missing.
 It prints the totals, a line per (set, quantity): how many values Revit
 writes on objects rvt-rs also writes, how many are equal, how many differ
 and how many are missing; the entities each missing quantity is on; the
-values rvt-rs writes and Revit does not; and up to 40 differences, the
-largest relative ones first.
+values rvt-rs writes and Revit does not, with up to 10 of their objects
+each and whether Revit's export writes the object and which of the set's
+quantities it gives it; and up to 40 differences, the largest relative ones
+first.
 
 Usage:
 
@@ -230,8 +232,18 @@ def main(argv):
         on = ", ".join(f"{c} x{k}" for c, k in classes.most_common(4))
         print(f"  {qset}.{name}: {sum(classes.values())}; on {on}")
     print("rvt-rs quantities Revit does not write:")
+    their_sets = collections.defaultdict(set)
+    for key, qset, name in theirs:
+        their_sets[(key, qset)].add(name)
     for (qset, name), n in sorted(extra.items()):
         print(f"  {qset}.{name}: {n}")
+        keys = sorted(key for key, s, q in ours if (s, q) == (qset, name) and (key, s, q) not in theirs)
+        for key in keys[:10]:
+            if key not in their_entities:
+                print(f"    {key}: not in Revit's export")
+                continue
+            given = ", ".join(sorted(their_sets.get((key, qset), ()))) or "none"
+            print(f"    {key} {their_entities[key]}: Revit's {qset}: {given}")
     print("largest differences (rvt-rs, Revit; SI units):")
     for _, key, qset, name, mine, value in sorted(differences, key=lambda d: -d[0])[:40]:
         print(f"  {key} {qset}.{name}: {mine[0]} {mine[1]}, {value[0]} {value[1]}")
