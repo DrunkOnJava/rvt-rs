@@ -96,7 +96,13 @@ override, applied where it names `IfcShadingDevice`, `IfcSlab`, `IfcCovering`,
 and Revit's exporter acts on it (not on a 2024 file's curtain walls, RE-188, or its wall sweeps, RE-192),
 with the values not applied listed in the diagnostics. With `--revit-property-sets`, each element's
 named saved parameters in Revit's own property sets, one per parameter group (RE-210; the set
-names, grouping and values measured on Autodesk's Snowdon Towers HVAC, Site and Architectural). Not read: most instance and type parameters (#35, #155) and phases
+names, grouping and values measured on Autodesk's Snowdon Towers HVAC, Site and Architectural). With
+`--revit-set-placement`, also the properties Revit's own exporter writes where IFC4's definitions do not:
+a text parameter named `<set>.<property>` for a property the set's IFC4 definition lacks
+(`Pset_SpaceCommon.FloorCovering`), and the `Reference` of a set whose entity's name begins with the
+element's (`Pset_SpaceHeaterTypeCommon` on a space); without it every property is in the set IFC4 gives
+(RE-235). A value Revit's export writes that is known to be wrong is left out either way: a stair's or
+flight's `WalkingLineOffset`, half the run's width in feet read as millimetres. Not read: most instance and type parameters (#35, #155) and phases
 (#328), so an element Revit's export leaves out because of its phase can still
 appear. Elements in a design-option set's non-primary options are left out, as
 Revit leaves them out.
