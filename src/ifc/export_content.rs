@@ -1970,48 +1970,30 @@ fn add_railing_height(sets: &mut Vec<PropertySet>, ifc_type: &str, decoded: &Dec
     }
 }
 
-/// Add a wall's `Qto_WallBaseQuantities` `Length` and `Width`, or a
-/// curtain wall's `Qto_CurtainWallQuantities` `Length`, to `sets`: the
-/// length of its location line or arc, which revit-ifc's `LengthCalculator`
-/// (CLEANROOM.md source 5) takes for a wall, and its type's thickness, the
-/// wall's Width parameter `WidthCalculator` reads (#1016). Nothing where
-/// the line is not read.
+/// Add a wall's `Qto_WallBaseQuantities` `Width` to `sets`: its type's
+/// thickness, the wall's Width parameter revit-ifc's `WidthCalculator`
+/// (CLEANROOM.md source 5) reads (#1016). Its `Length` is not written: the
+/// wall's Length parameter `LengthCalculator` reads first is not its
+/// location line's length, which is longer on 186 of the BIM4LCA office's
+/// 607 walls by about a joined wall's thickness. Nothing where the
+/// thickness is not read.
 fn add_wall_quantities(sets: &mut Vec<PropertySet>, ifc_type: &str, decoded: &DecodedElement) {
     use crate::partition_schema_mvp as mvp;
-    let set = match ifc_type {
-        "IFCWALL" | "IFCWALLSTANDARDCASE" => "Qto_WallBaseQuantities",
-        "IFCCURTAINWALL" => "Qto_CurtainWallQuantities",
-        _ => return,
-    };
-    let (length, thickness) = if let Some(axis) = mvp::wall_axis_from_fields(&decoded.fields) {
-        (
-            wall_segment_length_feet(axis.start, axis.end),
-            axis.thickness_feet,
-        )
-    } else if let Some(arc) = mvp::wall_arc_from_fields(&decoded.fields) {
-        (
-            arc.radius * (arc.angles[1] - arc.angles[0]).abs(),
-            arc.thickness_feet,
-        )
-    } else {
-        return;
-    };
-    if !(length.is_finite() && length > 0.0) {
+    if !matches!(ifc_type, "IFCWALL" | "IFCWALLSTANDARDCASE") {
         return;
     }
-    let mut properties = vec![Property {
-        name: "Length".into(),
-        value: PropertyValue::PositiveLengthFeet(length),
-    }];
-    if set == "Qto_WallBaseQuantities" && thickness.is_finite() && thickness > 0.0 {
-        properties.push(Property {
+    let thickness = mvp::wall_axis_from_fields(&decoded.fields)
+        .map(|axis| axis.thickness_feet)
+        .or_else(|| mvp::wall_arc_from_fields(&decoded.fields).map(|arc| arc.thickness_feet));
+    let Some(thickness) = thickness.filter(|t| t.is_finite() && *t > 0.0) else {
+        return;
+    };
+    sets.push(PropertySet {
+        name: "Qto_WallBaseQuantities".into(),
+        properties: vec![Property {
             name: "Width".into(),
             value: PropertyValue::PositiveLengthFeet(thickness),
-        });
-    }
-    sets.push(PropertySet {
-        name: set.into(),
-        properties,
+        }],
     });
 }
 
