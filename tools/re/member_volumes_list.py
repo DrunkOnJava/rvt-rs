@@ -129,6 +129,12 @@ def main(argv):
         print(f"by {label} (value, equal):")
         for (value, ok), n in sorted(tally.items(), key=lambda kv: (str(kv[0][0]), kv[0][1])):
             print(f"    {value} {ok} x{n}")
+    print("every member Revit writes as anything but extruded solids, or whose volume differs:")
+    for k in rows:
+        kind = theirs.get(k, (None, "-"))[1]
+        ok = same(revit[k]["NetVolume"], mine[k][0])
+        if kind != "IfcExtrudedAreaSolid" or not ok:
+            print(f"row {k} {kind} {ours_direction.get(k, '-')} {'equal' if ok else 'differs'}")
     print("differing:")
     for k in misses[:40]:
         r = revit[k]
