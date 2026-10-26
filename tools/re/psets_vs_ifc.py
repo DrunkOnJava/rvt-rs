@@ -9,8 +9,8 @@ Revit's export relates to an object is keyed by the object (an element by its `T
 `Name`, a storey by its `Name`, the building as `building`), the set's name
 and the property's name. For each key Revit writes, the rvt-rs export either
 has the same value (value type and value as written, numbers within a
-relative 1e-5, lengths in metres from each file's own length unit), a
-different one, or none. rvt-rs's own sets
+relative 1e-5, lengths in metres from each file's own length unit, plane
+angles in radians from its angle unit), a different one, or none. rvt-rs's own sets
 (`RvtElementRecordGeometry` and other non-`Pset_` sets) are left out, as are
 objects rvt-rs does not write at all.
 
