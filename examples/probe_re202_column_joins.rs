@@ -40,7 +40,7 @@ fn main() -> anyhow::Result<()> {
         .iter()
         .filter_map(|c| c.id.map(u64::from))
         .collect();
-    let joins = rvt::research::native_column_joins::joins(&mut rf, &ids)?;
+    let joins = rvt::research::native_column_joins::joins(&mut rf, &ids)?.order;
     let walls: BTreeSet<u64> = joins.values().flatten().copied().collect();
     let sides = rvt::research::native_column_joins::wall_sides(&mut rf, &walls)?;
     let mut joined = 0usize;
