@@ -1142,7 +1142,7 @@ pub fn append_typed_production_elements(
                 },
             });
         }
-        add_level_slab_pitch(&mut reference_sets, &ifc_type, entities.get(entity_index));
+        add_level_slab_pitch(&mut reference_sets, entities.get(entity_index));
         // RE-154: the common property sets' Reference, the type's name;
         // RE-156: the shared parameter Serial Number.
         for set in reference_sets.into_iter().chain(serial_sets) {
@@ -1879,15 +1879,9 @@ fn add_extend_to_structure(sets: &mut Vec<PropertySet>, ifc_type: &str, decoded:
 /// `SlopeCalculator` (CLEANROOM.md source 5) gives a slab with no sloped
 /// extrusion and no location curve the slope of its largest upward face
 /// (RE-238). A body that is the record's box, or a solid, gets nothing.
-fn add_level_slab_pitch(
-    sets: &mut Vec<PropertySet>,
-    ifc_type: &str,
-    entity: Option<&entities::IfcEntity>,
-) {
-    if ifc_type != "IFCSLAB" {
-        return;
-    }
+fn add_level_slab_pitch(sets: &mut Vec<PropertySet>, entity: Option<&entities::IfcEntity>) {
     let Some(entities::IfcEntity::BuildingElement {
+        ifc_type,
         extrusion: Some(_),
         solid_shape: None,
         property_set,
@@ -1896,6 +1890,9 @@ fn add_level_slab_pitch(
     else {
         return;
     };
+    if ifc_type != "IFCSLAB" {
+        return;
+    }
     let mut boxed = false;
     let mut resolved = false;
     for property in property_set.iter().flat_map(|set| &set.properties) {
