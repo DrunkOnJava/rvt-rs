@@ -4440,7 +4440,7 @@ fn pset_property_value_count(model: &IfcModel) -> usize {
             model.building_storeys.len(),
         ))
     };
-    elements + storeys + building
+    elements + storeys + building + openings
 }
 
 fn export_confidence_summary(
