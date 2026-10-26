@@ -29,7 +29,8 @@ use rvt::research::partition_schema_mvp::{TYPE_ID_FIELD, recover_partition_schem
 use rvt::walker::{InstanceField, WalkerLimits};
 use serde_json::Value;
 
-const CLASSES: [&str; 5] = [
+const CLASSES: [&str; 6] = [
+    "IFCWALL",
     "IFCRAILING",
     "IFCBEAM",
     "IFCPIPESEGMENT",

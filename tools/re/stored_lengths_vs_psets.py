@@ -4,7 +4,8 @@ Revit's export writes (RE-231, #35, W7).
 
 Reads `examples/probe_re231_stored_lengths.rs`'s or
 `examples/probe_re231_record_lengths.rs`'s output and Revit's IFC
-export. For each IFC class and property of a length or count measure (a
+export. For each IFC class and property of a length or count measure, or
+length base quantity (a
 count compared as it is), over the
 elements of that class the probe lists and Revit's export gives the
 property, it counts, for each stored parameter, how many of those elements
@@ -58,6 +59,11 @@ def read_probe(path):
 def length_properties(definitions, metres):
     out = {}
     for pset in definitions:
+        if pset is not None and pset.is_a("IfcElementQuantity"):
+            for q in pset.Quantities or ():
+                if q.is_a("IfcQuantityLength") and q.LengthValue is not None:
+                    out[f"{pset.Name}.{q.Name}"] = q.LengthValue * metres / FEET
+            continue
         if pset is None or not pset.is_a("IfcPropertySet"):
             continue
         for prop in pset.HasProperties or ():
