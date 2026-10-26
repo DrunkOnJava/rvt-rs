@@ -8,7 +8,10 @@ times its `Length` plus 0, 1 or 2 times its section's area. For every IfcMember
 both files write, it takes rvt-rs's body as a world-space box (IfcOpenShell's
 geometry), its axis the box side equal to Revit's `Length`, and counts the
 ends free of every other member's box (an end is covered where a point just
-past its centre lies in another member's box, a 1 mm margin). It tallies
+past its centre lies in another member's box, a 1 mm margin), and the ends
+free of every box of a member running across it (its longest side on another
+axis): a mullion meeting a collinear one end to end, as stacked curtain walls'
+mullions do, is not joined to it. It tallies
 Revit's count of ends against the free ends rvt-rs finds, and against the
 world axis the member runs along and its type, and lists up to 30 where the
 count and the free ends differ.
@@ -79,14 +82,19 @@ def main(argv):
                 for z in range(a[2], b[2] + 1):
                     grid[(x, y, z)].append(i)
 
-    def covered(point, me):
+    long_axis = np.argmax(hi - lo, axis=1)
+
+    def covered(point, me, across=False):
         c = tuple(np.floor(point / cell).astype(int))
         for j in grid.get(c, ()):
-            if j != me and np.all(point >= lo[j] - MARGIN) and np.all(point <= hi[j] + MARGIN):
+            if j == me or (across and long_axis[j] == long_axis[me]):
+                continue
+            if np.all(point >= lo[j] - MARGIN) and np.all(point <= hi[j] + MARGIN):
                 return True
         return False
 
     tally = collections.Counter()
+    across_tally = collections.Counter()
     by_axis = collections.Counter()
     by_type = collections.Counter()
     types = {f"tag:{m.Tag}": (getattr(m, "ObjectType", None) or "-").replace(" ", "_") for m in ifcopenshell.open(args[1]).by_type("IfcMember") if m.Tag}
@@ -111,12 +119,14 @@ def main(argv):
             tally[("not a whole number of ends", "-")] += 1
             continue
         centre = (lo[i] + hi[i]) / 2
-        free = 0
+        free = free_across = 0
         for sign in (-1, 1):
             point = centre.copy()
             point[axis] = (hi[i][axis] if sign > 0 else lo[i][axis]) + sign * 2 * MARGIN
             free += not covered(point, i)
+            free_across += not covered(point, i, across=True)
         tally[(revit_ends, free)] += 1
+        across_tally[("z" if axis == 2 else "xy", revit_ends, free_across)] += 1
         by_axis[("xyz"[axis], revit_ends)] += 1
         by_type[(types.get(k, "-"), "z" if axis == 2 else "xy", revit_ends)] += 1
         if revit_ends != free:
@@ -124,6 +134,9 @@ def main(argv):
     print("Revit's ends counted, free ends rvt-rs finds: members")
     for (a, b), n in sorted(tally.items(), key=lambda kv: -kv[1]):
         print(f"  {a} {b}: {n}")
+    print("vertical (z) or not, Revit's ends counted, ends free of every member across it: members")
+    for (a, b, c), n in sorted(across_tally.items()):
+        print(f"  {a} {b} {c}: {n}")
     print("world axis, Revit's ends counted: members")
     for (a, b), n in sorted(by_axis.items()):
         print(f"  {a} {b}: {n}")
