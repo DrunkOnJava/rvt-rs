@@ -83,6 +83,7 @@ each curtain mullion's `Span`, its length along its own axis (RE-226),
 each curtain wall's type, named as its type's native record names it (RE-230),
 each wall's `ExtendToStructure`, whether its top is joined to a roof or floor (RE-228),
 each railing's `Height`, its type's top rail height (RE-231),
+a slab's `PitchAngle` 0 where its top is known to be level (RE-238),
 the project and shared parameters named for a property of one of IFC4's
 property sets (`Pset_WallCommon.FireRating`, or `FireExit` alone where no
 qualified one gives it, RE-227), from buildingSMART's
