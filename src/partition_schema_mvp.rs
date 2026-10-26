@@ -453,6 +453,8 @@ pub fn recover_partition_schema_mvp(
         })
         .collect();
     attach_system_type_names(rf, revit_version, &mut unnamed);
+    // --- Railings' heights (RE-231) ---
+    attach_railing_heights(rf, revit_version, &mut out.products);
     // --- Each element's type Function (RE-158) ---
     attach_type_functions(
         rf,
@@ -4160,6 +4162,46 @@ pub fn localized_system_family(family: &'static str, locale: Option<&str>) -> &'
         (Some("PTB"), "Floor") => "Piso",
         (Some("PTB"), "Basic Roof") => "Telhado básico",
         _ => family,
+    }
+}
+
+/// Field holding a railing's height, its type's top rail height, feet
+/// (RE-231).
+pub const RAILING_HEIGHT_FIELD: &str = "m_railing_height";
+
+/// Give each railing its type's top rail height
+/// ([`crate::native_stairs::railing_type_heights`], RE-231).
+fn attach_railing_heights(rf: &mut RevitFile, revit_version: u32, products: &mut [DecodedElement]) {
+    if !crate::native_stairs::RAILING_HEIGHT_REVIT_VERSIONS.contains(&revit_version) {
+        return;
+    }
+    let type_of = |element: &DecodedElement| {
+        element.fields.iter().find_map(|(name, value)| match value {
+            InstanceField::ElementId { id, .. } if name == TYPE_ID_FIELD => Some(u64::from(*id)),
+            _ => None,
+        })
+    };
+    let types: BTreeSet<u64> = products
+        .iter()
+        .filter(|element| element.class == "Railing")
+        .filter_map(type_of)
+        .collect();
+    let Ok(heights) = crate::native_stairs::railing_type_heights(rf, &types) else {
+        return;
+    };
+    for element in products
+        .iter_mut()
+        .filter(|element| element.class == "Railing")
+    {
+        if let Some(height) = type_of(element).and_then(|id| heights.get(&id)).copied() {
+            element.fields.push((
+                RAILING_HEIGHT_FIELD.into(),
+                InstanceField::Float {
+                    value: height,
+                    size: 8,
+                },
+            ));
+        }
     }
 }
 

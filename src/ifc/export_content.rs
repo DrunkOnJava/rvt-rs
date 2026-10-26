@@ -881,6 +881,7 @@ pub fn append_typed_production_elements(
         add_is_external(&mut reference_sets, &ifc_type, &decoded, opening_only);
         add_covering_finish(&mut reference_sets, &ifc_type, &decoded);
         add_mullion_span(&mut reference_sets, &ifc_type, &decoded);
+        add_railing_height(&mut reference_sets, &ifc_type, &decoded);
         add_extend_to_structure(&mut reference_sets, &ifc_type, &decoded);
         let mut serial_sets = serial_number_property_sets(&decoded);
         serial_sets.extend(revit_parameter_property_sets(&decoded));
@@ -1865,6 +1866,35 @@ fn add_extend_to_structure(sets: &mut Vec<PropertySet>, ifc_type: &str, decoded:
         Some(set) => set.properties.push(property),
         None => sets.push(PropertySet {
             name: "Pset_WallCommon".into(),
+            properties: vec![property],
+        }),
+    }
+}
+
+/// Add `Height` (`IfcPositiveLengthMeasure`) to a railing's
+/// `Pset_RailingCommon` among `sets`: its type's top rail height (RE-231).
+fn add_railing_height(sets: &mut Vec<PropertySet>, ifc_type: &str, decoded: &DecodedElement) {
+    if ifc_type != "IFCRAILING" {
+        return;
+    }
+    let Some(height) = decoded.fields.iter().find_map(|(name, value)| match value {
+        InstanceField::Float { value, .. }
+            if name == crate::partition_schema_mvp::RAILING_HEIGHT_FIELD =>
+        {
+            Some(*value)
+        }
+        _ => None,
+    }) else {
+        return;
+    };
+    let property = Property {
+        name: "Height".into(),
+        value: PropertyValue::PositiveLengthFeet(height),
+    };
+    match sets.iter_mut().find(|set| set.name == "Pset_RailingCommon") {
+        Some(set) => set.properties.push(property),
+        None => sets.push(PropertySet {
+            name: "Pset_RailingCommon".into(),
             properties: vec![property],
         }),
     }
