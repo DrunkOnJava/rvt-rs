@@ -8,7 +8,8 @@ elements meet: a mullion drawn as one extrusion of its section has its
 section's perimeter times its length plus 0, 1 or 2 ends. This takes, for
 each IfcMember of Revit's export whose body is one extruded solid, that count
 from Revit's own values ((NetSurfaceArea - perimeter x depth) / area of its
-solid), and whether its solid runs upright, and ranks every field of
+solid), and whether its solid runs upright (through its placement, any mapped
+item's transformation and the solid's position), and ranks every field of
 `examples/probe_re241_mullion_record_scalars.rs`'s records against each
 count, upright and not, with `record_scalars_vs_ifc.py`'s ranking.
 
@@ -32,6 +33,26 @@ from record_scalars_vs_ifc import read_probe, report  # noqa: E402
 from wall_qtos_list import solids  # noqa: E402
 
 
+def mapping_matrix(item):
+    """The 4x4 transformation an IfcMappedItem applies to its representation:
+    its target operator after the inverse of its source's origin."""
+    util = getattr(ifcopenshell.util.placement, "get_mappeditem_transformation", None)
+    if util is not None:
+        return np.array(util(item), dtype=float)
+    target = np.eye(4)
+    op = item.MappingTarget
+    if op is not None:
+        axis3 = getattr(op, "Axis3", None)
+        x = np.array(op.Axis1.DirectionRatios if op.Axis1 else (1.0, 0.0, 0.0), dtype=float)
+        z = np.array(axis3.DirectionRatios if axis3 else (0.0, 0.0, 1.0), dtype=float)
+        y = np.array(op.Axis2.DirectionRatios, dtype=float) if op.Axis2 else np.cross(z, x)
+        axes = [v / (np.linalg.norm(v) or 1) for v in (x, y, z)]
+        target[:3, :3] = np.column_stack(axes) * (op.Scale or 1.0)
+        target[:3, 3] = op.LocalOrigin.Coordinates
+    origin = np.array(ifcopenshell.util.placement.get_axis2placement(item.MappingSource.MappingOrigin), dtype=float)
+    return target @ np.linalg.inv(origin)
+
+
 def main():
     args = [a for a in sys.argv[1:] if a != "--list"]
     if len(args) != 2:
@@ -52,17 +73,18 @@ def main():
         items = []
         for rep in member.Representation.Representations:
             if rep.RepresentationIdentifier == "Body":
-                pending = list(rep.Items)
+                pending = [(item, np.eye(4)) for item in rep.Items]
                 while pending:
-                    item = pending.pop()
+                    item, mapped = pending.pop()
                     if item.is_a("IfcMappedItem"):
-                        pending.extend(item.MappingSource.MappedRepresentation.Items)
+                        inner = mapped @ mapping_matrix(item)
+                        pending.extend((i, inner) for i in item.MappingSource.MappedRepresentation.Items)
                         continue
-                    items.append(item)
-        found = [s for item in items for s in solids(item)]
+                    items.append((item, mapped))
+        found = [(s, mapped) for item, mapped in items for s in solids(item)]
         if len(found) != 1 or len(items) != 1:
             continue
-        solid = found[0]
+        solid, mapped = found[0]
         m = profile_measures(solid.SweptArea, scale)
         if m is None or m[0] <= 0:
             continue
@@ -71,7 +93,7 @@ def main():
         k = (nsa[tag] - perimeter * depth) / area
         if abs(k - round(k)) > 1e-3 or round(k) not in (0, 1, 2):
             continue
-        place = np.array(ifcopenshell.util.placement.get_local_placement(member.ObjectPlacement))
+        place = np.array(ifcopenshell.util.placement.get_local_placement(member.ObjectPlacement)) @ mapped
         if solid.Position is not None:
             place = place @ np.array(ifcopenshell.util.placement.get_axis2placement(solid.Position))
         d = place[:3, :3] @ np.array(solid.ExtrudedDirection.DirectionRatios, dtype=float)

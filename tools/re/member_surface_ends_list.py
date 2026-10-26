@@ -69,14 +69,20 @@ def main(argv):
         if qset == "Qto_MemberBaseQuantities" and value is not None:
             revit[key][name] = value
     keys = sorted(mine)
+    if not keys:
+        print("Revit's ends counted, free ends rvt-rs finds: members")
+        print("  no member with a body")
+        return 0
     lo = np.array([mine[k][0] for k in keys])
     hi = np.array([mine[k][1] for k in keys])
     # A coarse grid over box centres keeps the covering test near-linear.
     cell = 2.0
     grid = collections.defaultdict(list)
+    # Each box is indexed with the margin `covered` allows it, so a point in
+    # the margin across a cell boundary still finds it.
     for i, k in enumerate(keys):
-        a = np.floor(lo[i] / cell).astype(int)
-        b = np.floor(hi[i] / cell).astype(int)
+        a = np.floor((lo[i] - MARGIN) / cell).astype(int)
+        b = np.floor((hi[i] + MARGIN) / cell).astype(int)
         for x in range(a[0], b[0] + 1):
             for y in range(a[1], b[1] + 1):
                 for z in range(a[2], b[2] + 1):
