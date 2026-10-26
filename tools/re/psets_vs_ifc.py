@@ -115,7 +115,7 @@ IFC4_TYPE_SETS = {
 # Pset_PipeSegmentOccurrence; a segment's length, and IFC2X3's
 # Pset_DuctSegmentTypeCommon.Length, is in IFC4's base quantities, an
 # IfcElementQuantity this scorer does not read, so those lengths are counted
-# apart rather than scored.
+# apart here and scored by qtos_vs_ifc.py (#1016).
 IFC2X3_INVERT = ("Pset_FlowSegmentPipeSegment", "InvertElevation")
 IFC2X3_LENGTHS = {
     ("Pset_FlowSegmentPipeSegment", "Length"),
