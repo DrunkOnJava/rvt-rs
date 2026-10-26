@@ -92,7 +92,9 @@ writes the named ones in Revit's own property sets (RE-210). With
 `--revit-set-placement` it also writes properties where Revit's own exporter
 does and IFC4's definitions do not, such as a room's
 `Pset_SpaceCommon.FloorCovering`; by default every property is in the set
-IFC4 gives (RE-235).
+IFC4 gives (RE-235). It writes IFC4's base quantities by default, as Revit's
+built-in IFC4 export setups do, and `--no-base-quantities` leaves them out,
+as Revit's exporter does with "Export base quantities" off (RE-242).
 
 It is not a converter for arbitrary models: most parameters, family
 geometry (except the experimental `--saved-meshes` option, which draws a

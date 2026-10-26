@@ -14,7 +14,11 @@ writer's rounding) where that is larger. Revit's IFC2X3 export writes a
 pipe's or duct's length in a property set (`psets_vs_ifc`'s
 IFC2X3_LENGTHS), which is scored here as the IFC4 base quantity. A quantity carrying its own unit
 is counted apart and not scored. Objects rvt-rs does not write at all are
-left out.
+left out. Where Revit's export writes no base quantities at all (no
+`Qto_` IfcElementQuantity, nor IFC2X3's `BaseQuantities`), its export setup
+had "Export base quantities" off (RE-242), and the quantities rvt-rs writes
+are counted apart, not as values Revit does not write: `rvt-ifc
+--no-base-quantities` leaves them out.
 
 It prints the totals, a line per (set, quantity): how many values Revit
 writes on objects rvt-rs also writes, how many are equal, how many differ
@@ -120,7 +124,10 @@ def quantities(path, entities_of=None):
                 scale = unit_scale.get(unit) if unit else 1.0
                 value = None if raw is None or scale is None else float(raw) * scale
                 out[(key, definition.Name, q.Name)] = (q.is_a(), value)
-    return out, objects, entities, own_unit
+    base = any(
+        (q.Name or "").startswith("Qto_") or q.Name == "BaseQuantities" for q in f.by_type("IfcElementQuantity")
+    )
+    return out, objects, entities, own_unit, base
 
 
 def relative(a, b):
@@ -142,8 +149,8 @@ def main(argv):
     if len(args) != 2:
         print(__doc__, file=sys.stderr)
         return 2
-    ours, our_objects, our_entities, our_own = quantities(args[0])
-    theirs, their_objects, their_entities, their_own = quantities(args[1], our_entities)
+    ours, our_objects, our_entities, our_own, _ = quantities(args[0])
+    theirs, their_objects, their_entities, their_own, their_base = quantities(args[1], our_entities)
     rows = collections.defaultdict(lambda: [0, 0, 0, 0])
     missing_classes = collections.defaultdict(collections.Counter)
     differences = []
@@ -163,10 +170,20 @@ def main(argv):
             differences.append((relative(mine, value), key, qset, name, mine, value))
     totals = [sum(r[i] for r in rows.values()) for i in range(4)]
     extra = collections.Counter((qset, name) for key, qset, name in ours if (key, qset, name) not in theirs)
+    setting_off = collections.Counter() if their_base else extra
+    if not their_base:
+        extra = collections.Counter()
     print(
         f"Revit quantities on objects rvt-rs writes: {totals[0]}; equal: {totals[1]}; "
         f"different: {totals[2]}; missing: {totals[3]}; rvt-rs quantities Revit does not write: {sum(extra.values())}"
     )
+    if not their_base:
+        print(
+            "Revit's export writes no base quantities (its setup's Export base quantities off, RE-242): "
+            f"rvt-rs writes {sum(setting_off.values())}, which rvt-ifc --no-base-quantities leaves out"
+        )
+        for (qset, name), n in sorted(setting_off.items()):
+            print(f"  {qset}.{name}: {n}")
     if our_own or their_own:
         print(f"quantities with their own unit, not scored: rvt-rs {our_own}, Revit {their_own}")
     for (qset, name), (n, equal, different, missing) in sorted(rows.items()):
