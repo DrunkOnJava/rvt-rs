@@ -4,8 +4,8 @@
 **Issues:** #35 (parameters), W7 of [`docs/release-1.0-criteria.md`](../../docs/release-1.0-criteria.md); follows RE-194 §4, RE-235
 **Decision:** Griffin, 2026-10-26: a value that a project's export-time user-defined property set file maps into a set is out of W7's scope, and is listed per model with the evidence. W7 stays reachable on every reference model.
 **Artefacts:** the BIM4LCA office as built and at building permit (Revit 2024, Revit's IFC4 exports), RE1 Architecture, Mechanical, Plumbing and Electrical (Revit 2025, Revit's IFC2X3 exports), Core Interior (Revit 2024) and puzzbobb's R2025 models (Revit 2025, Revit's IFC4 exports), as Measure fetches them
-**Runs:** Measure [40272461335](https://github.com/DrunkOnJava/rvt-rs/actions/runs/40272461335) (`tools/re/psets_vs_ifc.py`, listing every space missing `OccupancyType`, on `main` at f0369be3), [40274417114](https://github.com/DrunkOnJava/rvt-rs/actions/runs/40274417114) (`examples/probe_re239_mapped_parameters.rs` with `tools/re/mapped_parameters_vs_psets.py`) and [40275298500](https://github.com/DrunkOnJava/rvt-rs/actions/runs/40275298500) (`tools/re/set_census.py`)
-**Result:** positive: every value the office's file places is a saved parameter of the element, and the model stores the parameter but not the file. As built, VALUES values are placed that way; no other reference model has one.
+**Runs:** Measure [40272461335](https://github.com/DrunkOnJava/rvt-rs/actions/runs/40272461335) (`tools/re/psets_vs_ifc.py`, listing every space missing `OccupancyType`, on `main` at f0369be3), [40276486381](https://github.com/DrunkOnJava/rvt-rs/actions/runs/40276486381) (`examples/probe_re239_mapped_parameters.rs` with `tools/re/mapped_parameters_vs_psets.py`, on f0498735) and [40275298500](https://github.com/DrunkOnJava/rvt-rs/actions/runs/40275298500) (`tools/re/set_census.py`)
+**Result:** positive: every value the office's file places is a saved parameter of the element, and the model stores the parameter and the export setting but not the file. As built, 2,013 values rvt-rs does not write as Revit does are placed that way, 1,938 at permit; no other reference model has one.
 
 ## 1. The office's file
 
@@ -19,32 +19,41 @@ What the file places, by `psets_vs_ifc` and `set_census` on objects rvt-rs write
 | `Pset_SpaceOccupancyRequirements.OccupancyType` | spaces | 234 | 234 | not written |
 | `Pset_SpaceOccupancyRequirements.OccupancyNumber` as `IfcInteger` | spaces | 55 | 55 | the same number, as the `IfcCountMeasure` IFC4 declares |
 | `Pset_SpaceCommon.FloorCovering`, `WallCovering`, `CeilingCovering` as `IfcText` | spaces | 646 | 646 | written with `--revit-set-placement` (RE-235) |
-| FI_SETS | | FI_ASBUILT | FI_PERMIT | not written |
+| `FI_RH1`, `FI_Kiinteistö`, `FI_Suunnittelija`, `FI_Kohde`, `FI_MallinSijainti`, `FI_RakennuksenSijainti` | the building and the site | 32 | 31 | not written |
 | `Pset_DoorWindowGlazingType.IsLaminated`, `IsTempered` | doors and windows | 1,070 | 1,062 | written: IFC4 gives doors and windows the set |
 
-As built, the 1,692 glazing values are on 604 walls, 151 curtain walls, 70 openings and 21 coverings; at permit on 588 walls, 149 curtain walls and 72 openings.
+An unfilled opening takes its cutting element's properties (RE-237 §1), so the openings curtain walls cut carry their glazing. `psets_vs_ifc` keys an element by its `Tag`, and such an opening has its curtain wall's, so as built its 846 keys for each glazing property (604 last written as walls, 151 as curtain walls, 70 as openings, 21 as coverings) stand for 918 objects: the probe matches 607 walls, 290 curtain walls and openings, and 21 coverings (§2). At permit they are 809 keys on 588 walls, 149 curtain walls and 72 openings. W7 is counted in that census's keys. The rooms' covering properties and the doors' and windows' glazing are listed for completeness; rvt-rs already writes them as Revit does, so they leave W7's count unchanged.
 
 ## 2. The parameters behind them
 
-The probe prints every Yes/No and text value each wall, curtain wall, covering and room saves (RE-207), and the scorer counts, for each property Revit writes, which parameter holds the same value. Elements are matched by `Tag`, a space by its number, and the 43 rooms without one by their ElementId:
+The probe prints every Yes/No and text value each wall, curtain wall, covering, member, plate and room saves (RE-207), and the scorer counts, for each property Revit writes, which parameter holds the same value. Elements are matched by `Tag`, a space by its number, and the 43 rooms without one by their ElementId:
 
 | property | held by | as built | at permit |
 |---|---|---:|---:|
 | glazing, on walls | parameters 2189854 and 2189858, named `Pset_DoorWindowGlazingType.IsLaminated` and `.IsTempered` | 607 of 607 | 591 of 591 |
 | glazing, on curtain walls and their openings | the same two parameters | 290 of 290 | 292 of 292 |
-| glazing, on coverings | COVERINGS | | |
+| glazing, on coverings (walls Revit exports as coverings) | the same two parameters | 21 of 21 | none written |
 | `OccupancyType` | parameter 2065807, `RoomTypeCode` (values such as `0400-64-03`) | 234 of 234 | 234 of 234 |
 
 ## 3. Only the file says where they go
 
 The parameters' names do not decide it:
 
-- every wall Revit writes glazing on also holds parameter 1882432, `Pset_CurtainWallCommon.IsExternal`, and every curtain wall parameter 1877411, `Pset_WallCommon.IsExternal`. Revit's export writes no `Pset_CurtainWallCommon` on a wall and no `Pset_WallCommon` on a curtain wall (RE-194 §4), yet writes `Pset_DoorWindowGlazingType` on both. Writing every parameter named `<set>.<property>` wherever an element holds it would add 897 values as built that Revit's export does not write;
+- every wall Revit writes glazing on also holds parameter 1882432, `Pset_CurtainWallCommon.IsExternal`, and every curtain wall parameter 1877411, `Pset_WallCommon.IsExternal`. Revit's export writes no `Pset_CurtainWallCommon` on a wall and no `Pset_WallCommon` on a curtain wall (RE-194 §4), yet writes `Pset_DoorWindowGlazingType` on both. Writing every parameter named `<set>.<property>` wherever an element holds it would add at least 827 values as built (607 walls, 220 curtain walls) that Revit's export does not write;
 - revit-ifc's own definitions (`ExporterInitializer_PsetDef.cs`) write `Pset_DoorWindowGlazingType` on `IfcDoor` and `IfcWindow` only, and read `OccupancyType` from a parameter named `OccupancyType`, `Pset_SpaceOccupancyRequirements.OccupancyType` or a localised name such as `Occupancy Type`; the `OccupancyTypeCalculator` they also look up is not in revit-ifc's source. No office room has a parameter by any of those names. The codes are in `RoomTypeCode`, a name revit-ifc's source does not contain.
 
 ## 4. The model does not store the file
 
-SCAN
+The probe counts, in every stream of each model as stored and inflated, the keyword `PropertySet:` that opens each set of such a file, the name of one set only the office's file defines (`FI_Kohde`), and revit-ifc's names for its export setup (`IFCExportConfiguration`) and for the setting that turns the file on and names it (`ExportUserDefinedPsets`, `ExportUserDefinedPsetsFileName`), in UTF-8 and UTF-16:
+
+| model | `PropertySet:` | `FI_Kohde` | `IFCExportConfiguration` | `ExportUserDefinedPsets` | the setting |
+|---|---:|---:|---:|---:|---|
+| office as built | 0 | 0 | 1 (`Global/Latest`) | 4 (`Partitions/425`) | `true`, a file named `LCA_Properties_export_….txt` |
+| office at permit | 0 | 0 | 1 | 4 (`Partitions/336`, `Partitions/404`) | the same |
+| Core Interior | 0 | 0 | 1 | 4 (`Partitions/65`) | `false` |
+| RE1, R2025, Einhoven | 0 | 0 | 0 | 0 | none saved |
+
+The office's model keeps the export setup that was used, with the user-defined property sets turned on and the file's name (the probe prints the text after each `ExportUserDefinedPsets`, a path cut to its file name), but not the file: no set definition, and no name of a set only the file defines. Which parameter goes to which set on which entity is in a text file beside the model, not in it.
 
 ## 5. What rvt-rs does
 
@@ -52,13 +61,13 @@ Nothing changes. These values are out of W7's scope and listed here per model:
 
 | model | values out of scope | which |
 |---|---:|---|
-| office as built | VALUES | §1 |
-| office at permit | VALUES_PERMIT | §1 |
+| office as built | 2,013 | §1: 1,692 glazing, 234 `OccupancyType`, 55 `OccupancyNumber` types, 32 in the FI_ sets |
+| office at permit | 1,938 | §1: 1,618 glazing, 234, 55, 31 |
 | RE1 Architecture, Mechanical, Plumbing, Electrical | 0 | each property their exports write and rvt-rs does not is on an entity revit-ifc's IFC2X3 definitions give its set, or on an unfilled opening, which takes its cutting element's (RE-237 §1) |
 | Core Interior | 0 | its reference export writes no property sets |
-| R2025 models | R2025 | |
+| R2025 models | 0 | each such property is on an entity revit-ifc's definitions give its set, in a set matched by the start of its entity's name (RE-235 §1), or on an unfilled opening |
 
-The rest of what the office's export writes and rvt-rs does not (`Pset_MemberCommon.IsExternal` on 10,003 mullions, `Pset_PlateCommon.IsExternal` on 260 panels, sloped slabs' `PitchAngle`, beams' `Span`, `Slope` and `Roll`) is placed by revit-ifc's own rules and stays in W7.
+The rest of what the office's export writes and rvt-rs does not (`Pset_MemberCommon.IsExternal` on 10,003 mullions, `Pset_PlateCommon.IsExternal` on 260 panels, sloped slabs' `PitchAngle`, beams' `Span`, `Slope` and `Roll`) is placed by revit-ifc's own rules and stays in W7. No file maps a value onto the mullions and panels: the probe finds no saved Yes/No or text parameter on any of the 10,003 mullions, and none but the two empty IFC export parameters (-1019016, -1019014) on the panels, so their `IsExternal` is revit-ifc's calculation, whose host rule RE-226 §2 measured negative. Quantities are not counted here or in W7's census yet (#1016).
 
 ## 6. Reproduce
 
