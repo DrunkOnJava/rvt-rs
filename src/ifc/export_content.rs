@@ -899,6 +899,13 @@ pub fn append_typed_production_elements(
             extrusion.as_ref(),
             solid_shape.as_ref(),
         );
+        add_slab_gross_area(
+            &mut reference_sets,
+            &ifc_type,
+            &decoded,
+            extrusion.as_ref(),
+            solid_shape.is_none() && piece_bodies.is_empty(),
+        );
         add_stair_flight_quantities(&mut reference_sets, &ifc_type, &decoded);
         add_railing_height(&mut reference_sets, &ifc_type, &decoded);
         add_extend_to_structure(&mut reference_sets, &ifc_type, &decoded);
@@ -2086,6 +2093,49 @@ fn add_body_quantities(
         properties: vec![Property {
             name: name.into(),
             value: PropertyValue::PositiveLengthFeet(feet),
+        }],
+    });
+}
+
+/// Add a floor's `Qto_SlabBaseQuantities.GrossArea` to `sets` (#1016,
+/// RE-249): the area of the profile its body extrudes, its outline less its
+/// holes, as Revit's export writes it. Only on a floor drawn as one extrusion
+/// (`single`): a sketch of separate loops is several elements sharing its
+/// `Tag`, and a stair landing's slab gets none from Revit's export.
+fn add_slab_gross_area(
+    sets: &mut Vec<PropertySet>,
+    ifc_type: &str,
+    decoded: &DecodedElement,
+    extrusion: Option<&Extrusion>,
+    single: bool,
+) {
+    use crate::ifc::from_decoded::polygon_area_sqft;
+    if ifc_type != "IFCSLAB" || decoded.class != "Floor" || !single {
+        return;
+    }
+    let Some(body) = extrusion else {
+        return;
+    };
+    let area = match &body.profile_override {
+        None => body.width_feet * body.depth_feet,
+        Some(entities::ProfileDef::Rectangle {
+            width_feet,
+            depth_feet,
+        }) => width_feet * depth_feet,
+        Some(entities::ProfileDef::ArbitraryClosed { points }) => polygon_area_sqft(points),
+        Some(entities::ProfileDef::ArbitraryWithVoids { points, voids }) => {
+            polygon_area_sqft(points) - voids.iter().map(|v| polygon_area_sqft(v)).sum::<f64>()
+        }
+        Some(_) => return,
+    };
+    if !(area.is_finite() && area > 0.0) {
+        return;
+    }
+    sets.push(PropertySet {
+        name: "Qto_SlabBaseQuantities".into(),
+        properties: vec![Property {
+            name: "GrossArea".into(),
+            value: PropertyValue::AreaSquareFeet(area),
         }],
     });
 }
