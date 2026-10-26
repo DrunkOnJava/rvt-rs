@@ -72,6 +72,7 @@ def options(walls, wall, sign):
 
 
 def main(argv):
+    argv = [a for a in argv if a != "--list"]
     if len(argv) != 3:
         print(__doc__, file=sys.stderr)
         return 2
