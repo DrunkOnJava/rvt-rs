@@ -2004,11 +2004,16 @@ fn add_mullion_span(sets: &mut Vec<PropertySet>, ifc_type: &str, decoded: &Decod
         }
         _ => None,
     });
-    let span = match (mvp::curtain_axes_from_fields(&decoded.fields), along) {
-        (Some(axes), _) => oriented_box(axes, size).map(|(_, half)| 2.0 * half[2]),
-        (None, Some(axis)) => size.get(axis).copied(),
-        (None, None) => None,
+    // The box's two sides across the mullion, then its length along it.
+    let sides = match (mvp::curtain_axes_from_fields(&decoded.fields), along) {
+        (Some(axes), _) => oriented_box(axes, size).map(|(_, half)| half.map(|h| 2.0 * h)),
+        (None, Some(axis)) if axis < 3 => {
+            let across: Vec<f64> = (0..3).filter(|i| *i != axis).map(|i| size[i]).collect();
+            Some([across[0], across[1], size[axis]])
+        }
+        _ => None,
     };
+    let span = sides.map(|sides| sides[2]);
     let Some(span) = span.filter(|span| span.is_finite() && *span > 0.0) else {
         return;
     };
@@ -2023,12 +2028,34 @@ fn add_mullion_span(sets: &mut Vec<PropertySet>, ifc_type: &str, decoded: &Decod
             properties: vec![property],
         }),
     }
+    let mut quantities = vec![Property {
+        name: "Length".into(),
+        value: PropertyValue::PositiveLengthFeet(span),
+    }];
+    // #1016: a rectangular mullion's section is its box across it, and its
+    // solid the box: revit-ifc's `CrossSectionAreaCalculator` takes the
+    // body extrusion's profile area, `NetVolumeCalculator` and
+    // `NetSurfaceAreaCalculator` its solid's volume and faces.
+    if let Some([a, b, _]) =
+        sides.filter(|s| s[0].is_finite() && s[1].is_finite() && s[0] > 0.0 && s[1] > 0.0)
+    {
+        let section = a * b;
+        quantities.push(Property {
+            name: "CrossSectionArea".into(),
+            value: PropertyValue::AreaSquareFeet(section),
+        });
+        quantities.push(Property {
+            name: "NetSurfaceArea".into(),
+            value: PropertyValue::AreaSquareFeet(2.0 * (a + b) * span + 2.0 * section),
+        });
+        quantities.push(Property {
+            name: "NetVolume".into(),
+            value: PropertyValue::VolumeCubicFeet(section * span),
+        });
+    }
     sets.push(PropertySet {
         name: "Qto_MemberBaseQuantities".into(),
-        properties: vec![Property {
-            name: "Length".into(),
-            value: PropertyValue::PositiveLengthFeet(span),
-        }],
+        properties: quantities,
     });
 }
 
