@@ -620,6 +620,16 @@ pub fn recover_partition_schema_mvp(
         }
     }
 
+    // --- Every column's joins, in one native pass (RE-202, RE-247) ---
+    let column_ids: BTreeSet<u64> = out
+        .columns
+        .iter()
+        .chain(out.products.iter())
+        .filter(|element| is_column_class(&element.class))
+        .filter_map(|element| element.id.map(u64::from))
+        .collect();
+    let column_joins = crate::native_column_joins::joins(rf, &column_ids).ok();
+
     // --- Family instances whose type draws with no material (RE-149, #355) ---
     // An instance whose own material parameters name its materials takes
     // them instead (RE-200).
@@ -632,8 +642,28 @@ pub fn recover_partition_schema_mvp(
         }
         // The first joined wall's layer on the column's side (RE-202), then
         // the joined walls' one shared set (#580).
-        attach_first_join_materials(rf, &mut out.columns, &out.walls);
+        attach_first_join_materials(
+            rf,
+            column_joins.as_ref().map(|joins| &joins.order),
+            &mut out.columns,
+            &out.walls,
+        );
         attach_joined_wall_materials(&mut out.columns, &out.walls);
+    }
+    // --- Columns no `CleanPairGStep` joins, which Revit's export draws as
+    // an extrusion (RE-247) ---
+    if let Some(joins) = &column_joins {
+        for element in out.columns.iter_mut().chain(out.products.iter_mut()) {
+            if is_column_class(&element.class)
+                && element
+                    .id
+                    .is_some_and(|id| joins.without_clean_steps.contains(&u64::from(id)))
+            {
+                element
+                    .fields
+                    .push((COLUMN_UNJOINED_FIELD.into(), InstanceField::Bool(true)));
+            }
+        }
     }
 
     // --- Curtain mullions' and panels' materials, from their types (RE-166, B66) ---
@@ -2064,6 +2094,17 @@ pub fn hollow_section_from_fields(
     })
 }
 
+/// Set on a column whose record holds no `CleanPairGStep`
+/// ([`crate::native_column_joins::ColumnJoins::without_clean_steps`]):
+/// Revit's export draws it as an extrusion, and gives it the extrusion's
+/// depth as its `Qto_ColumnBaseQuantities.Length` (RE-247).
+pub const COLUMN_UNJOINED_FIELD: &str = "m_column_unjoined";
+
+/// Whether `class` is a column's, architectural or structural.
+fn is_column_class(class: &str) -> bool {
+    matches!(class, "Column" | "StructuralColumn")
+}
+
 /// Classes whose type's hollow section is read (W6).
 pub const HOLLOW_SECTION_CLASSES: [&str; 2] = ["StructuralColumn", "Column"];
 
@@ -3011,6 +3052,7 @@ fn set_type_materials(element: &mut DecodedElement, names: Vec<String>) {
 /// [`COLUMN_JOINED_WALL_FIELD`]: crate::element_record_column_cuts::COLUMN_JOINED_WALL_FIELD
 fn attach_first_join_materials(
     rf: &mut RevitFile,
+    joined: Option<&BTreeMap<u64, Vec<u64>>>,
     columns: &mut [DecodedElement],
     walls: &[DecodedElement],
 ) {
@@ -3023,16 +3065,12 @@ fn attach_first_join_materials(
             _ => None,
         })
     };
-    let ids: BTreeSet<u64> = columns
-        .iter()
-        .filter(|column| has_unnamed_material_only(column))
-        .filter_map(|column| column.id.map(u64::from))
-        .collect();
-    let Ok(joined) = joins::joins(rf, &ids) else {
+    let Some(joined) = joined else {
         return;
     };
     let first: BTreeMap<u64, u64> = columns
         .iter()
+        .filter(|column| has_unnamed_material_only(column))
         .filter_map(|column| {
             let id = u64::from(column.id?);
             let order = joined.get(&id)?;
