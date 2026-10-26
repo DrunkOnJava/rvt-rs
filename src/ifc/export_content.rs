@@ -2080,8 +2080,9 @@ fn add_body_quantities(
 }
 
 /// Add a stair run's `Qto_StairFlightBaseQuantities` to `sets` (#1016,
-/// RE-247): its `Length`, the extent of its side view along the run, and its
-/// `NetVolume`, that side view's area times the run's width, the solid
+/// RE-247): its `Length`, the distance from its first riser line to its last
+/// ([`crate::partition_schema_mvp::STAIR_RUN_LENGTH_FIELD`]), and its
+/// `NetVolume`, its side view's area times the run's width, the solid
 /// [`STAIR_RUN_BODY_SOURCE`] draws. None for a run of several solids
 /// (`pieces`) or one not drawn from its sketch.
 fn add_stair_flight_quantities(
@@ -2097,12 +2098,14 @@ fn add_stair_flight_quantities(
     else {
         return;
     };
-    let (low, high) = run
-        .profile
-        .iter()
-        .fold((f64::INFINITY, f64::NEG_INFINITY), |(low, high), p| {
-            (low.min(p[0]), high.max(p[0]))
-        });
+    let length = decoded.fields.iter().find_map(|(name, value)| match value {
+        InstanceField::Float { value, .. }
+            if name == crate::partition_schema_mvp::STAIR_RUN_LENGTH_FIELD =>
+        {
+            Some(*value)
+        }
+        _ => None,
+    });
     let area = run
         .profile
         .iter()
@@ -2111,22 +2114,25 @@ fn add_stair_flight_quantities(
         .sum::<f64>()
         .abs()
         / 2.0;
-    let (length, volume) = (high - low, area * run.width_feet);
-    if !(length.is_finite() && length > 0.0 && volume.is_finite() && volume > 0.0) {
+    let volume = area * run.width_feet;
+    if !(volume.is_finite() && volume > 0.0) {
         return;
     }
+    let mut properties: Vec<Property> = length
+        .filter(|length| length.is_finite() && *length > 0.0)
+        .map(|length| Property {
+            name: "Length".into(),
+            value: PropertyValue::PositiveLengthFeet(length),
+        })
+        .into_iter()
+        .collect();
+    properties.push(Property {
+        name: "NetVolume".into(),
+        value: PropertyValue::VolumeCubicFeet(volume),
+    });
     sets.push(PropertySet {
         name: "Qto_StairFlightBaseQuantities".into(),
-        properties: vec![
-            Property {
-                name: "Length".into(),
-                value: PropertyValue::PositiveLengthFeet(length),
-            },
-            Property {
-                name: "NetVolume".into(),
-                value: PropertyValue::VolumeCubicFeet(volume),
-            },
-        ],
+        properties,
     });
 }
 
