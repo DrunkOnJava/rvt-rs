@@ -345,6 +345,62 @@ pub fn extract(
 /// values. Each record's saved metadata is read against no
 /// definitions.
 // Tracker: B80.
+/// Every current or historical record of every partition (#1032): its
+/// channel, ElementId, partition and the class tag its body opens with,
+/// sorted, read in one walk with [`Options`]' default stream and group
+/// budgets and memoised on the handle (`RevitFile::native_record_index`).
+/// A pass with those budgets finds the partitions holding its selected
+/// records from it, rather than walking every partition for them, and walks
+/// only those partitions.
+pub struct RecordIndex {
+    records: Vec<(u64, u64, u32, Option<u16>)>,
+}
+
+/// The [`RecordIndex`] of `file`.
+pub(crate) fn build_record_index(file: &mut RevitFile) -> Result<RecordIndex> {
+    let version = file.basic_file_info()?.version;
+    ensure!(
+        matches!(version, 2023..=2027),
+        "native record framing is unvalidated for Revit {version}"
+    );
+    let preamble = file.native_preamble()?;
+    let defaults = Options::default();
+    let mut names: Vec<_> = file
+        .stream_names()
+        .iter()
+        .filter(|n| n.starts_with("Partitions/"))
+        .cloned()
+        .collect();
+    names.sort();
+    let mut records = Vec::new();
+    for name in &names {
+        let partition: u32 = name[11..].parse()?;
+        let stored = file.read_stream_with_limit(name, defaults.max_stream_bytes)?;
+        let prepared = compression::prepare_stream_for_inflate(name, &stored);
+        let inflated = file.inflated_partition(name).ok();
+        native_segments::walk_inflated(
+            &prepared,
+            inflated.as_deref(),
+            &preamble.registry,
+            defaults.max_group_bytes,
+            |source, bytes| {
+                if source.content_key.is_some() {
+                    return Ok(());
+                }
+                for (id, _, start, end) in group_records(source, bytes, version)? {
+                    let tag = bytes[start..end]
+                        .get(..2)
+                        .map(|b| u16::from_le_bytes([b[0], b[1]]));
+                    records.push((source.channel, id, partition, tag));
+                }
+                Ok(())
+            },
+        )?;
+    }
+    records.sort_unstable();
+    Ok(RecordIndex { records })
+}
+
 pub fn extract_graphs(
     file: &mut RevitFile,
     options: &Options,
@@ -496,7 +552,31 @@ fn extract_records(
     // `rac_advanced`). A first pass finds the partitions that hold each
     // selected element's records.
     let mut holders: BTreeMap<(u64, u64), BTreeSet<u32>> = BTreeMap::new();
-    for name in &names {
+    // #1032: with the default budgets the handle's record index answers
+    // this without a walk, and the walk below visits only the partitions
+    // holding a selected record.
+    let defaults = Options::default();
+    let record_index = (options.max_stream_bytes == defaults.max_stream_bytes
+        && options.max_group_bytes == defaults.max_group_bytes)
+        .then(|| file.native_record_index().ok())
+        .flatten();
+    let walked: Option<BTreeSet<u32>> = record_index.as_ref().map(|record_index| {
+        for &(channel, id, partition, tag) in &record_index.records {
+            if !options.channels.contains(&channel) {
+                continue;
+            }
+            let by_class = !options.selected_classes.is_empty()
+                && index.identities.contains_key(&id)
+                && tag
+                    .and_then(|tag| registry.class(tag))
+                    .is_some_and(|class| options.selected_classes.contains(&class.name));
+            if selected.contains(&id) || by_class {
+                holders.entry((channel, id)).or_default().insert(partition);
+            }
+        }
+        holders.values().flatten().copied().collect()
+    });
+    for name in names.iter().filter(|_| walked.is_none()) {
         let partition: u32 = name[11..].parse()?;
         let stored = file.read_stream_with_limit(name, options.max_stream_bytes)?;
         let prepared = compression::prepare_stream_for_inflate(name, &stored);
@@ -526,6 +606,12 @@ fn extract_records(
     let mut seen_ids = BTreeSet::new();
     for name in names {
         let partition: u32 = name[11..].parse()?;
+        if walked
+            .as_ref()
+            .is_some_and(|walked| !walked.contains(&partition))
+        {
+            continue;
+        }
         let stored = file.read_stream_with_limit(&name, options.max_stream_bytes)?;
         let prepared = compression::prepare_stream_for_inflate(&name, &stored);
         let inflated = file.inflated_partition(&name).ok();
