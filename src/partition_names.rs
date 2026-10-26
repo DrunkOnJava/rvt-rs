@@ -25,8 +25,8 @@
 
 use crate::le_bytes;
 use crate::partition_element_records::{
-    BUILTIN_CATEGORY_MAX, BUILTIN_CATEGORY_MIN, PartitionRecordSpan, bbox_marker,
-    partition_record_chain, supports_revit_version,
+    BUILTIN_CATEGORY_MAX, BUILTIN_CATEGORY_MIN, PartitionRecordSpan, file_bbox_marker,
+    partition_record_chain,
 };
 use crate::{Result, RevitFile};
 use std::collections::{BTreeMap, BTreeSet};
@@ -229,7 +229,7 @@ fn named_ids_in(
 pub fn compute_element_names(rf: &mut RevitFile) -> Result<ElementNames> {
     let mut out = ElementNames::default();
     let version = rf.basic_file_info()?.version;
-    let Some(marker) = bbox_marker(version).filter(|_| supports_revit_version(version)) else {
+    let Some(marker) = file_bbox_marker(rf, version) else {
         return Ok(out);
     };
     let declared: BTreeSet<u32> = match crate::elem_table::parse_records(rf) {

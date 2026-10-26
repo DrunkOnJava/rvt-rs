@@ -427,7 +427,8 @@ pub fn scan_type_records(
     if !supports_revit_version(revit_version) || declared_ids.is_empty() {
         return Ok(Vec::new());
     }
-    let Some(bbox_marker) = crate::partition_element_records::bbox_marker(revit_version) else {
+    let Some(bbox_marker) = crate::partition_element_records::file_bbox_marker(rf, revit_version)
+    else {
         return Ok(Vec::new());
     };
     let mut out = Vec::new();

@@ -45,7 +45,7 @@ real      duct_fields
 real      duct_names
 real      duct_segment_shape
 real      duct_segment_type_common
-real      elem_table_corpus         skip=declared_element_ids_returns_sorted_deduped_set
+real      elem_table_corpus
 real      elem_table_frame
 real      element_materials
 real      element_names
@@ -79,6 +79,7 @@ real      revit_global_ids
 real      revit_property_sets
 real      rooms_floors_from_records_only
 real      samples
+real      schema_bbox_marker
 real      schema_registry_catalogs
 real      segment_length
 real      serial_number
