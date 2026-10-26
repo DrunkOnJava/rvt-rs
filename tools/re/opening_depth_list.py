@@ -53,6 +53,16 @@ def main(argv):
         return 2
     ours_f, theirs_f = ifcopenshell.open(args[0]), ifcopenshell.open(args[1])
     mine, theirs = openings(ours_f), openings(theirs_f)
+    # Revit's aggregates by part Tag: a stacked wall's members are parts of it.
+    whole_of = {}
+    for rel in theirs_f.by_type("IfcRelAggregates"):
+        for part in rel.RelatedObjects:
+            if getattr(part, "Tag", None):
+                whole_of[part.Tag] = (rel.RelatingObject.is_a(), getattr(rel.RelatingObject, "Tag", None))
+    revit_types = {}
+    for wall in theirs_f.by_type("IfcWall"):
+        if wall.Tag:
+            revit_types[wall.Tag] = getattr(wall, "ObjectType", None)
     tally = collections.Counter()
     rest = []
     for tag, (cls, host_cls, host_tag, depth) in sorted(mine.items()):
@@ -68,8 +78,14 @@ def main(argv):
         else:
             state = "equal" if same(depth, revit[3]) else "different"
         tally[(cls, f"same host {same_host}", state)] += 1
-        if state != "equal" and len(rest) < 12:
-            rest.append(f"{tag} {cls}: rvt-rs {depth:.6g} in {host_cls} {host_tag}; Revit {revit[3]} in {revit[1]} {revit[2]}")
+        if not same_host:
+            whole = whole_of.get(revit[2])
+            tally[(cls, "Revit's host is a part of rvt-rs's host", str(whole is not None and whole[1] == host_tag))] += 1
+        if (state != "equal" or not same_host) and len(rest) < 16:
+            rest.append(
+                f"{tag} {cls} {state}: rvt-rs {depth:.6g} in {host_cls} {host_tag} {revit_types.get(host_tag)!r};"
+                f" Revit {revit[3]} in {revit[1]} {revit[2]} {revit_types.get(revit[2])!r}, part of {whole_of.get(revit[2])}"
+            )
     print(f"rvt-rs openings with a Depth: {sum(tally.values())}")
     for key, n in sorted(tally.items()):
         print(f"    {key[0]} {key[1]} {key[2]} x{n}")
