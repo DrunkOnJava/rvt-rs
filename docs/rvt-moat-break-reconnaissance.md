@@ -2227,3 +2227,7 @@ A stair flight's `Length` in Revit's export is the span of its run's riser lines
 ## Addendum — RE-248 a curtain mullion's NetSurfaceArea (2026-10-26)
 
 Revit's export writes a mullion's `NetSurfaceArea` as the sum of its Revit solid's faces (revit-ifc's `NetSurfaceAreaCalculator`): on the BIM4LCA office, for the 9,631 mullions drawn as one extrusion along a box side, its section's perimeter times its `Length` plus 0, 1 or 2 times its section's area, by type and orientation (the painted 50 × 50 mm type's horizontal mullions mostly none, its vertical ones both). Which ends count is which ends the mullion is not joined to another at; the mullion's records do not hold it, and rvt-rs's boxes of the mullions, covered or crossed, do not reproduce it. Not written. Report: `reports/element-framing/RE-248-mullion-net-surface-area.md`.
+
+## Addendum — RE-249 a floor's GrossArea (2026-10-26)
+
+Revit's export writes a floor's `Qto_SlabBaseQuantities.GrossArea` as the area of the profile its slab extrudes, its sketch outline less its holes: equal to rvt-rs's profile on all 40 of the BIM4LCA office's slabs drawn from their record box, where the slab's other quantities follow its body less often (a sloped slab's record box is deeper than its layers). Stair landings' slabs get none. rvt-rs writes it on each floor drawn as one extrusion: 31 equal on the office, none different. Report: `reports/element-framing/RE-249-slab-gross-area.md`.

@@ -84,6 +84,7 @@ each door's and window's `Width`, `Height` and `Area` base quantities, its type'
 each curtain wall's type, named as its type's native record names it (RE-230),
 each wall's `Qto_WallBaseQuantities.Width`, its type's thickness (#1016), and the `Qto_OpeningElementBaseQuantities.Depth` of each opening a door or window whose symbol cuts an outline makes in it, that thickness (RE-244); the openings' `Width` and `Height`, which Revit's export swaps, are left out (RE-235 §5),
 each pipe's `GrossCrossSectionArea` and `OuterSurfaceArea` from its cylinder, each stair flight's `Length`, the span of its riser lines, and `NetVolume`, its side views' area times its width, and the `Length` of each column whose record holds no `CleanPairGStep` join, which Revit's export draws as an extrusion (RE-247); a joined column's `Length` and a curtain panel's `Width` are left out,
+each floor's `Qto_SlabBaseQuantities.GrossArea` where it is drawn as one extrusion, its profile's area less its holes (RE-249),
 each of these base quantities left out by `rvt-ifc --no-base-quantities`, as Revit's exporter leaves them out with "Export base quantities" off; Revit's built-in IFC4 setups turn it on, so rvt-ifc does by default (RE-242),
 the type of each pipe, wall sweep and ramp that neither its stored layout nor its reference list types, the one its own native record names (RE-240),
 each wall's `ExtendToStructure`, whether its top is joined to a roof or floor (RE-228),
