@@ -9,7 +9,9 @@ the same way: the object (an element by its `Tag`, a space or storey by its
 name. A value is its quantity entity and its value in SI units (metres,
 square metres, cubic metres, kilograms, seconds) from each file's own unit
 assignment; equal means the same entity and a value within a relative
-1e-5, or 1e-9 in absolute terms near zero. A quantity carrying its own unit
+1e-5, or 1e-9 in absolute terms near zero. Revit's IFC2X3 export writes a
+pipe's or duct's length in a property set (`psets_vs_ifc`'s
+IFC2X3_LENGTHS), which is scored here as the IFC4 base quantity. A quantity carrying its own unit
 is counted apart and not scored. Objects rvt-rs does not write at all are
 left out.
 
@@ -34,7 +36,14 @@ import ifcopenshell
 import ifcopenshell.util.unit
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from psets_vs_ifc import key_of  # noqa: E402
+from psets_vs_ifc import IFC2X3_LENGTHS, key_of  # noqa: E402
+
+# Where an IFC2X3 export writes a segment's length (#822, psets_vs_ifc's
+# IFC2X3_LENGTHS): the IFC4 base quantity of the entity rvt-rs writes it as.
+IFC4_LENGTH_QUANTITY = {
+    "IfcPipeSegment": "Qto_PipeSegmentBaseQuantities",
+    "IfcDuctSegment": "Qto_DuctSegmentBaseQuantities",
+}
 
 KINDS = {
     "IfcQuantityLength": ("LengthValue", "LENGTHUNIT"),
@@ -57,16 +66,34 @@ def scales(f):
     return out
 
 
-def quantities(path):
+def quantities(path, entities_of=None):
     """(object key, set, quantity) -> (entity, SI value), the keys of every
     object, each object's entity by key, and how many quantities carry
-    their own unit."""
+    their own unit. In an IFC2X3 file, a segment length in a property set
+    is keyed as the IFC4 base quantity of the entity `entities_of` (the
+    other file's) gives the object."""
     f = ifcopenshell.open(path)
     unit_scale = scales(f)
     out = {}
     objects = set()
     entities = {}
     own_unit = 0
+    if f.schema == "IFC2X3" and entities_of is not None:
+        for rel in f.by_type("IfcRelDefinesByProperties"):
+            definition = rel.RelatingPropertyDefinition
+            if not definition.is_a("IfcPropertySet"):
+                continue
+            for obj in rel.RelatedObjects:
+                key = key_of(obj)
+                qset = IFC4_LENGTH_QUANTITY.get(entities_of.get(key))
+                if qset is None:
+                    continue
+                for prop in definition.HasProperties or ():
+                    if (definition.Name, prop.Name) in IFC2X3_LENGTHS and prop.is_a("IfcPropertySingleValue"):
+                        raw = prop.NominalValue.wrappedValue if prop.NominalValue else None
+                        scale = unit_scale.get("LENGTHUNIT")
+                        value = None if raw is None or scale is None else float(raw) * scale
+                        out.setdefault((key, qset, "Length"), ("IfcQuantityLength", value))
     for product in f.by_type("IfcObject"):
         key = key_of(product)
         if key:
@@ -115,7 +142,7 @@ def main(argv):
         print(__doc__, file=sys.stderr)
         return 2
     ours, our_objects, our_entities, our_own = quantities(args[0])
-    theirs, their_objects, their_entities, their_own = quantities(args[1])
+    theirs, their_objects, their_entities, their_own = quantities(args[1], our_entities)
     rows = collections.defaultdict(lambda: [0, 0, 0, 0])
     missing_classes = collections.defaultdict(collections.Counter)
     differences = []
