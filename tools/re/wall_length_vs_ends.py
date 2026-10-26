@@ -15,7 +15,11 @@ ft), and prints how many walls one gives, the choices that do (the first
 found, `axis` first), the walls by the choices at each end and whether
 `axis, axis` alone gives it, and up to 40 walls none does. With `--list`,
 it also prints a `wall <id> <Length> <choices>` line per wall, the choices
-at each end as `[label, joined wall id, GLine parameter]`.
+at each end as `[label, joined wall id, GLine parameter]`, and an `axis <id>
+<length> <start> <end>` line per wall with an `Axis` polyline in the export:
+its length and where its ends fall along the GLine (parameters), through
+the plan transform from the model's coordinates to the export's fitted to
+the walls whose GLine ends give their Length.
 
 Usage:
 
@@ -25,8 +29,13 @@ Usage:
 import collections
 import itertools
 import json
+import math
 import os
 import sys
+
+import ifcopenshell
+import ifcopenshell.util.placement
+import ifcopenshell.util.unit
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from qtos_vs_ifc import quantities  # noqa: E402
@@ -106,6 +115,48 @@ def choices(walls, meets, wall, end):
     return out
 
 
+def axes(path):
+    """Wall tag -> its `Axis` polyline's plan end points, feet."""
+    f = ifcopenshell.open(path)
+    scale = ifcopenshell.util.unit.calculate_unit_scale(f) / FOOT
+    out = {}
+    for wall in f.by_type("IfcWall"):
+        if not (wall.Tag or "").isdigit() or wall.Representation is None:
+            continue
+        for rep in wall.Representation.Representations:
+            if rep.RepresentationIdentifier != "Axis":
+                continue
+            for item in rep.Items:
+                if not item.is_a("IfcPolyline") or len(item.Points) < 2:
+                    continue
+                m = ifcopenshell.util.placement.get_local_placement(wall.ObjectPlacement)
+                ends = []
+                for point in (item.Points[0], item.Points[-1]):
+                    x, y = point.Coordinates[0], point.Coordinates[1]
+                    ends.append(
+                        (
+                            (m[0][0] * x + m[0][1] * y + m[0][3]) * scale,
+                            (m[1][0] * x + m[1][1] * y + m[1][3]) * scale,
+                        )
+                    )
+                out[int(wall.Tag)] = ends
+    return out
+
+
+def fit(pairs):
+    """The plan rotation and translation taking the first of each pair to the second."""
+    n = len(pairs)
+    ax = sum(a[0] for a, _ in pairs) / n
+    ay = sum(a[1] for a, _ in pairs) / n
+    bx = sum(b[0] for _, b in pairs) / n
+    by = sum(b[1] for _, b in pairs) / n
+    sxx = sum((a[0] - ax) * (b[0] - bx) + (a[1] - ay) * (b[1] - by) for a, b in pairs)
+    sxy = sum((a[0] - ax) * (b[1] - by) - (a[1] - ay) * (b[0] - bx) for a, b in pairs)
+    angle = math.atan2(sxy, sxx)
+    c, s = math.cos(angle), math.sin(angle)
+    return c, s, bx - (c * ax - s * ay), by - (s * ax + c * ay)
+
+
 def main(argv):
     listing = "--list" in argv
     argv = [a for a in argv if a != "--list"]
@@ -125,9 +176,11 @@ def main(argv):
             if tag.isdigit():
                 revit[int(tag)] = value / FOOT
     meets = joined(walls)
+    exported = axes(argv[2])
     by_choice = collections.Counter()
     by_kind = collections.Counter()
     unmatched = []
+    agreed = {}
     total = 0
     for i, length in sorted(revit.items()):
         wall = walls.get(i)
@@ -144,11 +197,45 @@ def main(argv):
                 break
         kind = tuple(len(meets.get((i, end), ())) for end in (0, 1))
         by_kind[(kind, found is not None, found == ("axis", "axis"))] += 1
+        if found is not None:
+            agreed[i] = (found, length)
         if found is None:
             span = abs(ends[1][0][2] - ends[0][0][2])
             unmatched.append((i, length, span - length, kind, wall.get("keyref")))
         else:
             by_choice[tuple(sorted(found))] += 1
+    pairs = []
+    for i, (label, _) in agreed.items():
+        if label == ("axis", "axis") and i in exported:
+            (ox, oy), (dx, dy), (e0, e1) = gline(walls[i])
+            ours = [(ox + e0 * dx, oy + e0 * dy), (ox + e1 * dx, oy + e1 * dy)]
+            theirs = exported[i]
+            if math.dist(ours[0], ours[1]) > 1:
+                if math.dist(theirs[0], theirs[1]) and abs(math.dist(*theirs) - math.dist(*ours)) <= TOL:
+                    pairs += list(zip(ours, theirs))
+    moved = 0
+    if len(pairs) >= 4:
+        c, s, tx, ty = fit(pairs)
+        worst = max(math.dist((c * a[0] - s * a[1] + tx, s * a[0] + c * a[1] + ty), b) for a, b in pairs)
+        flipped = 0
+        print(f"plan transform fitted to {len(pairs) // 2} walls, worst end {worst:.6f} ft")
+        for i in sorted(exported):
+            if i not in walls or walls[i].get("gline") is None:
+                continue
+            (ox, oy), (dx, dy), (e0, e1) = gline(walls[i])
+            params = []
+            for x, y in exported[i]:
+                u, v = x - tx, y - ty
+                px, py = c * u + s * v, -s * u + c * v
+                params.append((px - ox) * dx + (py - oy) * dy)
+            if abs(params[0] - e0) > TOL or abs(params[1] - e1) > TOL:
+                moved += 1
+            if abs(params[0] - e1) < abs(params[0] - e0):
+                flipped += 1
+            if listing:
+                length = math.dist(*exported[i])
+                print(f"axis {i} {length!r} {params[0]!r} {params[1]!r}")
+        print(f"walls whose exported Axis ends are not their GLine's: {moved}; reversed: {flipped}")
     print(f"walls with Revit's Length and a GLine: {total}")
     print(f"a choice at each end gives the Length: {sum(by_choice.values())}")
     for c, n in by_choice.most_common():
