@@ -9,7 +9,8 @@ the same way: the object (an element by its `Tag`, a space or storey by its
 name. A value is its quantity entity and its value in SI units (metres,
 square metres, cubic metres, kilograms, seconds) from each file's own unit
 assignment; equal means the same entity and a value within a relative
-1e-5, or 1e-9 in absolute terms near zero. Revit's IFC2X3 export writes a
+1e-5, or within 1e-6 (a micrometre, a square or cubic one: the rvt-rs
+writer's rounding) where that is larger. Revit's IFC2X3 export writes a
 pipe's or duct's length in a property set (`psets_vs_ifc`'s
 IFC2X3_LENGTHS), which is scored here as the IFC4 base quantity. A quantity carrying its own unit
 is counted apart and not scored. Objects rvt-rs does not write at all are
@@ -133,7 +134,7 @@ def same(a, b):
     (kind_a, x), (kind_b, y) = a, b
     if kind_a != kind_b or x is None or y is None:
         return kind_a == kind_b and x == y
-    return abs(x - y) <= max(1e-9, 1e-5 * max(abs(x), abs(y)))
+    return abs(x - y) <= max(1e-6, 1e-5 * max(abs(x), abs(y)))
 
 
 def main(argv):
