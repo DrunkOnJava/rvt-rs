@@ -652,11 +652,18 @@ pub fn recover_partition_schema_mvp(
     // --- Each door's and window's size from the outline its symbol cuts
     // (RE-215, #844) ---
     let walls: BTreeSet<u32> = out.walls.iter().filter_map(|wall| wall.id).collect();
+    let plain_walls: BTreeSet<u32> = out
+        .walls
+        .iter()
+        .filter(|wall| wall.class != CURTAIN_WALL_CLASS)
+        .filter_map(|wall| wall.id)
+        .collect();
     attach_cut_loop_sizes(
         rf,
         revit_version,
         [&mut out.doors, &mut out.windows],
         &walls,
+        &plain_walls,
     );
     // --- Steel beams' and columns' I sections from their type (RE-103, RE-104) ---
     attach_beam_sections(rf, revit_version, &mut out.products);
@@ -2354,6 +2361,7 @@ fn attach_cut_loop_sizes(
     revit_version: u32,
     groups: [&mut Vec<DecodedElement>; 2],
     walls: &BTreeSet<u32>,
+    plain_walls: &BTreeSet<u32>,
 ) {
     if !CUT_LOOP_REVIT_VERSIONS.contains(&revit_version) {
         return;
@@ -2372,11 +2380,35 @@ fn attach_cut_loop_sizes(
         .iter()
         .filter_map(|element| element.id.map(u64::from))
         .collect();
-    let Ok((loops, uncut, drawn_by)) =
+    let Ok((loops, uncut, drawn_by, hosts)) =
         crate::native_symbol_cuts::instance_cuts_and_symbols(rf, &ids)
     else {
         return;
     };
+    // RE-245: a door or window set in a wall is set in the one its current
+    // native record names, which the reference list's nearest wall
+    // (`attach_host_candidates`) is not where the list names several.
+    for element in elements.iter_mut() {
+        let Some(native) = element
+            .id
+            .and_then(|id| hosts.get(&u64::from(id)))
+            .and_then(|host| u32::try_from(*host).ok())
+        else {
+            continue;
+        };
+        let bound = element
+            .fields
+            .iter_mut()
+            .find_map(|(name, value)| match value {
+                InstanceField::ElementId { id, .. } if name == OPENING_HOST_FIELD => Some(id),
+                _ => None,
+            });
+        if let Some(bound) = bound {
+            if *bound != native && plain_walls.contains(&native) {
+                *bound = native;
+            }
+        }
+    }
     for element in elements.iter_mut() {
         let Some(cut) = element.id.and_then(|id| loops.get(&u64::from(id))) else {
             continue;
