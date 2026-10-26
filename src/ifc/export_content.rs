@@ -892,6 +892,12 @@ pub fn append_typed_production_elements(
         add_mullion_span(&mut reference_sets, &ifc_type, &decoded);
         add_door_window_quantities(&mut reference_sets, &ifc_type, &decoded);
         add_wall_quantities(&mut reference_sets, &ifc_type, &decoded);
+        add_body_quantities(
+            &mut reference_sets,
+            &ifc_type,
+            extrusion.as_ref(),
+            solid_shape.as_ref(),
+        );
         add_railing_height(&mut reference_sets, &ifc_type, &decoded);
         add_extend_to_structure(&mut reference_sets, &ifc_type, &decoded);
         let mut serial_sets = serial_number_property_sets(&decoded);
@@ -1115,13 +1121,37 @@ pub fn append_typed_production_elements(
             "IFCDUCTSEGMENT" => Some(("Qto_DuctSegmentBaseQuantities", None)),
             _ => None,
         };
+        // RE-247: a pipe's cross-section and outer surface are those of the
+        // cylinder it is drawn as (RE-131), as Revit's export writes them.
+        let pipe_radius = (decoded.class == "Pipe")
+            .then(|| crate::partition_schema_mvp::pipe_body_from_fields(&decoded.fields))
+            .flatten()
+            .map(|pipe| pipe.radius_feet)
+            .filter(|radius| radius.is_finite() && *radius > 0.0);
         if let Some((quantities, occurrence)) = segment_sets {
-            let quantities = segment_length.map(|length| PropertySet {
-                name: quantities.into(),
-                properties: vec![Property {
+            let quantities = segment_length.map(|length| {
+                let mut properties = vec![Property {
                     name: "Length".into(),
                     value: PropertyValue::PositiveLengthFeet(length),
-                }],
+                }];
+                if let Some(radius) = pipe_radius {
+                    properties.push(Property {
+                        name: "GrossCrossSectionArea".into(),
+                        value: PropertyValue::AreaSquareFeet(
+                            std::f64::consts::PI * radius * radius,
+                        ),
+                    });
+                    properties.push(Property {
+                        name: "OuterSurfaceArea".into(),
+                        value: PropertyValue::AreaSquareFeet(
+                            2.0 * std::f64::consts::PI * radius * length,
+                        ),
+                    });
+                }
+                PropertySet {
+                    name: quantities.into(),
+                    properties,
+                }
             });
             if let Some(set) = quantities {
                 entities.push(entities::IfcEntity::ElementPropertySet {
@@ -2009,6 +2039,42 @@ fn add_door_window_quantities(
                 value: PropertyValue::AreaSquareFeet(width * height),
             },
         ],
+    });
+}
+
+/// Add the base quantities a column's or curtain panel's body gives to `sets`
+/// (#1016, RE-247): a column's `Length`, the depth of the extrusion it is
+/// drawn as, and a panel's `Width`, the larger side of its box's profile,
+/// as Revit's export writes them. None where another solid draws it.
+fn add_body_quantities(
+    sets: &mut Vec<PropertySet>,
+    ifc_type: &str,
+    extrusion: Option<&Extrusion>,
+    solid_shape: Option<&entities::SolidShape>,
+) {
+    let (set, quantity) = match (ifc_type, extrusion, solid_shape) {
+        ("IFCCOLUMN", Some(body), None) => {
+            ("Qto_ColumnBaseQuantities", ("Length", body.height_feet))
+        }
+        ("IFCCOLUMN", _, Some(entities::SolidShape::PlacedExtrusion { depth_feet, .. })) => {
+            ("Qto_ColumnBaseQuantities", ("Length", *depth_feet))
+        }
+        ("IFCPLATE", Some(body), None) if body.profile_override.is_none() => (
+            "Qto_PlateBaseQuantities",
+            ("Width", body.width_feet.max(body.depth_feet)),
+        ),
+        _ => return,
+    };
+    let (name, feet) = quantity;
+    if !(feet.is_finite() && feet > 0.0) {
+        return;
+    }
+    sets.push(PropertySet {
+        name: set.into(),
+        properties: vec![Property {
+            name: name.into(),
+            value: PropertyValue::PositiveLengthFeet(feet),
+        }],
     });
 }
 
