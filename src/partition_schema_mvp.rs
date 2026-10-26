@@ -1156,11 +1156,6 @@ fn attach_wall_sweep_types(
     }
 }
 
-/// Give each pipe, wall sweep and ramp still without a type, or a name of
-/// its own, the type its native record names
-/// ([`crate::native_element_types::system_type_names`], RE-240). Its family
-/// is then its class's system family ([`system_family`]), and a sweep's is
-/// Wall Sweep, as RE-69 names it.
 /// Mark each curtain mullion that stands on a straight curtain wall with an
 /// unedited profile and whose type has its own rectangular section
 /// ([`crate::native_mullion_hosts::mullions_on_plain_hosts`], RE-243) with
@@ -1185,6 +1180,11 @@ fn attach_mullion_plain_hosts(rf: &mut RevitFile, products: &mut [DecodedElement
     }
 }
 
+/// Give each pipe, wall sweep and ramp still without a type, or a name of
+/// its own, the type its native record names
+/// ([`crate::native_element_types::system_type_names`], RE-240). Its family
+/// is then its class's system family ([`system_family`]), and a sweep's is
+/// Wall Sweep, as RE-69 names it.
 fn attach_native_type_names(rf: &mut RevitFile, products: &mut [DecodedElement]) {
     let has = |element: &DecodedElement, field: &str| {
         element.fields.iter().any(|(name, _)| name == field)
