@@ -21,7 +21,9 @@ import sys
 
 import ifcopenshell
 import ifcopenshell.util.element
+import ifcopenshell.util.placement
 import ifcopenshell.util.unit
+import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from qtos_vs_ifc import quantities  # noqa: E402
@@ -60,6 +62,25 @@ def bodies(f):
     return out
 
 
+def direction(member):
+    """vertical, horizontal or slanted: the world direction of the member's
+    body extrusion, through its placement and the solid's position."""
+    if member.Representation is None:
+        return "-"
+    for rep in member.Representation.Representations:
+        if rep.RepresentationIdentifier != "Body":
+            continue
+        for item in rep.Items:
+            for solid in solids(item):
+                m = np.array(ifcopenshell.util.placement.get_local_placement(member.ObjectPlacement))
+                if solid.Position is not None:
+                    m = m @ np.array(ifcopenshell.util.placement.get_axis2placement(solid.Position))
+                d = m[:3, :3] @ np.array(solid.ExtrudedDirection.DirectionRatios, dtype=float)
+                z = abs(d[2]) / (np.linalg.norm(d) or 1)
+                return "vertical" if z > 0.999 else ("horizontal" if z < 0.001 else "slanted")
+    return "-"
+
+
 def same(a, b):
     return a is not None and b is not None and abs(a - b) <= max(1e-6, 1e-5 * max(abs(a), abs(b)))
 
@@ -77,13 +98,19 @@ def main(argv):
         if member.Tag and common.get("Span") is not None:
             spans[f"tag:{member.Tag}"] = float(common["Span"]) * ifcopenshell.util.unit.calculate_unit_scale(ours_f)
     types = {f"tag:{m.Tag}": getattr(m, "ObjectType", None) or "-" for m in theirs_f.by_type("IfcMember") if m.Tag}
+    ours_direction = {f"tag:{m.Tag}": direction(m) for m in ours_f.by_type("IfcMember") if m.Tag}
     revit = collections.defaultdict(dict)
     for (key, qset, name), (_, value) in quantities(args[1])[0].items():
         if qset == "Qto_MemberBaseQuantities" and value is not None:
             revit[key][name] = value
     rows = [k for k in sorted(revit) if "NetVolume" in revit[k] and k in mine]
     print(f"members with NetVolume in Revit's export that rvt-rs writes: {len(rows)}")
-    tallies = {"type": collections.Counter(), "Revit's solid": collections.Counter(), "Length is rvt-rs's Span": collections.Counter()}
+    tallies = {
+        "type": collections.Counter(),
+        "Revit's solid": collections.Counter(),
+        "Length is rvt-rs's Span": collections.Counter(),
+        "rvt-rs's direction and Revit's solid": collections.Counter(),
+    }
     revit_body_equal = 0
     misses = []
     for k in rows:
@@ -92,6 +119,7 @@ def main(argv):
         tallies["type"][(types.get(k, "-"), ok)] += 1
         tallies["Revit's solid"][(theirs.get(k, (None, "-"))[1], ok)] += 1
         tallies["Length is rvt-rs's Span"][(same(revit[k].get("Length"), spans.get(k)), ok)] += 1
+        tallies["rvt-rs's direction and Revit's solid"][(f"{ours_direction.get(k, '-')} {theirs.get(k, (None, '-'))[1]}", ok)] += 1
         revit_body_equal += same(v, theirs.get(k, (None, ""))[0])
         if not ok:
             misses.append(k)
