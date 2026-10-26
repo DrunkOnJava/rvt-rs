@@ -17,7 +17,11 @@
 //! `id`, plan `start` and `end` and the type's `thickness` (feet), and
 //! `joins`, each `CDJoinInfo` as `[[this end, other id, other end], ...,
 //! wallJoinType]`, and `ends`, each `JoinEndGStep` as `[end, weakIdx,
-//! omitted id, omitted end]`.
+//! omitted id, omitted end]`; `control`, `VWallDriver.m_controlJoinsSet` as
+//! `[m_index, [[id, end], ...]]`; `keyref`, `SWall.m_wallKeyRef`,
+//! `m_locLineOffset` and `m_keyRefOffset`; `exterior`, the unit plan direction
+//! to the exterior face (RE-53); and `tweaks`, the ElementIds
+//! `WallJoinTweakGStep`'s `m_affectedEdgesTags` name.
 //!
 //! Usage:
 //!   cargo run --profile ci --example probe_re252_wall_ends -- MODEL.rvt > ends.jsonl
@@ -42,18 +46,36 @@ fn main() -> anyhow::Result<()> {
         version,
         rvt::walker::WalkerLimits::default(),
     )?;
-    let axes: BTreeMap<u64, rvt::research::partition_schema_mvp::WallAxis> = mvp
+    type Axis = (rvt::research::partition_schema_mvp::WallAxis, String);
+    let axes: BTreeMap<u64, Axis> = mvp
         .walls
         .iter()
         .filter_map(|wall| {
+            let float = |wanted: &str| {
+                wall.fields.iter().find_map(|(name, value)| match value {
+                    rvt::walker::InstanceField::Float { value, .. } if name == wanted => {
+                        Some(*value)
+                    }
+                    _ => None,
+                })
+            };
+            let exterior =
+                match rvt::research::partition_schema_mvp::WALL_EXTERIOR_FIELDS.map(float) {
+                    [Some(x), Some(y)] => format!("[{x},{y}]"),
+                    _ => "null".into(),
+                };
             Some((
                 u64::from(wall.id?),
-                rvt::research::partition_schema_mvp::wall_axis_from_fields(&wall.fields)?,
+                (
+                    rvt::research::partition_schema_mvp::wall_axis_from_fields(&wall.fields)?,
+                    exterior,
+                ),
             ))
         })
         .collect();
     let ids: BTreeSet<u64> = axes.keys().copied().collect();
-    let mut rows: BTreeMap<u64, (Vec<String>, Vec<String>)> = BTreeMap::new();
+    type Row = (Vec<String>, Vec<String>, String, BTreeSet<i64>, Vec<String>);
+    let mut rows: BTreeMap<u64, Row> = BTreeMap::new();
     extract_graphs(
         &mut rf,
         &Options {
@@ -66,6 +88,9 @@ fn main() -> anyhow::Result<()> {
             };
             let mut joins = Vec::new();
             let mut ends = Vec::new();
+            let mut keyref = String::from("null");
+            let mut tweaks: BTreeSet<i64> = BTreeSet::new();
+            let mut control = Vec::new();
             for object in &graph.objects {
                 match object.class_name.as_str() {
                     "CDJoinInfo" => {
@@ -102,24 +127,94 @@ fn main() -> anyhow::Result<()> {
                             show(omitted_end)
                         ));
                     }
+                    "SWall" => {
+                        let num = |name: &str| {
+                            object
+                                .fields
+                                .get(name)
+                                .and_then(Value::as_f64)
+                                .map_or("null".into(), |v| v.to_string())
+                        };
+                        keyref = format!(
+                            "[{},{},{}]",
+                            num("m_wallKeyRef"),
+                            num("m_locLineOffset"),
+                            num("m_keyRefOffset")
+                        );
+                    }
+                    "VWallDriver" => {
+                        for set in object
+                            .fields
+                            .get("m_controlJoinsSet")
+                            .and_then(Value::as_array)
+                            .into_iter()
+                            .flatten()
+                        {
+                            let index = set.get("m_index").and_then(Value::as_i64);
+                            let mut entry = String::new();
+                            for item in set
+                                .pointer("/m_JoinInfo/m_info")
+                                .and_then(Value::as_array)
+                                .into_iter()
+                                .flatten()
+                            {
+                                let other = item.get("m_elemId").and_then(id_of);
+                                let end = item.get("m_joinedEnd").and_then(Value::as_i64);
+                                let show =
+                                    |v: Option<i64>| v.map_or("null".into(), |v| v.to_string());
+                                if !entry.is_empty() {
+                                    entry.push(',');
+                                }
+                                let _ = write!(entry, "[{},{}]", show(other), show(end));
+                            }
+                            control.push(format!(
+                                "[{},[{entry}]]",
+                                index.map_or("null".into(), |v| v.to_string())
+                            ));
+                        }
+                    }
+                    "WallJoinTweakGStep" => {
+                        if let Some(tags) = object
+                            .fields
+                            .get("m_affectedEdgesTags")
+                            .and_then(Value::as_array)
+                        {
+                            for tag in tags {
+                                if let Some(id) = tag.get("first").and_then(id_of) {
+                                    tweaks.insert(id);
+                                }
+                            }
+                        }
+                    }
                     _ => {}
                 }
             }
-            rows.insert(record.identity.element_id, (joins, ends));
+            rows.insert(
+                record.identity.element_id,
+                (joins, ends, keyref, tweaks, control),
+            );
             Ok(())
         },
     )?;
-    for (id, axis) in &axes {
-        let (joins, ends) = rows.get(id).cloned().unwrap_or_default();
+    for (id, (axis, exterior)) in &axes {
+        let (joins, ends, keyref, tweaks, control) = rows.get(id).cloned().unwrap_or_default();
+        let keyref = if keyref.is_empty() {
+            "null".into()
+        } else {
+            keyref
+        };
+        let tweaks: Vec<String> = tweaks.iter().map(i64::to_string).collect();
         println!(
-            "{{\"id\":{id},\"start\":[{},{}],\"end\":[{},{}],\"thickness\":{},\"joins\":[{}],\"ends\":[{}]}}",
+            "{{\"id\":{id},\"start\":[{},{}],\"end\":[{},{}],\"thickness\":{},\"joins\":[{}],\"ends\":[{}],\"keyref\":{keyref},\"exterior\":{exterior},\"control\":[{}],\"tweaks\":[{}]}}",
             axis.start[0],
             axis.start[1],
             axis.end[0],
             axis.end[1],
             axis.thickness_feet,
             joins.join(","),
-            ends.join(",")
+            ends.join(","),
+            control.join(","),
+            tweaks.join(",")
         );
     }
     eprintln!(
