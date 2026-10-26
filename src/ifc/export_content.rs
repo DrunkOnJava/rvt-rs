@@ -1976,6 +1976,9 @@ fn add_railing_height(sets: &mut Vec<PropertySet>, ifc_type: &str, decoded: &Dec
 /// its own Z axis (RE-226): on the model's axes, its record box's extent
 /// along the model axis that Z lies on; turned or tilted, the extent along Z
 /// of the box along its own axes (RE-106). Nothing where neither is read.
+/// The same length is its `Qto_MemberBaseQuantities.Length`, which Revit's
+/// export gives every one of the BIM4LCA office's 10,003 mullions equal to
+/// their `Span` (#1016).
 fn add_mullion_span(sets: &mut Vec<PropertySet>, ifc_type: &str, decoded: &DecodedElement) {
     use crate::partition_schema_mvp as mvp;
     if ifc_type != "IFCMEMBER" || decoded.class != "CurtainWallMullion" {
@@ -2020,6 +2023,13 @@ fn add_mullion_span(sets: &mut Vec<PropertySet>, ifc_type: &str, decoded: &Decod
             properties: vec![property],
         }),
     }
+    sets.push(PropertySet {
+        name: "Qto_MemberBaseQuantities".into(),
+        properties: vec![Property {
+            name: "Length".into(),
+            value: PropertyValue::PositiveLengthFeet(span),
+        }],
+    });
 }
 
 /// Add `Finish` (`IfcText`) to a covering's `Pset_CoveringCommon` among
