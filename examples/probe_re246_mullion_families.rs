@@ -1,11 +1,17 @@
-//! RE-246 (#1016): what in a curtain mullion type's family says its kind
+//! RE-246 (#1016): what in a curtain mullion type says its kind
 //! (rectangular, circular, corner), whatever language its name is in.
 //!
-//! FACT under test: RE-243 writes a mullion's `NetVolume` only for the
-//! Rectangular Mullion and Quad Corner Mullion families, matched by their
-//! English names, since no field of the mullion type (`SysMullionFamSym`)
-//! sets them apart. Hypothesis: the family its `m_familyId` names holds the
-//! kind in a field, the same on every file.
+//! FACT: each mullion type's record (`SysMullionFamSym`) holds one section
+//! object whose class names its shape (`SysRectMullionProfile`,
+//! `SysCircMullionProfile`, `SysLMullionProfile`, `SysVMullionProfile`,
+//! `SysTrapMullionProfile`, `SysQuadMullionProfile`, `SysCustMullionProfile`
+//! for a profile family's). The family its `m_familyId` names says nothing
+//! more: the six system families' records (class `Family`) differ only in
+//! `m_id`, `m_name` and `m_surrogateId`. Verify: on the BIM4LCA office every
+//! type line of family Rectangular Mullion lists `SysRectMullionProfile` and
+//! of Quad Corner Mullion `SysQuadMullionProfile`; on Autodesk's MEP samples
+//! the family is `Rechteckiger Pfosten` and its types list
+//! `SysRectMullionProfile` or `SysCustMullionProfile`.
 //!
 //! Output, one line per mullion type and one per family its types name:
 //!   type <type id> family=<family id> name=<SymbolInfo.m_name> classes=<class,...>
