@@ -5163,9 +5163,10 @@ pub const WALL_LENGTH_FIELD: &str = "m_wall_length";
 
 /// Field holding the length of a wall's native curve, feet, on every wall with
 /// a centreline whose native curve is the same line (RE-252): one of the two
-/// lengths Revit's export may write as its `Length`, which the census compares
-/// with the other, Revit's own cut-back `Axis`, to count apart a wall whose
-/// two lengths differ (the maintainer, 2026-10-26).
+/// lengths Revit's export may write as its `Length`. The export's diagnostics
+/// list it (`wall_curve_lengths_feet`), not its IFC file, for the census to
+/// compare with the other, Revit's own cut-back `Axis`, and count apart a
+/// wall whose two lengths differ (the maintainer, 2026-10-26 and 2026-10-27).
 pub const WALL_CURVE_LENGTH_FIELD: &str = "m_wall_curve_length";
 
 /// Give each wall with a centreline whose native curve, cut back where its

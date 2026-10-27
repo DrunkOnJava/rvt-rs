@@ -22,9 +22,13 @@ are counted apart, not as values Revit does not write: `rvt-ifc
 is known to be wrong (RE-235 §5, `REVIT_DEFECTS`) is left out of rvt-rs's
 export and counted apart here, not as missing. So is a wall's missing
 `Length` where the two lengths Revit's export may write differ: the length of
-the curve rvt-rs's own `RvtElementRecordGeometry.CurveLength` gives and that
-of the cut-back curve Revit's `Axis` draws (RE-252), on a model where Revit's
-`Length` is one of those two on every wall, so no curve was read wrong.
+the wall's curve, which rvt-rs's export diagnostics list
+(`decoded.wall_curve_lengths_feet`, not in its IFC file), and that of the
+cut-back curve Revit's `Axis` draws (RE-252), on a model where Revit's
+`Length` is one of those two on every wall, so no curve was read wrong. The
+diagnostics are the `diagnostics.json` beside the rvt-rs IFC, as Measure
+writes them, or the file `--diagnostics` names; without one, no wall is
+counted apart.
 
 It prints the totals, a line per (set, quantity): how many values Revit
 writes on objects rvt-rs also writes, how many are equal, how many differ
@@ -35,12 +39,13 @@ first.
 
 Usage:
 
-    python3 tools/re/qtos_vs_ifc.py <rvt-rs.ifc> <revit-export.ifc>
+    python3 tools/re/qtos_vs_ifc.py <rvt-rs.ifc> <revit-export.ifc> [--diagnostics <diagnostics.json>]
 
 Needs IfcOpenShell (the version tools/ci/requirements-ifc.txt pins).
 """
 
 import collections
+import json
 import os
 import sys
 
@@ -122,22 +127,14 @@ def open_ifc(path):
 
 
 def curve_lengths(path):
-    """Object key -> the wall curve length rvt-rs's own set carries
-    (`RvtElementRecordGeometry.CurveLength`, RE-252), metres."""
-    f = open_ifc(path)
-    scale = ifcopenshell.util.unit.calculate_unit_scale(f)
-    out = {}
-    for rel in f.by_type("IfcRelDefinesByProperties"):
-        pset = rel.RelatingPropertyDefinition
-        if not pset.is_a("IfcPropertySet") or pset.Name != "RvtElementRecordGeometry":
-            continue
-        for prop in pset.HasProperties or ():
-            if prop.Name == "CurveLength" and prop.is_a("IfcPropertySingleValue") and prop.NominalValue:
-                for obj in rel.RelatedObjects:
-                    key = key_of(obj)
-                    if key:
-                        out[key] = float(prop.NominalValue.wrappedValue) * scale
-    return out
+    """Object key -> each wall's curve length, metres, from rvt-rs's export
+    diagnostics (`decoded.wall_curve_lengths_feet`, RE-252); empty when
+    there is no such file."""
+    if not os.path.exists(path):
+        return {}
+    with open(path, encoding="utf-8") as f:
+        lengths = json.load(f).get("decoded", {}).get("wall_curve_lengths_feet", {})
+    return {f"tag:{tag}": feet * 0.3048 for tag, feet in lengths.items()}
 
 
 def axis_lengths(path):
@@ -243,6 +240,14 @@ def same(a, b):
 
 def main(argv):
     args = [a for a in argv[1:] if a != "--list"]
+    diagnostics = None
+    if "--diagnostics" in args:
+        at = args.index("--diagnostics")
+        diagnostics = args[at + 1] if at + 1 < len(args) else None
+        del args[at : at + 2]
+        if diagnostics is None:
+            print(__doc__, file=sys.stderr)
+            return 2
     if len(args) != 2:
         print(__doc__, file=sys.stderr)
         return 2
@@ -252,7 +257,8 @@ def main(argv):
     missing_classes = collections.defaultdict(collections.Counter)
     differences = []
     defects = collections.Counter()
-    our_curves = curve_lengths(args[0])
+    beside = os.path.join(os.path.dirname(os.path.abspath(args[0])), "diagnostics.json")
+    our_curves = curve_lengths(diagnostics or beside)
     their_axes = axis_lengths(args[1])
     # rvt-rs's curve lengths are trusted to count walls apart only where
     # Revit's export never contradicts them: on every wall, Revit's Length
