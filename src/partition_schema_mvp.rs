@@ -281,6 +281,8 @@ pub fn recover_partition_schema_mvp(
     out.rooms = rooms_from_partition_category_records(rf, revit_version, &level_ids)?;
     // Their outlines from the faces of their stored solids (RE-101).
     attach_room_outlines(rf, revit_version, &mut out.rooms);
+    // Their heights from their native records (RE-255).
+    attach_room_heights(rf, revit_version, &mut out.rooms);
     // --- Areas, which carry no record box (#763) ---
     out.areas = crate::partition_area_records::areas_from_partition_chain_records(
         rf,
@@ -8502,6 +8504,72 @@ fn attach_room_outlines(rf: &mut RevitFile, revit_version: u32, rooms: &mut [Dec
                 }
             }
             room.fields.extend(fields);
+        }
+    }
+}
+
+/// Releases a room's `Qto_SpaceBaseQuantities.Height` is read on (RE-255).
+pub const ROOM_HEIGHT_REVIT_VERSIONS: &[u32] = &[2024, 2025, 2026];
+
+/// Field holding a room's height, feet (RE-255).
+pub const ROOM_HEIGHT_FIELD: &str = "m_room_height";
+
+/// Give each room whose native record holds its stored solid's faces (two
+/// `Face` objects or more) its `RoomElem.m_height` as its height: Revit's
+/// export writes it as the space's `Height` on every such room of the
+/// BIM4LCA office, the R2025 models and the held-out Revit 2026 house
+/// (RE-255). A room with no faces in its
+/// record gets none: on the office Revit's `Height` is another value on all
+/// 20 of those.
+fn attach_room_heights(rf: &mut RevitFile, revit_version: u32, rooms: &mut [DecodedElement]) {
+    if !ROOM_HEIGHT_REVIT_VERSIONS.contains(&revit_version) {
+        return;
+    }
+    let ids: BTreeSet<u64> = rooms
+        .iter()
+        .filter_map(|room| room.id.map(u64::from))
+        .collect();
+    if ids.is_empty() {
+        return;
+    }
+    let options = crate::native_document::Options {
+        selected_ids: ids,
+        ..crate::native_document::Options::default()
+    };
+    let mut heights: BTreeMap<u64, f64> = BTreeMap::new();
+    let read = crate::native_document::extract_graphs(rf, &options, |record| {
+        let Some(graph) = record.graph.as_ref() else {
+            return Ok(());
+        };
+        let faces = graph
+            .objects
+            .iter()
+            .filter(|o| o.class_name == "Face")
+            .count();
+        let height = graph
+            .objects
+            .iter()
+            .find(|o| o.class_name == "RoomElem")
+            .and_then(|o| o.fields.get("m_height"))
+            .and_then(serde_json::Value::as_f64)
+            .filter(|h| h.is_finite() && *h > 0.0);
+        if let (true, Some(height)) = (faces >= 2, height) {
+            heights.insert(record.identity.element_id, height);
+        }
+        Ok(())
+    });
+    if read.is_err() {
+        return;
+    }
+    for room in rooms.iter_mut() {
+        if let Some(height) = room.id.and_then(|id| heights.get(&u64::from(id))).copied() {
+            room.fields.push((
+                ROOM_HEIGHT_FIELD.into(),
+                InstanceField::Float {
+                    value: height,
+                    size: 8,
+                },
+            ));
         }
     }
 }

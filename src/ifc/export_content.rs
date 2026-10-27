@@ -918,6 +918,7 @@ pub fn append_typed_production_elements(
         add_stair_flight_quantities(&mut reference_sets, &ifc_type, &decoded);
         add_railing_height(&mut reference_sets, &ifc_type, &decoded);
         add_railing_length(&mut reference_sets, &ifc_type, &decoded);
+        add_space_height(&mut reference_sets, &ifc_type, &decoded);
         add_extend_to_structure(&mut reference_sets, &ifc_type, &decoded);
         let mut serial_sets = serial_number_property_sets(&decoded);
         serial_sets.extend(revit_parameter_property_sets(&decoded));
@@ -2012,6 +2013,31 @@ fn add_railing_length(sets: &mut Vec<PropertySet>, ifc_type: &str, decoded: &Dec
         properties: vec![Property {
             name: "Length".into(),
             value: PropertyValue::PositiveLengthFeet(length),
+        }],
+    });
+}
+
+/// Add a space's `Qto_SpaceBaseQuantities.Height` to `sets`, its room's
+/// height (RE-255).
+fn add_space_height(sets: &mut Vec<PropertySet>, ifc_type: &str, decoded: &DecodedElement) {
+    if ifc_type != "IFCSPACE" {
+        return;
+    }
+    let Some(height) = decoded.fields.iter().find_map(|(name, value)| match value {
+        InstanceField::Float { value, .. }
+            if name == crate::partition_schema_mvp::ROOM_HEIGHT_FIELD =>
+        {
+            Some(*value)
+        }
+        _ => None,
+    }) else {
+        return;
+    };
+    sets.push(PropertySet {
+        name: "Qto_SpaceBaseQuantities".into(),
+        properties: vec![Property {
+            name: "Height".into(),
+            value: PropertyValue::PositiveLengthFeet(height),
         }],
     });
 }

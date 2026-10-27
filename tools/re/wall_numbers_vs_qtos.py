@@ -52,19 +52,20 @@ def read_probe(path):
     return rows
 
 
-def main():
+def main(qset_wanted="Qto_WallBaseQuantities", tag_of=None, noun="walls"):
     args = [a for a in sys.argv[1:] if a != "--list"]
     if len(args) != 2:
         print(__doc__)
         return 2
     rows = read_probe(args[0])
+    tag_of = tag_of(args[0]) if tag_of else (lambda key: key.removeprefix("tag:"))
     totals = collections.Counter()
     hits = collections.defaultdict(collections.Counter)
     equal = collections.defaultdict(dict)
     eligible = collections.defaultdict(set)
     for (key, qset, name), (kind, value) in quantities(args[1])[0].items():
-        tag = key.removeprefix("tag:")
-        if qset != "Qto_WallBaseQuantities" or value is None or tag not in rows or kind not in TO_FEET:
+        tag = tag_of(key)
+        if qset != qset_wanted or value is None or tag not in rows or kind not in TO_FEET:
             continue
         target = value * TO_FEET[kind]
         totals[name] += 1
@@ -74,12 +75,12 @@ def main():
             if ok:
                 hits[name][field] += 1
             equal[(name, field)][tag] = ok
-    print(f"probe: {len(rows)} walls")
+    print(f"probe: {len(rows)} {noun}")
     for name, n in sorted(totals.items()):
         best = ", ".join(f"{f} {k}" for f, k in hits[name].most_common(8)) or "none"
         tags = {t for (q, _), by in equal.items() if q == name for t, ok in by.items() if ok}
         planes = {t for (q, f), by in equal.items() if q == name and f.split(".")[0].split("#")[0] == "Plane" and ".m_Envelope." in f for t, ok in by.items() if ok}
-        print(f"{name}: {n} walls, {len(tags)} with some field equal, {len(planes)} with a face plane's envelope; {best}")
+        print(f"{name}: {n} {noun}, {len(tags)} with some field equal, {len(planes)} with a face plane's envelope; {best}")
     truths = {}
     for name, n in totals.items():
         if not hits[name]:
