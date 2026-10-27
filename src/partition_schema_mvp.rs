@@ -5156,7 +5156,9 @@ fn attach_wall_layers(rf: &mut RevitFile, revit_version: u32, walls: &mut [Decod
 
 /// Field holding a wall's Length, feet: its curve's length, where the curve
 /// cut back at its joins is as long ([`crate::native_walls::trimmed_ends`],
-/// RE-252), so Revit's export gives it either way.
+/// RE-252), so Revit's export gives it either way; on a curtain wall, its
+/// curve's length, which Revit's export writes as its
+/// `Qto_CurtainWallQuantities.Length` (#1016).
 pub const WALL_LENGTH_FIELD: &str = "m_wall_length";
 
 /// Give each wall with a centreline whose native curve, cut back where its
@@ -5179,6 +5181,21 @@ fn attach_wall_lengths(
         let Some(id) = wall.id.map(u64::from) else {
             continue;
         };
+        if wall.class == CURTAIN_WALL_CLASS {
+            if let Some(curve) = native.get(&id) {
+                let length = (curve.end[0] - curve.start[0]).hypot(curve.end[1] - curve.start[1]);
+                if length.is_finite() && length > 0.0 {
+                    wall.fields.push((
+                        WALL_LENGTH_FIELD.into(),
+                        InstanceField::Float {
+                            value: length,
+                            size: 8,
+                        },
+                    ));
+                }
+            }
+            continue;
+        }
         let (Some(axis), Some(curve)) = (wall_axis_from_fields(&wall.fields), native.get(&id))
         else {
             continue;
