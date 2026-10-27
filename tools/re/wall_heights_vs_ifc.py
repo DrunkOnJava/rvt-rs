@@ -64,6 +64,10 @@ def cutters(path):
             box = extents(f, product)
             if box is not None:
                 out.append((box, str(product.Tag or "-")))
+                body = sorted(
+                    {r.RepresentationType or "-" for r in product.Representation.Representations if r.RepresentationIdentifier == "Body"}
+                )
+                print(f"cutter tag:{product.Tag} {kind} {'/'.join(body)} low {box[0]:.4f} high {box[1]:.4f}")
     return out
 
 
