@@ -253,6 +253,24 @@ fn main() -> anyhow::Result<()> {
         .map(|(run, _)| *run)
         .collect();
     let (counts, run_counts) = native_stair_counts(&mut rf, &stairs, &held_runs)?;
+    for (stair, count) in &counts {
+        println!(
+            "stairinfo {stair} risers {} riser {} tread {}",
+            count.risers, count.riser_height_feet, count.tread_depth_feet
+        );
+    }
+    for (run, counted) in &run_counts {
+        let direction = shapes.get(run).and_then(|shape| shape.direction);
+        println!(
+            "runinfo {run} stair {} risers {} height {} begin {} end {} direction {:?}",
+            counted.stair,
+            counted.risers,
+            counted.height_feet,
+            counted.begin_with_riser,
+            counted.end_with_riser,
+            direction
+        );
+    }
     for (id, stair) in &railing_stairs {
         let Some(count) = counts.get(stair) else {
             println!("stair {id} - -");
