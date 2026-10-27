@@ -67,9 +67,9 @@ def extents(f, entity):
     if not verts:
         return None
     xs, ys, zs = verts[0::3], verts[1::3], verts[2::3]
-    FOOTPRINTS[str(entity.Tag)] = [
+    FOOTPRINTS.setdefault(str(entity.Tag), []).extend(
         tuple(c / FOOT for k in faces[i : i + 3] for c in (xs[k], ys[k])) for i in range(0, len(faces), 3)
-    ]
+    )
     return tuple(v / FOOT for v in (min(zs), max(zs), min(xs), max(xs), min(ys), max(ys)))
 
 
@@ -152,9 +152,9 @@ def surfaces(path):
             except Exception:
                 continue
             v, faces = list(geometry.verts), list(geometry.faces)
-            out[str(product.Tag)] = [
+            out.setdefault(str(product.Tag), []).extend(
                 tuple(tuple(v[3 * k + c] / FOOT for c in range(3)) for k in faces[i : i + 3]) for i in range(0, len(faces), 3)
-            ]
+            )
     return out
 
 
@@ -176,13 +176,16 @@ def heights_at(tris, x, y):
 
 def ranges(path, kinds=("IfcWall",)):
     """Tag -> (lowest z, highest z in feet, storey name, representation
-    types, plan box) of every product of `kinds` with a body."""
+    types, plan box) of every product of `kinds` with a body. The pieces
+    both exporters write under one Tag (a floor sketched as separate loops)
+    count as one body: their extents and representation types are merged,
+    and the first piece's storey is kept."""
     f = ifcopenshell.open(path)
     settings = ifcopenshell.geom.settings()
     settings.set("use-world-coords", True)
     out = {}
     for wall in (product for kind in kinds for product in f.by_type(kind)):
-        if not wall.Tag or wall.Representation is None or str(wall.Tag) in out:
+        if not wall.Tag or wall.Representation is None:
             continue
         try:
             verts = ifcopenshell.geom.create_shape(settings, wall).geometry.verts
@@ -193,17 +196,16 @@ def ranges(path, kinds=("IfcWall",)):
         zs = verts[2::3]
         xs, ys = verts[0::3], verts[1::3]
         container = ifcopenshell.util.element.get_container(wall)
-        kinds = sorted(
-            {r.RepresentationType or "-" for r in wall.Representation.Representations if r.RepresentationIdentifier == "Body"}
-        )
+        bodies = {r.RepresentationType or "-" for r in wall.Representation.Representations if r.RepresentationIdentifier == "Body"}
         # IfcOpenShell's geometry is in metres whatever the file's unit.
-        out[str(wall.Tag)] = (
-            min(zs) / FOOT,
-            max(zs) / FOOT,
-            container.Name if container is not None and container.is_a("IfcBuildingStorey") else "-",
-            "/".join(kinds),
-            tuple(v / FOOT for v in (min(zs), max(zs), min(xs), max(xs), min(ys), max(ys))),
-        )
+        box = tuple(v / FOOT for v in (min(zs), max(zs), min(xs), max(xs), min(ys), max(ys)))
+        storey = container.Name if container is not None and container.is_a("IfcBuildingStorey") else "-"
+        seen = out.get(str(wall.Tag))
+        if seen is not None:
+            bodies |= set(seen[3].split("/"))
+            box = tuple((min if i % 2 == 0 else max)(a, b) for i, (a, b) in enumerate(zip(seen[4], box)))
+            storey = seen[2]
+        out[str(wall.Tag)] = (box[0], box[1], storey, "/".join(sorted(bodies)), box)
     return out
 
 
