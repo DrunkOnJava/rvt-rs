@@ -68,9 +68,7 @@ IFC4_LENGTH_QUANTITY = {
 # CrossSectionArea grows with its length and is never its section's area; a
 # door's opening's Width is its vertical extent and its Height its horizontal
 # one, where IFC4 defines a wall opening's the other way (RE-244). An
-# opening is keyed by the Tag of the door filling it. A slab's Perimeter is
-# its perimeter in feet, unscaled, in a file whose length unit is millimetres
-# (#1016).
+# opening is keyed by the Tag of the door filling it.
 # A wall's Length, which Revit's export writes as either its curve's length or
 # that of its curve cut back at its joins, by how it draws the wall (RE-252).
 # Where the two differ, nothing in the model says which, so a missing Length
@@ -82,7 +80,6 @@ TWO_LENGTHS_TOLERANCE_M = 1e-4 * 0.3048
 
 REVIT_DEFECTS = {
     ("Qto_MemberBaseQuantities", "CrossSectionArea"): "MULLION",
-    ("Qto_SlabBaseQuantities", "Perimeter"): "IfcSlab",
     ("Qto_OpeningElementBaseQuantities", "Width"): "IfcDoor",
     ("Qto_OpeningElementBaseQuantities", "Height"): "IfcDoor",
 }
@@ -164,6 +161,70 @@ def axis_lengths(path):
                 if len(points) == 2:
                     (x0, y0), (x1, y1) = points
                     out[key] = ((x1 - x0) ** 2 + (y1 - y0) ** 2) ** 0.5 * scale
+    return out
+
+
+# A slab's Perimeter where Revit's export writes it in feet, unscaled: its raw
+# value, read as feet, is the perimeter of the profile Revit's own body for it
+# extrudes (RE-235 §5). Counted apart only on a slab where that holds, within
+# a relative 1e-4 (the maintainer, 2026-10-26); any other slab's is scored.
+SLAB_PERIMETER = ("Qto_SlabBaseQuantities", "Perimeter")
+FOOT_METRES = 0.3048
+
+
+def _outline_length(curve):
+    """A closed outline's length in file units, for a polyline or an indexed
+    poly curve of straight segments; None for another curve."""
+    if curve.is_a("IfcPolyline"):
+        points = [tuple(p.Coordinates[:2]) for p in curve.Points]
+    elif curve.is_a("IfcIndexedPolyCurve") and not curve.Segments:
+        points = [tuple(p[:2]) for p in curve.Points.CoordList]
+    else:
+        return None
+    if len(points) < 3:
+        return None
+    if points[0] != points[-1]:
+        points = points + [points[0]]
+    return sum(((b[0] - a[0]) ** 2 + (b[1] - a[1]) ** 2) ** 0.5 for a, b in zip(points, points[1:]))
+
+
+def _extrusions(item):
+    if item.is_a("IfcExtrudedAreaSolid"):
+        return [item]
+    if item.is_a("IfcBooleanResult"):
+        return _extrusions(item.FirstOperand)
+    if item.is_a("IfcMappedItem"):
+        return [e for i in item.MappingSource.MappedRepresentation.Items for e in _extrusions(i)]
+    return []
+
+
+def slab_profile_perimeters(path):
+    """Slab key -> the perimeter of the one profile its body extrudes, metres."""
+    f = open_ifc(path)
+    scale = ifcopenshell.util.unit.calculate_unit_scale(f)
+    out = {}
+    for slab in f.by_type("IfcSlab"):
+        key = key_of(slab)
+        if not key or slab.Representation is None:
+            continue
+        solids = [
+            e
+            for rep in slab.Representation.Representations
+            if rep.RepresentationIdentifier == "Body"
+            for item in rep.Items
+            for e in _extrusions(item)
+        ]
+        if len(solids) != 1:
+            continue
+        area = solids[0].SweptArea
+        if area.is_a("IfcRectangleProfileDef"):
+            length = 2 * (area.XDim + area.YDim)
+        elif area.is_a("IfcArbitraryClosedProfileDef"):
+            length = _outline_length(area.OuterCurve)
+        else:
+            length = None
+        if length:
+            out[key] = length * scale
     return out
 
 
@@ -282,6 +343,8 @@ def main(argv):
             curve_checks["neither"] += 1
     trust_curves = curve_checks["neither"] == 0
     two_lengths = 0
+    their_slab_perimeters = slab_profile_perimeters(args[1])
+    their_length_scale = ifcopenshell.util.unit.calculate_unit_scale(open_ifc(args[1]))
     for (key, qset, name), value in sorted(theirs.items()):
         if key not in our_objects:
             continue
@@ -293,6 +356,12 @@ def main(argv):
             curve, axis = our_curves.get(key), their_axes.get(key)
             if curve is not None and axis is not None and abs(curve - axis) > TWO_LENGTHS_TOLERANCE_M:
                 two_lengths += 1
+                continue
+        if (qset, name) == SLAB_PERIMETER and value[1] is not None and key in their_slab_perimeters:
+            as_feet = value[1] / their_length_scale * FOOT_METRES
+            outline = their_slab_perimeters[key]
+            if abs(as_feet - outline) <= 1e-4 * max(abs(as_feet), abs(outline)):
+                defects[(qset, name)] += 1
                 continue
         row = rows[(qset, name)]
         row[0] += 1
