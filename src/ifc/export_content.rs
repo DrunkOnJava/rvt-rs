@@ -2059,9 +2059,18 @@ fn add_door_window_quantities(
     });
 }
 
-/// Add the base quantity a column's body gives to `sets` (#1016, RE-247):
-/// its `Length`, the depth of the extrusion it is drawn as, on a column
-/// joined by no `CleanPairGStep`
+/// Add the base quantities a column's body gives to `sets` (#1016, RE-247):
+/// its `Length`, the depth of the extrusion it is drawn as, and, where that
+/// extrusion is its type's hollow section (whose family parameters are
+/// Revit's profile exactly), its `CrossSectionArea` (the section's area),
+/// `OuterSurfaceArea` (the length times the section's outline and hole) and
+/// `GrossVolume` (the area times the length), as revit-ifc's
+/// `PropertyUtil.CreateBeamColumnBaseQuantities` takes them (CLEANROOM.md
+/// source 5). Its `NetVolume` is left out: Revit's export writes the volume
+/// Revit computes, less than that on every one of the BIM4LCA office's
+/// hollow columns. A column drawn as its record's box gets none of these, as a
+/// round column is drawn as one too. All on a column joined by no
+/// `CleanPairGStep`
 /// ([`crate::partition_schema_mvp::COLUMN_UNJOINED_FIELD`]), which Revit's
 /// export draws as that extrusion. A joined column's Length is left out:
 /// Revit's export draws 18 of the BIM4LCA office's at permit as a cut mesh
@@ -2083,25 +2092,39 @@ fn add_body_quantities(
     if !unjoined {
         return;
     }
-    let (set, quantity) = match (ifc_type, extrusion, solid_shape) {
-        ("IFCCOLUMN", Some(body), None) => {
-            ("Qto_ColumnBaseQuantities", ("Length", body.height_feet))
-        }
+    let (feet, profile) = match (ifc_type, extrusion, solid_shape) {
+        ("IFCCOLUMN", Some(body), None) => (body.height_feet, Some(body)),
         ("IFCCOLUMN", _, Some(entities::SolidShape::PlacedExtrusion { depth_feet, .. })) => {
-            ("Qto_ColumnBaseQuantities", ("Length", *depth_feet))
+            (*depth_feet, None)
         }
         _ => return,
     };
-    let (name, feet) = quantity;
     if !(feet.is_finite() && feet > 0.0) {
         return;
     }
+    let mut properties = vec![Property {
+        name: "Length".into(),
+        value: PropertyValue::PositiveLengthFeet(feet),
+    }];
+    if let Some((area, perimeter)) = profile.and_then(hollow_section_area_perimeter) {
+        properties.extend([
+            Property {
+                name: "CrossSectionArea".into(),
+                value: PropertyValue::AreaSquareFeet(area),
+            },
+            Property {
+                name: "OuterSurfaceArea".into(),
+                value: PropertyValue::AreaSquareFeet(perimeter * feet),
+            },
+            Property {
+                name: "GrossVolume".into(),
+                value: PropertyValue::VolumeCubicFeet(area * feet),
+            },
+        ]);
+    }
     sets.push(PropertySet {
-        name: set.into(),
-        properties: vec![Property {
-            name: name.into(),
-            value: PropertyValue::PositiveLengthFeet(feet),
-        }],
+        name: "Qto_ColumnBaseQuantities".into(),
+        properties,
     });
 }
 
@@ -2174,6 +2197,70 @@ fn profile_area(body: &Extrusion) -> Option<f64> {
         Some(_) => return None,
     };
     (area.is_finite() && area > 0.0).then_some(area)
+}
+
+/// The area and the length of the outline and hole of a hollow section
+/// `body` extrudes ([`hollow_section_profile`]), its arcs counted exactly;
+/// `None` for another profile.
+fn hollow_section_area_perimeter(body: &Extrusion) -> Option<(f64, f64)> {
+    let Some(entities::ProfileDef::IndexedPolyCurveWithVoids { outer, voids }) =
+        &body.profile_override
+    else {
+        return None;
+    };
+    let (mut area, mut perimeter) = curve_area_length(outer)?;
+    area = area.abs();
+    for void in voids {
+        let (hole, length) = curve_area_length(void)?;
+        area -= hole.abs();
+        perimeter += length;
+    }
+    (area.is_finite() && area > 0.0 && perimeter.is_finite()).then_some((area, perimeter))
+}
+
+/// The signed area (positive counter-clockwise) and the length of a closed
+/// curve of lines and three-point arcs, by Green's theorem, so an arc counts
+/// as itself and not its chord.
+fn curve_area_length(curve: &entities::IndexedCurve) -> Option<(f64, f64)> {
+    use std::f64::consts::TAU;
+    let point = |i: usize| curve.points.get(i).copied();
+    let (mut area, mut length) = (0.0, 0.0);
+    for segment in &curve.segments {
+        match *segment {
+            entities::CurveSegment::Line([a, b]) => {
+                let ((x0, y0), (x1, y1)) = (point(a)?, point(b)?);
+                area += (x0 * y1 - x1 * y0) / 2.0;
+                length += (x1 - x0).hypot(y1 - y0);
+            }
+            entities::CurveSegment::Arc([a, m, b]) => {
+                let (p0, p1, p2) = (point(a)?, point(m)?, point(b)?);
+                let d = 2.0 * (p0.0 * (p1.1 - p2.1) + p1.0 * (p2.1 - p0.1) + p2.0 * (p0.1 - p1.1));
+                if d.abs() < 1e-12 {
+                    return None;
+                }
+                let sq = |p: (f64, f64)| p.0 * p.0 + p.1 * p.1;
+                let cx =
+                    (sq(p0) * (p1.1 - p2.1) + sq(p1) * (p2.1 - p0.1) + sq(p2) * (p0.1 - p1.1)) / d;
+                let cy =
+                    (sq(p0) * (p2.0 - p1.0) + sq(p1) * (p0.0 - p2.0) + sq(p2) * (p1.0 - p0.0)) / d;
+                let r = (p0.0 - cx).hypot(p0.1 - cy);
+                let angle = |p: (f64, f64)| (p.1 - cy).atan2(p.0 - cx);
+                let (a0, am, a2) = (angle(p0), angle(p1), angle(p2));
+                let ccw = (a2 - a0).rem_euclid(TAU);
+                let sweep = if (am - a0).rem_euclid(TAU) < ccw {
+                    ccw
+                } else {
+                    ccw - TAU
+                };
+                let a1 = a0 + sweep;
+                area += (r * r * sweep + cx * r * (a1.sin() - a0.sin())
+                    - cy * r * (a1.cos() - a0.cos()))
+                    / 2.0;
+                length += r * sweep.abs();
+            }
+        }
+    }
+    Some((area, length))
 }
 
 /// Add a ceiling's `Qto_CoveringBaseQuantities.Width` to `sets` (#1016,
