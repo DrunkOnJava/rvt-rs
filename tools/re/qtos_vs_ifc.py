@@ -167,7 +167,8 @@ def axis_lengths(path):
 # A slab's Perimeter where Revit's export writes it in feet, unscaled: its raw
 # value, read as feet, is the perimeter of the profile Revit's own body for it
 # extrudes (RE-235 §5). Counted apart only on a slab where that holds, within
-# a relative 1e-4 (the maintainer, 2026-10-26); any other slab's is scored.
+# a relative 1e-4 (the maintainer, 2026-10-26), and only in a file whose length
+# unit is not the foot, where such a value is right; any other is scored.
 SLAB_PERIMETER = ("Qto_SlabBaseQuantities", "Perimeter")
 FOOT_METRES = 0.3048
 
@@ -345,6 +346,8 @@ def main(argv):
     two_lengths = 0
     their_slab_perimeters = slab_profile_perimeters(args[1])
     their_length_scale = ifcopenshell.util.unit.calculate_unit_scale(open_ifc(args[1]))
+    # In a file whose length unit is the foot, a perimeter in feet is right.
+    feet_file = abs(their_length_scale - FOOT_METRES) <= 1e-9
     for (key, qset, name), value in sorted(theirs.items()):
         if key not in our_objects:
             continue
@@ -357,7 +360,12 @@ def main(argv):
             if curve is not None and axis is not None and abs(curve - axis) > TWO_LENGTHS_TOLERANCE_M:
                 two_lengths += 1
                 continue
-        if (qset, name) == SLAB_PERIMETER and value[1] is not None and key in their_slab_perimeters:
+        if (
+            (qset, name) == SLAB_PERIMETER
+            and not feet_file
+            and value[1] is not None
+            and key in their_slab_perimeters
+        ):
             as_feet = value[1] / their_length_scale * FOOT_METRES
             outline = their_slab_perimeters[key]
             if abs(as_feet - outline) <= 1e-4 * max(abs(as_feet), abs(outline)):
