@@ -1,18 +1,30 @@
 #!/usr/bin/env python3
 """Compare how high each wall of an rvt-rs IFC stands with Revit's own IFC
-export of the same file (#1067, RE-257).
+export of the same file (#1067, RE-257, RE-258).
 
 For each `IfcWall` both files hold under one `Tag` (the Revit ElementId), it
 meshes both bodies with IfcOpenShell in world coordinates and takes their
-lowest and highest points. Revit's export is in shared coordinates, so the
-two files' heights differ by one offset: the median of the walls' base
-differences. It then counts the walls whose base and top are Revit's
-within 0.001 ft, those where only one of them is, and those where neither
-is, and gives each file's storey for the walls that miss. Plan positions
-are `wall_bodies_vs_ifc.py`'s. It then tests one explanation of the misses:
-that Revit cuts a wall where a floor, roof or footing whose plan box
-overlaps the wall's crosses its top or its base, and counts for each end
-whether that cut gives Revit's.
+lowest and highest points. The two files' heights differ by one offset, the
+median of the walls' base differences. It counts the walls whose base and
+top are Revit's within 0.001 ft, those where only one of them is, and those
+where neither is, and gives each file's storey for the walls that miss.
+Plan positions are `wall_bodies_vs_ifc.py`'s. It then compares the floors,
+roofs and footings' own bases and tops the same way.
+
+For the misses it prints what RE-258 reads them against:
+
+- `wall tag:<Tag> rvt-rs <z low, z high, x min, x max, y min, y max>
+  Revit <base> <top>`, every wall's extents in feet;
+- `cutter tag:<Tag> <entity> <representation> <extents>`, every floor,
+  roof and footing of rvt-rs's file;
+- `crossed tag:<Tag> <end>:<other>:<cuts|passes>:<over|beside>`, each of
+  them whose plan box overlaps the wall and that crosses its top (at its
+  underside) or its base (at its top), whether Revit's end is there, and
+  whether its body lies over the wall's middle;
+- `over tag:<Tag> <other>:<underside,top>:<underside,top>`, each one whose
+  body lies over the wall's middle, with its underside and top there in
+  rvt-rs's body and in Revit's. Revit's plan is reached by a turn and a
+  shift fitted to the walls' middles by least squares, which it prints.
 
 Usage:
 
@@ -283,12 +295,6 @@ def main():
     our_surfaces, revit_surfaces = surfaces(args[0]), surfaces(args[1])
     for name, found in (("rvt-rs", our_surfaces), ("Revit", revit_surfaces)):
         print(f"surfaces {name}: {len(found)} bodies, {sum(len(v) for v in found.values())} triangles")
-    for probe_tag in ("1861193", "2765485", "1474132"):
-        for name, found in (("rvt-rs", our_surfaces), ("Revit", revit_surfaces)):
-            tris = found.get(probe_tag, [])
-            if tris:
-                zs = sorted({round(p[2], 3) for tri in tris for p in tri})
-                print(f"surface tag:{probe_tag} {name}: {len(tris)} triangles, heights {zs[:12]}")
     for tag in both:
         box = ours[tag][4]
         mid = ((box[2] + box[3]) / 2, (box[4] + box[5]) / 2)
