@@ -110,8 +110,7 @@ fn main() -> anyhow::Result<()> {
             };
             named.extend(
                 partition_names::find_element_data_names(inflated.bytes(), &header, &wanted)
-                    .into_iter()
-                    .map(|(id, _)| id),
+                    .into_keys(),
             );
         }
     }
