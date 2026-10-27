@@ -5,7 +5,11 @@
 # terms were not checked, which is why they are only fetched for a run. Hashes and sizes
 # measured 2026-10-01; the five Snowdon Towers 2024 models (#766), Autodesk's multi-model
 # 2024 sample published under Samples/ on the same host, every Revit 2015 row and the 2019
-# MEP and rst_advanced rows, on 2026-10-18.
+# MEP and rst_advanced rows, on 2026-10-18. Unlike the unlicensed held-out and BIMcollab models,
+# their runs' per-element results are uploaded in full (the maintainer, 2026-10-26): Autodesk
+# publishes them as learning files on a host whose family content phi-ag/rvt lists under CC
+# BY-NC-SA 3.0, and Autodesk itself republishes rac_basic_sample_project.rvt in its own public
+# sample repositories.
 # year	file	url	sha256	bytes
 2015	rac_basic_sample_project.rvt	https://revit.downloads.autodesk.com/download/2015RVT_RTM/Docs/rac_basic_sample_project.rvt	8ff35b3c86f235f7eb2fa212d1fe62acf321779ea74852ef451374cf78da19ed	16633856
 2015	rst_basic_sample_project.rvt	https://revit.downloads.autodesk.com/download/2015RVT_RTM/Docs/rst_basic_sample_project.rvt	e7063b58d5a4cc9c07ae0617f07e8e8043d7f77a3ee4fc11f7edd35dabe8cc30	6758400
