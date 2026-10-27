@@ -142,6 +142,9 @@ def line_ends(item):
     return None
 
 
+listing_sets = "--list" in sys.argv
+
+
 def axes(path):
     """Wall tag -> its `Axis` item's plan end points, feet, and its Body
     items' entities; and a census of the walls' representations as
@@ -175,6 +178,18 @@ def axes(path):
                     )
                     for x, y in local
                 ]
+    sets = collections.Counter()
+    for rel in f.by_type("IfcRelDefinesByProperties"):
+        qto = rel.RelatingPropertyDefinition
+        if not qto.is_a("IfcElementQuantity") or qto.Name != "Qto_WallBaseQuantities":
+            continue
+        lengths = [q.LengthValue for q in qto.Quantities if q.is_a("IfcQuantityLength") and q.Name == "Length"]
+        for obj in rel.RelatedObjects:
+            if obj.is_a("IfcWall") and (obj.Tag or "").isdigit():
+                sets[int(obj.Tag)] += 1
+                if listing_sets:
+                    print(f"qto {obj.Tag} {qto.id()} {qto.MethodOfMeasurement!r} {[float(v) * scale for v in lengths]!r}")
+    print(f"walls by their number of Qto_WallBaseQuantities sets: {sorted(collections.Counter(sets.values()).items())}")
     return out, bodies, census
 
 
