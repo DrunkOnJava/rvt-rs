@@ -123,6 +123,44 @@ def predicted(wall, boxes):
     return base, top
 
 
+def surfaces(path):
+    """Tag -> the triangles (three (x, y, z) points, feet) of each floor,
+    roof and footing body in `path`."""
+    f = ifcopenshell.open(path)
+    settings = ifcopenshell.geom.settings()
+    settings.set("use-world-coords", True)
+    out = {}
+    for kind in CUTTERS:
+        for product in f.by_type(kind):
+            if product.Representation is None or not product.Tag:
+                continue
+            try:
+                geometry = ifcopenshell.geom.create_shape(settings, product).geometry
+            except Exception:
+                continue
+            v, faces = geometry.verts, geometry.faces
+            out[str(product.Tag)] = [
+                tuple(tuple(v[3 * k + c] / FOOT for c in range(3)) for k in faces[i : i + 3]) for i in range(0, len(faces), 3)
+            ]
+    return out
+
+
+def heights_at(tris, x, y):
+    """The heights at which the vertical line through (x, y) meets the
+    triangles `tris`: (lowest, highest), or None where it meets none."""
+    zs = []
+    for (ax, ay, az), (bx, by, bz), (cx, cy, cz) in tris:
+        det = (by - cy) * (ax - cx) + (cx - bx) * (ay - cy)
+        if abs(det) < 1e-12:
+            continue
+        l1 = ((by - cy) * (x - cx) + (cx - bx) * (y - cy)) / det
+        l2 = ((cy - ay) * (x - cx) + (ax - cx) * (y - cy)) / det
+        l3 = 1 - l1 - l2
+        if min(l1, l2, l3) >= -1e-9:
+            zs.append(l1 * az + l2 * bz + l3 * cz)
+    return (min(zs), max(zs)) if zs else None
+
+
 def ranges(path, kinds=("IfcWall",)):
     """Tag -> (lowest z, highest z in feet, storey name, representation
     types, plan box) of every product of `kinds` with a body."""
@@ -215,6 +253,23 @@ def main():
         print(f"  {group}: {n}")
     for group, n in storeys.most_common():
         print(f"  misses in the {group}: {n}")
+    # Every floor, roof or footing whose body lies over a wall's middle in
+    # plan, with where its underside and top are there in rvt-rs's body
+    # and in Revit's.
+    our_surfaces, revit_surfaces = surfaces(args[0]), surfaces(args[1])
+    for tag in both:
+        box = ours[tag][4]
+        mid = ((box[2] + box[3]) / 2, (box[4] + box[5]) / 2)
+        found = []
+        for other, tris in our_surfaces.items():
+            at = heights_at(tris, *mid)
+            if at is None or at[1] < box[0] - TOLERANCE or at[0] > box[1] + 5:
+                continue
+            theirs = heights_at(revit_surfaces.get(other, []), mid[0], mid[1])
+            theirs = "-" if theirs is None else f"{theirs[0] - offset:.4f},{theirs[1] - offset:.4f}"
+            found.append(f"{other}:{at[0]:.4f},{at[1]:.4f}:{theirs}")
+        if found:
+            print(f"over tag:{tag} " + " ".join(found))
     print(f"cut by the {len(boxes)} floors, roofs and footings whose plan box overlaps the wall:")
     for (end, group), n in sorted(cut.items()):
         print(f"  {end}: {group}: {n}")
