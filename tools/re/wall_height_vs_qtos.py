@@ -11,7 +11,10 @@ reads `examples/probe_re251_wall_numbers.rs`'s `rec` lines and Revit's IFC
 export, and counts, for the walls where the two agree (a relative 1e-6),
 how many carry Revit's `Height`, a different one, or none; then, for the
 walls where they do not, which of the two Revit's is. It also counts the
-walls Revit's export writes more than once (a wall split by storey).
+walls Revit's export writes more than once (a wall split by storey), and,
+for each wall whose `Height` rvt-rs's depth does not give, whether Revit's
+own body is as tall as that `Height` (its vertical span, from IfcOpenShell's
+geometry) and which representation Revit draws it with.
 
 Usage:
 
@@ -36,6 +39,32 @@ def same(a, b):
     return abs(a - b) <= 1e-6 * max(1.0, abs(a), abs(b))
 
 
+def body_spans(f, tags):
+    """Tag -> (vertical span of Revit's body in feet, its representation
+    types), for the walls `tags` names."""
+    import ifcopenshell.geom
+
+    settings = ifcopenshell.geom.settings()
+    settings.set("use-world-coords", True)
+    out = {}
+    for wall in f.by_type("IfcWall"):
+        tag = str(wall.Tag)
+        if tag not in tags or wall.Representation is None:
+            continue
+        kinds = sorted(
+            {r.RepresentationType or "-" for r in wall.Representation.Representations if r.RepresentationIdentifier == "Body"}
+        )
+        try:
+            shape = ifcopenshell.geom.create_shape(settings, wall)
+            verts = shape.geometry.verts
+        except Exception:
+            out[tag] = (None, kinds)
+            continue
+        zs = verts[2::3]
+        out[tag] = ((max(zs) - min(zs)) / FOOT if zs else None, kinds)
+    return out
+
+
 def main():
     listing = "--list" in sys.argv
     args = [a for a in sys.argv[1:] if a != "--list"]
@@ -47,9 +76,14 @@ def main():
     for (key, qset, name), (_, value) in quantities(args[1])[0].items():
         if qset == "Qto_WallBaseQuantities" and name == "Height" and value is not None:
             heights[key.removeprefix("tag:")] = value / FOOT
-    written = collections.Counter(
-        str(wall.Tag) for wall in ifcopenshell.open(args[1]).by_type("IfcWall") if wall.Tag
-    )
+    revit_file = ifcopenshell.open(args[1])
+    written = collections.Counter(str(wall.Tag) for wall in revit_file.by_type("IfcWall") if wall.Tag)
+    misses = {
+        tag
+        for tag, fields in rows.items()
+        if tag in heights and not same(fields.get(DEPTH, [float("nan")])[0], heights[tag])
+    }
+    spans = body_spans(revit_file, misses)
     counts = collections.Counter()
     lines = []
     for tag, fields in sorted(rows.items()):
@@ -72,8 +106,16 @@ def main():
             hits = [n for n, v in ((DEPTH, depth), (UNCONNECTED, unconnected)) if v is not None and same(v, revit)]
             outcome = " and ".join(hits) + " is Revit's" if hits else "neither is Revit's"
         counts[(group, outcome)] += 1
+        if tag in spans:
+            span, kinds = spans[tag]
+            body = "no body" if span is None else ("as tall" if same(span, revit) else "not as tall")
+            counts[("miss: Revit's body " + body, "/".join(kinds))] += 1
         if group != "agree" or outcome != "Revit's":
-            lines.append(f"  tag:{tag} {group}: depth {depth}, unconnected {unconnected}, Revit {revit}")
+            span = spans.get(tag, (None, []))
+            lines.append(
+                f"  tag:{tag} {group}: depth {depth}, unconnected {unconnected}, Revit {revit},"
+                f" Revit's body {span[0]} ({'/'.join(span[1])})"
+            )
     print(f"probe: {len(rows)} walls, Revit's export: {len(heights)} with a Height")
     for key, n in sorted(counts.items(), key=lambda kv: str(kv[0])):
         label = key if isinstance(key, str) else f"{key[0]}: {key[1]}"
