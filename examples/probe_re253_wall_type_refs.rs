@@ -22,7 +22,9 @@
 //! have a type record in more than one partition. Then `walltype <name>`
 //! for each name the file's Walls type records give themselves, which
 //! `tools/re/export_after_save.py` looks for among the export's wall types
-//! (this output is not uploaded for a held-out model). Last, `saved <time>`,
+//! (this output is not uploaded for a held-out model), and `wallbox <tag>
+//! <feet>`, the smaller side in plan of each wall's element-record box,
+//! which does not depend on how rvt-rs reads its type. Last, `saved <time>`,
 //! the file's save time (its `ProjectInformation` Atom `updated`), which
 //! `tools/re/export_after_save.py` compares with Revit's export's time.
 //!
@@ -264,6 +266,19 @@ fn main() -> anyhow::Result<()> {
         "type copies: picked types with a type record {}; in more than one partition {records_several}",
         record_streams.len()
     );
+    for wall in &mvp.walls {
+        let side = |wanted: &str| {
+            wall.fields.iter().find_map(|(name, value)| match value {
+                InstanceField::Float { value, .. } if name == wanted => Some(*value),
+                _ => None,
+            })
+        };
+        if let (Some(id), Some(width), Some(depth)) =
+            (wall.id, side("m_bboxWidth"), side("m_bboxDepth"))
+        {
+            println!("wallbox {id} {}", width.min(depth));
+        }
+    }
     println!("saved {}", saved.as_deref().unwrap_or("-"));
     Ok(())
 }
