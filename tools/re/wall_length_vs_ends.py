@@ -16,8 +16,9 @@ found, `axis` first), the walls by the choices at each end and whether
 `axis, axis` alone gives it, and up to 40 walls none does. With `--list`,
 it also prints a `wall <id> <Length> <choices>` line per wall, the choices
 at each end as `[label, joined wall id, GLine parameter]`, and an `axis <id>
-<length> <start> <end>` line per wall with an `Axis` polyline in the export:
-its length and where its ends fall along the GLine (parameters), through
+<length> <start> <end> <body>` line per wall with a straight `Axis` in the
+export: its length, where its ends fall along the GLine (parameters) and
+its Body items' entities, through
 the plan transform from the model's coordinates to the export's fitted to
 the walls whose GLine ends give their Length.
 
@@ -119,6 +120,8 @@ def line_ends(item):
     """A straight axis item's two plan end points, local coordinates."""
     if item.is_a("IfcPolyline") and len(item.Points) >= 2:
         return [tuple(p.Coordinates[:2]) for p in (item.Points[0], item.Points[-1])]
+    if item.is_a("IfcIndexedPolyCurve") and len(item.Points.CoordList) >= 2:
+        return [tuple(item.Points.CoordList[k][:2]) for k in (0, -1)]
     if item.is_a("IfcTrimmedCurve") and item.BasisCurve.is_a("IfcLine"):
         line = item.BasisCurve
         (px, py), v = line.Pnt.Coordinates[:2], line.Dir
@@ -139,11 +142,15 @@ def line_ends(item):
 
 
 def axes(path):
-    """Wall tag -> its `Axis` item's plan end points, feet, and a census of
-    the walls' representations as (identifier, item entity) -> count."""
+    """Wall tag -> its `Axis` item's plan end points, feet, and its Body
+    items' entities; and a census of the walls' representations as
+    (identifier, item entity) -> count."""
     f = ifcopenshell.open(path)
+    header = f.header.file_name
+    print(f"export: {header.originating_system} / {header.preprocessor_version}")
     scale = ifcopenshell.util.unit.calculate_unit_scale(f) / FOOT
     out = {}
+    bodies = {}
     census = collections.Counter()
     for wall in f.by_type("IfcWall"):
         if not (wall.Tag or "").isdigit() or wall.Representation is None:
@@ -151,6 +158,8 @@ def axes(path):
         for rep in wall.Representation.Representations:
             for item in rep.Items:
                 census[(rep.RepresentationIdentifier, item.is_a())] += 1
+            if rep.RepresentationIdentifier == "Body":
+                bodies[int(wall.Tag)] = "+".join(sorted({item.is_a() for item in rep.Items}))
             if rep.RepresentationIdentifier != "Axis":
                 continue
             for item in rep.Items:
@@ -165,7 +174,7 @@ def axes(path):
                     )
                     for x, y in local
                 ]
-    return out, census
+    return out, bodies, census
 
 
 def fit(pairs):
@@ -201,7 +210,7 @@ def main(argv):
             if tag.isdigit():
                 revit[int(tag)] = value / FOOT
     meets = joined(walls)
-    exported, census = axes(argv[2])
+    exported, bodies, census = axes(argv[2])
     print("the export's wall representations, identifier and item: count")
     for (identifier, entity), n in census.most_common():
         print(f"  {identifier} {entity}: {n}")
@@ -262,7 +271,7 @@ def main(argv):
                 flipped += 1
             if listing:
                 length = math.dist(*exported[i])
-                print(f"axis {i} {length!r} {params[0]!r} {params[1]!r}")
+                print(f"axis {i} {length!r} {params[0]!r} {params[1]!r} {bodies.get(i, '-')}")
         print(f"walls whose exported Axis ends are not their GLine's: {moved}; reversed: {flipped}")
     print(f"walls with Revit's Length and a GLine: {total}")
     print(f"a choice at each end gives the Length: {sum(by_choice.values())}")
