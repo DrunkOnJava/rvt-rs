@@ -2063,10 +2063,12 @@ fn add_door_window_quantities(
 /// its `Length`, the depth of the extrusion it is drawn as, and, where that
 /// extrusion is its type's hollow section (whose family parameters are
 /// Revit's profile exactly), its `CrossSectionArea` (the section's area),
-/// `OuterSurfaceArea` (the length times the section's outline and hole),
-/// `GrossVolume` and `NetVolume` (the area times the length), as revit-ifc's
+/// `OuterSurfaceArea` (the length times the section's outline and hole) and
+/// `GrossVolume` (the area times the length), as revit-ifc's
 /// `PropertyUtil.CreateBeamColumnBaseQuantities` takes them (CLEANROOM.md
-/// source 5); a column drawn as its record's box gets none of these, as a
+/// source 5). Its `NetVolume` is left out: Revit's export writes the volume
+/// Revit computes, less than that on every one of the BIM4LCA office's
+/// hollow columns. A column drawn as its record's box gets none of these, as a
 /// round column is drawn as one too. All on a column joined by no
 /// `CleanPairGStep`
 /// ([`crate::partition_schema_mvp::COLUMN_UNJOINED_FIELD`]), which Revit's
@@ -2116,10 +2118,6 @@ fn add_body_quantities(
             },
             Property {
                 name: "GrossVolume".into(),
-                value: PropertyValue::VolumeCubicFeet(area * feet),
-            },
-            Property {
-                name: "NetVolume".into(),
                 value: PropertyValue::VolumeCubicFeet(area * feet),
             },
         ]);
