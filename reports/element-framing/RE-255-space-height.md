@@ -38,7 +38,11 @@ Core Interior's 116 room heights and RE1 Architecture's 11 are counted apart, th
 
 The 20 office rooms whose records hold no faces, and every space's areas and volumes (`NetVolume` on 278 office spaces, `GrossVolume` on 136): Revit computes them from the room's geometry, which rvt-rs reads as an outline (RE-101) but not as Revit's volume.
 
-## 5. Reproduce
+## 5. The volumes against rvt-rs's own body (added 2026-10-27)
+
+The probe now also prints rvt-rs's own body of each space, the area of the profile it extrudes (its stored solid's outline, RE-101, where read) and that times the extrusion's depth (Measure [40474485786](https://github.com/DrunkOnJava/rvt-rs/actions/runs/40474485786)). On R2025 12 every space quantity Revit writes is a value of it: `GrossFloorArea`, `NetFloorArea` and `GrossCeilingArea` its area, `GrossVolume` and `NetVolume` its volume, on both rooms. On the office the volume is Revit's `NetVolume` on 167 of 278 rooms and `GrossVolume` on 86 of 136; the area times the room's own `m_height` on 24 and 23; and no field of the room's record tells the rooms it holds on from the others (the best, a record with no `CellList` cells, holds 167 true and 67 false). The stored solid's faces carry a box in their own planes, not their outlines, so their areas, and a volume from them, are not exact either. The volumes stay unwritten.
+
+## 6. Reproduce
 
 ```bash
 gh workflow run measure.yml --ref main -f ref=13aa1969dcc060ed56afc3df8368631a851b6957 -f base=none -f nordic=true -f r2025=true \
