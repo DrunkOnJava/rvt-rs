@@ -103,14 +103,14 @@ def predicted(wall, boxes):
     return base, top
 
 
-def ranges(path):
+def ranges(path, kinds=("IfcWall",)):
     """Tag -> (lowest z, highest z in feet, storey name, representation
-    types, plan box) of every wall with a body."""
+    types, plan box) of every product of `kinds` with a body."""
     f = ifcopenshell.open(path)
     settings = ifcopenshell.geom.settings()
     settings.set("use-world-coords", True)
     out = {}
-    for wall in f.by_type("IfcWall"):
+    for wall in (product for kind in kinds for product in f.by_type(kind)):
         if not wall.Tag or wall.Representation is None or str(wall.Tag) in out:
             continue
         try:
@@ -178,6 +178,19 @@ def main():
             needed = abs(drawn - theirs) > TOLERANCE
             cut[(end, "cut and Revit's" if changed and right else "cut, not Revit's" if changed else "uncut, Revit cuts" if needed else "uncut and Revit's")] += 1
     print(f"walls in both files: {len(both)} (rvt-rs {len(ours)}, Revit {len(revit)}); offset {offset:.6f} ft")
+    # The floors, roofs and footings themselves, which a cut would be read
+    # from: are their bases and tops Revit's?
+    our_slabs, revit_slabs = ranges(args[0], CUTTERS), ranges(args[1], CUTTERS)
+    slab_counts = collections.Counter()
+    for tag in sorted(set(our_slabs) & set(revit_slabs)):
+        low = revit_slabs[tag][0] - offset - our_slabs[tag][0]
+        high = revit_slabs[tag][1] - offset - our_slabs[tag][1]
+        ok = (abs(low) <= TOLERANCE, abs(high) <= TOLERANCE)
+        slab_counts[ok] += 1
+        if ok != (True, True):
+            print(f"slab tag:{tag} base {low:+.4f} ft, top {high:+.4f} ft, Revit body {revit_slabs[tag][3]}, rvt-rs body {our_slabs[tag][3]}")
+    for (base_ok, top_ok), n in sorted(slab_counts.items()):
+        print(f"  floors, roofs and footings with base {'Revit' if base_ok else 'not Revit'}'s and top {'Revit' if top_ok else 'not Revit'}'s: {n}")
     for group, n in counts.most_common():
         print(f"  {group}: {n}")
     for group, n in storeys.most_common():
