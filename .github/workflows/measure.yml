@@ -128,7 +128,7 @@ on:
         required: false
         default: false
       bimcollab:
-        description: Also score BIMcollab's example structural model (Revit 2015) against Revit 2015's export of it (research/bimcollab-models.tsv, no licence stated, fetched for the run and never stored)
+        description: Also score BIMcollab's example structural model (Revit 2015) against Revit 2015's export of it (research/bimcollab-models.tsv, no licence stated, fetched for the run; only its summary counts are uploaded)
         type: boolean
         required: false
         default: false
@@ -322,9 +322,9 @@ jobs:
           # The runner's CPU, so the compare job can say which machines the
           # wall times came from.
           grep -m1 'model name' /proc/cpuinfo | cut -d: -f2- | xargs > results/runner.txt
-      # The held-out models carry no licence: only their counts leave the
-      # runner (RE-252).
-      - name: Keep only the held-out models' counts
+      # The held-out models and BIMcollab's carry no licence: only their
+      # counts leave the runner (RE-252).
+      - name: Keep only the unlicensed models' counts
         shell: bash
         run: tools/ci/scrub-holdout-results.sh results
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

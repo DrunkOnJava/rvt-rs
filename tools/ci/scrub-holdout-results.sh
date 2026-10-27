@@ -1,13 +1,15 @@
 #!/usr/bin/env bash
-# Reduce each held-out model's Measure results to summary counts before they
-# are uploaded (research/holdout-models.tsv, RE-252).
+# Reduce the Measure results of each model fetched without a licence to
+# redistribute it, the held-out models (research/holdout-models.tsv, RE-252)
+# and BIMcollab's example model (research/bimcollab-models.tsv, RE-198), to
+# summary counts before they are uploaded.
 #
 # Usage:
 #   tools/ci/scrub-holdout-results.sh RESULTS_DIR
 #
-# The held-out models carry no redistribution licence, and a public
-# repository's artifacts can be downloaded by anyone, so nothing taken from
-# them per element may be uploaded. For each RESULTS_DIR/holdout-*/ this keeps
+# A public repository's artifacts can be downloaded by anyone, so nothing taken
+# from those models per element may be uploaded (Griffin, 2026-10-26). For
+# each RESULTS_DIR/holdout-*/ and RESULTS_DIR/bimcollab-*/ this keeps
 # counts.txt, made of the summary lines of its probe scores (the wall length
 # rule, the export's version and the census of its wall representations) and
 # of its quantity census (the totals and each quantity's counts), and
@@ -15,7 +17,7 @@
 set -euo pipefail
 
 RESULTS="${1:?usage: scrub-holdout-results.sh RESULTS_DIR}"
-for dir in "$RESULTS"/holdout-*/; do
+for dir in "$RESULTS"/holdout-*/ "$RESULTS"/bimcollab-*/; do
   [ -d "$dir" ] || continue
   {
     for f in "$dir"probe_score*.txt; do
