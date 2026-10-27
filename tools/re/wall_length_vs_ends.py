@@ -26,7 +26,9 @@ back at its joins (`trimmed_line`) is as long as the GLine, how many there
 are and on how many the GLine's span is Revit's Length; and of the walls whose
 `Width` Revit writes but the partition reader gives no centreline, on how
 many it is the total of the layers the reader gives them (with `--list`, a
-`width <id> <Width> <layers> <cross section>` line each). Last, for each
+`width <id> <Width> <layers> <cross section>` line each); and how many
+curtain walls' `Qto_CurtainWallQuantities.Length` is their GLine's span
+(`curtain <id> <Length> <span>` lines with `--list`). Last, for each
 candidate rule for walls whose drawn and trimmed lines agree (no wall joined at either end;
 also no wall among the `pairs` partners; also no partner at all), the walls
 it selects, on how many the GLine's span is Revit's Length, and those it is
@@ -300,9 +302,14 @@ def main(argv):
             walls[row["id"]] = row
     revit = {}
     widths = {}
+    curtains = {}
     for (key, qset, name), (_, value) in quantities(argv[2])[0].items():
         tag = key.removeprefix("tag:")
-        if qset != "Qto_WallBaseQuantities" or value is None or not tag.isdigit():
+        if value is None or not tag.isdigit():
+            continue
+        if qset == "Qto_CurtainWallQuantities" and name == "Length":
+            curtains[int(tag)] = value / FOOT
+        if qset != "Qto_WallBaseQuantities":
             continue
         if name == "Length":
             revit[int(tag)] = value / FOOT
@@ -416,6 +423,13 @@ def main(argv):
         for i, w in unplaced:
             keyref = walls[i].get("keyref") or []
             print(f"width {i} {w!r} {walls[i].get('layers')!r} {keyref[3] if len(keyref) > 3 else None}")
+    read = {i: c for i, c in curtains.items() if i in walls and walls[i].get("gline") is not None}
+    equal = [i for i, c in read.items() if abs((walls[i]["gline"][5] - walls[i]["gline"][4]) - c) <= TOL]
+    print(f"curtain walls with Revit's Length: {len(curtains)}; with a GLine {len(read)}, Length = its span on {len(equal)}")
+    if listing:
+        for i, c in sorted(read.items()):
+            span = walls[i]["gline"][5] - walls[i]["gline"][4]
+            print(f"curtain {i} {c!r} {span!r}")
     print(f"walls with Revit's Length and a GLine: {total}")
     print(f"a choice at each end gives the Length: {sum(by_choice.values())}")
     for c, n in by_choice.most_common():
