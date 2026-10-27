@@ -17,8 +17,9 @@ found, `axis` first), the walls by the choices at each end and whether
 it also prints a `wall <id> <Length> <choices>` line per wall, the choices
 at each end as `[label, joined wall id, GLine parameter]`, and an `axis <id>
 <length> <start> <end> <body>` line per wall with a straight `Axis` in the
-export: its length, where its ends fall along the GLine (parameters) and
-its Body items' entities, through
+export: its length, where its ends fall along the GLine (parameters), its
+Body items' entities and its ends in the export's plan coordinates (feet),
+through
 the plan transform from the model's coordinates to the export's fitted to
 the walls whose GLine ends give their Length.
 
@@ -270,8 +271,12 @@ def main(argv):
             if abs(params[0] - e1) < abs(params[0] - e0):
                 flipped += 1
             if listing:
-                length = math.dist(*exported[i])
-                print(f"axis {i} {length!r} {params[0]!r} {params[1]!r} {bodies.get(i, '-')}")
+                length = float(math.dist(*exported[i]))
+                (ax, ay), (bx, by) = exported[i]
+                print(
+                    f"axis {i} {length!r} {float(params[0])!r} {float(params[1])!r} {bodies.get(i, '-')}"
+                    f" {float(ax)!r} {float(ay)!r} {float(bx)!r} {float(by)!r}"
+                )
         print(f"walls whose exported Axis ends are not their GLine's: {moved}; reversed: {flipped}")
     print(f"walls with Revit's Length and a GLine: {total}")
     print(f"a choice at each end gives the Length: {sum(by_choice.values())}")
