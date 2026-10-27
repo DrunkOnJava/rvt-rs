@@ -21,8 +21,10 @@ export: its length, where its ends fall along the GLine (parameters), its
 Body items' entities and its ends in the export's plan coordinates (feet),
 through
 the plan transform from the model's coordinates to the export's fitted to
-the walls whose GLine ends give their Length. Last, for each candidate rule
-for walls whose drawn and trimmed lines agree (no wall joined at either end;
+the walls whose GLine ends give their Length. Then, for walls whose line cut
+back at its joins (`trimmed_line`) is as long as the GLine, how many there
+are and on how many the GLine's span is Revit's Length. Last, for each
+candidate rule for walls whose drawn and trimmed lines agree (no wall joined at either end;
 also no wall among the `pairs` partners; also no partner at all), the walls
 it selects, on how many the GLine's span is Revit's Length, and those it is
 not.
@@ -118,6 +120,76 @@ def choices(walls, meets, wall, end):
             else:
                 label = "other"
             out.append((label, other, t))
+    return out
+
+
+def outer_faces(walls, own, other):
+    """Where `own` crosses `other`'s outermost two planes, GLine parameters."""
+    o = walls.get(other)
+    if o is None or o.get("gline") is None:
+        return []
+    planes = offsets(o)
+    if not planes:
+        return []
+    lo, hi = min(off for off, _ in planes), max(off for off, _ in planes)
+    out = set()
+    for off, plane in planes:
+        if abs(off - lo) < 1e-6 or abs(off - hi) < 1e-6:
+            t = crossing(own, plane)
+            if t is not None:
+                out.add(round(t, 9))
+    return sorted(out)
+
+
+def face_end(walls, meets, wall, end):
+    """The end the join records give: the GLine's where no wall is joined
+    there; the far face of the wall the end step's exposed face map names;
+    else the nearest near face of a wall joined there. None where unread."""
+    own = gline(wall)
+    here, there = own[2][end], own[2][1 - end]
+    named = sorted(meets.get((wall["id"], end), ()))
+    if not named:
+        return here, "free"
+    steps = [s for s in wall.get("ends", []) if s[0] == end]
+    exposed = [f[0] for f in (steps[0][4] if steps and len(steps[0]) > 4 else []) if f[0] in walls]
+    if exposed:
+        faces = outer_faces(walls, own, exposed[0])
+        return (max(faces, key=lambda t: abs(t - there)), "far") if faces else (None, "far")
+    near = [min(f, key=lambda t: abs(t - there)) for f in (outer_faces(walls, own, o) for o in named) if f]
+    return (min(near, key=lambda t: abs(t - there)), "near") if near else (None, "near")
+
+
+def reach_end(wall, end):
+    """The end the partition reader's join reach gives (RE-70, RE-71, RE-73,
+    RE-222), the layer reach of largest size where its layers end apart."""
+    reach = wall.get("reach") or {}
+    side = "start" if end == 0 else "end"
+    value = reach.get(f"m_wall_join_{side}_reach")
+    layers = reach.get(f"m_wall_join_{side}_layer_reaches")
+    if value is None and layers:
+        value = max(layers, key=abs)
+    if value is None:
+        return None
+    here = gline(wall)[2][end]
+    return here - value if end == 0 else here + value
+
+
+def trimmed_line(walls, meets, wall):
+    """Both ends of the wall's line cut back at its joins, where the join
+    records and the join reaches agree on each (a free end needs no join
+    step partner), and every join step partner is a wall; else None."""
+    if any(other not in walls for _, other in wall.get("pairs", [])):
+        return None
+    out = []
+    for end in (0, 1):
+        t, kind = face_end(walls, meets, wall, end)
+        r = reach_end(wall, end)
+        if t is not None and r is not None and abs(t - r) <= TOL:
+            out.append(t)
+        elif t is not None and kind == "free" and r is None and not wall.get("pairs"):
+            out.append(t)
+        else:
+            return None
     return out
 
 
@@ -314,6 +386,18 @@ def main(argv):
         ]
         wrong = [i for i in chosen if abs((walls[i]["gline"][5] - walls[i]["gline"][4]) - revit[i]) > TOL]
         print(f"rule {name}: {len(chosen)} walls, span is Revit's Length on {len(chosen) - len(wrong)}, not on {wrong}")
+    shipped, wrong = 0, []
+    for i, length in sorted(revit.items()):
+        wall = walls.get(i)
+        if wall is None or wall.get("gline") is None or wall.get("start") is None:
+            continue
+        ends = trimmed_line(walls, meets, wall)
+        span = wall["gline"][5] - wall["gline"][4]
+        if ends is not None and abs((ends[1] - ends[0]) - span) <= TOL:
+            shipped += 1
+            if abs(span - length) > TOL:
+                wrong.append(i)
+    print(f"rule trimmed line = drawn line: {shipped} walls, span is Revit's Length on {shipped - len(wrong)}, not on {wrong}")
     print(f"walls with Revit's Length and a GLine: {total}")
     print(f"a choice at each end gives the Length: {sum(by_choice.values())}")
     for c, n in by_choice.most_common():
