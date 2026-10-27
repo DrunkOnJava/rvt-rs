@@ -60,7 +60,7 @@ The office's quantities equal go from 20,247 to 20,335 as built (20,151 to 20,23
 
 ## 6. What stays open
 
-A wall whose cut-back curve is not as long as its curve, or whose ends the readings do not agree on, has no `Length`: Revit's export gives one of two values there and nothing in the model says which. Its `GrossFootprintArea` (`Length` × `Width` on all 279 walls Revit writes it on) and its side areas and volumes (`GrossSideArea` = `Length` × `Height` on only 206 of 579) are #1046's next steps.
+A wall whose cut-back curve is not as long as its curve, or whose ends the readings do not agree on, has no `Length`: Revit's export gives one of two values there and nothing in the model says which. Its `GrossFootprintArea` (`Length` × `Width` on all 279 walls Revit writes it on) and its side areas and volumes (`GrossSideArea` = `Length` × `Height` on only 206 of 579) are #1046's next steps. Revit writes the footprint only where its exporter draws the wall as an extrusion (revit-ifc's `TryToCreateAsExtrusion` gives the profile's area), and of the 88 walls that now get a `Length` as built, 45 are extrusions and 43 meshes; no pair of the record's join step classes and join kinds tells that choice (the best, a layered join or else no `JoinToRoofGStep`, 494 of 607 as built and 466 of 589 at permit), so it stays out.
 
 ## 7. Reproduce
 

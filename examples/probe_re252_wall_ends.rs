@@ -29,9 +29,11 @@
 //! `curve`, the classes of the objects whose token `VWallDriver.m_pCrv`
 //! names; `pairs`, the other element of each `CleanPairGStep` and
 //! `CutPairGStep` (`m_otherId`) and `WallEmbedWallGStep` (`m_instId`) as
-//! `[class, id]`; and `reach`, the partition reader's `m_wall_join_*` fields
+//! `[class, id]`; `reach`, the partition reader's `m_wall_join_*` fields
 //! (RE-70, RE-71, RE-73, RE-74, RE-222) as an object, null where it gives
-//! the wall no centreline.
+//! the wall no centreline; and `layers`, the total width of the layers the
+//! partition reader gives the wall (#1016), null where it gives none.
+//! `keyref` has `SWall.m_wallCrossSection` fourth.
 //!
 //! Usage:
 //!   cargo run --profile ci --example probe_re252_wall_ends -- MODEL.rvt > ends.jsonl
@@ -111,6 +113,31 @@ fn main() -> anyhow::Result<()> {
         })
         .collect();
     let ids: BTreeSet<u64> = axes.keys().copied().collect();
+    let layers: BTreeMap<u64, f64> = mvp
+        .walls
+        .iter()
+        .filter_map(|wall| {
+            let bands = wall.fields.iter().find_map(|(name, value)| match value {
+                rvt::walker::InstanceField::Vector(items)
+                    if name == rvt::research::partition_schema_mvp::WALL_LAYERS_FIELD =>
+                {
+                    Some(items)
+                }
+                _ => None,
+            })?;
+            let widths: Option<Vec<f64>> = bands
+                .iter()
+                .map(|band| match band {
+                    rvt::walker::InstanceField::Vector(parts) => match parts.first() {
+                        Some(rvt::walker::InstanceField::Float { value, .. }) => Some(*value),
+                        _ => None,
+                    },
+                    _ => None,
+                })
+                .collect();
+            Some((u64::from(wall.id?), widths?.iter().sum()))
+        })
+        .collect();
     #[derive(Clone, Default)]
     struct Row {
         joins: Vec<String>,
@@ -247,10 +274,11 @@ fn main() -> anyhow::Result<()> {
                                 .map_or("null".into(), |v| v.to_string())
                         };
                         keyref = format!(
-                            "[{},{},{}]",
+                            "[{},{},{},{}]",
                             num("m_wallKeyRef"),
                             num("m_locLineOffset"),
-                            num("m_keyRefOffset")
+                            num("m_keyRefOffset"),
+                            num("m_wallCrossSection")
                         );
                     }
                     "VWallDriver" => {
@@ -362,7 +390,7 @@ fn main() -> anyhow::Result<()> {
         };
         let tweaks: Vec<String> = row.tweaks.iter().map(i64::to_string).collect();
         println!(
-            "{{\"id\":{id},\"start\":{start},\"end\":{end},\"thickness\":{thickness},\"joins\":[{}],\"ends\":[{}],\"keyref\":{keyref},\"exterior\":{exterior},\"control\":[{}],\"tweaks\":[{}],\"gline\":{},\"planes\":[{}],\"objects\":[{}],\"curve\":[{}],\"pairs\":[{}],\"reach\":{reach}}}",
+            "{{\"id\":{id},\"start\":{start},\"end\":{end},\"thickness\":{thickness},\"joins\":[{}],\"ends\":[{}],\"keyref\":{keyref},\"exterior\":{exterior},\"control\":[{}],\"tweaks\":[{}],\"gline\":{},\"planes\":[{}],\"objects\":[{}],\"curve\":[{}],\"pairs\":[{}],\"reach\":{reach},\"layers\":{}}}",
             row.joins.join(","),
             row.ends.join(","),
             row.control.join(","),
@@ -371,7 +399,8 @@ fn main() -> anyhow::Result<()> {
             row.planes.join(","),
             row.objects.join(","),
             row.curve.join(","),
-            row.pairs.join(",")
+            row.pairs.join(","),
+            layers.get(id).map_or("null".into(), |v| v.to_string())
         );
     }
     eprintln!(

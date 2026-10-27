@@ -23,7 +23,10 @@ through
 the plan transform from the model's coordinates to the export's fitted to
 the walls whose GLine ends give their Length. Then, for walls whose line cut
 back at its joins (`trimmed_line`) is as long as the GLine, how many there
-are and on how many the GLine's span is Revit's Length. Last, for each
+are and on how many the GLine's span is Revit's Length; and of the walls whose
+`Width` Revit writes but the partition reader gives no centreline, on how
+many it is the total of the layers the reader gives them (with `--list`, a
+`width <id> <Width> <layers> <cross section>` line each). Last, for each
 candidate rule for walls whose drawn and trimmed lines agree (no wall joined at either end;
 also no wall among the `pairs` partners; also no partner at all), the walls
 it selects, on how many the GLine's span is Revit's Length, and those it is
@@ -296,11 +299,15 @@ def main(argv):
             row = json.loads(raw)
             walls[row["id"]] = row
     revit = {}
+    widths = {}
     for (key, qset, name), (_, value) in quantities(argv[2])[0].items():
-        if qset == "Qto_WallBaseQuantities" and name == "Length" and value is not None:
-            tag = key.removeprefix("tag:")
-            if tag.isdigit():
-                revit[int(tag)] = value / FOOT
+        tag = key.removeprefix("tag:")
+        if qset != "Qto_WallBaseQuantities" or value is None or not tag.isdigit():
+            continue
+        if name == "Length":
+            revit[int(tag)] = value / FOOT
+        elif name == "Width":
+            widths[int(tag)] = value / FOOT
     meets = joined(walls)
     exported, bodies, census = axes(argv[2])
     print("the export's wall representations, identifier and item: count")
@@ -398,6 +405,17 @@ def main(argv):
             if abs(span - length) > TOL:
                 wrong.append(i)
     print(f"rule trimmed line = drawn line: {shipped} walls, span is Revit's Length on {shipped - len(wrong)}, not on {wrong}")
+    unplaced = [(i, w) for i, w in sorted(widths.items()) if i in walls and walls[i].get("thickness") is None]
+    layered = [(i, w) for i, w in unplaced if walls[i].get("layers") is not None]
+    same = [i for i, w in layered if abs(walls[i]["layers"] - w) <= TOL]
+    print(
+        f"walls Revit gives a Width the partition reader gives no centreline: {len(unplaced)}; "
+        f"with layers {len(layered)}, Width = their total on {len(same)}"
+    )
+    if listing:
+        for i, w in unplaced:
+            keyref = walls[i].get("keyref") or []
+            print(f"width {i} {w!r} {walls[i].get('layers')!r} {keyref[3] if len(keyref) > 3 else None}")
     print(f"walls with Revit's Length and a GLine: {total}")
     print(f"a choice at each end gives the Length: {sum(by_choice.values())}")
     for c, n in by_choice.most_common():

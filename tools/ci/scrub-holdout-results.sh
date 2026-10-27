@@ -23,7 +23,7 @@ for dir in "$RESULTS"/holdout-*/ "$RESULTS"/bimcollab-*/; do
   {
     for f in "$dir"probe_score*.txt; do
       [ -f "$f" ] || continue
-      grep -E "^(rule [a-z ,=]+: [0-9]+ walls, span is Revit's Length on [0-9]+, not on \[[0-9, ]*\]|walls with Revit's Length and a GLine: [0-9]+|a choice at each end gives the Length: [0-9]+|walls by their number of Qto_WallBaseQuantities sets: [][0-9(), ]+|exit [0-9]+)$" "$f" || true
+      grep -E "^(rule [a-z ,=]+: [0-9]+ walls, span is Revit's Length on [0-9]+, not on \[[0-9, ]*\]|walls with Revit's Length and a GLine: [0-9]+|a choice at each end gives the Length: [0-9]+|walls by their number of Qto_WallBaseQuantities sets: [][0-9(), ]+|walls Revit gives a Width the partition reader gives no centreline: [0-9]+; with layers [0-9]+, Width = their total on [0-9]+|exit [0-9]+)$" "$f" || true
     done
     for f in "$dir"qtos_vs_ifc*.txt; do
       [ -f "$f" ] || continue
