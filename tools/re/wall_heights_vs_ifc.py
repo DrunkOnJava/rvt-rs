@@ -67,7 +67,7 @@ def cutters(path):
                 body = sorted(
                     {r.RepresentationType or "-" for r in product.Representation.Representations if r.RepresentationIdentifier == "Body"}
                 )
-                print(f"cutter tag:{product.Tag} {kind} {'/'.join(body)} low {box[0]:.4f} high {box[1]:.4f}")
+                print(f"cutter tag:{product.Tag} {kind} {'/'.join(body)} " + " ".join(f"{v:.4f}" for v in box))
     return out
 
 
@@ -187,6 +187,8 @@ def main():
         print(f"  {end}: {group}: {n}")
     # Each wall a floor, roof or footing crosses: the crossing's Tag, and
     # whether Revit's end is where it crosses (`cuts`) or not (`passes`).
+    for tag in both:
+        print(f"wall tag:{tag} rvt-rs " + " ".join(f"{v:.4f}" for v in ours[tag][4]) + f" Revit {revit[tag][0] - offset:.4f} {revit[tag][1] - offset:.4f}")
     for tag in both:
         want = {"base": revit[tag][0] - offset, "top": revit[tag][1] - offset}
         found = crossing(ours[tag][4], boxes)
