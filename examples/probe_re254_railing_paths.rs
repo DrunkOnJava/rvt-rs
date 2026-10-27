@@ -12,8 +12,8 @@
 //! lengths in feet, each `GLine` the span of its `m_endParams` and each
 //! `GArc` its radius times the span of its `m_endParams` (radians); then
 //! `classes <record class> <object class>=<count> ...` per railing, and for
-//! the first three railings each object of its record as
-//! `object <tag> <class> <fields as JSON, cut at 600 characters>`.
+//! the first three railings each field of each object of its record as
+//! `field <tag> <class> <name> <value as JSON, cut at 400 characters>`.
 //!
 //! Usage:
 //!   cargo run --profile ci --example probe_re254_railing_paths -- MODEL.rvt
@@ -69,9 +69,13 @@ fn main() -> anyhow::Result<()> {
             for object in &graph.objects {
                 *entry.1.entry(object.class_name.clone()).or_default() += 1;
                 if dumped.contains(&id) {
-                    let fields = object.fields.to_string();
-                    let cut: String = fields.chars().take(600).collect();
-                    println!("object {id} {} {cut}", object.class_name);
+                    if let Some(fields) = object.fields.as_object() {
+                        for (name, value) in fields {
+                            let value = value.to_string();
+                            let cut: String = value.chars().take(400).collect();
+                            println!("field {id} {} {name} {cut}", object.class_name);
+                        }
+                    }
                 }
             }
             for object in &graph.objects {
