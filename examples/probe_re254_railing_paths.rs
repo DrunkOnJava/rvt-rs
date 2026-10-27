@@ -10,7 +10,10 @@
 //! Output, one line per railing the export writes:
 //!   rail <tag> <line length sum> <arc length sum> <curve classes ...>
 //! lengths in feet, each `GLine` the span of its `m_endParams` and each
-//! `GArc` its radius times the span of its `m_endParams` (radians).
+//! `GArc` its radius times the span of its `m_endParams` (radians); then
+//! `classes <record class> <object class>=<count> ...` per railing, and for
+//! the first three railings each object of its record as
+//! `object <tag> <class> <fields as JSON, cut at 600 characters>`.
 //!
 //! Usage:
 //!   cargo run --profile ci --example probe_re254_railing_paths -- MODEL.rvt
@@ -47,6 +50,8 @@ fn main() -> anyhow::Result<()> {
         })
         .collect();
     let mut rows: BTreeMap<u64, (f64, f64, Vec<String>)> = BTreeMap::new();
+    let mut census: BTreeMap<u64, (String, BTreeMap<String, usize>)> = BTreeMap::new();
+    let dumped: BTreeSet<u64> = ids.iter().copied().take(3).collect();
     extract_graphs(
         &mut rf,
         &Options {
@@ -58,6 +63,17 @@ fn main() -> anyhow::Result<()> {
                 return Ok(());
             };
             let (mut lines, mut arcs, mut classes) = (0.0, 0.0, Vec::new());
+            let id = record.identity.element_id;
+            let entry = census.entry(id).or_default();
+            entry.0 = record.class_name.clone().unwrap_or_default();
+            for object in &graph.objects {
+                *entry.1.entry(object.class_name.clone()).or_default() += 1;
+                if dumped.contains(&id) {
+                    let fields = object.fields.to_string();
+                    let cut: String = fields.chars().take(600).collect();
+                    println!("object {id} {} {cut}", object.class_name);
+                }
+            }
             for object in &graph.objects {
                 let name = object.class_name.as_str();
                 if !name.starts_with('G')
@@ -91,6 +107,10 @@ fn main() -> anyhow::Result<()> {
             }
             None => println!("rail {id} - -"),
         }
+    }
+    for (id, (class, objects)) in &census {
+        let counts: Vec<String> = objects.iter().map(|(c, n)| format!("{c}={n}")).collect();
+        println!("classes {id} {class} {}", counts.join(" "));
     }
     eprintln!("{} railings, {} records", ids.len(), rows.len());
     Ok(())
