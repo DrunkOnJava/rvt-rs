@@ -21,7 +21,8 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use rvt::RevitFile;
 use rvt::ifc::RvtDocExporter;
-use rvt::ifc::entities::IfcEntity;
+use rvt::ifc::entities::{IfcEntity, PropertyValue};
+use rvt::ifc::export_content::{ROOM_NAME_PROPERTY, ROOM_NUMBER_PROPERTY};
 use rvt::research::native_document::{Options, extract};
 use rvt::research::native_element_parameters;
 use serde_json::Value;
@@ -68,9 +69,29 @@ fn main() -> anyhow::Result<()> {
                 ifc_type,
                 name,
                 type_guid: Some(tag),
+                property_set,
                 ..
             } if ifc_type.eq_ignore_ascii_case("IFCSPACE") => {
-                Some((tag.parse().ok()?, name.clone()))
+                // The `Name` the writer gives the space: its room number,
+                // else `<room name>:<ElementId>`, else its own name.
+                let text = |key: &str| {
+                    property_set
+                        .as_ref()?
+                        .properties
+                        .iter()
+                        .find_map(|p| match &p.value {
+                            PropertyValue::Text(text)
+                                if p.name == key && !text.trim().is_empty() =>
+                            {
+                                Some(text.clone())
+                            }
+                            _ => None,
+                        })
+                };
+                let written = text(ROOM_NUMBER_PROPERTY)
+                    .or_else(|| text(ROOM_NAME_PROPERTY).map(|room| format!("{room}:{tag}")))
+                    .unwrap_or_else(|| name.clone());
+                Some((tag.parse().ok()?, written))
             }
             _ => None,
         })
