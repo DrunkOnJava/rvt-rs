@@ -21,7 +21,12 @@
 //! `HP.<parameter id>` and its type's Function (RE-185) as `HF.function`;
 //! and the element's own saved metadata: parameter sets `MP.`, raw-field
 //! `MR.` and resolved family `MF.` values, declared custom parameters
-//! `MC.<id>=<has value>`, and `MD.complete`.
+//! `MC.<id>=<has value>`, and `MD.complete`. For #1046 (a mullion's
+//! `NetSurfaceArea` follows the joins at its ends, RE-248) also the host's
+//! type (`m_WallAttributesId`, a curtain wall type, whose join condition
+//! decides which grid's mullions run through): its ElementId as
+//! `ID.hosttype`, the first 60 objects of its record prefixed `HT.`, and its
+//! saved parameters as `HTP.<parameter id>`.
 //!
 //! Usage:
 //!   cargo run --profile ci --example probe_re241_mullion_record_scalars -- MODEL.rvt
@@ -131,6 +136,7 @@ fn main() -> anyhow::Result<()> {
     )?;
     let others: BTreeSet<u64> = links.values().flatten().flatten().copied().collect();
     let mut other_scalars: BTreeMap<u64, (Vec<String>, Vec<String>)> = BTreeMap::new();
+    let mut host_types: BTreeMap<u64, u64> = BTreeMap::new();
     extract_graphs(
         &mut rf,
         &Options {
@@ -148,9 +154,40 @@ fn main() -> anyhow::Result<()> {
                     scalars(graph, "H.", HOST_OBJECTS),
                 ),
             );
+            if let Some(kind) = linked(graph, "m_WallAttributesId") {
+                host_types.insert(record.identity.element_id, kind);
+            }
             Ok(())
         },
     )?;
+    // The hosts' types: their records and saved parameters (#1046).
+    let kinds: BTreeSet<u64> = host_types.values().copied().collect();
+    let mut kind_scalars: BTreeMap<u64, Vec<String>> = BTreeMap::new();
+    extract_graphs(
+        &mut rf,
+        &Options {
+            selected_ids: kinds.clone(),
+            ..Options::default()
+        },
+        |record| {
+            if let Some(graph) = record.graph.as_ref() {
+                kind_scalars.insert(
+                    record.identity.element_id,
+                    scalars(graph, "HT.", TYPE_OBJECTS),
+                );
+            }
+            Ok(())
+        },
+    )?;
+    let kind_saved = native_element_parameters::read(&mut rf, &kinds)?;
+    for (kind, parameters) in &kind_saved.elements {
+        let parts = kind_scalars.entry(*kind).or_default();
+        for parameter in parameters {
+            if let Some(value) = scalar(&parameter.value) {
+                parts.push(format!("HTP.{}={value}", parameter.parameter_id));
+            }
+        }
+    }
     // The hosts' own saved Yes/No and text parameters (RE-207) and their
     // type's Function (RE-185).
     let hosts: BTreeSet<u64> = links.values().filter_map(|[_, host]| *host).collect();
@@ -244,6 +281,14 @@ fn main() -> anyhow::Result<()> {
         }
         if let Some(host) = host {
             all.extend(host_parts(host));
+            let kind = host_types.get(&host).copied();
+            all.push(format!(
+                "ID.hosttype={}",
+                kind.map_or("-".into(), |k| k.to_string())
+            ));
+            if let Some(parts) = kind.and_then(|k| kind_scalars.get(&k)) {
+                all.extend(parts.iter().cloned());
+            }
         }
         match metadata.get(id) {
             Some(parts) => all.extend(parts.iter().cloned()),
