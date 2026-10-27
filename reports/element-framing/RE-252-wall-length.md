@@ -62,7 +62,11 @@ The office's quantities equal go from 20,247 to 20,335 as built (20,151 to 20,23
 
 A wall whose cut-back curve is not as long as its curve, or whose ends the readings do not agree on, has no `Length`: Revit's export gives one of two values there and nothing in the model says which. Its `GrossFootprintArea` (`Length` × `Width` on all 279 walls Revit writes it on) and its side areas and volumes (`GrossSideArea` = `Length` × `Height` on only 206 of 579) are #1046's next steps. Revit writes the footprint only where its exporter draws the wall as an extrusion (revit-ifc's `TryToCreateAsExtrusion` gives the profile's area), and of the 88 walls that now get a `Length` as built, 45 are extrusions and 43 meshes; no pair of the record's join step classes and join kinds tells that choice (the best, a layered join or else no `JoinToRoofGStep`, 494 of 607 as built and 466 of 589 at permit), so it stays out.
 
-## 7. Reproduce
+## 7. The walls whose two lengths differ (added 2026-10-26)
+
+The maintainer's choice counts a wall's `Length` apart where its two possible values differ, rather than as missing. Revit's export draws the cut-back curve as the wall's `Axis` but does not carry the curve's own length, so rvt-rs writes it in its own `RvtElementRecordGeometry.CurveLength` (left out of the property census, as rvt-rs's own sets are), and `tools/re/qtos_vs_ifc.py` counts apart a missing `Length` where that and the `Axis`'s length differ by more than 1e-4 ft. Half of that comparison is rvt-rs's reading, which Revit's export confirms only where it wrote the curve's length; so the census counts walls apart only on a model where Revit's `Length` is either rvt-rs's curve's or its own `Axis`'s on every wall, none neither. On the office as built it is the curve's on 407 walls and the `Axis`'s on 184, neither on 0, and 461 walls are counted apart, leaving 146 to score: 88 equal, 58 missing (whose two lengths agree but whose ends the readings do not). At permit: 329, 181 and 0; 388 apart; 81 equal, 120 missing (Measure 40445008095).
+
+## 8. Reproduce
 
 ```bash
 gh workflow run measure.yml --ref main -f ref=f49308e8ca7ccf3dc6aa4f2822a23323f0c3b874 -f base=main -f nordic=true -f r2025=true
