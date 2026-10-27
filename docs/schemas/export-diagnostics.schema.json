@@ -172,6 +172,17 @@
           "items": {
             "type": "string"
           }
+        },
+        "wall_curve_lengths_feet": {
+          "type": "object",
+          "description": "The length of each exported wall's native curve in feet, keyed by ElementId (RE-252): one of the two lengths Revit's export may write as the wall's Qto_WallBaseQuantities.Length. Not written in the IFC file; absent when no wall has one.",
+          "propertyNames": {
+            "pattern": "^[0-9]+$"
+          },
+          "additionalProperties": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          }
         }
       }
     },
