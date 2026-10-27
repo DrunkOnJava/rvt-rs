@@ -24,7 +24,8 @@
 //! `StairsElement` counts) and every other line and arc is level; and
 //! `stair2 <tag> <feet>`: the path's plan length plus, for each run of the
 //! stair, its risers less one times the tread depth climbing at that slope;
-//! `offset <tag> <feet>`, each railing's `BaseRailing.m_placementOffset`, and
+//! `offset <tag> <feet> flipped <bool>`, each railing's
+//! `BaseRailing.m_placementOffset` and `m_flipped`, and
 //! `line <sketch> <origin x y z> <direction x y z> <start> <end>` for each
 //! of its sketch's lines;
 //! and, where the path is one line and runs along one or more of the
@@ -100,7 +101,23 @@ fn main() -> anyhow::Result<()> {
                     .get("m_placementOffset")?
                     .as_f64()
             }) {
-                println!("offset {} {offset}", record.identity.element_id);
+                let flipped = record
+                    .graph
+                    .as_ref()
+                    .and_then(|graph| {
+                        graph
+                            .objects
+                            .iter()
+                            .find(|object| object.class_name == "BaseRailing")?
+                            .fields
+                            .get("m_flipped")?
+                            .as_bool()
+                    })
+                    .map_or("-".to_string(), |f| f.to_string());
+                println!(
+                    "offset {} {offset} flipped {flipped}",
+                    record.identity.element_id
+                );
             }
             let stair = record.graph.as_ref().and_then(|graph| {
                 let object = graph
