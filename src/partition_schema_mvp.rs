@@ -8509,7 +8509,7 @@ fn attach_room_outlines(rf: &mut RevitFile, revit_version: u32, rooms: &mut [Dec
 }
 
 /// Releases a room's `Qto_SpaceBaseQuantities.Height` is read on (RE-255).
-pub const ROOM_HEIGHT_REVIT_VERSIONS: &[u32] = &[2024, 2025];
+pub const ROOM_HEIGHT_REVIT_VERSIONS: &[u32] = &[2024, 2025, 2026];
 
 /// Field holding a room's height, feet (RE-255).
 pub const ROOM_HEIGHT_FIELD: &str = "m_room_height";
@@ -8517,7 +8517,8 @@ pub const ROOM_HEIGHT_FIELD: &str = "m_room_height";
 /// Give each room whose native record holds its stored solid's faces (two
 /// `Face` objects or more) its `RoomElem.m_height` as its height: Revit's
 /// export writes it as the space's `Height` on every such room of the
-/// BIM4LCA office and the R2025 models (RE-255). A room with no faces in its
+/// BIM4LCA office, the R2025 models and the held-out Revit 2026 house
+/// (RE-255). A room with no faces in its
 /// record gets none: on the office Revit's `Height` is another value on all
 /// 20 of those.
 fn attach_room_heights(rf: &mut RevitFile, revit_version: u32, rooms: &mut [DecodedElement]) {
