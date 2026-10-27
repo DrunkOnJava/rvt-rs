@@ -1,14 +1,17 @@
-//! RE-253 (#1048): how each wall's element record names its type, as counts
-//! only, so it can run on a model whose data may not leave the runner.
+//! RE-253 (#1048): how each wall's records name its type, so it can run on
+//! a model whose data may not leave the runner: its `type refs:` and `type
+//! copies:` lines are counts, which the held-out scrub keeps, and its other
+//! lines feed `tools/re/export_after_save.py` and are deleted before upload.
 //!
 //! FACT under test: a wall's type is the one type-definition record of the
 //! Walls category its reference list names (RE-28,
 //! `partition_type_records::unique_type_reference`). On a held-out Revit
-//! 2025 model one wall gets its sibling type's name and width; hypothesis:
-//! its list names a second type that the type-record scan does not take for
-//! a definition, so the join finds only one.
+//! 2025 model one wall gets its sibling type's name and width; the
+//! hypothesis that its list names a second type the type-record scan does
+//! not take for a definition is refuted: every reading of the saved file
+//! gives it the type rvt-rs picks (RE-253).
 //!
-//! Output, counts only: the walls; how many type definitions each one's
+//! Output, as counts: the walls; how many type definitions each one's
 //! reference list names (0, 1, 2 or more); how many name a Walls type record
 //! that is not a definition, and how many name an id with element-data
 //! names that is no Walls type record; how many have a type picked that
