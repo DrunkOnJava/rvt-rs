@@ -22,18 +22,25 @@ and it follows the mullion's type: of the 50 × 50 mm painted aluminium type, 4,
 - **Rvt-rs's boxes.** Counting the ends of each mullion's box that no other mullion's box covers (a point 2 mm past the end's centre) gives Revit's count on 4,416 + 621 + 485 of 9,631; counting only boxes of mullions running across it, on 1,035. 4,057 mullions that are not upright count no end though both their ends are free of every crossing box, and 2,177 upright ones count both where crossing boxes cover both.
 - **The records.** `mullion_ends_vs_records.py` ranks every field of each mullion's native record, its type's and its host's (RE-241's probe) against each count. The best is right on 4,992 of the 6,119 mullions that are not upright and on 3,579 of the 3,677 upright ones (it takes the count from Revit's own body, so it scores the 9,796 drawn as one extrusion). A mullion's own record holds no join: its `MullionFamRef` names only its host, a driver and an edge tag.
 
-Which mullion is continuous where two meet is the curtain wall type's join condition and each mullion's own Make Continuous or Break at Join setting, and the faces dropped follow from the joins at each end. Neither is read yet; the next signal is the host curtain wall's grid (its line segments, the edge tags `MullionFamRef.m_edgeTag` names) and its type's join condition.
+Which mullion is continuous where two meet is the curtain wall type's join condition and each mullion's own Make Continuous or Break at Join setting, and the faces dropped follow from the joins at each end. Neither was read when this was first written; the type's join condition is read in section 3 and says nothing, which leaves the host curtain wall's grid (its line segments, the edge tags `MullionFamRef.m_edgeTag` names) and each mullion's own setting.
 
-## 3. What rvt-rs does
+## 3. The host curtain wall's type (added 2026-10-27)
+
+RE-241's probe now also prints the record of each mullion's host's type (`HT.`, its `NewCurtainWallType` and `SpacingRule` objects) and that type's saved parameters (`HTP.`), and `mullion_ends_vs_records.py` ranks them with the rest (Measure [40446361666](https://github.com/DrunkOnJava/rvt-rs/actions/runs/40446361666), the office as built, 10,263 mullion records). The type's join condition, `NewCurtainWallType.m_autoJoinCond`, is 0 on every one of them, so it says nothing of which ends count; of its saved parameters 403070 is empty and -1140422 takes two values (1312 on 9,980 mullions, 1245 on 283) that do not follow the counts. No field of the type ranks above the best rules of section 2: 4,992 of 6,119 for the mullions that are not upright and 3,579 of 3,677 for the upright ones. What is left is each mullion's own Make Continuous or Break at Join setting, which no field ranked yet carries, and the grid the mullions lie on.
+
+## 4. What rvt-rs does
 
 Nothing changes: `NetSurfaceArea` is not written, and stays missing on all 10,003 mullions. Writing the section's sides plus the ends no box covers would be wrong on about half of them.
 
-## 4. Reproduce
+## 5. Reproduce
 
 ```bash
 gh workflow run measure.yml --ref main -f ref=d6d5f4b5bd4ada9149a18aa22dfd7a81736a5db7 -f base=none -f nordic=true \
   -f models="nordic-office-as-built" -f scorers="member_surfaces_list member_surface_ends_list"
 gh workflow run measure.yml --ref main -f ref=d6d5f4b5bd4ada9149a18aa22dfd7a81736a5db7 -f base=none -f nordic=true \
+  -f models="nordic-office-as-built" -f scorers=none \
+  -f probe=probe_re241_mullion_record_scalars -f probe_scorer=mullion_ends_vs_records
+gh workflow run measure.yml --ref main -f ref=d7a09ac35f8337d899d5b8c718389407b82a94ab -f base=none -f nordic=true \
   -f models="nordic-office-as-built" -f scorers=none \
   -f probe=probe_re241_mullion_record_scalars -f probe_scorer=mullion_ends_vs_records
 ```
