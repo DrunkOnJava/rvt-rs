@@ -26,7 +26,11 @@
 //! `planes`, each `Plane` as `[origin x, origin y, x axis x, x axis y]`;
 //! `objects`, every object of the record as `[class, token, class tag]`; and
 //! `curve`, the classes of the objects whose token `VWallDriver.m_pCrv`
-//! names.
+//! names; and `pairs`, the other element of each `CleanPairGStep` and
+//! `CutPairGStep` (`m_otherId`) and `WallEmbedWallGStep` (`m_instId`) as
+//! `[class, id]`; and `reach`, the partition reader's `m_wall_join_*` fields
+//! (RE-70, RE-71, RE-73, RE-74, RE-222) as an object, null where it gives
+//! the wall no centreline.
 //!
 //! Usage:
 //!   cargo run --profile ci --example probe_re252_wall_ends -- MODEL.rvt > ends.jsonl
@@ -37,6 +41,21 @@ use std::fmt::Write as _;
 use rvt::RevitFile;
 use rvt::research::native_document::{Options, extract_graphs};
 use serde_json::Value;
+
+fn field_json(field: &rvt::walker::InstanceField) -> String {
+    use rvt::walker::InstanceField as F;
+    match field {
+        F::Float { value, .. } if value.is_finite() => value.to_string(),
+        F::Integer { value, .. } => value.to_string(),
+        F::Bool(value) => value.to_string(),
+        F::ElementId { id, .. } => id.to_string(),
+        F::Vector(items) => format!(
+            "[{}]",
+            items.iter().map(field_json).collect::<Vec<_>>().join(",")
+        ),
+        _ => "null".into(),
+    }
+}
 
 fn id_of(value: &Value) -> Option<i64> {
     value.pointer("/m_id/m_id64").and_then(Value::as_i64)
@@ -51,7 +70,11 @@ fn main() -> anyhow::Result<()> {
         version,
         rvt::walker::WalkerLimits::default(),
     )?;
-    type Axis = (rvt::research::partition_schema_mvp::WallAxis, String);
+    type Axis = (
+        rvt::research::partition_schema_mvp::WallAxis,
+        String,
+        String,
+    );
     let axes: BTreeMap<u64, Axis> = mvp
         .walls
         .iter()
@@ -69,11 +92,19 @@ fn main() -> anyhow::Result<()> {
                     [Some(x), Some(y)] => format!("[{x},{y}]"),
                     _ => "null".into(),
                 };
+            let reach = wall
+                .fields
+                .iter()
+                .filter(|(name, _)| name.starts_with("m_wall_join"))
+                .map(|(name, value)| format!("\"{name}\":{}", field_json(value)))
+                .collect::<Vec<_>>()
+                .join(",");
             Some((
                 u64::from(wall.id?),
                 (
                     rvt::research::partition_schema_mvp::wall_axis_from_fields(&wall.fields)?,
                     exterior,
+                    format!("{{{reach}}}"),
                 ),
             ))
         })
@@ -90,6 +121,7 @@ fn main() -> anyhow::Result<()> {
         planes: Vec<String>,
         objects: Vec<String>,
         curve: Vec<String>,
+        pairs: Vec<String>,
     }
     let mut rows: BTreeMap<u64, Row> = BTreeMap::new();
     extract_graphs(
@@ -105,6 +137,19 @@ fn main() -> anyhow::Result<()> {
             };
             let mut gline = None;
             let mut planes = Vec::new();
+            let pairs: Vec<String> = graph
+                .objects
+                .iter()
+                .filter_map(|o| {
+                    let field = match o.class_name.as_str() {
+                        "CleanPairGStep" | "CutPairGStep" => "m_otherId",
+                        "WallEmbedWallGStep" => "m_instId",
+                        _ => return None,
+                    };
+                    let id = o.fields.get(field).and_then(id_of)?;
+                    Some(format!("[\"{}\",{id}]", o.class_name))
+                })
+                .collect();
             let objects: Vec<String> = graph
                 .objects
                 .iter()
@@ -268,6 +313,7 @@ fn main() -> anyhow::Result<()> {
                     planes,
                     objects,
                     curve,
+                    pairs,
                 },
             );
             Ok(())
@@ -276,14 +322,21 @@ fn main() -> anyhow::Result<()> {
     let every: BTreeSet<u64> = axes.keys().chain(rows.keys()).copied().collect();
     for id in &every {
         let row = rows.get(id).cloned().unwrap_or_default();
-        let (start, end, thickness, exterior) = match axes.get(id) {
-            Some((axis, exterior)) => (
+        let (start, end, thickness, exterior, reach) = match axes.get(id) {
+            Some((axis, exterior, reach)) => (
                 format!("[{},{}]", axis.start[0], axis.start[1]),
                 format!("[{},{}]", axis.end[0], axis.end[1]),
                 axis.thickness_feet.to_string(),
                 exterior.clone(),
+                reach.clone(),
             ),
-            None => ("null".into(), "null".into(), "null".into(), "null".into()),
+            None => (
+                "null".into(),
+                "null".into(),
+                "null".into(),
+                "null".into(),
+                "null".into(),
+            ),
         };
         let keyref = if row.keyref.is_empty() {
             "null".into()
@@ -292,7 +345,7 @@ fn main() -> anyhow::Result<()> {
         };
         let tweaks: Vec<String> = row.tweaks.iter().map(i64::to_string).collect();
         println!(
-            "{{\"id\":{id},\"start\":{start},\"end\":{end},\"thickness\":{thickness},\"joins\":[{}],\"ends\":[{}],\"keyref\":{keyref},\"exterior\":{exterior},\"control\":[{}],\"tweaks\":[{}],\"gline\":{},\"planes\":[{}],\"objects\":[{}],\"curve\":[{}]}}",
+            "{{\"id\":{id},\"start\":{start},\"end\":{end},\"thickness\":{thickness},\"joins\":[{}],\"ends\":[{}],\"keyref\":{keyref},\"exterior\":{exterior},\"control\":[{}],\"tweaks\":[{}],\"gline\":{},\"planes\":[{}],\"objects\":[{}],\"curve\":[{}],\"pairs\":[{}],\"reach\":{reach}}}",
             row.joins.join(","),
             row.ends.join(","),
             row.control.join(","),
@@ -300,7 +353,8 @@ fn main() -> anyhow::Result<()> {
             row.gline.as_deref().unwrap_or("null"),
             row.planes.join(","),
             row.objects.join(","),
-            row.curve.join(",")
+            row.curve.join(","),
+            row.pairs.join(",")
         );
     }
     eprintln!(

@@ -21,7 +21,11 @@ export: its length, where its ends fall along the GLine (parameters), its
 Body items' entities and its ends in the export's plan coordinates (feet),
 through
 the plan transform from the model's coordinates to the export's fitted to
-the walls whose GLine ends give their Length.
+the walls whose GLine ends give their Length. Last, for each candidate rule
+for walls whose drawn and trimmed lines agree (no wall joined at either end;
+also no wall among the `pairs` partners; also no partner at all), the walls
+it selects, on how many the GLine's span is Revit's Length, and those it is
+not.
 
 Usage:
 
@@ -293,6 +297,23 @@ def main(argv):
                     f" {float(ax)!r} {float(ay)!r} {float(bx)!r} {float(by)!r}"
                 )
         print(f"walls whose exported Axis ends are not their GLine's: {moved}; reversed: {flipped}")
+    rules = {
+        "free ends": lambda w: True,
+        "free ends, no wall partner": lambda w: not any(o in walls for _, o in w.get("pairs", [])),
+        "free ends, no partner": lambda w: not w.get("pairs"),
+    }
+    for name, extra in rules.items():
+        chosen = [
+            i
+            for i in revit
+            if i in walls
+            and walls[i].get("gline") is not None
+            and not meets.get((i, 0))
+            and not meets.get((i, 1))
+            and extra(walls[i])
+        ]
+        wrong = [i for i in chosen if abs((walls[i]["gline"][5] - walls[i]["gline"][4]) - revit[i]) > TOL]
+        print(f"rule {name}: {len(chosen)} walls, span is Revit's Length on {len(chosen) - len(wrong)}, not on {wrong}")
     print(f"walls with Revit's Length and a GLine: {total}")
     print(f"a choice at each end gives the Length: {sum(by_choice.values())}")
     for c, n in by_choice.most_common():
