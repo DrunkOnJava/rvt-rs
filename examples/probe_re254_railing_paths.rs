@@ -21,7 +21,9 @@
 //! record names a stair (`BaseRailing.m_stairsId`), `stair <tag> <feet>
 //! <slope>`: its path's length where each line parallel to a run of that
 //! stair climbs at the stair's riser height over its tread depth (its
-//! `StairsElement` counts) and every other line and arc is level.
+//! `StairsElement` counts) and every other line and arc is level; and
+//! `stair2 <tag> <feet>`: the path's plan length plus, for each run of the
+//! stair, its risers less one times the tread depth climbing at that slope.
 //!
 //! Usage:
 //!   cargo run --profile ci --example probe_re254_railing_paths -- MODEL.rvt
@@ -211,7 +213,12 @@ fn main() -> anyhow::Result<()> {
     )?;
     let shapes = native_run_shapes(&mut rf, &run_stairs.keys().copied().collect())?;
     let stairs: BTreeSet<u64> = railing_stairs.values().copied().collect();
-    let (counts, _) = native_stair_counts(&mut rf, &stairs, &BTreeSet::new())?;
+    let held_runs: BTreeSet<u64> = run_stairs
+        .iter()
+        .filter(|(_, stair)| stairs.contains(stair))
+        .map(|(run, _)| *run)
+        .collect();
+    let (counts, run_counts) = native_stair_counts(&mut rf, &stairs, &held_runs)?;
     for (id, stair) in &railing_stairs {
         let Some(count) = counts.get(stair) else {
             println!("stair {id} - -");
@@ -244,6 +251,14 @@ fn main() -> anyhow::Result<()> {
                 .sum()
         }) + arcs;
         println!("stair {id} {length} {slope}");
+        let plan =
+            lines.map_or(0.0, |lines| lines.iter().map(|(_, span)| span).sum::<f64>()) + arcs;
+        let climbing: f64 = run_counts
+            .values()
+            .filter(|run| run.stair == *stair)
+            .map(|run| (run.risers - 1).max(0) as f64 * count.tread_depth_feet)
+            .sum();
+        println!("stair2 {id} {}", plan + climbing * (slope.hypot(1.0) - 1.0));
     }
     eprintln!(
         "{} railings, {} sketches named, {} sketch records",
