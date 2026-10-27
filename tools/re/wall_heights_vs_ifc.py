@@ -38,19 +38,39 @@ TOLERANCE = 0.001
 CUTTERS = ("IfcSlab", "IfcRoof", "IfcFooting")
 
 
+FOOTPRINTS = {}
+
+
 def extents(f, entity):
     """(lowest z, highest z, x min, x max, y min, y max) of a product's body
-    in feet, or None."""
+    in feet, or None. Its triangles in plan go to FOOTPRINTS by Tag."""
     settings = ifcopenshell.geom.settings()
     settings.set("use-world-coords", True)
     try:
-        verts = ifcopenshell.geom.create_shape(settings, entity).geometry.verts
+        geometry = ifcopenshell.geom.create_shape(settings, entity).geometry
+        verts, faces = geometry.verts, geometry.faces
     except Exception:
         return None
     if not verts:
         return None
     xs, ys, zs = verts[0::3], verts[1::3], verts[2::3]
+    FOOTPRINTS[str(entity.Tag)] = [
+        tuple(c / FOOT for k in faces[i : i + 3] for c in (xs[k], ys[k])) for i in range(0, len(faces), 3)
+    ]
     return tuple(v / FOOT for v in (min(zs), max(zs), min(xs), max(xs), min(ys), max(ys)))
+
+
+def covers(tag, x, y):
+    """Whether the plan point (x, y) lies on the footprint of the body `tag`
+    names: inside one of its triangles seen from above."""
+    for ax, ay, bx, by, cx, cy in FOOTPRINTS.get(tag, ()):
+        d1 = (x - bx) * (ay - by) - (ax - bx) * (y - by)
+        d2 = (x - cx) * (by - cy) - (bx - cx) * (y - cy)
+        d3 = (x - ax) * (cy - ay) - (cx - ax) * (y - ay)
+        if not ((d1 < 0 or d2 < 0 or d3 < 0) and (d1 > 0 or d2 > 0 or d3 > 0)):
+            if (ax - bx) * (cy - by) - (ay - by) * (cx - bx) != 0:
+                return True
+    return False
 
 
 def cutters(path):
@@ -206,7 +226,12 @@ def main():
         want = {"base": revit[tag][0] - offset, "top": revit[tag][1] - offset}
         found = crossing(ours[tag][4], boxes)
         if found:
-            parts = [f"{end}:{other}:{'cuts' if abs(at - want[end]) <= TOLERANCE else 'passes'}" for other, end, at in found]
+            box = ours[tag][4]
+            mid = ((box[2] + box[3]) / 2, (box[4] + box[5]) / 2)
+            parts = [
+                f"{end}:{other}:{'cuts' if abs(at - want[end]) <= TOLERANCE else 'passes'}:{'over' if covers(other, *mid) else 'beside'}"
+                for other, end, at in found
+            ]
             print(f"crossed tag:{tag} " + " ".join(parts))
     print("\n".join(lines[:150]))
     return 0
