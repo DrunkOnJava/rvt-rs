@@ -13,7 +13,10 @@
 //!   rec <tag> <record class> <object class>.<field>=<number> ... P.<parameter id>=<number> ...
 //! every number of every object of the wall's record, those of its saved
 //! parameter sets (`MP.`), raw-field (`MR.`) and resolved family (`MF.`)
-//! parameters, and the RE-207 reader's numeric parameters (`P.`).
+//! parameters, the RE-207 reader's numeric parameters (`P.`), and, where
+//! rvt-rs draws the wall as an extrusion, that extrusion's depth (`B.depth`,
+//! its height), which `tools/re/wall_height_vs_qtos.py` sets against Revit's
+//! `Height` (RE-257).
 //!
 //! Usage:
 //!   cargo run --profile ci --example probe_re251_wall_numbers -- MODEL.rvt
@@ -61,6 +64,7 @@ fn main() -> anyhow::Result<()> {
     let path = std::env::args().nth(1).expect("usage: MODEL.rvt");
     let mut rf = RevitFile::open(&path)?;
     let model = RvtDocExporter.export_with_diagnostics(&mut rf)?.model;
+    let mut depths: BTreeMap<u64, f64> = BTreeMap::new();
     let ids: BTreeSet<u64> = model
         .entities
         .iter()
@@ -68,11 +72,17 @@ fn main() -> anyhow::Result<()> {
             IfcEntity::BuildingElement {
                 ifc_type,
                 type_guid: Some(tag),
+                extrusion,
+                solid_shape,
                 ..
             } if ifc_type.eq_ignore_ascii_case("IFCWALL")
                 || ifc_type.eq_ignore_ascii_case("IFCWALLSTANDARDCASE") =>
             {
-                tag.parse().ok()
+                let id = tag.parse().ok()?;
+                if let (Some(body), None) = (extrusion, solid_shape) {
+                    depths.insert(id, body.height_feet);
+                }
+                Some(id)
             }
             _ => None,
         })
@@ -141,6 +151,9 @@ fn main() -> anyhow::Result<()> {
             if let Some(n) = number(&parameter.value) {
                 all.push(format!("P.{}={n}", parameter.parameter_id));
             }
+        }
+        if let Some(depth) = depths.get(id) {
+            all.push(format!("B.depth={depth}"));
         }
         println!("rec {id} {class} {}", all.join(" "));
     }
