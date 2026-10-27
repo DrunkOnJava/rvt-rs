@@ -4268,7 +4268,6 @@ pub fn wall_layer_ends_from_fields(fields: &[(String, InstanceField)]) -> Option
 /// form of [`WALL_LAYERS_FIELD`] (RE-57).
 pub const SLAB_LAYERS_FIELD: &str = "m_slab_layers";
 
-/// The layers of a [`WALL_LAYERS_FIELD`] or [`SLAB_LAYERS_FIELD`] value.
 /// The layers [`WALL_LAYERS_FIELD`] records on a wall with no
 /// [`WALL_EXTERIOR_FIELDS`]: its type's, where its data does not place it
 /// (RE-88).
@@ -4287,6 +4286,20 @@ pub fn unplaced_wall_layers_from_fields(
         .and_then(layer_bands_from_field)
 }
 
+/// The total width of the layers [`WALL_LAYERS_FIELD`] records on a wall,
+/// its type's thickness, feet: Revit's `Wall.Width`, which revit-ifc's
+/// `CreateWallBaseQuantities` writes as the wall's `Width` (CLEANROOM.md
+/// source 5) whether or not the wall is drawn from its centreline (#1016).
+pub fn wall_layers_width_from_fields(fields: &[(String, InstanceField)]) -> Option<f64> {
+    let bands = fields
+        .iter()
+        .find_map(|(name, value)| (name == WALL_LAYERS_FIELD).then_some(value))
+        .and_then(layer_bands_from_field)?;
+    let width: f64 = bands.iter().map(|band| band.width_feet).sum();
+    (width.is_finite() && width > 0.0).then_some(width)
+}
+
+/// The layers of a [`WALL_LAYERS_FIELD`] or [`SLAB_LAYERS_FIELD`] value.
 fn layer_bands_from_field(value: &InstanceField) -> Option<Vec<crate::ifc::LayerBand>> {
     let InstanceField::Vector(items) = value else {
         return None;

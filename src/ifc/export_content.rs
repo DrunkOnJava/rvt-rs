@@ -2250,7 +2250,8 @@ fn add_stair_flight_quantities(
 
 /// Add a wall's `Qto_WallBaseQuantities` `Width` to `sets`: its type's
 /// thickness, the wall's Width parameter revit-ifc's `WidthCalculator`
-/// (CLEANROOM.md source 5) reads (#1016). Its `Length` too where the partition
+/// (CLEANROOM.md source 5) reads (#1016), also on a wall the partition
+/// reader does not draw from its centreline, from its type's layers. Its `Length` too where the partition
 /// reader gives one ([`crate::partition_schema_mvp::WALL_LENGTH_FIELD`]):
 /// Revit's export writes either the wall's curve's length or the length of
 /// that curve cut back at its joins, by how it draws the wall, so a Length is
@@ -2263,7 +2264,8 @@ fn add_wall_quantities(sets: &mut Vec<PropertySet>, ifc_type: &str, decoded: &De
     }
     let thickness = mvp::wall_axis_from_fields(&decoded.fields)
         .map(|axis| axis.thickness_feet)
-        .or_else(|| mvp::wall_arc_from_fields(&decoded.fields).map(|arc| arc.thickness_feet));
+        .or_else(|| mvp::wall_arc_from_fields(&decoded.fields).map(|arc| arc.thickness_feet))
+        .or_else(|| mvp::wall_layers_width_from_fields(&decoded.fields));
     let Some(thickness) = thickness.filter(|t| t.is_finite() && *t > 0.0) else {
         return;
     };
