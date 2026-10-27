@@ -269,7 +269,7 @@ fn main() -> anyhow::Result<()> {
                 .filter(|(_, s)| *s == stair)
                 .filter(|(run, _)| {
                     shapes
-                        .get(run)
+                        .get(*run)
                         .and_then(|shape| shape.direction)
                         .is_some_and(|d| (dir[0] * d[1] - dir[1] * d[0]).abs() < 1e-6)
                 })
