@@ -141,7 +141,8 @@ fn main() -> anyhow::Result<()> {
     let dumped: BTreeSet<u64> = wanted.iter().copied().take(3).collect();
     let mut rows: BTreeMap<u64, (f64, f64, Vec<String>)> = BTreeMap::new();
     let mut lines_of: BTreeMap<u64, Vec<([f64; 2], f64)>> = BTreeMap::new();
-    let mut line_points: BTreeMap<u64, Vec<([f64; 2], [f64; 2])>> = BTreeMap::new();
+    type PointAndDirection = ([f64; 2], [f64; 2]);
+    let mut line_points: BTreeMap<u64, Vec<PointAndDirection>> = BTreeMap::new();
     let mut census: BTreeMap<u64, (String, BTreeMap<String, usize>)> = BTreeMap::new();
     extract_graphs(
         &mut rf,
