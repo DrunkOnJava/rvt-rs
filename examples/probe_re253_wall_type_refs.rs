@@ -240,7 +240,7 @@ fn main() -> anyhow::Result<()> {
         "type refs: walls with a picked type whose native record names one: {native_read}; another than picked {native_other}, of them a type definition {native_other_definition}"
     );
     println!(
-        "type copies: picked types {}; named {}; in more than one partition {several}; with more than one name {names_differ}; latest name not the current copy's {latest_not_current} (walls {stale_walls}); no routed copy {no_route}",
+        "type copies: picked types {}; named {}; in more than one partition {several}; with more than one name {names_differ}; latest name differs from the current copy {latest_not_current} (walls {stale_walls}); no routed copy {no_route}",
         picked_types.len(),
         copies.len()
     );
