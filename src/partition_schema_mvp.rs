@@ -5161,6 +5161,13 @@ fn attach_wall_layers(rf: &mut RevitFile, revit_version: u32, walls: &mut [Decod
 /// `Qto_CurtainWallQuantities.Length` (#1016).
 pub const WALL_LENGTH_FIELD: &str = "m_wall_length";
 
+/// Field holding the length of a wall's native curve, feet, on every wall with
+/// a centreline whose native curve is the same line (RE-252): one of the two
+/// lengths Revit's export may write as its `Length`, which the census compares
+/// with the other, Revit's own cut-back `Axis`, to count apart a wall whose
+/// two lengths differ (the maintainer, 2026-10-26).
+pub const WALL_CURVE_LENGTH_FIELD: &str = "m_wall_curve_length";
+
 /// Give each wall with a centreline whose native curve, cut back where its
 /// body meets the walls joined at its ends, is as long as the curve, that
 /// length ([`WALL_LENGTH_FIELD`]): the centreline's length, which Revit's
@@ -5232,6 +5239,16 @@ fn attach_wall_lengths(
         let mut reaches = [None, None];
         for (slot, end) in ends.into_iter().enumerate() {
             reaches[end] = reach_of(slot).or_else(|| layer_reach_of(slot));
+        }
+        let curve_length = (curve.end[0] - curve.start[0]).hypot(curve.end[1] - curve.start[1]);
+        if curve_length.is_finite() && curve_length > 0.0 {
+            wall.fields.push((
+                WALL_CURVE_LENGTH_FIELD.into(),
+                InstanceField::Float {
+                    value: curve_length,
+                    size: 8,
+                },
+            ));
         }
         let Some([start, end]) = crate::native_walls::trimmed_ends(id, native, &joined, reaches)
         else {

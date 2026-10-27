@@ -20,7 +20,10 @@ had "Export base quantities" off (RE-242), and the quantities rvt-rs writes
 are counted apart, not as values Revit does not write: `rvt-ifc
 --no-base-quantities` leaves them out. A quantity Revit's export writes that
 is known to be wrong (RE-235 §5, `REVIT_DEFECTS`) is left out of rvt-rs's
-export and counted apart here, not as missing.
+export and counted apart here, not as missing. So is a wall's missing
+`Length` where the two lengths Revit's export may write differ: the length of
+the curve rvt-rs's own `RvtElementRecordGeometry.CurveLength` gives and that
+of the cut-back curve Revit's `Axis` draws (RE-252).
 
 It prints the totals, a line per (set, quantity): how many values Revit
 writes on objects rvt-rs also writes, how many are equal, how many differ
@@ -60,6 +63,14 @@ IFC4_LENGTH_QUANTITY = {
 # door's opening's Width is its vertical extent and its Height its horizontal
 # one, where IFC4 defines a wall opening's the other way (RE-244). An
 # opening is keyed by the Tag of the door filling it.
+# A wall's Length, which Revit's export writes as either its curve's length or
+# that of its curve cut back at its joins, by how it draws the wall (RE-252).
+# Where the two differ, nothing in the model says which, so a missing Length
+# there is counted apart (the maintainer, 2026-10-26): rvt-rs's own set gives
+# the curve's, Revit's export's `Axis` the cut-back curve's. 1e-4 ft.
+WALL_LENGTH = ("Qto_WallBaseQuantities", "Length")
+TWO_LENGTHS_TOLERANCE_M = 1e-4 * 0.3048
+
 REVIT_DEFECTS = {
     ("Qto_MemberBaseQuantities", "CrossSectionArea"): "MULLION",
     ("Qto_OpeningElementBaseQuantities", "Width"): "IfcDoor",
@@ -100,13 +111,67 @@ def predefined_type(product):
     return own
 
 
+_OPENED = {}
+
+
+def open_ifc(path):
+    if path not in _OPENED:
+        _OPENED[path] = ifcopenshell.open(path)
+    return _OPENED[path]
+
+
+def curve_lengths(path):
+    """Object key -> the wall curve length rvt-rs's own set carries
+    (`RvtElementRecordGeometry.CurveLength`, RE-252), metres."""
+    f = open_ifc(path)
+    scale = ifcopenshell.util.unit.calculate_unit_scale(f)
+    out = {}
+    for rel in f.by_type("IfcRelDefinesByProperties"):
+        pset = rel.RelatingPropertyDefinition
+        if not pset.is_a("IfcPropertySet") or pset.Name != "RvtElementRecordGeometry":
+            continue
+        for prop in pset.HasProperties or ():
+            if prop.Name == "CurveLength" and prop.is_a("IfcPropertySingleValue") and prop.NominalValue:
+                for obj in rel.RelatedObjects:
+                    key = key_of(obj)
+                    if key:
+                        out[key] = float(prop.NominalValue.wrappedValue) * scale
+    return out
+
+
+def axis_lengths(path):
+    """Object key -> the length of a wall's straight `Axis`, metres: in
+    Revit's export, the wall's curve cut back at its joins (RE-252)."""
+    f = open_ifc(path)
+    scale = ifcopenshell.util.unit.calculate_unit_scale(f)
+    out = {}
+    for wall in f.by_type("IfcWall"):
+        key = key_of(wall)
+        if not key or wall.Representation is None:
+            continue
+        for rep in wall.Representation.Representations:
+            if rep.RepresentationIdentifier != "Axis":
+                continue
+            for item in rep.Items:
+                if item.is_a("IfcIndexedPolyCurve") and not item.Segments:
+                    points = [tuple(p[:2]) for p in item.Points.CoordList]
+                elif item.is_a("IfcPolyline"):
+                    points = [tuple(p.Coordinates[:2]) for p in item.Points]
+                else:
+                    continue
+                if len(points) == 2:
+                    (x0, y0), (x1, y1) = points
+                    out[key] = ((x1 - x0) ** 2 + (y1 - y0) ** 2) ** 0.5 * scale
+    return out
+
+
 def quantities(path, entities_of=None):
     """(object key, set, quantity) -> (entity, SI value), the keys of every
     object, each object's entity by key, and how many quantities carry
     their own unit. In an IFC2X3 file, a segment length in a property set
     is keyed as the IFC4 base quantity of the entity `entities_of` (the
     other file's) gives the object."""
-    f = ifcopenshell.open(path)
+    f = open_ifc(path)
     unit_scale = scales(f)
     out = {}
     objects = set()
@@ -186,6 +251,9 @@ def main(argv):
     missing_classes = collections.defaultdict(collections.Counter)
     differences = []
     defects = collections.Counter()
+    our_curves = curve_lengths(args[0])
+    their_axes = axis_lengths(args[1])
+    two_lengths = 0
     for (key, qset, name), value in sorted(theirs.items()):
         if key not in our_objects:
             continue
@@ -193,6 +261,11 @@ def main(argv):
         if scope is not None and scope in their_predefined.get(key, ()):
             defects[(qset, name)] += 1
             continue
+        if (qset, name) == WALL_LENGTH and (key, qset, name) not in ours:
+            curve, axis = our_curves.get(key), their_axes.get(key)
+            if curve is not None and axis is not None and abs(curve - axis) > TWO_LENGTHS_TOLERANCE_M:
+                two_lengths += 1
+                continue
         row = rows[(qset, name)]
         row[0] += 1
         mine = ours.get((key, qset, name))
@@ -224,6 +297,10 @@ def main(argv):
             print(f"  {qset}.{name}: {n}")
     for (qset, name), n in sorted(defects.items()):
         print(f"Revit values known to be wrong, left out (RE-235 §5): {qset}.{name} {n}")
+    print(
+        "walls whose curve and its cut-back curve differ, either of which Revit's export may write "
+        f"as their Length, counted apart (RE-252): {two_lengths}"
+    )
     if our_own or their_own:
         print(f"quantities with their own unit, not scored: rvt-rs {our_own}, Revit {their_own}")
     for (qset, name), (n, equal, different, missing) in sorted(rows.items()):

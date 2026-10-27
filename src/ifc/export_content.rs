@@ -103,6 +103,10 @@ impl ExportContentPolicy {
 /// element record's bounding box (#204, #211).
 pub const ELEMENT_RECORD_PROPERTY_SET: &str = "RvtElementRecordGeometry";
 
+/// A wall's native curve's length in [`ELEMENT_RECORD_PROPERTY_SET`]
+/// ([`crate::partition_schema_mvp::WALL_CURVE_LENGTH_FIELD`], RE-252).
+pub const WALL_CURVE_LENGTH_PROPERTY: &str = "CurveLength";
+
 /// Property naming an element-record element's family (RE-38).
 pub const FAMILY_NAME_PROPERTY: &str = "FamilyName";
 
@@ -4969,6 +4973,21 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
             value: PropertyValue::LengthFeet(record_height),
         },
     ];
+    // RE-252: a wall's native curve's length, which the quantity census reads
+    // to tell the walls whose two possible `Length`s differ.
+    if let Some(length) = decoded.fields.iter().find_map(|(name, value)| match value {
+        InstanceField::Float { value, .. }
+            if name == crate::partition_schema_mvp::WALL_CURVE_LENGTH_FIELD =>
+        {
+            Some(*value)
+        }
+        _ => None,
+    }) {
+        properties.push(Property {
+            name: WALL_CURVE_LENGTH_PROPERTY.into(),
+            value: PropertyValue::PositiveLengthFeet(length),
+        });
+    }
     if column_body_z.0.is_some() && (height - record_height).abs() > 1e-9 {
         let source = if landing_slab {
             LANDING_SLAB_BODY_HEIGHT_SOURCE
