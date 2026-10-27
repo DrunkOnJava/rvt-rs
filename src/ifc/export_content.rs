@@ -2109,7 +2109,11 @@ fn add_body_quantities(
 /// RE-249): the area of the profile its body extrudes, its outline less its
 /// holes, as Revit's export writes it. Only on a floor drawn as one extrusion
 /// (`single`): a sketch of separate loops is several elements sharing its
-/// `Tag`, and a stair landing's slab gets none from Revit's export.
+/// `Tag`, and a stair landing's slab gets none from Revit's export. With it,
+/// as revit-ifc's `DepthCalculator`, `GrossVolumeCalculator` and
+/// `PerimeterCalculator` take them from that extrusion (CLEANROOM.md source
+/// 5): its `Depth`, the extrusion's length, its `GrossVolume`, the area times
+/// that length, and its `Perimeter`, its outline's.
 fn add_slab_gross_area(
     sets: &mut Vec<PropertySet>,
     ifc_type: &str,
@@ -2120,16 +2124,62 @@ fn add_slab_gross_area(
     if ifc_type != "IFCSLAB" || decoded.class != "Floor" || !single {
         return;
     }
-    let Some(area) = extrusion.and_then(profile_area) else {
+    let Some(body) = extrusion else {
         return;
     };
+    let Some(area) = profile_area(body) else {
+        return;
+    };
+    let mut properties = vec![Property {
+        name: "GrossArea".into(),
+        value: PropertyValue::AreaSquareFeet(area),
+    }];
+    let depth = body.height_feet;
+    if depth.is_finite() && depth > 0.0 {
+        properties.push(Property {
+            name: "Depth".into(),
+            value: PropertyValue::PositiveLengthFeet(depth),
+        });
+        properties.push(Property {
+            name: "GrossVolume".into(),
+            value: PropertyValue::VolumeCubicFeet(area * depth),
+        });
+    }
+    if let Some(perimeter) = profile_perimeter(body) {
+        properties.push(Property {
+            name: "Perimeter".into(),
+            value: PropertyValue::PositiveLengthFeet(perimeter),
+        });
+    }
     sets.push(PropertySet {
         name: "Qto_SlabBaseQuantities".into(),
-        properties: vec![Property {
-            name: "GrossArea".into(),
-            value: PropertyValue::AreaSquareFeet(area),
-        }],
+        properties,
     });
+}
+
+/// The length of the outline of the profile `body` extrudes, its holes left
+/// out; `None` for another profile.
+fn profile_perimeter(body: &Extrusion) -> Option<f64> {
+    let ring = |points: &[(f64, f64)]| -> f64 {
+        points
+            .iter()
+            .zip(points.iter().cycle().skip(1))
+            .map(|(a, b)| (b.0 - a.0).hypot(b.1 - a.1))
+            .sum()
+    };
+    let perimeter = match &body.profile_override {
+        None => 2.0 * (body.width_feet + body.depth_feet),
+        Some(entities::ProfileDef::Rectangle {
+            width_feet,
+            depth_feet,
+        }) => 2.0 * (width_feet + depth_feet),
+        Some(
+            entities::ProfileDef::ArbitraryClosed { points }
+            | entities::ProfileDef::ArbitraryWithVoids { points, .. },
+        ) => ring(points),
+        Some(_) => return None,
+    };
+    (perimeter.is_finite() && perimeter > 0.0).then_some(perimeter)
 }
 
 /// The area of the profile `body` extrudes, its rectangle or its outline less
