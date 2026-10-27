@@ -257,20 +257,29 @@ def main():
     # Every floor, roof or footing whose body lies over a wall's middle in
     # plan, with where its underside and top are there in rvt-rs's body
     # and in Revit's.
-    # The files may place the model apart in plan (shared coordinates);
-    # the walls' middles give that shift, and its spread says whether it is
-    # one shift (no turn between the files).
-    shifts = [
+    # The files may place the model apart in plan (shared coordinates): a
+    # turn and a shift, fitted to the walls' middles by least squares.
+    pairs = [
         (
-            (revit[t][4][2] + revit[t][4][3] - ours[t][4][2] - ours[t][4][3]) / 2,
-            (revit[t][4][4] + revit[t][4][5] - ours[t][4][4] - ours[t][4][5]) / 2,
+            ((ours[t][4][2] + ours[t][4][3]) / 2, (ours[t][4][4] + ours[t][4][5]) / 2),
+            ((revit[t][4][2] + revit[t][4][3]) / 2, (revit[t][4][4] + revit[t][4][5]) / 2),
         )
         for t in both
     ]
-    shift_x = statistics.median(s[0] for s in shifts)
-    shift_y = statistics.median(s[1] for s in shifts)
-    spread = statistics.median(math.hypot(s[0] - shift_x, s[1] - shift_y) for s in shifts)
-    print(f"plan shift Revit - rvt-rs: {shift_x:.4f}, {shift_y:.4f} ft (median spread {spread:.4f} ft)")
+    ox = statistics.fmean(a[0] for a, _ in pairs)
+    oy = statistics.fmean(a[1] for a, _ in pairs)
+    rx = statistics.fmean(b[0] for _, b in pairs)
+    ry = statistics.fmean(b[1] for _, b in pairs)
+    dot = sum((a[0] - ox) * (b[0] - rx) + (a[1] - oy) * (b[1] - ry) for a, b in pairs)
+    cross = sum((a[0] - ox) * (b[1] - ry) - (a[1] - oy) * (b[0] - rx) for a, b in pairs)
+    turn = math.atan2(cross, dot)
+    cos_t, sin_t = math.cos(turn), math.sin(turn)
+
+    def to_revit(x, y):
+        return (rx + cos_t * (x - ox) - sin_t * (y - oy), ry + sin_t * (x - ox) + cos_t * (y - oy))
+
+    spread = statistics.median(math.dist(to_revit(*a), b) for a, b in pairs)
+    print(f"plan turn Revit - rvt-rs: {math.degrees(turn):.6f} degrees (median wall-middle residual {spread:.4f} ft)")
     our_surfaces, revit_surfaces = surfaces(args[0]), surfaces(args[1])
     for name, found in (("rvt-rs", our_surfaces), ("Revit", revit_surfaces)):
         print(f"surfaces {name}: {len(found)} bodies, {sum(len(v) for v in found.values())} triangles")
@@ -288,7 +297,7 @@ def main():
             at = heights_at(tris, *mid)
             if at is None or at[1] < box[0] - TOLERANCE or at[0] > box[1] + 5:
                 continue
-            theirs = heights_at(revit_surfaces.get(other, []), mid[0] + shift_x, mid[1] + shift_y)
+            theirs = heights_at(revit_surfaces.get(other, []), *to_revit(*mid))
             theirs = "-" if theirs is None else f"{theirs[0] - offset:.4f},{theirs[1] - offset:.4f}"
             found.append(f"{other}:{at[0]:.4f},{at[1]:.4f}:{theirs}")
         if found:
