@@ -2109,7 +2109,13 @@ fn add_body_quantities(
 /// RE-249): the area of the profile its body extrudes, its outline less its
 /// holes, as Revit's export writes it. Only on a floor drawn as one extrusion
 /// (`single`): a sketch of separate loops is several elements sharing its
-/// `Tag`, and a stair landing's slab gets none from Revit's export.
+/// `Tag`, and a stair landing's slab gets none from Revit's export. Where the
+/// floor's type has one layer and the extrusion is as deep (RE-238), also,
+/// as revit-ifc's `DepthCalculator` and `GrossVolumeCalculator` take them
+/// from that extrusion (CLEANROOM.md source 5), its `Depth`, the extrusion's
+/// length, and its `GrossVolume`, the area times that length. Its
+/// `Perimeter` is left out: Revit's export writes it in feet, unscaled, in
+/// a file whose length unit is millimetres (RE-235 §5).
 fn add_slab_gross_area(
     sets: &mut Vec<PropertySet>,
     ifc_type: &str,
@@ -2120,15 +2126,34 @@ fn add_slab_gross_area(
     if ifc_type != "IFCSLAB" || decoded.class != "Floor" || !single {
         return;
     }
-    let Some(area) = extrusion.and_then(profile_area) else {
+    let Some(body) = extrusion else {
         return;
     };
+    let Some(area) = profile_area(body) else {
+        return;
+    };
+    let mut properties = vec![Property {
+        name: "GrossArea".into(),
+        value: PropertyValue::AreaSquareFeet(area),
+    }];
+    const TOLERANCE_FEET: f64 = 1e-3;
+    let depth = body.height_feet;
+    let layered = crate::partition_schema_mvp::element_layers_from_fields(&decoded.fields)
+        .filter(|layers| layers.stacked && layers.layers.len() == 1)
+        .is_some_and(|layers| (layers.layers[0].width_feet - depth).abs() <= TOLERANCE_FEET);
+    if layered && depth.is_finite() && depth > 0.0 {
+        properties.push(Property {
+            name: "Depth".into(),
+            value: PropertyValue::PositiveLengthFeet(depth),
+        });
+        properties.push(Property {
+            name: "GrossVolume".into(),
+            value: PropertyValue::VolumeCubicFeet(area * depth),
+        });
+    }
     sets.push(PropertySet {
         name: "Qto_SlabBaseQuantities".into(),
-        properties: vec![Property {
-            name: "GrossArea".into(),
-            value: PropertyValue::AreaSquareFeet(area),
-        }],
+        properties,
     });
 }
 
