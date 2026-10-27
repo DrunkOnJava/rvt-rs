@@ -24,7 +24,7 @@ Support depends on the Revit release, the file type and the feature. Opening a f
 
 The recovery figures in this README compare rvt-rs's export with Revit's own IFC export of the same file, element by element, on the models named in [What rvt-rs reads from real projects](#what-rvt-rs-reads-from-real-projects). Other models of the same releases are expected to behave alike but are not measured, and files saved by the same release can store their data differently. [`docs/support-matrix.json`](docs/support-matrix.json) records each capability with its evidence and its status ceiling.
 
-This README describes the development branch, `main`, which the browser viewer is also built from. Installed packages are the latest release; [Release 0.9.0 and main](#release-090-and-main) says what differs.
+This README describes the development branch, `main`, which the browser viewer is also built from. Installed packages are the latest release; [Release 0.10.0 and main](#release-0100-and-main) says what differs.
 
 ## What you can rely on, by input
 
@@ -43,23 +43,16 @@ This README describes the development branch, `main`, which the browser viewer i
 
 `rvt-capabilities --matrix -f text` prints the support matrix; [`docs/status.md`](docs/status.md) and [`docs/supported-profile.md`](docs/supported-profile.md) summarise it.
 
-## Release 0.9.0 and main
+## Release 0.10.0 and main
 
-The latest release is [v0.9.0](https://github.com/DrunkOnJava/rvt-rs/releases/tag/v0.9.0) (2026-10-26). `cargo install rvt --locked`, `pip install rvt`, the release archives and the container image install it, and "Upgrading from 0.8" in the [changelog](CHANGELOG.md) says what a user of 0.8 has to change: nothing in code, and `rvt-ifc --no-base-quantities` for an export without base quantities. What 0.9.0 added, in brief:
-
-- **Base quantities:** IFC4's `Qto_` sets as Revit's export writes them, on by default: curtain mullions' `Length` and, where Revit draws them as an extrusion of their section, `NetVolume` (RE-243, RE-246); doors' and windows' `Width`, `Height` and `Area`; walls' `Width` and their openings' `Depth` (RE-244); stair flights' `Length` and `NetVolume`, pipes' cross-section and outer surface, and unjoined columns' `Length` (RE-247). On the BIM4LCA office as built, 20,157 of the quantities Revit's export writes, one different and none that it leaves out (RE-242 for `--no-base-quantities`).
-- **Properties:** curtain mullions' `Span` (RE-226), walls' `ExtendToStructure` (RE-228), railings' `Height` (RE-231), level slabs' `PitchAngle` (RE-238), stair flights' treads, tread lengths and nosing on Revit 2024 and 2025 (RE-236), and the `Reference` of stairs, runs, landings, openings and furniture; a parameter named for a standard property (`FireExit`) fills it (RE-227).
-- **Types and hosts:** curtain walls, pipes, wall sweeps and ramps take the type their native record names (RE-230, RE-240); doors and windows are set in the wall their native record names (RE-245), and a face-hosted door or window cuts its opening (RE-225).
-- **Revit's own placement:** `rvt-ifc --revit-set-placement` writes properties where Revit's exporter does and IFC4's definitions do not (RE-235); values Revit's export writes wrong are left out either way.
-- **Faster:** exports of Revit 2023 to 2027 files find their native records through one index per file (#1032).
-
-The browser viewer is built from `main`, so it runs what `main` has. What `main` adds after 0.9.0, in brief, each value measured equal to Revit's export with none different ([#1016](https://github.com/DrunkOnJava/rvt-rs/issues/1016)):
+The latest release is [v0.10.0](https://github.com/DrunkOnJava/rvt-rs/releases/tag/v0.10.0) (2026-10-27). `cargo install rvt --locked`, `pip install rvt`, the release archives and the container image install it, and "Upgrading from 0.9" in the [changelog](CHANGELOG.md) says what a user of 0.9 has to change: nothing. What 0.10.0 added, in brief, each new value measured equal to Revit's export with none different ([#1016](https://github.com/DrunkOnJava/rvt-rs/issues/1016)):
 
 - **More base quantities:** walls' `Width` on slanted and unplaced walls too (all 607 of the BIM4LCA office's as built), a wall's `Length` where its curve cut back at its joins is as long as its curve (RE-252); straight curtain walls' `Length`, and beams' where they are drawn along their location line; floors' `GrossArea` (RE-249), and `Depth` and `GrossVolume` where the type has one layer; ceilings' `Width` (RE-250); unjoined hollow-section columns' `CrossSectionArea`, `OuterSurfaceArea` and `GrossVolume` (RE-247); spaces' `Height` where the room's record holds its solid's faces (RE-255); and the `Length` of a stair railing whose path is one line along its stair's runs (RE-254). On the BIM4LCA office as built, 21,065 of the quantities Revit's export writes, against 20,157 in 0.9.0.
+- **Type parameters:** `rvt-elements` and Python list a wall's, floor's, ceiling's or roof's type parameters after its own, from the type its native record names (RE-256, puzzbobb's #1065).
 - **Export diagnostics:** `rvt-ifc --diagnostics` lists each wall's native curve length and the walls whose native record names the type rvt-rs gives them, for the quantity census (RE-252, RE-253); the IFC does not change.
 - **Research:** what a mullion's `NetSurfaceArea` counts (RE-248), what a wall's record keeps of Revit's wall quantities (RE-251), which type a wall's records name (RE-253), how stair-well railings' `Length` follows their stair's runs (RE-254) and what a space's volume is not (RE-255).
 
-Each change is a fragment in [`changelog.d/`](changelog.d/README.md), which the next release moves into [`CHANGELOG.md`](CHANGELOG.md). To use `main` before the next release, build from source ([`docs/install.md`](docs/install.md#build-from-source)).
+The browser viewer is built from `main`, so it runs what `main` has; each change `main` adds after 0.10.0 is a fragment in [`changelog.d/`](changelog.d/README.md), which the next release moves into [`CHANGELOG.md`](CHANGELOG.md). To use `main` before the next release, build from source ([`docs/install.md`](docs/install.md#build-from-source)).
 
 Rust 2024 edition (MSRV 1.87). **Nineteen CLIs ship** (`rvt-analyze`, `rvt-info`, `rvt-inspect`, `rvt-schema`, `rvt-history`, `rvt-diff`, `rvt-corpus`, `rvt-dump`, `rvt-doc`, `rvt-ifc`, `rvt-ifc-compare`, `rvt-write`, `rvt-gltf`, `rvt-sheet`, `rvt-elem-table`, `rvt-elements`, `rvt-capabilities`, `rvt-schedule`, `gen-fixture`) plus the reproducible probes under `examples/`, one or more per format finding. Python bindings via pyo3+maturin in the `rvt-py` workspace member (so the core `rvt` crate can stay unconditionally `#![forbid(unsafe_code)]`) — `pip install rvt`.
 

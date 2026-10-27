@@ -8,6 +8,198 @@ fragments a release moves into this file.
 
 ## [Unreleased]
 
+## [0.10.0] — 2026-10-27
+
+0.10.0 writes more of the base quantities Revit's own IFC export writes,
+each new one measured against that export with none different.
+
+Walls carry their `Width` however they are drawn, and their `Length` where
+their curve, cut back at the walls joined at its ends, is as long as the
+curve (RE-252). Straight curtain walls carry their curve's `Length`, and
+beams drawn along their location line its length. Floors drawn as one
+extrusion carry their `GrossArea` (RE-249), and, where their type has one
+layer, their `Depth` and `GrossVolume`. Ceilings carry their layers'
+`Width` (RE-250). Hollow-section columns joined to nothing carry their
+`CrossSectionArea`, `OuterSurfaceArea` and `GrossVolume` (RE-247). Spaces
+whose room record holds its solid's faces carry the room's `Height`
+(RE-255). A stair railing whose path is one line along its stair's runs
+carries its `Length` (RE-254). On the BIM4LCA office as built that makes
+21,065 of the quantities Revit's export writes (20,157 in 0.9.0), one
+different (a mullion whose `Span` differs) and none that Revit's export
+leaves out.
+
+`rvt-ifc --diagnostics` lists each wall's native curve length and the walls
+whose native record names the type rvt-rs gives them, for the quantity
+census; the IFC file does not change. `rvt-elements` and Python list a
+wall's, floor's, ceiling's or roof's type parameters after its own
+(RE-256).
+
+puzzbobb's pull request reads those type parameters (#1065). Thank you.
+
+### Upgrading from 0.9
+
+- No code change is needed: the stable API breaks nothing
+  (`DecodedExportDiagnostics` gains two fields; it is `#[non_exhaustive]`).
+- An export carries more base quantities; `rvt-ifc --no-base-quantities`
+  still leaves them all out.
+- `rvt-elements` and `decoded_elements()` list more entries for walls,
+  floors, ceilings and roofs, all at level `type`; no entry changes.
+
+### Added
+
+- **A beam's `Length` (#1016).** A beam drawn along its location line
+  (RE-49) carries `Qto_BeamBaseQuantities.Length`, that line's length, as
+  Revit's export writes it: all 8 of the BIM4LCA office's beams at each
+  stage, none different. Its areas and volumes are left out, as the box it
+  is drawn as is not its section.
+
+- **Ceilings' `Width` (#1016, RE-250).** A compound ceiling whose body is as
+  deep as its type's layers carries `Qto_CoveringBaseQuantities.Width`, that
+  thickness, as Revit's export writes it: 59 of the BIM4LCA office's
+  ceilings as built and 55 at permit, each Revit's value, none different.
+  Its `GrossArea` is left out: its sketch's area is Revit's on most ceilings
+  but about 1% larger on 11.
+
+- **A hollow-section column's area, surface and volume (#1016, RE-247).** A
+  column joined to nothing and drawn as its type's hollow section carries
+  `Qto_ColumnBaseQuantities.CrossSectionArea`, `OuterSurfaceArea` and
+  `GrossVolume` from that section, its rounded corners counted as arcs:
+  Revit's values on all 79 such columns of the BIM4LCA office as built and
+  55 at permit, none different. Its `NetVolume` is left out, as Revit's
+  export writes the smaller volume Revit computes, and a column drawn as its
+  record's box gets none of the three, as a round column is drawn as one too.
+
+- **Curtain walls' `Length` (#1016).** A straight curtain wall carries
+  `Qto_CurtainWallQuantities.Length`, its curve's length, which Revit's
+  export writes from the wall's location curve: 213 of the BIM4LCA office's
+  220 curtain walls as built and at permit, each Revit's value, none
+  different. A curved one gets none.
+
+- **Floors' `Depth` and `GrossVolume` (#1016).** A floor drawn as one
+  extrusion whose type has one layer, as deep as the extrusion, carries
+  `Qto_SlabBaseQuantities.Depth`, the extrusion's length, and `GrossVolume`,
+  its profile's area times that length, as Revit's export writes them: 13 of
+  the BIM4LCA office's floors as built and at permit, each Revit's value,
+  none different. A layered floor gets neither: Revit's export gives one
+  layer's depth there. Its `Perimeter` is left out, as Revit's export writes
+  it in feet, unscaled, in a millimetre file; the census counts it apart on
+  each slab where its value, read as feet, is Revit's own outline (13 of the
+  office's floors at each stage).
+
+- **Floors' `GrossArea` (#1016, RE-249).** A floor drawn as one extrusion
+  carries `Qto_SlabBaseQuantities.GrossArea`, the area of the profile it
+  extrudes, its outline less its holes, as Revit's export writes it: 31 of
+  the BIM4LCA office's slabs as built and at permit, each Revit's value,
+  none different. A floor of several loops, drawn as several elements, is
+  left out.
+
+- **A space's `Height` (#1016, RE-255).** A space whose room's native record
+  holds its stored solid's faces carries `Qto_SpaceBaseQuantities.Height`,
+  the room's `RoomElem.m_height`, as Revit's export writes it: 234 of the
+  BIM4LCA office's 254 at each stage, every room of puzzbobb's R2025 models
+  and all 13 of the held-out Revit 2026 house's, none different. The other 20 office rooms, whose records hold no
+  faces, get none: Revit's `Height` is another value on all of them.
+
+- **A stair railing's `Length` (#1016, RE-254).** A railing that belongs to a
+  stair and whose path is one line along the stair's runs carries
+  `Qto_RailingBaseQuantities.Length`: the line, climbing at the stair's riser
+  height over its tread depth for as long as the longest of those runs
+  climbs and level for the rest, as Revit's export writes it. 4 of the
+  BIM4LCA office's railings at each stage and both railings of each of
+  puzzbobb's R2025 stair models 13 to 16, none different. A railing over a
+  stair well's landings, on a sloped floor, or level, gets none yet.
+
+- **A wall's, floor's, ceiling's and roof's type parameters in
+  `rvt-elements` and Python (#35, RE-256).** Each lists its type's saved
+  parameters after its own, as a family instance does: its native record
+  names its type (`m_WallAttributesId`, `m_floorAttributesId`,
+  `m_ceilingAttributesId`, `m_roofAttributesId`). On Snowdon Towers every
+  such type value Revit's export writes is Revit's: the type name on 1,363
+  of 1,380 elements (not the 17 stair landings), the assembly code 1,362 of
+  1,362, the type mark 889 of 889 and the walls' fire rating 683 of 683.
+
+- **A wall's curve length in the export diagnostics (#1046, RE-252).**
+  `rvt-ifc --diagnostics` lists each exported wall's native curve length
+  (`decoded.wall_curve_lengths_feet`, by ElementId); the IFC file does not
+  change. `tools/re/qtos_vs_ifc.py` compares it with the cut-back curve
+  Revit's export draws as the wall's `Axis`, and counts a missing `Length`
+  apart where the two differ, since Revit's export writes either: 461 of the
+  BIM4LCA office's walls as built and 388 at permit. It does so only on a
+  model where Revit's `Length` is one of the two on every wall, so no curve
+  was read wrong.
+
+- **Walls' `Length` (#1046, RE-252).** A wall carries
+  `Qto_WallBaseQuantities.Length` where its curve, cut back where its body
+  meets the walls joined at its ends, is as long as the curve. Revit's
+  export writes either length, by how it draws the wall, so only there is
+  the value never in doubt: 88 of the BIM4LCA office's walls as built and 81
+  at permit, each Revit's value, none different. The cut-back ends are read
+  twice, from the wall's native record and from its join reaches, and taken
+  only where the two agree.
+
+- **Every wall's `Width` (#1016).** A wall the partition reader does not draw
+  from its centreline (a slanted wall, or one whose line its data does not
+  place) carries `Qto_WallBaseQuantities.Width` too, its type's layers'
+  thickness, which Revit's export writes as the wall's `Width` whatever its
+  orientation: now all 607 of the BIM4LCA office's walls as built and all
+  589 at permit, each Revit's value, and 31 more door and window openings'
+  `Depth` with them.
+
+- **Walls whose saved record states their type, in the export diagnostics
+  (#1048, RE-253).** `rvt-ifc --diagnostics` lists the walls whose native
+  record names the type the export gives them (`decoded.walls_type_confirmed`).
+  `tools/re/qtos_vs_ifc.py` counts a wall's differing `Width` apart, where
+  Revit's export gives it another type, only on such a wall, so a wall whose
+  type rvt-rs picks wrong stays scored.
+
+### Research
+
+- **What a curtain mullion's `NetSurfaceArea` is (RE-248, #1016).** Revit's
+  export sums the faces of the mullion's Revit solid: its section's perimeter
+  times its length plus 0, 1 or 2 ends, the ends that are not joined to
+  another mullion. Listers and a ranking of the mullion records find nothing
+  in the model that says which ends those are, so the value stays unwritten
+  on all 10,003 of the BIM4LCA office's mullions; the next signal is the
+  curtain wall's grid and its type's join condition.
+  The curtain wall type's join condition (`m_autoJoinCond`) was read on
+  2026-10-27: 0 on every mullion of the office, so it does not say either.
+
+- **Where a railing's path is, and what its `Length` is (RE-254, #1016).** A
+  railing's native record names its path's sketch, whose lines and arcs are
+  the path in plan. Revit's export writes the path's length in 3D, along the
+  stair or sloped floor the railing stands on: the plan sum is Revit's
+  `Length` on 4 of the BIM4LCA office's 41 railings, and nothing read tells
+  those apart, so no railing gets one yet.
+
+- **Stair-well railings' `Length` (RE-254, #1016).** On the BIM4LCA office's
+  20 stair-well railings Revit's `Length` is the run-count climb of their
+  three-run stairs, less the railing's placement offset on the inner
+  railings and plus it on the outer ones, to 1e-13 ft, the sign following
+  which side of the railing its run lies on against the way it turns. How
+  the offset enters is not understood, so none of them gets a `Length` yet.
+
+- **What a space's volume is not (RE-255, #1016).** rvt-rs's own body of a
+  space, its stored solid's outline times its depth, is Revit's `NetVolume`
+  on 167 of the BIM4LCA office's 278 rooms and every space quantity on the
+  R2025 rooms, but nothing in a room's record tells the office rooms it
+  holds on, so no space volume or area is written.
+
+- **Whether a wall keeps Revit's wall quantities (RE-251, #1016).** A probe of
+  every number in each wall's native record and saved parameters finds none
+  of Revit's wall areas or volumes on the BIM4LCA office: Revit computes them
+  when it exports. A wall's `Height` is its saved parameter -1001101 on 496
+  of 579 walls, but nothing read tells the other 83 apart, so it stays
+  unwritten.
+
+- **Which type a wall's records name (RE-253, #1048).** On the held-out
+  model where one wall's `Width` differs from Revit's, every reading of the
+  saved file (the wall's reference list, its native record, its type's data
+  copies, the distance between its record's faces) gives it the 200 mm type
+  rvt-rs picks, while Revit's export, made hours after the last save, gives
+  it a 300 mm type the file also holds: most likely an unsaved change.
+  Count-only probes and a scorer of the export's time against the save's
+  run on held-out models.
+
 ## [0.9.0] — 2026-10-26
 
 0.9.0 writes more of the property sets and base quantities Revit's own IFC
