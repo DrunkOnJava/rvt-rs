@@ -24,6 +24,10 @@
 //! `StairsElement` counts) and every other line and arc is level; and
 //! `stair2 <tag> <feet>`: the path's plan length plus, for each run of the
 //! stair, its risers less one times the tread depth climbing at that slope;
+//! `offset <tag> <feet> flipped <bool>`, each railing's
+//! `BaseRailing.m_placementOffset` and `m_flipped`, and
+//! `line <sketch> <origin x y z> <direction x y z> <start> <end>` for each
+//! of its sketch's lines;
 //! and, where the path is one line and runs along one or more of the
 //! stair's runs, `stair3 <tag> <feet>`: that line, its part as long as the
 //! longest of those runs' climbs (risers less one times the tread depth)
@@ -88,6 +92,33 @@ fn main() -> anyhow::Result<()> {
             if let Some(sketch) = sketch {
                 sketches.insert(record.identity.element_id, sketch);
             }
+            if let Some(offset) = record.graph.as_ref().and_then(|graph| {
+                graph
+                    .objects
+                    .iter()
+                    .find(|object| object.class_name == "BaseRailing")?
+                    .fields
+                    .get("m_placementOffset")?
+                    .as_f64()
+            }) {
+                let flipped = record
+                    .graph
+                    .as_ref()
+                    .and_then(|graph| {
+                        graph
+                            .objects
+                            .iter()
+                            .find(|object| object.class_name == "BaseRailing")?
+                            .fields
+                            .get("m_flipped")?
+                            .as_bool()
+                    })
+                    .map_or("-".to_string(), |f| f.to_string());
+                println!(
+                    "offset {} {offset} flipped {flipped}",
+                    record.identity.element_id
+                );
+            }
             let stair = record.graph.as_ref().and_then(|graph| {
                 let object = graph
                     .objects
@@ -110,6 +141,8 @@ fn main() -> anyhow::Result<()> {
     let dumped: BTreeSet<u64> = wanted.iter().copied().take(3).collect();
     let mut rows: BTreeMap<u64, (f64, f64, Vec<String>)> = BTreeMap::new();
     let mut lines_of: BTreeMap<u64, Vec<([f64; 2], f64)>> = BTreeMap::new();
+    type PointAndDirection = ([f64; 2], [f64; 2]);
+    let mut line_points: BTreeMap<u64, Vec<PointAndDirection>> = BTreeMap::new();
     let mut census: BTreeMap<u64, (String, BTreeMap<String, usize>)> = BTreeMap::new();
     extract_graphs(
         &mut rf,
@@ -149,6 +182,32 @@ fn main() -> anyhow::Result<()> {
                 match name {
                     "GLine" => {
                         lines += (b - a).abs();
+                        let origin = object.fields.get("m_origin").and_then(Value::as_array);
+                        let dir = object.fields.get("m_dirVec").and_then(Value::as_array);
+                        if let (Some(o), Some(d)) = (origin, dir) {
+                            let point = |v: &Vec<Value>| {
+                                [
+                                    v.first().and_then(Value::as_f64).unwrap_or(f64::NAN),
+                                    v.get(1).and_then(Value::as_f64).unwrap_or(f64::NAN),
+                                ]
+                            };
+                            line_points
+                                .entry(id)
+                                .or_default()
+                                .push((point(o), point(d)));
+                            let at = |v: &Vec<Value>, i: usize| {
+                                v.get(i).and_then(Value::as_f64).unwrap_or(f64::NAN)
+                            };
+                            println!(
+                                "line {id} {} {} {} {} {} {} {a} {b}",
+                                at(o, 0),
+                                at(o, 1),
+                                at(o, 2),
+                                at(d, 0),
+                                at(d, 1),
+                                at(d, 2)
+                            );
+                        }
                         if let Some((dx, dy)) = object
                             .fields
                             .get("m_dirVec")
@@ -223,6 +282,76 @@ fn main() -> anyhow::Result<()> {
         .map(|(run, _)| *run)
         .collect();
     let (counts, run_counts) = native_stair_counts(&mut rf, &stairs, &held_runs)?;
+    for (stair, count) in &counts {
+        println!(
+            "stairinfo {stair} risers {} riser {} tread {}",
+            count.risers, count.riser_height_feet, count.tread_depth_feet
+        );
+    }
+    // Each run's plan footprint, from its decoded sketch (RE-52): which side
+    // of a railing's line along it the run lies on.
+    let version = rf.basic_file_info()?.version;
+    let mvp = rvt::research::partition_schema_mvp::recover_partition_schema_mvp(
+        &mut rf,
+        version,
+        rvt::walker::WalkerLimits::default(),
+    )?;
+    let bodies: BTreeMap<u64, rvt::research::partition_schema_mvp::StairRunBody> = mvp
+        .products
+        .iter()
+        .filter(|element| element.class == "StairsRun")
+        .filter_map(|element| {
+            Some((
+                u64::from(element.id?),
+                rvt::research::partition_schema_mvp::stair_run_body_from_fields(&element.fields)?,
+            ))
+        })
+        .collect();
+    for (id, stair) in &railing_stairs {
+        let Some(lines) = sketches.get(id).and_then(|sketch| line_points.get(sketch)) else {
+            continue;
+        };
+        let mut turn = 0.0_f64;
+        for pair in lines.windows(2) {
+            let (a, b) = (pair[0].1, pair[1].1);
+            turn += (a[0] * b[1] - a[1] * b[0]).atan2(a[0] * b[0] + a[1] * b[1]);
+        }
+        let Some(&(origin, dir)) = lines.first() else {
+            continue;
+        };
+        let side = run_stairs
+            .iter()
+            .filter(|(_, s)| *s == stair)
+            .filter_map(|(run, _)| bodies.get(run))
+            .filter(|body| (dir[0] * body.climb[1] - dir[1] * body.climb[0]).abs() < 1e-6)
+            .map(|body| {
+                let centre = [
+                    body.origin[0] + body.across[0] * body.width_feet / 2.0,
+                    body.origin[1] + body.across[1] * body.width_feet / 2.0,
+                ];
+                let to = [centre[0] - origin[0], centre[1] - origin[1]];
+                let cross = dir[0] * to[1] - dir[1] * to[0];
+                (cross.abs(), cross.signum())
+            })
+            .min_by(|a, b| a.0.total_cmp(&b.0))
+            .map(|(_, side)| side);
+        println!(
+            "side {id} run {} turn {turn}",
+            side.map_or("-".to_string(), |side| side.to_string())
+        );
+    }
+    for (run, counted) in &run_counts {
+        let direction = shapes.get(run).and_then(|shape| shape.direction);
+        println!(
+            "runinfo {run} stair {} risers {} height {} begin {} end {} direction {:?}",
+            counted.stair,
+            counted.risers,
+            counted.height_feet,
+            counted.begin_with_riser,
+            counted.end_with_riser,
+            direction
+        );
+    }
     for (id, stair) in &railing_stairs {
         let Some(count) = counts.get(stair) else {
             println!("stair {id} - -");
