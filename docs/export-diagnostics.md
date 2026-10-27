@@ -153,6 +153,7 @@ Important nested fields:
 | `decoded.parameter_value_count` | integer | Property values the export writes in `Pset_*` sets: each element's, and the storeys' and the building's. It equals the values of the IFC file's `Pset_` sets. |
 | `decoded.recovered_unit_identifiers` | array | Revit `autodesk.unit.*` identifiers selected for IFC unit assignment. |
 | `decoded.unknown_unit_identifiers` | array | Revit unit identifiers observed but not mapped to IFC units. |
+| `decoded.wall_curve_lengths_feet` | object | The length of each exported wall's native curve in feet, by ElementId (RE-252): one of the two lengths Revit's export may write as the wall's `Qto_WallBaseQuantities.Length`. `tools/re/qtos_vs_ifc.py` reads it to count apart a wall whose two lengths differ. It is not written in the IFC file, and is absent when no wall has one. |
 | `exported.by_ifc_type` | object | Count of exported building elements grouped by STEP entity type. |
 | `exported.building_elements_with_geometry` | integer | Exported elements with enough placement/body data for geometry. |
 | `exported.building_elements_carried_by_parts` | integer | Exported elements with no body of their own because their aggregated parts carry it, as in Revit's export: stairs (RE-39) and curtain walls (RE-46). Not counted in `building_elements_with_geometry`. |
