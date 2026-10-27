@@ -2059,9 +2059,14 @@ fn add_door_window_quantities(
     });
 }
 
-/// Add the base quantity a column's body gives to `sets` (#1016, RE-247):
-/// its `Length`, the depth of the extrusion it is drawn as, on a column
-/// joined by no `CleanPairGStep`
+/// Add the base quantities a column's body gives to `sets` (#1016, RE-247):
+/// its `Length`, the depth of the extrusion it is drawn as, and, where that
+/// extrusion's profile is one rvt-rs draws, its `CrossSectionArea` (the
+/// profile's area), `OuterSurfaceArea` (the length times the profile's
+/// outline and holes), `GrossVolume` and `NetVolume` (the area times the
+/// length), as revit-ifc's `PropertyUtil.CreateBeamColumnBaseQuantities`
+/// takes them (CLEANROOM.md source 5), on a column joined by no
+/// `CleanPairGStep`
 /// ([`crate::partition_schema_mvp::COLUMN_UNJOINED_FIELD`]), which Revit's
 /// export draws as that extrusion. A joined column's Length is left out:
 /// Revit's export draws 18 of the BIM4LCA office's at permit as a cut mesh
@@ -2083,25 +2088,45 @@ fn add_body_quantities(
     if !unjoined {
         return;
     }
-    let (set, quantity) = match (ifc_type, extrusion, solid_shape) {
-        ("IFCCOLUMN", Some(body), None) => {
-            ("Qto_ColumnBaseQuantities", ("Length", body.height_feet))
-        }
+    let (feet, profile) = match (ifc_type, extrusion, solid_shape) {
+        ("IFCCOLUMN", Some(body), None) => (body.height_feet, Some(body)),
         ("IFCCOLUMN", _, Some(entities::SolidShape::PlacedExtrusion { depth_feet, .. })) => {
-            ("Qto_ColumnBaseQuantities", ("Length", *depth_feet))
+            (*depth_feet, None)
         }
         _ => return,
     };
-    let (name, feet) = quantity;
     if !(feet.is_finite() && feet > 0.0) {
         return;
     }
+    let mut properties = vec![Property {
+        name: "Length".into(),
+        value: PropertyValue::PositiveLengthFeet(feet),
+    }];
+    if let Some((area, perimeter)) =
+        profile.and_then(|body| Some((profile_area(body)?, profile_perimeter(body)?)))
+    {
+        properties.extend([
+            Property {
+                name: "CrossSectionArea".into(),
+                value: PropertyValue::AreaSquareFeet(area),
+            },
+            Property {
+                name: "OuterSurfaceArea".into(),
+                value: PropertyValue::AreaSquareFeet(perimeter * feet),
+            },
+            Property {
+                name: "GrossVolume".into(),
+                value: PropertyValue::VolumeCubicFeet(area * feet),
+            },
+            Property {
+                name: "NetVolume".into(),
+                value: PropertyValue::VolumeCubicFeet(area * feet),
+            },
+        ]);
+    }
     sets.push(PropertySet {
-        name: set.into(),
-        properties: vec![Property {
-            name: name.into(),
-            value: PropertyValue::PositiveLengthFeet(feet),
-        }],
+        name: "Qto_ColumnBaseQuantities".into(),
+        properties,
     });
 }
 
@@ -2149,6 +2174,26 @@ fn profile_area(body: &Extrusion) -> Option<f64> {
         Some(_) => return None,
     };
     (area.is_finite() && area > 0.0).then_some(area)
+}
+
+/// The length of the outline and holes of the profile `body` extrudes;
+/// `None` for another profile or a length that is not positive.
+fn profile_perimeter(body: &Extrusion) -> Option<f64> {
+    use crate::ifc::from_decoded::polygon_perimeter_feet;
+    let perimeter = match &body.profile_override {
+        None => 2.0 * (body.width_feet + body.depth_feet),
+        Some(entities::ProfileDef::Rectangle {
+            width_feet,
+            depth_feet,
+        }) => 2.0 * (width_feet + depth_feet),
+        Some(entities::ProfileDef::ArbitraryClosed { points }) => polygon_perimeter_feet(points),
+        Some(entities::ProfileDef::ArbitraryWithVoids { points, voids }) => {
+            polygon_perimeter_feet(points)
+                + voids.iter().map(|v| polygon_perimeter_feet(v)).sum::<f64>()
+        }
+        Some(_) => return None,
+    };
+    (perimeter.is_finite() && perimeter > 0.0).then_some(perimeter)
 }
 
 /// Add a ceiling's `Qto_CoveringBaseQuantities.Width` to `sets` (#1016,
