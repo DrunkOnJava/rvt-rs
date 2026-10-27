@@ -138,7 +138,7 @@ def surfaces(path):
                 geometry = ifcopenshell.geom.create_shape(settings, product).geometry
             except Exception:
                 continue
-            v, faces = geometry.verts, geometry.faces
+            v, faces = list(geometry.verts), list(geometry.faces)
             out[str(product.Tag)] = [
                 tuple(tuple(v[3 * k + c] / FOOT for c in range(3)) for k in faces[i : i + 3]) for i in range(0, len(faces), 3)
             ]
@@ -257,6 +257,14 @@ def main():
     # plan, with where its underside and top are there in rvt-rs's body
     # and in Revit's.
     our_surfaces, revit_surfaces = surfaces(args[0]), surfaces(args[1])
+    for name, found in (("rvt-rs", our_surfaces), ("Revit", revit_surfaces)):
+        print(f"surfaces {name}: {len(found)} bodies, {sum(len(v) for v in found.values())} triangles")
+    for probe_tag in ("1861193", "2765485", "1474132"):
+        for name, found in (("rvt-rs", our_surfaces), ("Revit", revit_surfaces)):
+            tris = found.get(probe_tag, [])
+            if tris:
+                zs = sorted({round(p[2], 3) for tri in tris for p in tri})
+                print(f"surface tag:{probe_tag} {name}: {len(tris)} triangles, heights {zs[:12]}")
     for tag in both:
         box = ours[tag][4]
         mid = ((box[2] + box[3]) / 2, (box[4] + box[5]) / 2)
