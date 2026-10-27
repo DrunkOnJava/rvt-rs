@@ -17,16 +17,17 @@
 //! and the type's `thickness` (feet), null where the partition reader gives
 //! the wall no centreline; `joins`, each `CDJoinInfo` as `[[id, end], ...,
 //! wallJoinType]`; `ends`, each `JoinEndGStep` as `[end, weakIdx, omitted
-//! id, omitted end]`; `keyref`, `SWall.m_wallKeyRef`, `m_locLineOffset` and
-//! `m_keyRefOffset`; `exterior`, the unit plan direction to the exterior
-//! face (RE-53); `control`, `VWallDriver.m_controlJoinsSet` as `[m_index,
-//! [[id, end], ...]]`; `tweaks`, the ElementIds `WallJoinTweakGStep`'s
+//! id, omitted end, [[exposed face's element, its tag], ...]]`; `keyref`,
+//! `SWall.m_wallKeyRef`, `m_locLineOffset` and `m_keyRefOffset`;
+//! `exterior`, the unit plan direction to the exterior face (RE-53);
+//! `control`, `VWallDriver.m_controlJoinsSet` as `[m_index, [[id, end],
+//! ...]]`; `tweaks`, the ElementIds `WallJoinTweakGStep`'s
 //! `m_affectedEdgesTags` name; `gline`, the record's `GLine` as `[origin x,
-//! origin y, direction x, direction y, start parameter, end parameter]`; and
+//! origin y, direction x, direction y, start parameter, end parameter]`;
 //! `planes`, each `Plane` as `[origin x, origin y, x axis x, x axis y]`;
-//! `objects`, every object of the record as `[class, token, class tag]`; and
+//! `objects`, every object of the record as `[class, token, class tag]`;
 //! `curve`, the classes of the objects whose token `VWallDriver.m_pCrv`
-//! names; and `pairs`, the other element of each `CleanPairGStep` and
+//! names; `pairs`, the other element of each `CleanPairGStep` and
 //! `CutPairGStep` (`m_otherId`) and `WallEmbedWallGStep` (`m_instId`) as
 //! `[class, id]`; and `reach`, the partition reader's `m_wall_join_*` fields
 //! (RE-70, RE-71, RE-73, RE-74, RE-222) as an object, null where it gives
@@ -213,12 +214,28 @@ fn main() -> anyhow::Result<()> {
                             .and_then(|o| o.get("m_joinedEnd"))
                             .and_then(Value::as_i64);
                         let show = |v: Option<i64>| v.map_or("null".into(), |v| v.to_string());
+                        let exposed: Vec<String> = object
+                            .fields
+                            .get("m_exposedFaceMap")
+                            .and_then(Value::as_array)
+                            .into_iter()
+                            .flatten()
+                            .map(|pair| {
+                                let face = pair.get("second");
+                                format!(
+                                    "[{},{}]",
+                                    show(face.and_then(|f| f.get("m_elemId")).and_then(id_of)),
+                                    show(face.and_then(|f| f.get("m_tag")).and_then(Value::as_i64))
+                                )
+                            })
+                            .collect();
                         ends.push(format!(
-                            "[{},{},{},{}]",
+                            "[{},{},{},{},[{}]]",
                             show(field("m_end")),
                             show(field("m_weakIdx")),
                             show(omitted_id),
-                            show(omitted_end)
+                            show(omitted_end),
+                            exposed.join(",")
                         ));
                     }
                     "SWall" => {
