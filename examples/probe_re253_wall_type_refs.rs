@@ -19,7 +19,9 @@
 //! data (RE-216): how many have a name in more than one partition, more than
 //! one name, and a name in their latest partition (which the export takes,
 //! `type_data_names`) other than their routed current copy's; and how many
-//! have a type record in more than one partition.
+//! have a type record in more than one partition. Last, `saved <time>`,
+//! the file's save time (its `ProjectInformation` Atom `updated`), which
+//! `tools/re/export_after_save.py` compares with Revit's export's time.
 //!
 //! Usage:
 //!   cargo run --profile ci --example probe_re253_wall_type_refs -- MODEL.rvt
@@ -35,6 +37,7 @@ fn main() -> anyhow::Result<()> {
     let path = std::env::args().nth(1).expect("usage: MODEL.rvt");
     let mut rf = RevitFile::open(&path)?;
     let version = rf.basic_file_info()?.version;
+    let saved = rf.metadata()?.last_saved;
     let mvp = rvt::research::partition_schema_mvp::recover_partition_schema_mvp(
         &mut rf,
         version,
@@ -248,5 +251,6 @@ fn main() -> anyhow::Result<()> {
         "type copies: picked types with a type record {}; in more than one partition {records_several}",
         record_streams.len()
     );
+    println!("saved {}", saved.as_deref().unwrap_or("-"));
     Ok(())
 }
