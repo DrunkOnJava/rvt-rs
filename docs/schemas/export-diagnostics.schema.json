@@ -183,6 +183,15 @@
             "type": "number",
             "exclusiveMinimum": 0
           }
+        },
+        "walls_type_confirmed": {
+          "type": "array",
+          "description": "The ElementIds of the exported walls whose native record names the type the export gives them (RE-253). Not written in the IFC file; absent when there is none.",
+          "items": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "uniqueItems": true
         }
       }
     },

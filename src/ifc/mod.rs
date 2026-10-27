@@ -599,6 +599,13 @@ pub struct DecodedExportDiagnostics {
     /// not written in the IFC file (the maintainer, 2026-10-27).
     #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
     pub wall_curve_lengths_feet: std::collections::BTreeMap<u32, f64>,
+    /// The ElementIds of the exported walls whose native record names the
+    /// type the export gives them (RE-253): where Revit's export gives such
+    /// a wall another type, the quantity census counts its differing
+    /// `Width` apart, the saved file and its export disagreeing. Not
+    /// written in the IFC file.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeSet::is_empty")]
+    pub walls_type_confirmed: std::collections::BTreeSet<u32>,
 }
 
 fn default_min_element_confidence_serde() -> f32 {
@@ -3913,6 +3920,7 @@ pub fn build_export_diagnostics_with_limits(
                 .collect(),
             unknown_unit_identifiers: recovered_units.unknown_identifiers,
             wall_curve_lengths_feet: walker_stats.wall_curve_lengths_feet,
+            walls_type_confirmed: walker_stats.walls_type_confirmed,
         },
         source_coverage: {
             let coverage = SourceCoverageDiagnostics::measure(
@@ -4363,6 +4371,8 @@ struct ProductionWalkerStats {
     unapplied_export_values: std::collections::BTreeMap<String, usize>,
     /// [`DecodedExportDiagnostics::wall_curve_lengths_feet`].
     wall_curve_lengths_feet: std::collections::BTreeMap<u32, f64>,
+    /// [`DecodedExportDiagnostics::walls_type_confirmed`].
+    walls_type_confirmed: std::collections::BTreeSet<u32>,
 }
 
 fn production_walker_stats(
@@ -4403,6 +4413,12 @@ fn production_walker_stats(
                     _ => None,
                 }) {
                     stats.wall_curve_lengths_feet.insert(id, length);
+                }
+                if el.fields.iter().any(|(name, value)| {
+                    name == crate::partition_schema_mvp::WALL_TYPE_CONFIRMED_FIELD
+                        && matches!(value, crate::walker::InstanceField::Bool(true))
+                }) {
+                    stats.walls_type_confirmed.insert(id);
                 }
             }
         }

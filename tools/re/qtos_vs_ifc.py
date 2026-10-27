@@ -78,10 +78,14 @@ IFC4_LENGTH_QUANTITY = {
 WALL_LENGTH = ("Qto_WallBaseQuantities", "Length")
 TWO_LENGTHS_TOLERANCE_M = 1e-4 * 0.3048
 # A wall's Width where the two exports give the wall different types
-# (`ObjectType`) and the Widths differ: the type is scored by the names
-# census, and the Width follows from it. A held-out model's export gives one
-# wall a type its saved file does not (RE-253), which the maintainer chose
-# (2026-10-27) to count apart as an inconsistency of that pair.
+# (`ObjectType`), the Widths differ, and the wall's own native record names
+# the type rvt-rs gives it (rvt-rs's diagnostics, `walls_type_confirmed`):
+# the saved file and Revit's export disagree on its type, which the names
+# census scores, and the Width follows from it. A held-out model's export
+# gives one wall a type its saved file does not (RE-253), which the
+# maintainer chose (2026-10-27) to count apart as an inconsistency of that
+# pair; a wall whose type rvt-rs picks wrong is not confirmed and stays
+# scored.
 WALL_WIDTH = ("Qto_WallBaseQuantities", "Width")
 
 REVIT_DEFECTS = {
@@ -142,6 +146,16 @@ def curve_lengths(path):
     with open(path, encoding="utf-8") as f:
         lengths = json.load(f).get("decoded", {}).get("wall_curve_lengths_feet", {})
     return {f"tag:{tag}": feet * 0.3048 for tag, feet in lengths.items()}
+
+
+def confirmed_walls(path):
+    """Object keys of the walls rvt-rs's export diagnostics confirm the type
+    of (`decoded.walls_type_confirmed`, RE-253); empty without the file."""
+    if not os.path.exists(path):
+        return set()
+    with open(path, encoding="utf-8") as f:
+        ids = json.load(f).get("decoded", {}).get("walls_type_confirmed", [])
+    return {f"tag:{tag}" for tag in ids}
 
 
 def wall_types(path):
@@ -336,6 +350,7 @@ def main(argv):
     defects = collections.Counter()
     beside = os.path.join(os.path.dirname(os.path.abspath(args[0])), "diagnostics.json")
     our_curves = curve_lengths(diagnostics or beside)
+    confirmed = confirmed_walls(diagnostics or beside)
     their_axes = axis_lengths(args[1])
     # rvt-rs's curve lengths are trusted to count walls apart only where
     # Revit's export never contradicts them: on every wall, Revit's Length
@@ -361,6 +376,7 @@ def main(argv):
     feet_file = abs(their_length_scale - FOOT_METRES) <= 1e-9
     our_types, their_types = wall_types(args[0]), wall_types(args[1])
     other_types = 0
+    unconfirmed_types = 0
     for (key, qset, name), value in sorted(theirs.items()):
         if key not in our_objects:
             continue
@@ -388,8 +404,10 @@ def main(argv):
             mine = ours.get((key, qset, name))
             ours_type, theirs_type = our_types.get(key), their_types.get(key)
             if mine is not None and not same(mine, value) and ours_type and theirs_type and ours_type != theirs_type:
-                other_types += 1
-                continue
+                if key in confirmed:
+                    other_types += 1
+                    continue
+                unconfirmed_types += 1
         row = rows[(qset, name)]
         row[0] += 1
         mine = ours.get((key, qset, name))
@@ -430,6 +448,7 @@ def main(argv):
         f"neither: {curve_checks['neither']}{'' if trust_curves else ' (none counted apart)'}"
     )
     print(f"walls the two exports give different types, their differing Width counted apart (RE-253): {other_types}")
+    print(f"walls the two exports give different types whose record does not confirm rvt-rs's, their Width scored (RE-253): {unconfirmed_types}")
     if our_own or their_own:
         print(f"quantities with their own unit, not scored: rvt-rs {our_own}, Revit {their_own}")
     for (qset, name), (n, equal, different, missing) in sorted(rows.items()):

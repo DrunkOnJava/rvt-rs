@@ -81,6 +81,8 @@ pub struct NativeWall {
     /// The other element of each `CleanPairGStep` and `CutPairGStep`
     /// (`m_otherId`) and `WallEmbedWallGStep` (`m_instId`).
     pub partners: Vec<u64>,
+    /// `m_WallAttributesId`, the type the record names.
+    pub type_id: Option<u64>,
 }
 
 /// The widths of a `CompoundStructure`'s layers outside its core, on its
@@ -376,6 +378,7 @@ pub fn native_walls_and_top_joins(
                 exposed,
                 side_joins,
                 partners,
+                type_id: None,
             };
             let type_id = root.and_then(|fields| element_id(fields.get("m_WallAttributesId")?));
             (wall, type_id)
@@ -389,6 +392,7 @@ pub fn native_walls_and_top_joins(
         .into_iter()
         .map(|(id, (mut wall, type_id))| {
             wall.shells = type_id.and_then(|type_id| types.get(&type_id).copied());
+            wall.type_id = type_id;
             (id, wall)
         })
         .collect();
