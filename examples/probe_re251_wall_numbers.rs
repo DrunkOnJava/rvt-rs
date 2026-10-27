@@ -15,9 +15,8 @@
 //! parameter sets (`MP.`), raw-field (`MR.`) and resolved family (`MF.`)
 //! parameters, the RE-207 reader's numeric parameters (`P.`), and, where
 //! rvt-rs draws the wall as an extrusion, that extrusion's depth (`B.depth`,
-//! its height) and its placement's height in model space (`B.z0`), which
-//! `tools/re/wall_height_vs_qtos.py` sets against Revit's `Height` and body
-//! (RE-257, #1067).
+//! its height), which `tools/re/wall_height_vs_qtos.py` sets against Revit's
+//! `Height` (RE-257).
 //!
 //! Usage:
 //!   cargo run --profile ci --example probe_re251_wall_numbers -- MODEL.rvt
@@ -66,7 +65,6 @@ fn main() -> anyhow::Result<()> {
     let mut rf = RevitFile::open(&path)?;
     let model = RvtDocExporter.export_with_diagnostics(&mut rf)?.model;
     let mut depths: BTreeMap<u64, f64> = BTreeMap::new();
-    let mut bases: BTreeMap<u64, f64> = BTreeMap::new();
     let ids: BTreeSet<u64> = model
         .entities
         .iter()
@@ -76,8 +74,6 @@ fn main() -> anyhow::Result<()> {
                 type_guid: Some(tag),
                 extrusion,
                 solid_shape,
-                storey_index,
-                location_feet,
                 ..
             } if ifc_type.eq_ignore_ascii_case("IFCWALL")
                 || ifc_type.eq_ignore_ascii_case("IFCWALLSTANDARDCASE") =>
@@ -85,12 +81,6 @@ fn main() -> anyhow::Result<()> {
                 let id = tag.parse().ok()?;
                 if let (Some(body), None) = (extrusion, solid_shape) {
                     depths.insert(id, body.height_feet);
-                }
-                // The body's base in model space: its storey's elevation,
-                // which its placement is relative to, plus its own z.
-                let storey = storey_index.and_then(|i| model.building_storeys.get(i));
-                if let (Some(storey), Some(location)) = (storey, location_feet) {
-                    bases.insert(id, storey.elevation_feet + location[2]);
                 }
                 Some(id)
             }
@@ -164,9 +154,6 @@ fn main() -> anyhow::Result<()> {
         }
         if let Some(depth) = depths.get(id) {
             all.push(format!("B.depth={depth}"));
-        }
-        if let Some(base) = bases.get(id) {
-            all.push(format!("B.z0={base}"));
         }
         println!("rec {id} {class} {}", all.join(" "));
     }
