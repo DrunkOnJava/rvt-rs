@@ -12,8 +12,8 @@
 # each RESULTS_DIR/holdout-*/ and RESULTS_DIR/bimcollab-*/ this keeps
 # counts.txt, made of the summary lines of its probe scores (the wall length
 # rule, with the walls it is wrong on as a count, the export's version, the
-# census of its wall representations and the hours between its save and its
-# export), the count lines a probe prints for
+# census of its wall representations, the hours between its save and its
+# export and the railing rules' counts), the count lines a probe prints for
 # such a model (`type refs:` and `type copies:`, RE-253) and
 # of its quantity census (the totals and each quantity's counts, the walls it
 # counts apart for their two lengths (RE-252), and for each value that
@@ -29,7 +29,7 @@ for dir in "$RESULTS"/holdout-*/ "$RESULTS"/bimcollab-*/; do
   {
     for f in "$dir"probe_score*.txt; do
       [ -f "$f" ] || continue
-      grep -E "^(rule [a-z ,=]+: [0-9]+ walls, span is Revit's Length on [0-9]+, not on \[[0-9, ]*\]|walls with Revit's Length and a GLine: [0-9]+|a choice at each end gives the Length: [0-9]+|walls by their number of Qto_WallBaseQuantities sets: [][0-9(), ]+|walls Revit gives a Width the partition reader gives no centreline: [0-9]+; with layers [0-9]+, Width = their total on [0-9]+|export time vs save: (export less save in hours: -?[0-9]+\.[0-9]|not read \((no save time|no export time)\))|export wall types not in the file: [0-9]+ of [0-9]+; walls of them: [0-9]+|wall (boxes|faces) vs Revit Width: walls [0-9]+; box side equal [0-9]+; thinner [0-9]+( \(ratios( [0-9]+\.[0-9]+)+\))?; thicker [0-9]+|exit [0-9]+)$" "$f" \
+      grep -E "^(rule [a-z ,=]+: [0-9]+ walls, span is Revit's Length on [0-9]+, not on \[[0-9, ]*\]|walls with Revit's Length and a GLine: [0-9]+|a choice at each end gives the Length: [0-9]+|walls by their number of Qto_WallBaseQuantities sets: [][0-9(), ]+|walls Revit gives a Width the partition reader gives no centreline: [0-9]+; with layers [0-9]+, Width = their total on [0-9]+|export time vs save: (export less save in hours: -?[0-9]+\.[0-9]|not read \((no save time|no export time)\))|export wall types not in the file: [0-9]+ of [0-9]+; walls of them: [0-9]+|wall (boxes|faces) vs Revit Width: walls [0-9]+; box side equal [0-9]+; thinner [0-9]+( \(ratios( [0-9]+\.[0-9]+)+\))?; thicker [0-9]+|railings with Revit's Length: [0-9]+(; [a-z ]+ [0-9]+)*|railings a stair holds: [0-9]+; the (stair|run count) rule gives Revit's Length on [0-9]+|railings a stair holds whose path is one line along its runs: [0-9]+; the one line rule gives Revit's Length on [0-9]+|exit [0-9]+)$" "$f" \
         | awk '{ if (match($0, /not on \[[0-9, ]*\]$/)) { ids = substr($0, RSTART + 8, RLENGTH - 9); n = ids == "" ? 0 : split(ids, a, ","); $0 = substr($0, 1, RSTART - 1) "not on " n " walls" } print }' || true
     done
     for f in "$dir"probe.txt "$dir"probe-*.txt; do
