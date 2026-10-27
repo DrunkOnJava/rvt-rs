@@ -11,8 +11,10 @@
 # from those models per element may be uploaded (Griffin, 2026-10-26). For
 # each RESULTS_DIR/holdout-*/ and RESULTS_DIR/bimcollab-*/ this keeps
 # counts.txt, made of the summary lines of its probe scores (the wall length
-# rule, with the walls it is wrong on as a count, the export's version and the
-# census of its wall representations) and
+# rule, with the walls it is wrong on as a count, the export's version, the
+# census of its wall representations and the hours between its save and its
+# export), the count lines a probe prints for
+# such a model (`type refs:` and `type copies:`, RE-253) and
 # of its quantity census (the totals and each quantity's counts, the walls it
 # counts apart for their two lengths (RE-252), and for each value that
 # differs only the quantity and rvt-rs's value over Revit's), of
@@ -27,12 +29,16 @@ for dir in "$RESULTS"/holdout-*/ "$RESULTS"/bimcollab-*/; do
   {
     for f in "$dir"probe_score*.txt; do
       [ -f "$f" ] || continue
-      grep -E "^(rule [a-z ,=]+: [0-9]+ walls, span is Revit's Length on [0-9]+, not on \[[0-9, ]*\]|walls with Revit's Length and a GLine: [0-9]+|a choice at each end gives the Length: [0-9]+|walls by their number of Qto_WallBaseQuantities sets: [][0-9(), ]+|walls Revit gives a Width the partition reader gives no centreline: [0-9]+; with layers [0-9]+, Width = their total on [0-9]+|exit [0-9]+)$" "$f" \
+      grep -E "^(rule [a-z ,=]+: [0-9]+ walls, span is Revit's Length on [0-9]+, not on \[[0-9, ]*\]|walls with Revit's Length and a GLine: [0-9]+|a choice at each end gives the Length: [0-9]+|walls by their number of Qto_WallBaseQuantities sets: [][0-9(), ]+|walls Revit gives a Width the partition reader gives no centreline: [0-9]+; with layers [0-9]+, Width = their total on [0-9]+|export time vs save: (export less save in hours: -?[0-9]+\.[0-9]|not read \((no save time|no export time)\))|export wall types not in the file: [0-9]+ of [0-9]+; walls of them: [0-9]+|wall (boxes|faces) vs Revit Width: walls [0-9]+; box side equal [0-9]+; thinner [0-9]+( \(ratios( [0-9]+\.[0-9]+)+\))?; thicker [0-9]+|exit [0-9]+)$" "$f" \
         | awk '{ if (match($0, /not on \[[0-9, ]*\]$/)) { ids = substr($0, RSTART + 8, RLENGTH - 9); n = ids == "" ? 0 : split(ids, a, ","); $0 = substr($0, 1, RSTART - 1) "not on " n " walls" } print }' || true
+    done
+    for f in "$dir"probe.txt "$dir"probe-*.txt; do
+      [ -f "$f" ] || continue
+      grep -E '^type (refs|copies): [A-Za-z ,;:()-]+[0-9][0-9A-Za-z ,;:()-]*$' "$f" || true
     done
     for f in "$dir"qtos_vs_ifc*.txt; do
       [ -f "$f" ] || continue
-      grep -E "^(Revit quantities on objects rvt-rs writes: [0-9]+; equal: [0-9]+; different: [0-9]+; missing: [0-9]+; rvt-rs quantities Revit does not write: [0-9]+|  Qto_[A-Za-z]+\.[A-Za-z]+: [0-9]+, equal [0-9]+, different [0-9]+, missing [0-9]+|walls whose curve and its cut-back curve differ, either of which Revit's export may write as their Length, counted apart \(RE-252\): [0-9]+|walls whose Length is rvt-rs's curve's: [0-9]+; Revit's Axis's: [0-9]+; neither: [0-9]+( \(none counted apart\))?|exit [0-9]+)$" "$f" || true
+      grep -E "^(Revit quantities on objects rvt-rs writes: [0-9]+; equal: [0-9]+; different: [0-9]+; missing: [0-9]+; rvt-rs quantities Revit does not write: [0-9]+|  Qto_[A-Za-z]+\.[A-Za-z]+: [0-9]+, equal [0-9]+, different [0-9]+, missing [0-9]+|walls whose curve and its cut-back curve differ, either of which Revit's export may write as their Length, counted apart \(RE-252\): [0-9]+|walls whose Length is rvt-rs's curve's: [0-9]+; Revit's Axis's: [0-9]+; neither: [0-9]+( \(none counted apart\))?|walls the two exports give different types, their differing Width counted apart \(RE-253\): [0-9]+|exit [0-9]+)$" "$f" || true
       awk '/^largest differences/ { on = 1; next }
            on && $2 ~ /^Qto_[A-Za-z]+\.[A-Za-z]+:$/ && $6 + 0 != 0 {
              q = $2; sub(/:$/, "", q); a = $4; sub(/,$/, "", a)

@@ -77,6 +77,12 @@ IFC4_LENGTH_QUANTITY = {
 # 1e-4 ft.
 WALL_LENGTH = ("Qto_WallBaseQuantities", "Length")
 TWO_LENGTHS_TOLERANCE_M = 1e-4 * 0.3048
+# A wall's Width where the two exports give the wall different types
+# (`ObjectType`) and the Widths differ: the type is scored by the names
+# census, and the Width follows from it. A held-out model's export gives one
+# wall a type its saved file does not (RE-253), which the maintainer chose
+# (2026-10-27) to count apart as an inconsistency of that pair.
+WALL_WIDTH = ("Qto_WallBaseQuantities", "Width")
 
 REVIT_DEFECTS = {
     ("Qto_MemberBaseQuantities", "CrossSectionArea"): "MULLION",
@@ -136,6 +142,11 @@ def curve_lengths(path):
     with open(path, encoding="utf-8") as f:
         lengths = json.load(f).get("decoded", {}).get("wall_curve_lengths_feet", {})
     return {f"tag:{tag}": feet * 0.3048 for tag, feet in lengths.items()}
+
+
+def wall_types(path):
+    """Wall key -> its `ObjectType`, its type as the export names it."""
+    return {key_of(wall): wall.ObjectType for wall in open_ifc(path).by_type("IfcWall") if key_of(wall) and wall.ObjectType}
 
 
 def axis_lengths(path):
@@ -348,6 +359,8 @@ def main(argv):
     their_length_scale = ifcopenshell.util.unit.calculate_unit_scale(open_ifc(args[1]))
     # In a file whose length unit is the foot, a perimeter in feet is right.
     feet_file = abs(their_length_scale - FOOT_METRES) <= 1e-9
+    our_types, their_types = wall_types(args[0]), wall_types(args[1])
+    other_types = 0
     for (key, qset, name), value in sorted(theirs.items()):
         if key not in our_objects:
             continue
@@ -370,6 +383,12 @@ def main(argv):
             outline = their_slab_perimeters[key]
             if abs(as_feet - outline) <= 1e-4 * max(abs(as_feet), abs(outline)):
                 defects[(qset, name)] += 1
+                continue
+        if (qset, name) == WALL_WIDTH:
+            mine = ours.get((key, qset, name))
+            ours_type, theirs_type = our_types.get(key), their_types.get(key)
+            if mine is not None and not same(mine, value) and ours_type and theirs_type and ours_type != theirs_type:
+                other_types += 1
                 continue
         row = rows[(qset, name)]
         row[0] += 1
@@ -410,6 +429,7 @@ def main(argv):
         f"walls whose Length is rvt-rs's curve's: {curve_checks['curve']}; Revit's Axis's: {curve_checks['axis']}; "
         f"neither: {curve_checks['neither']}{'' if trust_curves else ' (none counted apart)'}"
     )
+    print(f"walls the two exports give different types, their differing Width counted apart (RE-253): {other_types}")
     if our_own or their_own:
         print(f"quantities with their own unit, not scored: rvt-rs {our_own}, Revit {their_own}")
     for (qset, name), (n, equal, different, missing) in sorted(rows.items()):

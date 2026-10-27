@@ -22,7 +22,7 @@ At permit the split is 217 and 14 against 177 and 52, with 129 walls where the t
 A wall's native `SWall` record (RE-222):
 
 - `VWallDriver.m_pCrv` points at the record's `GLine`, the wall's curve: its `m_endParams` end on the middle plane of a wall joined there, on every joined end of the office's 607 walls.
-- Its upright `Plane` objects along the curve are its faces (and its location planes): the outermost two are where the wall's sides are, also on a wall whose curve is not its centreline.
+- Its upright `Plane` objects along the curve are its faces (and its location planes): the outermost two are where the wall's sides are on most walls, also on a wall whose curve is not its centreline, but not on every layered wall, where they can lie inside its sides (on 191 of the office's 596 walls as built, RE-253 §4).
 - `VWallDriver.m_controlJoinsSet` names the walls joined at each end (`m_index`), each with the end it joins by (2 or 3 its middle, a T joint), and `CDJoinInfo` names the walls whose end meets this wall's middle; `CDJoinInfo` alone misses most of the joins at a wall's own ends.
 - `JoinEndGStep.m_exposedFaceMap` names a face of another wall at an end that runs through to that wall's far face: on the office as built, every one of the 231 such ends of the exported `Axis` has one, and 623 of the 631 that stop at a joined wall's near face have none.
 - `CleanPairGStep`, `CutPairGStep` (`m_otherId`) and `WallEmbedWallGStep` (`m_instId`) name the other elements cutting the wall; where one is not a wall (a column, a curtain wall), the `Axis` ends where that element cuts it, which the joins do not give.
