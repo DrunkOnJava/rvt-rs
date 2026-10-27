@@ -892,6 +892,7 @@ pub fn append_typed_production_elements(
         add_mullion_span(&mut reference_sets, &ifc_type, &decoded);
         add_door_window_quantities(&mut reference_sets, &ifc_type, &decoded);
         add_wall_quantities(&mut reference_sets, &ifc_type, &decoded);
+        add_curtain_wall_length(&mut reference_sets, &ifc_type, &decoded);
         add_body_quantities(
             &mut reference_sets,
             &ifc_type,
@@ -2257,6 +2258,31 @@ fn add_stair_flight_quantities(
 /// that curve cut back at its joins, by how it draws the wall, so a Length is
 /// written only where the two are the same (Griffin, 2026-10-26, RE-252).
 /// Nothing where the thickness is not read.
+/// Add a curtain wall's `Qto_CurtainWallQuantities.Length` to `sets`: its
+/// curve's length ([`crate::partition_schema_mvp::WALL_LENGTH_FIELD`]), which
+/// revit-ifc's `LengthCalculator` takes from the wall's location curve
+/// (CLEANROOM.md source 5): on all 218 of the BIM4LCA office's straight
+/// curtain walls, as built and at permit (#1016). Nothing on a curved one.
+fn add_curtain_wall_length(sets: &mut Vec<PropertySet>, ifc_type: &str, decoded: &DecodedElement) {
+    use crate::partition_schema_mvp as mvp;
+    if ifc_type != "IFCCURTAINWALL" || decoded.class != mvp::CURTAIN_WALL_CLASS {
+        return;
+    }
+    let Some(length) = decoded.fields.iter().find_map(|(name, value)| match value {
+        InstanceField::Float { value, .. } if name == mvp::WALL_LENGTH_FIELD => Some(*value),
+        _ => None,
+    }) else {
+        return;
+    };
+    sets.push(PropertySet {
+        name: "Qto_CurtainWallQuantities".into(),
+        properties: vec![Property {
+            name: "Length".into(),
+            value: PropertyValue::PositiveLengthFeet(length),
+        }],
+    });
+}
+
 fn add_wall_quantities(sets: &mut Vec<PropertySet>, ifc_type: &str, decoded: &DecodedElement) {
     use crate::partition_schema_mvp as mvp;
     if !matches!(ifc_type, "IFCWALL" | "IFCWALLSTANDARDCASE") {
