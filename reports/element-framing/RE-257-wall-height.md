@@ -52,12 +52,9 @@ Nothing changes: no wall gets a `Height`. Writing the depth would be wrong on 78
 ## 6. Reproduce
 
 ```bash
-gh workflow run measure.yml --ref re/wall-height -f ref=8904889d80fb22a1c8a37e0eb59e62a319ac5f73 -f base=none -f nordic=true \
-  -f models="nordic-office-*" -f scorers=none \
-  -f probe=probe_re251_wall_numbers -f probe_scorer=wall_height_vs_qtos
-gh workflow run measure.yml --ref re/wall-height -f ref=efc4fcb8ae18ed8924225a8d351f184f50ba3391 -f base=none -f nordic=true -f r2025=true \
+gh workflow run measure.yml --ref main -f ref=ee0635aa097aad4ab82e6d30322354c847d998cd -f base=none -f nordic=true -f r2025=true \
   -f models="nordic-office-* r2025-*" -f scorers=none \
   -f probe=probe_re251_wall_numbers -f probe_scorer=wall_height_vs_qtos
 ```
 
-Once this lands, `--ref main` with the merge commit as `ref` runs the same.
+The runs above measured the same probe and scorer before a rebase onto 0.10.0; those commits are kept under `refs/archive/2026-10-27/re/wall-height-measured`.
