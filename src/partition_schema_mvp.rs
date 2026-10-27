@@ -8509,7 +8509,7 @@ fn attach_room_outlines(rf: &mut RevitFile, revit_version: u32, rooms: &mut [Dec
 }
 
 /// Releases a room's `Qto_SpaceBaseQuantities.Height` is read on (RE-255).
-pub const ROOM_HEIGHT_REVIT_VERSIONS: &[u32] = &[2024, 2025];
+pub const ROOM_HEIGHT_REVIT_VERSIONS: &[u32] = &[2024, 2025, 2026];
 
 /// Field holding a room's height, feet (RE-255).
 pub const ROOM_HEIGHT_FIELD: &str = "m_room_height";
