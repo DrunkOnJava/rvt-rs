@@ -916,6 +916,7 @@ pub fn append_typed_production_elements(
         );
         add_stair_flight_quantities(&mut reference_sets, &ifc_type, &decoded);
         add_railing_height(&mut reference_sets, &ifc_type, &decoded);
+        add_railing_length(&mut reference_sets, &ifc_type, &decoded);
         add_extend_to_structure(&mut reference_sets, &ifc_type, &decoded);
         let mut serial_sets = serial_number_property_sets(&decoded);
         serial_sets.extend(revit_parameter_property_sets(&decoded));
@@ -1987,6 +1988,31 @@ fn add_level_slab_pitch(sets: &mut Vec<PropertySet>) {
             properties: vec![property],
         }),
     }
+}
+
+/// Add a stair railing's `Qto_RailingBaseQuantities.Length` to `sets`, its
+/// path along its stair (RE-254).
+fn add_railing_length(sets: &mut Vec<PropertySet>, ifc_type: &str, decoded: &DecodedElement) {
+    if ifc_type != "IFCRAILING" {
+        return;
+    }
+    let Some(length) = decoded.fields.iter().find_map(|(name, value)| match value {
+        InstanceField::Float { value, .. }
+            if name == crate::partition_schema_mvp::RAILING_LENGTH_FIELD =>
+        {
+            Some(*value)
+        }
+        _ => None,
+    }) else {
+        return;
+    };
+    sets.push(PropertySet {
+        name: "Qto_RailingBaseQuantities".into(),
+        properties: vec![Property {
+            name: "Length".into(),
+            value: PropertyValue::PositiveLengthFeet(length),
+        }],
+    });
 }
 
 /// Add `Height` (`IfcPositiveLengthMeasure`) to a railing's

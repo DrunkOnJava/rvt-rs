@@ -825,6 +825,186 @@ pub fn railing_type_heights(
     Ok(out)
 }
 
+/// A sketch `GLine`'s plan direction (`m_dirVec`) and length, the span of
+/// its `m_endParams`, feet.
+fn sketch_line(fields: &Value) -> Option<([f64; 2], f64)> {
+    let ends = fields.get("m_endParams")?.as_array()?;
+    let dir = fields.get("m_dirVec")?.as_array()?;
+    let span = (ends.get(1)?.as_f64()? - ends.first()?.as_f64()?).abs();
+    let dir = [dir.first()?.as_f64()?, dir.get(1)?.as_f64()?];
+    (span.is_finite() && dir.iter().all(|c| c.is_finite())).then_some((dir, span))
+}
+
+/// Releases a stair railing's `Length` is read on (RE-254).
+pub const RAILING_LENGTH_REVIT_VERSIONS: &[u32] = &[2024, 2025];
+
+/// The `Length` Revit's export writes on each railing in `railings` that
+/// belongs to a stair (`BaseRailing.m_stairsId`) and whose path, the sketch
+/// its record names (`m_sketchId`), is one straight line along one or more
+/// of that stair's runs, feet (RE-254). The line climbs at the stair's
+/// riser height over its tread depth (its `StairsElement`'s actual counts)
+/// for as long as the longest of those runs climbs, its risers less one
+/// times the tread depth (`m_topRiserIndex` less `m_baseRiserIndex`, less
+/// one), and runs level for the rest: Revit's `Length` on every such railing
+/// of the BIM4LCA office and the R2025 stair models. A railing whose path
+/// has more lines, or an arc, is left out: over a stair well with landings
+/// the climb is not read yet.
+pub fn railing_lengths(
+    rf: &mut RevitFile,
+    railings: &BTreeSet<u64>,
+) -> anyhow::Result<BTreeMap<u64, f64>> {
+    if railings.is_empty() {
+        return Ok(BTreeMap::new());
+    }
+    let mut held: BTreeMap<u64, (u64, u64)> = BTreeMap::new();
+    let options = Options {
+        selected_ids: railings.clone(),
+        ..Options::default()
+    };
+    extract_graphs(rf, &options, |record| {
+        let root = record
+            .graph
+            .as_ref()
+            .and_then(|graph| graph.objects.iter().find(|o| o.class_name == "BaseRailing"));
+        if let Some((sketch, stair)) = root.and_then(|root| {
+            Some((
+                element_id(&root.fields, "m_sketchId")?,
+                element_id(&root.fields, "m_stairsId")?,
+            ))
+        }) {
+            held.insert(record.identity.element_id, (sketch, stair));
+        }
+        Ok(())
+    })?;
+    if held.is_empty() {
+        return Ok(BTreeMap::new());
+    }
+    let sketches: BTreeSet<u64> = held.values().map(|(sketch, _)| *sketch).collect();
+    let stairs: BTreeSet<u64> = held.values().map(|(_, stair)| *stair).collect();
+    type Line = ([f64; 2], f64);
+    let mut paths: BTreeMap<u64, Option<Vec<Line>>> = BTreeMap::new();
+    let mut slopes: BTreeMap<u64, (f64, f64)> = BTreeMap::new();
+    let mut runs: Vec<(u64, i64, [f64; 2])> = Vec::new();
+    let options = Options {
+        selected_ids: sketches.union(&stairs).copied().collect(),
+        selected_classes: ["StairsRun".to_string()].into(),
+        ..Options::default()
+    };
+    extract_graphs(rf, &options, |record| {
+        let Some(graph) = record.graph.as_ref() else {
+            return Ok(());
+        };
+        let id = record.identity.element_id;
+        match record.class_name.as_deref() {
+            Some("StairsElement") if stairs.contains(&id) => {
+                if let Some(fields) = graph.objects.first().map(|o| &o.fields) {
+                    if let (Some(riser), Some(tread)) = (
+                        number(fields, "m_actualRiserHeight").filter(|h| *h > 0.0),
+                        number(fields, "m_actualTreadDepth").filter(|d| *d > 0.0),
+                    ) {
+                        slopes.insert(id, (riser, tread));
+                    }
+                }
+            }
+            Some("StairsRun") => {
+                let Some(fields) = graph.objects.first().map(|o| &o.fields) else {
+                    return Ok(());
+                };
+                let index = |name: &str| fields.get(name).and_then(Value::as_i64);
+                let counted = (
+                    element_id(fields, "m_stairsId"),
+                    index("m_topRiserIndex"),
+                    index("m_baseRiserIndex"),
+                    number(fields, "m_topElevation"),
+                    number(fields, "m_bottomElevation"),
+                    flag(fields, "m_beginWithRiser"),
+                    flag(fields, "m_endWithRiser"),
+                );
+                let (
+                    Some(stair),
+                    Some(top),
+                    Some(base),
+                    Some(top_z),
+                    Some(bottom_z),
+                    Some(_),
+                    Some(_),
+                ) = counted
+                else {
+                    return Ok(());
+                };
+                if !stairs.contains(&stair) || top <= base || top_z - bottom_z <= 0.0 {
+                    return Ok(());
+                }
+                let treads: Vec<&Value> = graph
+                    .objects
+                    .iter()
+                    .filter(|o| o.class_name == "StairsTreadInfo")
+                    .map(|o| &o.fields)
+                    .collect();
+                let kinds: BTreeSet<Option<i64>> = treads
+                    .iter()
+                    .map(|t| t.get("m_runType").and_then(Value::as_i64))
+                    .collect();
+                if kinds.len() != 1 || kinds.contains(&None) {
+                    return Ok(());
+                }
+                if let Some(direction) = treads
+                    .first()
+                    .and_then(|t| point(t, "m_runDirProj"))
+                    .and_then(unit_plan)
+                {
+                    runs.push((stair, top - base, direction));
+                }
+            }
+            _ if sketches.contains(&id) => {
+                let mut lines = Some(Vec::new());
+                for object in &graph.objects {
+                    let name = object.class_name.as_str();
+                    if !name.starts_with('G')
+                        || !(name.contains("Line")
+                            || name.contains("Arc")
+                            || name.contains("Curve"))
+                    {
+                        continue;
+                    }
+                    let line = if name == "GLine" {
+                        sketch_line(&object.fields)
+                    } else {
+                        None
+                    };
+                    match (line, lines.as_mut()) {
+                        (Some(line), Some(found)) => found.push(line),
+                        _ => lines = None,
+                    }
+                }
+                paths.insert(id, lines);
+            }
+            _ => {}
+        }
+        Ok(())
+    })?;
+    let mut out = BTreeMap::new();
+    for (railing, (sketch, stair)) in held {
+        let (Some(Some(path)), Some(&(riser, tread))) = (paths.get(&sketch), slopes.get(&stair))
+        else {
+            continue;
+        };
+        let [(dir, span)] = path.as_slice() else {
+            continue;
+        };
+        let longest = runs
+            .iter()
+            .filter(|(of, _, d)| *of == stair && (dir[0] * d[1] - dir[1] * d[0]).abs() < 1e-6)
+            .map(|(_, risers, _)| (risers - 1).max(0) as f64 * tread)
+            .fold(0.0_f64, f64::max);
+        if longest > 0.0 && *span > 0.0 {
+            let climb = span.min(longest);
+            out.insert(railing, span + climb * ((riser / tread).hypot(1.0) - 1.0));
+        }
+    }
+    Ok(out)
+}
+
 /// Releases a stair's and its parts' names are read from their native
 /// records on: the R2025 stair models (#323).
 pub const NATIVE_STAIR_NAME_REVIT_VERSIONS: &[u32] = &[2025];
