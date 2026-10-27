@@ -900,6 +900,7 @@ pub fn append_typed_production_elements(
             extrusion.as_ref(),
             solid_shape.as_ref(),
         );
+        add_beam_length(&mut reference_sets, &ifc_type, property_set.as_ref());
         add_slab_gross_area(
             &mut reference_sets,
             &ifc_type,
@@ -2151,6 +2152,46 @@ fn add_body_quantities(
     sets.push(PropertySet {
         name: "Qto_ColumnBaseQuantities".into(),
         properties,
+    });
+}
+
+/// Add a beam's `Qto_BeamBaseQuantities.Length` to `sets` (#1016): the
+/// length of the location line it is drawn along (RE-49, its record set's
+/// `AxisLength`), where its body is that line's box
+/// ([`BEAM_AXIS_BODY_SOURCE`]), whose ends lie in the beam's record box:
+/// Revit's export writes it as its body's extrusion length, the line's on
+/// each of the BIM4LCA office's 8 beams. Its areas and volumes are left out:
+/// that box is not the beam's section.
+fn add_beam_length(sets: &mut Vec<PropertySet>, ifc_type: &str, record: Option<&PropertySet>) {
+    if ifc_type != "IFCBEAM" {
+        return;
+    }
+    let Some(record) = record else {
+        return;
+    };
+    let along_axis = record.properties.iter().any(|property| {
+        property.name == "BodySource"
+            && matches!(&property.value, PropertyValue::Text(text) if text == BEAM_AXIS_BODY_SOURCE)
+    });
+    let length = record
+        .properties
+        .iter()
+        .find_map(|property| match &property.value {
+            PropertyValue::LengthFeet(feet) if property.name == "AxisLength" => Some(*feet),
+            _ => None,
+        });
+    let (true, Some(length)) = (along_axis, length) else {
+        return;
+    };
+    if !(length.is_finite() && length > 0.0) {
+        return;
+    }
+    sets.push(PropertySet {
+        name: "Qto_BeamBaseQuantities".into(),
+        properties: vec![Property {
+            name: "Length".into(),
+            value: PropertyValue::PositiveLengthFeet(length),
+        }],
     });
 }
 
