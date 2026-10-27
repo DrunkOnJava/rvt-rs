@@ -33,7 +33,7 @@ Revit's value is never shorter than the sum, and the stair wells' railings, whos
 
 ## 4. What stays open
 
-A railing's `Length` needs its path's height along it: over a stair flight the flight's slope (its riser height over its tread depth, RE-92 and native stairs), on a sloped floor or roof that host's plane. Until that is read, no railing gets a `Length`, as Revit's export writes one wherever no field tells a level railing apart.
+A railing's `Length` needs its path's height along it: over a stair flight the flight's slope (its riser height over its tread depth, RE-92 and native stairs), on a sloped floor or roof that host's plane. Until that is read, no railing gets a `Length`: Revit's export writes one on every railing, and on 37 of the office's 41 it is not the plan sum, with nothing read telling the other 4 apart.
 
 ## 5. Reproduce
 
