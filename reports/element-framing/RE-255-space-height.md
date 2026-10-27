@@ -41,8 +41,8 @@ The 20 office rooms whose records hold no faces, and every space's areas and vol
 ## 5. Reproduce
 
 ```bash
-gh workflow run measure.yml --ref main -f ref=COMMIT -f base=none -f nordic=true -f r2025=true \
+gh workflow run measure.yml --ref main -f ref=13aa1969dcc060ed56afc3df8368631a851b6957 -f base=none -f nordic=true -f r2025=true \
   -f models="nordic-office-as-built r2025-12_Rooms_Door_Windows r2025-13_Rooms_Stairs" -f scorers=none \
   -f probe=probe_re255_space_numbers -f probe_scorer=space_numbers_vs_qtos
-gh workflow run measure.yml --ref main -f ref=COMMIT -f base=main -f nordic=true -f r2025=true
+gh workflow run measure.yml --ref main -f ref=13aa1969dcc060ed56afc3df8368631a851b6957 -f base=main -f nordic=true -f r2025=true
 ```
