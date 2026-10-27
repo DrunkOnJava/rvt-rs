@@ -2109,11 +2109,13 @@ fn add_body_quantities(
 /// RE-249): the area of the profile its body extrudes, its outline less its
 /// holes, as Revit's export writes it. Only on a floor drawn as one extrusion
 /// (`single`): a sketch of separate loops is several elements sharing its
-/// `Tag`, and a stair landing's slab gets none from Revit's export. With it,
-/// as revit-ifc's `DepthCalculator`, `GrossVolumeCalculator` and
-/// `PerimeterCalculator` take them from that extrusion (CLEANROOM.md source
-/// 5): its `Depth`, the extrusion's length, its `GrossVolume`, the area times
-/// that length, and its `Perimeter`, its outline's.
+/// `Tag`, and a stair landing's slab gets none from Revit's export. Where the
+/// extrusion is as deep as the floor's type's stacked layers (RE-238), also,
+/// as revit-ifc's `DepthCalculator` and `GrossVolumeCalculator` take them
+/// from that extrusion (CLEANROOM.md source 5), its `Depth`, the extrusion's
+/// length, and its `GrossVolume`, the area times that length. Its
+/// `Perimeter` is left out: Revit's export writes it in feet, unscaled, in
+/// a file whose length unit is millimetres (RE-235 §5).
 fn add_slab_gross_area(
     sets: &mut Vec<PropertySet>,
     ifc_type: &str,
@@ -2134,8 +2136,15 @@ fn add_slab_gross_area(
         name: "GrossArea".into(),
         value: PropertyValue::AreaSquareFeet(area),
     }];
+    const TOLERANCE_FEET: f64 = 1e-3;
     let depth = body.height_feet;
-    if depth.is_finite() && depth > 0.0 {
+    let layered = crate::partition_schema_mvp::element_layers_from_fields(&decoded.fields)
+        .filter(|layers| layers.stacked && !layers.layers.is_empty())
+        .is_some_and(|layers| {
+            let total: f64 = layers.layers.iter().map(|layer| layer.width_feet).sum();
+            (total - depth).abs() <= TOLERANCE_FEET
+        });
+    if layered && depth.is_finite() && depth > 0.0 {
         properties.push(Property {
             name: "Depth".into(),
             value: PropertyValue::PositiveLengthFeet(depth),
@@ -2145,41 +2154,10 @@ fn add_slab_gross_area(
             value: PropertyValue::VolumeCubicFeet(area * depth),
         });
     }
-    if let Some(perimeter) = profile_perimeter(body) {
-        properties.push(Property {
-            name: "Perimeter".into(),
-            value: PropertyValue::PositiveLengthFeet(perimeter),
-        });
-    }
     sets.push(PropertySet {
         name: "Qto_SlabBaseQuantities".into(),
         properties,
     });
-}
-
-/// The length of the outline of the profile `body` extrudes, its holes left
-/// out; `None` for another profile.
-fn profile_perimeter(body: &Extrusion) -> Option<f64> {
-    let ring = |points: &[(f64, f64)]| -> f64 {
-        points
-            .iter()
-            .zip(points.iter().cycle().skip(1))
-            .map(|(a, b)| (b.0 - a.0).hypot(b.1 - a.1))
-            .sum()
-    };
-    let perimeter = match &body.profile_override {
-        None => 2.0 * (body.width_feet + body.depth_feet),
-        Some(entities::ProfileDef::Rectangle {
-            width_feet,
-            depth_feet,
-        }) => 2.0 * (width_feet + depth_feet),
-        Some(
-            entities::ProfileDef::ArbitraryClosed { points }
-            | entities::ProfileDef::ArbitraryWithVoids { points, .. },
-        ) => ring(points),
-        Some(_) => return None,
-    };
-    (perimeter.is_finite() && perimeter > 0.0).then_some(perimeter)
 }
 
 /// The area of the profile `body` extrudes, its rectangle or its outline less

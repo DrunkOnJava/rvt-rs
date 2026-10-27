@@ -68,17 +68,21 @@ IFC4_LENGTH_QUANTITY = {
 # CrossSectionArea grows with its length and is never its section's area; a
 # door's opening's Width is its vertical extent and its Height its horizontal
 # one, where IFC4 defines a wall opening's the other way (RE-244). An
-# opening is keyed by the Tag of the door filling it.
+# opening is keyed by the Tag of the door filling it. A slab's Perimeter is
+# its perimeter in feet, unscaled, in a file whose length unit is millimetres
+# (#1016).
 # A wall's Length, which Revit's export writes as either its curve's length or
 # that of its curve cut back at its joins, by how it draws the wall (RE-252).
 # Where the two differ, nothing in the model says which, so a missing Length
-# there is counted apart (the maintainer, 2026-10-26): rvt-rs's own set gives
-# the curve's, Revit's export's `Axis` the cut-back curve's. 1e-4 ft.
+# there is counted apart (the maintainer, 2026-10-26): rvt-rs's export
+# diagnostics give the curve's, Revit's export's `Axis` the cut-back curve's.
+# 1e-4 ft.
 WALL_LENGTH = ("Qto_WallBaseQuantities", "Length")
 TWO_LENGTHS_TOLERANCE_M = 1e-4 * 0.3048
 
 REVIT_DEFECTS = {
     ("Qto_MemberBaseQuantities", "CrossSectionArea"): "MULLION",
+    ("Qto_SlabBaseQuantities", "Perimeter"): "IfcSlab",
     ("Qto_OpeningElementBaseQuantities", "Width"): "IfcDoor",
     ("Qto_OpeningElementBaseQuantities", "Height"): "IfcDoor",
 }
