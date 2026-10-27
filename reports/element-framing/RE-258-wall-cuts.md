@@ -3,7 +3,7 @@
 **Date:** 2026-10-27
 **Issues:** #1067 (walls drawn taller than Revit's body), #1016 (W7: walls' `Height`), W6 of [`docs/release-1.0-criteria.md`](../../docs/release-1.0-criteria.md); follows RE-257 (a wall's `Height` is its body's span) and RE-228 (`JoinToRoofGStep.m_baseOrTop`)
 **Artefacts:** the BIM4LCA office as built and at building permit (Revit 2024, Revit 24.0.5's IFC4 exports), Core Interior (Revit 2024), RE1 Architecture and puzzbobb's R2025 models (Revit 2025), as Measure fetches them
-**Runs:** Measure (`tools/re/wall_heights_vs_ifc.py`, with `examples/probe_re251_wall_numbers.rs` for the walls' records) [40509396187](https://github.com/DrunkOnJava/rvt-rs/actions/runs/40509396187) (every model), [40515952214](https://github.com/DrunkOnJava/rvt-rs/actions/runs/40515952214) (the floors' own heights) and [40523970600](https://github.com/DrunkOnJava/rvt-rs/actions/runs/40523970600) (both offices, both files' floors sampled over each wall)
+**Runs:** Measure (`tools/re/wall_heights_vs_ifc.py`, with `examples/probe_re251_wall_numbers.rs` for the walls' records) [40509396187](https://github.com/DrunkOnJava/rvt-rs/actions/runs/40509396187) (every model), [40515952214](https://github.com/DrunkOnJava/rvt-rs/actions/runs/40515952214) (the floors' own heights) and [40523970600](https://github.com/DrunkOnJava/rvt-rs/actions/runs/40523970600) (both offices, both files' floors sampled over each wall); [40556720844](https://github.com/DrunkOnJava/rvt-rs/actions/runs/40556720844) re-ran every model with the scorer as it lands, which takes the pieces an exporter writes under one Tag as one body: every count here is unchanged
 **Result:** positive for the top, narrowed, not shipped; negative for the base. Revit cuts a wall's top at the underside of a floor its top join names (`JoinToRoofGStep` with `m_baseOrTop` 1). That gives 63 of the office's 65 top cuts as built and 68 of 70 at permit, but it also cuts 5 walls at each stage that Revit leaves whole, and nothing in either file tells those apart. No wall is cut yet.
 
 ## 1. Which end moves
@@ -56,9 +56,9 @@ Nothing changes. Cutting the tops by the rule would make 63 walls Revit's as bui
 ## 6. Reproduce
 
 ```bash
-gh workflow run measure.yml --ref main -f ref=<this PR's merge commit> -f base=none -f nordic=true \
+gh workflow run measure.yml --ref main -f ref=5a81e74587c1cc8c71f8d2dacb9fada7baef88f4 -f base=none -f nordic=true \
   -f models="nordic-office-*" -f scorers=wall_heights_vs_ifc \
   -f probe=probe_re251_wall_numbers -f probe_scorer=-
 ```
 
-The runs above measured the branch's commits, kept under `refs/archive/2026-10-27/re/wall-cuts` once it lands. The rule's tallies come from joining `probe.txt`'s `JoinToRoofGStep` objects (`m_baseOrTop`, `m_ids`) with the scorer's `wall` and `over` lines.
+The export and the probe are `main`'s as this lands (5a81e745), and the scorer comes from `main` once it has. The runs above measured the branch's commits, kept under `refs/archive/2026-10-27/re/wall-cuts` once it lands. The rule's tallies come from joining `probe.txt`'s `JoinToRoofGStep` objects (`m_baseOrTop`, `m_ids`) with the scorer's `wall` and `over` lines.
