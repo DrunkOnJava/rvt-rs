@@ -2110,7 +2110,7 @@ fn add_body_quantities(
 /// holes, as Revit's export writes it. Only on a floor drawn as one extrusion
 /// (`single`): a sketch of separate loops is several elements sharing its
 /// `Tag`, and a stair landing's slab gets none from Revit's export. Where the
-/// extrusion is as deep as the floor's type's stacked layers (RE-238), also,
+/// floor's type has one layer and the extrusion is as deep (RE-238), also,
 /// as revit-ifc's `DepthCalculator` and `GrossVolumeCalculator` take them
 /// from that extrusion (CLEANROOM.md source 5), its `Depth`, the extrusion's
 /// length, and its `GrossVolume`, the area times that length. Its
@@ -2139,11 +2139,8 @@ fn add_slab_gross_area(
     const TOLERANCE_FEET: f64 = 1e-3;
     let depth = body.height_feet;
     let layered = crate::partition_schema_mvp::element_layers_from_fields(&decoded.fields)
-        .filter(|layers| layers.stacked && !layers.layers.is_empty())
-        .is_some_and(|layers| {
-            let total: f64 = layers.layers.iter().map(|layer| layer.width_feet).sum();
-            (total - depth).abs() <= TOLERANCE_FEET
-        });
+        .filter(|layers| layers.stacked && layers.layers.len() == 1)
+        .is_some_and(|layers| (layers.layers[0].width_feet - depth).abs() <= TOLERANCE_FEET);
     if layered && depth.is_finite() && depth > 0.0 {
         properties.push(Property {
             name: "Depth".into(),
