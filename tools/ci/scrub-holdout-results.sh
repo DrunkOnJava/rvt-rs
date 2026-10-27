@@ -13,8 +13,9 @@
 # counts.txt, made of the summary lines of its probe scores (the wall length
 # rule, with the walls it is wrong on as a count, the export's version and the
 # census of its wall representations) and
-# of its quantity census (the totals and each quantity's counts, and for each
-# value that differs only the quantity and rvt-rs's value over Revit's), of
+# of its quantity census (the totals and each quantity's counts, the walls it
+# counts apart for their two lengths (RE-252), and for each value that
+# differs only the quantity and rvt-rs's value over Revit's), of
 # its names census (counts by category, entity and agreement) and of its layer
 # set census (its counts, not its worst elements), and
 # ifc.sha256, the hash of rvt-rs's own export; every other file is deleted.
@@ -31,7 +32,7 @@ for dir in "$RESULTS"/holdout-*/ "$RESULTS"/bimcollab-*/; do
     done
     for f in "$dir"qtos_vs_ifc*.txt; do
       [ -f "$f" ] || continue
-      grep -E '^(Revit quantities on objects rvt-rs writes: [0-9]+; equal: [0-9]+; different: [0-9]+; missing: [0-9]+; rvt-rs quantities Revit does not write: [0-9]+|  Qto_[A-Za-z]+\.[A-Za-z]+: [0-9]+, equal [0-9]+, different [0-9]+, missing [0-9]+|exit [0-9]+)$' "$f" || true
+      grep -E "^(Revit quantities on objects rvt-rs writes: [0-9]+; equal: [0-9]+; different: [0-9]+; missing: [0-9]+; rvt-rs quantities Revit does not write: [0-9]+|  Qto_[A-Za-z]+\.[A-Za-z]+: [0-9]+, equal [0-9]+, different [0-9]+, missing [0-9]+|walls whose curve and its cut-back curve differ, either of which Revit's export may write as their Length, counted apart \(RE-252\): [0-9]+|walls whose Length is rvt-rs's curve's: [0-9]+; Revit's Axis's: [0-9]+; neither: [0-9]+( \(none counted apart\))?|exit [0-9]+)$" "$f" || true
       awk '/^largest differences/ { on = 1; next }
            on && $2 ~ /^Qto_[A-Za-z]+\.[A-Za-z]+:$/ && $6 + 0 != 0 {
              q = $2; sub(/:$/, "", q); a = $4; sub(/,$/, "", a)
