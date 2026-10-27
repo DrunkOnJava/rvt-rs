@@ -738,6 +738,16 @@ Built-in parameters have no name (the built-in catalog is not shipped,
 #255), a family's built-in slots such as a window type's Width are not
 resolved, and nothing new is written to IFC.
 
+**RE-256 (2026-10-27)** gives a wall, floor, ceiling and roof its type's
+saved parameters after its own in the same lists, through the member its
+native record names its type in (`m_WallAttributesId`,
+`m_floorAttributesId`, `m_ceilingAttributesId`, `m_roofAttributesId`). On
+Snowdon Towers every such value Revit's export writes on the element's type
+object is Revit's: type name, assembly code, type mark and walls' fire
+rating, 4,297 of the 4,314 Revit writes (the 17 left are stair landings,
+which name no type this way)
+(`reports/element-framing/RE-256-system-family-type-parameters.md`).
+
 **RE-210 (2026-10-22)** adds `rvt-ifc --revit-property-sets` (#35). It
 writes each element's named saved parameters (RE-207) as Revit's exporter
 does with "Export Revit property sets", following revit-ifc's
