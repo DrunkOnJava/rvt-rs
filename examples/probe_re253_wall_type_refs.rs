@@ -19,7 +19,10 @@
 //! data (RE-216): how many have a name in more than one partition, more than
 //! one name, and a name in their latest partition (which the export takes,
 //! `type_data_names`) other than their routed current copy's; and how many
-//! have a type record in more than one partition. Last, `saved <time>`,
+//! have a type record in more than one partition. Then `walltype <name>`
+//! for each name the file's Walls type records give themselves, which
+//! `tools/re/export_after_save.py` looks for among the export's wall types
+//! (this output is not uploaded for a held-out model). Last, `saved <time>`,
 //! the file's save time (its `ProjectInformation` Atom `updated`), which
 //! `tools/re/export_after_save.py` compares with Revit's export's time.
 //!
@@ -169,6 +172,7 @@ fn main() -> anyhow::Result<()> {
         }
     }
     let picked_types: BTreeSet<u32> = picks.values().copied().collect();
+    let read_types: BTreeSet<u32> = type_records.union(&picked_types).copied().collect();
     let mut copies: BTreeMap<u32, BTreeMap<u32, String>> = BTreeMap::new();
     if let Some(header) = partition_names::element_data_header(version) {
         for stream in rf.partition_stream_names() {
@@ -181,12 +185,21 @@ fn main() -> anyhow::Result<()> {
                 .and_then(|n| n.parse::<u32>().ok())
                 .unwrap_or(0);
             for (id, name) in
-                partition_names::find_element_data_names(inflated.bytes(), &header, &picked_types)
+                partition_names::find_element_data_names(inflated.bytes(), &header, &read_types)
             {
                 copies.entry(id).or_default().insert(partition, name);
             }
         }
     }
+    let file_type_names: BTreeSet<&String> = copies.values().flat_map(|by| by.values()).collect();
+    for name in &file_type_names {
+        println!("walltype {name}");
+    }
+    let copies: BTreeMap<u32, BTreeMap<u32, String>> = copies
+        .iter()
+        .filter(|(id, _)| picked_types.contains(id))
+        .map(|(id, by)| (*id, by.clone()))
+        .collect();
     let holders: BTreeMap<u32, BTreeSet<u32>> = copies
         .iter()
         .map(|(&id, by)| (id, by.keys().copied().collect()))
