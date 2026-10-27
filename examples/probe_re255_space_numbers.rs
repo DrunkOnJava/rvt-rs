@@ -87,7 +87,7 @@ fn main() -> anyhow::Result<()> {
                     }
                     Some(_) => return None,
                 };
-                Some((tag.parse().ok()?, (area, area * body.height_feet)))
+                Some((tag.parse().ok()?, (area, body.height_feet)))
             }
             _ => None,
         })
@@ -193,9 +193,16 @@ fn main() -> anyhow::Result<()> {
                 all.push(format!("P.{}={n}", parameter.parameter_id));
             }
         }
-        if let Some((area, volume)) = bodies.get(id) {
+        if let Some((area, height)) = bodies.get(id) {
             all.push(format!("B.area={area}"));
-            all.push(format!("B.volume={volume}"));
+            all.push(format!("B.height={height}"));
+            all.push(format!("B.volume={}", area * height));
+            let room_height = parts
+                .iter()
+                .find_map(|part| part.strip_prefix("RoomElem.m_height=")?.parse::<f64>().ok());
+            if let Some(room_height) = room_height {
+                all.push(format!("B.area_x_room_height={}", area * room_height));
+            }
         }
         println!("rec {id} {class} {}", all.join(" "));
     }
