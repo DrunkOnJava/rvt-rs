@@ -2250,11 +2250,12 @@ fn add_stair_flight_quantities(
 
 /// Add a wall's `Qto_WallBaseQuantities` `Width` to `sets`: its type's
 /// thickness, the wall's Width parameter revit-ifc's `WidthCalculator`
-/// (CLEANROOM.md source 5) reads (#1016). Its `Length` is not written: the
-/// wall's Length parameter `LengthCalculator` reads first is not its
-/// location line's length, which is longer on 186 of the BIM4LCA office's
-/// 607 walls by about a joined wall's thickness. Nothing where the
-/// thickness is not read.
+/// (CLEANROOM.md source 5) reads (#1016). Its `Length` too where the partition
+/// reader gives one ([`crate::partition_schema_mvp::WALL_LENGTH_FIELD`]):
+/// Revit's export writes either the wall's curve's length or the length of
+/// that curve cut back at its joins, by how it draws the wall, so a Length is
+/// written only where the two are the same (Griffin, 2026-10-26, RE-252).
+/// Nothing where the thickness is not read.
 fn add_wall_quantities(sets: &mut Vec<PropertySet>, ifc_type: &str, decoded: &DecodedElement) {
     use crate::partition_schema_mvp as mvp;
     if !matches!(ifc_type, "IFCWALL" | "IFCWALLSTANDARDCASE") {
@@ -2266,12 +2267,25 @@ fn add_wall_quantities(sets: &mut Vec<PropertySet>, ifc_type: &str, decoded: &De
     let Some(thickness) = thickness.filter(|t| t.is_finite() && *t > 0.0) else {
         return;
     };
+    let length = decoded.fields.iter().find_map(|(name, value)| match value {
+        InstanceField::Float { value, .. } if name == mvp::WALL_LENGTH_FIELD => Some(*value),
+        _ => None,
+    });
+    let mut properties: Vec<Property> = length
+        .filter(|l| l.is_finite() && *l > 0.0)
+        .map(|length| Property {
+            name: "Length".into(),
+            value: PropertyValue::PositiveLengthFeet(length),
+        })
+        .into_iter()
+        .collect();
+    properties.push(Property {
+        name: "Width".into(),
+        value: PropertyValue::PositiveLengthFeet(thickness),
+    });
     sets.push(PropertySet {
         name: "Qto_WallBaseQuantities".into(),
-        properties: vec![Property {
-            name: "Width".into(),
-            value: PropertyValue::PositiveLengthFeet(thickness),
-        }],
+        properties,
     });
 }
 

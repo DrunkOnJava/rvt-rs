@@ -4,7 +4,8 @@
 # and 02_BIMcollab_Example_STR_optimized.ifc is Revit 2015's own IFC2X3 Coordination View 2.0 export
 # of it (IfcApplication "Autodesk Revit Architecture 2015 (ENU)", version 2015, 2014-10-08), later passed
 # through Solibri's IFC Optimizer. No redistribution licence is stated, so both are fetched for a Measure
-# run (`-f bimcollab=true`) by tools/ci/fetch-bimcollab.sh and never committed. STE1200 gave the .rvt's
+# run (`-f bimcollab=true`) by tools/ci/fetch-bimcollab.sh, never committed, and only the run's summary
+# counts are uploaded (tools/ci/scrub-holdout-results.sh, Griffin, 2026-10-26). STE1200 gave the .rvt's
 # provenance and sha256 (Discussion #112); the rest was measured 2026-10-21. The archives are checked
 # through their members only: BIMcollab repacks them (bc-example-project_2025.zip).
 # kind	name	url, or archive:path (outer!inner for a zip in the archive)	sha256	bytes

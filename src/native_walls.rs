@@ -29,6 +29,17 @@
 //! interior side (`m_numShellLayersExt`, `m_numShellLayersInt`): a layered
 //! wall's core runs on through the other wall's layers outside its core
 //! (RE-223, [`crate::element_record_wall_joins::tee_join`]).
+//!
+//! Revit's export writes a wall's `Qto_WallBaseQuantities.Length` as either
+//! its curve's length or the length of its curve cut back where its body
+//! meets the walls joined at its ends (revit-ifc's `LengthCalculator` and
+//! `WallExporter`, CLEANROOM.md source 5), one or the other by how the
+//! export draws the wall. [`trimmed_ends`] reads where the cut-back curve
+//! ends from the record: the curve's `GLine` ends on a joined wall's middle,
+//! the record's outermost two `Plane` objects along the curve are its faces,
+//! and an end whose `JoinEndGStep.m_exposedFaceMap` names a wall runs to that
+//! wall's far face, any other joined end to the nearest face of the walls
+//! joined there (RE-252).
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -57,6 +68,19 @@ pub struct NativeWall {
     /// its interior side, feet; `None` where its type is not a basic wall
     /// type with a compound structure.
     pub shells: Option<[f64; 2]>,
+    /// The signed distances, to the left of the curve's direction, of the
+    /// record's outermost two upright `Plane` objects along it, its faces,
+    /// feet; `None` where it has none.
+    pub faces: Option<[f64; 2]>,
+    /// The elements whose faces the `JoinEndGStep.m_exposedFaceMap` of the
+    /// curve's start and of its end names, in its order.
+    pub exposed: [Vec<u64>; 2],
+    /// The walls whose end meets this wall's middle, from its `CDJoinInfo`
+    /// objects, each with that end (0 or 1).
+    pub side_joins: Vec<(u64, u32)>,
+    /// The other element of each `CleanPairGStep` and `CutPairGStep`
+    /// (`m_otherId`) and `WallEmbedWallGStep` (`m_instId`).
+    pub partners: Vec<u64>,
 }
 
 /// The widths of a `CompoundStructure`'s layers outside its core, on its
@@ -91,6 +115,29 @@ fn triple(value: Option<&Value>) -> Option<[f64; 3]> {
         [x, y, z] => Some([x.as_f64()?, y.as_f64()?, z.as_f64()?]),
         _ => None,
     }
+}
+
+/// The signed distances to the left of the line from `start` along the unit
+/// `direction` of the outermost two of `planes` that stand upright along it.
+fn face_offsets(planes: &[&Value], start: [f64; 2], direction: [f64; 2]) -> Option<[f64; 2]> {
+    let offsets: Vec<f64> = planes
+        .iter()
+        .filter_map(|plane| {
+            let origin = triple(plane.get("m_origin"))?;
+            let x = triple(plane.get("m_xVec"))?;
+            let y = triple(plane.get("m_yVec"))?;
+            let along =
+                (direction[0] * x[1] - direction[1] * x[0]).abs() <= 1e-6 && x[2].abs() <= 1e-6;
+            let upright = (y[2].abs() - 1.0).abs() <= 1e-6;
+            (along && upright).then(|| {
+                (origin[0] - start[0]) * -direction[1] + (origin[1] - start[1]) * direction[0]
+            })
+        })
+        .filter(|offset| offset.is_finite())
+        .collect();
+    let low = offsets.iter().copied().reduce(f64::min)?;
+    let high = offsets.iter().copied().reduce(f64::max)?;
+    Some([low, high])
 }
 
 /// The plan start and end of a horizontal `GLine`.
@@ -254,6 +301,70 @@ pub fn native_walls_and_top_joins(
                 .cloned()
                 .unwrap_or_default();
             let root = graph.objects.first().map(|object| &object.fields);
+            let length = (end[0] - start[0]).hypot(end[1] - start[1]);
+            let direction = [(end[0] - start[0]) / length, (end[1] - start[1]) / length];
+            let planes: Vec<&Value> = graph
+                .objects
+                .iter()
+                .filter(|object| object.class_name == "Plane")
+                .map(|object| &object.fields)
+                .collect();
+            let mut exposed = [Vec::new(), Vec::new()];
+            let mut stepped = [false, false];
+            for step in graph
+                .objects
+                .iter()
+                .filter(|object| object.class_name == "JoinEndGStep")
+                .map(|object| &object.fields)
+            {
+                let Some(slot) = step
+                    .get("m_end")
+                    .and_then(Value::as_u64)
+                    .and_then(|end| usize::try_from(end).ok())
+                    .filter(|end| *end < 2)
+                else {
+                    continue;
+                };
+                if !std::mem::replace(&mut stepped[slot], true) {
+                    exposed[slot] = step
+                        .get("m_exposedFaceMap")
+                        .and_then(Value::as_array)
+                        .into_iter()
+                        .flatten()
+                        .filter_map(|face| element_id(face.pointer("/second/m_elemId")?))
+                        .collect();
+                }
+            }
+            let side_joins = graph
+                .objects
+                .iter()
+                .filter(|object| object.class_name == "CDJoinInfo")
+                .flat_map(|join| {
+                    join.fields
+                        .get("m_info")
+                        .and_then(Value::as_array)
+                        .into_iter()
+                        .flatten()
+                })
+                .filter_map(|member| {
+                    let other = element_id(member.get("m_elemId")?)?;
+                    let joined = u32::try_from(member.get("m_joinedEnd")?.as_u64()?).ok()?;
+                    (other != id && joined < 2).then_some((other, joined))
+                })
+                .collect();
+            let partners = graph
+                .objects
+                .iter()
+                .filter_map(|object| {
+                    let field = match object.class_name.as_str() {
+                        "CleanPairGStep" | "CutPairGStep" => "m_otherId",
+                        "WallEmbedWallGStep" => "m_instId",
+                        _ => return None,
+                    };
+                    Some(object.fields.get(field).and_then(element_id))
+                })
+                .map(|other| other.unwrap_or(u64::MAX))
+                .collect();
             let wall = NativeWall {
                 start,
                 end,
@@ -261,6 +372,10 @@ pub fn native_walls_and_top_joins(
                 cross_section: root.and_then(|fields| fields.get("m_wallCrossSection")?.as_i64()),
                 joins: [0, 1].map(|end| end_join(id, &controls, end)),
                 shells: None,
+                faces: face_offsets(&planes, start, direction),
+                exposed,
+                side_joins,
+                partners,
             };
             let type_id = root.and_then(|fields| element_id(fields.get("m_WallAttributesId")?));
             (wall, type_id)
@@ -306,4 +421,107 @@ pub fn tee_reach(
     thickness(*host)
         .filter(|t| t.is_finite() && *t > 0.0)
         .map(|t| -t / 2.0)
+}
+
+/// The walls joined at each end of each of `walls`: those its record's join
+/// lists name there, and those whose `CDJoinInfo` pairs that end with their
+/// middle.
+pub fn joined_at_ends(walls: &BTreeMap<u64, NativeWall>) -> BTreeMap<(u64, u32), BTreeSet<u64>> {
+    let mut out: BTreeMap<(u64, u32), BTreeSet<u64>> = BTreeMap::new();
+    for (&id, wall) in walls {
+        for (end, join) in (0u32..).zip(&wall.joins) {
+            for &(other, _) in join.iter().flatten() {
+                if other != id {
+                    out.entry((id, end)).or_default().insert(other);
+                }
+            }
+        }
+        for &(other, end) in &wall.side_joins {
+            out.entry((other, end)).or_default().insert(id);
+        }
+    }
+    out
+}
+
+/// Where wall `id`'s curve, cut back where its body meets the walls joined
+/// at its ends, starts and ends, as distances along it from its start, feet
+/// (RE-252). Each end is read twice: from the record, as the curve's end
+/// where no wall is joined there, the far face of the wall its end step's
+/// exposed face map names, or else the nearest face of the walls joined
+/// there; and from `reaches`, how far past that end the body reaches (RE-70,
+/// RE-71, RE-73, RE-222). An end is taken where the two agree, or where no
+/// wall is joined, no reach is given and nothing cuts the wall. `None`
+/// where an end is not taken, or an element other than one of `walls` cuts
+/// or joins the wall. Against Revit's exports of the BIM4LCA office (both
+/// stages) and puzzbobb's Revit 2025 models, every wall whose cut-back curve
+/// this gives is as long as its curve has that length as Revit's `Length`.
+pub fn trimmed_ends(
+    id: u64,
+    walls: &BTreeMap<u64, NativeWall>,
+    joined: &BTreeMap<(u64, u32), BTreeSet<u64>>,
+    reaches: [Option<f64>; 2],
+) -> Option<[f64; 2]> {
+    const AGREE_FEET: f64 = 1e-4;
+    let wall = walls.get(&id)?;
+    if wall.partners.iter().any(|other| !walls.contains_key(other))
+        || wall.joins.iter().any(Option::is_none)
+    {
+        return None;
+    }
+    let length = (wall.end[0] - wall.start[0]).hypot(wall.end[1] - wall.start[1]);
+    let direction = [
+        (wall.end[0] - wall.start[0]) / length,
+        (wall.end[1] - wall.start[1]) / length,
+    ];
+    // Where this wall's curve crosses the other wall's face at `offset`.
+    let crossing = |other: &NativeWall, offset: f64| {
+        let span = (other.end[0] - other.start[0]).hypot(other.end[1] - other.start[1]);
+        let along = [
+            (other.end[0] - other.start[0]) / span,
+            (other.end[1] - other.start[1]) / span,
+        ];
+        let point = [
+            other.start[0] - along[1] * offset,
+            other.start[1] + along[0] * offset,
+        ];
+        let cross = direction[0] * along[1] - direction[1] * along[0];
+        (cross.abs() >= 1e-9).then(|| {
+            ((point[0] - wall.start[0]) * along[1] - (point[1] - wall.start[1]) * along[0]) / cross
+        })
+    };
+    let faces = |other: u64| -> Vec<f64> {
+        walls
+            .get(&other)
+            .and_then(|o| Some((o, o.faces?)))
+            .map(|(o, faces)| faces.iter().filter_map(|&f| crossing(o, f)).collect())
+            .unwrap_or_default()
+    };
+    fn nearest(to: f64) -> impl Fn(&f64, &f64) -> std::cmp::Ordering {
+        move |a, b| (a - to).abs().total_cmp(&(b - to).abs())
+    }
+    let end_of = |end: u32| -> Option<f64> {
+        let (here, there) = if end == 0 {
+            (0.0, length)
+        } else {
+            (length, 0.0)
+        };
+        let reach = reaches[end as usize].map(|r| if end == 0 { here - r } else { here + r });
+        let read = match joined.get(&(id, end)) {
+            None if reach.is_none() && wall.partners.is_empty() => return Some(here),
+            None => Some(here),
+            Some(named) => match wall.exposed[end as usize]
+                .iter()
+                .find(|other| walls.contains_key(other))
+            {
+                Some(&other) => faces(other).into_iter().max_by(nearest(there)),
+                None => named
+                    .iter()
+                    .filter_map(|&other| faces(other).into_iter().min_by(nearest(there)))
+                    .min_by(nearest(there)),
+            },
+        };
+        let (read, reach) = (read?, reach?);
+        ((read - reach).abs() <= AGREE_FEET).then_some(read)
+    };
+    Some([end_of(0)?, end_of(1)?])
 }

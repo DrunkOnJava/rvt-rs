@@ -2239,3 +2239,8 @@ Revit's export writes a compound ceiling's `Qto_CoveringBaseQuantities.Width` as
 ## Addendum — RE-251 a wall's record does not keep Revit's wall quantities (2026-10-26)
 
 No number in a wall's native record or its saved parameters is Revit's wall side area, footprint area or volume on the BIM4LCA office: Revit computes those when it exports. A wall's `Height` is its saved parameter -1001101 on 496 of 579 walls (478 of 565 at permit); the rest are mostly walls whose top is joined to a roof or floor, and no field read tells them apart (the best, the `JoinToRoofGStep` it holds, is right on 529). Not written. Report: `reports/element-framing/RE-251-wall-saved-dimensions.md`.
+
+## Addendum — RE-252 a wall's Length (2026-10-26)
+
+Revit's export writes a wall's `Qto_WallBaseQuantities.Length` as either the length of its curve (the native `GLine`, which ends on a joined wall's middle) or the length of that curve cut back where its body meets the walls joined at its ends, the exported `Axis`, by how it draws the wall. The cut-back ends are read from the wall's native record (its face planes, the walls its control join sets and `CDJoinInfo` name, the far face where `JoinEndGStep.m_exposedFaceMap` names a wall) and from its join reaches, and taken where the two agree; where the cut-back curve is as long as the curve, rvt-rs writes that length: 88 office walls as built, 81 at permit, all 46 of the R2025 models' and 5 of the held-out flowbim.ee house's, each Revit's, none different. Report: `reports/element-framing/RE-252-wall-length.md`.
+

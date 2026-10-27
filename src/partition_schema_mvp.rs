@@ -5137,6 +5137,87 @@ fn attach_wall_layers(rf: &mut RevitFile, revit_version: u32, walls: &mut [Decod
     if centreline_bodies {
         attach_wall_butt_joins(rf, revit_version, walls, &layers, &native);
         attach_native_tee_reaches(walls, &native);
+        attach_wall_lengths(walls, &native);
+    }
+}
+
+/// Field holding a wall's Length, feet: its curve's length, where the curve
+/// cut back at its joins is as long ([`crate::native_walls::trimmed_ends`],
+/// RE-252), so Revit's export gives it either way.
+pub const WALL_LENGTH_FIELD: &str = "m_wall_length";
+
+/// Give each wall with a centreline whose native curve, cut back where its
+/// body meets the walls joined at its ends, is as long as the curve, that
+/// length ([`WALL_LENGTH_FIELD`]): the centreline's length, which Revit's
+/// export writes as its `Length` whether it measures the curve or the cut
+/// back curve (RE-252). The reach each end's join lists give
+/// ([`WALL_JOIN_REACH_FIELDS`], or the largest of its layers' where they end
+/// apart) is the second reading the record's must agree with.
+fn attach_wall_lengths(
+    walls: &mut [DecodedElement],
+    native: &BTreeMap<u64, crate::native_walls::NativeWall>,
+) {
+    const SAME_LENGTH_FEET: f64 = 1e-4;
+    let joined = crate::native_walls::joined_at_ends(native);
+    let near = |a: [f64; 2], b: [f64; 2]| {
+        (a[0] - b[0]).hypot(a[1] - b[1]) <= NATIVE_WALL_LINE_TOLERANCE_FEET
+    };
+    for wall in walls.iter_mut() {
+        let Some(id) = wall.id.map(u64::from) else {
+            continue;
+        };
+        let (Some(axis), Some(curve)) = (wall_axis_from_fields(&wall.fields), native.get(&id))
+        else {
+            continue;
+        };
+        let ends = if near(curve.start, axis.start) && near(curve.end, axis.end) {
+            [0, 1]
+        } else if near(curve.start, axis.end) && near(curve.end, axis.start) {
+            [1, 0]
+        } else {
+            continue;
+        };
+        let reach_of = |slot: usize| {
+            wall.fields.iter().find_map(|(name, value)| match value {
+                InstanceField::Float { value, .. } if name == WALL_JOIN_REACH_FIELDS[slot] => {
+                    Some(*value)
+                }
+                _ => None,
+            })
+        };
+        let layer_reach_of = |slot: usize| {
+            wall.fields.iter().find_map(|(name, value)| match value {
+                InstanceField::Vector(items) if name == WALL_JOIN_LAYER_REACH_FIELDS[slot] => items
+                    .iter()
+                    .map(|item| match item {
+                        InstanceField::Float { value, .. } => Some(*value),
+                        _ => None,
+                    })
+                    .collect::<Option<Vec<f64>>>()?
+                    .into_iter()
+                    .max_by(|a, b| a.abs().total_cmp(&b.abs())),
+                _ => None,
+            })
+        };
+        let mut reaches = [None, None];
+        for (slot, end) in ends.into_iter().enumerate() {
+            reaches[end] = reach_of(slot).or_else(|| layer_reach_of(slot));
+        }
+        let Some([start, end]) = crate::native_walls::trimmed_ends(id, native, &joined, reaches)
+        else {
+            continue;
+        };
+        let length = (curve.end[0] - curve.start[0]).hypot(curve.end[1] - curve.start[1]);
+        if ((end - start) - length).abs() <= SAME_LENGTH_FEET && length.is_finite() && length > 0.0
+        {
+            wall.fields.push((
+                WALL_LENGTH_FIELD.into(),
+                InstanceField::Float {
+                    value: length,
+                    size: 8,
+                },
+            ));
+        }
     }
 }
 
