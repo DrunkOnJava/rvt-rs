@@ -24,7 +24,10 @@
 //! `tools/re/export_after_save.py` looks for among the export's wall types
 //! (this output is not uploaded for a held-out model), and `wallbox <tag>
 //! <feet>`, the smaller side in plan of each wall's element-record box,
-//! which does not depend on how rvt-rs reads its type. Last, `saved <time>`,
+//! which does not depend on how rvt-rs reads its type, and `wallfaces <tag>
+//! <feet>`, the distance between the outermost two face planes of its
+//! native `SWall` record (RE-252), its thickness as saved whichever way the
+//! wall runs. Last, `saved <time>`,
 //! the file's save time (its `ProjectInformation` Atom `updated`), which
 //! `tools/re/export_after_save.py` compares with Revit's export's time.
 //!
@@ -277,6 +280,16 @@ fn main() -> anyhow::Result<()> {
             (wall.id, side("m_bboxWidth"), side("m_bboxDepth"))
         {
             println!("wallbox {id} {}", width.min(depth));
+        }
+    }
+    let ids: BTreeSet<u64> = mvp
+        .walls
+        .iter()
+        .filter_map(|w| w.id.map(u64::from))
+        .collect();
+    for (id, wall) in rvt::research::native_walls::native_walls(&mut rf, &ids)? {
+        if let Some([a, b]) = wall.faces {
+            println!("wallfaces {id} {}", (b - a).abs());
         }
     }
     println!("saved {}", saved.as_deref().unwrap_or("-"));

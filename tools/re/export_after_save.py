@@ -19,8 +19,11 @@ smaller side of it in plan (the probe's `wallbox <tag> <feet>` lines,
 which do not depend on how rvt-rs reads the wall's type), with the
 `Qto_WallBaseQuantities.Width` Revit's export gives the wall: a box
 thinner than that width shows a wall saved thinner than it was exported
-(a wall off the axes has a box wider than itself). Only counts are printed,
-and the ratio of each thinner box to Revit's width.
+(a wall off the axes has a box wider than itself). It does the same with
+the distance between the outermost face planes of each wall's native
+record (the probe's `wallfaces <tag> <feet>`), its thickness as saved
+whichever way it runs. Only counts are printed, and the ratio of each
+thinner box or face pair to Revit's width.
 
 Usage:
 
@@ -47,6 +50,7 @@ def main(argv):
     saved = None
     file_types = set()
     boxes = {}
+    faces = {}
     for line in open(args[0], encoding="utf-8", errors="replace"):
         if line.startswith("saved ") and line.split()[1] != "-":
             saved = datetime.datetime.fromisoformat(line.split()[1].replace("Z", "+00:00"))
@@ -55,6 +59,9 @@ def main(argv):
         elif line.startswith("wallbox "):
             parts = line.split()
             boxes[parts[1]] = float(parts[2])
+        elif line.startswith("wallfaces "):
+            parts = line.split()
+            faces[parts[1]] = float(parts[2])
     f = ifcopenshell.open(args[1])
     absent = set()
     types = f.by_type("IfcWallType")
@@ -69,24 +76,28 @@ def main(argv):
             walls += 1
     print(f"export wall types not in the file: {len(absent)} of {len(types)}; walls of them: {walls}")
     scale = ifcopenshell.util.unit.calculate_unit_scale(f)
-    equal = thinner = thicker = compared = 0
-    ratios = []
+    widths = {}
     for wall in f.by_type("IfcWall"):
-        box = boxes.get(wall.Tag or "")
         width = ifcopenshell.util.element.get_psets(wall, qtos_only=True).get("Qto_WallBaseQuantities", {}).get("Width")
-        if box is None or not width:
-            continue
-        compared += 1
-        width_ft = width * scale / FOOT
-        if abs(box - width_ft) <= TOL_FT:
-            equal += 1
-        elif box < width_ft:
-            thinner += 1
-            ratios.append(f"{box / width_ft:.6f}")
-        else:
-            thicker += 1
-    listed = f" (ratios {' '.join(sorted(ratios))})" if ratios else ""
-    print(f"wall boxes vs Revit Width: walls {compared}; box side equal {equal}; thinner {thinner}{listed}; thicker {thicker}")
+        if wall.Tag and width:
+            widths[wall.Tag] = width * scale / FOOT
+    for label, sides in (("wall boxes", boxes), ("wall faces", faces)):
+        equal = thinner = thicker = compared = 0
+        ratios = []
+        for tag, width_ft in widths.items():
+            side = sides.get(tag)
+            if side is None:
+                continue
+            compared += 1
+            if abs(side - width_ft) <= TOL_FT:
+                equal += 1
+            elif side < width_ft:
+                thinner += 1
+                ratios.append(f"{side / width_ft:.6f}")
+            else:
+                thicker += 1
+        listed = f" (ratios {' '.join(sorted(ratios))})" if ratios else ""
+        print(f"{label} vs Revit Width: walls {compared}; box side equal {equal}; thinner {thinner}{listed}; thicker {thicker}")
     exported = None
     with open(args[1], encoding="utf-8", errors="replace") as f:
         head = f.read(4096)
