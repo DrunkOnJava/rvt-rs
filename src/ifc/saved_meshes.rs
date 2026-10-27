@@ -45,6 +45,16 @@ pub struct SavedMeshReport {
 /// Replace each bounding-box body with the element's saved mesh, where the
 /// file holds one and all of it decodes.
 pub fn attach(rf: &mut crate::RevitFile, model: &mut IfcModel) -> anyhow::Result<SavedMeshReport> {
+    attach_with_control(rf, model, &crate::control::WalkerControl::default())
+}
+
+/// Same as [`attach`], reading the saved graphics through
+/// `research::native_saved_scene::extract_at_detail_with_control`.
+pub fn attach_with_control(
+    rf: &mut crate::RevitFile,
+    model: &mut IfcModel,
+    control: &crate::control::WalkerControl,
+) -> anyhow::Result<SavedMeshReport> {
     let mut report = SavedMeshReport::default();
     let mut by_id: BTreeMap<u64, Vec<usize>> = BTreeMap::new();
     // A stair or curtain wall is drawn by its parts; its own saved graphics
@@ -97,7 +107,8 @@ pub fn attach(rf: &mut crate::RevitFile, model: &mut IfcModel) -> anyhow::Result
         max_graph_objects: 1_000_000,
         ..Default::default()
     };
-    let scene = crate::native_saved_scene::extract_at_detail(rf, &options, 3)?;
+    let scene =
+        crate::native_saved_scene::extract_at_detail_with_control(rf, &options, 3, control)?;
     for element in &scene.elements {
         let Some(indices) = by_id.get(&element.identity.element_id) else {
             continue;

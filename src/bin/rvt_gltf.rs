@@ -15,7 +15,7 @@
 
 use clap::Parser;
 use rvt::RevitFile;
-use rvt::ifc::{Exporter, RvtDocExporter, gltf::model_to_glb};
+use rvt::ifc::{ExportQualityMode, RvtDocExporter, gltf::model_to_glb};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
@@ -55,6 +55,11 @@ struct Cli {
     /// display (#255). Slower on large files.
     #[arg(long)]
     saved_meshes: bool,
+
+    /// Print progress to stderr as the conversion goes
+    /// (`progress: <stage> <done>/<total>`, as `rvt-elements --progress`).
+    #[arg(long)]
+    progress: bool,
 }
 
 fn main() -> ExitCode {
@@ -99,11 +104,24 @@ fn run(cli: &Cli) -> Result<(), String> {
     )?;
     // Open errors from the library already name the file.
     let mut rf = RevitFile::open(&input).map_err(|e| e.to_string())?;
+    let control = if cli.progress {
+        rvt::control::WalkerControl::new().with_progress(|event| {
+            let total = event.total.map(|t| format!("/{t}")).unwrap_or_default();
+            eprintln!("progress: {} {}{total}", event.stage.as_str(), event.done);
+        })
+    } else {
+        rvt::control::WalkerControl::new()
+    };
     let mut model = RvtDocExporter
-        .export(&mut rf)
+        .export_with_mode_limits_and_control(
+            &mut rf,
+            ExportQualityMode::Scaffold,
+            rvt::walker::WalkerLimits::default(),
+            &control,
+        )
         .map_err(|e| format!("export {}: {e}", input.display()))?;
     if cli.saved_meshes {
-        if let Err(e) = rvt::ifc::saved_meshes::attach(&mut rf, &mut model) {
+        if let Err(e) = rvt::ifc::saved_meshes::attach_with_control(&mut rf, &mut model, &control) {
             eprintln!("rvt-gltf: saved graphics not read, bodies unchanged: {e}");
         }
     }
