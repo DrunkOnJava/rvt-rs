@@ -1,6 +1,6 @@
 # Roadmap
 
-Last reviewed: 2026-10-26
+Last reviewed: 2026-10-27
 
 This roadmap is the public, contributor-facing view of where rvt-rs is headed.
 The support boundary lives in [`docs/status.md`](docs/status.md) and the
@@ -119,15 +119,23 @@ the four levels a file can reach are in the
   slabs' `PitchAngle`, stair flights' treads and nosing and more
   `Reference` values; types and hosts from native records; and
   `--revit-set-placement`.
+- **0.10.0, 2026-10-27.** More of Revit's base quantities (21,065 equal on
+  the BIM4LCA office as built, none that Revit's export leaves out): walls'
+  `Length` and every wall's `Width`, curtain walls' and beams' `Length`,
+  floors' `GrossArea`, `Depth` and `GrossVolume`, ceilings' `Width`,
+  hollow-section columns' areas and volume, spaces' `Height` and stair
+  railings' `Length`; and system-family elements' type parameters
+  (puzzbobb, #1065).
 
-### 0.10.0: IFC geometry and element data
+### 0.11.0: IFC geometry and element data
 
-The geometry and element-data work that continues after 0.9.0, moved from the
-0.9.0 milestone when 0.9.0 shipped. Each
+The geometry and element-data work that continues after 0.10.0, moved from the
+0.10.0 milestone when 0.10.0 shipped. Each
 slice records a baseline, an improvement and a residual against Revit's own
 exports on the reference pack (#407), approximations stay labelled (#409), and
 a slice ships in the next release that contains it. Geometry open now: wall
-bodies thicker or thinner than their type's layers (#358), stair flights
+bodies thicker or thinner than their type's layers (#358) and walls Revit
+draws cut, drawn taller than its body (#1067), stair flights
 (#357), roofs Revit splits into slab parts (#323), hip roofs over T and U footprints and roof cases
 with no oracle (#884, #885), the openings on releases other than 2024 and 2025
 (#227), room boundaries whose solid does not
