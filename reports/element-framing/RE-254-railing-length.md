@@ -45,11 +45,19 @@ The same at permit. R2025 14 ends without a riser: its run's sketch spans the sa
 
 So a stair railing whose path is one line along its stair's runs carries the third rule's length as its `Qto_RailingBaseQuantities.Length` (`native_stairs::railing_lengths`, one native pass for the railings and one for their sketches, stairs and runs). Against `main` (Measure [40456875725](https://github.com/DrunkOnJava/rvt-rs/actions/runs/40456875725), unfiltered): 4 more of the office's quantities equal at each stage and 2 on each of R2025 13 to 16, none different; no other export moves, and export times are unchanged.
 
-## 5. What stays open
+## 5. The stair wells (added 2026-10-27, later)
+
+The office's 20 stair-well railings belong to three-run stairs: on stair 2859203, for one, a run of 8 risers climbing +y, one of 11 climbing −x and one of 8 climbing −y, each tread 0.984 ft (`stairinfo`, `runinfo`; Measure [40470573973](https://github.com/DrunkOnJava/rvt-rs/actions/runs/40470573973)). The inner railing's sketch (`line`) runs 6.890 ft along the first run, 0.361 and 0.180 ft round the corner, 9.843 ft along the second run, 0.180 and 0.361 ft round the next corner and 6.890 ft along the third: so the 9.843 ft side is a run, not a landing, and the climbing plan length is the runs' risers less one times the tread, 24 × 0.984 = 23.622 ft, on the inner and the outer railing alike, as §4's second rule takes it.
+
+Revit's `Length` is that rule's length less 0.065617 ft on each of the 10 inner railings and more by the same on each of the 10 outer ones, to 1e-13 ft. 0.065617 ft is these railings' `BaseRailing.m_placementOffset` (20 mm; the office's railings have 0, −0.0509, 0.0656 or 0.0833 ft). `m_flipped` is false on all 41 of the office's railings and tells nothing. The sign is the railing's own geometry: the sense its path turns (±180° on every well railing) times the side of its first line the run along it lies on (Measure [40472254653](https://github.com/DrunkOnJava/rvt-rs/actions/runs/40472254653), the run's footprint from its decoded sketch): plus where the run lies inside the turn, the outer railings, and minus where it lies outside, the inner ones, on all 20.
+
+What the offset does is not understood. Offsetting the sketch away from the stair by the offset lengthens the outer path and shortens the inner one, as measured, but at the two 90° corners each well path has that would be four times the offset, not once. A straight path is not affected: the R2025 railings' 0.0833 ft and two office railings' 0.0656 ft leave their one-line `Length` exact (§4). On the office every cornered stair railing has exactly two 90° corners, so it cannot tell an effect per path from one per corner; the outer sketches' two landing legs also differ by half the offset (4.2971 and 4.2651 ft) where the inner ones are equal. A model with a stair railing of one corner, or of other angles, would tell. Until then the stair-well railings stay without a `Length`: a fitted correction would be right on all 20 office railings, but it rests on one model and no mechanism, and no held-out model has a cornered stair railing.
+
+## 6. What stays open
 
 Every other railing's `Length`: a stair railing over landings needs its rail's plan offset there; a railing on a sloped floor or roof its host's plane; a level railing something that tells it is level (the plan sum is Revit's on 4 of the office's 15 railings that belong to no stair, and nothing read tells those apart).
 
-## 6. Reproduce
+## 7. Reproduce
 
 ```bash
 gh workflow run measure.yml --ref main -f ref=dc9ad4003c13bff6a41fbd462d37a2b71bd303de -f base=none -f nordic=true -f r2025=true \
