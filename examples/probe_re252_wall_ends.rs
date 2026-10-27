@@ -23,7 +23,10 @@
 //! [[id, end], ...]]`; `tweaks`, the ElementIds `WallJoinTweakGStep`'s
 //! `m_affectedEdgesTags` name; `gline`, the record's `GLine` as `[origin x,
 //! origin y, direction x, direction y, start parameter, end parameter]`; and
-//! `planes`, each `Plane` as `[origin x, origin y, x axis x, x axis y]`.
+//! `planes`, each `Plane` as `[origin x, origin y, x axis x, x axis y]`;
+//! `objects`, every object of the record as `[class, token, class tag]`; and
+//! `curve`, the classes of the objects whose token `VWallDriver.m_pCrv`
+//! names.
 //!
 //! Usage:
 //!   cargo run --profile ci --example probe_re252_wall_ends -- MODEL.rvt > ends.jsonl
@@ -85,6 +88,8 @@ fn main() -> anyhow::Result<()> {
         control: Vec<String>,
         gline: Option<String>,
         planes: Vec<String>,
+        objects: Vec<String>,
+        curve: Vec<String>,
     }
     let mut rows: BTreeMap<u64, Row> = BTreeMap::new();
     extract_graphs(
@@ -100,6 +105,28 @@ fn main() -> anyhow::Result<()> {
             };
             let mut gline = None;
             let mut planes = Vec::new();
+            let objects: Vec<String> = graph
+                .objects
+                .iter()
+                .map(|o| format!("[\"{}\",{},{}]", o.class_name, o.token, o.class_tag))
+                .collect();
+            let curve: Vec<String> = graph
+                .objects
+                .iter()
+                .filter(|o| o.class_name == "VWallDriver")
+                .filter_map(|o| {
+                    o.fields
+                        .pointer("/m_pCrv/pointer_token")
+                        .and_then(Value::as_u64)
+                })
+                .flat_map(|token| {
+                    graph
+                        .objects
+                        .iter()
+                        .filter(move |o| u64::from(o.token) == token)
+                        .map(|o| format!("\"{}\"", o.class_name))
+                })
+                .collect();
             let numbers = |value: Option<&Value>| -> Vec<f64> {
                 value
                     .and_then(Value::as_array)
@@ -239,6 +266,8 @@ fn main() -> anyhow::Result<()> {
                     control,
                     gline,
                     planes,
+                    objects,
+                    curve,
                 },
             );
             Ok(())
@@ -263,13 +292,15 @@ fn main() -> anyhow::Result<()> {
         };
         let tweaks: Vec<String> = row.tweaks.iter().map(i64::to_string).collect();
         println!(
-            "{{\"id\":{id},\"start\":{start},\"end\":{end},\"thickness\":{thickness},\"joins\":[{}],\"ends\":[{}],\"keyref\":{keyref},\"exterior\":{exterior},\"control\":[{}],\"tweaks\":[{}],\"gline\":{},\"planes\":[{}]}}",
+            "{{\"id\":{id},\"start\":{start},\"end\":{end},\"thickness\":{thickness},\"joins\":[{}],\"ends\":[{}],\"keyref\":{keyref},\"exterior\":{exterior},\"control\":[{}],\"tweaks\":[{}],\"gline\":{},\"planes\":[{}],\"objects\":[{}],\"curve\":[{}]}}",
             row.joins.join(","),
             row.ends.join(","),
             row.control.join(","),
             tweaks.join(","),
             row.gline.as_deref().unwrap_or("null"),
-            row.planes.join(",")
+            row.planes.join(","),
+            row.objects.join(","),
+            row.curve.join(",")
         );
     }
     eprintln!(

@@ -115,32 +115,57 @@ def choices(walls, meets, wall, end):
     return out
 
 
+def line_ends(item):
+    """A straight axis item's two plan end points, local coordinates."""
+    if item.is_a("IfcPolyline") and len(item.Points) >= 2:
+        return [tuple(p.Coordinates[:2]) for p in (item.Points[0], item.Points[-1])]
+    if item.is_a("IfcTrimmedCurve") and item.BasisCurve.is_a("IfcLine"):
+        line = item.BasisCurve
+        (px, py), v = line.Pnt.Coordinates[:2], line.Dir
+        dx, dy = v.Orientation.DirectionRatios[:2]
+        norm = math.hypot(dx, dy)
+        dx, dy = dx / norm * v.Magnitude, dy / norm * v.Magnitude
+        ends = []
+        for trim in (item.Trim1, item.Trim2):
+            for t in trim:
+                if t.is_a("IfcCartesianPoint"):
+                    ends.append(tuple(t.Coordinates[:2]))
+                    break
+            else:
+                t = next(t for t in trim if t.is_a("IfcParameterValue")).wrappedValue
+                ends.append((px + t * dx, py + t * dy))
+        return ends
+    return None
+
+
 def axes(path):
-    """Wall tag -> its `Axis` polyline's plan end points, feet."""
+    """Wall tag -> its `Axis` item's plan end points, feet, and a census of
+    the walls' representations as (identifier, item entity) -> count."""
     f = ifcopenshell.open(path)
     scale = ifcopenshell.util.unit.calculate_unit_scale(f) / FOOT
     out = {}
+    census = collections.Counter()
     for wall in f.by_type("IfcWall"):
         if not (wall.Tag or "").isdigit() or wall.Representation is None:
             continue
         for rep in wall.Representation.Representations:
+            for item in rep.Items:
+                census[(rep.RepresentationIdentifier, item.is_a())] += 1
             if rep.RepresentationIdentifier != "Axis":
                 continue
             for item in rep.Items:
-                if not item.is_a("IfcPolyline") or len(item.Points) < 2:
+                local = line_ends(item)
+                if local is None:
                     continue
                 m = ifcopenshell.util.placement.get_local_placement(wall.ObjectPlacement)
-                ends = []
-                for point in (item.Points[0], item.Points[-1]):
-                    x, y = point.Coordinates[0], point.Coordinates[1]
-                    ends.append(
-                        (
-                            (m[0][0] * x + m[0][1] * y + m[0][3]) * scale,
-                            (m[1][0] * x + m[1][1] * y + m[1][3]) * scale,
-                        )
+                out[int(wall.Tag)] = [
+                    (
+                        (m[0][0] * x + m[0][1] * y + m[0][3]) * scale,
+                        (m[1][0] * x + m[1][1] * y + m[1][3]) * scale,
                     )
-                out[int(wall.Tag)] = ends
-    return out
+                    for x, y in local
+                ]
+    return out, census
 
 
 def fit(pairs):
@@ -176,7 +201,10 @@ def main(argv):
             if tag.isdigit():
                 revit[int(tag)] = value / FOOT
     meets = joined(walls)
-    exported = axes(argv[2])
+    exported, census = axes(argv[2])
+    print("the export's wall representations, identifier and item: count")
+    for (identifier, entity), n in census.most_common():
+        print(f"  {identifier} {entity}: {n}")
     by_choice = collections.Counter()
     by_kind = collections.Counter()
     unmatched = []
