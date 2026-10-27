@@ -3,8 +3,8 @@
 **Date:** 2026-10-27
 **Issues:** #1016 (quantities), W7 of [`docs/release-1.0-criteria.md`](../../docs/release-1.0-criteria.md); follows RE-92 (stair runs) and RE-247 (a stair flight's `Length`)
 **Artefacts:** the BIM4LCA office as built (Revit 2024, Revit 24.0.5's IFC4 export) and puzzbobb's R2025 13 (Rooms, Stairs; Revit 2025), as Measure fetches them
-**Runs:** Measure [40446445002](https://github.com/DrunkOnJava/rvt-rs/actions/runs/40446445002), [40447406827](https://github.com/DrunkOnJava/rvt-rs/actions/runs/40447406827), [40448457476](https://github.com/DrunkOnJava/rvt-rs/actions/runs/40448457476) and [40449134993](https://github.com/DrunkOnJava/rvt-rs/actions/runs/40449134993) (`examples/probe_re254_railing_paths.rs` with `tools/re/railing_length_vs_ifc.py`)
-**Result:** positive for where the path is, negative for the `Length`: a railing's path is the lines and arcs of the sketch its native record names, and their lengths add up to Revit's `Qto_RailingBaseQuantities.Length` only where the railing is level; on stairs and sloped floors Revit's is the path's length in 3D, which nothing read gives yet. Nothing is written.
+**Runs:** Measure [40455977588](https://github.com/DrunkOnJava/rvt-rs/actions/runs/40455977588) and [40456875725](https://github.com/DrunkOnJava/rvt-rs/actions/runs/40456875725) for §4; Measure [40446445002](https://github.com/DrunkOnJava/rvt-rs/actions/runs/40446445002), [40447406827](https://github.com/DrunkOnJava/rvt-rs/actions/runs/40447406827), [40448457476](https://github.com/DrunkOnJava/rvt-rs/actions/runs/40448457476) and [40449134993](https://github.com/DrunkOnJava/rvt-rs/actions/runs/40449134993) (`examples/probe_re254_railing_paths.rs` with `tools/re/railing_length_vs_ifc.py`)
+**Result:** positive for where the path is, negative for the `Length`: a railing's path is the lines and arcs of the sketch its native record names, and their lengths add up to Revit's `Qto_RailingBaseQuantities.Length` only where the railing is level; on stairs and sloped floors Revit's is the path's length in 3D. Narrowed (added 2026-10-27, §4): on a stair railing whose path is one line along its stair's runs, that length follows from the stair's risers and treads, and is written; every other railing's is not yet.
 
 ## 1. Which length Revit writes
 
@@ -31,13 +31,30 @@ On R2025 13 each railing's sketch is one line of 7.349 ft, its flight's `Length`
 
 Revit's value is never shorter than the sum, and the stair wells' railings, whose paths in plan are the same, get different lengths, so it is the path's length in 3D, along the stair or the sloped floor or roof the railing stands on (on 1467318, 0.0106 ft over 19.52 ft, a rise of about 0.64 ft, a fall of about 3%). Nothing read says which railings are level: the four that are include two with a `PointOnFaceDriver` and `RailingSketchCurveData` and two with neither, and 32 of the 37 that are not have neither.
 
-## 4. What stays open
+## 4. Stair railings (added 2026-10-27)
 
-A railing's `Length` needs its path's height along it: over a stair flight the flight's slope (its riser height over its tread depth, RE-92 and native stairs), on a sloped floor or roof that host's plane. Until that is read, no railing gets a `Length`: Revit's export writes one on every railing, and on 37 of the office's 41 it is not the plan sum, with nothing read telling the other 4 apart.
+`BaseRailing.m_stairsId` names the stair a stair railing belongs to; its `StairsElement` gives the stair's actual riser height and tread depth (`m_actualRiserHeight`, `m_actualTreadDepth`), and each `StairsRun` its stair (`m_stairsId`), its risers (`m_topRiserIndex` less `m_baseRiserIndex`) and, on its first `StairsTreadInfo`, the plan direction it climbs (`m_runDirProj`). Three rules for the 3D length, against Revit's `Length` (Measure [40455977588](https://github.com/DrunkOnJava/rvt-rs/actions/runs/40455977588), the office at both stages, R2025 12 to 18 and the held-out models, none of which has a stair railing):
 
-## 5. Reproduce
+| rule | office as built (26 stair railings) | R2025 13 to 16 (8) | R2025 17, spiral (2) |
+|---|---:|---:|---:|
+| every line along a run climbs at the slope, the rest level | 2 | 6 (not 14) | 0 |
+| the plan length plus, for each run of the stair, its risers less one times the tread depth climbing | 2 | 8 | 0 |
+| a path of one line along one or more of the stair's runs: that line, as much of it as the longest of those runs climbs (its risers less one times the tread depth) climbing, the rest level | 4 of 4 | 8 of 8 | none (arcs) |
+
+The same at permit. R2025 14 ends without a riser: its run's sketch spans the same 7.349 ft as R2025 13's, but its rail climbs over one tread less, as the run's risers less one say. On the office's 20 stair-well railings, whose paths have several lines, the second rule misses by 0.0656 ft whatever the slope, over on the inner railings and under on the outer ones: a plan offset of the rail at the landings that nothing read gives yet.
+
+So a stair railing whose path is one line along its stair's runs carries the third rule's length as its `Qto_RailingBaseQuantities.Length` (`native_stairs::railing_lengths`, one native pass for the railings and one for their sketches, stairs and runs). Against `main` (Measure [40456875725](https://github.com/DrunkOnJava/rvt-rs/actions/runs/40456875725), unfiltered): 4 more of the office's quantities equal at each stage and 2 on each of R2025 13 to 16, none different; no other export moves, and export times are unchanged.
+
+## 5. What stays open
+
+Every other railing's `Length`: a stair railing over landings needs its rail's plan offset there; a railing on a sloped floor or roof its host's plane; a level railing something that tells it is level (the plan sum is Revit's on 4 of the office's 15 railings that belong to no stair, and nothing read tells those apart).
+
+## 6. Reproduce
 
 ```bash
 gh workflow run measure.yml --ref main -f ref=dc9ad4003c13bff6a41fbd462d37a2b71bd303de -f base=none -f nordic=true -f r2025=true \
   -f models="nordic-office-as-built r2025-13_Rooms_Stairs" -f scorers=none -f probe=probe_re254_railing_paths -f probe_scorer=railing_length_vs_ifc
+gh workflow run measure.yml --ref main -f ref=a6a97dbb1158b245ed5a8563e5a586f2db264d1f -f base=main -f nordic=true -f r2025=true
+gh workflow run measure.yml --ref main -f ref=a6a97dbb1158b245ed5a8563e5a586f2db264d1f -f base=none -f holdout=true -f nordic=true -f r2025=true \
+  -f models="holdout-* nordic-office-* r2025-1[2-8]*" -f scorers=none -f probe=probe_re254_railing_paths -f probe_scorer=railing_length_vs_ifc
 ```
