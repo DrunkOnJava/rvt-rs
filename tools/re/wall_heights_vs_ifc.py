@@ -54,7 +54,7 @@ def extents(f, entity):
 
 
 def cutters(path):
-    """The extents of every floor, roof and footing body."""
+    """(extents, Tag) of every floor, roof and footing body."""
     f = ifcopenshell.open(path)
     out = []
     for kind in CUTTERS:
@@ -63,7 +63,23 @@ def cutters(path):
                 continue
             box = extents(f, product)
             if box is not None:
-                out.append(box)
+                out.append((box, str(product.Tag or "-")))
+    return out
+
+
+def crossing(wall, boxes):
+    """The (Tag, end, its height) of each floor, roof or footing whose plan
+    box overlaps `wall` and that crosses its top (at its underside) or its
+    base (at its top)."""
+    low, high, x0, x1, y0, y1 = wall
+    out = []
+    for (c_low, c_high, cx0, cx1, cy0, cy1), tag in boxes:
+        if min(x1, cx1) - max(x0, cx0) <= TOLERANCE or min(y1, cy1) - max(y0, cy0) <= TOLERANCE:
+            continue
+        if low + TOLERANCE < c_low < high - TOLERANCE and c_high >= high - TOLERANCE:
+            out.append((tag, "top", c_low))
+        if low + TOLERANCE < c_high < high - TOLERANCE and c_low <= low + TOLERANCE:
+            out.append((tag, "base", c_high))
     return out
 
 
@@ -73,7 +89,7 @@ def predicted(wall, boxes):
     base: (base, top) in feet."""
     low, high, x0, x1, y0, y1 = wall
     base, top = low, high
-    for c_low, c_high, cx0, cx1, cy0, cy1 in boxes:
+    for (c_low, c_high, cx0, cx1, cy0, cy1), _ in boxes:
         if min(x1, cx1) - max(x0, cx0) <= TOLERANCE or min(y1, cy1) - max(y0, cy0) <= TOLERANCE:
             continue
         if low + TOLERANCE < c_low < high - TOLERANCE and c_high >= high - TOLERANCE:
@@ -165,6 +181,14 @@ def main():
     print(f"cut by the {len(boxes)} floors, roofs and footings whose plan box overlaps the wall:")
     for (end, group), n in sorted(cut.items()):
         print(f"  {end}: {group}: {n}")
+    # Each wall a floor, roof or footing crosses: the crossing's Tag, and
+    # whether Revit's end is where it crosses (`cuts`) or not (`passes`).
+    for tag in both:
+        want = {"base": revit[tag][0] - offset, "top": revit[tag][1] - offset}
+        found = crossing(ours[tag][4], boxes)
+        if found:
+            parts = [f"{end}:{other}:{'cuts' if abs(at - want[end]) <= TOLERANCE else 'passes'}" for other, end, at in found]
+            print(f"crossed tag:{tag} " + " ".join(parts))
     print("\n".join(lines[:150]))
     return 0
 
