@@ -36,6 +36,7 @@ def main(argv):
     rows = {}
     stairs = {}
     stairs2 = {}
+    stairs3 = {}
     for line in open(args[0], encoding="utf-8", errors="replace"):
         parts = line.split()
         if len(parts) >= 4 and parts[0] == "rail" and parts[2] != "-":
@@ -44,6 +45,8 @@ def main(argv):
             stairs[parts[1]] = (float(parts[2]), float(parts[3]))
         elif len(parts) == 3 and parts[0] == "stair2":
             stairs2[parts[1]] = float(parts[2])
+        elif len(parts) == 3 and parts[0] == "stair3":
+            stairs3[parts[1]] = float(parts[2])
     revit = {}
     for (key, qset, name), (_, value) in quantities(args[1])[0].items():
         if qset == "Qto_RailingBaseQuantities" and name == "Length" and value is not None:
@@ -68,6 +71,9 @@ def main(argv):
     print(f"railings a stair holds: {len(held)}; the stair rule gives Revit's Length on {equal}")
     equal2 = sum(1 for tag in held if tag in stairs2 and abs(stairs2[tag] - revit[tag]) <= TOL)
     print(f"railings a stair holds: {len(held)}; the run count rule gives Revit's Length on {equal2}")
+    one = [tag for tag in held if tag in stairs3]
+    equal3 = sum(1 for tag in one if abs(stairs3[tag] - revit[tag]) <= TOL)
+    print(f"railings a stair holds whose path is one line along its runs: {len(one)}; the one line rule gives Revit's Length on {equal3}")
     if listing:
         for tag in held:
             print(f"stair railing {tag} {revit[tag]!r} {stairs[tag][0]!r} {stairs2.get(tag)!r} slope {stairs[tag][1]!r}")

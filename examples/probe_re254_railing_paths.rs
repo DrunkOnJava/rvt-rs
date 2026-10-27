@@ -23,7 +23,11 @@
 //! stair climbs at the stair's riser height over its tread depth (its
 //! `StairsElement` counts) and every other line and arc is level; and
 //! `stair2 <tag> <feet>`: the path's plan length plus, for each run of the
-//! stair, its risers less one times the tread depth climbing at that slope.
+//! stair, its risers less one times the tread depth climbing at that slope;
+//! and, where the path is one line and runs along one or more of the
+//! stair's runs, `stair3 <tag> <feet>`: that line, its part as long as the
+//! longest of those runs' climbs (risers less one times the tread depth)
+//! climbing at the slope.
 //!
 //! Usage:
 //!   cargo run --profile ci --example probe_re254_railing_paths -- MODEL.rvt
@@ -259,6 +263,28 @@ fn main() -> anyhow::Result<()> {
             .map(|run| (run.risers - 1).max(0) as f64 * count.tread_depth_feet)
             .sum();
         println!("stair2 {id} {}", plan + climbing * (slope.hypot(1.0) - 1.0));
+        if let (Some([(dir, span)]), true) = (lines.map(Vec::as_slice), arcs == 0.0) {
+            let along: Vec<u64> = run_stairs
+                .iter()
+                .filter(|(_, s)| *s == stair)
+                .filter(|(run, _)| {
+                    shapes
+                        .get(run)
+                        .and_then(|shape| shape.direction)
+                        .is_some_and(|d| (dir[0] * d[1] - dir[1] * d[0]).abs() < 1e-6)
+                })
+                .map(|(run, _)| *run)
+                .collect();
+            let longest = along
+                .iter()
+                .filter_map(|run| run_counts.get(run))
+                .map(|run| (run.risers - 1).max(0) as f64 * count.tread_depth_feet)
+                .fold(0.0_f64, f64::max);
+            if longest > 0.0 {
+                let climb = span.min(longest);
+                println!("stair3 {id} {}", span + climb * (slope.hypot(1.0) - 1.0));
+            }
+        }
     }
     eprintln!(
         "{} railings, {} sketches named, {} sketch records",
