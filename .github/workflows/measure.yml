@@ -41,6 +41,13 @@
 #
 #   gh workflow run measure.yml -f ref=my-branch -f base=main -f bimcollab=true
 #
+# With `holdout`, the held-out models (research/holdout-models.tsv, RE-252):
+# the flowbim.ee house (Revit 2026) and two 255ribeiro projects, for checking a
+# rule against files it was not derived on. They carry no licence, so only
+# their summary counts are uploaded (tools/ci/scrub-holdout-results.sh).
+#
+#   gh workflow run measure.yml -f ref=my-branch -f base=none -f holdout=true -f models="holdout-*"
+#
 # `sample_years` narrows the samples to a range of releases, and
 # `probe_pair_release` also runs a two-file probe on each sample and the same
 # project saved by that release, the sample first, for the cross-release
@@ -122,6 +129,11 @@ on:
         default: false
       bimcollab:
         description: Also score BIMcollab's example structural model (Revit 2015) against Revit 2015's export of it (research/bimcollab-models.tsv, no licence stated, fetched for the run and never stored)
+        type: boolean
+        required: false
+        default: false
+      holdout:
+        description: Also score the held-out models against Revit's exports of them (research/holdout-models.tsv, no licence stated, fetched for the run; only their summary counts are uploaded)
         type: boolean
         required: false
         default: false
@@ -253,6 +265,21 @@ jobs:
             2) echo "::warning::BIMcollab example model NOT MEASURED: an archive could not be downloaded" ;;
             *) echo "::error::the BIMcollab example model no longer matches research/bimcollab-models.tsv"; exit 1 ;;
           esac
+      # A held-out model's host being unreachable is NOT MEASURED; a file
+      # that no longer matches its pin fails the run.
+      - name: Fetch the held-out models
+        if: inputs.holdout
+        shell: bash
+        run: |
+          set +e
+          tools/ci/fetch-holdout-models.sh research/holdout-models.tsv models
+          status=$?
+          set -e
+          case "$status" in
+            0) ;;
+            2) echo "::warning::held-out models NOT MEASURED: a file could not be downloaded" ;;
+            *) echo "::error::a held-out model no longer matches research/holdout-models.tsv"; exit 1 ;;
+          esac
       - name: Fetch the family corpus
         if: inputs.families || github.event_name == 'pull_request'
         uses: $/.github/actions/fetch-corpus
@@ -295,6 +322,11 @@ jobs:
           # The runner's CPU, so the compare job can say which machines the
           # wall times came from.
           grep -m1 'model name' /proc/cpuinfo | cut -d: -f2- | xargs > results/runner.txt
+      # The held-out models carry no licence: only their counts leave the
+      # runner (RE-252).
+      - name: Keep only the held-out models' counts
+        shell: bash
+        run: tools/ci/scrub-holdout-results.sh results
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: measure-${{ matrix.side }}

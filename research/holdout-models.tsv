@@ -1,0 +1,15 @@
+# Held-out Revit models with Revit's own IFC export with base quantities on, for checking a rule
+# derived on the other reference models against files it was not derived on (RE-252, #1046):
+# the flowbim.ee single-dwelling house (Revit 2026, Revit 26.4's IFC4X3 export, RE-124) and two of
+# 255ribeiro/intro_ifc's projects (modelo_bim, saved in Revit 2023 and exported by Revit 26.2;
+# teste_export_2025, Revit 2025 and its 25.4 export), at commit 5a0e9fa2. No redistribution licence
+# is stated for any of them, so they are fetched from their public sources for a Measure run
+# (`-f holdout=true`) by tools/ci/fetch-holdout-models.sh, never committed, and only their summary
+# counts leave the runner (tools/ci/scrub-holdout-results.sh): Griffin, 2026-10-26.
+# name	url	sha256	bytes
+AA-SingleDwellingHouse-RVT-CIADD.rvt	https://flowbim.ee/files/content/cci/ENG/AA-SingleDwellingHouse-RVT-CIADD.rvt	eeff78f3d07dc23397d276f870f42240cb453cfdd39d965531a9d0ccc7d0a654	66670592
+AA-SingleDwellingHouse-RVT-CIADD.ifc	https://flowbim.ee/files/content/cci/ENG/AA-SingleDwellingHouse-RVT-CIADD.ifc	c9e2986c0f349b3aee0973a15d598c9fc82955e0b4d75b4e8ff99808be767342	77456430
+modelo_bim.rvt	https://raw.githubusercontent.com/255ribeiro/intro_ifc/5a0e9fa2d8d68166e7c123a457ea24474a02c413/docs/testes/modelo_bim.rvt	e06107f54481f408995ddf8f66093f1e4c4bc576ac0a3ff186edc4d32e21ff62	4542464
+modelo_bim.ifc	https://raw.githubusercontent.com/255ribeiro/intro_ifc/5a0e9fa2d8d68166e7c123a457ea24474a02c413/docs/testes/modelo_bim.ifc	58a6aa2872a818a43ed383e833a3a88ec768ef20ef75658bcbd9f7e846fab47f	221653
+teste_export_2025.rvt	https://raw.githubusercontent.com/255ribeiro/intro_ifc/5a0e9fa2d8d68166e7c123a457ea24474a02c413/docs/IDS/teste_export_2025.rvt	73ee5cba253535f97afc9d6e2bd13a8c19a60d82a61b5b5c422a4a1173427115	4476928
+teste_export_2025.ifc	https://raw.githubusercontent.com/255ribeiro/intro_ifc/5a0e9fa2d8d68166e7c123a457ea24474a02c413/docs/IDS/teste_export_2025.ifc	f98dd81b02ccf8ee55c1846edb42cb6d1ba293bc0217a3d281d75fa2d952b445	50644
