@@ -591,6 +591,14 @@ pub struct DecodedExportDiagnostics {
     pub min_element_confidence: f32,
     pub recovered_unit_identifiers: Vec<String>,
     pub unknown_unit_identifiers: Vec<String>,
+    /// The length of each exported wall's native curve, feet, by ElementId
+    /// (RE-252):
+    /// one of the two lengths Revit's export may write as the wall's
+    /// `Qto_WallBaseQuantities.Length`, which the quantity census compares
+    /// with the other to count apart a wall whose two lengths differ. It is
+    /// not written in the IFC file (the maintainer, 2026-10-27).
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub wall_curve_lengths_feet: std::collections::BTreeMap<u32, f64>,
 }
 
 fn default_min_element_confidence_serde() -> f32 {
@@ -3904,6 +3912,7 @@ pub fn build_export_diagnostics_with_limits(
                 .map(|unit| unit.forge_identifier.clone())
                 .collect(),
             unknown_unit_identifiers: recovered_units.unknown_identifiers,
+            wall_curve_lengths_feet: walker_stats.wall_curve_lengths_feet,
         },
         source_coverage: {
             let coverage = SourceCoverageDiagnostics::measure(
@@ -4352,6 +4361,8 @@ struct ProductionWalkerStats {
     /// Exported elements whose "Export to IFC As" value the export does not
     /// apply, by `"<value> on <class>"` (#792).
     unapplied_export_values: std::collections::BTreeMap<String, usize>,
+    /// [`DecodedExportDiagnostics::wall_curve_lengths_feet`].
+    wall_curve_lengths_feet: std::collections::BTreeMap<u32, f64>,
 }
 
 fn production_walker_stats(
@@ -4375,11 +4386,25 @@ fn production_walker_stats(
         n += 1;
         if !el.meets_confidence(min_c) {
             stats.elements_below_min_confidence += 1;
-        } else if let Some(value) = export_content::unapplied_export_value(&el) {
-            *stats
-                .unapplied_export_values
-                .entry(format!("{value} on {}", el.class))
-                .or_insert(0) += 1;
+        } else {
+            if let Some(value) = export_content::unapplied_export_value(&el) {
+                *stats
+                    .unapplied_export_values
+                    .entry(format!("{value} on {}", el.class))
+                    .or_insert(0) += 1;
+            }
+            if let Some(id) = el.id {
+                if let Some(length) = el.fields.iter().find_map(|(name, value)| match value {
+                    crate::walker::InstanceField::Float { value, .. }
+                        if name == crate::partition_schema_mvp::WALL_CURVE_LENGTH_FIELD =>
+                    {
+                        Some(*value)
+                    }
+                    _ => None,
+                }) {
+                    stats.wall_curve_lengths_feet.insert(id, length);
+                }
+            }
         }
     }
     if n > 0 {
