@@ -24,6 +24,9 @@
 //! `StairsElement` counts) and every other line and arc is level; and
 //! `stair2 <tag> <feet>`: the path's plan length plus, for each run of the
 //! stair, its risers less one times the tread depth climbing at that slope;
+//! `offset <tag> <feet>`, each railing's `BaseRailing.m_placementOffset`, and
+//! `line <sketch> <origin x y z> <direction x y z> <start> <end>` for each
+//! of its sketch's lines;
 //! and, where the path is one line and runs along one or more of the
 //! stair's runs, `stair3 <tag> <feet>`: that line, its part as long as the
 //! longest of those runs' climbs (risers less one times the tread depth)
@@ -88,6 +91,17 @@ fn main() -> anyhow::Result<()> {
             if let Some(sketch) = sketch {
                 sketches.insert(record.identity.element_id, sketch);
             }
+            if let Some(offset) = record.graph.as_ref().and_then(|graph| {
+                graph
+                    .objects
+                    .iter()
+                    .find(|object| object.class_name == "BaseRailing")?
+                    .fields
+                    .get("m_placementOffset")?
+                    .as_f64()
+            }) {
+                println!("offset {} {offset}", record.identity.element_id);
+            }
             let stair = record.graph.as_ref().and_then(|graph| {
                 let object = graph
                     .objects
@@ -149,6 +163,22 @@ fn main() -> anyhow::Result<()> {
                 match name {
                     "GLine" => {
                         lines += (b - a).abs();
+                        let origin = object.fields.get("m_origin").and_then(Value::as_array);
+                        let dir = object.fields.get("m_dirVec").and_then(Value::as_array);
+                        if let (Some(o), Some(d)) = (origin, dir) {
+                            let at = |v: &Vec<Value>, i: usize| {
+                                v.get(i).and_then(Value::as_f64).unwrap_or(f64::NAN)
+                            };
+                            println!(
+                                "line {id} {} {} {} {} {} {} {a} {b}",
+                                at(o, 0),
+                                at(o, 1),
+                                at(o, 2),
+                                at(d, 0),
+                                at(d, 1),
+                                at(d, 2)
+                            );
+                        }
                         if let Some((dx, dy)) = object
                             .fields
                             .get("m_dirVec")
