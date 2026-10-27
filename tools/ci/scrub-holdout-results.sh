@@ -12,7 +12,8 @@
 # each RESULTS_DIR/holdout-*/ and RESULTS_DIR/bimcollab-*/ this keeps
 # counts.txt, made of the summary lines of its probe scores (the wall length
 # rule, the export's version and the census of its wall representations) and
-# of its quantity census (the totals and each quantity's counts), and
+# of its quantity census (the totals and each quantity's counts, and for each
+# value that differs only the quantity and rvt-rs's value over Revit's), and
 # ifc.sha256, the hash of rvt-rs's own export; every other file is deleted.
 set -euo pipefail
 
@@ -27,6 +28,11 @@ for dir in "$RESULTS"/holdout-*/ "$RESULTS"/bimcollab-*/; do
     for f in "$dir"qtos_vs_ifc*.txt; do
       [ -f "$f" ] || continue
       grep -E '^(Revit quantities on objects rvt-rs writes: [0-9]+; equal: [0-9]+; different: [0-9]+; missing: [0-9]+; rvt-rs quantities Revit does not write: [0-9]+|  Qto_[A-Za-z]+\.[A-Za-z]+: [0-9]+, equal [0-9]+, different [0-9]+, missing [0-9]+|exit [0-9]+)$' "$f" || true
+      awk '/^largest differences/ { on = 1; next }
+           on && $2 ~ /^Qto_[A-Za-z]+\.[A-Za-z]+:$/ && $6 + 0 != 0 {
+             q = $2; sub(/:$/, "", q); a = $4; sub(/,$/, "", a)
+             printf "different %s: rvt-rs over Revit %.6f\n", q, a / $6
+           }' "$f"
     done
   } > "$RUNNER_TEMP/counts.txt"
   find "$dir" -mindepth 1 ! -name ifc.sha256 -delete
