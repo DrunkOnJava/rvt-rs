@@ -5044,6 +5044,18 @@ fn attach_wall_layers(rf: &mut RevitFile, revit_version: u32, walls: &mut [Decod
             wall.fields
                 .push((WALL_TOP_JOINED_FIELD.into(), InstanceField::Bool(*joined)));
         }
+        let picked = wall.fields.iter().find_map(|(name, value)| match value {
+            InstanceField::ElementId { id, .. } if name == TYPE_ID_FIELD => Some(u64::from(*id)),
+            _ => None,
+        });
+        let named = wall
+            .id
+            .and_then(|id| native.get(&u64::from(id)))
+            .and_then(|native| native.type_id);
+        if picked.is_some() && picked == named {
+            wall.fields
+                .push((WALL_TYPE_CONFIRMED_FIELD.into(), InstanceField::Bool(true)));
+        }
     }
     // RE-91: a layer that takes its category's material takes the one the
     // document's object styles give walls, where it is set and named.
@@ -5202,6 +5214,12 @@ fn attach_wall_layers(rf: &mut RevitFile, revit_version: u32, walls: &mut [Decod
 /// curve's length, which Revit's export writes as its
 /// `Qto_CurtainWallQuantities.Length` (#1016).
 pub const WALL_LENGTH_FIELD: &str = "m_wall_length";
+
+/// Field set on a wall whose native `SWall` record names, in
+/// `m_WallAttributesId`, the type rvt-rs picks for it ([`TYPE_ID_FIELD`]):
+/// the wall's type as its saved file states it (RE-253). The export's
+/// diagnostics list these walls for the quantity census.
+pub const WALL_TYPE_CONFIRMED_FIELD: &str = "m_wall_type_confirmed";
 
 /// Field holding the length of a wall's native curve, feet, on every wall with
 /// a centreline whose native curve is the same line (RE-252): one of the two
