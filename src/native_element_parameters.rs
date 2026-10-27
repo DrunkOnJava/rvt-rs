@@ -12,7 +12,9 @@
 //! (#255).
 //!
 //! A family instance's list is its own values, then its type's
-//! (`m_masterSymbolId`) type parameters it does not hold itself. A family
+//! (`m_masterSymbolId`) type parameters it does not hold itself. A wall,
+//! floor, ceiling or roof gets its type's the same way, through the field
+//! its record names its type in ([`SYSTEM_TYPE_LINKS`]). A family
 //! parameter whose definition says it is an instance parameter
 //! (`m_instanceParam`) is taken only from the instance: the type's slot for
 //! it is the family's default, not the instance's value.
@@ -122,6 +124,18 @@ struct RecordParameters {
     master_symbol: Option<i64>,
 }
 
+/// The system-family element records that name their type, as (element
+/// record class, the field naming the type, the type record's class).
+pub const SYSTEM_TYPE_LINKS: [(&str, &str, &str); 7] = [
+    ("SWall", "m_WallAttributesId", "BasicWallType"),
+    ("ArcWall", "m_WallAttributesId", "BasicWallType"),
+    ("FaceWall", "m_typeId", "BasicWallType"),
+    ("Floor", "m_floorAttributesId", "FloorAttributes"),
+    ("Ceiling", "m_ceilingAttributesId", "CompoundCeilingType"),
+    ("ProfileRoof", "m_roofAttributesId", "RoofAttributes"),
+    ("Roof", "m_roofAttributesId", "RoofAttributes"),
+];
+
 /// Read the saved parameters of `ids` (ElemTable element ids). Elements
 /// with no native record, or whose record does not decode, get none, as
 /// does every element of a file from before Revit 2023.
@@ -133,6 +147,7 @@ pub fn read(file: &mut RevitFile, ids: &BTreeSet<u64>) -> Result<ElementParamete
         selected_ids: ids.clone(),
         selected_classes: ["FamilySymbol", "Family", "MaterialElem"]
             .into_iter()
+            .chain(SYSTEM_TYPE_LINKS.iter().map(|link| link.2))
             .map(String::from)
             .collect(),
         ..Default::default()
@@ -180,7 +195,11 @@ pub fn read(file: &mut RevitFile, ids: &BTreeSet<u64>) -> Result<ElementParamete
             }
             _ => {}
         }
-        if !ids.contains(&record.identity.element_id) && root.class_name != "FamilySymbol" {
+        let is_type = root.class_name == "FamilySymbol"
+            || SYSTEM_TYPE_LINKS
+                .iter()
+                .any(|link| link.2 == root.class_name);
+        if !ids.contains(&record.identity.element_id) && !is_type {
             return Ok(());
         }
         let definitions: BTreeMap<i64, &Definition> = metadata
@@ -264,13 +283,11 @@ pub fn read(file: &mut RevitFile, ids: &BTreeSet<u64>) -> Result<ElementParamete
                 instance_defaults,
                 unresolved_slots: owner_slots
                     .saturating_sub(metadata.resolved_family_parameters.len()),
-                master_symbol: (class_name == "FamilyInstance")
-                    .then(|| {
-                        root.fields
-                            .get("m_masterSymbolId")
-                            .and_then(|value| crate::native_metadata::identifier(value).ok())
-                    })
-                    .flatten(),
+                master_symbol: std::iter::once(("FamilyInstance", "m_masterSymbolId"))
+                    .chain(SYSTEM_TYPE_LINKS.iter().map(|link| (link.0, link.1)))
+                    .find(|link| link.0 == class_name)
+                    .and_then(|link| root.fields.get(link.1))
+                    .and_then(|value| crate::native_metadata::identifier(value).ok()),
             },
         );
         Ok(())

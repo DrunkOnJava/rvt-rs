@@ -373,6 +373,8 @@ pub fn project(graph: &ObjectGraph) -> Result<SavedMetadata> {
             | "BasicWallType"
             | "LevelAttributes"
             | "FloorAttributes"
+            | "CompoundCeilingType"
+            | "RoofAttributes"
             | "RbsPipeType"
             | "RbsPipingSystemType"
     );

@@ -8,7 +8,10 @@
 //! integer, a text, or a number written without a unit. A family instance
 //! takes its type's type parameters: on the R2025 models (#356) a window's
 //! `Pset_WindowCommon.FireRating` is its type's family parameter `Fire
-//! Rating`, where the window has no parameter named for the property.
+//! Rating`, where the window has no parameter named for the property. A wall
+//! takes its wall type's the same way: each R2025 wall lists its type's name
+//! (Type Name, -1002001) from the type Revit's export relates it
+//! to, whose `Tag` is the type's ElementId.
 //!
 //! Runs against `RVT_NORDIC_LCA_DIR` (the BIM4LCA housing on terrain, and the
 //! as-built office where its export is there too) and
@@ -266,4 +269,80 @@ fn r2025_windows_take_their_types_fire_rating() {
         .expect("Fire Rating");
     assert_eq!(fire.level, ParameterLevel::Type);
     assert_eq!(fire.source_element_id, 12499);
+}
+
+#[test]
+fn r2025_walls_take_their_wall_types_name() {
+    let Some(dir) =
+        std::env::var_os("RVT_PROJECT_CORPUS_DIR").map(|d| PathBuf::from(d).join("r2025"))
+    else {
+        eprintln!("skipping: RVT_PROJECT_CORPUS_DIR is not set");
+        return;
+    };
+    let mut checked = 0;
+    for name in ["01_Walls", "08_LShapedHipRoof", "18_WallJoins"] {
+        let model = dir.join(format!("{name}.rvt"));
+        let Ok(step) = std::fs::read_to_string(model.with_extension("ifc")) else {
+            eprintln!("skipping: no R2025 model {name}");
+            continue;
+        };
+        // Wall Tag -> its type's Tag and name, as Revit's export relates them.
+        let ents = entities(&step);
+        let field = |args: &str, i: usize| {
+            decode_step_string(split_args(args)[i].trim().trim_matches('\''))
+        };
+        let mut types: BTreeMap<u64, (i64, String)> = BTreeMap::new();
+        for (entity, args) in ents.values() {
+            if entity != "IFCRELDEFINESBYTYPE" {
+                continue;
+            }
+            let f = split_args(args);
+            let Some(("IFCWALLTYPE", type_args)) = f[5]
+                .trim()
+                .strip_prefix('#')
+                .and_then(|id| id.parse::<u64>().ok())
+                .and_then(|id| ents.get(&id))
+                .map(|(e, a)| (e.as_str(), a.as_str()))
+            else {
+                continue;
+            };
+            let type_tag: i64 = field(type_args, 7).parse().expect("type Tag");
+            let type_name = field(type_args, 2);
+            let type_name = type_name
+                .split_once(':')
+                .map_or(type_name.as_str(), |(_, n)| n);
+            for wall in list(&f[4]) {
+                if let Some(("IFCWALL", wall_args)) = ents.get(&wall).map(|(e, a)| (e.as_str(), a))
+                {
+                    let tag = field(wall_args, 7).parse().expect("wall Tag");
+                    types.insert(tag, (type_tag, type_name.to_string()));
+                }
+            }
+        }
+        assert!(!types.is_empty(), "{name}: Revit's export types no wall");
+        let mut file = RevitFile::open(&model).expect("model");
+        let ids: BTreeSet<u64> = types.keys().copied().collect();
+        let ours =
+            rvt::research::native_element_parameters::read(&mut file, &ids).expect("parameters");
+        for (tag, (type_tag, type_name)) in &types {
+            let symbol_name = ours.elements[tag]
+                .iter()
+                .find(|p| p.parameter_id == -1_002_001)
+                .unwrap_or_else(|| panic!("{name}: wall {tag} lists no type name"));
+            assert_eq!(
+                symbol_name.level,
+                ParameterLevel::Type,
+                "{name}: wall {tag}"
+            );
+            assert_eq!(
+                symbol_name.source_element_id, *type_tag,
+                "{name}: wall {tag}"
+            );
+            assert_eq!(symbol_name.value, type_name.as_str(), "{name}: wall {tag}");
+            checked += 1;
+        }
+    }
+    if checked > 0 {
+        assert_eq!(checked, 5 + 7 + 9, "the walls of models 01, 08 and 18");
+    }
 }
