@@ -23,7 +23,8 @@ is known to be wrong (RE-235 §5, `REVIT_DEFECTS`) is left out of rvt-rs's
 export and counted apart here, not as missing. So is a wall's missing
 `Length` where the two lengths Revit's export may write differ: the length of
 the curve rvt-rs's own `RvtElementRecordGeometry.CurveLength` gives and that
-of the cut-back curve Revit's `Axis` draws (RE-252).
+of the cut-back curve Revit's `Axis` draws (RE-252), on a model where Revit's
+`Length` is one of those two on every wall, so no curve was read wrong.
 
 It prints the totals, a line per (set, quantity): how many values Revit
 writes on objects rvt-rs also writes, how many are equal, how many differ
@@ -253,6 +254,23 @@ def main(argv):
     defects = collections.Counter()
     our_curves = curve_lengths(args[0])
     their_axes = axis_lengths(args[1])
+    # rvt-rs's curve lengths are trusted to count walls apart only where
+    # Revit's export never contradicts them: on every wall, Revit's Length
+    # is either that curve's length or its own Axis's (RE-252). A wall
+    # whose Length is neither shows a curve read wrong, and then no wall is
+    # counted apart.
+    curve_checks = collections.Counter()
+    for (key, qset, name), (_, value) in theirs.items():
+        if (qset, name) != WALL_LENGTH or value is None or key not in our_curves:
+            continue
+        near = lambda other: other is not None and abs(other - value) <= TWO_LENGTHS_TOLERANCE_M
+        if near(our_curves[key]):
+            curve_checks["curve"] += 1
+        elif near(their_axes.get(key)):
+            curve_checks["axis"] += 1
+        else:
+            curve_checks["neither"] += 1
+    trust_curves = curve_checks["neither"] == 0
     two_lengths = 0
     for (key, qset, name), value in sorted(theirs.items()):
         if key not in our_objects:
@@ -261,7 +279,7 @@ def main(argv):
         if scope is not None and scope in their_predefined.get(key, ()):
             defects[(qset, name)] += 1
             continue
-        if (qset, name) == WALL_LENGTH and (key, qset, name) not in ours:
+        if trust_curves and (qset, name) == WALL_LENGTH and (key, qset, name) not in ours:
             curve, axis = our_curves.get(key), their_axes.get(key)
             if curve is not None and axis is not None and abs(curve - axis) > TWO_LENGTHS_TOLERANCE_M:
                 two_lengths += 1
@@ -300,6 +318,10 @@ def main(argv):
     print(
         "walls whose curve and its cut-back curve differ, either of which Revit's export may write "
         f"as their Length, counted apart (RE-252): {two_lengths}"
+    )
+    print(
+        f"walls whose Length is rvt-rs's curve's: {curve_checks['curve']}; Revit's Axis's: {curve_checks['axis']}; "
+        f"neither: {curve_checks['neither']}{'' if trust_curves else ' (none counted apart)'}"
     )
     if our_own or their_own:
         print(f"quantities with their own unit, not scored: rvt-rs {our_own}, Revit {their_own}")
