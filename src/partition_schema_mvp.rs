@@ -455,6 +455,8 @@ pub fn recover_partition_schema_mvp(
     attach_system_type_names(rf, revit_version, &mut unnamed);
     // --- Railings' heights (RE-231) ---
     attach_railing_heights(rf, revit_version, &mut out.products);
+    // --- Stair railings' Length (RE-254) ---
+    attach_railing_lengths(rf, revit_version, &mut out.products);
     // --- Each element's type Function (RE-158) ---
     attach_type_functions(
         rf,
@@ -4458,6 +4460,44 @@ pub fn localized_system_family(family: &'static str, locale: Option<&str>) -> &'
 /// Field holding a railing's height, its type's top rail height, feet
 /// (RE-231).
 pub const RAILING_HEIGHT_FIELD: &str = "m_railing_height";
+
+/// Field holding a stair railing's `Length`, its path along its stair,
+/// feet (RE-254).
+pub const RAILING_LENGTH_FIELD: &str = "m_railing_length";
+
+/// Give each railing of a stair whose path is one line along that stair's
+/// runs its `Length` ([`crate::native_stairs::railing_lengths`], RE-254).
+fn attach_railing_lengths(rf: &mut RevitFile, revit_version: u32, products: &mut [DecodedElement]) {
+    if !crate::native_stairs::RAILING_LENGTH_REVIT_VERSIONS.contains(&revit_version) {
+        return;
+    }
+    let railings: BTreeSet<u64> = products
+        .iter()
+        .filter(|element| element.class == "Railing")
+        .filter_map(|element| element.id.map(u64::from))
+        .collect();
+    let Ok(lengths) = crate::native_stairs::railing_lengths(rf, &railings) else {
+        return;
+    };
+    for element in products
+        .iter_mut()
+        .filter(|element| element.class == "Railing")
+    {
+        if let Some(length) = element
+            .id
+            .and_then(|id| lengths.get(&u64::from(id)))
+            .copied()
+        {
+            element.fields.push((
+                RAILING_LENGTH_FIELD.into(),
+                InstanceField::Float {
+                    value: length,
+                    size: 8,
+                },
+            ));
+        }
+    }
+}
 
 /// Give each railing its type's top rail height
 /// ([`crate::native_stairs::railing_type_heights`], RE-231).

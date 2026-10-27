@@ -17,7 +17,17 @@
 //! then `classes <tag> <sketch id> <sketch record class> <object
 //! class>=<count> ...` per railing, and for the first three sketches each
 //! field of each object of their record as `field <sketch id> <class> <name>
-//! <value as JSON, cut at 400 characters>`.
+//! <value as JSON, cut at 400 characters>`. Last, for each railing whose
+//! record names a stair (`BaseRailing.m_stairsId`), `stair <tag> <feet>
+//! <slope>`: its path's length where each line parallel to a run of that
+//! stair climbs at the stair's riser height over its tread depth (its
+//! `StairsElement` counts) and every other line and arc is level; and
+//! `stair2 <tag> <feet>`: the path's plan length plus, for each run of the
+//! stair, its risers less one times the tread depth climbing at that slope;
+//! and, where the path is one line and runs along one or more of the
+//! stair's runs, `stair3 <tag> <feet>`: that line, its part as long as the
+//! longest of those runs' climbs (risers less one times the tread depth)
+//! climbing at the slope.
 //!
 //! Usage:
 //!   cargo run --profile ci --example probe_re254_railing_paths -- MODEL.rvt
@@ -28,6 +38,7 @@ use rvt::RevitFile;
 use rvt::ifc::RvtDocExporter;
 use rvt::ifc::entities::IfcEntity;
 use rvt::research::native_document::{Options, extract_graphs};
+use rvt::research::native_stairs::{native_run_shapes, native_stair_counts};
 use serde_json::Value;
 
 fn pair(value: Option<&Value>) -> Option<(f64, f64)> {
@@ -54,6 +65,7 @@ fn main() -> anyhow::Result<()> {
         })
         .collect();
     let mut sketches: BTreeMap<u64, u64> = BTreeMap::new();
+    let mut railing_stairs: BTreeMap<u64, u64> = BTreeMap::new();
     extract_graphs(
         &mut rf,
         &Options {
@@ -76,12 +88,28 @@ fn main() -> anyhow::Result<()> {
             if let Some(sketch) = sketch {
                 sketches.insert(record.identity.element_id, sketch);
             }
+            let stair = record.graph.as_ref().and_then(|graph| {
+                let object = graph
+                    .objects
+                    .iter()
+                    .find(|object| object.class_name == "BaseRailing")?;
+                let id = object
+                    .fields
+                    .get("m_stairsId")?
+                    .pointer("/m_id/m_id64")?
+                    .as_i64()?;
+                u64::try_from(id).ok()
+            });
+            if let Some(stair) = stair {
+                railing_stairs.insert(record.identity.element_id, stair);
+            }
             Ok(())
         },
     )?;
     let wanted: BTreeSet<u64> = sketches.values().copied().collect();
     let dumped: BTreeSet<u64> = wanted.iter().copied().take(3).collect();
     let mut rows: BTreeMap<u64, (f64, f64, Vec<String>)> = BTreeMap::new();
+    let mut lines_of: BTreeMap<u64, Vec<([f64; 2], f64)>> = BTreeMap::new();
     let mut census: BTreeMap<u64, (String, BTreeMap<String, usize>)> = BTreeMap::new();
     extract_graphs(
         &mut rf,
@@ -119,7 +147,20 @@ fn main() -> anyhow::Result<()> {
                     continue;
                 };
                 match name {
-                    "GLine" => lines += (b - a).abs(),
+                    "GLine" => {
+                        lines += (b - a).abs();
+                        if let Some((dx, dy)) = object
+                            .fields
+                            .get("m_dirVec")
+                            .and_then(Value::as_array)
+                            .and_then(|v| Some((v.first()?.as_f64()?, v.get(1)?.as_f64()?)))
+                        {
+                            lines_of
+                                .entry(id)
+                                .or_default()
+                                .push(([dx, dy], (b - a).abs()));
+                        }
+                    }
                     "GArc" => {
                         if let Some(radius) = object.fields.get("m_radius").and_then(Value::as_f64)
                         {
@@ -148,6 +189,102 @@ fn main() -> anyhow::Result<()> {
         };
         let counts: Vec<String> = objects.iter().map(|(c, n)| format!("{c}={n}")).collect();
         println!("classes {id} {sketch} {class} {}", counts.join(" "));
+    }
+    let mut run_stairs: BTreeMap<u64, u64> = BTreeMap::new();
+    extract_graphs(
+        &mut rf,
+        &Options {
+            selected_classes: ["StairsRun".to_string()].into(),
+            ..Options::default()
+        },
+        |record| {
+            let stair = record.graph.as_ref().and_then(|graph| {
+                let id = graph
+                    .objects
+                    .iter()
+                    .find(|object| object.class_name == "StairsRun")?
+                    .fields
+                    .get("m_stairsId")?
+                    .pointer("/m_id/m_id64")?
+                    .as_i64()?;
+                u64::try_from(id).ok()
+            });
+            if let Some(stair) = stair {
+                run_stairs.insert(record.identity.element_id, stair);
+            }
+            Ok(())
+        },
+    )?;
+    let shapes = native_run_shapes(&mut rf, &run_stairs.keys().copied().collect())?;
+    let stairs: BTreeSet<u64> = railing_stairs.values().copied().collect();
+    let held_runs: BTreeSet<u64> = run_stairs
+        .iter()
+        .filter(|(_, stair)| stairs.contains(stair))
+        .map(|(run, _)| *run)
+        .collect();
+    let (counts, run_counts) = native_stair_counts(&mut rf, &stairs, &held_runs)?;
+    for (id, stair) in &railing_stairs {
+        let Some(count) = counts.get(stair) else {
+            println!("stair {id} - -");
+            continue;
+        };
+        let slope = count.riser_height_feet / count.tread_depth_feet;
+        let directions: Vec<[f64; 2]> = run_stairs
+            .iter()
+            .filter(|(_, s)| *s == stair)
+            .filter_map(|(run, _)| shapes.get(run)?.direction)
+            .collect();
+        let arcs = sketches
+            .get(id)
+            .and_then(|sketch| rows.get(sketch))
+            .map_or(0.0, |r| r.1);
+        let lines = sketches.get(id).and_then(|sketch| lines_of.get(sketch));
+        let length: f64 = lines.map_or(0.0, |lines| {
+            lines
+                .iter()
+                .map(|(dir, span)| {
+                    let along = directions
+                        .iter()
+                        .any(|d| (dir[0] * d[1] - dir[1] * d[0]).abs() < 1e-6);
+                    if along {
+                        span * slope.hypot(1.0)
+                    } else {
+                        *span
+                    }
+                })
+                .sum()
+        }) + arcs;
+        println!("stair {id} {length} {slope}");
+        let plan =
+            lines.map_or(0.0, |lines| lines.iter().map(|(_, span)| span).sum::<f64>()) + arcs;
+        let climbing: f64 = run_counts
+            .values()
+            .filter(|run| run.stair == *stair)
+            .map(|run| (run.risers - 1).max(0) as f64 * count.tread_depth_feet)
+            .sum();
+        println!("stair2 {id} {}", plan + climbing * (slope.hypot(1.0) - 1.0));
+        if let (Some([(dir, span)]), true) = (lines.map(Vec::as_slice), arcs == 0.0) {
+            let along: Vec<u64> = run_stairs
+                .iter()
+                .filter(|(_, s)| *s == stair)
+                .filter(|(run, _)| {
+                    shapes
+                        .get(*run)
+                        .and_then(|shape| shape.direction)
+                        .is_some_and(|d| (dir[0] * d[1] - dir[1] * d[0]).abs() < 1e-6)
+                })
+                .map(|(run, _)| *run)
+                .collect();
+            let longest = along
+                .iter()
+                .filter_map(|run| run_counts.get(run))
+                .map(|run| (run.risers - 1).max(0) as f64 * count.tread_depth_feet)
+                .fold(0.0_f64, f64::max);
+            if longest > 0.0 {
+                let climb = span.min(longest);
+                println!("stair3 {id} {}", span + climb * (slope.hypot(1.0) - 1.0));
+            }
+        }
     }
     eprintln!(
         "{} railings, {} sketches named, {} sketch records",
