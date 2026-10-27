@@ -222,7 +222,7 @@ pub fn extract_at_detail_with_control(
                 .collect();
             handles
                 .into_iter()
-                .flat_map(|h| h.join().expect("saved mesh worker panicked"))
+                .flat_map(|h| h.join().unwrap_or_else(|e| std::panic::resume_unwind(e)))
                 .collect()
         });
         built.sort_by_key(|(i, _)| *i);
