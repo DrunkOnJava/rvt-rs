@@ -11,8 +11,11 @@
 //! Output, counts only: the walls; how many type definitions each one's
 //! reference list names (0, 1, 2 or more); how many name a Walls type record
 //! that is not a definition, and how many name an id with element-data
-//! names that is no Walls type record; and how many have a type picked that
-//! is not the one definition their list names.
+//! names that is no Walls type record; how many have a type picked that
+//! is not the one definition their list names; and how many walls' native
+//! `SWall` record, the current copy (RE-216), names another type in
+//! `m_WallAttributesId` than the one picked, and how many of those types
+//! are type definitions.
 //!
 //! Usage:
 //!   cargo run --profile ci --example probe_re253_wall_type_refs -- MODEL.rvt
@@ -20,6 +23,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use rvt::RevitFile;
+use rvt::research::native_document::{Options, extract_graphs};
 use rvt::research::{partition_element_records as per, partition_names, partition_type_records};
 use rvt::walker::InstanceField;
 
@@ -38,6 +42,7 @@ fn main() -> anyhow::Result<()> {
     let definitions = partition_type_records::type_definition_ids(&records);
     let type_records: BTreeSet<u32> = records.iter().map(|record| record.element_id).collect();
     let mut lists: Vec<(Vec<u32>, Option<u32>)> = Vec::new();
+    let mut picks: BTreeMap<u64, u32> = BTreeMap::new();
     for wall in &mvp.walls {
         let mut stream = None;
         let mut offset = None;
@@ -70,6 +75,9 @@ fn main() -> anyhow::Result<()> {
             .iter()
             .filter_map(|&slot| u32::try_from(slot).ok())
             .collect();
+        if let (Some(id), Some(picked)) = (wall.id, picked) {
+            picks.insert(u64::from(id), picked);
+        }
         lists.push((ids, picked));
     }
     let wanted: BTreeSet<u32> = lists
@@ -117,6 +125,42 @@ fn main() -> anyhow::Result<()> {
             }
         }
     }
+    let mut native_types: BTreeMap<u64, u32> = BTreeMap::new();
+    extract_graphs(
+        &mut rf,
+        &Options {
+            selected_ids: picks.keys().copied().collect(),
+            ..Options::default()
+        },
+        |record| {
+            if let Some(kind) = record.graph.as_ref().and_then(|graph| {
+                let id = graph
+                    .objects
+                    .first()?
+                    .fields
+                    .get("m_WallAttributesId")?
+                    .pointer("/m_id/m_id64")?
+                    .as_i64()?;
+                u32::try_from(id).ok()
+            }) {
+                native_types.insert(record.identity.element_id, kind);
+            }
+            Ok(())
+        },
+    )?;
+    let (mut native_read, mut native_other, mut native_other_definition) = (0, 0, 0);
+    for (id, picked) in &picks {
+        let Some(kind) = native_types.get(id) else {
+            continue;
+        };
+        native_read += 1;
+        if kind != picked {
+            native_other += 1;
+            if definitions.contains(kind) {
+                native_other_definition += 1;
+            }
+        }
+    }
     let count = |k: usize| by_definitions.get(&k).copied().unwrap_or(0);
     println!(
         "type refs: walls {}; naming 0 type definitions {}, 1 {}, 2 or more {}",
@@ -133,6 +177,9 @@ fn main() -> anyhow::Result<()> {
     );
     println!(
         "type refs: walls whose picked type is not the one definition their list names: {picked_other}"
+    );
+    println!(
+        "type refs: walls with a picked type whose native record names one: {native_read}; another than picked {native_other}, of them a type definition {native_other_definition}"
     );
     Ok(())
 }
