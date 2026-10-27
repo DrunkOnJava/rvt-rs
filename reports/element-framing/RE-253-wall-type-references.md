@@ -36,7 +36,7 @@ Two readings that do not go through its type:
 
 ## 5. What follows
 
-Nothing in the saved file says the wall is of the 300 mm type, and each reading that can say which it is says 200 mm. rvt-rs's `Width` there is the saved file's, and the export most likely describes an unsaved state of the model: whether #1048 is a reference-pair inconsistency rather than a reader defect is the maintainer's call. No output changes.
+Nothing in the saved file says the wall is of the 300 mm type, and each reading that can say which it is says 200 mm. rvt-rs's `Width` there is the saved file's, and the export most likely describes an unsaved state of the model. The maintainer chose (2026-10-27) to treat #1048 as an inconsistency of that reference pair, not a reader defect: `tools/re/qtos_vs_ifc.py` counts a wall's `Width` apart where the two exports give the wall different types (`ObjectType`) and the Widths differ, the type itself being scored by the names census, and `research/holdout-models.tsv` records it. No export changes.
 
 The face planes correct RE-252 §2, which took the outermost two for the wall's sides on every wall. RE-252's rule takes a wall's end only where that reading of the record agrees with the partition join reach (§3), and every `Length` it writes is Revit's (§4), so the correction changes no output.
 

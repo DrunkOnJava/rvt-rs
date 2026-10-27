@@ -6,6 +6,10 @@
 # is stated for any of them, so they are fetched from their public sources for a Measure run
 # (`-f holdout=true`) by tools/ci/fetch-holdout-models.sh, never committed, and only their summary
 # counts leave the runner (tools/ci/scrub-holdout-results.sh): Griffin, 2026-10-26.
+# teste_export_2025's export does not match its saved file on one wall: every record of the .rvt
+# gives it a 200 mm type, the export (made hours after the last save) a 300 mm one the file also
+# holds (RE-253). The maintainer chose (2026-10-27) to treat that as an inconsistency of the pair
+# (#1048): tools/re/qtos_vs_ifc.py counts that wall's Width apart.
 # name	url	sha256	bytes
 AA-SingleDwellingHouse-RVT-CIADD.rvt	https://flowbim.ee/files/content/cci/ENG/AA-SingleDwellingHouse-RVT-CIADD.rvt	eeff78f3d07dc23397d276f870f42240cb453cfdd39d965531a9d0ccc7d0a654	66670592
 AA-SingleDwellingHouse-RVT-CIADD.ifc	https://flowbim.ee/files/content/cci/ENG/AA-SingleDwellingHouse-RVT-CIADD.ifc	c9e2986c0f349b3aee0973a15d598c9fc82955e0b4d75b4e8ff99808be767342	77456430
