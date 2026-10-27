@@ -1,6 +1,6 @@
 # Project Status
 
-Last reviewed: 2026-10-26
+Last reviewed: 2026-10-27
 
 This page is the public source of truth for what rvt-rs can do today. It is
 intentionally blunt so users can decide quickly whether the tool fits their
@@ -979,11 +979,21 @@ prints it from any installed build.
 
 ## Roadmap Position
 
-- **v0.9.0** (2026-10-26) is the latest release: crates.io and docs.rs,
+- **v0.10.0** (2026-10-27) is the latest release: crates.io and docs.rs,
   the `rvt` wheels on PyPI, GitHub Release archives for Linux, macOS and
   Windows, and the container image, each checked from its published
   artifacts ([`install.md`](install.md)). It carries everything under
-  `[0.9.0]` in [`CHANGELOG.md`](../CHANGELOG.md): IFC4 base quantities as
+  `[0.10.0]` in [`CHANGELOG.md`](../CHANGELOG.md): more of the base
+  quantities Revit's export writes (21,065 equal on the BIM4LCA office as
+  built, one different, none that Revit's export leaves out), among them
+  walls' `Length` and every wall's `Width`, curtain walls' and beams'
+  `Length`, floors' `GrossArea`, `Depth` and `GrossVolume`, ceilings'
+  `Width`, hollow-section columns' areas and volume, spaces' `Height` and
+  stair railings' `Length`; two diagnostics fields for the quantity census;
+  and the type parameters of walls, floors, ceilings and roofs in
+  `rvt-elements` and Python. Its "Upgrading from 0.9" section says no code
+  change is needed.
+- **v0.9.0** (2026-10-26) is the release before: IFC4 base quantities as
   Revit's export writes them, on by default and left out by
   `rvt-ifc --no-base-quantities` (20,157 equal on the BIM4LCA office as
   built, one different, none that Revit's export leaves out); curtain
@@ -992,15 +1002,9 @@ prints it from any installed build.
   `Reference` of stairs, runs, landings, openings and furniture; types from
   native records for curtain walls, pipes, wall sweeps and ramps; doors and
   windows in the wall their native record names; `--revit-set-placement`;
-  and faster exports of Revit 2023 to 2027 files. Its "Upgrading from 0.8"
-  section lists what a 0.8 user has to change.
-- **v0.8.0** (2026-10-25) is the release before: Revit 2025 stair runs
-  drawn as their treads and risers, walls that end where Revit's do at T
-  joints, square hollow-section columns as their section, Revit 2024 pipes
-  as cylinders, the stored project GlobalIds, Revit's property sets, and
-  `--anonymize`.
-- `main` has everything v0.9.0 has, and is ahead of it by what is under
-  `[Unreleased]`.
+  and faster exports of Revit 2023 to 2027 files.
+- `main` has everything v0.10.0 has, and is ahead of it by the fragments
+  under [`changelog.d/`](../changelog.d/README.md).
 
 Open work is tracked as GitHub issues; [`TODO.md`](../TODO.md) is the older
 task backlog.
