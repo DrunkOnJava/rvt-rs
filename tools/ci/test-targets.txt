@@ -99,6 +99,7 @@ cli       cli_real_files
 cli       parameter_diagnostics
 cli       reproducible_outputs
 cli       rvt_dump_cli
+cli       rvt_gltf_progress_cli
 cli       rvt_ifc_diagnostics_cli
 cli       rvt_info_cli
 cli       rvt_inspect_cli

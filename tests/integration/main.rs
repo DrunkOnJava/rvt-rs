@@ -141,6 +141,8 @@ mod revit_property_sets;
 mod rooms_floors_from_records_only;
 #[path = "../rvt_dump_cli.rs"]
 mod rvt_dump_cli;
+#[path = "../rvt_gltf_progress_cli.rs"]
+mod rvt_gltf_progress_cli;
 #[path = "../rvt_ifc_diagnostics_cli.rs"]
 mod rvt_ifc_diagnostics_cli;
 #[path = "../rvt_info_cli.rs"]

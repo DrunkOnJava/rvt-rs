@@ -11,7 +11,9 @@
 //! Cancellation is cooperative — checked at the start of every
 //! [`PROGRESS_BYTE_INTERVAL`] of scanned bytes, every 256 decoded
 //! candidates, before each partition stream, and once after each loop —
-//! and it returns [`Error::Cancelled`]; nothing partial is yielded.
+//! and it returns [`Error::Cancelled`]; nothing partial is yielded. Saved
+//! graphics (`research::native_saved_scene::extract_at_detail_with_control`)
+//! check it before each pass over the file and before each element's mesh.
 
 use std::fmt;
 use std::sync::Arc;
@@ -68,6 +70,11 @@ pub enum Stage {
     /// Partition-stream passes; `done`/`total` are streams where known,
     /// otherwise 0 then 1/1 around the merged partition recoveries.
     PartitionScan,
+    /// Reading the saved display graphics and their materials (reported as
+    /// 0 then 1/1).
+    SavedGraphics,
+    /// Meshing each element's saved graphics; `done`/`total` are elements.
+    SavedMeshes,
 }
 
 impl Stage {
@@ -77,6 +84,8 @@ impl Stage {
             Self::CandidateScan => "candidate-scan",
             Self::ElementDecode => "element-decode",
             Self::PartitionScan => "partition-scan",
+            Self::SavedGraphics => "saved-graphics",
+            Self::SavedMeshes => "saved-meshes",
         }
     }
 }
