@@ -68,9 +68,22 @@ Per quantity on the office as built (at permit): column `Length` 93 (71) equal, 
 
 - Columns joined by a `CleanPairGStep`: 186 lengths as built and 256 at permit, of which Revit draws 18 as a mesh and the rest as an extrusion, with nothing yet telling them apart.
 - Curtain panels' `Width`: 257 and 266 equal values, left out for the 3 panels Revit's export gives none.
-- Columns' `CrossSectionArea`, `OuterSurfaceArea` and volumes, panels' and pipes' remaining quantities (section 1), and the spiral flight's quantities.
+- Columns' `CrossSectionArea`, `OuterSurfaceArea` and volumes, panels' and pipes' remaining quantities (section 1), and the spiral flight's quantities. Section 8 writes three of them on the hollow-section columns.
 
-## 8. Reproduce
+## 8. Hollow-section columns (added 2026-10-27)
+
+revit-ifc's `PropertyUtil.CreateBeamColumnBaseQuantities` (CLEANROOM.md source 5) takes a column's `CrossSectionArea` as its extrusion's profile area, its `OuterSurfaceArea` as its length times the profile's outer and inner perimeters, its `GrossVolume` as the area times the length, and its `NetVolume` as the volume Revit computes for the element. Every one of the office's columns joined to nothing (93 as built) is drawn either as its record's box (14) or as its type's hollow section (79), the section rvt-rs reads from the family's parameters, rounded corners and all (RE-221). On the box, the profile's area is Revit's on every column but 3053209, a round column of 150 mm that rvt-rs draws as a 150 mm box: nothing read yet says a box-drawn column is round. On the hollow sections, the area and the lengths of the section's outline and hole, its arcs counted as arcs, give Revit's `CrossSectionArea`, `OuterSurfaceArea` and `GrossVolume` on all 79 as built and all 55 at permit, while its `NetVolume` is less than area times length on every one of them (by 1.7 to 3.4% on the 40 the census lists).
+
+So a column joined to nothing and drawn as its type's hollow section carries `CrossSectionArea`, `OuterSurfaceArea` and `GrossVolume`; its `NetVolume`, and all four on a column drawn as its box, are left out.
+
+| model | quantities equal | different |
+|---|---:|---:|
+| office as built | 20,556 → 20,793 (79 × 3) | 1 → 1 |
+| office at permit | 20,543 → 20,708 (55 × 3) | 1 → 1 |
+
+(Measure [40450791034](https://github.com/DrunkOnJava/rvt-rs/actions/runs/40450791034), this change against `main` before #1052, unfiltered.) Only the two office exports move: Core Interior's, RE1's and every R2025 export are as on `main`, so no witness observation or fixture changes.
+
+## 9. Reproduce
 
 ```bash
 gh workflow run measure.yml --ref main -f ref=08df58d42a4a00db195f46fdc9f535074bf2b546 -f base=main \
@@ -78,4 +91,5 @@ gh workflow run measure.yml --ref main -f ref=08df58d42a4a00db195f46fdc9f535074b
 gh workflow run measure.yml --ref main -f ref=08df58d42a4a00db195f46fdc9f535074bf2b546 -f base=none \
   -f nordic=true -f models="nordic-office-*" -f scorers=none \
   -f probe=probe_re247_qto_records -f probe_scorer=record_scalars_vs_ifc
+gh workflow run measure.yml --ref main -f ref=3867b8948d43c161ee496fb2211d0572bdce3cc3 -f base=main -f nordic=true -f r2025=true
 ```
