@@ -2255,3 +2255,7 @@ Revit's export writes a wall's `Qto_WallBaseQuantities.Height` as the vertical s
 ## Addendum — RE-258 where Revit cuts a wall's top and base (2026-10-27)
 
 rvt-rs's walls differ from Revit's export at one end only: on the BIM4LCA office 65 tops and 20 bases as built (70 and 24 at permit), against none on Core Interior's 360 and puzzbobb's 117 R2025 walls. Revit cuts a top at the underside of a floor the wall's `JoinToRoofGStep` with `m_baseOrTop` 1 names, over the wall's middle: 63 of the 65 tops as built and 68 of 70 at permit. The same rule cuts 5 walls at each stage that Revit leaves whole, and neither file tells them apart (`reports/element-framing/RE-258-wall-cuts.md`, #1067).
+
+## Addendum — RE-261 bits 7 and 12 of the flag word (2026-10-28)
+
+Checked against Revit's exports of Core Interior, the four RE1 models and puzzbobb's 23 R2025 models, bit 12 of the element record's flag word at `+0x46` is set on exactly the rooms Revit exports as an `IfcSpace` (139 of 139, and on none of the 163 it leaves out) and on exactly the walls with an end joined in Revit's export (8 of 8 on RE1 Architecture, the only export that writes wall joins). Bit 7 is set on every type record and no other (144 of 144, as RE-128 found). Two rows of puzzbobb's table on #223 reproduce; their `WallSweep` reading of bit 7 is not testable on these models, and the rest of their table stays unverified (`reports/element-framing/RE-261-flag-word-bits.md`).
