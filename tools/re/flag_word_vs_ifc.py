@@ -4,10 +4,11 @@
 Reads `examples/probe_re261_flag_word_bits.rs`'s `rec`, `room-frame` and
 `bit7` lines and pairs each record with Revit's element of the same Tag:
 
-- walls (`SWall`): bit 12 against whether Revit's export joins the wall to
-  another (`IfcRelConnectsPathElements`, either side);
+- walls (`SWall`): bit 12 against whether Revit's export joins an end of the
+  wall (`IfcRelConnectsPathElements`, `ATSTART` or `ATEND` on the wall's own
+  side), and against any join (`ATPATH` included);
 - rooms (`RoomElem`): bit 12 against whether Revit exported the room as an
-  `IfcSpace`.
+  `IfcSpace`, paired by the ElementId in the space's GlobalId.
 
 Each prints a 2x2 table (bit set or clear, by the export's answer) and, with
 `--list`, the ids off the diagonal. It also repeats the probe's bit 7 census by
@@ -22,6 +23,7 @@ import collections
 import sys
 
 import ifcopenshell
+import ifcopenshell.guid
 
 BIT12 = 0x1000
 
@@ -38,6 +40,30 @@ def table(name, rows, listing):
                 print(f"  {label}: {' '.join(map(str, ids))}")
 
 
+def space_element_ids(model, by_tag, room_ids):
+    """ElementIds of Revit's IfcSpaces, read back from their GlobalIds.
+
+    Revit's GlobalId for element `id` of an episode is the episode's GUID with
+    `id` XORed into its last four bytes (RE-167, `revit_global_ids.rs`). Every
+    tagged element gives its episode's first 12 bytes and last word; a space
+    pairs with the room `low ^ word` of an episode with the same 12 bytes.
+    """
+    episodes = collections.defaultdict(set)
+    for tag, element in by_tag.items():
+        if not tag.isdigit():
+            continue
+        value = bytes.fromhex(ifcopenshell.guid.expand(element.GlobalId))
+        episodes[value[:12]].add(int.from_bytes(value[12:], "big") ^ int(tag))
+    out = set()
+    for space in model.by_type("IfcSpace"):
+        value = bytes.fromhex(ifcopenshell.guid.expand(space.GlobalId))
+        low = int.from_bytes(value[12:], "big")
+        hits = {str(low ^ word) for word in episodes.get(value[:12], ())} & room_ids
+        if len(hits) == 1:
+            out |= hits
+    return out
+
+
 def main():
     listing = "--list" in sys.argv[3:]
     records = {}
@@ -46,6 +72,7 @@ def main():
     for line in open(sys.argv[1], encoding="utf-8", errors="replace"):
         parts = line.split()
         if len(parts) >= 5 and parts[0] == "rec":
+            # The last field, p1 or p2, says which prologue the frame has.
             records[parts[1]] = (parts[3], int(parts[4], 16))
         elif len(parts) == 4 and parts[0] == "bit7":
             bit7.append((parts[1], int(parts[2]), int(parts[3])))
@@ -53,31 +80,41 @@ def main():
             frames.append((parts[1], parts[3], parts[4], int(parts[5], 16)))
     model = ifcopenshell.open(sys.argv[2])
     by_tag = {str(e.Tag): e for e in model.by_type("IfcElement") if e.Tag}
-    spaces = {str(s.Tag) for s in model.by_type("IfcSpace") if getattr(s, "Tag", None)}
-    if not spaces:
-        # IFC2x3 spaces have no Tag; Revit names them by number, so fall back
-        # to the ElementId Revit writes in its IfcGUID-independent property.
-        for space in model.by_type("IfcSpace"):
-            for rel in getattr(space, "IsDefinedBy", []) or []:
-                props = getattr(getattr(rel, "RelatingPropertyDefinition", None), "HasProperties", []) or []
-                for prop in props:
-                    if prop.Name == "ElementId" and prop.NominalValue is not None:
-                        spaces.add(str(prop.NominalValue.wrappedValue))
-    joined = set()
+    spaces = space_element_ids(model, by_tag, {tag for tag, (cls, _) in records.items() if cls == "RoomElem"})
+    sides = collections.defaultdict(set)
     for rel in model.by_type("IfcRelConnectsPathElements"):
-        for element in (rel.RelatingElement, rel.RelatedElement):
+        for element, kind in (
+            (rel.RelatingElement, rel.RelatingConnectionType),
+            (rel.RelatedElement, rel.RelatedConnectionType),
+        ):
             if element is not None and element.Tag:
-                joined.add(str(element.Tag))
-
-    walls = [
-        (tag, bool(word & BIT12), tag in joined)
-        for tag, (cls, word) in records.items()
-        if cls == "SWall" and tag in by_tag
-    ]
-    rooms = [(tag, bool(word & BIT12), tag in spaces) for tag, (cls, word) in records.items() if cls == "RoomElem"]
-    print(f"records {len(records)}; IfcSpace {len(spaces)}; walls in IfcRelConnectsPathElements {len(joined)}")
-    table("walls (joined in Revit's export)", walls, listing)
-    table("rooms (IfcSpace in Revit's export)", rooms, listing)
+                sides[str(element.Tag)].add(kind)
+    print(
+        f"records {len(records)}; IfcSpace {len(model.by_type('IfcSpace'))}, paired by GlobalId {len(spaces)}; "
+        f"walls in IfcRelConnectsPathElements {len(sides)}"
+    )
+    walls = [(tag, word) for tag, (cls, word) in records.items() if cls == "SWall" and tag in by_tag]
+    if sides:
+        table(
+            "walls (an end joined in Revit's export: ATSTART or ATEND on its own side)",
+            [(t, bool(w & BIT12), bool(sides[t] & {"ATSTART", "ATEND"})) for t, w in walls],
+            listing,
+        )
+        table(
+            "walls (any join in Revit's export, ATPATH included)",
+            [(t, bool(w & BIT12), bool(sides[t])) for t, w in walls],
+            listing,
+        )
+    else:
+        print(f"walls: {len(walls)} paired; Revit's export writes no IfcRelConnectsPathElements, not tested")
+    if model.by_type("IfcSpace"):
+        table(
+            "rooms (IfcSpace in Revit's export)",
+            [(tag, bool(word & BIT12), tag in spaces) for tag, (cls, word) in records.items() if cls == "RoomElem"],
+            listing,
+        )
+    else:
+        print("rooms: Revit's export has no IfcSpace, not tested")
     print("bit 7 (0x80) by class, records with it of records:")
     for cls, set_, total in sorted(bit7, key=lambda r: (-r[1], r[0])):
         if set_:

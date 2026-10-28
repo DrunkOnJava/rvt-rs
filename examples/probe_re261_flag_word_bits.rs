@@ -12,7 +12,8 @@
 //!   computed block.
 //!
 //! Output:
-//!   rec <id> <BuiltInCategory> <class> <+0x46 as hex> <+0x42 placement kind> <container>
+//!   rec <id> <BuiltInCategory> <class> <+0x46 as hex> <+0x42 placement kind> <container> <p1|p2>
+//!   (p2: a second-prologue frame, id read from its enclosing record, RE-35)
 //!   room-frame <id> <class> <marker at +0x50: yes|no> <decoded: yes|no> <+0x46 as hex>
 //!   bit7 <class> <records with 0x80> <records>
 //!
@@ -60,21 +61,32 @@ fn main() -> rvt::Result<()> {
         .find(|c| c.name == "RoomElem")
         .map(|c| c.tag);
 
+    let assigned_all = rf.second_prologue_ids();
+    let none = BTreeMap::new();
     let mut seen = BTreeSet::new();
+    let mut unattributed_rooms = (0usize, 0usize);
     let mut bit7: BTreeMap<String, (usize, usize)> = BTreeMap::new();
     let mut decoded_rooms = BTreeSet::new();
     let mut room_frames = Vec::new();
     for stream in rf.partition_stream_names() {
         let inflated = rf.inflated_partition(&stream)?;
         let buf = inflated.bytes();
+        let assigned = assigned_all.get(&stream).unwrap_or(&none);
         for hit in memchr::memmem::find_iter(buf, &marker) {
             let Some(offset) = hit.checked_sub(per::BBOX_MARKER_OFFSET) else {
                 continue;
             };
-            let Some(record) = per::decode_at_with_marker(&stream, buf, offset, &declared, &marker)
-            else {
-                continue;
-            };
+            let (record, prologue) =
+                match per::decode_at_with_marker(&stream, buf, offset, &declared, &marker) {
+                    Some(record) => (record, "p1"),
+                    None => match assigned
+                        .get(&offset)
+                        .and_then(|&id| per::decode_frame_as(&stream, buf, offset, id, &marker))
+                    {
+                        Some(record) => (record, "p2"),
+                        None => continue,
+                    },
+                };
             if !seen.insert(record.element_id) {
                 continue;
             }
@@ -94,13 +106,14 @@ fn main() -> rvt::Result<()> {
                 decoded_rooms.insert(record.element_id);
             }
             println!(
-                "rec {} {} {} {:#010x} {:#010x} {:#x}",
+                "rec {} {} {} {:#010x} {:#010x} {:#x} {}",
                 record.element_id,
                 record.builtin_category,
                 class,
                 flags,
                 record.placement_kind,
-                record.container
+                record.container,
+                prologue
             );
         }
         let needle = (per::OST_ROOMS as u64).to_le_bytes();
@@ -115,16 +128,22 @@ fn main() -> rvt::Result<()> {
             ) else {
                 continue;
             };
-            if raw_id > u64::from(u32::MAX) || !declared.contains(&(raw_id as u32)) {
-                continue;
-            }
             if Some(tag) != room_tag {
                 continue;
             }
             let has_marker = buf
                 .get(offset + per::BBOX_MARKER_OFFSET..offset + per::BBOX_MARKER_OFFSET + 8)
                 == Some(&marker[..]);
-            room_frames.push((raw_id as u32, class_name(tag), has_marker, flags));
+            let id = if raw_id <= u64::from(u32::MAX) && declared.contains(&(raw_id as u32)) {
+                Some(raw_id as u32)
+            } else {
+                assigned.get(&offset).copied()
+            };
+            match id {
+                Some(id) => room_frames.push((id, class_name(tag), has_marker, flags)),
+                None if has_marker => unattributed_rooms.0 += 1,
+                None => unattributed_rooms.1 += 1,
+            }
         }
     }
     room_frames.sort();
@@ -150,10 +169,12 @@ fn main() -> rvt::Result<()> {
         println!("bit7 {class} {set} {total}");
     }
     eprintln!(
-        "{} records; RoomElem frames {}, scan_category_records_multi rooms {}, frames it misses {missed}",
+        "{} records; RoomElem frames {}, scan_category_records_multi rooms {}, frames it misses {missed}; RoomElem frames with no id: {} with the marker, {} without",
         seen.len(),
         room_frames.len(),
-        scanned_ids.len()
+        scanned_ids.len(),
+        unattributed_rooms.0,
+        unattributed_rooms.1
     );
     Ok(())
 }
