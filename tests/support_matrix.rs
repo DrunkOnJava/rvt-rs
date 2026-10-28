@@ -467,3 +467,31 @@ fn release_table_matches_the_crate_and_the_family_corpus() {
         }
     }
 }
+
+/// The viewer's support grid is drawn from the release table, not written by
+/// hand: main.ts imports docs/support-matrix.json and builds the cells from
+/// `releases`, and index.html holds none of its own.
+#[test]
+fn viewer_support_grid_is_drawn_from_the_matrix() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let main =
+        std::fs::read_to_string(root.join("viewer/src/main.ts")).expect("read viewer/src/main.ts");
+    assert!(
+        main.contains("from '../../docs/support-matrix.json'"),
+        "the viewer imports the shipped support matrix"
+    );
+    assert!(
+        main.contains("supportMatrix.releases"),
+        "the viewer draws the grid from the release table"
+    );
+    let index =
+        std::fs::read_to_string(root.join("viewer/index.html")).expect("read viewer/index.html");
+    assert!(
+        index.contains(r#"id="support-grid""#),
+        "index.html holds the grid's table"
+    );
+    assert!(
+        !index.contains("support-cell"),
+        "index.html must not hold hand-written grid cells"
+    );
+}

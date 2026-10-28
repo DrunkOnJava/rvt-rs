@@ -92,9 +92,9 @@ function buildGenFixture() {
 }
 
 function writeThumbnail(filePath, label, accent) {
-  // A flat tile in the design system's tint and ink for the demo's kind:
-  // the card shows it at 72 x 40, where a building mark reads and text
-  // would not. The label rides along as the SVG title.
+  // A flat neutral tile for every demo without a capture: the card shows it
+  // at 56 x 36, where a building mark reads and text would not. The label
+  // rides along as the SVG title.
   const svg = `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="320" height="180" viewBox="0 0 320 180" role="img">
   <title>${escapeXml(label)}</title>
@@ -236,12 +236,10 @@ function stageRealProject(demo, destAbs) {
 
 // Tint (the ramp's lightest step) and ink (its step 6) from the design
 // system's blue, green, amber and gray ramps.
-function thumbAccent(demo) {
-  if ((demo.tags ?? []).includes(REAL_PROJECT_TAG)) return { tint: '#e6f1ff', ink: '#1881ff' };
-  if (demo.format === 'ifc') return { tint: '#f0fdf4', ink: '#16a34a' };
-  if (demo.format === 'rfa') return { tint: '#fffbeb', ink: '#d97706' };
-  return { tint: '#f5f5f7', ink: '#76797f' };
-}
+// One neutral glyph: only a capture of the viewer's own drawing may show
+// what a demo decodes to.
+// No fill of its own: the card's tile colour shows through in either scheme.
+const NEUTRAL_THUMB = { tint: 'none', ink: '#909398' };
 
 function main() {
   if (!fs.existsSync(catalogSrc)) {
@@ -315,8 +313,12 @@ function main() {
 
     if (thumbRel) {
       const thumbAbs = path.join(viewerRoot, 'public', thumbRel);
-      if (!fs.existsSync(thumbAbs)) {
-        writeThumbnail(thumbAbs, demo.name, thumbAccent(demo));
+      if (demo.capture) {
+        // A capture of the viewer drawing this demo, committed under
+        // viewer/demo-captures/.
+        copyFile(path.join(repoRoot, demo.capture), thumbAbs);
+      } else {
+        writeThumbnail(thumbAbs, demo.name, NEUTRAL_THUMB);
       }
     }
 
