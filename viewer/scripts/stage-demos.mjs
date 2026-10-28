@@ -238,7 +238,8 @@ function stageRealProject(demo, destAbs) {
 // system's blue, green, amber and gray ramps.
 // One neutral glyph: only a capture of the viewer's own drawing may show
 // what a demo decodes to.
-const NEUTRAL_THUMB = { tint: '#f5f5f7', ink: '#909398' };
+// No fill of its own: the card's tile colour shows through in either scheme.
+const NEUTRAL_THUMB = { tint: 'none', ink: '#909398' };
 
 function main() {
   if (!fs.existsSync(catalogSrc)) {

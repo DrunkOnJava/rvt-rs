@@ -617,7 +617,11 @@ header .export-hint[hidden] {
   flex-basis: 100%;
 }
 .support-card-rows .support-matrix {
+  display: block;
   margin: 0;
+}
+.support-card-rows .support-link {
+  margin-right: var(--sx-space-3);
 }
 
 /* Below the grid: the drop target beside the demo list. */
@@ -722,6 +726,7 @@ header .export-hint[hidden] {
   border: 0;
   border-bottom: 1px solid var(--sx-color-border-subtle);
   border-radius: 0;
+  text-decoration: none;
   cursor: pointer;
   transition: background-color var(--sx-duration-fast) var(--sx-ease-standard);
 }
@@ -1601,13 +1606,13 @@ select:focus:not(:focus-visible),
 
 /* The canvas is the window less both panels (580px), so the grid's rows
    move under it first and the drop target over the demo list next. */
-@media (max-width: 1520px) {
-  .support-card {
+@media (max-width: 1365px) {
+  .open-row {
     grid-template-columns: minmax(0, 1fr);
   }
 }
 @media (max-width: 1280px) {
-  .open-row {
+  .support-card {
     grid-template-columns: minmax(0, 1fr);
   }
 }
