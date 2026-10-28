@@ -3,7 +3,7 @@
 Zero-upload, client-side Revit viewer powered by
 [`rvt-rs`](https://github.com/DrunkOnJava/rvt-rs) compiled to WebAssembly.
 
-Hosted at <https://drunkonjava.github.io/rvt-rs/viewer/>.
+Hosted at <https://drunkonjava.github.io/rvt-rs/>.
 
 Install and local build paths are documented in
 [`docs/install.md`](../docs/install.md).
