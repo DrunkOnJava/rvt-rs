@@ -366,7 +366,7 @@ impl ElementDataLayout {
     }
 }
 
-/// [`ELEMENT_DATA_HEADER_2023`] on a 32-bit release, Revit 2015 to 2023:
+/// [`ELEMENT_DATA_HEADER_2023`] on a 32-bit release, Revit 2011 to 2023:
 /// the `u16` is the release's `CellList` tag (RE-180). `None` on any other
 /// release.
 pub fn element_data_header_32(revit_version: u32) -> Option<[u8; 10]> {
@@ -408,7 +408,7 @@ pub fn find_element_data_names_2023(buf: &[u8], wanted: &BTreeSet<u32>) -> BTree
 /// made element 86961 ("Working Drawings") of the 2019 to 2022 `rac_basic`
 /// the type of five walls. 2023 keeps RE-111's reading: there the same rule
 /// would give five walls a type their 2024 copies do not confirm (RE-180).
-/// On Revit 2015 to 2018 the name is looked for in the element's own data
+/// Before Revit 2019 the name is looked for in the element's own data
 /// only, up to the next element's data header, and a one-unit entry is
 /// passed over rather than taken. Level 311 of the 2018 `rac_basic` has no
 /// framed name of its own, and the first one after its header is wall type
