@@ -82,7 +82,12 @@ Revit 2019 (for 2015 to 2018, RE-181), 2023 (for 2019 to 2022, RE-180) and
 2026 (for 2027, RE-179) rather than against a Revit export of them, except one
 2015 project, BIMcollab's structural example, against Revit 2015's own export
 (RE-198); 2015's
-`rst_basic` is another model than its 2019 copy, so it is not measured. Every
+`rst_basic` is another model than its 2019 copy, so it is not measured. On
+projects saved by Revit 2011 to 2014, experimentally and outside the 1.0
+range (2015 to 2027), it exports their elements too, measured on a local copy
+of Autodesk's 2013 `rac_advanced` sample against its 2015 copy, and files of
+Revit 2008 to 2013 now open (RE-259); those files are closed source and
+measured locally only. Every
 other recovery claim is measured against the oracle its report names, Revit's
 own IFC export of the same file wherever one exists; the measured tables are in the
 [README](../README.md#what-rvt-rs-reads-from-real-projects) and the four
