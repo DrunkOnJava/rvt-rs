@@ -72,12 +72,13 @@ const BLOCK_LAYOUT_2023: BlockLayout = BlockLayout {
     not_a_map: None,
 };
 
-/// [`BLOCK_LAYOUT_2023`] on Revit 2011 to 2013, where an ElementId and the
+/// [`BLOCK_LAYOUT_2023`] on Revit 2008 to 2013, where an ElementId and the
 /// same mark also open `00 00 00 00 00 01`: 5,081 of the 9,490 marks of
 /// Autodesk's 2013 `rac_advanced_sample_project`, none of its 2015 copy's
 /// 5,410 (RE-259). Read as blocks, their first maps gave 101 of its
 /// elements type materials their 2015 copies do not have, such as `Default`
-/// and `Phase - Temporary` on a door.
+/// and `Phase - Temporary` on a door. Local 2008 and 2009 files hold such
+/// marks too (4 and 20, RE-260).
 const BLOCK_LAYOUT_2011: BlockLayout = BlockLayout {
     not_a_map: Some(&[0, 0, 0, 0, 0, 1]),
     ..BLOCK_LAYOUT_2023
@@ -374,7 +375,7 @@ pub fn type_material_names_2023(rf: &mut RevitFile) -> BTreeMap<u32, Vec<String>
     type_material_names_32(rf, crate::partition_element_records_2023::REVIT_2023)
 }
 
-/// [`type_material_names_2023`] on any 32-bit release, Revit 2011 to 2023,
+/// [`type_material_names_2023`] on any 32-bit release, Revit 2008 to 2023,
 /// whose materials are [`crate::partition_materials::scan_materials_32`]'s
 /// (RE-180). Empty on any other release.
 pub fn type_material_names_32(

@@ -195,9 +195,9 @@ fn build_report(
     } else {
         display_path(path, redact)
     };
-    // The releases rvt-rs reads, 2011 to 2022 and 2027 experimentally (RE-179
-    // to RE-181, RE-259).
-    let supported_revit_version = matches!(summary.version, 2011..=2027);
+    // The releases rvt-rs reads, 2008 to 2022 and 2027 experimentally (RE-179
+    // to RE-181, RE-259, RE-260).
+    let supported_revit_version = matches!(summary.version, 2008..=2027);
     let decoded = DecodedHealth {
         class_name_count: summary.class_name_count,
         production_elements: diagnostics.decoded.production_walker_elements,
