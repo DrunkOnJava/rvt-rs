@@ -11,6 +11,10 @@ where neither is, and gives each file's storey for the walls that miss.
 Plan positions are `wall_bodies_vs_ifc.py`'s. It then compares the floors,
 roofs and footings' own bases and tops the same way.
 
+Only each product's Body representation is meshed. A wall, floor, roof or
+footing with no Body, or one IfcOpenShell cannot mesh, is left out, and
+the count of those is printed by file, entity and reason.
+
 For the misses it prints what RE-258 reads them against:
 
 - `wall tag:<Tag> rvt-rs <z low, z high, x min, x max, y min, y max>
@@ -53,17 +57,34 @@ CUTTERS = ("IfcSlab", "IfcRoof", "IfcFooting")
 
 FOOTPRINTS = {}
 
+UNMESHED = {}
 
-def extents(f, entity):
+
+def body_geometry(settings, product, path):
+    """IfcOpenShell's geometry of `product`'s Body representation, or None,
+    noted in UNMESHED. Revit 2025's IFC4X3 export lists the Axis before the
+    Body, and IfcOpenShell meshes the first representation it is given
+    (RE-213), so the Body is named."""
+    body = next((r for r in product.Representation.Representations if r.RepresentationIdentifier == "Body"), None)
+    if body is None:
+        UNMESHED[(path, product.id())] = (product.is_a(), "no Body representation")
+        return None
+    try:
+        return ifcopenshell.geom.create_shape(settings, product, body).geometry
+    except Exception:
+        UNMESHED[(path, product.id())] = (product.is_a(), "IfcOpenShell cannot mesh the Body")
+        return None
+
+
+def extents(path, entity):
     """(lowest z, highest z, x min, x max, y min, y max) of a product's body
     in feet, or None. Its triangles in plan go to FOOTPRINTS by Tag."""
     settings = ifcopenshell.geom.settings()
     settings.set("use-world-coords", True)
-    try:
-        geometry = ifcopenshell.geom.create_shape(settings, entity).geometry
-        verts, faces = geometry.verts, geometry.faces
-    except Exception:
+    geometry = body_geometry(settings, entity, path)
+    if geometry is None:
         return None
+    verts, faces = geometry.verts, geometry.faces
     if not verts:
         return None
     xs, ys, zs = verts[0::3], verts[1::3], verts[2::3]
@@ -94,7 +115,7 @@ def cutters(path):
         for product in f.by_type(kind):
             if product.Representation is None:
                 continue
-            box = extents(f, product)
+            box = extents(path, product)
             if box is not None:
                 out.append((box, str(product.Tag or "-")))
                 body = sorted(
@@ -147,9 +168,8 @@ def surfaces(path):
         for product in f.by_type(kind):
             if product.Representation is None or not product.Tag:
                 continue
-            try:
-                geometry = ifcopenshell.geom.create_shape(settings, product).geometry
-            except Exception:
+            geometry = body_geometry(settings, product, path)
+            if geometry is None:
                 continue
             v, faces = list(geometry.verts), list(geometry.faces)
             out.setdefault(str(product.Tag), []).extend(
@@ -187,10 +207,10 @@ def ranges(path, kinds=("IfcWall",)):
     for wall in (product for kind in kinds for product in f.by_type(kind)):
         if not wall.Tag or wall.Representation is None:
             continue
-        try:
-            verts = ifcopenshell.geom.create_shape(settings, wall).geometry.verts
-        except Exception:
+        geometry = body_geometry(settings, wall, path)
+        if geometry is None:
             continue
+        verts = geometry.verts
         if not verts:
             continue
         zs = verts[2::3]
@@ -328,6 +348,11 @@ def main():
                 for other, end, at in found
             ]
             print(f"crossed tag:{tag} " + " ".join(parts))
+    unmeshed = collections.Counter(
+        ("rvt-rs" if path == args[0] else "Revit", kind, reason) for (path, _), (kind, reason) in UNMESHED.items()
+    )
+    for (name, kind, reason), n in sorted(unmeshed.items()):
+        print(f"left out of {name}'s file: {kind}, {reason}: {n}")
     print("\n".join(lines[:150]))
     return 0
 
