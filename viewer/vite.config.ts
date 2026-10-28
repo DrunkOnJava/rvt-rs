@@ -7,8 +7,8 @@ const { version } = JSON.parse(readFileSync(new URL('./package.json', import.met
   version: string;
 };
 
-// Deploys to https://drunkonjava.github.io/rvt-rs/viewer/ — so base must
-// match the trailing subdirectory of the published path.
+// Deploys to the Pages root, https://drunkonjava.github.io/rvt-rs/; the
+// relative base keeps asset URLs working under that sub-path.
 export default defineConfig({
   base: './',
   define: {
