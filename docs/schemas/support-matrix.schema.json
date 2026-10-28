@@ -11,7 +11,8 @@
     "status_vocabulary",
     "audit_controls",
     "honesty_invariants",
-    "capabilities"
+    "capabilities",
+    "releases"
   ],
   "additionalProperties": false,
   "properties": {
@@ -101,9 +102,48 @@
       "items": {
         "$ref": "#/$defs/capability"
       }
+    },
+    "releases": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/release"
+      },
+      "description": "One row per Revit release whose files rvt-rs reads, oldest first: the capability that rates its projects' element records and the capabilities that rate its family files. Statuses live only in the capabilities; the viewer's support grid is drawn from this table."
     }
   },
   "$defs": {
+    "release": {
+      "type": "object",
+      "required": [
+        "release",
+        "project_capability",
+        "family_capabilities"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "release": {
+          "type": "integer",
+          "minimum": 2000,
+          "maximum": 2100,
+          "description": "Revit release year."
+        },
+        "project_capability": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]*$",
+          "description": "Id of the capability that rates this release's project element records (rvt::capability::release_capability_id)."
+        },
+        "family_capabilities": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9-]*$"
+          },
+          "uniqueItems": true,
+          "description": "Ids of the capabilities measured on this release's family files; empty where the family corpus has no file of the release."
+        }
+      }
+    },
     "capability": {
       "type": "object",
       "required": [

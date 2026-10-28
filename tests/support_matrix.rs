@@ -4,6 +4,8 @@
 //! TEST-001 — schema validation + honesty invariants run in CI.
 //! DOC-001 — docs/status.md references the checked-in matrix.
 
+mod common;
+
 use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
@@ -391,6 +393,77 @@ fn every_release_read_has_a_support_matrix_status() {
                 );
                 assert_eq!(support.status, "unsupported");
             }
+        }
+    }
+}
+
+/// The release table the viewer's support grid is drawn from: one row per
+/// release whose element records are read, citing the rows that rate its
+/// projects and its family files, so the grid cannot claim more than the
+/// matrix, the crate or the family corpus.
+#[test]
+fn release_table_matches_the_crate_and_the_family_corpus() {
+    let matrix = load_json("docs/support-matrix.json");
+    let statuses: BTreeMap<&str, &str> = matrix["capabilities"]
+        .as_array()
+        .expect("capabilities array")
+        .iter()
+        .map(|row| {
+            (
+                row["id"].as_str().expect("capability id"),
+                row["status"].as_str().expect("capability status"),
+            )
+        })
+        .collect();
+    let rows = matrix["releases"].as_array().expect("releases array");
+    let release_of = |row: &Value| {
+        u32::try_from(row["release"].as_u64().expect("release year")).expect("release year")
+    };
+    let listed: Vec<u32> = rows.iter().map(release_of).collect();
+    let read: Vec<u32> = (2000..=2100)
+        .filter(|&release| rvt::capability::release_capability_id(release).is_some())
+        .collect();
+    assert_eq!(
+        listed, read,
+        "the table lists every release whose element records are read, oldest first"
+    );
+    for row in rows {
+        let release = release_of(row);
+        let project = row["project_capability"]
+            .as_str()
+            .expect("project_capability");
+        assert_eq!(
+            Some(project),
+            rvt::capability::release_capability_id(release),
+            "Revit {release}: the table and rvt::capability cite different rows"
+        );
+        assert!(
+            statuses.contains_key(project),
+            "Revit {release}: row {project} is not in the matrix"
+        );
+        let families: Vec<&str> = row["family_capabilities"]
+            .as_array()
+            .expect("family_capabilities array")
+            .iter()
+            .map(|id| id.as_str().expect("capability id"))
+            .collect();
+        if common::ALL_YEARS.contains(&release) {
+            assert!(
+                !families.is_empty(),
+                "Revit {release} is in the family corpus, so its family files are measured"
+            );
+        } else {
+            assert!(
+                families.is_empty(),
+                "Revit {release} has no file in the family corpus, so nothing is claimed for its family files"
+            );
+        }
+        for id in families {
+            assert_eq!(
+                statuses.get(id).copied(),
+                Some("verified"),
+                "Revit {release}: family files cite {id}, which the viewer shows as verified"
+            );
         }
     }
 }
