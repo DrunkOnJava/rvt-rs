@@ -2251,3 +2251,7 @@ A system-family element's native record names its type in one member: `SWall` an
 ## Addendum — RE-257 a wall's Height (2026-10-27)
 
 Revit's export writes a wall's `Qto_WallBaseQuantities.Height` as the vertical span of its own body: on the BIM4LCA office it is exactly that on every wall where rvt-rs's body depth misses (78 of 78 as built, 84 of 84 at permit). rvt-rs's wall body, as tall as its record box, has Revit's height on 501 of the office's 579 walls and on all 117 of puzzbobb's R2025 walls, attached tops included. The office's other 78 are drawn taller than Revit's body (#1067). The saved Unconnected Height agrees with rvt-rs's depth on 77 of them, and no field of the record separates them, so no wall gets a `Height` (`reports/element-framing/RE-257-wall-height.md`).
+
+## Addendum — RE-258 where Revit cuts a wall's top and base (2026-10-27)
+
+rvt-rs's walls differ from Revit's export at one end only: on the BIM4LCA office 65 tops and 20 bases as built (70 and 24 at permit), against none on Core Interior's 360 and puzzbobb's 117 R2025 walls. Revit cuts a top at the underside of a floor the wall's `JoinToRoofGStep` with `m_baseOrTop` 1 names, over the wall's middle: 63 of the 65 tops as built and 68 of 70 at permit. The same rule cuts 5 walls at each stage that Revit leaves whole, and neither file tells them apart (`reports/element-framing/RE-258-wall-cuts.md`, #1067).
