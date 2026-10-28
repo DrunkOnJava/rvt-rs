@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vite';
 
 // The viewer shows the release it was built from (#405). Its package
@@ -18,6 +19,14 @@ export default defineConfig({
     // Viewer is strictly client-side. No proxy, no SSR, no API back-end.
     port: 5173,
     strictPort: true,
+    // The support grid imports docs/support-matrix.json from outside the
+    // viewer root, so the dev server may read docs/ as well.
+    fs: {
+      allow: [
+        fileURLToPath(new URL('.', import.meta.url)),
+        fileURLToPath(new URL('../docs', import.meta.url)),
+      ],
+    },
     // COOP/COEP are needed so we can eventually use SharedArrayBuffer for
     // cross-thread transfers. Even without it today, setting these now
     // keeps the surface honest.

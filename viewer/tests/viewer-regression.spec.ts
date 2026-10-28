@@ -51,7 +51,7 @@ test.describe('on a 2x display', () => {
   // The renderer sizes the canvas's backing store in device pixels. The
   // canvas element itself must still fill the viewport exactly, or a HiDPI
   // screen lays it out twice as large, widens the grid and pushes the file
-  // status panel off-screen with the drop zone centred in the overflow.
+  // status panel off-screen with the drop target laid out in the overflow.
   test('the canvas fills the viewport and every panel stays on screen', async ({ page }) => {
     await page.goto('/');
     await expect(page.locator('#status')).toHaveText(/Ready/);
@@ -68,14 +68,14 @@ test.describe('on a 2x display', () => {
         canvasCss: [Math.round(rect.width), Math.round(rect.height)],
         canvasBacking: [canvas.width, canvas.height],
         sidebarRight: document.getElementById('sidebar-right')!.getBoundingClientRect().right,
-        titleOffset: Math.abs(title.left + title.width / 2 - (viewportRect.left + viewportRect.width / 2)),
+        titleInside: title.left >= viewportRect.left && title.right <= viewportRect.right,
       };
     });
     expect(layout.pageWidth).toBe(layout.windowWidth);
     expect(layout.canvasCss).toEqual(layout.viewport);
     expect(layout.canvasBacking).toEqual(layout.viewport.map((v) => v * 2));
     expect(layout.sidebarRight).toBeLessThanOrEqual(layout.windowWidth);
-    expect(layout.titleOffset).toBeLessThan(2);
+    expect(layout.titleInside).toBe(true);
   });
 });
 

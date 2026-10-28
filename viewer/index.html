@@ -33,6 +33,8 @@
           <option value="geometry">geometry</option>
           <option value="strict">strict</option>
         </select>
+        <span class="export-hint" id="export-hint">Open a file to export</span>
+        <div class="export-group" role="group" aria-label="Exports">
         <button class="export-btn" id="export-glb" disabled title="Download 3D model as glTF 2.0 binary" aria-label="Export glTF">
           Export glTF
         </button>
@@ -42,6 +44,7 @@
         <button class="export-btn" id="export-svg" disabled title="Download 2D plan view as SVG" aria-label="Export plan SVG">
           Export plan
         </button>
+        </div>
       </header>
       <aside id="sidebar-left" aria-label="Scene tree and categories">
         <h2 id="scene-tree-heading">Scene tree</h2>
@@ -65,28 +68,55 @@
       </aside>
       <main id="viewport" tabindex="-1" aria-label="3D viewport">
         <div id="dropzone" role="region" aria-label="Open a Revit file">
-          <div class="big">Drop a Revit file here</div>
-          <div class="hint">
-            Client-side only — every byte is parsed in this tab. No upload, no account, no
-            telemetry. Revit 2023, 2024 and 2025 projects open with their walls, doors, windows,
-            floors, roofs, stairs, furniture and fixtures under Revit's own ElementIds and
-            names; other releases and family files open with their metadata and schema. See
-            <a href="https://github.com/DrunkOnJava/rvt-rs/blob/main/docs/viewer-privacy-posture.md"
-              >privacy</a
-            >
-            and
-            <a href="https://github.com/DrunkOnJava/rvt-rs/blob/main/docs/status.md"
-              >status</a
-            >.
-          </div>
-          <div id="app-version" class="hint"></div>
-          <button id="pick-file" type="button" aria-controls="file-input">Choose file…</button>
-          <input id="file-input" type="file" accept=".rvt,.rfa,.rte,.rft" hidden aria-label="Revit file picker" />
-          <section id="demo-gallery" aria-label="Redistributable demo gallery">
-            <h2>Demo gallery</h2>
-            <div class="gallery-attribution" id="demo-attribution">Loading redistributable demos…</div>
-            <div id="demo-list" role="list"></div>
+          <section class="support-card" aria-labelledby="support-grid-heading">
+            <div class="support-card-grid">
+              <h2 id="support-grid-heading">Supported profile</h2>
+              <!-- Drawn from docs/support-matrix.json's releases table (main.ts). -->
+              <table class="support-grid" id="support-grid" aria-describedby="support-grid-legend"></table>
+              <ul class="support-legend" id="support-grid-legend"></ul>
+            </div>
+            <div class="support-card-rows" id="support-slot-canvas"></div>
           </section>
+          <div class="open-row">
+            <div class="drop-target">
+              <svg class="plan-drawing" viewBox="0 0 320 200" aria-hidden="true" focusable="false">
+                <g fill="none" stroke="currentColor" stroke-width="1.25" stroke-linejoin="miter">
+                  <path d="M40 30 H280 V170 H40 Z" stroke-width="2.5" />
+                  <path d="M46 36 H274 V164 H46 Z" />
+                  <path d="M160 36 V110 M154 36 V110 M154 130 V164 M160 130 V164" />
+                  <path d="M46 100 H120 M46 106 H120 M140 100 H154 M140 106 H154" />
+                  <path d="M120 106 A20 20 0 0 1 140 106" />
+                  <path d="M200 164 V170 M240 164 V170 M200 167 H240" />
+                  <path d="M280 60 H274 M280 90 H274 M277 60 V90" />
+                  <path d="M80 30 V36 M120 30 V36 M80 33 H120" />
+                  <path d="M196 60 H250 V140 H196 Z M196 70 H250 M196 80 H250 M196 90 H250 M196 100 H250 M196 110 H250 M196 120 H250 M196 130 H250" />
+                  <path d="M223 136 V64 M218 70 L223 64 L228 70" />
+                </g>
+              </svg>
+              <div class="big">Drop a Revit file here</div>
+              <div class="hint">
+                Client-side only — every byte is parsed in this tab. No upload, no account, no
+                telemetry. Revit 2023, 2024 and 2025 projects open with their walls, doors, windows,
+                floors, roofs, stairs, furniture and fixtures under Revit's own ElementIds and
+                names; other releases and family files open with their metadata and schema. See
+                <a href="https://github.com/DrunkOnJava/rvt-rs/blob/main/docs/viewer-privacy-posture.md"
+                  >privacy</a
+                >
+                and
+                <a href="https://github.com/DrunkOnJava/rvt-rs/blob/main/docs/status.md"
+                  >status</a
+                >.
+              </div>
+              <div id="app-version" class="hint"></div>
+              <button id="pick-file" type="button" aria-controls="file-input">Choose file…</button>
+              <input id="file-input" type="file" accept=".rvt,.rfa,.rte,.rft" hidden aria-label="Revit file picker" />
+            </div>
+            <section id="demo-gallery" aria-label="Redistributable demo gallery">
+              <h2>Demo gallery</h2>
+              <div class="gallery-attribution" id="demo-attribution">Loading redistributable demos…</div>
+              <div id="demo-list" role="list"></div>
+            </section>
+          </div>
         </div>
         <!--
           Loading treatment. Visually indeterminate (no fake percentage —
@@ -131,44 +161,49 @@
           <summary>Diagnostics details</summary>
           <pre id="diagnostics-json" aria-label="Diagnostics JSON"></pre>
         </details>
-        <h2>Supported MVP workflow</h2>
-        <div class="mvp-workflow" id="mvp-workflow">
-          <strong>Open locally or pick a demo</strong> → read Decode / Export confidence →
-          inspect decoded elements → choose an IFC bar (scaffold is honest for synthetics) →
-          export only after checking the quality label → download diagnostics for partial
-          exports. Typed elements come from Revit 2024 and 2025 projects; other releases export
-          a scaffold.
-        </div>
-        <h2>Supported profile</h2>
-        <div class="support-matrix" aria-label="Supported Revit file profile">
-          <div class="support-row">
-            <span class="k">Formats</span>
+        <details class="panel-details" id="mvp-workflow-details">
+          <summary>Supported MVP workflow</summary>
+          <div class="mvp-workflow" id="mvp-workflow">
+            <strong>Open locally or pick a demo</strong> → read Decode / Export confidence →
+            inspect decoded elements → choose an IFC bar (scaffold is honest for synthetics) →
+            export only after checking the quality label → download diagnostics for partial
+            exports. Typed elements come from Revit 2023, 2024 and 2025 projects, and
+            experimentally from Revit 2015 to 2022, 2026 and 2027 projects; other files export a
+            scaffold.
+          </div>
+        </details>
+        <details class="panel-details" id="support-profile-home" hidden>
+          <summary>Supported profile</summary>
+        </details>
+        <div class="support-matrix" id="support-matrix" aria-label="Supported Revit file profile">
+          <details class="support-row">
+            <summary class="k">Formats</summary>
             <span class="v">.rvt, .rfa, .rte, .rft — metadata/schema across verified Revit 2016–2026 family samples.</span>
-          </div>
-          <div class="support-row">
-            <span class="k">Real projects</span>
+          </details>
+          <details class="support-row">
+            <summary class="k">Real projects</summary>
             <span class="v">Core Interior (2024) opens from the gallery with walls, slabs, columns, doors, windows, rooms and real storeys, and Einhoven (2023) with its walls and storeys. Both come from magnetar-io/revit-test-datasets (MIT) and are the files the CI browser regression gates.</span>
-          </div>
-          <div class="support-row">
-            <span class="k">Synthetics</span>
+          </details>
+          <details class="support-row">
+            <summary class="k">Synthetics</summary>
             <span class="v">Tier1 demos (architectural-2024, structural-2023, mep-2024) open cleanly but decode as scaffold ~25% — that is expected, not a bug.</span>
-          </div>
-          <div class="support-row">
-            <span class="k">IFC now</span>
+          </details>
+          <details class="support-row">
+            <summary class="k">IFC now</summary>
             <span class="v">Revit 2024 and 2025 projects export walls, doors, windows, columns, slabs, roofs, ceilings, stairs, railings, rooms, curtain-wall parts, furniture, casework, lighting and plumbing fixtures, equipment, ducts, pipes, structural framing and foundations, and site elements, each under the ElementId and, for family instances, the Family:Type name Revit's own export gives it. Bodies are bounding boxes, refined to sketched outlines for slabs, roofs and stair landings, roof planes along their slopes, trimmed runs for walls, beams along their axes, cylinders for pipes, and treads and risers for stair flights, spiral ones included. Revit 2023 projects export typed elements too, and Revit 2015 to 2022, 2026 and 2027 projects experimentally; other files export a valid scaffold. The typed / geometry / strict bars refuse a file that does not meet them.</span>
-          </div>
-          <div class="support-row">
-            <span class="k">3-D view</span>
+          </details>
+          <details class="support-row">
+            <summary class="k">3-D view</summary>
             <span class="v">Revit 2024 and 2025 walls, floors, roofs and ceilings are drawn as their layers, each in its material's shading colour, where the layers add up to the element's thickness. Other elements take their category's colour.</span>
-          </div>
-          <div class="support-row">
-            <span class="k">MVP target</span>
+          </details>
+          <details class="support-row">
+            <summary class="k">MVP target</summary>
             <span class="v">Revit 2024/2025 projects: levels, walls, floors, doors, windows, rooms, materials, and the building products around them.</span>
-          </div>
-          <div class="support-row">
-            <span class="k">Not ready</span>
-            <span class="v">Element records before Revit 2024; true element geometry beyond bounding boxes and sketched outlines for most categories; most parameters; layer sets for elements drawn whole or sloped; some elements Revit's own export leaves out, such as opening-cut families and curtain panels with no resolved type, which rvt-rs still exports; phase filtering; and semantic Revit editing.</span>
-          </div>
+          </details>
+          <details class="support-row">
+            <summary class="k">Not ready</summary>
+            <span class="v">Element records outside Revit 2023 to 2025, which export only experimentally; true element geometry beyond bounding boxes and sketched outlines for most categories; most parameters; layer sets for elements drawn whole or sloped; some elements Revit's own export leaves out, such as opening-cut families and curtain panels with no resolved type, which rvt-rs still exports; phase filtering; and semantic Revit editing.</span>
+          </details>
           <a class="support-link" href="https://github.com/DrunkOnJava/rvt-rs/blob/main/docs/supported-profile.md">
             Profile details
           </a>

@@ -232,6 +232,22 @@ header .export-btn.primary:disabled {
 header .export-btn:active:not(:disabled) {
   transform: translateY(1px);
 }
+header .export-group {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+header .export-hint {
+  flex: none;
+  font-size: var(--sx-fs-xs);
+  font-weight: var(--sx-fw-medium);
+  color: var(--sx-color-on-chrome-muted);
+  white-space: nowrap;
+}
+header .export-hint[hidden] {
+  display: none;
+}
 
 /* ---- Panels: the navbar and the right-hand panel ------------------------ */
 
@@ -494,10 +510,9 @@ header .export-btn:active:not(:disabled) {
   z-index: 10;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: safe center;
+  gap: var(--sx-space-6);
   overflow-y: auto;
-  padding: var(--sx-space-6) var(--sx-space-md);
+  padding: var(--sx-space-6) var(--sx-space-8);
   /* Opaque: the empty scene's grid must not draw lines through the text. */
   background: var(--sx-color-body);
   color: var(--sx-color-text);
@@ -509,6 +524,123 @@ header .export-btn:active:not(:disabled) {
 }
 #dropzone.hidden {
   display: none;
+}
+#dropzone h2 {
+  margin: 0 0 var(--sx-space-3);
+  font-size: var(--sx-h5);
+  font-weight: var(--sx-fw-bold);
+  line-height: var(--sx-h5-lh);
+  color: var(--sx-color-title);
+}
+
+/* Support grid: what each release reads, before anything is dropped. */
+.support-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 260px;
+  gap: var(--sx-space-6);
+  padding: var(--sx-space-5) var(--sx-space-6);
+  background: var(--sx-color-surface);
+  border: 1px solid var(--sx-color-border-subtle);
+  border-radius: var(--sx-radius-md);
+}
+.support-card-grid {
+  min-width: 0;
+  overflow-x: auto;
+}
+.support-grid {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 4px 6px;
+  font-size: var(--sx-fs-xs);
+  font-variant-numeric: tabular-nums;
+}
+.support-grid th {
+  font-weight: var(--sx-fw-medium);
+  color: var(--sx-color-dimmed);
+  text-align: center;
+  white-space: nowrap;
+}
+.support-grid th[scope='row'],
+.support-grid thead th:first-child {
+  padding-right: var(--sx-space-2);
+  font-weight: var(--sx-fw-semibold);
+  color: var(--sx-color-text);
+  text-align: left;
+}
+.support-grid td {
+  height: 32px;
+  min-width: 28px;
+}
+/* Each state differs in shape as well as colour: typed is a solid fill,
+   verified a solid outline, experimental a dashed amber outline and not
+   measured a dashed grey one. */
+.support-cell {
+  border-radius: var(--sx-radius-sm);
+}
+.support-cell.typed {
+  background: var(--sx-color-success);
+}
+.support-cell.verified {
+  background: var(--sx-color-success-light);
+  box-shadow: inset 0 0 0 1.5px var(--sx-color-success);
+}
+.support-cell.experimental {
+  background: var(--sx-color-warning-light);
+  outline: 1.5px dashed var(--sx-color-warning);
+  outline-offset: -1.5px;
+}
+.support-cell.not-measured {
+  outline: 1.5px dashed var(--sx-color-border-strong);
+  outline-offset: -1.5px;
+}
+.support-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sx-space-2) var(--sx-space-5);
+  margin: var(--sx-space-3) 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--sx-fs-xs);
+  color: var(--sx-color-dimmed);
+}
+.support-legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sx-space-2);
+}
+.support-legend .support-cell {
+  display: inline-block;
+  width: 18px;
+  height: 12px;
+}
+.support-legend-note {
+  flex-basis: 100%;
+}
+.support-card-rows .support-matrix {
+  margin: 0;
+}
+
+/* Below the grid: the drop target beside the demo list. */
+.open-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
+  gap: var(--sx-space-6);
+  align-items: start;
+}
+.drop-target {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: var(--sx-space-6);
+  text-align: center;
+  border: 1px dashed var(--sx-color-border-strong);
+  border-radius: var(--sx-radius-md);
+}
+.plan-drawing {
+  width: min(100%, 300px);
+  height: auto;
+  margin-bottom: var(--sx-space-4);
+  color: var(--sx-color-dimmed);
 }
 #dropzone .big {
   margin-bottom: 6px;
@@ -559,16 +691,8 @@ header .export-btn:active:not(:disabled) {
 }
 
 #demo-gallery {
-  width: min(720px, 92%);
-  margin-top: var(--sx-space-xl);
+  min-width: 0;
   text-align: left;
-}
-#demo-gallery h2 {
-  margin: 0 0 4px;
-  font-size: var(--sx-h4);
-  font-weight: var(--sx-fw-bold);
-  line-height: var(--sx-h4-lh);
-  color: var(--sx-color-title);
 }
 #demo-gallery .gallery-attribution {
   margin-bottom: var(--sx-space-sm);
@@ -578,34 +702,31 @@ header .export-btn:active:not(:disabled) {
 }
 #demo-list {
   display: grid;
-  gap: 8px;
-  max-height: min(42vh, 360px);
-  overflow-y: auto;
+  border-top: 1px solid var(--sx-color-border-subtle);
 }
 
-/* Demo cards: resource cards with an image tile. */
+/* Demo rows: thumbnail, name and facts, expected quality. */
 .demo-card {
   position: relative;
   display: grid;
-  grid-template-columns: 72px 1fr;
-  gap: var(--sx-space-sm);
-  align-items: start;
+  grid-template-columns: 56px minmax(0, 1fr) auto;
+  gap: var(--sx-space-3);
+  align-items: center;
   width: 100%;
-  padding: var(--sx-space-sm);
+  min-height: 52px;
+  padding: var(--sx-space-2) var(--sx-space-1);
   font: inherit;
   color: inherit;
   text-align: left;
-  background: var(--sx-color-surface);
-  border: 1px solid var(--sx-color-border-subtle);
-  border-radius: var(--sx-radius-default);
+  background: none;
+  border: 0;
+  border-bottom: 1px solid var(--sx-color-border-subtle);
+  border-radius: 0;
   cursor: pointer;
-  transition:
-    border-color var(--sx-duration-fast) var(--sx-ease-standard),
-    background-color var(--sx-duration-fast) var(--sx-ease-standard);
+  transition: background-color var(--sx-duration-fast) var(--sx-ease-standard);
 }
 .demo-card:hover:not(:disabled) {
   background: var(--sx-color-selected-hover);
-  border-color: var(--sx-blue-2);
 }
 .demo-card:active:not(:disabled) {
   background: var(--sx-color-selected);
@@ -615,35 +736,43 @@ header .export-btn:active:not(:disabled) {
   opacity: 0.55;
 }
 .demo-card:focus-visible {
-  border-color: var(--sx-color-primary);
+  outline: 2px solid var(--sx-color-primary);
+  outline-offset: -2px;
 }
 .demo-card img {
-  width: 72px;
-  height: 40px;
+  width: 56px;
+  height: 36px;
   object-fit: cover;
   background: var(--sx-color-surface-muted);
   border: 1px solid var(--sx-color-border-subtle);
-  border-radius: var(--sx-radius-md);
+  border-radius: var(--sx-radius-sm);
   transition: opacity var(--sx-duration-base) var(--sx-ease-standard);
 }
 .demo-card:disabled img,
 .demo-card[aria-busy='true'] img {
   opacity: 0.5;
 }
+.demo-card .demo-body {
+  min-width: 0;
+}
 .demo-card .demo-title {
-  font-size: var(--sx-fs-sm);
+  font-size: var(--sx-fs-compact);
   font-weight: var(--sx-fw-semibold);
   line-height: var(--sx-lh-xs);
   color: var(--sx-color-text);
 }
 .demo-card .demo-meta {
   margin-top: 2px;
+  overflow: hidden;
   font-size: 11px;
   line-height: var(--sx-lh-xs);
   color: var(--sx-color-dimmed);
-  white-space: pre-line;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
-/* Badges: sentence case, a light tint of the tone colour. */
+/* Badges: sentence case, a light tint of the tone colour. Blue stays for
+   actions and selection, so scaffold and reference read neutral. */
 .demo-card .demo-quality,
 .demo-badge {
   display: inline-flex;
@@ -656,30 +785,22 @@ header .export-btn:active:not(:disabled) {
   white-space: nowrap;
 }
 .demo-card .demo-quality {
-  margin-top: 6px;
-  color: var(--sx-color-warning);
-  background: var(--sx-color-warning-light);
+  color: var(--sx-color-dimmed);
+  background: var(--sx-color-neutral-light);
 }
 .demo-card .demo-quality.geometry {
   color: var(--sx-color-success);
   background: var(--sx-color-success-light);
 }
-.demo-card .demo-quality.reference {
-  color: var(--sx-color-primary);
-  background: var(--sx-color-primary-light);
-}
 .demo-badge {
   margin-left: 8px;
   vertical-align: 1px;
-  color: var(--sx-color-primary);
-  background: var(--sx-color-primary-light);
-}
-.demo-card[data-demo-real='true'] {
-  border-color: var(--sx-color-border);
+  color: var(--sx-color-text);
+  background: none;
+  box-shadow: inset 0 0 0 1px var(--sx-color-border);
 }
 .demo-card[aria-busy='true'] {
   cursor: progress;
-  border-color: var(--sx-blue-2);
 }
 .demo-card[aria-busy='true'] .demo-title {
   color: var(--sx-color-dimmed);
@@ -930,13 +1051,16 @@ header .export-btn:active:not(:disabled) {
 .status-panel {
   display: grid;
   margin-bottom: var(--sx-space-xs);
+  border: 1px solid var(--sx-color-border);
+  border-radius: var(--sx-radius-md);
+  overflow: hidden;
 }
 .status-row {
   display: grid;
   grid-template-columns: 10px 88px 1fr;
   gap: 8px;
   align-items: start;
-  padding: 8px 4px;
+  padding: 7px 10px;
   font-size: var(--sx-fs-xs);
   line-height: var(--sx-lh-xs);
   border-bottom: 1px solid var(--sx-color-border-subtle);
@@ -959,6 +1083,13 @@ header .export-btn:active:not(:disabled) {
 }
 .status-dot.bad {
   background: var(--sx-color-danger);
+}
+.status-dot.idle {
+  background: none;
+  box-shadow: inset 0 0 0 1.5px var(--sx-color-border-strong);
+}
+.status-row:last-child {
+  border-bottom: 0;
 }
 .status-label {
   font-weight: var(--sx-fw-semibold);
@@ -1003,7 +1134,8 @@ header .export-btn:active:not(:disabled) {
 }
 
 /* Diagnostics: an accordion row over a code panel set in the sans face. */
-#diagnostics-details {
+#diagnostics-details,
+.panel-details {
   margin-bottom: var(--sx-space-sm);
   font-size: var(--sx-fs-xs);
   color: var(--sx-color-dimmed);
@@ -1012,7 +1144,9 @@ header .export-btn:active:not(:disabled) {
   border-radius: var(--sx-radius-md);
   overflow: hidden;
 }
-#diagnostics-details summary {
+#diagnostics-details summary,
+.panel-details > summary,
+.support-row > summary {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1022,10 +1156,14 @@ header .export-btn:active:not(:disabled) {
   list-style: none;
   cursor: pointer;
 }
-#diagnostics-details summary::-webkit-details-marker {
+#diagnostics-details summary::-webkit-details-marker,
+.panel-details > summary::-webkit-details-marker,
+.support-row > summary::-webkit-details-marker {
   display: none;
 }
-#diagnostics-details summary::after {
+#diagnostics-details summary::after,
+.panel-details > summary::after,
+.support-row > summary::after {
   content: '';
   width: 6px;
   height: 6px;
@@ -1035,7 +1173,9 @@ header .export-btn:active:not(:disabled) {
   transform: translateY(-2px) rotate(45deg);
   transition: transform var(--sx-duration-base) var(--sx-ease-standard);
 }
-#diagnostics-details[open] summary::after {
+#diagnostics-details[open] summary::after,
+.panel-details[open] > summary::after,
+.support-row[open] > summary::after {
   transform: translateY(1px) rotate(-135deg);
 }
 #diagnostics-json {
@@ -1058,13 +1198,11 @@ header .export-btn:active:not(:disabled) {
 /* ---- Workflow and supported profile --------------------------------------- */
 
 .mvp-workflow {
-  margin: 0 0 var(--sx-space-sm);
-  padding: 10px 12px;
+  margin: 0;
+  padding: 0 12px 12px;
   font-size: var(--sx-fs-xs);
   line-height: var(--sx-lh-sm);
   color: var(--sx-color-dimmed);
-  background: var(--sx-color-surface-subtle);
-  border-radius: var(--sx-radius-md);
 }
 .mvp-workflow strong {
   font-weight: var(--sx-fw-semibold);
@@ -1078,11 +1216,14 @@ header .export-btn:active:not(:disabled) {
   line-height: var(--sx-lh-xs);
 }
 .support-row {
-  display: grid;
-  grid-template-columns: 78px 1fr;
-  gap: 8px;
-  padding: 8px 4px;
   border-bottom: 1px solid var(--sx-color-border-subtle);
+}
+.support-row > summary {
+  padding: 8px 4px;
+}
+.support-row .v {
+  display: block;
+  padding: 0 4px 10px;
 }
 .support-row .k {
   font-weight: var(--sx-fw-semibold);
@@ -1446,6 +1587,31 @@ select:focus:not(:focus-visible),
     width: min(100%, 560px);
   }
 }
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* The canvas is the window less both panels (580px), so the grid's rows
+   move under it first and the drop target over the demo list next. */
+@media (max-width: 1520px) {
+  .support-card {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (max-width: 1280px) {
+  .open-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 @media (max-width: 560px) {
   header h1 {
     font-size: 15px;

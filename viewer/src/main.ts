@@ -15,6 +15,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import supportMatrix from '../../docs/support-matrix.json';
 
 // ---------- DOM ----------
 const $ = (id: string): HTMLElement => {
@@ -58,6 +59,12 @@ const scaffoldNoteBodyEl = $('scaffold-note-body');
 const showRealProjectsBtn = $('show-real-projects') as HTMLButtonElement;
 const dismissScaffoldNoteBtn = $('dismiss-scaffold-note') as HTMLButtonElement;
 const toastRegionEl = $('toast-region');
+const exportHintEl = $('export-hint');
+const supportMatrixEl = $('support-matrix');
+const supportHomeEl = $('support-profile-home') as HTMLDetailsElement;
+const supportSlotEl = $('support-slot-canvas');
+const supportGridEl = $('support-grid') as HTMLTableElement;
+const supportLegendEl = $('support-grid-legend');
 
 // ---------- Motion ----------
 const reducedMotionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -498,7 +505,7 @@ function maybeShowScaffoldNote(diagnostics: ExportDiagnostics): void {
 /** Reopens the gallery and puts the keyboard on the first real project. */
 function revealRealProjects(): void {
   hideScaffoldNote();
-  dropzone.classList.remove('hidden');
+  setDropzoneVisible(true);
   const card = demoListEl.querySelector<HTMLElement>('[data-demo-real="true"]');
   if (!card) {
     setStatus('Real-project demos are not staged in this build');
@@ -737,6 +744,7 @@ async function loadBytes(file: File): Promise<void> {
   exportGlbBtn.disabled = true;
   exportIfcBtn.disabled = true;
   exportSvgBtn.disabled = true;
+  setExportHint('Exports unlock when the file is read');
   downloadDiagnosticsBtn.disabled = true;
   downloadScheduleBtn.disabled = true;
   downloadRoomsBtn.disabled = true;
@@ -762,7 +770,8 @@ async function loadBytes(file: File): Promise<void> {
     clearDemoCardBusy();
     setStatus(`Error: ${message}`);
     renderErrorStatusPanel(message);
-    dropzone.classList.remove('hidden');
+    setDropzoneVisible(true);
+    setExportHint('Open a file to export');
     toast(`Could not read ${file.name}. ${message}`, 'bad');
     return;
   }
@@ -815,7 +824,7 @@ async function loadBytes(file: File): Promise<void> {
       }
       fileMetaEl.textContent = bits.join(' · ');
       currentDocument = msg.document ?? null;
-      dropzone.classList.add('hidden');
+      setDropzoneVisible(false);
       return;
     }
     if (msg.type === 'error') {
@@ -824,7 +833,8 @@ async function loadBytes(file: File): Promise<void> {
       setStatus(`Error: ${msg.message}`);
       renderErrorStatusPanel(msg.message);
       hideScaffoldNote();
-      dropzone.classList.remove('hidden');
+      setDropzoneVisible(true);
+      setExportHint('Open a file to export');
       toast(`Could not open ${file.name}. ${msg.message}`, 'bad');
       return;
     }
@@ -843,10 +853,11 @@ async function loadBytes(file: File): Promise<void> {
     renderExportQuality(currentDiagnostics);
     renderStatusPanel(currentDiagnostics);
     fileMetaEl.textContent = `${file.name} · ${formatBytes(file.size)} · ${countEntities(msg.scene)} entities`;
-    dropzone.classList.add('hidden');
+    setDropzoneVisible(false);
     exportGlbBtn.disabled = false;
     exportIfcBtn.disabled = false;
     exportSvgBtn.disabled = false;
+    setExportHint(null);
     downloadDiagnosticsBtn.disabled = false;
     // The schedules follow the model: an element schedule whenever any
     // building element decoded, a room schedule only when rooms did.
@@ -865,14 +876,14 @@ async function loadBytes(file: File): Promise<void> {
 function renderEmptyStatusPanel(): void {
   statusPanelEl.innerHTML = '';
   resetStatusRowStagger();
-  statusPanelEl.appendChild(statusRow('File', 'warn', 'No file opened'));
-  statusPanelEl.appendChild(statusRow('Mode', 'warn', 'Waiting for file'));
-  statusPanelEl.appendChild(statusRow('Schema', 'warn', 'Waiting for file'));
-  statusPanelEl.appendChild(statusRow('Elements', 'warn', 'Waiting for file'));
-  statusPanelEl.appendChild(statusRow('Geometry', 'warn', 'Waiting for file'));
-  statusPanelEl.appendChild(statusRow('Decode', 'warn', 'Waiting for file'));
-  statusPanelEl.appendChild(statusRow('Export', 'warn', 'Waiting for file'));
-  statusPanelEl.appendChild(statusRow('IFC bar', 'warn', `Selected · ${selectedExportMode()}`));
+  statusPanelEl.appendChild(statusRow('File', 'idle', 'No file opened'));
+  statusPanelEl.appendChild(statusRow('Mode', 'idle', 'Waiting for file'));
+  statusPanelEl.appendChild(statusRow('Schema', 'idle', 'Waiting for file'));
+  statusPanelEl.appendChild(statusRow('Elements', 'idle', 'Waiting for file'));
+  statusPanelEl.appendChild(statusRow('Geometry', 'idle', 'Waiting for file'));
+  statusPanelEl.appendChild(statusRow('Decode', 'idle', 'Waiting for file'));
+  statusPanelEl.appendChild(statusRow('Export', 'idle', 'Waiting for file'));
+  statusPanelEl.appendChild(statusRow('IFC bar', 'idle', `Selected · ${selectedExportMode()}`));
   statusPanelEl.appendChild(statusRow('Warnings', 'ok', 'No export warnings'));
   diagnosticsJsonEl.textContent = '';
 }
@@ -2487,7 +2498,7 @@ function renderStatusPanel(diagnostics: ExportDiagnostics): void {
   );
 }
 
-type StatusKind = 'ok' | 'warn' | 'bad';
+type StatusKind = 'ok' | 'warn' | 'bad' | 'idle';
 
 interface FailureModeStatus {
   kind: StatusKind;
@@ -3227,11 +3238,12 @@ function fillDemoCard(card: HTMLElement, demo: DemoEntry, loadable: boolean): vo
     const img = document.createElement('img');
     img.src = demoAssetUrl(demo.thumbnail);
     img.alt = '';
-    img.width = 72;
-    img.height = 40;
+    img.width = 56;
+    img.height = 36;
     card.appendChild(img);
   }
   const body = document.createElement('div');
+  body.className = 'demo-body';
   const title = document.createElement('div');
   title.className = 'demo-title';
   title.textContent = demo.name;
@@ -3243,6 +3255,8 @@ function fillDemoCard(card: HTMLElement, demo: DemoEntry, loadable: boolean): vo
     badge.textContent = 'Real project';
     title.appendChild(badge);
   }
+  // One line of facts and the licence; the provenance and notes are the
+  // card's tooltip.
   const meta = document.createElement('div');
   meta.className = 'demo-meta';
   const bits = [
@@ -3250,28 +3264,25 @@ function fillDemoCard(card: HTMLElement, demo: DemoEntry, loadable: boolean): vo
     demo.revit_version ? `Revit ${demo.revit_version}` : null,
     demo.element_count_hint ? `~${demo.element_count_hint} elements` : null,
     demo.license ?? null,
-  ].filter(Boolean);
-  meta.textContent = bits.join(' · ');
-  if (demo.provenance) {
-    meta.textContent += `\n${demo.provenance}`;
-  }
-  if (demo.expected_quality_note) {
-    meta.textContent += `\n${demo.expected_quality_note}`;
-  }
+  ];
   if (!demo.available) {
-    meta.textContent += '\nNot bundled in this build (corpus optional).';
+    bits.push('not bundled in this build');
   } else if (!loadable && demo.format !== 'ifc') {
-    meta.textContent += '\nUnavailable in this build.';
+    bits.push('unavailable in this build');
   } else if (!loadable) {
-    meta.textContent += '\nReference download — not opened by the RVT parser.';
+    bits.push('Reference download, not opened by the RVT parser');
   }
+  meta.textContent = bits.filter(Boolean).join(' · ');
+  card.title = [demo.provenance, demo.expected_quality_note]
+    .filter(Boolean)
+    .join('\n');
   const quality = document.createElement('span');
   quality.className = `demo-quality ${qualityPillClass(demo.expected_quality)}`;
   quality.textContent = `Expected: ${demo.expected_quality ?? 'Unknown'}`;
   body.appendChild(title);
   body.appendChild(meta);
-  body.appendChild(quality);
   card.appendChild(body);
+  card.appendChild(quality);
 }
 
 async function initDemoGallery(): Promise<void> {
@@ -3289,6 +3300,116 @@ async function initDemoGallery(): Promise<void> {
   }
 }
 
+/**
+ * Shows or hides the empty state. The profile rows sit beside the support
+ * grid while the canvas is empty and move to the right panel once a file is
+ * open, so they stay reachable.
+ */
+function setDropzoneVisible(visible: boolean): void {
+  dropzone.classList.toggle('hidden', !visible);
+  if (visible) {
+    supportSlotEl.appendChild(supportMatrixEl);
+    supportHomeEl.hidden = true;
+  } else {
+    supportHomeEl.appendChild(supportMatrixEl);
+    supportHomeEl.hidden = false;
+  }
+}
+
+/** Why the export buttons are disabled, or null once they are not. */
+function setExportHint(text: string | null): void {
+  exportHintEl.hidden = text === null;
+  exportHintEl.textContent = text ?? '';
+}
+
+type SupportState = 'typed' | 'verified' | 'experimental' | 'not-measured';
+
+const SUPPORT_STATE_LABEL: Record<SupportState, string> = {
+  typed: 'Typed elements',
+  verified: 'Verified metadata and schema',
+  experimental: 'Experimental export',
+  'not-measured': 'Not measured',
+};
+
+/**
+ * What the viewer reads of each Revit release's projects and family files,
+ * drawn from docs/support-matrix.json: its releases table names the rows
+ * that rate each release, and those rows' statuses decide the cells, so the
+ * grid cannot claim more than the matrix (tests/support_matrix.rs pins this
+ * import).
+ */
+function renderSupportGrid(): void {
+  const statusOf = new Map<string, string>(
+    supportMatrix.capabilities.map((row): [string, string] => [row.id, row.status]),
+  );
+  const projectState = (id: string): SupportState | null => {
+    const status = statusOf.get(id);
+    if (status === 'verified' || status === 'partial') return 'typed';
+    if (status === 'experimental') return 'experimental';
+    return null;
+  };
+  const familyState = (ids: readonly string[]): SupportState =>
+    ids.length > 0 && ids.every((id) => statusOf.get(id) === 'verified')
+      ? 'verified'
+      : 'not-measured';
+
+  const head = supportGridEl.createTHead().insertRow();
+  const corner = document.createElement('th');
+  corner.scope = 'col';
+  corner.textContent = 'Revit release';
+  head.appendChild(corner);
+  const body = supportGridEl.createTBody();
+  const projects = body.insertRow();
+  const families = body.insertRow();
+  for (const [row, label] of [
+    [projects, 'Projects'],
+    [families, 'Family files'],
+  ] as const) {
+    const th = document.createElement('th');
+    th.scope = 'row';
+    th.textContent = label;
+    row.appendChild(th);
+  }
+  const shown = new Set<SupportState>();
+  for (const release of supportMatrix.releases) {
+    const year = document.createElement('th');
+    year.scope = 'col';
+    year.textContent = String(release.release);
+    head.appendChild(year);
+    const cells: [HTMLTableRowElement, SupportState | null, string][] = [
+      [projects, projectState(release.project_capability), 'projects'],
+      [families, familyState(release.family_capabilities), 'family files'],
+    ];
+    for (const [row, state, what] of cells) {
+      const cell = row.insertCell();
+      if (!state) continue;
+      shown.add(state);
+      cell.className = `support-cell ${state}`;
+      cell.title = `Revit ${release.release} ${what}: ${SUPPORT_STATE_LABEL[state]}`;
+      const text = document.createElement('span');
+      text.className = 'visually-hidden';
+      text.textContent = SUPPORT_STATE_LABEL[state];
+      cell.appendChild(text);
+    }
+  }
+  for (const state of ['typed', 'verified', 'experimental', 'not-measured'] as const) {
+    if (!shown.has(state)) continue;
+    const item = document.createElement('li');
+    const swatch = document.createElement('span');
+    swatch.className = `support-cell ${state}`;
+    swatch.setAttribute('aria-hidden', 'true');
+    item.append(swatch, SUPPORT_STATE_LABEL[state]);
+    supportLegendEl.appendChild(item);
+  }
+  const note = document.createElement('li');
+  note.className = 'support-legend-note';
+  note.textContent = 'Other files export a valid scaffold.';
+  supportLegendEl.appendChild(note);
+}
+
+renderSupportGrid();
+setDropzoneVisible(true);
+setExportHint('Open a file to export');
 renderEmptyStatusPanel();
 void initDemoGallery();
 setStatus('Ready · drop a file or open a demo');
