@@ -5,7 +5,9 @@
 //! `Outline` and `ElementParents`, RE-80), `constant` (`bbox_marker`),
 //! `header_tag` (the schema's `ElementHeader`) and `prologue`
 //! (`record_prologue_constant` of the schema's marker), and `scanned`, the
-//! marker `file_bbox_marker` hands the scans.
+//! marker `file_bbox_marker` hands the scans, `schema_release` (the
+//! release the schema belongs to, `schema_release`) and `layout` (the
+//! release the readers take, `RevitFile::layout_release`).
 //!
 //! Usage:
 //!   cargo run --profile ci --example probe_421_schema_marker -- FILE.rvt ...
@@ -35,11 +37,12 @@ fn main() {
             }
         };
         let release = rf.basic_file_info().map(|i| i.version).unwrap_or(0);
+        let layout = rf.layout_release().unwrap_or(release);
         let schema = record_marker(&mut rf);
         let marker = schema.map(|(m, _)| m);
         println!(
             "{{\"file\":{file:?},\"release\":{release},\"schema\":{},\"constant\":{},\
-             \"header_tag\":{},\"prologue\":{},\"scanned\":{}}}",
+             \"header_tag\":{},\"prologue\":{},\"scanned\":{},\"schema_release\":{},\"layout\":{layout}}}",
             hex(marker),
             hex(per::bbox_marker(release)),
             schema.map_or_else(|| "null".into(), |(_, t)| t.to_string()),
@@ -47,7 +50,8 @@ fn main() {
                 || "null".into(),
                 |m| per::record_prologue_constant(&m).to_string()
             ),
-            hex(per::file_bbox_marker(&mut rf, release)),
+            hex(per::file_bbox_marker(&mut rf, layout)),
+            per::schema_release(&mut rf).map_or_else(|| "null".into(), |r| r.to_string()),
         );
     }
 }

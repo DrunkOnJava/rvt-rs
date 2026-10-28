@@ -1116,6 +1116,9 @@ fn export_rvt_doc(
     // BasicFileInfo's original path.
     let part = rf.part_atom().ok();
     let bfi = rf.basic_file_info().ok();
+    // #421: the release whose layout the records take, which is not the
+    // saving release on a file that kept an older release's schema.
+    let layout = rf.layout_release().ok();
     let project_name = part.as_ref().and_then(|pa| pa.title.clone()).or_else(|| {
         bfi.as_ref()
             .and_then(|b| b.original_path.as_deref())
@@ -1126,9 +1129,10 @@ fn export_rvt_doc(
         let mut d = Vec::new();
         if let Some(b) = &bfi {
             d.push(format!("Revit {} export", b.version));
-            if let Some(message) =
-                crate::arc_wall_record::ArcWallRecord::standard_decoder_status(b.version)
-                    .diagnostic_message()
+            if let Some(message) = crate::arc_wall_record::ArcWallRecord::standard_decoder_status(
+                layout.unwrap_or(b.version),
+            )
+            .diagnostic_message()
             {
                 d.push(message);
             }
@@ -1212,7 +1216,7 @@ fn export_rvt_doc(
     // `apply_element_record_storeys`, whose replacement half is a
     // no-op once the storeys carry real, distinct elevations.
     let mut level_storey_bind = crate::level_bind::LevelStoreyBind::new();
-    if let Some(revit_version) = bfi.as_ref().map(|b| b.version) {
+    if let Some(revit_version) = layout {
         apply_partition_level_storeys(
             rf,
             revit_version,
@@ -1231,7 +1235,7 @@ fn export_rvt_doc(
     //
     // See `reports/element-framing/RE-14.3-synthesis.md` and
     // `reports/element-framing/RE-15-arcwall-trailer-synthesis.md`.
-    if let Some(revit_version) = bfi.as_ref().map(|b| b.version) {
+    if let Some(revit_version) = layout {
         if let Ok(scan) = crate::partition_arc_walls::scan_partition_arc_walls_with_limits(
             rf,
             revit_version,
@@ -2139,7 +2143,7 @@ fn revit_model_global_ids(
         ..RevitGlobalIds::default()
     };
     out.revit_version = rf.basic_file_info().ok().map(|info| info.version);
-    let levels = match out.revit_version {
+    let levels = match rf.layout_release().ok() {
         Some(version) => crate::partition_level_records::recover_partition_levels(rf, version)
             .unwrap_or_default(),
         None => Vec::new(),
@@ -2349,7 +2353,7 @@ fn attach_hosted_cut_openings(rf: &mut crate::RevitFile, entities: &mut Vec<enti
     if cuts.is_empty() {
         return;
     }
-    let revit_version = rf.basic_file_info().map(|info| info.version).unwrap_or(0);
+    let revit_version = rf.layout_release().unwrap_or(0);
     let ids = cuts
         .iter()
         .filter_map(|cut| u32::try_from(cut.instance).ok())
@@ -2514,7 +2518,7 @@ fn attach_family_instance_ports(
             }
         }
     }
-    let revit_version = rf.basic_file_info().map(|info| info.version).unwrap_or(0);
+    let revit_version = rf.layout_release().unwrap_or(0);
     let transforms = if PORT_PLACEMENT_REVIT_VERSIONS.contains(&revit_version) {
         let ids = instances.iter().map(|(_, id, _)| *id).collect();
         crate::partition_instance_transforms::scan_instance_transforms(rf, revit_version, &ids)
@@ -3572,6 +3576,7 @@ pub fn build_export_diagnostics_with_limits(
     walker_limits: crate::walker::WalkerLimits,
 ) -> ExportDiagnostics {
     let bfi = rf.basic_file_info().ok();
+    let layout = rf.layout_release().ok();
     let part = rf.part_atom().ok();
     let stream_names = rf.stream_names();
     let diagnostic_candidates = collect_diagnostic_walker_proxy_candidates(rf, walker_limits);
@@ -3614,10 +3619,9 @@ pub fn build_export_diagnostics_with_limits(
     // attributable ElementId are rejected by the fail-closed decode, so a
     // file made mostly of them exports a fraction of its model while
     // looking complete. Count them so the sidecar says so.
-    let unattributed_frames = bfi
-        .as_ref()
-        .and_then(|b| {
-            crate::partition_element_records::scan_unattributed_frames(rf, b.version).ok()
+    let unattributed_frames = layout
+        .and_then(|version| {
+            crate::partition_element_records::scan_unattributed_frames(rf, version).ok()
         })
         .unwrap_or_default();
     let unattributed_total: usize = unattributed_frames.values().sum();
@@ -3632,10 +3636,9 @@ pub fn build_export_diagnostics_with_limits(
     // #309: placed instances with no 3D body are left out by design, as
     // Revit's own export leaves them out. They are not missing, so they
     // do not count toward `unexported_element_records`.
-    let volumeless = bfi
-        .as_ref()
-        .and_then(|b| {
-            crate::partition_element_records::scan_volumeless_instances(rf, b.version).ok()
+    let volumeless = layout
+        .and_then(|version| {
+            crate::partition_element_records::scan_volumeless_instances(rf, version).ok()
         })
         .unwrap_or_default();
     let volumeless_total: usize = volumeless.values().sum();
@@ -3649,10 +3652,9 @@ pub fn build_export_diagnostics_with_limits(
     }
     // #319: elements in a non-primary design option are left out as
     // Revit's own export leaves them out. They are not missing either.
-    let non_primary = bfi
-        .as_ref()
-        .and_then(|b| {
-            crate::partition_design_options::scan_non_primary_option_instances(rf, b.version).ok()
+    let non_primary = layout
+        .and_then(|version| {
+            crate::partition_design_options::scan_non_primary_option_instances(rf, version).ok()
         })
         .unwrap_or_default();
     let non_primary_total: usize = non_primary.values().sum();
@@ -3667,9 +3669,10 @@ pub fn build_export_diagnostics_with_limits(
     // #309: empty curtain panels are left out as Revit's own export leaves
     // them out, recognised by their family's name. A type of theirs with a
     // material set would contradict that name, and is reported.
-    let empty_panels = bfi
-        .as_ref()
-        .and_then(|b| crate::partition_schema_mvp::scan_empty_curtain_panels(rf, b.version).ok())
+    let empty_panels = layout
+        .and_then(|version| {
+            crate::partition_schema_mvp::scan_empty_curtain_panels(rf, version).ok()
+        })
         .unwrap_or_default();
     if empty_panels.count > 0 {
         skipped.push(SkippedExportItem {
@@ -3694,7 +3697,7 @@ pub fn build_export_diagnostics_with_limits(
     }
     // Surface ArcWall partition-scan limit hits so crafted large
     // Partitions/* streams are visible in the diagnostics sidecar.
-    if let Some(version) = bfi.as_ref().map(|b| b.version) {
+    if let Some(version) = layout {
         if let Ok(scan) = crate::partition_arc_walls::scan_partition_arc_walls_with_limits(
             rf,
             version,
@@ -3707,10 +3710,8 @@ pub fn build_export_diagnostics_with_limits(
     }
     if exported.building_elements == 0 {
         warnings.push("No building elements were exported; output is scaffold-only.".into());
-    } else if let Some(version) = bfi
-        .as_ref()
-        .map(|b| b.version)
-        .filter(|&version| crate::partition_element_records_2023::is_32bit_release(version))
+    } else if let Some(version) =
+        layout.filter(|&version| crate::partition_element_records_2023::is_32bit_release(version))
     {
         // RE-81, RE-102, RE-107, RE-109, RE-111 to RE-115, RE-180: what a
         // 2015 to 2023 export carries, and what it does not (RE-181).

@@ -292,7 +292,7 @@ pub fn family_forms(
     if families.is_empty() {
         return Ok(out);
     }
-    let version = rf.basic_file_info()?.version;
+    let version = rf.layout_release()?;
     let registry =
         crate::schema_registry::parse(&native_document::read_single(rf, "Formats/Latest")?)?;
     let mut streams: Vec<String> = rf
