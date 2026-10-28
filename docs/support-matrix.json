@@ -153,6 +153,15 @@
       "user_impact": "Revit 2027 projects export typed elements under Revit's ElementIds, on Revit's storeys, with rooms named and doors and windows in their walls; checked against the same models saved by Revit 2026, not against a Revit 2027 export."
     },
     {
+      "id": "element-records-revit-2008-2010",
+      "area": "elements",
+      "name": "Revit 2008 to 2010 partition element records, read in the 32-bit layout of Revit 2011 to 2023, with storeys and named materials",
+      "status": "experimental",
+      "evidence": "partition_element_records_2023::REVIT_32BIT_RELEASES, schema_tags and envelope_shortfall; partition_materials (name_before_properties); partition_level_records::framed_plane_marker; examples/probe_re260_revit_2008_2010.rs; reports/element-framing/RE-260-revit-2008-2010-element-records.md",
+      "notes": "Revit 2009 and 2010 frame their element records as 2011 does (a declared u32 ElementId 52 bytes before every marker of the local files); Revit 2008's envelope has 12 bytes between the category and the placement kind where later releases have 16, all ff, so its id is 48 bytes before the marker. Each release takes its own tags of the five schema classes RE-180 lists, and 2011 to 2013's shading frame and value blocks (RE-259) hold on 2008 and 2009. A 2008 to 2011 material's name is a u32-counted string followed by three equal f64s, with no PhysicalParamSet tag after it: every material of the local 2008 to 2011 files is now named, and where its own MaterialElemGroupHelper frame names it too the two agree (43 of 43). A 2008 to 2012 Level's elevation follows ff ff ff ff and the Plane tag after its name, one reference slot and 16 bytes, written twice 24 bytes apart: every local 2008 to 2012 file reads its Levels as storeys (Revit's template 0 and 10 ft, and 0 and 4 m on one 2012 project). There is no Revit export and no copy of the same model saved by another release of any 2008 to 2010 file here, and every one is closed source and measured locally only; what is shown is that the records read without a byte left over and that the elements hang together (a 2009 wall and its 8 doors on two storeys, a 2008 causeway as one generic model). Not read, as on 2015 to 2023: design options, layered joins, IFC export overrides, parameters.",
+      "user_impact": "Outside the 1.0 range (2015 to 2027), measured on the contributor's local closed-source files only. Revit 2008 to 2010 projects export typed elements under Revit's ElementIds, on their storeys, with named materials; checked only for consistency within each file, not against Revit's export. Revit 2011 and 2012 projects gain their storeys and, on 2011, their material names."
+    },
+    {
       "id": "element-records-revit-2011-2014",
       "area": "elements",
       "name": "Revit 2011 to 2014 partition element records, read in the 32-bit layout of Revit 2015 to 2023, with storeys, hosts, type names, layer sets and materials",
