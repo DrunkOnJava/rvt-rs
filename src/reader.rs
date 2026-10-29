@@ -185,6 +185,7 @@ pub struct RevitFile {
     /// Memoised `Formats/Latest` classes: a dozen partition readers each
     /// read and parsed the schema again for a few class tags.
     schema_classes_memo: Option<Arc<crate::formats::SchemaClasses>>,
+    layout_release_memo: Option<u32>,
     /// Memoised material names (RE-58, RE-203), by release and the hash of
     /// the declared ids they were read for: half a dozen material steps of
     /// an export each asked for them.
@@ -396,6 +397,7 @@ impl RevitFile {
             native_preamble: None,
             native_record_index: None,
             schema_classes_memo: None,
+            layout_release_memo: None,
             material_names: std::collections::HashMap::new(),
             category_style_materials: None,
             unread_streams: Vec::new(),
@@ -880,6 +882,25 @@ impl RevitFile {
         let classes = Arc::new(self.schema_classes()?);
         self.schema_classes_memo = Some(Arc::clone(&classes));
         Ok(classes)
+    }
+
+    /// The release whose layout the file's records take, which the
+    /// partition readers are keyed on: the release of the file's schema
+    /// (`research::partition_element_records::schema_release`) when it is
+    /// older than the release that saved the file, otherwise the saving
+    /// release (`BasicFileInfo`'s version), which metadata and reports
+    /// keep (#421). Memoised.
+    pub fn layout_release(&mut self) -> Result<u32> {
+        if let Some(release) = self.layout_release_memo {
+            return Ok(release);
+        }
+        let saved = self.basic_file_info()?.version;
+        let release = match crate::partition_element_records::schema_release(self) {
+            Some(schema) if schema < saved => schema,
+            _ => saved,
+        };
+        self.layout_release_memo = Some(release);
+        Ok(release)
     }
 
     /// Every class of the embedded schema with its serialization tag, read by

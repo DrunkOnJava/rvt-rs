@@ -140,7 +140,7 @@ pub const SYSTEM_TYPE_LINKS: [(&str, &str, &str); 7] = [
 /// with no native record, or whose record does not decode, get none, as
 /// does every element of a file from before Revit 2023.
 pub fn read(file: &mut RevitFile, ids: &BTreeSet<u64>) -> Result<ElementParameters> {
-    if !matches!(file.basic_file_info()?.version, 2023..=2027) || ids.is_empty() {
+    if !matches!(file.layout_release()?, 2023..=2027) || ids.is_empty() {
         return Ok(ElementParameters::default());
     }
     let options = Options {
