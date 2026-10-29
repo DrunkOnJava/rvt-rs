@@ -9,3 +9,6 @@
 # was measured on 2026-10-18 (#773): once the scorers keep each file bound,
 # every scorer output on main's commit is the one 0.8.5 gives.
 ifcopenshell==0.9.0.post1
+# IfcOpenShell's EXPRESS rule check (ifcopenshell.express.rule_executor, Measure's
+# `rules:` section) imports pytest's assertion rewriter.
+pytest

@@ -28,7 +28,7 @@ runs:
         REPO: ${{ inputs.repository }}
       run: |
         case "$REPO" in
-          phi-ag/rvt) sha=d2eb1f3ec0ce56261c9ae5a5e9adc495f5b4bea1 ;;
+          phi-ag/rvt) sha=bec25470413fbe659c3ab30d4cfd029b73d63fc3 ;;
           magnetar-io/revit-test-datasets) sha=fd755e18cec40ed016d06b082f420d796571fef1 ;;
           *) echo "::error::no pinned commit for ${REPO} in .github/actions/fetch-corpus"; exit 1 ;;
         esac

@@ -15,7 +15,7 @@ fn all_years() -> Vec<u32> {
 }
 
 #[test]
-fn opens_all_11_versions() {
+fn opens_every_release_in_the_corpus() {
     for year in all_years() {
         let p = sample_for_year(year);
         if !p.exists() {
@@ -45,7 +45,7 @@ fn opens_all_11_versions() {
 
 /// The `BasicFileInfo` `Key: value` block reads on every release, at both
 /// byte alignments (2016-2025 even, 2026 odd). `Unique Document Increments`
-/// grows by one per yearly re-save of the sample, 59 on 2016 to 70 on 2026.
+/// grows by one per yearly re-save of the sample, 59 on 2016 to 71 on 2027.
 #[test]
 fn basic_file_info_properties_read_on_every_release() {
     for year in all_years() {
