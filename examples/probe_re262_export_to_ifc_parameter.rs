@@ -22,8 +22,13 @@
 //!
 //! Extra ElementIds print every built-in parameter those elements carry, to
 //! see what else could tell them apart.
+//!
+//! The reader keeps only FamilyParams slots whose definition it recovers, so
+//! the probe then lists every slot of the declared elements and of every
+//! `FamilySymbol` that holds either parameter, resolved or not.
 
 use rvt::RevitFile;
+use rvt::research::native_document::{self, Options};
 use rvt::research::native_element_parameters::{ParameterKind, read};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -84,6 +89,41 @@ fn main() -> anyhow::Result<()> {
     println!("elements by parameter, level and value:");
     for ((parameter, level, value), count) in &by_value {
         println!("  {parameter} {level} {value}: {count}");
+    }
+    let options = Options {
+        selected_ids: ids.clone(),
+        selected_classes: BTreeSet::from(["FamilySymbol".to_string()]),
+        ..Default::default()
+    };
+    let mut slots: BTreeMap<(i64, bool, String), usize> = BTreeMap::new();
+    native_document::extract(&mut rf, &options, |record| {
+        let (Some(graph), Some(metadata)) = (&record.graph, &record.saved_metadata) else {
+            return Ok(());
+        };
+        let class = &graph.objects[0].class_name;
+        for slot in &metadata.family_parameter_slots {
+            if slot.parameter_id != EXPORT_TO_IFC && slot.parameter_id != EXPORT_TYPE_TO_IFC {
+                continue;
+            }
+            let resolved = metadata.resolved_family_parameters.iter().any(|value| {
+                value.source_object == slot.source_object && value.parameter_id == slot.parameter_id
+            });
+            let watched = watch.contains(&record.identity.element_id);
+            if watched || !resolved {
+                println!(
+                    "  slot {} {class} {} integer {} resolved {resolved}",
+                    record.identity.element_id, slot.parameter_id, slot.integer_slot
+                );
+            }
+            *slots
+                .entry((slot.parameter_id, resolved, slot.integer_slot.to_string()))
+                .or_default() += 1;
+        }
+        Ok(())
+    })?;
+    println!("FamilyParams slots by parameter, resolved and integer value:");
+    for ((parameter, resolved, value), count) in &slots {
+        println!("  {parameter} resolved {resolved} {value}: {count}");
     }
     Ok(())
 }
