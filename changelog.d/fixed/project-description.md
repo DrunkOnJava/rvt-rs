@@ -4,3 +4,5 @@
   [2023]", a note about one of rvt-rs's readers that told a user of the IFC
   nothing about the model. It is now "Revit 2024 export" and the family's id
   where there is one.
+  `rvt-ifc --placeholder`'s description no longer names internal work
+  phases; it says the file holds the project only.

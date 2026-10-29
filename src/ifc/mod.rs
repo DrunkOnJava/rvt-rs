@@ -878,10 +878,7 @@ impl Exporter for PlaceholderExporter {
         Ok(IfcModel {
             project_name,
             description: Some(
-                "Partial IFC export via rvt-rs PlaceholderExporter. \
-                 Geometry, categories, and elements are pending Layer 5b \
-                 walker + Phase 5 geometry work."
-                    .into(),
+                "Placeholder export: the project only, no storeys, elements or geometry.".into(),
             ),
             entities: Vec::new(),
             classifications: Vec::new(),
