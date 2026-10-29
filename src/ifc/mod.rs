@@ -1444,28 +1444,51 @@ fn opening_cuts_through_hosts(
         };
         let (x_band, y_band) = (band(axes[0]), band(axes[1]));
         let (x_width, y_width) = (x_band.1 - x_band.0, y_band.1 - y_band.0);
+        // RE-225: where the symbol cuts a solid and no loop, Revit's export
+        // cuts the opening to that solid: as deep across the wall as the
+        // solid's Y extent, centred on the wall, and as tall as its Z
+        // extent, down from the body's top (the BIM4LCA office's windows).
+        let solid = cut_solid_size(entity);
+        let solid_z = solid.map(|[_, _, height]| [body.height_feet - height, height]);
         let cut = if y_width <= MAX_THICKNESS_FEET && y_width < x_width / 2.0 && y_width > 0.0 {
             Some(entities::OpeningCut {
                 x_dim_feet: body.width_feet,
-                y_dim_feet: y_width,
+                y_dim_feet: solid.map_or(y_width, |[_, depth, _]| depth),
                 centre_feet: [0.0, (y_band.0 + y_band.1) / 2.0],
-                z_range_feet: None,
+                z_range_feet: solid_z,
             })
         } else if x_width <= MAX_THICKNESS_FEET && x_width < y_width / 2.0 && x_width > 0.0 {
             Some(entities::OpeningCut {
-                x_dim_feet: x_width,
+                x_dim_feet: solid.map_or(x_width, |[_, depth, _]| depth),
                 y_dim_feet: body.depth_feet,
                 centre_feet: [(x_band.0 + x_band.1) / 2.0, 0.0],
-                z_range_feet: None,
+                z_range_feet: solid_z,
             })
         } else {
             None
         };
-        if let Some(cut) = window_cut(cut) {
+        let cut = if solid.is_some() {
+            cut
+        } else {
+            window_cut(cut)
+        };
+        if let Some(cut) = cut {
             cuts.insert(index, cut);
         }
     }
     cuts
+}
+
+/// The extents along X, Y and Z of the solid a door's or window's symbol
+/// cuts where it cuts no loop (RE-225,
+/// [`export_content::CUT_SOLID_SIZE_PROPERTIES`]), feet.
+fn cut_solid_size(entity: &entities::IfcEntity) -> Option<[f64; 3]> {
+    let [width, depth, height] = export_content::CUT_SOLID_SIZE_PROPERTIES;
+    Some([
+        positive_length_property(entity, width)?,
+        positive_length_property(entity, depth)?,
+        positive_length_property(entity, height)?,
+    ])
 }
 
 /// A length property of an element's own property set, feet.
