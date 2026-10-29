@@ -19,7 +19,11 @@
 # counts apart for their two lengths (RE-252), and for each value that
 # differs only the quantity and rvt-rs's value over Revit's), of
 # its names census (counts by category, entity and agreement) and of its layer
-# set census (its counts, not its worst elements), and
+# set census (its counts, not its worst elements), of its identity censuses
+# (Griffin, 2026-10-29: counts only, never an ElementId or a name): the
+# class-set totals and each class's revit / same / other / absent counts and
+# the extra elements' count by class, the GlobalId agreement counts, and the
+# storey verdict counts by kind, and
 # ifc.sha256, the hash of rvt-rs's own export; every other file is deleted.
 set -euo pipefail
 
@@ -52,6 +56,22 @@ for dir in "$RESULTS"/holdout-*/ "$RESULTS"/bimcollab-*/; do
     for f in "$dir"layer_sets_vs_ifc.txt; do
       [ -f "$f" ] || continue
       grep -E "^( +[0-9]+  [a-z][a-z ]*(: [A-Za-z',: ]+| = Revit's Family:Type)?|  [a-z ]+ within [0-9.]+ ft of Revit's: [0-9]+ of [0-9]+)$" "$f" | sed 's/^/layer sets: /' || true
+    done
+    for f in "$dir"class_sets_vs_ifc.txt; do
+      [ -f "$f" ] || continue
+      awk '/^extra in rvt-rs.s export, by class:$/ { extra = 1; next }
+           /^(Revit.s|rvt-rs.s) export: [0-9]+ paired elements and spaces, [0-9]+ untagged and [0-9]+ repeated Tags left out$/ { print "class sets: " $0; next }
+           !extra && /^Ifc[A-Za-z0-9]+ +[0-9]+ +[0-9]+ +[0-9]+ +[0-9]+  (Ifc[A-Za-z0-9]+ [0-9]+(, Ifc[A-Za-z0-9]+ [0-9]+)*)?$/ { print "class sets: " $0; next }
+           extra && /^Ifc[A-Za-z0-9]+ +[0-9]+$/ { print "class sets extra: " $0; next }
+           { extra = 0 }' "$f"
+    done
+    for f in "$dir"global_ids_vs_ifc.txt; do
+      [ -f "$f" ] || continue
+      grep -E "^(elements: \{((\"not in Revit's export\"|\"GlobalId = Revit's\"|'differs'): [0-9]+(, )?)*\}|storeys: [0-9]+ of [0-9]+ equal Revit's|storeys whose GlobalId is one of Revit's: [0-9]+ of [0-9]+|(IfcProject|IfcSite|IfcBuilding): [0-9]+ of [0-9]+ equal Revit's|spaces: [0-9]+ of [0-9]+ equal one of Revit's)$" "$f" | sed 's/^/global ids: /' || true
+    done
+    for f in "$dir"storeys_vs_ifc.txt; do
+      [ -f "$f" ] || continue
+      grep -E "^([0-9]+ elements, [0-9]+ not on a storey|against Revit's export:| +[0-9]+  Ifc[A-Za-z0-9]+| +[0-9]+  (same storey as Revit's|on no storey; Revit's is (a storey|another container)|on a storey; Revit contains it in <Ifc[A-Za-z0-9]+>|a different storey from Revit's)|  different, by type: Ifc[A-Za-z0-9]+ [0-9]+(, Ifc[A-Za-z0-9]+ [0-9]+)*)$" "$f" | sed 's/^/storeys: /' || true
     done
   } > "$RUNNER_TEMP/counts.txt"
   find "$dir" -mindepth 1 ! -name ifc.sha256 -delete
