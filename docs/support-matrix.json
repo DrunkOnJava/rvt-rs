@@ -748,6 +748,10 @@
     }
   ],
   "releases": [
+    {"release": 2011, "project_capability": "element-records-revit-2011-2014", "family_capabilities": []},
+    {"release": 2012, "project_capability": "element-records-revit-2011-2014", "family_capabilities": []},
+    {"release": 2013, "project_capability": "element-records-revit-2011-2014", "family_capabilities": []},
+    {"release": 2014, "project_capability": "element-records-revit-2011-2014", "family_capabilities": []},
     {"release": 2015, "project_capability": "element-records-revit-2015-2018", "family_capabilities": []},
     {"release": 2016, "project_capability": "element-records-revit-2015-2018", "family_capabilities": ["metadata-partatom-preview", "formats-latest-schema"]},
     {"release": 2017, "project_capability": "element-records-revit-2015-2018", "family_capabilities": ["metadata-partatom-preview", "formats-latest-schema"]},
