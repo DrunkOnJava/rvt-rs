@@ -6,7 +6,8 @@
 //! prints each shell's triangle count and signed volume, then, for the
 //! smallest shell enclosing positive volume, how many of the points 1e-4 ft
 //! inside its faces each larger shell holds by ray parity along two
-//! directions.
+//! directions. Last, each primitive's object index, face tag, render style,
+//! material and owner, and the shell (at 2e-5 ft) its triangles fall in.
 //!
 //! Usage:
 //!   cargo run --profile ci --example probe_re265_contained_shells -- MODEL.rvt
@@ -127,11 +128,13 @@ fn main() -> anyhow::Result<()> {
             continue;
         }
         let mut triangles: Vec<[Point; 3]> = Vec::new();
-        for p in &element.meshes.primitives {
+        let mut primitive_of: Vec<usize> = Vec::new();
+        for (index, p) in element.meshes.primitives.iter().enumerate() {
             for t in &p.triangles {
                 if let [Some(a), Some(b), Some(c)] = t.map(|i| p.vertices.get(i as usize).copied())
                 {
                     triangles.push([a, b, c]);
+                    primitive_of.push(index);
                 }
             }
         }
@@ -200,6 +203,31 @@ fn main() -> anyhow::Result<()> {
                     inside([0.1301, -0.7127, 0.6893])
                 );
             }
+        }
+        let groups = shells(&triangles, 2e-5);
+        let mut shell_of = vec![0usize; triangles.len()];
+        for (g, shell) in groups.iter().enumerate() {
+            for &i in shell {
+                shell_of[i] = g;
+            }
+        }
+        for (index, p) in element.meshes.primitives.iter().enumerate() {
+            let in_shells: std::collections::BTreeSet<usize> = primitive_of
+                .iter()
+                .enumerate()
+                .filter(|(_, owner)| **owner == index)
+                .map(|(t, _)| shell_of[t])
+                .collect();
+            println!(
+                "  primitive {index}: object {} face {} style {} material {:?} owner {:?} triangles {} shell {:?}",
+                p.object_index,
+                p.face_tag,
+                p.render_style_id,
+                p.material_id,
+                p.source_owner_id,
+                p.triangles.len(),
+                in_shells
+            );
         }
     }
     Ok(())
