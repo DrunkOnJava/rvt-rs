@@ -146,25 +146,62 @@ pub fn instance_cut_loops_and_uncut(
     rf: &mut RevitFile,
     instances: &BTreeSet<u64>,
 ) -> anyhow::Result<(BTreeMap<u64, CutLoop>, BTreeSet<u64>)> {
-    let (loops, uncut, _, _) = instance_cuts_and_symbols(rf, instances)?;
+    let (loops, uncut, _, _, _) = instance_cuts_and_symbols(rf, instances)?;
     Ok((loops, uncut))
 }
 
+/// The extents of the solid a family symbol cuts where it cuts no loop
+/// (`m_complexCutGeoms`, RE-225), in the symbol's own coordinates, feet:
+/// along X (the width), Y (across the host) and Z (the height).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct CutSolidSize {
+    /// Extent along the symbol's X axis.
+    pub x_feet: f64,
+    /// Extent along its Y axis, across the host.
+    pub y_feet: f64,
+    /// Extent along its Z axis.
+    pub z_feet: f64,
+}
+
+/// The extents of `vertices`, or `None` when any is not finite or the
+/// solid is flat along an axis.
+fn cut_solid_size(vertices: &[[f64; 3]]) -> Option<CutSolidSize> {
+    let mut lo = [f64::INFINITY; 3];
+    let mut hi = [f64::NEG_INFINITY; 3];
+    for vertex in vertices {
+        for axis in 0..3 {
+            lo[axis] = lo[axis].min(vertex[axis]);
+            hi[axis] = hi[axis].max(vertex[axis]);
+        }
+    }
+    let size = [hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]];
+    size.iter()
+        .all(|extent| extent.is_finite() && *extent > 0.0)
+        .then_some(CutSolidSize {
+            x_feet: size[0],
+            y_feet: size[1],
+            z_feet: size[2],
+        })
+}
+
 /// An instance's cut loop, the instances whose symbol cuts none, the
-/// symbol that draws each instance and the element hosting it, as
+/// symbol that draws each instance, the element hosting it, and the extents
+/// of the solid an instance's symbol cuts where it cuts no loop, as
 /// [`instance_cuts_and_symbols`] reads them.
 pub type InstanceCuts = (
     BTreeMap<u64, CutLoop>,
     BTreeSet<u64>,
     BTreeMap<u64, u64>,
     BTreeMap<u64, u64>,
+    BTreeMap<u64, CutSolidSize>,
 );
 
 /// [`instance_cut_loops_and_uncut`], and the symbol that draws each of
 /// `instances` (its `InstanceInfo.m_symbolId`), read in the same pass:
 /// the type where the instance's own parameters change nothing, else the
-/// symbol its parameters make; and the element hosting it, the `m_hostId`
-/// its current record names (RE-245).
+/// symbol its parameters make; the element hosting it, the `m_hostId`
+/// its current record names (RE-245); and, where the symbol cuts no loop,
+/// the extents of the solid it cuts (RE-225).
 pub fn instance_cuts_and_symbols(
     rf: &mut RevitFile,
     instances: &BTreeSet<u64>,
@@ -175,8 +212,10 @@ pub fn instance_cuts_and_symbols(
             BTreeSet::new(),
             BTreeMap::new(),
             BTreeMap::new(),
+            BTreeMap::new(),
         ));
     }
+    let mut solids: BTreeMap<u64, CutSolidSize> = BTreeMap::new();
     let mut drawn_by: BTreeMap<u64, u64> = BTreeMap::new();
     let mut hosts: BTreeMap<u64, u64> = BTreeMap::new();
     let mut loops: BTreeMap<u64, CutLoop> = BTreeMap::new();
@@ -202,6 +241,9 @@ pub fn instance_cuts_and_symbols(
                 .is_some_and(Vec::is_empty)
             {
                 uncut_symbols.insert(id);
+                if let Some(size) = cut_solid_vertices(graph).and_then(|v| cut_solid_size(&v)) {
+                    solids.insert(id, size);
+                }
             }
         } else if instances.contains(&id) {
             if let Some(symbol) = graph
@@ -232,7 +274,11 @@ pub fn instance_cuts_and_symbols(
         .iter()
         .filter_map(|(instance, symbol)| Some((*instance, *loops.get(symbol)?)))
         .collect();
-    Ok((loops, uncut, drawn_by, hosts))
+    let solids = drawn_by
+        .iter()
+        .filter_map(|(instance, symbol)| Some((*instance, *solids.get(symbol)?)))
+        .collect();
+    Ok((loops, uncut, drawn_by, hosts, solids))
 }
 
 /// A family instance hosted on a face of another element through a
