@@ -1013,9 +1013,30 @@ impl SchemaClasses {
 /// The tag is not stored: it is the definition ordinal. Every inline
 /// reference repeats its tag in its low 15 bits, which the reader checks, so
 /// a misread stops the parse instead of shifting every later tag.
+///
+/// Schemas written before Revit 2014 have no GUID list: a class ends at its
+/// last field, with no `u32` count (`A3PartyObject` is its name, base,
+/// version and field count, then the next separator, on Revit 2008 to 2013
+/// files). The stream says nothing of which form it takes, so it is read
+/// with GUID lists first and, when that stops early, without them; the
+/// reading that gets further is kept.
 pub fn schema_classes(data: &[u8]) -> SchemaClasses {
+    let with_guids = schema_classes_in(data, true);
+    if with_guids.stopped.is_none() {
+        return with_guids;
+    }
+    let without = schema_classes_in(data, false);
+    if without.parsed_bytes > with_guids.parsed_bytes {
+        without
+    } else {
+        with_guids
+    }
+}
+
+fn schema_classes_in(data: &[u8], guid_lists: bool) -> SchemaClasses {
     let mut reader = GrammarReader {
         data,
+        guid_lists,
         next_tag: FIRST_SCHEMA_TAG,
         classes: Vec::new(),
     };
@@ -1056,6 +1077,8 @@ const MAX_SCHEMA_NESTING: usize = 64;
 
 struct GrammarReader<'a> {
     data: &'a [u8],
+    /// Whether each class ends with a `u32`-counted GUID list (2014 on).
+    guid_lists: bool,
     next_tag: u16,
     classes: Vec<SchemaClass>,
 }
@@ -1191,13 +1214,15 @@ impl GrammarReader<'_> {
             let (_, next) = self.field_type(next, depth)?;
             p = next;
         }
-        let guids = Self::need(self.u32(p), "GUID count", p)? as usize;
-        p += 4;
-        p = guids
-            .checked_mul(16)
-            .and_then(|len| p.checked_add(len))
-            .filter(|end| *end <= self.data.len() && guids <= 60_000)
-            .ok_or_else(|| format!("GUID count {guids} at {:#x}", p - 4))?;
+        if self.guid_lists {
+            let guids = Self::need(self.u32(p), "GUID count", p)? as usize;
+            p += 4;
+            p = guids
+                .checked_mul(16)
+                .and_then(|len| p.checked_add(len))
+                .filter(|end| *end <= self.data.len() && guids <= 60_000)
+                .ok_or_else(|| format!("GUID count {guids} at {:#x}", p - 4))?;
+        }
         self.classes.push(SchemaClass {
             tag,
             name,

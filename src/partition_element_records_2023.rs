@@ -1,5 +1,5 @@
-//! Revit 2023 partition element records (RE-81, #421), and Revit 2015 to
-//! 2022's, which take the same layout (RE-180, RE-181).
+//! Revit 2023 partition element records (RE-81, #421), and Revit 2011 to
+//! 2022's, which take the same layout (RE-180, RE-181, RE-259).
 //!
 //! A 2023 record sits behind the same marker as 2024 and 2025,
 //! `[tag of Outline][0xFF x 4][tag of ElementParents]` in the file's own
@@ -34,18 +34,23 @@ use std::collections::BTreeSet;
 /// The release this layout is first measured on.
 pub const REVIT_2023: u32 = 2023;
 
-/// The releases whose records take this layout: Revit 2015 to 2023
-/// (RE-180, RE-181). On Autodesk's 2019, 2020, 2021 and 2022 sample projects
+/// The releases whose records take this layout: Revit 2011 to 2023
+/// (RE-180, RE-181, RE-259). On Autodesk's 2019, 2020, 2021 and 2022 sample projects
 /// every marker of the file's own schema has a declared `u32` ElementId 52
 /// bytes before it and the tag of `ElementHeader` 8 bytes after that, as on
 /// 2023, but for 4 to 109 per file, as many as on the file's 2023 copy but on
 /// 2021 `rac_advanced` (`examples/probe_re180_revit_2019_2022.rs`). On their
 /// 2016, 2017 and 2018 copies it is the same, with as many markers without
 /// one as on the 2019 copy, and on three of Autodesk's 2015 templates all but
-/// 0 to 68 per file (`examples/probe_re181_revit_2015_2018.rs`). Revit 2014
-/// is left out: the one 2014 file measured is not documented, so it is no
-/// evidence for the release (fail closed).
-pub const REVIT_32BIT_RELEASES: std::ops::RangeInclusive<u32> = 2015..=2023;
+/// 0 to 68 per file (`examples/probe_re181_revit_2015_2018.rs`). On every
+/// marker of eight local Revit 2011 to 2014 files, among them Autodesk's
+/// 2013 `rac_advanced_sample_project`, the id is 52 bytes before it too
+/// (`examples/probe_re259_revit_2011_2014.rs`). Those files are closed
+/// source and measured locally only. Revit 2009 and 2010 frame their
+/// markers the same way, but no file of theirs has a copy to check its
+/// fields against, and Revit 2008 puts the id 48 bytes before the marker;
+/// none of the three is read.
+pub const REVIT_32BIT_RELEASES: std::ops::RangeInclusive<u32> = 2011..=2023;
 
 /// Whether `revit_version` writes this module's 32-bit records and the
 /// 32-bit name, material, layer and Level frames that go with them.
@@ -73,7 +78,9 @@ pub struct SchemaTags32 {
 
 /// The [`SchemaTags32`] of `revit_version`, read from Autodesk's sample
 /// projects of each release (every file of a release has the same
-/// schema), or `None` outside [`REVIT_32BIT_RELEASES`]. No 2015 sample
+/// schema), or `None` outside [`REVIT_32BIT_RELEASES`]. The 2011 to 2014
+/// rows are read from local files of each release (RE-259), every file of
+/// a release giving the same tags. No 2015 sample
 /// project is published: that row is read from three of Autodesk's 2015
 /// templates (RE-181).
 pub fn schema_tags(revit_version: u32) -> Option<SchemaTags32> {
@@ -87,6 +94,10 @@ pub fn schema_tags(revit_version: u32) -> Option<SchemaTags32> {
         })
     };
     match revit_version {
+        2011 => tags(0x01d5, 0x0668, 0x07ab, 0x013d, 0x0aab),
+        2012 => tags(0x0217, 0x0702, 0x0865, 0x0183, 0x0b8c),
+        2013 => tags(0x0250, 0x07e2, 0x095e, 0x01b9, 0x0cfc),
+        2014 => tags(0x0251, 0x080e, 0x09a7, 0x01bc, 0x0d5a),
         2015 => tags(0x024f, 0x0871, 0x0a0b, 0x01b9, 0x0dc4),
         2016 => tags(0x0255, 0x088b, 0x0a34, 0x01be, 0x0e06),
         2017 => tags(0x025d, 0x08b7, 0x0a73, 0x01bf, 0x0e5e),
@@ -162,7 +173,7 @@ pub fn record_marker(rf: &mut RevitFile) -> Option<([u8; 8], u16)> {
     Some((marker, header))
 }
 
-/// Every 2015 to 2023 element record in the file whose ElementId is
+/// Every 2011 to 2023 element record in the file whose ElementId is
 /// declared in `Global/ElemTable`. Empty for any other release (fail
 /// closed).
 pub fn scan_records(rf: &mut RevitFile, revit_version: u32) -> Vec<PartitionElementRecord> {

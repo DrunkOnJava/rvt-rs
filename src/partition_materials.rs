@@ -111,14 +111,22 @@ fn frame_at(buf: &[u8], at: usize) -> Option<MaterialAppearance> {
 /// shininess. A material that opens its own data frames it with `ff ff ff
 /// ff 9b 0b`; a family's own material does not, so the frame is known by
 /// its 0.5 and its slots instead. Revit 2015 to 2018 write two slots, not
-/// four ([`pattern_slots_32`]).
-fn frame_at_2023(buf: &[u8], at: usize, slots: usize) -> Option<MaterialAppearance> {
+/// four ([`pattern_slots_32`]), and Revit 2011 to 2013 two `u32`
+/// ElementIds between the 0.5 and the slots ([`shading_ids_32`]).
+fn frame_at_2023(buf: &[u8], at: usize, slots: usize, ids: usize) -> Option<MaterialAppearance> {
     let slots_at = at.checked_sub(8 * slots)?;
-    let transparency = le_bytes::f32_at(buf, slots_at.checked_sub(8)?)?;
-    let second = le_bytes::f32_at(buf, slots_at - 4)?;
+    let ids_at = slots_at.checked_sub(4 * ids)?;
+    let transparency = le_bytes::f32_at(buf, ids_at.checked_sub(8)?)?;
+    let second = le_bytes::f32_at(buf, ids_at - 4)?;
     let plausible = |v: f32| (0.0..=1.0).contains(&v) && (v == 0.0 || v.is_normal());
     if !plausible(transparency) || second != 0.5 {
         return None;
+    }
+    for id_at in (ids_at..slots_at).step_by(4) {
+        let id = le_bytes::u32_at(buf, id_at)?;
+        if id != u32::MAX && id >= 0x0100_0000 {
+            return None;
+        }
     }
     for slot in (slots_at..at).step_by(8) {
         let id = le_bytes::u32_at(buf, slot)?;
@@ -142,11 +150,22 @@ fn frame_at_2023(buf: &[u8], at: usize, slots: usize) -> Option<MaterialAppearan
 
 /// The pattern slots of a 32-bit release's shading frame: four, the
 /// foreground and background of the surface and cut patterns, from Revit
-/// 2019 on, and two on Revit 2015 to 2018, which have one pattern of each.
+/// 2019 on, and two on Revit 2011 to 2018, which have one pattern of each.
 /// Autodesk's 2017 `rac_basic` frames each material of its 2019 copy with
-/// the same bytes, but for the two slots it lacks (RE-181).
+/// the same bytes, but for the two slots it lacks (RE-181); Autodesk's 2013
+/// `rac_advanced` frames its 2015 copy's two (RE-259).
 pub fn pattern_slots_32(revit_version: u32) -> usize {
     if revit_version < 2019 { 2 } else { 4 }
+}
+
+/// The `u32` ElementIds a 32-bit release's shading frame holds between the
+/// 0.5 and the pattern slots: two on Revit 2011 to 2013, `ff` × 4 when
+/// unset, and none from Revit 2014 on. Autodesk's 2013
+/// `rac_advanced_sample_project` frames Carbon Steel as `00 00 00 3f · ff
+/// ff ff ff ff ff ff ff ·` then its 2015 copy's two slots and colour; one
+/// of its materials sets the second id.
+pub fn shading_ids_32(revit_version: u32) -> usize {
+    if revit_version < 2014 { 2 } else { 0 }
 }
 
 /// The first shading frame after the material ElementId at `id_at`.
@@ -171,6 +190,7 @@ pub fn scan_material_appearances(
             rf,
             tags.material,
             pattern_slots_32(revit_version),
+            shading_ids_32(revit_version),
             declared,
         ));
     }
@@ -500,8 +520,9 @@ fn native_material_names(
 /// 2024 files and, in [`CATEGORY_MATERIAL_FRAME_2023`]'s layout, on Revit
 /// 2023 (RE-115) and 2015 to 2022 (RE-180, RE-181); RE1's 2025 files hold no entry
 /// in either layout.
-pub const CATEGORY_MATERIAL_SUPPORTED_REVIT_VERSIONS: &[u32] =
-    &[2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024];
+pub const CATEGORY_MATERIAL_SUPPORTED_REVIT_VERSIONS: &[u32] = &[
+    2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024,
+];
 
 /// A category's object-styles entry on Revit 2023 (RE-115), after its
 /// `BuiltInCategory` (`i32`): an unset `u32`, a `u32` that is 1 or 2 (the
@@ -684,7 +705,7 @@ pub fn scan_materials_2023(
     )
 }
 
-/// [`scan_materials_2023`] on any 32-bit release, Revit 2015 to 2023, with
+/// [`scan_materials_2023`] on any 32-bit release, Revit 2011 to 2023, with
 /// the release's tags of `Material`, `PhysicalParamSet` and `CellList`
 /// (RE-180). Empty on any other release.
 pub fn scan_materials_32(
@@ -833,6 +854,7 @@ fn scan_material_appearances_2023(
     rf: &mut RevitFile,
     material: u16,
     slots: usize,
+    ids: usize,
     declared: &BTreeSet<u32>,
 ) -> BTreeMap<u32, MaterialAppearance> {
     const PREFIX: [u8; 7] = [0, 0, 0, 0xff, 0xff, 0xff, 0xff];
@@ -860,7 +882,7 @@ fn scan_material_appearances_2023(
                 .saturating_add(APPEARANCE_WINDOW)
                 .min(buf.len().saturating_sub(8));
             let Some(appearance) =
-                (tag_at + 2 + 40..to).find_map(|at| frame_at_2023(buf, at, slots))
+                (tag_at + 2 + 40..to).find_map(|at| frame_at_2023(buf, at, slots, ids))
             else {
                 continue;
             };
