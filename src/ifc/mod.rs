@@ -1129,13 +1129,6 @@ fn export_rvt_doc(
         let mut d = Vec::new();
         if let Some(b) = &bfi {
             d.push(format!("Revit {} export", b.version));
-            if let Some(message) = crate::arc_wall_record::ArcWallRecord::standard_decoder_status(
-                layout.unwrap_or(b.version),
-            )
-            .diagnostic_message()
-            {
-                d.push(message);
-            }
         }
         if let Some(p) = &part {
             if let Some(id) = &p.id {
