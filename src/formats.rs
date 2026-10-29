@@ -353,6 +353,14 @@ pub enum FieldType {
     /// Anything we haven't classified yet. Preserves the raw bytes so
     /// downstream tools can reanalyse.
     Unknown { bytes: Vec<u8> },
+    /// `{kind} {sub} {flags} 0x00 ...` with `flags` 0x02, 0x12 or 0x22:
+    /// any other encoding with byte 2 set (RE-264). Revit 2027's schema
+    /// gives it to 325 fields that no 2016 to 2026 schema lists, and to no
+    /// other; with byte 2 cleared each decodes as `base`. Their names are
+    /// runtime state (`DBView::m_horzDirTemp`, `ImageSymbol::m_flags_unsaved`,
+    /// edit-mode managers). Whether instance data holds a value for them is
+    /// not measured, so readers treat them as [`FieldType::Unknown`].
+    Flagged { flags: u8, base: Box<FieldType> },
 }
 
 impl FieldType {
@@ -361,6 +369,17 @@ impl FieldType {
     pub fn decode(bytes: &[u8]) -> Self {
         if bytes.is_empty() {
             return FieldType::Unknown { bytes: Vec::new() };
+        }
+        if bytes.len() >= 4 && matches!(bytes[2], 0x02 | 0x12 | 0x22) && bytes[3] == 0x00 {
+            let mut unflagged = bytes.to_vec();
+            unflagged[2] = 0x00;
+            let base = FieldType::decode(&unflagged);
+            if !matches!(base, FieldType::Unknown { .. }) {
+                return FieldType::Flagged {
+                    flags: bytes[2],
+                    base: Box::new(base),
+                };
+            }
         }
         // `sub` is the two bytes following the outer-kind byte, little-
         // endian. The schema parser occasionally delivers a 2-byte slice
@@ -533,6 +552,18 @@ impl FieldType {
                 out
             }
             FieldType::Unknown { bytes } => bytes.clone(),
+            FieldType::Flagged { flags, base } => {
+                // A flagged string keeps the `08 60` form: in the common
+                // `08 00 60 00` byte 2 is the string's own.
+                let mut out = match **base {
+                    FieldType::String => vec![0x08, 0x60, 0x00, 0x00],
+                    _ => base.encode(),
+                };
+                if let Some(byte) = out.get_mut(2) {
+                    *byte = *flags;
+                }
+                out
+            }
         }
     }
 }
