@@ -26,12 +26,12 @@ pub fn samples_dir() -> PathBuf {
 pub fn sample_for_year(year: u32) -> PathBuf {
     let filename = match year {
         2016..=2019 => format!("rac_basic_sample_family-{year}.rfa"),
-        2020..=2026 => format!("racbasicsamplefamily-{year}.rfa"),
+        2020..=2027 => format!("racbasicsamplefamily-{year}.rfa"),
         _ => panic!("unknown sample year {year}"),
     };
     samples_dir().join(filename)
 }
 
-pub const ALL_YEARS: [u32; 11] = [
-    2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026,
+pub const ALL_YEARS: [u32; 12] = [
+    2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026, 2027,
 ];

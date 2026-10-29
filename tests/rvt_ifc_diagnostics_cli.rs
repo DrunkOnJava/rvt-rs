@@ -278,3 +278,84 @@ fn anonymized_diagnostics_and_inspect_report_hide_every_project_name() {
 
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// rvt-ifc's diagnostics for `model`, with or without `--anonymize`.
+fn diagnostics_of(
+    model: &std::path::Path,
+    dir: &std::path::Path,
+    name: &str,
+    anonymize: bool,
+) -> Value {
+    let path = dir.join(name);
+    let mut command = Command::new(env!("CARGO_BIN_EXE_rvt-ifc"));
+    command
+        .arg(model)
+        .arg("-o")
+        .arg(dir.join(format!("{name}.ifc")))
+        .arg("--diagnostics")
+        .arg(&path);
+    if anonymize {
+        command.arg("--anonymize");
+    }
+    let output = command.output().expect("run rvt-ifc");
+    assert!(
+        output.status.success(),
+        "rvt-ifc failed\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    serde_json::from_str(&std::fs::read_to_string(&path).expect("read diagnostics"))
+        .expect("parse diagnostics")
+}
+
+/// The family test above on a project: Core Interior names its project,
+/// fifteen Levels, materials and skipped elements, none of which the
+/// anonymized diagnostics or inspect report may carry.
+#[test]
+fn anonymized_project_diagnostics_and_inspect_report_hide_every_project_name() {
+    let Some(corpus) = std::env::var_os("RVT_PROJECT_CORPUS_DIR") else {
+        eprintln!("skipping project --anonymize assertion: RVT_PROJECT_CORPUS_DIR is unset");
+        return;
+    };
+    let model = std::path::PathBuf::from(corpus).join("2024_Core_Interior.rvt");
+    if !model.exists() {
+        eprintln!(
+            "skipping project --anonymize assertion: {} is missing",
+            model.display()
+        );
+        return;
+    }
+    let dir = temp_diagnostics_dir("rvt-rs-anonymize-project");
+    let plain = diagnostics_of(&model, &dir, "plain.json", false);
+    let anonymized = diagnostics_of(&model, &dir, "anonymized.json", true);
+    let mut names = project_names(&plain);
+    names.push("2024_Core_Interior".into());
+    assert!(
+        names.len() > 10,
+        "the plain diagnostics should name the project's Levels and materials: {names:?}"
+    );
+    assert_eq!(
+        leaked(&anonymized, &names),
+        None,
+        "anonymized project diagnostics still name the project"
+    );
+    assert_eq!(
+        plain["exported"]["by_ifc_type"],
+        anonymized["exported"]["by_ifc_type"]
+    );
+
+    let output = Command::new(env!("CARGO_BIN_EXE_rvt-inspect"))
+        .arg(&model)
+        .arg("--json")
+        .arg("--anonymize")
+        .output()
+        .expect("run rvt-inspect");
+    assert!(output.status.success(), "rvt-inspect --anonymize failed");
+    let report: Value = serde_json::from_slice(&output.stdout).expect("parse inspect report");
+    assert_eq!(
+        leaked(&report, &names),
+        None,
+        "anonymized project inspect report still names the project"
+    );
+
+    let _ = std::fs::remove_dir_all(&dir);
+}

@@ -1,0 +1,65 @@
+name: Practitioner report
+description: You ran rvt-rs on your own Revit models. Tell us what worked and what did not, without sharing the models.
+title: "Report: "
+labels: ["area:product", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you. rvt-rs 1.0 needs reports from people who run it on their own models (#874, [Discussion #982](https://github.com/DrunkOnJava/rvt-rs/discussions/982)). Nothing here asks for a model file: counts and anonymized diagnostics are enough. Run `rvt-ifc model.rvt -o model.ifc --diagnostics model.diagnostics.json --anonymize`; `--anonymize` replaces the names the diagnostics take from the project with placeholders and keeps counts and ElementIds. It does not touch the IFC, which keeps every name: do not attach `model.ifc`.
+  - type: input
+    id: role
+    attributes:
+      label: Your work
+      description: What you do with Revit models (architect, BIM coordinator, MEP engineer, software developer, ...).
+    validations:
+      required: true
+  - type: input
+    id: rvt_rs_version
+    attributes:
+      label: rvt-rs version
+      description: "`rvt-ifc --version`, the Python wheel's version, or the viewer's footer."
+    validations:
+      required: true
+  - type: textarea
+    id: models
+    attributes:
+      label: Models
+      description: For each model, the Revit release that saved it, its discipline and its size in MB. No names.
+      placeholder: |
+        Revit 2024, architectural, 438 MB
+        Revit 2025, structural, 60 MB
+    validations:
+      required: true
+  - type: checkboxes
+    id: steps
+    attributes:
+      label: What you ran
+      options:
+        - label: Installed it (say how below)
+        - label: Opened a model (CLI, Python or the browser viewer)
+        - label: Inspected elements and their data
+        - label: Exported IFC
+        - label: Compared the IFC with Revit's own IFC export of the same model (rvt-ifc-compare, IfcOpenShell, or another viewer)
+        - label: Opened the IFC in other software (name it below)
+  - type: textarea
+    id: comparison
+    attributes:
+      label: Against Revit's own export
+      description: If you exported the same model from Revit, the export setup you used (for example IFC4 Reference View, coordinate base) and what differed. Counts are enough.
+  - type: textarea
+    id: findings
+    attributes:
+      label: What worked and what did not
+      description: Wrong or missing elements, geometry, properties, storeys, coordinates; crashes; anything slow. Attach the anonymized diagnostics JSON if you can.
+    validations:
+      required: true
+  - type: dropdown
+    id: count_as_report
+    attributes:
+      label: May we count this as a practitioner report for the 1.0 criteria?
+      options:
+        - "Yes"
+        - "No"
+    validations:
+      required: true

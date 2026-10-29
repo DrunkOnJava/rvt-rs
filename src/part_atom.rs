@@ -43,6 +43,38 @@ pub struct Category {
     pub scheme: Option<String>,
 }
 
+/// One type of a family as the stream's type table lists it (`<A:family>`,
+/// one `<A:part>` per type): the text Revit wrote of the type and its type
+/// parameters when the family was saved.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[non_exhaustive]
+pub struct FamilyType {
+    /// The type's name (`0610 x 0915mm`).
+    pub name: String,
+    pub parameters: Vec<TypeParameter>,
+}
+
+/// One type parameter of a [`FamilyType`]. Revit writes no element for a
+/// parameter whose value is empty.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[non_exhaustive]
+pub struct TypeParameter {
+    /// The element's name in the table (`Default_Elevation`).
+    pub name: String,
+    /// `displayName` (`Default Elevation`).
+    pub display_name: Option<String>,
+    /// `type`: `system` for a built-in parameter, `custom` for one the
+    /// family defines, `shared` for a shared parameter.
+    pub kind: Option<String>,
+    /// `typeOfParameter` (`Length`, `Material`, `Text`, ...).
+    pub type_of_parameter: Option<String>,
+    /// `units` (`mm`), which an imperial family's lengths do not carry.
+    pub units: Option<String>,
+    /// The value as Revit printed it: `762.00` in `units`, or feet and
+    /// inches (`2' - 0"`) on an imperial family.
+    pub value: String,
+}
+
 impl PartAtom {
     pub fn from_bytes(data: &[u8]) -> Result<Self> {
         let raw_xml = std::str::from_utf8(data)
@@ -214,6 +246,13 @@ impl PartAtom {
         Ok(atom)
     }
 
+    /// The family's types from the stream's type table, in the order the
+    /// stream lists them; empty when it has none, as a project's
+    /// `ProjectInformation` has none.
+    pub fn family_types(&self) -> Result<Vec<FamilyType>> {
+        family_types(&self.raw_xml)
+    }
+
     /// Encode a `PartAtom` back to Atom-format XML bytes.
     /// Inverse of [`Self::from_bytes`].
     ///
@@ -286,6 +325,107 @@ impl PartAtom {
         out.push_str("</entry>\n");
         out.into_bytes()
     }
+}
+
+fn family_types(xml: &str) -> Result<Vec<FamilyType>> {
+    fn local(name: &str) -> &str {
+        name.rsplit(':').next().unwrap_or(name)
+    }
+    fn attribute(e: &quick_xml::events::BytesStart<'_>, key: &str) -> Option<String> {
+        e.attributes().find_map(|a| {
+            let a = a.ok()?;
+            if a.key.into_inner() != key {
+                return None;
+            }
+            a.normalized_value(XmlVersion::Implicit1_0)
+                .ok()
+                .map(|v| v.into_owned())
+        })
+    }
+    let mut reader = Reader::from_str(xml);
+    let mut buf = Vec::new();
+    let mut types = Vec::new();
+    // The depth of the open `<A:family>` and of the open `<A:part>`, and
+    // the element open directly inside that part.
+    let mut depth = 0usize;
+    let mut family: Option<usize> = None;
+    let mut part: Option<(usize, FamilyType)> = None;
+    let mut child: Option<TypeParameter> = None;
+    let mut text = String::new();
+    loop {
+        match reader.read_event_into(&mut buf) {
+            Ok(Event::Start(ref e)) => {
+                depth += 1;
+                let name = local(e.name().into_inner());
+                let part_depth = part.as_ref().map(|(p, _)| *p);
+                match (family, part_depth) {
+                    (None, _) if name == "family" => family = Some(depth),
+                    (Some(f), None) if depth == f + 1 && name == "part" => {
+                        part = Some((
+                            depth,
+                            FamilyType {
+                                name: String::new(),
+                                parameters: Vec::new(),
+                            },
+                        ));
+                    }
+                    (_, Some(p)) if depth == p + 1 => {
+                        text.clear();
+                        child = Some(TypeParameter {
+                            name: name.to_string(),
+                            display_name: attribute(e, "displayName"),
+                            kind: attribute(e, "type"),
+                            type_of_parameter: attribute(e, "typeOfParameter"),
+                            units: attribute(e, "units"),
+                            value: String::new(),
+                        });
+                    }
+                    _ => {}
+                }
+            }
+            Ok(Event::Text(e)) if child.is_some() => text.push_str(&e),
+            Ok(Event::GeneralRef(e)) if child.is_some() => {
+                if let Ok(Some(ch)) = e.resolve_char_ref() {
+                    text.push(ch);
+                } else if let Some(val) = resolve_predefined_entity(&e) {
+                    text.push_str(val);
+                }
+            }
+            Ok(Event::End(_)) => {
+                let part_depth = part.as_ref().map(|(p, _)| *p);
+                match part_depth {
+                    Some(p) if depth == p + 1 => {
+                        if let (Some((_, current)), Some(mut parameter)) =
+                            (part.as_mut(), child.take())
+                        {
+                            let value = text.trim().to_string();
+                            if parameter.name == "title" {
+                                current.name = value;
+                            } else {
+                                parameter.value = value;
+                                current.parameters.push(parameter);
+                            }
+                        }
+                    }
+                    Some(p) if depth == p => {
+                        if let Some((_, done)) = part.take() {
+                            types.push(done);
+                        }
+                    }
+                    _ => {}
+                }
+                if family == Some(depth) {
+                    family = None;
+                }
+                depth = depth.saturating_sub(1);
+            }
+            Ok(Event::Eof) => break,
+            Err(e) => return Err(Error::PartAtom(format!("{e}"))),
+            _ => {}
+        }
+        buf.clear();
+    }
+    Ok(types)
 }
 
 fn xml_escape_text(s: &str) -> String {

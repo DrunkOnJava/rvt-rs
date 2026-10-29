@@ -84,6 +84,30 @@ def volume(triangles):
     return abs(np.einsum("ij,ij->i", a, np.cross(b, c)).sum() / 6.0)
 
 
+def shell_volumes(triangles):
+    """The signed volume of each set of triangles joined through shared
+    vertices (to 1e-6 ft), largest first."""
+    keys = [tuple(np.round(v * 1e6).astype(np.int64)) for v in triangles.reshape(-1, 3)]
+    parent = {}
+
+    def find(k):
+        while parent.setdefault(k, k) != k:
+            parent[k] = parent[parent[k]]
+            k = parent[k]
+        return k
+
+    for i in range(0, len(keys), 3):
+        root = find(keys[i])
+        for k in keys[i + 1 : i + 3]:
+            parent[find(k)] = root
+    a, b, c = triangles[:, 0], triangles[:, 1], triangles[:, 2]
+    signed = np.einsum("ij,ij->i", a, np.cross(b, c)) / 6.0
+    shells = collections.defaultdict(float)
+    for i, v in enumerate(signed):
+        shells[find(keys[3 * i])] += float(v)
+    return sorted(shells.values(), key=lambda v: -abs(v))
+
+
 def segment_distances(p, a, b):
     ab = b - a
     t = np.einsum("ntk,tk->nt", p - a, ab) / np.maximum(np.einsum("tk,tk->t", ab, ab), 1e-24)
@@ -185,6 +209,18 @@ def main():
             f"  {tag} {cls} '{object_type}': volume ratio {ratio:.4f}, Revit's vertices to rvt-rs's surface"
             f" {to_ours:.4g} ft, rvt-rs's to Revit's {to_ref:.4g} ft"
         )
+    # Bodies whose surfaces agree but whose enclosed volumes do not, which
+    # the distance ranking above does not reach.
+    outliers = sorted((abs(s[4] - 1), s) for s in scored if abs(s[4] - 1) > 0.01)
+    for _, (far, tag, cls, object_type, ratio, to_ours, to_ref) in outliers[-15:]:
+        print(
+            f"  volume {tag} {cls} '{object_type}': volume ratio {ratio:.4f},"
+            f" farthest vertex {far:.4g} ft"
+        )
+        for side, triangles in (("rvt-rs", ours[tag][2]), ("Revit", ref[tag][2])):
+            shells = shell_volumes(triangles)
+            listed = " ".join(f"{v:.4f}" for v in shells[:8])
+            print(f"    {side} shells {len(shells)}, signed volumes (cubic ft): {listed}")
     return 0
 
 
