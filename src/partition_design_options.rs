@@ -198,7 +198,7 @@ pub fn find_set_entries(buf: &[u8], options: &[u32]) -> Vec<(String, u32)> {
 /// `RevitFile::design_options` memoises it.
 pub fn compute_design_options(rf: &mut RevitFile) -> Result<DesignOptions> {
     let mut out = DesignOptions::default();
-    let version = rf.basic_file_info()?.version;
+    let version = rf.layout_release()?;
     let Some(marker) = crate::partition_element_records::file_bbox_marker(rf, version) else {
         return Ok(out);
     };
