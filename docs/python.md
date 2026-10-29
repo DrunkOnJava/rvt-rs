@@ -125,12 +125,14 @@ It raises `FileNotFoundError` / `OSError` on I/O failure and `ValueError`
 when the file is not a readable Revit file. `redact=True` scrubs the user
 name and Windows user folders.
 
-`rvt_to_ifc(path, mode="scaffold")` opens the file, runs the
-document-level IFC4 exporter (`ifc::RvtDocExporter`), and returns the
-IFC4 STEP text. Equivalent to
-`rvt.RevitFile(path).write_ifc(mode=mode)`. Raises `IOError` on open
-failure, `ValueError` if the file parses as CFB but the exporter
-can't build a model or the requested export mode cannot be satisfied.
+`rvt_to_ifc(path, mode="scaffold", allow_partial=False)` opens the file,
+runs the document-level IFC4 exporter (`ifc::RvtDocExporter`), and returns
+the IFC4 STEP text. Equivalent to
+`rvt.RevitFile(path).write_ifc(mode=mode, allow_partial=allow_partial)`.
+Raises `IOError` on open failure, `ValueError` if the file parses as CFB
+but the exporter can't build a model, the requested export mode cannot be
+satisfied, or a resource limit kept part of the file from being read and
+`allow_partial` is false.
 
 `rvt_to_ifc_diagnostics(path)` returns the JSON diagnostics sidecar
 for the same export path. The schema matches `rvt-ifc --diagnostics`
@@ -169,7 +171,7 @@ Resource limits map directly to the Rust `OpenLimits` /
 |---|---|---|
 | `max_file_bytes` | 2 GiB (`2 * 1024³`) | File size cap, enforced before reading |
 | `max_stream_bytes` | 256 MiB (`256 * 1024²`) | Per-stream size cap in `read_stream` |
-| `max_inflate_bytes` | 256 MiB (`256 * 1024²`) | Decompressed output cap per inflate call |
+| `max_inflate_bytes` | 256 MiB (`256 * 1024²`) | Decompressed output cap per inflate call; a multi-member stream such as `Partitions/NN` may inflate to this or 1 GiB in total, whichever is larger |
 | `max_walker_scan_bytes` | 128 MiB (`128 * 1024²`) | Decompressed `Global/Latest` bytes scanned by walker fallback paths |
 | `max_walker_candidates` | 100,000 | Maximum schema-scan candidates retained |
 | `max_walker_trial_offsets` | 16,000,000 | Maximum trial decodes attempted by walker scans |
@@ -361,7 +363,7 @@ CLI mirror: `rvt-elements file.rvt --counts`.
 export diagnostics sidecar (same payload as `rvt-ifc --diagnostics`).
 
 ```text
-write_ifc(self, mode: str = "scaffold") -> str
+write_ifc(self, mode: str = "scaffold", allow_partial: bool = False) -> str
 export_diagnostics_json(self) -> str
 ```
 Produce an IFC4 STEP string via `ifc::RvtDocExporter`, the same
@@ -452,13 +454,33 @@ caps from [`src/walker.rs`](../src/walker.rs):
   `read_stream` call.
 - `max_inflate_bytes` (default 256 MiB) — enforced per inflate
   call in the truncated-gzip decompressor; protects against
-  compressed-bomb input.
+  compressed-bomb input. The members of one multi-member stream
+  (`Partitions/NN`) may together inflate to this or 1 GiB, whichever
+  is larger.
 - `max_walker_scan_bytes`, `max_walker_candidates`,
   `max_walker_trial_offsets`, `max_walker_record_decode_bytes`,
   and `max_walker_container_records` — bound schema-directed
   fallback scans and return warnings in lossy diagnostics when hit.
 
-All three defaults are conservative for desktop use. Tighten them
+A stream these limits stop is not read (or is read only in part),
+and every reader goes on without it; `unread_streams()` lists each
+one with its stored size, the limit and which limit it was, and
+`write_ifc()` and `rvt_to_ifc()` raise `ValueError` rather than
+return an incomplete IFC unless `allow_partial=True` (#1075). Real
+client models with a 400 MiB to 1 GiB partition need larger limits,
+and several GB of memory:
+
+```python
+f = rvt.RevitFile(
+    path,
+    max_stream_bytes=2 * 1024**3,
+    max_inflate_bytes=8 * 1024**3,
+    max_walker_scan_bytes=8 * 1024**3,
+)
+ifc_text = f.write_ifc()   # raises ValueError if part of the file is still unread
+```
+
+The defaults are conservative for desktop use. Tighten them
 for untrusted input:
 
 ```python

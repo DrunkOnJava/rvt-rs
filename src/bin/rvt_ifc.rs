@@ -48,7 +48,10 @@ impl From<CliExportQualityMode> for ExportQualityMode {
         rvt-ifc model.rvt --diagnostics out.diagnostics.json --anonymize   to post publicly\n  \
         rvt-ifc model.rvt --mode geometry\n\n\
         SOURCE_DATE_EPOCH (Unix seconds) sets the time the IFC header and owner\n\
-        history record, so two exports of the same file are the same bytes."
+        history record, so two exports of the same file are the same bytes.\n\n\
+        Exit status 3: a resource limit kept part of the file from being read, so\n\
+        no IFC was written (the diagnostics sidecar, if asked for, lists the\n\
+        streams). Re-run with --large-model, or --allow-partial to write it anyway."
 )]
 struct Args {
     /// Path to a `.rvt` / `.rfa` / `.rte` / `.rft` file.
@@ -146,7 +149,39 @@ struct Args {
     /// Maximum records accepted in walker reference containers.
     #[arg(long)]
     max_walker_container_records: Option<usize>,
+    /// Maximum bytes of one stream read from the file (default 256 MiB). A
+    /// larger stream is not read, and nothing is written unless
+    /// `--allow-partial` (#1075).
+    #[arg(long, value_name = "BYTES")]
+    max_stream_bytes: Option<u64>,
+    /// Maximum inflated bytes of one compressed member (default 256 MiB). The
+    /// members of one stream may inflate to this or 1 GiB together,
+    /// whichever is larger.
+    #[arg(long, value_name = "BYTES")]
+    max_inflate_bytes: Option<usize>,
+    /// Raise the stream, inflate and walker-scan limits for large models:
+    /// streams up to 2 GiB, 8 GiB inflated. A model whose largest partition
+    /// is 1 GiB stored needs several GB of memory.
+    #[arg(long)]
+    large_model: bool,
+    /// Write the IFC even when a resource limit kept part of the file from
+    /// being read. The diagnostics list the streams that were not read.
+    #[arg(long)]
+    allow_partial: bool,
 }
+
+/// A resource limit kept part of the input from being read, and
+/// `--allow-partial` was not given (#1075): exit status 3.
+#[derive(Debug)]
+struct PartialRead;
+
+impl std::fmt::Display for PartialRead {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("no IFC written: part of the input was not read (see above)")
+    }
+}
+
+impl std::error::Error for PartialRead {}
 
 fn main() -> std::process::ExitCode {
     rvt::cli::exit_quietly_on_broken_pipe();
@@ -154,14 +189,25 @@ fn main() -> std::process::ExitCode {
         Ok(()) => std::process::ExitCode::SUCCESS,
         Err(e) => {
             eprintln!("error: {e}");
-            std::process::ExitCode::from(1)
+            if e.downcast_ref::<PartialRead>().is_some() {
+                std::process::ExitCode::from(3)
+            } else {
+                std::process::ExitCode::from(1)
+            }
         }
     }
 }
 
 fn run(args: Args) -> anyhow::Result<()> {
     let timestamp = source_date_epoch()?;
-    let mut rf = RevitFile::open(&args.input)?;
+    let mut rf = RevitFile::open_with_limits(
+        &args.input,
+        rvt::cli::open_limits(
+            args.max_stream_bytes,
+            args.max_inflate_bytes,
+            args.large_model,
+        ),
+    )?;
     let quality_mode = ExportQualityMode::from(args.mode);
     let walker_limits = walker_limits_from_args(&args);
 
@@ -238,6 +284,25 @@ fn run(args: Args) -> anyhow::Result<()> {
         p
     });
 
+    // #1075: the steps above may have read more streams than the export did.
+    rvt::ifc::record_unread_streams(&mut diagnostics, rf.unread_streams());
+    let unread = rf.unread_streams().len();
+    if unread > 0 {
+        eprintln!(
+            "rvt-ifc: {unread} stream(s) not read whole, so the export is missing what they hold:"
+        );
+        for line in rvt::cli::unread_stream_report(rf.unread_streams()) {
+            eprintln!("{line}");
+        }
+        if !args.allow_partial {
+            if let Some(diagnostics_path) = &args.diagnostics {
+                write_diagnostics_sidecar(diagnostics_path, &diagnostics, args.anonymize)?;
+            }
+            return Err(PartialRead.into());
+        }
+        eprintln!("rvt-ifc: writing the incomplete export (--allow-partial)");
+    }
+
     if let Err(err) = quality_mode.validate(&diagnostics) {
         if let Some(diagnostics_path) = &args.diagnostics {
             write_diagnostics_sidecar(diagnostics_path, &diagnostics, args.anonymize)?;
@@ -281,9 +346,11 @@ fn run(args: Args) -> anyhow::Result<()> {
 fn walker_limits_from_args(args: &Args) -> WalkerLimits {
     let defaults = WalkerLimits::default();
     WalkerLimits {
-        max_scan_bytes: args
-            .max_walker_scan_bytes
-            .unwrap_or(defaults.max_scan_bytes),
+        max_scan_bytes: args.max_walker_scan_bytes.unwrap_or(if args.large_model {
+            rvt::cli::LARGE_MODEL_MAX_INFLATE_BYTES
+        } else {
+            defaults.max_scan_bytes
+        }),
         max_candidates: args
             .max_walker_candidates
             .unwrap_or(defaults.max_candidates),
