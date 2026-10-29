@@ -900,8 +900,8 @@ checkout and pinned by sha256 (#257): `Revit_IFC5_Einhoven.rvt` (2023,
 913 KB) and `2024_Core_Interior.rvt` (2024, 33.7 MB). Staging refuses a file
 whose bytes do not match the catalog hash, and both cards are gated by
 Playwright. Viewer File Status lists
-recovered storey names, material name samples, and an honest Parameters
-row (empty until AProperty* host joins). The scene tree groups each
+recovered storey names, material name samples, and a Parameters row that
+counts the Revit parameter values written into the export's property sets. The scene tree groups each
 storey's elements by category, type name first, with curtain-wall and
 stair parts under their whole. Elements reach their storey from the
 Level their record names (RE-59, RE-60): all 970 of Core Interior's
