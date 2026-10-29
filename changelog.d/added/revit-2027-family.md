@@ -8,3 +8,6 @@
   references and so on) and keeps the flag. What the flag means for their
   instance bytes is not measured, so readers treat them as unknown, as
   before.
+  Breaking for a consumer of the schema-table JSON
+  (`docs/schemas/schema-table.schema.json`): a 2027 schema's field can now
+  be `Flagged`, where it was `Unknown`.
