@@ -472,11 +472,12 @@ and several GB of memory:
 
 ```python
 f = rvt.RevitFile(
-    path,
+    "model.rvt",
     max_stream_bytes=2 * 1024**3,
     max_inflate_bytes=8 * 1024**3,
     max_walker_scan_bytes=8 * 1024**3,
 )
+assert f.unread_streams() == []
 ifc_text = f.write_ifc()   # raises ValueError if part of the file is still unread
 ```
 
