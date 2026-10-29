@@ -73,6 +73,68 @@ impl Default for OpenLimits {
     }
 }
 
+/// A stream a resource limit kept rvt-rs from reading whole (#1075). Every
+/// reader that needed it went on without it, so what it holds is missing from
+/// whatever the handle produced; [`RevitFile::unread_streams`] lists them.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct UnreadStream {
+    /// The stream, e.g. `Partitions/189`.
+    pub name: String,
+    /// Its stored size in bytes.
+    pub stored_bytes: u64,
+    /// Which limit stopped it.
+    pub kind: UnreadKind,
+    /// That limit in bytes.
+    pub limit: u64,
+}
+
+/// Which resource limit stopped a stream ([`UnreadStream`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[non_exhaustive]
+pub enum UnreadKind {
+    /// The stream is larger than [`OpenLimits::max_stream_bytes`] and was not
+    /// read at all.
+    StreamTooLarge,
+    /// One of its gzip members would inflate past
+    /// [`compression::InflateLimits::max_output_bytes`] and was left out.
+    MemberTooLarge,
+    /// Its members together would inflate past
+    /// [`compression::InflateLimits::max_stream_total_bytes`]; those after
+    /// the cap were left out.
+    InflatedTotalTooLarge,
+}
+
+impl UnreadKind {
+    /// Short machine-readable name, as the export diagnostics use it.
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::StreamTooLarge => "stream_too_large",
+            Self::MemberTooLarge => "inflated_member_too_large",
+            Self::InflatedTotalTooLarge => "inflated_total_too_large",
+        }
+    }
+}
+
+impl std::fmt::Display for UnreadStream {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let what = match self.kind {
+            UnreadKind::StreamTooLarge => "is larger than the stream limit",
+            UnreadKind::MemberTooLarge => {
+                "has a compressed member that inflates past the inflate limit"
+            }
+            UnreadKind::InflatedTotalTooLarge => {
+                "inflates past the limit on one stream's inflated total"
+            }
+        };
+        write!(
+            f,
+            "stream {} ({} bytes stored) {what} of {} bytes, so what it holds is missing",
+            self.name, self.stored_bytes, self.limit
+        )
+    }
+}
+
 /// Opened Revit file. Holds the CFB handle + cached stream bytes.
 pub struct RevitFile {
     cfb: CompoundFile<Cursor<Vec<u8>>>,
@@ -123,12 +185,15 @@ pub struct RevitFile {
     /// Memoised `Formats/Latest` classes: a dozen partition readers each
     /// read and parsed the schema again for a few class tags.
     schema_classes_memo: Option<Arc<crate::formats::SchemaClasses>>,
+    layout_release_memo: Option<u32>,
     /// Memoised material names (RE-58, RE-203), by release and the hash of
     /// the declared ids they were read for: half a dozen material steps of
     /// an export each asked for them.
     material_names: std::collections::HashMap<(u32, u64), Arc<BTreeMap<u32, String>>>,
     /// Memoised materials each category's graphics styles name (RE-206).
     category_style_materials: Option<Arc<BTreeMap<i64, BTreeSet<u32>>>>,
+    /// Streams a resource limit kept from being read whole (#1075).
+    unread_streams: Vec<UnreadStream>,
 }
 
 /// The limits it was opened with and how many streams it has inflated so
@@ -332,9 +397,42 @@ impl RevitFile {
             native_preamble: None,
             native_record_index: None,
             schema_classes_memo: None,
+            layout_release_memo: None,
             material_names: std::collections::HashMap::new(),
             category_style_materials: None,
+            unread_streams: Vec::new(),
         })
+    }
+
+    /// The streams a resource limit kept from being read whole since this
+    /// handle was opened, in the order they were met (#1075). Empty when
+    /// nothing was cut; when not, the readers went on without them, so
+    /// anything produced from this handle is missing what they hold.
+    pub fn unread_streams(&self) -> &[UnreadStream] {
+        &self.unread_streams
+    }
+
+    fn note_unread(&mut self, unread: UnreadStream) {
+        if !self
+            .unread_streams
+            .iter()
+            .any(|known| known.name == unread.name && known.kind == unread.kind)
+        {
+            self.unread_streams.push(unread);
+        }
+    }
+
+    /// Record `err` against stream `name` when it is an inflate stopped by a
+    /// limit, for readers that inflate a stream themselves.
+    pub(crate) fn note_inflate_error(&mut self, name: &str, stored_bytes: usize, err: &Error) {
+        if matches!(err, Error::DecompressLimitExceeded(_)) {
+            self.note_unread(UnreadStream {
+                name: name.to_string(),
+                stored_bytes: stored_bytes as u64,
+                kind: UnreadKind::MemberTooLarge,
+                limit: self.limits.inflate_limits.max_output_bytes as u64,
+            });
+        }
     }
 
     /// Resource limits this file was opened under. Use to match
@@ -356,7 +454,26 @@ impl RevitFile {
             return Ok(Arc::clone(cached));
         }
         let raw = self.read_stream(name)?;
-        let inflated = Arc::new(compression::InflatedStream::from_stored(name, &raw));
+        let limits = self.limits.inflate_limits;
+        let (inflated, shortfall) =
+            compression::InflatedStream::from_stored_with_limits(name, &raw, limits);
+        if shortfall.members_over_limit > 0 {
+            self.note_unread(UnreadStream {
+                name: name.to_string(),
+                stored_bytes: raw.len() as u64,
+                kind: UnreadKind::MemberTooLarge,
+                limit: limits.max_output_bytes as u64,
+            });
+        }
+        if shortfall.stopped_at_total {
+            self.note_unread(UnreadStream {
+                name: name.to_string(),
+                stored_bytes: raw.len() as u64,
+                kind: UnreadKind::InflatedTotalTooLarge,
+                limit: limits.max_stream_total_bytes() as u64,
+            });
+        }
+        let inflated = Arc::new(inflated);
         self.inflated
             .insert(name.to_string(), Arc::clone(&inflated));
         Ok(inflated)
@@ -594,8 +711,22 @@ impl RevitFile {
     /// For streams larger than the limit, returns an error rather
     /// than allocating a potentially multi-GB `Vec`. Use
     /// [`Self::read_stream_with_limit`] to override per-call.
+    ///
+    /// A stream refused for its size is recorded in
+    /// [`Self::unread_streams`], since the readers that ask for it go on
+    /// without it.
     pub fn read_stream(&mut self, name: &str) -> Result<Vec<u8>> {
-        self.read_stream_with_limit(name, self.limits.max_stream_bytes)
+        let read = self.read_stream_with_limit(name, self.limits.max_stream_bytes);
+        if let Err(Error::TooLarge { size, limit, .. }) = &read {
+            let unread = UnreadStream {
+                name: name.trim_start_matches('/').to_string(),
+                stored_bytes: self.stream_size(name).unwrap_or(*size),
+                kind: UnreadKind::StreamTooLarge,
+                limit: *limit,
+            };
+            self.note_unread(unread);
+        }
+        read
     }
 
     /// Read a named stream's raw bytes, capped at an explicit
@@ -751,6 +882,25 @@ impl RevitFile {
         let classes = Arc::new(self.schema_classes()?);
         self.schema_classes_memo = Some(Arc::clone(&classes));
         Ok(classes)
+    }
+
+    /// The release whose layout the file's records take, which the
+    /// partition readers are keyed on: the release of the file's schema
+    /// (`research::partition_element_records::schema_release`) when it is
+    /// older than the release that saved the file, otherwise the saving
+    /// release (`BasicFileInfo`'s version), which metadata and reports
+    /// keep (#421). Memoised.
+    pub fn layout_release(&mut self) -> Result<u32> {
+        if let Some(release) = self.layout_release_memo {
+            return Ok(release);
+        }
+        let saved = self.basic_file_info()?.version;
+        let release = match crate::partition_element_records::schema_release(self) {
+            Some(schema) if schema < saved => schema,
+            _ => saved,
+        };
+        self.layout_release_memo = Some(release);
+        Ok(release)
     }
 
     /// Every class of the embedded schema with its serialization tag, read by

@@ -189,7 +189,7 @@ pub fn scan_partition_arc_walls_with_limits(
 
 /// Convenience wrapper: read BasicFileInfo version, then scan.
 pub fn iter_partition_arc_walls(rf: &mut RevitFile) -> Result<PartitionArcWallScan> {
-    let version = rf.basic_file_info()?.version;
+    let version = rf.layout_release()?;
     scan_partition_arc_walls(rf, version)
 }
 

@@ -98,6 +98,7 @@ cli       cli_ergonomics
 cli       cli_real_files
 cli       parameter_diagnostics
 cli       reproducible_outputs
+cli       resource_limits_cli
 cli       rvt_dump_cli
 cli       rvt_gltf_progress_cli
 cli       rvt_ifc_diagnostics_cli

@@ -1520,13 +1520,24 @@ pub fn iter_elements_with_control(
         return Ok(Vec::clone(&elements).into_iter());
     }
     control.report(Stage::SchemaParse, 0, None);
+    // #1075: both inflates run under the handle's limits, and a limit that
+    // stops one is recorded on the handle before the walk fails.
+    let inflate_limits = rf.limits().inflate_limits;
     let formats_raw = rf.read_stream(streams::FORMATS_LATEST)?;
-    let formats_d = compression::inflate_stream_at(streams::FORMATS_LATEST, &formats_raw, 0)?;
+    let formats_d = compression::inflate_stream_at_with_limits(
+        streams::FORMATS_LATEST,
+        &formats_raw,
+        0,
+        inflate_limits,
+    )
+    .inspect_err(|e| rf.note_inflate_error(streams::FORMATS_LATEST, formats_raw.len(), e))?;
     let schema = formats::parse_schema(&formats_d)?;
     control.report(Stage::SchemaParse, 1, Some(1));
 
     let raw = rf.read_stream(streams::GLOBAL_LATEST)?;
-    let (_, d) = compression::inflate_stream_auto(streams::GLOBAL_LATEST, &raw)?;
+    let (_, d) =
+        compression::inflate_stream_auto_with_limits(streams::GLOBAL_LATEST, &raw, inflate_limits)
+            .inspect_err(|e| rf.note_inflate_error(streams::GLOBAL_LATEST, raw.len(), e))?;
 
     let class_by_name: std::collections::HashMap<&str, &formats::ClassEntry> = schema
         .classes
@@ -1590,12 +1601,10 @@ pub fn iter_elements_with_control(
 
     // Partition ArcWall merge (version-gated). Fail closed: only
     // records that pass the standard envelope decoder are emitted.
-    if let Ok(bfi) = rf.basic_file_info() {
-        if let Ok(scan) = crate::partition_arc_walls::scan_partition_arc_walls_with_limits(
-            rf,
-            bfi.version,
-            limits,
-        ) {
+    if let Ok(version) = rf.layout_release() {
+        if let Ok(scan) =
+            crate::partition_arc_walls::scan_partition_arc_walls_with_limits(rf, version, limits)
+        {
             for wall in scan.walls {
                 let typed =
                     crate::elements::arc_wall::ArcWall::from_parts(wall.record, wall.trailer);
@@ -1613,7 +1622,7 @@ pub fn iter_elements_with_control(
         // loops / 2024 ArcWallRectOpening index. Fail closed — no
         // invented Door/Window typed success.
         if let Ok(mvp) =
-            crate::partition_schema_mvp::recover_partition_schema_mvp(rf, bfi.version, limits)
+            crate::partition_schema_mvp::recover_partition_schema_mvp(rf, version, limits)
         {
             for decoded in mvp.into_elements() {
                 if let Some(id) = decoded.id {
