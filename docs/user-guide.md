@@ -355,6 +355,26 @@ seconds) to fix it, for example to keep an exported IFC under version control:
 SOURCE_DATE_EPOCH=1700000000 rvt-ifc model.rvt -o model.ifc
 ```
 
+### Compare with Revit's own export
+
+rvt-rs writes IFC4 in metres, with the project at Revit's internal origin:
+`IfcSite` at the identity placement, no latitude or longitude, and no
+`IfcMapConversion`. A Revit export made with shared coordinates or a
+survey point therefore sits elsewhere in a federated model; one made with
+Revit's built-in "IFC4 Reference View" setup and its default coordinate base
+is the closer comparison (not yet checked on a Revit seat). Then:
+
+```bash
+rvt-ifc model.rvt -o ours.ifc --diagnostics ours.diagnostics.json --anonymize
+rvt-ifc-compare ours.ifc revit-export.ifc --json compare.json
+```
+
+`rvt-ifc-compare` reads each file in its own length unit, so Revit's feet or
+millimetres compare with rvt-rs's metres. Counts by IFC class, storeys and
+objects only on one side are what a [practitioner
+report](https://github.com/DrunkOnJava/rvt-rs/issues/new?template=practitioner_report.yml)
+needs; no model file is.
+
 ## Understand Warnings
 
 The most important status words are:
@@ -403,7 +423,9 @@ rooms, materials, and common parameters. See
    replaces only a path's `\Users\<name>\` part and Autodesk build and
    project-id folders.
 
-2. Open a GitHub issue and include:
+2. Open a GitHub issue (the [practitioner
+   report](https://github.com/DrunkOnJava/rvt-rs/issues/new?template=practitioner_report.yml)
+   form if you ran it on your own models) and include:
 
    - Revit version, if known.
    - File type: `.rvt`, `.rfa`, `.rte`, or `.rft`.
