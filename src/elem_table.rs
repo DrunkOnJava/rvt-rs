@@ -319,6 +319,15 @@ fn inflate(rf: &mut RevitFile) -> Result<Vec<u8>> {
         .or_else(|_| compression::inflate_stream_at(GLOBAL_ELEM_TABLE, &raw, 0))
 }
 
+/// The record layout [`detect_layout`] finds in `rf`'s Global/ElemTable. The
+/// implicit fallback ([`RecordFraming::Implicit`]) means neither record size
+/// fits, so the declared ElementIds are unknown (#421).
+pub fn layout(rf: &mut RevitFile) -> Result<ElemTableLayout> {
+    let d = inflate(rf)?;
+    parse_header_bytes(&d)?;
+    Ok(detect_layout(&d))
+}
+
 /// Parse all records from Global/ElemTable: the `u32` count at `0x02`
 /// records from `0x06`, at the record size [`detect_layout`] finds, or from
 /// `0x30` on the implicit fallback layout, which reads the same count.
