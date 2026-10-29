@@ -16,8 +16,13 @@
 //! record box is 3.75 ft deep because it includes the swing: the 2.92 ft
 //! difference #227 measured against Revit's own export.
 //!
-//! Reading saved graphics is slow on large files, so it is opt-in
-//! (`rvt-ifc --saved-meshes`, `rvt-gltf --saved-meshes`).
+//! Doors and windows are drawn from their saved meshes by default
+//! ([`SavedMeshScope::DoorsAndWindows`]: the maintainer, 2026-10-29), where
+//! every vertex is Revit's within 0.001 ft on Core Interior's 132 doors and
+//! 6 windows and the BIM4LCA office's 269 windows (Measure run
+//! 40932136360). Every other class is opt-in ([`SavedMeshScope::All`],
+//! `rvt-ifc --saved-meshes`, `rvt-gltf --saved-meshes`): reading saved
+//! graphics is slow on large files, and some partial meshes record nothing.
 
 use super::IfcModel;
 use super::entities::{BrepTriangle, IfcEntity, PropertyValue, SolidShape};
@@ -42,6 +47,25 @@ pub struct SavedMeshReport {
     pub triangles: usize,
 }
 
+/// Which bounding-box bodies [`attach_scoped_with_control`] replaces.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum SavedMeshScope {
+    /// Every element drawn as its record's box (`rvt-ifc --saved-meshes`).
+    All,
+    /// Doors and windows only, as `rvt-ifc` and `rvt-gltf` do by default.
+    DoorsAndWindows,
+}
+
+impl SavedMeshScope {
+    fn includes(self, ifc_type: &str) -> bool {
+        match self {
+            Self::All => true,
+            Self::DoorsAndWindows => matches!(ifc_type, "IFCDOOR" | "IFCWINDOW"),
+        }
+    }
+}
+
 /// Replace each bounding-box body with the element's saved mesh, where the
 /// file holds one and all of it decodes.
 pub fn attach(rf: &mut crate::RevitFile, model: &mut IfcModel) -> anyhow::Result<SavedMeshReport> {
@@ -53,6 +77,16 @@ pub fn attach(rf: &mut crate::RevitFile, model: &mut IfcModel) -> anyhow::Result
 pub fn attach_with_control(
     rf: &mut crate::RevitFile,
     model: &mut IfcModel,
+    control: &crate::control::WalkerControl,
+) -> anyhow::Result<SavedMeshReport> {
+    attach_scoped_with_control(rf, model, SavedMeshScope::All, control)
+}
+
+/// Same as [`attach_with_control`], for the bodies `scope` names only.
+pub fn attach_scoped_with_control(
+    rf: &mut crate::RevitFile,
+    model: &mut IfcModel,
+    scope: SavedMeshScope,
     control: &crate::control::WalkerControl,
 ) -> anyhow::Result<SavedMeshReport> {
     let mut report = SavedMeshReport::default();
@@ -72,6 +106,7 @@ pub fn attach_with_control(
             continue;
         }
         let IfcEntity::BuildingElement {
+            ifc_type,
             type_guid: Some(tag),
             property_set: Some(set),
             location_feet: Some(_),
@@ -80,6 +115,9 @@ pub fn attach_with_control(
         else {
             continue;
         };
+        if !scope.includes(ifc_type) {
+            continue;
+        }
         let text = |name: &str| {
             set.properties.iter().find_map(|p| match &p.value {
                 PropertyValue::Text(t) if p.name == name => Some(t.as_str()),
