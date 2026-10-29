@@ -179,8 +179,8 @@ info() { # file dir
 }
 
 # C9: the IFC4 schema's view of dir/model.ifc in dir/schema.txt: attribute
-# counts always, IfcOpenShell's full validation up to max_bytes, otherwise
-# marked as skipped, and the standard property sets against IFC4's
+# counts always, IfcOpenShell's full validation and its check of the schema's
+# EXPRESS rules up to max_bytes, otherwise marked as skipped, and the standard property sets against IFC4's
 # definitions, fetched once into PSET_DEFINITIONS (#822).
 PSET_DEFINITIONS="${RUNNER_TEMP:-/tmp}/ifc4-pset-definitions.csv"
 schema() { # dir max_bytes
@@ -191,6 +191,8 @@ schema() { # dir max_bytes
     if [ "$(stat -c %s "$1/model.ifc")" -le "$2" ]; then
       echo "validate:"
       timed "$1" schema-validate timeout 1200 python "$(dirname "$0")/ifc_validate_summary.py" "$1/model.ifc" "$1/validation.jsonl" 2>&1
+      echo "rules:"
+      timed "$1" schema-rules timeout 1200 python "$(dirname "$0")/ifc_validate_summary.py" --rules "$1/model.ifc" 2>&1
     else
       echo "validate: skipped, over $(( $2 / 1048576 )) MB"
     fi
