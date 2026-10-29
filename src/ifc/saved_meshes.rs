@@ -45,6 +45,9 @@ pub struct SavedMeshReport {
     pub partial: usize,
     /// Triangles written in all.
     pub triangles: usize,
+    /// Shells left out because they lie wholly inside another shell of the
+    /// same body (#1103).
+    pub contained_shells: usize,
 }
 
 /// Which bounding-box bodies [`attach_scoped_with_control`] replaces.
@@ -200,6 +203,7 @@ pub fn attach_scoped_with_control(
                     .map(|t| BrepTriangle(base + t[0], base + t[1], base + t[2])),
             );
         }
+        report.contained_shells += leave_out_contained_shells(&vertices, &mut triangles);
         if triangles.is_empty() {
             continue;
         }
@@ -216,4 +220,188 @@ pub fn attach_scoped_with_control(
         }
     }
     Ok(report)
+}
+
+type Point = [f64; 3];
+
+fn sub(a: Point, b: Point) -> Point {
+    [a[0] - b[0], a[1] - b[1], a[2] - b[2]]
+}
+
+fn dot(a: Point, b: Point) -> f64 {
+    a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
+}
+
+fn cross(a: Point, b: Point) -> Point {
+    [
+        a[1] * b[2] - a[2] * b[1],
+        a[2] * b[0] - a[0] * b[2],
+        a[0] * b[1] - a[1] * b[0],
+    ]
+}
+
+/// Whether the ray from `origin` along `direction` crosses the triangle
+/// (Moller and Trumbore).
+fn ray_crosses(origin: Point, direction: Point, [a, b, c]: [Point; 3]) -> bool {
+    let (e1, e2) = (sub(b, a), sub(c, a));
+    let h = cross(direction, e2);
+    let det = dot(e1, h);
+    if det.abs() < 1e-12 {
+        return false;
+    }
+    let s = sub(origin, a);
+    let u = dot(s, h) / det;
+    if !(0.0..=1.0).contains(&u) {
+        return false;
+    }
+    let q = cross(s, e1);
+    let v = dot(direction, q) / det;
+    v >= 0.0 && u + v <= 1.0 && dot(e2, q) / det > 1e-9
+}
+
+/// #1103: a saved mesh can hold a closed shell lying wholly inside another
+/// shell of the same body, as a part flush with a door's leaf, where Revit's
+/// export writes the two as one solid (on the BIM4LCA office four doors, the
+/// larger shell alone equal to Revit's body). Such a shell adds volume and no
+/// surface, so it is left out. Shells are the triangles joined through
+/// vertices at one position (to 1e-6 ft); a shell enclosing positive volume
+/// is inside a larger one when a point just inside each of its faces is
+/// inside that one by ray parity. A shell enclosing no positive volume, such
+/// as a void, is kept. Returns how many shells were left out.
+fn leave_out_contained_shells(vertices: &[Point], triangles: &mut Vec<BrepTriangle>) -> usize {
+    const INSET_FEET: f64 = 1e-4;
+    const DIRECTION: Point = [0.4817, 0.5743, 0.6619];
+    let mut positions: BTreeMap<[i64; 3], usize> = BTreeMap::new();
+    let ids: Vec<usize> = vertices
+        .iter()
+        .map(|v| {
+            let next = positions.len();
+            *positions
+                .entry(v.map(|c| (c * 1e6).round() as i64))
+                .or_insert(next)
+        })
+        .collect();
+    let mut parent: Vec<usize> = (0..positions.len()).collect();
+    fn root(parent: &mut [usize], mut i: usize) -> usize {
+        while parent[i] != i {
+            parent[i] = parent[parent[i]];
+            i = parent[i];
+        }
+        i
+    }
+    let corners: Vec<[Point; 3]> = triangles
+        .iter()
+        .map(|t| [t.0, t.1, t.2].map(|i| vertices[i as usize]))
+        .collect();
+    for t in triangles.iter() {
+        let first = root(&mut parent, ids[t.0 as usize]);
+        for other in [t.1, t.2] {
+            let r = root(&mut parent, ids[other as usize]);
+            parent[r] = first;
+        }
+    }
+    let mut shells: BTreeMap<usize, Vec<usize>> = BTreeMap::new();
+    for (i, t) in triangles.iter().enumerate() {
+        let r = root(&mut parent, ids[t.0 as usize]);
+        shells.entry(r).or_default().push(i);
+    }
+    if shells.len() < 2 {
+        return 0;
+    }
+    struct Shell {
+        triangles: Vec<usize>,
+        volume: f64,
+        min: Point,
+        max: Point,
+    }
+    let shells: Vec<Shell> = shells
+        .into_values()
+        .map(|triangles| {
+            let mut min = [f64::INFINITY; 3];
+            let mut max = [f64::NEG_INFINITY; 3];
+            let mut volume = 0.0;
+            for &i in &triangles {
+                let [a, b, c] = corners[i];
+                volume += dot(a, cross(b, c)) / 6.0;
+                for p in [a, b, c] {
+                    for ((lo, hi), v) in min.iter_mut().zip(max.iter_mut()).zip(p) {
+                        *lo = lo.min(v);
+                        *hi = hi.max(v);
+                    }
+                }
+            }
+            Shell {
+                triangles,
+                volume,
+                min,
+                max,
+            }
+        })
+        .collect();
+    let inside = |p: Point, shell: &Shell| {
+        shell
+            .triangles
+            .iter()
+            .filter(|&&i| ray_crosses(p, DIRECTION, corners[i]))
+            .count()
+            % 2
+            == 1
+    };
+    let mut left_out = vec![false; shells.len()];
+    for (s, small) in shells.iter().enumerate() {
+        if small.volume <= 0.0 || small.triangles.len() < 4 {
+            continue;
+        }
+        let samples: Vec<Point> = small
+            .triangles
+            .iter()
+            .filter_map(|&i| {
+                let [a, b, c] = corners[i];
+                let n = cross(sub(b, a), sub(c, a));
+                let length = dot(n, n).sqrt();
+                (length > 1e-12).then(|| {
+                    let centre = [
+                        (a[0] + b[0] + c[0]) / 3.0,
+                        (a[1] + b[1] + c[1]) / 3.0,
+                        (a[2] + b[2] + c[2]) / 3.0,
+                    ];
+                    let k = INSET_FEET / length;
+                    [
+                        centre[0] - n[0] * k,
+                        centre[1] - n[1] * k,
+                        centre[2] - n[2] * k,
+                    ]
+                })
+            })
+            .collect();
+        if samples.is_empty() {
+            continue;
+        }
+        left_out[s] = shells.iter().enumerate().any(|(l, large)| {
+            l != s
+                && !left_out[l]
+                && large.volume > small.volume
+                && (0..3).all(|k| {
+                    small.min[k] >= large.min[k] - INSET_FEET
+                        && small.max[k] <= large.max[k] + INSET_FEET
+                })
+                && samples.iter().all(|&p| inside(p, large))
+        });
+    }
+    let dropped: BTreeSet<usize> = shells
+        .iter()
+        .zip(&left_out)
+        .filter(|(_, out)| **out)
+        .flat_map(|(shell, _)| shell.triangles.iter().copied())
+        .collect();
+    if dropped.is_empty() {
+        return 0;
+    }
+    let mut index = 0;
+    triangles.retain(|_| {
+        let keep = !dropped.contains(&index);
+        index += 1;
+        keep
+    });
+    left_out.iter().filter(|out| **out).count()
 }

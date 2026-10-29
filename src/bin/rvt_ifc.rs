@@ -248,6 +248,12 @@ fn run(args: Args) -> anyhow::Result<()> {
                         "rvt-ifc: {} of {} {what} drawn from their saved graphics ({} triangles); {} kept their box, their saved graphics not decoding whole",
                         report.replaced, report.candidates, report.triangles, report.partial
                     );
+                    if report.contained_shells > 0 {
+                        eprintln!(
+                            "rvt-ifc: {} shell(s) lying wholly inside another of the same body left out",
+                            report.contained_shells
+                        );
+                    }
                 }
             }
             Err(e) => eprintln!("rvt-ifc: saved graphics not read, bodies unchanged: {e}"),
