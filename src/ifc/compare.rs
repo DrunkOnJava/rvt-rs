@@ -478,6 +478,11 @@ pub fn length_unit_scale_to_metres(text: &str) -> Option<f64> {
     let enumeration = |arg: &str| arg.trim().trim_matches('.').to_ascii_uppercase();
     let si_scale = |args: &[String]| -> f64 {
         match args.get(2).map(|prefix| enumeration(prefix)).as_deref() {
+            Some("EXA") => 1e18,
+            Some("PETA") => 1e15,
+            Some("TERA") => 1e12,
+            Some("GIGA") => 1e9,
+            Some("MEGA") => 1e6,
             Some("KILO") => 1e3,
             Some("HECTO") => 1e2,
             Some("DECA") => 1e1,
@@ -485,6 +490,10 @@ pub fn length_unit_scale_to_metres(text: &str) -> Option<f64> {
             Some("CENTI") => 1e-2,
             Some("MILLI") => 1e-3,
             Some("MICRO") => 1e-6,
+            Some("NANO") => 1e-9,
+            Some("PICO") => 1e-12,
+            Some("FEMTO") => 1e-15,
+            Some("ATTO") => 1e-18,
             _ => 1.0,
         }
     };
