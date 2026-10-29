@@ -276,6 +276,7 @@ fn ifc_compare_tells_an_export_from_itself_and_from_revits() {
         json["entity_count_deltas"]
     );
     if revit_ifc.exists() {
+        let against = dir.join("against-revit.json");
         let against_revit = run(
             env!("CARGO_BIN_EXE_rvt-ifc-compare"),
             &[
@@ -283,6 +284,8 @@ fn ifc_compare_tells_an_export_from_itself_and_from_revits() {
                 revit_ifc.as_os_str(),
                 "--fail-on-diff".as_ref(),
                 "--quiet".as_ref(),
+                "--json".as_ref(),
+                against.as_os_str(),
             ],
         );
         assert_eq!(
@@ -290,6 +293,18 @@ fn ifc_compare_tells_an_export_from_itself_and_from_revits() {
             Some(2),
             "rvt-rs's IFC4 export against Revit's IFC2X3 export differs structurally"
         );
+        // rvt-rs writes metres and Revit's export of RE1 millimetres: once
+        // both are read in metres, RE1's storeys are the same on both sides.
+        let json: Value =
+            serde_json::from_slice(&std::fs::read(&against).expect("report")).expect("report JSON");
+        for side in ["storeys_only_left", "storeys_only_right"] {
+            assert_eq!(
+                json[side].as_array().map(Vec::len),
+                Some(0),
+                "{side} against Revit's export: {}",
+                json[side]
+            );
+        }
     }
     let _ = std::fs::remove_dir_all(&dir);
 }
