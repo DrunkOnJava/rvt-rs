@@ -415,10 +415,11 @@ rooms, materials, and common parameters. See
    rvt-ifc model.rvt -o model.ifc --mode strict --diagnostics model.diagnostics.json --anonymize
    ```
 
-   `--anonymize` replaces every name the output takes from the project (the
-   file and project names, levels, materials, sample element names, stored
-   folder paths) with a placeholder, keeping counts and ElementIds, so the
-   files can be attached to a public issue. Without it, `rvt-inspect`
+   `--anonymize` replaces every name the inspect report and the diagnostics
+   take from the project (the file and project names, levels, materials,
+   sample element names, stored folder paths) with a placeholder, keeping
+   counts and ElementIds, so those two files can be attached to a public
+   issue. It does not change the IFC: `model.ifc` keeps every name. Without it, `rvt-inspect`
    replaces only a path's `\Users\<name>\` part and Autodesk build and
    project-id folders.
 
