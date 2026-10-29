@@ -50,10 +50,10 @@ Coordination mirror: [Discussion #112 notes](disc-112-coordination.md).
 
 ## User-Facing Summary
 
-rvt-rs opens every Revit file from 2016 to 2026 and reads its metadata,
-previews and embedded schema. Revit 2015 and 2027 files open too, measured
-on Autodesk's six 2015 and five 2027 sample projects, where previews and
-PartAtom are not measured. On Revit 2024 and 2025 project files it reads
+rvt-rs opens every Revit file from 2016 to 2027 and reads its metadata,
+previews and embedded schema. Revit 2015 files open too, measured on
+Autodesk's six 2015 sample projects, where previews and PartAtom are not
+measured. On Revit 2024 and 2025 project files it reads
 the building: each element's ElementId, category, name, type (written as
 an IFC type object of its Revit type, RE-110), storey, materials, layers,
 GlobalId, `IsExternal` (RE-193), curtain mullions' `Span` (RE-226), walls'
@@ -900,8 +900,8 @@ checkout and pinned by sha256 (#257): `Revit_IFC5_Einhoven.rvt` (2023,
 913 KB) and `2024_Core_Interior.rvt` (2024, 33.7 MB). Staging refuses a file
 whose bytes do not match the catalog hash, and both cards are gated by
 Playwright. Viewer File Status lists
-recovered storey names, material name samples, and an honest Parameters
-row (empty until AProperty* host joins). The scene tree groups each
+recovered storey names, material name samples, and a Parameters row that
+counts the Revit parameter values written into the export's property sets. The scene tree groups each
 storey's elements by category, type name first, with curtain-wall and
 stair parts under their whole. Elements reach their storey from the
 Level their record names (RE-59, RE-60): all 970 of Core Interior's

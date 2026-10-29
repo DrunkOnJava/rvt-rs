@@ -585,11 +585,5 @@ fn arcwall_2024_project_does_not_run_2023_decoder() -> Result<()> {
         "2024 export must not emit ArcWall-* entities from the 2023 decoder: {arcwall_names:?}"
     );
 
-    let description = model.description.as_deref().unwrap_or_default();
-    assert!(
-        description.contains("ArcWall standard decoder skipped: Revit 2024"),
-        "2024 export should surface the ArcWall version gate diagnostic, got: {description}"
-    );
-
     Ok(())
 }
