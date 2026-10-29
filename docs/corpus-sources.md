@@ -7,18 +7,18 @@ edge cases we want confidence on.
 
 ## What's still missing
 
-- **`.rvt` project files** (20-200 MB range). Real architecture /
-  engineering projects with hundreds of levels, sheets, views,
-  elements. Tests: does `rvt-analyze` still finish in seconds? Are
-  there tag values we haven't seen? Does Layer 4c.2 classification
-  coverage hold at 100% (as verified against the 11-version sample-
-  family corpus)?
+- **A redistributable `.rvt` project over 100 MB.** Project files are in
+  now ([`reference-models.md`](reference-models.md); the largest
+  redistributable one is 99.8 MB, `research/bim4lca-models.tsv`), but
+  client models of 438 MB and 1.13 GB with partitions of 400 MiB to
+  1 GiB exist (#1075) and cannot be shared.
 - **`.rte` project templates** (~1-20 MB). Tests the template-file
   code paths.
 - **`.rft` family templates** (~100 KB - 2 MB). Tests families not
   yet populated with content.
-- **Large-project stress test**. Find a publicly-redistributable file
-  ≥ 100 MB to verify streaming-read + memory behaviour.
+- **Held-out project pairs**: projects with their own release's Revit IFC
+  export, never used to develop a fix, two per release from 2015 to 2027
+  (#408, Discussion #1088).
 
 ## Where to find them (lawful, redistributable sources)
 

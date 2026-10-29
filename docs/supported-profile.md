@@ -13,9 +13,9 @@ A Revit file can succeed at one level and not the next, so rvt-rs keeps them
 apart:
 
 1. **Opened.** The OLE container, its streams, metadata, previews and schema
-   read: every Revit release from 2016 to 2026, across the family corpus.
-   Revit 2015 and 2027 files open too, on Autodesk's sample projects, where
-   previews and PartAtom are not measured.
+   read: every Revit release from 2016 to 2027, across the family corpus.
+   Revit 2015 files open too, on Autodesk's sample projects, where previews
+   and PartAtom are not measured.
 2. **Elements identified.** Each element is found with its Revit ElementId and
    category, and the set equals the one Revit's own IFC export holds. Revit
    2024 and 2025 project files, and Revit 2023 ones with their bounding boxes
@@ -45,7 +45,8 @@ apart:
 | Revit 2019 to 2022 project | yes | experimental (since 0.6.0): 2023's records and readers with each release's schema tags; every ElementId shared with the 2023 copies of Autodesk's sample projects keeps its class, and the `rac_basic`, `rst_basic` and 2021 and 2022 `rac_advanced` exports have the 2023 copies' building elements, class for class (RE-180); no Revit export of a 2019 to 2022 file is measured | as on 2023 | as on 2023 |
 | Revit 2015 to 2018 project | yes on 2016 to 2018; 2015 partial: opens on Autodesk's sample projects; previews and PartAtom not measured | experimental (since 0.6.0): 2019's records and readers with each release's schema tags; every ElementId shared with the 2019 copies of Autodesk's 2016 to 2018 sample projects keeps its class, and their exports have the 2019 copies' building elements, class for class; on five of the six 2015 samples every shared ElementId keeps its class, and the sixth, `rst_basic`, is another model (RE-181); no Revit export of a 2015 to 2018 file is measured | as on 2019 | as on 2019 |
 | Revit 2014 and earlier project | not measured on a documented project; a public 2014 family opens and its schema and ElemTable read (RE-147) | no | none | metadata |
-| Family (`.rfa`) or template (`.rte`, `.rft`) | yes | family metadata and OmniClass only | none | none |
+| Family (`.rfa`) | yes | family metadata and OmniClass only | none | a family's types and type parameters as its `PartAtom` stream lists them: Revit's text at save, not read from the family's own records |
+| Template (`.rte`, `.rft`) | the same container code; no template file is in any corpus, so not measured | not measured | none | none |
 
 A file that is corrupt, encrypted, a zero-byte Git LFS placeholder, or not an
 OLE/CFB Revit container is refused with an error. A stream larger than
@@ -75,7 +76,7 @@ memory ceiling.
 | Rooms | `IfcSpace` with number, name and the outline of the room's stored solid (RE-101) | Revit's own area and outline on all 116 Core Interior and 11 RE1 Architecture rooms (RE-101's run; neither CI nor Measure scores room outlines); 45 of 54 Snowdon Towers rooms at the area its VIM export gives, the other 7 whose solids do not close keeping their box (#90); on Revit 2023, all 9 of Exemplo_data's (RE-102) |
 | Areas | `IfcSpace` with number, name and storey; no body | all 30 of Revit's area spaces on the BIM4LCA office, as built and at building permit (RE-191); Revit 2024 only |
 | Furniture, fixtures, equipment, MEP devices, site | the element's bounding box, turned with the instance where it is turned (RE-87) | placement and extent only; no family geometry. MEP devices and equipment are measured on RE1 Electrical and Mechanical only (RE-79) |
-| Family instances with `--saved-meshes` | the mesh Revit saved for the element's display | within 0.01 ft of Revit's export: Core Interior 158 of 158, RE1 (2025) 207 of 214, Snowdon Towers 3,332 of 3,736. Revit's own shape, every vertex within 0.001 ft: Core Interior 138 of 138 doors and windows, the BIM4LCA office 1,294 of 1,709 scored (all its windows; 48 of 269 doors), RE1 148 of 214; a mesh that is not exact is part of the body (RE-78). Since RE-224 a mesh some face of which did not decode keeps its box: on the office 1,294 of the 1,352 bodies then drawn are exact (1,376 of 1,438 at permit) |
+| Family instances from their saved meshes (doors and windows by default on Revit 2023 to 2027, every other family with `--saved-meshes`) | the mesh Revit saved for the element's display | within 0.01 ft of Revit's export: Core Interior 158 of 158, RE1 (2025) 207 of 214, Snowdon Towers 3,332 of 3,736. Revit's own shape, every vertex within 0.001 ft: Core Interior 138 of 138 doors and windows, the BIM4LCA office 1,294 of 1,709 scored (all its windows; 48 of 269 doors), RE1 148 of 214; a mesh that is not exact is part of the body (RE-78). Since RE-224 a mesh some face of which did not decode keeps its box: on the office 1,294 of the 1,352 bodies then drawn are exact (1,376 of 1,438 at permit) |
 
 ## Properties on Revit 2024 and 2025 projects
 

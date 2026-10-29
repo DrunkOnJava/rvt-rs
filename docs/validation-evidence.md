@@ -70,7 +70,10 @@ write:
 The Measure workflow (`.github/workflows/measure.yml`) exports the six
 redistributable reference models (Core Interior, Einhoven and the four RE1
 models) and scores the five that come with Revit's own IFC export (all but
-Einhoven, which is only exported and schema-checked) against it, with the
+Einhoven, which is only exported and schema-checked) against it (by
+default; `-f nordic=true`, `r2025=true`, `bimcollab=true`, `holdout=true`
+and `samples=true` add the BIM4LCA office, puzzbobb's Revit 2025 models,
+BIMcollab's 2015 example, the holdout pack and Autodesk's sample projects), with the
 scorers under `tools/re/`: element counts, ElementIds,
 bodies, materials, storeys, openings and more. It is not part of
 `CI passed`. It runs when the measurement itself changes and is dispatched
