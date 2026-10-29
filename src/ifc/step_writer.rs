@@ -1451,7 +1451,7 @@ impl StepWriter {
         self.emit_entity(
             owner_hist,
             format!(
-                "IFCOWNERHISTORY(#{person_and_org},#{application},$,.ADDED.,$,#{person_and_org},#{application},{})",
+                "IFCOWNERHISTORY(#{person_and_org},#{application},$,.NOCHANGE.,$,$,$,{})",
                 self.timestamp
             ),
         );
