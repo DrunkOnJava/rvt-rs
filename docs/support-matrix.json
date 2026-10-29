@@ -751,6 +751,6 @@
     {"release": 2024, "project_capability": "typed-project-elements", "family_capabilities": ["metadata-partatom-preview", "formats-latest-schema"]},
     {"release": 2025, "project_capability": "element-records-revit-2025", "family_capabilities": ["metadata-partatom-preview", "formats-latest-schema"]},
     {"release": 2026, "project_capability": "element-records-revit-2026", "family_capabilities": ["metadata-partatom-preview", "formats-latest-schema"]},
-    {"release": 2027, "project_capability": "element-records-revit-2027", "family_capabilities": []}
+    {"release": 2027, "project_capability": "element-records-revit-2027", "family_capabilities": ["metadata-partatom-preview", "formats-latest-schema"]}
   ]
 }

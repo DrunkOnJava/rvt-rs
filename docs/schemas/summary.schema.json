@@ -155,6 +155,64 @@
           "$ref": "#/$defs/file_metadata"
         }
       ]
+    },
+    "family_types": {
+      "description": "A family's types and type parameters from its PartAtom type table (PartAtom::family_types); absent when the file has none.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "name",
+          "parameters"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "parameters": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "name",
+                "value"
+              ],
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "display_name": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "kind": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "type_of_parameter": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "units": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "value": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "$defs": {
