@@ -1,7 +1,7 @@
 //! #792, #879: does Revit's "Export to IFC" parameter explain the single
 //! elements rvt-rs writes that Revit's export leaves out?
 //!
-//! HYPOTHESIS (not yet a finding): Revit's exporter first reads an element's
+//! RE-262, a measured negative. HYPOTHESIS: Revit's exporter first reads an element's
 //! `IFC_EXPORT_ELEMENT` (BuiltInParameter -1019012, "Export to IFC": By Type,
 //! Yes or No) and its type's `IFC_EXPORT_ELEMENT_TYPE` (-1019013), and leaves
 //! out what says No, before any category mapping (revit-ifc
@@ -18,7 +18,7 @@
 //! exported element carries.
 //!
 //! Usage:
-//!   cargo run --profile ci --example probe_export_to_ifc_parameter -- FILE.rvt [ELEMENTID ...]
+//!   cargo run --profile ci --example probe_re262_export_to_ifc_parameter -- FILE.rvt [ELEMENTID ...]
 //!
 //! Extra ElementIds print every built-in parameter those elements carry, to
 //! see what else could tell them apart.
@@ -33,7 +33,7 @@ const EXPORT_TYPE_TO_IFC: i64 = -1019013;
 fn main() -> anyhow::Result<()> {
     let mut args = std::env::args().skip(1);
     let path = args.next().ok_or_else(|| {
-        anyhow::anyhow!("usage: probe_export_to_ifc_parameter FILE.rvt [ELEMENTID ...]")
+        anyhow::anyhow!("usage: probe_re262_export_to_ifc_parameter FILE.rvt [ELEMENTID ...]")
     })?;
     let watch: BTreeSet<u64> = args.filter_map(|a| a.parse().ok()).collect();
     let mut rf = RevitFile::open(&path)?;
