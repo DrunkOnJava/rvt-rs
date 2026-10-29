@@ -45,7 +45,7 @@ apart:
 | Revit 2019 to 2022 project | yes | experimental (since 0.6.0): 2023's records and readers with each release's schema tags; every ElementId shared with the 2023 copies of Autodesk's sample projects keeps its class, and the `rac_basic`, `rst_basic` and 2021 and 2022 `rac_advanced` exports have the 2023 copies' building elements, class for class (RE-180); no Revit export of a 2019 to 2022 file is measured | as on 2023 | as on 2023 |
 | Revit 2015 to 2018 project | yes on 2016 to 2018; 2015 partial: opens on Autodesk's sample projects; previews and PartAtom not measured | experimental (since 0.6.0): 2019's records and readers with each release's schema tags; every ElementId shared with the 2019 copies of Autodesk's 2016 to 2018 sample projects keeps its class, and their exports have the 2019 copies' building elements, class for class; on five of the six 2015 samples every shared ElementId keeps its class, and the sixth, `rst_basic`, is another model (RE-181); no Revit export of a 2015 to 2018 file is measured | as on 2019 | as on 2019 |
 | Revit 2014 and earlier project | not measured on a documented project; a public 2014 family opens and its schema and ElemTable read (RE-147) | no | none | metadata |
-| Family (`.rfa`) | yes | family metadata and OmniClass only | none | none |
+| Family (`.rfa`) | yes | family metadata and OmniClass only | none | a family's types and type parameters as its `PartAtom` stream lists them: Revit's text at save, not read from the family's own records |
 | Template (`.rte`, `.rft`) | the same container code; no template file is in any corpus, so not measured | not measured | none | none |
 
 A file that is corrupt, encrypted, a zero-byte Git LFS placeholder, or not an

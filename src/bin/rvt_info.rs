@@ -132,6 +132,10 @@ struct Report<'a> {
     /// Worksharing, save history and document identity
     /// (`rvt::metadata::FileMetadata`).
     document: Option<&'a FileMetadata>,
+    /// A family's types and type parameters from its `PartAtom` type table
+    /// (`rvt::part_atom::PartAtom::family_types`); absent when it has none.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    family_types: Option<Vec<rvt::part_atom::FamilyType>>,
 }
 
 fn report_one(cli: &Cli, format: Format) -> anyhow::Result<()> {
@@ -155,10 +159,16 @@ fn report_one(cli: &Cli, format: Format) -> anyhow::Result<()> {
         eprintln!("preview PNG written to {}", preview_path.display());
     }
 
+    let family_types = summary
+        .partatom
+        .as_ref()
+        .and_then(|atom| atom.family_types().ok())
+        .filter(|types| !types.is_empty());
     if format == Format::Json {
         let report = Report {
             summary: &summary,
             document: document.as_ref(),
+            family_types,
         };
         println!("{}", serde_json::to_string_pretty(&report)?);
         return Ok(());
@@ -167,7 +177,13 @@ fn report_one(cli: &Cli, format: Format) -> anyhow::Result<()> {
         .file_name()
         .map(|n| n.to_string_lossy().into_owned())
         .unwrap_or_default();
-    print_text(&name, &summary, document.as_ref(), cli.show_classes);
+    print_text(
+        &name,
+        &summary,
+        document.as_ref(),
+        family_types.as_deref(),
+        cli.show_classes,
+    );
     if cli.all_classes {
         let names = rf.class_names()?;
         println!("\n=== all class names ({}) ===", names.len());
@@ -188,6 +204,7 @@ fn print_text(
     name: &str,
     s: &rvt::reader::Summary,
     doc: Option<&FileMetadata>,
+    family_types: Option<&[rvt::part_atom::FamilyType]>,
     show_classes: bool,
 ) {
     println!("Revit file · {name}");
@@ -269,6 +286,12 @@ fn print_text(
             println!("  taxonomies:");
             for t in &pa.taxonomies {
                 println!("    - {} ({})", t.label, t.term);
+            }
+        }
+        if let Some(types) = family_types {
+            println!("  types:     {}", types.len());
+            for t in types {
+                println!("    - {} ({} type parameters)", t.name, t.parameters.len());
             }
         }
     }
