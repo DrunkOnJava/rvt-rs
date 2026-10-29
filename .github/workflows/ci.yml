@@ -570,9 +570,10 @@ jobs:
           python -m ifcopenshell.validate /tmp/walker-real-project.ifc
           python -m ifcopenshell.validate /tmp/core-interior.ifc
           python tools/ci/ifc_schema_arity.py /tmp/walker-real-project.ifc /tmp/core-interior.ifc
-      # #908: saved graphics are opt-in (--saved-meshes), so no other job
-      # reads them. Export both real projects with them, fail unless each
-      # draws some body from them, and validate both exports.
+      # #908: doors and windows are drawn from their saved graphics by
+      # default (2026-10-29); every other class only with --saved-meshes, so
+      # no other job reads theirs. Export both real projects with it, fail
+      # unless each draws some body from them, and validate both exports.
       - name: Export and validate real projects with their saved meshes
         env:
           RVT_PROJECT_CORPUS_DIR: ${{ github.workspace }}/_project_corpus/Revit
