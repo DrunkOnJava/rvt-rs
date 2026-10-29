@@ -18,7 +18,7 @@ pub const TRANSMISSION_DATA: &str = "TransmissionData";
 
 /// Revit year → known Partitions/NN marker.
 ///
-/// Observed empirically from the 11-version phi-ag corpus. 59 is skipped between
+/// Observed empirically from the 12-version phi-ag corpus. 59 is skipped between
 /// 2016 and 2017; afterwards the number monotonically increments.
 pub fn partition_for_year(year: u32) -> Option<u32> {
     match year {
@@ -33,6 +33,7 @@ pub fn partition_for_year(year: u32) -> Option<u32> {
         2024 => Some(67),
         2025 => Some(68),
         2026 => Some(69),
+        2027 => Some(70),
         _ => None,
     }
 }
@@ -52,6 +53,7 @@ pub fn year_for_partition(n: u32) -> Option<u32> {
         67 => Some(2024),
         68 => Some(2025),
         69 => Some(2026),
+        70 => Some(2027),
         _ => None,
     }
 }
