@@ -32,7 +32,7 @@ This README describes the development branch, `main`, which the browser viewer i
 |---|---|---|---|---|
 | Revit 2024 and 2025 projects | yes | typed IFC entities from each element's own record; by ElementId the set equals Revit's export on Core Interior, RE1 Architecture, Electrical and Mechanical, the 22 of puzzbobb's Revit 2025 models that have an export, and the BIM4LCA office as built; RE1 Plumbing and the office at building permit each write one element Revit's export leaves out, and 29 of Snowdon Towers' 5,974 are not in it (local only; details below) | measured per category: exact joins, profiles and cuts where decoded, the element's bounding box where not | names, family and type names, storey, materials and layers, Revit's GlobalId, stair dimensions, IFC export overrides; most other parameters not read |
 | Revit 2026 projects | yes | **experimental (since 0.5.0):** typed IFC entities from each element's record (RE-124), on one 2026 project 113 of the 115 elements of Revit's export, none outside it | the element's bounding box, walls cut back at their joins (wall thickness Revit's on 59 of 59, length on 35) | Revit's GlobalIds (113 of 113), storeys with Revit's names and elevations (4 of 4), rooms with Revit's number and name (13 of 13), doors and windows in their host walls, family and type names, wall and floor layer sets as thick as Revit's, walls joined by their join lists; roof slopes, stairs and IFC export overrides not read |
-| Revit 2027 projects | partial: they open on Autodesk's sample projects; previews and PartAtom are not measured | **experimental (since 0.6.0):** typed IFC entities from each element's record, with the constants the file's schema gives (RE-179); on Autodesk's five 2027 sample projects the same ElementIds and classes as their 2026 copies (20,818 of 20,818), with **no Revit 2027 export measured** | as on 2026 | as on 2026: storeys, rooms, doors and windows in their hosts, family and type names, layer sets, wall joins and mullion materials read the same as the 2026 copies; 79 corner mullions are not put in a curtain wall |
+| Revit 2027 projects | yes; 325 fields of the 2027 schema carry a flag whose meaning is not measured (RE-264) | **experimental (since 0.6.0):** typed IFC entities from each element's record, with the constants the file's schema gives (RE-179); on Autodesk's five 2027 sample projects the same ElementIds and classes as their 2026 copies (20,818 of 20,818), with **no Revit 2027 export measured** | as on 2026 | as on 2026: storeys, rooms, doors and windows in their hosts, family and type names, layer sets, wall joins and mullion materials read the same as the 2026 copies; 79 corner mullions are not put in a curtain wall |
 | Revit 2023 projects | yes | typed IFC entities (since 0.4.0) from each element's record (RE-81): on two 2023 projects every element of Revit's export (37 of 37) or all but the 8 window trims nested in windows (37 of 45), none outside it | the element's bounding box, walls cut back by the walls they join (Exemplo_data 17 of 17 and modelo_bim 4 of 4 as Revit's, RE-120), beams stopped at the faces of the columns they frame into (modelo_bim 8 of 8, RE-122); rooms their outline (RE-102) | ElementId, category, each door's and window's host wall (30 of 30 as Revit's, RE-85), and the storeys of Revit's own Levels with each element on the one its record names, a beam on the one at its top (Exemplo_data 37 of 37 and modelo_bim 37 of 37 in Revit's storey, RE-107, RE-119), each family instance's family and type name (50 of 50 as Revit names them, RE-109), each wall's, floor's and roof's type and system family (24 of 24 with Revit's type, RE-111, RE-112), family instances' materials (44 of 45 as Revit's, RE-113), and layer sets, named by their own or their category's material (RE-114, RE-115): Exemplo_data 36 of 37 and modelo_bim 31 of 37 elements with Revit's materials, and materials with Revit's shading colours (20 of 21, none different, RE-116); no layered or angled joins, design options or IFC export overrides, and the diagnostics say so |
 | Revit 2019 to 2022 projects | yes | **experimental (since 0.6.0):** typed IFC entities from each element's record, which 2019 to 2022 frame as 2023 does, read with the tags each release's schema gives (RE-180); on Autodesk's 2019 to 2022 sample projects every ElementId shared with the 2023 copy has the class it has there (`rac_basic`, `rst_basic` and `rac_advanced` of each release), with **no Revit export of a 2019 to 2022 file measured** | as on 2023 | as on 2023: storeys, doors and windows in their hosts, family and type names, layer sets and materials read as the 2023 copies do, with a few type names and type materials different (RE-180 §6) |
 | Revit 2015 to 2018 projects | yes on 2016 to 2018; on 2015, partial: they open on Autodesk's sample projects, and previews and PartAtom are not measured | **experimental (since 0.6.0):** typed IFC entities from each element's record, which 2015 to 2018 frame as 2019 does, read with the tags each release's schema gives (RE-181); on Autodesk's 2016, 2017 and 2018 sample projects every ElementId shared with the 2019 copy has the class it has there (`rac_basic`, `rst_basic` and `rac_advanced` of each release), and on five of its six 2015 sample projects (the sixth is another model), with **Revit's own export measured on one 2015 project and on none of 2016 to 2018**: BIMcollab's structural example (RE-198, a public download, not redistributable) has all 241 of Revit's elements by ElementId, each in Revit's class or IFC4's for its IFC2X3 one, 3 air terminals Revit's export leaves out (#879), 16 footings on no storey and none of its elements' GlobalIds Revit's (#878); 2014's element records are not read, since no documented 2014 project backs them | as on 2019 | as on 2019: storeys, doors and windows in their hosts, family and type names, layer sets and materials read as the 2019 copies do, but where the files' own bytes differ (RE-181 §6) |
@@ -63,10 +63,10 @@ Rust 2024 edition (MSRV 1.87). **Nineteen CLIs ship** (`rvt-analyze`, `rvt-info`
 |---|---|---|
 | OLE/CFB container open | ✓ | No Revit required |
 | Truncated-gzip stream decode | ✓ | |
-| `BasicFileInfo` metadata | ✓ | Version, build, GUID, original path, plus the `Key: value` block every release 2016-2026 writes: worksharing state, central model path, last-saved-by user, save counter, single-user-cloud flag (`rvt-info`, `rvt::metadata`) |
+| `BasicFileInfo` metadata | ✓ | Version, build, GUID, original path, plus the `Key: value` block every release 2016-2027 writes: worksharing state, central model path, last-saved-by user, save counter, single-user-cloud flag (`rvt-info`, `rvt::metadata`) |
 | `PartAtom` XML | ✓ | Title, OmniClass code, taxonomies |
 | Stream preview extraction | ✓ | Clean PNG, wrapper stripped |
-| `Formats/Latest` schema parse | ✓ | the whole page-stripped schema: 4,126 classes and 11,562 fields on Revit 2024, 122,107 fields across the 11 releases (#410) |
+| `Formats/Latest` schema parse | ✓ | the whole page-stripped schema: 4,126 classes and 11,562 fields on Revit 2024, 134,794 fields across the 12 releases (#410) |
 | Field-type classification | ✓ | 9 to 12 fields per release unclassified out of 10,000 to 12,000, all listed in the CI gate (`tests/field_type_coverage.rs`, #410); the 100% figure before #410 covered only the first 64 KB of each schema |
 | Cross-release tag-drift table | ✓ | First public 122×11 dataset |
 | Layer 5a ADocument walker | partial | Reliable on Revit 2024–2026; 2016–2023 entry-point detection pending |
@@ -154,7 +154,7 @@ The schema work here, decoding the whole of `Formats/Latest` and classifying all
 
 If you are building BIM or AEC tooling and want an Apache-2.0 Revit reader to build on:
 
-- **Revit 2016 to 2026 files**: container open, stream decompression, metadata, previews, schema introspection (the whole schema, all but about ten field encodings per release classified) and stream-level byte-preserving writes.
+- **Revit 2016 to 2027 files**: container open, stream decompression, metadata, previews, schema introspection (the whole schema, all but about ten field encodings per release classified) and stream-level byte-preserving writes.
 - **Revit 2024 and 2025 projects** — typed elements with Revit's ElementIds, names, types, storeys, materials, layers and GlobalIds, as IFC4, glTF 2.0, plan SVG and CSV, each export with a diagnostics sidecar naming what was approximated or left out.
 - **Revit 2023 projects** — typed elements with Revit's ElementIds and categories, each drawn as its bounding box (RE-81), walls cut back at their joins (RE-120), beams at their columns (RE-122), rooms as their outline (RE-102), on the storeys of Revit's own Levels (RE-107), family instances named as Revit names them (RE-109), walls, floors and roofs with their type, read from its layers (RE-111, RE-112).
 - **Revit 2026 projects, experimentally (since 0.5.0)**: typed elements, storeys, rooms, doors and windows, type names and layer sets, measured on one project (RE-124).
@@ -271,7 +271,7 @@ All modules build for native targets and for `wasm32-unknown-unknown`, which the
 | `compression` | Truncated-gzip decode (`inflate_at`, `inflate_at_auto`, `inflate_at_with_limits`) + multi-chunk (`inflate_all_chunks_with_limits`) + truncated-gzip encoder for write-back (`truncated_gzip_encode`) |
 | `basic_file_info` | Version, build tag, GUID, creator path, locale — read path + byte-back encoder (`BasicFileInfo::encode`) |
 | `part_atom` | Atom XML with Autodesk `partatom` namespace — title, OmniClass, taxonomies — read + encode |
-| `formats` | Parse + encode `Formats/Latest` with `FieldType` classification (all but 9 to 12 fields per release classified across the 11-release corpus, #410) |
+| `formats` | Parse + encode `Formats/Latest` with `FieldType` classification (all but 9 to 12 fields per release classified across the 12-release corpus, #410; 2027's flagged fields by their base type, RE-264) |
 | `walker` | Schema-directed instance walker + generic `decode_instance` + `detect_adocument_start` entry-point finder; candidates of the 7 classes in `elements::MVP_TYPED_CLASSES` go through their typed decoder from the registry (fail closed), and every other class decodes generically |
 | `elements` | 81 `ElementDecoder` registry entries in `all_decoders()` (Wall, Floor, Door, Window, Column, Beam, Stair, Railing, Rebar, Room, Furniture, …); the walker uses the 7 `MVP_TYPED_CLASSES` decoders, and no test exercises the rest (#573). Real project elements come from partition element records |
 | `geometry` | Curve / Face / Solid variants (Line, Arc, Ellipse, NURBS, Hermite, Ruled, Revolved, Extrusion, Sweep, Blend, SweptBlend, Boolean, Mesh, PointCloud) |
@@ -380,7 +380,7 @@ cargo build --release
 # ADocument's instance fields, as text or JSON
 ./target/release/rvt-doc my-project.rvt > doc.txt
 
-# Cross-version corpus analysis (11 releases in one pass; 3 or more files)
+# Cross-version corpus analysis (12 releases in one pass; 3 or more files)
 ./target/release/rvt-corpus /path/to/corpus-dir/*.rfa
 
 # Triage a folder of files into failure buckets
@@ -434,7 +434,7 @@ this stream layout (constant across 11 years of Revit releases):
 │   └── PartitionTable            DEFLATE — partition metadata
 ├── PartAtom                      plain XML (Atom + Autodesk partatom namespace)
 ├── Partitions/NN                 bulk data: 5-10 concatenated DEFLATE segments
-│                                 NN = 58, 60-69 for Revit 2016-2026
+│                                 NN = 58, 60-70 for Revit 2016-2027
 ├── RevitPreview4.0               custom header + PNG thumbnail
 └── TransmissionData              UTF-16LE transmission metadata
 ```
@@ -482,7 +482,7 @@ The full analysis narrative with 12 dated addenda lives in [`docs/rvt-moat-break
 
 The real-file checks read public corpora that are fetched, never committed:
 
-- **Families:** Autodesk's `rac_basic_sample_family`, one per Revit release from 2016 to 2026, distributed through Git LFS in [`phi-ag/rvt`](https://github.com/phi-ag/rvt). `RVT_SAMPLES_DIR` points at them.
+- **Families:** Autodesk's `rac_basic_sample_family`, one per Revit release from 2016 to 2027, distributed through Git LFS in [`phi-ag/rvt`](https://github.com/phi-ag/rvt). `RVT_SAMPLES_DIR` points at them.
 - **Projects:** the MIT-licensed models of [`magnetar-io/revit-test-datasets`](https://github.com/magnetar-io/revit-test-datasets) (Core Interior, Einhoven) and the RE1 models of [`Drshelden/IFC-ECS`](https://github.com/Drshelden/IFC-ECS), each with Revit's own IFC export. `RVT_PROJECT_CORPUS_DIR` points at them.
 
 A check whose files are absent skips with a message, so a partial corpus is fine. [`CONTRIBUTING.md`](CONTRIBUTING.md#corpus-env-vars) shows how to fetch both, and [`docs/reference-models.md`](docs/reference-models.md) lists every model the measurements use.
