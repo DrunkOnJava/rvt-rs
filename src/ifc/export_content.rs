@@ -3428,6 +3428,12 @@ pub const DOOR_TYPE_SIZE_PROPERTIES: [&str; 2] = ["TypeWidth", "TypeHeight"];
 /// `crate::partition_schema_mvp::CUT_LOOP_SIZE_FIELDS`), feet.
 pub const CUT_LOOP_SIZE_PROPERTIES: [&str; 2] = ["CutWidth", "CutHeight"];
 
+/// Properties holding the extents along X, Y and Z of the solid a door's or
+/// window's symbol cuts where it cuts no loop (RE-225,
+/// `crate::partition_schema_mvp::CUT_SOLID_SIZE_FIELDS`), feet.
+pub const CUT_SOLID_SIZE_PROPERTIES: [&str; 3] =
+    ["CutSolidWidth", "CutSolidDepth", "CutSolidHeight"];
+
 /// Properties holding a door's or window's record box extent along its own
 /// X axis and its height, where its symbol cuts no loop (#810,
 /// `crate::partition_schema_mvp::INSTANCE_BOX_SIZE_FIELDS`), feet.
@@ -5328,6 +5334,15 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
     // symbol cuts in its host.
     if let Some(size) = crate::partition_schema_mvp::cut_loop_size_from_fields(&decoded.fields) {
         for (name, feet) in CUT_LOOP_SIZE_PROPERTIES.iter().zip(size) {
+            properties.push(Property {
+                name: (*name).into(),
+                value: PropertyValue::PositiveLengthFeet(feet),
+            });
+        }
+    }
+    // RE-225: one whose symbol cuts a solid and no loop, the solid's extents.
+    if let Some(size) = crate::partition_schema_mvp::cut_solid_size_from_fields(&decoded.fields) {
+        for (name, feet) in CUT_SOLID_SIZE_PROPERTIES.iter().zip(size) {
             properties.push(Property {
                 name: (*name).into(),
                 value: PropertyValue::PositiveLengthFeet(feet),
