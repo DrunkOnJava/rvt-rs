@@ -13,9 +13,9 @@ A Revit file can succeed at one level and not the next, so rvt-rs keeps them
 apart:
 
 1. **Opened.** The OLE container, its streams, metadata, previews and schema
-   read: every Revit release from 2016 to 2026, across the family corpus.
-   Revit 2015 and 2027 files open too, on Autodesk's sample projects, where
-   previews and PartAtom are not measured.
+   read: every Revit release from 2016 to 2027, across the family corpus.
+   Revit 2015 files open too, on Autodesk's sample projects, where previews
+   and PartAtom are not measured.
 2. **Elements identified.** Each element is found with its Revit ElementId and
    category, and the set equals the one Revit's own IFC export holds. Revit
    2024 and 2025 project files, and Revit 2023 ones with their bounding boxes

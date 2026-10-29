@@ -11,7 +11,7 @@ Scope sources:
 
 ## 1. Format versions supported
 
-Integration corpus: Autodesk's public `rac_basic_sample_family` RFA, one file per Revit release 2016 through 2026, exercised by [`tests/samples.rs`](../tests/samples.rs) via `ALL_YEARS = [2016..=2026]` in [`tests/common/mod.rs`](../tests/common/mod.rs). Revit 2015 and 2027 have no file in it; they are read from Autodesk's sample projects (six 2015 and five 2027, pinned in [`research/autodesk-sample-projects.tsv`](../research/autodesk-sample-projects.tsv) and read by Measure).
+Integration corpus: Autodesk's public `rac_basic_sample_family` RFA, one file per Revit release 2016 through 2027, exercised by [`tests/samples.rs`](../tests/samples.rs) via `ALL_YEARS = [2016..=2027]` in [`tests/common/mod.rs`](../tests/common/mod.rs). Revit 2015 has no file in it; it is read from Autodesk's six 2015 sample projects, as 2027 projects are from its five 2027 ones (pinned in [`research/autodesk-sample-projects.tsv`](../research/autodesk-sample-projects.tsv) and read by Measure).
 
 | Revit release | `BasicFileInfo` year | `Partitions/NN` marker | OLE + schema + metadata | Schema-directed walker (ADocument) |
 |---|---|---|---|---|
@@ -27,16 +27,16 @@ Integration corpus: Autodesk's public `rac_basic_sample_family` RFA, one file pe
 | 2024 | 2024 | Partitions/67 | full | full |
 | 2025 | 2025 | Partitions/68 | full | full |
 | 2026 | 2026 | Partitions/69 | full | full |
-| 2027 | 2027 | none in the corpus | partial: the container, streams, schema and `BasicFileInfo` on the sample projects; PartAtom and the preview are not measured | not measured |
+| 2027 | 2027 | Partitions/70 | full; 325 schema fields carry a flag whose meaning is not measured (RE-264) | not measured |
 
 Column definitions:
 
-- **OLE + schema + metadata**: opens the CFB container, reads all 13 invariant streams, decompresses `Formats/Latest`, parses the whole page-stripped class schema (4,126 classes and 11,562 fields on the 2024 sample, all but 9 to 12 fields per release type-classified, #410), extracts `BasicFileInfo` (version / build / GUID / path / locale), parses `PartAtom` XML, extracts the `RevitPreview4.0` PNG thumbnail, decodes `Contents`, and decodes the 167-byte `Global/PartitionTable` invariant. This column is `full` on every release from 2016 to 2026; on 2015 and 2027 it is partial, as their rows say.
+- **OLE + schema + metadata**: opens the CFB container, reads all 13 invariant streams, decompresses `Formats/Latest`, parses the whole page-stripped class schema (4,126 classes and 11,562 fields on the 2024 sample, all but 9 to 12 fields per release type-classified, #410; 2027's flagged fields by their base type, RE-264), extracts `BasicFileInfo` (version / build / GUID / path / locale), parses `PartAtom` XML, extracts the `RevitPreview4.0` PNG thumbnail, decodes `Contents`, and decodes the 167-byte `Global/PartitionTable` invariant. This column is `full` on every release from 2016 to 2027; on 2015 it is partial, as its row says.
 - **Schema-directed walker**: `walker::read_adocument` locates the `ADocument` entry point in `Global/Latest` and walks all declared fields. Reliable on Revit 2024–2026. Returns `Ok(None)` on 2016–2023 when the entry-point detector can't find a high-confidence offset (see `walker.rs` §366–370 and `docs/rvt-phase4c-session-2026-04-19.md`). This is also the bridge the Layer-5b per-class decoders depend on at runtime against real files.
 
 The same releases, with the support-matrix rows that rate their projects and family files, are the `releases` table of [`docs/support-matrix.json`](support-matrix.json), which `tests/support_matrix.rs` pins to `rvt::capability` and the family corpus.
 
-On the 2015 and 2027 sample projects `rvt-info` reads every file, and their elements export experimentally ([`docs/status.md`](status.md), RE-179, RE-181); the family-corpus columns are not measured on them. Before 2015, only a 2014 family is measured (see the limitations below), and after 2027 nothing is. The schema parser and compression path are likely to still work on near-future releases because the truncated-gzip and `Formats/Latest` framing have not changed in a decade, but nothing is claimed outside `[2015, 2027]` beyond that 2014 family.
+On the 2015 and 2027 sample projects `rvt-info` reads every file, and their elements export experimentally ([`docs/status.md`](status.md), RE-179, RE-181); 2015 has no family in the corpus, so its family-corpus columns are not measured. Before 2015, only a 2014 family is measured (see the limitations below), and after 2027 nothing is. The schema parser and compression path are likely to still work on near-future releases because the truncated-gzip and `Formats/Latest` framing have not changed in a decade, but nothing is claimed outside `[2015, 2027]` beyond that 2014 family.
 
 ## 2. File type support
 
