@@ -71,6 +71,15 @@ and `unsupported_geometry_missing_dimensions`. A single element can appear in
 more than one geometry bucket because these are condition counts, not a
 deduplicated element total.
 
+`stream_not_read_resource_limit` lists the streams a resource limit kept from
+being read whole (#1075): `classes` maps each stream's name (`Partitions/189`)
+to how many limits stopped it, `count` is the number of streams, and one
+warning per stream, beginning `Not read whole:`, gives its stored size, the
+limit and which one it was (the stream limit, one inflated member, or the
+stream's inflated total). Every reader went on without those streams, so the
+export is missing what they hold. `rvt-ifc` and `rvt-gltf` write no model and
+exit with status 3 when this item is present, unless `--allow-partial`.
+
 `element_record_without_element_id` counts the element records of every
 recovered category whose frame is in place (the `BuiltInCategory` at `+0x12`
 and the bounding-box marker at `+0x50`) but whose `+0x00` holds no ElementId,

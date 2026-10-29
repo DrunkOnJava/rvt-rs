@@ -133,6 +133,8 @@ mod re19_door_window_wall_negative;
 mod reference_values;
 #[path = "../reproducible_outputs.rs"]
 mod reproducible_outputs;
+#[path = "../resource_limits_cli.rs"]
+mod resource_limits_cli;
 #[path = "../revit_global_ids.rs"]
 mod revit_global_ids;
 #[path = "../revit_property_sets.rs"]

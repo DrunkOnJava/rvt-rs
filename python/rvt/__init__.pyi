@@ -166,6 +166,15 @@ class RevitFile:
         regardless of host OS.
         """
 
+    def unread_streams(self) -> list[dict[str, Any]]:
+        """The streams a resource limit kept from being read whole so far,
+        each with ``name``, ``stored_bytes``, ``kind``
+        (``"stream_too_large"``, ``"inflated_member_too_large"`` or
+        ``"inflated_total_too_large"``) and ``limit``. Empty when nothing
+        was cut; when not, everything read from this file is missing what
+        those streams hold.
+        """
+
     def read_stream(self, name: str) -> bytes:
         """Raw bytes of the named OLE stream. Accepts either
         ``/Formats/Latest`` or ``Formats/Latest`` (both resolve the
@@ -298,7 +307,7 @@ class RevitFile:
         ["production_walker_elements"]`` for ``total``.
         """
 
-    def write_ifc(self, mode: str = "scaffold") -> str:
+    def write_ifc(self, mode: str = "scaffold", allow_partial: bool = False) -> str:
         """Produce an IFC4 STEP string for this file via the
         ``RvtDocExporter``.
 
@@ -308,6 +317,11 @@ class RevitFile:
         enough for that quality level. On a file with no recovered
         elements, such as the synthetic fixtures, only ``scaffold``
         succeeds.
+
+        Raises ``ValueError`` when a resource limit kept part of the
+        file from being read (``unread_streams()`` lists it), unless
+        ``allow_partial=True``; open the file with a larger
+        ``max_stream_bytes`` / ``max_inflate_bytes`` to read it.
         """
 
     def export_diagnostics_json(self) -> str:
@@ -358,10 +372,10 @@ def read_metadata(path: str, redact: bool = False) -> FileMetadata:
     """
 
 
-def rvt_to_ifc(path: str, mode: str = "scaffold") -> str:
+def rvt_to_ifc(path: str, mode: str = "scaffold", allow_partial: bool = False) -> str:
     """One-shot: open ``path``, run ``RvtDocExporter``, return the
     IFC4 STEP text. Equivalent to
-    ``RevitFile(path).write_ifc(mode=mode)``.
+    ``RevitFile(path).write_ifc(mode=mode, allow_partial=allow_partial)``.
     """
 
 

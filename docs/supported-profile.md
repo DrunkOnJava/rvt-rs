@@ -47,7 +47,15 @@ apart:
 | Family (`.rfa`) or template (`.rte`, `.rft`) | yes | family metadata and OmniClass only | none | none |
 
 A file that is corrupt, encrypted, a zero-byte Git LFS placeholder, or not an
-OLE/CFB Revit container is refused with an error, never a partial model.
+OLE/CFB Revit container is refused with an error. A stream larger than
+rvt-rs's resource limits (by default 2 GiB for the file, 256 MiB for one
+stream and for one inflated member, and 1 GiB inflated per partition) is not
+read, so the elements it holds are not exported. `rvt-ifc` and `rvt-gltf` then
+name each such stream, write no model and exit with status 3 unless
+`--allow-partial`, and the diagnostics list them; `--large-model` raises the
+limits for models whose largest partition is several hundred MiB to 1 GiB
+(#1075). The browser viewer keeps the default limits and wasm32's 4 GiB
+memory ceiling.
 
 ## Geometry on Revit 2024 and 2025 projects
 
@@ -125,7 +133,8 @@ Revit leaves them out.
   element whose storey is unknown sits in the building, not on a storey; a
   missing value is absent, not zero.
 - `rvt-ifc --diagnostics out.json` and the viewer's diagnostics download list
-  what was exported, approximated and skipped, and why. `--mode
+  what was exported, approximated and skipped, and why, including every
+  stream a resource limit kept from being read (`stream_not_read_resource_limit`). `--mode
   typed-no-geometry`, `geometry` and `strict` refuse a file that does not meet
   that bar instead of writing a thinner IFC.
 
