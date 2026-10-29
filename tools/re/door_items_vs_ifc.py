@@ -30,6 +30,7 @@ def items(representation):
 
 
 def main(argv):
+    argv = [a for a in argv if not a.startswith("--")]
     if len(argv) != 3:
         print(__doc__, file=sys.stderr)
         return 2
