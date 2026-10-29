@@ -1391,6 +1391,7 @@ fn opening_cuts_through_hosts(
     let mut cuts = std::collections::BTreeMap::new();
     for (index, entity) in entities.iter().enumerate() {
         let entities::IfcEntity::BuildingElement {
+            ifc_type,
             host_element_index: Some(host),
             extrusion: Some(body),
             solid_shape: None,
@@ -1444,11 +1445,13 @@ fn opening_cuts_through_hosts(
         };
         let (x_band, y_band) = (band(axes[0]), band(axes[1]));
         let (x_width, y_width) = (x_band.1 - x_band.0, y_band.1 - y_band.0);
-        // RE-225: where the symbol cuts a solid and no loop, Revit's export
-        // cuts the opening to that solid: as deep across the wall as the
-        // solid's Y extent, centred on the wall, and as tall as its Z
+        // RE-225: where a window's symbol cuts a solid and no loop, Revit's
+        // export cuts the opening to that solid: as deep across the wall as
+        // the solid's Y extent, centred on the wall, and as tall as its Z
         // extent, down from the body's top (the BIM4LCA office's windows).
-        let solid = cut_solid_size(entity);
+        // A door's keeps its box: on the office its solid gives none of
+        // Revit's openings.
+        let solid = cut_solid_size(entity).filter(|_| ifc_type.eq_ignore_ascii_case("IfcWindow"));
         let solid_z = solid.map(|[_, _, height]| [body.height_feet - height, height]);
         let cut = if y_width <= MAX_THICKNESS_FEET && y_width < x_width / 2.0 && y_width > 0.0 {
             Some(entities::OpeningCut {
