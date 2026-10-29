@@ -27,7 +27,10 @@ use std::process::ExitCode;
     about = "Convert a Revit (.rvt, .rfa, .rte, .rft) file to a glTF 2.0 binary (.glb)",
     after_help = "Examples:\n  \
         rvt-gltf model.rvt                      writes model.glb next to the input\n  \
-        rvt-gltf model.rvt -o viewer/model.glb --verbose"
+        rvt-gltf model.rvt -o viewer/model.glb --verbose\n\n\
+        Exit status 3: a resource limit kept part of the file from being read, so\n\
+        no glb was written. Re-run with --large-model, or --allow-partial to write\n\
+        it anyway."
 )]
 struct Cli {
     /// Revit file to convert (.rvt / .rfa / .rte / .rft).
@@ -60,6 +63,44 @@ struct Cli {
     /// (`progress: <stage> <done>/<total>`, as `rvt-elements --progress`).
     #[arg(long)]
     progress: bool,
+
+    /// Maximum bytes of one stream read from the file (default 256 MiB). A
+    /// larger stream is not read, and nothing is written unless
+    /// `--allow-partial` (#1075).
+    #[arg(long, value_name = "BYTES")]
+    max_stream_bytes: Option<u64>,
+
+    /// Maximum inflated bytes of one compressed member (default 256 MiB). The
+    /// members of one stream may inflate to this or 1 GiB together,
+    /// whichever is larger.
+    #[arg(long, value_name = "BYTES")]
+    max_inflate_bytes: Option<usize>,
+
+    /// Raise the stream, inflate and walker-scan limits for large models:
+    /// streams up to 2 GiB, 8 GiB inflated. A model whose largest partition
+    /// is 1 GiB stored needs several GB of memory.
+    #[arg(long)]
+    large_model: bool,
+
+    /// Write the glb even when a resource limit kept part of the file from
+    /// being read.
+    #[arg(long)]
+    allow_partial: bool,
+}
+
+/// Why a conversion stopped.
+enum Failure {
+    /// Exit status 1.
+    Error(String),
+    /// A resource limit kept part of the input from being read and
+    /// `--allow-partial` was not given (#1075): exit status 3.
+    PartialRead,
+}
+
+impl From<String> for Failure {
+    fn from(message: String) -> Self {
+        Self::Error(message)
+    }
 }
 
 fn main() -> ExitCode {
@@ -67,9 +108,13 @@ fn main() -> ExitCode {
     let cli = Cli::parse();
     match run(&cli) {
         Ok(()) => ExitCode::SUCCESS,
-        Err(e) => {
+        Err(Failure::Error(e)) => {
             eprintln!("error: {e}");
             ExitCode::from(1)
+        }
+        Err(Failure::PartialRead) => {
+            eprintln!("error: no glb written: part of the input was not read (see above)");
+            ExitCode::from(3)
         }
     }
 }
@@ -95,7 +140,7 @@ fn resolve_paths(
     Ok((input, output))
 }
 
-fn run(cli: &Cli) -> Result<(), String> {
+fn run(cli: &Cli) -> Result<(), Failure> {
     let (input, output) = resolve_paths(
         cli.input.as_deref(),
         cli.src.as_deref(),
@@ -103,7 +148,13 @@ fn run(cli: &Cli) -> Result<(), String> {
         "glb",
     )?;
     // Open errors from the library already name the file.
-    let mut rf = RevitFile::open(&input).map_err(|e| e.to_string())?;
+    let limits =
+        rvt::cli::open_limits(cli.max_stream_bytes, cli.max_inflate_bytes, cli.large_model);
+    let mut rf = RevitFile::open_with_limits(&input, limits).map_err(|e| e.to_string())?;
+    let mut walker_limits = rvt::walker::WalkerLimits::default();
+    if cli.large_model {
+        walker_limits.max_scan_bytes = rvt::cli::LARGE_MODEL_MAX_INFLATE_BYTES;
+    }
     let control = if cli.progress {
         rvt::control::WalkerControl::new().with_progress(|event| {
             let total = event.total.map(|t| format!("/{t}")).unwrap_or_default();
@@ -116,7 +167,7 @@ fn run(cli: &Cli) -> Result<(), String> {
         .export_with_mode_limits_and_control(
             &mut rf,
             ExportQualityMode::Scaffold,
-            rvt::walker::WalkerLimits::default(),
+            walker_limits,
             &control,
         )
         .map_err(|e| format!("export {}: {e}", input.display()))?;
@@ -124,6 +175,19 @@ fn run(cli: &Cli) -> Result<(), String> {
         if let Err(e) = rvt::ifc::saved_meshes::attach_with_control(&mut rf, &mut model, &control) {
             eprintln!("rvt-gltf: saved graphics not read, bodies unchanged: {e}");
         }
+    }
+    let unread = rf.unread_streams().len();
+    if unread > 0 {
+        eprintln!(
+            "rvt-gltf: {unread} stream(s) not read whole, so the model is missing what they hold:"
+        );
+        for line in rvt::cli::unread_stream_report(rf.unread_streams()) {
+            eprintln!("{line}");
+        }
+        if !cli.allow_partial {
+            return Err(Failure::PartialRead);
+        }
+        eprintln!("rvt-gltf: writing the incomplete model (--allow-partial)");
     }
     let glb = model_to_glb(&model);
     fs::write(&output, &glb).map_err(|e| format!("write {}: {e}", output.display()))?;

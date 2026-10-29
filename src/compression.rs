@@ -23,6 +23,11 @@ pub const GZIP_MAGIC: [u8; 3] = [0x1F, 0x8B, 0x08];
 /// [`InflateLimits`] to [`inflate_at_with_limits`].
 pub const DEFAULT_MAX_INFLATE_BYTES: usize = 256 * 1024 * 1024;
 
+/// Default maximum inflated bytes of one multi-member stream, all its members
+/// together: what [`InflateLimits::max_stream_total_bytes`] gives at the
+/// default per-member cap.
+pub const DEFAULT_MAX_INFLATED_STREAM_BYTES: usize = 1024 * 1024 * 1024;
+
 /// Upper bound on the capacity reserved before a DEFLATE member is
 /// decoded. The reservation must not scale with the input that follows
 /// the member: [`inflate_all_chunks_with_limits`] decodes every member
@@ -62,6 +67,38 @@ impl Default for InflateLimits {
         Self {
             max_output_bytes: DEFAULT_MAX_INFLATE_BYTES,
         }
+    }
+}
+
+impl InflateLimits {
+    /// The cap on one multi-member stream's inflated members together:
+    /// [`DEFAULT_MAX_INFLATED_STREAM_BYTES`], or `max_output_bytes` when that
+    /// is larger, so raising the per-member cap for a large model raises
+    /// the stream's total with it (#1075).
+    pub fn max_stream_total_bytes(&self) -> usize {
+        DEFAULT_MAX_INFLATED_STREAM_BYTES.max(self.max_output_bytes)
+    }
+}
+
+/// What a multi-member inflate left out because a limit stopped it (#1075).
+/// Members that fail to inflate for any other reason are gzip-magic false
+/// positives inside compressed data and are not counted.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct InflateShortfall {
+    /// Members skipped because each would inflate past
+    /// [`InflateLimits::max_output_bytes`].
+    pub members_over_limit: usize,
+    /// True when the members stopped at the stream's inflated total
+    /// ([`InflateLimits::max_stream_total_bytes`]) and the rest were not
+    /// inflated.
+    pub stopped_at_total: bool,
+}
+
+impl InflateShortfall {
+    /// True when no limit left anything out.
+    pub fn is_complete(&self) -> bool {
+        self.members_over_limit == 0 && !self.stopped_at_total
     }
 }
 
@@ -177,14 +214,33 @@ pub fn prepare_stream_for_inflate<'a>(
 /// Raw [`inflate_at`] remains a path-agnostic codec and **never** strips — so
 /// Formats/Latest, tiny streams, and already-clean buffers stay untouched.
 pub fn inflate_stream_at(stream_name: &str, stored: &[u8], offset: usize) -> Result<Vec<u8>> {
+    inflate_stream_at_with_limits(stream_name, stored, offset, InflateLimits::default())
+}
+
+/// [`inflate_stream_at`] under `limits`.
+pub fn inflate_stream_at_with_limits(
+    stream_name: &str,
+    stored: &[u8],
+    offset: usize,
+    limits: InflateLimits,
+) -> Result<Vec<u8>> {
     let prepared = prepare_stream_for_inflate(stream_name, stored);
-    inflate_at(prepared.as_ref(), offset)
+    inflate_at_with_limits(prepared.as_ref(), offset, limits)
 }
 
 /// Auto-offset inflate for a named stored stream (page-stripped when gated).
 pub fn inflate_stream_auto(stream_name: &str, stored: &[u8]) -> Result<(usize, Vec<u8>)> {
+    inflate_stream_auto_with_limits(stream_name, stored, InflateLimits::default())
+}
+
+/// [`inflate_stream_auto`] under `limits`.
+pub fn inflate_stream_auto_with_limits(
+    stream_name: &str,
+    stored: &[u8],
+    limits: InflateLimits,
+) -> Result<(usize, Vec<u8>)> {
     let prepared = prepare_stream_for_inflate(stream_name, stored);
-    inflate_at_auto(prepared.as_ref())
+    inflate_at_auto_with_limits(prepared.as_ref(), limits)
 }
 
 /// Inflate every gzip member in a named stored stream (page-stripped when gated).
@@ -214,13 +270,25 @@ pub struct InflatedStream {
 }
 
 impl InflatedStream {
-    /// Inflate every member of `stored` and concatenate them in order.
+    /// Inflate every member of `stored` and concatenate them in order, at
+    /// the default [`InflateLimits`].
     pub fn from_stored(stream_name: &str, stored: &[u8]) -> Self {
+        Self::from_stored_with_limits(stream_name, stored, InflateLimits::default()).0
+    }
+
+    /// [`Self::from_stored`] under `limits`: each member is capped at
+    /// `max_output_bytes` and the members together at
+    /// [`InflateLimits::max_stream_total_bytes`], with what the caps left out.
+    pub fn from_stored_with_limits(
+        stream_name: &str,
+        stored: &[u8],
+        limits: InflateLimits,
+    ) -> (Self, InflateShortfall) {
         let prepared = prepare_stream_for_inflate(stream_name, stored);
-        let chunks = inflate_all_members_with_limits(
+        let (chunks, shortfall) = inflate_all_members_with_limits(
             prepared.as_ref(),
-            InflateLimits::default(),
-            1024 * 1024 * 1024,
+            limits,
+            limits.max_stream_total_bytes(),
         );
         let total: usize = chunks.iter().map(|(_, _, chunk)| chunk.len()).sum();
         let mut concat = Vec::with_capacity(total);
@@ -231,11 +299,14 @@ impl InflatedStream {
             chunk_ends.push(concat.len());
             members.push((*offset, *consumed));
         }
-        Self {
-            concat,
-            chunk_ends,
-            members,
-        }
+        (
+            Self {
+                concat,
+                chunk_ends,
+                members,
+            },
+            shortfall,
+        )
     }
 
     /// The inflated member whose gzip header starts at `offset` of the
@@ -619,13 +690,18 @@ pub fn inflate_at(data: &[u8], offset: usize) -> Result<Vec<u8>> {
 /// that need to preserve the custom prefix on round-trip write can
 /// read it from `data[..prefix_len]`.
 pub fn inflate_at_auto(data: &[u8]) -> Result<(usize, Vec<u8>)> {
+    inflate_at_auto_with_limits(data, InflateLimits::default())
+}
+
+/// [`inflate_at_auto`] under `limits`.
+pub fn inflate_at_auto_with_limits(data: &[u8], limits: InflateLimits) -> Result<(usize, Vec<u8>)> {
     // Heuristic: the first gzip magic in the stream. Family files hit
     // at offset 8; project files sometimes hit at offset 0. We always
     // prefer the observed offset over a hard-coded constant because
     // the hard-coded value panicked on the first project-file Global/
     // History we probed.
     let offset = find_gzip_offsets(data).into_iter().next().unwrap_or(8);
-    let out = inflate_at_with_limits(data, offset, InflateLimits::default())?;
+    let out = inflate_at_with_limits(data, offset, limits)?;
     Ok((offset, out))
 }
 
@@ -667,33 +743,41 @@ pub fn inflate_all_chunks_with_limits(
     aggregate: usize,
 ) -> Vec<Vec<u8>> {
     inflate_all_members_with_limits(data, per_chunk, aggregate)
+        .0
         .into_iter()
         .map(|(_, _, chunk)| chunk)
         .collect()
 }
 
 /// [`inflate_all_chunks_with_limits`], with each chunk's offset in `data`
-/// and the bytes its gzip header and DEFLATE stream take there.
+/// and the bytes its gzip header and DEFLATE stream take there, and what the
+/// limits left out.
 // Tracker: B82.
 fn inflate_all_members_with_limits(
     data: &[u8],
     per_chunk: InflateLimits,
     aggregate: usize,
-) -> Vec<(usize, usize, Vec<u8>)> {
+) -> (Vec<(usize, usize, Vec<u8>)>, InflateShortfall) {
     let mut total: usize = 0;
     let mut results = Vec::new();
+    let mut shortfall = InflateShortfall::default();
     for off in find_gzip_offsets(data) {
         let (chunk, consumed) = match inflate_member_at_with_limits(data, off, per_chunk) {
             Ok(c) => c,
+            Err(Error::DecompressLimitExceeded(_)) => {
+                shortfall.members_over_limit += 1;
+                continue;
+            }
             Err(_) => continue,
         };
         if total.saturating_add(chunk.len()) > aggregate {
+            shortfall.stopped_at_total = true;
             break;
         }
         total += chunk.len();
         results.push((off, consumed, chunk));
     }
-    results
+    (results, shortfall)
 }
 
 /// Inflate every GZIP chunk in `data`, concatenating the outputs.

@@ -3906,7 +3906,7 @@ pub fn build_export_diagnostics_with_limits(
         unattributed_total,
     );
 
-    ExportDiagnostics {
+    let mut diagnostics = ExportDiagnostics {
         schema_version: EXPORT_DIAGNOSTICS_SCHEMA_VERSION,
         mode,
         input: ExportInputDiagnostics {
@@ -3966,7 +3966,53 @@ pub fn build_export_diagnostics_with_limits(
         warnings,
         confidence,
         formats_latest_integrity,
+    };
+    record_unread_streams(&mut diagnostics, rf.unread_streams());
+    diagnostics
+}
+
+/// The skipped-item reason for streams a resource limit kept from being read
+/// whole (#1075); its `classes` map each such stream's name to how many
+/// limits stopped it.
+pub const UNREAD_STREAMS_REASON: &str = "stream_not_read_resource_limit";
+
+/// How each warning about a stream not read whole begins.
+const UNREAD_STREAM_WARNING: &str = "Not read whole: ";
+
+/// Put the streams a resource limit kept from being read whole
+/// ([`crate::RevitFile::unread_streams`], #1075) into `diagnostics`: one
+/// skipped item ([`UNREAD_STREAMS_REASON`]) and a warning per stream, in
+/// place of any an earlier call wrote. The export built every element it
+/// could without them, so what they hold is missing; call this again after
+/// a later step (saved meshes, Revit property sets) has read more streams.
+pub fn record_unread_streams(
+    diagnostics: &mut ExportDiagnostics,
+    unread: &[crate::reader::UnreadStream],
+) {
+    diagnostics
+        .skipped
+        .retain(|item| item.reason != UNREAD_STREAMS_REASON);
+    diagnostics
+        .warnings
+        .retain(|warning| !warning.starts_with(UNREAD_STREAM_WARNING));
+    if !unread.is_empty() {
+        let mut streams = std::collections::BTreeMap::new();
+        for stream in unread {
+            *streams.entry(stream.name.clone()).or_insert(0) += 1;
+        }
+        diagnostics.skipped.push(SkippedExportItem {
+            reason: UNREAD_STREAMS_REASON.into(),
+            count: streams.len(),
+            classes: streams,
+            sample_names: Vec::new(),
+        });
+        for stream in unread {
+            diagnostics.warnings.push(format!(
+                "{UNREAD_STREAM_WARNING}{stream}; the export is incomplete. Raise the limit to read it: rvt-ifc --large-model (or --max-stream-bytes / --max-inflate-bytes), or OpenLimits / RevitFile(max_stream_bytes=..., max_inflate_bytes=...) from Rust and Python."
+            ));
+        }
     }
+    diagnostics.confidence.warning_count = diagnostics.warnings.len();
 }
 
 /// Recount [`ExportDiagnostics::exported`] after changing `model`, as

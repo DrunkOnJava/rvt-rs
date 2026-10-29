@@ -325,6 +325,28 @@ Export modes:
 If strict mode fails, read the diagnostics JSON. The failure may mean the file is
 valid Revit but outside the current rvt-rs support profile.
 
+### Large models
+
+rvt-rs caps what it reads so that a hostile file cannot exhaust memory: 2 GiB
+for the file, 256 MiB for one stream, 256 MiB for one inflated member and 1 GiB
+inflated per stream. Large client models can keep most of their elements in
+one partition stream of 400 MiB to 1 GiB. When a limit stops a stream,
+`rvt-ifc` names it, writes no IFC and exits with status 3:
+
+```text
+rvt-ifc: 1 stream(s) not read whole, so the export is missing what they hold:
+  stream Partitions/189 (422248448 bytes stored) is larger than the stream limit of 268435456 bytes, so what it holds is missing
+```
+
+Re-run with `--large-model` (streams up to 2 GiB, 8 GiB inflated), or set
+`--max-stream-bytes` and `--max-inflate-bytes` yourself. A model whose largest
+partition is 1 GiB stored needs several GB of memory. `--allow-partial` writes
+the incomplete IFC anyway; the diagnostics list the streams it lacks
+(`stream_not_read_resource_limit`). `rvt-gltf` takes the same flags. In Python,
+open the file with `max_stream_bytes` and `max_inflate_bytes`; `write_ifc()`
+raises `ValueError` while a stream is unread. The browser viewer keeps the
+default limits and wasm32's 4 GiB memory ceiling.
+
 Two exports of the same file are the same bytes except for the export time,
 which the IFC header and owner history record. Set `SOURCE_DATE_EPOCH` (Unix
 seconds) to fix it, for example to keep an exported IFC under version control:

@@ -35,3 +35,52 @@ fn is_closed_stdout_pipe(message: &str) -> bool {
             .iter()
             .any(|code| message.contains(code))
 }
+
+/// The `--large-model` preset's per-stream cap: the whole file's cap
+/// ([`crate::reader::DEFAULT_MAX_FILE_BYTES`]). A stream is never larger
+/// than its file, which is already read into memory, so this adds no
+/// allocation an attacker could not force with the file itself.
+pub const LARGE_MODEL_MAX_STREAM_BYTES: u64 = crate::reader::DEFAULT_MAX_FILE_BYTES;
+
+/// The `--large-model` preset's inflate cap, per gzip member and per stream
+/// in total ([`crate::compression::InflateLimits::max_stream_total_bytes`]):
+/// 8 GiB, or the address space on a 32-bit target. Client models with a
+/// 1 GiB stored partition inflate past 1 GiB (#1075).
+pub const LARGE_MODEL_MAX_INFLATE_BYTES: usize = if usize::BITS >= 64 {
+    (8u64 << 30) as usize
+} else {
+    usize::MAX
+};
+
+/// The [`crate::reader::OpenLimits`] a CLI opens its input with: the
+/// defaults, the `--large-model` preset over them, and an explicit
+/// `--max-stream-bytes` / `--max-inflate-bytes` over both.
+pub fn open_limits(
+    max_stream_bytes: Option<u64>,
+    max_inflate_bytes: Option<usize>,
+    large_model: bool,
+) -> crate::reader::OpenLimits {
+    let mut limits = crate::reader::OpenLimits::default();
+    if large_model {
+        limits.max_stream_bytes = LARGE_MODEL_MAX_STREAM_BYTES;
+        limits.inflate_limits.max_output_bytes = LARGE_MODEL_MAX_INFLATE_BYTES;
+    }
+    if let Some(bytes) = max_stream_bytes {
+        limits.max_stream_bytes = bytes;
+    }
+    if let Some(bytes) = max_inflate_bytes {
+        limits.inflate_limits.max_output_bytes = bytes;
+    }
+    limits
+}
+
+/// The lines a CLI prints when a resource limit kept streams from being read
+/// whole (#1075), one per stream, then how to go on.
+pub fn unread_stream_report(unread: &[crate::reader::UnreadStream]) -> Vec<String> {
+    let mut lines: Vec<String> = unread.iter().map(|stream| format!("  {stream}")).collect();
+    lines.push(
+        "  Re-run with --large-model (or a larger --max-stream-bytes / --max-inflate-bytes) to read them, or --allow-partial to write the incomplete output anyway."
+            .to_string(),
+    );
+    lines
+}
