@@ -8,5 +8,11 @@
   to 2027 marker, or a 2015 to 2023 release's class tags) when it is older
   than the saving release (`RevitFile::layout_release`). A schema that
   matches no measured release still reads nothing. Metadata, reports and
-  the export's GlobalIds keep the saving release. Every local file of 2015
-  to 2027 carries its own release's schema and exports byte-identically.
+  the export's GlobalIds keep the saving release; the diagnostics say when
+  a file is read as another release than the one that saved it, and give
+  the support status of the release it is read as. On Autodesk's 58 sample
+  projects of 2015 to 2027 each schema is its own release's and every
+  export is byte-identical (Measure run 40928760469). Not yet measured on
+  an affected file. A file whose `Global/ElemTable` fits neither record
+  size still reads no element records, and the diagnostics now say so;
+  `probe_421_schema_marker` prints the table's fit as counts only.

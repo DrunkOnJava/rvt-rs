@@ -3728,12 +3728,28 @@ pub fn build_export_diagnostics_with_limits(
              nested in doors and windows are left out."
         ));
     }
-    let release_support = bfi
-        .as_ref()
-        .map(|b| crate::capability::release_support(b.version));
-    if let Some((version, support)) = bfi
-        .as_ref()
-        .map(|b| b.version)
+    // #421: a file that kept an older release's schema is read with that
+    // release's readers, so its support is that release's.
+    let read_as = layout.or_else(|| bfi.as_ref().map(|b| b.version));
+    if let (Some(saved), Some(read_as)) = (bfi.as_ref().map(|b| b.version), layout) {
+        if read_as != saved {
+            warnings.push(format!(
+                "Saved by Revit {saved} but keeps Revit {read_as}'s schema, so its records are read \
+                 as Revit {read_as}'s (#421)."
+            ));
+        }
+    }
+    if let Ok(table) = crate::elem_table::layout(rf) {
+        if matches!(table.framing, crate::elem_table::RecordFraming::Implicit) {
+            warnings.push(
+                "Global/ElemTable's records fit neither its 28- nor its 40-byte layout, so the \
+                 declared ElementIds are not known and no element record is read (#421)."
+                    .into(),
+            );
+        }
+    }
+    let release_support = read_as.map(crate::capability::release_support);
+    if let Some((version, support)) = read_as
         .zip(release_support.as_ref())
         .filter(|(_, support)| support.status == "experimental")
     {
