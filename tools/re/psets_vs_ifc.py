@@ -35,6 +35,7 @@ Needs IfcOpenShell (the version tools/ci/requirements-ifc.txt pins).
 
 import collections
 import os
+import re
 import sys
 
 import ifcopenshell
@@ -126,6 +127,13 @@ REVIT_DEFECTS = {
     ("Pset_StairCommon", "WalkingLineOffset"),
 }
 
+# Pset_BuildingCommon.NumberOfStoreys (RE-263, #1097). Revit's exporter
+# before IFC 26.1 writes the number of storeys that contain an element; from
+# 26.1 the number of storeys, IFC4's definition, which rvt-rs writes. An older
+# exporter's value is counted apart where it is the first and not the second.
+STOREY_COUNT = ("Pset_BuildingCommon", "NumberOfStoreys")
+STOREY_COUNT_EXPORTER = (26, 1)
+
 IFC2X3_LENGTHS = {
     ("Pset_FlowSegmentPipeSegment", "Length"),
     ("Pset_FlowSegmentDuctSegment", "Length"),
@@ -145,9 +153,11 @@ IFC2X3_OWN_SET = {("Pset_PipeFittingTypeCommon", "NominalDiameter")}
 
 def properties(path):
     """(object key, set, property) -> value, the keys of every object, each
-    object's entity by key, and whether the file is IFC2X3. An IFC2X3 file's
-    space coverings, and its Pset_QuantityTakeOff.Reference, are keyed under
-    their IFC4 set."""
+    object's entity by key, whether the file is IFC2X3, and its exporter's
+    IFC version (None when its header names none), number of storeys and
+    number of storeys an element is contained in. An IFC2X3 file's space
+    coverings, and its Pset_QuantityTakeOff.Reference, are keyed under their
+    IFC4 set."""
     f = ifcopenshell.open(path)
     ifc2x3 = f.schema == "IFC2X3"
     metres_per_unit = ifcopenshell.util.unit.calculate_unit_scale(f)
@@ -210,7 +220,28 @@ def properties(path):
         for pset in kind.HasPropertySets or ():
             if standard(pset):
                 add(key, pset)
-    return out, objects, entities, ifc2x3
+    exporter = re.search(r"IFC (\d+)\.(\d+)", f.header.file_name.originating_system or "")
+    holding = {
+        rel.RelatingStructure.id()
+        for rel in f.by_type("IfcRelContainedInSpatialStructure")
+        if rel.RelatingStructure.is_a("IfcBuildingStorey") and rel.RelatedElements
+    }
+    storeys = (
+        (int(exporter[1]), int(exporter[2])) if exporter else None,
+        len(f.by_type("IfcBuildingStorey")),
+        len(holding),
+    )
+    return out, objects, entities, ifc2x3, storeys
+
+
+def older_storey_count(storeys, value):
+    exporter, count, holding = storeys
+    return (
+        exporter is not None
+        and exporter < STOREY_COUNT_EXPORTER
+        and holding != count
+        and value == ("IfcInteger", holding)
+    )
 
 
 def main(argv):
@@ -223,7 +254,7 @@ def main(argv):
     if len(args) != 2:
         print(__doc__, file=sys.stderr)
         return 2
-    (ours, our_objects, our_entities, _), (theirs, their_objects, their_entities, their_ifc2x3) = (
+    (ours, our_objects, our_entities, _, _), (theirs, their_objects, their_entities, their_ifc2x3, their_storeys) = (
         properties(args[0]),
         properties(args[1]),
     )
@@ -248,6 +279,7 @@ def main(argv):
     twice = 0
     in_own_set = 0
     defects = collections.Counter()
+    older_storeys = 0
     for (key, pset, prop), value in sorted(theirs.items()):
         if key not in our_objects:
             continue
@@ -262,6 +294,9 @@ def main(argv):
             continue
         if (pset, prop) in REVIT_DEFECTS:
             defects[(pset, prop)] += 1
+            continue
+        if (pset, prop) == STOREY_COUNT and older_storey_count(their_storeys, value):
+            older_storeys += 1
             continue
         row = rows[(pset, prop)]
         row[0] += 1
@@ -286,6 +321,13 @@ def main(argv):
         print(f"  {pset}.{prop}: {n}, equal {equal}, different {different}, missing {missing}")
     for (pset, prop), n in sorted(defects.items()):
         print(f"Revit values known to be wrong, left out (RE-235 §5): {pset}.{prop} {n}")
+    if older_storeys:
+        exporter, count, holding = their_storeys
+        print(
+            f"Revit values its exporter before IFC 26.1 counts otherwise, not scored (RE-263):"
+            f" {'.'.join(STOREY_COUNT)} {older_storeys} (IFC {exporter[0]}.{exporter[1]}:"
+            f" {holding} of {count} storeys contain an element)"
+        )
     if as_quantities:
         print(f"IFC2X3 lengths IFC4 holds as quantities, not scored here: {as_quantities}")
     if twice:
