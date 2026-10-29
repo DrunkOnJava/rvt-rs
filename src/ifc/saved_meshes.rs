@@ -264,30 +264,48 @@ fn ray_crosses(origin: Point, direction: Point, [a, b, c]: [Point; 3]) -> bool {
 /// export writes the two as one solid (on the BIM4LCA office four doors, the
 /// larger shell alone equal to Revit's body). Such a shell adds volume and no
 /// surface, so it is left out. Shells are the triangles joined through
-/// vertices at one position (to 1e-6 ft); a shell enclosing positive volume
+/// vertices within 2e-5 ft of each other (the saved positions of a corner
+/// that several faces share differ in their last digits, far from the
+/// document origin); a shell enclosing positive volume
 /// is inside a larger one when a point just inside each of its faces is
 /// inside that one by ray parity. A shell enclosing no positive volume, such
 /// as a void, is kept. Returns how many shells were left out.
 fn leave_out_contained_shells(vertices: &[Point], triangles: &mut Vec<BrepTriangle>) -> usize {
     const INSET_FEET: f64 = 1e-4;
+    const JOIN_FEET: f64 = 2e-5;
     const DIRECTION: Point = [0.4817, 0.5743, 0.6619];
-    let mut positions: BTreeMap<[i64; 3], usize> = BTreeMap::new();
+    let mut cells: BTreeMap<[i64; 3], usize> = BTreeMap::new();
     let ids: Vec<usize> = vertices
         .iter()
         .map(|v| {
-            let next = positions.len();
-            *positions
-                .entry(v.map(|c| (c * 1e6).round() as i64))
+            let next = cells.len();
+            *cells
+                .entry(v.map(|c| (c / JOIN_FEET).round() as i64))
                 .or_insert(next)
         })
         .collect();
-    let mut parent: Vec<usize> = (0..positions.len()).collect();
+    let mut parent: Vec<usize> = (0..cells.len()).collect();
     fn root(parent: &mut [usize], mut i: usize) -> usize {
         while parent[i] != i {
             parent[i] = parent[parent[i]];
             i = parent[i];
         }
         i
+    }
+    // Positions either side of a cell boundary: join each cell with its
+    // occupied neighbours.
+    for (cell, &id) in &cells {
+        for dx in -1..=1 {
+            for dy in -1..=1 {
+                for dz in -1..=1 {
+                    let near = [cell[0] + dx, cell[1] + dy, cell[2] + dz];
+                    if let Some(&other) = cells.get(&near) {
+                        let (a, b) = (root(&mut parent, id), root(&mut parent, other));
+                        parent[a] = b;
+                    }
+                }
+            }
+        }
     }
     let corners: Vec<[Point; 3]> = triangles
         .iter()
