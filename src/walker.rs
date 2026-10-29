@@ -914,7 +914,8 @@ pub fn read_field_by_type(
             *cursor += consumed;
             InstanceField::Bytes(out)
         }
-        FieldType::Unknown { .. } => {
+        // RE-264: what a flagged field's instance bytes hold is not measured.
+        FieldType::Unknown { .. } | FieldType::Flagged { .. } => {
             // Forward remaining bytes. Callers can inspect them.
             let slice = rem();
             let out = slice.to_vec();

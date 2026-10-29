@@ -1,11 +1,12 @@
 //! CI regression gate for field-type classification.
 //!
-//! Opens every Revit sample in the 11-version reference corpus, parses
+//! Opens every Revit sample in the 12-version reference corpus, parses
 //! its whole page-stripped `Formats/Latest` schema (#410: about 10,000 to
 //! 12,000 fields per release; before #410 only the first 64 KB, 1,000 to
 //! 1,400, were parsed, which is where the old 100% figure came from), and
 //! asserts that no field decodes to `FieldType::Unknown` except the
-//! [`RESIDUAL`] ones, whose encodings are not classified yet. If a decoder
+//! [`RESIDUAL`] ones, whose encodings are not classified yet (Revit 2027's
+//! flagged fields, RE-264, decode to `FieldType::Flagged`). If a decoder
 //! arm regresses, or a corpus file carries a byte pattern we haven't mapped,
 //! this test fails with a concrete per-file breakdown.
 //!
@@ -14,7 +15,7 @@
 //! requires the caller to provide the samples via either:
 //!   - Default path `_corpus/examples/Autodesk` under the crate root, or
 //!   - `RVT_SAMPLES_DIR` env var pointing to a directory that contains
-//!     the 11 `.rfa` files (used by CI when it checks out phi-ag/rvt).
+//!     the 12 `.rfa` files (used by CI when it checks out phi-ag/rvt).
 //!
 //! If the corpus is missing, the test fails — it does NOT silently
 //! skip. This guarantees the regression gate cannot pass vacuously.

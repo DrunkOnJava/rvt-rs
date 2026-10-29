@@ -80,11 +80,16 @@ struct Args {
     /// validated typed model elements.
     #[arg(long, conflicts_with = "placeholder")]
     diagnostic_proxies: bool,
-    /// Draw doors, windows, furniture and other elements whose body would
-    /// be their record's bounding box from the meshes Revit saved for
-    /// display (#255). Slower on large files.
-    #[arg(long, conflicts_with = "placeholder")]
+    /// Draw every element whose body would be its record's bounding box
+    /// (furniture, fixtures, equipment and the rest) from the mesh Revit
+    /// saved for display (#255). Doors and windows are drawn so by default
+    /// on Revit 2023 to 2027. Slower on large files.
+    #[arg(long, conflicts_with_all = ["placeholder", "no_saved_meshes"])]
     saved_meshes: bool,
+    /// Keep doors and windows as their record's bounding box instead of the
+    /// mesh Revit saved for them.
+    #[arg(long, conflicts_with = "placeholder")]
+    no_saved_meshes: bool,
     /// Also write Revit's own property sets, as Revit's exporter does with
     /// "Export Revit property sets": each element's named parameters in one
     /// set per parameter group, and its type's on its type object (RE-210).
@@ -224,16 +229,26 @@ fn run(args: Args) -> anyhow::Result<()> {
     };
     let mut model = result.model;
     let mut diagnostics = result.diagnostics;
-    if args.saved_meshes {
+    if let Some(scope) = saved_mesh_scope(&mut rf, &args) {
         // The saved graphics only improve bodies: when they cannot be read,
         // the export goes ahead with the bodies it has, and says so.
-        match rvt::ifc::saved_meshes::attach(&mut rf, &mut model) {
+        let control = rvt::control::WalkerControl::default();
+        match rvt::ifc::saved_meshes::attach_scoped_with_control(
+            &mut rf, &mut model, scope, &control,
+        ) {
             Ok(report) => {
                 rvt::ifc::recount_exported(&mut diagnostics, &model);
-                eprintln!(
-                    "rvt-ifc: {} of {} bounding-box bodies drawn from their saved graphics ({} triangles); {} kept their box, their saved graphics not decoding whole",
-                    report.replaced, report.candidates, report.triangles, report.partial
-                );
+                if report.candidates > 0 {
+                    let what = if args.saved_meshes {
+                        "bounding-box bodies"
+                    } else {
+                        "door and window bounding-box bodies"
+                    };
+                    eprintln!(
+                        "rvt-ifc: {} of {} {what} drawn from their saved graphics ({} triangles); {} kept their box, their saved graphics not decoding whole",
+                        report.replaced, report.candidates, report.triangles, report.partial
+                    );
+                }
             }
             Err(e) => eprintln!("rvt-ifc: saved graphics not read, bodies unchanged: {e}"),
         }
@@ -341,6 +356,27 @@ fn run(args: Args) -> anyhow::Result<()> {
         );
     }
     Ok(())
+}
+
+/// Which bodies to draw from the saved graphics: every boxed one with
+/// `--saved-meshes`, none with `--no-saved-meshes` or `--placeholder`, and
+/// otherwise doors and windows (the maintainer, 2026-10-29) on the releases
+/// whose saved graphics are read, Revit 2023 to 2027.
+fn saved_mesh_scope(
+    rf: &mut RevitFile,
+    args: &Args,
+) -> Option<rvt::ifc::saved_meshes::SavedMeshScope> {
+    use rvt::ifc::saved_meshes::SavedMeshScope;
+    if args.placeholder || args.no_saved_meshes {
+        return None;
+    }
+    if args.saved_meshes {
+        return Some(SavedMeshScope::All);
+    }
+    let release = rf.basic_file_info().ok()?.version;
+    (2023..=2027)
+        .contains(&release)
+        .then_some(SavedMeshScope::DoorsAndWindows)
 }
 
 fn walker_limits_from_args(args: &Args) -> WalkerLimits {
