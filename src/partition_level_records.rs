@@ -726,9 +726,13 @@ pub fn levels_from_records_and_blocks(
 
 /// Whether a recovered level list is usable as a storey set.
 ///
-/// Fail closed: at least two levels, one block per Level, and no two
+/// Fail closed: at least one level, one block per Level, and no two
 /// building-storey levels sharing an elevation. A partial recovery is not
-/// silently emitted as a smaller building.
+/// silently emitted as a smaller building. A single Level passes here;
+/// [`scan_partition_levels`] keeps it only when the broader
+/// [`scan_partition_level_ids`] finds no other Level either, as on a
+/// one-storey project (R2025 `01_Walls`, whose Revit export has that one
+/// storey).
 ///
 /// A Level that is not a building storey may share a storey's elevation
 /// (#746: BIM4LCA `Housing_Timber_*` has the reference level
@@ -746,7 +750,7 @@ pub fn recovered_levels_are_a_storey_set(
         .map(|record| record.element_id)
         .collect::<BTreeSet<u32>>()
         .len();
-    if levels.len() < 2 || levels.len() != level_records {
+    if levels.is_empty() || levels.len() != level_records {
         return false;
     }
     let mut seen: BTreeSet<u64> = BTreeSet::new();
@@ -984,6 +988,12 @@ pub fn scan_partition_levels(
         .collect();
     let levels = levels_from_records_and_blocks(&records, blocks);
     if !recovered_levels_are_a_storey_set(&records, &levels) {
+        return Ok(Vec::new());
+    }
+    // One Level is the storey set only when no other Level frames anywhere:
+    // a second Level the full recovery missed would otherwise leave its
+    // elements on the wrong storey.
+    if levels.len() == 1 && scan_partition_level_ids(rf, revit_version, declared_ids)?.len() != 1 {
         return Ok(Vec::new());
     }
     Ok(levels)
