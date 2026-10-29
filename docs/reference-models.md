@@ -26,14 +26,14 @@ lists the local-only files with their source and hash, and never fetches them.
 |---|---|---|---|---|
 | magnetar Core Interior | 2024 | MIT, redistributable | IFC4 ReferenceView 1.2, Revit 24.0.20.20 (the full `_slim` export, and a 20 KB element fixture) | 360 walls, 132 doors, 6 windows, 256 columns, 80 slabs, 15 storeys; Revit's GlobalId on 854 elements, 116 rooms and 15 storeys. Run in CI. |
 | magnetar Einhoven | 2023 | MIT, redistributable | none | 2023 element records with no export to score against (walls, windows, materials), the 2023 arc-wall path; pinned by the project-count fixture and the viewer's browser test |
-| IFC-ECS RE1 Architecture, Mechanical, Plumbing, Electrical | 2025 | MIT, redistributable | IFC2X3 CoordinationView 2.0, Revit 26.2.0.20 | 2025 element records; Architecture: 7 walls, 2 slabs, 11 rooms; 2 storeys each; Revit's GlobalIds 73 / 73 / 123 / 12. Run in CI. |
-| Autodesk Snowdon Towers Architectural | 2024 | none declared, local only | IFC4 ReferenceView 1.2, Revit 24.0.20.20 | 5,974 exported, 5,945 of them in Revit's export; 1,078 walls; 18 storeys; wall joins, layers, curtain walls, stairs, roofs |
+| IFC-ECS RE1 Architecture, Mechanical, Plumbing, Electrical | 2025 | MIT, redistributable | IFC2X3 CoordinationView 2.0, Revit 26.2.0.20 (the files are Revit 2025, so this is a cross-release pair) | 2025 element records; Architecture: 7 walls, 2 slabs, 11 rooms; 2 storeys each; Revit's GlobalIds 73 / 73 / 123 / 12. Run in CI. |
+| Autodesk Snowdon Towers Architectural | 2024 | none declared, local only | IFC4 ReferenceView 1.2, Revit 24.0.20.20 | 5,974 exported, 5,945 of them in Revit's export (from #309 and #328, no committed report); 1,078 walls; 18 storeys; wall joins, layers, curtain walls, stairs, roofs |
 | Autodesk Snowdon Towers Structural | 2024 | none declared, local only | VIM | beams along their axes, structural categories |
 | Autodesk Snowdon Towers Plumbing, HVAC, Electrical | 2024 | Autodesk sample, local only; downloaded from Autodesk's "Revit Sample Project Files" page (sha256 `4f80526b…`, `58538599…`, `e50e1b71…`) | VIM (2027 edition) | **held out**: never used to develop the decoder, measured once as they are (`reports/validation/held-out-snowdon-mep-2026-09-27.md`) |
 | MIT 4.567 tutorial house, 2024 and 2025 saves | 2024, 2025 | copyright reserved, local only | none | the same model and ElementIds in two releases; the one shed roof |
 | 255ribeiro Projeto1, `teste_export_2025` | 2025 | none declared, local only | IFC4X3 CoordinationView; IFC4 DesignTransferView 1.0, Revit 25.4 (PTB) | metric projects; IFC export overrides; files saved in `PTB` (RE-123) |
 | 255ribeiro `Exemplo_data`, `modelo_bim` | 2023 | none declared, local only | IFC4 ReferenceView 1.2, Revit 23.1 (`Exemplo_data`); IFC4 DesignTransferView 1.0, Revit 26.2 PTB (`modelo_bim`, exported from the 2023 file by a later Revit) | Revit 2023 element records (RE-81 to RE-122): 37 of 37 and 37 of 45 elements, storeys, types, layers, materials, wall joins, beams; files saved in `PTB` |
-| BIMcollab example, structural model (`02_BIMcollab_Example_STR`) | 2015 | none stated, local only; BIMcollab's public example project (`research/bimcollab-models.tsv`, fetched by Measure with `-f bimcollab=true`, STE1200's pointer) | IFC2X3 CoordinationView 2.0, Revit Architecture 2015, 2014-10-08, rewritten by Solibri's IFC Optimizer; the model was renamed after it | **held out**, measured once before any fix (RE-198): all 241 exported elements by ElementId and class, 3 more written, GlobalIds not in the file (#878, RE-208), 16 footings on no storey (#879); wall faces and layer sets as Revit's |
+| BIMcollab example, structural model (`02_BIMcollab_Example_STR`) | 2015 | none stated, local only; BIMcollab's public example project (`research/bimcollab-models.tsv`, fetched by Measure with `-f bimcollab=true`, STE1200's pointer) | IFC2X3 CoordinationView 2.0, Revit Architecture 2015, 2014-10-08, rewritten by Solibri's IFC Optimizer; the model was renamed after it | held out when measured (RE-198); RE-208 and RE-220 have since used it, so it no longer counts as held out: all 241 exported elements by ElementId, in Revit's class or IFC4's for its IFC2X3 one, 3 more written, GlobalIds not in the file (#878, RE-208), 16 footings on no storey (#879); wall faces and layer sets as Revit's |
 
 ## Candidates, not yet measured here
 
@@ -71,7 +71,7 @@ and fetched by `tools/fetch-autodesk-samples.sh`; the Measure workflow reads
 them with `-f samples=true` (`rvt-info`, the IFC export's diagnostics, and the
 probe given). They are never stored in this repository.
 
-There is no Revit export of any of them, so they measure the record envelope
+No Revit export of any of them is available to a Measure run (Snowdon Towers Architectural's is local only), so they measure the record envelope
 and what a release's reader gives on the same model, not recovery against
 Revit: `reports/element-framing/RE-140-sample-projects-2016-2027.md` compares
 each release's records with 2024's by ElementId. They do not admit a release.
