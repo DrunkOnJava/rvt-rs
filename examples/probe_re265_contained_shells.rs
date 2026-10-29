@@ -7,7 +7,9 @@
 //! smallest shell enclosing positive volume, how many of the points 1e-4 ft
 //! inside its faces each larger shell holds by ray parity along two
 //! directions. Last, each primitive's object index, face tag, render style,
-//! material and owner, and the shell (at 2e-5 ft) its triangles fall in.
+//! material and owner, and the shell (at 2e-5 ft) its triangles fall in;
+//! then each render style's `GStyleElem` record: its category (`m_categoryId`,
+//! a negative id being a built-in category) and its scalar fields.
 //!
 //! Usage:
 //!   cargo run --profile ci --example probe_re265_contained_shells -- MODEL.rvt
@@ -15,7 +17,7 @@
 use std::collections::BTreeMap;
 
 use rvt::RevitFile;
-use rvt::research::native_document::Options;
+use rvt::research::native_document::{self, Options};
 use rvt::research::native_saved_scene::extract_at_detail;
 
 type Point = [f64; 3];
@@ -122,6 +124,7 @@ fn main() -> anyhow::Result<()> {
         ..Default::default()
     };
     let scene = extract_at_detail(&mut rf, &options, 3)?;
+    let mut styles = std::collections::BTreeSet::new();
     for element in &scene.elements {
         let id = element.identity.element_id;
         if !DOORS.contains(&id) {
@@ -218,6 +221,7 @@ fn main() -> anyhow::Result<()> {
                 .filter(|(_, owner)| **owner == index)
                 .map(|(t, _)| shell_of[t])
                 .collect();
+            styles.insert(p.render_style_id);
             println!(
                 "  primitive {index}: object {} face {} style {} material {:?} owner {:?} triangles {} shell {:?}",
                 p.object_index,
@@ -230,5 +234,42 @@ fn main() -> anyhow::Result<()> {
             );
         }
     }
+    let wanted: std::collections::BTreeSet<u64> = styles
+        .iter()
+        .filter_map(|&id| u64::try_from(id).ok())
+        .collect();
+    let options = Options {
+        selected_ids: wanted.clone(),
+        ..Default::default()
+    };
+    native_document::extract(&mut rf, &options, |record| {
+        if !wanted.contains(&record.identity.element_id) {
+            return Ok(());
+        }
+        let Some(graph) = &record.graph else {
+            return Ok(());
+        };
+        for (n, object) in graph.objects.iter().enumerate().take(4) {
+            let scalars: Vec<String> = object
+                .fields
+                .iter()
+                .filter(|(_, v)| !v.is_object() && !v.is_array())
+                .map(|(k, v)| format!("{k}={v}"))
+                .collect();
+            let ids: Vec<String> = object
+                .fields
+                .iter()
+                .filter_map(|(k, v)| v.pointer("/m_id/m_id64").map(|id| format!("{k}={id}")))
+                .collect();
+            println!(
+                "style {} object {n} {}: {} {}",
+                record.identity.element_id,
+                object.class_name,
+                ids.join(" "),
+                scalars.join(" ")
+            );
+        }
+        Ok(())
+    })?;
     Ok(())
 }
