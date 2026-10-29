@@ -369,8 +369,9 @@ rvt-ifc model.rvt -o ours.ifc --diagnostics ours.diagnostics.json --anonymize
 rvt-ifc-compare ours.ifc revit-export.ifc --json compare.json
 ```
 
-Counts by IFC class, storeys and objects only on one side are what a
-[practitioner
+`rvt-ifc-compare` reads each file in its own length unit, so Revit's feet or
+millimetres compare with rvt-rs's metres. Counts by IFC class, storeys and
+objects only on one side are what a [practitioner
 report](https://github.com/DrunkOnJava/rvt-rs/issues/new?template=practitioner_report.yml)
 needs; no model file is.
 
