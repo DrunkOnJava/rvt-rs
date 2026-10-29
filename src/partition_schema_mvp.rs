@@ -2382,6 +2382,25 @@ pub fn instance_box_size_from_fields(fields: &[(String, InstanceField)]) -> Opti
     Some([width?, height?])
 }
 
+/// Fields carrying the extents along X, Y and Z of the solid a door's or
+/// window's symbol cuts where it cuts no loop (RE-225), feet.
+pub const CUT_SOLID_SIZE_FIELDS: [&str; 3] = [
+    "m_cut_solid_width",
+    "m_cut_solid_depth",
+    "m_cut_solid_height",
+];
+
+/// The extents [`CUT_SOLID_SIZE_FIELDS`] record, feet.
+pub fn cut_solid_size_from_fields(fields: &[(String, InstanceField)]) -> Option<[f64; 3]> {
+    let [width, depth, height] = CUT_SOLID_SIZE_FIELDS.map(|wanted| {
+        fields.iter().find_map(|(name, value)| match value {
+            InstanceField::Float { value, .. } if name == wanted => Some(*value),
+            _ => None,
+        })
+    });
+    Some([width?, depth?, height?])
+}
+
 /// Releases a door's or window's cut loop is measured on (RE-215): 2024
 /// (Core Interior) and 2025 (RE1 Architecture, the R2025 models).
 pub const CUT_LOOP_REVIT_VERSIONS: &[u32] = &[2024, 2025];
@@ -2426,7 +2445,7 @@ fn attach_cut_loop_sizes(
         .iter()
         .filter_map(|element| element.id.map(u64::from))
         .collect();
-    let Ok((loops, uncut, drawn_by, hosts)) =
+    let Ok((loops, uncut, drawn_by, hosts, solids)) =
         crate::native_symbol_cuts::instance_cuts_and_symbols(rf, &ids)
     else {
         return;
@@ -2453,6 +2472,30 @@ fn attach_cut_loop_sizes(
             if *bound != native && plain_walls.contains(&native) {
                 *bound = native;
             }
+        }
+    }
+    // RE-225: a door or window set in a wall whose symbol cuts a solid and
+    // no loop carries the solid's extents, which Revit's export cuts its
+    // opening to (the BIM4LCA office's windows).
+    for element in elements.iter_mut() {
+        let Some(id) = element.id.map(u64::from) else {
+            continue;
+        };
+        let in_wall = hosts
+            .get(&id)
+            .and_then(|host| u32::try_from(*host).ok())
+            .is_some_and(|host| walls.contains(&host));
+        let Some(solid) = solids.get(&id).filter(|_| in_wall) else {
+            continue;
+        };
+        for (name, value) in
+            CUT_SOLID_SIZE_FIELDS
+                .iter()
+                .zip([solid.x_feet, solid.y_feet, solid.z_feet])
+        {
+            element
+                .fields
+                .push(((*name).into(), InstanceField::Float { value, size: 8 }));
         }
     }
     for element in elements.iter_mut() {
