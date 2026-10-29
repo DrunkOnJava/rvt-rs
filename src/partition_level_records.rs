@@ -155,7 +155,8 @@ use std::collections::{BTreeMap, BTreeSet};
 /// on two projects in its 32-bit form (RE-107), as 2015 to 2022 write it
 /// (RE-180, RE-181).
 pub const PARTITION_LEVEL_SUPPORTED_REVIT_VERSIONS: &[u32] = &[
-    2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026, 2027,
+    2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026,
+    2027,
 ];
 
 /// The release whose Level records and name blocks carry 32-bit
@@ -852,10 +853,13 @@ pub fn find_level_records_2023(
 /// (RE-181). Their other records carry the later releases' kinds: the 7
 /// Levels of Autodesk's 2017 `rac_basic` hold it, and their 2019 copies
 /// hold the instance kind, under the same ElementIds and bytes otherwise.
+/// The one local Revit 2014 file holds it too; Revit 2011 to 2013 Levels
+/// hold the instance kind, as 2019 and later do: the 5 Levels of Autodesk's
+/// 2013 `rac_advanced` hold it where their 2015 copies hold this (RE-259).
 pub const LEVEL_PLACEMENT_KIND_2015: u32 = 0xffff_ef6f;
 
 /// Every `OST_Levels` record of every partition, first- and
-/// second-prologue. On Revit 2015 to 2018 a Level's own placement kind,
+/// second-prologue. Before Revit 2019 a Level's own placement kind,
 /// [`LEVEL_PLACEMENT_KIND_2015`], reads as the instance kind.
 fn level_records(
     rf: &mut RevitFile,

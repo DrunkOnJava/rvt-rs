@@ -153,6 +153,15 @@
       "user_impact": "Revit 2027 projects export typed elements under Revit's ElementIds, on Revit's storeys, with rooms named and doors and windows in their walls; checked against the same models saved by Revit 2026, not against a Revit 2027 export."
     },
     {
+      "id": "element-records-revit-2011-2014",
+      "area": "elements",
+      "name": "Revit 2011 to 2014 partition element records, read in the 32-bit layout of Revit 2015 to 2023, with storeys, hosts, type names, layer sets and materials",
+      "status": "experimental",
+      "evidence": "basic_file_info (release years from 2008, the build-date release); formats::schema_classes (schemas without GUID lists); partition_element_records_2023::REVIT_32BIT_RELEASES and schema_tags; partition_materials::shading_ids_32; partition_type_materials (2011 to 2013 blocks that hold no map); examples/probe_re259_revit_2011_2014.rs; reports/element-framing/RE-259-revit-2011-2014-element-records.md",
+      "notes": "Files written before Revit 2014 did not open: BasicFileInfo was read only for a year from 2014 on, and a schema written before 2014 has no GUID list after a class's fields. With both read, every local 2008 to 2013 file opens and its schema reads to the end; 2008 and 2009, which state no year, take the build year plus one. Revit 2011 to 2014 frame their element records as 2015 does: on eight local 2011 to 2014 files every record marker has a declared u32 ElementId 52 bytes before it. Each release takes its own tags of the five schema classes RE-180 lists. Two layouts differ from 2015's on 2011 to 2013: a material's shading frame holds two u32 ElementIds between the 0.5 and the pattern slots, and an ElementId and the value-block mark also open blocks that hold no type's map. 2011 to 2013 Levels hold the instance placement kind; 2014 Levels hold 2015's. There is no Revit export of a file before 2015, and every one measured is closed source and measured locally only: the oracle is a local copy of Autodesk's 2013 rac_advanced sample against the pinned 2015 copy. Every ElementId both hold has its class, and 62,071 of 62,153 fields agree; the rest are in the files' own records (a re-divided curtain wall, a shorter wall, two beams' Level references). 2011, 2012 and 2014 have no same-model pair. Revit 2008 to 2010 files open with their metadata and schema, and their element records are not read. Not read, as on 2015 to 2023: design options, layered joins, IFC export overrides, parameters.",
+      "user_impact": "Outside the 1.0 range (2015 to 2027), measured on the contributor's local closed-source files only. Revit 2008 to 2013 files open and report their release, metadata and schema. Revit 2011 to 2014 projects export typed elements under Revit's ElementIds, on Revit's storeys, with doors and windows in their walls and named types and layer sets; checked against one 2013 sample saved by Revit 2015, not against Revit's export."
+    },
+    {
       "id": "element-records-revit-2015-2018",
       "area": "elements",
       "name": "Revit 2015 to 2018 partition element records, read in the 32-bit layout of Revit 2019 to 2023, with storeys, hosts, type names, layer sets and materials",
@@ -739,6 +748,10 @@
     }
   ],
   "releases": [
+    {"release": 2011, "project_capability": "element-records-revit-2011-2014", "family_capabilities": []},
+    {"release": 2012, "project_capability": "element-records-revit-2011-2014", "family_capabilities": []},
+    {"release": 2013, "project_capability": "element-records-revit-2011-2014", "family_capabilities": []},
+    {"release": 2014, "project_capability": "element-records-revit-2011-2014", "family_capabilities": []},
     {"release": 2015, "project_capability": "element-records-revit-2015-2018", "family_capabilities": []},
     {"release": 2016, "project_capability": "element-records-revit-2015-2018", "family_capabilities": ["metadata-partatom-preview", "formats-latest-schema"]},
     {"release": 2017, "project_capability": "element-records-revit-2015-2018", "family_capabilities": ["metadata-partatom-preview", "formats-latest-schema"]},
