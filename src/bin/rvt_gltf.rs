@@ -53,11 +53,17 @@ struct Cli {
     #[arg(long)]
     verbose: bool,
 
-    /// Draw doors, windows, furniture and other elements whose body would
-    /// be their record's bounding box from the meshes Revit saved for
-    /// display (#255). Slower on large files.
-    #[arg(long)]
+    /// Draw every element whose body would be its record's bounding box
+    /// (furniture, fixtures, equipment and the rest) from the mesh Revit
+    /// saved for display (#255). Doors and windows are drawn so by default
+    /// on Revit 2023 to 2027. Slower on large files.
+    #[arg(long, conflicts_with = "no_saved_meshes")]
     saved_meshes: bool,
+
+    /// Keep doors and windows as their record's bounding box instead of the
+    /// mesh Revit saved for them.
+    #[arg(long)]
+    no_saved_meshes: bool,
 
     /// Print progress to stderr as the conversion goes
     /// (`progress: <stage> <done>/<total>`, as `rvt-elements --progress`).
@@ -171,8 +177,22 @@ fn run(cli: &Cli) -> Result<(), Failure> {
             &control,
         )
         .map_err(|e| format!("export {}: {e}", input.display()))?;
-    if cli.saved_meshes {
-        if let Err(e) = rvt::ifc::saved_meshes::attach_with_control(&mut rf, &mut model, &control) {
+    let scope = if cli.no_saved_meshes {
+        None
+    } else if cli.saved_meshes {
+        Some(rvt::ifc::saved_meshes::SavedMeshScope::All)
+    } else {
+        // Doors and windows by default (the maintainer, 2026-10-29), on the
+        // releases whose saved graphics are read.
+        rf.basic_file_info()
+            .ok()
+            .filter(|info| (2023..=2027).contains(&info.version))
+            .map(|_| rvt::ifc::saved_meshes::SavedMeshScope::DoorsAndWindows)
+    };
+    if let Some(scope) = scope {
+        if let Err(e) =
+            rvt::ifc::saved_meshes::attach_scoped_with_control(&mut rf, &mut model, scope, &control)
+        {
             eprintln!("rvt-gltf: saved graphics not read, bodies unchanged: {e}");
         }
     }

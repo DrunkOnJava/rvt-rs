@@ -1601,12 +1601,10 @@ pub fn iter_elements_with_control(
 
     // Partition ArcWall merge (version-gated). Fail closed: only
     // records that pass the standard envelope decoder are emitted.
-    if let Ok(bfi) = rf.basic_file_info() {
-        if let Ok(scan) = crate::partition_arc_walls::scan_partition_arc_walls_with_limits(
-            rf,
-            bfi.version,
-            limits,
-        ) {
+    if let Ok(version) = rf.layout_release() {
+        if let Ok(scan) =
+            crate::partition_arc_walls::scan_partition_arc_walls_with_limits(rf, version, limits)
+        {
             for wall in scan.walls {
                 let typed =
                     crate::elements::arc_wall::ArcWall::from_parts(wall.record, wall.trailer);
@@ -1624,7 +1622,7 @@ pub fn iter_elements_with_control(
         // loops / 2024 ArcWallRectOpening index. Fail closed — no
         // invented Door/Window typed success.
         if let Ok(mvp) =
-            crate::partition_schema_mvp::recover_partition_schema_mvp(rf, bfi.version, limits)
+            crate::partition_schema_mvp::recover_partition_schema_mvp(rf, version, limits)
         {
             for decoded in mvp.into_elements() {
                 if let Some(id) = decoded.id {
