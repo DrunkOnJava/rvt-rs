@@ -99,9 +99,9 @@ built-in IFC4 export setups do, and `--no-base-quantities` leaves them out,
 as Revit's exporter does with "Export base quantities" off (RE-242).
 
 It is not a converter for arbitrary models: most parameters, family
-geometry (except the experimental `--saved-meshes` option, which draws a
-Revit 2024, 2025 or 2026 family instance from the mesh Revit saved for its
-display, RE-78), roofs over a T or U footprint and roofs by extrusion outside Revit 2025, the height of
+geometry (doors and windows are drawn from the mesh Revit saved for their
+display by default, and any other family instance with the experimental
+`--saved-meshes` option, RE-78), roofs over a T or U footprint and roofs by extrusion outside Revit 2025, the height of
 walls Revit draws cut (78 of the BIM4LCA office's, #1067), the boundaries of
 rooms whose stored solid does not close, opening profiles and phase
 filtering are not decoded, and rvt-rs does not edit
@@ -900,8 +900,8 @@ checkout and pinned by sha256 (#257): `Revit_IFC5_Einhoven.rvt` (2023,
 913 KB) and `2024_Core_Interior.rvt` (2024, 33.7 MB). Staging refuses a file
 whose bytes do not match the catalog hash, and both cards are gated by
 Playwright. Viewer File Status lists
-recovered storey names, material name samples, and an honest Parameters
-row (empty until AProperty* host joins). The scene tree groups each
+recovered storey names, material name samples, and a Parameters row that
+counts the Revit parameter values written into the export's property sets. The scene tree groups each
 storey's elements by category, type name first, with curtain-wall and
 stair parts under their whole. Elements reach their storey from the
 Level their record names (RE-59, RE-60): all 970 of Core Interior's

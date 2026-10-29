@@ -626,7 +626,7 @@
       "name": "AProperty* host parameter joins",
       "status": "unsupported",
       "evidence": "Production iter_elements / Global/Latest candidate scans; #35 idle on magnetar corpora",
-      "notes": "Honest empty Parameters row until carriers and host joins are proven.",
+      "notes": "The Global/Latest AProperty* carriers are still not joined to host elements. Parameters are read from the native records instead (native-element-parameters, RE-207), so the viewer's Parameters row counts the values written.",
       "user_impact": "Element parameters are not exposed as a completed feature."
     },
     {
@@ -643,8 +643,8 @@
       "area": "ifc",
       "name": "Element and room schedules as CSV (rvt-schedule, viewer, Python)",
       "status": "partial",
-      "evidence": "ifc::schedule_csv unit tests; tests/rvt_schedule_cli.rs (tier-1 shape; 2024_Core_Interior 970 elements / 360 walls / 132 hosted doors / 6 windows / 256 columns / 116 rooms); viewer Playwright download test",
-      "notes": "One row per decoded element or room, so coverage is exactly the decode coverage: typed rows on Revit 2024 project files with element records, scaffold-only elsewhere. Unknown values are empty cells. No room area: room bodies are record bounding boxes, not boundaries.",
+      "evidence": "tests/rvt_schedule_cli.rs (tier-1 shape; 2024_Core_Interior 970 elements / 360 walls / 132 hosted doors / 6 windows / 256 columns / 116 rooms); viewer Playwright download test",
+      "notes": "One row per decoded element or room, so coverage is exactly the decode coverage: typed rows on every release whose element records are read (Revit 2023 to 2025; 2015 to 2022, 2026 and 2027 experimentally), scaffold-only elsewhere. Unknown values are empty cells. A room's area is its outline's where the room's stored solid was read (RE-101), and empty where the room keeps its box.",
       "user_impact": "A spreadsheet of walls, doors, windows, columns, slabs and rooms without Revit, on files whose elements decode."
     },
     {
