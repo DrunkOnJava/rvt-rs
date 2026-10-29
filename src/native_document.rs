@@ -429,7 +429,7 @@ fn extract_records(
     definitions: &crate::native_parameter_definitions::Registry,
     mut emit: impl FnMut(Record) -> Result<()>,
 ) -> Result<Summary> {
-    let version = file.basic_file_info()?.version;
+    let version = file.layout_release()?;
     ensure!(
         matches!(version, 2023..=2027),
         "native record framing is unvalidated for Revit {version}"

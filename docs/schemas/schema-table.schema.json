@@ -320,6 +320,31 @@
               }
             }
           }
+        },
+        {
+          "type": "object",
+          "required": [
+            "Flagged"
+          ],
+          "properties": {
+            "Flagged": {
+              "type": "object",
+              "required": [
+                "flags",
+                "base"
+              ],
+              "properties": {
+                "flags": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 255
+                },
+                "base": {
+                  "$ref": "#/$defs/field_type"
+                }
+              }
+            }
+          }
         }
       ]
     }

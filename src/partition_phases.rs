@@ -104,7 +104,7 @@ pub fn find_phase_names(
 /// The file's phases by ElementId. An id whose frames disagree is dropped.
 /// Empty on a release the frame is not measured on.
 pub fn phase_names(rf: &mut RevitFile) -> Result<BTreeMap<u32, String>> {
-    let version = rf.basic_file_info()?.version;
+    let version = rf.layout_release()?;
     let Some(header) = crate::partition_names::element_data_header(version)
         .filter(|_| PHASE_SUPPORTED_REVIT_VERSIONS.contains(&version))
     else {

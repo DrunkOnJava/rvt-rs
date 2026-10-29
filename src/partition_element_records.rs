@@ -524,7 +524,9 @@ pub fn schema_bbox_marker(rf: &mut RevitFile) -> Option<[u8; 8]> {
 /// A file whose schema gives another marker than the constant is not
 /// scanned (fail closed). One whose schema does not parse keeps the
 /// constant, and a release with no constant needs the schema. On every
-/// 2024 to 2027 file measured the two agree (#421).
+/// 2024 to 2027 file measured the two agree (#421). The readers pass
+/// [`RevitFile::layout_release`], so a file that kept an older release's
+/// schema is checked against that release's constant.
 pub fn file_bbox_marker(rf: &mut RevitFile, revit_version: u32) -> Option<[u8; 8]> {
     if !supports_revit_version(revit_version) {
         return None;
@@ -535,6 +537,31 @@ pub fn file_bbox_marker(rf: &mut RevitFile, revit_version: u32) -> Option<[u8; 8
         (Some(schema), _) => Some(schema),
         (None, measured) => measured,
     }
+}
+
+/// The release whose schema the file carries: the 2024 to 2027 release
+/// whose [`bbox_marker`] the schema gives, or the 2015 to 2023 release whose
+/// [`schema_tags`](crate::partition_element_records_2023::schema_tags) it
+/// has. `None` when the schema does not parse or matches no release
+/// measured.
+///
+/// A file can carry an older release's schema than the release that saved
+/// it: of 49 project files saved by Revit 2024 to 2027 in a field report,
+/// 25 carried the marker of 2022, 2023, 2024 or 2025, and their record
+/// histories list that release (#421). Their records take that release's
+/// layout, so [`RevitFile::layout_release`] reads them as that release.
+pub fn schema_release(rf: &mut RevitFile) -> Option<u32> {
+    use crate::partition_element_records_2023::{
+        REVIT_32BIT_RELEASES, file_schema_tags, schema_tags,
+    };
+    let marker = schema_bbox_marker(rf)?;
+    if let Some(release) = (2024..=2027).find(|&release| bbox_marker(release) == Some(marker)) {
+        return Some(release);
+    }
+    let tags = file_schema_tags(rf)?;
+    REVIT_32BIT_RELEASES
+        .clone()
+        .find(|&release| schema_tags(release) == Some(tags))
 }
 
 /// A decoded partition element-record header.
@@ -1159,7 +1186,7 @@ fn is_symbol_frame(buf: &[u8], offset: usize) -> bool {
 /// proven. `RevitFile::second_prologue_ids` memoises it.
 pub fn compute_second_prologue_ids(rf: &mut RevitFile) -> SecondPrologueIds {
     let mut out = SecondPrologueIds::new();
-    let Ok(version) = rf.basic_file_info().map(|b| b.version) else {
+    let Ok(version) = rf.layout_release() else {
         return out;
     };
     let Some(marker) = file_bbox_marker(rf, version) else {

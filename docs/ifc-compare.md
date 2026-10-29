@@ -25,8 +25,8 @@ Dimensions compared:
 | Dimension | Source |
 |---|---|
 | Entity-type counts | DATA-section `TYPE(...)` histogram |
-| Storeys | `IfcBuildingStorey` Name + elevation |
-| Bounding box | Axis-aligned extents of `IfcCartesianPoint` |
+| Storeys | `IfcBuildingStorey` Name + elevation, in metres by each file's own `LENGTHUNIT` |
+| Bounding box | Axis-aligned extents of `IfcCartesianPoint`, in metres the same way (local coordinates, not placed) |
 | Objects | Product entities (`IfcWall`, `IfcDoor`, …) Name |
 | Materials | Distinct `IfcMaterial` names |
 | Property keys | Distinct `IfcPropertySingleValue` Name values |
