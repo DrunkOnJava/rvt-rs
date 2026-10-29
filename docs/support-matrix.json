@@ -757,6 +757,9 @@
     }
   ],
   "releases": [
+    {"release": 2008, "project_capability": "element-records-revit-2008-2010", "family_capabilities": []},
+    {"release": 2009, "project_capability": "element-records-revit-2008-2010", "family_capabilities": []},
+    {"release": 2010, "project_capability": "element-records-revit-2008-2010", "family_capabilities": []},
     {"release": 2011, "project_capability": "element-records-revit-2011-2014", "family_capabilities": []},
     {"release": 2012, "project_capability": "element-records-revit-2011-2014", "family_capabilities": []},
     {"release": 2013, "project_capability": "element-records-revit-2011-2014", "family_capabilities": []},
