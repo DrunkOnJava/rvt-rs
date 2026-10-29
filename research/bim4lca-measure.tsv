@@ -3,8 +3,12 @@
 # VTT's ARCH.zip under CC BY-SA 4.0 (https://cris.vtt.fi/en/publications/bim-files-to-download/).
 # Read by byte range by tools/ci/fetch-bim4lca.py and never stored; same format as
 # research/bim4lca-models.tsv, whose archive row this repeats. Entries measured 2026-10-18.
+# A mirror row names another URL that serves the same archive, tried before the archive's
+# own: the CDN that URL redirects to (2026-10-29), added after the first host timed out on the
+# runners.
 # kind	path	sha256	bytes
 archive	https://www.nordicsustainableconstruction.com/Media/638593249820446520/ARCH.zip	025e33fb0c0ce3b7a869f4177a0862918cc987408f4cd34e58a0eabd8d9917c4	1579459850
+mirror	https://cdn2.gopublic.dk/socialboligstyrelsennordic/Media/638593249820446520/ARCH.zip	025e33fb0c0ce3b7a869f4177a0862918cc987408f4cd34e58a0eabd8d9917c4	1579459850
 entry	ARCH/REVIT/ARK_NordicLCA_Office_Concrete_As-Built.rvt	747120005b4b35c7cb66ec61158aab50ded95e052e172cb387b86cd15b31d906	64622592
 entry	ARCH/REVIT/ARK_NordicLCA_Office_Concrete_BuildingPermit.rvt	1c12c2058128315edbd65a8bf97f60da971aee8625f21233b8477d9c6165c1d1	78319616
 entry	ARCH/IFC/ARK_NordicLCA_Office_Concrete_As-Built_Revit.ifc	b2f530eba8b4424c4542b98e9a2c7bbcc726367f21b2740f3074e4a6ce917382	83761311
