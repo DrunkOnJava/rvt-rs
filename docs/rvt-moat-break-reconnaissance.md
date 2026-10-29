@@ -2259,3 +2259,7 @@ rvt-rs's walls differ from Revit's export at one end only: on the BIM4LCA office
 ## Addendum — RE-261 bits 7 and 12 of the flag word (2026-10-28)
 
 Checked against Revit's exports of Core Interior, the four RE1 models and puzzbobb's 23 R2025 models, bit 12 of the element record's flag word at `+0x46` is set on exactly the rooms Revit exports as an `IfcSpace` (139 of 139, and on none of the 163 it leaves out) and on exactly the walls with an end joined in Revit's export (8 of 8 on RE1 Architecture, the only export that writes wall joins). Bit 7 is set on every type record and no other (144 of 144, as RE-128 found). Two rows of puzzbobb's table on #223 reproduce; their `WallSweep` reading of bit 7 is not testable on these models, and the rest of their table stays unverified (`reports/element-framing/RE-261-flag-word-bits.md`).
+
+## Addendum — RE-262 "Export to IFC" is not why Revit leaves out RE1 Plumbing's tank and the office's permit column (2026-10-29)
+
+Revit's exporter reads `IFC_EXPORT_ELEMENT` (−1019012) and `IFC_EXPORT_ELEMENT_TYPE` (−1019013) first, and rvt-rs reads neither, so an element set to No would explain an element rvt-rs writes and Revit's export leaves out. Neither parameter is saved on RE1 Plumbing's tank 442378 or the BIM4LCA office permit model's column 1927742, nor on any other element of those models, RE1 Architecture or Core Interior (Measure run 40944230277); 24 office instances as built carry −1019012 with value 1. A measured negative (`reports/element-framing/RE-262-export-to-ifc-parameter.md`).

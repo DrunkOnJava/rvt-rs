@@ -4,9 +4,11 @@
 Usage: fetch-bim4lca.py <pins.tsv> <target_dir>
        fetch-bim4lca.py --pin <pins.tsv> <entry>...
 
-The pins (research/bim4lca-models.tsv) give the archive's URL and byte count
-and, per entry, its path in the archive and the sha256 and byte count of the
-file it holds. Only those entries are read: the archive's central directory
+The pins (research/bim4lca-models.tsv) give the archive's URL and byte count,
+any mirrors serving the same archive, and, per entry, its path in the archive
+and the sha256 and byte count of the file it holds. Mirrors are tried first,
+then the archive's own URL; a host that cannot be reached passes to the next,
+and every byte is still checked against the pins. Only those entries are read: the archive's central directory
 gives each one's offset, and range requests fetch it, so a run downloads the
 models and not the 1.58 GB archive. Each file lands in target_dir under its
 own name and is checked against its pins; one already there with the right
@@ -44,19 +46,25 @@ class Unreachable(Exception):
     pass
 
 
-def read_pins(path: Path) -> tuple[str, int, list[tuple[str, str, int]]]:
-    archive, entries = None, []
+def read_pins(path: Path) -> tuple[list[str], int, list[tuple[str, str, int]]]:
+    """The URLs to try in order (mirrors, then the archive's), its byte
+    count, and the entries."""
+    archive, mirrors, entries = None, [], []
     for line in path.read_text().splitlines():
         if not line.strip() or line.startswith("#"):
             continue
         kind, name, sha, size = line.split("\t")
         if kind == "archive":
             archive = (name, int(size))
+        elif kind == "mirror":
+            mirrors.append((name, int(size)))
         elif kind == "entry":
             entries.append((name, sha, int(size)))
     if archive is None:
         raise SystemExit(f"error: {path} names no archive")
-    return archive[0], archive[1], entries
+    if any(size != archive[1] for _, size in mirrors):
+        raise SystemExit(f"error: a mirror in {path} pins another byte count than the archive")
+    return [url for url, _ in mirrors] + [archive[0]], archive[1], entries
 
 
 def fetch(url: str, start: int, end: int, total: int) -> bytes:
@@ -128,6 +136,18 @@ def central_directory(url: str, total: int) -> dict[str, tuple[int, int, int, in
     return entries
 
 
+def reachable(urls: list[str], total: int) -> tuple[str, dict[str, tuple[int, int, int, int]]]:
+    """The first of urls that answers, with the archive's central directory."""
+    last = None
+    for url in urls:
+        try:
+            return url, central_directory(url, total)
+        except Unreachable as error:
+            print(f"  [unreachable] {error}", flush=True)
+            last = error
+    raise last
+
+
 def extract(url: str, total: int, entry: tuple[int, int, int, int], out: Path) -> tuple[str, int]:
     method, csize, usize, lho = entry
     if method not in (0, 8):
@@ -163,10 +183,10 @@ def sha256(path: Path) -> str:
 def main(argv: list[str]) -> int:
     pin_mode = argv[:1] == ["--pin"]
     pins = Path(argv[1] if pin_mode else argv[0])
-    url, total, pinned = read_pins(pins)
+    urls, total, pinned = read_pins(pins)
     try:
         if pin_mode:
-            directory = central_directory(url, total)
+            url, directory = reachable(urls, total)
             for name in argv[2:]:
                 if name not in directory:
                     raise Stale(f"{name} is not in the archive")
@@ -188,7 +208,7 @@ def main(argv: list[str]) -> int:
                 missing.append((name, sha, size, out))
         if not missing:
             return 0
-        directory = central_directory(url, total)
+        url, directory = reachable(urls, total)
         for name, sha, size, out in missing:
             if name not in directory:
                 raise Stale(f"{name} is not in the archive")
