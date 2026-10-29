@@ -77,20 +77,51 @@ fn parse_export_quality_mode(mode: &str) -> PyResult<ifc::ExportQualityMode> {
 fn write_ifc_with_quality_mode(
     rf: &mut RustRevitFile,
     mode: ifc::ExportQualityMode,
+    allow_partial: bool,
 ) -> PyResult<String> {
-    write_ifc_with_quality_mode_and_limits(rf, mode, walker::WalkerLimits::default())
+    write_ifc_with_quality_mode_and_limits(rf, mode, walker::WalkerLimits::default(), allow_partial)
 }
 
 fn write_ifc_with_quality_mode_and_limits(
     rf: &mut RustRevitFile,
     mode: ifc::ExportQualityMode,
     walker_limits: walker::WalkerLimits,
+    allow_partial: bool,
 ) -> PyResult<String> {
     let result = ifc::RvtDocExporter
         .export_with_diagnostics_mode_and_limits(rf, mode, walker_limits)
         .map_err(to_py_val)?;
+    // #1075: a stream a resource limit kept from being read leaves the
+    // export without what it holds; refuse unless the caller accepts that.
+    if !allow_partial && !rf.unread_streams().is_empty() {
+        let mut message =
+            String::from("part of the file was not read, so the IFC would be incomplete:");
+        for stream in rf.unread_streams() {
+            message.push_str(&format!("\n  {stream}"));
+        }
+        message.push_str(
+            "\nOpen the file with a larger max_stream_bytes / max_inflate_bytes to read it, or pass allow_partial=True to write the incomplete IFC.",
+        );
+        return Err(PyValueError::new_err(message));
+    }
     mode.validate(&result.diagnostics).map_err(to_py_val)?;
     Ok(ifc::write_step(&result.model))
+}
+
+fn unread_streams_to_list<'py>(
+    py: Python<'py>,
+    unread: &[rvt::reader::UnreadStream],
+) -> PyResult<Bound<'py, PyList>> {
+    let list = PyList::empty(py);
+    for stream in unread {
+        let entry = PyDict::new(py);
+        entry.set_item("name", stream.name.as_str())?;
+        entry.set_item("stored_bytes", stream.stored_bytes)?;
+        entry.set_item("kind", stream.kind.as_str())?;
+        entry.set_item("limit", stream.limit)?;
+        list.append(entry)?;
+    }
+    Ok(list)
 }
 
 /// Shared serialiser: ADocumentInstance → Python dict. Used by the
@@ -343,6 +374,17 @@ impl PyRevitFile {
     /// All OLE stream paths (sorted, `/`-separated on every OS).
     fn stream_names(&self) -> Vec<String> {
         self.inner.stream_names()
+    }
+
+    /// The streams a resource limit kept from being read whole so far
+    /// (#1075), each a dict with `name`, `stored_bytes`, `kind`
+    /// (`"stream_too_large"`, `"inflated_member_too_large"` or
+    /// `"inflated_total_too_large"`) and `limit`. Empty when nothing was
+    /// cut. When not, everything read from this file is missing what those
+    /// streams hold; open it again with a larger `max_stream_bytes` /
+    /// `max_inflate_bytes`.
+    fn unread_streams<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyList>> {
+        unread_streams_to_list(py, self.inner.unread_streams())
     }
 
     /// Raw bytes of the named OLE stream. Accepts either a
@@ -676,10 +718,19 @@ impl PyRevitFile {
     /// On a file with no recovered elements, such as the synthetic
     /// fixtures, only `scaffold` succeeds; the stronger modes raise
     /// `ValueError`.
-    #[pyo3(signature = (mode = "scaffold"))]
-    fn write_ifc(&mut self, mode: &str) -> PyResult<String> {
+    ///
+    /// Raises `ValueError` when a resource limit kept part of the file from
+    /// being read (`unread_streams()` lists it), unless
+    /// `allow_partial=True`.
+    #[pyo3(signature = (mode = "scaffold", allow_partial = false))]
+    fn write_ifc(&mut self, mode: &str, allow_partial: bool) -> PyResult<String> {
         let mode = parse_export_quality_mode(mode)?;
-        write_ifc_with_quality_mode_and_limits(&mut self.inner, mode, self.walker_limits)
+        write_ifc_with_quality_mode_and_limits(
+            &mut self.inner,
+            mode,
+            self.walker_limits,
+            allow_partial,
+        )
     }
 
     /// Spreadsheet schedule of the decoded model as CSV text
@@ -803,13 +854,15 @@ impl PyRevitFile {
 
 /// One-shot helper: open a Revit file, run the document-level IFC
 /// exporter, return the STEP string. Equivalent to
-/// `rvt.RevitFile(path).write_ifc()`.
+/// `rvt.RevitFile(path).write_ifc(mode, allow_partial)`: raises
+/// `ValueError` when a resource limit kept part of the file from being read,
+/// unless `allow_partial=True`.
 #[pyfunction]
-#[pyo3(signature = (path, mode = "scaffold"))]
-fn rvt_to_ifc(path: &str, mode: &str) -> PyResult<String> {
+#[pyo3(signature = (path, mode = "scaffold", allow_partial = false))]
+fn rvt_to_ifc(path: &str, mode: &str, allow_partial: bool) -> PyResult<String> {
     let mut rf = RustRevitFile::open(path).map_err(to_py_io)?;
     let mode = parse_export_quality_mode(mode)?;
-    write_ifc_with_quality_mode(&mut rf, mode)
+    write_ifc_with_quality_mode(&mut rf, mode, allow_partial)
 }
 
 /// Document identity for the file at `path` without loading the whole

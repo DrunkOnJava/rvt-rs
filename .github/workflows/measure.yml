@@ -194,8 +194,12 @@ jobs:
           workspaces: measured
           shared-key: measure
           # Runs dispatched from a feature branch saved caches no other run
-          # could restore (C2).
-          save-if: ${{ github.ref == 'refs/heads/main' }}
+          # could restore (C2). A run from main that measures other code
+          # (`ref` or `base` naming a branch, a SHA or a contributor's pull
+          # request) does not save either: that code's build scripts run
+          # here, and a cache they wrote would be restored by every later
+          # main run.
+          save-if: ${{ github.ref == 'refs/heads/main' && (matrix.side == 'base' && (inputs.base == '' || inputs.base == 'main') || matrix.side != 'base' && inputs.ref == '') }}
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.12"
@@ -428,7 +432,8 @@ jobs:
             head
             base
           shared-key: measure
-          save-if: ${{ github.ref == 'refs/heads/main' }}
+          # As in the measure job: only main's own code saves the cache.
+          save-if: ${{ github.ref == 'refs/heads/main' && inputs.ref == '' && (inputs.base == '' || inputs.base == 'main') }}
       - name: Build both
         run: |
           (cd head && git log -1 --format='%H %s' > ../head-commit.txt && cargo build --profile ci --bin rvt-ifc)
