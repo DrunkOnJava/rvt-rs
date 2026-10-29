@@ -185,6 +185,14 @@ def main():
             f"  {tag} {cls} '{object_type}': volume ratio {ratio:.4f}, Revit's vertices to rvt-rs's surface"
             f" {to_ours:.4g} ft, rvt-rs's to Revit's {to_ref:.4g} ft"
         )
+    # Bodies whose surfaces agree but whose enclosed volumes do not, which
+    # the distance ranking above does not reach.
+    outliers = sorted((abs(s[4] - 1), s) for s in scored if abs(s[4] - 1) > 0.01)
+    for _, (far, tag, cls, object_type, ratio, to_ours, to_ref) in outliers[-15:]:
+        print(
+            f"  volume {tag} {cls} '{object_type}': volume ratio {ratio:.4f},"
+            f" farthest vertex {far:.4g} ft"
+        )
     return 0
 
 
