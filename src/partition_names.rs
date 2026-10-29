@@ -228,7 +228,7 @@ fn named_ids_in(
 /// `RevitFile::element_names` memoises it.
 pub fn compute_element_names(rf: &mut RevitFile) -> Result<ElementNames> {
     let mut out = ElementNames::default();
-    let version = rf.basic_file_info()?.version;
+    let version = rf.layout_release()?;
     let Some(marker) = file_bbox_marker(rf, version) else {
         return Ok(out);
     };

@@ -183,7 +183,7 @@ pub fn scan_connector_pairs(
     rf: &mut RevitFile,
     curves: &BTreeSet<u64>,
 ) -> Result<Vec<ConnectorPair>> {
-    if curves.is_empty() || !supports_revit_version(rf.basic_file_info()?.version) {
+    if curves.is_empty() || !supports_revit_version(rf.layout_release()?) {
         return Ok(Vec::new());
     }
     let classes = rf.memoised_schema_classes()?;
@@ -248,7 +248,7 @@ pub fn scan_fitting_pairs(
     fittings: &BTreeSet<u64>,
     others: &BTreeSet<u64>,
 ) -> Result<Vec<ConnectorPair>> {
-    if fittings.is_empty() || !supports_revit_version(rf.basic_file_info()?.version) {
+    if fittings.is_empty() || !supports_revit_version(rf.layout_release()?) {
         return Ok(Vec::new());
     }
     let count = LIST_ENTRIES.to_le_bytes();

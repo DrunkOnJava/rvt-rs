@@ -100,6 +100,27 @@ pub fn schema_tags(revit_version: u32) -> Option<SchemaTags32> {
     }
 }
 
+/// The [`SchemaTags32`] of the file's own schema, or `None` when the
+/// schema does not parse or lacks one of the classes. On a file saved by
+/// the release it was made in they are that release's [`schema_tags`].
+pub fn file_schema_tags(rf: &mut RevitFile) -> Option<SchemaTags32> {
+    let classes = rf.memoised_schema_classes().ok()?;
+    let tag = |name: &str| {
+        classes
+            .classes
+            .iter()
+            .find(|c| c.name == name)
+            .map(|c| c.tag)
+    };
+    Some(SchemaTags32 {
+        cell_list: tag("CellList")?,
+        material: tag("Material")?,
+        physical_param_set: tag("PhysicalParamSet")?,
+        pattern_helper: tag("PatternHelper")?,
+        vertical_regions_structure: tag("VerticalRegionsStructure")?,
+    })
+}
+
 /// Bytes from the ElementId to the marker.
 const ID_BEFORE_MARKER: usize = 52;
 /// Bytes from the `BuiltInCategory` to the marker.

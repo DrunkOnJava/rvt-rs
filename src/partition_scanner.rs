@@ -340,7 +340,7 @@ pub fn scan_partitions_with_control(
 
 /// Convenience: read BasicFileInfo version, then scan with defaults.
 pub fn iter_partition_candidates(rf: &mut RevitFile) -> Result<PartitionScan> {
-    let version = rf.basic_file_info()?.version;
+    let version = rf.layout_release()?;
     scan_partitions(rf, version, &ScanOptions::default())
 }
 
