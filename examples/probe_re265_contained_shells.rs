@@ -8,7 +8,7 @@
 //! inside its faces each larger shell holds by ray parity along two
 //! directions. Last, each primitive's object index, face tag, render style,
 //! material and owner, and the shell (at 2e-5 ft) its triangles fall in;
-//! then each render style's `GStyleElem` record: its category (`m_categoryId`,
+//! each saved-graphics object's signed volume; then each render style's record: its category (`m_categoryId`,
 //! a negative id being a built-in category) and its scalar fields.
 //!
 //! Usage:
@@ -206,6 +206,18 @@ fn main() -> anyhow::Result<()> {
                     inside([0.1301, -0.7127, 0.6893])
                 );
             }
+        }
+        let mut by_object: BTreeMap<usize, (usize, f64)> = BTreeMap::new();
+        for (t, &owner) in primitive_of.iter().enumerate() {
+            let [a, b, c] = triangles[t];
+            let entry = by_object
+                .entry(element.meshes.primitives[owner].object_index)
+                .or_default();
+            entry.0 += 1;
+            entry.1 += dot(a, cross(b, c)) / 6.0;
+        }
+        for (object, (count, signed)) in &by_object {
+            println!("  object {object}: {count} triangles, signed volume {signed:.4} cubic ft");
         }
         let groups = shells(&triangles, 2e-5);
         let mut shell_of = vec![0usize; triangles.len()];
