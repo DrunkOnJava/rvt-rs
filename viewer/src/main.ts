@@ -2519,6 +2519,16 @@ function classifyFailureMode(diagnostics: ExportDiagnostics): FailureModeStatus 
   const diagnosticCandidates = decoded.diagnostic_proxy_candidates ?? 0;
   const level = confidence.level ?? 'unknown';
 
+  // #1075: a stream over the reader's resource limits was not read, so the
+  // model is missing what it holds, however many elements came through.
+  const unreadStreams = warnings.filter((warning) => warning.startsWith('Not read whole: ')).length;
+  if (unreadStreams > 0) {
+    return {
+      kind: 'bad',
+      title: 'Part of the file not read',
+      summary: `${unreadStreams} stream${unreadStreams === 1 ? '' : 's'} over the browser's resource limits, so the model is incomplete; rvt-ifc --large-model reads it`,
+    };
+  }
   // The releases rvt-rs reads, 2015 to 2022 and 2027 experimentally, as rvt-inspect has it.
   if (typeof revitVersion === 'number' && (revitVersion < 2015 || revitVersion > 2027)) {
     return {
