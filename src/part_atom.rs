@@ -328,10 +328,10 @@ impl PartAtom {
 }
 
 fn family_types(xml: &str) -> Result<Vec<FamilyType>> {
-    fn local(name: &[u8]) -> &[u8] {
-        name.rsplit(|&b| b == b':').next().unwrap_or(name)
+    fn local(name: &str) -> &str {
+        name.rsplit(':').next().unwrap_or(name)
     }
-    fn attribute(e: &quick_xml::events::BytesStart<'_>, key: &[u8]) -> Option<String> {
+    fn attribute(e: &quick_xml::events::BytesStart<'_>, key: &str) -> Option<String> {
         e.attributes().find_map(|a| {
             let a = a.ok()?;
             if a.key.into_inner() != key {
@@ -359,8 +359,8 @@ fn family_types(xml: &str) -> Result<Vec<FamilyType>> {
                 let name = local(e.name().into_inner());
                 let part_depth = part.as_ref().map(|(p, _)| *p);
                 match (family, part_depth) {
-                    (None, _) if name == b"family" => family = Some(depth),
-                    (Some(f), None) if depth == f + 1 && name == b"part" => {
+                    (None, _) if name == "family" => family = Some(depth),
+                    (Some(f), None) if depth == f + 1 && name == "part" => {
                         part = Some((
                             depth,
                             FamilyType {
@@ -372,11 +372,11 @@ fn family_types(xml: &str) -> Result<Vec<FamilyType>> {
                     (_, Some(p)) if depth == p + 1 => {
                         text.clear();
                         child = Some(TypeParameter {
-                            name: String::from_utf8_lossy(name).into_owned(),
-                            display_name: attribute(e, b"displayName"),
-                            kind: attribute(e, b"type"),
-                            type_of_parameter: attribute(e, b"typeOfParameter"),
-                            units: attribute(e, b"units"),
+                            name: name.to_string(),
+                            display_name: attribute(e, "displayName"),
+                            kind: attribute(e, "type"),
+                            type_of_parameter: attribute(e, "typeOfParameter"),
+                            units: attribute(e, "units"),
                             value: String::new(),
                         });
                     }
