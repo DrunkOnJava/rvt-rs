@@ -252,13 +252,17 @@ fn main() -> anyhow::Result<()> {
         for (n, object) in graph.objects.iter().enumerate().take(4) {
             let scalars: Vec<String> = object
                 .fields
-                .iter()
+                .as_object()
+                .into_iter()
+                .flatten()
                 .filter(|(_, v)| !v.is_object() && !v.is_array())
                 .map(|(k, v)| format!("{k}={v}"))
                 .collect();
             let ids: Vec<String> = object
                 .fields
-                .iter()
+                .as_object()
+                .into_iter()
+                .flatten()
                 .filter_map(|(k, v)| v.pointer("/m_id/m_id64").map(|id| format!("{k}={id}")))
                 .collect();
             println!(
