@@ -64,7 +64,7 @@ pub struct TypeParameter {
     /// `displayName` (`Default Elevation`).
     pub display_name: Option<String>,
     /// `type`: `system` for a built-in parameter, `custom` for one the
-    /// family defines.
+    /// family defines, `shared` for a shared parameter.
     pub kind: Option<String>,
     /// `typeOfParameter` (`Length`, `Material`, `Text`, ...).
     pub type_of_parameter: Option<String>,
