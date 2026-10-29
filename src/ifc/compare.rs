@@ -25,9 +25,11 @@ use std::collections::{BTreeMap, BTreeSet};
 pub struct IfcFileSummary {
     /// Uppercase entity type → occurrence count (DATA section only).
     pub entity_counts: BTreeMap<String, usize>,
-    /// Storeys in file order: `(name, elevation_metres_or_none)`.
+    /// Storeys in file order: `(name, elevation)`, the elevation in metres
+    /// when the file declares its length unit, else as written.
     pub storeys: Vec<StoreySummary>,
-    /// Axis-aligned bbox over all Cartesian points with ≥2 coords.
+    /// Axis-aligned bbox over all Cartesian points with ≥2 coords, in
+    /// metres when the file declares its length unit, else as written.
     pub bounding_box: Option<BoundingBox>,
     /// Product-like entities: type + Name attribute when present.
     pub objects: Vec<ObjectSummary>,
@@ -98,8 +100,13 @@ pub struct BoundingBoxDelta {
 }
 
 /// Parse an IFC STEP document into a comparable summary.
+///
+/// Lengths (storey elevations, the bounding box) are converted to metres
+/// by the file's own `LENGTHUNIT` ([`length_unit_scale_to_metres`]), so an
+/// export in metres compares with Revit's in feet or millimetres.
 pub fn summarize_ifc_step(text: &str) -> IfcFileSummary {
     let mut summary = IfcFileSummary::default();
+    let scale = length_unit_scale_to_metres(text).unwrap_or(1.0);
     let mut bbox_min = [f64::INFINITY; 3];
     let mut bbox_max = [f64::NEG_INFINITY; 3];
     let mut saw_point = false;
@@ -114,7 +121,7 @@ pub fn summarize_ifc_step(text: &str) -> IfcFileSummary {
         match type_name.as_str() {
             "IFCBUILDINGSTOREY" => {
                 let name = nth_string_arg(&args, 2).unwrap_or_else(|| "(unnamed)".into());
-                let elevation = trailing_numeric_arg(&args);
+                let elevation = trailing_numeric_arg(&args).map(|e| e * scale);
                 summary.storeys.push(StoreySummary { name, elevation });
             }
             "IFCCARTESIANPOINT" => {
@@ -122,8 +129,8 @@ pub fn summarize_ifc_step(text: &str) -> IfcFileSummary {
                     let dims = coords.len().min(3);
                     for i in 0..dims {
                         saw_point = true;
-                        bbox_min[i] = bbox_min[i].min(coords[i]);
-                        bbox_max[i] = bbox_max[i].max(coords[i]);
+                        bbox_min[i] = bbox_min[i].min(coords[i] * scale);
+                        bbox_max[i] = bbox_max[i].max(coords[i] * scale);
                     }
                     // 2D points: treat Z as 0 for bbox completeness.
                     if dims == 2 {
@@ -454,6 +461,93 @@ fn is_product_type(ty: &str) -> bool {
             | "IFCFLOWSEGMENT"
             | "IFCOPENINGELEMENT"
     )
+}
+
+/// Metres per unit of the file's `LENGTHUNIT`: the `IfcSIUnit` (with its
+/// prefix) or `IfcConversionBasedUnit` (its `IfcMeasureWithUnit` ratio times
+/// its SI unit) that the `IfcProject`'s `UnitsInContext` assigns. `None`
+/// when the file declares none.
+pub fn length_unit_scale_to_metres(text: &str) -> Option<f64> {
+    let entities: BTreeMap<u32, (String, Vec<String>)> = iter_numbered_entities(text)
+        .filter_map(|(id, entity)| {
+            let (type_name, args) = split_entity(&entity)?;
+            Some((id, (type_name, split_top_level_args(&args))))
+        })
+        .collect();
+    let reference = |arg: &str| arg.trim().strip_prefix('#')?.parse::<u32>().ok();
+    let enumeration = |arg: &str| arg.trim().trim_matches('.').to_ascii_uppercase();
+    let si_scale = |args: &[String]| -> f64 {
+        match args.get(2).map(|prefix| enumeration(prefix)).as_deref() {
+            Some("EXA") => 1e18,
+            Some("PETA") => 1e15,
+            Some("TERA") => 1e12,
+            Some("GIGA") => 1e9,
+            Some("MEGA") => 1e6,
+            Some("KILO") => 1e3,
+            Some("HECTO") => 1e2,
+            Some("DECA") => 1e1,
+            Some("DECI") => 1e-1,
+            Some("CENTI") => 1e-2,
+            Some("MILLI") => 1e-3,
+            Some("MICRO") => 1e-6,
+            Some("NANO") => 1e-9,
+            Some("PICO") => 1e-12,
+            Some("FEMTO") => 1e-15,
+            Some("ATTO") => 1e-18,
+            _ => 1.0,
+        }
+    };
+    let (_, project) = entities.values().find(|(ty, _)| ty == "IFCPROJECT")?;
+    let (_, assignment) = entities.get(&reference(project.get(8)?)?)?;
+    let units = assignment.first()?.trim();
+    let units = units.strip_prefix('(')?.strip_suffix(')')?;
+    for unit in split_top_level_args(units) {
+        let Some((ty, args)) = reference(&unit).and_then(|id| entities.get(&id)) else {
+            continue;
+        };
+        if args.get(1).map(|kind| enumeration(kind)).as_deref() != Some("LENGTHUNIT") {
+            continue;
+        }
+        if ty == "IFCSIUNIT" {
+            return Some(si_scale(args));
+        }
+        if ty == "IFCCONVERSIONBASEDUNIT" {
+            let (_, measure) = entities.get(&reference(args.get(3)?)?)?;
+            let value = measure.first()?.trim();
+            let ratio = value
+                .split_once('(')
+                .and_then(|(_, rest)| rest.strip_suffix(')'))
+                .unwrap_or(value)
+                .trim()
+                .parse::<f64>()
+                .ok()?;
+            let (base_type, base) = entities.get(&reference(measure.get(1)?)?)?;
+            return (base_type == "IFCSIUNIT").then(|| ratio * si_scale(base));
+        }
+    }
+    None
+}
+
+/// Every `#id=ENTITY(...)` of the DATA section with its id.
+fn iter_numbered_entities(text: &str) -> impl Iterator<Item = (u32, String)> + '_ {
+    let data = extract_data_section(text);
+    let mut out = Vec::new();
+    let mut rest = data;
+    while let Some(hash) = rest.find('#') {
+        rest = &rest[hash..];
+        let Some(eq) = rest.find('=') else { break };
+        let id = rest[1..eq].trim().parse::<u32>().ok();
+        let after_eq = &rest[eq + 1..];
+        let Some(end) = find_entity_end(after_eq) else {
+            break;
+        };
+        let entity = after_eq[..end].trim();
+        if let Some(id) = id.filter(|_| !entity.is_empty()) {
+            out.push((id, entity.to_string()));
+        }
+        rest = &after_eq[end + 1..];
+    }
+    out.into_iter()
 }
 
 fn iter_data_entities(text: &str) -> impl Iterator<Item = String> + '_ {
