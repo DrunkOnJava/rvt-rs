@@ -35,6 +35,54 @@ def paired_tags(paired, class_of, klass):
     return [t for t, _ in paired if class_of.get(t) == klass]
 
 
+def footing_elevations(model, storey_of, class_of):
+    import ifcopenshell.geom
+    import ifcopenshell.util.placement
+    import ifcopenshell.util.unit
+
+    scale = ifcopenshell.util.unit.calculate_unit_scale(model)
+    storeys = {}
+    for storey in model.by_type("IfcBuildingStorey"):
+        if storey.Elevation is not None and storey.Name:
+            storeys[storey.Name] = float(storey.Elevation) * scale
+    order = sorted(storeys.items(), key=lambda item: item[1])
+    settings = ifcopenshell.geom.settings()
+    settings.set(settings.USE_WORLD_COORDS, True)
+    rows = []
+    for entity in model.by_type("IfcFooting"):
+        tag = getattr(entity, "Tag", None)
+        where = storey_of.get(tag)
+        if where not in storeys:
+            continue
+        place = float(ifcopenshell.util.placement.get_local_placement(entity.ObjectPlacement)[2][3]) * scale
+        shape = ifcopenshell.geom.create_shape(settings, entity)
+        zs = list(shape.geometry.verts[2::3])
+        rows.append((where, place, min(zs), max(zs)))
+    print(f"native levels: footings with an elevation {len(rows)} of {len(model.by_type('IfcFooting'))}, storeys {len(storeys)}")
+    if not rows:
+        return
+
+    def at_or_below(z):
+        below = [name for name, elevation in order if elevation <= z + 0.001]
+        return below[-1] if below else order[0][0]
+
+    def nearest(z):
+        return min(order, key=lambda item: abs(item[1] - z))[0]
+
+    for label, pick in (("storey at or below", at_or_below), ("nearest storey", nearest)):
+        for what, index in (("base", 2), ("top", 3), ("placement", 1)):
+            hit = sum(1 for row in rows if pick(row[index]) == row[0])
+            print(f"native levels: footing {what} elevation, {label}: {hit} of {len(rows)} in Revit storey")
+    lowest = order[0][0]
+    print(f"native levels: footings in the lowest storey {sum(1 for row in rows if row[0] == lowest)} of {len(rows)}")
+    print(f"native levels: footing storeys {len({row[0] for row in rows})}")
+    print(
+        "native levels: footing base above its storey elevation "
+        f"{sum(1 for row in rows if row[2] >= storeys[row[0]] - 0.001)} of {len(rows)}, "
+        f"top below it {sum(1 for row in rows if row[3] <= storeys[row[0]] + 0.001)} of {len(rows)}"
+    )
+
+
 def main():
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
     if len(args) != 2:
@@ -151,6 +199,13 @@ def main():
             )
         used = {v for _, v in mine}
         print(f"native levels: ElementId parameter {pid} IfcFooting Levels {len(used)}, of them a Level an Element base names {len([v for v in used if v in majority])}")
+
+    # Where Revit puts the footings relative to the storeys' elevations, for a
+    # footing that names no Level (#879): counts only.
+    try:
+        footing_elevations(model, storey_of, class_of)
+    except Exception as error:  # noqa: BLE001
+        print(f"native levels: footing elevations not measured {type(error).__name__}")
 
     # Phases: the export phase is the last of the project's (RE-184).
     phases = collections.Counter()
