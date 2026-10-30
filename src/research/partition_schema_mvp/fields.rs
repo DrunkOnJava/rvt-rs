@@ -88,6 +88,12 @@ pub const CURTAIN_MULLION_ALONG_FIELD: &str = "m_curtain_mullion_along";
 /// length (RE-243).
 pub const MULLION_PLAIN_HOST_FIELD: &str = "m_mullion_plain_host";
 
+/// How many of its two end faces the Revit solid of a curtain mullion keeps,
+/// 0, 1 or 2, where that follows from the boxes of the mullions of its curtain
+/// wall (`kept_ends`, RE-268). Its `NetSurfaceArea` is its section's
+/// perimeter times its length plus that many of its section's areas.
+pub const MULLION_KEPT_ENDS_FIELD: &str = "m_mullion_kept_ends";
+
 /// Fields holding a door's or window's facing: the plan direction of
 /// its transform's Y axis (RE-87), which Revit's exporter sets against its
 /// host wall to decide whether the door's symbol is flipped.

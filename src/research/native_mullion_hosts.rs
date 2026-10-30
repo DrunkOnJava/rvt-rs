@@ -12,7 +12,10 @@
 //! draws a profile family's section rather than its own. A type's record
 //! holds one section object whose class names its shape (RE-246), the same
 //! in every language: [`BOX_SECTION_CLASSES`] are those whose section is a
-//! full rectangle, which the mullion's box gives.
+//! full rectangle, which the mullion's box gives. The mullions of one curtain
+//! wall are those that name it as their host (`m_hostId`), which
+//! [`mullion_hosts`] returns with the plain ones (`NetSurfaceArea` groups
+//! them by it, RE-268).
 
 use crate::native_json::{agree, element_id_i64};
 use crate::{RevitFile, native_document};
@@ -33,18 +36,26 @@ fn linked(graph: &crate::native_parameters::ObjectGraph, field: &str) -> Option<
         .and_then(|id| u64::try_from(id).ok())
 }
 
-/// The mullions of `mullions` whose host, the curtain wall their native
-/// record names, is a straight wall (`SWall`) whose record holds neither an
-/// `ArcWall` nor an `ExtrusionGStep`, and whose type's record
-/// (`SysMullionFamSym`) sets no profile and holds a
-/// [`BOX_SECTION_CLASSES`] section, read in one pass. A mullion, host
-/// or type whose copies disagree is left out.
-pub fn mullions_on_plain_hosts(
-    rf: &mut RevitFile,
-    mullions: &BTreeSet<u64>,
-) -> anyhow::Result<BTreeSet<u64>> {
+/// The curtain wall each mullion's native record names, and the mullions
+/// among them that stand on plain hosts.
+#[derive(Debug, Clone, Default)]
+pub struct MullionHosts {
+    /// A mullion's host: the `m_hostId` of its native record, where every
+    /// copy of the record agrees on it and on its type.
+    pub host: BTreeMap<u64, u64>,
+    /// The mullions whose host, the curtain wall their native
+    /// record names, is a straight wall (`SWall`) whose record holds neither an
+    /// `ArcWall` nor an `ExtrusionGStep`, and whose type's record
+    /// (`SysMullionFamSym`) sets no profile and holds a
+    /// [`BOX_SECTION_CLASSES`] section.
+    pub plain: BTreeSet<u64>,
+}
+
+/// The hosts of `mullions`, and those that stand on plain hosts, read in one
+/// pass. A mullion, host or type whose copies disagree is left out.
+pub fn mullion_hosts(rf: &mut RevitFile, mullions: &BTreeSet<u64>) -> anyhow::Result<MullionHosts> {
     if mullions.is_empty() {
-        return Ok(BTreeSet::new());
+        return Ok(MullionHosts::default());
     }
     let options = native_document::Options {
         selected_ids: mullions.clone(),
@@ -92,11 +103,24 @@ pub fn mullions_on_plain_hosts(
         Ok(())
     })?;
     let is_plain = |id: &u64| plain.get(id).copied().flatten() == Some(true);
-    Ok(links
-        .into_iter()
-        .filter_map(|(mullion, link)| {
-            let (host, mullion_type) = link?;
-            (is_plain(&host) && is_plain(&mullion_type)).then_some(mullion)
-        })
-        .collect())
+    let mut out = MullionHosts::default();
+    for (mullion, link) in links {
+        let Some((host, mullion_type)) = link else {
+            continue;
+        };
+        out.host.insert(mullion, host);
+        if is_plain(&host) && is_plain(&mullion_type) {
+            out.plain.insert(mullion);
+        }
+    }
+    Ok(out)
+}
+
+/// The mullions of `mullions` that stand on plain hosts
+/// ([`MullionHosts::plain`]).
+pub fn mullions_on_plain_hosts(
+    rf: &mut RevitFile,
+    mullions: &BTreeSet<u64>,
+) -> anyhow::Result<BTreeSet<u64>> {
+    Ok(mullion_hosts(rf, mullions)?.plain)
 }
