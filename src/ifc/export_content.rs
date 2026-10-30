@@ -57,6 +57,11 @@ pub struct TypedProductionAppend {
     pub element_type_materials: BTreeMap<u32, Vec<String>>,
     /// Each element's type, by ElementId (RE-110).
     pub element_type_ids: BTreeMap<u32, u32>,
+    /// The standard property sets Revit's export gives each type object, by
+    /// the type's ElementId and the STEP name of the type entity
+    /// (`IFCWALLTYPE`): its common set's `IsExternal` and `FireRating`
+    /// (RE-286). A type whose elements disagree has none.
+    pub type_entity_sets: BTreeMap<u32, BTreeMap<String, Vec<PropertySet>>>,
     /// Each family instance's original symbol, by ElementId (RE-167).
     pub element_original_symbols: BTreeMap<u32, u32>,
     /// Whether Revit's exporter takes each door's and window's symbol as
@@ -399,6 +404,9 @@ pub fn append_typed_production_elements(
     // pairs name, for the cut at the floor that covers it.
     let mut pending_tops: Vec<(usize, Vec<u32>)> = Vec::new();
     let mut level_bind = crate::level_bind::LevelStoreyBind::new();
+    // RE-286: what each type object's common set holds, by type and type
+    // entity; `None` once two of its elements disagree.
+    let mut type_commons: BTreeMap<(u32, String), Option<TypeCommon>> = BTreeMap::new();
 
     for decoded in decoded_iter {
         *out.production_class_counts
@@ -1247,6 +1255,7 @@ pub fn append_typed_production_elements(
         if level_slab {
             add_level_slab_pitch(&mut reference_sets);
         }
+        record_type_common(&mut type_commons, &ifc_type, &decoded);
         // RE-154: the common property sets' Reference, the type's name;
         // RE-156: the shared parameter Serial Number.
         for set in reference_sets.into_iter().chain(serial_sets) {
@@ -1425,6 +1434,15 @@ pub fn append_typed_production_elements(
     }
     add_named_parameter_sets(entities, pending_named);
     add_piece_sets(entities, pieces_of);
+    for ((type_id, entity), common) in type_commons {
+        let Some(set) = common.and_then(|common| common.into_set(&entity)) else {
+            continue;
+        };
+        out.type_entity_sets
+            .entry(type_id)
+            .or_default()
+            .insert(entity, vec![set]);
+    }
 
     out
 }
@@ -2002,6 +2020,109 @@ fn add_is_external(
             properties: vec![property],
         }),
     }
+}
+
+/// What the common property set of a type object holds (RE-286).
+#[derive(Clone, PartialEq)]
+struct TypeCommon {
+    is_external: Option<bool>,
+    fire_rating: Option<String>,
+}
+
+/// The entities whose type objects Revit's IFC4 exports of the BIM4LCA office
+/// (exporter 24.0.5) and of the R2025 models (25.0.2) give their common set's
+/// `IsExternal`, among those rvt-rs writes a type object for (RE-286). The
+/// office's ramp type holds no set at all, and a curtain member's type is the
+/// exporter's cache (RE-269).
+const TYPE_COMMON_ENTITIES: &[&str] = &[
+    "IFCWALL",
+    "IFCCURTAINWALL",
+    "IFCDOOR",
+    "IFCWINDOW",
+    "IFCSLAB",
+    "IFCROOF",
+    "IFCCOLUMN",
+    "IFCBEAM",
+    "IFCCOVERING",
+    "IFCRAILING",
+    "IFCSTAIR",
+    "IFCBUILDINGELEMENTPROXY",
+    "IFCSPACE",
+];
+
+impl TypeCommon {
+    /// The common set of the type entity `type_entity` (`IFCWALLTYPE`).
+    fn into_set(self, type_entity: &str) -> Option<PropertySet> {
+        let name = is_external_set(type_entity.strip_suffix("TYPE")?)?;
+        let mut properties = Vec::new();
+        if let Some(external) = self.is_external {
+            properties.push(Property {
+                name: "IsExternal".into(),
+                value: PropertyValue::Boolean(external),
+            });
+        }
+        if let Some(rating) = self.fire_rating {
+            properties.push(Property {
+                name: "FireRating".into(),
+                value: PropertyValue::Label(rating),
+            });
+        }
+        (!properties.is_empty()).then(|| PropertySet {
+            name: name.into(),
+            properties,
+        })
+    }
+}
+
+/// Note what the type object of `decoded`'s type holds in its common set
+/// (RE-286): the `IsExternal` Revit's exporter calculates for the type
+/// (`TYPE_IS_EXTERNAL_FIELD`) and the type's Fire Rating (RE-77), as revit-ifc
+/// runs the common set's entries on the type itself (CLEANROOM.md source 5).
+/// Two elements of one type that disagree leave it none.
+fn record_type_common(
+    commons: &mut BTreeMap<(u32, String), Option<TypeCommon>>,
+    ifc_type: &str,
+    decoded: &DecodedElement,
+) {
+    use crate::partition_schema_mvp as mvp;
+    let upper = ifc_type.to_ascii_uppercase();
+    if !TYPE_COMMON_ENTITIES.contains(&upper.as_str()) {
+        return;
+    }
+    let Some(type_id) = decoded.fields.iter().find_map(|(name, value)| match value {
+        InstanceField::ElementId { id, .. } if name == mvp::TYPE_ID_FIELD => Some(*id),
+        _ => None,
+    }) else {
+        return;
+    };
+    let is_external = decoded.fields.iter().find_map(|(name, value)| match value {
+        InstanceField::Bool(flag) if name == mvp::TYPE_IS_EXTERNAL_FIELD => Some(*flag),
+        _ => None,
+    });
+    let fire_rating = decoded
+        .fields
+        .iter()
+        .find_map(|(field, value)| match value {
+            InstanceField::String(text)
+                if field.strip_prefix(mvp::TYPE_PARAMETER_FIELD_PREFIX) == Some("Fire Rating")
+                    && !text.is_empty() =>
+            {
+                Some(text.clone())
+            }
+            _ => None,
+        });
+    let found = TypeCommon {
+        is_external,
+        fire_rating,
+    };
+    commons
+        .entry((type_id, format!("{upper}TYPE")))
+        .and_modify(|seen| {
+            if seen.as_ref() != Some(&found) {
+                *seen = None;
+            }
+        })
+        .or_insert(Some(found));
 }
 
 /// Add `ExtendToStructure` (`IfcBoolean`) to a wall's `Pset_WallCommon`

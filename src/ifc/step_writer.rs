@@ -3801,7 +3801,19 @@ impl StepWriter {
             ];
             // RE-210: Revit's own sets of the type's parameters, each into
             // the set of its name, the properties it does not hold yet.
-            for extra in model.type_property_sets.get(type_id).into_iter().flatten() {
+            let by_entity = model
+                .type_entity_sets
+                .get(type_id)
+                .and_then(|sets| sets.get(entity_name.as_str()))
+                .into_iter()
+                .flatten();
+            for extra in model
+                .type_property_sets
+                .get(type_id)
+                .into_iter()
+                .flatten()
+                .chain(by_entity)
+            {
                 match type_sets.iter_mut().find(|set| set.name == extra.name) {
                     Some(set) => {
                         for property in &extra.properties {
