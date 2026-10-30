@@ -10,4 +10,9 @@
   keeps bit 15, and every reference to the root `ElementId` class reads as
   `ElementId`, where that used to depend on the next field.
   `FieldType::encode` writes the six bytes. Code that names `sub` stops
-  compiling: drop it.
+  compiling: drop it. No export changes (Measure run 41102077364, every
+  reference model, the R2025 models, Autodesk's samples and the family
+  corpus); the walker's schema scan finds fewer low-confidence candidates,
+  which the default export already left out, so the diagnostics count fewer
+  suppressed ones (1,138 to 91 `HostObjAttr` on Autodesk's 2027 MEP sample,
+  on 39 files in all).
