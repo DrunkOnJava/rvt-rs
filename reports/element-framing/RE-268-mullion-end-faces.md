@@ -3,7 +3,7 @@
 **Date:** 2026-10-30
 **Issues:** #1046 (step 2), #1016 (quantities), W7 of [`docs/release-1.0-criteria.md`](../../docs/release-1.0-criteria.md); follows RE-248 (what a mullion's `NetSurfaceArea` counts), RE-243 (mullions drawn as an extrusion), RE-226 (`Span`), RE-241, RE-72
 **Artefacts:** the BIM4LCA office as built and at building permit (Revit 2024, Revit's IFC4 exports), as Measure fetches them
-**Runs:** Measure [41079057668](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41079057668) (`examples/probe_1046_curtain_graphs.rs`, as built), [41080188877](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41080188877) (`examples/probe_1046_mullion_joins.rs`, both), [41088829892](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41088829892) (that probe with `tools/re/mullion_joins_vs_ifc.py`), [41087652091](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41087652091) (this change against `main`: `qtos_vs_ifc`, `psets_vs_ifc`, `tools/re/mullion_ends_vs_boxes.py`) and [41088468432](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41088468432) (unfiltered, every scorer, with the R2025 models)
+**Runs:** Measure [41079057668](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41079057668) (`probes/examples/probe_1046_curtain_graphs.rs`, as built), [41080188877](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41080188877) (`probes/examples/probe_1046_mullion_joins.rs`, both), [41094260414](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41094260414) (that probe with `tools/re/mullion_joins_vs_ifc.py`), [41091498749](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41091498749) (this change against `main`: `qtos_vs_ifc`, `psets_vs_ifc`, `tools/re/mullion_ends_vs_boxes.py`; the same counts in [41087652091](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41087652091) on the commit before the size bound) and [41091518481](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41091518481) (unfiltered, every scorer, with the R2025 models and `timing`)
 **Result:** positive, narrowed: which of a mullion's two ends Revit's solid keeps follows from where the boxes of its curtain wall's mullions meet, and `perimeter x length + kept ends x section area` equals Revit's `NetSurfaceArea` on every mullion read, 6,606 of 10,003 as built and 6,636 of 10,031 at permit, none different. The mullions on curved and edited curtain walls (2,208) and 1,189 where an end is not read stay missing.
 
 ## 1. The question
@@ -22,7 +22,7 @@ The probes list the records of the office as built (and, for the second, at perm
 | `CGridDivideFaceGStep.m_cellMap` | per grid cell its four edge tags, its panel and its grid lines |
 | `CurtainGridLine` records (3,122; 3,014 owned by one of the 220 walls that hold mullions) | the line's `GLine` (origin, direction, extent) |
 
-`tools/re/mullion_joins_vs_ifc.py` against Revit's export (run 41088829892):
+`tools/re/mullion_joins_vs_ifc.py` against Revit's export (run 41094260414; at permit 4,911 joins on 151 walls, 9,217 of 9,824 mullions agree):
 
 - There are 4,909 joins on 149 of the 220 curtain walls: 4,908 of three mullions and 1 of two. `m_constULinesButt` is false on all. `CurtainGrid.m_joinTypes` is empty on 218 walls; two walls hold no `CurtainGrid` object. 108 members name an edge that has no mullion in the export.
 - `m_end` 0 is the far end of the mullion's exported extrusion (where its extrusion ends) and `m_end` 1 its start: 6,943 + 7,439 members, no exception.
@@ -41,7 +41,7 @@ The joins alone are not the answer. Reading "an end is hidden when it is one of 
 | 2 | 1 | 480 |
 | 2 | 2 | 4,135 |
 
-A join lists a vertex where an upright ends against a horizontal that runs through. A vertex where an upright continues into the next upright is in none, so the 480 + 8 mullions the joins leave with both ends counted, and Revit counts 1 or 0 of, are there; and a join's presence does not settle a count either: 43 horizontals that are in joins at both ends count both. So the rest of this report reads the ends from the boxes the joins produced.
+A join lists a vertex where an upright ends against a horizontal that runs through. Vertices where two mullions meet end to end, or an upright continues into the next, are in none, which fits the 480 + 8 mullions the joins leave with both ends counted and Revit counts 1 or 0 of; and a join's presence does not settle a count either: 43 horizontals that are in joins at both ends count both. So the rest of this report reads the ends from the boxes the joins produced.
 
 ## 3. The ends follow from the boxes
 
@@ -56,7 +56,7 @@ RE-248 §2 counted an end as covered when a point 2 mm past its centre lies in a
 | PAR_SAME, PAR_IN | runs the same way and lies over this one (an end at `p` with its body on the same side, or its box holding `p`) |
 | OBLIQUE | runs neither along nor across |
 
-An end is hidden when it has a PARTNER and nothing across covers `p`, or when a mullion across covers `p` (PERP_CENTER or PERP_IN) and it has no PARTNER; otherwise it is counted. The mullion's count of kept ends is its two ends' sum. rvt-rs's box of a mullion is its Revit solid (the `NetVolume` of RE-243 is equal on 7,795), so the rule runs on rvt-rs's boxes: `tools/re/mullion_ends_vs_boxes.py` takes the boxes from rvt-rs's IFC, the mullion's axis from rvt-rs's own `Length`, and Revit's count from its `NetSurfaceArea`. Against Revit's counts (run 41087652091, office as built):
+An end is hidden when it has a PARTNER and nothing across covers `p`, or when a mullion across covers `p` (PERP_CENTER or PERP_IN) and it has no PARTNER; otherwise it is counted. The mullion's count of kept ends is its two ends' sum. rvt-rs's box of a mullion is its Revit solid (the `NetVolume` of RE-243 is equal on 7,795), so the rule runs on rvt-rs's boxes: `tools/re/mullion_ends_vs_boxes.py` takes the boxes from rvt-rs's IFC, the mullion's axis from rvt-rs's own `Length`, and Revit's count from its `NetSurfaceArea`. Against Revit's counts (run 41091498749, office as built):
 
 | end labels | ends Revit's `NetSurfaceArea` counts | mullions |
 |---|---:|---:|
@@ -67,7 +67,7 @@ An end is hidden when it has a PARTNER and nothing across covers `p`, or when a 
 | PERP_FACE, nothing | 2 | 348 |
 | nothing, nothing | 2 | 231 |
 
-Every one of the 8,268 mullions the rule reads, drawn as their box's extrusion or not, falls on the diagonal (the count it gives against Revit's: 0 on 3,891, 1 on 1,003, 2 on 3,374), apart from 136 whose `NetSurfaceArea` makes a fraction of a section (cut mullions, §4). By type and orientation the written mullions are the painted 50 x 50 mm type's horizontal ones with 0 (2,844), 1 (511) or 2 (331) kept ends and its upright ones with 2 (1,801), the plain 50 x 50 mm type's with 0 (13), 1 (52 + 352 upright) or 2 (406 + 78) and the 50 x 150 mm type's with 1 (2 + 74) or 2 (118 + 22).
+The rule reads 8,404 mullions, drawn as their box's extrusion or not. 8,268 fall on the diagonal (the count it gives against Revit's: 0 on 3,891, 1 on 1,003, 2 on 3,374), and the other 136 have a `NetSurfaceArea` that is not a whole number of sections (cut mullions, §4). By type and orientation the written mullions are the painted 50 x 50 mm type's horizontal ones with 0 (2,844), 1 (511) or 2 (331) kept ends and its upright ones with 2 (1,801), the plain 50 x 50 mm type's with 0 (13), 1 (52 + 352 upright) or 2 (406 + 78) and the 50 x 150 mm type's with 1 (2 + 74) or 2 (118 + 22).
 
 No mullion that is written has a PERP_CENTER or PERP_IN end (the table above lists every label pair among them): the covered branch of the rule decides only mullions that are left out, and is not claimed.
 
@@ -81,7 +81,7 @@ A mullion is not claimed when an end carries PERP_IN, PAR_SAME, PAR_IN or OBLIQU
 | an end lies over another mullion, or another lies over it (PAR_SAME, PAR_IN) | 159 | 159 | 0 |
 | an end meets a mullion left out, or one shorter than its section | 1,021 | 1,019 | 2 |
 
-The 7 the rule would get wrong are why the others are left out: five have a PERP_IN end, and two are horizontal pieces of one wall, 0.1 m long, whose ends butt against an upright that lies over another upright (the count is 0 where the rule says 1). Leaving out the mullions whose end meets one that lies over another or is shorter than its section removes both of those two, and no field read tells them from the 1,000 others that meet the same kind of neighbour and are right. Oblique ends and unknown axes occur only on mullions outside the 7,795.
+The 7 the rule would get wrong are why the others are left out: five have a PERP_IN end, and two are horizontal pieces of one wall, 0.1 m long, whose ends butt against an upright that lies over another upright (the count is 0 where the rule says 1). Leaving out the mullions whose end meets one that lies over another or is shorter than its section removes both of those two, and no field read tells them from the 1,019 others that meet the same kind of neighbour and are right. Oblique ends and unknown axes occur only on mullions outside the 7,795.
 
 On the 2,208 mullions Revit does not draw as an extrusion of their box (RE-243 §2: mullions on curved or edited curtain walls), the rule reaches 1,800 and is right on 1,664 and wrong on 136, the cut mullions whose count is a fraction; RE-243 §2 found no field of the mullion's record, its type's or its host's that tells the mullions Revit draws as a mesh from the extrusions on the same walls, and a count that is not whole is a cut solid of the same kind, so none is written.
 
@@ -91,7 +91,7 @@ On the 2,208 mullions Revit does not draw as an extrusion of their box (RE-243 �
 
 ## 6. Measured
 
-Run 41087652091, this change against `main` (`qtos_vs_ifc`, `psets_vs_ifc`):
+Run 41091498749, this change against `main` (`qtos_vs_ifc`, `psets_vs_ifc`):
 
 | model | `NetSurfaceArea` equal | different | missing | quantities Revit writes that rvt-rs writes equal |
 |---|---:|---:|---:|---|
@@ -100,14 +100,14 @@ Run 41087652091, this change against `main` (`qtos_vs_ifc`, `psets_vs_ifc`):
 
 Only `Qto_MemberBaseQuantities.NetSurfaceArea` moves in the quantity census; the property census is identical. The scorer's own counts are 6,604 and 6,634: it groups mullions by the wall rvt-rs's IFC aggregates them under, and 2 mullions have none there, where the exporter groups them by the wall the mullion's record names. The permit file is the same building with the same Tags, so it is a repeat on the same walls, not an independent test. The 3,397 missing are the 2,208 of §4 and 1,189 left out.
 
-Unfiltered run 41088468432 (every scorer, `nordic`, `r2025`): see the pull request.
+Unfiltered run 41091518481 (every scorer, `nordic`, `r2025`, `timing`, this change against `main`): the exports that move are the two office models and RE1 Architecture; the exports of Core Interior, Einhoven, RE1 Electrical, Mechanical and Plumbing and of the R2025 models are byte-identical to `main`'s, and every scorer output apart from those three models' `qtos_vs_ifc` is identical. RE1 Architecture's 10 mullions now carry a `NetSurfaceArea` that Revit's export of it, made with Export base quantities off, does not write (RE-242): the census counts the quantities rvt-rs writes there apart, 68 to 78, so the value is not measurable on it. `rvt-ifc` takes 19.8 s to 20.4 s on the office as built and 19.2 s to 19.2 s at permit (one runner, three rounds); every other file is within 4%.
 
 ## 7. Reproduce
 
 ```bash
-gh workflow run measure.yml --ref re/1046-mullion-ends -f ref=e5d2b8f415efbd87b035e576851f0ea7bd45a197 -f base=main -f nordic=true \
+gh workflow run measure.yml --ref re/1046-mullion-ends -f ref=e2cb89e499858857ec1ac7edae5f7b5508f09d2d -f base=main -f nordic=true \
   -f models="nordic-office-*" -f scorers="qtos_vs_ifc psets_vs_ifc mullion_ends_vs_boxes"
-gh workflow run measure.yml --ref re/1046-mullion-ends -f ref=a59240e88c9365e96975a3fd61567ef060a72a0b -f base=none -f nordic=true \
+gh workflow run measure.yml --ref re/1046-mullion-ends -f ref=6e95d29728eb995946ee8489c860c0e5b74e062b -f base=none -f nordic=true \
   -f models="nordic-office-*" -f scorers=none -f probe=probe_1046_mullion_joins -f probe_scorer=mullion_joins_vs_ifc
-gh workflow run measure.yml --ref re/1046-mullion-ends -f ref=e5d2b8f415efbd87b035e576851f0ea7bd45a197 -f base=main -f nordic=true -f r2025=true
+gh workflow run measure.yml --ref re/1046-mullion-ends -f ref=e2cb89e499858857ec1ac7edae5f7b5508f09d2d -f base=main -f nordic=true -f r2025=true -f timing=true
 ```
