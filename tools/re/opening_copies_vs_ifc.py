@@ -2,7 +2,7 @@
 """Which copy of a door's or window's instance data places Revit's opening
 (#227, #548).
 
-Research tool for `examples/probe_227_missing_transforms.rs`, whose `copy`
+Research tool for `probes/examples/probe_227_missing_transforms.rs`, whose `copy`
 lines give, for each door or window whose data copies disagree, each copy's
 transform (RE-87) with the cut loop (RE-215). For each such element this
 moves the vertices of the `IfcOpeningElement` it fills in Revit's export into

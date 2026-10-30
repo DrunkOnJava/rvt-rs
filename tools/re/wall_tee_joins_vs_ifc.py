@@ -2,7 +2,7 @@
 """Where a wall stops at a T joint, against Revit.
 
 Research tool for `reports/element-framing/RE-73-wall-tee-joins.md`. Its
-input is the JSON-lines output of `examples/probe_re73_tee_joins.rs`: each
+input is the JSON-lines output of `probes/examples/probe_re73_tee_joins.rs`: each
 wall's centreline, thickness, exterior side, layers (exterior first, each
 width and function) and, at each end, the wall it joins and how far past
 the centreline's end the exporter draws its body or each of its layers.

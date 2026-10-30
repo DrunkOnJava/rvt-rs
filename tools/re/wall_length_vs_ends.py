@@ -2,7 +2,7 @@
 """How a wall's Length in Revit's export follows from the walls joined at its
 ends (#1046, RE-252).
 
-Reads `examples/probe_re252_wall_ends.rs`'s JSON lines and Revit's IFC
+Reads `probes/examples/probe_re252_wall_ends.rs`'s JSON lines and Revit's IFC
 export. The walls joined at a wall's end are those its
 `VWallDriver.m_controlJoinsSet` names for that end and those whose
 `CDJoinInfo` pairs this wall's end with one of their sides. Each end of the

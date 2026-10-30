@@ -2,7 +2,7 @@
 """Which number of a room's native record or saved parameters is each of
 Revit's space base quantities (#1016, RE-255).
 
-`wall_numbers_vs_qtos.py` for `examples/probe_re255_space_numbers.rs`: it
+`wall_numbers_vs_qtos.py` for `probes/examples/probe_re255_space_numbers.rs`: it
 reads the probe's `rec` lines and its `roomname <tag> <name>` lines, which
 give the `IfcSpace` `Name` the quantity census keys a space by, and looks
 for each of Revit's `Qto_SpaceBaseQuantities` among the room's numbers.

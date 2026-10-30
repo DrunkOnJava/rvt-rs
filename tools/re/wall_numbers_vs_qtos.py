@@ -2,7 +2,7 @@
 """Which number of a wall's native record or saved parameters is each of
 Revit's wall base quantities (#1016, RE-251).
 
-Reads `examples/probe_re251_wall_numbers.rs`'s `rec <tag> <class>
+Reads `probes/examples/probe_re251_wall_numbers.rs`'s `rec <tag> <class>
 <field>=<number> ...` lines and Revit's IFC export. For each of the wall's
 `Qto_WallBaseQuantities` Revit writes, in feet, square feet or cubic feet as
 its kind is a length, area or volume, it counts the walls on which each field

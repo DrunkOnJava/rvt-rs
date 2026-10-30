@@ -1,0 +1,23 @@
+[package]
+name = "rvt-probes"
+version = "0.0.0"
+edition = "2024"
+rust-version = "1.87"
+license = "Apache-2.0"
+description = "The probes behind the RE reports: each example proves one format fact against a corpus. Not published."
+publish = false
+
+# Each probe is an example: `cargo run --profile ci -p rvt-probes --example
+# probe_re70_wall_join_lists -- <file>`. They live outside the `rvt` package so
+# that its builds and CI checks do not compile 244 programs only research runs;
+# CI's clippy job checks them once.
+[lints]
+workspace = true
+
+[dependencies]
+rvt = { path = "..", features = ["unstable-research"] }
+anyhow = "1"
+cfb = "0.15"
+memchr = "2"
+serde_json = "1"
+sha2 = "0.11"

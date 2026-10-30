@@ -35,7 +35,7 @@ Usage:
     rvt-elements MODEL.rvt --no-typed > elements.json
     python3 tools/re/element_parameters_vs_ifc.py elements.json REVIT.ifc [--list]
 
-The first argument may also be `examples/probe_re207_element_parameters`'
+The first argument may also be `probes/examples/probe_re207_element_parameters`'
 output, one element per line, as the Measure workflow records it.
 
 Needs IfcOpenShell (the version tools/ci/requirements-ifc.txt pins).

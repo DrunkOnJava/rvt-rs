@@ -3,7 +3,7 @@
 in Revit's own IFC export (#528).
 
 Research tool for `reports/element-framing/RE-138-connector-pairs.md`. The
-input is the output of `examples/probe_re138_connector_pairs.rs` on a model:
+input is the output of `probes/examples/probe_re138_connector_pairs.rs` on a model:
 the ElementIds of its ducts and pipes, and the pairs (a duct's or pipe's
 connector and the element and connector joined to it) that
 `partition_connector_pairs` reads. Revit's export writes each connector as an

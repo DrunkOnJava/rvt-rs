@@ -127,6 +127,19 @@ A set whose primary cannot be read keeps all its options. On Snowdon Towers
 the count is 27 (9 floors, 9 slab edges, 8 walls, one generic model), none of
 which Revit's export holds (RE-40).
 
+`element_record_not_in_export_phase` counts placed instances of a recovered
+category that do not exist in the export phase: created after it, or
+demolished in it or before it. With no phase chosen, Revit's own IFC export
+shows the project's last phase and leaves these out; rvt-rs does the same,
+and they do not count toward `unexported_element_records`. Rooms are never
+counted or left out, because Revit's exporter skips a room by its own phase
+parameter, which is not measured to be its created phase. On Snowdon Towers
+Architectural (2024) the count is 6 (Floor), the slabs of #328, which are
+created and demolished in the Legends phase (RE-184). A read of the phases
+that fails on a Revit 2023 to 2027 file is reported in `warnings` ("The
+project's phases could not be read"), and the export then writes every
+element.
+
 `element_record_empty_curtain_panel` counts placed curtain panels of the
 "Empty System Panel" family, the panel type that fills a grid cell with
 nothing. Revit's own IFC export leaves every one of them out, and so does

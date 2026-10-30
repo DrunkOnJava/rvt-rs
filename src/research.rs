@@ -78,6 +78,7 @@
 //! - [`native_parameters`]: Schema-directed native value prefixes and deferred parameter sets
 //! - [`native_parametric_mesh`]: Bounded UV-grid meshing for decoded parametric surfaces
 //! - [`native_parametric_surface`]: Typed evaluators for the non-planar surfaces observed in saved graphs
+//! - [`native_phases`]: The project's phase order, and the elements a last-phase export leaves out (RE-184, #328)
 //! - [`native_rendered_content`]: Family types whose family is rendered content (RE-202, #355)
 //! - [`native_saved_mesh`]: Tessellation of bounded saved planar and cylindrical BRep faces
 //! - [`native_saved_scene`]: Current native saved-graphics extraction with explicit shared-symbol closure
@@ -89,21 +90,14 @@
 //!
 //! ## Other research
 //!
-//! - [`class_tag_map`]: Cross-version class-tag lookup
-//! - [`compound_framing`]: Compound ArcWall (`0x0821`) stamp / marker investigation harness
 //! - [`es_refs`]: ES reference occurrence locator contracts, with no decoder yet
 //! - [`evidence`]: Named evidence tiers and lightweight ledgers
 //! - [`identity`]: Document-scoped identity and source-span contracts
 //! - [`rect_opening_index`]: Version-gated decoder for Revit 2024 ArcWallRectOpening 60 B index records (RE-15, #89)
-//! - [`relations`]: Experimental typed-relation domains, SCC condensation, and quarantine
 //! - [`revit_global_ids`]: The IFC `GlobalId` Revit's own exporter gives an element, rebuilt from the file (RE-48)
 //! - [`schema_registry`]: Forward-only Formats/Latest registry framing, without byte-name scanning
 // Tracker: D20, B66, B44, B33, M3-03, M3-04, B54, B59, B43, L5B-10.
 
-#[path = "class_tag_map.rs"]
-pub mod class_tag_map;
-#[path = "compound_framing.rs"]
-pub mod compound_framing;
 #[path = "element_record_beam_cuts.rs"]
 pub mod element_record_beam_cuts;
 #[path = "element_record_column_cuts.rs"]
@@ -162,6 +156,8 @@ pub mod native_parameters;
 pub mod native_parametric_mesh;
 #[path = "native_parametric_surface.rs"]
 pub mod native_parametric_surface;
+#[path = "native_phases.rs"]
+pub mod native_phases;
 #[path = "native_rendered_content.rs"]
 pub mod native_rendered_content;
 #[path = "native_saved_mesh.rs"]
@@ -246,8 +242,6 @@ pub mod partition_type_parameters;
 pub mod partition_type_records;
 #[path = "rect_opening_index.rs"]
 pub mod rect_opening_index;
-#[path = "relations.rs"]
-pub mod relations;
 #[path = "revit_global_ids.rs"]
 pub mod revit_global_ids;
 #[path = "schema_registry.rs"]
