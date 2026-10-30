@@ -123,16 +123,9 @@ pub fn recover_partition_schema_mvp(
     let level_names = building_storey_name_candidates(string_values.iter().copied());
     let name_set = collect_name_candidates(string_values.iter().copied());
 
-    let walls = match partition_arc_walls::scan_partition_arc_walls_with_limits(
-        rf,
-        revit_version,
-        limits,
-    ) {
-        Ok(scan) => scan.walls,
-        Err(_) => Vec::new(),
-    };
+    let arc_walls = rf.memoised_arc_wall_scan(revit_version, limits);
 
-    out.levels = levels_from_storeys_and_names(&walls, &level_names);
+    out.levels = levels_from_storeys_and_names(&arc_walls.walls, &level_names);
     out.materials = match materials_from_records(rf, revit_version) {
         Some(materials) => materials,
         None => materials_from_names(&name_set),

@@ -1603,20 +1603,16 @@ pub fn iter_elements_with_control(
     // Partition ArcWall merge (version-gated). Fail closed: only
     // records that pass the standard envelope decoder are emitted.
     if let Ok(version) = rf.layout_release() {
-        if let Ok(scan) =
-            crate::partition_arc_walls::scan_partition_arc_walls_with_limits(rf, version, limits)
-        {
-            for wall in scan.walls {
-                let typed =
-                    crate::elements::arc_wall::ArcWall::from_parts(wall.record, wall.trailer);
-                let decoded = typed.to_decoded_element(&wall.partition, wall.offset);
-                if let Some(id) = decoded.id {
-                    if !seen_ids.insert(id) {
-                        continue;
-                    }
+        let scan = rf.memoised_arc_wall_scan(version, limits);
+        for wall in &scan.walls {
+            let typed = crate::elements::arc_wall::ArcWall::from_parts(wall.record, wall.trailer);
+            let decoded = typed.to_decoded_element(&wall.partition, wall.offset);
+            if let Some(id) = decoded.id {
+                if !seen_ids.insert(id) {
+                    continue;
                 }
-                out.push(decoded);
             }
+            out.push(decoded);
         }
 
         // Partition schema MVP: Level / Material / Room / Floor plan

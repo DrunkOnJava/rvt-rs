@@ -110,19 +110,34 @@ pub fn scan_partition_arc_walls(
 /// Same as [`scan_partition_arc_walls`], applying explicit
 /// [`WalkerLimits`] to every partition buffer scan so crafted large
 /// streams cannot force unbounded candidate materialisation.
+///
+/// The scan runs once per file, release and limits: a later call reads the
+/// memoised result (`RevitFile::memoised_arc_wall_scan`).
 pub fn scan_partition_arc_walls_with_limits(
     rf: &mut RevitFile,
     revit_version: u32,
     limits: WalkerLimits,
 ) -> Result<PartitionArcWallScan> {
+    Ok(PartitionArcWallScan::clone(
+        &rf.memoised_arc_wall_scan(revit_version, limits),
+    ))
+}
+
+/// The scan [`scan_partition_arc_walls_with_limits`] describes, run in
+/// full.
+pub(crate) fn compute_partition_arc_walls(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    limits: WalkerLimits,
+) -> PartitionArcWallScan {
     let status = ArcWallRecord::standard_decoder_status(revit_version);
     if !status.is_supported() {
-        return Ok(PartitionArcWallScan {
+        return PartitionArcWallScan {
             status,
             walls: Vec::new(),
             scanned_bytes: 0,
             limit_hit: None,
-        });
+        };
     }
 
     let partition_streams = rf.partition_stream_names();
@@ -180,12 +195,12 @@ pub fn scan_partition_arc_walls_with_limits(
         }
     }
 
-    Ok(PartitionArcWallScan {
+    PartitionArcWallScan {
         status,
         walls,
         scanned_bytes,
         limit_hit,
-    })
+    }
 }
 
 /// Convenience wrapper: read BasicFileInfo version, then scan.
