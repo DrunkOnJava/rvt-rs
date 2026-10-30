@@ -323,6 +323,8 @@ pub fn recover_partition_schema_mvp(
 
     // --- Other product categories from element records (RE-33) ---
     out.products = product_instances_from_partition_records(rf, revit_version, &level_ids)?;
+    // --- Which floors, ceilings and roofs nothing cuts (RE-295) ---
+    attach_slab_uncut(rf, &mut [&mut out.slabs, &mut out.products]);
     // --- Base constraints of elements naming two Levels (RE-59), then
     // railings by their host and elements by the Level objects they name
     // (RE-60) ---
