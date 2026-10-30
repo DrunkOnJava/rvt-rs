@@ -86,7 +86,9 @@ Revit 2019 (for 2015 to 2018, RE-181), 2023 (for 2019 to 2022, RE-180) and
 projects saved by Revit 2011 to 2014, experimentally and outside the 1.0
 range (2015 to 2027), it exports their elements too, measured on a local copy
 of Autodesk's 2013 `rac_advanced` sample against its 2015 copy, and files of
-Revit 2008 to 2013 now open (RE-259); those files are closed source and
+Revit 2008 to 2013 now open (RE-259); on Revit 2008 to 2010 projects it
+exports their elements, storeys and named materials, checked only for
+consistency within each file (RE-260). Those files are closed source and
 measured locally only. Every
 other recovery claim is measured against the oracle its report names, Revit's
 own IFC export of the same file wherever one exists; the measured tables are in the

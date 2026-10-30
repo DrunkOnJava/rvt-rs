@@ -22,6 +22,10 @@
 #     research/witness/<artifact>/observations/rvt-rs.json;
 #   - <scorer>.txt: each tools/re scorer's output against Revit's export,
 #     ending with its exit status;
+#   - revit_property_sets_vs_ifc.txt, where Revit's export with its own
+#     property sets is beside the model as <model>.revit-sets.ifc: an export
+#     with `--revit-property-sets` (its log rvt-ifc-revit-sets.log) scored
+#     against it (RE-210);
 #   - timings.log: each step's wall time in milliseconds, and the item's
 #     after its export (the export's is in rvt-ifc.log);
 #   - info.json and info.exit: `rvt-info --redact --json` on it (the identity,
@@ -108,7 +112,7 @@ IFC_SCORERS="class_sets_vs_ifc aggregates_vs_ifc global_ids_vs_ifc names_vs_ifc 
 room_names_vs_ifc type_objects_vs_ifc layer_sets_vs_ifc element_materials_vs_ifc
 material_colours_vs_ifc openings_vs_ifc opening_hosts_vs_ifc opening_boxes_vs_ifc
 door_bodies_vs_ifc door_window_sizes_vs_ifc oriented_boxes_vs_ifc plan_profiles_vs_ifc
-pipe_bodies_vs_ifc duct_bodies_vs_ifc roof_bodies_vs_ifc stair_bodies_vs_ifc ports_vs_ifc psets_vs_ifc qtos_vs_ifc saved_meshes_vs_ifc tagged_spaces_vs_ifc port_places_vs_ifc predefined_types_vs_ifc box_bodies_vs_ifc column_bodies_vs_ifc mesh_bodies_vs_ifc wall_ends_list wall_heights_vs_ifc"
+pipe_bodies_vs_ifc duct_bodies_vs_ifc roof_bodies_vs_ifc stair_bodies_vs_ifc ports_vs_ifc psets_vs_ifc qtos_vs_ifc saved_meshes_vs_ifc tagged_spaces_vs_ifc port_places_vs_ifc predefined_types_vs_ifc box_bodies_vs_ifc column_bodies_vs_ifc mesh_bodies_vs_ifc wall_ends_list wall_heights_vs_ifc frames_vs_ifc"
 GLB_SCORERS="wall_bodies_vs_ifc wall_ends_cv_vs_ifc wall_layers_vs_ifc slab_layers_vs_ifc glb_material_colours_vs_ifc"
 
 read -ra MODEL_PATTERNS <<< "${MEASURE_MODELS:-}"
@@ -133,7 +137,7 @@ wanted() { # step
 # Whether a step is in a scorer list or is one of the steps run by name.
 listed() { # step
   local s
-  for s in $IFC_SCORERS $GLB_SCORERS info gltf schema witness none; do
+  for s in $IFC_SCORERS $GLB_SCORERS info gltf schema witness revit_property_sets_vs_ifc none; do
     [ "$s" = "$1" ] && return 0
   done
   return 1
@@ -227,7 +231,7 @@ finished() { # dir name started
 }
 
 measure_model() { # name rvt ref
-  local name="$1" rvt="$2" ref="$3" dir item_started artifact s
+  local name="$1" rvt="$2" ref="$3" dir item_started artifact s sets flags
   item_started=$(date +%s%N)
   dir=$(model_dir "$name"); mkdir -p "$dir"
   if wanted_glb; then
@@ -265,6 +269,22 @@ measure_model() { # name rvt ref
       [ -f "$SCORERS/$s.py" ] || continue
       score "$dir/$s.txt" "$SCORERS/$s.py" "$dir/model.ifc" "$MODELS/$ref"
     done
+  fi
+  # RE-210: where Revit's export with its own property sets is beside the
+  # model (<model>.revit-sets.ifc, the R2025 models), an export with
+  # `--revit-property-sets` scored against it.
+  sets="${rvt%.rvt}.revit-sets.ifc"
+  if [ -f "$MODELS/$sets" ] && wanted revit_property_sets_vs_ifc; then
+    case " ${RVT_IFC_FLAGS:-} " in
+      *" --revit-property-sets "*) flags=() ;;
+      *) flags=(--revit-property-sets) ;;
+    esac
+    # shellcheck disable=SC2086 # RVT_IFC_FLAGS is a list of flags.
+    timed "$dir" rvt-ifc-revit-sets "$BIN/rvt-ifc" "$MODELS/$rvt" -o "$dir/revit-sets.ifc" ${RVT_IFC_FLAGS:-} "${flags[@]}" \
+      > "$dir/rvt-ifc-revit-sets.log" 2>&1
+    echo "exit $?" >> "$dir/rvt-ifc-revit-sets.log"
+    score "$dir/revit_property_sets_vs_ifc.txt" "$SCORERS/revit_property_sets_vs_ifc.py" "$dir/revit-sets.ifc" "$MODELS/$sets" --list
+    rm -f "$dir/revit-sets.ifc"
   fi
   # The bulky outputs stay out of the uploaded results.
   rm -f "$dir/model.glb" "$dir/validation.jsonl"

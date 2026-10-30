@@ -366,7 +366,7 @@ impl ElementDataLayout {
     }
 }
 
-/// [`ELEMENT_DATA_HEADER_2023`] on a 32-bit release, Revit 2011 to 2023:
+/// [`ELEMENT_DATA_HEADER_2023`] on a 32-bit release, Revit 2008 to 2023:
 /// the `u16` is the release's `CellList` tag (RE-180). `None` on any other
 /// release.
 pub fn element_data_header_32(revit_version: u32) -> Option<[u8; 10]> {
