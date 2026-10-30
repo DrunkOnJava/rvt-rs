@@ -10,14 +10,16 @@
 //! R2025 models (RE-185), and on the 2 walls of the BIM4LCA office no
 //! parameter decides (RE-193).
 
-use crate::native_json::element_id;
+use crate::native_json::identifier_i64;
 use crate::{RevitFile, native_document};
 use std::collections::{BTreeMap, BTreeSet};
 
 /// The type Function (`m_function`) of each of `walls`, by the wall's
 /// ElementId: the wall's record names its type, and the type's record holds
 /// the Function. A wall whose type or Function is not found is left out.
-/// Errs where the native record path does not read the file's release.
+/// Read on Revit 2015 to 2027, the type's id in either shape of `Identifier`
+/// (RE-283). Errs where the native record path does not read the file's
+/// release.
 pub fn wall_type_functions(
     rf: &mut RevitFile,
     walls: &BTreeSet<u64>,
@@ -32,11 +34,10 @@ pub fn wall_type_functions(
         let Some(graph) = record.graph.as_ref() else {
             return Ok(());
         };
-        if let Some(type_id) = graph
-            .objects
-            .iter()
-            .find_map(|object| object.fields.get("m_WallAttributesId").and_then(element_id))
-        {
+        if let Some(type_id) = graph.objects.iter().find_map(|object| {
+            let id = identifier_i64(object.fields.get("m_WallAttributesId")?)?;
+            u64::try_from(id).ok()
+        }) {
             wall_type.insert(record.identity.element_id, type_id);
         }
         Ok(())
