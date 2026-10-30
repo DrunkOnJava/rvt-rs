@@ -43,7 +43,7 @@ name: Publish (crates.io + PyPI + release binaries)
 # workflow publish.yml, environment crates-io.
 #
 # Once both are in place, pushing a signed `v*` tag on main, or on a hotfix
-# branch, publishes the release (RELEASE.md, steps 9 to 12, and its hotfix
+# branch, publishes the release (RELEASE.md, steps 8 to 11, and its hotfix
 # process).
 
 on:
