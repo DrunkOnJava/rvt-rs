@@ -114,7 +114,7 @@ Core Interior's and RE1 Architecture's exports were made with base quantities of
 
 ## 6. What stays unwritten
 
-- Walls with a top join (217 of the office's as built that have only roof or floor joins and clean joins): 163 are right on the side areas and the gross volume and 118 on the net volume. What decides is whether the top is Revit's (RE-267) and whether the ends are, and a body from the wall's layers is right on the longest face only. A rule for them has to say the floors that join a wall do not intrude on it or cut it where rvt-rs draws it, and that its length is the one the record gives (`Length` written).
+- Walls with a top join (217 of the office's as built that have only roof or floor joins and clean joins, before the second rule): 163 are right on the side areas and the gross volume and 118 on the net volume. The second rule takes 18 of them (22 at permit) and leaves the rest: those a floor passes through, those whose length the record does not confirm, and those drawn from their layers (a body that is right on the longest face only).
 - Walls with openings (their doors and windows are voids of the body), cut pairs, embedded walls and sweeps (334): 71 of 334 are right on the net volume.
 - `GrossFootprintArea` = `Length` × `Width` on all 279 walls that carry it, but one wall of the 49 as built and one of the 48 at permit (3184170, whose length is half its width) has none, extruded all the same. A footprint on the 49 would be one Revit omits.
 - The 28 walls as built and 24 at permit with only a `NetVolume`: nothing in the record tells them from the rest, and their `NetVolume` waits on a rule for the body.
