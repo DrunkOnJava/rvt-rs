@@ -1,5 +1,6 @@
-- **No `Pset_ShadingDeviceCommon.Reference` (RE-239 §7).** No Revit IFC4
-  export measured holds a shading device, so nothing confirms that Revit's
-  export writes the set; it is left out until one does (the maintainer,
-  2026-10-29). Core Interior's 20 shading devices are the only ones in the
-  reference models.
+- **`Reference` only in the sets a Revit export confirms (RE-239 §7).**
+  rvt-rs writes an element's type name as `Reference` in the 34 IFC4
+  standard sets where a measured Revit export writes it with the same value,
+  and in no other set until one does (the maintainer, 2026-10-29). Shading
+  devices, alarms (Revit's export is measured to omit it), footings,
+  reinforcing bars, transport elements and ramp flights get none for now.

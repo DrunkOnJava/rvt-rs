@@ -1695,8 +1695,8 @@ type ReferenceKinds = BTreeMap<
 /// sets). Revit's IFC4 export gives the BIM4LCA office's elements exactly
 /// these sets, but for those revit-ifc matches by a prefix of the entity's
 /// name, such as `Pset_StairFlightCommon` on a stair. None for a space,
-/// whose `Reference` is [`space_common_property_set`]'s, nor in
-/// [`UNCONFIRMED_REFERENCE_SETS`].
+/// whose `Reference` is [`space_common_property_set`]'s, and only the sets
+/// in [`CONFIRMED_REFERENCE_SETS`].
 fn reference_set_kinds(
     ifc_type: &str,
     predefined_type: Option<&str>,
@@ -1711,16 +1711,52 @@ fn reference_set_kinds(
     STANDARD_PROPERTY_SETS
         .iter()
         .filter(|set| set.applies_to(ifc_type, predefined_type))
-        .filter(|set| !UNCONFIRMED_REFERENCE_SETS.contains(&set.name))
+        .filter(|set| CONFIRMED_REFERENCE_SETS.contains(&set.name))
         .filter_map(|set| Some((set.name, set.property_kind("Reference")?)))
         .collect()
 }
 
-/// Sets whose `Reference` no Revit IFC4 export measured has written: left
-/// out until one does (the maintainer, 2026-10-29). No reference export
-/// holds an `IfcShadingDevice`; Core Interior's 20 have only an export with
-/// no property sets (RE-239 §5).
-const UNCONFIRMED_REFERENCE_SETS: &[&str] = &["Pset_ShadingDeviceCommon"];
+/// The sets whose `Reference` a Revit export measured writes, equal to
+/// rvt-rs's and never where rvt-rs leaves it out (RE-239 §7): the office's
+/// and the R2025 models' IFC4 exports, and RE1's IFC2X3 exports for the duct
+/// and pipe fitting and duct segment types. Reference goes in no other set
+/// until a Revit export confirms it (the maintainer, 2026-10-29).
+const CONFIRMED_REFERENCE_SETS: &[&str] = &[
+    "Pset_AirTerminalTypeCommon",
+    "Pset_BeamCommon",
+    "Pset_BuildingElementProxyCommon",
+    "Pset_ColumnCommon",
+    "Pset_CoveringCommon",
+    "Pset_CurtainWallCommon",
+    "Pset_DoorCommon",
+    "Pset_DuctFittingTypeCommon",
+    "Pset_DuctSegmentTypeCommon",
+    "Pset_ElectricApplianceTypeCommon",
+    "Pset_EnvironmentalImpactIndicators",
+    "Pset_FireSuppressionTerminalTypeCommon",
+    "Pset_FurnitureTypeCommon",
+    "Pset_LightFixtureTypeCommon",
+    "Pset_MemberCommon",
+    "Pset_OpeningElementCommon",
+    "Pset_PipeFittingTypeCommon",
+    "Pset_PipeSegmentTypeCommon",
+    "Pset_PlateCommon",
+    "Pset_RailingCommon",
+    "Pset_RampCommon",
+    "Pset_ReinforcementBarPitchOfBeam",
+    "Pset_ReinforcementBarPitchOfColumn",
+    "Pset_ReinforcementBarPitchOfSlab",
+    "Pset_ReinforcementBarPitchOfWall",
+    "Pset_RoofCommon",
+    "Pset_SanitaryTerminalTypeCommon",
+    "Pset_SlabCommon",
+    "Pset_SpaceCommon",
+    "Pset_StairCommon",
+    "Pset_StairFlightCommon",
+    "Pset_WallCommon",
+    "Pset_WasteTerminalTypeCommon",
+    "Pset_WindowCommon",
+];
 
 /// The sets `kinds` ([`reference_set_kinds`]), each holding `type_name` as
 /// its `Reference`.

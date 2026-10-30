@@ -90,5 +90,12 @@ The listing of §1 is `psets_vs_ifc.txt` in any Measure run with `nordic=true`; 
 | equal and never different there, with an extra only on elements Revit's export leaves out (column 1927742, 17 openings) | 5 | 1,684 |
 | in no IFC4 export: `Pset_ShadingDeviceCommon.Reference` | 1 | 20 |
 
-The middle row's properties are `Pset_EnvironmentalImpactIndicators.Reference`, `Pset_ColumnCommon.IsExternal` and `Reference`, `Pset_ReinforcementBarPitchOfColumn.Reference` and `Pset_OpeningElementCommon.Reference`: their extras are elements Revit's export does not hold (W4, RE-262), not values. No reference export holds an `IfcShadingDevice`, so nothing confirms that Revit writes `Pset_ShadingDeviceCommon.Reference`. The maintainer chose to keep both set-asides and to leave that property out until a Revit IFC4 export confirms it (2026-10-29): Core Interior's 20 shading devices no longer get the set.
+The middle row's properties are `Pset_EnvironmentalImpactIndicators.Reference`, `Pset_ColumnCommon.IsExternal` and `Reference`, `Pset_ReinforcementBarPitchOfColumn.Reference` and `Pset_OpeningElementCommon.Reference`: their extras are elements Revit's export does not hold (W4, RE-262), not values. No reference export holds an `IfcShadingDevice`, so nothing confirms that Revit writes `Pset_ShadingDeviceCommon.Reference`. The maintainer chose to keep both set-asides and to leave that property out until a Revit IFC4 export confirms it (2026-10-29), and then, for every set, to write `Reference` only where a Revit export confirms it. rvt-rs can write `Reference` in 44 standard sets for the entities it exports. 34 are confirmed: 31 equal on the office's and the R2025 models' IFC4 exports and never written where Revit's export leaves them out, and the duct fitting, duct segment and pipe fitting types on RE1's IFC2X3 exports. They are `CONFIRMED_REFERENCE_SETS` (`src/ifc/export_content.rs`). The others get no `Reference`:
+
+- `Pset_ShadingDeviceCommon`: in no reference export;
+- `Pset_AlarmTypeCommon`: Revit's IFC2X3 export of RE1 Electrical leaves it out on all 5 alarm types;
+- `Pset_FootingCommon`, `Pset_ReinforcementBarCountOfIndependentFooting`, `Pset_ReinforcementBarPitchOfContinuousFooting`, `Pset_ReinforcingBarCommon`, `Pset_ElementComponentCommon`, `Pset_TransportElementCommon`, `Pset_RampFlightCommon`: no reference export confirms them (only BIMcollab's 2015 structural model has footings, and its results are counts only);
+- `Pset_BuildingStoreyCommon`: a storey is never given `Reference`.
+
+A set joins the list when a reference export confirms it.
 
