@@ -76,6 +76,8 @@ materials,
 layers,
 GlobalIds,
 `IsExternal`,
+curtain mullions' and panels' `IsExternal` by their curtain wall's, as exporters from IFC_v24.2.20 on give it,
+the exterior members' checked against revit-ifc's source only (RE-288, [#1187](https://github.com/DrunkOnJava/rvt-rs/issues/1187)),
 curtain mullions' `Span` (RE-226),
 beams' `Span` (RE-49),
 beams' `Slope` 0 where drawn along a level location line (RE-49),
@@ -150,9 +152,14 @@ a floor's `Perimeter`,
 which it writes in feet as though they were the file's unit) is left out, listed in RE-235 §5 and counted apart by both censuses (63,
 10,003,
 382 and 13 values on the office as built).
-So are curtain mullions' and panels' `IsExternal` and their mullion types', which the exporter that made the office's exports (24.0.5.432) sets from its own cache of element types, not from the model: the property census counts them apart, 10,267 values on the office as built and 10,304 at permit (RE-269;
+So are the curtain mullions' and panels' `IsExternal` in the office's exports and their mullion types', which the exporter that made them (24.0.5.432) sets from its own cache of element types, not from the model: the property census counts them apart, 10,267 values on the office as built and 10,304 at permit (RE-269;
 the maintainer,
 2026-10-30).
+rvt-rs writes the members' by their curtain wall's value, as exporters from IFC_v24.2.20 on give it, and none on the member types (RE-288, [#1187](https://github.com/DrunkOnJava/rvt-rs/issues/1187);
+the maintainer,
+2026-10-30).
+That differs from the office's on the members the cache turned false (8,579 of 10,003 mullions and 33 of 260 panels as built, RE-193), and the only model of a newer exporter with curtain members is RE1 Architecture (26.2), whose 12 members, 10 mullions and 2 panels, stand on one interior curtain wall and are false by either rule:
+the exterior members' values are checked against revit-ifc's source only, since no newer exporter's model has an exterior curtain wall.
 On the office as built, with `--revit-set-placement` (Measure run 41129228138, `main` at b09310a6), 455 of the 45,525 property values Revit's export writes on objects rvt-rs writes are missing and 1 differs;
 without it, 1,421 are missing (Measure run 41129224669).
 At building permit, 452 of 45,704, and 1,418 without it.
