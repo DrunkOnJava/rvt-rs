@@ -4623,7 +4623,7 @@ fn pset_property_value_count(model: &IfcModel) -> usize {
     } else {
         values(&entities::PropertySet::building_set(
             model.building_storeys.len(),
-        ))
+        )) - usize::from(!step_writer::every_storey_holds_an_element(model))
     };
     elements + storeys + building + openings
 }

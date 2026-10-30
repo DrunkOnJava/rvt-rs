@@ -1651,7 +1651,13 @@ impl StepWriter {
             }
         }
         if !storeys.is_empty() {
-            let set = PropertySet::building_set(storeys.len());
+            let mut set = PropertySet::building_set(storeys.len());
+            // RE-263: the storey count only where Revit's two rules for it
+            // agree (the maintainer, 2026-10-29).
+            if !every_storey_holds_an_element(model) {
+                set.properties
+                    .retain(|property| property.name != "NumberOfStoreys");
+            }
             let key = ["building", set.name.as_str()].join("\u{1f}");
             self.emit_property_set(
                 owner_hist,
@@ -2117,17 +2123,7 @@ impl StepWriter {
         let mut unplaced_spaces: Vec<usize> = Vec::new();
         // B63: the elements a space contains, by the space's entity index;
         // they are left out of their storey's containment.
-        let space_of: HashMap<usize, usize> = model
-            .entities
-            .iter()
-            .filter_map(|entity| match entity {
-                super::entities::IfcEntity::SpaceContainment { space, elements } => {
-                    Some(elements.iter().map(move |element| (*element, *space)))
-                }
-                _ => None,
-            })
-            .flatten()
-            .collect();
+        let space_of = elements_in_spaces(model);
         let mut per_space_elements: BTreeMap<usize, Vec<usize>> = BTreeMap::new();
         // Track (element_id, material_index) pairs so we can emit
         // IfcRelAssociatesMaterial per material after the element
@@ -2178,30 +2174,7 @@ impl StepWriter {
         // #323: parts of an aggregate whose whole is a building element
         // reach the spatial structure through that whole, so they are left
         // out of the storey containment below.
-        let is_building_element = |index: usize| {
-            matches!(
-                model.entities.get(index),
-                Some(super::entities::IfcEntity::BuildingElement { .. })
-            )
-        };
-        let aggregate_parts: std::collections::BTreeSet<usize> = model
-            .entities
-            .iter()
-            .filter_map(|entity| match entity {
-                super::entities::IfcEntity::Aggregate { whole, parts }
-                    if is_building_element(*whole) =>
-                {
-                    Some(
-                        parts
-                            .iter()
-                            .copied()
-                            .filter(|part| *part != *whole && is_building_element(*part)),
-                    )
-                }
-                _ => None,
-            })
-            .flatten()
-            .collect();
+        let aggregate_parts = aggregate_parts_of_elements(model);
         // #400: each building element's GlobalId, fixed from what the
         // element is rather than where it lands in the file. Revit's own
         // where the file yields it (RE-48); otherwise the element's
@@ -2240,34 +2213,7 @@ impl StepWriter {
         // written as items of its body: where the element and the piece are
         // both plain extrusions, or neither has geometry. Any other piece is
         // written as an element of its own.
-        let plain_body = |index: usize| match model.entities.get(index) {
-            Some(super::entities::IfcEntity::BuildingElement {
-                extrusion,
-                solid_shape: None,
-                representation_map_index: None,
-                ..
-            }) => Some(extrusion.as_ref()),
-            _ => None,
-        };
-        let mut piece_bodies: BTreeMap<usize, Vec<&Extrusion>> = BTreeMap::new();
-        let mut folded_pieces: std::collections::BTreeSet<usize> = Default::default();
-        for (owner, pieces) in &model.body_pieces {
-            let Some(owner_body) = plain_body(*owner) else {
-                continue;
-            };
-            for piece in pieces {
-                match (owner_body, plain_body(*piece)) {
-                    (Some(_), Some(Some(body))) => {
-                        piece_bodies.entry(*owner).or_default().push(body);
-                        folded_pieces.insert(*piece);
-                    }
-                    (None, Some(None)) => {
-                        folded_pieces.insert(*piece);
-                    }
-                    _ => {}
-                }
-            }
-        }
+        let (piece_bodies, folded_pieces) = fold_body_pieces(model);
         let mut el_id_to_gid: HashMap<usize, &str> = HashMap::new();
         for (entity_idx, entity) in model.entities.iter().enumerate() {
             if folded_pieces.contains(&entity_idx) {
@@ -4161,4 +4107,123 @@ fn stable_guid(document: &str, key: &[&str]) -> String {
     value[6] = (value[6] & 0x0f) | 0x80;
     value[8] = (value[8] & 0x3f) | 0x80;
     crate::revit_global_ids::compress_ifc_guid(value)
+}
+
+/// The elements a space contains (B63), by their entity index: each maps
+/// to its space's, and is left out of its storey's containment.
+fn elements_in_spaces(model: &IfcModel) -> HashMap<usize, usize> {
+    model
+        .entities
+        .iter()
+        .filter_map(|entity| match entity {
+            super::entities::IfcEntity::SpaceContainment { space, elements } => {
+                Some(elements.iter().map(move |element| (*element, *space)))
+            }
+            _ => None,
+        })
+        .flatten()
+        .collect()
+}
+
+/// The parts of every aggregate whose whole is a building element (#323):
+/// they reach the spatial structure through that whole.
+fn aggregate_parts_of_elements(model: &IfcModel) -> std::collections::BTreeSet<usize> {
+    let is_building_element = |index: usize| {
+        matches!(
+            model.entities.get(index),
+            Some(super::entities::IfcEntity::BuildingElement { .. })
+        )
+    };
+    model
+        .entities
+        .iter()
+        .filter_map(|entity| match entity {
+            super::entities::IfcEntity::Aggregate { whole, parts }
+                if is_building_element(*whole) =>
+            {
+                Some(
+                    parts
+                        .iter()
+                        .copied()
+                        .filter(|part| *part != *whole && is_building_element(*part)),
+                )
+            }
+            _ => None,
+        })
+        .flatten()
+        .collect()
+}
+
+/// #823: the further pieces of an element written as items of its body,
+/// by their owner, and every piece folded so: where the element and the
+/// piece are both plain extrusions, or neither has geometry.
+type PieceBodies<'a> = BTreeMap<usize, Vec<&'a Extrusion>>;
+
+fn fold_body_pieces(model: &IfcModel) -> (PieceBodies<'_>, std::collections::BTreeSet<usize>) {
+    let plain_body = |index: usize| match model.entities.get(index) {
+        Some(super::entities::IfcEntity::BuildingElement {
+            extrusion,
+            solid_shape: None,
+            representation_map_index: None,
+            ..
+        }) => Some(extrusion.as_ref()),
+        _ => None,
+    };
+    let mut piece_bodies: BTreeMap<usize, Vec<&Extrusion>> = BTreeMap::new();
+    let mut folded = std::collections::BTreeSet::new();
+    for (owner, pieces) in &model.body_pieces {
+        let Some(owner_body) = plain_body(*owner) else {
+            continue;
+        };
+        for piece in pieces {
+            match (owner_body, plain_body(*piece)) {
+                (Some(_), Some(Some(body))) => {
+                    piece_bodies.entry(*owner).or_default().push(body);
+                    folded.insert(*piece);
+                }
+                (None, Some(None)) => {
+                    folded.insert(*piece);
+                }
+                _ => {}
+            }
+        }
+    }
+    (piece_bodies, folded)
+}
+
+/// Whether every storey of `model` contains an element: an element written
+/// in its own `IfcRelContainedInSpatialStructure` with that storey, as the
+/// writer places it (not a space, a hosted opening, a body piece written as
+/// an item of its owner, a part of an aggregate or an element a space
+/// contains). Revit's exporter up to IFC 26.0 counts the storeys that
+/// contain an element as `NumberOfStoreys`, and from 26.1 every storey, so
+/// the two agree only here (RE-263; the maintainer, 2026-10-29).
+pub(crate) fn every_storey_holds_an_element(model: &IfcModel) -> bool {
+    let storeys = model.building_storeys.len();
+    let in_spaces = elements_in_spaces(model);
+    let parts = aggregate_parts_of_elements(model);
+    let (_, folded) = fold_body_pieces(model);
+    let mut holding = vec![false; storeys];
+    for (index, entity) in model.entities.iter().enumerate() {
+        let super::entities::IfcEntity::BuildingElement {
+            ifc_type,
+            storey_index: Some(storey),
+            host_element_index,
+            ..
+        } = entity
+        else {
+            continue;
+        };
+        let ifc_upper = ifc_type.to_ascii_uppercase();
+        let contained = *storey < storeys
+            && !folded.contains(&index)
+            && !(ifc_upper == "IFCOPENINGELEMENT" && host_element_index.is_some())
+            && !in_spaces.contains_key(&index)
+            && ifc_upper != "IFCSPACE"
+            && !parts.contains(&index);
+        if contained {
+            holding[*storey] = true;
+        }
+    }
+    holding.iter().all(|held| *held)
 }
