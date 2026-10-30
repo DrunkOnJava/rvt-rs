@@ -40,6 +40,7 @@
 //! were not their record box (`reports/element-framing/RE-101-room-solids.md`).
 
 use crate::element_record_plan_profiles::{PlanProfile, plan_profile_from_lines};
+use crate::le_bytes;
 use crate::{Result, RevitFile};
 use std::collections::BTreeMap;
 
@@ -125,8 +126,7 @@ fn read_f64s<const N: usize>(buf: &[u8], at: usize) -> Option<[f64; N]> {
     let mut out = [0.0; N];
     for (index, value) in out.iter_mut().enumerate() {
         let start = at.checked_add(8 * index)?;
-        let bytes = buf.get(start..start.checked_add(8)?)?;
-        *value = f64::from_le_bytes(bytes.try_into().ok()?);
+        *value = le_bytes::f64_at(buf, start)?;
         if !value.is_finite() {
             return None;
         }

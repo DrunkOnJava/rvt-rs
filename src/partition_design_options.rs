@@ -171,10 +171,7 @@ pub fn find_set_entries(buf: &[u8], options: &[u32]) -> Vec<(String, u32)> {
         let Some(bytes) = buf.get(name_at..name_at + units * 2) else {
             continue;
         };
-        let code_units: Vec<u16> = bytes
-            .chunks_exact(2)
-            .map(|pair| u16::from_le_bytes([pair[0], pair[1]]))
-            .collect();
+        let code_units: Vec<u16> = le_bytes::u16_units(bytes).collect();
         let Ok(name) = String::from_utf16(&code_units) else {
             continue;
         };

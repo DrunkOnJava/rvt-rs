@@ -265,7 +265,7 @@ fn framed_plane_elevation(buf: &[u8], end: usize, marker: &[u8]) -> Option<f64> 
     if buf.get(at + FRAMED_ELEVATION_COPY..at + FRAMED_ELEVATION_COPY + 8)? != value {
         return None;
     }
-    let elevation = f64::from_le_bytes(value.try_into().ok()?);
+    let elevation = le_bytes::f64_at(value, 0)?;
     (elevation == 0.0 || elevation.is_normal()).then_some(elevation)
 }
 
@@ -604,10 +604,7 @@ fn decode_name_block(
     }
     let end = value.checked_add(chars.checked_mul(2)?)?;
     let raw = buf.get(value..end)?;
-    let units: Vec<u16> = raw
-        .chunks_exact(2)
-        .map(|pair| u16::from_le_bytes([pair[0], pair[1]]))
-        .collect();
+    let units: Vec<u16> = le_bytes::u16_units(raw).collect();
     let name = String::from_utf16(&units).ok()?;
     if name.chars().any(|c| c.is_control()) {
         return None;

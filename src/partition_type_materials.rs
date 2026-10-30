@@ -18,6 +18,7 @@
 //! is the type's ([`type_material_names_2023`]).
 
 use crate::RevitFile;
+use crate::le_bytes;
 use crate::partition_element_records::supports_revit_version;
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -85,10 +86,10 @@ const BLOCK_LAYOUT_2011: BlockLayout = BlockLayout {
 };
 
 fn id_at(buf: &[u8], at: usize, len: usize) -> Option<u32> {
-    let bytes = buf.get(at..at.checked_add(len)?)?;
     match len {
-        4 => Some(u32::from_le_bytes(bytes.try_into().ok()?)),
-        _ => u32::try_from(u64::from_le_bytes(bytes.try_into().ok()?)).ok(),
+        4 => le_bytes::u32_at(buf, at),
+        8 => u32::try_from(le_bytes::u64_at(buf, at)?).ok(),
+        _ => None,
     }
 }
 
@@ -175,7 +176,7 @@ fn map_at(
     materials: &BTreeSet<u32>,
     id_len: usize,
 ) -> Option<MaterialMap> {
-    let count = u32::from_le_bytes(buf.get(at..at + 4)?.try_into().ok()?) as usize;
+    let count = le_bytes::u32_at(buf, at)? as usize;
     if !(1..=MAX_ENTRIES).contains(&count) {
         return None;
     }

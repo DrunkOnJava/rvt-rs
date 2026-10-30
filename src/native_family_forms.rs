@@ -30,6 +30,7 @@
 //! is 1 on its type and 0 on the one instance, and Revit leaves its
 //! "Acrylic, Clear" out.
 
+use crate::le_bytes;
 use crate::native_parameters::ObjectGraph;
 use crate::{RevitFile, compression, native_document, native_parameters, native_segments};
 use std::collections::{BTreeMap, BTreeSet};
@@ -176,8 +177,7 @@ fn read_documents(
                 let document = documents.entry(*family).or_default();
                 for (id, _, start, end) in records {
                     let body = &bytes[start..end];
-                    let Some(class) = body.get(..2).map(|b| u16::from_le_bytes([b[0], b[1]]))
-                    else {
+                    let Some(class) = le_bytes::u16_at(body, 0) else {
                         continue;
                     };
                     let is_form = form_tags.contains(&class);

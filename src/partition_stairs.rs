@@ -138,11 +138,8 @@ pub fn run_riser_count_at(buf: &[u8], data_offset: usize) -> Option<u32> {
 fn data_offsets(buf: &[u8], header: &[u8; 10], ids: &[u32]) -> BTreeMap<u32, usize> {
     let mut out = BTreeMap::new();
     for hit in memchr::memmem::find_iter(buf, header) {
-        let Some(id) = buf
-            .get(hit + header.len()..hit + header.len() + 8)
-            .and_then(|s| s.first_chunk::<8>())
-            .map(|b| u64::from_le_bytes(*b))
-            .and_then(|id| u32::try_from(id).ok())
+        let Some(id) =
+            le_bytes::u64_at(buf, hit + header.len()).and_then(|id| u32::try_from(id).ok())
         else {
             continue;
         };
@@ -398,10 +395,7 @@ fn utf16_at(buf: &[u8], at: usize) -> Option<String> {
         return None;
     }
     let raw = buf.get(at + 4..at + 4 + 2 * length)?;
-    let units: Vec<u16> = raw
-        .chunks_exact(2)
-        .map(|pair| u16::from_le_bytes([pair[0], pair[1]]))
-        .collect();
+    let units: Vec<u16> = le_bytes::u16_units(raw).collect();
     String::from_utf16(&units).ok()
 }
 
@@ -524,7 +518,7 @@ fn stair_type_name(buf: &[u8], at: usize) -> Option<String> {
     }
     let mut at = at + 4;
     for _ in 0..count {
-        let parameter = i64::from_le_bytes(buf.get(at..at + 8)?.try_into().ok()?);
+        let parameter = le_bytes::i64_at(buf, at)?;
         if parameter >= 0 {
             return None;
         }
@@ -553,7 +547,7 @@ pub fn component_type_at(buf: &[u8], id_at: usize, kind: ComponentKind) -> Optio
             // supports) holds f64 values there instead, and is not read.
             for slot in 0..STAIR_TYPE_COMPONENT_SLOTS {
                 let at = id_at + STAIR_TYPE_COMPONENTS_OFFSET + 8 * slot;
-                let id = u64::from_le_bytes(buf.get(at..at + 8)?.try_into().ok()?);
+                let id = le_bytes::u64_at(buf, at)?;
                 if id == u64::MAX {
                     continue;
                 }
@@ -751,10 +745,7 @@ fn scan_run_data<T: PartialEq>(
         let hits: Vec<usize> = memchr::memmem::find_iter(buf, &header).collect();
         for (index, &hit) in hits.iter().enumerate() {
             let id_at = hit + header.len();
-            let Some(id) = buf
-                .get(id_at..id_at + 8)
-                .and_then(|s| s.first_chunk::<8>())
-                .map(|b| u64::from_le_bytes(*b))
+            let Some(id) = le_bytes::u64_at(buf, id_at)
                 .and_then(|id| u32::try_from(id).ok())
                 .filter(|id| runs.contains(id))
             else {

@@ -20,6 +20,7 @@
 //! `reports/element-framing/RE-178-column-cut-body.md`.
 
 use crate::RevitFile;
+use crate::le_bytes;
 use std::collections::BTreeMap;
 
 /// What follows the `u64` ElementId: `u64 3 · u64 -1`.
@@ -33,7 +34,7 @@ fn boxes(buf: &[u8], at: usize) -> Option<[f64; 6]> {
     let mut out = [0.0; 6];
     for (i, value) in out.iter_mut().enumerate() {
         let start = at.checked_add(i * 8)?;
-        *value = f64::from_le_bytes(buf.get(start..start + 8)?.try_into().ok()?);
+        *value = le_bytes::f64_at(buf, start)?;
     }
     (out.iter().all(|v| v.is_finite() && v.abs() < 1e5)
         && out[3] > out[0]
@@ -66,10 +67,7 @@ fn column_nodes(
             if id_at < 96 {
                 continue;
             }
-            let Some(id) = buf
-                .get(id_at..id_at + 8)
-                .and_then(|b| u64::from_le_bytes(b.try_into().ok()?).try_into().ok())
-            else {
+            let Some(id) = le_bytes::u64_at(buf, id_at).and_then(|id| id.try_into().ok()) else {
                 continue;
             };
             if !targets.contains_key(&id) {

@@ -27,3 +27,15 @@ pub(crate) fn f32_at(buf: &[u8], at: usize) -> Option<f32> {
 pub(crate) fn f64_at(buf: &[u8], at: usize) -> Option<f64> {
     Some(f64::from_le_bytes(*buf.get(at..)?.first_chunk()?))
 }
+
+pub(crate) fn i32_at(buf: &[u8], at: usize) -> Option<i32> {
+    Some(i32::from_le_bytes(*buf.get(at..)?.first_chunk()?))
+}
+
+/// The little-endian `u16` code units of `bytes`, two bytes each; a last odd
+/// byte is dropped.
+pub(crate) fn u16_units(bytes: &[u8]) -> impl Iterator<Item = u16> {
+    bytes
+        .chunks_exact(2)
+        .map(|pair| u16::from_le_bytes([pair[0], pair[1]]))
+}

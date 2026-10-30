@@ -185,10 +185,7 @@ pub fn bounded_arc_at(buf: &[u8], at: usize) -> Option<BoundedArc> {
     if buf.get(at..at.checked_add(4)?)? != BOUNDED_LINE_TAG {
         return None;
     }
-    let kind = buf
-        .get(at.checked_sub(8)?..at)
-        .and_then(|s| s.first_chunk::<8>())
-        .map(|b| u64::from_le_bytes(*b))?;
+    let kind = le_bytes::u64_at(buf, at.checked_sub(8)?)?;
     if kind != 1 {
         return None;
     }

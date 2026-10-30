@@ -57,6 +57,7 @@
 //! such as [`BasicFileInfo::worksharing`] and [`BasicFileInfo::username`]
 //! read from it and return `None` for an absent or empty value.
 
+use crate::le_bytes;
 use crate::{Error, Result};
 use encoding_rs::UTF_16LE;
 use serde::{Deserialize, Serialize};
@@ -338,9 +339,7 @@ pub fn parse_properties(data: &[u8]) -> Vec<FileProperty> {
         let Some(body) = data.get(align..) else {
             return Vec::new();
         };
-        let units = body
-            .chunks_exact(2)
-            .map(|pair| u16::from_le_bytes([pair[0], pair[1]]));
+        let units = le_bytes::u16_units(body);
         let text: String = char::decode_utf16(units)
             .map(|unit| unit.unwrap_or(char::REPLACEMENT_CHARACTER))
             .collect();

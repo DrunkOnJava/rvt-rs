@@ -9,6 +9,7 @@
 //! id. `01 00 00 00` cannot overlap itself, so it finds exactly the
 //! occurrences a search per id finds.
 
+use crate::le_bytes;
 use std::collections::BTreeSet;
 
 /// The bytes an object's ElementId follows.
@@ -29,7 +30,9 @@ pub fn find_id_objects(buf: &[u8], ids: &BTreeSet<u32>) -> Vec<(u32, usize)> {
         if raw[4..] != [0, 0, 0, 0] {
             continue;
         }
-        let id = u32::from_le_bytes([raw[0], raw[1], raw[2], raw[3]]);
+        let Some(id) = le_bytes::u32_at(raw, 0) else {
+            continue;
+        };
         if (low..=high).contains(&id) && ids.contains(&id) {
             out.push((id, id_at));
         }

@@ -130,7 +130,7 @@ pub fn decode_at(
     let mut value = String::with_capacity(chars);
     for index in 0..chars {
         let at = offset + index * 2;
-        let unit = u16::from_le_bytes([buf[at], buf[at + 1]]);
+        let unit = le_bytes::u16_at(buf, at)?;
         // An IFC entity name is ASCII alphanumeric; anything else here
         // means the anchor landed inside unrelated text.
         let byte = u8::try_from(unit).ok()?;
@@ -312,8 +312,8 @@ fn export_parameter_value(buf: &[u8], at: usize, key: i64) -> Option<String> {
     }
     let bytes = buf.get(at + 4..at + 4 + units * 2)?;
     let mut value = String::with_capacity(units);
-    for pair in bytes.chunks_exact(2) {
-        let byte = u8::try_from(u16::from_le_bytes([pair[0], pair[1]])).ok()?;
+    for unit in le_bytes::u16_units(bytes) {
+        let byte = u8::try_from(unit).ok()?;
         if !(byte.is_ascii_alphanumeric() || byte == b'_') {
             return None;
         }

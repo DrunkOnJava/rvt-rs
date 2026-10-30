@@ -63,6 +63,7 @@
 //!   that its last slot names the sketched element on the recorded
 //!   edge.
 
+use crate::le_bytes;
 use crate::partition_element_records::PartitionElementRecord;
 use crate::walker::InstanceField;
 use std::collections::BTreeMap;
@@ -1020,16 +1021,8 @@ fn sketch_curve_list(
     header_len: usize,
     sketch_lines: &std::collections::BTreeSet<u32>,
 ) -> Option<(u32, u32, Vec<u32>)> {
-    let u64_at = |at: usize| {
-        data.get(at..at.checked_add(8)?)
-            .and_then(|s| s.first_chunk::<8>())
-            .map(|b| u64::from_le_bytes(*b))
-    };
-    let u32_at = |at: usize| {
-        data.get(at..at.checked_add(4)?)
-            .and_then(|s| s.first_chunk::<4>())
-            .map(|b| u32::from_le_bytes(*b))
-    };
+    let u64_at = |at: usize| le_bytes::u64_at(data, at);
+    let u32_at = |at: usize| le_bytes::u32_at(data, at);
     let own = u32::try_from(u64_at(header_len)?).ok()?;
     let owner = u32::try_from(u64_at(SKETCH_OWNER_OFFSET)?).ok()?;
     if owner == own || sketch_lines.contains(&owner) {

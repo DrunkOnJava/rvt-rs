@@ -226,7 +226,7 @@ pub fn layers_at(
     let mut layers = Vec::with_capacity(count);
     for index in 0..count {
         let at = count_at + 4 + layout.record_len * index;
-        let width = f64::from_le_bytes(buf.get(at..at + 8)?.try_into().ok()?);
+        let width = le_bytes::f64_at(buf, at)?;
         let material = id_at(at + layout.material_at)?;
         let deck = id_at(at + layout.deck_at)?;
         let function = le_bytes::u32_at(buf, at + layout.function_at)?;
@@ -272,11 +272,8 @@ fn framed(buf: &[u8], count_at: usize, tag: [u8; 2]) -> bool {
             return false;
         };
         le_bytes::u32_at(buf, start) == Some(k as u32)
-            && (0..k).all(|i| {
-                buf.get(start + 4 + 2 * i..start + 6 + 2 * i)
-                    .map(|unit| u16::from_le_bytes([unit[0], unit[1]]))
-                    .is_some_and(|unit| unit >= 0x20)
-            })
+            && (0..k)
+                .all(|i| le_bytes::u16_at(buf, start + 4 + 2 * i).is_some_and(|unit| unit >= 0x20))
     })
 }
 
@@ -714,12 +711,9 @@ pub fn wall_type_face_angles_after(data: &[u8], frame: &[u8]) -> Option<[f64; 3]
         return None;
     }
     let angle = |index: usize| {
-        data.get(at + 8 * index..at + 8 * index + 8)
-            .and_then(|b| b.first_chunk::<8>())
-            .map(|b| f64::from_le_bytes(*b))
-            .filter(|value| {
-                *value == 0.0 || (1e-9..std::f64::consts::FRAC_PI_2).contains(&value.abs())
-            })
+        le_bytes::f64_at(data, at + 8 * index).filter(|value| {
+            *value == 0.0 || (1e-9..std::f64::consts::FRAC_PI_2).contains(&value.abs())
+        })
     };
     Some([angle(0)?, angle(1)?, angle(2)?])
 }

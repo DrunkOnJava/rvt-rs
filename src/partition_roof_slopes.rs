@@ -79,7 +79,7 @@ pub fn edge_slope_in(data: &[u8], revit_version: u32) -> Option<EdgeSlope> {
         if !(angle.is_finite() && angle > 0.0 && angle < std::f64::consts::FRAC_PI_2) {
             return None;
         }
-        let small = i64::from_le_bytes(data.get(at + 0x20..at + 0x28)?.try_into().ok()?);
+        let small = le_bytes::i64_at(data, at + 0x20)?;
         if !(-64..=-1).contains(&small) || le_bytes::u32_at(data, at + 0x2c)? != 7 {
             return None;
         }
@@ -129,10 +129,7 @@ pub fn scan_edge_slopes(
         let hits: Vec<usize> = memchr::memmem::find_iter(buf, &header).collect();
         for (index, &hit) in hits.iter().enumerate() {
             let id_at = hit + header.len();
-            let Some(id) = buf
-                .get(id_at..id_at + 8)
-                .and_then(|s| s.first_chunk::<8>())
-                .map(|b| u64::from_le_bytes(*b))
+            let Some(id) = le_bytes::u64_at(buf, id_at)
                 .and_then(|id| u32::try_from(id).ok())
                 .filter(|id| lines.contains(id))
             else {
@@ -267,10 +264,7 @@ pub fn scan_arrow_heights(
         let hits: Vec<usize> = memchr::memmem::find_iter(buf, &header).collect();
         for (index, &hit) in hits.iter().enumerate() {
             let id_at = hit + header.len();
-            let Some(id) = buf
-                .get(id_at..id_at + 8)
-                .and_then(|s| s.first_chunk::<8>())
-                .map(|b| u64::from_le_bytes(*b))
+            let Some(id) = le_bytes::u64_at(buf, id_at)
                 .and_then(|id| u32::try_from(id).ok())
                 .filter(|id| lines.contains(id))
             else {
@@ -338,10 +332,7 @@ pub fn scan_fascia_depths(
         let hits: Vec<usize> = memchr::memmem::find_iter(buf, &header).collect();
         for (index, &hit) in hits.iter().enumerate() {
             let id_at = hit + header.len();
-            let Some(id) = buf
-                .get(id_at..id_at + 8)
-                .and_then(|s| s.first_chunk::<8>())
-                .map(|b| u64::from_le_bytes(*b))
+            let Some(id) = le_bytes::u64_at(buf, id_at)
                 .and_then(|id| u32::try_from(id).ok())
                 .filter(|id| roofs.contains(id))
             else {
