@@ -130,34 +130,8 @@ pub(super) fn attach_is_external(
             }
         }
     }
-    let mut curtain_walls: BTreeMap<u32, bool> = BTreeMap::new();
-    for element in groups.iter_mut().flat_map(|elements| elements.iter_mut()) {
-        if let Some(external) = calculated_is_external(element, last_step) {
-            element
-                .fields
-                .push((IS_EXTERNAL_FIELD.into(), InstanceField::Bool(external)));
-            if let (CURTAIN_WALL_CLASS, Some(id)) = (element.class.as_str(), element.id) {
-                curtain_walls.insert(id, external);
-            }
-        }
-    }
-    // RE-193, RE-269: a mullion or panel with no parameter or type Function
-    // takes its host's value, its curtain wall's, as revit-ifc's
-    // `IsElementExternal` does from IFC_v24.2.20 on.
     for element in groups.into_iter().flat_map(|elements| elements.iter_mut()) {
-        if !CURTAIN_WALL_PART_CLASSES.contains(&element.class.as_str())
-            || element
-                .fields
-                .iter()
-                .any(|(name, _)| name == IS_EXTERNAL_FIELD)
-        {
-            continue;
-        }
-        let host = element.fields.iter().find_map(|(name, value)| match value {
-            InstanceField::ElementId { id, .. } if name == AGGREGATE_WHOLE_FIELD => Some(*id),
-            _ => None,
-        });
-        if let Some(&external) = host.and_then(|id| curtain_walls.get(&id)) {
+        if let Some(external) = calculated_is_external(element, last_step) {
             element
                 .fields
                 .push((IS_EXTERNAL_FIELD.into(), InstanceField::Bool(external)));
