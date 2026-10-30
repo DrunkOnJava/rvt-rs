@@ -2174,6 +2174,12 @@ impl StepWriter {
         // #323: parts of an aggregate whose whole is a building element
         // reach the spatial structure through that whole, so they are left
         // out of the storey containment below.
+        let is_building_element = |index: usize| {
+            matches!(
+                model.entities.get(index),
+                Some(super::entities::IfcEntity::BuildingElement { .. })
+            )
+        };
         let aggregate_parts = aggregate_parts_of_elements(model);
         // #400: each building element's GlobalId, fixed from what the
         // element is rather than where it lands in the file. Revit's own
