@@ -50,5 +50,5 @@ Measure [40985981272](https://github.com/DrunkOnJava/rvt-rs/actions/runs/4098598
 | different | 23 | 0 |
 | missing | 0 | 29 |
 
-The one left is R2025's `01_Walls`, whose one storey holds its walls. RE1's four and the 22 other R2025 models have a storey with no element. So do the BIM4LCA office's two exports, though both rules agreed there before: Revit's export contains an element in each of its 10 storeys, rvt-rs's leaves `Sea Level` empty, so rvt-rs cannot tell the two exporters' counts apart and writes none. Core Interior's export writes no property sets (RE-239 §5). Nothing else moves: every other value of the census and every other scorer's output is as before.
+The one left is R2025's `01_Walls`, whose one storey holds its walls. RE1's four and the 22 other R2025 models have a storey with no element. So do the BIM4LCA office's two exports, though both rules agreed there before: Revit's export contains an element in each of its 10 storeys, but at least one of rvt-rs's 10 contains none (398 of its elements are on no storey or in a space), so rvt-rs cannot tell the two exporters' counts apart and writes none. Core Interior's export writes no property sets (RE-239 §5). Nothing else moves: every other value of the census and every other scorer's output is as before.
 
