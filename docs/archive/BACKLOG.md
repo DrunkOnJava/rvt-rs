@@ -1,5 +1,10 @@
 # Backlog
 
+> **Archived 2026-10-30.** The ranked backlog maintainer sessions worked
+> from between 2026-10-03 and 2026-10-19, moved here from the repository
+> root. Open work is tracked as GitHub issues. The session settings below
+> are the ones in force then, not now.
+
 Working backlog for maintainer sessions. The public plan is the GitHub
 milestones and issues; this file ranks what a session can do now, with the
 evidence that put each item here. Statuses: `open`, `committed`,
