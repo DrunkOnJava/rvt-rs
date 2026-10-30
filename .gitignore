@@ -4,10 +4,9 @@
 **/*.rs.bk
 *.pdb
 
-# Note: Cargo.lock IS committed. This is an application crate
-# shipping 7 binaries — a committed lockfile gives reproducible
-# builds for end users and is the standard guidance from the Cargo
-# book.
+# Note: Cargo.lock IS committed. The crate ships its CLIs, and a
+# committed lockfile gives their users reproducible builds, as the
+# Cargo book advises.
 
 # ---- Documentation & benchmark artifacts ----
 /target/doc/
@@ -18,11 +17,9 @@
 *.heapdump
 
 # ---- Claude Code context files (NEVER commit) ----
-# CLAUDE.md provides cross-session context to the Claude agent. It lives
-# at the PARENT of this repo (rvt-recon-2026-04-19/CLAUDE.md), not
-# inside the repo. This entry is a defensive guard in case anyone
-# copies or symlinks it here. A Codespace writes its own, which imports
-# AGENTS.md (.devcontainer/first-create.sh).
+# A maintainer's CLAUDE.md sits at the repository root and stays
+# untracked. A Codespace writes its own, which imports AGENTS.md
+# (.devcontainer/first-create.sh).
 CLAUDE.md
 .claude/*.local.md
 .claude/*.local.json
@@ -92,7 +89,7 @@ $RECYCLE.BIN/
 *.old
 *.tmp
 
-# ---- Python (in case we add tooling) ----
+# ---- Python ----
 __pycache__/
 *.pyc
 *.pyo
@@ -106,7 +103,7 @@ env/
 *.egg-info/
 .pytest_cache/
 
-# ---- Node (in case we add JS tooling) ----
+# ---- Node ----
 node_modules/
 npm-debug.log*
 yarn-debug.log*
@@ -122,7 +119,7 @@ yarn-error.log*
 *.rfa
 *.rte
 *.rft
-# Lane Three: redistributable synthetic fixtures under corpus/ are
+# Redistributable synthetic fixtures under corpus/ are
 # intentionally committed (Apache-2.0 gen-fixture output + license
 # sidecars). Negate the blanket *.rvt ignore for that tree only.
 !corpus/
