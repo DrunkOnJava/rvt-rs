@@ -666,10 +666,7 @@ impl Cursor<'_> {
     }
 }
 fn identifier(value: &Value) -> Result<i64> {
-    value
-        .get("m_id")
-        .and_then(|v| v.get("m_id64"))
-        .and_then(Value::as_i64)
+    crate::native_json::identifier_i64(value)
         .ok_or_else(|| anyhow::anyhow!("unsupported serialized ElementId value"))
 }
 /// Decode scalar parameter sets after the schema-directed derived-field prefix.

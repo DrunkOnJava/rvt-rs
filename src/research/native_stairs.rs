@@ -1020,7 +1020,7 @@ pub struct NativeStairPart {
 }
 
 fn element_id(v: &Value, name: &str) -> Option<u64> {
-    v.get(name)?.get("m_id")?.get("m_id64")?.as_u64()
+    crate::native_json::element_id(v.get(name)?)
 }
 
 /// The stair, type and family of each stair, run and support in `parts`,

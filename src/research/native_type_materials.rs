@@ -65,8 +65,8 @@ pub fn geometry_materials(
         };
         for entry in map {
             let Some(id) = entry
-                .pointer("/second/m_id/m_id64")
-                .and_then(serde_json::Value::as_i64)
+                .get("second")
+                .and_then(crate::native_json::element_id_i64)
             else {
                 continue;
             };

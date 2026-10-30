@@ -4,17 +4,16 @@
 use serde_json::Value;
 use std::collections::BTreeMap;
 
-/// `{"m_id":{"m_id64":n}}` as `n`.
+/// An ElementId field as either shape of the schema saves it, as `n`:
+/// `{"m_id":{"m_id64":n}}` from Revit 2024 and `{"m_id":{"m_id":n}}` on 2015
+/// to 2023 (RE-280). `None` for a null id, which is negative.
 pub(crate) fn element_id(value: &Value) -> Option<u64> {
-    value
-        .pointer("/m_id/m_id64")
-        .and_then(Value::as_i64)
-        .and_then(|n| u64::try_from(n).ok())
+    identifier_i64(value).and_then(|n| u64::try_from(n).ok())
 }
 
-/// `{"m_id":{"m_id64":n}}` as `n`, signed.
+/// [`element_id`], signed.
 pub(crate) fn element_id_i64(value: &Value) -> Option<i64> {
-    value.pointer("/m_id/m_id64").and_then(Value::as_i64)
+    identifier_i64(value)
 }
 
 /// An ElementId field as either shape of the schema saves it: the
