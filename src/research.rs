@@ -24,7 +24,7 @@
 //! - [`partition_curve_fields`]: A duct's or pipe's size and type, from its curve object (RE-134, #96, #35)
 //! - [`partition_design_options`]: Design option sets and their primary options (#319, RE-40)
 //! - [`partition_element_records`]: Partition element-record headers
-//! - [`partition_element_records_2023`]: Revit 2023 partition element records (RE-81, #421), and Revit 2011 to 2022's, which take the same layout (RE-180, RE-181, RE-259)
+//! - [`partition_element_records_2023`]: Revit 2023 partition element records (RE-81, #421), and Revit 2008 to 2022's, which take the same layout (RE-180, RE-181, RE-259, RE-260)
 //! - [`partition_fitting_sizes`]: A pipe fitting's nominal size, from its own data object (RE-165, #35)
 //! - [`partition_id_objects`]: Serialised objects keyed by their ElementId, found in one pass
 //! - [`partition_ifc_export_overrides`]: Per-element IFC export-type overrides carried in the Revit 2024 partition parameter blocks (#212, RE-22)

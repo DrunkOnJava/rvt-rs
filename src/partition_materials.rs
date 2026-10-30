@@ -111,7 +111,7 @@ fn frame_at(buf: &[u8], at: usize) -> Option<MaterialAppearance> {
 /// shininess. A material that opens its own data frames it with `ff ff ff
 /// ff 9b 0b`; a family's own material does not, so the frame is known by
 /// its 0.5 and its slots instead. Revit 2015 to 2018 write two slots, not
-/// four ([`pattern_slots_32`]), and Revit 2011 to 2013 two `u32`
+/// four ([`pattern_slots_32`]), and Revit 2008 to 2013 two `u32`
 /// ElementIds between the 0.5 and the slots ([`shading_ids_32`]).
 fn frame_at_2023(buf: &[u8], at: usize, slots: usize, ids: usize) -> Option<MaterialAppearance> {
     let slots_at = at.checked_sub(8 * slots)?;
@@ -159,8 +159,9 @@ pub fn pattern_slots_32(revit_version: u32) -> usize {
 }
 
 /// The `u32` ElementIds a 32-bit release's shading frame holds between the
-/// 0.5 and the pattern slots: two on Revit 2011 to 2013, `ff` × 4 when
-/// unset, and none from Revit 2014 on. Autodesk's 2013
+/// 0.5 and the pattern slots: two on Revit 2008 to 2013, `ff` × 4 when
+/// unset, and none from Revit 2014 on. Every frame of the local 2008 and
+/// 2009 files holds them too (58 and 79 frames, RE-260). Autodesk's 2013
 /// `rac_advanced_sample_project` frames Carbon Steel as `00 00 00 3f · ff
 /// ff ff ff ff ff ff ff ·` then its 2015 copy's two slots and colour; one
 /// of its materials sets the second id.
@@ -521,7 +522,8 @@ fn native_material_names(
 /// 2023 (RE-115) and 2015 to 2022 (RE-180, RE-181); RE1's 2025 files hold no entry
 /// in either layout.
 pub const CATEGORY_MATERIAL_SUPPORTED_REVIT_VERSIONS: &[u32] = &[
-    2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024,
+    2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023,
+    2024,
 ];
 
 /// A category's object-styles entry on Revit 2023 (RE-115), after its
@@ -705,7 +707,7 @@ pub fn scan_materials_2023(
     )
 }
 
-/// [`scan_materials_2023`] on any 32-bit release, Revit 2011 to 2023, with
+/// [`scan_materials_2023`] on any 32-bit release, Revit 2008 to 2023, with
 /// the release's tags of `Material`, `PhysicalParamSet` and `CellList`
 /// (RE-180). Empty on any other release.
 pub fn scan_materials_32(
@@ -748,6 +750,11 @@ pub fn scan_materials_32(
             let object = &buf[tag_at + 2..end];
             let name = own_name_field(object)
                 .or_else(|| terminated_name_2023(object, tags.physical_param_set))
+                .or_else(|| {
+                    (revit_version < NAME_BEFORE_PROPERTIES_UNTIL)
+                        .then(|| name_before_properties(object))
+                        .flatten()
+                })
                 .or_else(|| {
                     memchr::memmem::find_iter(object, &entry).find_map(|hit| {
                         let n = le_bytes::u32_at(object, hit + entry.len())?;
@@ -902,6 +909,30 @@ fn scan_material_appearances_2023(
         .into_iter()
         .filter_map(|(id, appearance)| appearance.map(|a| (id, a)))
         .collect()
+}
+
+/// The first release whose material names [`name_before_properties`] does
+/// not read: from Revit 2012 a name ends before `PhysicalParamSet`'s tag.
+const NAME_BEFORE_PROPERTIES_UNTIL: u32 = 2012;
+
+/// The first name `u32 n · UTF-16 × n` in `object` that three equal `f64`s
+/// follow, the start of a Revit 2008 to 2011 material's properties. There
+/// a material's name is not ended by `PhysicalParamSet`'s tag, and only
+/// some materials frame it as a `MaterialElemGroupHelper`; it may follow a
+/// list of parameter entries. On every material object of local Revit
+/// 2008, 2009, 2010 and 2011 files a name is found this way, and on the
+/// 2010 and 2011 files, wherever the object's own `MaterialElemGroupHelper`
+/// frame names it too, the two agree (43 of 43) (RE-260).
+fn name_before_properties(object: &[u8]) -> Option<String> {
+    let limit = object.len().min(NAME_WINDOW);
+    (0..limit).find_map(|at| {
+        let n = le_bytes::u32_at(object, at)?;
+        let name = utf16_name(object, at + 4, n)?;
+        let end = at + 4 + 2 * name.encode_utf16().count();
+        let first = object.get(end..end + 8)?;
+        (object.get(end + 8..end + 16)? == first && object.get(end + 16..end + 24)? == first)
+            .then_some(name)
+    })
 }
 
 /// The name `u32 n · UTF-16 × n` ending right before the first `ff ff ff ff

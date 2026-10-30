@@ -33,6 +33,7 @@ pub struct ReleaseSupport {
 /// or `None` for a release whose element records are not read.
 pub fn release_capability_id(revit_version: u32) -> Option<&'static str> {
     match revit_version {
+        2008..=2010 => Some("element-records-revit-2008-2010"),
         2011..=2014 => Some("element-records-revit-2011-2014"),
         2015..=2018 => Some("element-records-revit-2015-2018"),
         2019..=2022 => Some("element-records-revit-2019-2022"),

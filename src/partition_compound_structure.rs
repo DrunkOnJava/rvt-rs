@@ -75,8 +75,8 @@ pub const COMPOUND_STRUCTURE_SUPPORTED_REVIT_VERSIONS: &[u32] = &[2024, 2025, 20
 /// the same projects, whose walls read the line their 2019 copies do
 /// (RE-181).
 pub const WALL_LINE_SUPPORTED_REVIT_VERSIONS: &[u32] = &[
-    2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026,
-    2027,
+    2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023,
+    2024, 2025, 2026, 2027,
 ];
 
 /// Each wall's location line, by ElementId, on a release in
@@ -129,8 +129,8 @@ pub struct LayerLayout {
 /// The layer record layout of `revit_version`, where it is measured.
 pub fn layer_layout(revit_version: u32) -> Option<LayerLayout> {
     match revit_version {
-        // Revit 2011 to 2022 write 2023's records (RE-180, RE-181, RE-259).
-        2011..=2023 => Some(LayerLayout {
+        // Revit 2008 to 2022 write 2023's records (RE-180, RE-181, RE-259, RE-260).
+        2008..=2023 => Some(LayerLayout {
             record_len: 29,
             function_at: 8,
             material_at: 16,
@@ -303,7 +303,7 @@ pub fn scan_type_layers(
     materials: &BTreeSet<u32>,
     declared: &BTreeSet<u32>,
 ) -> Result<BTreeMap<u32, Vec<CompoundLayer>>> {
-    // Revit 2011 to 2023's data header frames a `u32` id (RE-111, RE-180).
+    // Revit 2008 to 2023's data header frames a `u32` id (RE-111, RE-180).
     let header =
         crate::partition_names::element_data_layout(revit_version).map(|layout| layout.header);
     let (Some(header), Some(tag), Some(layout)) = (
@@ -396,7 +396,7 @@ pub fn wall_orientation(data: &[u8]) -> Option<WallOrientation> {
 /// of Autodesk's 2013 `rac_advanced` has its 2015 copy's exterior side
 /// (RE-259).
 pub fn wall_orientation_has_word(revit_version: u32) -> bool {
-    !(2011..=2020).contains(&revit_version)
+    !(2008..=2020).contains(&revit_version)
 }
 
 /// [`wall_orientation`], for data with or without the word
