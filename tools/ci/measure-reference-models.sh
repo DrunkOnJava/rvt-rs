@@ -283,7 +283,7 @@ measure_model() { # name rvt ref
     timed "$dir" rvt-ifc-revit-sets "$BIN/rvt-ifc" "$MODELS/$rvt" -o "$dir/revit-sets.ifc" ${RVT_IFC_FLAGS:-} "${flags[@]}" \
       > "$dir/rvt-ifc-revit-sets.log" 2>&1
     echo "exit $?" >> "$dir/rvt-ifc-revit-sets.log"
-    score "$dir/revit_property_sets_vs_ifc.txt" "$SCORERS/revit_property_sets_vs_ifc.py" "$dir/revit-sets.ifc" "$MODELS/$sets"
+    score "$dir/revit_property_sets_vs_ifc.txt" "$SCORERS/revit_property_sets_vs_ifc.py" "$dir/revit-sets.ifc" "$MODELS/$sets" --list
     rm -f "$dir/revit-sets.ifc"
   fi
   # The bulky outputs stay out of the uploaded results.
