@@ -4,7 +4,7 @@ The `rvt::ifc` module ships a complete Rust data model for a
 browser/desktop 3D viewer, and the `rvt-wasm` crate exposes it to
 JavaScript: [The JavaScript bindings](#the-javascript-bindings) below lists
 every function the browser viewer can call. The sections before it map the
-Rust functions behind them, grouped by the 11 submodules that make up the
+Rust functions behind them, grouped by the submodules that make up the
 viewer surface.
 
 Everything listed here is:
@@ -156,31 +156,6 @@ use rvt::ifc::pbr::PbrMaterial;
   paint/ceramic/tile → 0.5, default → 0.6.
 - sRGB → linear color conversion on color unpack.
 
-## Measurement
-
-```rust
-use rvt::ifc::measure::{
-    distance, vector, dot, cross, magnitude, normalize,
-    angle_abc, polygon_area_3d, polygon_perimeter,
-    Measurement,
-};
-```
-
-- `distance(a, b) -> f64`, `angle_abc(a, b, c) -> f64`,
-  `polygon_area_3d(&[Point3]) -> f64`, `polygon_perimeter(&[Point3]) -> f64`.
-- `Measurement { Distance, Angle, Area }` tagged enum with
-  builder methods.
-
-## Annotations
-
-```rust
-use rvt::ifc::annotation::{Annotation, AnnotationLayer};
-```
-
-- `Annotation { Note, Leader, Polyline, Pin }` tagged enum.
-- `AnnotationLayer` with `push`, `remove_by_id`, `find`, `len`,
-  `next_id(counter, kind)`.
-
 ## Rendering outputs
 
 ### 3D (glTF 2.0 binary)
@@ -322,7 +297,6 @@ let svg = render_plan_svg(&model, &SheetOptions::default());
 
 // 4. Bind interactions.
 //    - Click element → element_info_panel(&model, entity_index)
-//    - Measure tool  → Measurement::distance(a, b) / angle / area
 //    - Layer toggle  → filter.hide(ifc_type); filter.apply(&scene)
 //    - View mode     → mode.default_section_box(storey, bbox)
 //    - Share URL     → encode_to_fragment(&state)

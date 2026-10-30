@@ -57,8 +57,6 @@
 //! | [`pbr`] | Revit Material → glTF PBR mapping |
 //! | [`camera`] | Orbit-camera state + controls |
 //! | [`clipping`] | ClippingPlane + SectionBox + ViewMode |
-//! | [`measure`] | Distance / angle / polygon-area |
-//! | [`annotation`] | Note / leader / polyline / pin markups |
 //! | [`share`] | ViewerState URL-fragment serialization |
 //! | [`gltf`] | glTF 2.0 GLB binary exporter |
 //! | [`sheet`] | 2D SVG plan view emission |
@@ -80,7 +78,6 @@
 
 use crate::Result;
 
-pub mod annotation;
 pub mod body_geometry;
 pub mod camera;
 pub mod category_map;
@@ -90,7 +87,6 @@ pub mod entities;
 pub mod export_content;
 pub mod from_decoded;
 pub mod gltf;
-pub mod measure;
 pub mod pbr;
 pub mod revit_property_sets;
 pub mod revit_set_placement;
