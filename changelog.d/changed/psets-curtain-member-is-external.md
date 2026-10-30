@@ -10,7 +10,7 @@
   apart, with the other values Revit's export gets wrong (RE-235 §5). It
   counts them only where the export's own type objects hold the value, so
   RE1 Architecture's 12 members, exported by a later exporter, are still
-  scored. On the office as built the census goes from 12,684 missing of
-  57,773 to 2,417 of 47,506 with `--revit-set-placement`, and from 13,650
-  to 3,383 without it; equal (45,033 and 44,067) and different (56) do not
+  scored. On the office as built the census goes from 12,672 missing of
+  57,773 to 2,405 of 47,506 with `--revit-set-placement`, and from 13,638
+  to 3,371 without it; equal (45,045 and 44,079) and different (56) do not
   move, and no export changes.

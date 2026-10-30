@@ -46,7 +46,7 @@ The 961: 646 coverings, 298 `Pset_SpaceHeaterTypeCommon.Reference`, one air term
 
 ## 5. Revit values left out
 
-A value Revit's export writes that is known to be wrong is not written, with or without the option, and `tools/re/psets_vs_ifc.py` and `tools/re/qtos_vs_ifc.py` count it apart (`REVIT_DEFECTS`, and for the curtain members' `IsExternal` `curtain_cache_values` in `psets_vs_ifc.py`), not as missing: 63 `WalkingLineOffset` values and 10,003 mullions' `CrossSectionArea` on the office as built (Measure 40306633673), and 10,267 curtain members' and member types' `IsExternal` values (Measure 41114107468 and 41114111544, against 41114114865 and 41114119296 on `main`: equal and different unchanged on all 31 models, missing down by those values on the two office files):
+A value Revit's export writes that is known to be wrong is not written, with or without the option, and `tools/re/psets_vs_ifc.py` and `tools/re/qtos_vs_ifc.py` count it apart (`REVIT_DEFECTS`, and for the curtain members' `IsExternal` `curtain_cache_values` in `psets_vs_ifc.py`), not as missing: 63 `WalkingLineOffset` values and 10,003 mullions' `CrossSectionArea` on the office as built (Measure 40306633673), and 10,267 curtain members' and member types' `IsExternal` values (Measure 41117832403 and 41117838385, against 41117828966 and 41117835321 on `main` at b9e0ce71: equal and different unchanged on all 31 models, missing down by those values on the two office files):
 
 | property | Revit's value | why it is wrong |
 |---|---|---|
