@@ -83,7 +83,7 @@ the four levels a file can reach are in the
   export put them, checked against buildingSMART's published IFC4 property
   set definitions on every measured export. Exports carry parameters named
   for a standard set's property, `IsExternal` (on every class but curtain
-  mullions and panels), type Fire
+  mullions and panels, RE-269), type Fire
   Ratings, door sizes, Revit 2024 Areas as spaces, and port types, with
   electrical ports' direction (HVAC and piping directions are not read yet,
   #834); Revit 2015 to 2022 and 2027 projects export their elements,
@@ -144,8 +144,8 @@ The geometry and element-data work that continues after 0.11.0, moved from the
 slice records a baseline, an improvement and a residual against Revit's own
 exports on the reference pack (#407), approximations stay labelled (#409), and
 a slice ships in the next release that contains it. Geometry open now: wall
-bodies thicker or thinner than their type's layers (#358) and walls Revit
-draws cut, drawn taller than its body (#1067), stair flights
+bodies thicker or thinner than their type's layers (#358) and the tops of walls Revit
+steps over a floor that covers them in part (#1067), stair flights
 (#357), roofs Revit splits into slab parts (#323), hip roofs over T and U footprints and roof cases
 with no oracle (#884, #885), the openings on releases other than 2024 and 2025
 (#227), room boundaries whose solid does not

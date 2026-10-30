@@ -28,10 +28,20 @@ Eleven distinct inner diameters, from 7.48 mm (a 9.52 mm pipe) to 102.26 mm (a 1
 
 ## 4. What this changes
 
-`InvertElevation` can be written for every pipe along an axis: the lower end of a vertical pipe; the axis of a horizontal one less half the inner diameter read at byte 549 of its `RbsPipeCurve` object; each above the pipe's storey. A sloped pipe's invert is not measured here, as RE1 has none.
+`InvertElevation` can be written for every pipe along an axis: the lower end of a vertical pipe; the axis of a horizontal one less half the inner diameter read at byte 549 of its `RbsPipeCurve` object; each above the pipe's storey (section 6 corrects this: above the model's zero). A sloped pipe's invert is not measured here, as RE1 has none.
 
 ## 5. Reproduce
 
 ```text
 gh workflow run measure.yml --ref main -f ref=0c7e71c27eacb72a35bfefec76f9804225f0e4bd -f base=none -f probe=probe_re157_pipe_inner_diameter
 ```
+
+## 6. Correction, 2026-10-30: the invert is a height above the model's zero, not above the storey
+
+**Artefacts:** the BIM4LCA office as built and at building permit (Revit 2024, CC BY-SA 4.0) with Revit's IFC4 exports. Measured on GitHub's hosted runners with the Measure workflow, run 41109551247 (`psets_vs_ifc`: `Pset_PipeSegmentOccurrence.InvertElevation` 12 values, equal 0 before and 12 after on both files; RE1 Mechanical's 6 and Plumbing's 63 stay equal, their exports byte-identical).
+
+Every RE1 pipe is on Level 1, at elevation 0, so sections 1 and 4 could not tell a height above the storey from a height above the model's zero. The office is the first model with pipes on a storey that is not at zero. Its 12 pipes are `Pipe Types:JSV-3`, all vertical, on `Level_01` (55,500 mm in Revit's export). Each pipe's extrusion starts 179.19 mm below the storey's placement and runs up 3,679.19 mm, so its lower end is at 55,320.81 mm. `Pset_PipeSegmentOccurrence.InvertElevation` is `55320.806855210511` on all 12, in the file's millimetres: the height of the lower end above the model's zero. Above the storey it would be -179.19 mm.
+
+rvt-rs therefore writes a pipe's invert as the height it works out in the model's frame, without taking the storey's elevation off (the step `pipe_inverts_above_storeys` took is gone). On RE1 nothing moves: the storey those 69 pipes stand on is at zero.
+
+A vertical pipe's lower end needs no inner diameter, so it is written on a Revit 2024 pipe too, where the diameters are not read (#869). A horizontal pipe still needs the diameter, and a 2024 one still gets nothing: no model has one to measure.

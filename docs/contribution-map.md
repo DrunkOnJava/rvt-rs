@@ -25,7 +25,7 @@ milestone is for.
 
 | Issue | Remainder |
 |---|---|
-| [#1067](https://github.com/DrunkOnJava/rvt-rs/issues/1067) | BIM4LCA office: 78 of 579 walls drawn taller than Revit's body, which Revit draws cut where a joined floor covers them; the rule is exact at permit and misses one wall as built, and a part-covered wall needs a stepped top (RE-257, RE-267) |
+| [#1067](https://github.com/DrunkOnJava/rvt-rs/issues/1067) | BIM4LCA office: walls a floor covers in part, which Revit steps and rvt-rs draws at their full height (29 as built, 26 at permit), and one wall as built that Revit cuts although 0.0243 ft² of its plan lies outside the floor; the walls a floor covers whole are cut since RE-267 (RE-257, RE-267) |
 | [#885](https://github.com/DrunkOnJava/rvt-rs/issues/885) | Roof cases with no oracle: 2024 gables and hips, a slope arrow stopping short; roofs sloped by several slope arrows (puzzbobb's T and U roofs) are drawn as their record box (RE-199 follow-up) |
 | [#884](https://github.com/DrunkOnJava/rvt-rs/issues/884) | Hip roofs over T and U footprints stay level blocks: straight-skeleton split events (RE-199 follow-up) |
 | [#869](https://github.com/DrunkOnJava/rvt-rs/issues/869) | MEP ports and pipe cylinders outside Revit 2024 and 2025: no 2026 or 2027 MEP model has a Revit export to measure against |
@@ -57,6 +57,7 @@ The requirements these serve, each with its bar, status and evidence, are in
 | [#878](https://github.com/DrunkOnJava/rvt-rs/issues/878) | Revit 2015: the elements' own GlobalIds are not rebuilt (0 of 241 on BIMcollab's structural example; project, site, building and storeys are) |
 | [#874](https://github.com/DrunkOnJava/rvt-rs/issues/874) | 1.0: practitioner workflow reports folded into the supported profile |
 | [#792](https://github.com/DrunkOnJava/rvt-rs/issues/792) | BIM4LCA office: fixture 3095244 is IfcSanitaryTerminal where Revit writes IfcFlowTerminal, and the permit model writes a column Revit's export leaves out |
+| [#1158](https://github.com/DrunkOnJava/rvt-rs/issues/1158) | Native records on Revit 2015 to 2022: the framing, the preamble and the graphs are measured (RE-280); `extract_records` still refuses these releases until its Element base, ElementId reads and extensible-storage catalogue take the older shapes and the 2015 to 2017 declared sizes |
 | [#421](https://github.com/DrunkOnJava/rvt-rs/issues/421) | Element records beyond 2024/2025: derive the marker from the schema and measure the older envelope (RE-80 follow-up) |
 | [#408](https://github.com/DrunkOnJava/rvt-rs/issues/408) | Held-out validation: measure on licensed models not used to develop the decoder |
 
