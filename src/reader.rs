@@ -664,8 +664,8 @@ impl RevitFile {
     /// The project's phase order and the elements Revit's export leaves
     /// out by phase, memoised (#328, RE-184). Empty where the native record
     /// path does not read the release or the file lists no phases, and
-    /// empty with [`crate::native_phases::PhaseFilter::read_error`] set where
-    /// it reads the release and the read failed.
+    /// empty with its `read_error` set where it reads the release and the
+    /// read failed.
     #[cfg(feature = "unstable-research")]
     pub fn phase_filter(&mut self) -> Arc<crate::native_phases::PhaseFilter> {
         self.memoised_phase_filter()
