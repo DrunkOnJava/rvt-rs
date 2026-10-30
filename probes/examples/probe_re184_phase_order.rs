@@ -14,7 +14,7 @@
 //! created phase (-1) are not phased and are not counted.
 //!
 //! Usage:
-//!   cargo run --profile ci --example probe_re184_phase_order -- MODEL.rvt ...
+//!   cargo run --profile ci -p rvt-probes --example probe_re184_phase_order -- MODEL.rvt ...
 
 use rvt::RevitFile;
 use rvt::research::native_document;

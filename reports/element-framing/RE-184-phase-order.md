@@ -3,7 +3,7 @@
 **Date:** 2026-10-05; rebased onto `main` 5a81e745 and re-measured 2026-10-27; rooms (§5) and the CI note (§6) added 2026-10-30, on review of #1074
 **Issues:** #328; backlog items B38 and B46
 **Artefacts:** 29 local projects, Revit 2023 to 2027: RE1 Architecture, Core Interior, Autodesk's `rac`, `rst` and `rme` samples, Snowdon Towers (2025 edition, 7 disciplines; 2024 Architectural, re-measured 2026-10-27), Golden Nugget (2), three Japanese samples, `02_2025.zip` model 12 (#356), and `01_Walls_Phases` and `01_Walls_Phases_Demo`, two Revit 2025 models made for this question, each with Revit's IFC4 Reference View export (default settings). Measured locally.
-**Probe:** `examples/probe_re184_phase_order.rs`.
+**Probe:** `probes/examples/probe_re184_phase_order.rs`.
 **Status:** positive for every element but a room. The phase order, the export phase (the last) and the rule for created and demolished phases are each checked against a Revit export. The exporter now applies the rule (`src/native_phases.rs`, `tests/phase_filter.rs`) to every element but a room (§5). Rooms are not checked, because no model here measures the rule Revit applies to them.
 
 ## 1. The question
@@ -104,6 +104,6 @@ Areas are not read through the filter either: `partition_area_records` applies d
 ## 7. Reproduce
 
 ```text
-cargo run --profile ci --example probe_re184_phase_order -- "Snowdon Towers Sample Architectural.rvt" RE1-Architecture.rvt
+cargo run --profile ci -p rvt-probes --example probe_re184_phase_order -- "Snowdon Towers Sample Architectural.rvt" RE1-Architecture.rvt
 RVT_PROJECT_CORPUS_DIR=<dir holding 01_Walls_Phases*.rvt/.ifc> cargo test --profile ci --test phase_filter
 ```
