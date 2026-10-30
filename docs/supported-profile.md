@@ -65,8 +65,8 @@ measured by lowering the limits below the reference files' streams (Core
 Interior's 17 MB partition against an 8 MiB limit). No model over the default
 limits has been read with `--large-model` yet: the field report behind #1075
 (two client models of about 438 MB and 1.13 GB, whose largest partitions are
-403 MiB and 1,057 MiB) was measured on a patched 0.10.0 and is being repeated
-on 0.11.0.
+403 MiB and 1,057 MiB) was measured on a patched 0.10.0; the reporter was
+asked on 2026-10-30 to repeat it on 0.11.0 and has not reported back.
 
 A project saved by Revit 2024 to 2027 can keep the schema of the release it
 passed through, and with it that release's element-record layout. Such a
@@ -76,13 +76,14 @@ measured release still reads no element records. The field report behind
 #421 found this on 25 of 49 client project files saved by Revit 2024 to 2027,
 which 0.10.0 read as empty. None of the reference or sample files keeps an
 older schema, so the reading is not yet measured on an affected file; the
-reporter is checking 0.11.0 on theirs.
+reporter was asked on 2026-10-30 to check 0.11.0 on theirs and has not
+reported back.
 
 ## Geometry on Revit 2024 and 2025 projects
 
 | Element | What you get | How close |
 |---|---|---|
-| Walls | a body from the wall's centreline and its type's thickness, drawn as its layers in the viewer and glTF, ending as its joins say, along its arc when curved, leaning on its exterior face when tapered | faces exactly Revit's on 1,030 of Snowdon's 1,078 walls; both ends on 724; all 360 of Core Interior's; both ends on 482 of the BIM4LCA office's 607 as built and 422 of 589 at building permit, a corner's ends not yet read from the join order (RE-222, RE-223) |
+| Walls | a body from the wall's centreline and its type's thickness, drawn as its layers in the viewer and glTF, ending as its joins say, along its arc when curved, leaning on its exterior face when tapered, its top cut at the underside of the floor, roof or footing that covers it whole | faces exactly Revit's on 1,030 of Snowdon's 1,078 walls; both ends on 724; all 360 of Core Interior's; both ends on 482 of the BIM4LCA office's 607 as built and 422 of 589 at building permit, a corner's ends not yet read from the join order (RE-222, RE-223); wall tops Revit's on 64 of the 65 the office cuts as built and 70 of 70 at permit, a wall a floor covers in part keeping its full height (RE-267) |
 | Floors, building pads | the sketched plan outline, holes included, at the measured thickness | Core Interior 80 of 80 outlines; the BIM4LCA office's slabs with Revit's outline within 0.01 ft, 63 of 63 on each file (Measure run 40927543524) |
 | Roofs | the sketched outline; a shed, gable or hip roof, or one sloped by an arrow, as its planes (RE-56, RE-199); a Revit 2025 roof by extrusion as its sketch's section (RE-211) | 11 of 13 outlined Snowdon roofs with Revit's area; on puzzbobb's Revit 2025 models, 19 of 19 roofs with Revit's body (RE-199, RE-211); hips over T and U footprints are level blocks (#884) |
 | Columns | the column prism minus what walls cut from it | Core Interior 256 of 256, exact |

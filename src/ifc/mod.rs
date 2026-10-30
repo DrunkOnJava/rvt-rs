@@ -1168,7 +1168,7 @@ fn export_rvt_doc(
         element_type_ids,
         element_original_symbols,
         element_flips,
-        computed_inverts,
+        _,
         body_pieces,
     ) = append_production_walker_elements(
         rf,
@@ -1282,8 +1282,6 @@ fn export_rvt_doc(
     // no-geometry modes (where no record bbox was attached in the
     // first place) find nothing to bind and change nothing.
     apply_element_record_storeys(&mut entities, &mut building_storeys);
-    // RE-157: a pipe's invert is above its storey, known only now.
-    export_content::pipe_inverts_above_storeys(&mut entities, &building_storeys, &computed_inverts);
     // B63: a room's furniture, fixtures and equipment are contained in its
     // space, which needs both on their storeys.
     export_content::contain_in_spaces(&mut entities);
@@ -3284,8 +3282,8 @@ fn ifc_mapping_label(emission: &entities::IfcUnitEmission) -> String {
 /// What the production walker's elements give beside their entities: each
 /// layered element's layers (RE-53), the materials each element's type
 /// draws in (RE-82), and the layers of walls their data does not place
-/// (RE-88), all by ElementId, and the pipe inverts worked out in model
-/// height (RE-157), by entity index.
+/// (RE-88), all by ElementId, and the pipe inverts worked out (RE-157), by
+/// entity index.
 type WalkerElementData = (
     std::collections::BTreeMap<u32, ElementLayers>,
     std::collections::BTreeMap<u32, Vec<String>>,
