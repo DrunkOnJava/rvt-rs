@@ -136,6 +136,19 @@ def main():
             entry[1] += int(storey_of[t] == majority[v])
         for klass, (n, k) in sorted(by_class.items()):
             print(f"native levels: ElementId parameter {pid} class {klass} {k} of {n}")
+        # Every other element on a storey that holds the parameter: unset (-1),
+        # or an ElementId that is not a Level an Element base names.
+        rest = collections.defaultdict(list)
+        for t, v in held:
+            if v not in majority:
+                rest[class_of.get(t, "-")].append(v)
+        for klass, values in sorted(rest.items()):
+            unset = sum(1 for v in values if v == -1)
+            other = [v for v in values if v != -1]
+            print(
+                f"native levels: ElementId parameter {pid} class {klass} not a Level an Element base names {len(values)}, "
+                f"unset {unset}, another ElementId {len(other)} with {len(set(other))} distinct values"
+            )
         used = {v for _, v in mine}
         print(f"native levels: ElementId parameter {pid} IfcFooting Levels {len(used)}, of them a Level an Element base names {len([v for v in used if v in majority])}")
 
