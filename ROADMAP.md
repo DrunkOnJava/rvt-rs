@@ -143,8 +143,8 @@ The geometry and element-data work that continues after 0.11.0, moved from the
 slice records a baseline, an improvement and a residual against Revit's own
 exports on the reference pack (#407), approximations stay labelled (#409), and
 a slice ships in the next release that contains it. Geometry open now: wall
-bodies thicker or thinner than their type's layers (#358) and walls Revit
-draws cut, drawn taller than its body (#1067), stair flights
+bodies thicker or thinner than their type's layers (#358) and the tops of walls Revit
+steps over a floor that covers them in part (#1067), stair flights
 (#357), roofs Revit splits into slab parts (#323), hip roofs over T and U footprints and roof cases
 with no oracle (#884, #885), the openings on releases other than 2024 and 2025
 (#227), room boundaries whose solid does not

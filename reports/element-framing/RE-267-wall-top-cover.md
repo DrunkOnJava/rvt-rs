@@ -3,8 +3,8 @@
 **Date:** 2026-10-30
 **Issues:** #1067 (walls drawn taller than Revit's body), #1016 (W7: walls' `Height`), W6 of [`docs/release-1.0-criteria.md`](../../docs/release-1.0-criteria.md); corrects RE-258 §3 and follows RE-257 (a wall's `Height` is its body's span), RE-228 (`JoinToRoofGStep.m_baseOrTop`) and RE-266
 **Artefacts:** the BIM4LCA office as built and at building permit (Revit 2024, Revit 24.0.5's IFC4 exports), Core Interior (Revit 2024), RE1 Architecture and puzzbobb's R2025 models (Revit 2025), as Measure fetches them
-**Runs:** Measure [41075127575](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41075127575) (both offices: `probes/examples/probe_1067_native_dump.rs` and `tools/re/wall_top_cover_vs_ifc.py`), [41076305345](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41076305345) (every model, the scorer also printing each wall's horizontal top faces), [41077948567](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41077948567) (the probe on Core Interior, RE1 and the R2025 models) and [41079569865](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41079569865) (every model, the scorer also reading each floor's level across the wall)
-**Result:** positive for the mechanism, narrowed for the rule, not shipped. The 5 walls per stage that RE-258 found Revit "leaves whole" are not whole: Revit cuts them at the floor's underside over the part of their plan the floor covers and leaves the rest at full height, so the highest point does not move. A rule that cuts a top only where the named floor covers the wall's whole plan gives 64 of the office's 65 cut tops as built and 70 of 70 at permit, and cuts no wall that Revit leaves whole. One wall as built is cut by Revit although a sliver of its plan lies outside the floor, and nothing read explains it; a part-covered wall also needs a stepped top. So no wall is cut yet.
+**Runs:** Measure [41075127575](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41075127575) (both offices: `probes/examples/probe_1067_native_dump.rs` and `tools/re/wall_top_cover_vs_ifc.py`), [41076305345](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41076305345) (every model, the scorer also printing each wall's horizontal top faces), [41077948567](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41077948567) (the probe on Core Interior, RE1 and the R2025 models) and [41079569865](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41079569865) (every model, the scorer also reading each floor's level across the wall); for the shipped rule [41092512565](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41092512565) (every model and scorer, against `main`), [41092527900](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41092527900) (`wall_top_cover_vs_ifc` on its export) and [41091288700](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41091288700) (both offices, with `Height` written on the cut walls)
+**Result:** positive, shipped for the walls a named floor covers whole. The 5 walls per stage that RE-258 found Revit "leaves whole" are not whole: Revit cuts them at the floor's underside over the part of their plan the floor covers and leaves the rest at full height, so the highest point does not move. A rule that cuts a top only where the named floor covers the wall's whole plan gives 64 of the office's 65 cut tops as built and 70 of 70 at permit, and cuts no wall that Revit leaves whole; rvt-rs now draws those walls so, and no other wall's base or top moves on any model. One wall as built is cut by Revit although a sliver of its plan lies outside the floor, and nothing read explains it; the walls a floor covers in part need a stepped top. Both keep their full height.
 
 ## 1. What RE-258 measured, and what it missed
 
@@ -87,15 +87,46 @@ The wall's end is 0.032 ft past the floor's edge as built and flush with it at p
 
 ## 7. What rvt-rs does
 
-Nothing changes. The rule is not exact on both stages, and cutting the tops it gets right would still draw a part-covered wall too tall where the floor covers it. Those walls need a stepped top, which an extrusion cannot draw: 22 office walls in each file are stepped along their centre line, and 7 and 4 more have a strip at full height beside it. Left as a box, a part-covered wall has Revit's `Height` (its highest point is the box's), which RE-266 already writes on walls nothing joins to or cuts; a wall cut whole has the underside less its base. Core Interior's 360 walls and the R2025 models' walls are untouched.
+A wall's top is cut at the underside of the floor, roof or footing that its top join or one of its `CutPairGStep`s names, where all of this holds in rvt-rs's own export. The pass is `ifc::export_content::wall_tops`, run once every element is in the model, since the floor is another element; the ElementIds come from the wall's native record (`native_walls::WallRecords::top_cutters`), read in the pass that already reads `JoinToRoofGStep` for RE-228.
 
-An exporter would need, for each wall with a top join or a cut pair: the named floor's plan outline with its openings (1474132's recess), a level underside across the whole plan (the R2025 roofs fail it), the wall's plan after its joins (rvt-rs's differs from Revit's by up to 1.3 ft² on walls of 4 to 13 ft²), and the wall in §5 settled. `wall_top_cover_vs_ifc.py` is the measurement for each.
+- The element is an `IfcSlab`, `IfcRoof` or `IfcFooting` drawn as a plain extrusion, or as several such pieces at one height. Its underside is then level across the wall, which is §3's condition by construction. A roof drawn from its slopes is a solid and is left out, so the R2025 roofs that slope across a wall's thickness cut nothing.
+- The underside lies between the wall's base and top, 0.001 ft in.
+- The element's outline covers the whole of the wall's plan, clear of the element's holes and of the openings that void it: the area of the wall's plan outside the outline and the area of it inside a hole or opening are each under 1e-4 ft². The areas are worked out on triangles of rvt-rs's own plans, the outline and each hole one by one, since a floor of nine holes did not triangulate whole (the storey slabs 1457693 and 1457785 as built). A hole that does not triangulate to its own area counts as its bounding box; an outline that does not leaves the wall as it was.
+
+The wall is one plain extrusion with no hole in its plan and no edited elevation profile; a wall drawn as anything else keeps its body (17 of the office's walls as built that name a floor, none of which Revit cuts at its underside). Where several elements qualify the wall is cut at the lowest underside (no office wall has two at different undersides). The extrusion's height becomes the underside less the base; the placement and `BoundingBoxHeight` stay, and the wall carries `BodyHeightSource` `wall_top_cut_at_covering_floor` and `TopCoverElementId`.
+
+The tolerance. §3 measures 1e-6 ft² on IfcOpenShell's meshes of the written IFC. In memory a covered wall measures at most 4.1e-6 ft² outside its floor (1727582 as built, against 1498471; every other covered wall under 1e-9), and the walls a floor covers in part at least 0.0127 (3123954), then 0.0210, 0.0243 (3004978, §5) and 0.0317, so 1e-4 keeps a factor of 24 above the one and 127 below the other.
+
+Measured by Measure run [41092512565](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41092512565) against `main`, every model and scorer (the cover scorer on the shipped export is [41092527900](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41092527900)):
+
+| BIM4LCA office | as built | at permit |
+|---|---:|---:|
+| walls with base and top Revit's, before | 522 | 495 |
+| ... after | 586 | 565 |
+| walls with base Revit's and top not, before | 65 | 70 |
+| ... after | 1 | 0 |
+| walls cut | 64 | 70 |
+
+The one wall left is §5's. `ifc.sha256` changes on the two office models only: the exports of Core Interior, RE1 Architecture and the R2025 models are byte-identical, and on the offices every scorer's output is unchanged but `wall_heights_vs_ifc` and `frames_vs_ifc`, whose fit of rvt-rs's frame onto Revit's reads the walls' heights (as built, the vertical shift is 0.008 ft where it was -0.016, and the median residual 0.0078 ft where it was 0.0165).
+
+Left as they were: the walls a floor covers in part, which need a stepped top that an extrusion cannot draw (22 office walls in each file are stepped along their centre line, and 7 and 4 more have a strip at full height beside it, §1: 29 as built and 26 at permit), and §5's wall.
+
+`Height`. A cut wall's `Qto_WallBaseQuantities.Height` is the underside less its base. Written on all 64 and 70 it is Revit's on 62 and 66 and never different ([41091288700](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41091288700): 143 and 136 equal on the offices), but Revit's export writes none on the other 2 (1746099 and 1767978) and 4 (1488456, 1746099, 1795193 and 3363820), the walls it draws as a mesh, and no field read tells them from the rest: not the join steps (1767978 holds a top join and nothing else), the cut pairs, the cutouts (27 and 29 of the cut walls hold one and have a `Height`) or the classes of the partners. Written on all, rvt-rs would write 2 and 4 values Revit's export omits (the maintainer, 2026-10-26: no quantity Revit omits), so a cut wall gets no `Height`, as before.
+
+Stepping the rest needs a body that is not one extrusion, which this export draws a wall as, and the wall's plan after its joins (rvt-rs's differs from Revit's by up to 1.3 ft² on walls of 4 to 13 ft²). `wall_top_cover_vs_ifc.py` is the measurement for each.
 
 ## 8. Reproduce
 
 ```bash
 gh workflow run measure.yml --ref main -f ref=dfdb1025159243f41ae876b731f2912dae22ea98 -f base=none -f nordic=true -f r2025=true \
   -f scorers=wall_top_cover_vs_ifc -f probe=probe_1067_native_dump -f probe_scorer=-
+```
+
+The shipped rule, whose `--ref` must carry the scorer (`main` once it lands):
+
+```bash
+gh workflow run measure.yml --ref main -f ref=555dbb358203c0ad77f35a030f54d821253e1fbd -f base=main -f nordic=true -f r2025=true
+gh workflow run measure.yml --ref main -f ref=555dbb358203c0ad77f35a030f54d821253e1fbd -f base=main -f nordic=true -f r2025=true -f scorers=wall_top_cover_vs_ifc
 ```
 
 The scorer and the probe are this change's, and `main` has them once it lands (until then use `--ref re/1067-wall-top-cuts`); the runs above measured the branch's commits c0fa0953, e7d8d172 and dfdb1025 (the scorer and probe as they stand), kept under `refs/archive/2026-10-30/re/1067-wall-top-cuts` once it lands. The tallies join the probe's `wall <id> relation` lines (`JoinToRoofGStep top`, `CutPairGStep`) with the scorer's `wall`, `top`, `levels`, `pair` and `gap` lines.
