@@ -37,6 +37,26 @@ pub fn wall_axis_from_fields(fields: &[(String, InstanceField)]) -> Option<WallA
     })
 }
 
+/// The ElementIds [`WALL_TOP_CUTTERS_FIELD`] records: what a wall's top join
+/// and cut pairs name (RE-267). Empty where it holds none.
+pub fn wall_top_cutters_from_fields(fields: &[(String, InstanceField)]) -> Vec<u32> {
+    fields
+        .iter()
+        .find_map(|(name, value)| match value {
+            InstanceField::Vector(items) if name == WALL_TOP_CUTTERS_FIELD => Some(
+                items
+                    .iter()
+                    .filter_map(|item| match item {
+                        InstanceField::ElementId { id, .. } => Some(*id),
+                        _ => None,
+                    })
+                    .collect(),
+            ),
+            _ => None,
+        })
+        .unwrap_or_default()
+}
+
 /// A curved wall's location arc and its type's thickness (RE-75).
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct WallArc {
@@ -500,6 +520,7 @@ pub(super) fn attach_wall_layers(
         walls: native,
         top_joined,
         uncut,
+        top_cutters,
         whole,
     } = if centreline_bodies {
         let ids: BTreeSet<u64> = wall_ids.iter().map(|&id| u64::from(id)).collect();
@@ -515,6 +536,23 @@ pub(super) fn attach_wall_layers(
         if wall.id.is_some_and(|id| uncut.contains(&u64::from(id))) {
             wall.fields
                 .push((WALL_UNCUT_FIELD.into(), InstanceField::Bool(true)));
+        }
+        // RE-267: the elements its top join and cut pairs name, an id that
+        // does not fit an ElementId leaving the wall out.
+        if let Some(named) = wall.id.and_then(|id| top_cutters.get(&u64::from(id))) {
+            let items: Option<Vec<InstanceField>> = named
+                .iter()
+                .map(|&id| {
+                    Some(InstanceField::ElementId {
+                        tag: 0,
+                        id: u32::try_from(id).ok()?,
+                    })
+                })
+                .collect();
+            if let Some(items) = items {
+                wall.fields
+                    .push((WALL_TOP_CUTTERS_FIELD.into(), InstanceField::Vector(items)));
+            }
         }
         if wall.id.is_some_and(|id| whole.contains(&u64::from(id))) {
             wall.fields
