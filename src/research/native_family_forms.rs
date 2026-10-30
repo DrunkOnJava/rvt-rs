@@ -293,6 +293,12 @@ pub fn family_forms(
         return Ok(out);
     }
     let version = rf.layout_release()?;
+    anyhow::ensure!(
+        native_document::Options::default()
+            .releases
+            .contains(&version),
+        "family forms are not measured on Revit {version}"
+    );
     let registry =
         crate::schema_registry::parse(&native_document::read_single(rf, "Formats/Latest")?)?;
     let mut streams: Vec<String> = rf

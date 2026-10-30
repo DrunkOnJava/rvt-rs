@@ -25,7 +25,7 @@
 //! the SI value. A Yes/No value is a boolean. An ElementId value that names a
 //! material or a family type also gets that element's name.
 //!
-//! Revit 2023 to 2027 only, as [`crate::native_document::extract`].
+//! Revit 2015 to 2027, as [`crate::native_document::extract`] reads them (RE-280).
 
 use crate::RevitFile;
 use crate::native_document::{self, Options};
@@ -138,9 +138,9 @@ pub const SYSTEM_TYPE_LINKS: [(&str, &str, &str); 7] = [
 
 /// Read the saved parameters of `ids` (ElemTable element ids). Elements
 /// with no native record, or whose record does not decode, get none, as
-/// does every element of a file from before Revit 2023.
+/// does every element of a file from before Revit 2015.
 pub fn read(file: &mut RevitFile, ids: &BTreeSet<u64>) -> Result<ElementParameters> {
-    if !matches!(file.layout_release()?, 2023..=2027) || ids.is_empty() {
+    if !native_document::NATIVE_RELEASES.contains(&file.layout_release()?) || ids.is_empty() {
         return Ok(ElementParameters::default());
     }
     let options = Options {
@@ -150,6 +150,7 @@ pub fn read(file: &mut RevitFile, ids: &BTreeSet<u64>) -> Result<ElementParamete
             .chain(SYSTEM_TYPE_LINKS.iter().map(|link| link.2))
             .map(String::from)
             .collect(),
+        releases: native_document::NATIVE_RELEASES,
         ..Default::default()
     };
     let mut records: BTreeMap<i64, RecordParameters> = BTreeMap::new();
