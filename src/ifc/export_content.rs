@@ -31,6 +31,7 @@ use crate::geometry::{
 use crate::walker::{DecodedElement, InstanceField};
 use std::collections::{BTreeMap, HashMap};
 
+mod wall_areas;
 mod wall_tops;
 
 /// Result of folding production walker hits into an IFC draft.
@@ -368,6 +369,7 @@ pub fn append_typed_production_elements(
     // RE-84: doors and windows whose type draws no geometry.
     let mut without_geometry: std::collections::BTreeSet<usize> = Default::default();
     let mut pending_parts: Vec<(usize, u32)> = Vec::new();
+    let mut pending_bounded: Vec<(usize, Vec<u32>)> = Vec::new();
     // RE-194: each element's parameters named for a standard set's property,
     // written once the entity it is written as is final.
     let mut pending_named: Vec<(usize, Vec<(String, Property)>)> = Vec::new();
@@ -1030,6 +1032,20 @@ pub fn append_typed_production_elements(
                 pending_tops.push((entity_index, named));
             }
         }
+        // RE-270: a wall joined to a roof or floor, whose length is confirmed.
+        if policy.include_geometry && decoded.class == "Wall" {
+            if let Some(named) =
+                crate::partition_schema_mvp::wall_bounded_from_fields(&decoded.fields)
+            {
+                let confirmed = decoded.fields.iter().any(|(name, value)| {
+                    name == crate::partition_schema_mvp::WALL_LENGTH_FIELD
+                        && matches!(value, InstanceField::Float { .. })
+                });
+                if confirmed {
+                    pending_bounded.push((entity_index, named));
+                }
+            }
+        }
         // #331: each further piece of a sketch of separate loops is an
         // element of its own with the element's `Tag`, named `…:2`, `…:3`,
         // as in Revit's export.
@@ -1242,6 +1258,13 @@ pub fn append_typed_production_elements(
 
     // RE-267: a wall's top is cut at the underside of the floor that covers it.
     wall_tops::cut_wall_tops(entities, &pending_tops);
+
+    // RE-270: the side areas and volumes of a wall joined to floors that
+    // leave it as its record's box. It runs after the pass above, on purpose:
+    // it reads each extrusion at its final height, and a wall that pass cut
+    // has the underside of the floor that cut it for its top, which that
+    // floor then clears.
+    wall_areas::add_bounded_wall_quantities(entities, &pending_bounded);
 
     // #323: group each whole's parts into one aggregate.
     let mut parts_by_whole: BTreeMap<usize, Vec<usize>> = BTreeMap::new();
@@ -2786,13 +2809,24 @@ fn add_wall_areas_and_volumes(
     else {
         return;
     };
+    let Some(quantities) = prism_quantities(body, width) else {
+        return;
+    };
+    set.properties.extend(quantities);
+}
+
+/// A rectangular wall's `GrossSideArea`, `NetSideArea`, `GrossVolume` and
+/// `NetVolume` (RE-270): the longer side's area twice, the type's `width`
+/// times it, and the rectangle's area times the height. `None` where a size
+/// is not a positive number.
+fn prism_quantities(body: &Extrusion, width: f64) -> Option<[Property; 4]> {
     let sizes = [body.width_feet, body.depth_feet, body.height_feet, width];
     if !sizes.iter().all(|size| size.is_finite() && *size > 0.0) {
-        return;
+        return None;
     }
     let side = body.width_feet.max(body.depth_feet) * body.height_feet;
     let volume = body.width_feet * body.depth_feet * body.height_feet;
-    set.properties.extend([
+    Some([
         Property {
             name: "GrossSideArea".into(),
             value: PropertyValue::AreaSquareFeet(side),
@@ -2809,7 +2843,7 @@ fn add_wall_areas_and_volumes(
             name: "NetVolume".into(),
             value: PropertyValue::VolumeCubicFeet(volume),
         },
-    ]);
+    ])
 }
 
 /// Add `Span` (`IfcPositiveLengthMeasure`) to a curtain mullion's
