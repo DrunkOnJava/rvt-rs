@@ -234,7 +234,10 @@ pub fn scan_partition_buffer(
     }
 
     let mut out = Vec::new();
-    let last = buf.len().saturating_sub(3);
+    // A candidate needs its tag and the two zero bytes after it, so the last
+    // offset worth reading is `len - 4` (`buf.len() >= 4` above). Reading to
+    // `len - 3` let a tag there with a zero third byte read `buf[len]`.
+    let last = buf.len() - 4;
     for offset in 0..=last {
         let tag = u16::from_le_bytes([buf[offset], buf[offset + 1]]);
         if !tags.contains(&tag) {
