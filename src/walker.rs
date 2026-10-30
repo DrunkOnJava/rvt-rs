@@ -25,6 +25,7 @@
 //! | Other `FieldType` variants | not observed in current ADocument fixtures; retained as raw bytes until a validated wire shape is available |
 
 use crate::control::{PROGRESS_BYTE_INTERVAL, Stage, WalkerControl};
+use crate::le_bytes;
 use crate::{Error, Result, RevitFile, compression, formats, streams};
 
 /// One field's value as read by the walker.
@@ -1603,20 +1604,16 @@ pub fn iter_elements_with_control(
     // Partition ArcWall merge (version-gated). Fail closed: only
     // records that pass the standard envelope decoder are emitted.
     if let Ok(version) = rf.layout_release() {
-        if let Ok(scan) =
-            crate::partition_arc_walls::scan_partition_arc_walls_with_limits(rf, version, limits)
-        {
-            for wall in scan.walls {
-                let typed =
-                    crate::elements::arc_wall::ArcWall::from_parts(wall.record, wall.trailer);
-                let decoded = typed.to_decoded_element(&wall.partition, wall.offset);
-                if let Some(id) = decoded.id {
-                    if !seen_ids.insert(id) {
-                        continue;
-                    }
+        let scan = rf.memoised_arc_wall_scan(version, limits);
+        for wall in &scan.walls {
+            let typed = crate::elements::arc_wall::ArcWall::from_parts(wall.record, wall.trailer);
+            let decoded = typed.to_decoded_element(&wall.partition, wall.offset);
+            if let Some(id) = decoded.id {
+                if !seen_ids.insert(id) {
+                    continue;
                 }
-                out.push(decoded);
             }
+            out.push(decoded);
         }
 
         // Partition schema MVP: Level / Material / Room / Floor plan
@@ -2213,8 +2210,8 @@ fn heuristic_find(d: &[u8]) -> Option<usize> {
     let mut k = min_start;
     while k + 16 <= d.len() {
         if d[k..k + 8].iter().all(|&b| b == 0) {
-            let next_u32 = u32::from_le_bytes([d[k + 8], d[k + 9], d[k + 10], d[k + 11]]);
-            let next_next = u32::from_le_bytes([d[k + 12], d[k + 13], d[k + 14], d[k + 15]]);
+            let next_u32 = le_bytes::u32_at(d, k + 8)?;
+            let next_next = le_bytes::u32_at(d, k + 12)?;
             if (1..=100).contains(&next_u32) && (next_next == 0xffffffff || next_next <= 0x10000) {
                 return Some(k);
             }

@@ -20,6 +20,7 @@ use crate::elements::level::{Level, normalise_field_name};
 use crate::elements::openings::{Door, Window};
 use crate::elements::wall::Wall;
 use crate::geometry::{Curve, CurveLoop, Point3};
+use crate::vector_math::polygon_area_xy;
 use crate::walker::{DecodedElement, InstanceField};
 
 /// Stable machine-readable reason a recovery path failed closed.
@@ -508,20 +509,6 @@ fn is_closed_loop(pts: &[(f64, f64)]) -> bool {
     let (fx, fy) = pts[0];
     let (lx, ly) = pts[pts.len() - 1];
     (fx - lx).abs() < 1e-9 && (fy - ly).abs() < 1e-9
-}
-
-fn polygon_area_xy(points: &[(f64, f64)]) -> f64 {
-    if points.len() < 3 {
-        return 0.0;
-    }
-    let n = points.len();
-    let mut sum = 0.0;
-    for i in 0..n {
-        let (x0, y0) = points[i];
-        let (x1, y1) = points[(i + 1) % n];
-        sum += x0 * y1 - x1 * y0;
-    }
-    (sum * 0.5).abs()
 }
 
 // ---------------------------------------------------------------------------

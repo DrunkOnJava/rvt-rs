@@ -114,10 +114,7 @@ fn utf16_at(buf: &[u8], at: usize, chars: usize) -> Option<String> {
         return None;
     }
     let bytes = buf.get(at..at.checked_add(chars.checked_mul(2)?)?)?;
-    let units: Vec<u16> = bytes
-        .chunks_exact(2)
-        .map(|c| u16::from_le_bytes([c[0], c[1]]))
-        .collect();
+    let units: Vec<u16> = le_bytes::u16_units(bytes).collect();
     let text = String::from_utf16(&units).ok()?;
     if text.chars().any(char::is_control) {
         return None;
@@ -375,11 +372,7 @@ pub struct DataObject {
 /// size again and its Adler-32, over the class word and the payload less its
 /// last 4 bytes, verifies. Revit 2024 and later.
 pub fn verified_data_object(buf: &[u8], p: usize) -> Option<DataObject> {
-    let u32_at = |p: usize| {
-        buf.get(p..p.checked_add(4)?)
-            .and_then(|b| b.first_chunk::<4>())
-            .map(|b| u32::from_le_bytes(*b))
-    };
+    let u32_at = |p: usize| le_bytes::u32_at(buf, p);
     if u32_at(p.checked_add(4)?)? != 0 {
         return None;
     }
@@ -713,15 +706,11 @@ pub fn find_parameter_definitions(rf: &mut RevitFile, revit_version: u32) -> BTr
 
 /// `u32 n · UTF-16 × n` at `at`: 1 to `limit` code units, no control character.
 fn utf16_entry(buf: &[u8], at: usize, limit: usize) -> Option<String> {
-    let n = usize::try_from(u32::from_le_bytes(buf.get(at..at + 4)?.try_into().ok()?)).ok()?;
+    let n = usize::try_from(le_bytes::u32_at(buf, at)?).ok()?;
     if !(1..=limit).contains(&n) {
         return None;
     }
-    let units: Vec<u16> = buf
-        .get(at + 4..at + 4 + 2 * n)?
-        .chunks_exact(2)
-        .map(|pair| u16::from_le_bytes([pair[0], pair[1]]))
-        .collect();
+    let units: Vec<u16> = le_bytes::u16_units(buf.get(at + 4..at + 4 + 2 * n)?).collect();
     let text = String::from_utf16(&units).ok()?;
     (!text.chars().any(char::is_control)).then_some(text)
 }
@@ -773,15 +762,11 @@ pub fn scan_room_parameter_entries(
         )
     };
     let string_at = |buf: &[u8], at: usize, limit: usize| -> Option<(String, usize)> {
-        let n = usize::try_from(u32::from_le_bytes(buf.get(at..at + 4)?.try_into().ok()?)).ok()?;
+        let n = usize::try_from(le_bytes::u32_at(buf, at)?).ok()?;
         if n > limit {
             return None;
         }
-        let units: Vec<u16> = buf
-            .get(at + 4..at + 4 + 2 * n)?
-            .chunks_exact(2)
-            .map(|pair| u16::from_le_bytes([pair[0], pair[1]]))
-            .collect();
+        let units: Vec<u16> = le_bytes::u16_units(buf.get(at + 4..at + 4 + 2 * n)?).collect();
         let text = String::from_utf16(&units).ok()?;
         (!text.chars().any(char::is_control)).then_some((text, at + 4 + 2 * n))
     };

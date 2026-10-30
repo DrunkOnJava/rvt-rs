@@ -60,6 +60,7 @@
 //! member, which the instance rule already excludes.
 
 use crate::le_bytes;
+use crate::partition_element_records::find_subslice;
 use crate::{Result, RevitFile};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
@@ -129,7 +130,7 @@ pub fn decode_at(
     let mut value = String::with_capacity(chars);
     for index in 0..chars {
         let at = offset + index * 2;
-        let unit = u16::from_le_bytes([buf[at], buf[at + 1]]);
+        let unit = le_bytes::u16_at(buf, at)?;
         // An IFC entity name is ASCII alphanumeric; anything else here
         // means the anchor landed inside unrelated text.
         let byte = u8::try_from(unit).ok()?;
@@ -181,24 +182,6 @@ pub fn find_overrides(
         cursor = hit + 1;
     }
     out
-}
-
-fn find_subslice(haystack: &[u8], needle: &[u8]) -> Option<usize> {
-    if needle.is_empty() || haystack.len() < needle.len() {
-        return None;
-    }
-    let first = needle[0];
-    let last = haystack.len() - needle.len();
-    let mut index = 0usize;
-    while index <= last {
-        let delta = haystack[index..=last].iter().position(|b| *b == first)?;
-        let start = index + delta;
-        if &haystack[start..start + needle.len()] == needle {
-            return Some(start);
-        }
-        index = start + 1;
-    }
-    None
 }
 
 /// Collapse accepted entries to one value per ElementId.
@@ -329,8 +312,8 @@ fn export_parameter_value(buf: &[u8], at: usize, key: i64) -> Option<String> {
     }
     let bytes = buf.get(at + 4..at + 4 + units * 2)?;
     let mut value = String::with_capacity(units);
-    for pair in bytes.chunks_exact(2) {
-        let byte = u8::try_from(u16::from_le_bytes([pair[0], pair[1]])).ok()?;
+    for unit in le_bytes::u16_units(bytes) {
+        let byte = u8::try_from(unit).ok()?;
         if !(byte.is_ascii_alphanumeric() || byte == b'_') {
             return None;
         }

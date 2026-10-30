@@ -6,6 +6,7 @@
 //! bytes and refuses truncated streams, so we skip the gzip header manually
 //! and pump the raw DEFLATE body through `flate2::read::DeflateDecoder`.
 
+use crate::le_bytes;
 use crate::{Error, Result};
 use flate2::read::DeflateDecoder;
 use std::io::{Read, Write};
@@ -517,8 +518,7 @@ pub fn gzip_header_len(data: &[u8], offset: usize) -> Option<usize> {
     if flags & 0x04 != 0 {
         // FEXTRA: 2-byte LE length, then that many bytes
         let xlen_end = pos.checked_add(2)?;
-        let xlen_bytes = data.get(pos..xlen_end)?;
-        let xlen = u16::from_le_bytes([xlen_bytes[0], xlen_bytes[1]]) as usize;
+        let xlen = le_bytes::u16_at(data, pos)? as usize;
         pos = xlen_end.checked_add(xlen)?;
     }
     if flags & 0x08 != 0 {

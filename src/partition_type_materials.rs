@@ -18,6 +18,7 @@
 //! is the type's ([`type_material_names_2023`]).
 
 use crate::RevitFile;
+use crate::le_bytes;
 use crate::partition_element_records::supports_revit_version;
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -85,10 +86,10 @@ const BLOCK_LAYOUT_2011: BlockLayout = BlockLayout {
 };
 
 fn id_at(buf: &[u8], at: usize, len: usize) -> Option<u32> {
-    let bytes = buf.get(at..at.checked_add(len)?)?;
     match len {
-        4 => Some(u32::from_le_bytes(bytes.try_into().ok()?)),
-        _ => u32::try_from(u64::from_le_bytes(bytes.try_into().ok()?)).ok(),
+        4 => le_bytes::u32_at(buf, at),
+        8 => u32::try_from(le_bytes::u64_at(buf, at)?).ok(),
+        _ => None,
     }
 }
 
@@ -175,7 +176,7 @@ fn map_at(
     materials: &BTreeSet<u32>,
     id_len: usize,
 ) -> Option<MaterialMap> {
-    let count = u32::from_le_bytes(buf.get(at..at + 4)?.try_into().ok()?) as usize;
+    let count = le_bytes::u32_at(buf, at)? as usize;
     if !(1..=MAX_ENTRIES).contains(&count) {
         return None;
     }
@@ -277,7 +278,7 @@ const MAX_GEOMETRY_TAG: u32 = 0xffff;
 fn opens_unset_map(buf: &[u8], start: usize, end: usize, materials: &BTreeSet<u32>) -> bool {
     let mut at = start;
     while at + 4 <= end {
-        let Some(count) = crate::le_bytes::u32_at(buf, at) else {
+        let Some(count) = le_bytes::u32_at(buf, at) else {
             return false;
         };
         let count = count as usize;
@@ -288,8 +289,7 @@ fn opens_unset_map(buf: &[u8], start: usize, end: usize, materials: &BTreeSet<u3
             let (mut unset, mut material) = (0usize, 0usize);
             for entry in 0..count {
                 let e = at + 4 + entry * 12;
-                let (Some(key), Some(value)) =
-                    (crate::le_bytes::u32_at(buf, e), buf.get(e + 4..e + 12))
+                let (Some(key), Some(value)) = (le_bytes::u32_at(buf, e), buf.get(e + 4..e + 12))
                 else {
                     return false;
                 };

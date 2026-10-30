@@ -10,6 +10,7 @@
 use crate::arc_wall_record::{
     ArcWallRecord, ArcWallScanStatus, ArcWallTrailer, STANDARD_RECORD_MIN_SIZE,
 };
+use crate::element_record_storeys::elevation_storey_name;
 use crate::ifc::Storey;
 use crate::walker::{WalkerLimitHit, WalkerLimits};
 use crate::{Result, RevitFile};
@@ -109,19 +110,35 @@ pub fn scan_partition_arc_walls(
 /// Same as [`scan_partition_arc_walls`], applying explicit
 /// [`WalkerLimits`] to every partition buffer scan so crafted large
 /// streams cannot force unbounded candidate materialisation.
+///
+/// The file keeps its latest scan (`RevitFile::memoised_arc_wall_scan`): a
+/// repeat call with the same release and limits returns a copy of it, and a
+/// call with other limits scans again.
 pub fn scan_partition_arc_walls_with_limits(
     rf: &mut RevitFile,
     revit_version: u32,
     limits: WalkerLimits,
 ) -> Result<PartitionArcWallScan> {
+    Ok(PartitionArcWallScan::clone(
+        &rf.memoised_arc_wall_scan(revit_version, limits),
+    ))
+}
+
+/// The scan [`scan_partition_arc_walls_with_limits`] describes, run in
+/// full.
+pub(crate) fn compute_partition_arc_walls(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    limits: WalkerLimits,
+) -> PartitionArcWallScan {
     let status = ArcWallRecord::standard_decoder_status(revit_version);
     if !status.is_supported() {
-        return Ok(PartitionArcWallScan {
+        return PartitionArcWallScan {
             status,
             walls: Vec::new(),
             scanned_bytes: 0,
             limit_hit: None,
-        });
+        };
     }
 
     let partition_streams = rf.partition_stream_names();
@@ -179,12 +196,12 @@ pub fn scan_partition_arc_walls_with_limits(
         }
     }
 
-    Ok(PartitionArcWallScan {
+    PartitionArcWallScan {
         status,
         walls,
         scanned_bytes,
         limit_hit,
-    })
+    }
 }
 
 /// Convenience wrapper: read BasicFileInfo version, then scan.
@@ -257,7 +274,7 @@ pub fn recover_storeys_from_arc_walls(
     let mut storeys: Vec<Storey> = elevations
         .iter()
         .map(|&elevation_feet| Storey {
-            name: elevation_fallback_name(elevation_feet),
+            name: elevation_storey_name(elevation_feet),
             elevation_feet,
         })
         .collect();
@@ -291,10 +308,6 @@ pub fn recover_storeys_from_arc_walls(
         elevation_fallback,
         level_name_candidates: filtered.len(),
     }
-}
-
-fn elevation_fallback_name(elevation_feet: f64) -> String {
-    format!("Elevation {elevation_feet:.3} ft")
 }
 
 fn parse_level_number(name: &str) -> Option<u32> {

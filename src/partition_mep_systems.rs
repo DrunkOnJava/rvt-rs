@@ -11,6 +11,7 @@
 //! element Revit groups in it holds its id.
 // Tracker: B33.
 
+use crate::le_bytes;
 use crate::partition_room_parameters::{DATA_OBJECT_HEADER, verified_data_object};
 use crate::{Result, RevitFile};
 use std::collections::{BTreeMap, BTreeSet};
@@ -42,17 +43,11 @@ pub fn supports_revit_version(revit_version: u32) -> bool {
 /// The `u32 n · UTF-16 × n` string at `q` of `bytes`, `n` at most
 /// [`MAX_NAME_UNITS`].
 fn string_at(bytes: &[u8], q: usize) -> Option<Vec<u16>> {
-    let n = u32::from_le_bytes(bytes.get(q..q.checked_add(4)?)?.try_into().ok()?) as usize;
+    let n = le_bytes::u32_at(bytes, q)? as usize;
     if n > MAX_NAME_UNITS {
         return None;
     }
-    Some(
-        bytes
-            .get(q + 4..q + 4 + 2 * n)?
-            .chunks_exact(2)
-            .map(|c| u16::from_le_bytes([c[0], c[1]]))
-            .collect(),
-    )
+    Some(le_bytes::u16_units(bytes.get(q + 4..q + 4 + 2 * n)?).collect())
 }
 
 /// The first non-empty `u32 n · UTF-16 × n` string in `payload` of printable
@@ -84,7 +79,7 @@ pub const UNNAMED_CIRCUIT: &str = "<unnamed>";
 fn circuit_number(object: &[u8]) -> Option<String> {
     let marker = memchr::memmem::find(object, &CIRCUIT_MARKER)? + CIRCUIT_MARKER.len() - 1;
     let list = marker + CIRCUIT_LIST_OFFSET;
-    let count = u32::from_le_bytes(object.get(list..list + 4)?.try_into().ok()?) as usize;
+    let count = le_bytes::u32_at(object, list)? as usize;
     let units = string_at(object, list + 4 + count.checked_mul(CIRCUIT_ENTRY_BYTES)?)?;
     if units.is_empty() {
         return Some(UNNAMED_CIRCUIT.into());

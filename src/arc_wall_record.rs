@@ -56,6 +56,7 @@
 //! singleton trailer (177 B) documented in
 //! `reports/element-framing/RE-15-arcwall-trailer-synthesis.md`.
 
+use crate::le_bytes;
 use crate::walker::{WalkerLimitHit, WalkerLimits};
 use crate::{Error, Result};
 
@@ -485,40 +486,16 @@ impl ArcWallRecord {
             return None;
         }
 
-        let element_id_raw = u32::from_le_bytes([
-            buf[offset + TRAILER_ELEMENT_ID_OFFSET],
-            buf[offset + TRAILER_ELEMENT_ID_OFFSET + 1],
-            buf[offset + TRAILER_ELEMENT_ID_OFFSET + 2],
-            buf[offset + TRAILER_ELEMENT_ID_OFFSET + 3],
-        ]);
-        let element_id_dup = u32::from_le_bytes([
-            buf[offset + TRAILER_ELEMENT_ID_DUP_OFFSET],
-            buf[offset + TRAILER_ELEMENT_ID_DUP_OFFSET + 1],
-            buf[offset + TRAILER_ELEMENT_ID_DUP_OFFSET + 2],
-            buf[offset + TRAILER_ELEMENT_ID_DUP_OFFSET + 3],
-        ]);
+        let element_id_raw = le_bytes::u32_at(buf, offset + TRAILER_ELEMENT_ID_OFFSET)?;
+        let element_id_dup = le_bytes::u32_at(buf, offset + TRAILER_ELEMENT_ID_DUP_OFFSET)?;
         let element_id =
             (element_id_raw == element_id_dup && element_id_raw != 0 && element_id_raw != u32::MAX)
                 .then_some(element_id_raw);
 
-        let type_id_raw = u32::from_le_bytes([
-            buf[offset + TRAILER_TYPE_ID_OFFSET],
-            buf[offset + TRAILER_TYPE_ID_OFFSET + 1],
-            buf[offset + TRAILER_TYPE_ID_OFFSET + 2],
-            buf[offset + TRAILER_TYPE_ID_OFFSET + 3],
-        ]);
+        let type_id_raw = le_bytes::u32_at(buf, offset + TRAILER_TYPE_ID_OFFSET)?;
         let type_id = (type_id_raw != 0 && type_id_raw != u32::MAX).then_some(type_id_raw);
 
-        let base_elevation = f64::from_le_bytes([
-            buf[offset + TRAILER_BASE_ELEVATION_OFFSET],
-            buf[offset + TRAILER_BASE_ELEVATION_OFFSET + 1],
-            buf[offset + TRAILER_BASE_ELEVATION_OFFSET + 2],
-            buf[offset + TRAILER_BASE_ELEVATION_OFFSET + 3],
-            buf[offset + TRAILER_BASE_ELEVATION_OFFSET + 4],
-            buf[offset + TRAILER_BASE_ELEVATION_OFFSET + 5],
-            buf[offset + TRAILER_BASE_ELEVATION_OFFSET + 6],
-            buf[offset + TRAILER_BASE_ELEVATION_OFFSET + 7],
-        ]);
+        let base_elevation = le_bytes::f64_at(buf, offset + TRAILER_BASE_ELEVATION_OFFSET)?;
         let base_elevation_feet = base_elevation.is_finite().then_some(base_elevation);
 
         Some(ArcWallTrailer {

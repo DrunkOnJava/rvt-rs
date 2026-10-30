@@ -37,6 +37,7 @@
 //!   name-only rooms and plan-loop floors that once filled in were
 //!   removed after they matched nothing in Revit's own exports.
 
+use crate::le_bytes;
 use crate::partition_arc_walls::{self, PartitionArcWall};
 use crate::partition_name_candidates::{
     NameBucket, building_storey_name_candidates, classify_name, collect_name_candidates,
@@ -123,16 +124,9 @@ pub fn recover_partition_schema_mvp(
     let level_names = building_storey_name_candidates(string_values.iter().copied());
     let name_set = collect_name_candidates(string_values.iter().copied());
 
-    let walls = match partition_arc_walls::scan_partition_arc_walls_with_limits(
-        rf,
-        revit_version,
-        limits,
-    ) {
-        Ok(scan) => scan.walls,
-        Err(_) => Vec::new(),
-    };
+    let arc_walls = rf.memoised_arc_wall_scan(revit_version, limits);
 
-    out.levels = levels_from_storeys_and_names(&walls, &level_names);
+    out.levels = levels_from_storeys_and_names(&arc_walls.walls, &level_names);
     out.materials = match materials_from_records(rf, revit_version) {
         Some(materials) => materials,
         None => materials_from_names(&name_set),
@@ -1850,7 +1844,7 @@ fn attach_original_symbols<const N: usize>(
                 if at < p {
                     continue;
                 }
-                let Some(value) = crate::le_bytes::u32_at(buf, at) else {
+                let Some(value) = le_bytes::u32_at(buf, at) else {
                     continue;
                 };
                 held.entry(object.element_id)
@@ -8315,11 +8309,6 @@ fn scan_curtain_grid_walls(
     let Some(header) = crate::partition_names::element_data_header(revit_version) else {
         return BTreeMap::new();
     };
-    let u64_at = |buf: &[u8], at: usize| {
-        buf.get(at..at.checked_add(8)?)
-            .and_then(|b| b.first_chunk::<8>())
-            .map(|b| u64::from_le_bytes(*b))
-    };
     let mut found: BTreeMap<u32, Option<u32>> = BTreeMap::new();
     for stream in rf.partition_stream_names() {
         let Ok(inflated) = rf.inflated_partition(&stream) else {
@@ -8328,14 +8317,14 @@ fn scan_curtain_grid_walls(
         let buf = inflated.bytes();
         for hit in memchr::memmem::find_iter(buf, &header) {
             let id_at = hit + header.len();
-            let Some(id) = u64_at(buf, id_at)
+            let Some(id) = le_bytes::u64_at(buf, id_at)
                 .and_then(|id| u32::try_from(id).ok())
                 .filter(|id| candidates.contains(id))
             else {
                 continue;
             };
             let [first, second] =
-                CURTAIN_GRID_WALL_OFFSETS.map(|offset| u64_at(buf, id_at + 8 + offset));
+                CURTAIN_GRID_WALL_OFFSETS.map(|offset| le_bytes::u64_at(buf, id_at + 8 + offset));
             let wall = match (first, second) {
                 (Some(first), Some(second)) if first == second => u32::try_from(first)
                     .ok()

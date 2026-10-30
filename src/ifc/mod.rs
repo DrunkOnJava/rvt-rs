@@ -1216,67 +1216,60 @@ fn export_rvt_doc(
     // See `reports/element-framing/RE-14.3-synthesis.md` and
     // `reports/element-framing/RE-15-arcwall-trailer-synthesis.md`.
     if let Some(revit_version) = layout {
-        if let Ok(scan) = crate::partition_arc_walls::scan_partition_arc_walls_with_limits(
-            rf,
-            revit_version,
-            walker_limits,
-        ) {
-            let level_names = collect_partition_building_storey_names(rf);
-            let recovery = crate::partition_arc_walls::recover_storeys_from_arc_walls(
-                &scan.walls,
-                &level_names,
-            );
-            if building_storeys.is_empty() {
-                building_storeys = recovery.storeys;
-            }
-            let existing_ids: std::collections::HashSet<u32> = entities
-                .iter()
-                .filter_map(|e| match e {
-                    entities::IfcEntity::BuildingElement { type_guid, .. } => {
-                        type_guid.as_ref().and_then(|g| g.parse().ok())
-                    }
-                    _ => None,
-                })
-                .collect();
-            for wall in &scan.walls {
-                if let Some(id) = wall.element_id() {
-                    if existing_ids.contains(&id) {
-                        continue;
-                    }
+        let scan = rf.memoised_arc_wall_scan(revit_version, walker_limits);
+        let level_names = collect_partition_building_storey_names(rf);
+        let recovery =
+            crate::partition_arc_walls::recover_storeys_from_arc_walls(&scan.walls, &level_names);
+        if building_storeys.is_empty() {
+            building_storeys = recovery.storeys;
+        }
+        let existing_ids: std::collections::HashSet<u32> = entities
+            .iter()
+            .filter_map(|e| match e {
+                entities::IfcEntity::BuildingElement { type_guid, .. } => {
+                    type_guid.as_ref().and_then(|g| g.parse().ok())
                 }
-                let geometry = if policy.include_geometry {
-                    arcwall_geometry_from_partition_wall(wall)
-                } else {
-                    None
-                };
-                let storey_index = wall.base_elevation_feet().and_then(|elev| {
-                    crate::partition_arc_walls::storey_index_for_elevation(&building_storeys, elev)
-                });
-                let property_set = arcwall_property_set(wall);
-                let name = match wall.element_id() {
-                    Some(id) => format!("ArcWall-{id}"),
-                    None => format!("ArcWall-{}-{}", wall.partition, wall.offset),
-                };
-                entities.push(entities::IfcEntity::BuildingElement {
-                    ifc_type: "IFCWALL".to_string(),
-                    name,
-                    type_guid: wall.element_id().map(|id| id.to_string()),
-                    predefined_type: category_map::lookup("ArcWall")
-                        .and_then(|m| m.predefined_type)
-                        .map(str::to_string),
-                    storey_index,
-                    material_index: None,
-                    property_set,
-                    location_feet: geometry.as_ref().map(|(location, _, _)| *location),
-                    rotation_radians: geometry.as_ref().map(|(_, rotation, _)| *rotation),
-                    extrusion: geometry.map(|(_, _, extrusion)| extrusion),
-                    host_element_index: None,
-                    material_layer_set_index: None,
-                    material_profile_set_index: None,
-                    solid_shape: None,
-                    representation_map_index: None,
-                });
+                _ => None,
+            })
+            .collect();
+        for wall in &scan.walls {
+            if let Some(id) = wall.element_id() {
+                if existing_ids.contains(&id) {
+                    continue;
+                }
             }
+            let geometry = if policy.include_geometry {
+                arcwall_geometry_from_partition_wall(wall)
+            } else {
+                None
+            };
+            let storey_index = wall.base_elevation_feet().and_then(|elev| {
+                crate::partition_arc_walls::storey_index_for_elevation(&building_storeys, elev)
+            });
+            let property_set = arcwall_property_set(wall);
+            let name = match wall.element_id() {
+                Some(id) => format!("ArcWall-{id}"),
+                None => format!("ArcWall-{}-{}", wall.partition, wall.offset),
+            };
+            entities.push(entities::IfcEntity::BuildingElement {
+                ifc_type: "IFCWALL".to_string(),
+                name,
+                type_guid: wall.element_id().map(|id| id.to_string()),
+                predefined_type: category_map::lookup("ArcWall")
+                    .and_then(|m| m.predefined_type)
+                    .map(str::to_string),
+                storey_index,
+                material_index: None,
+                property_set,
+                location_feet: geometry.as_ref().map(|(location, _, _)| *location),
+                rotation_radians: geometry.as_ref().map(|(_, rotation, _)| *rotation),
+                extrusion: geometry.map(|(_, _, extrusion)| extrusion),
+                host_element_index: None,
+                material_layer_set_index: None,
+                material_profile_set_index: None,
+                solid_shape: None,
+                representation_map_index: None,
+            });
         }
     }
 
@@ -3726,14 +3719,8 @@ pub fn build_export_diagnostics_with_limits(
     // Surface ArcWall partition-scan limit hits so crafted large
     // Partitions/* streams are visible in the diagnostics sidecar.
     if let Some(version) = layout {
-        if let Ok(scan) = crate::partition_arc_walls::scan_partition_arc_walls_with_limits(
-            rf,
-            version,
-            walker_limits,
-        ) {
-            if let Some(hit) = scan.limit_hit {
-                warnings.push(format!("{}: {}", hit.code(), hit.message()));
-            }
+        if let Some(hit) = rf.memoised_arc_wall_scan(version, walker_limits).limit_hit {
+            warnings.push(format!("{}: {}", hit.code(), hit.message()));
         }
     }
     if exported.building_elements == 0 {

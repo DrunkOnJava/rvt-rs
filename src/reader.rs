@@ -172,6 +172,10 @@ pub struct RevitFile {
     /// its diagnostics' class counts; the second reuses the first.
     // Tracker: B71.
     walk: Option<CachedWalk>,
+    /// Memoised partition ArcWall scan for a release and walker limits: the
+    /// production walk, the partition MVP and the IFC export (twice) each ran
+    /// the same scan over every partition.
+    arc_wall_scan: Option<CachedArcWallScan>,
     /// Memoised data objects (RE-153) of each partition stream: the
     /// original symbols, railing types and MEP systems each scanned every
     /// partition for them.
@@ -221,6 +225,13 @@ type CachedWalk = (
     i64,
     crate::walker::WalkerLimits,
     Arc<Vec<crate::walker::DecodedElement>>,
+);
+
+/// A memoised ArcWall scan: its release, its limits and its result.
+type CachedArcWallScan = (
+    u32,
+    crate::walker::WalkerLimits,
+    Arc<crate::partition_arc_walls::PartitionArcWallScan>,
 );
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -396,6 +407,7 @@ impl RevitFile {
             design_options: None,
             phase_filter: None,
             walk: None,
+            arc_wall_scan: None,
             data_objects: std::collections::HashMap::new(),
             native_preamble: None,
             native_record_index: None,
@@ -610,6 +622,28 @@ impl RevitFile {
         let computed =
             Arc::new(crate::partition_names::compute_element_names(self).unwrap_or_default());
         self.element_names = Some(Arc::clone(&computed));
+        computed
+    }
+
+    /// The partition ArcWall scan of `revit_version` under `limits`, run on
+    /// the first request and shared after (the scan reads only the file, the
+    /// release and the limits).
+    pub(crate) fn memoised_arc_wall_scan(
+        &mut self,
+        revit_version: u32,
+        limits: crate::walker::WalkerLimits,
+    ) -> Arc<crate::partition_arc_walls::PartitionArcWallScan> {
+        if let Some((version, held, scan)) = &self.arc_wall_scan {
+            if *version == revit_version && *held == limits {
+                return Arc::clone(scan);
+            }
+        }
+        let computed = Arc::new(crate::partition_arc_walls::compute_partition_arc_walls(
+            self,
+            revit_version,
+            limits,
+        ));
+        self.arc_wall_scan = Some((revit_version, limits, Arc::clone(&computed)));
         computed
     }
 

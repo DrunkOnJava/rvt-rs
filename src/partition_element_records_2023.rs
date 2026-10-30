@@ -25,6 +25,7 @@
 //! each element's Level (RE-107).
 
 use crate::RevitFile;
+use crate::le_bytes;
 use crate::partition_element_records::{
     BBOX_MARKER_OFFSET, BBOX_OFFSET, BUILTIN_CATEGORY_MAX, BUILTIN_CATEGORY_MIN, CLASS_TAG_OFFSET,
     PLACEMENT_KIND_OFFSET, PartitionElementRecord,
@@ -241,17 +242,16 @@ fn decode_at_marker(
     shortfall: usize,
 ) -> Option<PartitionElementRecord> {
     let id_at = at.checked_sub(ID_BEFORE_MARKER - shortfall)?;
-    let element_id = u32::from_le_bytes(buf.get(id_at..id_at + 4)?.try_into().ok()?);
+    let element_id = le_bytes::u32_at(buf, id_at)?;
     if !declared.contains(&element_id) {
         return None;
     }
     let tag_at = id_at + HEADER_TAG_AFTER_ID;
-    if u16::from_le_bytes(buf.get(tag_at..tag_at + 2)?.try_into().ok()?) != header_tag {
+    if le_bytes::u16_at(buf, tag_at)? != header_tag {
         return None;
     }
     let category_at = at - (CATEGORY_BEFORE_MARKER - shortfall);
-    let builtin_category =
-        i64::from_le_bytes(buf.get(category_at..category_at + 8)?.try_into().ok()?);
+    let builtin_category = le_bytes::i64_at(buf, category_at)?;
     if !(BUILTIN_CATEGORY_MIN..=BUILTIN_CATEGORY_MAX).contains(&builtin_category) {
         return None;
     }
@@ -263,16 +263,15 @@ fn decode_at_marker(
         buf.get(from..from + len)
     };
     let container_at = at.checked_sub(CONTAINER_BEFORE_MARKER)?;
-    let container =
-        match u32::from_le_bytes(buf.get(container_at..container_at + 4)?.try_into().ok()?) {
-            u32::MAX => u64::MAX,
-            id => u64::from(id),
-        };
-    let placement_kind = u32::from_le_bytes(field(PLACEMENT_KIND_OFFSET, 4)?.try_into().ok()?);
-    let class_tag = u16::from_le_bytes(field(CLASS_TAG_OFFSET, 2)?.try_into().ok()?);
+    let container = match le_bytes::u32_at(buf, container_at)? {
+        u32::MAX => u64::MAX,
+        id => u64::from(id),
+    };
+    let placement_kind = le_bytes::u32_at(field(PLACEMENT_KIND_OFFSET, 4)?, 0)?;
+    let class_tag = le_bytes::u16_at(field(CLASS_TAG_OFFSET, 2)?, 0)?;
     let mut bbox_feet = [0.0f64; 6];
     for (index, slot) in bbox_feet.iter_mut().enumerate() {
-        let value = f64::from_le_bytes(field(BBOX_OFFSET + index * 8, 8)?.try_into().ok()?);
+        let value = le_bytes::f64_at(field(BBOX_OFFSET + index * 8, 8)?, 0)?;
         if !value.is_finite() {
             return None;
         }
@@ -303,7 +302,7 @@ fn decode_at_marker(
 
 /// A `u32`-counted list of `u32` ElementIds at `at`, widened to `u64`.
 fn u32_list(buf: &[u8], at: usize) -> Option<Vec<u64>> {
-    let count = u32::from_le_bytes(buf.get(at..at + 4)?.try_into().ok()?) as usize;
+    let count = le_bytes::u32_at(buf, at)? as usize;
     if count > MAX_REFERENCES {
         return None;
     }

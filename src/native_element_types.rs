@@ -9,6 +9,7 @@
 //! sweeps and 5 ramps, which neither RE-130's stored layout nor RE-69's
 //! reference list types.
 
+use crate::native_json::{agree, element_id};
 use crate::{RevitFile, native_document};
 use std::collections::BTreeMap;
 
@@ -23,14 +24,6 @@ const KINDS: [(&str, &str, &str, &str); 3] = [
 /// Whether [`system_type_names`] reads elements of decoded class `class`.
 pub fn reads_class(class: &str) -> bool {
     KINDS.iter().any(|kind| kind.0 == class)
-}
-
-/// `{"m_id":{"m_id64":n}}` as `n`.
-fn element_id(value: &serde_json::Value) -> Option<u64> {
-    value
-        .pointer("/m_id/m_id64")
-        .and_then(serde_json::Value::as_i64)
-        .and_then(|n| u64::try_from(n).ok())
 }
 
 /// The type id and name of each of `elements` (ElementId to decoded class)
@@ -92,19 +85,4 @@ pub fn system_type_names(
             (*class == type_class).then(|| (element, (type_id, name.clone())))
         })
         .collect())
-}
-
-/// Record `value` for `id`, or `None` once two copies disagree or one has
-/// none.
-fn agree<T: PartialEq>(map: &mut BTreeMap<u64, Option<T>>, id: u64, value: Option<T>) {
-    match map.get_mut(&id) {
-        None => {
-            map.insert(id, value);
-        }
-        Some(held) => {
-            if *held != value {
-                *held = None;
-            }
-        }
-    }
 }

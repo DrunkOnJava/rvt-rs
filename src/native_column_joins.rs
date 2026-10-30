@@ -17,16 +17,9 @@
 //! at building permit; the 18 columns it draws as a cut mesh at permit each
 //! hold one or more (RE-247).
 
+use crate::native_json::element_id;
 use crate::{RevitFile, native_document};
 use std::collections::{BTreeMap, BTreeSet};
-
-/// `{"m_id":{"m_id64":n}}` as `n`.
-fn element_id(value: &serde_json::Value) -> Option<u64> {
-    value
-        .pointer("/m_id/m_id64")
-        .and_then(serde_json::Value::as_i64)
-        .and_then(|n| u64::try_from(n).ok())
-}
 
 /// A straight wall's location line in plan and the unit normal toward its
 /// exterior face.
