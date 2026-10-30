@@ -209,7 +209,14 @@ fn plan_triangles(
     placement: &Placement,
 ) -> Option<Vec<Triangle>> {
     let expected = area(outer).abs() - holes.iter().map(|hole| area(hole).abs()).sum::<f64>();
-    let cap = section(outer, holes)?;
+    let Some(cap) = section(outer, holes) else {
+        eprintln!(
+            "wall_tops: debug section none outer {} holes {}",
+            outer.len(),
+            holes.len()
+        );
+        return None;
+    };
     let mut triangles = Vec::with_capacity(cap.cap_triangles.len());
     let mut drawn = 0.0;
     for corners in &cap.cap_triangles {
@@ -222,7 +229,17 @@ fn plan_triangles(
         drawn += area(&triangle).abs();
         triangles.push(triangle);
     }
-    ((drawn - expected).abs() <= TRIANGULATION_TOLERANCE_SQUARE_FEET).then_some(triangles)
+    if (drawn - expected).abs() > TRIANGULATION_TOLERANCE_SQUARE_FEET {
+        eprintln!(
+            "wall_tops: debug triangulated area {drawn:.6} expected {expected:.6} outer {} holes {} outer area {:.6} holes area {:?}",
+            outer.len(),
+            holes.len(),
+            area(outer).abs(),
+            holes.iter().map(|h| area(h).abs()).collect::<Vec<_>>()
+        );
+        return None;
+    }
+    Some(triangles)
 }
 
 /// The slab, roof or footing made of the entities `pieces` (a floor of
@@ -246,23 +263,39 @@ fn build_cutter(
             ..
         } = entities.get(index)?
         else {
+            eprintln!("wall_tops: debug cutter piece {index} is not a plain extrusion");
             return None;
         };
         if !(body.height_feet.is_finite() && body.height_feet > 0.0)
             || !location.iter().all(|v| v.is_finite())
         {
+            eprintln!("wall_tops: debug cutter piece {index} bad height or location");
             return None;
         }
         let (least, greatest) = heights.unwrap_or((location[2], location[2]));
         heights = Some((least.min(location[2]), greatest.max(location[2])));
         let placement = Placement::new(Some(*location), *rotation_radians);
-        let (outer, holes) = extrusion_rings(body)?;
-        triangles.extend(plan_triangles(&outer, &holes, &placement)?);
+        let Some((outer, holes)) = extrusion_rings(body) else {
+            eprintln!("wall_tops: debug cutter piece {index} has no rings");
+            return None;
+        };
+        let Some(found) = plan_triangles(&outer, &holes, &placement) else {
+            eprintln!("wall_tops: debug cutter piece {index} plan did not triangulate");
+            return None;
+        };
+        triangles.extend(found);
         for outline in voids.get(&index).into_iter().flatten() {
-            void_triangles.extend(plan_triangles(outline, &[], &placement)?);
+            let Some(found) = plan_triangles(outline, &[], &placement) else {
+                eprintln!("wall_tops: debug cutter piece {index} void did not triangulate");
+                return None;
+            };
+            void_triangles.extend(found);
         }
     }
     let (least, greatest) = heights?;
+    if greatest - least > UNDERSIDE_TOLERANCE_FEET {
+        eprintln!("wall_tops: debug cutter pieces at different heights {least} {greatest}");
+    }
     (greatest - least <= UNDERSIDE_TOLERANCE_FEET).then_some(Cutter {
         underside: least,
         triangles,
