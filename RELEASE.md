@@ -24,8 +24,7 @@ the **minor** version, not the major. That is:
 The current version lives in `Cargo.toml` under `[package].version`. It
 is repeated in `rvt-py/Cargo.toml` (the wheel's version, and its `=X.Y.Z`
 dependency on `rvt`), `rvt-wasm/Cargo.toml`, the `rvt` dependency of
-`tools/stream_evidence/Cargo.toml`, `viewer/package.json`, `CITATION.cff`,
-`.release-please-manifest.json`, and the workspace crates' entries in
+`tools/stream_evidence/Cargo.toml`, `viewer/package.json`, `CITATION.cff`, and the workspace crates' entries in
 `Cargo.lock` and `fuzz/Cargo.lock`. All of them must agree at tag time.
 
 ## Release cadence
@@ -132,11 +131,8 @@ project treats a silent skipped step the same as an untested change.
 6. **Update `CITATION.cff`.** Set `version:` to `X.Y.Z` and
    `date-released:` to the ISO date. These two fields must agree with
    the git tag and the `Cargo.toml` version.
-7. **Update `.release-please-manifest.json`.** Set `"."` to the new
-   version. This keeps release-please in sync even though the workflow
-   isn't yet wired up (see [Release automation](#release-automation)).
-8. **Open the release pull request,** `chore(release): prepare vX.Y.Z`,
-   with steps 4 to 7 and the README's release section
+7. **Open the release pull request,** `chore(release): prepare vX.Y.Z`,
+   with steps 4 to 6 and the README's release section
    (`## Release X.Y.Z and main`) moved to the new version. crates.io and
    PyPI show the README packed into each version, which can never be
    edited once it is published, so it names the release it ships in; it
@@ -148,19 +144,19 @@ project treats a silent skipped step the same as an untested change.
    pull request's CI run (its `octetproof-core-interior` artifact) and
    push them. Only `witness_version` and the verdict hashes should
    differ. Merging this pull request is not the release.
-9. **Confirm the registries' trusted publishers.** crates.io and PyPI
+8. **Confirm the registries' trusted publishers.** crates.io and PyPI
    each need one for repository DrunkOnJava/rvt-rs, workflow
    `publish.yml`, environment `crates-io` or `pypi` (see
    [`docs/maintaining.md`](docs/maintaining.md#releases)). Without
    crates.io's, the crate's publish fails, and PyPI, the release
    binaries and the container image, which wait for it, never run.
-10. **Tag the merged commit.** `git fetch origin`, check that
+9. **Tag the merged commit.** `git fetch origin`, check that
     `origin/main` is the release pull request's squash commit, then
     `git tag -s vX.Y.Z -m "rvt-rs X.Y.Z" origin/main`. The `-s` signs
     the tag with the maintainer's key, which release authenticity
     requires. The `release-tags` ruleset lets only a maintainer create
     a `v*` tag, and nobody can move or delete one.
-11. **Push the tag.** `git push origin vX.Y.Z` runs `publish.yml`. It
+10. **Push the tag.** `git push origin vX.Y.Z` runs `publish.yml`. It
     builds the wheels and the sdist and checks them: each wheel installed
     and opening a model, `cargo install` of the source with the CLI
     sample smoke, the docs.rs build preview and the viewer load smoke.
@@ -170,13 +166,13 @@ project treats a silent skipped step the same as an untested change.
     `release-binaries.yml`, the CLI archives and the container image with
     their attestations, both of which wait for the crate. If a job fails, fix its cause and
     re-run the failed jobs.
-12. **Write the release page.** `release-binaries.yml` creates the
+11. **Write the release page.** `release-binaries.yml` creates the
     release from the tag with GitHub's generated notes. Replace them with
     this version's `CHANGELOG.md` section, verbatim, followed by
     `User guide: https://github.com/DrunkOnJava/rvt-rs/blob/vX.Y.Z/docs/user-guide.md`
     with the real tag substituted
     (`gh release edit vX.Y.Z --notes-file <file>`).
-13. **Announce (optional).** If the release is worth calling out,
+12. **Announce (optional).** If the release is worth calling out,
     drafts live under `docs/launch/` — currently `hn-show-hn.md` and
     `reddit-r-rust.md`, with further channels (buildingSMART forum,
     OSArch) added as drafts land. Post from the drafts rather than
@@ -229,14 +225,14 @@ where CI and Measure run, only when it is ready to release.
    landed on `main` first, `git cherry-pick -x` it. Where no existing
    real-file, CLI or contract check fails without the fix, add one that
    does (unit tests are banned, see `CONTRIBUTING.md`).
-3. **Prepare the release on the branch.** Steps 4 to 7 above (the
-   version files, `CHANGELOG.md`, `CITATION.cff` and the manifest) and
+3. **Prepare the release on the branch.** Steps 4 to 6 above (the
+   version files, `CHANGELOG.md` and `CITATION.cff`) and
    the README's release section, committed to the branch: no pull
    request into `main` can test a branch cut from a tag.
 4. **Check it.** Pushing the branch runs CI on it with the full matrix
    `main` gets (`ci.yml` runs on `hotfix/**` pushes). The new version
    changes both Core Interior witness observations and their verdicts
-   (step 8): take them from that run's `octetproof-core-interior`
+   (step 7): take them from that run's `octetproof-core-interior`
    artifact and check that every difference is `witness_version`, a
    verdict hash, or one the fix explains and the changelog states, then
    commit them and push again; that run must pass too. Measure the
@@ -256,7 +252,7 @@ where CI and Measure run, only when it is ready to release.
    `ci.yml` ignores (Markdown, `docs/`, `CITATION.cff` and a few others),
    a push of only those runs none, and a change to code needs Measure
    again.
-6. **Tag the reviewed head and push the tag.** Steps 9 to 12 above,
+6. **Tag the reviewed head and push the tag.** Steps 8 to 11 above,
    with that head in place of `origin/main`, once its code and witness
    files are the ones CI and Measure passed:
    `git tag -s vX.Y.(Z+1) -m "rvt-rs X.Y.(Z+1)" <its SHA>`. Then close
@@ -267,7 +263,7 @@ where CI and Measure run, only when it is ready to release.
    section (its entries moved out of `[Unreleased]`), the version files
    and the README's release section. `main` exports differently from the
    branch, so take its Core Interior witness observations and verdicts
-   from that pull request's own CI run, as in step 8, not from the
+   from that pull request's own CI run, as in step 7, not from the
    branch. Then delete the branch; the tag keeps its commits.
 
 ## Post-release
@@ -277,7 +273,7 @@ where CI and Measure run, only when it is ready to release.
   a pull request moves the other latest-release statements to the new
   version and records the checks: `docs/install.md`, `docs/python.md`,
   `docs/status.md`, `docs/supported-profile.md` and `ROADMAP.md`. The
-  README's release section moved in the release pull request (step 8).
+  README's release section moved in the release pull request (step 7).
 - **Monitor `docs.rs`.** The docs build is async and often trails the
   `cargo publish` by several minutes. If it fails, the package page
   shows a red banner; triage the build log and cut a `PATCH` with the
@@ -306,7 +302,7 @@ aspirational state. Update this section when you wire up more of it.
   required check, passes only when every one of them did (see
   [`docs/maintaining.md`](docs/maintaining.md#pull-requests)).
 - **Publish workflow** (`.github/workflows/publish.yml`), on `v*` tags and
-  `workflow_dispatch`: the checks and publish order of step 11. Its
+  `workflow_dispatch`: the checks and publish order of step 10. Its
   crates.io and PyPI jobs authenticate by Trusted Publishing in the
   `crates-io` and `pypi` environments, which only `v*` tags may deploy
   to; PyPI and the release binaries wait for the crates.io job. The
@@ -321,10 +317,5 @@ aspirational state. Update this section when you wire up more of it.
   it for a tag.
 - **Dependabot** (`.github/dependabot.yml`): see
   [`docs/maintaining.md`](docs/maintaining.md#security-and-automation-settings).
-- **release-please**: configuration is in place
-  (`release-please-config.json` + `.release-please-manifest.json`
-  targeting `rust` release-type for this crate) but is **not yet
-  wired** to a GitHub Actions workflow. Until that lands, the
-  release checklist above is run manually.
 - **TestPyPI:** no dry run has published to TestPyPI yet (task `Q-13`
   in the backlog); the 0.2.0 dry runs ran the checks only.
