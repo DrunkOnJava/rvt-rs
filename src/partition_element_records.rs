@@ -1560,18 +1560,19 @@ pub fn scan_volumeless_instances(
     };
     let categories: Vec<i64> = RECOVERED_CATEGORIES.iter().map(|(c, _)| *c).collect();
     let records = scan_category_records_multi(rf, revit_version, &categories, &declared)?;
-    // An element in a non-primary design option is left out for that reason
-    // instead, and counted by
-    // `partition_design_options::scan_non_primary_option_instances`.
+    // An element in a non-primary design option, or not in the export phase,
+    // is left out for that reason instead, and counted by
+    // `partition_design_options::scan_non_primary_option_instances` or
+    // `native_phases::scan_phase_excluded_instances`.
     let options = rf.memoised_design_options();
+    let phases = rf.memoised_phase_filter();
     // An element framed more than once counts once, and only when no frame
     // of it has volume.
     let mut with_volume: BTreeSet<u32> = BTreeSet::new();
     let mut without: BTreeMap<u32, i64> = BTreeMap::new();
-    for record in records
-        .iter()
-        .filter(|r| r.is_exported_instance() && !options.excludes(r))
-    {
+    for record in records.iter().filter(|r| {
+        r.is_exported_instance() && !options.excludes(r) && !phases.excludes(r.element_id)
+    }) {
         if record.has_volume() {
             with_volume.insert(record.element_id);
         } else {

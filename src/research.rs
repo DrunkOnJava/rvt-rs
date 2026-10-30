@@ -78,6 +78,7 @@
 //! - [`native_parameters`]: Schema-directed native value prefixes and deferred parameter sets
 //! - [`native_parametric_mesh`]: Bounded UV-grid meshing for decoded parametric surfaces
 //! - [`native_parametric_surface`]: Typed evaluators for the non-planar surfaces observed in saved graphs
+//! - [`native_phases`]: The project's phase order, and the elements a last-phase export leaves out (RE-184, #328)
 //! - [`native_rendered_content`]: Family types whose family is rendered content (RE-202, #355)
 //! - [`native_saved_mesh`]: Tessellation of bounded saved planar and cylindrical BRep faces
 //! - [`native_saved_scene`]: Current native saved-graphics extraction with explicit shared-symbol closure
@@ -155,6 +156,8 @@ pub mod native_parameters;
 pub mod native_parametric_mesh;
 #[path = "native_parametric_surface.rs"]
 pub mod native_parametric_surface;
+#[path = "native_phases.rs"]
+pub mod native_phases;
 #[path = "native_rendered_content.rs"]
 pub mod native_rendered_content;
 #[path = "native_saved_mesh.rs"]

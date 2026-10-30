@@ -3672,6 +3672,21 @@ pub fn build_export_diagnostics_with_limits(
             sample_names: Vec::new(),
         });
     }
+    // #328: elements that do not exist in the export phase (the project's
+    // last) are left out as Revit's own export leaves them out (RE-184).
+    let phase_excluded = bfi
+        .as_ref()
+        .and_then(|b| crate::native_phases::scan_phase_excluded_instances(rf, b.version).ok())
+        .unwrap_or_default();
+    let phase_excluded_total: usize = phase_excluded.values().sum();
+    if phase_excluded_total > 0 {
+        skipped.push(SkippedExportItem {
+            reason: "element_record_not_in_export_phase".into(),
+            count: phase_excluded_total,
+            classes: phase_excluded,
+            sample_names: Vec::new(),
+        });
+    }
     // #309: empty curtain panels are left out as Revit's own export leaves
     // them out, recognised by their family's name. A type of theirs with a
     // material set would contradict that name, and is reported.

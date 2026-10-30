@@ -1,0 +1,9 @@
+- **Elements that do not exist in the export phase are left out (#328,
+  RE-184).** A project's `AllProjectPhases` record lists its phases in
+  order, and with no phase chosen Revit's export shows the last: an element
+  is written when it was created in that phase or before it and not
+  demolished in it or before it, as Revit 2025's exports of two models made
+  for this show. On Snowdon Towers, whose phases run Legends, Existing, New
+  Construction, the six slabs created and demolished in Legends are no
+  longer written, and nothing else changes. The diagnostics count what is
+  left out as `element_record_not_in_export_phase`.
