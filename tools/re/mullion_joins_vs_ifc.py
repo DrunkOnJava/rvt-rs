@@ -114,11 +114,12 @@ def read_mullions(f):
 
 
 def main(argv):
-    if len(argv) != 3:
+    args = [a for a in argv[1:] if a != "--list"]
+    if len(args) != 2:
         print(__doc__, file=sys.stderr)
         return 2
-    mul, joins, drivers = read_probe(argv[1])
-    mullions = read_mullions(ifcopenshell.open(argv[2]))
+    mul, joins, drivers = read_probe(args[0])
+    mullions = read_mullions(ifcopenshell.open(args[1]))
     by_edge = {(host, edge): tag for tag, (host, edge) in mul.items()}
     print(f"mullions and panels listed: {len(mul)}, mullions drawn as one extruded solid with a whole count of ends: {len(mullions)}")
     print(f"curtain walls: {len(drivers)}, with joins: {len(joins)}, joins: {sum(len(v) for v in joins.values())}")
