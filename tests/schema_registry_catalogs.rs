@@ -1,4 +1,4 @@
-//! Every family's `Formats/Latest` catalog (2016 to 2026) is read to its end
+//! Every family's `Formats/Latest` catalog (2016 to 2027) is read to its end
 //! by `schema_registry::parse`, the parser the native record path uses, and
 //! gives the same classes as `formats::schema_classes`, which reads every
 //! one of them to its end (#154). puzzbobb reported that the first stops on
