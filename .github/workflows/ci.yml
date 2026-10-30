@@ -241,6 +241,16 @@ jobs:
           RVT_SAMPLES_DIR: ${{ matrix.with_corpus && format('{0}/_corpus/examples/Autodesk', github.workspace) || '' }}
           RVT_REQUIRE_CORPUS: ${{ matrix.with_corpus && '1' || '' }}
         run: tools/ci/verify-real-files.sh --profile ci --no-fail-fast
+      # A committed synthetic IFC fixture that no longer matches the writer's
+      # output (tests/common, assert_matches_fixture) leaves the current
+      # output here: commit it to tests/fixtures/ if the change is intended.
+      - name: Upload the current synthetic IFC fixtures
+        if: failure() && matrix.os == 'ubuntu-24.04' && matrix.label != 'msrv'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: synthetic-fixtures
+          path: target/tmp/synthetic-fixtures/
+          if-no-files-found: ignore
       # The user examples the README links (examples/README.md), run on the
       # committed synthetic project so they cannot drift from the API
       # (#872). Linux only: they do not depend on the platform.

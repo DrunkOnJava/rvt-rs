@@ -7,10 +7,10 @@
 //! validates the emitted STEP file against IFC4 structural
 //! requirements.
 //!
-//! The output is optionally written to
-//! `tests/fixtures/synthetic-project.ifc` when the `DUMP_IFC`
-//! environment variable is set — useful for opening in BlenderBIM
-//! / IfcOpenShell to verify the file renders as expected.
+//! The output, written at a fixed timestamp, must match the committed
+//! `tests/fixtures/synthetic-project.ifc` apart from the release version
+//! (`common::assert_matches_fixture`), which IfcOpenShell validates and the
+//! viewer offers as a demo. Setting `DUMP_IFC` rewrites the fixture.
 //!
 //! # What gets emitted
 //!
@@ -33,7 +33,10 @@ use rvt::ifc::MaterialInfo;
 use rvt::ifc::from_decoded::{
     slab_extrusion, wall_extrusion, wall_property_set, window_property_set,
 };
+use rvt::ifc::step_writer::{StepOptions, write_step_with_options};
 use rvt::ifc::{BuilderOptions, ElementInput, Storey, build_ifc_model, write_step};
+
+mod common;
 use rvt::walker::{DecodedElement, InstanceField};
 
 fn mk_decoded(class: &str) -> DecodedElement {
@@ -304,6 +307,12 @@ fn synthetic_project_emits_valid_ifc4() {
 
     let model = build_ifc_model(&inputs, opts);
     let step = write_step(&model);
+    let fixture = write_step_with_options(
+        &model,
+        &StepOptions {
+            timestamp: Some(common::SYNTHETIC_FIXTURE_TIMESTAMP),
+        },
+    );
 
     // --- Optional: dump to a fixture file when asked, before any check ---
     if std::env::var("DUMP_IFC").is_ok() {
@@ -312,7 +321,7 @@ fn synthetic_project_emits_valid_ifc4() {
             .join("fixtures");
         std::fs::create_dir_all(&out_dir).expect("fixtures dir");
         let out_path = out_dir.join("synthetic-project.ifc");
-        std::fs::write(&out_path, &step).expect("write ifc");
+        std::fs::write(&out_path, &fixture).expect("write ifc");
         eprintln!("wrote {}", out_path.display());
     }
 
@@ -526,11 +535,12 @@ fn synthetic_project_emits_valid_ifc4() {
         step.contains(",3.048000,0.203200)"),
         "E/W wall profile dims missing (10' × 8\")"
     );
+
+    common::assert_matches_fixture("synthetic-project.ifc", &fixture);
 }
 
 #[test]
 fn synthetic_project_is_byte_stable_under_fixed_timestamp() {
-    use rvt::ifc::step_writer::{StepOptions, write_step_with_options};
     let wall = mk_decoded("Wall");
     let inputs = vec![ElementInput {
         decoded: &wall,

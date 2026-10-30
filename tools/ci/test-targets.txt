@@ -15,13 +15,12 @@
 #             reader or exporter gives against the file or Revit's own export
 #   cli       runs the built binaries end to end
 #   contract  checks a published claim (support matrix, binary inventory,
-#             witness verdicts, JSON schemas, field-type coverage) against
-#             the code and artifacts
+#             witness verdicts, JSON schemas, field-type coverage, the
+#             committed synthetic IFC fixtures) against the code and artifacts
 #   hardening replays inputs that crashed or overran a parser of untrusted
 #             files (fuzz findings) through the public API: run, as a
 #             parser of hostile input must keep surviving them (the
 #             maintainer's choice, 2026-10-05, C9)
-#   unit      synthetic-only or property tests: kept as source, not run
 #
 # `skip=` leaves out the synthetic-fixture tests inside a real-file target.
 
@@ -109,14 +108,11 @@ cli       rvt_schedule_cli
 
 contract  binary_inventory
 contract  field_type_coverage
+contract  ifc_synthetic_project
+contract  ifc_synthetic_structural
 contract  json_schema_contracts
 contract  project_count_fixtures
 contract  support_matrix
 contract  witness_registry
 contract  witness_verdict
 
-unit      control_cancellation
-unit      graceful_degradation
-unit      ifc_synthetic_project
-unit      ifc_synthetic_structural
-unit      proptest_parsers
