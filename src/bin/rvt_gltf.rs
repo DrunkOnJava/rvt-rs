@@ -182,12 +182,7 @@ fn run(cli: &Cli) -> Result<(), Failure> {
     } else if cli.saved_meshes {
         Some(rvt::ifc::saved_meshes::SavedMeshScope::All)
     } else {
-        // Doors and windows by default (the maintainer, 2026-10-29), on the
-        // releases whose saved graphics are read.
-        rf.basic_file_info()
-            .ok()
-            .filter(|info| (2023..=2027).contains(&info.version))
-            .map(|_| rvt::ifc::saved_meshes::SavedMeshScope::DoorsAndWindows)
+        rvt::ifc::saved_meshes::default_scope(&mut rf)
     };
     if let Some(scope) = scope {
         if let Err(e) =
