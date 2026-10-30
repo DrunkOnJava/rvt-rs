@@ -838,3 +838,22 @@ fn step_writer_handles_adversarial_model_strings() {
         assert!(out.contains("IFCPROJECT"));
     });
 }
+
+// ---- research::partition_scanner::scan_partition_buffer ----
+
+/// A tagged class whose tag sits in a buffer's last three bytes, followed by a
+/// zero byte: the record-prefix check read one byte past the end.
+#[test]
+fn partition_scan_tag_in_the_last_three_bytes_does_not_panic() {
+    use rvt::research::partition_scanner::{ScanOptions, scan_partition_buffer};
+    let tags = std::collections::BTreeMap::from([(0x0191u16, "ArcWall".to_string())]);
+    for len in 4..12 {
+        let mut data = vec![0xffu8; len];
+        data[len - 3] = 0x91;
+        data[len - 2] = 0x01;
+        data[len - 1] = 0x00;
+        assert_no_panic("scan_partition_buffer tag at len - 3", &data, |d| {
+            scan_partition_buffer("Partitions/5", d, &[], 2023, &tags, &ScanOptions::default())
+        });
+    }
+}
