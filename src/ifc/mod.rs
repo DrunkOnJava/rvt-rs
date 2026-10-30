@@ -1282,7 +1282,7 @@ fn export_rvt_doc(
     // sees the whole record set, and before the geometry strip so the
     // no-geometry modes (where no record bbox was attached in the
     // first place) find nothing to bind and change nothing.
-    apply_element_record_storeys(&mut entities, &mut building_storeys);
+    apply_element_record_storeys(&mut entities, &mut building_storeys, &mut storey_properties);
     // B63: a room's furniture, fixtures and equipment are contained in its
     // space, which needs both on their storeys.
     export_content::contain_in_spaces(&mut entities);
@@ -2995,6 +2995,7 @@ fn record_level_element_id(entity: &entities::IfcEntity) -> Option<u32> {
 fn apply_element_record_storeys(
     entities: &mut [entities::IfcEntity],
     building_storeys: &mut Vec<Storey>,
+    storey_properties: &mut std::collections::BTreeMap<usize, entities::StoreyProperties>,
 ) {
     use crate::element_record_storeys as records;
 
@@ -3024,6 +3025,9 @@ fn apply_element_record_storeys(
                 *storey_index = None;
             }
         }
+        // A Level's type name belongs to the storey that Level became, by
+        // index; none of the replacement list's storeys is that Level.
+        storey_properties.clear();
         *building_storeys = recovery.storeys;
     }
 
