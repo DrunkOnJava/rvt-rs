@@ -113,22 +113,31 @@ def main():
         taken = {n for lv, c in others.items() for n in c}
         print(f"native levels: {klass} storeys no other class Level names {len([n for n in mine_storeys if n not in taken])} of {len(mine_storeys)}")
 
-    # Which ElementId parameter names a storey's Level: one whose few values
-    # each sit in one storey, and that the footings hold.
-    footings = [t for t in paired_tags(paired, class_of, "IfcFooting")]
+    # Which ElementId parameter names a storey's Level: the Levels the Element
+    # bases name map to storeys (above); a parameter whose value is one of
+    # those Levels is a Level parameter when the element is in that storey.
+    footings = paired_tags(paired, class_of, "IfcFooting")
     for pid in sorted(params):
         held = [(t, v) for t, v in params[pid].items() if t in storey_of and not storey_of[t].startswith("<")]
-        values = collections.defaultdict(collections.Counter)
-        for t, v in held:
-            values[v][storey_of[t]] += 1
-        if not 2 <= len(values) <= 12:
+        known = [(t, v) for t, v in held if v in majority]
+        if len(known) < 10:
             continue
-        in_majority = sum(max(c.values()) for c in values.values())
-        mine = [t for t in footings if t in params[pid]]
+        ok = sum(1 for t, v in known if storey_of[t] == majority[v])
+        mine = [(t, v) for t, v in known if class_of.get(t) == "IfcFooting"]
+        mine_ok = sum(1 for t, v in mine if storey_of[t] == majority[v])
         print(
-            f"native levels: ElementId parameter {pid} on {len(held)} elements with {len(values)} values, "
-            f"{in_majority} in the majority storey of their value, held by {len(mine)} of {len(footings)} IfcFooting"
+            f"native levels: ElementId parameter {pid} holds a Level an Element base names on {len(known)} of {len(held)} elements, "
+            f"{ok} of them in that Level storey; IfcFooting {len(mine)} of {len(footings)} hold one, {mine_ok} in its storey"
         )
+        by_class = collections.defaultdict(lambda: [0, 0])
+        for t, v in known:
+            entry = by_class[class_of.get(t, "-")]
+            entry[0] += 1
+            entry[1] += int(storey_of[t] == majority[v])
+        for klass, (n, k) in sorted(by_class.items()):
+            print(f"native levels: ElementId parameter {pid} class {klass} {k} of {n}")
+        used = {v for _, v in mine}
+        print(f"native levels: ElementId parameter {pid} IfcFooting Levels {len(used)}, of them a Level an Element base names {len([v for v in used if v in majority])}")
 
     # Phases: the export phase is the last of the project's (RE-184).
     phases = collections.Counter()
