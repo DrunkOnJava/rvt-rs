@@ -2,7 +2,7 @@
 //!
 //! Reads `.rvt`, `.rfa`, `.rte` and `.rft` files without Revit or any
 //! Autodesk component: metadata, previews and the embedded schema of every
-//! release from 2016 to 2026, and, on Revit 2024 and 2025 project files, the
+//! release from 2016 to 2027, and, on Revit 2024 and 2025 project files, the
 //! building itself (typed elements with Revit's ElementIds, names, types,
 //! storeys, materials, layers, GlobalIds and some type parameters), written
 //! out as IFC4, glTF or plan SVG.

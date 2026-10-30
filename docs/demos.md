@@ -303,7 +303,9 @@ Notable properties:
   element, a relationship's participants (#400). None depends on where
   the entity lands in the file, so an export keeps its GlobalIds when
   unrelated geometry changes, and the fixture is byte-stable across
-  rebuilds (see Demo 5).
+  rebuilds (see Demo 5). `tools/ifc_globalid_stability.py BEFORE.ifc
+  AFTER.ifc --require-stable` checks that between two exports of one
+  model.
 - **Real opening chain.** The front door is hosted in the south wall
   (via `host_element_index` in the test), so the writer emits
   `IfcOpeningElement` + `IfcRelVoidsElement(wall, opening)` +

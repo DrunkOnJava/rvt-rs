@@ -1,4 +1,4 @@
-//! The native path walks every partition of every family, 2016 to 2026
+//! The native path walks every partition of every family, 2016 to 2027
 //! (#421).
 //!
 //! `native_segments::walk` reads a partition's segment markers with the
