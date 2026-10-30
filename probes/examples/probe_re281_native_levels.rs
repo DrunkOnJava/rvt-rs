@@ -16,13 +16,18 @@
 //!     associated Level, with a created phase, and the phases listed;
 //!   element <ElementId> <class> <assoc level> <created phase> <demolished phase>
 //!     one line per declared element whose record reads (ElementIds, so a
-//!     model without a licence keeps only the count lines).
+//!     model without a licence keeps only the count lines);
+//!   param <ElementId> <parameter id> <value>
+//!     each ElementId-valued saved parameter an element holds itself
+//!     (`native_element_parameters::read`), unless `--records` is given: a
+//!     Level an element names that its Element base does not.
 //!
 //! Usage:
 //!   cargo run --profile ci -p rvt-probes --example probe_re281_native_levels -- MODEL.rvt
 
 use rvt::RevitFile;
 use rvt::research::native_document::{self, NATIVE_RELEASES, Options};
+use rvt::research::native_element_parameters::{ParameterLevel, read};
 use std::collections::BTreeSet;
 
 fn main() {
@@ -31,8 +36,9 @@ fn main() {
         eprintln!("usage: probe_re281_native_levels MODEL.rvt");
         std::process::exit(2);
     }
+    let records_only = std::env::args().any(|arg| arg == "--records");
     for path in paths.iter().filter(|p| !p.starts_with("--")) {
-        if let Err(error) = run(path) {
+        if let Err(error) = run(path, records_only) {
             let text: String = format!("{error:#}")
                 .chars()
                 .map(|c| {
@@ -49,7 +55,7 @@ fn main() {
     }
 }
 
-fn run(path: &str) -> anyhow::Result<()> {
+fn run(path: &str, records_only: bool) -> anyhow::Result<()> {
     let mut rf = RevitFile::open(path)?;
     let release = rf.layout_release()?;
     let options = Options {
@@ -61,6 +67,7 @@ fn run(path: &str) -> anyhow::Result<()> {
     let mut with_level = 0usize;
     let mut with_phase = 0usize;
     let mut lines = Vec::new();
+    let mut ids = BTreeSet::new();
     let summary = native_document::extract_graphs(&mut rf, &options, |record| {
         let Some(base) = &record.base else {
             return Ok(());
@@ -69,6 +76,7 @@ fn run(path: &str) -> anyhow::Result<()> {
         with_level += usize::from(base.associated_level_id != -1);
         with_phase += usize::from(base.created_phase_id != -1);
         let class = record.class_name.clone().unwrap_or_default();
+        ids.insert(record.identity.element_id);
         lines.push(format!(
             "element {} {} {} {} {}",
             record.identity.element_id,
@@ -92,6 +100,30 @@ fn run(path: &str) -> anyhow::Result<()> {
     );
     for line in lines {
         println!("{line}");
+    }
+    if !records_only {
+        let saved = read(&mut rf, &ids)?;
+        let (mut elements_with, mut values) = (0usize, 0usize);
+        for (id, parameters) in &saved.elements {
+            let mut any = false;
+            for parameter in parameters {
+                if parameter.level != ParameterLevel::Instance
+                    || parameter.storage_type != "ElementId"
+                {
+                    continue;
+                }
+                if let Some(value) = parameter.value.as_i64() {
+                    println!("param {id} {} {value}", parameter.parameter_id);
+                    values += 1;
+                    any = true;
+                }
+            }
+            elements_with += usize::from(any);
+        }
+        println!(
+            "native levels: saved parameters read for {} elements, {elements_with} holding an ElementId parameter of their own, {values} such values",
+            saved.elements.len()
+        );
     }
     Ok(())
 }

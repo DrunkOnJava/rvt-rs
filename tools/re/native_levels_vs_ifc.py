@@ -31,16 +31,25 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import storeys_vs_ifc  # noqa: E402
 
 
+def paired_tags(paired, class_of, klass):
+    return [t for t, _ in paired if class_of.get(t) == klass]
+
+
 def main():
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
     if len(args) != 2:
         print(__doc__, file=sys.stderr)
         return 2
     elements = {}
+    params = collections.defaultdict(dict)
     for line in open(args[0], errors="replace"):
         parts = line.split()
         if len(parts) == 6 and parts[0] == "element":
             elements[parts[1]] = (parts[2], int(parts[3]), int(parts[4]), int(parts[5]))
+        elif len(parts) == 4 and parts[0] == "param":
+            params[int(parts[2])].setdefault(parts[1], int(parts[3]))
+        elif line.startswith("native levels: "):
+            print(line.rstrip("\n"))
     model = ifcopenshell.open(args[1])
     storey_of = storeys_vs_ifc.storeys(model)
     class_of = {}
@@ -103,6 +112,23 @@ def main():
         print(f"native levels: {klass} Levels whose footings are in more than one storey {sum(1 for s in by_own.values() if len(s) > 1)}")
         taken = {n for lv, c in others.items() for n in c}
         print(f"native levels: {klass} storeys no other class Level names {len([n for n in mine_storeys if n not in taken])} of {len(mine_storeys)}")
+
+    # Which ElementId parameter names a storey's Level: one whose few values
+    # each sit in one storey, and that the footings hold.
+    footings = [t for t in paired_tags(paired, class_of, "IfcFooting")]
+    for pid in sorted(params):
+        held = [(t, v) for t, v in params[pid].items() if t in storey_of and not storey_of[t].startswith("<")]
+        values = collections.defaultdict(collections.Counter)
+        for t, v in held:
+            values[v][storey_of[t]] += 1
+        if not 2 <= len(values) <= 12:
+            continue
+        in_majority = sum(max(c.values()) for c in values.values())
+        mine = [t for t in footings if t in params[pid]]
+        print(
+            f"native levels: ElementId parameter {pid} on {len(held)} elements with {len(values)} values, "
+            f"{in_majority} in the majority storey of their value, held by {len(mine)} of {len(footings)} IfcFooting"
+        )
 
     # Phases: the export phase is the last of the project's (RE-184).
     phases = collections.Counter()
