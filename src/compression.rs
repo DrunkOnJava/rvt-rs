@@ -130,7 +130,7 @@ fn clean_stream_path(path: &str) -> &str {
 /// out at first because stripping it lowered an opportunistic class-name
 /// count; that count was drift garbage. With the strip, every file of one
 /// Revit release inflates to the byte-identical schema, family or project,
-/// and without it no two do (`examples/probe_schema_page_strip.rs`).
+/// and without it no two do (`probes/examples/probe_schema_page_strip.rs`).
 ///
 /// `ProjectInformation`, `PartAtom`, `BasicFileInfo`, and preview streams are
 /// never gated — they are not routed through the paged gzip reader.

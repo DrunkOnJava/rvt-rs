@@ -2,7 +2,7 @@
 """Where each layer of a wall ends at a layered butt join, against Revit.
 
 Research tool for `reports/element-framing/RE-71-layered-wall-joins.md`. Its
-input is the JSON-lines output of `examples/probe_re71_layered_joins.rs`:
+input is the JSON-lines output of `probes/examples/probe_re71_layered_joins.rs`:
 each wall's centreline, thickness, exterior side, layers (exterior first,
 each width and function) and its RE-70 join at each end.
 
@@ -202,7 +202,7 @@ def main():
     if len(args) < 2:
         raise SystemExit(__doc__)
     glb = args[args.index("--glb") + 1] if "--glb" in args else None
-    rows = {row["id"]: row for row in map(json.loads, open(args[0]))}
+    rows = {row["id"]: row for row in (json.loads(line) for line in open(args[0]) if line.startswith("{"))}
     helpers = load("wall_layers_vs_ifc")
     model = ifcopenshell.open(args[1])
     to_internal, _ = helpers.site_to_internal(model)

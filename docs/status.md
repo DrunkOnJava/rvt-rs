@@ -110,9 +110,8 @@ geometry (doors and windows are drawn from the mesh Revit saved for their
 display by default, and any other family instance with the experimental
 `--saved-meshes` option, RE-78), roofs over a T or U footprint and roofs by extrusion outside Revit 2025, the height of
 walls Revit draws cut (78 of the BIM4LCA office's, #1067), the boundaries of
-rooms whose stored solid does not close, opening profiles and phase
-filtering are not decoded, and rvt-rs does not edit
-Revit model data.
+rooms whose stored solid does not close and opening profiles are not
+decoded, and rvt-rs does not edit Revit model data.
 
 ## Finding history
 
@@ -937,6 +936,23 @@ since RE-95 the 20 shading plates carry theirs too, each equal to
 Revit's. Eighty-one classes
 remain registered, each through `SimpleDecoder`; `MVP_TYPED_CLASSES` are
 consulted by `iter_elements`.
+
+**RE-184 (2026-10-27)** leaves out the elements that do not exist in the
+export phase, as Revit's export leaves them out (#328). A project's
+`AllProjectPhases.m_phaseIds` lists its phases in order, and with no phase
+chosen Revit's export shows the last: an element is exported when it was
+created in that phase or before it and not demolished in it or before it,
+by its `m_createdPhaseId` and `m_demolishedPhaseId`. Measured against
+Revit 2025's exports of two models made for it (a wall created in the last
+of three phases is exported, a wall demolished in it is not). On Snowdon
+Towers the phases run Legends, Existing, New Construction, so #328's six
+slabs, created and demolished in Legends, are left out, and nothing else
+is. An export setting that picks another phase is not read. Rooms are not
+checked: Revit's exporter skips a room whose own phase parameter is not the
+export phase instead of applying that rule, and no model here shows the
+parameter to be the room's created phase, so a room created in an earlier
+phase is still written (revit-ifc `ElementFilteringUtil.IsRoomInInvalidPhase`;
+`reports/element-framing/RE-184-phase-order.md`).
 
 ## Performance
 

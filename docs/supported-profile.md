@@ -38,7 +38,7 @@ apart:
 
 | Input | Opened | Elements identified | Geometry | Properties |
 |---|---|---|---|---|
-| Revit 2024 and 2025 project (`.rvt`) | yes | yes, measured on Core Interior, the four RE1 models, Snowdon Towers, Projeto1 and `teste_export_2025` (RE1's exports are by Revit 26.2; one plumbing fixture on RE1 Plumbing and 29 elements on Snowdon Towers are not in Revit's export) | see below | see below |
+| Revit 2024 and 2025 project (`.rvt`) | yes | yes, measured on Core Interior, the four RE1 models, Snowdon Towers, Projeto1 and `teste_export_2025` (RE1's exports are by Revit 26.2; one plumbing fixture on RE1 Plumbing and 23 elements on Snowdon Towers are not in Revit's export) | see below | see below |
 | Revit 2026 project | yes | experimental (since 0.5.0): measured on one 2026 project against Revit's own IFC4X3 export, 113 of its 115 elements and none outside it (RE-124) | the element's bounding box, walls cut back at their joins | Revit's GlobalIds, storeys, rooms with Revit's numbers and names, doors and windows in their hosts, family and type names, layer sets |
 | Revit 2023 project | yes | yes, measured on two 2023 projects against Revit's IFC4 exports (RE-81); components nested in doors and windows are left out | the element's bounding box; rooms their outline (RE-102) | ElementId, category, door and window host walls (RE-85), Levels as storeys with each element on the one its record names (RE-107), and family instances' family and type names (RE-109) |
 | Revit 2027 project | partial: opens on Autodesk's sample projects; previews and PartAtom not measured | experimental (since 0.6.0): the same ElementIds and classes as the 2026 copies of Autodesk's five sample projects (RE-179); no Revit 2027 export is measured | as on 2026 | as on 2026 |
@@ -122,10 +122,12 @@ a text parameter named `<set>.<property>` for a property the set's IFC4 definiti
 (`Pset_SpaceCommon.FloorCovering`), and the `Reference` of a set whose entity's name begins with the
 element's (`Pset_SpaceHeaterTypeCommon` on a space); without it every property is in the set IFC4 gives
 (RE-235). A value Revit's export writes that is known to be wrong is left out either way: a stair's or
-flight's `WalkingLineOffset`, half the run's width in feet read as millimetres, and a curtain mullion's `Qto_MemberBaseQuantities.CrossSectionArea`, which grows with its length and is never its section's area (RE-235 §5). Not read: most instance and type parameters (#35, #155) and phases
-(#328), so an element Revit's export leaves out because of its phase can still
-appear. Elements in a design-option set's non-primary options are left out, as
-Revit leaves them out.
+flight's `WalkingLineOffset`, half the run's width in feet read as millimetres, and a curtain mullion's `Qto_MemberBaseQuantities.CrossSectionArea`, which grows with its length and is never its section's area (RE-235 §5). Not read: most instance and type parameters (#35, #155). Elements in a
+design-option set's non-primary options are left out, as Revit leaves them out,
+and so are elements that do not exist in the project's last phase (RE-184),
+except rooms: Revit skips a room by its own phase parameter, which is not
+measured to be its created phase, so a room created in an earlier phase is
+still written.
 
 ## What approximations look like in the output
 

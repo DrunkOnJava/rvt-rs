@@ -43,7 +43,7 @@ Unit tests are banned in this repository: do not add them. Show the change worki
 - [ ] Commit messages describe WHAT changed and WHY, not "fix things" or "updates"
 - [ ] No emojis in code, docs, or commit messages
 - [ ] No private paths, personal email addresses, or internal jargon in committed files
-- [ ] If this is a reverse-engineering finding: a reproducible probe under `examples/` and a dated addendum to `docs/rvt-moat-break-reconnaissance.md` are included
+- [ ] If this is a reverse-engineering finding: a reproducible probe under `probes/examples/` and a dated addendum to `docs/rvt-moat-break-reconnaissance.md` are included
 
 ## Legal and contribution hygiene
 

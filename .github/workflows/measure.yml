@@ -78,7 +78,7 @@ on:
         required: false
         default: main
       probe:
-        description: examples/ probes to run on each model as well (e.g. probe_re70_wall_join_lists), space-separated, empty for none
+        description: probes (probes/examples, or examples/ on an older ref) to run on each model as well (e.g. probe_re70_wall_join_lists), space-separated, empty for none
         required: false
         default: ""
       keep_ifc:
@@ -211,14 +211,23 @@ jobs:
           git log -1 --format='%H %s' > ../measured-commit.txt
           cargo build --profile ci --bin rvt-ifc --bin rvt-gltf --bin rvt-info
           # A base older than a probe has no such example; it is skipped there.
+          # Probes live in the rvt-probes crate (probes/examples) since it was
+          # split out; a ref from before that has them in examples/. Both build
+          # into the workspace's target/ci/examples.
           examples=()
+          probes=()
           for probe in $PROBE; do
-            if [ -f "examples/$probe.rs" ]; then
+            if [ -f "probes/examples/$probe.rs" ]; then
+              probes+=(--example "$probe")
+            elif [ -f "examples/$probe.rs" ]; then
               examples+=(--example "$probe")
             fi
           done
           if [ "${#examples[@]}" -gt 0 ]; then
             cargo build --profile ci "${examples[@]}"
+          fi
+          if [ "${#probes[@]}" -gt 0 ]; then
+            cargo build --profile ci -p rvt-probes "${probes[@]}"
           fi
         env:
           PROBE: ${{ inputs.probe }}

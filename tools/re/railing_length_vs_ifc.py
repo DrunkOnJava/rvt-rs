@@ -2,7 +2,7 @@
 """Whether a railing's record's curves give Revit's
 `Qto_RailingBaseQuantities.Length` (#1016, RE-254).
 
-Reads `examples/probe_re254_railing_paths.rs`'s `rail <tag> <lines> <arcs>
+Reads `probes/examples/probe_re254_railing_paths.rs`'s `rail <tag> <lines> <arcs>
 <classes>` lines and Revit's IFC export, and prints how many railings Revit
 gives a `Length`, on how many the record's line lengths, its arcs', or both
 together are it (within 1e-4 ft), and, with `--list`, each railing's

@@ -3,8 +3,8 @@
 (RE-228, #35, W7).
 
 Reads a probe's `rec <tag> <record class> <object>.<field>=<value> ...`
-lines (`examples/probe_re228_wall_record_scalars.rs`,
-`examples/probe_re233_column_record_scalars.rs`) and Revit's IFC
+lines (`probes/examples/probe_re228_wall_record_scalars.rs`,
+`probes/examples/probe_re233_column_record_scalars.rs`) and Revit's IFC
 export. For every boolean property of every property set Revit writes on
 those elements (by Tag), and for whether Revit writes a property at all
 where it writes it on some of them only (`present:<set>.<property>`), and

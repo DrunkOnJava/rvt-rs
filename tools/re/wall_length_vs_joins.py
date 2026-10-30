@@ -5,7 +5,7 @@ walls it is joined to (#1016, #1046).
 revit-ifc's `LengthCalculator` (CLEANROOM.md source 5) takes a wall's
 `Qto_WallBaseQuantities.Length` from its Length parameter, which on the
 BIM4LCA office is not its centreline's length on 186 of 607 walls. Reads
-`examples/probe_re70_wall_join_lists.rs`'s JSON lines (each wall's centreline,
+`probes/examples/probe_re70_wall_join_lists.rs`'s JSON lines (each wall's centreline,
 type thickness and join lists) and Revit's IFC export, and for each wall
 takes the centreline's length less Revit's `Length` (feet). It looks for that
 difference among the sums of one term per join list, each term none, or plus

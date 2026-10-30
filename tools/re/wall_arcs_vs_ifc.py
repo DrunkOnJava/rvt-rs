@@ -2,7 +2,7 @@
 """Curved walls' arcs, against the arc axes of Revit's own IFC export.
 
 Research tool for `reports/element-framing/RE-75-curved-walls.md`. Its input
-is the JSON-lines output of `examples/probe_re75_wall_arcs.rs`: each wall
+is the JSON-lines output of `probes/examples/probe_re75_wall_arcs.rs`: each wall
 whose data stores an arc, with the arc's centre, radius, angles and axes.
 
 For every wall whose `Axis` representation in Revit's IFC4 export holds an
@@ -82,7 +82,7 @@ def main():
     args = sys.argv[1:]
     if len(args) < 2:
         raise SystemExit(__doc__)
-    probe = {row["id"]: row for row in map(json.loads, open(args[0]))}
+    probe = {row["id"]: row for row in (json.loads(line) for line in open(args[0]) if line.startswith("{"))}
     model = ifcopenshell.open(args[1])
     to_internal, _ = load("wall_layers_vs_ifc").site_to_internal(model)
     revit = revit_arcs(model, to_internal)

@@ -3672,6 +3672,20 @@ pub fn build_export_diagnostics_with_limits(
             sample_names: Vec::new(),
         });
     }
+    // #328: elements that do not exist in the export phase (the project's
+    // last) are left out as Revit's own export leaves them out (RE-184).
+    let phase_excluded = layout
+        .and_then(|version| crate::native_phases::scan_phase_excluded_instances(rf, version).ok())
+        .unwrap_or_default();
+    let phase_excluded_total: usize = phase_excluded.values().sum();
+    if phase_excluded_total > 0 {
+        skipped.push(SkippedExportItem {
+            reason: "element_record_not_in_export_phase".into(),
+            count: phase_excluded_total,
+            classes: phase_excluded,
+            sample_names: Vec::new(),
+        });
+    }
     // #309: empty curtain panels are left out as Revit's own export leaves
     // them out, recognised by their family's name. A type of theirs with a
     // material set would contradict that name, and is reported.
@@ -3694,6 +3708,14 @@ pub fn build_export_diagnostics_with_limits(
 
     let recovered_units = recover_project_units(rf);
     let mut warnings = diagnostic_candidates.warnings;
+    // #328: a failed read of the project's phases leaves the filter empty, so
+    // every element is written, including any that Revit's export leaves out
+    // for its phase.
+    if let Some(error) = &rf.memoised_phase_filter().read_error {
+        warnings.push(format!(
+            "The project's phases could not be read ({error}); elements that do not exist in the export phase are written (#328, RE-184)."
+        ));
+    }
     if !empty_panels.types_with_material.is_empty() {
         warnings.push(format!(
             "{} empty curtain panel type(s) carry a material, which an empty panel should not: {:?}",

@@ -2,7 +2,7 @@
 """Which stored length of a door's or window's symbol is the
 `OverallWidth` or `OverallHeight` Revit's export writes (RE-229, #810).
 
-Reads `examples/probe_re229_symbol_lengths.rs`'s output and Revit's IFC
+Reads `probes/examples/probe_re229_symbol_lengths.rs`'s output and Revit's IFC
 export. For each parameter (id and name), over the doors and windows whose
 symbol stores it, it counts how often its value is Revit's width and how
 often Revit's height, within 0.001 ft. Then, for the doors and windows

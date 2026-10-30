@@ -37,7 +37,7 @@ autotests = false
 # unconditionally — no feature-gated escape hatch. The wheel on
 # PyPI still ships as a single `rvt` distribution; it's built via
 # `maturin build --manifest-path rvt-py/Cargo.toml`.
-members = [".", "rvt-py", "rvt-wasm", "tools/stream_evidence"]
+members = [".", "probes", "rvt-py", "rvt-wasm", "tools/stream_evidence"]
 
 # Lints beyond rustc's and clippy's defaults that the workspace keeps, so an
 # editor shows what CI enforces: CI denies every warning (`-D warnings`).
@@ -137,8 +137,6 @@ rvt = { path = ".", features = ["unstable-research"] }
 # `html_reports` renders per-run HTML + SVG so CI artefacts are
 # browsable. Version 0.7 builds on the MSRV.
 criterion ={ version = "0.8", features = ["html_reports"] }
-# Property-based never-panic / round-trip suites in tests/proptest_parsers.rs.
-proptest = "1"
 # Tier-one corpus health: hex-encode license-sidecar SHA256 checks of
 # committed synthetic fixtures under corpus/tier1/ (`sha2` itself is a
 # regular dependency — `rvt-ifc --observation` hashes its input).

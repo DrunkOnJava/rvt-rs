@@ -17,15 +17,19 @@
 //! mapped items, changes the profile emission — this test catches
 //! it with a specific failure message per entity category.
 //!
-//! Output optionally dumped to `tests/fixtures/synthetic-structural.ifc`
-//! when `DUMP_IFC_STRUCTURAL=1` is set (matches the `DUMP_IFC`
-//! pattern in `ifc_synthetic_project.rs`).
+//! The output, written at a fixed timestamp, must match the committed
+//! `tests/fixtures/synthetic-structural.ifc` apart from the release version
+//! (`common::assert_matches_fixture`). Setting `DUMP_IFC_STRUCTURAL` rewrites
+//! the fixture.
 
 use rvt::ifc::entities::{
     BrepTriangle, Extrusion, IfcEntity, MaterialProfile, MaterialProfileSet, RepresentationMap,
     SolidShape,
 };
+use rvt::ifc::step_writer::{StepOptions, write_step_with_options};
 use rvt::ifc::{IfcModel, MaterialInfo, Storey, write_step};
+
+mod common;
 
 fn pick_owner_history_placeholder(s: &str) -> bool {
     s.contains("IFCOWNERHISTORY(")
@@ -282,6 +286,12 @@ fn synthetic_structural_ifc_has_expected_entity_counts() {
     };
 
     let step = write_step(&model);
+    let fixture = write_step_with_options(
+        &model,
+        &StepOptions {
+            timestamp: Some(common::SYNTHETIC_FIXTURE_TIMESTAMP),
+        },
+    );
 
     // --- Structural / profile counts ---
     // Two columns, both with distinct profile emission.
@@ -364,7 +374,9 @@ fn synthetic_structural_ifc_has_expected_entity_counts() {
             .join("fixtures");
         std::fs::create_dir_all(&out_dir).expect("fixtures dir");
         let out_path = out_dir.join("synthetic-structural.ifc");
-        std::fs::write(&out_path, &step).expect("write ifc");
+        std::fs::write(&out_path, &fixture).expect("write ifc");
         eprintln!("wrote {}", out_path.display());
     }
+
+    common::assert_matches_fixture("synthetic-structural.ifc", &fixture);
 }

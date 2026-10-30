@@ -2,8 +2,8 @@
 """Which stored length of an element or of its type is a length property
 Revit's export writes (RE-231, #35, W7).
 
-Reads `examples/probe_re231_stored_lengths.rs`'s or
-`examples/probe_re231_record_lengths.rs`'s output and Revit's IFC
+Reads `probes/examples/probe_re231_stored_lengths.rs`'s or
+`probes/examples/probe_re231_record_lengths.rs`'s output and Revit's IFC
 export. For each IFC class and property of a length or count measure (a
 count compared as it is), over the
 elements of that class the probe lists and Revit's export gives the

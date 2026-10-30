@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Tabulate element records' `+0x46` flag word against Revit's export (RE-128, #223).
 
-Input: the JSON lines of `examples/probe_re128_record_flags.rs` (other lines
+Input: the JSON lines of `probes/examples/probe_re128_record_flags.rs` (other lines
 are skipped) and Revit's export of the same model.
 
 Each record is joined to Revit's export by Tag (its ElementId). For each

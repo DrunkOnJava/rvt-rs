@@ -2,7 +2,7 @@
 """A roof by extrusion's sketch curves and data against Revit's body (RE-211,
 #883).
 
-Takes the output of `examples/probe_re211_extrusion_roofs.rs` and Revit's
+Takes the output of `probes/examples/probe_re211_extrusion_roofs.rs` and Revit's
 IFC export. For every roof the probe lists that Revit's export holds (same
 Tag), this meshes Revit's body in world space with IfcOpenShell and reports:
 

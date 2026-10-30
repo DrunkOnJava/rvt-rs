@@ -2,7 +2,7 @@
 """Where a wall ends at an angled join, against Revit.
 
 Research tool for `reports/element-framing/RE-74-angled-wall-joins.md`. Its
-input is the JSON-lines output of `examples/probe_re73_tee_joins.rs`: each
+input is the JSON-lines output of `probes/examples/probe_re73_tee_joins.rs`: each
 wall's centreline, thickness, exterior side, layers and, at each end, the
 wall it joins and how far past the end each layer reaches along its
 exterior-side and interior-side edge.
@@ -71,7 +71,7 @@ def main():
     args = sys.argv[1:]
     if len(args) < 2:
         raise SystemExit(__doc__)
-    rows = {row["id"]: row for row in map(json.loads, open(args[0]))}
+    rows = {row["id"]: row for row in (json.loads(line) for line in open(args[0]) if line.startswith("{"))}
     helpers = joins.load("wall_layers_vs_ifc")
     model = ifcopenshell.open(args[1])
     to_internal, _ = helpers.site_to_internal(model)

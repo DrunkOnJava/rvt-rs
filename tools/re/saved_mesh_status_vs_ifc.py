@@ -2,7 +2,7 @@
 """Does the saved scene's record of what it dropped tell a complete saved
 mesh from a partial one (RE-224, W6)?
 
-Reads `examples/probe_re224_saved_mesh_status.rs`'s output and the rvt-rs
+Reads `probes/examples/probe_re224_saved_mesh_status.rs`'s output and the rvt-rs
 export beside it (`model.ifc`, made with `--saved-meshes` and kept by
 Measure's `keep_ifc`), and scores every saved-mesh body against Revit's body
 with the same `Tag` as `mesh_bodies_vs_ifc.py` does: exact when every tested
