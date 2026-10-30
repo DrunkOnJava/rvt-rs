@@ -101,7 +101,7 @@ pub mod step_writer;
 pub use export_content::{
     ELEMENT_RECORD_PROPERTY_SET, ExportContentPolicy, is_misleading_proxy_class,
 };
-pub use from_decoded::{BuilderOptions, ElementInput, build_ifc_model, entity_type_histogram};
+pub use from_decoded::{BuilderOptions, ElementInput, build_ifc_model};
 pub use step_writer::write_step;
 
 /// In-memory IFC model — what a successful export produces. Wire format
@@ -274,9 +274,8 @@ pub struct Storey {
     pub elevation_feet: f64,
 }
 
-/// A single material entry ready for IFC emission. Derived from
-/// a decoded Revit `Material` element via
-/// [`from_decoded::materials_from_revit`].
+/// A single material entry ready for IFC emission, derived from a decoded
+/// Revit `Material` element.
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct MaterialInfo {
     /// Display name ("Concrete", "Glass - Tinted", "Wood - Oak").

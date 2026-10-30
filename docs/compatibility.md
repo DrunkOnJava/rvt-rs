@@ -147,9 +147,9 @@ The bridge [`ifc::build_ifc_model`](../src/ifc/from_decoded.rs) maps each decode
 Column definitions:
 
 - **IFC entity + placement**: a valid `IfcWall` / `IfcSlab` / … is constructed and wired to the storey via `IfcRelContainedInSpatialStructure`. Always yes for every Revit class that has a mapping in [`category_map.rs`](../src/ifc/category_map.rs); unknown classes fall back to `IfcBuildingElementProxy` rather than being dropped.
-- **Extruded geometry**: an `IfcRectangleProfileDef` + `IfcExtrudedAreaSolid` + `IfcShapeRepresentation` + `IfcProductDefinitionShape` chain is emitted and attached to the element's `Representation` slot, iff the caller supplies an `Extrusion` via one of the helpers in [`from_decoded.rs`](../src/ifc/from_decoded.rs) (`wall_extrusion`, `slab_extrusion`, `roof_extrusion`, `ceiling_extrusion`, `column_extrusion`). The helpers exist for the classes marked "yes"; they do not exist yet for the classes marked "no helper". The solid's `Position` is the project-level identity placement: the element translation is carried once, by the element's own `IfcLocalPlacement`, so a consumer composing `ObjectPlacement × Position` lands on the element instead of twice past it (#232).
-- **Material association**: an `IfcMaterial` + `IfcRelAssociatesMaterial` is emitted iff the caller populates `BuilderOptions.materials` (see [`materials_from_revit`](../src/ifc/from_decoded.rs)) and sets `ElementInput.material_index`. For compound hosts, `ElementInput.material_layer_set_index` routes through an `IfcMaterialLayerSet` + `IfcMaterialLayerSetUsage` chain; for profile-driven members, `material_profile_set_index` routes through `IfcMaterialProfileSet` + `IfcMaterialProfileSetUsage`. Precedence order is `profile_set > layer_set > single material` — whichever is set wins.
-- **Property set**: an `IfcPropertySet` + `IfcPropertySingleValue` + `IfcRelDefinesByProperties` is emitted for each `PropertySet` the caller puts in `ElementInput.property_sets`, typically from a dedicated helper (`wall_property_set`, `door_property_set`, `window_property_set`, `stair_property_set`, `column_property_set`, `beam_property_set`). A helper puts a value in IFC4's standard set only where that set declares the property (`Pset_StairCommon.NumberOfRiser`, `RiserHeight` and `TreadLength`, `Pset_BeamCommon.Span`, `Pset_ColumnCommon.LoadBearing`), and every other value in a set of rvt-rs's naming (`RvtWall`, `RvtDoor`, `RvtWindow`, `RvtStair`, `RvtBeam`, `RvtColumn`): IFC reserves the `Pset_` prefix and each standard set's properties for buildingSMART's definitions (#827). Quantity-typed properties route through `IfcQuantityArea` / `IfcQuantityVolume` / `IfcQuantityCount` / `IfcQuantityTime` / `IfcQuantityWeight`, with Imperial-to-SI conversion done at emission time (square-feet → m², cubic-feet → m³, pounds → kg).
+- **Extruded geometry**: an `IfcRectangleProfileDef` + `IfcExtrudedAreaSolid` + `IfcShapeRepresentation` + `IfcProductDefinitionShape` chain is emitted and attached to the element's `Representation` slot, iff the caller supplies an `Extrusion` via one of the helpers in [`from_decoded.rs`](../src/ifc/from_decoded.rs) (`wall_extrusion`, `slab_extrusion`). The helpers exist for the classes marked "yes"; they do not exist for the classes marked "no helper". The solid's `Position` is the project-level identity placement: the element translation is carried once, by the element's own `IfcLocalPlacement`, so a consumer composing `ObjectPlacement × Position` lands on the element instead of twice past it (#232).
+- **Material association**: an `IfcMaterial` + `IfcRelAssociatesMaterial` is emitted iff the caller populates `BuilderOptions.materials` and sets `ElementInput.material_index`. For compound hosts, `ElementInput.material_layer_set_index` routes through an `IfcMaterialLayerSet` + `IfcMaterialLayerSetUsage` chain; for profile-driven members, `material_profile_set_index` routes through `IfcMaterialProfileSet` + `IfcMaterialProfileSetUsage`. Precedence order is `profile_set > layer_set > single material` — whichever is set wins.
+- **Property set**: an `IfcPropertySet` + `IfcPropertySingleValue` + `IfcRelDefinesByProperties` is emitted for each `PropertySet` the caller puts in `ElementInput.property_sets`, typically from a dedicated helper (`wall_property_set`, `window_property_set`). Both helpers write a set of rvt-rs's naming (`RvtWall`, `RvtWindow`): IFC reserves the `Pset_` prefix and each standard set's properties for buildingSMART's definitions (#827). Quantity-typed properties route through `IfcQuantityArea` / `IfcQuantityVolume` / `IfcQuantityCount` / `IfcQuantityTime` / `IfcQuantityWeight`, with Imperial-to-SI conversion done at emission time (square-feet → m², cubic-feet → m³, pounds → kg).
 - **Opening / fill**: for doors / windows, iff the caller sets `host_element_index` and `extrusion` on the opening, the writer emits `IfcOpeningElement` + `IfcRelVoidsElement` (host → opening) + `IfcRelFillsElement` (opening → door/window).
 
 | Revit class | IFC entity | Placement + storey | Extrusion helper | Material assoc | Property set | Opening / fill |
@@ -158,16 +158,16 @@ Column definitions:
 | Grid | IfcGrid | yes | no helper | n/a | n/a | n/a |
 | Wall | IfcWall (NOTDEFINED) | yes | yes (`wall_extrusion`) | yes | yes (`wall_property_set`) | n/a |
 | CurtainWall | IfcCurtainWall | yes | no helper | no helper | no helper | n/a |
-| Door | IfcDoor (DOOR) | yes | caller-supplied | yes | yes (`door_property_set`) | yes |
+| Door | IfcDoor (DOOR) | yes | caller-supplied | yes | no helper | yes |
 | Window | IfcWindow (WINDOW) | yes | caller-supplied | yes | yes (`window_property_set`) | yes |
 | Floor | IfcSlab (FLOOR) | yes | yes (`slab_extrusion`) | yes | no helper | n/a |
-| Roof | IfcRoof | yes | yes (`roof_extrusion`) | yes | no helper | n/a |
-| Ceiling | IfcCovering (CEILING) | yes | yes (`ceiling_extrusion`) | yes | no helper | n/a |
-| Stair | IfcStair | yes | no helper | yes | yes (`stair_property_set`) | n/a |
+| Roof | IfcRoof | yes | no helper | yes | no helper | n/a |
+| Ceiling | IfcCovering (CEILING) | yes | no helper | yes | no helper | n/a |
+| Stair | IfcStair | yes | no helper | yes | no helper | n/a |
 | Railing | IfcRailing | yes | no helper | yes | no helper | n/a |
 | Ramp | IfcRamp | yes | no helper | yes | no helper | n/a |
-| Column | IfcColumn (COLUMN) | yes | yes (`column_extrusion`) | yes | no helper | n/a |
-| StructuralColumn | IfcColumn (COLUMN) | yes | yes (`column_extrusion`) | yes | no helper | n/a |
+| Column | IfcColumn (COLUMN) | yes | no helper | yes | no helper | n/a |
+| StructuralColumn | IfcColumn (COLUMN) | yes | no helper | yes | no helper | n/a |
 | StructuralFraming | IfcBeam (BEAM) | yes | no helper | yes | no helper | n/a |
 | StructuralFoundation | IfcFooting | yes | no helper | yes | no helper | n/a |
 | Rebar | IfcReinforcingBar | yes | no helper | yes | no helper | n/a |
