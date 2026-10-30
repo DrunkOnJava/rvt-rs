@@ -1019,7 +1019,7 @@ pub fn append_typed_production_elements(
             solid_shape,
             representation_map_index: None,
         });
-        // RE-269: a wall joined to a roof or floor, whose length is confirmed.
+        // RE-270: a wall joined to a roof or floor, whose length is confirmed.
         if policy.include_geometry && decoded.class == "Wall" {
             if let Some(named) =
                 crate::partition_schema_mvp::wall_bounded_from_fields(&decoded.fields)
@@ -1244,7 +1244,7 @@ pub fn append_typed_production_elements(
         }
     }
 
-    // RE-269: the side areas and volumes of a wall joined to floors that
+    // RE-270: the side areas and volumes of a wall joined to floors that
     // leave it as its record's box.
     wall_areas::add_bounded_wall_quantities(entities, &pending_bounded);
 
@@ -2713,7 +2713,7 @@ fn add_wall_areas_and_volumes(
 }
 
 /// A rectangular wall's `GrossSideArea`, `NetSideArea`, `GrossVolume` and
-/// `NetVolume` (RE-269): the longer side's area twice, the type's `width`
+/// `NetVolume` (RE-270): the longer side's area twice, the type's `width`
 /// times it, and the rectangle's area times the height. `None` where a size
 /// is not a positive number.
 fn prism_quantities(body: &Extrusion, width: f64) -> Option<[Property; 4]> {

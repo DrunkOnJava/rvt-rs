@@ -1,4 +1,4 @@
-//! The side areas and volumes of a wall joined to floors (#1046, RE-269).
+//! The side areas and volumes of a wall joined to floors (#1046, RE-270).
 //!
 //! A wall joined to a roof, floor or footing (`JoinToRoofGStep`) is the same
 //! prism as one nothing is joined to, except where the element cuts it: Revit

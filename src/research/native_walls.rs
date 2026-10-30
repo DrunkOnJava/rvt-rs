@@ -240,7 +240,7 @@ const HARMLESS_STEPS: [&str; 6] = [
 
 /// The step classes besides `HARMLESS_STEPS` that a wall joined to a roof or
 /// floor may hold and still be drawn as its joins and layers make it, when
-/// the elements it is joined to are accounted for (RE-269).
+/// the elements it is joined to are accounted for (RE-270).
 const BOUNDED_STEPS: [&str; 2] = ["JoinToRoofGStep", "CleanPairGStep"];
 
 /// What [`native_walls_and_top_joins`] reads from walls' native records.
@@ -263,7 +263,7 @@ pub struct WallRecords {
     /// extensions) and a roof or floor join or a clean join, with the ElementIds their
     /// roof and floor joins name (at the top and at the base, in ascending
     /// order; none where they hold none). A wall whose join names its
-    /// elements in a shape that is not read is left out (RE-269).
+    /// elements in a shape that is not read is left out (RE-270).
     pub bounded: BTreeMap<u64, Vec<u64>>,
 }
 

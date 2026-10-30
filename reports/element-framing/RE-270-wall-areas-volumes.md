@@ -3,8 +3,8 @@
 **Date:** 2026-10-30
 **Issues:** #1046 (quantities Revit computes from its joined geometry, step 1: walls), #1016 (quantities), W7 of [`docs/release-1.0-criteria.md`](../../docs/release-1.0-criteria.md); follows RE-251 (a wall's record keeps none of Revit's wall quantities), RE-252 (`Length`), RE-257, RE-266 and RE-267 (`Height`, and the top cut at the floor that covers a wall)
 **Artefacts:** the BIM4LCA office as built and at building permit (Revit 2024, Revit's IFC4 Reference View export, exporter 24.0.5) and puzzbobb's R2025 models (Revit 2025, Revit 25.0.2's IFC4 exports), as Measure fetches them; Core Interior and RE1 Architecture, whose exports have base quantities off (RE-242)
-**Runs:** Measure (`tools/re/wall_quantities_vs_ifc.py`, with `probes/examples/probe_1067_native_dump.rs` for the walls' records) [41101457836](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41101457836) and [41103633258](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41103633258); the change against `main`, every model and scorer, [41108951821](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41108951821) (the scorer runs are of the same scorer on this change's first commits)
-**Result:** positive, narrowed. Revit writes a wall's `GrossSideArea`, `NetSideArea` and `GrossVolume` on exactly the walls it writes a `Height` on, and its `NetVolume` on every wall. All four are fixed by the faces and the volume of the wall's joined solid. rvt-rs writes them on the walls whose native record holds no step that cuts, embeds or sweeps the solid and whose body is the record's box cut back at its joins, a plain rectangle: 49 of the office's walls as built, 48 at permit and 91 R2025 walls, Revit's on every one, none different and none Revit's export leaves out.
+**Runs:** Measure (`tools/re/wall_quantities_vs_ifc.py`, with `probes/examples/probe_1067_native_dump.rs` for the walls' records) [41101457836](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41101457836) and [41103633258](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41103633258); the change against `main`, every model and scorer, [41108951821](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41108951821) and, for the second rule, against the first, [41109523760](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41109523760) (the scorer runs are of the same scorer on this change's first commits)
+**Result:** positive, narrowed. Revit writes a wall's `GrossSideArea`, `NetSideArea` and `GrossVolume` on exactly the walls it writes a `Height` on, and its `NetVolume` on every wall. All four are fixed by the faces and the volume of the wall's joined solid. rvt-rs writes them on the walls whose native record holds no step that cuts, embeds or sweeps the solid and whose body is the record's box cut back at its joins, a plain rectangle: 49 of the office's walls as built, 48 at permit and 91 R2025 walls, Revit's on every one, none different and none Revit's export leaves out. A second rule adds the walls joined to roofs, floors or footings that lie clear of them, whose record confirms their length: 16 more as built and 20 at permit.
 
 ## 1. What Revit writes, and where
 
@@ -75,6 +75,26 @@ Measured on the walls this selects (Measure 41103633258 on the exported bodies, 
 | R2025 models | 91 | 91 | 91 | 91 | 91 | 0 | 0 |
 
 The other bodies from the record's box, `partition_wall_centreline`, are the ones that go wrong (R2025 `18_WallJoins` 4511 and 4567, an angled join), so they stay out, and so does the one record-box wall at permit whose body is the bare box (`partition_element_record_bbox`, right on its one wall).
+
+### The second rule: a wall joined to roofs and floors
+
+A wall of group 3 gets the same four quantities when all of these hold:
+
+- its record holds no step but the harmless ones, `JoinToRoofGStep` and `CleanPairGStep` (`native_walls::WallRecords::bounded`, with the ElementIds its roof and floor joins name, at the top and at the base; a join whose elements are not readable leaves it out);
+- its body is the same rectangle, and its record confirms its length: it carries a `Length` (RE-252), the curve cut back at its joins being as long as the curve with both ends read twice alike;
+- every element its joins name is a slab, roof or footing rvt-rs draws as a plain extrusion that lies wholly above the wall's top or wholly below its base, so that it cannot cut the wall (`export_content::wall_areas`). A named element that is anything else, or is not drawn as an extrusion (a sloped roof), leaves the wall out.
+
+What each condition buys, on the walls of group 3 with a record's box rectangle (Measure 41103633258, the walls' final tops as in RE-267): of those whose joins clear the wall and whose length is confirmed, 18 of 18 as built and 22 of 22 at permit are right on all four; of those whose joins clear it but whose length is not, 45 of 53 and 51 of 54 (the wrong ones are a half wall thickness too long: the box trimmed at a joint); of those a join intrudes on or names an element that is not an extrusion, 2 of 11 and 3 of 12 without the length, and none of the 27 R2025 walls under the sloped roofs. The length is the reading that separates the ends; the joins are the reading that separates the tops.
+
+Measured (run 41109523760, against the first rule's branch; `main` has not RE-267's cut yet, so the walls a floor cuts there, 4 as built and 5 at permit that carry the length, are left out until it lands, and the second rule takes them then):
+
+| | walls added | `NetVolume` | `GrossSideArea` | `NetSideArea` | `GrossVolume` | different | Revit omits |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| office as built | 16 | 16 | 16 | 16 | 16 | 0 | 0 |
+| office at permit | 20 | 20 | 20 | 20 | 20 | 0 | 0 |
+| R2025 models | 0 | | | | | | |
+
+The office as built goes from 27,948 to 28,012 of the 39,721 quantities equal, at permit from 27,878 to 27,958 of 40,013, and the R2025 models stay at 775; Core Interior gains one wall, counted apart, and its witness observations are refreshed. The R2025 walls under roofs are all under sloped roofs, which rvt-rs draws as solids (RE-199) and the rule does not measure.
 
 ## 5. Measured
 

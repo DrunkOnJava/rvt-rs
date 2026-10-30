@@ -38,7 +38,7 @@ pub fn wall_axis_from_fields(fields: &[(String, InstanceField)]) -> Option<WallA
 }
 
 /// The ElementIds [`WALL_BOUNDED_FIELD`] records: the elements a wall's roof
-/// and floor joins name (RE-269). `None` where the field is absent, an empty
+/// and floor joins name (RE-270). `None` where the field is absent, an empty
 /// list where the wall is joined to none.
 pub fn wall_bounded_from_fields(fields: &[(String, InstanceField)]) -> Option<Vec<u32>> {
     fields.iter().find_map(|(name, value)| match value {

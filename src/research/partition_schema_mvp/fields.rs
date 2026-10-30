@@ -674,7 +674,7 @@ pub const WALL_WHOLE_FIELD: &str = "m_wall_whole";
 /// Field set, as a vector of ElementIds, on a wall whose native record holds
 /// no step but the harmless ones, a roof or floor join and a clean join: the
 /// elements its roof and floor joins name, none where it has none
-/// ([`crate::native_walls::WallRecords::bounded`], RE-269).
+/// ([`crate::native_walls::WallRecords::bounded`], RE-270).
 pub const WALL_BOUNDED_FIELD: &str = "m_wall_bounded";
 
 /// Field carrying the name of the phase an element was created in
