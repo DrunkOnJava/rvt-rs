@@ -920,6 +920,7 @@ pub fn append_typed_production_elements(
             solid_shape.as_ref(),
         );
         add_beam_length(&mut reference_sets, &ifc_type, property_set.as_ref());
+        add_beam_span(&mut reference_sets, &ifc_type);
         add_slab_gross_area(
             &mut reference_sets,
             &ifc_type,
@@ -2290,6 +2291,45 @@ fn add_beam_length(sets: &mut Vec<PropertySet>, ifc_type: &str, record: Option<&
             value: PropertyValue::PositiveLengthFeet(length),
         }],
     });
+}
+
+/// Add a beam's `Pset_BeamCommon.Span` to `sets` (W7): revit-ifc's
+/// `SpanCalculator` (CLEANROOM.md source 5) takes it, where no parameter
+/// gives it, from the length of the extrusion the beam is exported as, the
+/// length `Qto_BeamBaseQuantities.Length` holds ([`add_beam_length`]), which
+/// is the line the beam is drawn along (RE-49). Revit's export writes the
+/// two equal on each of the BIM4LCA office's 8 beams, as built and at
+/// permit. Written only where `sets` holds that `Length`, so a beam Revit
+/// draws another way, whose export has no extrusion length, gets none.
+fn add_beam_span(sets: &mut Vec<PropertySet>, ifc_type: &str) {
+    if ifc_type != "IFCBEAM" {
+        return;
+    }
+    let length = sets
+        .iter()
+        .find(|set| set.name == "Qto_BeamBaseQuantities")
+        .and_then(|set| {
+            set.properties.iter().find_map(|property| {
+                match (property.name.as_str(), &property.value) {
+                    ("Length", PropertyValue::PositiveLengthFeet(feet)) => Some(*feet),
+                    _ => None,
+                }
+            })
+        });
+    let Some(length) = length else {
+        return;
+    };
+    let property = Property {
+        name: "Span".into(),
+        value: PropertyValue::PositiveLengthFeet(length),
+    };
+    match sets.iter_mut().find(|set| set.name == "Pset_BeamCommon") {
+        Some(set) => set.properties.push(property),
+        None => sets.push(PropertySet {
+            name: "Pset_BeamCommon".into(),
+            properties: vec![property],
+        }),
+    }
 }
 
 /// Add a floor's `Qto_SlabBaseQuantities.GrossArea` to `sets` (#1016,
