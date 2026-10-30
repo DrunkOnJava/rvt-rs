@@ -47,7 +47,7 @@ use serde_json::Value;
 
 use crate::RevitFile;
 use crate::native_document::{Options, extract_graphs};
-use crate::native_json::element_id;
+use crate::native_json::{element_id, element_id_i64};
 
 /// A wall's curve and the joins at its ends, from its native record.
 #[derive(Debug, Clone, PartialEq)]
@@ -151,6 +151,31 @@ fn line_ends(fields: &Value) -> Option<([f64; 2], [f64; 2])> {
         .then_some((start, end))
 }
 
+/// The ElementIds named by a wall's top join (every `JoinToRoofGStep` with
+/// `m_baseOrTop` 1, its `m_ids`) and by its `CutPairGStep`s (`m_otherId`),
+/// from the `(class, fields)` of the objects of its record; a null reference
+/// (an id of 0 or less) names nothing. `None` where a step names its
+/// elements in a shape that is not read, so that no step is left out unseen.
+fn named_by_steps<'a>(steps: impl Iterator<Item = (&'a str, &'a Value)>) -> Option<BTreeSet<u64>> {
+    let mut named = BTreeSet::new();
+    for (class, fields) in steps {
+        let references: Vec<&Value> = match class {
+            "JoinToRoofGStep" if fields.get("m_baseOrTop").and_then(Value::as_i64) == Some(1) => {
+                fields.get("m_ids")?.as_array()?.iter().collect()
+            }
+            "CutPairGStep" => vec![fields.get("m_otherId")?],
+            _ => continue,
+        };
+        for reference in references {
+            let id = element_id_i64(reference)?;
+            if id > 0 {
+                named.insert(u64::try_from(id).ok()?);
+            }
+        }
+    }
+    Some(named)
+}
+
 /// The join listing `wall`'s `end`, as (member, end it joins by) pairs.
 fn end_join(wall: u64, controls: &[Value], end: u32) -> Option<Vec<(u64, u32)>> {
     let mut found = Vec::new();
@@ -226,6 +251,18 @@ pub fn curtain_wall_type_names(
     Ok(out)
 }
 
+/// The step classes of a wall's record that leave its solid as its joins and
+/// its type's layers make it (RE-270): every other class ending in `Step` may
+/// cut, join, embed or sweep it.
+const HARMLESS_STEPS: [&str; 6] = [
+    "BaseWallGStep",
+    "JoinEndGStep",
+    "VCWSplitFaceGStep",
+    "WallRefPlanesGStep",
+    "WallJoinTweakGStep",
+    "VerticalExtensionOfLayersGStep",
+];
+
 /// What [`native_walls_and_top_joins`] reads from walls' native records.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct WallRecords {
@@ -235,6 +272,17 @@ pub struct WallRecords {
     pub top_joined: BTreeMap<u64, bool>,
     /// The walls nothing is joined to or cuts.
     pub uncut: BTreeSet<u64>,
+    /// The ElementIds each wall's top could be cut at (RE-267): those its
+    /// top join (`JoinToRoofGStep` with `m_baseOrTop` 1) and its
+    /// `CutPairGStep`s name, in ascending order. A wall that names none, or
+    /// one of whose steps is not readable, is left out.
+    pub top_cutters: BTreeMap<u64, Vec<u64>>,
+    /// The walls whose record holds no step but the harmless ones (a wall's
+    /// base, ends, split faces, reference planes, join tweaks and layer
+    /// extensions):
+    /// nothing cuts, embeds or sweeps the solid its joins and layers make
+    /// (RE-270).
+    pub whole: BTreeSet<u64>,
 }
 
 /// [`native_walls`], and for every one of `walls` whose `SWall` or `ArcWall`
@@ -251,6 +299,9 @@ pub struct WallRecords {
 /// each is as tall as Revit's body, and Revit's export writes its `Height`
 /// on every one: 81 of the BIM4LCA office's walls as built, 70 at building
 /// permit and 93 of puzzbobb's R2025 walls (RE-266).
+///
+/// And the elements each wall's top join and cut pairs name, from which the
+/// export cuts the top at a floor (RE-267, [`WallRecords::top_cutters`]).
 pub fn native_walls_and_top_joins(
     rf: &mut RevitFile,
     walls: &BTreeSet<u64>,
@@ -260,6 +311,8 @@ pub fn native_walls_and_top_joins(
     }
     let mut top_joined: BTreeMap<u64, bool> = BTreeMap::new();
     let mut uncut: BTreeSet<u64> = BTreeSet::new();
+    let mut top_cutters: BTreeMap<u64, Vec<u64>> = BTreeMap::new();
+    let mut whole: BTreeSet<u64> = BTreeSet::new();
     let options = Options {
         selected_ids: walls.clone(),
         selected_classes: BTreeSet::from(["BasicWallType".to_string()]),
@@ -301,6 +354,19 @@ pub fn native_walls_and_top_joins(
             )
         }) {
             uncut.insert(id);
+        }
+        let steps = graph
+            .objects
+            .iter()
+            .map(|object| (object.class_name.as_str(), &object.fields));
+        if let Some(named) = named_by_steps(steps).filter(|named| !named.is_empty()) {
+            top_cutters.insert(id, named.into_iter().collect());
+        }
+        if graph.objects.iter().all(|object| {
+            !object.class_name.ends_with("Step")
+                || HARMLESS_STEPS.contains(&object.class_name.as_str())
+        }) {
+            whole.insert(id);
         }
         if class != "SWall" {
             return Ok(());
@@ -421,6 +487,8 @@ pub fn native_walls_and_top_joins(
         walls,
         top_joined,
         uncut,
+        top_cutters,
+        whole,
     })
 }
 
