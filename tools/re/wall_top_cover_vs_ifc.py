@@ -31,6 +31,12 @@ wall from its start, `-` where the body is not there):
                                           of the body, highest first
   pair tag:<Tag> floor:<Tag> <entity> rvt-rs covers <fraction> gap <ft2>
        Revit covers <fraction> gap <ft2> | rvt-rs under <runs> | Revit under <runs>
+  level tag:<Tag> floor:<Tag> rvt-rs <lowest highest> | Revit <...>
+                                          the lowest and highest underside of the
+                                          floor over three rows of stations (the
+                                          centre line and 0.45 thicknesses off it
+                                          on each side): equal where it is level
+                                          across the wall
   gap tag:<Tag> floor:<Tag> rvt-rs <x0 x1 y0 y1 pieces n> | Revit <...>
                                           the extent of the wall's plan outside
                                           the floor's
@@ -168,6 +174,25 @@ def heights_at(triangles, xs, ys):
     return low, high, distinct
 
 
+def level_range(triangles, xs, ys, direction, thickness):
+    """The lowest and highest underside of `triangles` over three rows of
+    stations: the centre line and the two 0.45 thicknesses off it, or None
+    where they meet none."""
+    normal = np.array([-direction[1], direction[0]])
+    found = []
+    for share in (-0.45, 0.0, 0.45):
+        low = heights_at(triangles, xs + normal[0] * thickness * share, ys + normal[1] * thickness * share)[0]
+        found.append(low[np.isfinite(low)])
+    found = np.concatenate(found)
+    if not len(found):
+        return None
+    return float(found.min()), float(found.max())
+
+
+def fmt_range(found):
+    return "-" if found is None else f"{found[0]:.4f} {found[1]:.4f}"
+
+
 def runs(values, cell, length):
     """`from-to:height` runs of equal heights (to 0.001 ft) along the wall."""
     keys = [None if math.isnan(v) else round(float(v), 3) for v in values]
@@ -187,7 +212,8 @@ def runs(values, cell, length):
 
 def stations(plan):
     """Station points every STEP ft along the long axis of `plan`'s minimum
-    rotated rectangle: (xs, ys, cell, length, thickness), or None."""
+    rotated rectangle: (xs, ys, cell, length, thickness, direction), or
+    None."""
     rectangle = shapely.minimum_rotated_rectangle(plan)
     if rectangle.geom_type != "Polygon":
         return None
@@ -202,7 +228,7 @@ def stations(plan):
     cell = length / count
     along = (np.arange(count) + 0.5) * cell
     start = corners.mean(axis=0) - direction * length / 2
-    return start[0] + direction[0] * along, start[1] + direction[1] * along, cell, length, thickness
+    return start[0] + direction[0] * along, start[1] + direction[1] * along, cell, length, thickness, direction
 
 
 def cover(wall_plan, floor_plan):
@@ -300,7 +326,7 @@ def main():
         if along is None:
             print(f"wall tag:{tag} no long axis")
             continue
-        xs, ys, cell, length, thickness = along
+        xs, ys, cell, length, thickness, direction = along
         ours_box, revit_box = box(ours_body), box(revit_body)
         print(
             f"wall tag:{tag} length {length:.4f} thickness {thickness:.4f} area rvt-rs {ours_plan.area:.4f} "
@@ -339,6 +365,10 @@ def main():
                 f"pair tag:{tag} floor:{slab} {kinds.get(slab, '-')} rvt-rs covers {fmt_cover(ours_cover)} "
                 f"Revit covers {fmt_cover(revit_cover)} | rvt-rs under {runs(ours_under, cell, length)} "
                 f"| Revit under {runs(revit_under, cell, length)}"
+            )
+            print(
+                f"level tag:{tag} floor:{slab} rvt-rs {fmt_range(level_range(ours_slabs[slab], xs, ys, direction, thickness)) if slab in ours_slabs else '-'} "
+                f"| Revit {fmt_range(level_range(revit_slabs[slab], xs, ys, direction, thickness)) if slab in revit_slabs else '-'}"
             )
             if fmt_gap(ours_cover) != "-" or fmt_gap(revit_cover) != "-":
                 print(f"gap tag:{tag} floor:{slab} rvt-rs {fmt_gap(ours_cover)} | Revit {fmt_gap(revit_cover)}")
