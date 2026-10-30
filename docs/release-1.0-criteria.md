@@ -104,7 +104,7 @@ those Revit's export computes from its joined geometry, which the file does not 
 and the `NetSurfaceArea` of the mullions whose ends the boxes do not say Revit keeps,
 RE-248,
 RE-268), stay in W7 (the maintainer,
-2026-10-26) and are reached by reproducing Revit's joins ([#1046](https://github.com/DrunkOnJava/rvt-rs/issues/1046)): of the 39,388 Revit's export writes on objects rvt-rs writes on the office as built, 28,065 are written equal (curtain mullions' `Length`,
+2026-10-26) and are reached by reproducing Revit's joins ([#1046](https://github.com/DrunkOnJava/rvt-rs/issues/1046)): of the 39,388 Revit's export writes on objects rvt-rs writes on the office as built, 28,809 are written equal (curtain mullions' `Length`,
 `NetSurfaceArea` where the boxes of their wall's mullions say which ends Revit's solid keeps (6,606 of 10,003, RE-268),
 and `NetVolume` where Revit's export draws the mullion as an extrusion of its section (RE-243),
 doors' and windows' `Width`,
@@ -129,6 +129,11 @@ and the `Length` of columns joined to nothing and,
 on those drawn as their type's hollow section,
 their `CrossSectionArea`,
 `OuterSurfaceArea` and `GrossVolume` (RE-247),
+the `CrossSectionArea`,
+`OuterSurfaceArea`,
+`GrossVolume` and `NetVolume` of columns a clean pair joins that are drawn as their record's box,
+where no slab,
+wall or covering they are paired with cuts them or crosses an end of them (RE-291),
 floors' `GrossArea` (RE-249) and,
 where a floor's type has one layer as deep as its extrusion,
 its `Depth` and `GrossVolume`,
@@ -137,9 +142,11 @@ of more than one layer,
 their `Width` (RE-295, [#1016](https://github.com/DrunkOnJava/rvt-rs/issues/1016); what remains of the slabs, [#1208](https://github.com/DrunkOnJava/rvt-rs/issues/1208)),
 ceilings' `Width` (RE-250),
 spaces' `Height` where the room's record holds its solid's faces (RE-255),
-stair railings' `Length` where the path is one line along the stair's runs (RE-254)), 1 differs (the mullion whose `Span` differs) and 11,322 are missing (Measure run 41140153113, `main` at 483f1a0f; the 527 quantities Revit's export writes on openings rvt-rs does not write, a door's further cuts and the cuts of curtain walls and cabinets, are counted apart, [#1165](https://github.com/DrunkOnJava/rvt-rs/issues/1165)), none written that Revit's export leaves out (the maintainer,
+stair railings' `Length` where the path is one line along the stair's runs (RE-254)), 1 differs (the mullion whose `Span` differs) and 10,578 are missing (Measure run 41146562639, `main` at 9637d5ff; the 527 quantities Revit's export writes on openings rvt-rs does not write, a door's further cuts and the cuts of curtain walls and cabinets, are counted apart, [#1165](https://github.com/DrunkOnJava/rvt-rs/issues/1165)), none written that Revit's export leaves out (the maintainer,
 2026-10-26: a joined column's `Length` and a curtain panel's `Width` are left out,
-since Revit's export gives none on 18 meshed columns and 3 panels that nothing tells apart), and RE1's 94 IFC2X3 pipe and duct lengths all are written;
+since Revit's export gives none on 18 meshed columns and 3 panels that nothing tells apart;
+RE-291 now tells the columns apart,
+[#1203](https://github.com/DrunkOnJava/rvt-rs/issues/1203)), and RE1's 94 IFC2X3 pipe and duct lengths all are written;
 Core Interior's and RE1 Architecture's exports were made with Revit's "Export base quantities" off, so the census counts the quantities rvt-rs writes on them apart (2,268 and 86,
 and RE1 Mechanical's and Plumbing's pipe areas,
 12 and 126), and `rvt-ifc --no-base-quantities` leaves them out, base quantities being on by default as in each of Revit's built-in IFC4 setups (RE-242);
@@ -180,6 +187,7 @@ the 0.12.0 milestone)
 Open: type objects' values ([#1185](https://github.com/DrunkOnJava/rvt-rs/issues/1185)),
 the BIM4LCA office's stair values ([#1186](https://github.com/DrunkOnJava/rvt-rs/issues/1186)),
 curtain members' `IsExternal` by the host rule ([#1187](https://github.com/DrunkOnJava/rvt-rs/issues/1187)),
+columns' `Length` and the box-drawn columns no clean pair joins ([#1203](https://github.com/DrunkOnJava/rvt-rs/issues/1203)),
 and the remaining values with no rule yet ([#1193](https://github.com/DrunkOnJava/rvt-rs/issues/1193)).
 
 ## Interfaces 1.0 stabilizes
