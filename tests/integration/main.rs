@@ -113,6 +113,8 @@ mod parameter_diagnostics;
 mod partition_record_chain;
 #[path = "../partition_scanner.rs"]
 mod partition_scanner;
+#[path = "../phase_filter.rs"]
+mod phase_filter;
 #[path = "../port_nesting.rs"]
 mod port_nesting;
 #[path = "../project_corpus_smoke.rs"]
