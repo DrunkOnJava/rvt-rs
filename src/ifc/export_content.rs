@@ -1015,6 +1015,7 @@ pub fn append_typed_production_elements(
             }
         });
         let level_set = level_parameter_property_set(&decoded, &ifc_type);
+        record_type_common(&mut type_commons, &ifc_type, &decoded);
         // #823: Revit's export writes a ceiling of separate loops as one
         // covering whose body holds every piece, where it splits a floor.
         let pieces_in_body =
@@ -1256,7 +1257,6 @@ pub fn append_typed_production_elements(
         if level_slab {
             add_level_slab_pitch(&mut reference_sets);
         }
-        record_type_common(&mut type_commons, &ifc_type, &decoded);
         // RE-154: the common property sets' Reference, the type's name;
         // RE-156: the shared parameter Serial Number.
         for set in reference_sets.into_iter().chain(serial_sets) {
