@@ -47,6 +47,7 @@ use serde_json::Value;
 
 use crate::RevitFile;
 use crate::native_document::{Options, extract_graphs};
+use crate::native_json::element_id;
 
 /// A wall's curve and the joins at its ends, from its native record.
 #[derive(Debug, Clone, PartialEq)]
@@ -103,13 +104,6 @@ fn shell_widths(structure: &Value) -> Option<[f64; 2]> {
         widths[..exterior].iter().sum(),
         widths[widths.len() - interior..].iter().sum(),
     ])
-}
-
-fn element_id(value: &Value) -> Option<u64> {
-    value
-        .pointer("/m_id/m_id64")
-        .and_then(Value::as_i64)
-        .and_then(|n| u64::try_from(n).ok())
 }
 
 fn triple(value: Option<&Value>) -> Option<[f64; 3]> {

@@ -14,6 +14,7 @@
 //! in every language: [`BOX_SECTION_CLASSES`] are those whose section is a
 //! full rectangle, which the mullion's box gives.
 
+use crate::native_json::{agree, element_id_i64};
 use crate::{RevitFile, native_document};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -23,19 +24,12 @@ use std::collections::{BTreeMap, BTreeSet};
 /// for a profile family's section, `SysCustMullionProfile`.
 pub const BOX_SECTION_CLASSES: [&str; 2] = ["SysRectMullionProfile", "SysQuadMullionProfile"];
 
-/// `{"m_id":{"m_id64":n}}` as `n`, signed.
-fn element_id(value: &serde_json::Value) -> Option<i64> {
-    value
-        .pointer("/m_id/m_id64")
-        .and_then(serde_json::Value::as_i64)
-}
-
 /// The first id `field` of any of `graph`'s objects names, where positive.
 fn linked(graph: &crate::native_parameters::ObjectGraph, field: &str) -> Option<u64> {
     graph
         .objects
         .iter()
-        .find_map(|object| object.fields.get(field).and_then(element_id))
+        .find_map(|object| object.fields.get(field).and_then(element_id_i64))
         .and_then(|id| u64::try_from(id).ok())
 }
 
@@ -81,7 +75,7 @@ pub fn mullions_on_plain_hosts(
                     .objects
                     .iter()
                     .find(|object| object.class_name == "SysMullionFamSym")
-                    .and_then(|object| object.fields.get("m_profileId").and_then(element_id))
+                    .and_then(|object| object.fields.get("m_profileId").and_then(element_id_i64))
                     .map(|profile| profile < 0);
                 let boxed = graph
                     .objects
@@ -105,19 +99,4 @@ pub fn mullions_on_plain_hosts(
             (is_plain(&host) && is_plain(&mullion_type)).then_some(mullion)
         })
         .collect())
-}
-
-/// Record `value` for `id`, or `None` once two copies disagree or one has
-/// none.
-fn agree<T: PartialEq>(map: &mut BTreeMap<u64, Option<T>>, id: u64, value: Option<T>) {
-    match map.get_mut(&id) {
-        None => {
-            map.insert(id, value);
-        }
-        Some(held) => {
-            if *held != value {
-                *held = None;
-            }
-        }
-    }
 }
