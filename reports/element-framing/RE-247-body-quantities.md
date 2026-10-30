@@ -93,3 +93,5 @@ gh workflow run measure.yml --ref main -f ref=08df58d42a4a00db195f46fdc9f535074b
   -f probe=probe_re247_qto_records -f probe_scorer=record_scalars_vs_ifc
 gh workflow run measure.yml --ref main -f ref=3867b8948d43c161ee496fb2211d0572bdce3cc3 -f base=main -f nordic=true -f r2025=true
 ```
+
+Measure passes a scorer only the two IFC files, so `qto_candidates_list.py`'s `--by-source` and `--misses` views run as the scorers `qto_candidates_by_source` and `qto_candidates_misses`.
