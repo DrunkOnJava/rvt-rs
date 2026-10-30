@@ -276,7 +276,7 @@ All modules build for native targets and for `wasm32-unknown-unknown`, which the
 | `formats` | Parse + encode `Formats/Latest` with `FieldType` classification (all but 9 to 12 fields per release classified across the 12-release corpus, #410; 2027's flagged fields by their base type, RE-264) |
 | `walker` | Schema-directed instance walker + generic `decode_instance` + `detect_adocument_start` entry-point finder; candidates of the 7 classes in `elements::MVP_TYPED_CLASSES` go through their typed decoder from the registry (fail closed), and every other class decodes generically |
 | `elements` | 81 `ElementDecoder` registry entries in `all_decoders()`, all `SimpleDecoder` (Wall, Floor, Door, Window, Column, Beam, Stair, Railing, Rebar, Room, Furniture, …), and typed views of Level, Wall, Floor, Door, Window, Room and Material; the walker uses the 7 `MVP_TYPED_CLASSES` decoders, and no test exercises the rest (#573). Real project elements come from partition element records |
-| `geometry` | Curve / Face / Solid variants (Line, Arc, Ellipse, NURBS, Hermite, Ruled, Revolved, Extrusion, Sweep, Blend, SweptBlend, Boolean, Mesh, PointCloud) |
+| `geometry` | `Point3`, `Curve` (Line, Arc, Circle, Ellipse, Hermite spline, NURBS, cylindrical helix) and `CurveLoop`, and `recovery`, which reads wall location curves, floor boundaries, opening hosts and level elevations from the typed views |
 | `object_graph` | `DocumentHistory`, string-record extractor for Global/Latest + Partitions/NN |
 | `class_index` | Quick class-name inventory (BTreeSet) |
 | `corpus` | Cross-version byte-delta classifier |
@@ -284,7 +284,7 @@ All modules build for native targets and for `wasm32-unknown-unknown`, which the
 | `partitions` | Partitions/NN 44-byte header decoder + gzip-chunk splitter |
 | `writer` | Byte-preserving round-trip `copy_file` + `write_with_patches` (atomic temp-file rename, stream-hash verification) + GUID + history preservation |
 | `round_trip` | Per-class encoder round-trip verification (`verify_instance_round_trip`) |
-| `ifc` | Full IFC4 spatial tree + elements + materials + properties + openings + extrusion geometry + glTF 2.0 binary (`gltf::model_to_glb`) + plan-view SVG (`sheet::render_plan_svg`) + viewer data model (`scene_graph`, `camera`, `clipping`, `sheet`, `share`, `measure`, `annotation`, `pbr`) |
+| `ifc` | Full IFC4 spatial tree + elements + materials + properties + openings + extrusion geometry + glTF 2.0 binary (`gltf::model_to_glb`) + plan-view SVG (`sheet::render_plan_svg`) + viewer data model (`scene_graph`, `camera`, `clipping`, `sheet`, `share`, `pbr`) |
 | `streams` | Named constants for every invariant OLE stream in a Revit file |
 | `redact` | Shared PII scrubbers for all CLIs (`--redact` flag) |
 | (`rvt-wasm` crate) | the 22 JS-callable wasm-bindgen bindings powering the browser viewer ([`docs/viewer-api.md`](docs/viewer-api.md#the-javascript-bindings)), a crate of its own so `rvt` builds as a plain `rlib` |
