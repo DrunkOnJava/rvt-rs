@@ -943,6 +943,13 @@ pub fn append_typed_production_elements(
         add_railing_height(&mut reference_sets, &ifc_type, &decoded);
         add_railing_length(&mut reference_sets, &ifc_type, &decoded);
         add_space_height(&mut reference_sets, &ifc_type, &decoded);
+        add_space_net_volume(
+            &mut reference_sets,
+            &ifc_type,
+            &decoded,
+            extrusion.as_ref(),
+            solid_shape.is_none() && piece_bodies.is_empty(),
+        );
         add_extend_to_structure(&mut reference_sets, &ifc_type, &decoded);
         let mut serial_sets = serial_number_property_sets(&decoded);
         serial_sets.extend(revit_parameter_property_sets(&decoded));
@@ -2134,6 +2141,54 @@ fn add_space_height(sets: &mut Vec<PropertySet>, ifc_type: &str, decoded: &Decod
         properties: vec![Property {
             name: "Height".into(),
             value: PropertyValue::PositiveLengthFeet(height),
+        }],
+    });
+}
+
+/// Add a space's `Qto_SpaceBaseQuantities.NetVolume` to `sets` (#1016,
+/// RE-296): the area of its outline, its holes taken off, times the height of
+/// its box, where the room's stored solid is a prism of that outline
+/// ([`crate::partition_schema_mvp::ROOM_PRISM_FIELD`]). Revit's export writes
+/// the volume of the room's closed shell, which on such a room is that: on
+/// every one of the 167 rooms of the BIM4LCA office as built and the 178 at
+/// building permit that are prisms, and on none of the rooms whose ceiling
+/// steps. `GrossVolume` is left out: Revit's export writes it only on the
+/// rooms it draws as an extrusion, 88 of those 167, and nothing in the file
+/// tells them from the other 79 it draws as a tessellation.
+fn add_space_net_volume(
+    sets: &mut Vec<PropertySet>,
+    ifc_type: &str,
+    decoded: &DecodedElement,
+    extrusion: Option<&Extrusion>,
+    single: bool,
+) {
+    if ifc_type != "IFCSPACE" || !single {
+        return;
+    }
+    let prism = decoded.fields.iter().any(|(name, value)| {
+        name == crate::partition_schema_mvp::ROOM_PRISM_FIELD
+            && matches!(value, InstanceField::Bool(true))
+    });
+    let from_solid = decoded.fields.iter().any(|(name, value)| {
+        name == crate::element_record_plan_profiles::PLAN_PROFILE_SOURCE_FIELD
+            && matches!(value, InstanceField::String(source)
+                if source == crate::partition_room_boundaries::ROOM_OUTLINE_SOURCE)
+    });
+    let Some(body) = extrusion.filter(|_| prism && from_solid) else {
+        return;
+    };
+    let Some(area) = profile_area(body) else {
+        return;
+    };
+    let height = body.height_feet;
+    if !(height.is_finite() && height > 0.0) {
+        return;
+    }
+    sets.push(PropertySet {
+        name: "Qto_SpaceBaseQuantities".into(),
+        properties: vec![Property {
+            name: "NetVolume".into(),
+            value: PropertyValue::VolumeCubicFeet(area * height),
         }],
     });
 }
