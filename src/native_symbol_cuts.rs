@@ -16,6 +16,7 @@
 //! Architecture's 4 doors, and the door and 3 windows of each of the R2025
 //! models 12 to 17 (`reports/element-framing/RE-215-symbol-cut-loops.md`).
 
+use crate::vector_math::distance;
 use crate::{RevitFile, native_document, native_saved_mesh::pointer};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -58,10 +59,6 @@ fn point(value: Option<&serde_json::Value>) -> Option<[f64; 3]> {
     };
     let p = [x.as_f64()?, y.as_f64()?, z.as_f64()?];
     p.iter().all(|v| v.is_finite()).then_some(p)
-}
-
-fn distance(a: [f64; 3], b: [f64; 3]) -> f64 {
-    (0..3).map(|i| (a[i] - b[i]).powi(2)).sum::<f64>().sqrt()
 }
 
 /// The cut loop of a `FamilySymbol` graph: one loop, every curve a `GLine`,

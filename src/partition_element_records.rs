@@ -781,7 +781,8 @@ impl PartitionElementRecord {
     }
 }
 
-fn quantise(v: f64) -> i64 {
+/// Quantise to 1e-4 ft so bit-identical doubles group exactly.
+pub(crate) fn quantise(v: f64) -> i64 {
     (v * 10_000.0).round() as i64
 }
 

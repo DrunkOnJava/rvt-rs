@@ -194,6 +194,7 @@ pub mod redact;
 pub mod round_trip;
 pub mod streams;
 pub mod transmission_data;
+mod vector_math;
 pub mod walker;
 pub mod writer;
 

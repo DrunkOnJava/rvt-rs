@@ -39,6 +39,7 @@
 //!   and are simply absent.
 
 use crate::ifc::Storey;
+use crate::partition_element_records::quantise;
 
 /// Two base elevations within this many feet are the same storey.
 ///
@@ -54,11 +55,6 @@ pub const STOREY_ELEVATION_TOLERANCE_FEET: f64 = 1e-3;
 /// storey *set*, and replacing a recovered Level list with it would
 /// lose more than it adds.
 pub const MIN_DISTINCT_ELEVATIONS: usize = 2;
-
-/// Quantise to 1e-4 ft so bit-identical doubles group exactly.
-fn quantise(value: f64) -> i64 {
-    (value * 10_000.0).round() as i64
-}
 
 /// Distinct, ascending base elevations from a stream of measured
 /// values. Non-finite values are dropped rather than propagated.
