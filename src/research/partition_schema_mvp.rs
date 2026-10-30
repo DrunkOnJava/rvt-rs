@@ -259,6 +259,18 @@ pub fn recover_partition_schema_mvp(
         // nothing else's IsExternal is read on these releases (RE-283) ---
         attach_wall_type_functions(rf, revit_version, out.walls.iter_mut());
         attach_calculated_is_external(out.walls.iter_mut(), false);
+        // --- A structural beam's or column's IsExternal is the calculation's
+        // last step, not external, and its LoadBearing its category's (RE-285) ---
+        attach_calculated_is_external(
+            out.columns
+                .iter_mut()
+                .chain(out.products.iter_mut())
+                .filter(|element| {
+                    IS_EXTERNAL_LAST_STEP_RECORD_CLASSES.contains(&element.class.as_str())
+                }),
+            true,
+        );
+        attach_load_bearing(out.columns.iter_mut().chain(out.products.iter_mut()));
         return Ok(out);
     }
 
@@ -782,6 +794,9 @@ pub fn recover_partition_schema_mvp(
             &mut out.products,
         ],
     );
+    // --- A structural beam's or column's LoadBearing is its category's
+    // (RE-285), unless a parameter named for it says otherwise ---
+    attach_load_bearing(out.columns.iter_mut().chain(out.products.iter_mut()));
     Ok(out)
 }
 
