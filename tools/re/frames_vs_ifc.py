@@ -17,6 +17,11 @@ from the bounding-box centres of up to 200 elements both files tag with the
 same ElementId (walls, columns, slabs, roofs, beams), and the residual left
 after it and after Revit's site placement alone. Lengths in metres.
 
+An element is every product of its class with its Tag (a floor Revit splits
+into slabs taken whole). Revit's boxes are taken in rvt-rs's orientation:
+its vertices with its site placement undone, the centre then placed again, so
+a site rotation turns each centre with its body.
+
 Usage:
 
     python3 tools/re/frames_vs_ifc.py <rvt-rs.ifc> <revit-export.ifc>
@@ -44,7 +49,7 @@ def header(f, label):
     for c in conversions:
         print(
             f"{label} IfcMapConversion: eastings {c.Eastings:.3f} northings {c.Northings:.3f}"
-            f" height {c.OrthogonalHeight:.3f} x-axis ({c.XAxisAbscissa or 1:.6f}, {c.XAxisOrdinate or 0:.6f})"
+            f" height {c.OrthogonalHeight:.3f} x-axis ({axis(c.XAxisAbscissa, 1):.6f}, {axis(c.XAxisOrdinate, 0):.6f})"
         )
     if not conversions:
         print(f"{label} IfcMapConversion: none")
@@ -61,13 +66,20 @@ def header(f, label):
     return m
 
 
-def centres(f, tags):
+def axis(value, unset):
+    return unset if value is None else value
+
+
+def centres(f, tags, frame):
+    """Tag -> the centre of the bounding box of every product of CLASSES with
+    that Tag, taken with `frame` undone and then placed by it again."""
     settings = ifcopenshell.geom.settings()
     settings.set("use-world-coords", True)
-    out = {}
-    for element in f.by_type("IfcElement"):
+    undo = np.linalg.inv(frame)
+    verts = {}
+    for element in (e for c in CLASSES for e in f.by_type(c)):
         tag = element.Tag
-        if tag not in tags or tag in out:
+        if tag not in tags:
             continue
         try:
             shape = ifcopenshell.geom.create_shape(settings, element)
@@ -75,7 +87,13 @@ def centres(f, tags):
             continue
         v = np.array(shape.geometry.verts, dtype=float).reshape(-1, 3)
         if len(v):
-            out[tag] = (v.min(axis=0) + v.max(axis=0)) / 2
+            verts.setdefault(tag, []).append(v)
+    out = {}
+    for tag, pieces in verts.items():
+        v = np.vstack(pieces)
+        local = (undo[:3, :3] @ v.T).T + undo[:3, 3]
+        centre = (local.min(axis=0) + local.max(axis=0)) / 2
+        out[tag] = frame[:3, :3] @ centre + frame[:3, 3]
     return out
 
 
@@ -107,7 +125,7 @@ def main(argv):
     common = sorted(tagged(ours) & tagged(theirs), key=lambda t: (len(t), t))
     step = max(1, -(-len(common) // SAMPLE))
     sample = set(common[::step])
-    a_all, b_all = centres(ours, sample), centres(theirs, sample)
+    a_all, b_all = centres(ours, sample, np.eye(4)), centres(theirs, sample, site)
     both = sorted(set(a_all) & set(b_all), key=lambda t: (len(t), t))
     print(f"elements tagged in both: {len(common)}; centres compared: {len(both)}")
     if len(both) < 3:
