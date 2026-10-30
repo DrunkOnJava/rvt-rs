@@ -61,6 +61,11 @@ pub struct TypedProductionAppend {
     /// is part of the type's GlobalId.
     // Tracker: B72, B74.
     pub element_flips: BTreeMap<u32, bool>,
+    /// The entity indexes of the `Pset_PipeSegmentOccurrence` sets whose
+    /// `InvertElevation` rvt-rs worked out (RE-157). Nothing reads them any
+    /// more: the invert is written as the height above the model's zero, so
+    /// no step takes a storey's elevation off it.
+    pub computed_inverts: Vec<usize>,
     /// The further pieces written inside their element's body rather than
     /// as elements of their own (#823), by index in the entities
     /// ([`super::IfcModel::body_pieces`]).
@@ -1181,6 +1186,7 @@ pub fn append_typed_production_elements(
                 });
             }
             if let Some(set) = occurrence {
+                out.computed_inverts.push(entities.len());
                 entities.push(entities::IfcEntity::ElementPropertySet {
                     element: entity_index,
                     set,
