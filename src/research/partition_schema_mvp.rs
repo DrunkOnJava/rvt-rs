@@ -762,6 +762,18 @@ pub fn recover_partition_schema_mvp(
             &mut out.products,
         ],
     );
+    // --- IsExternal of each element's type object (RE-286) ---
+    attach_type_is_external(
+        revit_version,
+        [
+            &mut out.walls,
+            &mut out.columns,
+            &mut out.doors,
+            &mut out.windows,
+            &mut out.slabs,
+            &mut out.products,
+        ],
+    );
     // --- The parameters named for a standard set's other properties (RE-194) ---
     attach_named_parameters(
         rf,
