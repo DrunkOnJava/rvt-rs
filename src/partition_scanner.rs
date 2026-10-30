@@ -447,18 +447,13 @@ fn tag_map_from_schema(schema: &SchemaTable) -> BTreeMap<u16, String> {
 
 fn read_envelope(buf: &[u8], offset: usize) -> PartitionEnvelope {
     let filter_pad = u16::from_le_bytes([buf[offset + 2], buf[offset + 3]]);
-    let mut envelope = PartitionEnvelope {
+    PartitionEnvelope {
         filter_pad,
-        fixed_header_0: None,
-        count_version: None,
-        type_code: None,
-        variant_marker: None,
-    };
-    envelope.fixed_header_0 = le_bytes::u32_at(buf, offset + 4);
-    envelope.count_version = le_bytes::u32_at(buf, offset + 8);
-    envelope.type_code = le_bytes::u32_at(buf, offset + 12);
-    envelope.variant_marker = le_bytes::u16_at(buf, offset + 0x10);
-    envelope
+        fixed_header_0: le_bytes::u32_at(buf, offset + 4),
+        count_version: le_bytes::u32_at(buf, offset + 8),
+        type_code: le_bytes::u32_at(buf, offset + 12),
+        variant_marker: le_bytes::u16_at(buf, offset + 0x10),
+    }
 }
 
 fn score_candidate(
