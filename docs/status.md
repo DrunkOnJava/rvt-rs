@@ -56,7 +56,7 @@ Autodesk's six 2015 sample projects, where previews and PartAtom are not
 measured. On Revit 2024 and 2025 project files it reads
 the building: each element's ElementId, category, name, type (written as
 an IFC type object of its Revit type, RE-110), storey, materials, layers,
-GlobalId, `IsExternal` (RE-193), curtain mullions' `Span` (RE-226), walls'
+GlobalId, `IsExternal` (RE-193), curtain mullions' `Span` (RE-226) and, where the boxes of their wall's mullions say which ends Revit's solid keeps, `NetSurfaceArea` (RE-268), walls'
 `ExtendToStructure` (RE-228), railings' `Height` (RE-231), stair flights' treads, nosing and run type
 and landings' type (RE-92) and the parameters named for a standard property
 set's property (RE-194), and a body that is exact where the element's
