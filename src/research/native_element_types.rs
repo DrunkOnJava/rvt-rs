@@ -1,5 +1,5 @@
-//! The type a pipe, wall sweep or ramp names in its own native record
-//! (RE-240).
+//! The type a pipe, wall sweep, ramp or Level names in its own native record
+//! (RE-240, RE-275).
 //!
 //! A pipe's `RbsPipeCurve` record names its type in `m_idType`, a wall
 //! sweep's `WallSweep` record in `m_typeId` and a ramp's `Ramp` record in
@@ -7,7 +7,8 @@
 //! `RampAttributes`, holds its name in `SymbolInfo.m_name`. On both BIM4LCA
 //! office files (Revit 2024) that is Revit's type for all 12 pipes, 9 wall
 //! sweeps and 5 ramps, which neither RE-130's stored layout nor RE-69's
-//! reference list types.
+//! reference list types. A `Level` record names its type in `m_attrId`, a
+//! `LevelAttributes` record (RE-275).
 
 use crate::native_json::{agree, element_id};
 use crate::{RevitFile, native_document};
@@ -15,10 +16,11 @@ use std::collections::BTreeMap;
 
 /// For each decoded class read here: the element's record class, the member
 /// naming its type, and the type's record class.
-const KINDS: [(&str, &str, &str, &str); 3] = [
+const KINDS: [(&str, &str, &str, &str); 4] = [
     ("Pipe", "RbsPipeCurve", "m_idType", "RbsPipeType"),
     ("WallSweep", "WallSweep", "m_typeId", "CorniceAttr"),
     ("Ramp", "Ramp", "m_rampAttrId", "RampAttributes"),
+    ("Level", "Level", "m_attrId", "LevelAttributes"),
 ];
 
 /// Whether [`system_type_names`] reads elements of decoded class `class`.
