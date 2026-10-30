@@ -15,6 +15,14 @@ holds a merge on a maintainer's or contributor's review thread, on a
 code-scanning finding and on a Codex finding, which is acted on when it
 arrives (fixed, or answered with evidence) and resolved.
 
+Amended 2026-10-30: Codex's automatic reviews are off. A Claude Code
+review agent run by the maintainer reads each pull request as it
+leaves draft; its blocking findings are fixed or answered before the
+pull request is queued, and a short summary of the review, labelled as
+automated, is posted on the pull request. `@codex review` can still be
+asked for on a pull request. A merge still waits only on `CI passed`
+and resolved threads.
+
 ## Context
 
 Audit of ruleset `main-protection` (id `15270879`) found signatures, linear
