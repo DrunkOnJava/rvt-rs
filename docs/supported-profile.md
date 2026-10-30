@@ -120,10 +120,12 @@ a text parameter named `<set>.<property>` for a property the set's IFC4 definiti
 (`Pset_SpaceCommon.FloorCovering`), and the `Reference` of a set whose entity's name begins with the
 element's (`Pset_SpaceHeaterTypeCommon` on a space); without it every property is in the set IFC4 gives
 (RE-235). A value Revit's export writes that is known to be wrong is left out either way: a stair's or
-flight's `WalkingLineOffset`, half the run's width in feet read as millimetres, and a curtain mullion's `Qto_MemberBaseQuantities.CrossSectionArea`, which grows with its length and is never its section's area (RE-235 §5). Not read: most instance and type parameters (#35, #155) and phases
-(#328), so an element Revit's export leaves out because of its phase can still
-appear. Elements in a design-option set's non-primary options are left out, as
-Revit leaves them out.
+flight's `WalkingLineOffset`, half the run's width in feet read as millimetres, and a curtain mullion's `Qto_MemberBaseQuantities.CrossSectionArea`, which grows with its length and is never its section's area (RE-235 §5). Not read: most instance and type parameters (#35, #155). Elements in a
+design-option set's non-primary options are left out, as Revit leaves them out,
+and so are elements that do not exist in the project's last phase (RE-184),
+except rooms: Revit skips a room by its own phase parameter, which is not
+measured to be its created phase, so a room created in an earlier phase is
+still written.
 
 ## What approximations look like in the output
 

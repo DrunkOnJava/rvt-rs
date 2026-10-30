@@ -34,7 +34,7 @@ sample projects saved by Revit
 2019, 2023 and 2026 (but 2015's `rst_basic`, another model than its 2019 copy).
 What is not decoded
 (most parameters in IFC, family geometry, roofs by extrusion outside
-Revit 2025, openings whose symbol cuts no outline, phase filtering) is listed in [`docs/status.md`](docs/status.md), and
+Revit 2025, openings whose symbol cuts no outline, the phase check of rooms) is listed in [`docs/status.md`](docs/status.md), and
 the four levels a file can reach are in the
 [supported profile](docs/supported-profile.md).
 
@@ -141,9 +141,8 @@ draws cut, drawn taller than its body (#1067), stair flights
 with no oracle (#884, #885), the openings on releases other than 2024 and 2025
 (#227), room boundaries whose solid does not
 close (#90), beams (#94), MEP equipment and routes (#96) and ports and pipes outside
-Revit 2024 and 2025 (#869), the sketch-to-solid pipeline (#156), and the Snowdon slabs
-that are not in Revit's export: six in the Legends phase (#328) and one more
-(#309). Element data: instance and type parameters with units and precedence
+Revit 2024 and 2025 (#869), the sketch-to-solid pipeline (#156), and the Snowdon slab
+that is not in Revit's export (#309). Element data: instance and type parameters with units and precedence
 (#35, #155) and the element-record fields that carry them (#223), written to
 IFC property sets and shown in the viewer; door and window sizes where the
 symbol cuts no outline, two doors still wide (#810); and ports' system classification (#834).

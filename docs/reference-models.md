@@ -27,7 +27,7 @@ lists the local-only files with their source and hash, and never fetches them.
 | magnetar Core Interior | 2024 | MIT, redistributable | IFC4 ReferenceView 1.2, Revit 24.0.20.20 (the full `_slim` export, and a 20 KB element fixture) | 360 walls, 132 doors, 6 windows, 256 columns, 80 slabs, 15 storeys; Revit's GlobalId on 854 elements, 116 rooms and 15 storeys. Run in CI. |
 | magnetar Einhoven | 2023 | MIT, redistributable | none | 2023 element records with no export to score against (walls, windows, materials), the 2023 arc-wall path; pinned by the project-count fixture and the viewer's browser test |
 | IFC-ECS RE1 Architecture, Mechanical, Plumbing, Electrical | 2025 | MIT, redistributable | IFC2X3 CoordinationView 2.0, Revit 26.2.0.20 (the files are Revit 2025, so this is a cross-release pair) | 2025 element records; Architecture: 7 walls, 2 slabs, 11 rooms; 2 storeys each; Revit's GlobalIds 73 / 73 / 123 / 12. Run in CI. |
-| Autodesk Snowdon Towers Architectural | 2024 | none declared, local only | IFC4 ReferenceView 1.2, Revit 24.0.20.20 | 5,974 exported, 5,945 of them in Revit's export (from #309 and #328, no committed report); 1,078 walls; 18 storeys; wall joins, layers, curtain walls, stairs, roofs |
+| Autodesk Snowdon Towers Architectural | 2024 | none declared, local only | IFC4 ReferenceView 1.2, Revit 24.0.20.20 | 5,968 exported, 5,945 of them in Revit's export (from #309 and #328, no committed report; the other 23 are curtain panels with no resolved type, and the 6 slabs in the Legends phase of #328 are no longer written, RE-184); 1,078 walls; 18 storeys; wall joins, layers, curtain walls, stairs, roofs |
 | Autodesk Snowdon Towers Structural | 2024 | none declared, local only | VIM | beams along their axes, structural categories |
 | Autodesk Snowdon Towers Plumbing, HVAC, Electrical | 2024 | Autodesk sample, local only; downloaded from Autodesk's "Revit Sample Project Files" page (sha256 `4f80526b…`, `58538599…`, `e50e1b71…`) | VIM (2027 edition) | **held out**: never used to develop the decoder, measured once as they are (`reports/validation/held-out-snowdon-mep-2026-09-27.md`) |
 | MIT 4.567 tutorial house, 2024 and 2025 saves | 2024, 2025 | copyright reserved, local only | none | the same model and ElementIds in two releases; the one shed roof |
@@ -125,7 +125,7 @@ differences between rvt-rs and "Revit's export" are settings, not decoding:
   (Snowdon: rotate 26.0156°, translate (1370151.83, 258247.98) ft, z + 780.5 ft).
 - **What is exported.** Revit's exporter leaves out non-primary design
   options, elements not in the exported phase, 2D-only families and some
-  types (#309, #328); rvt-rs follows it where the bytes say which.
+  types (#309, #328); rvt-rs follows it where the bytes say which. Rooms are not checked against the phase, which Revit does by a room's own phase parameter (RE-184).
 - **Model state.** An export can be newer than the `.rvt` beside it:
   `teste_export_2025.ifc` shows one wall in a later state than its `.rvt`.
 
