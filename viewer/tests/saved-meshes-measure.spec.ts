@@ -73,7 +73,6 @@ interface Measurement {
   openMs: number;
   workerMs: number;
   wasmMemoryBytes: number;
-  workerHeapBytes: number | null;
   mainHeapBytes: number | null;
   buildingElements: number;
   doors: number;
@@ -110,7 +109,6 @@ async function read(
     openMs: number;
     workerMs: number;
     wasmMemoryBytes: number;
-    workerHeapBytes: number | null;
   } | null;
   expect(stats, 'the viewer reports what an open cost').not.toBeNull();
   const diagnostics = JSON.parse(
@@ -131,7 +129,6 @@ async function read(
     openMs: stats!.openMs,
     workerMs: stats!.workerMs,
     wasmMemoryBytes: stats!.wasmMemoryBytes,
-    workerHeapBytes: stats!.workerHeapBytes,
     mainHeapBytes,
     buildingElements: exported.building_elements,
     doors: exported.by_ifc_type.IFCDOOR ?? 0,
@@ -188,7 +185,6 @@ function tableRows(report: Report): string[][] {
       seconds(m.loadMs),
       seconds(m.openMs),
       mib(m.wasmMemoryBytes),
-      mib(m.workerHeapBytes),
       mib(m.mainHeapBytes),
       `${m.savedMeshBodies} of ${m.doors + m.windows}`,
       String(m.boundingBoxBodies),
@@ -202,7 +198,6 @@ function tableRows(report: Report): string[][] {
       'Load s',
       'Open s',
       'Wasm MiB',
-      'Worker heap MiB',
       'Page heap MiB',
       'Doors and windows from meshes',
       'Box bodies',

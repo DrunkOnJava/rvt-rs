@@ -13,11 +13,11 @@
  *   worker → main: { type: 'summary', summary, document } (VW1-20 partial;
  *                   `document` is the FileMetadata or null)
  *   worker → main: { type: 'ready', model, scene, glb, types, diagnostics, stats }
- *                  `stats` is { openMs, workerMs, wasmMemoryBytes, workerHeapBytes }:
- *                  the milliseconds spent in the wasm open (saved meshes included)
- *                  and in the whole parse, the wasm linear memory after it (which
- *                  only grows, so it is the peak against the 4 GiB a tab can hold),
- *                  and the worker's JavaScript heap where the browser reports it.
+ *                  `stats` is { openMs, workerMs, wasmMemoryBytes }: the
+ *                  milliseconds spent in the wasm open (saved meshes included)
+ *                  and in the whole parse, and the wasm linear memory after it,
+ *                  which only grows, so it is the peak against the 4 GiB a tab
+ *                  can hold.
  *   worker → main: { type: 'info', index, panel }
  *   worker → main: { type: 'error', message: string }
  */
@@ -132,9 +132,6 @@ self.addEventListener('message', async (ev: MessageEvent<ParseMsg>) => {
       openMs,
       workerMs: performance.now() - startedAt,
       wasmMemoryBytes: wasm.memory.buffer.byteLength,
-      workerHeapBytes:
-        (performance as unknown as { memory?: { usedJSHeapSize?: number } }).memory
-          ?.usedJSHeapSize ?? null,
     };
 
     send(

@@ -816,8 +816,6 @@ interface LoadStats {
   workerMs: number;
   /** The wasm linear memory after the open, which only grows: the peak against the 4 GiB a tab holds. */
   wasmMemoryBytes: number;
-  /** The worker's JavaScript heap, where the browser reports it. */
-  workerHeapBytes: number | null;
 }
 
 async function loadBytes(file: File, limits?: OpenLimitsOptions): Promise<void> {
