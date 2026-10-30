@@ -6,11 +6,13 @@
 # hash is the one the author posted; hash and size measured 2026-10-18.
 # On #885 (2026-10-27) the author added, under Apache-2.0, R2025_TU_Roof.zip (20_T_U_Roof, a
 # project with T and U hip roofs, and its IFC4 Reference View export) and R2025_Models_wRVTSets.zip
-# (exports of the models with Revit's property sets on, no .rvt); of the latter only
-# 07_1Slope_ArrowDefined_2Cut50mmFascia's is read, the first export of that model, renamed to sit
-# beside its .rvt. The others are another export setup and are not read. Hashes and sizes measured
-# 2026-10-29.
+# (exports of the models with Revit's property sets on, no .rvt). Of the latter, each export whose
+# .rvt is in R2025_Models.zip is read as <model>.revit-sets.ifc, which
+# tools/ci/measure-reference-models.sh scores `rvt-ifc --revit-property-sets` against (RE-210), and
+# 07_1Slope_ArrowDefined_2Cut50mmFascia's, that model's first export, also as its reference
+# export. 01_Walls_Phases_Demo and 19_1Slope_ArrowDefined_SetToSlope_HeadHalfway have no .rvt and
+# are not read. Hashes and sizes measured 2026-10-29.
 # kind	url	sha256	bytes	members (member=name, comma-separated; empty for every .rvt and .ifc)
 archive	https://github.com/user-attachments/files/33065191/R2025_Models.zip	8673d803fb0b9b6aa20d08448eeed16eb34222566bfaf7a2dc761c064dc30d6a	25563111
 archive	https://github.com/user-attachments/files/34048901/R2025_TU_Roof.zip	38dad62722d5a6e1cf03405f99f4ece060ec7473e34dbb45de9e72247ca47e6e	498825
-archive	https://github.com/user-attachments/files/34048316/R2025_Models_wRVTSets.zip	ff9b3946eddcaff52ba42e28d77ea556aa5df905a13402d7f25692758bf59559	1082655	07_1Slope_ArrowDefined_2Cut50mmFascia_rvt.ifc=07_1Slope_ArrowDefined_2Cut50mmFascia.ifc
+archive	https://github.com/user-attachments/files/34048316/R2025_Models_wRVTSets.zip	ff9b3946eddcaff52ba42e28d77ea556aa5df905a13402d7f25692758bf59559	1082655	07_1Slope_ArrowDefined_2Cut50mmFascia_rvt.ifc=07_1Slope_ArrowDefined_2Cut50mmFascia.ifc,01_Walls_rvt.ifc=01_Walls.revit-sets.ifc,02_1Slope_Rafter2PlumbCut_rvt.ifc=02_1Slope_Rafter2PlumbCut.revit-sets.ifc,03_2Slope_Rafter2SquareCut_rvt.ifc=03_2Slope_Rafter2SquareCut.revit-sets.ifc,04_Gable_rvt.ifc=04_Gable.revit-sets.ifc,04_Gable_Swapped_Slopes_rvt.ifc=04_Gable_Swapped_Slopes.revit-sets.ifc,05_1Slope_ArrowDefined_rvt.ifc=05_1Slope_ArrowDefined.revit-sets.ifc,06_1Slope_ArrowDefined_SetToSlope_rvt.ifc=06_1Slope_ArrowDefined_SetToSlope.revit-sets.ifc,07_1Slope_ArrowDefined_2Cut50mmFascia_rvt.ifc=07_1Slope_ArrowDefined_2Cut50mmFascia.revit-sets.ifc,08_LShapedHipRoof_rvt.ifc=08_LShapedHipRoof.revit-sets.ifc,09_LShapedHipRoof_1Edge300Offset_rvt.ifc=09_LShapedHipRoof_1Edge300Offset.revit-sets.ifc,10_LShapedHipRoof_1Edge300Offset_Hole_rvt.ifc=10_LShapedHipRoof_1Edge300Offset_Hole.revit-sets.ifc,11_RoofByExtrusion_rvt.ifc=11_RoofByExtrusion.revit-sets.ifc,12_Rooms_Door_Windows_rvt.ifc=12_Rooms_Door_Windows.revit-sets.ifc,13_Rooms_Stairs_rvt.ifc=13_Rooms_Stairs.revit-sets.ifc,14_Rooms_Stairs_endwithriserOFF_rvt.ifc=14_Rooms_Stairs_endwithriserOFF.revit-sets.ifc,15_Rooms_Stairs_NoRisers_rvt.ifc=15_Rooms_Stairs_NoRisers.revit-sets.ifc,16_Rooms_Stairs_Monolithic_rvt.ifc=16_Rooms_Stairs_Monolithic.revit-sets.ifc,17_Rooms_Stairs_Spiral_rvt.ifc=17_Rooms_Stairs_Spiral.revit-sets.ifc,18_WallJoins_rvt.ifc=18_WallJoins.revit-sets.ifc
