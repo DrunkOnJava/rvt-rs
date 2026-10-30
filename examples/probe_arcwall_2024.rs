@@ -1,7 +1,7 @@
 //! RE-13 — verify ArcWall decoder generalises to Revit 2024.
 //!
 //! On Revit 2023 (Einhoven) ArcWall's tag is 0x0191. For Revit 2024,
-//! the class_tag_map documents tag drift per release; this probe
+//! docs/data/tag-drift-2016-2026.csv records tag drift per release; this probe
 //! checks whether ArcWall in 2024 still uses 0x0191 or has drifted,
 //! and whether the record envelope (variant 0x07fa, fixed header
 //! 0x00088004) is identical.
