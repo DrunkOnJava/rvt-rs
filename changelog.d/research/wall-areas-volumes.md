@@ -1,4 +1,4 @@
-- **What Revit's wall areas and volumes are (RE-269, #1046).** In revit-ifc
+- **What Revit's wall areas and volumes are (RE-270, #1046).** In revit-ifc
   24.1 and 24.2 (the office's exporter) a wall's `GrossSideArea` is the
   largest vertical face's outer boundary and `NetSideArea` the largest face
   with its holes out, the solid's volume is `NetVolume`, and `GrossVolume` is

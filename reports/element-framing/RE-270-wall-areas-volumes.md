@@ -1,4 +1,4 @@
-# RE-269 — A wall's side areas and volumes
+# RE-270 — A wall's side areas and volumes
 
 **Date:** 2026-10-30
 **Issues:** #1046 (quantities Revit computes from its joined geometry, step 1: walls), #1016 (quantities), W7 of [`docs/release-1.0-criteria.md`](../../docs/release-1.0-criteria.md); follows RE-251 (a wall's record keeps none of Revit's wall quantities), RE-252 (`Length`), RE-257, RE-266 and RE-267 (`Height`, and the top cut at the floor that covers a wall)

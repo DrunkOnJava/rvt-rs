@@ -1,4 +1,4 @@
-- **A wall's side areas and volumes (#1046, RE-269).** A wall whose native
+- **A wall's side areas and volumes (#1046, RE-270).** A wall whose native
   record holds no step that cuts, embeds or sweeps it and whose body is its
   record's box cut back at its joins, a rectangle, carries
   `Qto_WallBaseQuantities.GrossSideArea`, `NetSideArea`, `GrossVolume` and

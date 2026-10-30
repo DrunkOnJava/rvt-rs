@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """What Revit's wall areas and volumes are, and whether a wall body gives them
-(#1046, RE-269).
+(#1046, RE-270).
 
 Revit's export writes a wall's `Qto_WallBaseQuantities` `GrossSideArea`,
 `NetSideArea`, `GrossVolume` and `NetVolume` from the faces and the volume of

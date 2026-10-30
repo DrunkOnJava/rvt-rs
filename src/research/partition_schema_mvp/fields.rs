@@ -668,7 +668,7 @@ pub const WALL_TOP_JOINED_FIELD: &str = "m_wall_top_joined";
 pub const WALL_UNCUT_FIELD: &str = "m_wall_uncut";
 
 /// Field set on a wall whose native record holds no step that cuts, embeds or
-/// sweeps its solid ([`crate::native_walls::WallRecords::whole`], RE-269).
+/// sweeps its solid ([`crate::native_walls::WallRecords::whole`], RE-270).
 pub const WALL_WHOLE_FIELD: &str = "m_wall_whole";
 
 /// Field carrying the name of the phase an element was created in
