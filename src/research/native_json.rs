@@ -17,6 +17,17 @@ pub(crate) fn element_id_i64(value: &Value) -> Option<i64> {
     value.pointer("/m_id/m_id64").and_then(Value::as_i64)
 }
 
+/// An ElementId field as either shape of the schema saves it: the
+/// `Identifier` under `m_id` holds `m_id64` from Revit 2024 and a 4-byte
+/// `m_id` on 2015 to 2023 (RE-280), `{"m_id":{"m_id":n}}`.
+pub(crate) fn identifier_i64(value: &Value) -> Option<i64> {
+    let identifier = value.get("m_id")?;
+    identifier
+        .get("m_id64")
+        .or_else(|| identifier.get("m_id"))
+        .and_then(Value::as_i64)
+}
+
 /// A three-number array as a point, `None` unless every coordinate is finite.
 pub(crate) fn finite_triple(value: &Value) -> Option<[f64; 3]> {
     let [x, y, z] = value.as_array()?.as_slice() else {

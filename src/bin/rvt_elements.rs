@@ -120,7 +120,7 @@ fn run(cli: Cli) -> anyhow::Result<()> {
         return Ok(());
     }
 
-    // Revit 2023 to 2027 only; other files keep their AProperty* entries.
+    // Revit 2015 to 2027 only; other files keep their AProperty* entries.
     let saved = rvt::elements::parameters::saved_parameters_lossy(&mut rf, &elements);
     for warning in &saved.diagnostics.warnings {
         eprintln!("warning: {}", warning.message);
