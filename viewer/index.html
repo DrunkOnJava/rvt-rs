@@ -156,6 +156,11 @@
       <aside id="sidebar-right" aria-label="File status and element details">
         <h2>File status</h2>
         <div class="status-panel" id="status-panel" aria-live="polite"></div>
+        <label class="option-toggle" id="saved-meshes-toggle">
+          <input id="saved-meshes" type="checkbox" checked aria-describedby="saved-meshes-hint" />
+          Draw doors and windows from saved meshes
+        </label>
+        <p class="option-hint" id="saved-meshes-hint">For Revit 2023 to 2027 files, as rvt-ifc does. Off keeps each one's bounding box. Changing this reopens the open file.</p>
         <button class="side-btn" id="download-diagnostics" disabled type="button" aria-label="Download diagnostics JSON with the project's names replaced" title="The diagnostics with the file, project, level and material names replaced, so they can be posted publicly">Download diagnostics</button>
         <details id="diagnostics-details">
           <summary>Diagnostics details</summary>
