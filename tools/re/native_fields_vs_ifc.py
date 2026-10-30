@@ -33,6 +33,9 @@ import ifcopenshell
 import ifcopenshell.util.element
 
 FLAGS = ("LoadBearing", "IsExternal")
+# Fields printed with their values on every class, whether or not the flag
+# takes both states there: the ones a candidate scan found (RE-286).
+WATCHED = ("m_isStructuralSignificant", "m_wallStructuralUsage", "m_analyzesAs")
 
 
 def tagged(model):
@@ -97,14 +100,24 @@ def main():
         for klass, rows in sorted(classes.items()):
             true = sum(1 for _, v in rows if v)
             print(f"native readers: field {klass} {flag} revit true {true} false {len(rows) - true}")
-            if true in (0, len(rows)):
-                continue
             held = collections.defaultdict(lambda: collections.defaultdict(collections.Counter))
             have = collections.Counter()
             for tag, state in rows:
                 for key, value in candidates_of(tag, fields, links).items():
                     held[key][value][state] += 1
                     have[key] += 1
+            for key in sorted(held):
+                if key[-1] in WATCHED:
+                    triples = "; ".join(
+                        f"{text(value)} {'true' if state else 'false'} {count}"
+                        for value, states in sorted(held[key].items())
+                        for state, count in sorted(states.items())
+                    )
+                    print(
+                        f"native readers: field {klass} {flag} watched {' '.join(key)} held by {have[key]} of {len(rows)} values ({triples})"
+                    )
+            if true in (0, len(rows)):
+                continue
             for key in sorted(held):
                 by_value = held[key]
                 if have[key] != len(rows) or len(by_value) < 2:
