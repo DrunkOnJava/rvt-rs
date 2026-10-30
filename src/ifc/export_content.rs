@@ -1036,7 +1036,7 @@ pub fn append_typed_production_elements(
                 pending_tops.push((entity_index, named));
             }
         }
-        // RE-291: a column joined by a clean pair, with the elements its pairs name.
+        // RE-291: a column whose type is a plain rectangle, with the elements its pairs name.
         if policy.include_geometry
             && matches!(decoded.class.as_str(), "Column" | "StructuralColumn")
         {
@@ -1044,14 +1044,19 @@ pub fn append_typed_production_elements(
                 name == crate::partition_schema_mvp::COLUMN_UNJOINED_FIELD
                     && matches!(value, InstanceField::Bool(true))
             });
-            if let (false, Some((cut, clean))) = (
-                unjoined,
-                crate::partition_schema_mvp::column_partners_from_fields(&decoded.fields),
+            let partners =
+                crate::partition_schema_mvp::column_partners_from_fields(&decoded.fields)
+                    .or_else(|| unjoined.then(Default::default));
+            if let (Some(sides), Some((cut, clean))) = (
+                crate::partition_schema_mvp::column_rectangle_from_fields(&decoded.fields),
+                partners,
             ) {
                 pending_columns.push(column_quantities::Pending {
                     index: entity_index,
                     cut,
                     clean,
+                    unjoined,
+                    sides,
                 });
             }
         }

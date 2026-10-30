@@ -13,9 +13,14 @@
 //!
 //! This pass writes a column's `CrossSectionArea`, `OuterSurfaceArea`,
 //! `GrossVolume` and `NetVolume` as its record box's, on a column drawn as
-//! that box and joined by a `CleanPairGStep` (those no clean step joins are
-//! the ones `add_body_quantities` covers), when every element its
-//! cut and clean pairs name is exported and
+//! that box whose type is a plain rectangle (its parameters `b` and `h`, or
+//! `b` alone, are the box's sides: a round column is drawn as a box too, and
+//! its type holds a `Diameter`), and
+//!
+//! - that no `CleanPairGStep` joins (`add_body_quantities` gives its
+//!   `Length`; Revit draws it as an extrusion on every one); or
+//! - that a clean pair joins, when every element its cut and clean pairs
+//!   name is exported and
 //!
 //! - is a slab lying wholly above or wholly below the column;
 //! - is a wall, covering or column, if it is named by a clean pair only.
@@ -34,7 +39,10 @@ use crate::ifc::entities::{IfcEntity, Property, PropertySet, PropertyValue};
 /// of it, feet.
 const EDGE_FEET: f64 = 5e-3;
 
-/// A column joined by a clean pair, waiting for the pass.
+/// How far the box's sides may differ from the type's, feet.
+const SIDE_FEET: f64 = 1e-4;
+
+/// A column whose type is a plain rectangle, waiting for the pass.
 pub(super) struct Pending {
     /// The column's entity index.
     pub index: usize,
@@ -42,6 +50,21 @@ pub(super) struct Pending {
     pub cut: Vec<u32>,
     /// The ElementIds its clean pairs name.
     pub clean: Vec<u32>,
+    /// Whether no clean pair joins it.
+    pub unjoined: bool,
+    /// The sides of its type's rectangle, feet.
+    pub sides: [f64; 2],
+}
+
+/// Whether `body`'s two plan sides are the rectangle `sides`, in either
+/// order.
+fn fills_section(body_sides: [f64; 2], sides: [f64; 2]) -> bool {
+    let (long, short) = (
+        body_sides[0].max(body_sides[1]),
+        body_sides[0].min(body_sides[1]),
+    );
+    let (wanted_long, wanted_short) = (sides[0].max(sides[1]), sides[0].min(sides[1]));
+    (long - wanted_long).abs() <= SIDE_FEET && (short - wanted_short).abs() <= SIDE_FEET
 }
 
 /// An element's entity type and, where it is drawn as one extrusion, its
@@ -155,8 +178,11 @@ pub(super) fn add_joined_column_quantities(entities: &mut Vec<IfcEntity>, pendin
         {
             continue;
         }
+        if !fills_section([body.width_feet, body.depth_feet], column.sides) {
+            continue;
+        }
         let (base, top) = (location[2], location[2] + body.height_feet);
-        if !unaffected(&partners, column, base, top) {
+        if !column.unjoined && !unaffected(&partners, column, base, top) {
             continue;
         }
         let [width, depth, height] = sizes;

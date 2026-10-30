@@ -485,18 +485,15 @@ pub struct HollowSection {
 /// BIM4LCA office's `Rectangular and Square Hollow Sections-Column` family.
 pub const HOLLOW_SECTION_PARAMETER_NAMES: [&str; 4] = ["b", "Ht", "t", "kr"];
 
-/// The hollow section of each type in `types` whose family parameters
-/// named [`HOLLOW_SECTION_PARAMETER_NAMES`] it holds, every partition's
-/// value agreeing, where they make a section with walls and rounded corners
-/// (`t` positive and under half of `b` and of `Ht`, `kr` over `t` and at
-/// most half of each). On the BIM4LCA office the three such column types'
-/// values are Revit's profiles exactly: outside `b` by `Ht` with corners of
-/// radius `kr`, inside `t` in with corners of radius `kr - t`.
-pub fn type_hollow_sections(
+/// The length parameters each type in `types` holds, by the caption
+/// (`ParamDefValue.m_caption`) their `ParamElemFamily` elements carry, every
+/// partition's value agreeing (RE-221, RE-291). A parameter two partitions
+/// give different values, or whose element is not read, is left out.
+pub fn type_named_lengths(
     rf: &mut RevitFile,
     revit_version: u32,
     types: &BTreeSet<u32>,
-) -> BTreeMap<u32, HollowSection> {
+) -> BTreeMap<u32, BTreeMap<String, f64>> {
     if !supports_revit_version(revit_version) || types.is_empty() {
         return BTreeMap::new();
     }
@@ -556,36 +553,79 @@ pub fn type_hollow_sections(
             return BTreeMap::new();
         }
     }
-    let mut held: BTreeMap<u32, BTreeMap<&str, f64>> = BTreeMap::new();
+    let mut held: BTreeMap<u32, BTreeMap<String, f64>> = BTreeMap::new();
     for ((owner, parameter), value) in &values {
         let (Some(value), Some(name)) = (value, names.get(parameter)) else {
             continue;
         };
-        if let Some(wanted) = HOLLOW_SECTION_PARAMETER_NAMES
-            .iter()
-            .find(|wanted| **wanted == name.as_str())
-        {
-            held.entry(*owner).or_default().insert(*wanted, *value);
-        }
+        held.entry(*owner).or_default().insert(name.clone(), *value);
     }
-    held.into_iter()
-        .filter_map(|(owner, by_name)| {
-            let [b, h, t, r] =
-                HOLLOW_SECTION_PARAMETER_NAMES.map(|name| by_name.get(name).copied());
-            let section = HollowSection {
-                width_feet: b?,
-                height_feet: h?,
-                wall_feet: t?,
-                outer_radius_feet: r?,
-            };
-            let narrow = section.width_feet.min(section.height_feet);
-            (section.wall_feet > 0.0
-                && 2.0 * section.wall_feet < narrow
-                && section.outer_radius_feet > section.wall_feet
-                && 2.0 * section.outer_radius_feet <= narrow)
-                .then_some((owner, section))
-        })
+    held
+}
+
+/// The hollow section of each type in `types` whose family parameters
+/// named [`HOLLOW_SECTION_PARAMETER_NAMES`] it holds, every partition's
+/// value agreeing, where they make a section with walls and rounded corners
+/// ([`hollow_section`]). On the BIM4LCA office the three such column types'
+/// values are Revit's profiles exactly: outside `b` by `Ht` with corners of
+/// radius `kr`, inside `t` in with corners of radius `kr - t`.
+pub fn type_hollow_sections(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    types: &BTreeSet<u32>,
+) -> BTreeMap<u32, HollowSection> {
+    type_named_lengths(rf, revit_version, types)
+        .into_iter()
+        .filter_map(|(owner, by_name)| hollow_section(&by_name).map(|section| (owner, section)))
         .collect()
+}
+
+/// The hollow section `by_name` (a type's [`type_named_lengths`]) makes:
+/// `t` positive and under half of `b` and of `Ht`, `kr` over `t` and at most
+/// half of each.
+pub fn hollow_section(by_name: &BTreeMap<String, f64>) -> Option<HollowSection> {
+    let [b, h, t, r] = HOLLOW_SECTION_PARAMETER_NAMES.map(|name| by_name.get(name).copied());
+    let section = HollowSection {
+        width_feet: b?,
+        height_feet: h?,
+        wall_feet: t?,
+        outer_radius_feet: r?,
+    };
+    let narrow = section.width_feet.min(section.height_feet);
+    (section.wall_feet > 0.0
+        && 2.0 * section.wall_feet < narrow
+        && section.outer_radius_feet > section.wall_feet
+        && 2.0 * section.outer_radius_feet <= narrow)
+        .then_some(section)
+}
+
+/// Captions whose presence means a column type's section is not the plain
+/// rectangle `b` and `h` give: a hollow section's thickness, height and
+/// corner radius ([`HOLLOW_SECTION_PARAMETER_NAMES`]) or a round column's
+/// diameter.
+const NOT_RECTANGULAR_NAMES: [&str; 4] = ["Ht", "t", "kr", "Diameter"];
+
+/// The two sides, feet, of the plain rectangular section a column type holds
+/// as its parameters `b` and `h` (`b` alone for a square one), from `by_name`
+/// (a type's [`type_named_lengths`]). On the BIM4LCA office the square and
+/// rectangular concrete column types hold exactly these, equal to their
+/// columns' record boxes, and the one round column's type holds a `Diameter`
+/// and no `b` (RE-291). `None` for a type that holds a hollow section's
+/// `Ht`, `t` or `kr` or a round column's `Diameter`, no `b`, or a side that
+/// is not a positive number.
+pub fn rectangular_section(by_name: &BTreeMap<String, f64>) -> Option<[f64; 2]> {
+    if NOT_RECTANGULAR_NAMES
+        .iter()
+        .any(|name| by_name.contains_key(*name))
+    {
+        return None;
+    }
+    let b = *by_name.get("b")?;
+    let h = by_name.get("h").copied().unwrap_or(b);
+    [b, h]
+        .iter()
+        .all(|side| side.is_finite() && *side > 0.0)
+        .then_some([b, h])
 }
 
 /// The values of `parameters` held by each type in `types`, where every

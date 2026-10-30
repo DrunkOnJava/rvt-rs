@@ -203,6 +203,11 @@ pub const COLUMN_CUT_PARTNERS_FIELD: &str = "m_column_cut_partners";
 /// See [`COLUMN_CUT_PARTNERS_FIELD`].
 pub const COLUMN_CLEAN_PARTNERS_FIELD: &str = "m_column_clean_partners";
 
+/// Fields holding the two sides, feet, of a column's plain rectangular
+/// section, read from its type's parameters `b` and `h`
+/// ([`crate::partition_type_parameters::rectangular_section`], RE-291).
+pub const COLUMN_RECTANGLE_FIELDS: [&str; 2] = ["m_column_rect_b", "m_column_rect_h"];
+
 /// Classes whose type's hollow section is read (W6).
 pub const HOLLOW_SECTION_CLASSES: [&str; 2] = ["StructuralColumn", "Column"];
 

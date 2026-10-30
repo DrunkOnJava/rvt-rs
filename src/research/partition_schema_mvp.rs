@@ -769,7 +769,7 @@ pub fn recover_partition_schema_mvp(
     // --- Steel beams' and columns' I sections from their type (RE-103, RE-104) ---
     attach_beam_sections(rf, revit_version, &mut out.products);
     // --- Hollow structural sections from their type's family parameters (W6) ---
-    attach_hollow_sections(rf, revit_version, [&mut out.columns, &mut out.products]);
+    attach_column_sections(rf, revit_version, [&mut out.columns, &mut out.products]);
     // --- A wall's and a curtain panel wall's type Function, from its native
     // type record (RE-185), after RE-72 has relabelled the panels ---
     attach_wall_type_functions(
