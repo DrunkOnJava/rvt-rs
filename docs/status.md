@@ -733,7 +733,7 @@ outline; 154 of Snowdon's slabs now match Revit's area within 0.1%
 
 **RE-207 (2026-10-22)** lists each element's saved parameters in
 `rvt-elements` and Python's `decoded_elements()`, on Revit 2023 to 2027
-files (#35). They are read from the element's native record: its typed
+files (#35; 2015 to 2022 since RE-281, experimentally). They are read from the element's native record: its typed
 parameter sets, the family slots of its own `FamilyParams` that a
 definition resolves, and the native fields read as built-in parameters,
 each named by the file's own definition (family, shared, project and
