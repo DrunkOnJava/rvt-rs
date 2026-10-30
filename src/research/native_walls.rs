@@ -251,6 +251,18 @@ pub fn curtain_wall_type_names(
     Ok(out)
 }
 
+/// The step classes of a wall's record that leave its solid as its joins and
+/// its type's layers make it (RE-269): every other class ending in `Step` may
+/// cut, join, embed or sweep it.
+const HARMLESS_STEPS: [&str; 6] = [
+    "BaseWallGStep",
+    "JoinEndGStep",
+    "VCWSplitFaceGStep",
+    "WallRefPlanesGStep",
+    "WallJoinTweakGStep",
+    "VerticalExtensionOfLayersGStep",
+];
+
 /// What [`native_walls_and_top_joins`] reads from walls' native records.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct WallRecords {
@@ -260,6 +272,10 @@ pub struct WallRecords {
     pub top_joined: BTreeMap<u64, bool>,
     /// The walls nothing is joined to or cuts.
     pub uncut: BTreeSet<u64>,
+    /// The walls whose record holds no step but those of [`HARMLESS_STEPS`]:
+    /// nothing cuts, embeds or sweeps the solid its joins and layers make
+    /// (RE-269).
+    pub whole: BTreeSet<u64>,
     /// The ElementIds each wall's top could be cut at (RE-267): those its
     /// top join (`JoinToRoofGStep` with `m_baseOrTop` 1) and its
     /// `CutPairGStep`s name, in ascending order. A wall that names none, or
@@ -293,6 +309,7 @@ pub fn native_walls_and_top_joins(
     }
     let mut top_joined: BTreeMap<u64, bool> = BTreeMap::new();
     let mut uncut: BTreeSet<u64> = BTreeSet::new();
+    let mut whole: BTreeSet<u64> = BTreeSet::new();
     let mut top_cutters: BTreeMap<u64, Vec<u64>> = BTreeMap::new();
     let options = Options {
         selected_ids: walls.clone(),
@@ -335,6 +352,12 @@ pub fn native_walls_and_top_joins(
             )
         }) {
             uncut.insert(id);
+        }
+        if graph.objects.iter().all(|object| {
+            !object.class_name.ends_with("Step")
+                || HARMLESS_STEPS.contains(&object.class_name.as_str())
+        }) {
+            whole.insert(id);
         }
         let steps = graph
             .objects
@@ -462,6 +485,7 @@ pub fn native_walls_and_top_joins(
         walls,
         top_joined,
         uncut,
+        whole,
         top_cutters,
     })
 }

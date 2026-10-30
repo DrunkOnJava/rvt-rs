@@ -520,6 +520,7 @@ pub(super) fn attach_wall_layers(
         walls: native,
         top_joined,
         uncut,
+        whole,
         top_cutters,
     } = if centreline_bodies {
         let ids: BTreeSet<u64> = wall_ids.iter().map(|&id| u64::from(id)).collect();
@@ -535,6 +536,10 @@ pub(super) fn attach_wall_layers(
         if wall.id.is_some_and(|id| uncut.contains(&u64::from(id))) {
             wall.fields
                 .push((WALL_UNCUT_FIELD.into(), InstanceField::Bool(true)));
+        }
+        if wall.id.is_some_and(|id| whole.contains(&u64::from(id))) {
+            wall.fields
+                .push((WALL_WHOLE_FIELD.into(), InstanceField::Bool(true)));
         }
         // RE-267: the elements its top join and cut pairs name, an id that
         // does not fit an ElementId leaving the wall out.

@@ -661,6 +661,10 @@ pub const WALL_TOP_JOINED_FIELD: &str = "m_wall_top_joined";
 /// is as tall as Revit's, and Revit's export writes that as its `Height`.
 pub const WALL_UNCUT_FIELD: &str = "m_wall_uncut";
 
+/// Field set on a wall whose native record holds no step that cuts, embeds or
+/// sweeps its solid ([`crate::native_walls::WallRecords::whole`], RE-269).
+pub const WALL_WHOLE_FIELD: &str = "m_wall_whole";
+
 /// Field holding, as a vector of ElementIds, the elements a wall's top join
 /// (`JoinToRoofGStep` with `m_baseOrTop` 1) and its `CutPairGStep`s name
 /// ([`crate::native_walls::WallRecords::top_cutters`], RE-267): the floors,
