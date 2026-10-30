@@ -107,7 +107,9 @@ Measured by Measure run [41092512565](https://github.com/DrunkOnJava/rvt-rs/acti
 | ... after | 1 | 0 |
 | walls cut | 64 | 70 |
 
-The one wall left is §5's. `ifc.sha256` changes on the two office models only: the exports of Core Interior, RE1 Architecture and the R2025 models are byte-identical, and on the offices every scorer's output is unchanged but `wall_heights_vs_ifc` and `frames_vs_ifc`, whose fit of rvt-rs's frame onto Revit's reads the walls' heights (as built, the vertical shift is 0.008 ft where it was -0.016, and the median residual 0.0078 ft where it was 0.0165).
+The one wall left is §5's. Exactly the cut walls' bodies change, their tops only (no base and no plan moves), and each lands on Revit's top. `ifc.sha256` changes on the two office models only: the exports of Core Interior, RE1 Architecture and the R2025 models are byte-identical, and on the offices every scorer's output is unchanged but `wall_heights_vs_ifc` and `frames_vs_ifc`, whose fit of rvt-rs's frame onto Revit's reads the walls' heights (as built, the vertical shift is 0.009 ft where it was -0.016 and the median residual 0.0096 ft where it was 0.0165; at permit 0.010 ft where it was -0.025 and 0.0111 ft where it was 0.0258).
+
+On the shipped export `wall_top_cover_vs_ifc` ([41092527900](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41092527900)) reads rvt-rs's top along the whole wall equal to Revit's on 472 of 607 walls as built (416 before) and 419 of 589 at permit (367), and no wall that was equal differs now. The top of each of the 64 and 70 cut walls is Revit's height along its length; 56 and 52 of them are equal to the station, and the rest differ only where Revit's body has no point (a gap across it, or its end where the two plans differ). Of the 135 and 170 walls still differing, 128 and 167 have more than one run in Revit's top: a step or a gap.
 
 Left as they were: the walls a floor covers in part, which need a stepped top that an extrusion cannot draw (22 office walls in each file are stepped along their centre line, and 7 and 4 more have a strip at full height beside it, §1: 29 as built and 26 at permit), and §5's wall.
 
