@@ -2443,6 +2443,17 @@ fn add_beam_roll(sets: &mut Vec<PropertySet>, ifc_type: &str, decoded: &DecodedE
 /// length, and its `GrossVolume`, the area times that length. Its
 /// `Perimeter` is left out: Revit's export writes it in feet, unscaled, in
 /// a file whose length unit is millimetres (RE-235 §5).
+///
+/// Where the floor's layers are read, also its `NetVolume`, that area times
+/// the layers' total thickness (RE-295, #1016): Revit's export writes the
+/// volume of the floor's solid, which is that on every floor of the BIM4LCA
+/// office as built and at building permit that nothing cuts, flat or sloped,
+/// whatever its layers; [`leave_out_cut_slab_volumes`] takes it off a floor
+/// that a hosted symbol cuts. Where the floor has more than one layer, also
+/// its `Width`, the same total: Revit's export writes a compound floor's type
+/// thickness there, where on a floor of one layer it writes its profile's
+/// extent along the extrusion's Y axis, which no field of the floor's record
+/// gives.
 fn add_slab_gross_area(
     sets: &mut Vec<PropertySet>,
     ifc_type: &str,
@@ -2465,9 +2476,11 @@ fn add_slab_gross_area(
     }];
     const TOLERANCE_FEET: f64 = 1e-3;
     let depth = body.height_feet;
-    let layered = crate::partition_schema_mvp::element_layers_from_fields(&decoded.fields)
-        .filter(|layers| layers.stacked && layers.layers.len() == 1)
-        .is_some_and(|layers| (layers.layers[0].width_feet - depth).abs() <= TOLERANCE_FEET);
+    let layers = crate::partition_schema_mvp::element_layers_from_fields(&decoded.fields)
+        .filter(|layers| layers.stacked && !layers.layers.is_empty());
+    let layered = layers.as_ref().is_some_and(|layers| {
+        layers.layers.len() == 1 && (layers.layers[0].width_feet - depth).abs() <= TOLERANCE_FEET
+    });
     if layered && depth.is_finite() && depth > 0.0 {
         properties.push(Property {
             name: "Depth".into(),
@@ -2478,10 +2491,51 @@ fn add_slab_gross_area(
             value: PropertyValue::VolumeCubicFeet(area * depth),
         });
     }
+    if let Some(layers) = &layers {
+        let thickness: f64 = layers.layers.iter().map(|layer| layer.width_feet).sum();
+        if thickness.is_finite() && thickness > 0.0 {
+            properties.push(Property {
+                name: "NetVolume".into(),
+                value: PropertyValue::VolumeCubicFeet(area * thickness),
+            });
+            if layers.layers.len() > 1 {
+                properties.push(Property {
+                    name: "Width".into(),
+                    value: PropertyValue::PositiveLengthFeet(thickness),
+                });
+            }
+        }
+    }
     sets.push(PropertySet {
         name: "Qto_SlabBaseQuantities".into(),
         properties,
     });
+}
+
+/// Take the `NetVolume` (RE-295) off the slab that something cuts: one that
+/// hosts a symbol's cut opening (#824, RE-225), whose solid Revit's export
+/// measures less the cut, as it does the roof `YP-1` of the BIM4LCA office
+/// (596.788 m3 against 598.189 m3 for its profile times its depth). Run after
+/// those openings are attached.
+pub(crate) fn leave_out_cut_slab_volumes(entities: &mut [entities::IfcEntity]) {
+    let cut: std::collections::BTreeSet<usize> = entities
+        .iter()
+        .filter_map(|entity| match entity {
+            entities::IfcEntity::HostedCutOpening { host, .. } => Some(*host),
+            _ => None,
+        })
+        .collect();
+    if cut.is_empty() {
+        return;
+    }
+    for entity in entities.iter_mut() {
+        if let entities::IfcEntity::ElementPropertySet { element, set } = entity {
+            if set.name == "Qto_SlabBaseQuantities" && cut.contains(element) {
+                set.properties
+                    .retain(|property| property.name != "NetVolume");
+            }
+        }
+    }
 }
 
 /// The area of the profile `body` extrudes, its rectangle or its outline less
