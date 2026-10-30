@@ -85,6 +85,8 @@ beams' `Span` (RE-49),
 beams' `Slope` 0 where drawn along a level location line (RE-49),
 unrotated beams' `Roll` (RE-276),
 walls' `ExtendToStructure` (RE-228),
+type objects' `IsExternal` from their type's Function, a roof's, else not external, and their `FireRating` and `LoadBearing`, with stair types' and flight types' dimensions
+(RE-286, [#1185](https://github.com/DrunkOnJava/rvt-rs/issues/1185); RE1 Architecture's IFC2X3 export by Revit 26.2 writes no `IsExternal` on a type, so the 8 of its types rvt-rs writes it on count as values Revit's export does not write),
 railings' `Height` (RE-231),
 level slabs' `PitchAngle` (RE-238),
 pipes' `InvertElevation` (RE-157),
@@ -139,7 +141,8 @@ since Revit's export gives none on 18 meshed columns and 3 panels that nothing t
 Core Interior's and RE1 Architecture's exports were made with Revit's "Export base quantities" off, so the census counts the quantities rvt-rs writes on them apart (1,390 and 64,
 and RE1 Mechanical's and Plumbing's pipe areas,
 12 and 126), and `rvt-ifc --no-base-quantities` leaves them out, base quantities being on by default as in each of Revit's built-in IFC4 setups (RE-242);
-the census scores type objects' own sets too ([#1018](https://github.com/DrunkOnJava/rvt-rs/issues/1018)): of the values Revit's export writes on the type objects rvt-rs writes, 184 on the office as built, mostly `IsExternal`, none is written yet (four more,
+the census scores type objects' own sets too ([#1018](https://github.com/DrunkOnJava/rvt-rs/issues/1018)): of the 182 values Revit's export writes on the type objects rvt-rs writes on the office as built, mostly `IsExternal`, 161 are written equal (RE-286, [#1185](https://github.com/DrunkOnJava/rvt-rs/issues/1185)), and the other 21 are the window types' `IsExternal` (6), the door types' `FireRating` (6), `IsExternal` (2) and `ThermalTransmittance` (1) and the family types' `Manufacturer` (6, RE-289);
+on RE1 Architecture, whose IFC2X3 export by Revit 26.2 writes no `IsExternal` on a type object (revit-ifc's source returns null for an element type from IFC_v24.2.20; whether it is the exporter's version or its view is not measured), the 8 types rvt-rs writes it on, as both IFC4 exports do, count as values Revit's export does not write, with no set-aside (the maintainer, 2026-10-30) (four more,
 the mullion types' `IsExternal`,
 are counted apart,
 RE-269).
