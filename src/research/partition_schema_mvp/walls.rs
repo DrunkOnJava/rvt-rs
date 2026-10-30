@@ -37,6 +37,24 @@ pub fn wall_axis_from_fields(fields: &[(String, InstanceField)]) -> Option<WallA
     })
 }
 
+/// The ElementIds [`WALL_BOUNDED_FIELD`] records: the elements a wall's roof
+/// and floor joins name (RE-269). `None` where the field is absent, an empty
+/// list where the wall is joined to none.
+pub fn wall_bounded_from_fields(fields: &[(String, InstanceField)]) -> Option<Vec<u32>> {
+    fields.iter().find_map(|(name, value)| match value {
+        InstanceField::Vector(items) if name == WALL_BOUNDED_FIELD => Some(
+            items
+                .iter()
+                .filter_map(|item| match item {
+                    InstanceField::ElementId { id, .. } => Some(*id),
+                    _ => None,
+                })
+                .collect(),
+        ),
+        _ => None,
+    })
+}
+
 /// A curved wall's location arc and its type's thickness (RE-75).
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct WallArc {
@@ -501,6 +519,7 @@ pub(super) fn attach_wall_layers(
         top_joined,
         uncut,
         whole,
+        bounded,
     } = if centreline_bodies {
         let ids: BTreeSet<u64> = wall_ids.iter().map(|&id| u64::from(id)).collect();
         crate::native_walls::native_walls_and_top_joins(rf, &ids).unwrap_or_default()
@@ -519,6 +538,21 @@ pub(super) fn attach_wall_layers(
         if wall.id.is_some_and(|id| whole.contains(&u64::from(id))) {
             wall.fields
                 .push((WALL_WHOLE_FIELD.into(), InstanceField::Bool(true)));
+        }
+        if let Some(named) = wall.id.and_then(|id| bounded.get(&u64::from(id))) {
+            let items: Option<Vec<InstanceField>> = named
+                .iter()
+                .map(|&id| {
+                    Some(InstanceField::ElementId {
+                        tag: 0,
+                        id: u32::try_from(id).ok()?,
+                    })
+                })
+                .collect();
+            if let Some(items) = items {
+                wall.fields
+                    .push((WALL_BOUNDED_FIELD.into(), InstanceField::Vector(items)));
+            }
         }
         let picked = wall.fields.iter().find_map(|(name, value)| match value {
             InstanceField::ElementId { id, .. } if name == TYPE_ID_FIELD => Some(u64::from(*id)),
