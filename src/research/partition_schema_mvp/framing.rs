@@ -43,6 +43,30 @@ pub(super) fn is_column_class(class: &str) -> bool {
     matches!(class, "Column" | "StructuralColumn")
 }
 
+/// The ElementIds [`COLUMN_CUT_PARTNERS_FIELD`] and
+/// [`COLUMN_CLEAN_PARTNERS_FIELD`] record: what a column's cut pairs and
+/// clean pairs name (RE-291). `None` where either is absent.
+pub fn column_partners_from_fields(
+    fields: &[(String, InstanceField)],
+) -> Option<(Vec<u32>, Vec<u32>)> {
+    let ids = |wanted: &str| {
+        fields.iter().find_map(|(name, value)| match value {
+            InstanceField::Vector(items) if name == wanted => items
+                .iter()
+                .map(|item| match item {
+                    InstanceField::ElementId { id, .. } => Some(*id),
+                    _ => None,
+                })
+                .collect::<Option<Vec<u32>>>(),
+            _ => None,
+        })
+    };
+    Some((
+        ids(COLUMN_CUT_PARTNERS_FIELD)?,
+        ids(COLUMN_CLEAN_PARTNERS_FIELD)?,
+    ))
+}
+
 /// Give each column whose type is a hollow structural section
 /// ([`crate::partition_type_parameters::type_hollow_sections`]) and holds no
 /// I section that section (W6). The exporter draws it only where its record
