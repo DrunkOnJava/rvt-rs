@@ -41,6 +41,49 @@ fn mullion_box(element: &DecodedElement) -> Option<MullionBox> {
     Some(MullionBox { along, ..model })
 }
 
+/// Give each curtain mullion and panel of `products` that has no
+/// [`IS_EXTERNAL_FIELD`] yet its curtain wall's from `walls`, as revit-ifc's
+/// `IsElementExternal` gives a family instance with no parameter and no type
+/// Function its host's value (CLEANROOM.md source 5; RE-193, RE-269): the
+/// curtain wall's own parameter or type Function, not the value of the property
+/// set parameter that wall's `Pset_CurtainWallCommon` is written from. Nothing
+/// for a part with no curtain wall or a curtain wall with no value.
+// Tracker: B64.
+pub(super) fn attach_curtain_member_is_external(
+    walls: &[DecodedElement],
+    products: &mut [DecodedElement],
+) {
+    let external: BTreeMap<u32, bool> = walls
+        .iter()
+        .filter(|wall| wall.class == CURTAIN_WALL_CLASS)
+        .filter_map(|wall| {
+            let value = wall.fields.iter().find_map(|(name, value)| match value {
+                InstanceField::Bool(flag) if name == IS_EXTERNAL_FIELD => Some(*flag),
+                _ => None,
+            })?;
+            Some((wall.id?, value))
+        })
+        .collect();
+    for part in products.iter_mut() {
+        if !CURTAIN_WALL_PART_CLASSES.contains(&part.class.as_str())
+            || part
+                .fields
+                .iter()
+                .any(|(name, _)| name == IS_EXTERNAL_FIELD)
+        {
+            continue;
+        }
+        let whole = part.fields.iter().find_map(|(name, value)| match value {
+            InstanceField::ElementId { id, .. } if name == AGGREGATE_WHOLE_FIELD => Some(*id),
+            _ => None,
+        });
+        if let Some(&value) = whole.and_then(|id| external.get(&id)) {
+            part.fields
+                .push((IS_EXTERNAL_FIELD.into(), InstanceField::Bool(value)));
+        }
+    }
+}
+
 /// Mark each curtain mullion that stands on a straight curtain wall with an
 /// unedited profile and whose type has its own rectangular section
 /// ([`crate::native_mullion_hosts::mullions_on_plain_hosts`], RE-243) with

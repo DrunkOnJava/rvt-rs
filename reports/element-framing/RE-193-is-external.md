@@ -52,7 +52,7 @@ Apart from curtain mullions and panels, no step differs from Revit's on any elem
 
 ## 6. What is not shown
 
-- **Curtain mullions and panels.** On the office Revit's export writes 9,505 of 10,003 members as not external, among them the mullions of curtain walls it writes as external. Taking the curtain wall's value is Revit's on 1,423. Neither the curtain wall nor the member's type decides: mullions of type 1907093 on curtain walls whose `Pset_CurtainWallCommon.IsExternal` and native Function are both external are not external 8,460 times and external 397 times (run 39190678462). Plates split the same way. Neither class gets a value.
+- **Curtain mullions and panels.** On the office Revit's export writes 9,505 of 10,003 members as not external, among them the mullions of curtain walls it writes as external. Taking the curtain wall's value is Revit's on 1,423. (Since 2026-10-30 rvt-rs writes that value on the members, RE-288, RE-269 §5.) Neither the curtain wall nor the member's type decides: mullions of type 1907093 on curtain walls whose `Pset_CurtainWallCommon.IsExternal` and native Function are both external are not external 8,460 times and external 397 times (run 39190678462). Plates split the same way. Neither class gets a value.
 - **Windows without a parameter or Function.** On the R2025 models their type's Function is not read, so their 18 windows get no value.
 - **Stair landings.** Revit writes the office's 22 as `IfcSlab`, with the value their stair's Function gives. They get the last step's value here, which equals it only where the stair is interior.
 - **A parameter on a type** named for a set never occurs in these files and is not read.

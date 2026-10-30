@@ -42,8 +42,14 @@ exporter that made the BIM4LCA office's exports does (a cache of element types
 that gives every curtain wall's members of a type after the first wall's the
 value false, RE-269), the `IsExternal` of the curtain members (IfcMember and
 IfcPlate under an IfcCurtainWall) of those types and of the type objects is
-counted apart, not as missing: rvt-rs does not write it (the maintainer,
-2026-10-30). A later exporter's (RE1 Architecture's) is scored.
+counted apart, not as missing: those are the exporter's cache, not the model's
+value, and rvt-rs does not replay it. rvt-rs writes the curtain members' own
+IsExternal by revit-ifc's host rule, the value of exporters from IFC_v24.2.20
+on (the maintainer, 2026-10-30, RE-288), so a member of the office the cache
+bucket does not hold is scored against it, and so are RE1 Architecture's
+(exporter 26.2), which the rule gives equal. The type objects' own values stay
+counted apart: rvt-rs writes none on a member type, a later exporter's
+IsElementExternal returning null for an element type.
 
 What a project's own user-defined property set file places is out of W7's
 scope (the maintainer, 2026-10-26, RE-239) and counted apart: in an IFC4
@@ -172,8 +178,9 @@ REVIT_DEFECTS = {
 # Revit 24.0's IsElementExternal also evaluates a type, and caches it as not
 # external, after the first curtain wall that uses it has had its members'
 # sets created, so every later wall's members of that type read false. It is
-# left out of rvt-rs's export (the maintainer, 2026-10-30) and counted apart
-# here, in the same bucket as REVIT_DEFECTS. A curtain member is an IfcMember
+# not replayed by rvt-rs (the maintainer, 2026-10-30), which writes the host
+# rule's value on the members instead (RE-288), and counted apart here, in the
+# same bucket as REVIT_DEFECTS. A curtain member is an IfcMember
 # or IfcPlate aggregated under an IfcCurtainWall, and the export is one of that
 # exporter when the member's type object holds the IsExternal itself, as an
 # exporter that does not cache types (24.2.20 on, RE1's 26.2) leaves it out.
