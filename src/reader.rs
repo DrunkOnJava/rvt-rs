@@ -663,7 +663,9 @@ impl RevitFile {
 
     /// The project's phase order and the elements Revit's export leaves
     /// out by phase, memoised (#328, RE-184). Empty where the native record
-    /// path does not read the release or the file lists no phases.
+    /// path does not read the release or the file lists no phases, and
+    /// empty with [`crate::native_phases::PhaseFilter::read_error`] set where
+    /// it reads the release and the read failed.
     #[cfg(feature = "unstable-research")]
     pub fn phase_filter(&mut self) -> Arc<crate::native_phases::PhaseFilter> {
         self.memoised_phase_filter()
@@ -675,8 +677,14 @@ impl RevitFile {
         if let Some(cached) = &self.phase_filter {
             return Arc::clone(cached);
         }
-        let computed =
-            Arc::new(crate::native_phases::compute_phase_filter(self).unwrap_or_default());
+        let computed = Arc::new(
+            crate::native_phases::compute_phase_filter(self).unwrap_or_else(|error| {
+                crate::native_phases::PhaseFilter {
+                    read_error: Some(format!("{error:#}")),
+                    ..Default::default()
+                }
+            }),
+        );
         self.phase_filter = Some(Arc::clone(&computed));
         computed
     }

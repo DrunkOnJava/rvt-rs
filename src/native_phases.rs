@@ -37,6 +37,10 @@ pub struct PhaseFilter {
     /// with the reason. It holds rooms too; [`Self::excludes`] never excludes
     /// one.
     pub excluded: BTreeMap<u64, PhaseExclusion>,
+    /// Why the phases could not be read, where a read of a release the
+    /// native record path reads failed. The filter is empty then, so the
+    /// export writes every element, and the export diagnostics say so.
+    pub read_error: Option<String>,
 }
 
 /// Why an element does not exist in the export phase.
@@ -91,9 +95,13 @@ pub fn exclusion(
 
 /// The project's phase order and every element not in its last phase, in
 /// one pass over the native records (graphs only for `AllProjectPhases`).
-/// Empty where the native record path does not read the release or the
-/// file lists no phases.
+/// Empty where the native record path does not read the release (Revit 2023
+/// to 2027 are read) or the file lists no phases; an error where it reads the
+/// release and the read fails.
 pub fn compute_phase_filter(rf: &mut RevitFile) -> anyhow::Result<PhaseFilter> {
+    if !matches!(rf.layout_release(), Ok(2023..=2027)) {
+        return Ok(PhaseFilter::default());
+    }
     let options = native_document::Options {
         graph_classes: Some(BTreeSet::from(["AllProjectPhases".to_string()])),
         ..native_document::Options::default()
@@ -139,7 +147,11 @@ pub fn compute_phase_filter(rf: &mut RevitFile) -> anyhow::Result<PhaseFilter> {
             }
         }
     }
-    Ok(PhaseFilter { order, excluded })
+    Ok(PhaseFilter {
+        order,
+        excluded,
+        read_error: None,
+    })
 }
 
 /// Placed instances of the recovered categories

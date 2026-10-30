@@ -60,6 +60,7 @@ With `P` the last phase, this leaves out #328's 6 slabs, and only them, on Snowd
 It applies to every element but a room, an area and an MEP space (§5). The exporter applies it in this change:
 
 - `native_phases::compute_phase_filter` reads the order and every element's two phase ids in one native pass, memoised as `RevitFile::phase_filter`.
+- `native_phases::compute_phase_filter` returns an empty filter without reading anything where the native record path does not read the release (it reads Revit 2023 to 2027). Where it reads the release and the read fails, the filter is empty with `read_error` set, the export writes every element, and the export diagnostics carry a warning ("The project's phases could not be read (...)"), as they do for a stream a resource limit kept from being read whole.
 - A new `native_document::Options::graph_classes` decodes graphs only for `AllProjectPhases`. Every other record is read through `native_element::decode_base` alone.
 - The filter sits beside `DesignOptions::excludes`, in `without_non_primary_options`, the empty curtain panel scan and the volumeless count. `PhaseFilter::excludes` takes the record, like `DesignOptions::excludes`, and never excludes a room.
 - Diagnostics report what it leaves out as `element_record_not_in_export_phase`.
