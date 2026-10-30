@@ -15,10 +15,10 @@ revit-ifc's `NetVolumeCalculator` (CLEANROOM.md source 5, read at v24.2.0; the o
 | `VP-1` and `VP-2` (four layers, 0.45 and 0.70 m) | 6 | 6 |
 | `AP-1` base slabs (three layers, 0.28 m), level | 4 | 4 |
 | `AP-1` base slabs, sloped | 4 | 4 |
-| `AP-3` gutter floors (one layer, 0.05 m), sloped | 6 | 6 |
+| `AP-3` gutter floors (one layer, 0.05 m), 4 of them sloped | 6 | 6 |
 | `TK-1`, `VP-3` and `AP-2` landings (one layer) | 11 | 11 |
 
-The sloped floors are the 8 whose record boxes rvt-rs draws level (RE-238; Revit gives them 1.9 to 24 degrees). For them Revit's value is still the area it writes as `GrossArea` times the thickness as the type states it, and its `Depth` is that thickness times the cosine of the slope (0.2603 m for the 0.28 m base slab whose extrusion direction has a vertical component of 0.93). At building permit the same 31 floors hold.
+The sloped floors are the 8 (4 `AP-1`, 4 `AP-3`) whose record boxes rvt-rs draws level (RE-238; Revit gives them 1.9 to 24 degrees). For them Revit's value is still the area it writes as `GrossArea` times the thickness as the type states it, and its `Depth` is that thickness times the cosine of the slope (0.2603 m for the 0.28 m base slab whose extrusion direction has a vertical component of 0.93). At building permit the same 31 floors hold.
 
 `Width` is that thickness on all 14 floors of more than one layer (`VP-1`, `VP-2` and `AP-1`): 0.45, 0.70 and 0.28 m. On a floor of one layer it is the profile's extent along the extrusion's Y axis (a landing of 6.025 by 2.76 m has `Width` 6.025 and `Length` 2.7605, a floor of 1.5 by 6.47 m has `Width` 1.5), and some floors with the same kind of profile get none: the rectangular `AP-2` landing 1440353 has neither as built and both at permit.
 
@@ -41,7 +41,7 @@ This change against `main` (Measure 41140153113, unfiltered, `-f nordic=true -f 
 | office as built | 0 → 31 of 63 | 0 → 14 of 34 | 0 | 0 |
 | office at permit | 0 → 31 of 63 | 0 → 14 of 35 | 0 | 0 |
 
-RESULTS_PLACEHOLDER
+The office as built goes from 28,020 to 28,065 of the 39,388 quantities equal and at permit from 27,966 to 28,011 of 39,679, with the mullion's one difference and none Revit's export leaves out. Core Interior's 79 floors carry a `NetVolume` and one a `Width`, and RE1 Architecture's 2 floors carry both; their exports have no base quantities, so the census counts them apart (2,188 → 2,268 and 82 → 86). Core Interior's witness observations gain 79 `IFCQUANTITYVOLUME` and 1 `IFCQUANTITYLENGTH`, and both verdicts replay PASS unchanged. No R2025 export moves, and every other scorer's output (properties, geometry, validation) is as on `main`. The run is of the commit before the cut marker was made to read ceilings and roofs too; Measure [41141311742](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41141311742) at the commit after it gives the same census.
 
 ## 5. What stays open
 
@@ -53,5 +53,5 @@ RESULTS_PLACEHOLDER
 ## 6. Reproduce
 
 ```bash
-gh workflow run measure.yml --ref main -f ref=SHA_PLACEHOLDER -f base=main -f nordic=true -f r2025=true
+gh workflow run measure.yml --ref main -f ref=eb191f78ae5bd1ca3511fdc865a470acef7b17d7 -f base=main -f nordic=true -f r2025=true
 ```
