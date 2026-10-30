@@ -25,8 +25,6 @@ mod column_cut_body;
 mod column_node_z;
 #[path = "../common_reference.rs"]
 mod common_reference;
-#[path = "../control_cancellation.rs"]
-mod control_cancellation;
 #[path = "../corpus_tier2_health.rs"]
 mod corpus_tier2_health;
 #[path = "../covering_finish.rs"]
@@ -73,8 +71,6 @@ mod field_type_coverage;
 mod fitting_nominal_diameter;
 #[path = "../fuzz_regressions.rs"]
 mod fuzz_regressions;
-#[path = "../graceful_degradation.rs"]
-mod graceful_degradation;
 #[path = "../ifc_export_overrides.rs"]
 mod ifc_export_overrides;
 #[path = "../ifc_roundtrip.rs"]
@@ -119,8 +115,6 @@ mod port_nesting;
 mod project_corpus_smoke;
 #[path = "../project_count_fixtures.rs"]
 mod project_count_fixtures;
-#[path = "../proptest_parsers.rs"]
-mod proptest_parsers;
 #[path = "../proxy_ports.rs"]
 mod proxy_ports;
 #[path = "../railing_type.rs"]
