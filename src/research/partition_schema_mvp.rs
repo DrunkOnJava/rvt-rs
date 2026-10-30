@@ -701,6 +701,38 @@ pub fn recover_partition_schema_mvp(
                     .push((COLUMN_UNJOINED_FIELD.into(), InstanceField::Bool(true)));
             }
         }
+        // --- The elements each column's pair steps name (RE-291) ---
+        for element in out.columns.iter_mut().chain(out.products.iter_mut()) {
+            if !is_column_class(&element.class) {
+                continue;
+            }
+            let Some(id) = element.id.map(u64::from) else {
+                continue;
+            };
+            let named = |partners: &BTreeMap<u64, BTreeSet<u64>>| {
+                partners
+                    .get(&id)?
+                    .iter()
+                    .map(|&other| {
+                        Some(InstanceField::ElementId {
+                            tag: 0,
+                            id: u32::try_from(other).ok()?,
+                        })
+                    })
+                    .collect::<Option<Vec<InstanceField>>>()
+            };
+            if let (Some(cut), Some(clean)) =
+                (named(&joins.cut_partners), named(&joins.clean_partners))
+            {
+                element
+                    .fields
+                    .push((COLUMN_CUT_PARTNERS_FIELD.into(), InstanceField::Vector(cut)));
+                element.fields.push((
+                    COLUMN_CLEAN_PARTNERS_FIELD.into(),
+                    InstanceField::Vector(clean),
+                ));
+            }
+        }
     }
 
     // --- Curtain mullions' and panels' materials, from their types (RE-166, B66) ---
