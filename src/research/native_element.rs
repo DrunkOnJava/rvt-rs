@@ -137,8 +137,10 @@ pub fn decode_base(body: &[u8], registry: &Registry) -> Result<ElementBase> {
             .ok_or_else(|| anyhow::anyhow!("Identifier schema missing"))?;
         ensure!(
             id.fields.len() == 1
-                && id.fields[0].name == "m_id64"
-                && id.fields[0].raw_descriptor == 11,
+                && matches!(
+                    (id.fields[0].name.as_str(), id.fields[0].raw_descriptor),
+                    ("m_id64", 11) | ("m_id", 4)
+                ),
             "unsupported Identifier value"
         );
     }
@@ -191,8 +193,7 @@ pub fn decode_base(body: &[u8], registry: &Registry) -> Result<ElementBase> {
         .start;
     let mut values = [0i64; 8];
     for (i, name) in ids.iter().enumerate() {
-        values[i] = fields[*name]["m_id"]["m_id64"]
-            .as_i64()
+        values[i] = crate::native_json::identifier_i64(&fields[*name])
             .ok_or_else(|| anyhow::anyhow!("Element identity value absent: {name}"))?;
     }
     Ok(ElementBase {
