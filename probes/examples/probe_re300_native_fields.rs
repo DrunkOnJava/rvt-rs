@@ -1,4 +1,4 @@
-//! RE-286 (probe): the scalar fields of walls', floors' and their types'
+//! RE-300 (probe): the scalar fields of walls', floors' and their types'
 //! native records, for scoring each against Revit's `LoadBearing`,
 //! `IsExternal` and `ThermalTransmittance` (#1158).
 //!
@@ -18,7 +18,7 @@
 //! scores them against the export and prints counts.
 //!
 //! Usage:
-//!   cargo run --profile ci -p rvt-probes --example probe_re286_native_fields -- FILE.rvt
+//!   cargo run --profile ci -p rvt-probes --example probe_re300_native_fields -- FILE.rvt
 
 use rvt::RevitFile;
 use rvt::research::native_document::{NATIVE_RELEASES, Options, extract_graphs};
@@ -38,7 +38,7 @@ const MAX_OBJECTS: usize = 12;
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let Some(path) = args.iter().find(|a| !a.starts_with("--")) else {
-        eprintln!("usage: probe_re286_native_fields FILE.rvt");
+        eprintln!("usage: probe_re300_native_fields FILE.rvt");
         std::process::exit(2);
     };
     if let Err(error) = run(path) {

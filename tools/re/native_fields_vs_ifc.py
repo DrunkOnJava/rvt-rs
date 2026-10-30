@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Score the scalar fields of walls', floors' and their types' native records
 against Revit's `LoadBearing`, `IsExternal` and `ThermalTransmittance`
-(RE-286, #1158).
+(RE-300, #1158).
 
-Reads `probe_re286_native_fields`' `field <id> <record class> <object
+Reads `probe_re300_native_fields`' `field <id> <record class> <object
 class>#<n> <field> <value>` and `link <id> <type id>` lines and Revit's own
 IFC export, pairs the elements by `Tag` (the ElementId), and prints counts
 only, in the `native readers:` lines `tools/ci/scrub-holdout-results.sh` keeps
@@ -34,7 +34,7 @@ import ifcopenshell.util.element
 
 FLAGS = ("LoadBearing", "IsExternal")
 # Fields printed with their values on every class, whether or not the flag
-# takes both states there: the ones a candidate scan found (RE-286).
+# takes both states there: the ones a candidate scan found (RE-300).
 WATCHED = ("m_isStructuralSignificant", "m_wallStructuralUsage", "m_analyzesAs", "m_function")
 # Pairs of fields whose joint values are printed against each flag.
 JOINTS = (("m_isStructuralSignificant", "m_function"),)

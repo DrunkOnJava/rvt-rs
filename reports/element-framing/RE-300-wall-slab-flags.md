@@ -1,10 +1,10 @@
-# RE-286: what Revit's LoadBearing, a slab's IsExternal and ThermalTransmittance are made of, and why none is admitted to Revit 2015 to 2022
+# RE-300: what Revit's LoadBearing, a slab's IsExternal and ThermalTransmittance are made of, and why none is admitted to Revit 2015 to 2022
 
 **Date:** 2026-10-30
 **Issues:** #1158; follows RE-283 (the parameters named for a property), RE-285 (beams' and columns' LoadBearing) and RE-185 (a wall type's Function)
 **Artefacts:** BIMcollab's Revit 2015 structural example (`02_BIMcollab_Example_STR.rvt`, sha256 `8cd1f122…e193`, with Revit 2015's own export; no licence stated, so only counts left the runner), and the held-out models (`research/holdout-models.tsv`: the flowbim.ee house, saved in Revit 2026 and exported by Revit 26.4; modelo_bim, saved in 2023 and exported by Revit 26.2; teste_export_2025), the BIM4LCA office, RE1 and puzzbobb's R2025 models.
 **Runs:** Measure [41134253852](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41134253852) (every field of the wall, floor and type records against Revit's flags), [41135131460](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41135131460) (the same, with the fields a scan found printed on every class), [41136244246](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41136244246) (a wall's structural flag against its type Function, jointly), [41136498155](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41136498155) (the floor's parameters) and [41137406596](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41137406596) (the parameters named for a flag).
-**Probes and scorers:** `probes/examples/probe_re285_flag_candidates.rs` and `tools/re/native_flags_vs_ifc.py` (the saved parameters), `probes/examples/probe_re286_native_fields.rs` and `tools/re/native_fields_vs_ifc.py` (the scalar fields of the native records).
+**Probes and scorers:** `probes/examples/probe_re285_flag_candidates.rs` and `tools/re/native_flags_vs_ifc.py` (the saved parameters), `probes/examples/probe_re300_native_fields.rs` and `tools/re/native_fields_vs_ifc.py` (the scalar fields of the native records).
 **Status:** mixed, and nothing here is admitted to 2015 to 2022. The rules are found for Revit's newer exporters and each is exact on the held-out models that exercise it; the one export of a 2015 to 2022 file, BIMcollab's, was made by Revit 2015's exporter, which writes `LoadBearing` and `IsExternal` for these classes from other data, so it cannot confirm them. `ThermalTransmittance` is not a field of any record. `Span` and `Slope` of beams need the beam's axis, which only the Revit 2024 partition layout reads.
 
 ## 1. What BIMcollab's export writes, and from what
@@ -47,6 +47,6 @@ BIMcollab does not confirm any of the first three. In its export the Structural 
 
 ```text
 gh workflow run measure.yml --ref <branch> -f ref=<commit> -f base=none -f nordic=true -f r2025=true -f bimcollab=true -f holdout=true -f scorers=none \
-  -f probe="probe_re285_flag_candidates probe_re286_native_fields" -f probe_scorer="native_flags_vs_ifc native_fields_vs_ifc"
+  -f probe="probe_re285_flag_candidates probe_re300_native_fields" -f probe_scorer="native_flags_vs_ifc native_fields_vs_ifc"
 gh run download <run id>   # measure-head/<model>/probe_score*.txt, counts.txt (BIMcollab and the held-out models: counts only)
 ```
