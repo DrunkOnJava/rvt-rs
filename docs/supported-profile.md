@@ -65,8 +65,8 @@ measured by lowering the limits below the reference files' streams (Core
 Interior's 17 MB partition against an 8 MiB limit). No model over the default
 limits has been read with `--large-model` yet: the field report behind #1075
 (two client models of about 438 MB and 1.13 GB, whose largest partitions are
-403 MiB and 1,057 MiB) was measured on a patched 0.10.0 and is being repeated
-on 0.11.0.
+403 MiB and 1,057 MiB) was measured on a patched 0.10.0; the reporter was
+asked on 2026-10-30 to repeat it on 0.11.0 and has not reported back.
 
 A project saved by Revit 2024 to 2027 can keep the schema of the release it
 passed through, and with it that release's element-record layout. Such a
@@ -76,13 +76,14 @@ measured release still reads no element records. The field report behind
 #421 found this on 25 of 49 client project files saved by Revit 2024 to 2027,
 which 0.10.0 read as empty. None of the reference or sample files keeps an
 older schema, so the reading is not yet measured on an affected file; the
-reporter is checking 0.11.0 on theirs.
+reporter was asked on 2026-10-30 to check 0.11.0 on theirs and has not
+reported back.
 
 ## Geometry on Revit 2024 and 2025 projects
 
 | Element | What you get | How close |
 |---|---|---|
-| Walls | a body from the wall's centreline and its type's thickness, drawn as its layers in the viewer and glTF, ending as its joins say, along its arc when curved, leaning on its exterior face when tapered | faces exactly Revit's on 1,030 of Snowdon's 1,078 walls; both ends on 724; all 360 of Core Interior's; both ends on 482 of the BIM4LCA office's 607 as built and 422 of 589 at building permit, a corner's ends not yet read from the join order (RE-222, RE-223) |
+| Walls | a body from the wall's centreline and its type's thickness, drawn as its layers in the viewer and glTF, ending as its joins say, along its arc when curved, leaning on its exterior face when tapered, its top cut at the underside of the floor, roof or footing that covers it whole | faces exactly Revit's on 1,030 of Snowdon's 1,078 walls; both ends on 724; all 360 of Core Interior's; both ends on 482 of the BIM4LCA office's 607 as built and 422 of 589 at building permit, a corner's ends not yet read from the join order (RE-222, RE-223); wall tops Revit's on 64 of the 65 the office cuts as built and 70 of 70 at permit, a wall a floor covers in part keeping its full height (RE-267) |
 | Floors, building pads | the sketched plan outline, holes included, at the measured thickness | Core Interior 80 of 80 outlines; the BIM4LCA office's slabs with Revit's outline within 0.01 ft, 63 of 63 on each file (Measure run 40927543524) |
 | Roofs | the sketched outline; a shed, gable or hip roof, or one sloped by an arrow, as its planes (RE-56, RE-199); a Revit 2025 roof by extrusion as its sketch's section (RE-211) | 11 of 13 outlined Snowdon roofs with Revit's area; on puzzbobb's Revit 2025 models, 19 of 19 roofs with Revit's body (RE-199, RE-211); hips over T and U footprints are level blocks (#884) |
 | Columns | the column prism minus what walls cut from it | Core Interior 256 of 256, exact |
@@ -111,7 +112,7 @@ Function, else its class's rule; none on curtain mullions and panels, RE-193),
 each curtain mullion's `Span`, its length along its own axis (RE-226), which is also its `Qto_MemberBaseQuantities.Length` (#1016), and its `NetVolume`, its section times that length, where Revit's export draws it as an extrusion of its section: a mullion whose type has its own rectangular or square section, told by the class of its type's section object in whatever language the model is in (RE-246), on a straight curtain wall whose profile is not edited (RE-243),
 each door's and window's `Width`, `Height` and `Area` base quantities, its type's size where the symbol that draws it has the same (#1016),
 each curtain wall's type, named as its type's native record names it (RE-230),
-each wall's `Qto_WallBaseQuantities.Width`, its type's thickness, also on a wall not drawn from its centreline (#1016), its `Length` where its curve cut back where its body meets the walls joined at its ends is as long as the curve, so either length Revit's export may write is that one (RE-252), and its `Height`, its body's depth, where its native record names no roof or floor joined to it, no element cutting it and no instance's cutout (RE-266), each beam's `Qto_BeamBaseQuantities.Length` where it is drawn along its location line (RE-49), its line's length, each curtain wall's `Qto_CurtainWallQuantities.Length`, its curve's (#1016), and the `Qto_OpeningElementBaseQuantities.Depth` of each opening a door or window whose symbol cuts an outline makes in it, that thickness (RE-244); the openings' `Width` and `Height`, which Revit's export swaps, are left out (RE-235 §5),
+each wall's `Qto_WallBaseQuantities.Width`, its type's thickness, also on a wall not drawn from its centreline (#1016), its `Length` where its curve cut back where its body meets the walls joined at its ends is as long as the curve, so either length Revit's export may write is that one (RE-252), and its `Height`, its body's depth, where its native record names no roof or floor joined to it, no element cutting it and no instance's cutout (RE-266), and its `GrossSideArea`, `NetSideArea`, `GrossVolume` and `NetVolume` where no step of the record cuts, embeds or sweeps it and its body is the record's box cut back at its joins, a rectangle (RE-270), each beam's `Qto_BeamBaseQuantities.Length` where it is drawn along its location line (RE-49), its line's length, each curtain wall's `Qto_CurtainWallQuantities.Length`, its curve's (#1016), and the `Qto_OpeningElementBaseQuantities.Depth` of each opening a door or window whose symbol cuts an outline makes in it, that thickness (RE-244); the openings' `Width` and `Height`, which Revit's export swaps, are left out (RE-235 §5),
 each pipe's `GrossCrossSectionArea` and `OuterSurfaceArea` from its cylinder, each stair flight's `Length`, the span of its riser lines, and `NetVolume`, its side views' area times its width, and the `Length` of each column whose record holds no `CleanPairGStep` join and, where such a column is drawn as its type's hollow section, its `CrossSectionArea`, `OuterSurfaceArea` and `GrossVolume` (RE-247 §8), which Revit's export draws as an extrusion (RE-247); a joined column's `Length` and a curtain panel's `Width` are left out,
 each floor's `Qto_SlabBaseQuantities.GrossArea` where it is drawn as one extrusion, its profile's area less its holes (RE-249), and, where its type has one layer as deep as that extrusion, its `Depth` and `GrossVolume` (#1016), and each ceiling's `Qto_CoveringBaseQuantities.Width` where its body's depth is its layers' thickness (RE-250), each space's `Qto_SpaceBaseQuantities.Height`, its room's, where the room's record holds its solid's faces (RE-255), each stair railing's `Qto_RailingBaseQuantities.Length` where its path is one line along its stair's runs (RE-254),
 each of these base quantities left out by `rvt-ifc --no-base-quantities`, as Revit's exporter leaves them out with "Export base quantities" off; Revit's built-in IFC4 setups turn it on, so rvt-ifc does by default (RE-242),
