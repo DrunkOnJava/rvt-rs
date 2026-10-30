@@ -3,7 +3,7 @@
 `rvt-ifc --diagnostics path.json` writes a JSON sidecar next to the IFC
 output. The same payload is available to Python via
 `RevitFile.export_diagnostics_json()` / `rvt_to_ifc_diagnostics(path)` and to
-WASM via `openRvtBytesWithDiagnostics(bytes)`.
+WASM via `openRvtBytesWithDiagnosticsMode(bytes, mode)`.
 
 The sidecar is meant for non-technical support, bug reports, and automated
 export-readiness checks. It does not contain raw model bytes.

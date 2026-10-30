@@ -40,10 +40,8 @@
 // Tracker: L5B-08.
 
 use super::level::normalise_field_name;
-use crate::formats;
 use crate::geometry::Point3;
-use crate::walker::{DecodedElement, ElementDecoder, HandleIndex, InstanceField};
-use crate::{Error, Result};
+use crate::walker::{DecodedElement, InstanceField};
 
 /// How a wall's load-bearing role is classified.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -155,80 +153,6 @@ impl WallFunction {
             Self::Soffit => "PARAPET",
             Self::CoreShaft => "SHEAR",
         }
-    }
-}
-
-/// Registered decoder for the `Wall` class.
-#[derive(Debug)]
-pub struct WallDecoder;
-
-impl ElementDecoder for WallDecoder {
-    fn class_name(&self) -> &'static str {
-        "Wall"
-    }
-
-    fn decode(
-        &self,
-        bytes: &[u8],
-        schema: &formats::ClassEntry,
-        index: &HandleIndex,
-    ) -> Result<DecodedElement> {
-        self.decode_with_limits(bytes, schema, index, crate::walker::WalkerLimits::default())
-    }
-
-    fn decode_with_limits(
-        &self,
-        bytes: &[u8],
-        schema: &formats::ClassEntry,
-        _index: &HandleIndex,
-        limits: crate::walker::WalkerLimits,
-    ) -> Result<DecodedElement> {
-        if schema.name != "Wall" {
-            return Err(Error::SchemaMismatch {
-                decoder: "Wall",
-                schema: schema.name.clone(),
-            });
-        }
-        Ok(crate::walker::decode_instance_with_limits(
-            bytes, 0, schema, limits,
-        ))
-    }
-}
-
-/// Registered decoder for the `WallType` class.
-#[derive(Debug)]
-pub struct WallTypeDecoder;
-
-impl ElementDecoder for WallTypeDecoder {
-    fn class_name(&self) -> &'static str {
-        "WallType"
-    }
-
-    fn decode(
-        &self,
-        bytes: &[u8],
-        schema: &formats::ClassEntry,
-        index: &HandleIndex,
-    ) -> Result<DecodedElement> {
-        self.decode_with_limits(bytes, schema, index, crate::walker::WalkerLimits::default())
-    }
-
-    fn decode_with_limits(
-        &self,
-        bytes: &[u8],
-        schema: &formats::ClassEntry,
-        _index: &HandleIndex,
-        limits: crate::walker::WalkerLimits,
-    ) -> Result<DecodedElement> {
-        if schema.name != "WallType" {
-            return Err(Error::SchemaMismatch {
-                decoder: "WallType",
-                schema: schema.name.clone(),
-            });
-        }
-        Ok(crate::walker::decode_instance_with_limits(
-            bytes, 0, schema, limits,
-        ))
     }
 }
 

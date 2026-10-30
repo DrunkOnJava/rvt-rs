@@ -110,9 +110,9 @@
     {
       "id": "typed-decoder-registry",
       "area": "elements",
-      "name": "Per-class typed decoder structs",
+      "name": "Per-class decoder registry",
       "status": "partial",
-      "evidence": "elements::all_decoders() (~81); MVP_TYPED_CLASSES consulted by iter_elements",
+      "evidence": "elements::all_decoders() (81 SimpleDecoder entries); MVP_TYPED_CLASSES consulted by iter_elements",
       "notes": "Library building blocks plus production MVP/ArcWall path. Broader registry is not production conversion.",
       "user_impact": "Developers can compose decoders; users should not read this as full coverage."
     },

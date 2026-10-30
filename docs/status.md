@@ -934,9 +934,9 @@ extrusion thickness is measured from the record bbox, and the slab
 *profile* is the boundary polygon its `OST_SketchLines` records close
 on **80 of 80** exported slabs (#31, RE-25, closed 2026-09-19), and
 since RE-95 the 20 shading plates carry theirs too, each equal to
-Revit's. Eighty-one per-class
-decoder structs remain registered; `MVP_TYPED_CLASSES` are consulted by
-`iter_elements`.
+Revit's. Eighty-one classes
+remain registered, each through `SimpleDecoder`; `MVP_TYPED_CLASSES` are
+consulted by `iter_elements`.
 
 ## Performance
 

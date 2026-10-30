@@ -32,8 +32,8 @@ respects this:
   `ifc::gltf::model_to_glb`, `ifc::sheet::render_plan_svg` all
   operate on in-process `IfcModel` values — no I/O beyond the
   caller's explicit paths.
-- `ifc::share::encode_to_fragment` serializes to a URL fragment
-  (`#v=...`), *not* a server-uploaded share link. The URL itself
+- A shared viewer state is a URL fragment (`#v=...`) that
+  `ifc::share::decode_from_fragment` reads, *not* a server-uploaded share link. The URL itself
   stays in the user's browser history; pasting it elsewhere is
   an explicit user action.
 - `ifc::pbr::PbrMaterial` reads Revit `MaterialInfo` values

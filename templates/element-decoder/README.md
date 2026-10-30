@@ -71,7 +71,7 @@ corpus integration tests.
 
 ## Style notes
 
-- Generated files follow `drafting.rs` conventions: 4-space indent,
+- Generated files follow `level.rs` conventions: 4-space indent,
   registration through `SimpleDecoder`, and `normalise_field_name`
   imported from the `level` module.
 - `cargo fmt --all` and `cargo clippy --all-targets -- -D warnings`

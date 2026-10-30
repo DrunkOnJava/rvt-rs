@@ -1,11 +1,5 @@
-//! Material / FillPattern / LinePattern / LineStyle — Revit's
-//! visual styling vocabulary. Every renderable element references at
-//! least one of these for its appearance.
-//!
-//! Grouped in one module because they're small + closely related; the
-//! usual pattern is one decoder per file, but these three are always
-//! consulted together at render time so co-locating them keeps
-//! relevant context together for contributors.
+//! `Material` — Revit's appearance vocabulary. Every renderable
+//! element references one for its appearance.
 
 use super::level::normalise_field_name;
 use crate::walker::{DecodedElement, InstanceField};
@@ -72,93 +66,5 @@ impl Material {
             ((c >> 8) & 0xFF) as u8,
             ((c >> 16) & 0xFF) as u8,
         ))
-    }
-}
-
-/// Typed view of a decoded FillPattern (surface or cut hatch).
-#[derive(Debug, Clone, PartialEq, Default)]
-#[non_exhaustive]
-pub struct FillPattern {
-    pub name: Option<String>,
-    /// True when the pattern is oriented to the host element's
-    /// local coordinate system (e.g. brick courses follow wall
-    /// direction); false for drafting patterns that stay world-aligned.
-    pub is_model_pattern: Option<bool>,
-}
-
-impl FillPattern {
-    pub fn from_decoded(decoded: &DecodedElement) -> Self {
-        let mut out = Self::default();
-        for (field_name, value) in &decoded.fields {
-            match (normalise_field_name(field_name).as_str(), value) {
-                ("name", InstanceField::String(s)) => out.name = Some(s.clone()),
-                ("ismodelpattern", InstanceField::Bool(b)) => {
-                    out.is_model_pattern = Some(*b);
-                }
-                _ => {}
-            }
-        }
-        out
-    }
-}
-
-/// Typed view of a decoded LinePattern (dash/dot pattern for lines).
-#[derive(Debug, Clone, PartialEq, Default)]
-#[non_exhaustive]
-pub struct LinePattern {
-    pub name: Option<String>,
-    /// Dash/space sequence in model units. Positive = dash, negative
-    /// = gap, 0 = dot. Schema exposes this as a vector field; when
-    /// that decodes land we'll populate it, for now keep the field
-    /// for future use.
-    pub pattern: Option<Vec<f64>>,
-}
-
-impl LinePattern {
-    pub fn from_decoded(decoded: &DecodedElement) -> Self {
-        let mut out = Self::default();
-        // Only `name` is decodable today; the pattern-sequence field
-        // is a Vector<f64> which needs the walker's Vector variant to
-        // land before it can be read. Keep the struct shape stable
-        // so callers don't break when that landing happens.
-        for (field_name, value) in &decoded.fields {
-            if let ("name", InstanceField::String(s)) =
-                (normalise_field_name(field_name).as_str(), value)
-            {
-                out.name = Some(s.clone());
-            }
-        }
-        out
-    }
-}
-
-/// Typed view of a decoded LineStyle.
-#[derive(Debug, Clone, PartialEq, Default)]
-#[non_exhaustive]
-pub struct LineStyle {
-    pub name: Option<String>,
-    pub weight: Option<u32>,
-    /// Packed RGB.
-    pub color: Option<u32>,
-    pub pattern_id: Option<crate::ElementId>,
-}
-
-impl LineStyle {
-    pub fn from_decoded(decoded: &DecodedElement) -> Self {
-        let mut out = Self::default();
-        for (field_name, value) in &decoded.fields {
-            match (normalise_field_name(field_name).as_str(), value) {
-                ("name", InstanceField::String(s)) => out.name = Some(s.clone()),
-                ("weight" | "lineweight", InstanceField::Integer { value, .. }) => {
-                    out.weight = Some(*value as u32);
-                }
-                ("color", InstanceField::Integer { value, .. }) => out.color = Some(*value as u32),
-                ("patternid" | "linepatternid", InstanceField::ElementId { id, .. }) => {
-                    out.pattern_id = Some(crate::ElementId::from(*id));
-                }
-                _ => {}
-            }
-        }
-        out
     }
 }
