@@ -2045,9 +2045,10 @@ const LOAD_BEARING_TYPE_CLASSES: &[&str] = &["StructuralColumn", "StructuralFram
 
 /// The entities whose type objects Revit's IFC4 exports of the BIM4LCA office
 /// (exporter 24.0.5) and of the R2025 models (25.0.2) give their common set's
-/// `IsExternal`, among those rvt-rs writes a type object for (RE-286). The
-/// office's ramp type holds no set at all, and a curtain member's type is the
-/// exporter's cache (RE-269).
+/// `IsExternal`, among those rvt-rs writes a type object for (RE-286). Not a
+/// ramp's, which holds no set in the office's export; a railing's, which that
+/// export writes no type object for at all, though the R2025 models' write one;
+/// nor a curtain member's, which is the exporter's cache (RE-269).
 const TYPE_COMMON_ENTITIES: &[&str] = &[
     "IFCWALL",
     "IFCCURTAINWALL",
@@ -2058,7 +2059,6 @@ const TYPE_COMMON_ENTITIES: &[&str] = &[
     "IFCCOLUMN",
     "IFCBEAM",
     "IFCCOVERING",
-    "IFCRAILING",
     "IFCSTAIR",
     "IFCSTAIRFLIGHT",
     "IFCBUILDINGELEMENTPROXY",
