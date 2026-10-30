@@ -344,8 +344,13 @@ partition is 1 GiB stored needs several GB of memory. `--allow-partial` writes
 the incomplete IFC anyway; the diagnostics list the streams it lacks
 (`stream_not_read_resource_limit`). `rvt-gltf` takes the same flags. In Python,
 open the file with `max_stream_bytes` and `max_inflate_bytes`; `write_ifc()`
-raises `ValueError` while a stream is unread. The browser viewer keeps the
-default limits and wasm32's 4 GiB memory ceiling.
+raises `ValueError` while a stream is unread. The browser viewer opens a file
+at the default limits and, when a stream is not read, shows "Part of the file
+not read" in the File status panel with a "Retry with large-model limits"
+button, which reopens the same file with `--large-model`'s limits (streams up
+to 2 GiB). A browser tab can use at most 4 GiB of memory, so a very large
+model can still fail to open there; `rvt-ifc --large-model` has no such
+ceiling.
 
 Two exports of the same file are the same bytes except for the export time,
 which the IFC header and owner history record. Set `SOURCE_DATE_EPOCH` (Unix

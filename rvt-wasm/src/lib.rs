@@ -32,6 +32,7 @@ use rvt::ifc::{
     sheet::{SheetOptions, render_plan_svg},
     step_writer::write_step,
 };
+use rvt::reader::OpenLimits;
 
 fn err_str<E: std::fmt::Display>(e: E) -> JsValue {
     JsValue::from_str(&e.to_string())
@@ -67,16 +68,98 @@ fn install_panic_hook() {
 #[wasm_bindgen(js_name = openRvtBytesWithDiagnosticsMode)]
 pub fn open_rvt_bytes_with_diagnostics_mode(bytes: &[u8], mode: &str) -> Result<JsValue, JsValue> {
     install_panic_hook();
+    export_with_limits(
+        bytes,
+        mode,
+        OpenLimits::default(),
+        rvt::walker::WalkerLimits::default(),
+    )
+}
+
+/// [`open_rvt_bytes_with_diagnostics_mode`] under the resource limits of
+/// `limits`, a JS object `{ largeModel?, maxStreamBytes?, maxInflateBytes? }`
+/// or `null` for the defaults. A field left out keeps its default; they
+/// are `rvt-ifc`'s flags of the same names, resolved by
+/// [`rvt::cli::open_limits`] (`largeModel` is `--large-model`, and an
+/// explicit byte limit wins over it):
+///
+/// - `largeModel: true` reads streams up to 2 GiB and lets a stream inflate
+///   up to the 4 GiB a wasm32 address space holds (`rvt-ifc` gives 8 GiB on
+///   a 64-bit host), and lifts the walker's scan cap the same way.
+/// - `maxStreamBytes` caps one stream as stored; a larger stream is not read.
+/// - `maxInflateBytes` caps one gzip member's inflated size; a stream's
+///   members together may inflate to this or 1 GiB, whichever is larger.
+///   A value past what a 32-bit `usize` holds saturates at 4 GiB minus 1.
+///
+/// Byte limits are whole numbers of bytes. A stream a limit keeps from being
+/// read is listed in `diagnostics` (the `stream_not_read_resource_limit`
+/// skipped item and a `Not read whole:` warning per stream, #1075), and the
+/// model is missing what it holds. Unknown fields and fractional, negative
+/// or non-finite byte limits throw.
+#[wasm_bindgen(js_name = openRvtBytesWithDiagnosticsModeAndOpenLimits)]
+pub fn open_rvt_bytes_with_diagnostics_mode_and_open_limits(
+    bytes: &[u8],
+    mode: &str,
+    limits: JsValue,
+) -> Result<JsValue, JsValue> {
+    install_panic_hook();
+    let (open_limits, walker_limits) = limits_from_js(limits)?;
+    export_with_limits(bytes, mode, open_limits, walker_limits)
+}
+
+fn export_with_limits(
+    bytes: &[u8],
+    mode: &str,
+    open_limits: OpenLimits,
+    walker_limits: rvt::walker::WalkerLimits,
+) -> Result<JsValue, JsValue> {
     let quality_mode = ExportQualityMode::parse(mode).map_err(err_str)?;
-    let mut rf = RevitFile::open_bytes(bytes.to_vec()).map_err(err_str)?;
+    let mut rf = RevitFile::open_bytes_with_limits(bytes.to_vec(), open_limits).map_err(err_str)?;
     let result = RvtDocExporter
-        .export_with_diagnostics_mode_and_limits(
-            &mut rf,
-            quality_mode,
-            rvt::walker::WalkerLimits::default(),
-        )
+        .export_with_diagnostics_mode_and_limits(&mut rf, quality_mode, walker_limits)
         .map_err(err_str)?;
     serde_wasm_bindgen::to_value(&result).map_err(err_str)
+}
+
+#[derive(Default, serde::Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct LimitsOptions {
+    large_model: Option<bool>,
+    max_stream_bytes: Option<f64>,
+    max_inflate_bytes: Option<f64>,
+}
+
+fn whole_bytes(field: &str, value: Option<f64>) -> Result<Option<u64>, JsValue> {
+    match value {
+        None => Ok(None),
+        Some(bytes) if bytes.is_finite() && bytes >= 0.0 && bytes.fract() == 0.0 => {
+            Ok(Some(bytes as u64))
+        }
+        Some(bytes) => Err(JsValue::from_str(&format!(
+            "{field} must be a whole number of bytes, got {bytes}"
+        ))),
+    }
+}
+
+fn limits_from_js(limits: JsValue) -> Result<(OpenLimits, rvt::walker::WalkerLimits), JsValue> {
+    let options: LimitsOptions = if limits.is_null() || limits.is_undefined() {
+        LimitsOptions::default()
+    } else {
+        serde_wasm_bindgen::from_value(limits).map_err(err_str)?
+    };
+    let large_model = options.large_model.unwrap_or(false);
+    let max_inflate_bytes = whole_bytes("maxInflateBytes", options.max_inflate_bytes)?
+        .map(|bytes| usize::try_from(bytes).unwrap_or(usize::MAX));
+    let open_limits = rvt::cli::open_limits(
+        whole_bytes("maxStreamBytes", options.max_stream_bytes)?,
+        max_inflate_bytes,
+        large_model,
+    );
+    let mut walker_limits = rvt::walker::WalkerLimits::default();
+    if large_model {
+        walker_limits.max_scan_bytes = rvt::cli::LARGE_MODEL_MAX_INFLATE_BYTES;
+    }
+    Ok((open_limits, walker_limits))
 }
 
 /// Quick summary — reads only the cheap metadata (BasicFileInfo +

@@ -73,6 +73,21 @@ none it runs that cargo build itself; when cargo is unavailable it warns
 `synthetic-mvp: missing (gen-fixture not found …)` and the gallery marks the
 demo unavailable. Nothing is downloaded either way.
 
+## Large models and resource limits
+
+A file opens under the reader's default limits (256 MiB per stream and per
+inflated member). When a stream is over them, File status reports "Part of the
+file not read" and offers "Retry with large-model limits", which reads the same
+file again with the limits `rvt-ifc --large-model` uses (streams up to 2 GiB).
+A browser tab can use at most 4 GiB of memory, so a very large model can still
+fail to open; `rvt-ifc --large-model` has no such ceiling. The button calls
+`openRvtBytesWithDiagnosticsModeAndOpenLimits` with `{ largeModel: true }`.
+
+`?maxStreamBytes=` and `?maxInflateBytes=` in the address open the first file
+under those limits, so a small file reaches the same path. The browser test
+`tests/large-model-retry.spec.ts` opens the tier-1 fixture at
+`/?maxStreamBytes=200`, which stops its 236-byte BasicFileInfo, and retries.
+
 ## Architecture
 
 ```text
@@ -82,7 +97,7 @@ User drops .rvt
 main.ts ── postMessage ──▶ worker.ts
                                 │
                                 ├── init wasm (pkg/rvt.js)
-                                ├── openRvtBytesWithDiagnosticsMode()
+                                ├── openRvtBytesWithDiagnosticsModeAndOpenLimits()
                                 │                         → IfcModel + diagnostics JSON
                                 ├── buildSceneGraph()     → SceneNode JSON
                                 ├── modelToGlb()          → Uint8Array

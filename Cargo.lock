@@ -1026,6 +1026,7 @@ name = "rvt-wasm"
 version = "0.10.0"
 dependencies = [
  "rvt",
+ "serde",
  "serde-wasm-bindgen",
  "wasm-bindgen",
 ]
