@@ -34,6 +34,7 @@
 //! every defining edge and its angle match Revit's own IFC export.
 
 use crate::le_bytes;
+use crate::native_json::element_id_i64;
 use crate::{Result, RevitFile};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -432,7 +433,6 @@ pub fn scan_rafter_cuts(
         selected_ids: roofs.iter().map(|&id| u64::from(id)).collect(),
         ..crate::native_document::Options::default()
     };
-    let id64 = |value: &serde_json::Value| value.get("m_id")?.get("m_id64")?.as_i64();
     let _ = crate::native_document::extract_graphs(rf, &options, |record| {
         if record.class_name.as_deref() != Some("ProfileRoof") {
             return Ok(());
@@ -446,7 +446,9 @@ pub fn scan_rafter_cuts(
             .flat_map(|graph| graph.objects.iter())
             .filter_map(|object| object.fields.get("m_paramSet")?.as_array())
             .flatten()
-            .find(|pair| pair.get("m_paramId").and_then(id64) == Some(RAFTER_CUT_PARAMETER))
+            .find(|pair| {
+                pair.get("m_paramId").and_then(element_id_i64) == Some(RAFTER_CUT_PARAMETER)
+            })
             .and_then(|pair| pair.get("m_value")?.as_i64())
             .and_then(rafter_cut_from_value);
         if let Some(cut) = cut {
