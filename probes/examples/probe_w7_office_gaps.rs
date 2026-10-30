@@ -6,7 +6,8 @@
 //! `Pset_BuildingStoreyCommon.Reference` and `.EntranceLevel` on its storeys.
 //! The probe prints, one JSON line each, what the file holds on those
 //! elements: the parameter definitions it declares, every Level's native
-//! object classes and scalar fields and saved parameters, and the structural
+//! object classes and scalar fields and saved parameters, the type each Level
+//! names (`m_attrId`) with its fields and parameters, and the structural
 //! columns', structural framing's and pipes' native object class counts,
 //! scalar fields of each object, decoded fields and saved parameters.
 //!
@@ -54,6 +55,39 @@ fn flatten(prefix: &str, value: &Value, depth: usize, out: &mut Map<String, Valu
             out.insert(prefix.to_string(), value.clone());
         }
     }
+}
+
+/// One line for a native record: its class counts and each object's scalars.
+fn print_native(kind: &str, class: Option<&String>, record: &native_document::Record) {
+    let id = record.identity.element_id;
+    let Some(graph) = record.graph.as_ref() else {
+        println!(
+            "{}",
+            json!({"kind": kind, "id": id, "class": class, "graph": false})
+        );
+        return;
+    };
+    let mut counts: BTreeMap<&str, usize> = BTreeMap::new();
+    for object in &graph.objects {
+        *counts.entry(object.class_name.as_str()).or_default() += 1;
+    }
+    let mut objects = Vec::new();
+    for object in graph.objects.iter().take(MAX_OBJECTS) {
+        let mut flat = Map::new();
+        flatten("", &object.fields, MAX_DEPTH, &mut flat);
+        objects.push(json!({"c": object.class_name, "f": flat}));
+    }
+    println!(
+        "{}",
+        json!({
+            "kind": kind,
+            "id": id,
+            "class": class,
+            "root": record.class_name,
+            "counts": counts,
+            "objects": objects,
+        })
+    );
 }
 
 fn main() -> anyhow::Result<()> {
@@ -127,41 +161,48 @@ fn main() -> anyhow::Result<()> {
         );
     }
 
+    let mut level_types: BTreeSet<u64> = BTreeSet::new();
     let options = Options {
         selected_ids: ids,
         ..Options::default()
     };
     native_document::extract_graphs(&mut rf, &options, |record| {
         let id = record.identity.element_id;
-        let Some(graph) = record.graph.as_ref() else {
-            println!(
-                "{}",
-                json!({"kind": "native", "id": id, "class": class_of.get(&id), "graph": false})
-            );
-            return Ok(());
-        };
-        let mut counts: BTreeMap<&str, usize> = BTreeMap::new();
-        for object in &graph.objects {
-            *counts.entry(object.class_name.as_str()).or_default() += 1;
+        if class_of.get(&id).map(String::as_str) == Some("Level") {
+            let type_id = record
+                .graph
+                .as_ref()
+                .and_then(|graph| graph.objects.first())
+                .and_then(|root| root.fields.pointer("/m_attrId/m_id/m_id64"))
+                .and_then(Value::as_u64);
+            if let Some(type_id) = type_id {
+                level_types.insert(type_id);
+            }
         }
-        let mut objects = Vec::new();
-        for object in graph.objects.iter().take(MAX_OBJECTS) {
-            let mut flat = Map::new();
-            flatten("", &object.fields, MAX_DEPTH, &mut flat);
-            objects.push(json!({"c": object.class_name, "f": flat}));
-        }
-        println!(
-            "{}",
-            json!({
-                "kind": "native",
-                "id": id,
-                "class": class_of.get(&id),
-                "root": record.class_name,
-                "counts": counts,
-                "objects": objects,
-            })
-        );
+        print_native("native", class_of.get(&id), &record);
         Ok(())
     })?;
+
+    if !level_types.is_empty() {
+        let type_parameters = native_element_parameters::read(&mut rf, &level_types)?;
+        for (id, list) in &type_parameters.elements {
+            let entries: Vec<Value> = list
+                .iter()
+                .filter_map(|parameter| serde_json::to_value(parameter).ok())
+                .collect();
+            println!(
+                "{}",
+                json!({"kind": "leveltype_parameters", "id": id, "parameters": entries})
+            );
+        }
+        let type_options = Options {
+            selected_ids: level_types,
+            ..Options::default()
+        };
+        native_document::extract_graphs(&mut rf, &type_options, |record| {
+            print_native("leveltype", None, &record);
+            Ok(())
+        })?;
+    }
     Ok(())
 }
