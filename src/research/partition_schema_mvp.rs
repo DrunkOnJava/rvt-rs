@@ -281,6 +281,9 @@ pub fn recover_partition_schema_mvp(
                 .chain(out.rooms.iter_mut())
                 .chain(out.products.iter_mut()),
         );
+        // --- A structural beam's or column's LoadBearing is its category's
+        // (RE-285), unless a parameter named for it says otherwise ---
+        attach_load_bearing(out.columns.iter_mut().chain(out.products.iter_mut()));
         return Ok(out);
     }
 
@@ -804,6 +807,9 @@ pub fn recover_partition_schema_mvp(
             &mut out.products,
         ],
     );
+    // --- A structural beam's or column's LoadBearing is its category's
+    // (RE-285), unless a parameter named for it says otherwise ---
+    attach_load_bearing(out.columns.iter_mut().chain(out.products.iter_mut()));
     Ok(out)
 }
 
