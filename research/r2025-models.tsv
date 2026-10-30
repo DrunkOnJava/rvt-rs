@@ -4,5 +4,13 @@
 # them and released the .rvt and .ifc files under Apache-2.0 on #356 (2026-10-05). Fetched for
 # a Measure run (`-f r2025=true`) by tools/ci/fetch-r2025-models.sh and never committed. The
 # hash is the one the author posted; hash and size measured 2026-10-18.
-# kind	url	sha256	bytes
+# On #885 (2026-10-27) the author added, under Apache-2.0, R2025_TU_Roof.zip (20_T_U_Roof, a
+# project with T and U hip roofs, and its IFC4 Reference View export) and R2025_Models_wRVTSets.zip
+# (exports of the models with Revit's property sets on, no .rvt); of the latter only
+# 07_1Slope_ArrowDefined_2Cut50mmFascia's is read, the first export of that model, renamed to sit
+# beside its .rvt. The others are another export setup and are not read. Hashes and sizes measured
+# 2026-10-29.
+# kind	url	sha256	bytes	members (member=name, comma-separated; empty for every .rvt and .ifc)
 archive	https://github.com/user-attachments/files/33065191/R2025_Models.zip	8673d803fb0b9b6aa20d08448eeed16eb34222566bfaf7a2dc761c064dc30d6a	25563111
+archive	https://github.com/user-attachments/files/34048901/R2025_TU_Roof.zip	38dad62722d5a6e1cf03405f99f4ece060ec7473e34dbb45de9e72247ca47e6e	498825
+archive	https://github.com/user-attachments/files/34048316/R2025_Models_wRVTSets.zip	ff9b3946eddcaff52ba42e28d77ea556aa5df905a13402d7f25692758bf59559	1082655	07_1Slope_ArrowDefined_2Cut50mmFascia_rvt.ifc=07_1Slope_ArrowDefined_2Cut50mmFascia.ifc
