@@ -220,6 +220,61 @@ pub(super) fn attach_beam_axes(
     }
 }
 
+/// Give each structural-framing element the Cross-Section Rotation its
+/// native record holds, in [`BEAM_ROTATION_FIELD`] (W7, RE-276): the
+/// `m_rotation`, radians, of its `FamInstCurveDriver`, which revit-ifc's
+/// `RollCalculator` reads from the element's `STRUCTURAL_BEND_DIR_ANGLE`
+/// parameter (CLEANROOM.md source 5). A beam whose copies disagree, or whose
+/// record is not read, gets none.
+pub(super) fn attach_beam_rotations(rf: &mut RevitFile, products: &mut [DecodedElement]) {
+    let beams: BTreeSet<u64> = products
+        .iter()
+        .filter(|element| element.class == "StructuralFraming")
+        .filter_map(|element| element.id)
+        .map(u64::from)
+        .collect();
+    if beams.is_empty() {
+        return;
+    }
+    let options = crate::native_document::Options {
+        selected_ids: beams,
+        ..Default::default()
+    };
+    let mut rotations: BTreeMap<u64, Option<f64>> = BTreeMap::new();
+    let read = crate::native_document::extract_graphs(rf, &options, |record| {
+        let Some(graph) = record.graph.as_ref() else {
+            return Ok(());
+        };
+        let rotation = graph
+            .objects
+            .iter()
+            .filter(|object| object.class_name == "FamInstCurveDriver")
+            .find_map(|object| object.fields.get("m_rotation"))
+            .and_then(serde_json::Value::as_f64)
+            .filter(|rotation| rotation.is_finite());
+        crate::native_json::agree(&mut rotations, record.identity.element_id, rotation);
+        Ok(())
+    });
+    if read.is_err() {
+        return;
+    }
+    for element in products
+        .iter_mut()
+        .filter(|element| element.class == "StructuralFraming")
+    {
+        let Some(Some(value)) = element
+            .id
+            .and_then(|id| rotations.get(&u64::from(id)).copied())
+        else {
+            continue;
+        };
+        element.fields.push((
+            BEAM_ROTATION_FIELD.into(),
+            InstanceField::Float { value, size: 8 },
+        ));
+    }
+}
+
 /// Recover architectural column instances from partition element
 /// records (#204, instance rule replaced in #211).
 ///
