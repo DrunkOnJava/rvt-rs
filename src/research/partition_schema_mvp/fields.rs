@@ -390,8 +390,8 @@ pub const SLAB_TYPE_THICKNESS_FIELD: &str = "m_slab_type_thickness";
 /// (RE-295).
 pub const SLAB_TYPE_LAYER_COUNT_FIELD: &str = "m_slab_type_layer_count";
 
-/// Set on a floor whose native record was read and holds no step that cuts
-/// its solid, a `CutPairGStep` or a `WallCutoutGStep` (RE-295).
+/// Set on a floor, ceiling or roof whose native record was read and holds no
+/// step that cuts its solid, a `CutPairGStep` or a `WallCutoutGStep` (RE-295).
 pub const SLAB_UNCUT_FIELD: &str = "m_slab_uncut";
 
 /// Field holding a railing's height, its type's top rail height, feet
