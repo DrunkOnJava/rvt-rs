@@ -13,10 +13,18 @@
 //! - its body is its record's box cut back at its joins, a plain rectangle;
 //! - every element its joins name is a slab, roof or footing drawn as a plain
 //!   extrusion that lies wholly above the wall's top or wholly below its
-//!   base, so that it cannot cut the wall. A wall cut at a floor (RE-267) is
-//!   the wall of which that floor's underside is the top. A named element
-//!   that is anything else, or is not drawn as an extrusion (a sloped roof),
-//!   leaves the wall out.
+//!   base, so that it cannot cut the wall. A named element that is anything
+//!   else, or is not drawn as an extrusion (a sloped roof), leaves the wall
+//!   out.
+//!
+//! The pass runs after `wall_tops`' (RE-267), on purpose, and reads
+//! each extrusion at the height that pass left it. A wall the floor cut has
+//! that floor's underside for its top, which the floor then clears, so such a
+//! wall is measured like any other. Revit's export writes no side areas on
+//! the walls it draws as a mesh (RE-267 §7 lists those among the cut walls
+//! that have no `Height`), and nothing read tells those from the rest; none
+//! of them has a confirmed length and a body from its record's box, so none
+//! is taken here (Measure, RE-270 §4).
 
 use std::collections::HashMap;
 
