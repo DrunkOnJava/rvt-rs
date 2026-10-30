@@ -25,7 +25,7 @@ milestone is for.
 
 | Issue | Remainder |
 |---|---|
-| [#1067](https://github.com/DrunkOnJava/rvt-rs/issues/1067) | BIM4LCA office: 78 of 579 walls drawn taller than Revit's body, which Revit draws cut where a joined floor covers them; the rule is exact at permit and misses one wall as built, and a part-covered wall needs a stepped top (RE-257, RE-267) |
+| [#1067](https://github.com/DrunkOnJava/rvt-rs/issues/1067) | BIM4LCA office: walls a floor covers in part, which Revit steps and rvt-rs draws at their full height (29 as built, 26 at permit), and one wall as built that Revit cuts although 0.0243 ft² of its plan lies outside the floor; the walls a floor covers whole are cut since RE-267 (RE-257, RE-267) |
 | [#885](https://github.com/DrunkOnJava/rvt-rs/issues/885) | Roof cases with no oracle: 2024 gables and hips, a slope arrow stopping short; roofs sloped by several slope arrows (puzzbobb's T and U roofs) are drawn as their record box (RE-199 follow-up) |
 | [#884](https://github.com/DrunkOnJava/rvt-rs/issues/884) | Hip roofs over T and U footprints stay level blocks: straight-skeleton split events (RE-199 follow-up) |
 | [#869](https://github.com/DrunkOnJava/rvt-rs/issues/869) | MEP ports and pipe cylinders outside Revit 2024 and 2025: no 2026 or 2027 MEP model has a Revit export to measure against |

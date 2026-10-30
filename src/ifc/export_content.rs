@@ -31,6 +31,8 @@ use crate::geometry::{
 use crate::walker::{DecodedElement, InstanceField};
 use std::collections::{BTreeMap, HashMap};
 
+mod wall_tops;
+
 /// Result of folding production walker hits into an IFC draft.
 #[derive(Debug, Default)]
 #[non_exhaustive]
@@ -390,6 +392,9 @@ pub fn append_typed_production_elements(
     let mut frames: HashMap<usize, PlanFrame> = Default::default();
     let mut facings: BTreeMap<u32, [f64; 2]> = BTreeMap::new();
     let mut opening_hosts: Vec<(usize, u32, u32)> = Vec::new();
+    // RE-267: each wall's entity index and the elements its top join and cut
+    // pairs name, for the cut at the floor that covers it.
+    let mut pending_tops: Vec<(usize, Vec<u32>)> = Vec::new();
     let mut level_bind = crate::level_bind::LevelStoreyBind::new();
 
     for decoded in decoded_iter {
@@ -898,6 +903,13 @@ pub fn append_typed_production_elements(
             &decoded,
             extrusion.as_ref().filter(|_| solid_shape.is_none()),
         );
+        add_wall_areas_and_volumes(
+            &mut reference_sets,
+            &ifc_type,
+            &decoded,
+            extrusion.as_ref().filter(|_| solid_shape.is_none()),
+            property_set.as_ref(),
+        );
         add_curtain_wall_length(&mut reference_sets, &ifc_type, &decoded);
         add_body_quantities(
             &mut reference_sets,
@@ -1009,6 +1021,12 @@ pub fn append_typed_production_elements(
             solid_shape,
             representation_map_index: None,
         });
+        if policy.include_geometry && decoded.class == "Wall" {
+            let named = crate::partition_schema_mvp::wall_top_cutters_from_fields(&decoded.fields);
+            if !named.is_empty() {
+                pending_tops.push((entity_index, named));
+            }
+        }
         // #331: each further piece of a sketch of separate loops is an
         // element of its own with the element's `Tag`, named `…:2`, `…:3`,
         // as in Revit's export.
@@ -1219,6 +1237,9 @@ pub fn append_typed_production_elements(
             pending_named.push((entity_index, named));
         }
     }
+
+    // RE-267: a wall's top is cut at the underside of the floor that covers it.
+    wall_tops::cut_wall_tops(entities, &pending_tops);
 
     // #323: group each whole's parts into one aggregate.
     let mut parts_by_whole: BTreeMap<usize, Vec<usize>> = BTreeMap::new();
@@ -2615,6 +2636,95 @@ fn add_wall_height(
     }
 }
 
+/// Add a wall's `Qto_WallBaseQuantities` `GrossSideArea`, `NetSideArea`,
+/// `GrossVolume` and `NetVolume` to `sets`, where its native record holds no
+/// step that cuts, embeds or sweeps it
+/// ([`crate::partition_schema_mvp::WALL_WHOLE_FIELD`]) and no roof or floor
+/// joined to it, and its body is its record box cut back at its joins
+/// (`partition_element_record_join_trimmed`), a plain rectangle.
+/// revit-ifc's `PropertyUtil.CreateWallBaseQuantities` (CLEANROOM.md source 5)
+/// takes the side areas from the largest vertical face of the wall's solid,
+/// `NetVolume` from the solid's volume and `GrossVolume` as the wall type's
+/// width times the side area. On a rectangular prism those are the longer
+/// side's area, the rectangle's area times the height, and the width times
+/// that side's area: Revit's on all 97 of the BIM4LCA office's such walls
+/// (49 as built, 48 at building permit) and 91 of puzzbobb's R2025 walls, and
+/// Revit's export writes all four on each (RE-270). Nothing on any other wall,
+/// whose solid may be cut, staircased or open (#1046).
+fn add_wall_areas_and_volumes(
+    sets: &mut [PropertySet],
+    ifc_type: &str,
+    decoded: &DecodedElement,
+    extrusion: Option<&Extrusion>,
+    property_set: Option<&PropertySet>,
+) {
+    if !matches!(ifc_type, "IFCWALL" | "IFCWALLSTANDARDCASE") {
+        return;
+    }
+    let flagged = |wanted: &str| {
+        decoded
+            .fields
+            .iter()
+            .any(|(name, value)| name == wanted && matches!(value, InstanceField::Bool(true)))
+    };
+    let boxed = property_set.is_some_and(|set| {
+        set.properties.iter().any(|property| {
+            property.name == "BodySource"
+                && matches!(&property.value, PropertyValue::Text(source)
+                    if source == crate::element_record_wall_joins::WALL_BODY_JOIN_TRIMMED)
+        })
+    });
+    if !(flagged(crate::partition_schema_mvp::WALL_UNCUT_FIELD)
+        && flagged(crate::partition_schema_mvp::WALL_WHOLE_FIELD)
+        && boxed)
+    {
+        return;
+    }
+    let Some(body) = extrusion.filter(|body| body.profile_override.is_none()) else {
+        return;
+    };
+    let Some(set) = sets
+        .iter_mut()
+        .find(|set| set.name == "Qto_WallBaseQuantities")
+    else {
+        return;
+    };
+    let Some(width) = set
+        .properties
+        .iter()
+        .find_map(|property| match &property.value {
+            PropertyValue::PositiveLengthFeet(width) if property.name == "Width" => Some(*width),
+            _ => None,
+        })
+    else {
+        return;
+    };
+    let sizes = [body.width_feet, body.depth_feet, body.height_feet, width];
+    if !sizes.iter().all(|size| size.is_finite() && *size > 0.0) {
+        return;
+    }
+    let side = body.width_feet.max(body.depth_feet) * body.height_feet;
+    let volume = body.width_feet * body.depth_feet * body.height_feet;
+    set.properties.extend([
+        Property {
+            name: "GrossSideArea".into(),
+            value: PropertyValue::AreaSquareFeet(side),
+        },
+        Property {
+            name: "NetSideArea".into(),
+            value: PropertyValue::AreaSquareFeet(side),
+        },
+        Property {
+            name: "GrossVolume".into(),
+            value: PropertyValue::VolumeCubicFeet(width * side),
+        },
+        Property {
+            name: "NetVolume".into(),
+            value: PropertyValue::VolumeCubicFeet(volume),
+        },
+    ]);
+}
+
 /// Add `Span` (`IfcPositiveLengthMeasure`) to a curtain mullion's
 /// `Pset_MemberCommon` among `sets`: its length, which revit-ifc's
 /// `SpanCalculator` (CLEANROOM.md source 5) takes from the depth of the
@@ -3465,6 +3575,11 @@ pub const COLUMN_CUT_BODY_HEIGHT_SOURCE: &str = "partition_geometry_node_after_j
 /// its top (`StairsLanding.m_baseElevation`) down its landing type's
 /// thickness (`StairsLandingType.m_thickness`, #824).
 pub const LANDING_SLAB_BODY_HEIGHT_SOURCE: &str = "native_landing_top_and_type_thickness";
+
+/// `BodyHeightSource` of a wall whose top is cut at the underside of the
+/// floor, roof or footing its top join or a cut pair names, where that
+/// element covers the whole of the wall's plan (#1067, RE-267).
+pub const WALL_TOP_COVER_BODY_HEIGHT_SOURCE: &str = "wall_top_cut_at_covering_floor";
 
 /// `BodySource` of a body that is the element record's bounding box, where
 /// no carrier refines it (#409).
