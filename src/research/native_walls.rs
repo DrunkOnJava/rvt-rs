@@ -263,6 +263,11 @@ const HARMLESS_STEPS: [&str; 6] = [
     "VerticalExtensionOfLayersGStep",
 ];
 
+/// The step classes besides `HARMLESS_STEPS` that a wall joined to a roof or
+/// floor may hold and still be drawn as its joins and layers make it, when
+/// the elements it is joined to are accounted for (RE-270).
+const BOUNDED_STEPS: [&str; 2] = ["JoinToRoofGStep", "CleanPairGStep"];
+
 /// What [`native_walls_and_top_joins`] reads from walls' native records.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct WallRecords {
@@ -283,6 +288,13 @@ pub struct WallRecords {
     /// nothing cuts, embeds or sweeps the solid its joins and layers make
     /// (RE-270).
     pub whole: BTreeSet<u64>,
+    /// The walls whose record holds no step but the harmless ones (a wall's
+    /// base, ends, split faces, reference planes, join tweaks and layer
+    /// extensions) and a roof or floor join or a clean join, with the ElementIds their
+    /// roof and floor joins name (at the top and at the base, in ascending
+    /// order; none where they hold none). A wall whose join names its
+    /// elements in a shape that is not read is left out (RE-270).
+    pub bounded: BTreeMap<u64, Vec<u64>>,
 }
 
 /// [`native_walls`], and for every one of `walls` whose `SWall` or `ArcWall`
@@ -313,6 +325,7 @@ pub fn native_walls_and_top_joins(
     let mut uncut: BTreeSet<u64> = BTreeSet::new();
     let mut top_cutters: BTreeMap<u64, Vec<u64>> = BTreeMap::new();
     let mut whole: BTreeSet<u64> = BTreeSet::new();
+    let mut bounded: BTreeMap<u64, Vec<u64>> = BTreeMap::new();
     let options = Options {
         selected_ids: walls.clone(),
         selected_classes: BTreeSet::from(["BasicWallType".to_string()]),
@@ -367,6 +380,31 @@ pub fn native_walls_and_top_joins(
                 || HARMLESS_STEPS.contains(&object.class_name.as_str())
         }) {
             whole.insert(id);
+        }
+        if graph.objects.iter().all(|object| {
+            !object.class_name.ends_with("Step")
+                || HARMLESS_STEPS.contains(&object.class_name.as_str())
+                || BOUNDED_STEPS.contains(&object.class_name.as_str())
+        }) {
+            let named: Option<BTreeSet<u64>> = graph
+                .objects
+                .iter()
+                .filter(|object| object.class_name == "JoinToRoofGStep")
+                .map(|object| object.fields.get("m_ids")?.as_array())
+                .collect::<Option<Vec<_>>>()
+                .and_then(|lists| {
+                    let mut named = BTreeSet::new();
+                    for reference in lists.into_iter().flatten() {
+                        let id = element_id_i64(reference)?;
+                        if id > 0 {
+                            named.insert(u64::try_from(id).ok()?);
+                        }
+                    }
+                    Some(named)
+                });
+            if let Some(named) = named {
+                bounded.insert(id, named.into_iter().collect());
+            }
         }
         if class != "SWall" {
             return Ok(());
@@ -489,6 +527,7 @@ pub fn native_walls_and_top_joins(
         uncut,
         top_cutters,
         whole,
+        bounded,
     })
 }
 
