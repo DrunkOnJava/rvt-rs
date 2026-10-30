@@ -10,6 +10,7 @@
 use crate::arc_wall_record::{
     ArcWallRecord, ArcWallScanStatus, ArcWallTrailer, STANDARD_RECORD_MIN_SIZE,
 };
+use crate::element_record_storeys::elevation_storey_name;
 use crate::ifc::Storey;
 use crate::walker::{WalkerLimitHit, WalkerLimits};
 use crate::{Result, RevitFile};
@@ -257,7 +258,7 @@ pub fn recover_storeys_from_arc_walls(
     let mut storeys: Vec<Storey> = elevations
         .iter()
         .map(|&elevation_feet| Storey {
-            name: elevation_fallback_name(elevation_feet),
+            name: elevation_storey_name(elevation_feet),
             elevation_feet,
         })
         .collect();
@@ -291,10 +292,6 @@ pub fn recover_storeys_from_arc_walls(
         elevation_fallback,
         level_name_candidates: filtered.len(),
     }
-}
-
-fn elevation_fallback_name(elevation_feet: f64) -> String {
-    format!("Elevation {elevation_feet:.3} ft")
 }
 
 fn parse_level_number(name: &str) -> Option<u32> {
