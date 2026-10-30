@@ -16,8 +16,6 @@ pub struct SavedElement {
     pub referenced_graph_sources: BTreeMap<u64, serde_json::Value>,
     pub status: String,
     pub meshes: GraphicsMeshes,
-    pub render_materials: BTreeMap<usize, crate::native_saved_materials::RenderMaterial>,
-    pub unresolved_material_primitives: Vec<usize>,
 }
 #[derive(Debug, Serialize)]
 pub struct SavedScene {
@@ -115,15 +113,6 @@ pub fn extract_at_detail_with_control(
         })?);
     }
     control.check()?;
-    let mut resolver = crate::native_saved_materials::Resolver::default_viewport_profile();
-    let mut material_options = options.clone();
-    material_options.channels = BTreeSet::from([102]);
-    material_options.selected_ids.clear();
-    summaries.push(native_document::extract_graphs(
-        file,
-        &material_options,
-        |r| resolver.ingest(&r),
-    )?);
     control.report(Stage::SavedGraphics, 1, Some(1));
     // Elements mesh independently: spread them over the cores, keeping order.
     // The browser build (wasm32-unknown-unknown) has no threads, so there, as
@@ -157,25 +146,7 @@ pub fn extract_at_detail_with_control(
             .into_iter()
             .map(|id| Ok((id, serde_json::to_value(&records[&id].source)?)))
             .collect::<Result<_>>()?;
-        let mut render_materials = BTreeMap::new();
-        let mut unresolved_material_primitives = Vec::new();
-        for (index, p) in meshes.primitives.iter().enumerate() {
-            match resolver.resolve(
-                id,
-                p.source_owner_id,
-                p.face_tag,
-                p.render_style_id,
-                p.material_id,
-            ) {
-                Some(m) => {
-                    render_materials.insert(index, m);
-                }
-                None => unresolved_material_primitives.push(index),
-            }
-        }
         Ok(SavedElement {
-            render_materials,
-            unresolved_material_primitives,
             id,
             identity: r.identity.clone(),
             source: serde_json::to_value(&r.source)?,
