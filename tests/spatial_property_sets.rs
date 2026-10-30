@@ -15,7 +15,10 @@
 //! A storey or space is matched by its `Name`. `NumberOfStoreys` is left out
 //! where a storey of Revit's export contains no element, as rvt-rs leaves it
 //! out there: Revit's exporters before and since IFC 26.1 count it otherwise
-//! (RE-263, the maintainer, 2026-10-29).
+//! (RE-263, the maintainer, 2026-10-29). rvt-rs also gives each storey its
+//! Level's type name as `Reference` (RE-275), which Revit's IFC4 exports write
+//! and IFC2X3's `Pset_BuildingStoreyCommon` does not have ([`IFC4_ONLY`]), so
+//! it is left out of the comparison with these IFC2X3 exports.
 //!
 //! Runs against `RVT_PROJECT_CORPUS_DIR`: `RE1-<discipline>.rvt` with
 //! `RE1-<discipline>.ifc`. Skips what is absent.
@@ -35,6 +38,10 @@ const SETS: &[&str] = &[
 /// The sets of [`SETS`] holding a storey's or space's name in Revit's IFC2X3
 /// export, which rvt-rs's IFC4 export does not write.
 const IFC2X3_NAME_SETS: [&str; 2] = ["Pset_AirSideSystemInformation", "Pset_ProductRequirements"];
+
+/// Properties rvt-rs writes in IFC4 that IFC2X3's definition of their set does
+/// not have, so Revit's IFC2X3 exports of RE1 cannot hold them.
+const IFC4_ONLY: [(&str, &str); 1] = [("Pset_BuildingStoreyCommon", "Reference")];
 
 /// A property set's properties: name -> value as written.
 type Props = BTreeMap<String, String>;
@@ -192,7 +199,14 @@ fn re1_spatial_property_sets_are_revits() {
         let result = RvtDocExporter
             .export_with_diagnostics(&mut rf)
             .expect("export");
-        let ours = spatial_sets(&write_step(&result.model));
+        let mut ours = spatial_sets(&write_step(&result.model));
+        for ((_, set), props) in ours.iter_mut() {
+            for (only_set, property) in IFC4_ONLY {
+                if set == only_set {
+                    props.remove(property);
+                }
+            }
+        }
         let differing: Vec<(&(String, String), &Props, Option<&Props>)> = theirs
             .iter()
             .filter(|((_, set), _)| !IFC2X3_NAME_SETS.contains(&set.as_str()))
