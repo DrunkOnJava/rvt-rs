@@ -833,6 +833,7 @@ fn step_writer_handles_adversarial_model_strings() {
             material_constituent_sets: Vec::new(),
             opening_cuts: Default::default(),
             body_pieces: Default::default(),
+            storey_properties: Default::default(),
         };
         let out = write_step_with_options(&model, &StepOptions { timestamp: Some(0) });
         assert!(out.contains("IFCPROJECT"));
