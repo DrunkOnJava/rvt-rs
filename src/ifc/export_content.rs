@@ -2648,6 +2648,17 @@ fn add_beam_roll(sets: &mut Vec<PropertySet>, ifc_type: &str, decoded: &DecodedE
 /// length, and its `GrossVolume`, the area times that length. Its
 /// `Perimeter` is left out: Revit's export writes it in feet, unscaled, in
 /// a file whose length unit is millimetres (RE-235 §5).
+///
+/// Where the floor's type's layers are read and its record holds no step that
+/// cuts it ([`crate::partition_schema_mvp::SLAB_UNCUT_FIELD`]), also its
+/// `NetVolume` (RE-295, #1016), that area times the layers' total thickness:
+/// the volume of the floor's solid, which Revit's export writes, is that on
+/// every floor of the BIM4LCA office as built and at building permit that
+/// nothing cuts, flat or sloped, whatever its layers. Where the type has more
+/// than one layer, also its `Width`, the same total: Revit's export writes a
+/// compound floor's type thickness there, where on a floor of one layer it
+/// writes its profile's extent along the extrusion's Y axis, which no field of
+/// the floor's record gives.
 fn add_slab_gross_area(
     sets: &mut Vec<PropertySet>,
     ifc_type: &str,
@@ -2670,9 +2681,29 @@ fn add_slab_gross_area(
     }];
     const TOLERANCE_FEET: f64 = 1e-3;
     let depth = body.height_feet;
-    let layered = crate::partition_schema_mvp::element_layers_from_fields(&decoded.fields)
-        .filter(|layers| layers.stacked && layers.layers.len() == 1)
-        .is_some_and(|layers| (layers.layers[0].width_feet - depth).abs() <= TOLERANCE_FEET);
+    let layers = crate::partition_schema_mvp::element_layers_from_fields(&decoded.fields)
+        .filter(|layers| layers.stacked && !layers.layers.is_empty());
+    let layered = layers.as_ref().is_some_and(|layers| {
+        layers.layers.len() == 1 && (layers.layers[0].width_feet - depth).abs() <= TOLERANCE_FEET
+    });
+    let float = |wanted: &str| {
+        decoded.fields.iter().find_map(|(name, value)| match value {
+            InstanceField::Float { value, .. } if name == wanted => Some(*value),
+            _ => None,
+        })
+    };
+    let layer_count = decoded.fields.iter().find_map(|(name, value)| match value {
+        InstanceField::Integer { value, .. }
+            if name == crate::partition_schema_mvp::SLAB_TYPE_LAYER_COUNT_FIELD =>
+        {
+            Some(*value)
+        }
+        _ => None,
+    });
+    let uncut = decoded.fields.iter().any(|(name, value)| {
+        name == crate::partition_schema_mvp::SLAB_UNCUT_FIELD
+            && matches!(value, InstanceField::Bool(true))
+    });
     if layered && depth.is_finite() && depth > 0.0 {
         properties.push(Property {
             name: "Depth".into(),
@@ -2682,6 +2713,22 @@ fn add_slab_gross_area(
             name: "GrossVolume".into(),
             value: PropertyValue::VolumeCubicFeet(area * depth),
         });
+    }
+    if let Some(thickness) = float(crate::partition_schema_mvp::SLAB_TYPE_THICKNESS_FIELD)
+        .filter(|thickness| thickness.is_finite() && *thickness > 0.0)
+    {
+        if uncut {
+            properties.push(Property {
+                name: "NetVolume".into(),
+                value: PropertyValue::VolumeCubicFeet(area * thickness),
+            });
+        }
+        if layer_count.is_some_and(|count| count > 1) {
+            properties.push(Property {
+                name: "Width".into(),
+                value: PropertyValue::PositiveLengthFeet(thickness),
+            });
+        }
     }
     sets.push(PropertySet {
         name: "Qto_SlabBaseQuantities".into(),
