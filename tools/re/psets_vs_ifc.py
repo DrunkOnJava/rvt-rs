@@ -37,6 +37,14 @@ the export has none (RE-242). Where Revit's export is IFC2X3, an IFC4
 property that IFC2X3's definition of its set does not have (IfcOpenShell's
 buildingSMART templates) is counted apart too: that export cannot write it.
 
+Where Revit's export writes `IsExternal` on its type objects too, as the
+exporter that made the BIM4LCA office's exports does (a cache of element types
+that gives every curtain wall's members of a type after the first wall's the
+value false, RE-269), the `IsExternal` of the curtain members (IfcMember and
+IfcPlate under an IfcCurtainWall) of those types and of the type objects is
+counted apart, not as missing: rvt-rs does not write it (the maintainer,
+2026-10-30). A later exporter's (RE1 Architecture's) is scored.
+
 Needs IfcOpenShell (the version tools/ci/requirements-ifc.txt pins).
 """
 
