@@ -24,7 +24,7 @@ The probes list the records of the office as built (and, for the second, at perm
 
 `tools/re/mullion_joins_vs_ifc.py` against Revit's export (run 41094260414; at permit 4,911 joins on 151 walls, 9,217 of 9,824 mullions agree):
 
-- There are 4,909 joins on 149 of the 220 curtain walls: 4,908 of three mullions and 1 of two. `m_constULinesButt` is false on all. `CurtainGrid.m_joinTypes` is empty on 218 walls; two walls hold no `CurtainGrid` object. 108 members name an edge that has no mullion in the export.
+- There are 4,909 joins on 149 of the 220 curtain walls: 4,908 of three mullions and 1 of two. `m_constULinesButt` is false on all. `CurtainGrid.m_joinTypes` is empty on 218 walls; two walls' records hold neither the driver's joins nor a `CurtainGrid` object. 108 members name an edge that has no mullion in the export.
 - `m_end` 0 is the far end of the mullion's exported extrusion (where its extrusion ends) and `m_end` 1 its start: 6,943 + 7,439 members, no exception.
 - In each of the 4,794 joins of three that were located, the one mullion running across the other two is upright, and the two others run along one another: a join lists a T, the upright that ends at a vertex and the horizontal that runs through it. It does not say which of them is continuous.
 
@@ -69,7 +69,7 @@ An end is hidden when it has a PARTNER and nothing across covers `p`, or when a 
 
 The rule reads 8,404 mullions, drawn as their box's extrusion or not. 8,268 fall on the diagonal (the count it gives against Revit's: 0 on 3,891, 1 on 1,003, 2 on 3,374), and the other 136 have a `NetSurfaceArea` that is not a whole number of sections (cut mullions, §4). By type and orientation the written mullions are the painted 50 x 50 mm type's horizontal ones with 0 (2,844), 1 (511) or 2 (331) kept ends and its upright ones with 2 (1,801), the plain 50 x 50 mm type's with 0 (13), 1 (52 + 352 upright) or 2 (406 + 78) and the 50 x 150 mm type's with 1 (2 + 74) or 2 (118 + 22).
 
-No mullion that is written has a PERP_CENTER or PERP_IN end (the table above lists every label pair among them): the covered branch of the rule decides only mullions that are left out, and is not claimed.
+No mullion that is written has a PERP_CENTER or PERP_IN end (the table above lists every label pair among them): the covered branch of the rule decides only mullions that are left out, and no value that is written. Reading a covered end as unread instead, so that a mullion with one is left out, writes 44 fewer (6,560 equal as built in the scorer) and none different; the branch stays as the rule's reading of the mullions it leaves out.
 
 ## 4. What is left out, and what decides the rest
 
@@ -100,14 +100,16 @@ Run 41091498749, this change against `main` (`qtos_vs_ifc`, `psets_vs_ifc`):
 
 Only `Qto_MemberBaseQuantities.NetSurfaceArea` moves in the quantity census; the property census is identical. The scorer's own counts are 6,604 and 6,634: it groups mullions by the wall rvt-rs's IFC aggregates them under, and 2 mullions have none there, where the exporter groups them by the wall the mullion's record names. The permit file is the same building with the same Tags, so it is a repeat on the same walls, not an independent test. The 3,397 missing are the 2,208 of §4 and 1,189 left out.
 
-Unfiltered run 41091518481 (every scorer, `nordic`, `r2025`, `timing`, this change against `main`): the exports that move are the two office models and RE1 Architecture; the exports of Core Interior, Einhoven, RE1 Electrical, Mechanical and Plumbing and of the R2025 models are byte-identical to `main`'s, and every scorer output apart from those three models' `qtos_vs_ifc` is identical. RE1 Architecture's 10 mullions now carry a `NetSurfaceArea` that Revit's export of it, made with Export base quantities off, does not write (RE-242): the census counts the quantities rvt-rs writes there apart, 68 to 78, so the value is not measurable on it. `rvt-ifc` takes 19.8 s to 20.4 s on the office as built and 19.2 s to 19.2 s at permit (one runner, three rounds); every other file is within 4%.
+Unfiltered run 41091518481 (every scorer, `nordic`, `r2025`, `timing`, this change against `main`): the exports that move are the two office models and RE1 Architecture; the exports of Core Interior, Einhoven, RE1 Electrical, Mechanical and Plumbing and of the R2025 models are byte-identical to `main`'s, and every scorer output apart from those three models' `qtos_vs_ifc` is identical. RE1 Architecture's 10 mullions now carry a `NetSurfaceArea` that Revit's export of it, made with Export base quantities off, does not write (RE-242): the census counts the quantities rvt-rs writes there apart, 68 to 78, so the value is not measurable on it. `rvt-ifc` takes 19.8 s to 20.4 s on the office as built and 19.2 s both ways at permit (one runner, three rounds); every other file is within 4%.
 
 ## 7. Reproduce
 
+The scorers land with this change; before it lands, use `--ref re/1046-mullion-ends` for them.
+
 ```bash
-gh workflow run measure.yml --ref re/1046-mullion-ends -f ref=e2cb89e499858857ec1ac7edae5f7b5508f09d2d -f base=main -f nordic=true \
+gh workflow run measure.yml --ref main -f ref=e2cb89e499858857ec1ac7edae5f7b5508f09d2d -f base=main -f nordic=true \
   -f models="nordic-office-*" -f scorers="qtos_vs_ifc psets_vs_ifc mullion_ends_vs_boxes"
-gh workflow run measure.yml --ref re/1046-mullion-ends -f ref=6e95d29728eb995946ee8489c860c0e5b74e062b -f base=none -f nordic=true \
+gh workflow run measure.yml --ref main -f ref=6e95d29728eb995946ee8489c860c0e5b74e062b -f base=none -f nordic=true \
   -f models="nordic-office-*" -f scorers=none -f probe=probe_1046_mullion_joins -f probe_scorer=mullion_joins_vs_ifc
-gh workflow run measure.yml --ref re/1046-mullion-ends -f ref=e2cb89e499858857ec1ac7edae5f7b5508f09d2d -f base=main -f nordic=true -f r2025=true -f timing=true
+gh workflow run measure.yml --ref main -f ref=e2cb89e499858857ec1ac7edae5f7b5508f09d2d -f base=main -f nordic=true -f r2025=true -f timing=true
 ```

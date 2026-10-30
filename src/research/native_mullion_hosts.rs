@@ -12,7 +12,10 @@
 //! draws a profile family's section rather than its own. A type's record
 //! holds one section object whose class names its shape (RE-246), the same
 //! in every language: [`BOX_SECTION_CLASSES`] are those whose section is a
-//! full rectangle, which the mullion's box gives.
+//! full rectangle, which the mullion's box gives. The mullions of one curtain
+//! wall are those that name it as their host (`m_hostId`), which
+//! [`mullion_hosts`] returns with the plain ones (`NetSurfaceArea` groups
+//! them by it, RE-268).
 
 use crate::native_json::{agree, element_id_i64};
 use crate::{RevitFile, native_document};
