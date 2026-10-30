@@ -55,7 +55,7 @@ def left(v):
 
 
 def load(path):
-    rows = {row["id"]: row for row in map(json.loads, open(path))}
+    rows = {row["id"]: row for row in (json.loads(line) for line in open(path) if line.startswith("{"))}
     names = {
         tag: {entry[1] for copy in row["lists"] for listed in copy for entry in listed}
         for tag, row in rows.items()
