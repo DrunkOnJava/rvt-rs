@@ -56,16 +56,17 @@ Two walls hold a split: one has 1 true of its 5 members (the one mullion of the 
 
 ## 5. What rvt-rs does
 
-Nothing changes: rvt-rs writes no `IsExternal` on curtain mullions and panels, as before (RE-193), and W7's counts are unchanged. The values are a function of the exporter's order and a defect Autodesk removed from later versions, not of the model. The choices for the maintainer:
+Nothing is written: rvt-rs writes no `IsExternal` on curtain mullions and panels, as before (RE-193), and none on the type objects of their types, where Revit's export writes false (§3). The values are a function of the exporter's order and a defect Autodesk removed from later versions, not of the model. The maintainer decided on 2026-10-30, between three choices, to leave them out and count them apart as known-wrong exporter output, with `WalkingLineOffset` and the mullions' `CrossSectionArea` (RE-235 §5): the census reports the 10,263 members' values (10,300 at permit) and their types' values as values of an exporter defect, not as missing.
 
-1. **Leave them out and count them apart**, as the census counts `WalkingLineOffset` and the mullions' `CrossSectionArea` (RE-235 §5): the 10,263 values stay unwritten, and W7 reports them as values of an exporter defect. Recommended.
-2. **Write the replay on Revit 2024 files**: exact on both office exports, which closes the 10,003 mullion values in W7's 12,853 missing (and the 260 panels'), and wrong for a 2024 file that a later exporter exports.
-3. **Write the host rule**: Revit's on 1,651 of the as-built 10,263 against this export, so not Revit's value here.
+The choices he did not take:
+
+- **Write the replay on Revit 2024 files**: exact on both office exports, which would close the 10,003 mullion values in W7's 12,853 missing (and the 260 panels'), and wrong for a 2024 file that a later exporter exports, which the model cannot tell.
+- **Write the host rule**: Revit's on 1,651 of the as-built 10,263 against this export, so not Revit's value here.
 
 ## 6. Reproduce
 
 ```bash
-gh workflow run measure.yml --ref re/269-member-is-external-cache \
+gh workflow run measure.yml --ref main \
   -f ref=7476ca1ebb4d1fe38d018803cec23f5f47af52d6 -f base=none -f nordic=true -f r2025=true -f scorers=none \
   -f probe=probe_is_external_members -f probe_scorer=member_is_external_cache_vs_ifc
 ```
