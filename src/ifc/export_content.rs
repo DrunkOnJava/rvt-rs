@@ -2686,6 +2686,12 @@ fn add_mullion_span(sets: &mut Vec<PropertySet>, ifc_type: &str, decoded: &Decod
             value: PropertyValue::VolumeCubicFeet(volume),
         });
     }
+    if let Some(area) = mullion_net_surface_area(decoded, sides, span) {
+        quantities.push(Property {
+            name: "NetSurfaceArea".into(),
+            value: PropertyValue::AreaSquareFeet(area),
+        });
+    }
     sets.push(PropertySet {
         name: "Qto_MemberBaseQuantities".into(),
         properties: quantities,
@@ -2706,6 +2712,38 @@ fn mullion_box_volume(decoded: &DecodedElement, sides: Option<[f64; 3]>, span: f
     });
     let [a, b, _] = sides?;
     (plain && a.is_finite() && b.is_finite() && a > 0.0 && b > 0.0).then_some(a * b * span)
+}
+
+/// A curtain mullion's `NetSurfaceArea` (#1016, RE-268): the perimeter of its
+/// box's section times its length plus its section's area for each end face
+/// its Revit solid keeps, where Revit's export draws it as an extrusion of
+/// that section (RE-243) and the boxes of its curtain wall's mullions say
+/// which ends are kept ([`crate::partition_schema_mvp::MULLION_KEPT_ENDS_FIELD`]).
+/// revit-ifc's `NetSurfaceAreaCalculator` (CLEANROOM.md source 5) sums the
+/// faces of the solid it writes.
+fn mullion_net_surface_area(
+    decoded: &DecodedElement,
+    sides: Option<[f64; 3]>,
+    span: f64,
+) -> Option<f64> {
+    use crate::partition_schema_mvp as mvp;
+    let plain = decoded.fields.iter().any(|(name, value)| {
+        name == mvp::MULLION_PLAIN_HOST_FIELD && matches!(value, InstanceField::Bool(true))
+    });
+    let kept = decoded
+        .fields
+        .iter()
+        .find_map(|(name, value)| match value {
+            InstanceField::Integer { value, .. } if name == mvp::MULLION_KEPT_ENDS_FIELD => {
+                u8::try_from(*value).ok().filter(|ends| *ends <= 2)
+            }
+            _ => None,
+        })?;
+    let [a, b, _] = sides?;
+    if !(plain && a.is_finite() && b.is_finite() && a > 0.0 && b > 0.0) {
+        return None;
+    }
+    Some(2.0 * (a + b) * span + f64::from(kept) * a * b)
 }
 
 /// Add `Finish` (`IfcText`) to a covering's `Pset_CoveringCommon` among
@@ -3449,7 +3487,10 @@ const ORIENTED_BOX_MIN_DET: f64 = 0.1;
 /// record box's centre whose extent along each model axis, `sum |a_i| e_i`,
 /// is the record box's. `None` where the axes leave it undetermined or a
 /// half-extent would not be positive.
-fn oriented_box(axes: [[f64; 3]; 3], size: [f64; 3]) -> Option<([[f64; 3]; 3], [f64; 3])> {
+pub(crate) fn oriented_box(
+    axes: [[f64; 3]; 3],
+    size: [f64; 3],
+) -> Option<([[f64; 3]; 3], [f64; 3])> {
     let m = |row: usize, col: usize| axes[col][row].abs();
     let det = m(0, 0) * (m(1, 1) * m(2, 2) - m(1, 2) * m(2, 1))
         - m(0, 1) * (m(1, 0) * m(2, 2) - m(1, 2) * m(2, 0))
