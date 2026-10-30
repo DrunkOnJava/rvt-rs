@@ -69,7 +69,24 @@ the residuals are the issues under the 0.12.0 milestone, and `tools/re/box_bodie
 
 <!-- One sentence or list item per line: a change to one value then touches one line, and pull requests changing different values merge cleanly. -->
 
-Names, types, storeys, materials, layers, GlobalIds, `IsExternal`, curtain mullions' `Span` (RE-226), beams' `Span` (RE-49), walls' `ExtendToStructure` (RE-228), railings' `Height` (RE-231), level slabs' `PitchAngle` (RE-238), pipes' `InvertElevation` (RE-157), stair flights' treads, tread lengths, nosing and `Reference`, landings' `Reference` and parameters named for a standard property set are read.
+Names,
+types,
+storeys,
+materials,
+layers,
+GlobalIds,
+`IsExternal`,
+curtain mullions' `Span` (RE-226),
+beams' `Span` (RE-49),
+beams' `Slope` 0 where drawn along a level location line (RE-49),
+walls' `ExtendToStructure` (RE-228),
+railings' `Height` (RE-231),
+level slabs' `PitchAngle` (RE-238),
+pipes' `InvertElevation` (RE-157),
+stair flights' treads,
+tread lengths,
+nosing and `Reference`,
+landings' `Reference` and parameters named for a standard property set are read.
 On the BIM4LCA office the export's own property set file places 2,013 values as built and 1,938 at permit that rvt-rs does not write as Revit does (glazing on walls,
 curtain walls and coverings,
 rooms' `OccupancyType` and the value type of their `OccupancyNumber`,
