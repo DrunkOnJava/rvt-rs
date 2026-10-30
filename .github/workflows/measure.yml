@@ -179,11 +179,34 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      # A ref given as an abbreviated SHA is not a ref checkout can fetch:
+      # it is expanded to the full SHA here. Branches, tags and full SHAs pass
+      # through unchanged.
+      - name: Resolve the refs
+        id: refs
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_REF: ${{ inputs.ref || github.sha }}
+          BASE_REF: ${{ inputs.base || 'main' }}
+        run: |
+          full() {
+            if [[ "$1" =~ ^[0-9a-f]{7,39}$ ]]; then
+              gh api "repos/$GITHUB_REPOSITORY/commits/$1" --jq .sha
+            else
+              echo "$1"
+            fi
+          }
+          head=$(full "$HEAD_REF")
+          base=$(full "$BASE_REF")
+          echo "head=$head" >> "$GITHUB_OUTPUT"
+          echo "base=$base" >> "$GITHUB_OUTPUT"
+          echo "head ${HEAD_REF} -> ${head}; base ${BASE_REF} -> ${base}"
       - name: Measured source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          ref: ${{ matrix.side == 'base' && (inputs.base || 'main') || (inputs.ref || github.sha) }}
+          ref: ${{ matrix.side == 'base' && steps.refs.outputs.base || steps.refs.outputs.head }}
           path: measured
       - name: Install Rust stable
         shell: bash
@@ -420,17 +443,40 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      # A ref given as an abbreviated SHA is not a ref checkout can fetch:
+      # it is expanded to the full SHA here. Branches, tags and full SHAs pass
+      # through unchanged.
+      - name: Resolve the refs
+        id: refs
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_REF: ${{ inputs.ref || github.sha }}
+          BASE_REF: ${{ inputs.base || 'main' }}
+        run: |
+          full() {
+            if [[ "$1" =~ ^[0-9a-f]{7,39}$ ]]; then
+              gh api "repos/$GITHUB_REPOSITORY/commits/$1" --jq .sha
+            else
+              echo "$1"
+            fi
+          }
+          head=$(full "$HEAD_REF")
+          base=$(full "$BASE_REF")
+          echo "head=$head" >> "$GITHUB_OUTPUT"
+          echo "base=$base" >> "$GITHUB_OUTPUT"
+          echo "head ${HEAD_REF} -> ${head}; base ${BASE_REF} -> ${base}"
       - name: Head source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          ref: ${{ inputs.ref || github.sha }}
+          ref: ${{ steps.refs.outputs.head }}
           path: head
       - name: Base source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          ref: ${{ inputs.base || 'main' }}
+          ref: ${{ steps.refs.outputs.base }}
           path: base
       - name: Install Rust stable
         shell: bash
