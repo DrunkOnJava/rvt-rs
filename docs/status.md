@@ -1,6 +1,6 @@
 # Project Status
 
-Last reviewed: 2026-10-27
+Last reviewed: 2026-10-30
 
 This page is the public source of truth for what rvt-rs can do today. It is
 intentionally blunt so users can decide quickly whether the tool fits their
@@ -1004,11 +1004,21 @@ prints it from any installed build.
 
 ## Roadmap Position
 
-- **v0.10.0** (2026-10-27) is the latest release: crates.io and docs.rs,
+- **v0.11.0** (2026-10-30) is the latest release: crates.io and docs.rs,
   the `rvt` wheels on PyPI, GitHub Release archives for Linux, macOS and
   Windows, and the container image, each checked from its published
   artifacts ([`install.md`](install.md)). It carries everything under
-  `[0.10.0]` in [`CHANGELOG.md`](../CHANGELOG.md): more of the base
+  `[0.11.0]` in [`CHANGELOG.md`](../CHANGELOG.md): a model over the
+  reader's resource limits is reported, and `rvt-ifc` and `rvt-gltf` exit
+  with status 3 instead of writing an empty model, with `--large-model` and
+  a viewer retry (#1075); files that kept an older release's schema read as
+  that release (#421); elements outside the export phase are left out
+  (#328); doors and windows are drawn from their saved meshes by default;
+  windows' openings follow their cut solids; walls nothing joins or cuts
+  carry their `Height`; Revit 2008 to 2014 export experimentally; and the
+  stable API nothing used is removed. Its "Upgrading from 0.10" section
+  lists what a 0.10 user has to change.
+- **v0.10.0** (2026-10-27) is the release before: more of the base
   quantities Revit's export writes (21,065 equal on the BIM4LCA office as
   built, one different, none that Revit's export leaves out), among them
   walls' `Length` and every wall's `Width`, curtain walls' and beams'
@@ -1016,19 +1026,8 @@ prints it from any installed build.
   `Width`, hollow-section columns' areas and volume, spaces' `Height` and
   stair railings' `Length`; two diagnostics fields for the quantity census;
   and the type parameters of walls, floors, ceilings and roofs in
-  `rvt-elements` and Python. Its "Upgrading from 0.9" section says no code
-  change is needed.
-- **v0.9.0** (2026-10-26) is the release before: IFC4 base quantities as
-  Revit's export writes them, on by default and left out by
-  `rvt-ifc --no-base-quantities` (20,157 equal on the BIM4LCA office as
-  built, one different, none that Revit's export leaves out); curtain
-  mullions' `Span`, walls' `ExtendToStructure`, railings' `Height`, level
-  slabs' `PitchAngle`, stair flights' treads and nosing, and the
-  `Reference` of stairs, runs, landings, openings and furniture; types from
-  native records for curtain walls, pipes, wall sweeps and ramps; doors and
-  windows in the wall their native record names; `--revit-set-placement`;
-  and faster exports of Revit 2023 to 2027 files.
-- `main` has everything v0.10.0 has, and is ahead of it by the fragments
+  `rvt-elements` and Python.
+- `main` has everything v0.11.0 has, and is ahead of it by the fragments
   under [`changelog.d/`](../changelog.d/README.md).
 
 Open work is tracked as GitHub issues; [`docs/archive/TODO.md`](archive/TODO.md) is

@@ -1,6 +1,6 @@
 # Roadmap
 
-Last reviewed: 2026-10-27
+Last reviewed: 2026-10-30
 
 This roadmap is the public, contributor-facing view of where rvt-rs is headed.
 The support boundary lives in [`docs/status.md`](docs/status.md) and the
@@ -127,11 +127,19 @@ the four levels a file can reach are in the
   hollow-section columns' areas and volume, spaces' `Height` and stair
   railings' `Length`; and system-family elements' type parameters
   (puzzbobb, #1065).
+- **0.11.0, 2026-10-30.** A model over the reader's resource limits is
+  reported instead of exporting empty, with `--large-model` and a viewer
+  retry (#1075); files that kept an older release's schema read as that
+  release (puzzbobb, #421); elements outside the export phase left out
+  (puzzbobb, #328); doors and windows drawn from their saved meshes by
+  default; windows' openings from their cut solids; walls' `Height` where
+  nothing joins or cuts them; Revit 2008 to 2014 experimental (puzzbobb);
+  and the unused stable API removed.
 
-### 0.11.0: IFC geometry and element data
+### 0.12.0: IFC geometry and element data
 
-The geometry and element-data work that continues after 0.10.0, moved from the
-0.10.0 milestone when 0.10.0 shipped. Each
+The geometry and element-data work that continues after 0.11.0, moved from the
+0.11.0 milestone when 0.11.0 shipped. Each
 slice records a baseline, an improvement and a residual against Revit's own
 exports on the reference pack (#407), approximations stay labelled (#409), and
 a slice ships in the next release that contains it. Geometry open now: wall
