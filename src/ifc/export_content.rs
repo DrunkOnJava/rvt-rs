@@ -63,9 +63,10 @@ pub struct TypedProductionAppend {
     /// is part of the type's GlobalId.
     // Tracker: B72, B74.
     pub element_flips: BTreeMap<u32, bool>,
-    /// The `Pset_PipeSegmentOccurrence` sets whose `InvertElevation` is a
-    /// pipe's invert worked out in model height, by index in the entities,
-    /// for `pipe_inverts_above_storeys` (RE-157).
+    /// The entity indexes of the `Pset_PipeSegmentOccurrence` sets whose
+    /// `InvertElevation` rvt-rs worked out (RE-157). Nothing reads them any
+    /// more: the invert is written as the height above the model's zero, so
+    /// no step takes a storey's elevation off it.
     pub computed_inverts: Vec<usize>,
     /// The further pieces written inside their element's body rather than
     /// as elements of their own (#823), by index in the entities
@@ -1136,10 +1137,9 @@ pub fn append_typed_production_elements(
             }
             _ => None,
         });
-        // RE-157: a pipe's invert, here in model height; the storey's
-        // elevation comes off once storeys are bound
-        // (`pipe_inverts_above_storeys`). A pipe whose parameter named for
-        // the property gives it (RE-194) has that, as it is.
+        // RE-157: a pipe's invert, in model height (RE-157 §6). A pipe whose
+        // parameter named for the property gives it (RE-194) has that, as it
+        // is.
         let explicit_invert = named.iter().any(|(set, property)| {
             set == "Pset_PipeSegmentOccurrence" && property.name == INVERT_ELEVATION_PROPERTY
         });
@@ -3189,20 +3189,17 @@ const PIPE_AXIS_TOLERANCE_FEET: f64 = 1e-6;
 
 /// A pipe's invert in model height, feet (RE-157): the lower end of a
 /// vertical pipe, or a horizontal pipe's axis less half its inner diameter.
-/// `None` for a sloped pipe, or one whose inner diameter was not read: the
-/// diameters are read on the release RE-157 measured the invert on (2025),
-/// and a 2024 pipe's axis alone gives an invert Revit's export does not
-/// (the BIM4LCA office's 12, #869).
+/// Revit's export gives it as the height above the model's zero, not above
+/// the pipe's storey: the BIM4LCA office's 12 vertical pipes, on a storey 55.5
+/// m up, carry 55.32 m (RE-157 §6). `None` for a sloped pipe, or a horizontal
+/// one whose inner diameter was not read: the diameters are read on the
+/// release RE-157 measured the invert on (2025), and a 2024 pipe's axis alone
+/// gives an invert Revit's export does not. A vertical pipe's needs no
+/// diameter, so a 2024 vertical pipe has one (#869).
 fn pipe_invert_height(fields: &[(String, InstanceField)]) -> Option<f64> {
     use crate::partition_schema_mvp as mvp;
     let pipe = mvp::pipe_body_from_fields(fields)?;
     let (start, end) = (pipe.start, pipe.end);
-    let inner = fields.iter().find_map(|(name, value)| match value {
-        InstanceField::Float { value, .. } if name == mvp::PIPE_INNER_DIAMETER_FIELD => {
-            Some(*value)
-        }
-        _ => None,
-    })?;
     let near = |a: f64, b: f64| (a - b).abs() <= PIPE_AXIS_TOLERANCE_FEET;
     let level = near(start[2], end[2]);
     if !level && near(start[0], end[0]) && near(start[1], end[1]) {
@@ -3211,45 +3208,13 @@ fn pipe_invert_height(fields: &[(String, InstanceField)]) -> Option<f64> {
     if !level {
         return None;
     }
-    Some(start[2] - inner / 2.0)
-}
-
-/// Take each pipe's storey elevation off the `InvertElevation` worked out in
-/// model height, in the sets `computed` lists, which Revit's export gives
-/// above the pipe's storey (RE-157). A pipe on no storey keeps its height
-/// above the model's zero.
-pub(super) fn pipe_inverts_above_storeys(
-    entities: &mut [entities::IfcEntity],
-    storeys: &[Storey],
-    computed: &[usize],
-) {
-    let elevations: Vec<f64> = entities
-        .iter()
-        .map(|entity| match entity {
-            entities::IfcEntity::BuildingElement {
-                storey_index: Some(index),
-                ..
-            } => storeys
-                .get(*index)
-                .map_or(0.0, |storey| storey.elevation_feet),
-            _ => 0.0,
-        })
-        .collect();
-    for &index in computed {
-        let Some(entities::IfcEntity::ElementPropertySet { element, set }) =
-            entities.get_mut(index)
-        else {
-            continue;
-        };
-        let elevation = elevations.get(*element).copied().unwrap_or(0.0);
-        for property in &mut set.properties {
-            if let (INVERT_ELEVATION_PROPERTY, PropertyValue::LengthFeet(height)) =
-                (property.name.as_str(), &mut property.value)
-            {
-                *height -= elevation;
-            }
+    let inner = fields.iter().find_map(|(name, value)| match value {
+        InstanceField::Float { value, .. } if name == mvp::PIPE_INNER_DIAMETER_FIELD => {
+            Some(*value)
         }
-    }
+        _ => None,
+    })?;
+    Some(start[2] - inner / 2.0)
 }
 
 /// The entities a room's space contains in Revit's export: on RE1
