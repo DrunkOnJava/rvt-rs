@@ -6,39 +6,38 @@
 //! the centres the Revit API reports for the same file. This probe lists
 //! the candidates for that comparison.
 //!
-//! FACT found with its first version (Measure run 41044021502): every view
-//! has a native `Viewport` record onto its own `DBDrawing`, with
-//! `m_ownerDBViewId` -1 and `m_offset` zero. A viewport placed on a sheet
-//! is a `Viewport` record whose `m_ownerDBViewId` names the sheet (a
-//! `DBViewDrafting` carrying `m_sheetNumber`) and whose `m_dbViewId` names
-//! the view it shows; its `m_offset` is not zero. The BIM4LCA office as
-//! built has 21 (and 173 per-view records); Core Interior and the RE1
-//! models have none.
+//! FACT found (Measure runs 41044021502 and 41045152790): every view has a
+//! native `Viewport` record onto its own `DBDrawing`, with `m_ownerDBViewId`
+//! -1 and `m_offset` zero. A viewport placed on a sheet is a `Viewport`
+//! record whose `m_ownerDBViewId` names the sheet (a `DBViewDrafting`
+//! carrying `m_sheetNumber` and `m_viewName`) and whose `m_dbViewId` names
+//! the view it shows; its `m_offset` is a point on the sheet in feet, with z
+//! 0. The BIM4LCA office as built has 21 such viewports on 19 sheets (and
+//! 173 per-view records); Core Interior and the RE1 models have none. No
+//! sheet viewport has a partition element-record frame. On the office,
+//! viewports placed side by side share the coordinate they are aligned on
+//! (sheet L13's three plans one x, sheet L07's two one y), as box centres
+//! would; whether `m_offset` is the box centre the Revit API reports, or the
+//! view's origin on the sheet, is what the comparison has to show.
 //!
 //! Output, lengths in feet on the sheet:
 //!   viewport <id> sheet <id> "<number>" "<name>" view <id> <class> "<name>"
-//!            scale <m_scale> offset <x> <y> label <x> <y> <z>
+//!            scale <m_scale> offset <x> <y> <z> label <x> <y> <z>
 //!                      each viewport on a sheet, from its native record
-//!   frame <id> <category> bbox <x0> <y0> <z0> <x1> <y1> <z1> centre <x> <y>
-//!                      the viewport's partition element record, where one
-//!                      decodes: its BuiltInCategory and box
-//!   view <id> <json>   the root object of the view each viewport shows
-//!                      (its crop region is among its members)
+//!   summary <class> <records>
+//! and, with `--records`:
 //!   record <json>      every record of the four viewport classes
 //!                      (`Viewport`, `GCSViewport`, `ViewportAttributes`,
 //!                      `ViewportInfo`), in full
-//!   summary <class> <records>
+//!   view <id> <json>   the root object of the view each viewport shows
 //!
 //! Usage:
-//!   cargo run --profile ci -p rvt-probes --example probe_1117_viewports -- MODEL.rvt
+//!   cargo run --profile ci -p rvt-probes --example probe_1117_viewports -- MODEL.rvt [--records]
 
 use std::collections::{BTreeMap, BTreeSet};
 
 use rvt::RevitFile;
 use rvt::research::native_document::{Options, extract_graphs};
-use rvt::research::partition_element_records::{
-    BBOX_MARKER_OFFSET, compute_second_prologue_ids, decode_frame_as, file_bbox_marker,
-};
 use serde_json::Value;
 
 const VIEWPORT_CLASSES: [&str; 4] = [
@@ -73,7 +72,10 @@ fn numbers(fields: &Value, member: &str) -> String {
 }
 
 fn main() -> anyhow::Result<()> {
-    let path = std::env::args().nth(1).expect("usage: MODEL.rvt");
+    let path = std::env::args()
+        .nth(1)
+        .expect("usage: MODEL.rvt [--records]");
+    let records = std::env::args().any(|arg| arg == "--records");
     let mut rf = RevitFile::open(&path)?;
     let options = Options {
         selected_classes: VIEWPORT_CLASSES
@@ -96,10 +98,12 @@ fn main() -> anyhow::Result<()> {
         {
             placed.insert(record.identity.element_id, root.fields.clone());
         }
-        println!(
-            "record {}",
-            serde_json::to_string(&record).unwrap_or_default()
-        );
+        if records {
+            println!(
+                "record {}",
+                serde_json::to_string(&record).unwrap_or_default()
+            );
+        }
         Ok(())
     })?;
 
@@ -151,58 +155,7 @@ fn main() -> anyhow::Result<()> {
         views.insert(view);
     }
 
-    let version = rf.basic_file_info()?.version;
-    if let Some(marker) = file_bbox_marker(&mut rf, version) {
-        let ids: BTreeSet<u64> = placed.keys().copied().collect();
-        let assigned = compute_second_prologue_ids(&mut rf);
-        let mut frames = BTreeMap::new();
-        for stream in rf.partition_stream_names() {
-            let Ok(inflated) = rf.inflated_partition(&stream) else {
-                continue;
-            };
-            let buf = inflated.bytes();
-            for at in memchr::memmem::find_iter(buf, &marker) {
-                let Some(start) = at.checked_sub(BBOX_MARKER_OFFSET) else {
-                    continue;
-                };
-                let Some(raw) = buf.get(start..start + 8) else {
-                    continue;
-                };
-                let id = u64::from_le_bytes(raw.try_into()?);
-                if !ids.contains(&id) {
-                    continue;
-                }
-                if let Some(record) = decode_frame_as(&stream, buf, start, id as u32, &marker) {
-                    frames.entry(id).or_insert(record);
-                }
-            }
-            for (&offset, &id) in assigned.get(&stream).into_iter().flatten() {
-                if !ids.contains(&u64::from(id)) {
-                    continue;
-                }
-                if let Some(record) = decode_frame_as(&stream, buf, offset, id, &marker) {
-                    frames.entry(u64::from(id)).or_insert(record);
-                }
-            }
-        }
-        for (id, record) in &frames {
-            let b = record.bbox_feet;
-            println!(
-                "frame {id} {} bbox {} {} {} {} {} {} centre {} {}",
-                record.builtin_category,
-                b[0],
-                b[1],
-                b[2],
-                b[3],
-                b[4],
-                b[5],
-                (b[0] + b[3]) / 2.0,
-                (b[1] + b[4]) / 2.0,
-            );
-        }
-    }
-
-    for view in &views {
+    for view in views.iter().filter(|_| records) {
         if let Some((_, fields)) = named.get(view) {
             println!(
                 "view {view} {}",
@@ -210,8 +163,8 @@ fn main() -> anyhow::Result<()> {
             );
         }
     }
-    for (class, records) in &counts {
-        println!("summary {class} {records}");
+    for (class, count) in &counts {
+        println!("summary {class} {count}");
     }
     Ok(())
 }
