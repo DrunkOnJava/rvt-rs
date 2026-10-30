@@ -37,6 +37,14 @@ the export has none (RE-242). Where Revit's export is IFC2X3, an IFC4
 property that IFC2X3's definition of its set does not have (IfcOpenShell's
 buildingSMART templates) is counted apart too: that export cannot write it.
 
+Where Revit's export writes `IsExternal` on its type objects too, as the
+exporter that made the BIM4LCA office's exports does (a cache of element types
+that gives every curtain wall's members of a type after the first wall's the
+value false, RE-269), the `IsExternal` of the curtain members (IfcMember and
+IfcPlate under an IfcCurtainWall) of those types and of the type objects is
+counted apart, not as missing: rvt-rs does not write it (the maintainer,
+2026-10-30). A later exporter's (RE1 Architecture's) is scored.
+
 Needs IfcOpenShell (the version tools/ci/requirements-ifc.txt pins).
 """
 
@@ -45,6 +53,7 @@ import os
 import sys
 
 import ifcopenshell
+import ifcopenshell.util.element
 import ifcopenshell.util.pset
 import ifcopenshell.util.unit
 
@@ -151,6 +160,48 @@ REVIT_DEFECTS = {
     ("Pset_StairFlightCommon", "WalkingLineOffset"),
     ("Pset_StairCommon", "WalkingLineOffset"),
 }
+# The IsExternal of a curtain mullion or panel and of its type object is the
+# product of the exporter's cache of element types, not of the model (RE-269):
+# Revit 24.0's IsElementExternal also evaluates a type, and caches it as not
+# external, after the first curtain wall that uses it has had its members'
+# sets created, so every later wall's members of that type read false. It is
+# left out of rvt-rs's export (the maintainer, 2026-10-30) and counted apart
+# here, in the same bucket as REVIT_DEFECTS. A curtain member is an IfcMember
+# or IfcPlate aggregated under an IfcCurtainWall, and the export is one of that
+# exporter when the member's type object holds the IsExternal itself, as an
+# exporter that does not cache types (24.2.20 on, RE1's 26.2) leaves it out.
+CURTAIN_MEMBER_ENTITIES = ("IfcMember", "IfcPlate")
+CURTAIN_MEMBER_SETS = ("Pset_MemberCommon", "Pset_PlateCommon")
+
+
+def curtain_cache_values(f, out):
+    """The (object key, set, property) triples of `out` that are the exporter's
+    type cache's IsExternal: of the curtain members whose type object holds
+    one, and of those type objects (RE-269)."""
+    members = {}
+    for entity in CURTAIN_MEMBER_ENTITIES:
+        for product in f.by_type(entity):
+            parents = [r.RelatingObject for r in product.Decomposes or ()]
+            key = key_of(product)
+            if not key or not any(p is not None and p.is_a("IfcCurtainWall") for p in parents):
+                continue
+            kind = ifcopenshell.util.element.get_type(product)
+            tag = getattr(kind, "Tag", None) if kind is not None else None
+            members[key] = f"type:{tag}" if tag else None
+    holding = {
+        key
+        for (key, pset, prop) in out
+        if prop == "IsExternal" and pset in CURTAIN_MEMBER_SETS and key.startswith("type:")
+    }
+    types = {kind for kind in members.values() if kind in holding}
+    keys = {key for key, kind in members.items() if kind in types} | types
+    return {
+        (key, pset, "IsExternal")
+        for key in keys
+        for pset in CURTAIN_MEMBER_SETS
+        if (key, pset, "IsExternal") in out
+    }
+
 
 IFC2X3_LENGTHS = {
     ("Pset_FlowSegmentPipeSegment", "Length"),
@@ -250,7 +301,7 @@ def properties(path):
         for pset in kind.HasPropertySets or ():
             if standard(pset):
                 add(key, pset)
-    return out, objects, entities, ifc2x3
+    return out, objects, entities, ifc2x3, curtain_cache_values(f, out)
 
 
 def main(argv):
@@ -263,7 +314,7 @@ def main(argv):
     if len(args) != 2:
         print(__doc__, file=sys.stderr)
         return 2
-    (ours, our_objects, our_entities, _), (theirs, their_objects, their_entities, their_ifc2x3) = (
+    (ours, our_objects, our_entities, _, _), (theirs, their_objects, their_entities, their_ifc2x3, their_cache) = (
         properties(args[0]),
         properties(args[1]),
     )
@@ -288,11 +339,15 @@ def main(argv):
     twice = 0
     in_own_set = 0
     defects = collections.Counter()
+    cache_defects = collections.Counter()
     unwritten_openings = collections.Counter()
     for (key, pset, prop), value in sorted(theirs.items()):
         if key not in our_objects:
             if key.startswith("opening:"):
                 unwritten_openings[(pset, prop)] += 1
+            continue
+        if (key, pset, prop) in their_cache:
+            cache_defects[(pset, prop, "types" if key.startswith("type:") else "curtain members")] += 1
             continue
         if pset.startswith("quantities:"):
             as_quantities += 1
@@ -342,6 +397,8 @@ def main(argv):
         print(f"  {pset}.{prop}: {n}, equal {equal}, different {different}, missing {missing}")
     for (pset, prop), n in sorted(defects.items()):
         print(f"Revit values known to be wrong, left out (RE-235 §5): {pset}.{prop} {n}")
+    for (pset, prop, where), n in sorted(cache_defects.items()):
+        print(f"Revit values known to be wrong, left out (RE-235 §5, RE-269): {pset}.{prop} on {where} {n}")
     if unwritten_openings:
         print(
             f"Revit values on openings rvt-rs does not write (a door or wall cut in a further host,"
