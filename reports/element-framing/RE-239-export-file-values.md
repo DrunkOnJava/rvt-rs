@@ -79,3 +79,16 @@ gh workflow run measure.yml --ref main -f ref=main -f base=none -f nordic=true -
 ```
 
 The listing of §1 is `psets_vs_ifc.txt` in any Measure run with `nordic=true`; `PSETS_MISSING` (#1013) names the properties it lists object by object.
+
+## 7. The values the census sets aside, checked on IFC4 exports (2026-10-29)
+
+`tools/re/psets_vs_ifc.py` sets aside what rvt-rs writes where Revit's reference export cannot have written it: Core Interior's export has no property sets (§5, #1115), and RE1's are IFC2X3, which defines no place for some IFC4 properties (#1118). That is 4,210 values in 25 properties. Each property was checked against Revit's IFC4 exports of the BIM4LCA office (as built, at permit) and the R2025 models (Measure [40981313275](https://github.com/DrunkOnJava/rvt-rs/actions/runs/40981313275) and, before either change, [40977753002](https://github.com/DrunkOnJava/rvt-rs/actions/runs/40977753002)):
+
+| | properties | values set aside |
+|---|---:|---:|
+| written by Revit's IFC4 exports and equal there, never different or extra | 19 | 2,506 |
+| equal and never different there, with an extra only on elements Revit's export leaves out (column 1927742, 17 openings) | 5 | 1,684 |
+| in no IFC4 export: `Pset_ShadingDeviceCommon.Reference` | 1 | 20 |
+
+The middle row's properties are `Pset_EnvironmentalImpactIndicators.Reference`, `Pset_ColumnCommon.IsExternal` and `Reference`, `Pset_ReinforcementBarPitchOfColumn.Reference` and `Pset_OpeningElementCommon.Reference`: their extras are elements Revit's export does not hold (W4, RE-262), not values. No reference export holds an `IfcShadingDevice`, so nothing confirms that Revit writes `Pset_ShadingDeviceCommon.Reference`. The maintainer chose to keep both set-asides and to leave that property out until a Revit IFC4 export confirms it (2026-10-29): Core Interior's 20 shading devices no longer get the set.
+
