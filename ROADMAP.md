@@ -7,7 +7,7 @@ The support boundary lives in [`docs/status.md`](docs/status.md) and the
 machine-readable [support matrix](docs/support-matrix.json); the statuses below
 are its ceilings and this page never claims more. The plan itself is the GitHub
 milestones and the issues under them; a milestone is closed when its release
-ships. [`TODO.md`](TODO.md) is the older task decomposition they grew out of,
+ships. [`docs/archive/TODO.md`](docs/archive/TODO.md) is the older task decomposition they grew out of,
 and [`docs/maintaining.md`](docs/maintaining.md) says how the tracker is run.
 
 ## Product Goal

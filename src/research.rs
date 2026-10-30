@@ -79,8 +79,6 @@
 //! - [`native_parametric_mesh`]: Bounded UV-grid meshing for decoded parametric surfaces
 //! - [`native_parametric_surface`]: Typed evaluators for the non-planar surfaces observed in saved graphs
 //! - [`native_rendered_content`]: Family types whose family is rendered content (RE-202, #355)
-//! - [`native_saved_glb`]: glTF export of native saved meshes, retaining face and material provenance
-//! - [`native_saved_materials`]: Saved material ownership and the default viewport conversion
 //! - [`native_saved_mesh`]: Tessellation of bounded saved planar and cylindrical BRep faces
 //! - [`native_saved_scene`]: Current native saved-graphics extraction with explicit shared-symbol closure
 //! - [`native_segments`]: Forward-only physical partition markers and continuation groups
@@ -166,10 +164,6 @@ pub mod native_parametric_mesh;
 pub mod native_parametric_surface;
 #[path = "native_rendered_content.rs"]
 pub mod native_rendered_content;
-#[path = "native_saved_glb.rs"]
-pub mod native_saved_glb;
-#[path = "native_saved_materials.rs"]
-pub mod native_saved_materials;
 #[path = "native_saved_mesh.rs"]
 pub mod native_saved_mesh;
 #[path = "native_saved_scene.rs"]
