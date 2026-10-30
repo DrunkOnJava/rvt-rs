@@ -108,8 +108,8 @@ as Revit's exporter does with "Export base quantities" off (RE-242).
 It is not a converter for arbitrary models: most parameters, family
 geometry (doors and windows are drawn from the mesh Revit saved for their
 display by default, and any other family instance with the experimental
-`--saved-meshes` option, RE-78), roofs over a T or U footprint and roofs by extrusion outside Revit 2025, the height of
-walls Revit draws cut (78 of the BIM4LCA office's, #1067), the boundaries of
+`--saved-meshes` option, RE-78), roofs over a T or U footprint and roofs by extrusion outside Revit 2025, the top of
+walls Revit steps over a floor that covers them in part (29 of the BIM4LCA office's as built and 26 at permit, #1067), the boundaries of
 rooms whose stored solid does not close and opening profiles are not
 decoded, and rvt-rs does not edit Revit model data.
 
