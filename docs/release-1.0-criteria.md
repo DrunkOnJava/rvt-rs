@@ -137,6 +137,7 @@ of more than one layer,
 their `Width` (RE-295, [#1016](https://github.com/DrunkOnJava/rvt-rs/issues/1016); what remains of the slabs, [#1208](https://github.com/DrunkOnJava/rvt-rs/issues/1208)),
 ceilings' `Width` (RE-250),
 spaces' `Height` where the room's record holds its solid's faces (RE-255),
+spaces' `NetVolume` where that solid is a prism of its outline (RE-296, [#1016](https://github.com/DrunkOnJava/rvt-rs/issues/1016); what remains of the spaces, [#1207](https://github.com/DrunkOnJava/rvt-rs/issues/1207)),
 stair railings' `Length` where the path is one line along the stair's runs (RE-254)), 1 differs (the mullion whose `Span` differs) and 11,322 are missing (Measure run 41140153113, `main` at 483f1a0f; the 527 quantities Revit's export writes on openings rvt-rs does not write, a door's further cuts and the cuts of curtain walls and cabinets, are counted apart, [#1165](https://github.com/DrunkOnJava/rvt-rs/issues/1165)), none written that Revit's export leaves out (the maintainer,
 2026-10-26: a joined column's `Length` and a curtain panel's `Width` are left out,
 since Revit's export gives none on 18 meshed columns and 3 panels that nothing tells apart), and RE1's 94 IFC2X3 pipe and duct lengths all are written;
