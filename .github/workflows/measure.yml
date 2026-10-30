@@ -112,6 +112,10 @@ on:
         description: With samples, only the releases from the first year to the last (e.g. "2026 2027"; one year reads from it on), empty for every release
         required: false
         default: ""
+      psets_missing:
+        description: "tools/re/psets_vs_ifc.py's PSETS_MISSING: <set>.<property>[,...] whose missing objects the census lists by key, entity and value (e.g. Pset_ColumnCommon.Slope); empty for none"
+        required: false
+        default: ""
       timing:
         description: Also time rvt-ifc at base and head on one runner, in turn, three rounds per file (the base and head jobs run on different runners, whose speed alone moves an export's time by up to about 1.7x)
         type: boolean
@@ -320,6 +324,7 @@ jobs:
           PROBE_SCORER_DIR: measured/tools/re
           MEASURE_MODELS: ${{ inputs.models }}
           MEASURE_SCORERS: ${{ inputs.scorers }}
+          PSETS_MISSING: ${{ inputs.psets_missing }}
           KEEP_IFC: ${{ inputs.keep_ifc && '1' || '' }}
           FAMILY_DIR: ${{ (inputs.families || github.event_name == 'pull_request') && format('{0}/_corpus/examples/Autodesk', github.workspace) || '' }}
           SAMPLE_DIR: ${{ inputs.samples && format('{0}/_samples', github.workspace) || '' }}
