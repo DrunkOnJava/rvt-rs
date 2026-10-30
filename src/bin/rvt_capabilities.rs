@@ -1,4 +1,4 @@
-//! `rvt-capabilities` — emit an honest capability / relation-domain snapshot.
+//! `rvt-capabilities` — emit an honest capability snapshot.
 //!
 //! Doctor-style CLI for the capability manifest. Prints JSON (default) or a short
 //! text summary. Does **not** claim ES remapping, compound openings, or
@@ -12,7 +12,7 @@ use std::process::ExitCode;
 #[command(
     name = "rvt-capabilities",
     version,
-    about = "Emit honest rvt-rs capability + relation-domain snapshot (no invented successes)",
+    about = "Emit honest rvt-rs capability snapshot (no invented successes)",
     after_help = "Examples:\n  \
         rvt-capabilities\n  \
         rvt-capabilities -f text\n  \
@@ -77,10 +77,6 @@ fn main() -> ExitCode {
                 }
             }
             println!();
-            println!("relation domains (experimental):");
-            for d in &manifest.relation_domains.domains {
-                println!("- {} · {:?}", d.id, d.status);
-            }
             for h in &manifest.honesty {
                 println!("honesty: {h}");
             }

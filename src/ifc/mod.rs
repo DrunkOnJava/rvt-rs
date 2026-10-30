@@ -828,20 +828,11 @@ fn require_geometry(diagnostics: &ExportDiagnostics, failures: &mut Vec<String>)
     }
 }
 
-/// Trait every IFC exporter implements. Multiple implementations exist
-/// as we phase this up: a null exporter that returns `NotYetImplemented`
-/// for everything, a partial one that emits only project+units, and
-/// eventually a full one.
+/// Trait every IFC exporter implements: [`RvtDocExporter`], the production
+/// exporter, [`DiagnosticRvtDocExporter`], which keeps low-confidence
+/// candidates for research, and [`PlaceholderExporter`].
 pub trait Exporter {
     fn export(&self, rf: &mut crate::RevitFile) -> Result<IfcModel>;
-}
-
-/// Returned by exporters that cannot yet produce a given entity class.
-#[derive(Debug, Clone, thiserror::Error)]
-#[error("IFC export not yet implemented: {reason}")]
-#[non_exhaustive]
-pub struct NotYetImplemented {
-    pub reason: String,
 }
 
 /// Placeholder exporter — returns an `IfcModel` whose only filled
@@ -852,9 +843,6 @@ pub struct NotYetImplemented {
 ///
 /// For the real document-level exporter with spatial hierarchy +
 /// classifications, use [`RvtDocExporter`] instead.
-///
-/// (Renamed from `NullExporter` in v0.1.3 — the old name implied
-/// it returns `NotYetImplemented`, which it does not.)
 #[derive(Debug)]
 pub struct PlaceholderExporter;
 

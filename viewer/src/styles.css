@@ -427,7 +427,8 @@ header .export-hint[hidden] {
 
 /* ---- Categories: checkbox rows ------------------------------------------ */
 
-.category-toggle {
+.category-toggle,
+.option-toggle {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -439,7 +440,8 @@ header .export-hint[hidden] {
   cursor: pointer;
   transition: background-color var(--sx-duration-fast) var(--sx-ease-standard);
 }
-.category-toggle:hover {
+.category-toggle:hover,
+.option-toggle:hover {
   background: var(--sx-color-selected-hover);
 }
 .category-toggle .tree-count {
@@ -450,10 +452,12 @@ header .export-hint[hidden] {
   font-size: var(--sx-fs-xs);
   color: var(--sx-color-dimmed);
 }
-.category-toggle:focus-within {
+.category-toggle:focus-within,
+.option-toggle:focus-within {
   background: var(--sx-color-selected);
 }
-.category-toggle input {
+.category-toggle input,
+.option-toggle input {
   appearance: none;
   display: inline-grid;
   place-items: center;
@@ -469,17 +473,36 @@ header .export-hint[hidden] {
     background-color var(--sx-duration-fast),
     border-color var(--sx-duration-fast);
 }
-.category-toggle input:checked {
+.category-toggle input:checked,
+.option-toggle input:checked {
   background: var(--sx-color-primary);
   border-color: var(--sx-color-primary);
 }
-.category-toggle input:checked::after {
+.option-toggle input:disabled {
+  background: var(--sx-color-disabled);
+  border-color: transparent;
+  cursor: not-allowed;
+}
+.category-toggle input:checked::after,
+.option-toggle input:checked::after {
   content: '';
   width: 8px;
   height: 5px;
   border: solid #fff;
   border-width: 0 0 2px 2px;
   transform: translateY(-1px) rotate(-45deg);
+}
+
+/* A panel option: a checkbox row with a line of help under it. */
+.option-toggle {
+  margin-top: var(--sx-space-xs);
+}
+.option-hint {
+  margin: 0 0 4px;
+  padding: 0 8px;
+  font-size: var(--sx-fs-xs);
+  line-height: var(--sx-lh-xs);
+  color: var(--sx-color-dimmed);
 }
 
 /* ---- Viewport ------------------------------------------------------------ */

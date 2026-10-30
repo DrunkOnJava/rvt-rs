@@ -2,18 +2,17 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://drunkonjava.github.io/rvt-rs/schemas/capability-manifest.schema.json",
   "title": "rvt-rs capability manifest (doctor / CLI snapshot)",
-  "description": "Honest capability snapshot aligning support-matrix ceilings with research stubs. verified requires E4+ evidence and a support-matrix update in the same change set. Experimental relation-domain rows are architecture only — not production topology claims.",
+  "description": "Honest capability snapshot aligning support-matrix ceilings with research rows. verified requires E4+ evidence and a support-matrix update in the same change set.",
   "type": "object",
   "required": [
     "schema_version",
     "manifest_id",
     "experimental",
     "capabilities",
-    "relation_domains",
     "honesty"
   ],
   "properties": {
-    "schema_version": { "type": "integer", "const": 1 },
+    "schema_version": { "type": "integer", "const": 2 },
     "manifest_id": { "type": "string", "minLength": 1 },
     "experimental": { "type": "boolean" },
     "capabilities": {
@@ -48,32 +47,6 @@
         },
         "additionalProperties": true
       }
-    },
-    "relation_domains": {
-      "type": "object",
-      "required": ["domains", "experimental", "notes"],
-      "properties": {
-        "domains": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "required": ["domain", "id", "status", "isolation_peers", "notes"],
-            "properties": {
-              "domain": { "enum": ["es_ref_graph", "es_value_tree", "bim_topology", "elem_table_ownership", "research_other"] },
-              "id": { "type": "string", "minLength": 1 },
-              "status": { "enum": ["experimental", "research", "quarantined"] },
-              "isolation_peers": {
-                "type": "array",
-                "items": { "enum": ["es_ref_graph", "es_value_tree", "bim_topology", "elem_table_ownership", "research_other"] }
-              },
-              "notes": { "type": "array", "items": { "type": "string" } }
-            }
-          }
-        },
-        "experimental": { "type": "boolean" },
-        "notes": { "type": "array", "items": { "type": "string" } }
-      },
-      "additionalProperties": true
     },
     "honesty": {
       "type": "array",
