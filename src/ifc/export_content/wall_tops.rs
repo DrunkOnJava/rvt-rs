@@ -41,9 +41,13 @@ use crate::ifc::body_geometry::{
 };
 use crate::ifc::entities::{IfcEntity, Property, PropertyValue};
 
-/// How much of a wall's plan may lie outside its floor's, or a floor's
-/// triangulated plan may differ from its outline, square feet.
-const COVER_TOLERANCE_SQUARE_FEET: f64 = 1e-6;
+/// How much of a wall's plan may lie outside its floor's and still be
+/// covered, square feet.
+const COVER_TOLERANCE_SQUARE_FEET: f64 = 1e-3;
+
+/// How far a floor's triangulated plan may differ in area from its outline,
+/// square feet.
+const TRIANGULATION_TOLERANCE_SQUARE_FEET: f64 = 1e-6;
 
 /// How far a floor's underside must lie inside the wall's height, and how
 /// far its pieces may differ in height, feet.
@@ -185,7 +189,7 @@ fn build_wall(entity: &IfcEntity) -> Option<Wall> {
         plan.reverse();
     }
     let size = area(&plan);
-    if !(size.is_finite() && size > COVER_TOLERANCE_SQUARE_FEET) {
+    if !(size.is_finite() && size > TRIANGULATION_TOLERANCE_SQUARE_FEET) {
         return None;
     }
     Some(Wall {
@@ -218,7 +222,7 @@ fn plan_triangles(
         drawn += area(&triangle).abs();
         triangles.push(triangle);
     }
-    ((drawn - expected).abs() <= COVER_TOLERANCE_SQUARE_FEET).then_some(triangles)
+    ((drawn - expected).abs() <= TRIANGULATION_TOLERANCE_SQUARE_FEET).then_some(triangles)
 }
 
 /// The slab, roof or footing made of the entities `pieces` (a floor of
@@ -299,10 +303,18 @@ fn decide(entities: &[IfcEntity], pending: &[(usize, Vec<u32>)]) -> Vec<(usize, 
     let mut cutters: HashMap<u32, Option<Cutter>> = HashMap::new();
     let mut cuts = Vec::new();
     for (index, named) in pending {
+        let wall_id = match entities.get(*index) {
+            Some(IfcEntity::BuildingElement { type_guid, .. }) => {
+                type_guid.clone().unwrap_or_default()
+            }
+            _ => String::new(),
+        };
         if profiled.contains(index) {
+            eprintln!("wall_tops: wall {wall_id}: profiled");
             continue;
         }
         let Some(wall) = entities.get(*index).and_then(build_wall) else {
+            eprintln!("wall_tops: wall {wall_id}: not a plain extrusion wall");
             continue;
         };
         let mut lowest: Option<(f64, u32)> = None;
@@ -315,9 +327,35 @@ fn decide(entities: &[IfcEntity], pending: &[(usize, Vec<u32>)]) -> Vec<(usize, 
                 .or_insert_with(|| build_cutter(entities, found, &voids))
                 .as_ref()
             else {
+                eprintln!(
+                    "wall_tops: wall {wall_id}: cutter {id} not usable ({} pieces)",
+                    found.len()
+                );
                 continue;
             };
             let level = cutter.underside;
+            if level > wall.base + UNDERSIDE_TOLERANCE_FEET
+                && level < wall.top - UNDERSIDE_TOLERANCE_FEET
+            {
+                let inside: f64 = cutter.triangles.iter().map(|t| overlap(&wall, t)).sum();
+                let voided: f64 = cutter.voids.iter().map(|t| overlap(&wall, t)).sum();
+                eprintln!(
+                    "wall_tops: wall {wall_id}: cutter {id} level {level:.4} base {:.4} top {:.4} area {:.9} inside {:.9} outside {:.9} voided {:.9} pieces {} triangles {}",
+                    wall.base,
+                    wall.top,
+                    wall.area,
+                    inside,
+                    wall.area - inside,
+                    voided,
+                    found.len(),
+                    cutter.triangles.len()
+                );
+            } else {
+                eprintln!(
+                    "wall_tops: wall {wall_id}: cutter {id} level {level:.4} outside base {:.4} top {:.4}",
+                    wall.base, wall.top
+                );
+            }
             if level > wall.base + UNDERSIDE_TOLERANCE_FEET
                 && level < wall.top - UNDERSIDE_TOLERANCE_FEET
                 && lowest.is_none_or(|(held, _)| level < held)
