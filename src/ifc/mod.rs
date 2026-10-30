@@ -55,9 +55,9 @@
 //! |---|---|
 //! | [`scene_graph`] | Project → storey → element tree + schedule |
 //! | [`pbr`] | Revit Material → glTF PBR mapping |
-//! | [`camera`] | Orbit-camera state + controls |
-//! | [`clipping`] | ClippingPlane + SectionBox + ViewMode |
-//! | [`share`] | ViewerState URL-fragment serialization |
+//! | [`camera`] | Orbit-camera state |
+//! | [`clipping`] | SectionBox + ViewMode |
+//! | [`share`] | ViewerState URL-fragment decoding |
 //! | [`gltf`] | glTF 2.0 GLB binary exporter |
 //! | [`sheet`] | 2D SVG plan view emission |
 //! | [`schedule_csv`] | Element and room schedules as CSV (spreadsheets) |
@@ -66,14 +66,9 @@
 //!
 //! 1. `IfcModel` produced via [`RvtDocExporter`]
 //! 2. [`scene_graph::build_scene_graph`] for the navigation tree
-//! 3. [`scene_graph::CategoryFilter`] applied per user toggles
-//! 4. [`gltf::model_to_glb`] for the 3D canvas, or
+//! 3. [`gltf::model_to_glb`] for the 3D canvas, or
 //!    [`sheet::render_plan_svg`] for the 2D drawing panel
-//! 5. [`camera::CameraState`] + [`clipping::ViewMode`] drive the
-//!    viewport's projection + spatial filter
-//! 6. [`scene_graph::element_info_panel`] powers click-to-inspect
-//! 7. [`share::encode_to_fragment`] serializes the whole state into
-//!    a URL for collaboration
+//! 4. [`scene_graph::element_info_panel`] powers click-to-inspect
 // Tracker: IFC-01, M5-05, VW1-05, VW1-15, VW1-06, VW1-07, VW1-13, VW1-12, VW1-24, VW1-04, VW1-11.
 
 use crate::Result;

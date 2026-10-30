@@ -24,27 +24,14 @@ use wasm_bindgen::prelude::*;
 use rvt::RevitFile;
 use rvt::ifc::{
     ExportQualityMode, IfcModel, RvtDocExporter,
-    camera::CameraState,
-    clipping::{SectionBox, ViewMode},
     gltf::model_to_glb,
     scene_graph::{
-        CategoryFilter, ElementInfoPanel, SceneNode, Schedule, build_scene_graph, build_schedule,
+        ElementInfoPanel, SceneNode, Schedule, build_scene_graph, build_schedule,
         distinct_ifc_types, element_info_panel,
     },
-    share::{ViewerState, decode_from_fragment, encode_to_fragment},
     sheet::{SheetOptions, render_plan_svg},
     step_writer::write_step,
 };
-use serde::Deserialize;
-
-#[derive(Debug, Default, Deserialize)]
-struct WasmWalkerLimits {
-    max_scan_bytes: Option<usize>,
-    max_candidates: Option<usize>,
-    max_trial_offsets: Option<usize>,
-    max_record_decode_bytes: Option<usize>,
-    max_container_records: Option<usize>,
-}
 
 fn err_str<E: std::fmt::Display>(e: E) -> JsValue {
     JsValue::from_str(&e.to_string())
@@ -70,59 +57,6 @@ fn install_panic_hook() {
     });
 }
 
-/// Open an RVT / RFA byte slice and return the raw `IfcModel` as
-/// a JS object. The viewer passes this around and then calls the
-/// other bindings to derive scene graph / glTF / schedule / etc.
-#[wasm_bindgen(js_name = openRvtBytes)]
-pub fn open_rvt_bytes(bytes: &[u8]) -> Result<JsValue, JsValue> {
-    install_panic_hook();
-    let mut rf = RevitFile::open_bytes(bytes.to_vec()).map_err(err_str)?;
-    let model = RvtDocExporter
-        .export_with_limits(&mut rf, rvt::walker::WalkerLimits::default())
-        .map_err(err_str)?;
-    serde_wasm_bindgen::to_value(&model).map_err(err_str)
-}
-
-/// Open an RVT / RFA byte slice with explicit walker scan limits.
-#[wasm_bindgen(js_name = openRvtBytesWithLimits)]
-pub fn open_rvt_bytes_with_limits(bytes: &[u8], limits: JsValue) -> Result<JsValue, JsValue> {
-    install_panic_hook();
-    let mut rf = RevitFile::open_bytes(bytes.to_vec()).map_err(err_str)?;
-    let model = RvtDocExporter
-        .export_with_limits(&mut rf, walker_limits_from_js(limits)?)
-        .map_err(err_str)?;
-    serde_wasm_bindgen::to_value(&model).map_err(err_str)
-}
-
-/// Open an RVT / RFA byte slice and return `{ model, diagnostics }`.
-///
-/// The diagnostics payload matches `rvt-ifc --diagnostics` and is
-/// intended for viewer bug reports and export-readiness messaging.
-#[wasm_bindgen(js_name = openRvtBytesWithDiagnostics)]
-pub fn open_rvt_bytes_with_diagnostics(bytes: &[u8]) -> Result<JsValue, JsValue> {
-    install_panic_hook();
-    let mut rf = RevitFile::open_bytes(bytes.to_vec()).map_err(err_str)?;
-    let result = RvtDocExporter
-        .export_with_diagnostics_and_limits(&mut rf, rvt::walker::WalkerLimits::default())
-        .map_err(err_str)?;
-    serde_wasm_bindgen::to_value(&result).map_err(err_str)
-}
-
-/// Open an RVT / RFA byte slice and return `{ model, diagnostics }`
-/// with explicit walker scan limits.
-#[wasm_bindgen(js_name = openRvtBytesWithDiagnosticsAndLimits)]
-pub fn open_rvt_bytes_with_diagnostics_and_limits(
-    bytes: &[u8],
-    limits: JsValue,
-) -> Result<JsValue, JsValue> {
-    install_panic_hook();
-    let mut rf = RevitFile::open_bytes(bytes.to_vec()).map_err(err_str)?;
-    let result = RvtDocExporter
-        .export_with_diagnostics_and_limits(&mut rf, walker_limits_from_js(limits)?)
-        .map_err(err_str)?;
-    serde_wasm_bindgen::to_value(&result).map_err(err_str)
-}
-
 /// Open an RVT / RFA byte slice with an IFC export quality mode and
 /// return `{ model, diagnostics }`.
 ///
@@ -140,27 +74,6 @@ pub fn open_rvt_bytes_with_diagnostics_mode(bytes: &[u8], mode: &str) -> Result<
             &mut rf,
             quality_mode,
             rvt::walker::WalkerLimits::default(),
-        )
-        .map_err(err_str)?;
-    serde_wasm_bindgen::to_value(&result).map_err(err_str)
-}
-
-/// Open an RVT / RFA byte slice with an IFC export quality mode and
-/// explicit walker scan limits.
-#[wasm_bindgen(js_name = openRvtBytesWithDiagnosticsModeAndLimits)]
-pub fn open_rvt_bytes_with_diagnostics_mode_and_limits(
-    bytes: &[u8],
-    mode: &str,
-    limits: JsValue,
-) -> Result<JsValue, JsValue> {
-    install_panic_hook();
-    let quality_mode = ExportQualityMode::parse(mode).map_err(err_str)?;
-    let mut rf = RevitFile::open_bytes(bytes.to_vec()).map_err(err_str)?;
-    let result = RvtDocExporter
-        .export_with_diagnostics_mode_and_limits(
-            &mut rf,
-            quality_mode,
-            walker_limits_from_js(limits)?,
         )
         .map_err(err_str)?;
     serde_wasm_bindgen::to_value(&result).map_err(err_str)
@@ -245,17 +158,6 @@ pub fn js_distinct_ifc_types(scene: JsValue) -> Result<JsValue, JsValue> {
     serde_wasm_bindgen::to_value(&types).map_err(err_str)
 }
 
-/// Apply a category filter to a scene. `filter` is a `CategoryFilter`
-/// JSON value; returns the pruned scene tree.
-#[wasm_bindgen(js_name = applyCategoryFilter)]
-pub fn js_apply_category_filter(scene: JsValue, filter: JsValue) -> Result<JsValue, JsValue> {
-    install_panic_hook();
-    let scene: SceneNode = serde_wasm_bindgen::from_value(scene).map_err(err_str)?;
-    let filter: CategoryFilter = serde_wasm_bindgen::from_value(filter).map_err(err_str)?;
-    let pruned = filter.apply(&scene);
-    serde_wasm_bindgen::to_value(&pruned).map_err(err_str)
-}
-
 /// Populate the element info panel for a click target.
 #[wasm_bindgen(js_name = elementInfoPanel)]
 pub fn js_element_info_panel(model: JsValue, entity_index: usize) -> Result<JsValue, JsValue> {
@@ -306,78 +208,10 @@ pub fn js_render_plan_svg(model: JsValue, options: JsValue) -> Result<String, Js
     Ok(render_plan_svg(&model, &options))
 }
 
-/// Encode a ViewerState to a URL fragment string.
-#[wasm_bindgen(js_name = encodeToFragment)]
-pub fn js_encode_to_fragment(state: JsValue) -> Result<String, JsValue> {
-    install_panic_hook();
-    let state: ViewerState = serde_wasm_bindgen::from_value(state).map_err(err_str)?;
-    Ok(encode_to_fragment(&state))
-}
-
-/// Decode a URL fragment into a ViewerState (or `null`).
-#[wasm_bindgen(js_name = decodeFromFragment)]
-pub fn js_decode_from_fragment(fragment: &str) -> Result<JsValue, JsValue> {
-    install_panic_hook();
-    let state = decode_from_fragment(fragment);
-    serde_wasm_bindgen::to_value(&state).map_err(err_str)
-}
-
-/// Compute the camera eye position for a given CameraState.
-#[wasm_bindgen(js_name = cameraEye)]
-pub fn js_camera_eye(state: JsValue) -> Result<JsValue, JsValue> {
-    install_panic_hook();
-    let state: CameraState = serde_wasm_bindgen::from_value(state).map_err(err_str)?;
-    serde_wasm_bindgen::to_value(&state.eye()).map_err(err_str)
-}
-
-/// Default section box for a given view mode.
-#[wasm_bindgen(js_name = defaultSectionBoxForView)]
-pub fn js_default_section_box(
-    mode: JsValue,
-    storey_elevation_feet: f64,
-    model_bbox: JsValue,
-) -> Result<JsValue, JsValue> {
-    install_panic_hook();
-    let mode: ViewMode = serde_wasm_bindgen::from_value(mode).map_err(err_str)?;
-    let bbox: SectionBox = serde_wasm_bindgen::from_value(model_bbox).map_err(err_str)?;
-    let result = mode.default_section_box(storey_elevation_feet, bbox);
-    serde_wasm_bindgen::to_value(&result).map_err(err_str)
-}
-
-/// SheetOptions defaults for the JS side. Exposed as a helper so
-/// the frontend can fetch them once and mutate fields rather than
-/// re-declaring the defaults.
-#[wasm_bindgen(js_name = defaultSheetOptions)]
-pub fn js_default_sheet_options() -> Result<JsValue, JsValue> {
-    install_panic_hook();
-    serde_wasm_bindgen::to_value(&SheetOptions::default()).map_err(err_str)
-}
-
 // Internal shim: serde-wasm-bindgen sometimes needs a
 // round-trip through JSON to normalise JS objects with mixed
 // numeric types (Three.js often passes Float32 where we want
 // f32; this forces explicit coercion).
 fn serde_js_options_bridge(input: JsValue) -> Result<JsValue, JsValue> {
     Ok(input)
-}
-
-fn walker_limits_from_js(input: JsValue) -> Result<rvt::walker::WalkerLimits, JsValue> {
-    if input.is_null() || input.is_undefined() {
-        return Ok(rvt::walker::WalkerLimits::default());
-    }
-    let parsed: WasmWalkerLimits = serde_wasm_bindgen::from_value(input).map_err(err_str)?;
-    let defaults = rvt::walker::WalkerLimits::default();
-    Ok(rvt::walker::WalkerLimits {
-        max_scan_bytes: parsed.max_scan_bytes.unwrap_or(defaults.max_scan_bytes),
-        max_candidates: parsed.max_candidates.unwrap_or(defaults.max_candidates),
-        max_trial_offsets: parsed
-            .max_trial_offsets
-            .unwrap_or(defaults.max_trial_offsets),
-        max_per_record_decode_bytes: parsed
-            .max_record_decode_bytes
-            .unwrap_or(defaults.max_per_record_decode_bytes),
-        max_container_records: parsed
-            .max_container_records
-            .unwrap_or(defaults.max_container_records),
-    })
 }
