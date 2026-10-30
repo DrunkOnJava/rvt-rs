@@ -1512,10 +1512,7 @@ pub fn scan_empty_curtain_panels(
     let mut panels: BTreeSet<u32> = BTreeSet::new();
     let mut types: BTreeSet<u32> = BTreeSet::new();
     for record in records.iter().filter(|r| {
-        r.is_exported_instance()
-            && !options.excludes(r)
-            && !phases.excludes(r.element_id)
-            && r.has_volume()
+        r.is_exported_instance() && !options.excludes(r) && !phases.excludes(r) && r.has_volume()
     }) {
         let Some(type_id) = crate::partition_names::resolve_type(
             &names,
@@ -9099,9 +9096,9 @@ fn without_non_primary_options(
 ) -> Vec<crate::partition_element_records::PartitionElementRecord> {
     let options = rf.memoised_design_options();
     // Elements not in the export phase are left out too, as Revit's export
-    // leaves them out (#328, RE-184).
+    // leaves them out, except rooms (#328, RE-184).
     let phases = rf.memoised_phase_filter();
-    records.retain(|record| !options.excludes(record) && !phases.excludes(record.element_id));
+    records.retain(|record| !options.excludes(record) && !phases.excludes(record));
     records
 }
 

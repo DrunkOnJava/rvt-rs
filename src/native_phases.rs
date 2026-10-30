@@ -7,6 +7,16 @@
 //! shows the last phase, and an element is exported when it exists there:
 //! created in it or before it, and not demolished in it or before it.
 //!
+//! Rooms are not checked. Revit's exporter applies that status rule to
+//! non-spatial elements only (revit-ifc, `ElementFilteringUtil.GetExportFilter`).
+//! It skips a room by a different rule, `ElementFilteringUtil.IsRoomInInvalidPhase`
+//! as `Exporter.ExportSpatialElements` calls it: a room whose own `ROOM_PHASE`
+//! parameter is set and is not the export phase. An area or an MEP space gets
+//! no phase check at all. No model here measures whether a room's
+//! `ROOM_PHASE` is its `m_createdPhaseId`, so [`PhaseFilter::excludes`] never
+//! excludes a room, and rvt-rs may write a room that Revit's export leaves out
+//! for its phase.
+//!
 //! Measured (RE-184): `01_Walls_Phases` keeps its wall created in the last
 //! of three phases, and `01_Walls_Phases_Demo` leaves out its wall demolished
 //! in it. On Snowdon Towers, whose phases run Legends, Existing, New
@@ -14,6 +24,7 @@
 //! Revit's export leaves out.
 // Tracker: B46.
 
+use crate::partition_element_records::{OST_ROOMS, PartitionElementRecord};
 use crate::{RevitFile, native_document};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -23,7 +34,8 @@ pub struct PhaseFilter {
     /// The project's phase ids, in order.
     pub order: Vec<i64>,
     /// Phased elements that do not exist in the last phase, by ElementId,
-    /// with the reason.
+    /// with the reason. It holds rooms too; [`Self::excludes`] never excludes
+    /// one.
     pub excluded: BTreeMap<u64, PhaseExclusion>,
 }
 
@@ -43,9 +55,13 @@ impl PhaseFilter {
         self.order.last().copied()
     }
 
-    /// Whether the element `id` does not exist in the export phase.
-    pub fn excludes(&self, id: u32) -> bool {
-        self.excluded.contains_key(&u64::from(id))
+    /// Whether `record` does not exist in the export phase, which Revit's
+    /// export leaves out. A room is never excluded: Revit's exporter checks
+    /// a room's own phase parameter instead of its status, and that
+    /// parameter is not measured to be the room's created phase.
+    pub fn excludes(&self, record: &PartitionElementRecord) -> bool {
+        record.builtin_category != OST_ROOMS
+            && self.excluded.contains_key(&u64::from(record.element_id))
     }
 }
 
@@ -131,7 +147,7 @@ pub fn compute_phase_filter(rf: &mut RevitFile) -> anyhow::Result<PhaseFilter> {
 /// in the export phase, one per ElementId, keyed by class name. The export
 /// leaves them out, as Revit's does; this counts them so the diagnostics can
 /// say so. An element also in a non-primary design option is counted there
-/// instead.
+/// instead. Rooms are never counted ([`PhaseFilter::excludes`]).
 pub fn scan_phase_excluded_instances(
     rf: &mut RevitFile,
     revit_version: u32,
@@ -155,9 +171,10 @@ pub fn scan_phase_excluded_instances(
     let categories: Vec<i64> = RECOVERED_CATEGORIES.iter().map(|(c, _)| *c).collect();
     let records = scan_category_records_multi(rf, revit_version, &categories, &declared)?;
     let mut excluded: BTreeMap<u32, i64> = BTreeMap::new();
-    for record in records.iter().filter(|r| {
-        r.is_exported_instance() && !options.excludes(r) && phases.excludes(r.element_id)
-    }) {
+    for record in records
+        .iter()
+        .filter(|r| r.is_exported_instance() && !options.excludes(r) && phases.excludes(r))
+    {
         excluded.insert(record.element_id, record.builtin_category);
     }
     for category in excluded.into_values() {

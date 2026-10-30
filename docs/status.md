@@ -947,8 +947,12 @@ Revit 2025's exports of two models made for it (a wall created in the last
 of three phases is exported, a wall demolished in it is not). On Snowdon
 Towers the phases run Legends, Existing, New Construction, so #328's six
 slabs, created and demolished in Legends, are left out, and nothing else
-is. An export setting that picks another phase is not read
-(`reports/element-framing/RE-184-phase-order.md`).
+is. An export setting that picks another phase is not read. Rooms are not
+checked: Revit's exporter skips a room whose own phase parameter is not the
+export phase instead of applying that rule, and no model here shows the
+parameter to be the room's created phase, so a room created in an earlier
+phase is still written (revit-ifc `ElementFilteringUtil.IsRoomInInvalidPhase`;
+`reports/element-framing/RE-184-phase-order.md`).
 
 ## Performance
 

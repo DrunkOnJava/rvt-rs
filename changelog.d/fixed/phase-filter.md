@@ -6,4 +6,7 @@
   for this show. On Snowdon Towers, whose phases run Legends, Existing, New
   Construction, the six slabs created and demolished in Legends are no
   longer written, and nothing else changes. The diagnostics count what is
-  left out as `element_record_not_in_export_phase`.
+  left out as `element_record_not_in_export_phase`. Rooms are not checked:
+  Revit's exporter skips a room by its own phase parameter, which no model
+  here shows to be its created phase, so a room created in an earlier phase
+  is still written.

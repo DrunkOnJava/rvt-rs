@@ -1570,9 +1570,10 @@ pub fn scan_volumeless_instances(
     // of it has volume.
     let mut with_volume: BTreeSet<u32> = BTreeSet::new();
     let mut without: BTreeMap<u32, i64> = BTreeMap::new();
-    for record in records.iter().filter(|r| {
-        r.is_exported_instance() && !options.excludes(r) && !phases.excludes(r.element_id)
-    }) {
+    for record in records
+        .iter()
+        .filter(|r| r.is_exported_instance() && !options.excludes(r) && !phases.excludes(r))
+    {
         if record.has_volume() {
             with_volume.insert(record.element_id);
         } else {
