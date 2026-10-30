@@ -921,6 +921,7 @@ pub fn append_typed_production_elements(
         );
         add_beam_length(&mut reference_sets, &ifc_type, property_set.as_ref());
         add_beam_span(&mut reference_sets, &ifc_type);
+        add_beam_slope(&mut reference_sets, &ifc_type, &decoded);
         add_slab_gross_area(
             &mut reference_sets,
             &ifc_type,
@@ -2305,8 +2306,22 @@ fn add_beam_span(sets: &mut Vec<PropertySet>, ifc_type: &str) {
     if ifc_type != "IFCBEAM" {
         return;
     }
-    let length = sets
-        .iter()
+    let Some(length) = beam_extrusion_length(sets) else {
+        return;
+    };
+    add_beam_common(
+        sets,
+        Property {
+            name: "Span".into(),
+            value: PropertyValue::PositiveLengthFeet(length),
+        },
+    );
+}
+
+/// The `Length` of the `Qto_BeamBaseQuantities` among `sets` ([`add_beam_length`]),
+/// the length of the extrusion Revit's export draws the beam as.
+fn beam_extrusion_length(sets: &[PropertySet]) -> Option<f64> {
+    sets.iter()
         .find(|set| set.name == "Qto_BeamBaseQuantities")
         .and_then(|set| {
             set.properties.iter().find_map(|property| {
@@ -2315,14 +2330,11 @@ fn add_beam_span(sets: &mut Vec<PropertySet>, ifc_type: &str) {
                     _ => None,
                 }
             })
-        });
-    let Some(length) = length else {
-        return;
-    };
-    let property = Property {
-        name: "Span".into(),
-        value: PropertyValue::PositiveLengthFeet(length),
-    };
+        })
+}
+
+/// Add `property` to the `Pset_BeamCommon` among `sets`, or a new one.
+fn add_beam_common(sets: &mut Vec<PropertySet>, property: Property) {
     match sets.iter_mut().find(|set| set.name == "Pset_BeamCommon") {
         Some(set) => set.properties.push(property),
         None => sets.push(PropertySet {
@@ -2330,6 +2342,41 @@ fn add_beam_span(sets: &mut Vec<PropertySet>, ifc_type: &str) {
             properties: vec![property],
         }),
     }
+}
+
+/// Add a level beam's `Pset_BeamCommon.Slope` 0 to `sets` (W7): revit-ifc's
+/// `SlopeCalculator` (CLEANROOM.md source 5) takes the slope of a beam it
+/// exports as an extrusion, where no parameter named `Slope` gives it, from
+/// the extrusion's own slope where there is one, and otherwise as the angle
+/// between its location line and the horizontal, 0 for a line in the plan.
+/// Only a beam written with the extrusion length of [`add_beam_length`]
+/// whose location line does not leave the horizontal (its direction's
+/// vertical share below [`crate::partition_beam_axes::HORIZONTAL_EPS`]) gets
+/// it: a sloped beam's value comes from the extrusion's slope, which is not
+/// measured, so it gets none. Revit's export writes 0 on each of the BIM4LCA
+/// office's 8 beams, as built and at permit, all level.
+fn add_beam_slope(sets: &mut Vec<PropertySet>, ifc_type: &str, decoded: &DecodedElement) {
+    if ifc_type != "IFCBEAM" || beam_extrusion_length(sets).is_none() {
+        return;
+    }
+    let Some((start, end)) = crate::partition_schema_mvp::beam_axis_from_fields(&decoded.fields)
+    else {
+        return;
+    };
+    let delta = [end[0] - start[0], end[1] - start[1], end[2] - start[2]];
+    let length = (delta[0] * delta[0] + delta[1] * delta[1] + delta[2] * delta[2]).sqrt();
+    if !(length.is_finite() && length > 0.0)
+        || (delta[2] / length).abs() > crate::partition_beam_axes::HORIZONTAL_EPS
+    {
+        return;
+    }
+    add_beam_common(
+        sets,
+        Property {
+            name: "Slope".into(),
+            value: PropertyValue::AngleRadians(0.0),
+        },
+    );
 }
 
 /// Add a floor's `Qto_SlabBaseQuantities.GrossArea` to `sets` (#1016,
