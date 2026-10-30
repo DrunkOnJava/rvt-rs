@@ -1665,12 +1665,13 @@ fn level_parameter_property_set(decoded: &DecodedElement, ifc_type: &str) -> Opt
 /// As revit-ifc's calculators give them (CLEANROOM.md source 5): a flight's
 /// number of treads and nosing length are its own (RE-92, RE-52), and a
 /// stair's nosing length the one its runs share; `TreadLengthAtOffset` is
-/// the stair's tread depth, which a flight carries, and so is a flight's
-/// `TreadLengthAtInnerSide`, since its run type has no inside-boundary
-/// width. A stair's `TreadLengthAtInnerSide` is its stair type's
-/// inside-boundary width where that is set, which is not read, so it is not
-/// written; nor is `WalkingLineOffset`, which revit-ifc gives as half the
-/// run's width in feet and the export scales as millimetres.
+/// the stair's tread depth, which a flight carries, and so is
+/// `TreadLengthAtInnerSide` of a flight and of its stair, which revit-ifc
+/// takes from the stair type's inside-boundary width where that is set and
+/// else from the tread depth (RE-287); the flights' and stairs' of the BIM4LCA
+/// office, as built and at permit, and of the R2025 models equal the depth, as
+/// no type there sets one. `WalkingLineOffset` is not written: revit-ifc gives
+/// it as half the run's width in feet and the export scales it as millimetres.
 fn stair_property_set(decoded: &DecodedElement) -> Option<PropertySet> {
     use crate::partition_schema_mvp as mvp;
     let (name, flight) = match decoded.class.as_str() {
@@ -1687,12 +1688,10 @@ fn stair_property_set(decoded: &DecodedElement) -> Option<PropertySet> {
                 name: "TreadLengthAtOffset".into(),
                 value: PropertyValue::PositiveLengthFeet(*value),
             });
-            if flight {
-                properties.push(Property {
-                    name: "TreadLengthAtInnerSide".into(),
-                    value: PropertyValue::PositiveLengthFeet(*value),
-                });
-            }
+            properties.push(Property {
+                name: "TreadLengthAtInnerSide".into(),
+                value: PropertyValue::PositiveLengthFeet(*value),
+            });
         }
         let property = match (field.as_str(), value) {
             (mvp::STAIR_TREAD_COUNT_FIELD, InstanceField::Integer { value, .. }) if flight => {

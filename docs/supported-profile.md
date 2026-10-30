@@ -105,10 +105,10 @@ material names and layer thicknesses, family instances' materials (RE-82), the I
 object of each element's type (RE-110), Revit's GlobalId (other entities get one
 derived from the document and their own identity, stable between exports,
 #400), stair riser and tread dimensions, each flight's
-number of treads and nosing length (RE-92, RE-236), on Revit 2024 its run type as its `Reference`
+number of treads and nosing length (RE-92, RE-236), a stair's `TreadLengthAtInnerSide` and, with `--revit-set-placement`, its `Pset_StairFlightCommon` summed or shared from its flights (RE-287), on Revit 2024 its run type as its `Reference`
 and each landing's type as its `Reference`, each element's `IsExternal` as Revit's
 exporter sets it (a parameter named for its property set, its type's
-Function, else its class's rule; none on curtain mullions and panels, RE-193, RE-269),
+Function, else its class's rule; on curtain mullions and panels their curtain wall's, RE-193, RE-288),
 each curtain mullion's `Span`, its length along its own axis (RE-226), which is also its `Qto_MemberBaseQuantities.Length` (#1016), and its `NetVolume`, its section times that length, where Revit's export draws it as an extrusion of its section: a mullion whose type has its own rectangular or square section, told by the class of its type's section object in whatever language the model is in (RE-246), on a straight curtain wall whose profile is not edited (RE-243),
 each door's and window's `Width`, `Height` and `Area` base quantities, its type's size where the symbol that draws it has the same (#1016),
 each curtain wall's type, named as its type's native record names it (RE-230),
@@ -139,7 +139,7 @@ a text parameter named `<set>.<property>` for a property the set's IFC4 definiti
 (`Pset_SpaceCommon.FloorCovering`), and the `Reference` of a set whose entity's name begins with the
 element's (`Pset_SpaceHeaterTypeCommon` on a space); without it every property is in the set IFC4 gives
 (RE-235). A value Revit's export writes that is known to be wrong is left out either way: a stair's or
-flight's `WalkingLineOffset`, half the run's width in feet read as millimetres, a curtain mullion's `Qto_MemberBaseQuantities.CrossSectionArea`, which grows with its length and is never its section's area, and a curtain mullion's or panel's `IsExternal` and its mullion type's, which the exporter that made the office's exports sets from its own cache of element types, not from the model (RE-235 §5, RE-269). Not read: most instance and type parameters (#35, #155). Elements in a
+flight's `WalkingLineOffset`, half the run's width in feet read as millimetres, a curtain mullion's `Qto_MemberBaseQuantities.CrossSectionArea`, which grows with its length and is never its section's area, and a curtain mullion's or panel's `IsExternal` in the office's exports and its mullion type's, which the exporter that made them sets from its own cache of element types, not from the model (RE-235 §5, RE-269; rvt-rs writes the member's by its curtain wall's value, RE-288). Not read: most instance and type parameters (#35, #155). Elements in a
 design-option set's non-primary options are left out, as Revit leaves them out,
 and so are elements that do not exist in the project's last phase (RE-184; the order is read on Revit 2015 to 2027, RE-281),
 except rooms: Revit skips a room by its own phase parameter, which is not

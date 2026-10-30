@@ -82,8 +82,8 @@ the four levels a file can reach are in the
   took from Revit's IFC2X3 exports moved to where IFC4 and Revit's own IFC4
   export put them, checked against buildingSMART's published IFC4 property
   set definitions on every measured export. Exports carry parameters named
-  for a standard set's property, `IsExternal` (on every class but curtain
-  mullions and panels, RE-269), type Fire
+  for a standard set's property, `IsExternal` (curtain mullions' and panels'
+  by their curtain wall's, RE-288), type Fire
   Ratings, door sizes, Revit 2024 Areas as spaces, and port types, with
   electrical ports' direction (HVAC and piping directions are not read yet,
   #834); Revit 2015 to 2022 and 2027 projects export their elements,

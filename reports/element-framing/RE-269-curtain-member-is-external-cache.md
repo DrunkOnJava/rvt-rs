@@ -63,6 +63,10 @@ The choices he did not take:
 - **Write the replay on Revit 2024 files**: exact on both office exports, which would close the 10,003 mullion values in W7's 12,853 missing (and the 260 panels'), and wrong for a 2024 file that a later exporter exports, which the model cannot tell.
 - **Write the host rule**: Revit's on 1,651 of the as-built 10,263 against this export, so not Revit's value here.
 
+### Update, 2026-10-30: the host rule is written
+
+The maintainer then took the choice §5 lists second, the host rule, because it is the value exporters from IFC_v24.2.20 on give (the replay stays unwritten): each mullion and panel takes its curtain wall's value, from the wall's own `IsExternal` parameter or type Function, as `IsElementExternal` gives a family instance its host's (RE-288, [#1187](https://github.com/DrunkOnJava/rvt-rs/issues/1187)). Nothing is written on the member types, which `IsElementExternal` at IFC_v24.2.20 and IFC_v24.3.40 returns null for. The office's values stay counted apart in the census, so the 8,579 mullions and 33 panels where the host rule differs from this exporter's export are not scored as different. The gap that remains: no model of a newer exporter has an exterior curtain wall, so the exterior members' values are checked against revit-ifc's source only.
+
 ## 6. Reproduce
 
 ```bash

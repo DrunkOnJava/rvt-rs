@@ -764,6 +764,8 @@ pub fn recover_partition_schema_mvp(
             &mut out.products,
         ],
     );
+    // --- A curtain mullion's or panel's IsExternal: its curtain wall's (RE-193, RE-269) ---
+    attach_curtain_member_is_external(&out.walls, &mut out.products);
     // --- The parameters named for a standard set's other properties (RE-194) ---
     attach_named_parameters(
         rf,
