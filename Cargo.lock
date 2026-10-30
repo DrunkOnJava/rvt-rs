@@ -1010,6 +1010,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "rvt-probes"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "cfb",
+ "memchr",
+ "rvt",
+ "serde_json",
+ "sha2",
+]
+
+[[package]]
 name = "rvt-py"
 version = "0.10.0"
 dependencies = [

@@ -116,7 +116,7 @@ variable is unset: the macOS and MSRV runs have no corpus.
   go through [`SECURITY.md`](SECURITY.md), not public issues.
 - **Performance regressions** caught by the benchmark harness in
   `tools/bench.sh` — open an issue with a before/after table.
-- **New facts** about the file format, as a probe under `examples/` and a
+- **New facts** about the file format, as a probe under `probes/examples/` and a
   dated report under `reports/element-framing/` (see
   [Reverse-engineering findings](#reverse-engineering-findings)).
 - **Documentation improvements.** The README and inline doc comments
@@ -125,7 +125,7 @@ variable is unset: the macOS and MSRV runs have no corpus.
   point (a CLI, the library on a file, the exporter) against a fixture or a
   corpus file and checks what a user would see. Unit tests are not accepted:
   CI and `tools/check-local.sh` do not run them, so they would check nothing.
-  For a format fact, the evidence is a probe under `examples/` and its
+  For a format fact, the evidence is a probe under `probes/examples/` and its
   report.
 
 ## Where help is most wanted
@@ -149,7 +149,7 @@ per-area starting points are in
   geometry questions, and how to report a problem with a model you cannot
   share: send `rvt-inspect --json --anonymize` and
   `rvt-ifc --diagnostics <file> --anonymize` output, never the building.
-- **Decoder research.** A byte probe under `examples/` plus a dated evidence
+- **Decoder research.** A byte probe under `probes/examples/` plus a dated evidence
   table for one class or partition pattern (decoder issue form; the reports
   under `reports/element-framing/` show the shape). Typed extraction works on Revit 2023 to 2025 projects, and
   experimentally on 2015 to 2022, 2026 and 2027 projects (since 0.5.0 for 2026,
@@ -202,7 +202,7 @@ Open an issue (or a draft PR) before starting work on any of:
   capability, update [`docs/status.md`](docs/status.md),
   [`ROADMAP.md`](ROADMAP.md), or [`docs/compatibility.md`](docs/compatibility.md)
   in the same PR.
-- **Every probe under `examples/`** gets a module-level doc
+- **Every probe under `probes/examples/`** gets a module-level doc
   comment explaining *what FACT it proves* and *how to verify*
   the result against the 11-version corpus.
 
@@ -273,7 +273,7 @@ are not checked.
 
 When you discover something new about the file format:
 
-1. Write a short probe under `examples/<name>.rs` that reproduces
+1. Write a short probe under `probes/examples/<name>.rs` that reproduces
    the finding from bytes: one self-contained file whose module doc states
    the fact it proves and how to check it, with corpus paths taken from
    arguments or the `RVT_*` environment variables, never hardcoded. The
@@ -383,7 +383,7 @@ export RVT_PROJECT_CORPUS_DIR=/tmp/magnetar/Revit
 
 tools/ci/verify-real-files.sh --profile ci          # real-file, CLI, contract checks
 cargo bench --bench project_file                    # Q-07 multi-MB
-cargo run --release --example probe_latest_framing  # any probe
+cargo run --release -p rvt-probes --example probe_latest_framing  # any probe
 ```
 
 Never hardcode absolute paths in test or probe code — the PII

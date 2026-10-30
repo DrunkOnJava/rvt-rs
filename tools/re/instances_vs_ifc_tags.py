@@ -2,7 +2,7 @@
 """Score placed-instance ElementIds against a Revit IFC export's Tags (RE-124).
 
 Reads the `category <id> <name> <count> <ids>` lines that
-`examples/probe_re124_revit_2026_records.rs` prints and compares the ids with
+`probes/examples/probe_re124_revit_2026_records.rs` prints and compares the ids with
 the numeric `Tag` of every element of the export, openings and virtual
 elements left out. Prints true and false positives, misses by IFC class, and
 the IFC class each found category lands on.

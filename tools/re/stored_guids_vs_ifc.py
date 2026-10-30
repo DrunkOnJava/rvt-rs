@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Tie Revit's GlobalIds to the IfcGUID strings a Revit 2015 file stores (#878).
 
-Reads `examples/probe_878_stored_guids.rs`'s output. For the project, site,
+Reads `probes/examples/probe_878_stored_guids.rs`'s output. For the project, site,
 building and every storey of Revit's export, it finds the stored string
 equal to the GlobalId (the storeys in elevation order beside the Levels by
 elevation, since the model's Levels were renamed after its export), and for every element with a Tag the one with its

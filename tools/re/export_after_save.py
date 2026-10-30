@@ -3,7 +3,7 @@
 whether the export names wall types the saved file does not have (#1048,
 RE-253).
 
-Reads the `saved <time>` line `examples/probe_re253_wall_type_refs.rs`
+Reads the `saved <time>` line `probes/examples/probe_re253_wall_type_refs.rs`
 prints (the file's `ProjectInformation` Atom `updated`, UTC) and the time in
 the export's `FILE_NAME` header (the exporting machine's local time, with no
 zone), and prints the export's time less the save's, in hours. An export

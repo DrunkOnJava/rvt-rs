@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Census the element record's `+0x46` flag bits against Revit's export (#223).
 
-Reads `examples/probe_223_flag_census.rs`'s `rec` lines, pairs each with
+Reads `probes/examples/probe_223_flag_census.rs`'s `rec` lines, pairs each with
 Revit's element of the same Tag, and reads that element's
 `Pset_*Common.LoadBearing` and `IsExternal`. Per IFC entity and property,
 it prints, for each of the 32 bits, how many paired elements have the bit

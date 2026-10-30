@@ -2,7 +2,7 @@
 """Curved walls' arcs, against the arc axes of Revit's own IFC export.
 
 Research tool for `reports/element-framing/RE-75-curved-walls.md`. Its input
-is the JSON-lines output of `examples/probe_re75_wall_arcs.rs`: each wall
+is the JSON-lines output of `probes/examples/probe_re75_wall_arcs.rs`: each wall
 whose data stores an arc, with the arc's centre, radius, angles and axes.
 
 For every wall whose `Axis` representation in Revit's IFC4 export holds an

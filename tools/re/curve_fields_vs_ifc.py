@@ -3,7 +3,7 @@
 anchor against Revit's own IFC export, per element (#96).
 
 Research tool for `reports/element-framing/RE-134-curve-fields-at-the-anchor.md`.
-The input is the output of `examples/probe_re134_duct_connectors.rs` on a
+The input is the output of `probes/examples/probe_re134_duct_connectors.rs` on a
 model, which prints each duct's and pipe's record, its connector entries and
 every anchor with the bytes that follow it. An element's anchor is the nearest
 one before its first connector entry, within 2,000 bytes. From it this reads

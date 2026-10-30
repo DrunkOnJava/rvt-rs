@@ -2,7 +2,7 @@
 """Find the element whose RE-48 GlobalId Revit's export derives its
 project's, site's and building's GlobalIds from (#878).
 
-Reads `examples/probe_878_project_guids.rs`'s output (RE-48's GlobalId of
+Reads `probes/examples/probe_878_project_guids.rs`'s output (RE-48's GlobalId of
 every declared element, and the project information records' ids). For
 Revit's IfcProject, IfcSite and IfcBuilding, it expands each GlobalId to its
 128 bits and, for each XOR of the low 8 bits from 0 to 255, looks for an

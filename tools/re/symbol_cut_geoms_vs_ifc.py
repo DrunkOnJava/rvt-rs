@@ -3,7 +3,7 @@
 `OverallWidth` and `OverallHeight` Revit's export writes where the symbol
 has no cut loop (RE-225, #810, #824)?
 
-Reads `examples/probe_re225_symbol_cut_geoms.rs`'s output and Revit's IFC
+Reads `probes/examples/probe_re225_symbol_cut_geoms.rs`'s output and Revit's IFC
 export. For each door and window the probe lists, joined to Revit's by
 Tag, it compares Revit's two sizes, within 0.001 ft, with:
 

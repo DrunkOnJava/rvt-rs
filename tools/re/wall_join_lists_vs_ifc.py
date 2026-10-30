@@ -2,7 +2,7 @@
 """Score RE-70's wall join-list rule at every L joint of a model.
 
 Research tool for `reports/element-framing/RE-70-wall-join-lists.md`. Its
-input is the JSON-lines output of `examples/probe_re70_wall_join_lists.rs`:
+input is the JSON-lines output of `probes/examples/probe_re70_wall_join_lists.rs`:
 each wall's centreline, type thickness, record box and join lists.
 
 An L joint is a wall end where exactly one other wall, overlapping it in

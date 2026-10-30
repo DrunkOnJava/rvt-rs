@@ -2,7 +2,7 @@
 """Find the element record reference-list slots that hold the element's
 storey and type in Revit's export (RE-130, #228).
 
-Input: the JSON lines of `examples/probe_re130_reference_slots.rs` (other
+Input: the JSON lines of `probes/examples/probe_re130_reference_slots.rs` (other
 lines are skipped) and Revit's export of the same model.
 
 For each record whose ElementId is an exported element's Tag, the element's

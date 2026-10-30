@@ -5,7 +5,7 @@ GlobalIds (RE-208, #878).
 Revit's GlobalId for an element is its episode's GUID with the ElementId
 XORed into the last 32 bits (RE-48). So every GlobalId in Revit's export,
 with its element's Tag XORed back out, gives that element's episode GUID.
-This scorer takes the output of `examples/probe_re208_episodes_2015.rs` (the
+This scorer takes the output of `probes/examples/probe_re208_episodes_2015.rs` (the
 GUID runs it found in `Global/History` and every `Global/ElemTable` record)
 and Revit's export, and reports:
 

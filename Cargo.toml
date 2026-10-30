@@ -37,7 +37,7 @@ autotests = false
 # unconditionally — no feature-gated escape hatch. The wheel on
 # PyPI still ships as a single `rvt` distribution; it's built via
 # `maturin build --manifest-path rvt-py/Cargo.toml`.
-members = [".", "rvt-py", "rvt-wasm", "tools/stream_evidence"]
+members = [".", "probes", "rvt-py", "rvt-wasm", "tools/stream_evidence"]
 
 # Lints beyond rustc's and clippy's defaults that the workspace keeps, so an
 # editor shows what CI enforces: CI denies every warning (`-D warnings`).
