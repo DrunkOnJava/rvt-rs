@@ -153,9 +153,11 @@ which it writes in feet as though they were the file's unit) is left out, listed
 So are curtain mullions' and panels' `IsExternal` and their mullion types', which the exporter that made the office's exports (24.0.5.432) sets from its own cache of element types, not from the model: the property census counts them apart, 10,267 values on the office as built and 10,304 at permit (RE-269;
 the maintainer,
 2026-10-30).
-On the office as built, with `--revit-set-placement` (Measure run 41117832403), 2,405 of the 47,506 property values Revit's export writes on objects rvt-rs writes are missing, 1,692 of them the glazing set's `IsLaminated` and `IsTempered` and 234 rooms' `OccupancyType`;
-without it, 3,371 (Measure run 41117838385).
-At building permit, 2,328 of 47,611, and 3,294 without it.
+On the office as built, with `--revit-set-placement` (Measure run 41129228138, `main` at b09310a6), 455 of the 45,525 property values Revit's export writes on objects rvt-rs writes are missing and 1 differs;
+without it, 1,421 are missing (Measure run 41129224669).
+At building permit, 452 of 45,704, and 1,418 without it.
+The census counts what the export's own property set file places apart, as out of scope (RE-239): 1,981 values as built and 1,907 at permit, the glazing set on elements that are not doors or windows and the space occupancy set, whose 55 `OccupancyNumber` values, written as `IfcInteger`, were 55 of the 56 that differed;
+on the same exports, before that, 2,381 of 47,506 were missing as built with the option and 3,347 without it (Measure runs 41129221110 and 41129217725).
 Before the curtain members' `IsExternal` was counted apart, 12,672 of 57,773 were missing with the option and 13,638 without it (Measure runs 41117828966 and 41117835321,
 `main` at b9e0ce71).
 The held-out and BIMcollab runs keep quantity counts only, so no property census of them is published.
