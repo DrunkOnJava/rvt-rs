@@ -38,7 +38,7 @@ gh workflow run measure.yml --ref main -f ref=0c7e71c27eacb72a35bfefec76f9804225
 
 ## 6. Correction, 2026-10-30: the invert is a height above the model's zero, not above the storey
 
-**Artefacts:** the BIM4LCA office as built and at building permit (Revit 2024, CC BY-SA 4.0) with Revit's IFC4 exports. Measured on GitHub's hosted runners with the Measure workflow, run RUN_ID.
+**Artefacts:** the BIM4LCA office as built and at building permit (Revit 2024, CC BY-SA 4.0) with Revit's IFC4 exports. Measured on GitHub's hosted runners with the Measure workflow, run 41109551247 (`psets_vs_ifc`: `Pset_PipeSegmentOccurrence.InvertElevation` 12 values, equal 0 before and 12 after on both files; RE1 Mechanical's 6 and Plumbing's 63 stay equal, their exports byte-identical).
 
 Every RE1 pipe is on Level 1, at elevation 0, so sections 1 and 4 could not tell a height above the storey from a height above the model's zero. The office is the first model with pipes on a storey that is not at zero. Its 12 pipes are `Pipe Types:JSV-3`, all vertical, on `Level_01` (55,500 mm in Revit's export). Each pipe's extrusion starts 179.19 mm below the storey's placement and runs up 3,679.19 mm, so its lower end is at 55,320.81 mm. `Pset_PipeSegmentOccurrence.InvertElevation` is `55320.806855210511` on all 12, in the file's millimetres: the height of the lower end above the model's zero. Above the storey it would be -179.19 mm.
 
