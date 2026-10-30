@@ -175,6 +175,29 @@ def body_kinds(wall):
     return "/".join(sorted(kinds)) or "-"
 
 
+def profile_shape(wall):
+    """The profile class of the wall's extrusion, with its corner count."""
+    if wall.Representation is None:
+        return "-"
+    shapes = []
+    for rep in wall.Representation.Representations:
+        if rep.RepresentationIdentifier != "Body":
+            continue
+        for item in rep.Items:
+            if not item.is_a("IfcExtrudedAreaSolid"):
+                continue
+            area = item.SweptArea
+            if area.is_a("IfcArbitraryClosedProfileDef"):
+                curve = area.OuterCurve
+                if curve.is_a("IfcPolyline"):
+                    shapes.append(f"poly{len(curve.Points) - 1}")
+                else:
+                    shapes.append("curve")
+            else:
+                shapes.append(area.is_a().replace("Ifc", "").replace("ProfileDef", ""))
+    return "+".join(shapes) or "-"
+
+
 def collect(path):
     f = qtos_vs_ifc.open_ifc(path)
     quantities = qtos_vs_ifc.quantities(path)[0]
@@ -193,20 +216,25 @@ def collect(path):
             continue
         tris = triangles(path, wall, settings)
         source = "-"
+        top = "-"
         for props in ifcopenshell.util.element.get_psets(wall).values():
             if "BodySource" in props:
                 source = str(props["BodySource"])
+            if "BodyHeightSource" in props:
+                top = str(props["BodyHeightSource"]) + ":" + str(props.get("TopCoverElementId", "-"))
         out[tag] = {
             "q": per.get(f"tag:{tag}", {}),
             "kinds": body_kinds(wall),
             "voids": len(wall.HasOpenings or ()),
             "source": source,
+            "top": top,
+            "shape": profile_shape(wall),
             "mesh": analyse(tris) if tris is not None else None,
         }
     return out
 
 
-def fmt(value, digits=4):
+def fmt(value, digits=6):
     return "-" if value is None else f"{value:.{digits}f}"
 
 
@@ -274,13 +302,13 @@ def main():
         revit_body = "R none"
         if r is not None:
             revit_body = (
-                f"R V={fmt(r['volume'])} H={fmt(r['high'] - r['low'])} plan={fmt(r['plan'])} faces={r['faces']} holes={r['holes']} "
+                f"R V={fmt(r['volume'])} lo={fmt(r['low'])} hi={fmt(r['high'])} H={fmt(r['high'] - r['low'])} plan={fmt(r['plan'])} faces={r['faces']} holes={r['holes']} "
                 f"A={fmt(r['A_net'])}/{fmt(r['A_gross'])} B={fmt(r['B_net'])}/{fmt(r['B_gross'])} top={r['tops']}"
             )
         our_body = "U none"
         if mine is not None:
             our_body = (
-                f"U V={fmt(mine['volume'])} H={fmt(mine['high'] - mine['low'])} plan={fmt(mine['plan'])} faces={mine['faces']} holes={mine['holes']} "
+                f"U V={fmt(mine['volume'])} lo={fmt(mine['low'])} hi={fmt(mine['high'])} H={fmt(mine['high'] - mine['low'])} plan={fmt(mine['plan'])} faces={mine['faces']} holes={mine['holes']} "
                 f"A={fmt(mine['A_net'])}/{fmt(mine['A_gross'])} B={fmt(mine['B_net'])}/{fmt(mine['B_gross'])} top={mine['tops']}"
             )
         same = "-"
@@ -296,8 +324,19 @@ def main():
         ours_q = " ".join(f"{SHORT[name]}={fmt(u['q'].get(name))}" for name in SHOWN if name in u["q"])
         print(
             f"wall tag:{tag} Q {row} | {revit_body} | {our_body} | same(V,H,plan) {same} | rvt-rs wrote [{ours_q}] "
-            f"voids R{revit[tag]['voids']} U{u['voids']} source {u['source']} kinds {revit[tag]['kinds']} / {u['kinds']}"
+            f"voids R{revit[tag]['voids']} U{u['voids']} source {u['source']} top {u['top']} shape {u['shape']} "
+            f"kinds {revit[tag]['kinds']} / {u['kinds']}"
         )
+    settings = ifcopenshell.geom.settings()
+    settings.set("use-world-coords", True)
+    f = qtos_vs_ifc.open_ifc(args[0])
+    for kind in base.CUTTERS:
+        for product in f.by_type(kind):
+            if not product.Tag or product.Representation is None:
+                continue
+            tris = triangles(args[0], product, settings)
+            if tris is not None:
+                print(f"cutter tag:{product.Tag} {kind} lo={fmt(tris[:, :, 2].min())} hi={fmt(tris[:, :, 2].max())}")
     return 0
 
 
