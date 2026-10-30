@@ -38,7 +38,7 @@ use rvt::research::native_element_parameters;
 use serde_json::{Map, Value};
 
 const WALLS: [&str; 2] = ["SWall", "ArcWall"];
-const SLABS: [&str; 4] = ["Floor", "Roof", "FootPrintRoof", "BuildingPad"];
+const SLABS: [&str; 5] = ["Floor", "Roof", "FootPrintRoof", "ProfileRoof", "BuildingPad"];
 const KEPT: [&str; 6] = [
     "GLine",
     "GArc",

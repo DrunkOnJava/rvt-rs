@@ -251,12 +251,15 @@ def fmt_gap(found):
 
 def levels(triangles):
     """The horizontal faces in the upper half of `triangles`' height, by
-    height (to 0.001 ft): `z=area[x0 x1 y0 y1]`, highest first."""
+    height (to 0.001 ft): `z=area[x0 x1 y0 y1]`, highest first. A triangle
+    is horizontal when its three corners lie within 0.001 ft of each other in
+    height, so a shallow slope is not read as a level face."""
     edge_a = triangles[:, 1] - triangles[:, 0]
     edge_b = triangles[:, 2] - triangles[:, 0]
     normal = np.cross(edge_a, edge_b)
     size = np.linalg.norm(normal, axis=1)
-    flat = (size > 1e-12) & (np.abs(normal[:, 2]) >= 0.999 * np.where(size > 1e-12, size, 1))
+    spread = triangles[:, :, 2].max(axis=1) - triangles[:, :, 2].min(axis=1)
+    flat = (size > 1e-12) & (spread <= 0.001)
     middle_height = (triangles[:, :, 2].min() + triangles[:, :, 2].max()) / 2
     heights = triangles[:, :, 2].mean(axis=1)
     found = {}
