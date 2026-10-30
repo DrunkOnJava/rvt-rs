@@ -111,8 +111,9 @@ pub fn scan_partition_arc_walls(
 /// [`WalkerLimits`] to every partition buffer scan so crafted large
 /// streams cannot force unbounded candidate materialisation.
 ///
-/// The scan runs once per file, release and limits: a later call reads the
-/// memoised result (`RevitFile::memoised_arc_wall_scan`).
+/// The file keeps its latest scan (`RevitFile::memoised_arc_wall_scan`): a
+/// repeat call with the same release and limits returns a copy of it, and a
+/// call with other limits scans again.
 pub fn scan_partition_arc_walls_with_limits(
     rf: &mut RevitFile,
     revit_version: u32,
