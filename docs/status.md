@@ -95,7 +95,7 @@ own IFC export of the same file wherever one exists; the measured tables are in 
 [README](../README.md#what-rvt-rs-reads-from-real-projects) and the four
 levels a file can reach (opened, elements identified, geometry, properties)
 are in the [supported profile](supported-profile.md). On Revit 2023 to 2027
-files, `rvt-elements` and Python also list each element's saved parameters,
+files, and experimentally on 2015 to 2022 ones (RE-281), `rvt-elements` and Python also list each element's saved parameters,
 named where the file defines them (RE-207), and `rvt-ifc --revit-property-sets`
 writes the named ones in Revit's own property sets (RE-210). With
 `--revit-set-placement` it also writes properties where Revit's own exporter
@@ -953,6 +953,23 @@ export phase instead of applying that rule, and no model here shows the
 parameter to be the room's created phase, so a room created in an earlier
 phase is still written (revit-ifc `ElementFilteringUtil.IsRoomInInvalidPhase`;
 `reports/element-framing/RE-184-phase-order.md`).
+
+**RE-281 (2026-10-30)** reads the project's phases and each element's saved
+parameters on Revit 2015 to 2022, experimentally, and the phase order on
+Revit 2023, which `native_element::decode_base` refused with every 2015 to
+2023 record because it took `Identifier` for the 8-byte `m_id64` of Revit
+2024: before 2024 it is a 4-byte `m_id`. On Autodesk's 33 sample projects of
+2015 to 2023 every file lists its phases (two or three) and no element is
+left out of the last; on BIMcollab's Revit 2015 example 8 are, none of them
+written. So no export moves. Parameters, read by name, hold the values of the same
+project's Revit 2023 copy (932,645 equal, 243 different, over 23 projects).
+Every other native reader (types, stairs, symbol cuts, mullion hosts, ports,
+saved meshes) stays on 2023 to 2027, and a record that needs the
+extensible-storage catalogue before Revit 2021 or is one of 2015 to 2017's
+`VarSketch` records is refused. BIMcollab's 16 footings name no Level: their
+Element base, `-1001352` and `-1002062` are all unset, as are the 15
+columns', which Revit still puts on a storey (#879;
+`reports/element-framing/RE-281-native-admission.md`).
 
 ## Performance
 
