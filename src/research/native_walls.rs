@@ -227,7 +227,7 @@ pub fn curtain_wall_type_names(
 }
 
 /// The step classes of a wall's record that leave its solid as its joins and
-/// its type's layers make it (RE-269): every other class ending in `Step` may
+/// its type's layers make it (RE-270): every other class ending in `Step` may
 /// cut, join, embed or sweep it.
 const HARMLESS_STEPS: [&str; 6] = [
     "BaseWallGStep",
@@ -256,7 +256,7 @@ pub struct WallRecords {
     /// base, ends, split faces, reference planes, join tweaks and layer
     /// extensions):
     /// nothing cuts, embeds or sweeps the solid its joins and layers make
-    /// (RE-269).
+    /// (RE-270).
     pub whole: BTreeSet<u64>,
     /// The walls whose record holds no step but the harmless ones (a wall's
     /// base, ends, split faces, reference planes, join tweaks and layer
