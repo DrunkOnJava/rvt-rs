@@ -32,7 +32,7 @@
 //!
 //! Measured against the meshes of the same beams in a VIM export of a later
 //! edition of the sample (`reports/element-framing/RE-49-beam-axes.md`,
-//! `examples/probe_re49_beam_axes.rs`), the section across the line is
+//! `probes/examples/probe_re49_beam_axes.rs`), the section across the line is
 //! Revit's on 613 of the 839 beams that edition kept unchanged, and Revit's
 //! less the top a floor join cuts away on 179 more. What the line does not
 //! carry is where Revit trims a beam at its supports (on 352 of the 839, by

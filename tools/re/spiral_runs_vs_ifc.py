@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Print Revit's IFC flight for each spiral stair run the probe lists (#357).
 
-Reads `examples/probe_357_spiral_runs.rs`'s output for the run ids and, for
+Reads `probes/examples/probe_357_spiral_runs.rs`'s output for the run ids and, for
 each `IfcStairFlight` of Revit's export with that Tag, prints its body in
 the site frame (Revit internal feet): its representation items, volume,
 bounds, the distinct heights of its vertices, and, at each height, its

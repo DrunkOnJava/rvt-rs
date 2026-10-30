@@ -12,7 +12,7 @@ and along the axis. A wall is tapered where its cut is more than 0.05 ft
 wider at the base than at the top; each face's lean is its change across
 the wall between the 1 and 99 per cent cuts.
 
-With the probe's output (`examples/probe_re86_tapered_walls.rs`), each wall
+With the probe's output (`probes/examples/probe_re86_tapered_walls.rs`), each wall
 is joined to its orientation word and, through Revit's
 `IfcRelDefinesByType`, to its type's face angles. The script reports:
 

@@ -164,6 +164,8 @@ pub struct RevitFile {
     element_names: Option<Arc<crate::partition_names::ElementNames>>,
     /// Memoised design option sets and their primary options (RE-40).
     design_options: Option<Arc<crate::partition_design_options::DesignOptions>>,
+    /// Memoised phase order and the elements not in the export phase (#328).
+    phase_filter: Option<Arc<crate::native_phases::PhaseFilter>>,
     /// Memoised production walk: the elements
     /// [`crate::walker::iter_elements_with_control`] yields for a minimum
     /// score and walker limits. An export walks once to write and again for
@@ -392,6 +394,7 @@ impl RevitFile {
             second_prologue_ids: None,
             element_names: None,
             design_options: None,
+            phase_filter: None,
             walk: None,
             data_objects: std::collections::HashMap::new(),
             native_preamble: None,
@@ -655,6 +658,34 @@ impl RevitFile {
             crate::partition_design_options::compute_design_options(self).unwrap_or_default(),
         );
         self.design_options = Some(Arc::clone(&computed));
+        computed
+    }
+
+    /// The project's phase order and the elements Revit's export leaves
+    /// out by phase, memoised (#328, RE-184). Empty where the native record
+    /// path does not read the release or the file lists no phases, and
+    /// empty with its `read_error` set where it reads the release and the
+    /// read failed.
+    #[cfg(feature = "unstable-research")]
+    pub fn phase_filter(&mut self) -> Arc<crate::native_phases::PhaseFilter> {
+        self.memoised_phase_filter()
+    }
+
+    /// `phase_filter` for the crate's own readers, with or without
+    /// `unstable-research`.
+    pub(crate) fn memoised_phase_filter(&mut self) -> Arc<crate::native_phases::PhaseFilter> {
+        if let Some(cached) = &self.phase_filter {
+            return Arc::clone(cached);
+        }
+        let computed = Arc::new(
+            crate::native_phases::compute_phase_filter(self).unwrap_or_else(|error| {
+                crate::native_phases::PhaseFilter {
+                    read_error: Some(format!("{error:#}")),
+                    ..Default::default()
+                }
+            }),
+        );
+        self.phase_filter = Some(Arc::clone(&computed));
         computed
     }
 

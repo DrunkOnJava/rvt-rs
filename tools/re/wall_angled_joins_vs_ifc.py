@@ -2,7 +2,7 @@
 """Where a wall ends at an angled join, against Revit.
 
 Research tool for `reports/element-framing/RE-74-angled-wall-joins.md`. Its
-input is the JSON-lines output of `examples/probe_re73_tee_joins.rs`: each
+input is the JSON-lines output of `probes/examples/probe_re73_tee_joins.rs`: each
 wall's centreline, thickness, exterior side, layers and, at each end, the
 wall it joins and how far past the end each layer reaches along its
 exterior-side and interior-side edge.

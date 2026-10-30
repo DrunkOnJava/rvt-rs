@@ -2,7 +2,7 @@
 """Where each layer of a wall ends at a layered butt join, against Revit.
 
 Research tool for `reports/element-framing/RE-71-layered-wall-joins.md`. Its
-input is the JSON-lines output of `examples/probe_re71_layered_joins.rs`:
+input is the JSON-lines output of `probes/examples/probe_re71_layered_joins.rs`:
 each wall's centreline, thickness, exterior side, layers (exterior first,
 each width and function) and its RE-70 join at each end.
 

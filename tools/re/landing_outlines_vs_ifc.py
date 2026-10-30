@@ -2,7 +2,7 @@
 """Whether a stair landing's own data holds the outline Revit's export draws
 (RE-214, #824).
 
-Takes the output of `examples/probe_re214_landing_outlines.rs` (every bounded
+Takes the output of `probes/examples/probe_re214_landing_outlines.rs` (every bounded
 line and arc in each landing's data) and Revit's export. For each landing it
 reports Revit's top-surface outline (from `plan_profiles_vs_ifc.tops`, in
 Revit's internal feet), and, for each elevation the landing's lines lie at,

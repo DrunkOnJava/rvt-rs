@@ -39,16 +39,16 @@ pub const REVIT_2023: u32 = 2023;
 /// every marker of the file's own schema has a declared `u32` ElementId 52
 /// bytes before it and the tag of `ElementHeader` 8 bytes after that, as on
 /// 2023, but for 4 to 109 per file, as many as on the file's 2023 copy but on
-/// 2021 `rac_advanced` (`examples/probe_re180_revit_2019_2022.rs`). On their
+/// 2021 `rac_advanced` (`probes/examples/probe_re180_revit_2019_2022.rs`). On their
 /// 2016, 2017 and 2018 copies it is the same, with as many markers without
 /// one as on the 2019 copy, and on three of Autodesk's 2015 templates all but
-/// 0 to 68 per file (`examples/probe_re181_revit_2015_2018.rs`). On every
+/// 0 to 68 per file (`probes/examples/probe_re181_revit_2015_2018.rs`). On every
 /// marker of eight local Revit 2011 to 2014 files, among them Autodesk's
 /// 2013 `rac_advanced_sample_project`, the id is 52 bytes before it too
-/// (`examples/probe_re259_revit_2011_2014.rs`). Those files are closed
+/// (`probes/examples/probe_re259_revit_2011_2014.rs`). Those files are closed
 /// source and measured locally only. So do local Revit 2009 and 2010
 /// files, and a local Revit 2008 file puts the id 48 bytes before the
-/// marker ([`envelope_shortfall`], `examples/probe_re260_revit_2008_2010.rs`).
+/// marker ([`envelope_shortfall`], `probes/examples/probe_re260_revit_2008_2010.rs`).
 /// No 2008 to 2010 file has a copy of its model to check its fields
 /// against: those releases rest on their own files' consistency (RE-260).
 pub const REVIT_32BIT_RELEASES: std::ops::RangeInclusive<u32> = 2008..=2023;
@@ -165,7 +165,7 @@ const CATEGORY_BEFORE_MARKER: usize = 38;
 /// (1,201, 5,858 and 8,901 records), where the `u64` at 2024's place
 /// relative to the marker (8 bytes after the category) disagrees on 9,
 /// 4,183 and 95, every container member among them
-/// (`examples/probe_32bit_container.rs`).
+/// (`probes/examples/probe_32bit_container.rs`).
 const CONTAINER_BEFORE_MARKER: usize = 22;
 /// Offset of the `ElementHeader` tag after the ElementId (after the `u32`
 /// id and the `u32` size).

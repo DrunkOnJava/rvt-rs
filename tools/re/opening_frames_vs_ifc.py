@@ -2,7 +2,7 @@
 """Revit's door and window openings in the instance's frame, against the
 outline the symbol cuts (#227).
 
-Research tool for `examples/probe_227_opening_frames.rs`. For each
+Research tool for `probes/examples/probe_227_opening_frames.rs`. For each
 `IfcOpeningElement` filling a door or window whose `frame` line the probe
 prints, the opening's vertices are moved into Revit's internal feet through
 the export's site placement, as `opening_boxes_vs_ifc.py` does, and then

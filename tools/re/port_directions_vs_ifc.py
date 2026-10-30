@@ -2,7 +2,7 @@
 """Where a port's flow direction comes from, against Revit's export (RE-212,
 #834).
 
-Takes the output of `examples/probe_re212_connector_data.rs` and Revit's IFC
+Takes the output of `probes/examples/probe_re212_connector_data.rs` and Revit's IFC
 export, whose ports are named `InPort_`, `OutPort_` or
 `Port_<ElementId>_<index>` by their direction (revit-ifc
 `ConnectorExporter`). For every port it applies the rule rvt-rs writes and

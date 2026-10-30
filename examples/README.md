@@ -16,10 +16,10 @@ lists and exports none; CI runs all three on it and on `Revit_IFC5_Einhoven.rvt`
 cargo run --example basics_inspect -- path/to/model.rvt
 ```
 
-**Research.** Everything else here supports a format finding: the
-`probe_*.rs` programs each prove one fact against a corpus (their module doc
-says which, and how to check it) and back a report under
-`reports/element-framing/`; the others are earlier research tools. They use
+**Research.** The probes, which each prove one fact against a corpus and
+back a report under `reports/element-framing/`, are their own crate:
+[`probes/`](../probes/README.md). The other programs here are earlier
+research tools. They use
 `rvt::research`, the unstable readers behind the `unstable-research`
 feature, which examples get automatically. Expect their APIs and output to
 change.

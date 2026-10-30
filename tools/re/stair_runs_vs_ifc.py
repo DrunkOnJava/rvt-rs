@@ -3,7 +3,7 @@
 
 Research tool for `reports/element-framing/RE-92-stair-run-ends.md`.
 
-`runs.json` is written by `examples/probe_re92_run_ends.rs --json`: each
+`runs.json` is written by `probes/examples/probe_re92_run_ends.rs --json`: each
 drawn run's sketch origin, climb and across directions, width, and side
 view as `[along, up]` feet. Revit's body for the flight with the same Tag
 is meshed by IfcOpenShell, moved into Revit's internal frame through the

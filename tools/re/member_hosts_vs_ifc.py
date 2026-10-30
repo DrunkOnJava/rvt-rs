@@ -2,7 +2,7 @@
 """Curtain mullions' and panels' `IsExternal` and `Span` against Revit's
 export (RE-226, #35, W7).
 
-Reads `examples/probe_re226_mullion_hosts.rs`'s output and Revit's IFC
+Reads `probes/examples/probe_re226_mullion_hosts.rs`'s output and Revit's IFC
 export. For every `IfcMember` and `IfcPlate` joined by Tag:
 
 - `IsExternal`: Revit's value set against what the probe's record names:

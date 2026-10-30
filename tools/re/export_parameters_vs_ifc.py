@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Pair the IFC export parameters rvt-rs reads (RE-45) with what Revit's own export wrote (#792).
 
-Reads the output of `examples/probe_re45_ifc_export_parameters.rs` and Revit's
+Reads the output of `probes/examples/probe_re45_ifc_export_parameters.rs` and Revit's
 IFC export of the same file. For each element the probe lists, it finds the
 element of the same `Tag` in Revit's export, or the type object of that `Tag`
 and the classes of the elements it types, or a space whose Name ends in

@@ -2,7 +2,7 @@
 """Tabulate the joined-wall lists (RE-127 probe) against how Revit's body
 ends at every L joint.
 
-Input: the JSON lines of `examples/probe_re127_joined_wall_lists.rs` (other
+Input: the JSON lines of `probes/examples/probe_re127_joined_wall_lists.rs` (other
 lines are skipped) and Revit's export of the same model.
 
 At each L joint (a wall end where exactly one other wall ends its

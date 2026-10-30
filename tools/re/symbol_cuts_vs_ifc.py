@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Score a family symbol's cut loop against Revit's door and window sizes.
 
-Research tool for RE-215 (#810, #844). `examples/probe_re215_symbol_cuts.rs`
+Research tool for RE-215 (#810, #844). `probes/examples/probe_re215_symbol_cuts.rs`
 prints each `FamilySymbol` whose `m_pCutLoops` is not empty, the objects of
 its graph (the loop's `GLine`s and `GArc`s among them), and each
 `FamilyInstance`'s ElementId-valued fields. This scorer takes each cut

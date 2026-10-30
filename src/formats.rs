@@ -44,7 +44,7 @@ use serde::{Deserialize, Serialize};
 /// garbage classes. Inflated through [`crate::compression::inflate_stream_at`],
 /// which strips the pages, the whole stream is schema: 4,126 classes on
 /// Revit 2024 where the first 64 KB held 395
-/// (`examples/probe_schema_page_strip.rs`). Kept for
+/// (`probes/examples/probe_schema_page_strip.rs`). Kept for
 /// [`parse_schema_with_scan_limit`] callers that want the old window.
 pub const SCHEMA_SCAN_LIMIT: usize = 64 * 1024;
 

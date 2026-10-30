@@ -34,6 +34,11 @@ pub struct Options {
     pub max_group_bytes: usize,
     pub max_graph_values: usize,
     pub max_graph_objects: usize,
+    /// When set, only records of these classes are decoded as graphs; every
+    /// other selected record is emitted with its Element base prefix alone
+    /// ([`Record::base`], [`crate::native_element::decode_base`]). That reads
+    /// a whole file's phase fields without its graph cost (#328).
+    pub graph_classes: Option<BTreeSet<String>>,
 }
 impl Default for Options {
     fn default() -> Self {
@@ -45,6 +50,7 @@ impl Default for Options {
             max_group_bytes: 256 * 1024 * 1024,
             max_graph_values: 100_000,
             max_graph_objects: 100_000,
+            graph_classes: None,
         }
     }
 }
@@ -63,6 +69,10 @@ pub struct Record {
     pub graph: Option<ObjectGraph>,
     pub saved_metadata: Option<crate::native_metadata::SavedMetadata>,
     pub metadata_diagnostic: Option<String>,
+    /// The record's Element base prefix, where [`Options::graph_classes`]
+    /// left its graph undecoded.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub base: Option<crate::native_element::ElementBase>,
 }
 #[derive(Debug, Serialize)]
 pub struct RecordSource {
@@ -655,6 +665,43 @@ fn extract_records(
                             continue;
                         }
                     }
+                    if let Some(graph_classes) = &options.graph_classes {
+                        if !class_name
+                            .as_ref()
+                            .is_some_and(|c| graph_classes.contains(c))
+                        {
+                            let base = crate::native_element::decode_base(body, registry);
+                            summary.emitted_records += 1;
+                            emit(Record {
+                                identity: identity.clone(),
+                                derived_default_ifc_guid: None,
+                                derived_identifier_diagnostic: None,
+                                effective_ifc_parameter: None,
+                                effective_ifc_parameter_diagnostic: None,
+                                channel: source.channel,
+                                class_name,
+                                status: if base.is_ok() {
+                                    "element_base"
+                                } else {
+                                    "unsupported_element_base"
+                                }
+                                .into(),
+                                diagnostic: base.as_ref().err().map(ToString::to_string),
+                                source: RecordSource {
+                                    stream: name.clone(),
+                                    group: source.clone(),
+                                    group_record_offset: offset,
+                                    body_bytes: body.len(),
+                                    body_sha256: String::new(),
+                                },
+                                graph: None,
+                                saved_metadata: None,
+                                metadata_diagnostic: None,
+                                base: base.ok(),
+                            })?;
+                            continue;
+                        }
+                    }
                     let decoded = native_parameters::decode_graph_with_catalog_usage(
                         body,
                         registry,
@@ -778,6 +825,7 @@ fn extract_records(
                         graph,
                         saved_metadata,
                         metadata_diagnostic,
+                        base: None,
                     })?;
                 }
                 Ok(())

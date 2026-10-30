@@ -2,7 +2,7 @@
 """Which saved parameter is each value Revit's export writes on walls,
 curtain walls, coverings, members, plates and spaces (RE-239, #35, W7).
 
-Reads `examples/probe_re239_mapped_parameters.rs`'s output and Revit's IFC
+Reads `probes/examples/probe_re239_mapped_parameters.rs`'s output and Revit's IFC
 export. Elements are matched by Tag; a space by its Name, the room number,
 or the ElementId after the last `:` of the Name of a room with no number.
 For each boolean or text property Revit writes, it counts, per parameter,

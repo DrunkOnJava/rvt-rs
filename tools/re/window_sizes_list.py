@@ -2,7 +2,7 @@
 """Where a window's OverallWidth and OverallHeight in Revit's export come
 from, where its symbol holds no cut loop (#810).
 
-Takes the output of `examples/probe_re187_door_window_sizes.rs` (each
+Takes the output of `probes/examples/probe_re187_door_window_sizes.rs` (each
 window's type Width and Height, -1001301 and -1001300, and its record box)
 and Revit's export. For each window type it prints, once per distinct
 combination: Revit's OverallWidth and OverallHeight; the type's Width and
