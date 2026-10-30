@@ -146,6 +146,7 @@
 //!   caller's gate (see [`recovered_levels_are_a_storey_set`]).
 
 use crate::le_bytes;
+use crate::partition_element_records::find_subslice;
 use crate::{Result, RevitFile};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
@@ -692,15 +693,6 @@ fn find_name_blocks_sized(
         }
     }
     out
-}
-
-/// First occurrence of `needle` in `haystack`, vectorised (as
-/// `partition_element_records` searches).
-fn find_subslice(haystack: &[u8], needle: &[u8]) -> Option<usize> {
-    if needle.is_empty() || haystack.len() < needle.len() {
-        return None;
-    }
-    memchr::memmem::find(haystack, needle)
 }
 
 /// The Levels of `level_ids` whose name block names an owner: the

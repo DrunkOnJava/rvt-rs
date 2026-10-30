@@ -1378,7 +1378,7 @@ pub fn find_category_records_with_marker(
 /// [`find_categories_records_assigned`] instead. `memchr::memmem` is the
 /// vectorised form of exactly the first-byte-then-compare loop this used
 /// to spell out by hand.
-fn find_subslice(haystack: &[u8], needle: &[u8]) -> Option<usize> {
+pub(crate) fn find_subslice(haystack: &[u8], needle: &[u8]) -> Option<usize> {
     if needle.is_empty() || haystack.len() < needle.len() {
         return None;
     }

@@ -60,6 +60,7 @@
 //! member, which the instance rule already excludes.
 
 use crate::le_bytes;
+use crate::partition_element_records::find_subslice;
 use crate::{Result, RevitFile};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
@@ -181,24 +182,6 @@ pub fn find_overrides(
         cursor = hit + 1;
     }
     out
-}
-
-fn find_subslice(haystack: &[u8], needle: &[u8]) -> Option<usize> {
-    if needle.is_empty() || haystack.len() < needle.len() {
-        return None;
-    }
-    let first = needle[0];
-    let last = haystack.len() - needle.len();
-    let mut index = 0usize;
-    while index <= last {
-        let delta = haystack[index..=last].iter().position(|b| *b == first)?;
-        let start = index + delta;
-        if &haystack[start..start + needle.len()] == needle {
-            return Some(start);
-        }
-        index = start + 1;
-    }
-    None
 }
 
 /// Collapse accepted entries to one value per ElementId.
