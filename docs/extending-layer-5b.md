@@ -365,7 +365,7 @@ Add to the `[Unreleased]` section:
 - `cargo clippy --all-targets -- -D warnings`
 - `tools/check-local.sh` (fmt, clippy, rustdoc, build, real-file checks)
 - Commit message: `feat(elements): a MyClass decoder (#NNN) (RE-NN)`
-  — reference the GitHub issue (CLASS-xx / M3-xx in `TODO.md`)
+  — reference the GitHub issue (CLASS-xx / M3-xx in `docs/archive/TODO.md`)
 - Open PR referencing the issue
 
 ---
@@ -477,7 +477,8 @@ exporter + basic viewer; the rest fill in per-category coverage.
 - Open a GitHub Discussion for "how do I…" questions
 - File an Issue with the `class-decoder` label if you hit a
   blocker that looks like a bug in the scaffold
-- `TODO.md` and `ROADMAP.md` carry the tracked decoder work (the
+- `ROADMAP.md` and the GitHub issues carry the tracked decoder work, and
+  `docs/archive/TODO.md` the older decomposition (the
   historical L5B-XX planning ids were never checked in)
 - Read `CONTRIBUTING.md` and `CLEANROOM.md` for the source-
   provenance rules before contributing

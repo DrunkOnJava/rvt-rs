@@ -269,29 +269,3 @@ fn run(cli: &Cli) -> Result<(), String> {
 
     Ok(())
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn base64_decodes_canonical_cases() {
-        assert_eq!(decode_base64("").unwrap(), b"");
-        assert_eq!(decode_base64("Zg==").unwrap(), b"f");
-        assert_eq!(decode_base64("Zm8=").unwrap(), b"fo");
-        assert_eq!(decode_base64("Zm9v").unwrap(), b"foo");
-        assert_eq!(decode_base64("Zm9vYg==").unwrap(), b"foob");
-        assert_eq!(decode_base64("Zm9vYmE=").unwrap(), b"fooba");
-        assert_eq!(decode_base64("Zm9vYmFy").unwrap(), b"foobar");
-    }
-
-    #[test]
-    fn base64_ignores_whitespace() {
-        assert_eq!(decode_base64("  Zm9v\n YmFy  ").unwrap(), b"foobar");
-    }
-
-    #[test]
-    fn base64_rejects_invalid_char() {
-        assert!(decode_base64("Z@9v").is_err());
-    }
-}

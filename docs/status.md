@@ -1015,8 +1015,8 @@ prints it from any installed build.
 - `main` has everything v0.10.0 has, and is ahead of it by the fragments
   under [`changelog.d/`](../changelog.d/README.md).
 
-Open work is tracked as GitHub issues; [`TODO.md`](../TODO.md) is the older
-task backlog.
+Open work is tracked as GitHub issues; [`docs/archive/TODO.md`](archive/TODO.md) is
+the older task backlog.
 
 ## Supported MVP Definition
 

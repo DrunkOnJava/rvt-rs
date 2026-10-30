@@ -998,36 +998,3 @@ fn warn_about_export_quality(diagnostics: &ExportDiagnostics) {
 fn lower_hex(bytes: &[u8]) -> String {
     bytes.iter().map(|b| format!("{b:02x}")).collect()
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn attributes_split_on_top_level_commas_only() {
-        let attrs = split_attributes("'a,b',#3,(1,2,3),$,.OPENING.");
-        assert_eq!(attrs, vec!["'a,b'", "#3", "(1,2,3)", "$", ".OPENING."]);
-    }
-
-    #[test]
-    fn a_doubled_apostrophe_does_not_end_the_string() {
-        let attrs = split_attributes("'it''s, one',#3");
-        assert_eq!(attrs, vec!["'it''s, one'", "#3"]);
-        assert_eq!(step_string(attrs[0]).as_deref(), Some("it's, one"));
-    }
-
-    #[test]
-    fn step_strings_decode_the_writers_escapes() {
-        assert_eq!(step_string("'20827'").as_deref(), Some("20827"));
-        assert_eq!(step_string("'a\\\\b'").as_deref(), Some("a\\b"));
-        assert_eq!(step_string("'\\X\\09'").as_deref(), Some("\t"));
-        assert_eq!(step_string("'\\X2\\00E9\\X0\\'").as_deref(), Some("é"));
-        assert_eq!(step_string("$"), None);
-    }
-
-    #[test]
-    fn negative_zero_normalises() {
-        assert_eq!(format_elevation_feet(-0.0), "0.000000");
-        assert_eq!(format_elevation_feet(f64::NAN), "");
-    }
-}

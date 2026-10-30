@@ -139,7 +139,7 @@ Eleven targets are checked in, one `[[bin]]` each in `fuzz/Cargo.toml`
 
 Scope for each target is described in its source file header; the
 security task ids that introduced them (SEC-14 onwards) are tracked in
-`TODO.md`.
+`docs/archive/TODO.md`.
 
 ## Related
 

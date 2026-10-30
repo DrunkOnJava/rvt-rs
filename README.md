@@ -151,7 +151,7 @@ All of the above were used to develop the decoder. Three models that were not, A
 
 The openBIM community, around [buildingSMART International](https://www.buildingsmart.org/) and the IFC standard, has long worked on getting building data out of Revit. Autodesk's [revit-ifc](https://github.com/Autodesk/revit-ifc) exporter runs inside Revit through the Revit API, so what it writes depends on what the API exposes and on how the export is configured; the [OSArch wiki's guide to setting up Revit for openBIM](https://wiki.osarch.org/index.php?title=Revit_setup_for_OpenBIM) covers the settings that matter. rvt-rs takes an independent route: it reads the file itself, so it runs where Revit is not installed, and its output can be checked against Revit's own export of the same file.
 
-The schema work here, decoding the whole of `Formats/Latest` and classifying all but about ten field encodings per release across 11 Revit releases, is the dictionary a byte-level reader needs. The aim is an export that can also carry data the Revit API does not surface. Today the export reaches what the tables above measure, and the rest is open work ([`ROADMAP.md`](ROADMAP.md), [`TODO.md`](TODO.md)).
+The schema work here, decoding the whole of `Formats/Latest` and classifying all but about ten field encodings per release across 11 Revit releases, is the dictionary a byte-level reader needs. The aim is an export that can also carry data the Revit API does not surface. Today the export reaches what the tables above measure, and the rest is open work ([`ROADMAP.md`](ROADMAP.md) and the [issues](https://github.com/DrunkOnJava/rvt-rs/issues)).
 
 If you are building BIM or AEC tooling and want an Apache-2.0 Revit reader to build on:
 

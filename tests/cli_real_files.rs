@@ -9,13 +9,16 @@
 //! - `rvt-elem-table --json`: the parsed records number the table's
 //!   `record_count`, their ids rise strictly, and every owner is a declared id;
 //! - `rvt-history --json`: the releases named rise and end with the file's own;
-//! - `rvt-analyze --json`: the identity's release is the file's;
+//! - `rvt-analyze --json`: the identity's release is the file's, and with
+//!   `--redact` no Windows user folder, Autodesk OneDrive path or internal
+//!   project-id folder survives, where the reports without it name some;
 //! - `rvt-diff`: a file against itself has every stream identical, and two
 //!   releases of the same family differ in some stream;
 //! - `rvt-ifc-compare --fail-on-diff`: an export against itself exits 0 with
 //!   no entity count delta, and against Revit's own export exits 2;
-//! - `rvt-write`: patching `Formats/Latest` or `Global/Latest` with its own
-//!   decompressed bytes either writes a file whose patched stream rvt-rs reads
+//! - `rvt-write`: patching `Formats/Latest` (bytes given inline) or
+//!   `Global/Latest` (bytes given as base64) with its own decompressed bytes
+//!   either writes a file whose patched stream rvt-rs reads
 //!   back as the same bytes, the other streams byte-identical, or is refused
 //!   with an error naming the stored pages; never exits 0 with a stream that
 //!   does not decode.
@@ -61,6 +64,27 @@ fn scratch(tag: &str) -> PathBuf {
     let dir = std::env::temp_dir().join(format!("rvt-rs-cli-real-{tag}-{}", std::process::id()));
     std::fs::create_dir_all(&dir).expect("scratch dir");
     dir
+}
+
+/// Standard base64 with `=` padding, the form `rvt-write`'s
+/// `new_decompressed_base64` takes.
+fn base64(bytes: &[u8]) -> String {
+    const ALPHABET: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut out = String::with_capacity(bytes.len().div_ceil(3) * 4);
+    for chunk in bytes.chunks(3) {
+        let n = chunk
+            .iter()
+            .enumerate()
+            .fold(0u32, |n, (i, &b)| n | (u32::from(b) << (16 - 8 * i)));
+        for i in 0..4 {
+            if i <= chunk.len() {
+                out.push(ALPHABET[((n >> (18 - 6 * i)) & 63) as usize] as char);
+            } else {
+                out.push('=');
+            }
+        }
+    }
+    out
 }
 
 /// Every four-digit release year (2000 to 2099) in `text`, in order.
@@ -327,9 +351,14 @@ fn write_round_trips_or_refuses_a_streams_own_bytes() {
             let decoded = rvt::research::native_document::read_single(&mut rf, stream)
                 .expect("decode source stream");
             let manifest = dir.join("patches.json");
-            let patches = serde_json::json!({
-                "patches": [{ "stream_name": stream, "new_decompressed": decoded, "framing": framing }]
-            });
+            // The two streams take the manifest's two byte forms, so both
+            // of rvt-write's decoders are exercised.
+            let patch = if stream == "Global/Latest" {
+                serde_json::json!({ "stream_name": stream, "new_decompressed_base64": base64(&decoded), "framing": framing })
+            } else {
+                serde_json::json!({ "stream_name": stream, "new_decompressed": decoded, "framing": framing })
+            };
+            let patches = serde_json::json!({ "patches": [patch] });
             std::fs::write(&manifest, serde_json::to_vec(&patches).expect("manifest"))
                 .expect("write manifest");
             let target = dir.join(format!("patched-{year}.rfa"));
@@ -390,4 +419,72 @@ fn write_round_trips_or_refuses_a_streams_own_bytes() {
     let _ = std::fs::remove_dir_all(&dir);
     eprintln!("rvt-write: {written_ok} patches round-tripped, {refused} refused");
     assert!(written_ok > 0, "no patch round-tripped");
+}
+
+/// Every string in a JSON document.
+fn strings(value: &Value, out: &mut Vec<String>) {
+    match value {
+        Value::String(s) => out.push(s.clone()),
+        Value::Array(items) => items.iter().for_each(|v| strings(v, out)),
+        Value::Object(map) => map.values().for_each(|v| strings(v, out)),
+        _ => {}
+    }
+}
+
+#[test]
+fn analyze_redact_leaves_no_user_folder_or_autodesk_internal_path() {
+    let files = families();
+    if files.is_empty() {
+        eprintln!("skipping: family corpus missing");
+        return;
+    }
+    let bin = env!("CARGO_BIN_EXE_rvt-analyze");
+    let mut to_scrub = 0;
+    for (year, path) in &files {
+        let report = |redact: bool| -> Vec<String> {
+            let mut args = vec![path.as_os_str(), "--json".as_ref()];
+            if redact {
+                args.push("--redact".as_ref());
+            }
+            let json: Value = serde_json::from_str(&ok(bin, &run(bin, &args))).expect("JSON");
+            let mut out = Vec::new();
+            strings(&json, &mut out);
+            out
+        };
+        to_scrub += report(false)
+            .iter()
+            .filter(|s| {
+                s.contains("\\Users\\")
+                    || s.contains("/Users/")
+                    || s.contains("OneDrive - Autodesk")
+            })
+            .count();
+        for s in report(true) {
+            for folder in ["\\Users\\", "/Users/"] {
+                for (i, _) in s.match_indices(folder) {
+                    assert!(
+                        s[i + folder.len()..].starts_with("<redacted>"),
+                        "{year}: a user folder survives --redact: {s}"
+                    );
+                }
+            }
+            assert!(
+                !s.contains("OneDrive - Autodesk"),
+                "{year}: an Autodesk OneDrive path survives --redact: {s}"
+            );
+            for (i, _) in s.match_indices("Revit - ") {
+                assert!(
+                    !s[i + "Revit - ".len()..].starts_with(|c: char| c.is_ascii_digit()),
+                    "{year}: a project-id folder survives --redact: {s}"
+                );
+            }
+        }
+    }
+    // The 2024 sample's report names the user folder and the Autodesk
+    // OneDrive path it was authored in (docs/demo/rvt-analyze-2024-redacted.json).
+    assert!(
+        to_scrub > 0,
+        "no report named a user folder, so --redact was not exercised"
+    );
+    eprintln!("rvt-analyze --redact: {to_scrub} strings with a user or internal path scrubbed");
 }
