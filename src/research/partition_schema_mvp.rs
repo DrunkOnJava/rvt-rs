@@ -302,8 +302,6 @@ pub fn recover_partition_schema_mvp(
     // Record-backed slabs carry an ElementId, a model bounding box,
     // a measured thickness and a storey.
     out.slabs = slabs_from_partition_category_records(rf, revit_version, &level_ids)?;
-    // Which floors nothing cuts (RE-295).
-    attach_slab_uncut(rf, &mut out.slabs);
 
     // --- Room instances from element records (#90, RE-29) ---
     //
@@ -325,6 +323,8 @@ pub fn recover_partition_schema_mvp(
 
     // --- Other product categories from element records (RE-33) ---
     out.products = product_instances_from_partition_records(rf, revit_version, &level_ids)?;
+    // --- Which floors and ceilings nothing cuts (RE-295, RE-297) ---
+    attach_slab_uncut(rf, &mut [&mut out.slabs, &mut out.products]);
     // --- Base constraints of elements naming two Levels (RE-59), then
     // railings by their host and elements by the Level objects they name
     // (RE-60) ---
