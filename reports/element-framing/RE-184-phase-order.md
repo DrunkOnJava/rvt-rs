@@ -1,6 +1,6 @@
 # RE-184: the phase order is `AllProjectPhases.m_phaseIds`, and Snowdon's 6 slabs exist in no phase after Legends
 
-**Date:** 2026-10-05; rebased onto `main` 5a81e745 and re-measured 2026-10-27; rooms (§5) added 2026-10-30, on review of #1074
+**Date:** 2026-10-05; rebased onto `main` 5a81e745 and re-measured 2026-10-27; rooms (§5) and the CI note (§6) added 2026-10-30, on review of #1074
 **Issues:** #328; backlog items B38 and B46
 **Artefacts:** 29 local projects, Revit 2023 to 2027: RE1 Architecture, Core Interior, Autodesk's `rac`, `rst` and `rme` samples, Snowdon Towers (2025 edition, 7 disciplines; 2024 Architectural, re-measured 2026-10-27), Golden Nugget (2), three Japanese samples, `02_2025.zip` model 12 (#356), and `01_Walls_Phases` and `01_Walls_Phases_Demo`, two Revit 2025 models made for this question, each with Revit's IFC4 Reference View export (default settings). Measured locally.
 **Probe:** `examples/probe_re184_phase_order.rs`.
@@ -99,6 +99,7 @@ Areas are not read through the filter either: `partition_area_records` applies d
 
 - **The export phase.** It is the last phase in `m_phaseIds` with Revit's default export settings (`01_Walls_Phases`). An export setting that picks another phase, or a filter view whose own phase Revit exports instead, is not read.
 - **Rooms** (§5).
+- **The test is not run in CI.** `tests/phase_filter.rs` needs `01_Walls_Phases` and `01_Walls_Phases_Demo` with Revit's exports of them. Those models are not published or pinned: their `.rvt` files are in no archive `research/r2025-models.tsv` pins (it notes that `01_Walls_Phases_Demo` has an export but no `.rvt`), so no CI job has them and the test skips there and passes. CI does not run the phase filter against a Revit export until they are published and fetched. Measure moves only Snowdon Towers Architectural's export with the filter (its six slabs, run 40930512289), and Revit's export of that sample is local only, so no Revit export in CI checks it either.
 
 ## 7. Reproduce
 

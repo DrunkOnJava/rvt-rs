@@ -10,6 +10,12 @@
 //!
 //! Runs against `RVT_PROJECT_CORPUS_DIR/r2025/`: `<model>.rvt` with
 //! `<model>.ifc`. Skips what is absent.
+//!
+//! CI does not run this test yet. The two models and Revit's exports of them
+//! are not published or pinned, so no CI job has them, and the test skips
+//! there and passes. It runs only where both models and their exports are
+//! under `RVT_PROJECT_CORPUS_DIR/r2025/`, until they are published and
+//! fetched (`reports/element-framing/RE-184-phase-order.md`, section 6).
 
 use rvt::RevitFile;
 use rvt::ifc::{RvtDocExporter, write_step};
