@@ -12,7 +12,7 @@ revit-ifc's `NetVolumeCalculator` (CLEANROOM.md source 5) takes the volume of th
 
 ## 2. Which mullions Revit draws as a mesh
 
-`record_scalars_vs_ifc.py`, ranking every scalar of each mullion's native record, its type's and its host's against whether Revit's body is anything but extruded solids:
+`record_scalars_vs_ifc.py`, ranking every scalar of each mullion's native record, its type's and its host's against whether Revit's body is anything but extruded solids (`record_scalars_straight_hosts.py` runs it on the mullions whose host is not an `ArcWall`):
 
 | host curtain wall | mullions | Revit's body an extrusion | NetVolume = box volume |
 |---|---:|---:|---:|
