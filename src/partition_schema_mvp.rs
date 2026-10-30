@@ -7313,6 +7313,13 @@ fn attach_is_external(
 /// BIM4LCA office at building permit 74 columns' `FireRating`. `IsExternal`
 /// is [`attach_is_external`]'s. Of the models measured, only the BIM4LCA
 /// office defines such parameters.
+/// `<set>.<property>` parameters left out where the file holds a value,
+/// because Revit's export writes none (the maintainer, 2026-10-29: no
+/// property value Revit's export omits). `Pset_DoorWindowGlazingType.IsWired`:
+/// every one of the BIM4LCA office's 1,337 elements carrying it holds 0, and
+/// its export writes it on none (RE-194 §4).
+const REVIT_OMITTED_PARAMETERS: &[&str] = &["Pset_DoorWindowGlazingType.IsWired"];
+
 fn attach_named_parameters(
     rf: &mut RevitFile,
     revit_version: u32,
@@ -7342,6 +7349,7 @@ fn attach_named_parameters(
             }
         }
     }
+    parameters.retain(|(name, _, _)| !REVIT_OMITTED_PARAMETERS.contains(&name.as_str()));
     if parameters.is_empty() {
         return;
     }
