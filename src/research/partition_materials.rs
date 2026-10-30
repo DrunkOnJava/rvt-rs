@@ -601,8 +601,11 @@ fn category_style_materials(rf: &mut RevitFile) -> anyhow::Result<BTreeMap<i64, 
         let Some(graph) = record.graph.as_ref() else {
             return Ok(());
         };
-        let id =
-            |value: Option<&serde_json::Value>| value.and_then(crate::native_json::element_id_i64);
+        let id = |value: Option<&serde_json::Value>| {
+            value
+                .and_then(|v| v.pointer("/m_id/m_id64"))
+                .and_then(serde_json::Value::as_i64)
+        };
         let Some(category) = graph
             .objects
             .first()
