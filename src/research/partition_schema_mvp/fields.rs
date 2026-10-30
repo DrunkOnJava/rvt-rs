@@ -667,6 +667,10 @@ pub const WALL_TOP_JOINED_FIELD: &str = "m_wall_top_joined";
 /// is as tall as Revit's, and Revit's export writes that as its `Height`.
 pub const WALL_UNCUT_FIELD: &str = "m_wall_uncut";
 
+/// Field set on a wall whose native record holds no step that cuts, embeds or
+/// sweeps its solid ([`crate::native_walls::WallRecords::whole`], RE-270).
+pub const WALL_WHOLE_FIELD: &str = "m_wall_whole";
+
 /// Field carrying the name of the phase an element was created in
 /// ([`crate::partition_phases`], #755).
 pub const PHASE_CREATED_FIELD: &str = "m_phase_created";
