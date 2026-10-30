@@ -43,21 +43,11 @@ import ifcopenshell.geom
 import ifcopenshell.util.placement
 import ifcopenshell.util.unit
 
+from ifc_common import report_mesh_error
+
 FEET = 0.3048
 COMPONENT = {5121: "B", 5123: "H", 5125: "I", 5126: "f"}
 WIDTH = {"SCALAR": 1, "VEC3": 3}
-
-
-MESH_ERRORS = set()
-
-
-def report_mesh_error(error):
-    """Print each distinct reason IfcOpenShell gives for not meshing an element, once (#773)."""
-    text = (str(error).strip().splitlines() or [""])[0]
-    message = f"{type(error).__name__}: {re.sub(r'#[0-9]+', '#N', text)[:200]}"
-    if message not in MESH_ERRORS:
-        MESH_ERRORS.add(message)
-        print(f"IfcOpenShell cannot mesh: {message}")
 
 
 def read_glb(path):

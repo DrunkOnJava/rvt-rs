@@ -733,6 +733,11 @@ jobs:
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - run: cargo doc --no-deps --lib
+      # The published crate carries only what Cargo.toml's `include` lists.
+      # Build it as crates.io will, so a file the source embeds and the list
+      # misses fails here rather than at release (publish.yml).
+      - name: crate package
+        run: cargo package -p rvt --locked
 
   # S2 (#873): a pull request that breaks the stable Rust API says so.
   # tools/ci/semver-gate.sh compares the crate's public API (default

@@ -12,16 +12,19 @@ documentation = "https://docs.rs/rvt"
 readme = "README.md"
 keywords = ["revit", "bim", "autodesk", "ifc", "rfa"]
 categories = ["parser-implementations", "compression", "command-line-utilities"]
-exclude = [
-    ".github/*",
-    ".gitignore",
-    "tools/bench.sh",
-    "docs/outreach/*",
-    "docs/announcement-draft.md",
-    "docs/demo/*",
-    # docs/data/*.csv must ship: src/class_tag_map.rs `include_str!`s
-    # docs/data/tag-drift-2016-2026.csv, and excluding it made the packaged
-    # crate fail `cargo publish --dry-run` verification.
+# What the published crate needs: the source, the files it embeds with
+# include_str! (docs/support-matrix.json in src/capability.rs,
+# docs/data/tag-drift-2016-2026.csv in src/class_tag_map.rs), the README
+# crates.io shows, and the licence files. Examples, tests, benches, reports
+# and tooling stay in the repository, and cargo drops the targets whose files
+# are left out. CI's `crate package` step builds the packaged crate.
+include = [
+    "/src/**/*.rs",
+    "/docs/support-matrix.json",
+    "/docs/data/tag-drift-2016-2026.csv",
+    "/README.md",
+    "/LICENSE",
+    "/NOTICE",
 ]
 # Every tests/*.rs file is a module of tests/integration/main.rs, one test
 # binary rather than one per file (C6).
