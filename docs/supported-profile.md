@@ -105,7 +105,7 @@ material names and layer thicknesses, family instances' materials (RE-82), the I
 object of each element's type (RE-110), Revit's GlobalId (other entities get one
 derived from the document and their own identity, stable between exports,
 #400), stair riser and tread dimensions, each flight's
-number of treads and nosing length (RE-92, RE-236), on Revit 2024 its run type as its `Reference`
+number of treads and nosing length (RE-92, RE-236), a stair's `TreadLengthAtInnerSide` and, with `--revit-set-placement`, its `Pset_StairFlightCommon` summed or shared from its flights (RE-287), on Revit 2024 its run type as its `Reference`
 and each landing's type as its `Reference`, each element's `IsExternal` as Revit's
 exporter sets it (a parameter named for its property set, its type's
 Function, else its class's rule; on curtain mullions and panels their curtain wall's, RE-193, RE-288), each type object's common set (`IsExternal` from its type's Function, a roof's, else not external, `FireRating` and `LoadBearing`, a stair type's and flight type's dimensions, RE-286),
