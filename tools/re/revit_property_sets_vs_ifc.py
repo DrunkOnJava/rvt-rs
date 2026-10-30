@@ -19,7 +19,11 @@ in a set that is not a standard one (`Pset_`, `Qto_`) or rvt-rs's own
 - differ: Revit writes it in that set with another value;
 - not written: Revit writes no such property there.
 
-It also counts, per set, the properties Revit writes that rvt-rs does not.
+It also counts, per set, the properties Revit writes that rvt-rs does not,
+and, among those that differ, the ones whose value in Revit's export is
+rvt-rs's divided by 304.8 squared: Revit 2025's export writes a window type's
+sill height and its nested families' sizes so, a 3 ft sill as 0.0098 mm
+(RE-210 §9).
 
 Usage:
     rvt-ifc MODEL.rvt -o ours.ifc --revit-property-sets
@@ -100,6 +104,13 @@ def same(a, b):
     return abs(x - y) <= max(ROUNDING, RELATIVE * max(abs(x), abs(y)))
 
 
+def shrunk_by_feet(ours, theirs):
+    a, b = ours[0], theirs[0]
+    if not all(isinstance(v, (int, float)) and not isinstance(v, bool) for v in (a, b)):
+        return False
+    return b != 0 and same((a, None), (b * 304.8 * 304.8, None))
+
+
 def main():
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
     if len(args) != 2:
@@ -107,6 +118,7 @@ def main():
     ours, revit = sets_of(args[0]), sets_of(args[1])
     counts = collections.defaultdict(collections.Counter)
     missing = collections.Counter()
+    shrunk = 0
     rows = []
     for tag, by_level in ours.items():
         theirs = revit.get(tag)
@@ -118,6 +130,8 @@ def main():
                 set_name, prop = key
                 if key in revit_values:
                     verdict = "equal" if same(value, revit_values[key]) else "differ"
+                    if verdict == "differ" and shrunk_by_feet(value, revit_values[key]):
+                        shrunk += 1
                 elif any(p == prop and same(value, v) for (s, p), v in revit_values.items()):
                     verdict = "other set"
                 else:
@@ -140,6 +154,8 @@ def main():
         f"differ {total['differ']}, not written by Revit {total['not written']}; "
         f"Revit's not written by rvt-rs: {sum(missing.values())}"
     )
+    if shrunk:
+        print(f"differ where Revit's value is rvt-rs's divided by 304.8 squared: {shrunk}")
     if "--list" in sys.argv:
         for row in rows:
             print("row", *row, sep="\t")

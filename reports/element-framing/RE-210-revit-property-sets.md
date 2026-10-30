@@ -141,7 +141,7 @@ The 498 are the Yes/No `FireExit` of 266 doors and 232 windows. rvt-rs writes it
 
 ## 6. Not measured yet
 
-The Snowdon models have no element of a type lacking a type object that rvt-rs exports, and no enumeration that rvt-rs writes. The RE1 MEP models' currents and R2025 models 12 to 17's family type values are written as on Snowdon Architectural but have no Revit export with these sets. An IFC4 export of R2025 models 01 and 12 to 17 with "Export Revit property sets" ticked would measure them, with rooms.
+The Snowdon models have no element of a type lacking a type object that rvt-rs exports, and no enumeration that rvt-rs writes. The RE1 MEP models' currents have no Revit export with these sets. R2025 models 01 and 12 to 17 now have one (§9).
 
 ## 7. Not written
 
@@ -160,3 +160,21 @@ Reading the parameters decodes each element's native record, as for `rvt-element
 |---|---:|---:|---:|
 | Core Interior | 6.785 ± 0.027 | 7.809 ± 0.015 | 1.15 |
 | BIM4LCA office, as built | 24.262 ± 0.027 | 34.036 ± 0.206 | 1.40 |
+
+## 9. Measured on Revit 2025's export with its own sets (2026-10-29)
+
+puzzbobb attached to #885 (2026-10-27, Apache-2.0) `R2025_Models_wRVTSets.zip`: IFC4 exports of the R2025 models by Revit 25.0.2 with "Export Revit property sets" ticked. Measure reads each one whose `.rvt` is in `R2025_Models.zip`, 19 of the 21, as `<model>.revit-sets.ifc` (`research/r2025-models.tsv`), and scores `rvt-ifc --revit-property-sets` against it (`tools/ci/measure-reference-models.sh`, Measure [40978087421](https://github.com/DrunkOnJava/rvt-rs/actions/runs/40978087421), listed in [40978621247](https://github.com/DrunkOnJava/rvt-rs/actions/runs/40978621247)):
+
+| | properties |
+|---|---:|
+| rvt-rs writes in Revit's own sets, over the 19 models | 2,646 |
+| ... equal | 2,502 |
+| ... different | 126 |
+| ... not written by Revit | 18 |
+| Revit's that rvt-rs does not write | 4,403 |
+
+- **The 126 different** are on R2025 models 12 to 17, 21 each: the window type's `Default Sill Height` and the `Width`, `Height`, `Opening Width` and `Opening Height` of the instances of the window's nested families (`Muntin Pattern_2x2`, `Trim-Window-Exterior-Flat`, `Trim-Window-Interior-Flat`), on each of the three `Window-Fixed:24" x 36"` windows. Revit's export writes each as rvt-rs's value divided by 304.8 squared: a 914.4 mm sill as `IFCLENGTHMEASURE(0.0098425196850393699)` in a millimetre file, the 24 in opening width as 0.0066 mm, where rvt-rs writes 914.4 and 609.6 mm, the window's size. Other lengths in the same file, such as `Rough Width`, are in millimetres. The scorer counts these on a line of their own.
+- **The 18 not written by Revit** are the stringer type's `Category`, `Family Name` and `Type Name` on the two stringers of models 13 to 15. rvt-rs writes them on the `IfcMemberType`; Revit's export writes them in `Other(Type)` on the two stringers and gives its `IfcMemberType` no sets, as §2 describes for a type whose type object is made after its elements' sets.
+- **The 4,403** are almost all built-in parameters (§7, #255): an element's `Constraints` (1,646), `Dimensions` (614), `Phasing` (228) and `Structural` (216), and its type's `Construction` (561) and `Analytical Properties` (296).
+
+Every other value rvt-rs writes is Revit's, among them all 1,176 in the elements' `Other` sets.
