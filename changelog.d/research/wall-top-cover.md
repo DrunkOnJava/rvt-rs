@@ -8,5 +8,6 @@
   whole plan gives 64 of the 65 cut tops as built and 70 of 70 at permit,
   and cuts no wall Revit leaves whole; one wall's 0.085 ft stub past the
   floor's edge is cut by Revit and unexplained, and a part-covered wall
-  needs a stepped top, so no wall is cut yet. `tools/re/wall_top_cover_vs_ifc.py`
-  and `probes/examples/probe_1067_native_dump.rs` are the measurement.
+  needs a stepped top, which this export does not draw.
+  `tools/re/wall_top_cover_vs_ifc.py` and
+  `probes/examples/probe_1067_native_dump.rs` are the measurement.
