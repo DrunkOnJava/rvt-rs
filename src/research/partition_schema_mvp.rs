@@ -255,10 +255,32 @@ pub fn recover_partition_schema_mvp(
             attach_type_materials(&type_materials, elements);
         }
         // --- A wall's type Function from its native type record (RE-185),
-        // and the IsExternal Revit's exporter calculates from it (RE-193);
-        // nothing else's IsExternal is read on these releases (RE-283) ---
+        // the parameters named for IsExternal or a standard property from the
+        // saved parameters (RE-193, RE-194), and the IsExternal Revit's
+        // exporter calculates from them (RE-283) ---
         attach_wall_type_functions(rf, revit_version, out.walls.iter_mut());
-        attach_calculated_is_external(out.walls.iter_mut(), false);
+        attach_native_named_parameters(
+            rf,
+            revit_version,
+            out.walls
+                .iter_mut()
+                .chain(out.columns.iter_mut())
+                .chain(out.doors.iter_mut())
+                .chain(out.windows.iter_mut())
+                .chain(out.slabs.iter_mut())
+                .chain(out.rooms.iter_mut())
+                .chain(out.products.iter_mut()),
+        );
+        attach_record_is_external(
+            out.walls
+                .iter_mut()
+                .chain(out.columns.iter_mut())
+                .chain(out.doors.iter_mut())
+                .chain(out.windows.iter_mut())
+                .chain(out.slabs.iter_mut())
+                .chain(out.rooms.iter_mut())
+                .chain(out.products.iter_mut()),
+        );
         return Ok(out);
     }
 
