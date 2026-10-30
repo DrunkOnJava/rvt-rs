@@ -892,6 +892,12 @@ pub fn append_typed_production_elements(
         add_mullion_span(&mut reference_sets, &ifc_type, &decoded);
         add_door_window_quantities(&mut reference_sets, &ifc_type, &decoded);
         add_wall_quantities(&mut reference_sets, &ifc_type, &decoded);
+        add_wall_height(
+            &mut reference_sets,
+            &ifc_type,
+            &decoded,
+            extrusion.as_ref().filter(|_| solid_shape.is_none()),
+        );
         add_curtain_wall_length(&mut reference_sets, &ifc_type, &decoded);
         add_body_quantities(
             &mut reference_sets,
@@ -2520,6 +2526,49 @@ fn add_wall_quantities(sets: &mut Vec<PropertySet>, ifc_type: &str, decoded: &De
         name: "Qto_WallBaseQuantities".into(),
         properties,
     });
+}
+
+/// Add a wall's `Qto_WallBaseQuantities.Height` to `sets`: the depth of
+/// the extrusion it is drawn as, where its native record names nothing
+/// joined to or cutting it ([`crate::partition_schema_mvp::WALL_UNCUT_FIELD`]).
+/// revit-ifc's `WallExporter` (CLEANROOM.md source 5) writes the vertical
+/// span of Revit's body, and on those walls the record box rvt-rs extrudes
+/// is that tall: on all 81 of the BIM4LCA office's as built, 70 at building
+/// permit and 73 of puzzbobb's R2025 walls, with Revit writing a `Height` on
+/// each (RE-266). Nothing on any other wall, whose body may be cut (#1067).
+fn add_wall_height(
+    sets: &mut Vec<PropertySet>,
+    ifc_type: &str,
+    decoded: &DecodedElement,
+    extrusion: Option<&Extrusion>,
+) {
+    if !matches!(ifc_type, "IFCWALL" | "IFCWALLSTANDARDCASE") {
+        return;
+    }
+    let uncut = decoded.fields.iter().any(|(name, value)| {
+        name == crate::partition_schema_mvp::WALL_UNCUT_FIELD
+            && matches!(value, InstanceField::Bool(true))
+    });
+    let Some(height) = extrusion
+        .map(|body| body.height_feet)
+        .filter(|height| uncut && height.is_finite() && *height > 0.0)
+    else {
+        return;
+    };
+    let property = Property {
+        name: "Height".into(),
+        value: PropertyValue::PositiveLengthFeet(height),
+    };
+    match sets
+        .iter_mut()
+        .find(|set| set.name == "Qto_WallBaseQuantities")
+    {
+        Some(set) => set.properties.push(property),
+        None => sets.push(PropertySet {
+            name: "Qto_WallBaseQuantities".into(),
+            properties: vec![property],
+        }),
+    }
 }
 
 /// Add `Span` (`IfcPositiveLengthMeasure`) to a curtain mullion's
