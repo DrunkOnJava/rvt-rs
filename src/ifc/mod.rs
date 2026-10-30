@@ -189,7 +189,8 @@ pub struct IfcModel {
     #[serde(default)]
     pub body_pieces: std::collections::BTreeMap<usize, Vec<usize>>,
     /// What each storey's Level gives beyond its name and elevation (W7,
-    /// RE-275), by index into `building_storeys`: the name of its type.
+    /// RE-275), by index into `building_storeys`: the name of its type and
+    /// its `EntranceLevel` parameter.
     #[serde(default)]
     pub storey_properties: std::collections::BTreeMap<usize, entities::StoreyProperties>,
 }

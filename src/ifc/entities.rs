@@ -1497,7 +1497,8 @@ impl PropertySet {
     }
 
     /// [`Self::storey_sets`] with what the storey's Level gives
-    /// (`properties`, W7, RE-275): the name of its type as `Reference`.
+    /// (`properties`, W7, RE-275): the name of its type as `Reference`, and
+    /// the value of its yes/no parameter `EntranceLevel`.
     pub fn storey_sets_for(properties: Option<&StoreyProperties>) -> Vec<PropertySet> {
         let mut set = vec![Property {
             name: "AboveGround".into(),
@@ -1507,6 +1508,12 @@ impl PropertySet {
             set.push(Property {
                 name: "Reference".into(),
                 value: PropertyValue::Identifier(reference.clone()),
+            });
+        }
+        if let Some(entrance) = properties.and_then(|properties| properties.entrance_level) {
+            set.push(Property {
+                name: "EntranceLevel".into(),
+                value: PropertyValue::Boolean(entrance),
             });
         }
         vec![PropertySet {
@@ -1541,6 +1548,9 @@ pub struct StoreyProperties {
     /// The name of the Level's type, which Revit's export writes as
     /// `Pset_BuildingStoreyCommon.Reference`.
     pub reference: Option<String>,
+    /// The Level's yes/no parameter `Pset_BuildingStoreyCommon.EntranceLevel`
+    /// (or `EntranceLevel`), where it holds a value.
+    pub entrance_level: Option<bool>,
 }
 
 /// A single property inside a [`PropertySet`].
