@@ -36,6 +36,9 @@ const PARALLEL: f64 = 0.999;
 const ACROSS: f64 = 0.01;
 /// A mullion shorter than its section by more than this is shorter than it.
 const SHORT_MARGIN_FEET: f64 = 0.001;
+/// A curtain wall with more mullions than this is left unread: the ends of each
+/// are compared with every other mullion of the wall.
+const MAX_GROUP: usize = 4096;
 
 /// The box of a curtain mullion: its centre, three unit axes with the
 /// half-extent along each (model feet), and the index of the axis it runs
@@ -159,6 +162,9 @@ fn neighbours(
 /// its two end faces its Revit solid keeps (0, 1 or 2); a mullion left out
 /// has none.
 pub fn kept_ends(group: &[MullionBox]) -> BTreeMap<u32, u8> {
+    if group.len() > MAX_GROUP {
+        return BTreeMap::new();
+    }
     let mut found: BTreeMap<u32, (usize, [Neighbours; 2])> = BTreeMap::new();
     let mut left_out: BTreeSet<u32> = BTreeSet::new();
     let mut sources: BTreeSet<u32> = BTreeSet::new();

@@ -239,6 +239,7 @@ def main(argv):
     values = collections.Counter()
     by_class = collections.Counter()
     left_out = collections.Counter()
+    by_labels = collections.Counter()
     different = []
     for host, group in by_host.items():
         for m in group:
@@ -255,6 +256,9 @@ def main(argv):
             if m["tag"] in found and m["tag"] not in cause:
                 predicted = sum(0 if hidden(f) else 1 for f in found[m["tag"]])
                 confusion[(predicted, implied if implied is not None else "-")] += 1
+                if implied is not None:
+                    pair = sorted("+".join(sorted(f)) or "nothing" for f in found[m["tag"]])
+                    by_labels[(" | ".join(pair), implied)] += 1
                 if m["plain"]:
                     if nsa is None:
                         values["Revit writes none"] += 1
@@ -276,6 +280,9 @@ def main(argv):
     print("predicted ends, ends implied by Revit's NetSurfaceArea (- not a whole 0 to 2): mullions")
     for (a, b), n in sorted(confusion.items(), key=lambda kv: (str(kv[0][0]), str(kv[0][1]))):
         print(f"  {a} {b}: {n}")
+    print("what lies at the two ends, ends implied by Revit's NetSurfaceArea: mullions")
+    for (pair, implied), n in sorted(by_labels.items(), key=lambda kv: -kv[1]):
+        print(f"  {pair}: {implied}: {n}")
     plain = sum(1 for b in boxes.values() if b["plain"])
     print(f"NetSurfaceArea on the {plain} mullions with a NetVolume (drawn as their box's extrusion): " + ", ".join(f"{k} {v}" for k, v in sorted(values.items())))
     print("left out among them, by cause, and the value the rule would have given: mullions")
