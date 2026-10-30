@@ -1,37 +1,16 @@
-//! `ParameterElement` + `SharedParameter` — the metadata side of
-//! Revit's parameter system.
+//! `AProperty*` value carriers and the saved parameters of an element.
 //!
 //! Revit parameters split into three layers:
 //!
 //! 1. **Definition** — what the parameter _is_ (name, storage type,
-//!    unit, group, whether it's shared across projects). That's this
-//!    module's responsibility via `ParameterElement` (project-local)
-//!    and `SharedParameter` (shared-parameter-file-backed).
+//!    unit, group, whether it's shared across projects).
 //! 2. **Attachment** — which categories or type/instance slots the
-//!    parameter applies to. Handled elsewhere (category-bindings,
-//!    future work).
+//!    parameter applies to.
 //! 3. **Value** — the actual stored number / string / ElementId for
-//!    a specific host element. Handled by the value-extraction pass.
-//!
-//! # Typical field shape (observed 2016–2026)
-//!
-//! ParameterElement:
-//!
-//! | Field | Type | Semantics |
-//! |---|---|---|
-//! | `m_name` | String | Human-visible parameter name ("Head Height", "Sill Height"). |
-//! | `m_parameter_group` | Primitive u32 | Revit's enum of groupings (Identity Data, Dimensions, Constraints, …). |
-//! | `m_storage_type` | Primitive u32 | 0 = None, 1 = Integer, 2 = Double, 3 = String, 4 = ElementId. |
-//! | `m_unit_type` | Primitive u32 | Revit's unit-spec enum (length / area / volume / angle / currency / …). |
-//! | `m_is_shared` | Primitive bool | True only for SharedParameter subclass instances. |
-//! | `m_visible` | Primitive bool | False = hidden from Properties panel. |
-//!
-//! SharedParameter (subclass):
-//!
-//! | Field | Type | Semantics |
-//! |---|---|---|
-//! | `m_guid` | Guid | Stable cross-project identifier — the whole point of SharedParameter. |
-//! | `m_description` | String | Free-form description shown in Shared Parameters dialog. |
+//!    a specific host element. This module reads values: a
+//!    [`ParameterValue`] from an `AProperty*` carrier, and an
+//!    element's saved parameters from its native record
+//!    ([`saved_parameters_lossy`]).
 
 use super::level::normalise_field_name;
 use crate::walker::{DecodedElement, InstanceField};
@@ -51,7 +30,7 @@ use crate::walker::{DecodedElement, InstanceField};
 
 /// Underlying wire-level storage kind of a parameter's value.
 ///
-/// Maps to Revit's `StorageType` enum. Every ParameterElement has
+/// Maps to Revit's `StorageType` enum. Every parameter definition has
 /// exactly one `StorageType`, set at creation and never changed.
 /// Value readers dispatch on this to decide
 /// how to interpret the raw bytes of a given element's value slot.
@@ -99,154 +78,6 @@ impl StorageType {
     /// numeric parameters for analytics.
     pub fn is_numeric(self) -> bool {
         matches!(self, Self::Integer | Self::Double)
-    }
-}
-
-/// How a parameter's value is produced.
-///
-/// Revit parameters come in three flavours by how their value is
-/// produced:
-///
-/// - **User-set**: a value the end user types or picks from a menu.
-///   Always writable, always carried on the element.
-/// - **Calculated / formula-driven**: the value is computed from a
-///   formula that references other parameters ("= 2 * Height +
-///   Width" for a label derived from geometry). Read-only to the
-///   user; Revit evaluates the formula at update time and writes
-///   the result back to the parameter slot.
-/// - **Reporting**: the value is pulled from geometry or the
-///   element's type at read time. Revit's "Dimension reports its
-///   length" is the canonical example. Read-only; never edited
-///   directly.
-///
-/// The `m_is_calculated` / `m_is_reporting` flags on
-/// `ParameterElement` are what distinguish these modes.
-// Tracker: L5B-56.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-#[non_exhaustive]
-pub enum ParameterValueSource {
-    /// User-set (default). Writable, no implicit dependency on
-    /// other parameters or geometry.
-    #[default]
-    UserSet,
-    /// Formula-driven. Revit recomputes the value from a formula
-    /// string each time an input parameter changes.
-    Calculated,
-    /// Reporting. Value sourced from geometry / element properties
-    /// at read time. Not user-editable.
-    Reporting,
-}
-
-/// Typed view of a decoded ParameterElement.
-#[derive(Debug, Clone, PartialEq, Default)]
-#[non_exhaustive]
-pub struct ParameterElement {
-    pub name: Option<String>,
-    pub parameter_group: Option<u32>,
-    pub storage_type: Option<StorageType>,
-    pub unit_type: Option<u32>,
-    pub is_shared: Option<bool>,
-    pub visible: Option<bool>,
-    /// How this parameter's value is produced. `None` when
-    /// the relevant flags weren't present in the decoded payload;
-    /// treat as [`ParameterValueSource::UserSet`] for
-    /// user-facing writability purposes.
-    // Tracker: L5B-56.
-    pub value_source: Option<ParameterValueSource>,
-}
-
-impl ParameterElement {
-    pub fn from_decoded(decoded: &DecodedElement) -> Self {
-        let mut out = Self::default();
-        let mut is_calculated = None;
-        let mut is_reporting = None;
-        for (field_name, value) in &decoded.fields {
-            match (normalise_field_name(field_name).as_str(), value) {
-                ("name", InstanceField::String(s)) => out.name = Some(s.clone()),
-                ("parametergroup" | "group", InstanceField::Integer { value, .. }) => {
-                    out.parameter_group = Some(*value as u32);
-                }
-                ("storagetype" | "storage", InstanceField::Integer { value, .. }) => {
-                    out.storage_type = Some(StorageType::from_code(*value as u32));
-                }
-                ("unittype" | "unit", InstanceField::Integer { value, .. }) => {
-                    out.unit_type = Some(*value as u32);
-                }
-                ("isshared" | "shared", InstanceField::Bool(b)) => {
-                    out.is_shared = Some(*b);
-                }
-                ("visible", InstanceField::Bool(b)) => out.visible = Some(*b),
-                (
-                    "iscalculated" | "calculated" | "isformula" | "formula",
-                    InstanceField::Bool(b),
-                ) => {
-                    is_calculated = Some(*b);
-                }
-                ("isreporting" | "reporting", InstanceField::Bool(b)) => {
-                    is_reporting = Some(*b);
-                }
-                _ => {}
-            }
-        }
-        // Precedence: reporting > calculated > user-set. A single
-        // parameter can't be both calculated and reporting in Revit's
-        // model (reporting parameters don't accept formulas), but if
-        // both flags are somehow set we surface the stronger
-        // constraint (reporting — fully read-only).
-        out.value_source = match (is_calculated, is_reporting) {
-            (_, Some(true)) => Some(ParameterValueSource::Reporting),
-            (Some(true), _) => Some(ParameterValueSource::Calculated),
-            (Some(false), Some(false)) | (Some(false), None) | (None, Some(false)) => {
-                Some(ParameterValueSource::UserSet)
-            }
-            (None, None) => None,
-        };
-        out
-    }
-
-    /// True when this parameter is user-writable — i.e., neither
-    /// calculated nor reporting. When the flags weren't present in
-    /// the decoded payload, assumes user-writable (the safe default).
-    pub fn is_user_writable(&self) -> bool {
-        !matches!(
-            self.value_source,
-            Some(ParameterValueSource::Calculated | ParameterValueSource::Reporting)
-        )
-    }
-}
-
-/// Typed view of a decoded SharedParameter.
-///
-/// Inherits every field from `ParameterElement` and adds two:
-/// `guid` (the stable cross-project identifier that makes a shared
-/// parameter "shared"), and a free-form `description`.
-#[derive(Debug, Clone, PartialEq, Default)]
-#[non_exhaustive]
-pub struct SharedParameter {
-    pub base: ParameterElement,
-    /// Stable cross-project GUID. This is what lets two projects
-    /// using the same shared-parameter file reconcile their
-    /// parameter instances as "the same parameter."
-    pub guid: Option<[u8; 16]>,
-    pub description: Option<String>,
-}
-
-impl SharedParameter {
-    pub fn from_decoded(decoded: &DecodedElement) -> Self {
-        let mut out = Self {
-            base: ParameterElement::from_decoded(decoded),
-            ..Self::default()
-        };
-        for (field_name, value) in &decoded.fields {
-            match (normalise_field_name(field_name).as_str(), value) {
-                ("guid", InstanceField::Guid(bytes)) => out.guid = Some(*bytes),
-                ("description", InstanceField::String(s)) => {
-                    out.description = Some(s.clone());
-                }
-                _ => {}
-            }
-        }
-        out
     }
 }
 
@@ -393,9 +224,7 @@ impl ParameterValue {
         }
     }
 
-    /// The [`StorageType`] this value corresponds to. Useful for
-    /// joining a decoded value against its matching ParameterElement
-    /// definition.
+    /// The [`StorageType`] this value corresponds to.
     pub fn storage_type(&self) -> StorageType {
         match self {
             ParameterValue::Boolean(_) | ParameterValue::Integer(_) | ParameterValue::Enum(_) => {
@@ -613,128 +442,4 @@ fn vector_to_f32_3(components: &[InstanceField]) -> Option<[f32; 3]> {
         tuple_f64[1] as f32,
         tuple_f64[2] as f32,
     ])
-}
-
-/// A per-element (or per-type) collection of decoded parameter
-/// values keyed by parameter name.
-///
-/// Revit's parameter-inheritance model has two tiers:
-///
-/// 1. **Type-level** parameters live on the `Symbol` (family type).
-///    Any instance of that type that hasn't overridden the value
-///    sees the type-level value.
-/// 2. **Instance-level** parameters live on the FamilyInstance
-///    (or any host element — Wall, Floor, etc.) directly. When an
-///    instance-level value is present for a given parameter name,
-///    it overrides the type-level value for that specific
-///    instance.
-///
-/// This struct holds one tier's view of the name → value map.
-/// Pair two of them — one for the type, one for the instance —
-/// and resolve with [`effective_value`].
-// Tracker: L5B-55.
-#[derive(Debug, Clone, Default, PartialEq)]
-pub struct ParameterBundle {
-    /// `BTreeMap` rather than `HashMap` so iteration order is
-    /// deterministic — useful for snapshot tests and STEP output
-    /// stability.
-    values: std::collections::BTreeMap<String, ParameterValue>,
-}
-
-impl ParameterBundle {
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    /// Insert a (name, value) pair. Later inserts overwrite
-    /// earlier ones for the same name.
-    pub fn insert(&mut self, name: impl Into<String>, value: ParameterValue) {
-        self.values.insert(name.into(), value);
-    }
-
-    /// Look up a parameter by name. Returns `None` when the name
-    /// isn't in this tier's map.
-    pub fn get(&self, name: &str) -> Option<&ParameterValue> {
-        self.values.get(name)
-    }
-
-    pub fn len(&self) -> usize {
-        self.values.len()
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.values.is_empty()
-    }
-
-    /// Iterate over (name, value) pairs in sorted-by-name order.
-    pub fn iter(&self) -> impl Iterator<Item = (&str, &ParameterValue)> {
-        self.values.iter().map(|(k, v)| (k.as_str(), v))
-    }
-
-    /// Every parameter name present in this tier. Sorted.
-    pub fn names(&self) -> impl Iterator<Item = &str> {
-        self.values.keys().map(String::as_str)
-    }
-}
-
-/// Resolve the effective value of a named parameter given both
-/// tiers.
-///
-/// Precedence follows Revit's own model: **instance wins over
-/// type**. The instance bundle is consulted first; if the
-/// parameter name isn't present there, the type bundle is the
-/// fallback; if the name is in neither, returns `None`.
-///
-/// Usage pattern:
-///
-/// ```rust
-/// use rvt::elements::parameters::{ParameterBundle, ParameterValue, effective_value};
-///
-/// let mut type_params = ParameterBundle::new();
-/// type_params.insert("Width", ParameterValue::Double(2.0));
-/// type_params.insert("Height", ParameterValue::Double(6.8));
-///
-/// let mut instance_params = ParameterBundle::new();
-/// instance_params.insert("Height", ParameterValue::Double(7.0));
-///
-/// // Instance overrides the type's 6.8-ft default.
-/// assert_eq!(
-///     effective_value(&instance_params, &type_params, "Height"),
-///     Some(&ParameterValue::Double(7.0))
-/// );
-/// // Instance didn't override Width — type-level value falls through.
-/// assert_eq!(
-///     effective_value(&instance_params, &type_params, "Width"),
-///     Some(&ParameterValue::Double(2.0))
-/// );
-/// // Unknown name → None.
-/// assert!(effective_value(&instance_params, &type_params, "Unknown").is_none());
-/// ```
-// Tracker: L5B-55.
-pub fn effective_value<'a>(
-    instance: &'a ParameterBundle,
-    type_: &'a ParameterBundle,
-    name: &str,
-) -> Option<&'a ParameterValue> {
-    instance.get(name).or_else(|| type_.get(name))
-}
-
-/// Merge a type bundle and an instance bundle into a single
-/// effective-view bundle.
-///
-/// Every parameter name present in EITHER bundle appears in the
-/// result. Instance values override type values for overlapping
-/// names — the same precedence rule as [`effective_value`] applied
-/// across the whole name set in one pass.
-///
-/// Useful when a downstream consumer (IFC property-set builder,
-/// schedule extractor) needs the full effective parameter map for
-/// an element without doing per-name lookups.
-// Tracker: L5B-55.
-pub fn merge_effective(instance: &ParameterBundle, type_: &ParameterBundle) -> ParameterBundle {
-    let mut out = type_.clone();
-    for (name, value) in instance.iter() {
-        out.insert(name.to_string(), value.clone());
-    }
-    out
 }

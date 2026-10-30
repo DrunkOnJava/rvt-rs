@@ -55,11 +55,9 @@
 //! |---|---|
 //! | [`scene_graph`] | Project → storey → element tree + schedule |
 //! | [`pbr`] | Revit Material → glTF PBR mapping |
-//! | [`camera`] | Orbit-camera state + controls |
-//! | [`clipping`] | ClippingPlane + SectionBox + ViewMode |
-//! | [`measure`] | Distance / angle / polygon-area |
-//! | [`annotation`] | Note / leader / polyline / pin markups |
-//! | [`share`] | ViewerState URL-fragment serialization |
+//! | [`camera`] | Orbit-camera state |
+//! | [`clipping`] | SectionBox + ViewMode |
+//! | [`share`] | ViewerState URL-fragment decoding |
 //! | [`gltf`] | glTF 2.0 GLB binary exporter |
 //! | [`sheet`] | 2D SVG plan view emission |
 //! | [`schedule_csv`] | Element and room schedules as CSV (spreadsheets) |
@@ -68,19 +66,13 @@
 //!
 //! 1. `IfcModel` produced via [`RvtDocExporter`]
 //! 2. [`scene_graph::build_scene_graph`] for the navigation tree
-//! 3. [`scene_graph::CategoryFilter`] applied per user toggles
-//! 4. [`gltf::model_to_glb`] for the 3D canvas, or
+//! 3. [`gltf::model_to_glb`] for the 3D canvas, or
 //!    [`sheet::render_plan_svg`] for the 2D drawing panel
-//! 5. [`camera::CameraState`] + [`clipping::ViewMode`] drive the
-//!    viewport's projection + spatial filter
-//! 6. [`scene_graph::element_info_panel`] powers click-to-inspect
-//! 7. [`share::encode_to_fragment`] serializes the whole state into
-//!    a URL for collaboration
+//! 4. [`scene_graph::element_info_panel`] powers click-to-inspect
 // Tracker: IFC-01, M5-05, VW1-05, VW1-15, VW1-06, VW1-07, VW1-13, VW1-12, VW1-24, VW1-04, VW1-11.
 
 use crate::Result;
 
-pub mod annotation;
 pub mod body_geometry;
 pub mod camera;
 pub mod category_map;
@@ -90,7 +82,6 @@ pub mod entities;
 pub mod export_content;
 pub mod from_decoded;
 pub mod gltf;
-pub mod measure;
 pub mod pbr;
 pub mod revit_property_sets;
 pub mod revit_set_placement;
@@ -105,7 +96,7 @@ pub mod step_writer;
 pub use export_content::{
     ELEMENT_RECORD_PROPERTY_SET, ExportContentPolicy, is_misleading_proxy_class,
 };
-pub use from_decoded::{BuilderOptions, ElementInput, build_ifc_model, entity_type_histogram};
+pub use from_decoded::{BuilderOptions, ElementInput, build_ifc_model};
 pub use step_writer::write_step;
 
 /// In-memory IFC model — what a successful export produces. Wire format
@@ -278,9 +269,8 @@ pub struct Storey {
     pub elevation_feet: f64,
 }
 
-/// A single material entry ready for IFC emission. Derived from
-/// a decoded Revit `Material` element via
-/// [`from_decoded::materials_from_revit`].
+/// A single material entry ready for IFC emission, derived from a decoded
+/// Revit `Material` element.
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct MaterialInfo {
     /// Display name ("Concrete", "Glass - Tinted", "Wood - Oak").

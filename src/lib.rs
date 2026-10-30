@@ -100,7 +100,7 @@
 //! - [`walker`]: the element walk: every element a file yields, with its provenance
 //! - [`parse_mode`]: strict and lossy parse results with diagnostics
 //! - [`control`]: cooperative cancellation and progress for long scans
-//! - [`geometry`]: geometry primitives the element walk and the exporters share
+//! - [`geometry`]: points and curves, and the recovery of element geometry from the typed views
 //! - [`level_bind`]: fail-closed binding of Levels to building storeys
 //! - [`ifc`]: IFC4, glTF, plan SVG and CSV export, with diagnostics
 //! - [`capability`]: the capability manifest built from `docs/support-matrix.json`

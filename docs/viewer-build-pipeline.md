@@ -81,9 +81,7 @@ pub fn build_scene_graph(model: JsValue) -> Result<JsValue, JsValue> {
 }
 
 // Repeat for every function in viewer-api.md:
-//   model_to_glb, render_plan_svg, element_info_panel, build_schedule,
-//   encode_to_fragment, decode_from_fragment, CategoryFilter::apply,
-//   Measurement builders, camera controls.
+//   model_to_glb, render_plan_svg, element_info_panel, build_schedule.
 ```
 
 ### `src/lib.rs` changes
@@ -139,12 +137,12 @@ names (wasm-bindgen's default).
 TypeScript usage:
 
 ```ts
-import init, { openRvtBytes, buildSceneGraph, modelToGlb } from 'rvt';
+import init, { openRvtBytesWithDiagnosticsMode, buildSceneGraph, modelToGlb } from 'rvt';
 
 await init();  // load the .wasm
 
 const bytes = await file.arrayBuffer();
-const model = openRvtBytes(new Uint8Array(bytes));
+const { model } = openRvtBytesWithDiagnosticsMode(new Uint8Array(bytes), 'scaffold');
 const scene = buildSceneGraph(model);
 const glb = modelToGlb(model);  // Uint8Array
 ```
@@ -165,9 +163,9 @@ loader.load(url, (gltf) => {
 });
 ```
 
-Camera binding: the Rust-side `CameraState::eye()` gives the
-world-space camera position; apply it to Three.js's `PerspectiveCamera`
-or `OrthographicCamera` per `ViewMode::is_orthographic()`.
+Camera binding: the viewer drives its own Three.js
+`PerspectiveCamera` or `OrthographicCamera` (`viewer/src/main.ts`); the
+Rust `CameraState` only carries a pose inside a shared `ViewerState`.
 
 Click-picking: Three.js `Raycaster` returns the intersected object;
 use the `userData.entityIndex` to call
@@ -248,15 +246,15 @@ Custom domain + HTTPS handled by GitHub Pages defaults.
 ## VW1-19 — WebWorker offloading
 
 Large RFAs (multi-megabyte) block the main thread when decoded
-synchronously. Solution: run `openRvtBytes` + `buildSceneGraph`
-in a dedicated worker.
+synchronously. Solution: run `openRvtBytesWithDiagnosticsMode` +
+`buildSceneGraph` in a dedicated worker.
 
 ```ts
 // worker.ts
-import init, { openRvtBytes, buildSceneGraph } from 'rvt';
+import init, { openRvtBytesWithDiagnosticsMode, buildSceneGraph } from 'rvt';
 self.onmessage = async (e) => {
     await init();
-    const model = openRvtBytes(e.data.bytes);
+    const { model } = openRvtBytesWithDiagnosticsMode(e.data.bytes, 'scaffold');
     const scene = buildSceneGraph(model);
     self.postMessage({ model, scene });
 };

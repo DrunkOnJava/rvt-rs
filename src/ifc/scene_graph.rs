@@ -51,113 +51,14 @@ pub struct SceneNode {
     pub children: Vec<SceneNode>,
 }
 
-impl SceneNode {
-    /// Count this node + every descendant. Handy for sanity-checks
-    /// and for sizing viewer-side buffers.
-    pub fn descendants_count(&self) -> usize {
-        1 + self
-            .children
-            .iter()
-            .map(SceneNode::descendants_count)
-            .sum::<usize>()
-    }
-
-    /// Find the first descendant whose name matches `name` exactly
-    /// (depth-first, pre-order). Returns `None` when no match
-    /// exists.
-    pub fn find_by_name<'a>(&'a self, name: &str) -> Option<&'a SceneNode> {
-        if self.name == name {
-            return Some(self);
-        }
-        for child in &self.children {
-            if let Some(found) = child.find_by_name(name) {
-                return Some(found);
-            }
-        }
-        None
-    }
-
-    /// Flatten the tree to `(depth, &node)` pairs, pre-order. Viewers
-    /// that render the scene as an indented list use this shape.
-    pub fn flatten(&self) -> Vec<(usize, &SceneNode)> {
-        let mut out = Vec::new();
-        self.flatten_into(0, &mut out);
-        out
-    }
-
-    fn flatten_into<'a>(&'a self, depth: usize, out: &mut Vec<(usize, &'a SceneNode)>) {
-        out.push((depth, self));
-        for child in &self.children {
-            child.flatten_into(depth + 1, out);
-        }
-    }
-}
-
-/// Category-based visibility filter for a scene graph.
-/// Carries a hide-list of IFC type strings; any node whose
-/// `ifc_type` matches (case-insensitive) is filtered out of the
-/// tree, along with all of its descendants.
-///
-/// Viewers implement "layer toggles" by toggling IFC types in this
-/// filter and re-rendering the returned tree.
+/// Category visibility state: the IFC types a viewer's layer toggles
+/// have hidden, as a shared viewer state carries them.
 // Tracker: VW1-09.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CategoryFilter {
-    /// IFC types to hide. Matched case-insensitively against
-    /// `SceneNode.ifc_type`. Use [`Self::hide`] to add a type,
-    /// [`Self::show`] to remove.
+    /// IFC types to hide, as the upper-case strings `SceneNode.ifc_type`
+    /// holds (`"IFCWALL"`).
     pub hidden: std::collections::BTreeSet<String>,
-}
-
-impl CategoryFilter {
-    /// New empty filter — everything visible.
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    /// Mark `ifc_type` as hidden. Case-insensitive — `"IFCWALL"` and
-    /// `"ifcwall"` are equivalent.
-    pub fn hide(&mut self, ifc_type: &str) {
-        self.hidden.insert(ifc_type.to_ascii_uppercase());
-    }
-
-    /// Mark `ifc_type` as visible again (removes from hide-list).
-    pub fn show(&mut self, ifc_type: &str) {
-        self.hidden.remove(&ifc_type.to_ascii_uppercase());
-    }
-
-    /// `true` when `ifc_type` is currently hidden.
-    pub fn is_hidden(&self, ifc_type: &str) -> bool {
-        self.hidden.contains(&ifc_type.to_ascii_uppercase())
-    }
-
-    /// Apply this filter to a scene graph — returns a new
-    /// `SceneNode` tree with all matching subtrees pruned. The
-    /// input is borrowed, not modified. An empty filter returns a
-    /// clone of the full tree.
-    ///
-    /// A node is pruned when its own `ifc_type` is in the hide-
-    /// list; child pruning then runs on the surviving descendants.
-    /// Pruning the root node returns a stub `SceneNode` with no
-    /// children (the root itself is preserved so viewers always
-    /// have something to bind to).
-    pub fn apply(&self, root: &SceneNode) -> SceneNode {
-        if self.hidden.is_empty() {
-            return root.clone();
-        }
-        SceneNode {
-            name: root.name.clone(),
-            ifc_type: root.ifc_type.clone(),
-            entity_index: root.entity_index,
-            storey_index: root.storey_index,
-            children: root
-                .children
-                .iter()
-                .filter(|child| !self.is_hidden(&child.ifc_type))
-                .map(|child| self.apply(child))
-                .collect(),
-        }
-    }
 }
 
 /// One end of a host relationship. Carries enough to label
@@ -880,62 +781,6 @@ impl Schedule {
     /// `true` when no rows.
     pub fn is_empty(&self) -> bool {
         self.rows.is_empty()
-    }
-
-    /// Filter to rows matching the given IFC type (case-
-    /// insensitive). Returns a new `Schedule`.
-    pub fn filter_by_ifc_type(&self, ifc_type: &str) -> Schedule {
-        let target = ifc_type.to_ascii_uppercase();
-        Schedule::from_rows(
-            self.rows
-                .iter()
-                .filter(|r| r.ifc_type.to_ascii_uppercase() == target)
-                .cloned()
-                .collect(),
-        )
-    }
-
-    /// Render as CSV. Header row + one row per
-    /// `ScheduleRow` with fields in the same order as the
-    /// struct: entity_index, ifc_type, name, storey, material,
-    /// guid. Values with commas or quotes are double-quote
-    /// wrapped + inner quotes doubled, per RFC 4180, and a value a
-    /// spreadsheet would read as a formula is prefixed with `'`.
-    /// For spreadsheet schedules with placement, size, host and
-    /// room columns use [`super::schedule_csv`].
-    // Tracker: VW1-15.
-    pub fn to_csv(&self) -> String {
-        let mut out = String::new();
-        out.push_str("entity_index,ifc_type,name,storey,material,guid\n");
-        for r in &self.rows {
-            out.push_str(&format!("{},", r.entity_index));
-            out.push_str(&csv_field(&r.ifc_type));
-            out.push(',');
-            out.push_str(&csv_field(&r.name));
-            out.push(',');
-            out.push_str(&csv_field(&r.storey));
-            out.push(',');
-            out.push_str(&csv_field(&r.material));
-            out.push(',');
-            out.push_str(&csv_field(&r.guid));
-            out.push('\n');
-        }
-        out
-    }
-}
-
-fn csv_field(s: &str) -> String {
-    // Names come from an untrusted file: neutralise formula triggers
-    // (OWASP CSV injection) before RFC 4180 quoting.
-    let s = if s.starts_with(['=', '+', '-', '@', '\t', '\r']) {
-        format!("'{s}")
-    } else {
-        s.to_string()
-    };
-    if s.contains(',') || s.contains('"') || s.contains('\n') || s.contains('\r') {
-        format!("\"{}\"", s.replace('"', "\"\""))
-    } else {
-        s
     }
 }
 

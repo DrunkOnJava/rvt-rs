@@ -4,7 +4,7 @@ The `rvt::ifc` module ships a complete Rust data model for a
 browser/desktop 3D viewer, and the `rvt-wasm` crate exposes it to
 JavaScript: [The JavaScript bindings](#the-javascript-bindings) below lists
 every function the browser viewer can call. The sections before it map the
-Rust functions behind them, grouped by the 11 submodules that make up the
+Rust functions behind them, grouped by the submodules that make up the
 viewer surface.
 
 Everything listed here is:
@@ -53,7 +53,7 @@ byte-order mark. The viewer's Schedule panel downloads both with
 ```rust
 use rvt::ifc::scene_graph::{
     build_scene_graph, SceneNode,
-    CategoryFilter, distinct_ifc_types,
+    distinct_ifc_types,
     element_info_panel, ElementInfoPanel,
     build_schedule, Schedule, ScheduleRow,
 };
@@ -62,10 +62,6 @@ use rvt::ifc::scene_graph::{
 - `build_scene_graph(&IfcModel) -> SceneNode` — project → storey
   → element tree with hosted doors/windows nested under their
   wall.
-- `SceneNode::descendants_count()`, `find_by_name(&str)`,
-  `flatten() -> Vec<(depth, &SceneNode)>`.
-- `CategoryFilter { hidden }` with `hide()` / `show()` /
-  `is_hidden()` / `apply(&SceneNode) -> SceneNode`.
 - `distinct_ifc_types(&SceneNode) -> Vec<String>` — populate the
   layer-toggle UI.
 - `element_info_panel(&IfcModel, entity_index) -> Option<ElementInfoPanel>` —
@@ -111,38 +107,37 @@ use rvt::ifc::scene_graph::{
     `storey`, `material`, `properties`, `placement`, `extents`.
     The viewer reports one as "not recovered" only where the
     export diagnostics agree it is a known decode gap.
-- `build_schedule(&IfcModel) -> Schedule` + `Schedule::to_csv()`
-  — tabular element export. `Schedule::groups` is the per-IFC-type
-  breakdown (`ScheduleTypeGroup { ifc_type, count, entity_indices,
+- `build_schedule(&IfcModel) -> Schedule` — tabular element export
+  (the CSV writer is `schedule_csv`, above). `Schedule::groups` is the
+  per-IFC-type breakdown (`ScheduleTypeGroup { ifc_type, count, entity_indices,
   storeys }`, biggest first) that drives the viewer's schedule
   panel and its per-type scene highlight. Rebuild it with
   `Schedule::from_rows` after resorting or filtering rows.
 
-## Camera
+## Viewer state
 
 ```rust
 use rvt::ifc::camera::CameraState;
+use rvt::ifc::clipping::{SectionBox, ViewMode};
+use rvt::ifc::scene_graph::CategoryFilter;
+use rvt::ifc::share::{ViewerState, decode_from_fragment};
 ```
+
+The plain-data pieces of a shared viewer state, which a URL fragment
+carries as base64-encoded JSON. The viewer does not call them: it drives
+its own camera and layer toggles in `viewer/src/main.ts`, and nothing in the
+Rust crate moves these values.
 
 - `CameraState { target, distance, yaw, pitch, fov_radians, near, far }`.
-- `orbit(delta_yaw, delta_pitch)` — clamps pitch to safe bounds.
-- `pan([dx, dy, dz])`.
-- `zoom(factor)` — clamps to [near*2, far/2].
-- `focus_on(target)`, `frame_bbox(min, max)`.
-- `eye() -> [f64; 3]` — world-space camera position.
-
-## Clipping + view mode
-
-```rust
-use rvt::ifc::clipping::{ClippingPlane, SectionBox, ViewMode};
-```
-
-- `ViewMode { Plan, ThreeD, Section }` +
-  `default_section_box(storey_elevation_feet, model_bbox)`.
-- `ClippingPlane { origin, normal }` with
-  `signed_distance(point)` + `contains(point)`.
-- `SectionBox { min, max }` with `new(a, b)` (normalises),
-  `infinite()`, `contains`, `expand_to`, `size`, `center`.
+- `ViewMode { Plan, ThreeD, Section }`.
+- `SectionBox { min, max }`.
+- `CategoryFilter { hidden }` — the upper-case IFC types the layer
+  toggles hide.
+- `ViewerState { file_hash, camera, view_mode, section_box,
+  category_filter, selected_name }`.
+- `decode_from_fragment(fragment) -> Option<ViewerState>` — base64-of-JSON;
+  strips `#`, `v=`, `#v=` prefixes and returns `None` for anything that
+  is not a current `ViewerState`.
 
 ## Materials (PBR)
 
@@ -155,31 +150,6 @@ use rvt::ifc::pbr::PbrMaterial;
   metal → metallic 1, wood → roughness 0.7, concrete → 0.9,
   paint/ceramic/tile → 0.5, default → 0.6.
 - sRGB → linear color conversion on color unpack.
-
-## Measurement
-
-```rust
-use rvt::ifc::measure::{
-    distance, vector, dot, cross, magnitude, normalize,
-    angle_abc, polygon_area_3d, polygon_perimeter,
-    Measurement,
-};
-```
-
-- `distance(a, b) -> f64`, `angle_abc(a, b, c) -> f64`,
-  `polygon_area_3d(&[Point3]) -> f64`, `polygon_perimeter(&[Point3]) -> f64`.
-- `Measurement { Distance, Angle, Area }` tagged enum with
-  builder methods.
-
-## Annotations
-
-```rust
-use rvt::ifc::annotation::{Annotation, AnnotationLayer};
-```
-
-- `Annotation { Note, Leader, Polyline, Pin }` tagged enum.
-- `AnnotationLayer` with `push`, `remove_by_id`, `find`, `len`,
-  `next_id(counter, kind)`.
 
 ## Rendering outputs
 
@@ -232,19 +202,6 @@ spaces are drawn first, beneath the walls, columns and doors.
 use rvt::ifc::step_writer::write_step;
 let step_text = write_step(&model);
 ```
-
-## URL sharing
-
-```rust
-use rvt::ifc::share::{ViewerState, encode_to_fragment, decode_from_fragment};
-```
-
-- `ViewerState { file_hash, camera, view_mode, section_box,
-  category_filter, selected_name }`.
-- `encode_to_fragment(&state) -> String` — base64-of-JSON ready
-  for `window.location.hash = "#v=" + returned`.
-- `decode_from_fragment(fragment) -> Option<ViewerState>` —
-  strips `#`, `v=`, `#v=` prefixes.
 
 ## Panic reporting and wasm32 memory
 
@@ -322,15 +279,11 @@ let svg = render_plan_svg(&model, &SheetOptions::default());
 
 // 4. Bind interactions.
 //    - Click element → element_info_panel(&model, entity_index)
-//    - Measure tool  → Measurement::distance(a, b) / angle / area
-//    - Layer toggle  → filter.hide(ifc_type); filter.apply(&scene)
-//    - View mode     → mode.default_section_box(storey, bbox)
-//    - Share URL     → encode_to_fragment(&state)
 ```
 
 ## The JavaScript bindings
 
-`rvt-wasm/src/lib.rs` exports these 22 functions through `wasm-bindgen`, and
+`rvt-wasm/src/lib.rs` exports these 11 functions through `wasm-bindgen`, and
 `wasm-pack` builds them into `viewer/pkg/`. They are the wasm API that 1.0
 keeps stable (`RELEASE.md`, "What 1.0 keeps stable"): CI fails a pull request
 that removes or renames one, removes, moves or retypes a parameter, adds one
@@ -346,25 +299,14 @@ describing the error.
 <!-- wasm-bindings -->
 | Binding | Arguments | Returns | What it does |
 |---|---|---|---|
-| `openRvtBytes` | `bytes: Uint8Array` | `IfcModel` | Opens a Revit file and exports its model |
-| `openRvtBytesWithLimits` | `bytes`, `limits: WalkerLimits` | `IfcModel` | The same, with the walker's scan limits |
-| `openRvtBytesWithDiagnostics` | `bytes` | `{ model, diagnostics }` | The model and its export diagnostics, as `rvt-ifc --diagnostics` writes them |
-| `openRvtBytesWithDiagnosticsAndLimits` | `bytes`, `limits` | `{ model, diagnostics }` | The same, with scan limits |
 | `openRvtBytesWithDiagnosticsMode` | `bytes`, `mode: string` | `{ model, diagnostics }` | The same at an export quality mode: `scaffold`, `typed-no-geometry`, `geometry` or `strict`, the stronger ones failing when the file cannot meet them |
-| `openRvtBytesWithDiagnosticsModeAndLimits` | `bytes`, `mode`, `limits` | `{ model, diagnostics }` | The same, with scan limits |
 | `quickSummary` | `bytes` | `Summary` | Release, build, PartAtom and the stream inventory, read without decoding the model |
 | `fileMetadata` | `bytes` | `FileMetadata` | Document identity (release, worksharing, last save, GUID, save counter), from the two identity streams only |
 | `scheduleCsv` | `model`, `kind: string`, `metric: boolean`, `excel: boolean` | `string` | The element (`kind` `"elements"`) or room (`"rooms"`) schedule as CSV, the columns of the [user guide](user-guide.md#get-a-schedule-into-excel) |
 | `buildSceneGraph` | `model` | scene tree | The model's scene graph |
 | `distinctIfcTypes` | `scene` | `string[]` | The IFC types in a scene, for the layer toggles |
-| `applyCategoryFilter` | `scene`, `filter: CategoryFilter` | scene tree | The scene pruned by a category filter |
 | `elementInfoPanel` | `model`, `entity_index: number` | info panel | What the info panel shows for one element |
 | `buildSchedule` | `model` | schedule table | A flat table of every building element |
 | `modelToGlb` | `model` | `Uint8Array` | The model as a glTF 2.0 binary |
 | `modelToIfcStep` | `model` | `string` | The model as an IFC4 STEP document |
 | `renderPlanSvg` | `model`, `options: SheetOptions` or `null` | `string` | A plan view as SVG |
-| `encodeToFragment` | `state: ViewerState` | `string` | A viewer state as a URL fragment |
-| `decodeFromFragment` | `fragment: string` | `ViewerState` or `null` | A URL fragment back into a viewer state |
-| `cameraEye` | `state: CameraState` | `[x, y, z]` | The camera's eye position |
-| `defaultSectionBoxForView` | `mode: ViewMode`, `storey_elevation_feet: number`, `model_bbox` | section box | The default section box for a view mode |
-| `defaultSheetOptions` | none | `SheetOptions` | The plan view's default options |

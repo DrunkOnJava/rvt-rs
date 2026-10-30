@@ -23,7 +23,6 @@ workspace = true
 rvt = { path = ".." }
 wasm-bindgen = "0.2"
 serde-wasm-bindgen = "0.6"
-serde = { version = "1", features = ["derive"] }
 
 # wasm-pack configuration. The bundled `wasm-opt` in wasm-pack 0.14
 # doesn't accept rustc's bulk-memory output — it prints a wall of

@@ -1,17 +1,14 @@
-//! Per-class element decoders.
+//! Per-class element decoders, and the typed views over what they decode.
 //!
-//! Each submodule implements [`crate::walker::ElementDecoder`] for
-//! one Revit class, or, where the walk's own field order is enough, the
-//! class is registered as a [`SimpleDecoder`] with its name. Adding a
-//! class that needs no class-specific decoding is one line in
+//! Every registered class decodes through a [`SimpleDecoder`]: it checks
+//! that the schema entry is the class it was registered for, then the walk
+//! reads the class's fields in the order `Formats/Latest` declares them.
+//! Adding a class that needs no class-specific decoding is one line in
 //! [`all_decoders`]: `Box::new(SimpleDecoder::new("MyClass"))`. A class
-//! that does is a three-file change:
-//!
-//! 1. Add `mod my_class;` here.
-//! 2. Register it in [`all_decoders`] (consulted by production
-//!    [`crate::walker::iter_elements`] for [`MVP_TYPED_CLASSES`]).
-//! 3. Implement `ElementDecoder` in `src/elements/my_class.rs` —
-//!    see `level.rs` as the reference example.
+//! whose fields callers want typed adds a submodule with a view struct and
+//! a `from_decoded` constructor, as `level.rs` does, and a class that must
+//! fail closed on a malformed instance implements
+//! [`crate::walker::ElementDecoder`] itself in that submodule.
 //!
 //! See `docs/extending-layer-5b.md` for the contributor walkthrough.
 //!
@@ -22,46 +19,28 @@
 //! `FieldType` classifications. It always works, but the output is
 //! untyped (each field shows up as an `InstanceField` variant).
 //!
-//! Concrete decoders in this module add a typed layer on top: they
-//! call `decode_instance` first, then pattern-match the `fields`
-//! vector into a class-specific struct (e.g. `Level { name,
-//! elevation, is_building_story, … }`). Callers who want typed
-//! Wall / Floor / Door values use these; callers who want a
+//! A typed view does no decoding of its own: it pattern-matches the
+//! `fields` vector of a decoded element into a class-specific struct (e.g.
+//! `Level { name, elevation_feet, is_building_story, … }`). Callers who want
+//! typed Wall / Floor / Door values use these; callers who want a
 //! uniform untyped dump use `decode_instance` directly.
 //!
 //! # The typed set
 //!
-//! Schema-driven typed decoders with wrong-schema rejection:
-//! Level, Wall, Floor, Door, Window, Room, Material.
-//! ArcWall uses a separate partition-byte path
-//! ([`arc_wall`]) because its wire format is not schema-field based.
-//! Production [`crate::walker::iter_elements`] prefers the typed
-//! registry for MVP classes on `Global/Latest` and merges
-//! version-gated ArcWall partition recovers — fail-closed when
-//! typed decode rejects.
+//! Typed views: Level, Wall (with WallType), Floor, Door, Window, Room
+//! ([`zones::Zone`]) and Material, projected to JSON by [`typed_json`].
+//! ArcWall uses a separate partition-byte path ([`arc_wall`]) because its
+//! wire format is not schema-field based. Production
+//! [`crate::walker::iter_elements`] prefers the registered decoder for
+//! [`MVP_TYPED_CLASSES`] on `Global/Latest` and merges version-gated
+//! ArcWall partition recovers — fail-closed when the decode rejects.
 
-pub mod annotations;
 pub mod arc_wall;
-pub mod category;
-pub mod ceiling;
-pub mod circulation;
-pub mod curtain_wall;
-pub mod drafting;
-pub mod family;
 pub mod floor;
-pub mod foundation_and_furnishings;
-pub mod generic;
-pub mod grid;
 pub mod level;
-pub mod mep;
 pub mod openings;
 pub mod parameters;
-pub mod project_organization;
-pub mod reference_planes;
-pub mod reference_points;
-pub mod roof;
 pub mod simple_decoder;
-pub mod structural;
 pub mod styling;
 pub mod typed_json;
 pub mod wall;
@@ -78,8 +57,7 @@ use crate::walker::{DecodedElement, ElementDecoder, HandleIndex};
 /// Class names the element walk decodes through their typed decoder.
 ///
 /// ArcWall is intentionally omitted — use [`arc_wall`] for partition
-/// records. `WallType` / `FloorType` remain available via
-/// [`all_decoders`] but are not required for the MVP acceptance set.
+/// records.
 // Tracker: M3-05.
 pub const MVP_TYPED_CLASSES: &[&str] = &[
     "Level", "Wall", "Floor", "Door", "Window", "Room", "Material",
@@ -93,9 +71,9 @@ pub const MVP_TYPED_CLASSES: &[&str] = &[
 /// it obvious what ships with the crate.
 pub fn all_decoders() -> Vec<Box<dyn ElementDecoder>> {
     vec![
-        Box::new(level::LevelDecoder),
-        Box::new(category::CategoryDecoder),
-        Box::new(category::SubcategoryDecoder),
+        Box::new(SimpleDecoder::new("Level")),
+        Box::new(SimpleDecoder::new("Category")),
+        Box::new(SimpleDecoder::new("Subcategory")),
         Box::new(SimpleDecoder::new("Material")),
         Box::new(SimpleDecoder::new("FillPattern")),
         Box::new(SimpleDecoder::new("LinePattern")),
@@ -105,17 +83,17 @@ pub fn all_decoders() -> Vec<Box<dyn ElementDecoder>> {
         Box::new(SimpleDecoder::new("ProjectPosition")),
         Box::new(SimpleDecoder::new("Grid")),
         Box::new(SimpleDecoder::new("GridType")),
-        Box::new(reference_planes::ReferencePlaneDecoder),
-        Box::new(wall::WallDecoder),
-        Box::new(wall::WallTypeDecoder),
-        Box::new(floor::FloorDecoder),
-        Box::new(floor::FloorTypeDecoder),
-        Box::new(roof::RoofDecoder),
-        Box::new(roof::RoofTypeDecoder),
-        Box::new(ceiling::CeilingDecoder),
-        Box::new(ceiling::CeilingTypeDecoder),
-        Box::new(openings::DoorDecoder),
-        Box::new(openings::WindowDecoder),
+        Box::new(SimpleDecoder::new("ReferencePlane")),
+        Box::new(SimpleDecoder::new("Wall")),
+        Box::new(SimpleDecoder::new("WallType")),
+        Box::new(SimpleDecoder::new("Floor")),
+        Box::new(SimpleDecoder::new("FloorType")),
+        Box::new(SimpleDecoder::new("Roof")),
+        Box::new(SimpleDecoder::new("RoofType")),
+        Box::new(SimpleDecoder::new("Ceiling")),
+        Box::new(SimpleDecoder::new("CeilingType")),
+        Box::new(SimpleDecoder::new("Door")),
+        Box::new(SimpleDecoder::new("Window")),
         Box::new(SimpleDecoder::new("Column")),
         Box::new(SimpleDecoder::new("StructuralColumn")),
         Box::new(SimpleDecoder::new("Beam")),
