@@ -62,7 +62,7 @@ Keys:
   decompressed stream bytes.
 - ``fields`` (list[TypedField]): decoded schema fields.
 - ``parameters`` (list[dict]): AProperty* value carriers, then, on Revit
-  2023 to 2027 files, the saved parameters of the element and its type,
+  2015 to 2027 files (2015 to 2022 experimentally), the saved parameters of the element and its type,
   as ``rvt-elements`` lists them: ``name`` (str | None), ``parameter_id``
   (int), ``kind``, ``storage_type``, ``spec_type_id``, ``group_type_id``,
   ``value`` (internal units), ``si_value`` / ``si_unit``, ``target_name``,

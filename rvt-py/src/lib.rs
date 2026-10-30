@@ -710,7 +710,7 @@ impl PyRevitFile {
         .map_err(to_py_val)?
         .collect();
 
-        // Revit 2023 to 2027 only; a file whose parameters cannot be read
+        // Revit 2015 to 2027 only; a file whose parameters cannot be read
         // keeps its elements, with a warning.
         let saved = elements::parameters::saved_parameters_lossy(&mut self.inner, &elements);
         for warning in &saved.diagnostics.warnings {

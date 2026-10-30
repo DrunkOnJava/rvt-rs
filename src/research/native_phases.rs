@@ -24,7 +24,7 @@
 //! Revit's export leaves out.
 // Tracker: B46.
 
-use crate::native_json::element_id_i64;
+use crate::native_json::identifier_i64;
 use crate::partition_element_records::{OST_ROOMS, PartitionElementRecord};
 use crate::{RevitFile, native_document};
 use std::collections::{BTreeMap, BTreeSet};
@@ -96,15 +96,19 @@ pub fn exclusion(
 
 /// The project's phase order and every element not in its last phase, in
 /// one pass over the native records (graphs only for `AllProjectPhases`).
-/// Empty where the native record path does not read the release (Revit 2023
+/// Empty where the native record path does not read the release (Revit 2015
 /// to 2027 are read) or the file lists no phases; an error where it reads the
 /// release and the read fails.
 pub fn compute_phase_filter(rf: &mut RevitFile) -> anyhow::Result<PhaseFilter> {
-    if !matches!(rf.layout_release(), Ok(2023..=2027)) {
+    if !rf
+        .layout_release()
+        .is_ok_and(|release| native_document::NATIVE_RELEASES.contains(&release))
+    {
         return Ok(PhaseFilter::default());
     }
     let options = native_document::Options {
         graph_classes: Some(BTreeSet::from(["AllProjectPhases".to_string()])),
+        releases: native_document::NATIVE_RELEASES,
         ..native_document::Options::default()
     };
     let mut order: Option<Vec<i64>> = None;
@@ -124,12 +128,12 @@ pub fn compute_phase_filter(rf: &mut RevitFile) -> anyhow::Result<PhaseFilter> {
             return Ok(());
         };
         let fields = serde_json::to_value(&root.fields)?;
-        if fields.get("m_famId").and_then(element_id_i64) != Some(-1) {
+        if fields.get("m_famId").and_then(identifier_i64) != Some(-1) {
             return Ok(());
         }
         let ids: Vec<i64> = fields["m_phaseIds"]
             .as_array()
-            .map(|a| a.iter().filter_map(element_id_i64).collect())
+            .map(|a| a.iter().filter_map(identifier_i64).collect())
             .unwrap_or_default();
         anyhow::ensure!(
             order.is_none() || order.as_ref() == Some(&ids),
