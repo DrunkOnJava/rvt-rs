@@ -53,18 +53,35 @@ struct BlockLayout {
     /// Read only the block's first map. A 2023 type's data runs on past
     /// its map into single-entry lists of other materials (RE-113).
     first_map_only: bool,
+    /// The opening of a block that holds no type's map: it still ends the
+    /// block before it, but is not read.
+    not_a_map: Option<&'static [u8]>,
 }
 
 const BLOCK_LAYOUT: BlockLayout = BlockLayout {
     mark: &VALUE_BLOCK_MARK,
     id_len: 8,
     first_map_only: false,
+    not_a_map: None,
 };
 
 const BLOCK_LAYOUT_2023: BlockLayout = BlockLayout {
     mark: &VALUE_BLOCK_MARK_2023,
     id_len: 4,
     first_map_only: true,
+    not_a_map: None,
+};
+
+/// [`BLOCK_LAYOUT_2023`] on Revit 2008 to 2013, where an ElementId and the
+/// same mark also open `00 00 00 00 00 01`: 5,081 of the 9,490 marks of
+/// Autodesk's 2013 `rac_advanced_sample_project`, none of its 2015 copy's
+/// 5,410 (RE-259). Read as blocks, their first maps gave 101 of its
+/// elements type materials their 2015 copies do not have, such as `Default`
+/// and `Phase - Temporary` on a door. Local 2008 and 2009 files hold such
+/// marks too (4 and 20, RE-260).
+const BLOCK_LAYOUT_2011: BlockLayout = BlockLayout {
+    not_a_map: Some(&[0, 0, 0, 0, 0, 1]),
+    ..BLOCK_LAYOUT_2023
 };
 
 fn id_at(buf: &[u8], at: usize, len: usize) -> Option<u32> {
@@ -107,8 +124,14 @@ fn scan_partition_with(
             .map_or(buf.len(), |next| next.0.saturating_sub(layout.id_len))
             .min(start + MAX_BLOCK_LEN)
             .min(buf.len());
-        let list = out.entry(owner).or_default();
         let mut at = start + layout.mark.len();
+        if layout
+            .not_a_map
+            .is_some_and(|opening| buf.get(at..at + opening.len()) == Some(opening))
+        {
+            continue;
+        }
+        let list = out.entry(owner).or_default();
         while at + 4 <= end {
             if let Some(found) = map_at(buf, at, end, materials, layout.id_len) {
                 if found.partial {
@@ -352,7 +375,7 @@ pub fn type_material_names_2023(rf: &mut RevitFile) -> BTreeMap<u32, Vec<String>
     type_material_names_32(rf, crate::partition_element_records_2023::REVIT_2023)
 }
 
-/// [`type_material_names_2023`] on any 32-bit release, Revit 2015 to 2023,
+/// [`type_material_names_2023`] on any 32-bit release, Revit 2008 to 2023,
 /// whose materials are [`crate::partition_materials::scan_materials_32`]'s
 /// (RE-180). Empty on any other release.
 pub fn type_material_names_32(
@@ -371,9 +394,12 @@ pub fn type_material_names_32(
         let Ok(inflated) = rf.inflated_partition(stream) else {
             continue;
         };
-        for (owner, found) in
-            scan_partition_with(inflated.bytes(), &declared, &tagged, BLOCK_LAYOUT_2023)
-        {
+        let layout = if revit_version < 2014 {
+            BLOCK_LAYOUT_2011
+        } else {
+            BLOCK_LAYOUT_2023
+        };
+        for (owner, found) in scan_partition_with(inflated.bytes(), &declared, &tagged, layout) {
             let list = by_owner.entry(owner).or_default();
             for material in found {
                 if !list.contains(&material) {

@@ -30,6 +30,11 @@ With `PSETS_MISSING=<set>.<property>[,...]` in the environment it also
 lists, for each such property, every object Revit writes it on and rvt-rs
 does not: its key, Revit's entity and value, and rvt-rs's entity and Name.
 
+Where Revit's export writes no standard property set at all, as its export
+of Core Interior (RE-239 §5), rvt-rs's values are counted apart rather than
+as values Revit does not write, as qtos_vs_ifc.py counts quantities where
+the export has none (RE-242).
+
 Needs IfcOpenShell (the version tools/ci/requirements-ifc.txt pins).
 """
 
@@ -313,6 +318,11 @@ def main(argv):
                 worst.append(f"  {key} {pset}.{prop}: rvt-rs {mine}, Revit {value}")
     totals = [sum(r[i] for r in rows.values()) for i in range(4)]
     extra = sum(1 for k in ours if k not in theirs)
+    # Revit's export writes no standard property set at all where it was made
+    # with no property sets, as Core Interior's was (RE-239 §5):
+    # what rvt-rs writes cannot be scored against it, so it is counted apart.
+    setup_apart = extra if not theirs else 0
+    extra -= setup_apart
     print(
         f"Revit values on objects rvt-rs writes: {totals[0]}; equal: {totals[1]}; "
         f"different: {totals[2]}; missing: {totals[3]}; rvt-rs values Revit does not write: {extra}"
@@ -328,6 +338,11 @@ def main(argv):
             f" {'.'.join(STOREY_COUNT)} {older_storeys} (IFC {exporter[0]}.{exporter[1]}:"
             f" {holding} of {count} storeys contain an element)"
         )
+    if setup_apart:
+        print(
+            f"Revit's export writes no standard property set (its setup, RE-239 §5);"
+            f" rvt-rs values not scored: {setup_apart}"
+        )
     if as_quantities:
         print(f"IFC2X3 lengths IFC4 holds as quantities, not scored here: {as_quantities}")
     if twice:
@@ -335,7 +350,7 @@ def main(argv):
     if in_own_set:
         print(f"IFC2X3 values no IFC4 set Revit's export writes holds, in rvt-rs's own set, not scored here: {in_own_set}")
     only = collections.defaultdict(lambda: [0, 0])
-    for key, pset, prop in ours:
+    for key, pset, prop in ours if theirs else ():
         if (key, pset, prop) not in theirs:
             only[(pset, prop)][0 if key in their_objects else 1] += 1
     print("rvt-rs values Revit does not write, on objects Revit writes and on others:")
