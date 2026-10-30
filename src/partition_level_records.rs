@@ -155,8 +155,8 @@ use std::collections::{BTreeMap, BTreeSet};
 /// on two projects in its 32-bit form (RE-107), as 2015 to 2022 write it
 /// (RE-180, RE-181).
 pub const PARTITION_LEVEL_SUPPORTED_REVIT_VERSIONS: &[u32] = &[
-    2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026,
-    2027,
+    2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023,
+    2024, 2025, 2026, 2027,
 ];
 
 /// The release whose Level records and name blocks carry 32-bit
@@ -220,6 +220,52 @@ pub fn schema_elevation_marker(rf: &mut RevitFile) -> Option<[u8; 6]> {
     let mut marker = [0x05, 0x00, 0x00, 0x00, 0x00, 0x00];
     marker[4..].copy_from_slice(&plane.to_le_bytes());
     Some(marker)
+}
+
+/// The first release whose Level elevation [`framed_plane_marker`] does not
+/// find: from Revit 2013 [`schema_elevation_marker`] does.
+pub const FRAMED_PLANE_UNTIL: u32 = 2013;
+
+/// The elevation marker of Revit 2008 to 2012 (RE-260): `ff ff ff ff` and
+/// the tag of the file's `Plane` class, 6 bytes after a Level's name, where
+/// 2013 and later write the `Plane` reference unframed. One reference slot
+/// follows it, `00 00 00 00` when unset or `ff ff ff ff` and a class tag
+/// when set; the elevation is 16 bytes after that slot, and the same `f64`
+/// again 24 bytes on. On the local 2008, 2009 and 2011 files
+/// their Levels 1 and 2 read 0 and 10 ft, Revit's template Levels, and on a
+/// local 2012 project its Levels 0 and 1 read 0 and 13.123 ft (4 m).
+pub fn framed_plane_marker(rf: &mut RevitFile) -> Option<[u8; 6]> {
+    let classes = rf.memoised_schema_classes().ok()?;
+    let plane = classes.classes.iter().find(|c| c.name == "Plane")?.tag;
+    let mut marker = [0xff, 0xff, 0xff, 0xff, 0x00, 0x00];
+    marker[4..].copy_from_slice(&plane.to_le_bytes());
+    Some(marker)
+}
+
+/// Bytes after a Level's name within which [`framed_plane_marker`] is found.
+const FRAMED_PLANE_SEARCH_BYTES: usize = 64;
+/// Bytes from the reference slot after [`framed_plane_marker`] to the
+/// elevation.
+const ELEVATION_AFTER_SLOT: usize = 16;
+/// Bytes from the elevation to its copy after [`framed_plane_marker`].
+const FRAMED_ELEVATION_COPY: usize = 24;
+
+/// The elevation after a Level's name ending at `end`, by
+/// [`framed_plane_marker`]'s layout.
+fn framed_plane_elevation(buf: &[u8], end: usize, marker: &[u8]) -> Option<f64> {
+    let window = buf.get(end..(end + FRAMED_PLANE_SEARCH_BYTES).min(buf.len()))?;
+    let slot = end + find_subslice(window, marker)? + marker.len();
+    let at = match buf.get(slot..slot + 4)? {
+        [0xff, 0xff, 0xff, 0xff] => slot + 6,
+        [0, 0, 0, 0] => slot + 4,
+        _ => return None,
+    } + ELEVATION_AFTER_SLOT;
+    let value = buf.get(at..at + 8)?;
+    if buf.get(at + FRAMED_ELEVATION_COPY..at + FRAMED_ELEVATION_COPY + 8)? != value {
+        return None;
+    }
+    let elevation = f64::from_le_bytes(value.try_into().ok()?);
+    (elevation == 0.0 || elevation.is_normal()).then_some(elevation)
 }
 
 /// The Level record marker per release: the last six bytes of the
@@ -565,20 +611,32 @@ fn decode_name_block(
     if name.chars().any(|c| c.is_control()) {
         return None;
     }
-    let window = buf.get(end..(end + ELEVATION_MARKER_SEARCH_BYTES).min(buf.len()))?;
-    let at = end + find_subslice(window, marker)? + ELEVATION_OFFSET_AFTER_MARKER;
-    let elevation_feet = le_bytes::f64_at(buf, at)?;
+    let elevation_feet = if marker.starts_with(&[0xff; 4]) {
+        framed_plane_elevation(buf, end, marker)?
+    } else {
+        let window = buf.get(end..(end + ELEVATION_MARKER_SEARCH_BYTES).min(buf.len()))?;
+        let at = end + find_subslice(window, marker)? + ELEVATION_OFFSET_AFTER_MARKER;
+        let copy = buf.get(at.checked_sub(ELEVATION_CONFIRM_LEAD_IN)?..at + 8)?;
+        let after = buf.get(at + 8..(at + 8 + ELEVATION_MARKER_SEARCH_BYTES).min(buf.len()))?;
+        find_subslice(after, copy)?;
+        le_bytes::f64_at(buf, at)?
+    };
     if !elevation_feet.is_finite() || elevation_feet.abs() > MAX_ELEVATION_FEET {
         return None;
     }
-    let copy = buf.get(at.checked_sub(ELEVATION_CONFIRM_LEAD_IN)?..at + 8)?;
-    let after = buf.get(at + 8..(at + 8 + ELEVATION_MARKER_SEARCH_BYTES).min(buf.len()))?;
-    find_subslice(after, copy)?;
     Some(NameElevationBlock {
         element_id,
         name,
         elevation_feet,
-        building_story: building_story_after(buf, end, id_len),
+        // RE-118's Building Story setting is measured from 2023 on. Before
+        // 2013 ([`framed_plane_marker`]) it is not: the two Levels of each
+        // local 2012 project read "not a building story" there, as no
+        // template Level is (RE-260), so it is not read.
+        building_story: if marker.starts_with(&[0xff; 4]) {
+            None
+        } else {
+            building_story_after(buf, end, id_len)
+        },
     })
 }
 
@@ -815,6 +873,20 @@ pub fn find_level_records_2023(
     header_tag: u16,
     marker: &[u8; 6],
 ) -> Vec<PartitionLevelRecord> {
+    find_level_records_32(stream, buf, declared_ids, header_tag, marker, 0)
+}
+
+/// [`find_level_records_2023`] on a record envelope `shortfall` bytes
+/// shorter between the category and the placement kind, as Revit 2008's
+/// is ([`crate::partition_element_records_2023::envelope_shortfall`]).
+fn find_level_records_32(
+    stream: &str,
+    buf: &[u8],
+    declared_ids: &BTreeSet<u32>,
+    header_tag: u16,
+    marker: &[u8; 6],
+    shortfall: usize,
+) -> Vec<PartitionLevelRecord> {
     let needle = (OST_LEVELS as u64).to_le_bytes();
     memchr::memmem::find_iter(buf, &needle)
         .filter_map(|category| {
@@ -826,7 +898,7 @@ pub fn find_level_records_2023(
             if le_bytes::u16_at(buf, id_at + HEADER_TAG_AFTER_ID_2023)? != header_tag {
                 return None;
             }
-            let marker_at = category + MARKER_AFTER_CATEGORY_2023;
+            let marker_at = category + MARKER_AFTER_CATEGORY_2023 - shortfall;
             if buf.get(marker_at..marker_at + marker.len())? != marker {
                 return None;
             }
@@ -835,13 +907,16 @@ pub fn find_level_records_2023(
                 offset: id_at,
                 element_id,
                 flags: le_bytes::u32_at(buf, id_at + 4)?,
-                container: match le_bytes::u32_at(buf, category + CONTAINER_AFTER_CATEGORY_2023)? {
+                container: match le_bytes::u32_at(
+                    buf,
+                    category + CONTAINER_AFTER_CATEGORY_2023 - shortfall,
+                )? {
                     u32::MAX => u64::MAX,
                     id => u64::from(id),
                 },
                 placement_kind: le_bytes::u32_at(
                     buf,
-                    category + PLACEMENT_KIND_AFTER_CATEGORY_2023,
+                    category + PLACEMENT_KIND_AFTER_CATEGORY_2023 - shortfall,
                 )?,
             })
         })
@@ -878,12 +953,13 @@ fn level_records(
             let Ok(inflated) = rf.inflated_partition(&stream) else {
                 continue;
             };
-            records.extend(find_level_records_2023(
+            records.extend(find_level_records_32(
                 &stream,
                 inflated.bytes(),
                 declared_ids,
                 header_tag,
                 &marker,
+                crate::partition_element_records_2023::envelope_shortfall(revit_version),
             ));
         }
         if revit_version < 2019 {
@@ -933,8 +1009,12 @@ pub fn scan_partition_levels(
     if !supports_revit_version(revit_version) || declared_ids.is_empty() {
         return Ok(Vec::new());
     }
-    let Some(marker) = elevation_marker(revit_version).or_else(|| schema_elevation_marker(rf))
-    else {
+    let marker = if revit_version < FRAMED_PLANE_UNTIL {
+        framed_plane_marker(rf)
+    } else {
+        elevation_marker(revit_version).or_else(|| schema_elevation_marker(rf))
+    };
+    let Some(marker) = marker else {
         return Ok(Vec::new());
     };
     let records = level_records(rf, revit_version, declared_ids);
