@@ -9,6 +9,7 @@
 //! Prints one line per integer built-in parameter an element holds:
 //!
 //!   param <ElementId> <class> <level> <parameter id> <value>
+//!   paramd <ElementId> <class> <level> <parameter id> <value>   (a double)
 //!
 //! `<class>` is the class of the element's own record, `<level>` `Instance`
 //! or `Type`. `tools/re/native_flags_vs_ifc.py` scores them against the
@@ -52,6 +53,15 @@ fn run(path: &str) -> anyhow::Result<()> {
             continue;
         }
         for parameter in parameters {
+            if parameter.kind == ParameterKind::BuiltIn && parameter.storage_type == "Double" {
+                if let Some(value) = parameter.value.as_f64() {
+                    println!(
+                        "paramd {id} {class} {:?} {} {value}",
+                        parameter.level, parameter.parameter_id
+                    );
+                }
+                continue;
+            }
             if parameter.kind != ParameterKind::BuiltIn || parameter.storage_type != "Integer" {
                 continue;
             }
