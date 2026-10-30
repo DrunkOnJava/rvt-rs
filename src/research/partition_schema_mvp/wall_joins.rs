@@ -166,6 +166,16 @@ pub(super) fn attach_wall_lengths(
         else {
             continue;
         };
+        let cutback = end - start;
+        if cutback.is_finite() && cutback > 0.0 {
+            wall.fields.push((
+                WALL_CUTBACK_LENGTH_FIELD.into(),
+                InstanceField::Float {
+                    value: cutback,
+                    size: 8,
+                },
+            ));
+        }
         let length = (curve.end[0] - curve.start[0]).hypot(curve.end[1] - curve.start[1]);
         if ((end - start) - length).abs() <= SAME_LENGTH_FEET && length.is_finite() && length > 0.0
         {
