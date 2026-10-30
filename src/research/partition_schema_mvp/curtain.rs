@@ -3,26 +3,94 @@
 use super::*;
 use crate::le_bytes;
 
+const MODEL_AXES: [[f64; 3]; 3] = [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]];
+
+/// The box of a curtain mullion: its record box, along the model's axes and
+/// the axis it runs along ([`CURTAIN_MULLION_ALONG_FIELD`]), or turned or
+/// tilted along its own axes ([`CURTAIN_AXES_FIELDS`], RE-106). A mullion
+/// whose axis is not known has no `along`.
+fn mullion_box(element: &DecodedElement) -> Option<MullionBox> {
+    let id = element.id?;
+    let [x0, y0, z0, x1, y1, z1] = element_record_bbox(element)?;
+    let centre = [(x0 + x1) / 2.0, (y0 + y1) / 2.0, (z0 + z1) / 2.0];
+    let size = [x1 - x0, y1 - y0, z1 - z0];
+    let model = MullionBox {
+        id,
+        centre,
+        axes: MODEL_AXES,
+        half: size.map(|side| side / 2.0),
+        along: None,
+    };
+    if let Some(axes) = curtain_axes_from_fields(&element.fields) {
+        return Some(match crate::ifc::export_content::oriented_box(axes, size) {
+            Some((axes, half)) => MullionBox {
+                axes,
+                half,
+                along: Some(2),
+                ..model
+            },
+            None => model,
+        });
+    }
+    let along = element.fields.iter().find_map(|(name, value)| match value {
+        InstanceField::Integer { value, .. } if name == CURTAIN_MULLION_ALONG_FIELD => {
+            usize::try_from(*value).ok().filter(|axis| *axis < 3)
+        }
+        _ => None,
+    });
+    Some(MullionBox { along, ..model })
+}
+
 /// Mark each curtain mullion that stands on a straight curtain wall with an
 /// unedited profile and whose type has its own rectangular section
 /// ([`crate::native_mullion_hosts::mullions_on_plain_hosts`], RE-243) with
-/// [`MULLION_PLAIN_HOST_FIELD`].
+/// [`MULLION_PLAIN_HOST_FIELD`], and give it, where the boxes of its curtain
+/// wall's mullions say how many of its end faces Revit's solid keeps
+/// ([`kept_ends`], RE-268), [`MULLION_KEPT_ENDS_FIELD`]. The curtain wall is
+/// the one its native record names, as in the record's own grouping.
 pub(super) fn attach_mullion_plain_hosts(rf: &mut RevitFile, products: &mut [DecodedElement]) {
     let mullions: BTreeSet<u64> = products
         .iter()
         .filter(|element| element.class == "CurtainWallMullion")
         .filter_map(|element| Some(u64::from(element.id?)))
         .collect();
-    let Ok(plain) = crate::native_mullion_hosts::mullions_on_plain_hosts(rf, &mullions) else {
+    let Ok(found) = crate::native_mullion_hosts::mullion_hosts(rf, &mullions) else {
         return;
     };
+    let mut groups: BTreeMap<u64, Vec<MullionBox>> = BTreeMap::new();
+    for element in products.iter() {
+        if element.class != "CurtainWallMullion" {
+            continue;
+        }
+        let Some(host) = element.id.and_then(|id| found.host.get(&u64::from(id))) else {
+            continue;
+        };
+        if let Some(mullion) = mullion_box(element) {
+            groups.entry(*host).or_default().push(mullion);
+        }
+    }
+    let mut kept: BTreeMap<u32, u8> = BTreeMap::new();
+    for group in groups.values() {
+        kept.extend(kept_ends(group));
+    }
     for element in products.iter_mut() {
-        if element.class == "CurtainWallMullion"
-            && element.id.is_some_and(|id| plain.contains(&u64::from(id)))
-        {
+        let Some(id) = element.id else {
+            continue;
+        };
+        if element.class == "CurtainWallMullion" && found.plain.contains(&u64::from(id)) {
             element
                 .fields
                 .push((MULLION_PLAIN_HOST_FIELD.into(), InstanceField::Bool(true)));
+            if let Some(ends) = kept.get(&id) {
+                element.fields.push((
+                    MULLION_KEPT_ENDS_FIELD.into(),
+                    InstanceField::Integer {
+                        value: i64::from(*ends),
+                        signed: false,
+                        size: 4,
+                    },
+                ));
+            }
         }
     }
 }
