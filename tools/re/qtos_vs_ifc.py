@@ -53,7 +53,7 @@ import ifcopenshell
 import ifcopenshell.util.unit
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from psets_vs_ifc import IFC2X3_LENGTHS, key_of  # noqa: E402
+from psets_vs_ifc import IFC2X3_LENGTHS, key_of, property_key_of  # noqa: E402
 
 # Where an IFC2X3 export writes a segment's length (#822, psets_vs_ifc's
 # IFC2X3_LENGTHS): the IFC4 base quantity of the entity rvt-rs writes it as.
@@ -68,7 +68,8 @@ IFC4_LENGTH_QUANTITY = {
 # CrossSectionArea grows with its length and is never its section's area; a
 # door's opening's Width is its vertical extent and its Height its horizontal
 # one, where IFC4 defines a wall opening's the other way (RE-244). An
-# opening is keyed by the Tag of the door filling it.
+# opening is keyed by its Tag and whether something fills it (#1161), and
+# carries the classes of what fills it, so the door's opening is still known.
 # A wall's Length, which Revit's export writes as either its curve's length or
 # that of its curve cut back at its joins, by how it draws the wall (RE-252).
 # Where the two differ, nothing in the model says which, so a missing Length
@@ -273,7 +274,7 @@ def quantities(path, entities_of=None):
             if not definition.is_a("IfcPropertySet"):
                 continue
             for obj in rel.RelatedObjects:
-                key = key_of(obj)
+                key = property_key_of(obj)
                 qset = IFC4_LENGTH_QUANTITY.get(entities_of.get(key))
                 if qset is None:
                     continue
@@ -284,17 +285,20 @@ def quantities(path, entities_of=None):
                         value = None if raw is None or scale is None else float(raw) * scale
                         out.setdefault((key, qset, "Length"), ("IfcQuantityLength", value))
     for product in f.by_type("IfcObject"):
-        key = key_of(product)
+        key = property_key_of(product)
         if key:
             objects.add(key)
             entities[key] = product.is_a()
-            predefined.setdefault(key, set()).update({predefined_type(product), product.is_a()})
+            classes = predefined.setdefault(key, set())
+            classes.update({predefined_type(product), product.is_a()})
+            if product.is_a("IfcOpeningElement"):
+                classes.update(rel.RelatedBuildingElement.is_a() for rel in product.HasFillings or ())
     for rel in f.by_type("IfcRelDefinesByProperties"):
         definition = rel.RelatingPropertyDefinition
         if not definition.is_a("IfcElementQuantity") or not (definition.Name or "").startswith("Qto_"):
             continue
         for obj in rel.RelatedObjects:
-            key = key_of(obj)
+            key = property_key_of(obj)
             if not key:
                 continue
             for q in definition.Quantities or ():
@@ -348,6 +352,7 @@ def main(argv):
     missing_classes = collections.defaultdict(collections.Counter)
     differences = []
     defects = collections.Counter()
+    unwritten_openings = collections.Counter()
     beside = os.path.join(os.path.dirname(os.path.abspath(args[0])), "diagnostics.json")
     our_curves = curve_lengths(diagnostics or beside)
     confirmed = confirmed_walls(diagnostics or beside)
@@ -379,6 +384,8 @@ def main(argv):
     unconfirmed_types = 0
     for (key, qset, name), value in sorted(theirs.items()):
         if key not in our_objects:
+            if key.startswith("opening:"):
+                unwritten_openings[(qset, name)] += 1
             continue
         scope = REVIT_DEFECTS.get((qset, name))
         if scope is not None and scope in their_predefined.get(key, ()):
@@ -439,6 +446,13 @@ def main(argv):
             print(f"  {qset}.{name}: {n}")
     for (qset, name), n in sorted(defects.items()):
         print(f"Revit values known to be wrong, left out (RE-235 §5): {qset}.{name} {n}")
+    if unwritten_openings:
+        print(
+            "Revit quantities on openings rvt-rs does not write (a door or wall cut in a further host,"
+            f" a curtain wall's or cabinet's cut, #1165), not scored: {sum(unwritten_openings.values())}"
+        )
+        for (qset, name), n in sorted(unwritten_openings.items()):
+            print(f"  {qset}.{name}: {n}")
     print(
         "walls whose curve and its cut-back curve differ, either of which Revit's export may write "
         f"as their Length, counted apart (RE-252): {two_lengths}"
