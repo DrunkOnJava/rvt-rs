@@ -1,7 +1,7 @@
 //! Native project identities and creation-episode UniqueIds.
 //! Explicit four-field (2023) and five-field (2024 to 2027) ElemTable contracts.
 //! Original identity suffixes are retained; they are not current record locators.
-use crate::{native_parameters, schema_registry::Registry};
+use crate::{native_extensible_storage::guid_string, native_parameters, schema_registry::Registry};
 use anyhow::{Result, ensure};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -229,22 +229,6 @@ pub struct Identity {
     pub partition_id: i64,
     pub unique_id: String,
 }
-fn guid_string(b: &[u8; 16]) -> String {
-    format!(
-        "{:08x}-{:04x}-{:04x}-{:02x}{:02x}-{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}",
-        u32::from_le_bytes([b[0], b[1], b[2], b[3]]),
-        u16::from_le_bytes([b[4], b[5]]),
-        u16::from_le_bytes([b[6], b[7]]),
-        b[8],
-        b[9],
-        b[10],
-        b[11],
-        b[12],
-        b[13],
-        b[14],
-        b[15]
-    )
-}
 /// Decode the measured post-root episode section. Its start is determined by
 /// schema field traversal; it is not a fixed byte offset or byte-pattern scan.
 pub fn creation_episodes(history: &[u8], registry: &Registry) -> Result<Vec<String>> {
@@ -287,7 +271,7 @@ pub fn creation_episodes(history: &[u8], registry: &Registry) -> Result<Vec<Stri
                     .ok_or_else(|| anyhow::anyhow!("invalid GUID byte"))?,
             )?;
         }
-        guids.push(guid_string(&bytes));
+        guids.push(guid_string(bytes));
         pos = decoded.end;
     }
     ensure!(

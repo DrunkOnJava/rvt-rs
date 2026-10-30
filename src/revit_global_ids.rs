@@ -118,13 +118,16 @@ pub fn canonical_guid(stored: [u8; 16]) -> [u8; 16] {
     out
 }
 
+/// The digits of IFC's 22-character base-64 `GlobalId`, lowest value first.
+const IFC_GUID_ALPHABET: &[u8; 64] =
+    b"0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_$";
+
 /// A 128-bit value in IFC's 22-character base-64 `GlobalId` form.
 pub fn compress_ifc_guid(value: [u8; 16]) -> String {
-    const ALPHABET: &[u8; 64] = b"0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_$";
     let mut n = u128::from_be_bytes(value);
     let mut out = [0u8; 22];
     for slot in out.iter_mut().rev() {
-        *slot = ALPHABET[(n & 63) as usize];
+        *slot = IFC_GUID_ALPHABET[(n & 63) as usize];
         n >>= 6;
     }
     out.iter().map(|&b| char::from(b)).collect()
@@ -133,13 +136,12 @@ pub fn compress_ifc_guid(value: [u8; 16]) -> String {
 /// A 22-character IFC `GlobalId` as the 128-bit value it writes, `None` when
 /// it is not one.
 pub fn expand_ifc_guid(global_id: &str) -> Option<[u8; 16]> {
-    const ALPHABET: &[u8; 64] = b"0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_$";
     if global_id.len() != 22 {
         return None;
     }
     let mut n: u128 = 0;
     for byte in global_id.bytes() {
-        let digit = ALPHABET.iter().position(|&a| a == byte)?;
+        let digit = IFC_GUID_ALPHABET.iter().position(|&a| a == byte)?;
         n = n.checked_mul(64)?.checked_add(digit as u128)?;
     }
     Some(n.to_be_bytes())
