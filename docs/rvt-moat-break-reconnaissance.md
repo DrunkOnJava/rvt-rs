@@ -2236,6 +2236,10 @@ Revit's export writes a floor's `Qto_SlabBaseQuantities.NetVolume` as the volume
 
 Revit's export writes a floor's `Qto_SlabBaseQuantities.GrossArea` as the area of the profile its slab extrudes, its sketch outline less its holes: equal to rvt-rs's profile on all 40 of the BIM4LCA office's slabs drawn from their record box, where the slab's other quantities follow its body less often (a sloped slab's record box is deeper than its layers). Stair landings' slabs get none. rvt-rs writes it on each floor drawn as one extrusion: 31 equal on the office, none different. Report: `reports/element-framing/RE-249-slab-gross-area.md`.
 
+## Addendum — RE-298 a level floor's Depth and a flat roof's slab quantities (2026-10-30)
+
+Revit's export writes a slab's `GrossVolume` as its `GrossArea` times its `Depth` on all 42 of the BIM4LCA office's slabs with a volume. A level floor of several layers (the 10 of types `VP-1`, `VP-2` and `AP-1`, as built and at permit) has its last layer's thickness as `Depth`: 0.32 of 0.45 m, 0.57 of 0.70 m, 0.1 of 0.28 m. A flat roof written as a slab (all 10, `Basic Roof`) has the extrusion's depth, its layers' total, however many there are (3 for `YP-3`, 5 for `YP-2`, 10 for `YP-1`), its `GrossArea` is its sketch's profile's area, and its `NetVolume` is the area times the depth except on the one a hatch cuts, which holds four `WallCutoutGStep`s. rvt-rs writes all of these; the `Width` of a roof is its profile's extent and stays unwritten. Report: `reports/element-framing/RE-298-slab-depth-roofs.md`.
+
 ## Addendum — RE-250 a ceiling's Width (2026-10-26)
 
 Revit's export writes a compound ceiling's `Qto_CoveringBaseQuantities.Width` as its type's thickness: on the BIM4LCA office, all 78 compound ceilings as built and 75 at permit have it equal to the depth of their record box. rvt-rs writes it where that depth is the type's layers' total, as RE-238 tells a level slab. The ceiling's `GrossArea` is its sketch's area on most but larger by about 1% on 11, and is left out. Report: `reports/element-framing/RE-250-ceiling-width.md`.
