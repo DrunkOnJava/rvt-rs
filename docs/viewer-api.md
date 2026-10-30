@@ -108,8 +108,8 @@ use rvt::ifc::scene_graph::{
     The viewer reports one as "not recovered" only where the
     export diagnostics agree it is a known decode gap.
 - `build_schedule(&IfcModel) -> Schedule` — tabular element export
-  (the CSV writer is `schedule_csv`, above). `Schedule::groups` is the per-IFC-type
-  breakdown (`ScheduleTypeGroup { ifc_type, count, entity_indices,
+  (the CSV writer is `schedule_csv`, above). `Schedule::groups` is the
+  per-IFC-type breakdown (`ScheduleTypeGroup { ifc_type, count, entity_indices,
   storeys }`, biggest first) that drives the viewer's schedule
   panel and its per-type scene highlight. Rebuild it with
   `Schedule::from_rows` after resorting or filtering rows.
@@ -123,9 +123,10 @@ use rvt::ifc::scene_graph::CategoryFilter;
 use rvt::ifc::share::{ViewerState, decode_from_fragment};
 ```
 
-The plain-data pieces of a shared viewer state. The viewer's own
-camera, section-box and layer-toggle controls (`viewer/src/main.ts`)
-move them; nothing in the Rust crate does.
+The plain-data pieces of a shared viewer state, which a URL fragment
+carries as base64-encoded JSON. The viewer does not call them: it drives
+its own camera and layer toggles in `viewer/src/main.ts`, and nothing in the
+Rust crate moves these values.
 
 - `CameraState { target, distance, yaw, pitch, fov_radians, near, far }`.
 - `ViewMode { Plan, ThreeD, Section }`.
