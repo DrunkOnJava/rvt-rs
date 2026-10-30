@@ -33,6 +33,7 @@
 //! even when the wire layout has a variation we haven't yet documented.
 
 use crate::Result;
+use crate::le_bytes;
 use serde::{Deserialize, Serialize};
 
 /// How many decompressed `Formats/Latest` bytes [`parse_schema`] scanned
@@ -1085,13 +1086,11 @@ struct GrammarReader<'a> {
 
 impl GrammarReader<'_> {
     fn u16(&self, at: usize) -> Option<u16> {
-        let bytes = self.data.get(at..at.checked_add(2)?)?;
-        Some(u16::from_le_bytes([bytes[0], bytes[1]]))
+        le_bytes::u16_at(self.data, at)
     }
 
     fn u32(&self, at: usize) -> Option<u32> {
-        let bytes = self.data.get(at..at.checked_add(4)?)?;
-        Some(u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]))
+        le_bytes::u32_at(self.data, at)
     }
 
     fn need<T>(value: Option<T>, what: &str, at: usize) -> std::result::Result<T, String> {

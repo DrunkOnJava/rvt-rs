@@ -30,6 +30,7 @@
 //! six sides. A pair of points that does not pass both is not a pipe's ends:
 //! the pipe keeps its box.
 
+use crate::le_bytes;
 use crate::{Result, RevitFile};
 use std::collections::{BTreeMap, HashMap};
 
@@ -195,14 +196,14 @@ fn cell(value: f64) -> i64 {
 
 /// The point of the connector entry whose marker `u32` 1 starts at `at`.
 fn entry_point(buf: &[u8], at: usize) -> Option<[f64; 3]> {
-    let index = u32::from_le_bytes(buf.get(at.checked_sub(4)?..at)?.try_into().ok()?);
+    let index = le_bytes::u32_at(buf, at.checked_sub(4)?)?;
     if index > MAX_CONNECTOR_INDEX {
         return None;
     }
     let mut point = [0.0f64; 3];
     for (axis, slot) in point.iter_mut().enumerate() {
         let from = at.checked_add(4)?.checked_add(8 * axis)?;
-        *slot = f64::from_le_bytes(buf.get(from..from.checked_add(8)?)?.try_into().ok()?);
+        *slot = le_bytes::f64_at(buf, from)?;
         if !slot.is_finite() {
             return None;
         }
@@ -355,17 +356,13 @@ pub fn scan_pipe_end_keys(
             }
             let Some(element) = at
                 .checked_sub(12)
-                .and_then(|from| buf.get(from..from.checked_add(8)?))
-                .and_then(|bytes| bytes.try_into().ok())
-                .map(u64::from_le_bytes)
+                .and_then(|from| le_bytes::u64_at(buf, from))
             else {
                 continue;
             };
             let Some(index) = at
                 .checked_sub(4)
-                .and_then(|from| buf.get(from..at))
-                .and_then(|bytes| bytes.try_into().ok())
-                .map(u32::from_le_bytes)
+                .and_then(|from| le_bytes::u32_at(buf, from))
             else {
                 continue;
             };

@@ -8,19 +8,12 @@
 //! 100 RPC Shrub, 6 RPC Female and 4 RPC Male, 127 of 127. No family of
 //! Core Interior or RE1 has the value.
 
+use crate::native_json::element_id;
 use crate::{RevitFile, native_document};
 use std::collections::{BTreeMap, BTreeSet};
 
 /// `Family.m_eRenderModelType` of rendered content.
 pub const RENDERED_CONTENT: i64 = 4;
-
-/// `{"m_id":{"m_id64":n}}` as `n`.
-fn element_id(value: &serde_json::Value) -> Option<u64> {
-    value
-        .pointer("/m_id/m_id64")
-        .and_then(serde_json::Value::as_i64)
-        .and_then(|n| u64::try_from(n).ok())
-}
 
 /// Those of `types` whose family's `m_eRenderModelType` is
 /// [`RENDERED_CONTENT`]. Errs where the native record path does not read the

@@ -20,6 +20,7 @@
 use super::entities::{
     Extrusion, IfcBooleanOp, IfcEntity, ProfileDef, RepresentationMap, SolidShape,
 };
+use crate::vector_math::{cross as cross3, dot, sub};
 
 /// A profile point, feet.
 pub type Point2 = (f64, f64);
@@ -1009,22 +1010,6 @@ pub fn layered_extrusion_meshes(
         meshes.push(mesh);
     }
     Some(meshes)
-}
-
-fn sub(a: [f64; 3], b: [f64; 3]) -> [f64; 3] {
-    [a[0] - b[0], a[1] - b[1], a[2] - b[2]]
-}
-
-fn dot(a: [f64; 3], b: [f64; 3]) -> f64 {
-    a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
-}
-
-fn cross3(a: [f64; 3], b: [f64; 3]) -> [f64; 3] {
-    [
-        a[1] * b[2] - a[2] * b[1],
-        a[2] * b[0] - a[0] * b[2],
-        a[0] * b[1] - a[1] * b[0],
-    ]
 }
 
 fn unit(v: [f64; 3]) -> Option<[f64; 3]> {

@@ -1,5 +1,6 @@
 //! Forward-only physical partition markers and continuation groups.
 //! Class tags come from the structural registry, never gzip/name searching.
+use crate::le_bytes;
 use crate::{compression::InflatedStream, schema_registry::Registry};
 use anyhow::{Result, ensure};
 use serde::Serialize;
@@ -266,11 +267,7 @@ pub fn walk_inflated(
                 units <= 1_000_000,
                 "partition signature string budget exceeded"
             );
-            let text = r
-                .take(units * 2)?
-                .chunks_exact(2)
-                .map(|s| u16::from_le_bytes([s[0], s[1]]))
-                .collect::<Vec<_>>();
+            let text = le_bytes::u16_units(r.take(units * 2)?).collect::<Vec<_>>();
             String::from_utf16(&text)?;
         } else {
             anyhow::bail!("unsupported partition marker {next} at {offset}");

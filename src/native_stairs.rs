@@ -48,6 +48,7 @@ use serde_json::Value;
 
 use crate::RevitFile;
 use crate::native_document::{Options, extract_graphs};
+use crate::native_json::finite_triple;
 use crate::partition_stairs::{RunSketch, RunType};
 
 /// Releases these records are measured on: the R2025 stair models (#357).
@@ -75,12 +76,7 @@ fn flag(v: &Value, name: &str) -> Option<bool> {
 }
 
 fn point(v: &Value, name: &str) -> Option<[f64; 3]> {
-    let a = v.get(name)?.as_array()?;
-    match a.as_slice() {
-        [x, y, z] => Some([x.as_f64()?, y.as_f64()?, z.as_f64()?])
-            .filter(|p| p.iter().all(|c| c.is_finite())),
-        _ => None,
-    }
+    finite_triple(v.get(name)?)
 }
 
 fn unit_plan(p: [f64; 3]) -> Option<[f64; 2]> {

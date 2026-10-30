@@ -34,6 +34,7 @@
 //! every defining edge and its angle match Revit's own IFC export.
 
 use crate::le_bytes;
+use crate::native_json::element_id_i64;
 use crate::{Result, RevitFile};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -79,7 +80,7 @@ pub fn edge_slope_in(data: &[u8], revit_version: u32) -> Option<EdgeSlope> {
         if !(angle.is_finite() && angle > 0.0 && angle < std::f64::consts::FRAC_PI_2) {
             return None;
         }
-        let small = i64::from_le_bytes(data.get(at + 0x20..at + 0x28)?.try_into().ok()?);
+        let small = le_bytes::i64_at(data, at + 0x20)?;
         if !(-64..=-1).contains(&small) || le_bytes::u32_at(data, at + 0x2c)? != 7 {
             return None;
         }
@@ -129,10 +130,7 @@ pub fn scan_edge_slopes(
         let hits: Vec<usize> = memchr::memmem::find_iter(buf, &header).collect();
         for (index, &hit) in hits.iter().enumerate() {
             let id_at = hit + header.len();
-            let Some(id) = buf
-                .get(id_at..id_at + 8)
-                .and_then(|s| s.first_chunk::<8>())
-                .map(|b| u64::from_le_bytes(*b))
+            let Some(id) = le_bytes::u64_at(buf, id_at)
                 .and_then(|id| u32::try_from(id).ok())
                 .filter(|id| lines.contains(id))
             else {
@@ -267,10 +265,7 @@ pub fn scan_arrow_heights(
         let hits: Vec<usize> = memchr::memmem::find_iter(buf, &header).collect();
         for (index, &hit) in hits.iter().enumerate() {
             let id_at = hit + header.len();
-            let Some(id) = buf
-                .get(id_at..id_at + 8)
-                .and_then(|s| s.first_chunk::<8>())
-                .map(|b| u64::from_le_bytes(*b))
+            let Some(id) = le_bytes::u64_at(buf, id_at)
                 .and_then(|id| u32::try_from(id).ok())
                 .filter(|id| lines.contains(id))
             else {
@@ -338,10 +333,7 @@ pub fn scan_fascia_depths(
         let hits: Vec<usize> = memchr::memmem::find_iter(buf, &header).collect();
         for (index, &hit) in hits.iter().enumerate() {
             let id_at = hit + header.len();
-            let Some(id) = buf
-                .get(id_at..id_at + 8)
-                .and_then(|s| s.first_chunk::<8>())
-                .map(|b| u64::from_le_bytes(*b))
+            let Some(id) = le_bytes::u64_at(buf, id_at)
                 .and_then(|id| u32::try_from(id).ok())
                 .filter(|id| roofs.contains(id))
             else {
@@ -441,7 +433,6 @@ pub fn scan_rafter_cuts(
         selected_ids: roofs.iter().map(|&id| u64::from(id)).collect(),
         ..crate::native_document::Options::default()
     };
-    let id64 = |value: &serde_json::Value| value.get("m_id")?.get("m_id64")?.as_i64();
     let _ = crate::native_document::extract_graphs(rf, &options, |record| {
         if record.class_name.as_deref() != Some("ProfileRoof") {
             return Ok(());
@@ -455,7 +446,9 @@ pub fn scan_rafter_cuts(
             .flat_map(|graph| graph.objects.iter())
             .filter_map(|object| object.fields.get("m_paramSet")?.as_array())
             .flatten()
-            .find(|pair| pair.get("m_paramId").and_then(id64) == Some(RAFTER_CUT_PARAMETER))
+            .find(|pair| {
+                pair.get("m_paramId").and_then(element_id_i64) == Some(RAFTER_CUT_PARAMETER)
+            })
             .and_then(|pair| pair.get("m_value")?.as_i64())
             .and_then(rafter_cut_from_value);
         if let Some(cut) = cut {

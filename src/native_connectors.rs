@@ -21,6 +21,7 @@
 //! end, so the instances' connectors hold every join.
 // Tracker: B54.
 
+use crate::native_json::{element_id, element_id_i64, finite_triple};
 use crate::partition_connector_pairs::ConnectorPair;
 use crate::{RevitFile, native_document};
 use std::collections::{BTreeMap, BTreeSet};
@@ -32,15 +33,6 @@ const PORT_DOMAINS: std::ops::RangeInclusive<i64> = 1..=3;
 /// The connection type of a connector reference that is a join (RE-171);
 /// type 4 names the connector's system.
 const JOIN: u64 = 1;
-
-/// The ElementId an `ElementId` field of a native record holds.
-fn element_id(value: &serde_json::Value) -> Option<u64> {
-    value
-        .get("m_id")?
-        .get("m_id64")?
-        .as_i64()
-        .and_then(|id| u64::try_from(id).ok())
-}
 
 /// The IFC4 `PredefinedType` of a port on a connector of Revit's `domain`
 /// (#828): HVAC `DUCT`, electrical `CABLE`, piping `PIPE`, as Revit's IFC4
@@ -132,31 +124,17 @@ pub struct ConnectorFrame {
     pub z_axis: [f64; 3],
 }
 
-fn triple(value: &serde_json::Value) -> Option<[f64; 3]> {
-    let [x, y, z] = value.as_array()?.as_slice() else {
-        return None;
-    };
-    let p = [x.as_f64()?, y.as_f64()?, z.as_f64()?];
-    p.iter().all(|v| v.is_finite()).then_some(p)
-}
-
 /// A `m_trf` value as a [`ConnectorFrame`]; `None` unless its point is
 /// finite and its axis a unit vector.
 fn connector_frame(trf: &serde_json::Value) -> Option<ConnectorFrame> {
-    let origin = triple(trf.get("m_or")?)?;
+    let origin = finite_triple(trf.get("m_or")?)?;
     let [r0, r1, r2] = trf.get("m_3x3")?.as_array()?.as_slice() else {
         return None;
     };
-    let rows = [triple(r0)?, triple(r1)?, triple(r2)?];
+    let rows = [finite_triple(r0)?, finite_triple(r1)?, finite_triple(r2)?];
     let z_axis = rows.map(|row| row[2]);
     let length = z_axis.iter().map(|v| v * v).sum::<f64>().sqrt();
     ((length - 1.0).abs() <= 1e-6).then_some(ConnectorFrame { origin, z_axis })
-}
-
-/// The `m_id64` an ElementId-shaped field holds, as the native records keep
-/// it.
-fn element_id_i64(value: &serde_json::Value) -> Option<i64> {
-    value.get("m_id")?.get("m_id64")?.as_i64()
 }
 
 /// Each connector's Flow Direction in a `Family` record's graph (RE-212), by

@@ -781,7 +781,8 @@ impl PartitionElementRecord {
     }
 }
 
-fn quantise(v: f64) -> i64 {
+/// Quantise to 1e-4 ft so bit-identical doubles group exactly.
+pub(crate) fn quantise(v: f64) -> i64 {
     (v * 10_000.0).round() as i64
 }
 
@@ -808,10 +809,7 @@ pub fn supports_revit_version(revit_version: u32) -> bool {
 /// the `u32` ElementId range is kept rather than dropped, so callers
 /// see the list exactly as framed.
 pub fn decode_reference_list(buf: &[u8], at: usize) -> Option<Vec<u64>> {
-    let count = buf
-        .get(at..at + 4)
-        .and_then(|s| s.first_chunk::<4>())
-        .map(|b| u32::from_le_bytes(*b))? as usize;
+    let count = le_bytes::u32_at(buf, at)? as usize;
     if count == 0 || count > REFERENCE_LIST_MAX_ENTRIES {
         return None;
     }
@@ -911,7 +909,7 @@ pub fn decode_frame_as(
     if offset.checked_add(RECORD_MIN_LEN)? > buf.len() {
         return None;
     }
-    if u16::from_le_bytes([buf[offset + 0x10], buf[offset + 0x11]]) != 0 {
+    if le_bytes::u16_at(buf, offset + 0x10)? != 0 {
         return None;
     }
     let builtin_category = le_bytes::u64_at(buf, offset + CATEGORY_OFFSET)? as i64;
@@ -947,10 +945,7 @@ pub fn decode_frame_as(
         .checked_add(REFERENCE_LIST_OFFSET)
         .and_then(|at| decode_owner_reference(buf, at));
     let design_option = frame_design_option(buf, offset);
-    let class_tag = u16::from_le_bytes([
-        buf[offset + CLASS_TAG_OFFSET],
-        buf[offset + CLASS_TAG_OFFSET + 1],
-    ]);
+    let class_tag = le_bytes::u16_at(buf, offset + CLASS_TAG_OFFSET)?;
     Some(PartitionElementRecord {
         stream: stream.to_string(),
         offset,
@@ -1377,7 +1372,7 @@ pub fn find_category_records_with_marker(
 /// [`find_categories_records_assigned`] instead. `memchr::memmem` is the
 /// vectorised form of exactly the first-byte-then-compare loop this used
 /// to spell out by hand.
-fn find_subslice(haystack: &[u8], needle: &[u8]) -> Option<usize> {
+pub(crate) fn find_subslice(haystack: &[u8], needle: &[u8]) -> Option<usize> {
     if needle.is_empty() || haystack.len() < needle.len() {
         return None;
     }

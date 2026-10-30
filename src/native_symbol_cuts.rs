@@ -16,6 +16,8 @@
 //! Architecture's 4 doors, and the door and 3 windows of each of the R2025
 //! models 12 to 17 (`reports/element-framing/RE-215-symbol-cut-loops.md`).
 
+use crate::native_json::{element_id, finite_triple};
+use crate::vector_math::distance;
 use crate::{RevitFile, native_document, native_saved_mesh::pointer};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -43,27 +45,6 @@ impl CutLoop {
     }
 }
 
-/// `{"m_id":{"m_id64":n}}` as `n`.
-fn element_id(value: &serde_json::Value) -> Option<u64> {
-    value
-        .pointer("/m_id/m_id64")
-        .and_then(serde_json::Value::as_i64)
-        .and_then(|n| u64::try_from(n).ok())
-}
-
-fn point(value: Option<&serde_json::Value>) -> Option<[f64; 3]> {
-    let items = value?.as_array()?;
-    let [x, y, z] = items.as_slice() else {
-        return None;
-    };
-    let p = [x.as_f64()?, y.as_f64()?, z.as_f64()?];
-    p.iter().all(|v| v.is_finite()).then_some(p)
-}
-
-fn distance(a: [f64; 3], b: [f64; 3]) -> f64 {
-    (0..3).map(|i| (a[i] - b[i]).powi(2)).sum::<f64>().sqrt()
-}
-
 /// The cut loop of a `FamilySymbol` graph: one loop, every curve a `GLine`,
 /// each line's start the previous line's end, closed, flat in the symbol's
 /// XZ plane and with some width and height. Anything else is `None`.
@@ -89,8 +70,8 @@ fn cut_loop(graph: &crate::native_parameters::ObjectGraph) -> Option<CutLoop> {
         if line.class_name != "GLine" {
             return None;
         }
-        let origin = point(line.fields.get("m_origin"))?;
-        let direction = point(line.fields.get("m_dirVec"))?;
+        let origin = line.fields.get("m_origin").and_then(finite_triple)?;
+        let direction = line.fields.get("m_dirVec").and_then(finite_triple)?;
         let [start, end] = point2(line.fields.get("m_endParams"))?;
         let at = |t: f64| [0, 1, 2].map(|i| origin[i] + direction[i] * t);
         ends.push((at(start), at(end)));

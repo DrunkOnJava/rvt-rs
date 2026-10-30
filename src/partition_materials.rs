@@ -96,7 +96,7 @@ fn frame_at(buf: &[u8], at: usize) -> Option<MaterialAppearance> {
             return None;
         }
     }
-    let shininess = u32::from_le_bytes(buf.get(at + 4..at + 8)?.try_into().ok()?);
+    let shininess = le_bytes::u32_at(buf, at + 4)?;
     Some(MaterialAppearance {
         rgb: [buf[at], buf[at + 1], buf[at + 2]],
         transparency,
@@ -140,7 +140,7 @@ fn frame_at_2023(buf: &[u8], at: usize, slots: usize, ids: usize) -> Option<Mate
     if *buf.get(at + 3)? != 0 {
         return None;
     }
-    let shininess = u32::from_le_bytes(buf.get(at + 4..at + 8)?.try_into().ok()?);
+    let shininess = le_bytes::u32_at(buf, at + 4)?;
     Some(MaterialAppearance {
         rgb: [buf[at], buf[at + 1], buf[at + 2]],
         transparency,
@@ -206,10 +206,7 @@ pub fn scan_material_appearances(
         let buf = inflated.bytes();
         for at in memchr::memmem::find_iter(buf, &[1u8, 0, 0, 0]) {
             let id_at = at + 4;
-            let Some(id) = buf
-                .get(id_at..id_at + 8)
-                .and_then(|s| s.first_chunk::<8>())
-                .map(|b| u64::from_le_bytes(*b))
+            let Some(id) = le_bytes::u64_at(buf, id_at)
                 .and_then(|id| u32::try_from(id).ok())
                 .filter(|id| declared.contains(id))
             else {
@@ -264,10 +261,7 @@ pub fn material_name_frame_tag(revit_version: u32) -> Option<[u8; 2]> {
 fn utf16_name(buf: &[u8], at: usize, n: u32) -> Option<String> {
     let n = usize::try_from(n).ok().filter(|n| (1..=256).contains(n))?;
     let bytes = buf.get(at..at.checked_add(2 * n)?)?;
-    let units: Vec<u16> = bytes
-        .chunks_exact(2)
-        .map(|unit| u16::from_le_bytes([unit[0], unit[1]]))
-        .collect();
+    let units: Vec<u16> = le_bytes::u16_units(bytes).collect();
     if units.iter().any(|u| !(0x20..0xfffe).contains(u)) {
         return None;
     }
@@ -373,7 +367,7 @@ fn closed_name(object: &[u8]) -> Option<String> {
         let n = le_bytes::u32_at(object, at)?;
         let name = utf16_name(object, at + 4, n)?;
         let after = at + 4 + 2 * usize::try_from(n).ok()?;
-        let id = u64::from_le_bytes(object.get(after + 8..after + 16)?.try_into().ok()?);
+        let id = le_bytes::u64_at(object, after + 8)?;
         (object.get(after..after + 8) == Some(&[0u8; 8][..])
             && object.get(after + 16..after + 24) == Some(&[0xffu8; 8][..])
             && u32::try_from(id).is_ok_and(|id| id > 0))
@@ -423,10 +417,7 @@ fn scan_material_names_uncached(
         let buf = inflated.bytes();
         for at in memchr::memmem::find_iter(buf, &[1u8, 0, 0, 0]) {
             let id_at = at + 4;
-            let Some(id) = buf
-                .get(id_at..id_at + 8)
-                .and_then(|s| s.first_chunk::<8>())
-                .map(|b| u64::from_le_bytes(*b))
+            let Some(id) = le_bytes::u64_at(buf, id_at)
                 .and_then(|id| u32::try_from(id).ok())
                 .filter(|id| declared.contains(id))
             else {
@@ -656,11 +647,7 @@ fn scan_category_material_entry(
         };
         let buf = inflated.bytes();
         for at in memchr::memmem::find_iter(buf, &pattern) {
-            if let Some(material) = buf
-                .get(at + pattern.len()..at + pattern.len() + 8)
-                .and_then(|b| b.first_chunk::<8>())
-                .map(|b| u64::from_le_bytes(*b))
-            {
+            if let Some(material) = le_bytes::u64_at(buf, at + pattern.len()) {
                 found.insert(material);
             }
         }
@@ -832,9 +819,7 @@ fn scan_category_material_2023(
         let buf = inflated.bytes();
         for at in memchr::memmem::find_iter(buf, &pattern) {
             let entry = |offset: usize, len: usize| buf.get(at + offset..at + offset + len);
-            let word = entry(8, 4)
-                .and_then(|b| b.first_chunk::<4>())
-                .map(|b| u32::from_le_bytes(*b));
+            let word = le_bytes::u32_at(buf, at + 8);
             if !matches!(word, Some(1 | 2))
                 || entry(12, 4) != Some(&[1, 0, 0, 0][..])
                 || entry(16, 6) != Some(&frame[..])
@@ -968,7 +953,7 @@ fn own_name_field(object: &[u8]) -> Option<String> {
     }
     let n = le_bytes::u32_at(object, at)?;
     // A slot followed by a BuiltInParameter id is a parameter entry.
-    let parameter = i32::from_le_bytes(object.get(at + 4..at + 8)?.try_into().ok()?);
+    let parameter = le_bytes::i32_at(object, at + 4)?;
     if is_builtin_parameter(i64::from(parameter)) {
         return None;
     }

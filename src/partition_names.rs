@@ -96,10 +96,7 @@ pub fn name_entries_2023(rf: &mut RevitFile, declared: &BTreeSet<u32>) -> BTreeM
             let Some(raw) = buf.get(at + 12..at + 12 + 2 * units) else {
                 continue;
             };
-            let code: Vec<u16> = raw
-                .chunks_exact(2)
-                .map(|pair| u16::from_le_bytes([pair[0], pair[1]]))
-                .collect();
+            let code: Vec<u16> = le_bytes::u16_units(raw).collect();
             let Ok(name) = String::from_utf16(&code) else {
                 continue;
             };
@@ -164,10 +161,7 @@ pub fn find_name_entries(buf: &[u8], declared_ids: &BTreeSet<u32>) -> Vec<NameEn
             if !declared_ids.contains(&element_id) {
                 continue;
             }
-            let code_units: Vec<u16> = buf[start..at]
-                .chunks_exact(2)
-                .map(|pair| u16::from_le_bytes([pair[0], pair[1]]))
-                .collect();
+            let code_units: Vec<u16> = le_bytes::u16_units(&buf[start..at]).collect();
             let Ok(name) = String::from_utf16(&code_units) else {
                 continue;
             };
@@ -622,10 +616,7 @@ pub fn find_mep_curve_type_names(buf: &[u8], wanted: &BTreeSet<u32>) -> BTreeMap
         let Some(bytes) = buf.get(start..start + units * 2) else {
             continue;
         };
-        let code_units: Vec<u16> = bytes
-            .chunks_exact(2)
-            .map(|pair| u16::from_le_bytes([pair[0], pair[1]]))
-            .collect();
+        let code_units: Vec<u16> = le_bytes::u16_units(bytes).collect();
         let Ok(name) = String::from_utf16(&code_units) else {
             continue;
         };
@@ -664,9 +655,7 @@ pub fn find_panel_type_materials(buf: &[u8], wanted: &BTreeSet<u32>) -> BTreeMap
         .filter_map(|(id, id_at)| {
             let tag_at = id_at + TYPE_OBJECT_TAG_OFFSET;
             (buf.get(tag_at..tag_at + 2) == Some(&TYPE_OBJECT_TAG[..])).then_some(())?;
-            let raw = buf
-                .get(id_at + PANEL_TYPE_MATERIAL_OFFSET..id_at + PANEL_TYPE_MATERIAL_OFFSET + 8)?;
-            let material = u64::from_le_bytes(raw.try_into().ok()?);
+            let material = le_bytes::u64_at(buf, id_at + PANEL_TYPE_MATERIAL_OFFSET)?;
             Some((id, (material != u64::MAX).then_some(material)))
         })
         .collect()
@@ -748,11 +737,7 @@ fn framed_string(buf: &[u8], start: usize, stop: usize, tag: [u8; 2]) -> Option<
         return None;
     }
     let end = at + 4 + 2 * units;
-    let code_units: Vec<u16> = buf
-        .get(at + 4..end)?
-        .chunks_exact(2)
-        .map(|pair| u16::from_le_bytes([pair[0], pair[1]]))
-        .collect();
+    let code_units: Vec<u16> = le_bytes::u16_units(buf.get(at + 4..end)?).collect();
     let text = String::from_utf16(&code_units).ok()?;
     if text.trim().is_empty()
         || text
@@ -791,11 +776,7 @@ fn name_ending_at(buf: &[u8], end: usize) -> Option<String> {
         if le_bytes::u32_at(buf, at)? as usize != units {
             return None;
         }
-        let code_units: Vec<u16> = buf
-            .get(at + 4..end)?
-            .chunks_exact(2)
-            .map(|pair| u16::from_le_bytes([pair[0], pair[1]]))
-            .collect();
+        let code_units: Vec<u16> = le_bytes::u16_units(buf.get(at + 4..end)?).collect();
         let name = String::from_utf16(&code_units).ok()?;
         (!name.trim().is_empty()
             && !name
@@ -846,10 +827,7 @@ fn first_framed_name(
         let Some(bytes) = buf.get(at + 10..at + 10 + units * 2) else {
             continue;
         };
-        let code_units: Vec<u16> = bytes
-            .chunks_exact(2)
-            .map(|pair| u16::from_le_bytes([pair[0], pair[1]]))
-            .collect();
+        let code_units: Vec<u16> = le_bytes::u16_units(bytes).collect();
         let Ok(name) = String::from_utf16(&code_units) else {
             continue;
         };

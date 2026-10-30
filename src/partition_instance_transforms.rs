@@ -151,10 +151,7 @@ pub fn scan_instance_transforms(
         let hits: Vec<usize> = memchr::memmem::find_iter(buf, &header).collect();
         for (index, &hit) in hits.iter().enumerate() {
             let id_at = hit + header.len();
-            let Some(id) = buf
-                .get(id_at..id_at + 8)
-                .and_then(|b| b.first_chunk::<8>())
-                .map(|b| u64::from_le_bytes(*b))
+            let Some(id) = le_bytes::u64_at(buf, id_at)
                 .and_then(|id| u32::try_from(id).ok())
                 .filter(|id| ids.contains(id))
             else {

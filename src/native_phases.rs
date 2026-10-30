@@ -24,6 +24,7 @@
 //! Revit's export leaves out.
 // Tracker: B46.
 
+use crate::native_json::element_id_i64;
 use crate::partition_element_records::{OST_ROOMS, PartitionElementRecord};
 use crate::{RevitFile, native_document};
 use std::collections::{BTreeMap, BTreeSet};
@@ -123,13 +124,12 @@ pub fn compute_phase_filter(rf: &mut RevitFile) -> anyhow::Result<PhaseFilter> {
             return Ok(());
         };
         let fields = serde_json::to_value(&root.fields)?;
-        let id = |v: &serde_json::Value| v.pointer("/m_id/m_id64").and_then(|x| x.as_i64());
-        if fields.get("m_famId").and_then(id) != Some(-1) {
+        if fields.get("m_famId").and_then(element_id_i64) != Some(-1) {
             return Ok(());
         }
         let ids: Vec<i64> = fields["m_phaseIds"]
             .as_array()
-            .map(|a| a.iter().filter_map(id).collect())
+            .map(|a| a.iter().filter_map(element_id_i64).collect())
             .unwrap_or_default();
         anyhow::ensure!(
             order.is_none() || order.as_ref() == Some(&ids),

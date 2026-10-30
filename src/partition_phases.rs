@@ -75,17 +75,17 @@ pub fn find_phase_names(
         if !tagged && !own_data {
             continue;
         }
-        let units = u32::from_le_bytes([rest[3], rest[4], rest[5], rest[6]]) as usize;
+        let Some(units) = le_bytes::u32_at(rest, 3) else {
+            continue;
+        };
+        let units = units as usize;
         if !(1..=crate::partition_names::NAME_MAX_UNITS).contains(&units) {
             continue;
         }
         let Some(bytes) = buf.get(fill + 63..fill + 63 + 2 * units) else {
             continue;
         };
-        let code_units: Vec<u16> = bytes
-            .chunks_exact(2)
-            .map(|pair| u16::from_le_bytes([pair[0], pair[1]]))
-            .collect();
+        let code_units: Vec<u16> = le_bytes::u16_units(bytes).collect();
         let Ok(name) = String::from_utf16(&code_units) else {
             continue;
         };

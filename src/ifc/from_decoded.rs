@@ -220,17 +220,7 @@ pub fn slab_extrusion(length_feet: f64, width_feet: f64, thickness_feet: Option<
 /// a decoded boundary really encloses area before it is extruded.
 // Tracker: GEO-28.
 pub fn polygon_area_sqft(points: &[(f64, f64)]) -> f64 {
-    if points.len() < 3 {
-        return 0.0;
-    }
-    let n = points.len();
-    let mut sum = 0.0;
-    for i in 0..n {
-        let (x0, y0) = points[i];
-        let (x1, y1) = points[(i + 1) % n];
-        sum += x0 * y1 - x1 * y0;
-    }
-    (sum * 0.5).abs()
+    crate::vector_math::polygon_area_xy(points)
 }
 
 /// The named sets that hold at least one property, in order.

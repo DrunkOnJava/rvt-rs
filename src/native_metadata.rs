@@ -5,6 +5,7 @@ use crate::native_parameter_definitions::{
     BuiltinDefinition, Definition, Registry, ResolvedFamilyParameter,
 };
 use crate::native_parameters::{ObjectGraph, Parameter};
+use crate::revit_global_ids::compress_ifc_guid;
 use anyhow::{Result, ensure};
 use serde::Serialize;
 use serde_json::Value;
@@ -877,13 +878,6 @@ pub fn derive_default_ifc_guid(unique_id: &str) -> Result<String> {
         (8..=16).contains(&suffix.len()) && suffix.bytes().all(|b| b.is_ascii_hexdigit()),
         "invalid UniqueId identifier suffix"
     );
-    let mut value =
-        u128::from_str_radix(&compact, 16)? ^ u128::from(u64::from_str_radix(suffix, 16)?);
-    const ALPHABET: &[u8; 64] = b"0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_$";
-    let mut result = [b'0'; 22];
-    for digit in result.iter_mut().rev() {
-        *digit = ALPHABET[(value & 63) as usize];
-        value >>= 6;
-    }
-    Ok(String::from_utf8(result.to_vec())?)
+    let value = u128::from_str_radix(&compact, 16)? ^ u128::from(u64::from_str_radix(suffix, 16)?);
+    Ok(compress_ifc_guid(value.to_be_bytes()))
 }

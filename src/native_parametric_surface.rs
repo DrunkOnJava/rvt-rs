@@ -1,6 +1,7 @@
 //! Typed evaluators for the non-planar surfaces observed in saved graphs.
 
 use crate::native_parameters::ObjectGraph;
+use crate::vector_math::{cross, dot, sub};
 use anyhow::{Context, Result, bail, ensure};
 use serde_json::Value;
 
@@ -21,14 +22,8 @@ fn p(v: &Value, n: &str) -> Result<Point> {
     );
     Ok(r)
 }
-fn dot(a: Point, b: Point) -> f64 {
-    a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
-}
 fn add(a: Point, b: Point) -> Point {
     [a[0] + b[0], a[1] + b[1], a[2] + b[2]]
-}
-fn sub(a: Point, b: Point) -> Point {
-    [a[0] - b[0], a[1] - b[1], a[2] - b[2]]
 }
 fn mul(a: Point, s: f64) -> Point {
     [a[0] * s, a[1] * s, a[2] * s]
@@ -382,14 +377,6 @@ impl ParametricSurface {
         ensure!(l > 1e-12, "surface normal is singular");
         Ok(mul(n, if *orient { 1. / l } else { -1. / l }))
     }
-}
-
-fn cross(a: Point, b: Point) -> Point {
-    [
-        a[1] * b[2] - a[2] * b[1],
-        a[2] * b[0] - a[0] * b[2],
-        a[0] * b[1] - a[1] * b[0],
-    ]
 }
 
 fn c_range(c: &Curve) -> [f64; 2] {

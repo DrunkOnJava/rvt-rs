@@ -3,6 +3,7 @@
 use crate::native_parameters::ObjectGraph;
 use crate::native_parametric_surface::ParametricSurface;
 use crate::native_saved_mesh::FaceMesh;
+use crate::vector_math::distance;
 use anyhow::{Context, Result, ensure};
 
 #[derive(Debug, Clone)]
@@ -12,9 +13,6 @@ pub struct ParametricMesh {
     pub triangles: Vec<[u32; 3]>,
 }
 
-fn distance(a: [f64; 3], b: [f64; 3]) -> f64 {
-    (0..3).map(|k| (a[k] - b[k]).powi(2)).sum::<f64>().sqrt()
-}
 fn uv_point(v: &serde_json::Value) -> Result<[f64; 2]> {
     let a = v.as_array().context("UV array")?;
     ensure!(a.len() == 2, "UV dimension");

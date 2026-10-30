@@ -12,6 +12,7 @@
 //! Revit's set (RE-203). Geometry mapped to −1 is exported as one more
 //! material, `<Unnamed>` (RE-149).
 
+use crate::native_json::element_id;
 use crate::{RevitFile, native_document};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -59,12 +60,7 @@ pub fn geometry_materials(
             return Ok(());
         };
         let mut found = GeometryMaterials {
-            family: root
-                .fields
-                .get("m_familyId")
-                .and_then(|id| id.pointer("/m_id/m_id64"))
-                .and_then(serde_json::Value::as_i64)
-                .and_then(|id| u64::try_from(id).ok()),
+            family: root.fields.get("m_familyId").and_then(element_id),
             ..GeometryMaterials::default()
         };
         for entry in map {

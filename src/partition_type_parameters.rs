@@ -26,6 +26,7 @@
 //! (RE-103).
 
 use crate::RevitFile;
+use crate::le_bytes;
 use crate::partition_element_records::supports_revit_version;
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -112,15 +113,12 @@ pub fn type_text_parameters(
 
 /// A `u32`-counted UTF-16 string at `at` of printable characters.
 fn text_at(buf: &[u8], at: usize) -> Option<String> {
-    let len = u32::from_le_bytes(buf.get(at..at + 4)?.try_into().ok()?) as usize;
+    let len = le_bytes::u32_at(buf, at)? as usize;
     if !(1..=MAX_VALUE_UNITS).contains(&len) {
         return None;
     }
     let bytes = buf.get(at + 4..at + 4 + len * 2)?;
-    let units: Vec<u16> = bytes
-        .chunks_exact(2)
-        .map(|pair| u16::from_le_bytes([pair[0], pair[1]]))
-        .collect();
+    let units: Vec<u16> = le_bytes::u16_units(bytes).collect();
     let text = String::from_utf16(&units).ok()?;
     text.chars().all(|c| !c.is_control()).then_some(text)
 }
@@ -163,7 +161,7 @@ pub fn family_parameters_named(
             if buf.get(id_at.checked_sub(4)?..id_at)? != [1, 0, 0, 0] {
                 return None;
             }
-            let id = u64::from_le_bytes(buf.get(id_at..id_at + 8)?.try_into().ok()?);
+            let id = le_bytes::u64_at(buf, id_at)?;
             u32::try_from(id)
                 .ok()
                 .filter(|id| declared_ids.contains(id))
@@ -187,8 +185,7 @@ pub fn scan_partition_lengths(
                 .checked_sub(16)
                 .and_then(|start| buf.get(start..at))
                 .filter(|entry| entry[8..] == [0xff; 8])
-                .and_then(|entry| entry.first_chunk::<8>().copied())
-                .map(f64::from_le_bytes)
+                .and_then(|entry| le_bytes::f64_at(entry, 0))
                 .filter(|value| value.is_finite() && value.abs() <= MAX_LENGTH_FEET)
             else {
                 continue;
@@ -458,13 +455,8 @@ pub fn partition_length_entries(
             continue;
         }
         let (Some(value), Some(parameter)) = (
-            buf.get(at - 8..at)
-                .and_then(|b| b.first_chunk::<8>().copied())
-                .map(f64::from_le_bytes)
-                .filter(|v| v.is_finite() && v.abs() <= MAX_LENGTH_FEET),
-            buf.get(at + 8..at + 16)
-                .and_then(|b| b.first_chunk::<8>().copied())
-                .map(i64::from_le_bytes),
+            le_bytes::f64_at(buf, at - 8).filter(|v| v.is_finite() && v.abs() <= MAX_LENGTH_FEET),
+            le_bytes::i64_at(buf, at + 8),
         ) else {
             continue;
         };
@@ -649,7 +641,7 @@ fn value_blocks(buf: &[u8], declared_ids: &BTreeSet<u32>) -> Vec<(usize, Option<
     memchr::memmem::find_iter(buf, &VALUE_BLOCK_MARK)
         .filter(|&at| at >= 8 && buf[at - 1] != 0xff)
         .filter_map(|at| {
-            let id = u64::from_le_bytes(buf[at - 8..at].try_into().ok()?);
+            let id = le_bytes::u64_at(buf, at - 8)?;
             let id = u32::try_from(id).ok()?;
             if declared_ids.contains(&id) {
                 Some((at, Some(id)))

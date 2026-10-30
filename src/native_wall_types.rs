@@ -10,16 +10,9 @@
 //! R2025 models (RE-185), and on the 2 walls of the BIM4LCA office no
 //! parameter decides (RE-193).
 
+use crate::native_json::element_id;
 use crate::{RevitFile, native_document};
 use std::collections::{BTreeMap, BTreeSet};
-
-/// `{"m_id":{"m_id64":n}}` as `n`.
-fn element_id(value: &serde_json::Value) -> Option<u64> {
-    value
-        .pointer("/m_id/m_id64")
-        .and_then(serde_json::Value::as_i64)
-        .and_then(|n| u64::try_from(n).ok())
-}
 
 /// The type Function (`m_function`) of each of `walls`, by the wall's
 /// ElementId: the wall's record names its type, and the type's record holds

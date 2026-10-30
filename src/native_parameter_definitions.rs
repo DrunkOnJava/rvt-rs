@@ -129,20 +129,7 @@ pub fn project(graph: &ObjectGraph) -> Result<Option<Definition>> {
                         .ok_or_else(|| anyhow::anyhow!("invalid GUID byte"))?,
                 )?;
             }
-            Ok::<_, anyhow::Error>(format!(
-                "{:08x}-{:04x}-{:04x}-{:02x}{:02x}-{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}",
-                u32::from_le_bytes([b[0], b[1], b[2], b[3]]),
-                u16::from_le_bytes([b[4], b[5]]),
-                u16::from_le_bytes([b[6], b[7]]),
-                b[8],
-                b[9],
-                b[10],
-                b[11],
-                b[12],
-                b[13],
-                b[14],
-                b[15]
-            ))
+            Ok::<_, anyhow::Error>(crate::native_extensible_storage::guid_string(b))
         })
         .transpose()?;
     let owner_fields = [

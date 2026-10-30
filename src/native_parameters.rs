@@ -4,6 +4,7 @@
 //! Object field keys are bare schema names unless the inheritance chain has
 //! multiple serialized declarations of that name; those keys are all emitted
 //! as `DeclaringClass::field`. Inline objects have independent naming scopes.
+use crate::le_bytes;
 use crate::schema_registry::{Field, Registry};
 use anyhow::{Result, ensure};
 use serde::{Deserialize, Serialize};
@@ -158,8 +159,8 @@ pub fn decode_graph_with_catalog_usage(
         limits.max_values > 0 && limits.max_objects > 0 && limits.max_depth > 0,
         "native graph resource budgets must be positive"
     );
-    ensure!(body.len() >= 2, "truncated root object tag");
-    let tag = u16::from_le_bytes(body[..2].try_into()?);
+    let tag =
+        le_bytes::u16_at(body, 0).ok_or_else(|| anyhow::anyhow!("truncated root object tag"))?;
     let mut cursor = Cursor {
         body,
         registry,
@@ -603,11 +604,7 @@ impl Cursor<'_> {
             0x60 if f.base == 8 => {
                 let n = self.u32()? as usize;
                 ensure!(n <= 1_000_000, "native string unit budget exceeded");
-                let units = self
-                    .take(n * 2)?
-                    .chunks_exact(2)
-                    .map(|b| u16::from_le_bytes([b[0], b[1]]))
-                    .collect::<Vec<_>>();
+                let units = le_bytes::u16_units(self.take(n * 2)?).collect::<Vec<_>>();
                 Ok(Value::String(String::from_utf16(&units)?))
             }
             0x10 | 0x11 | 0x12 | 0x13 | 0x50 | 0x51 | 0x52 | 0x53 => {

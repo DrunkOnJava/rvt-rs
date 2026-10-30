@@ -144,6 +144,8 @@ pub mod native_graphics_traversal;
 pub mod native_index;
 #[path = "native_instance_materials.rs"]
 pub mod native_instance_materials;
+#[path = "native_json.rs"]
+pub(crate) mod native_json;
 #[path = "native_metadata.rs"]
 pub mod native_metadata;
 #[path = "native_mullion_hosts.rs"]
