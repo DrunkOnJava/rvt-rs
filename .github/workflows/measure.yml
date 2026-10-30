@@ -252,7 +252,7 @@ jobs:
           case "$status" in
             0) ;;
             2) echo "::warning::R2025 models NOT MEASURED: the archive could not be downloaded" ;;
-            *) echo "::error::R2025_Models.zip no longer matches research/r2025-models.tsv"; exit 1 ;;
+            *) echo "::error::an R2025 archive no longer matches research/r2025-models.tsv"; exit 1 ;;
           esac
       # BIMcollab's host being unreachable is NOT MEASURED; a file that no
       # longer matches its pin fails the run.

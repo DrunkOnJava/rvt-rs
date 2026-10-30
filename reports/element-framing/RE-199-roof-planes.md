@@ -151,7 +151,7 @@ An arrow is a sketch line (record tag `1f 0f`, where boundary lines have `cf 0c`
 | `09_LShapedHipRoof_1Edge300Offset` | 24 | 2.9e-6 | 356.503864 | 356.504300 |
 | `10_LShapedHipRoof_1Edge300Offset_Hole` | 40 | 2.9e-6 | 336.967483 | 336.967803 |
 
-`07_1Slope_ArrowDefined_2Cut50mmFascia` has no export. Its body reproduces its record box, 12.096 ft.
+`07_1Slope_ArrowDefined_2Cut50mmFascia` had no export when this was written; its body reproduced its record box, 12.096 ft. Its first export (#885, 2026-10-27, with Revit's property sets on) measures it: the body is Revit's, every vertex within 2.45e-06 ft and 327.9969 cubic ft against Revit's 327.9963 (Measure run 40975829582), so the fascia rule holds on a plumb two-cut.
 
 Measure reproduces this table on GitHub's runners (run 39602093604, head `cf0ab157`, base `main`, `-f r2025=true`) with `tools/re/roof_bodies_vs_ifc.py`, which meshes each `IfcRoof` of both exports with IfcOpenShell: the same volumes to the sixth decimal, every vertex of Revit's body within 3.74e-6 ft of one of rvt-rs's. `12_Rooms_Door_Windows` and the stairs files `13` to `17` hold `02_1Slope`'s roof and match the same way, so 18 of the 19 roofs in Revit's exports match (every vertex within 0.001 ft, volume within 1e-4), where `main`'s level blocks match none (1,806 to 7,836 ft³ against Revit's 305 to 363). The 19th is `11_RoofByExtrusion` (§8, #883). The probe's output in the same run reads every rafter cut in §4's table and `07`'s fascia depth, 0.164042 ft.
 
@@ -182,6 +182,7 @@ The models above are local. On GitHub's runners (Measure run 39602093604, base `
 
 - **An arrow whose head stops short of the far edge.** Revit puts an arrow's tail on a boundary line, but its head may stop early, and the plane then runs on past the head. rvt-rs draws it that way, but no measured model has such an arrow.
 - **A square two-cut with a fascia depth.** No measured model has one, so it stays a level block.
+- **A roof sloped by several slope arrows.** puzzbobb's `20_T_U_Roof` (#885) has a T-shaped and a U-shaped roof, each sloped by six slope arrows and no defining edge (every edge reads `defines_slope` false). The slope-arrow rule reads one arrow, so both are drawn as their record box (Measure run 40975829582: 4,426 and 37,357 cubic ft against Revit's 437 and 1,846).
 - **Footprints whose skeleton has split events** (an edge's wedge cut by a non-neighbouring edge's), such as a T or U with long arms. The wedges are each edge's first ones, which an L does not outgrow. The record box guards the rest.
 - **Roofs by extrusion** (`11_RoofByExtrusion`: a curved profile, 1,187 vertices in Revit's export).
 - **The 2024 tutorial house** (RE-56's oracle) is not on this machine, and is local only on the maintainer's, where local-only files are not measured. Its shed is drawn by RE-56's single-edge path as before, but its edges now come from its Sketch's curve list where it has one (§2), so that file is not known to export unchanged. No 2024 roof with several defining edges is measured (#885).
