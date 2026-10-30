@@ -2106,12 +2106,6 @@ impl TypeCommon {
                 });
             }
         }
-        if occurrence == "IFCSTAIR" && self.stair_type {
-            sets.push(PropertySet {
-                name: "Pset_StairFlightCommon".into(),
-                properties: stair_type_zeros().into_iter().collect(),
-            });
-        }
         if let (true, Some(nosing)) = (occurrence == "IFCSTAIRFLIGHT", self.nosing_feet) {
             sets.push(PropertySet {
                 name: "Pset_StairFlightCommon".into(),
@@ -2127,7 +2121,8 @@ impl TypeCommon {
 
 /// What revit-ifc's stair calculators give a stair type object, which is no
 /// stair and no flight: 0 risers, 0 treads and a nosing length of 0, in
-/// `Pset_StairCommon` and in `Pset_StairFlightCommon` (RE-287). The BIM4LCA
+/// `Pset_StairCommon` (RE-287), and with `--revit-set-placement` in
+/// `Pset_StairFlightCommon` too ([`super::revit_set_placement`]). The BIM4LCA
 /// office's three stair types of stairs with data and each R2025 stair model's
 /// hold them; its fourth stair type, of a family placed as a stair, holds none.
 fn stair_type_zeros() -> [Property; 3] {

@@ -4645,7 +4645,7 @@ fn pset_property_value_count(model: &IfcModel) -> usize {
             model.building_storeys.len(),
         )) - usize::from(!step_writer::every_storey_holds_an_element(model))
     };
-    elements + storeys + building + openings
+    elements + storeys + building + openings + step_writer::type_object_pset_values(model)
 }
 
 fn export_confidence_summary(
