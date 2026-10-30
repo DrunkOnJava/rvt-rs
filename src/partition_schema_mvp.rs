@@ -1844,7 +1844,7 @@ fn attach_original_symbols<const N: usize>(
                 if at < p {
                     continue;
                 }
-                let Some(value) = crate::le_bytes::u32_at(buf, at) else {
+                let Some(value) = le_bytes::u32_at(buf, at) else {
                     continue;
                 };
                 held.entry(object.element_id)

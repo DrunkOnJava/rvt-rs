@@ -278,7 +278,7 @@ const MAX_GEOMETRY_TAG: u32 = 0xffff;
 fn opens_unset_map(buf: &[u8], start: usize, end: usize, materials: &BTreeSet<u32>) -> bool {
     let mut at = start;
     while at + 4 <= end {
-        let Some(count) = crate::le_bytes::u32_at(buf, at) else {
+        let Some(count) = le_bytes::u32_at(buf, at) else {
             return false;
         };
         let count = count as usize;
@@ -289,8 +289,7 @@ fn opens_unset_map(buf: &[u8], start: usize, end: usize, materials: &BTreeSet<u3
             let (mut unset, mut material) = (0usize, 0usize);
             for entry in 0..count {
                 let e = at + 4 + entry * 12;
-                let (Some(key), Some(value)) =
-                    (crate::le_bytes::u32_at(buf, e), buf.get(e + 4..e + 12))
+                let (Some(key), Some(value)) = (le_bytes::u32_at(buf, e), buf.get(e + 4..e + 12))
                 else {
                     return false;
                 };
