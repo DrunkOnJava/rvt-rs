@@ -22,8 +22,9 @@
 use wasm_bindgen::prelude::*;
 
 use rvt::RevitFile;
+use rvt::control::WalkerControl;
 use rvt::ifc::{
-    ExportQualityMode, IfcModel, RvtDocExporter,
+    ExportQualityMode, ExportResult, IfcModel, RvtDocExporter,
     gltf::model_to_glb,
     scene_graph::{
         ElementInfoPanel, SceneNode, Schedule, build_scene_graph, build_schedule,
@@ -65,6 +66,9 @@ fn install_panic_hook() {
 /// `strict`. Stronger modes fail closed when the decoded
 /// coverage cannot satisfy the requested bar — the viewer uses this to
 /// surface honest confidence rather than over-claiming geometry.
+///
+/// Doors and windows are drawn from the meshes Revit saved for them, as
+/// `rvt-ifc` does by default, on Revit 2023 to 2027 files.
 #[wasm_bindgen(js_name = openRvtBytesWithDiagnosticsMode)]
 pub fn open_rvt_bytes_with_diagnostics_mode(bytes: &[u8], mode: &str) -> Result<JsValue, JsValue> {
     install_panic_hook();
@@ -73,13 +77,15 @@ pub fn open_rvt_bytes_with_diagnostics_mode(bytes: &[u8], mode: &str) -> Result<
         mode,
         OpenLimits::default(),
         rvt::walker::WalkerLimits::default(),
+        true,
     )
 }
 
 /// [`open_rvt_bytes_with_diagnostics_mode`] under the resource limits of
-/// `limits`, a JS object `{ largeModel?, maxStreamBytes?, maxInflateBytes? }`
-/// or `null` for the defaults. A field left out keeps its default; they
-/// are `rvt-ifc`'s flags of the same names, resolved by
+/// `limits`, a JS object
+/// `{ largeModel?, maxStreamBytes?, maxInflateBytes?, savedMeshes? }` or
+/// `null` for the defaults. A field left out keeps its default; the first
+/// three are `rvt-ifc`'s flags of the same names, resolved by
 /// [`rvt::cli::open_limits`] (`largeModel` is `--large-model`, and an
 /// explicit byte limit wins over it):
 ///
@@ -90,6 +96,10 @@ pub fn open_rvt_bytes_with_diagnostics_mode(bytes: &[u8], mode: &str) -> Result<
 /// - `maxInflateBytes` caps one gzip member's inflated size; a stream's
 ///   members together may inflate to this or 1 GiB, whichever is larger.
 ///   A value past what a 32-bit `usize` holds saturates at 4 GiB minus 1.
+/// - `savedMeshes` (default `true`) draws the doors and windows of Revit 2023
+///   to 2027 files from the meshes Revit saved for them, as `rvt-ifc` does
+///   without `--no-saved-meshes`; `false` keeps their bounding boxes and
+///   skips the extra pass over the file's saved graphics.
 ///
 /// Byte limits are whole numbers of bytes. A stream a limit keeps from being
 /// read is listed in `diagnostics` (the `stream_not_read_resource_limit`
@@ -103,8 +113,8 @@ pub fn open_rvt_bytes_with_diagnostics_mode_and_open_limits(
     limits: JsValue,
 ) -> Result<JsValue, JsValue> {
     install_panic_hook();
-    let (open_limits, walker_limits) = limits_from_js(limits)?;
-    export_with_limits(bytes, mode, open_limits, walker_limits)
+    let (open_limits, walker_limits, saved_meshes) = limits_from_js(limits)?;
+    export_with_limits(bytes, mode, open_limits, walker_limits, saved_meshes)
 }
 
 fn export_with_limits(
@@ -112,13 +122,42 @@ fn export_with_limits(
     mode: &str,
     open_limits: OpenLimits,
     walker_limits: rvt::walker::WalkerLimits,
+    saved_meshes: bool,
 ) -> Result<JsValue, JsValue> {
     let quality_mode = ExportQualityMode::parse(mode).map_err(err_str)?;
     let mut rf = RevitFile::open_bytes_with_limits(bytes.to_vec(), open_limits).map_err(err_str)?;
-    let result = RvtDocExporter
+    let mut result = RvtDocExporter
         .export_with_diagnostics_mode_and_limits(&mut rf, quality_mode, walker_limits)
         .map_err(err_str)?;
+    if saved_meshes {
+        attach_saved_meshes(&mut rf, &mut result);
+    }
     serde_wasm_bindgen::to_value(&result).map_err(err_str)
+}
+
+/// Draw `result`'s doors and windows from their saved meshes, as `rvt-ifc`
+/// does by default ([`rvt::ifc::saved_meshes::default_scope`]: Revit 2023 to
+/// 2027 only), and recount its diagnostics. Saved graphics only improve
+/// bodies: when they cannot be read the model keeps its bounding boxes and the
+/// diagnostics carry a warning saying so.
+fn attach_saved_meshes(rf: &mut RevitFile, result: &mut ExportResult) {
+    let Some(scope) = rvt::ifc::saved_meshes::default_scope(rf) else {
+        return;
+    };
+    match rvt::ifc::saved_meshes::attach_scoped_with_control(
+        rf,
+        &mut result.model,
+        scope,
+        &WalkerControl::default(),
+    ) {
+        Ok(_) => rvt::ifc::recount_exported(&mut result.diagnostics, &result.model),
+        Err(e) => result.diagnostics.warnings.push(format!(
+            "Saved graphics not read, door and window bodies unchanged: {e}"
+        )),
+    }
+    // Reading the saved graphics may stop at a resource limit too, and this
+    // also recounts the warnings.
+    rvt::ifc::record_unread_streams(&mut result.diagnostics, rf.unread_streams());
 }
 
 #[derive(Default, serde::Deserialize)]
@@ -127,6 +166,7 @@ struct LimitsOptions {
     large_model: Option<bool>,
     max_stream_bytes: Option<f64>,
     max_inflate_bytes: Option<f64>,
+    saved_meshes: Option<bool>,
 }
 
 fn whole_bytes(field: &str, value: Option<f64>) -> Result<Option<u64>, JsValue> {
@@ -141,7 +181,9 @@ fn whole_bytes(field: &str, value: Option<f64>) -> Result<Option<u64>, JsValue> 
     }
 }
 
-fn limits_from_js(limits: JsValue) -> Result<(OpenLimits, rvt::walker::WalkerLimits), JsValue> {
+fn limits_from_js(
+    limits: JsValue,
+) -> Result<(OpenLimits, rvt::walker::WalkerLimits, bool), JsValue> {
     let options: LimitsOptions = if limits.is_null() || limits.is_undefined() {
         LimitsOptions::default()
     } else {
@@ -159,7 +201,11 @@ fn limits_from_js(limits: JsValue) -> Result<(OpenLimits, rvt::walker::WalkerLim
     if large_model {
         walker_limits.max_scan_bytes = rvt::cli::LARGE_MODEL_MAX_INFLATE_BYTES;
     }
-    Ok((open_limits, walker_limits))
+    Ok((
+        open_limits,
+        walker_limits,
+        options.saved_meshes.unwrap_or(true),
+    ))
 }
 
 /// Quick summary — reads only the cheap metadata (BasicFileInfo +
