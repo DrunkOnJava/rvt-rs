@@ -83,7 +83,10 @@ fn run(path: &str) -> anyhow::Result<()> {
             let n = seen.entry(object.class_name.as_str()).or_default();
             let object_class = format!("{}#{}", object.class_name, n);
             *n += 1;
-            for (name, value) in object.fields.iter() {
+            let Some(fields) = object.fields.as_object() else {
+                continue;
+            };
+            for (name, value) in fields {
                 if TYPE_LINKS.contains(&name.as_str()) {
                     if let Some(type_id) = identifier(value).filter(|t| *t > 0) {
                         if printed.insert(format!("link {type_id}")) {
