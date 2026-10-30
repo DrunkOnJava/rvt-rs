@@ -1695,7 +1695,8 @@ type ReferenceKinds = BTreeMap<
 /// sets). Revit's IFC4 export gives the BIM4LCA office's elements exactly
 /// these sets, but for those revit-ifc matches by a prefix of the entity's
 /// name, such as `Pset_StairFlightCommon` on a stair. None for a space,
-/// whose `Reference` is [`space_common_property_set`]'s.
+/// whose `Reference` is [`space_common_property_set`]'s, nor in
+/// [`UNCONFIRMED_REFERENCE_SETS`].
 fn reference_set_kinds(
     ifc_type: &str,
     predefined_type: Option<&str>,
@@ -1710,9 +1711,16 @@ fn reference_set_kinds(
     STANDARD_PROPERTY_SETS
         .iter()
         .filter(|set| set.applies_to(ifc_type, predefined_type))
+        .filter(|set| !UNCONFIRMED_REFERENCE_SETS.contains(&set.name))
         .filter_map(|set| Some((set.name, set.property_kind("Reference")?)))
         .collect()
 }
+
+/// Sets whose `Reference` no Revit IFC4 export measured has written: left
+/// out until one does (the maintainer, 2026-10-29). No reference export
+/// holds an `IfcShadingDevice`; Core Interior's 20 have only an export with
+/// no property sets (RE-239 §5).
+const UNCONFIRMED_REFERENCE_SETS: &[&str] = &["Pset_ShadingDeviceCommon"];
 
 /// The sets `kinds` ([`reference_set_kinds`]), each holding `type_name` as
 /// its `Reference`.
