@@ -22,7 +22,11 @@
 //! wall cannot rise through a floor above one that has cut it.
 //!
 //! The same body, a lower top: the placement and `BoundingBoxHeight` stay,
-//! and the wall carries a `BodyHeightSource` and the element's ElementId.
+//! and the wall carries a `BodyHeightSource` and the element's ElementId. The
+//! wall gets no `Qto_WallBaseQuantities.Height`, which would be Revit's on 62
+//! of the BIM4LCA office's 64 cut walls as built and 66 of 70 at permit, but
+//! Revit's export writes none on the others, and nothing read tells them apart
+//! (RE-267).
 //!
 //! Areas are worked out on triangles. The wall's plan is clipped against
 //! each triangle of the element's outline (Sutherland-Hodgman, against a
@@ -35,11 +39,11 @@
 
 use std::collections::{HashMap, HashSet};
 
-use super::{ELEMENT_RECORD_PROPERTY_SET, WALL_TOP_COVER_BODY_HEIGHT_SOURCE, add_element_set};
+use super::{ELEMENT_RECORD_PROPERTY_SET, WALL_TOP_COVER_BODY_HEIGHT_SOURCE};
 use crate::ifc::body_geometry::{
     Body, Placement, Point2, Ring, extrusion_rings, plan_outline, section,
 };
-use crate::ifc::entities::{IfcEntity, Property, PropertySet, PropertyValue};
+use crate::ifc::entities::{IfcEntity, Property, PropertyValue};
 
 /// How much of a wall's plan may lie outside its floor's, or inside the
 /// floor's openings, and still be covered, square feet. On the BIM4LCA office
@@ -357,7 +361,7 @@ fn decide(entities: &[IfcEntity], pending: &[(usize, Vec<u32>)]) -> Vec<(usize, 
 /// Cut the top of each wall of `pending` at the underside of the floor that
 /// covers it (see the module), setting its extrusion's height to the
 /// underside less its base.
-pub(super) fn cut_wall_tops(entities: &mut Vec<IfcEntity>, pending: &[(usize, Vec<u32>)]) {
+pub(super) fn cut_wall_tops(entities: &mut [IfcEntity], pending: &[(usize, Vec<u32>)]) {
     if pending.is_empty() {
         return;
     }
@@ -372,8 +376,7 @@ pub(super) fn cut_wall_tops(entities: &mut Vec<IfcEntity>, pending: &[(usize, Ve
         else {
             continue;
         };
-        let height = level - location[2];
-        body.height_feet = height;
+        body.height_feet = level - location[2];
         if let Some(set) = property_set
             .as_mut()
             .filter(|set| set.name == ELEMENT_RECORD_PROPERTY_SET)
@@ -387,16 +390,5 @@ pub(super) fn cut_wall_tops(entities: &mut Vec<IfcEntity>, pending: &[(usize, Ve
                 value: PropertyValue::Integer(i64::from(floor)),
             });
         }
-        add_element_set(
-            entities,
-            index,
-            PropertySet {
-                name: "Qto_WallBaseQuantities".into(),
-                properties: vec![Property {
-                    name: "Height".into(),
-                    value: PropertyValue::PositiveLengthFeet(height),
-                }],
-            },
-        );
     }
 }
