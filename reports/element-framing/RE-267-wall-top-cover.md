@@ -3,8 +3,8 @@
 **Date:** 2026-10-30
 **Issues:** #1067 (walls drawn taller than Revit's body), #1016 (W7: walls' `Height`), W6 of [`docs/release-1.0-criteria.md`](../../docs/release-1.0-criteria.md); corrects RE-258 §3 and follows RE-257 (a wall's `Height` is its body's span), RE-228 (`JoinToRoofGStep.m_baseOrTop`) and RE-266
 **Artefacts:** the BIM4LCA office as built and at building permit (Revit 2024, Revit 24.0.5's IFC4 exports), Core Interior (Revit 2024), RE1 Architecture and puzzbobb's R2025 models (Revit 2025), as Measure fetches them
-**Runs:** Measure [41075127575](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41075127575) (both offices: `probes/examples/probe_1067_native_dump.rs` and `tools/re/wall_top_cover_vs_ifc.py`), [41076305345](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41076305345) (every model, the scorer also printing each wall's horizontal top faces) and [41077948567](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41077948567) (the probe on Core Interior, RE1 and the R2025 models)
-**Result:** positive for the mechanism, narrowed for the rule, not shipped. The 5 walls per stage that RE-258 found Revit "leaves whole" are not whole: Revit cuts them at the floor's underside over the part of their plan the floor covers and leaves the rest at full height, so the highest point does not move. A rule that cuts a top only where the named floor covers the wall's whole plan gives 64 of the office's 65 cut tops as built and 70 of 70 at permit, and cuts no wall that Revit leaves whole. One wall as built is cut by Revit although a sliver of its plan lies outside the floor, nothing read explains it, and so no wall is cut yet.
+**Runs:** Measure [41075127575](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41075127575) (both offices: `probes/examples/probe_1067_native_dump.rs` and `tools/re/wall_top_cover_vs_ifc.py`), [41076305345](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41076305345) (every model, the scorer also printing each wall's horizontal top faces), [41077948567](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41077948567) (the probe on Core Interior, RE1 and the R2025 models) and [41079569865](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41079569865) (every model, the scorer also reading each floor's level across the wall)
+**Result:** positive for the mechanism, narrowed for the rule, not shipped. The 5 walls per stage that RE-258 found Revit "leaves whole" are not whole: Revit cuts them at the floor's underside over the part of their plan the floor covers and leaves the rest at full height, so the highest point does not move. A rule that cuts a top only where the named floor covers the wall's whole plan gives 64 of the office's 65 cut tops as built and 70 of 70 at permit, and cuts no wall that Revit leaves whole. One wall as built is cut by Revit although a sliver of its plan lies outside the floor, and nothing read explains it; a part-covered wall also needs a stepped top. So no wall is cut yet.
 
 ## 1. What RE-258 measured, and what it missed
 
@@ -19,11 +19,11 @@
 | stepped along the wall | 22 | 22 |
 | no body on the centre line | 1 | 0 |
 
-So 94 office walls as built and 96 at permit are cut somewhere on their centre line, not 65 and 70. A floor that stops short of a wall's end, or of one of its faces, cuts the rest and leaves a stub.
+So 94 office walls as built and 96 at permit are cut somewhere on their centre line, not 65 and 70. A floor that stops short of a wall's end, or of one of its faces, cuts the wall where it covers it and leaves the stub at full height.
 
 ## 2. The top is the floor's underside where the floor covers, the wall's own top elsewhere
 
-Take each wall with exactly one named floor whose underside is level over its centre line and between its base and top: 83 walls as built and 87 at permit. The plan area of Revit's horizontal face at the wall's full height equals the area of Revit's wall plan outside that floor's plan to 0.002 ft² on 79 and 83 of them. The others are 3 foundation walls per file beside the ground slab's edge (several have more than one height across their thickness, and one has a sliver under 0.001 ft wide), the wall in §5 as built, and at permit a roof-edge wall that differs by 0.018 ft². Along the centre line, taking the named floors' undersides where they cover and the wall's own top elsewhere, the prediction is Revit's height at every station on 591 of 607 walls as built and 575 of 589 at permit. The remaining 16 and 14 walls are lower in Revit than that, at a height that none of the floors, roofs and footings the scorer reads has: 8 walls in each file have a top that slopes along their length (183.10 to 183.34 ft over the first 2 ft of one), and the rest are cut by elements the scorer does not read. One wall at permit is higher than predicted.
+Take each wall with exactly one named floor whose underside is level over its centre line and between its base and top: 83 walls as built and 87 at permit. The plan area of Revit's horizontal face at the wall's full height equals the area of Revit's wall plan outside that floor's plan to 0.002 ft² on 79 and 83 of them. The others are 3 foundation walls per file beside the ground slab's edge (several have more than one height across their thickness, and one has a sliver under 0.001 ft wide), the wall in §5 as built, and at permit a roof-edge wall that differs by 0.018 ft². Along the centre line, taking the named floors' undersides where they cover and the wall's own top elsewhere, the prediction is Revit's height at every station on 591 of 607 walls as built and 575 of 589 at permit. The other 16 and 14 walls differ from it somewhere. Eight in each file have a top that slopes along their length (183.10 to 183.34 ft over the first 2 ft of one). As built, 2 are lower than predicted at the underside of a floor the scorer reads, at stations that floor does not reach (the larger, a foundation wall, over 19 ft of its length), and 6 at a height none of the floors, roofs and footings the scorer reads has. At permit, 5 are lower at such a height, and 1 is higher than predicted. These are measured and unexplained.
 
 The walls RE-258 §3 could not explain, with what stays at full height in Revit's body:
 
@@ -36,13 +36,13 @@ The walls RE-258 §3 could not explain, with what stays at full height in Revit'
 | 1892039, both stages | 1474132 | a 3 to 4 ft stretch at one end, where the floor's outline steps back (a recess 4.6 ft wide) | 2.476 as built, 2.045 at permit |
 | 2984235, 2984610 and 2984730 at permit | the roof slab over them | 44% of their plan (48% of 2984610's) | 18.475, 20.775 and 18.475 |
 
-In each row the full-height area is the area of Revit's wall plan outside Revit's floor plan, to 0.002 ft² (rvt-rs's plan against rvt-rs's floor gives the same where both walls have the same ends; it differs for 1457415 by 0.05 ft², and for 1892039 and 1630966 at permit, where rvt-rs's wall is longer). Revit's top over the rest of each wall is the floor's underside, level. The walls never were left whole: the part of the body the floor covers is cut.
+In each row the full-height area is the area of Revit's wall plan outside Revit's floor plan, to 0.002 ft² (2984610: 0.018). rvt-rs's plan against rvt-rs's floor gives the same where both walls have the same ends; it differs for 1457415 by 0.05 ft², and for 1892039 and 1630966 at permit, where rvt-rs's wall is longer. Revit's top over the rest of each wall is the floor's underside, level. The walls never were left whole: the part of the body the floor covers is cut.
 
 1892039's top join names a wall (3363820) beside 1474132. That wall's base is at 1892039's top, and it is the only wall in either file whose top join names a wall. It explains nothing: the recess in 1474132's outline does.
 
 ## 3. The rule and its tallies
 
-A wall's top is the underside of a floor, roof or footing that its top join (`JoinToRoofGStep` with `m_baseOrTop` 1) or one of its `CutPairGStep`s names, when that underside is level along the wall's centre line, lies between the wall's base and top, and the floor's plan (rvt-rs's body) covers the whole of the wall's plan (the wall's plan outside it under 1e-6 ft²). The two walls RE-258 found cut with no top join, 1746099 and 1795193, are cut this way, by the floor a Join Geometry pair names.
+A wall's top is the underside of a floor, roof or footing that its top join (`JoinToRoofGStep` with `m_baseOrTop` 1) or one of its `CutPairGStep`s names, when that underside is level across the wall (the floor's lowest and highest underside over three rows of stations, on the centre line and 0.45 thicknesses off it on each side, within 0.001 ft), lies between the wall's base and top, and the floor's plan (rvt-rs's body) covers the whole of the wall's plan (the wall's plan outside it under 1e-6 ft²). The two walls RE-258 found cut with no top join, 1746099 and 1795193, are cut this way, by the floor a Join Geometry pair names. A wall's `CleanPairGStep` names the same floors as its `CutPairGStep` on every wall measured, and the tallies count either.
 
 | | as built | at permit |
 |---|---:|---:|
@@ -57,7 +57,7 @@ At permit the rule is exact. Every wall with a named floor whose plan lies wholl
 
 The RE-258 rule, which cuts where the floor covers only part of the wall, is wrong on the 14 and 13 walls it selects that the new rule leaves: it draws the uncovered part too low.
 
-The rule, top join and cut pair together, cuts none of Core Interior's 360 walls or RE1 Architecture's 7. On the R2025 models its centre-line version picks 2 walls, in 3 models each (a slope-arrow roof in three, a hip roof in the other three), under a roof whose underside is level along the wall's centre line but slopes across the wall's 0.656 ft thickness. Revit's body there has no horizontal top face and its highest point is the record box's, so those walls are not cut; a rule that asks for a level underside across the whole plan, not along the centre line, picks none.
+The rule, top join and cut pair together, cuts none of Core Interior's 360 walls, RE1 Architecture's 7 or the 138 walls of the R2025 models. The across-plan level condition is what keeps it off the R2025 roofs: along the centre line alone, 2 walls in 3 models each (a slope-arrow roof in three, a hip roof in the other three) sit under a roof whose underside is level there but slopes across the wall's 0.656 ft thickness. Revit's body on those has no horizontal top face and its highest point is the record box's, so they are not cut.
 
 ## 4. What was compared and does not tell a cut wall from one with a part outside the floor
 
@@ -72,7 +72,7 @@ RE-258 §3 compared the history tables from a probe that printed arrays of up to
 
 ## 5. The one wall
 
-As built, one wall (5.0 ft long, 0.328 ft thick, its top joined to the same floor as the wall it abuts) ends 0.085 ft past the named floor's edge, inside the abutting wall's plan. rvt-rs's plan and Revit's agree (0.0243 ft² of it lies outside the floor in both), and Revit's body has one horizontal top face over its whole plan, at the floor's underside, stub included. At permit its end meets the abutting wall's face, the wall is covered, and it is cut. The three other slivers as built (0.032 to 0.033 ft) lie outside every wall and stay at full height. Why Revit cuts the stub is not read: the abutting wall is not cut over it, and counting a part of a wall's plan that lies inside an abutting wall's plan as covered would make the rule exact as built, but it rests on this one wall.
+As built, one wall (5.0 ft long, 0.328 ft thick, its top joined to the same floor as the wall it abuts) ends 0.085 ft past the named floor's edge, inside the abutting wall's plan. rvt-rs's plan and Revit's agree (0.0243 ft² of it lies outside the floor in both), and Revit's body has one horizontal top face over its whole plan, at the floor's underside, stub included. At permit its end meets the abutting wall's face, the wall is covered, and it is cut. The three other slivers as built (0.032 to 0.033 ft) lie outside every wall and stay at full height. Why Revit cuts the stub is not read: the abutting wall lies wholly outside the floor and is not cut, and counting a part of a wall's plan that lies inside an abutting wall's plan as covered would make the rule exact as built, but it rests on this one wall.
 
 ## 6. The two-stage pair
 
@@ -94,8 +94,8 @@ An exporter would need, for each wall with a top join or a cut pair: the named f
 ## 8. Reproduce
 
 ```bash
-gh workflow run measure.yml --ref main -f ref=e7d8d172c88d4c836e29b1a814d296dae1742de6 -f base=none -f nordic=true -f r2025=true \
+gh workflow run measure.yml --ref main -f ref=dfdb1025159243f41ae876b731f2912dae22ea98 -f base=none -f nordic=true -f r2025=true \
   -f scorers=wall_top_cover_vs_ifc -f probe=probe_1067_native_dump -f probe_scorer=-
 ```
 
-The scorer and the probe are this change's, and `main` has them once it lands; the runs above measured the branch's commits c0fa0953 and e7d8d172, kept under `refs/archive/2026-10-30/re/1067-wall-top-cuts` once it lands. The tallies join the probe's `wall <id> relation` lines (`JoinToRoofGStep top`, `CutPairGStep`) with the scorer's `wall`, `top`, `levels`, `pair` and `gap` lines.
+The scorer and the probe are this change's, and `main` has them once it lands (until then use `--ref re/1067-wall-top-cuts`); the runs above measured the branch's commits c0fa0953, e7d8d172 and dfdb1025 (the scorer and probe as they stand), kept under `refs/archive/2026-10-30/re/1067-wall-top-cuts` once it lands. The tallies join the probe's `wall <id> relation` lines (`JoinToRoofGStep top`, `CutPairGStep`) with the scorer's `wall`, `top`, `levels`, `pair` and `gap` lines.
