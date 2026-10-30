@@ -31,6 +31,10 @@ import ifcopenshell
 import ifcopenshell.util.element
 
 FLAGS = ("LoadBearing", "IsExternal")
+# Parameters printed with their values on every class, whether or not the
+# flag takes both states there: FLOOR_PARAM_IS_STRUCTURAL, which a candidate
+# scan found for floors, and FUNCTION_PARAM (RE-286).
+WATCHED = (-1001954, -1001006)
 
 
 def revit_flags(model):
@@ -126,6 +130,15 @@ def main():
                     holders[key][value][state] += 1
                     have[key] += 1
             for key in sorted(holders):
+                if key[1] in WATCHED:
+                    triples = "; ".join(
+                        f"{value} {'true' if state else 'false'} {count}"
+                        for value, states in sorted(holders[key].items())
+                        for state, count in sorted(states.items())
+                    )
+                    print(
+                        f"native readers: flag {klass} {flag} watched {key[0]} parameter {key[1]} held by {have[key]} of {len(rows)} values ({triples})"
+                    )
                 if have[key] != len(rows):
                     continue
                 by_value = holders[key]
