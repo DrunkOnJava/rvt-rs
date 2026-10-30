@@ -65,8 +65,8 @@ measured by lowering the limits below the reference files' streams (Core
 Interior's 17 MB partition against an 8 MiB limit). No model over the default
 limits has been read with `--large-model` yet: the field report behind #1075
 (two client models of about 438 MB and 1.13 GB, whose largest partitions are
-403 MiB and 1,057 MiB) was measured on a patched 0.10.0 and is being repeated
-on 0.11.0.
+403 MiB and 1,057 MiB) was measured on a patched 0.10.0; the reporter was
+asked on 2026-10-30 to repeat it on 0.11.0 and has not reported back.
 
 A project saved by Revit 2024 to 2027 can keep the schema of the release it
 passed through, and with it that release's element-record layout. Such a
@@ -76,7 +76,8 @@ measured release still reads no element records. The field report behind
 #421 found this on 25 of 49 client project files saved by Revit 2024 to 2027,
 which 0.10.0 read as empty. None of the reference or sample files keeps an
 older schema, so the reading is not yet measured on an affected file; the
-reporter is checking 0.11.0 on theirs.
+reporter was asked on 2026-10-30 to check 0.11.0 on theirs and has not
+reported back.
 
 ## Geometry on Revit 2024 and 2025 projects
 
