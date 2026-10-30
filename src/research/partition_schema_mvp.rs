@@ -302,6 +302,8 @@ pub fn recover_partition_schema_mvp(
     // Record-backed slabs carry an ElementId, a model bounding box,
     // a measured thickness and a storey.
     out.slabs = slabs_from_partition_category_records(rf, revit_version, &level_ids)?;
+    // Which floors nothing cuts (RE-295).
+    attach_slab_uncut(rf, &mut out.slabs);
 
     // --- Room instances from element records (#90, RE-29) ---
     //

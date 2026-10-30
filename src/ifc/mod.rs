@@ -1291,8 +1291,6 @@ fn export_rvt_doc(
     // #824: the openings a face-hosted door's or window's symbol cuts in the
     // element whose face hosts it.
     attach_hosted_cut_openings(rf, &mut entities);
-    // RE-295: a slab such an opening cuts has no volume from its profile.
-    export_content::leave_out_cut_slab_volumes(&mut entities);
 
     if !policy.include_geometry {
         export_content::strip_building_element_geometry(&mut entities);

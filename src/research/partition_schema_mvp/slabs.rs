@@ -590,3 +590,52 @@ pub(super) fn shaft_outlines(
     }
     out
 }
+
+/// Mark each floor of `slabs` whose native record was read and holds no step
+/// that cuts its solid (RE-295): no `CutPairGStep`, the join that cuts one
+/// element with another, and no `WallCutoutGStep`, the cut a hosted symbol
+/// makes. Revit's export measures a cut floor's `NetVolume` less the cut,
+/// which the floor's profile and layers do not give. A floor whose record is
+/// not read, on a release the native record path does not read, is not
+/// marked.
+pub(super) fn attach_slab_uncut(rf: &mut RevitFile, slabs: &mut [DecodedElement]) {
+    let ids: BTreeSet<u64> = slabs
+        .iter()
+        .filter(|slab| slab.class == "Floor")
+        .filter_map(|slab| slab.id.map(u64::from))
+        .collect();
+    if ids.is_empty() {
+        return;
+    }
+    let options = crate::native_document::Options {
+        selected_ids: ids,
+        ..crate::native_document::Options::default()
+    };
+    let mut cut: BTreeMap<u64, bool> = BTreeMap::new();
+    let read = crate::native_document::extract_graphs(rf, &options, |record| {
+        let Some(graph) = record.graph.as_ref() else {
+            return Ok(());
+        };
+        let steps = graph.objects.iter().any(|object| {
+            matches!(
+                object.class_name.as_str(),
+                "CutPairGStep" | "WallCutoutGStep"
+            )
+        });
+        *cut.entry(record.identity.element_id).or_default() |= steps;
+        Ok(())
+    });
+    if read.is_err() {
+        return;
+    }
+    for slab in slabs.iter_mut() {
+        if slab
+            .id
+            .and_then(|id| cut.get(&u64::from(id)))
+            .is_some_and(|seen| !seen)
+        {
+            slab.fields
+                .push((SLAB_UNCUT_FIELD.into(), InstanceField::Bool(true)));
+        }
+    }
+}

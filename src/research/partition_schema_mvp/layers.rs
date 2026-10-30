@@ -257,6 +257,29 @@ pub(super) fn attach_slab_layers(
             _ => None,
         });
         let total: f64 = type_layers.iter().map(|layer| layer.width_feet).sum();
+        // RE-295: a floor's volume is its area times that total, whatever
+        // its box, which a sloped floor's is deeper than.
+        if element.class == "Floor" && total.is_finite() && total > 0.0 {
+            let count = type_layers
+                .iter()
+                .filter(|layer| layer.width_feet > 0.0)
+                .count();
+            element.fields.push((
+                SLAB_TYPE_THICKNESS_FIELD.into(),
+                InstanceField::Float {
+                    value: total,
+                    size: 8,
+                },
+            ));
+            element.fields.push((
+                SLAB_TYPE_LAYER_COUNT_FIELD.into(),
+                InstanceField::Integer {
+                    value: count as i64,
+                    signed: false,
+                    size: 4,
+                },
+            ));
+        }
         if !height.is_some_and(|h| (h - total).abs() <= SLAB_LAYER_HEIGHT_TOLERANCE_FEET) {
             continue;
         }
