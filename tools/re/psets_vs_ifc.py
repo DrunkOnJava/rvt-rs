@@ -59,6 +59,24 @@ def key_of(obj):
     return f"tag:{tag}" if tag else None
 
 
+def property_key_of(obj):
+    """key_of, but an opening is keyed by whether a door or window fills it.
+
+    Revit's export writes several openings with one Tag, the ElementId of the
+    element they belong to: a door drawn as an opening and filled by its door,
+    and, in each further wall or door that element cuts, an opening with no
+    filling that holds `Pset_OpeningElementCommon.Reference` and `FireExit`
+    (the BIM4LCA office's 31 door openings, 69 curtain-wall cuts and 39 fire
+    hose cabinets). Keyed by Tag alone, those values were scored against
+    rvt-rs's filled opening, or its curtain wall, which Revit gives none."""
+    if obj.is_a("IfcOpeningElement"):
+        tag = getattr(obj, "Tag", None)
+        if not tag:
+            return None
+        return f"opening:{tag}:{'filled' if obj.HasFillings else 'void'}"
+    return key_of(obj)
+
+
 def value_of(value, metres_per_unit, radians_per_unit=1.0):
     if value is None:
         return None
@@ -222,7 +240,7 @@ def properties(path):
     objects = set()
     entities = {}
     for product in f.by_type("IfcObject"):
-        key = key_of(product)
+        key = property_key_of(product)
         if key:
             objects.add(key)
             entities[key] = product.is_a()
@@ -260,7 +278,7 @@ def properties(path):
         if not standard(pset):
             continue
         for obj in rel.RelatedObjects:
-            key = key_of(obj)
+            key = property_key_of(obj)
             if key:
                 add(key, pset)
     # A type object holds its sets itself (HasPropertySets, RE-210 §2), keyed
@@ -314,8 +332,11 @@ def main(argv):
     in_own_set = 0
     defects = collections.Counter()
     cache_defects = collections.Counter()
+    unwritten_openings = collections.Counter()
     for (key, pset, prop), value in sorted(theirs.items()):
         if key not in our_objects:
+            if key.startswith("opening:"):
+                unwritten_openings[(pset, prop)] += 1
             continue
         if (key, pset, prop) in their_cache:
             cache_defects[(pset, prop, "types" if key.startswith("type:") else "curtain members")] += 1
@@ -370,6 +391,13 @@ def main(argv):
         print(f"Revit values known to be wrong, left out (RE-235 §5): {pset}.{prop} {n}")
     for (pset, prop, where), n in sorted(cache_defects.items()):
         print(f"Revit values known to be wrong, left out (RE-235 §5, RE-269): {pset}.{prop} on {where} {n}")
+    if unwritten_openings:
+        print(
+            f"Revit values on openings rvt-rs does not write (a door or wall cut in a further host,"
+            f" a curtain wall's or cabinet's cut), not scored: {sum(unwritten_openings.values())}"
+        )
+        for (pset, prop), n in sorted(unwritten_openings.items()):
+            print(f"  {pset}.{prop}: {n}")
     if setup_apart:
         print(
             f"Revit's export writes no standard property set (its setup, RE-239 §5);"
@@ -416,7 +444,7 @@ def main(argv):
 
 def object_names(path):
     f = ifcopenshell.open(path)
-    return {key_of(o): o.Name for o in f.by_type("IfcObject") if key_of(o)}
+    return {property_key_of(o): o.Name for o in f.by_type("IfcObject") if property_key_of(o)}
 
 
 if __name__ == "__main__":
