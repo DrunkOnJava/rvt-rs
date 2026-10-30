@@ -38,7 +38,7 @@ Every model and every scorer against `main` (run 41141471438): the table follows
 ## 5. Reproduce
 
 ```bash
-gh workflow run measure.yml --ref feat/1046-wall-footprint -f ref=84bd4db6dc4e9fc1157020d6202892ead06e6ead -f base=main -f nordic=true -f r2025=true
+gh workflow run measure.yml --ref main -f ref=1a2c793ecd3961fb6863a6fa4d64b0846788bdf8 -f base=main -f nordic=true -f r2025=true
 gh workflow run measure.yml --ref main -f ref=f73908bf1b04c0b6d9c9acd8340fe3b5f73af67a -f base=none -f nordic=true -f r2025=true \
   -f models="nordic-office-* r2025-*" -f scorers=wall_quantities_vs_ifc -f probe=probe_1067_native_dump -f probe_scorer=-
 ```
