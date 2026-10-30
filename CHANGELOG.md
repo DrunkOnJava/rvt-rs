@@ -16,18 +16,23 @@ and leaves out what Revit's own export leaves out: elements that do not
 exist in the export phase, and property values Revit does not write. It
 also removes, in one breaking change, the stable API that nothing used.
 
-A stream over the reader's resource limits is now named in the
-diagnostics, and `rvt-ifc` and `rvt-gltf` exit with status 3 instead of
-writing an empty model; `--large-model` reads streams up to 2 GiB, and the
-viewer offers the same retry (#1075). A project saved by Revit 2024 to 2027
-that kept the schema of the release it passed through reads as that
-release, where it read as zero elements (#421). Doors and windows are drawn
-from the meshes Revit saved for them where the whole mesh decodes, windows
-whose family cuts a solid get Revit's opening, a one-storey project gets
-its storey, and walls nothing joins to or cuts carry Revit's `Height`.
+A stream over the reader's resource limits is now named in the diagnostics,
+and `rvt-ifc` and `rvt-gltf` exit with status 3 instead of writing an empty
+model; `--large-model` reads streams up to 2 GiB, and the viewer offers the
+same retry (#1075). A project saved by Revit 2024 to 2027 that kept the
+schema of the release it passed through is read as that release, where it
+read as zero elements (#421). Neither fix is measured yet on the files that
+showed the problem, which are private. #1075 is measured by lowering the
+limits below the streams of the reference files (Core Interior's 17 MB
+partition against an 8 MiB limit), and no model over the default limits has
+been read with `--large-model`. #421 is measured only on the reference and
+sample files, none of which keeps an older schema. Doors and windows are
+drawn from the meshes Revit saved for them where the whole mesh decodes,
+windows whose family cuts a solid get Revit's opening, a one-storey project
+gets its storey, and walls nothing joins to or cuts carry Revit's `Height`.
 Revit 2027 joins the family corpus. Revit 2008 to 2013 files now open, and
-2008 to 2014 projects export their elements experimentally, outside the
-1.0 range.
+2008 to 2014 projects export their elements experimentally, outside the 1.0
+range.
 
 puzzbobb wrote the phase filter (#1074), the reader for files that kept an
 older schema (#1081) and the Revit 2008 to 2014 readers (#1076, #1077), and
