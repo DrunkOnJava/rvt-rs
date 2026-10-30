@@ -2,7 +2,7 @@
 """Where Revit ends each wall's body, relative to the wall's native curve,
 against where rvt-rs ends it and where a join-order rule would (W6).
 
-Reads `examples/probe_wall_curves.rs` output (each wall's curve from its
+Reads `probes/examples/probe_wall_curves.rs` output (each wall's curve from its
 native record, its location-line key, its end joins) and Revit's own IFC
 export, and, when the Measure run keeps it (`-f keep_ifc=true`), rvt-rs's
 export `model.ifc` beside the probe output. For every straight wall, each

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Which stair run type Revit's export gives each flight (#357).
 
-Takes the output of `examples/probe_357_native_runs.rs`, whose `record`
+Takes the output of `probes/examples/probe_357_native_runs.rs`, whose `record`
 lines give each run's own type (the one `OST_StairsRuns` type definition its
 element record's reference list names, RE-28, which `native_runs` is given),
 and whose `run` and `stairs` lines give its stairs' default run type

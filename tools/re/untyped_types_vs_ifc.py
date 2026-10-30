@@ -2,7 +2,7 @@
 """Which record names the type of an element rvt-rs writes untyped (RE-240,
 #35, W7).
 
-Reads `examples/probe_re240_untyped_types.rs`'s output and Revit's IFC
+Reads `probes/examples/probe_re240_untyped_types.rs`'s output and Revit's IFC
 export. For each element the probe lists, Revit's element of the same Tag
 gives its ObjectType and type object (`IfcRelDefinesByType`); the scorer
 says which of the ids the element's native record names is that type

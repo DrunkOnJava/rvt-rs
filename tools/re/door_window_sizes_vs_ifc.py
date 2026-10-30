@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Score each candidate size of a door or window type against Revit's IFC.
 
-Research tool for RE-187 (#759). `examples/probe_re187_door_window_sizes.rs`
+Research tool for RE-187 (#759). `probes/examples/probe_re187_door_window_sizes.rs`
 prints, per door and window, the sizes its type holds: the BuiltInParameters
 Width and Height (-1001301, -1001300), Rough Width and Rough Height
 (-1001305, -1001304), and family parameters named Width and Height. This

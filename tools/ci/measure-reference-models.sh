@@ -34,8 +34,8 @@
 #     ProjectInformation stream. The IFC export reads only a PartAtom stream,
 #     which none of these models has (diagnostics.json says has_part_atom
 #     false), so this, and the families below, are what measure that parser;
-#   - probe.txt, when PROBE names an examples/ probe already built in
-#     BIN_DIR/examples: its output on the model, ending with its exit status;
+#   - probe.txt, when PROBE names a probe (the rvt-probes crate's
+#     examples) already built in BIN_DIR/examples: its output on the model, ending with its exit status;
 #   - probe_score.txt, when PROBE_SCORER also names a scorer in
 #     PROBE_SCORER_DIR taking <probe output> <revit-export.ifc>.
 # PROBE may name several probes and PROBE_SCORER a scorer for each, in the

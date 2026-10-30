@@ -7,7 +7,7 @@ revit-ifc's `WallExporter` (CLEANROOM.md source 5) writes a wall's
 rvt-rs has two readings of it: the depth of the extrusion it draws the wall
 as (`B.depth`, from its record box) and the wall's saved Unconnected Height
 (`P.-1001101`, RE-251). Each is Revit's on most walls but not all. This
-reads `examples/probe_re251_wall_numbers.rs`'s `rec` lines and Revit's IFC
+reads `probes/examples/probe_re251_wall_numbers.rs`'s `rec` lines and Revit's IFC
 export, and counts, for the walls where the two agree (a relative 1e-6),
 how many carry Revit's `Height`, a different one, or none; then, for the
 walls where they do not, which of the two Revit's is. It also counts the

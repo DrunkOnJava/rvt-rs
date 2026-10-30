@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Compare each copy of a wall's location line with Revit's wall (#824).
 
-Reads `examples/probe_824_wall_copies.rs`'s output. For each wall whose
+Reads `probes/examples/probe_824_wall_copies.rs`'s output. For each wall whose
 copies disagree, it meshes Revit's IfcWall of the same Tag in the site frame
 (Revit internal feet) and prints, per copy, how far the copy's two ends lie
 from the ends of Revit's body along the line, and the body's distance from

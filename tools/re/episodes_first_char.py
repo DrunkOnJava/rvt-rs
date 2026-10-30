@@ -4,7 +4,7 @@
 
 On BIMcollab's Revit 2015 example, a stored IfcGUID string has the last 21
 characters of an element's GlobalId in Revit's export, never the first. This
-takes the probe output of `examples/probe_re208_episodes_2015.rs` (its `gid`
+takes the probe output of `probes/examples/probe_re208_episodes_2015.rs` (its `gid`
 lines) and Revit's export, pairs each element with its stored string, and
 reports how much each candidate tells about Revit's first character: the
 conditional entropy H(first | stored first, candidate) against H(first |

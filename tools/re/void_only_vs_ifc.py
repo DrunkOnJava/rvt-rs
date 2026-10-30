@@ -3,7 +3,7 @@
 
 Research tool for `reports/element-framing/RE-84-void-only-doors-windows.md`
 (#309, #227). It reads the output of
-`examples/probe_re84_void_only_families.rs` (one door or window record per
+`probes/examples/probe_re84_void_only_families.rs` (one door or window record per
 line: ElementId, class, type ElementId, how many map materials the type has,
 family) and finds each ElementId in Revit's export:
 

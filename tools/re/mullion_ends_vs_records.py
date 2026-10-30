@@ -10,7 +10,7 @@ each IfcMember of Revit's export whose body is one extruded solid, that count
 from Revit's own values ((NetSurfaceArea - perimeter x depth) / area of its
 solid), and whether its solid runs upright (through its placement, any mapped
 item's transformation and the solid's position), and ranks every field of
-`examples/probe_re241_mullion_record_scalars.rs`'s records against each
+`probes/examples/probe_re241_mullion_record_scalars.rs`'s records against each
 count, upright and not, with `record_scalars_vs_ifc.py`'s ranking.
 
 Usage:

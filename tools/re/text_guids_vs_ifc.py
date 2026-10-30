@@ -2,7 +2,7 @@
 """Test every GUID a file holds as text as the base of Revit's project, site
 and building GlobalIds (#878).
 
-Reads `examples/probe_878_text_guids.rs`'s output. revit-ifc makes the three
+Reads `probes/examples/probe_878_text_guids.rs`'s output. revit-ifc makes the three
 from `ExportUtils.GetExportId` of the fake ElementIds -16, -15 and -14,
 which XORs them into the base GUID's last 32 bits as an element's id is
 (RE-48). For each GUID, read in text order and in .NET byte order, this

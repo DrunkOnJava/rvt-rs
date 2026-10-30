@@ -136,7 +136,7 @@ fn field_type_coverage_across_corpus() {
         unexpected.is_empty(),
         "field-type classification regressed — Unknown fields outside the documented \
          residual: {unexpected:?}. Run \
-         `SHOW_UNKNOWN=1 cargo run --profile ci --example probe_schema_page_strip -- <file>` \
+         `SHOW_UNKNOWN=1 cargo run --profile ci -p rvt-probes --example probe_schema_page_strip -- <file>` \
          to see the byte patterns."
     );
 

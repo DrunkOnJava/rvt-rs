@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Bit 12 of the element record's flag word against Revit's export (#223, RE-261).
 
-Reads `examples/probe_re261_flag_word_bits.rs`'s `rec`, `room-frame` and
+Reads `probes/examples/probe_re261_flag_word_bits.rs`'s `rec`, `room-frame` and
 `bit7` lines and pairs each record with Revit's element of the same Tag:
 
 - walls (`SWall`): bit 12 against whether Revit's export joins an end of the

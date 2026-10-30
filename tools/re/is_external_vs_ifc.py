@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Score each step of Revit's `IsExternal` rule against Revit's export (RE-193).
 
-`examples/probe_re193_is_external.rs` prints one JSON line per element with
+`probes/examples/probe_re193_is_external.rs` prints one JSON line per element with
 what rvt-rs reads for each step of the rule Revit's exporter applies
 (`CategoryUtil.IsElementExternal` in revit-ifc, CLEANROOM.md source 5), the
 first step that gives a value winning:

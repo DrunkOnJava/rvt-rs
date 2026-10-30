@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Score the parameters named `<property set>.<property>` against Revit's export (RE-194).
 
-`examples/probe_re194_pset_parameters.rs` prints, per element, the entry of
+`probes/examples/probe_re194_pset_parameters.rs` prints, per element, the entry of
 each project or shared parameter whose name starts with `Pset_` in the
 element's own data object, read as an integer (`int`), as text (`text`) and as
 an `f64` after the key (`after`), before an `ff` x 8 run (`before`) or just
