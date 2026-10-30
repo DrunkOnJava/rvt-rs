@@ -25,27 +25,11 @@ import sys
 
 import ifcopenshell
 import ifcopenshell.geom
-import ifcopenshell.util.placement
 import numpy as np
 
-FEET = 0.3048
+from ifc_common import site_frame
+
 BANDS = (0.001, 0.01, 0.1, 0.5)
-
-
-def site_frame(f):
-    """Shared metres (IfcOpenShell world) -> Revit internal feet."""
-    site = f.by_type("IfcSite")[0]
-    mat = ifcopenshell.util.placement.get_local_placement(site.ObjectPlacement)
-    ox, oy, oz = mat[0][3], mat[1][3], mat[2][3]
-    c, s = mat[0][0], mat[1][0]
-
-    def points(v):
-        dx, dy = v[:, 0] - ox, v[:, 1] - oy
-        return np.stack(
-            [(c * dx + s * dy) / FEET, (-s * dx + c * dy) / FEET, (v[:, 2] - oz) / FEET], axis=1
-        )
-
-    return points
 
 
 def band(diff):

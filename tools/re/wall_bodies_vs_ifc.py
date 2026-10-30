@@ -33,7 +33,6 @@ import collections
 import importlib.util
 import math
 import os
-import re
 import sys
 
 import ifcopenshell
@@ -41,24 +40,14 @@ import ifcopenshell.geom
 import ifcopenshell.util.element
 import ifcopenshell.util.placement
 
+from ifc_common import report_mesh_error
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 _spec = importlib.util.spec_from_file_location(
     "wall_layers_vs_ifc", os.path.join(HERE, "wall_layers_vs_ifc.py")
 )
 layers = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(layers)
-
-
-MESH_ERRORS = set()
-
-
-def report_mesh_error(error):
-    """Print each distinct reason IfcOpenShell gives for not meshing an element, once (#773)."""
-    text = (str(error).strip().splitlines() or [""])[0]
-    message = f"{type(error).__name__}: {re.sub(r'#[0-9]+', '#N', text)[:200]}"
-    if message not in MESH_ERRORS:
-        MESH_ERRORS.add(message)
-        print(f"IfcOpenShell cannot mesh: {message}")
 
 
 def wall_points(doc, blob):
