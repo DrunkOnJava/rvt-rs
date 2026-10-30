@@ -590,3 +590,60 @@ pub(super) fn shaft_outlines(
     }
     out
 }
+
+/// Whether `element` is a floor, a ceiling or a roof.
+fn is_plate(element: &DecodedElement) -> bool {
+    matches!(element.class.as_str(), "Floor" | "Ceiling" | "Roof")
+}
+
+/// Mark each floor, ceiling and roof of `lists` whose native record was read
+/// and holds no step that cuts its solid (RE-295): no `CutPairGStep`, the join
+/// that cuts one element with another, and no `WallCutoutGStep`, the cut a
+/// hosted symbol makes. Revit's export measures a cut floor's `NetVolume` less
+/// the cut, which the floor's profile and layers do not give. An element whose
+/// record is not read, on a release the native record path does not read, is
+/// not marked.
+pub(super) fn attach_slab_uncut(rf: &mut RevitFile, lists: &mut [&mut Vec<DecodedElement>]) {
+    let ids: BTreeSet<u64> = lists
+        .iter()
+        .flat_map(|list| list.iter())
+        .filter(|element| is_plate(element))
+        .filter_map(|element| element.id.map(u64::from))
+        .collect();
+    if ids.is_empty() {
+        return;
+    }
+    let options = crate::native_document::Options {
+        selected_ids: ids,
+        ..crate::native_document::Options::default()
+    };
+    let mut cut: BTreeMap<u64, bool> = BTreeMap::new();
+    let read = crate::native_document::extract_graphs(rf, &options, |record| {
+        let Some(graph) = record.graph.as_ref() else {
+            return Ok(());
+        };
+        let steps = graph.objects.iter().any(|object| {
+            matches!(
+                object.class_name.as_str(),
+                "CutPairGStep" | "WallCutoutGStep"
+            )
+        });
+        *cut.entry(record.identity.element_id).or_default() |= steps;
+        Ok(())
+    });
+    if read.is_err() {
+        return;
+    }
+    for element in lists.iter_mut().flat_map(|list| list.iter_mut()) {
+        if is_plate(element)
+            && element
+                .id
+                .and_then(|id| cut.get(&u64::from(id)))
+                .is_some_and(|seen| !seen)
+        {
+            element
+                .fields
+                .push((SLAB_UNCUT_FIELD.into(), InstanceField::Bool(true)));
+        }
+    }
+}
