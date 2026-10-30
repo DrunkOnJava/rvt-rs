@@ -924,6 +924,7 @@ pub fn append_typed_production_elements(
         add_beam_length(&mut reference_sets, &ifc_type, property_set.as_ref());
         add_beam_span(&mut reference_sets, &ifc_type);
         add_beam_slope(&mut reference_sets, &ifc_type, &decoded);
+        add_beam_roll(&mut reference_sets, &ifc_type, &decoded);
         add_slab_gross_area(
             &mut reference_sets,
             &ifc_type,
@@ -2397,6 +2398,35 @@ fn add_beam_slope(sets: &mut Vec<PropertySet>, ifc_type: &str, decoded: &Decoded
         sets,
         Property {
             name: "Slope".into(),
+            value: PropertyValue::AngleRadians(0.0),
+        },
+    );
+}
+
+/// Add an unrotated beam's `Pset_BeamCommon.Roll` 0 to `sets` (W7, RE-276):
+/// revit-ifc's `RollCalculator` (CLEANROOM.md source 5) takes the roll from
+/// the beam's Cross-Section Rotation parameter, in radians, whatever its
+/// value. rvt-rs reads that rotation from the beam's native record
+/// ([`crate::partition_schema_mvp::BEAM_ROTATION_FIELD`]) and writes the roll
+/// of a beam whose rotation is exactly 0, as it is on each of the BIM4LCA
+/// office's 8 beams, as built and at permit, on beams written with the
+/// extrusion length of [`add_beam_length`]. A rotated beam gets none: no
+/// measured beam is rotated, so its roll is not measured.
+fn add_beam_roll(sets: &mut Vec<PropertySet>, ifc_type: &str, decoded: &DecodedElement) {
+    if ifc_type != "IFCBEAM" || beam_extrusion_length(sets).is_none() {
+        return;
+    }
+    let unrotated = decoded.fields.iter().any(|(name, value)| {
+        name == crate::partition_schema_mvp::BEAM_ROTATION_FIELD
+            && matches!(value, InstanceField::Float { value, .. } if *value == 0.0)
+    });
+    if !unrotated {
+        return;
+    }
+    add_beam_common(
+        sets,
+        Property {
+            name: "Roll".into(),
             value: PropertyValue::AngleRadians(0.0),
         },
     );
