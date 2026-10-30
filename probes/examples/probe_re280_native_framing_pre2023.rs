@@ -67,7 +67,8 @@ const EXAMPLES: usize = 4;
 /// Rows printed per histogram.
 const TOP: usize = 20;
 /// The classes whose shape is printed: what the contracts read.
-const SHAPES: [&str; 13] = [
+const SHAPES: [&str; 14] = [
+    "VarParam",
     "Element",
     "ElementId",
     "Identifier",
@@ -392,6 +393,8 @@ fn split(bytes: &[u8], layout: Layout) -> Result<Framed, String> {
 struct Grouping {
     framed: Vec<Layout>,
     declared: Vec<Layout>,
+    counted: Vec<Layout>,
+    trailer: Vec<Layout>,
     chosen: Option<Framed>,
     kind: &'static str,
     errors: Vec<(Layout, String)>,
@@ -408,14 +411,22 @@ fn frame_group(
     let usual = if source.channel == 101 { 0 } else { 4 };
     let mut framed = Vec::new();
     let mut declared = Vec::new();
+    let mut counted = Vec::new();
+    let mut trailer = Vec::new();
     let mut errors = Vec::new();
     let mut results: Vec<(Layout, Framed)> = Vec::new();
     for layout in CANDIDATES {
         match split(bytes, layout) {
             Ok(found) => {
                 framed.push(layout);
-                if found.records.len() as u64 == source.declared_objects
-                    && found.body_sum == source.declared_body_bytes
+                let count = found.records.len() as u64;
+                if count == source.declared_objects {
+                    counted.push(layout);
+                    if found.body_sum + 4 * count == source.declared_body_bytes {
+                        trailer.push(layout);
+                    }
+                }
+                if count == source.declared_objects && found.body_sum == source.declared_body_bytes
                 {
                     declared.push(layout);
                 }
@@ -461,6 +472,8 @@ fn frame_group(
     Grouping {
         framed,
         declared,
+        counted,
+        trailer,
         chosen,
         kind,
         errors,
@@ -471,6 +484,8 @@ fn frame_group(
 struct Hits {
     framed: usize,
     declared: usize,
+    counted: usize,
+    trailer: usize,
 }
 
 #[derive(Default)]
@@ -539,7 +554,9 @@ struct Rec {
     class: String,
     graph_error: Option<String>,
     id_agrees: Option<bool>,
+    contract_error: Option<String>,
     base: Result<BaseScalars, String>,
+    raw_graph_error: Option<String>,
     metadata_error: Option<String>,
     params: Vec<Param>,
     objects: Vec<Obj>,
@@ -575,32 +592,52 @@ fn fingerprint(registry: &Registry, object: &GraphObject) -> Obj {
     }
 }
 
+/// The Element base scalars from the decoded root, through either shape of
+/// `Identifier` (`m_id` on 2015 to 2023, `m_id64` from 2024).
+fn base_from_graph(root: &GraphObject) -> Result<BaseScalars, String> {
+    let fields = &root.fields;
+    let get = |name: &str| {
+        fields
+            .get(name)
+            .and_then(identifier)
+            .ok_or_else(|| format!("no {name}"))
+    };
+    let flag = |name: &str| {
+        fields
+            .get(name)
+            .and_then(Value::as_bool)
+            .ok_or_else(|| format!("no {name}"))
+    };
+    Ok(BaseScalars {
+        id: get("m_id")?,
+        ids: [
+            get("m_assocLevelId")?,
+            get("m_famId")?,
+            get("m_unplacedOwnerId")?,
+            get("m_ownerDBViewId")?,
+            get("m_createdPhaseId")?,
+            get("m_demolishedPhaseId")?,
+            get("m_designOptionId")?,
+        ],
+        flags: [flag("m_locked")?, flag("m_moribund")?, flag("m_dummy")?],
+    })
+}
+
 fn decode_record(ctx: &Ctx<'_>, id: u64, partition: u32, body: &[u8]) -> Rec {
     let class = u16_at(body, 0)
         .and_then(|tag| ctx.registry.class(tag))
         .map_or_else(|| "<unregistered>".to_string(), |c| c.name.clone());
-    let base = match native_element::decode_base(body, ctx.registry) {
-        Ok(base) => Ok(BaseScalars {
-            id: base.id,
-            ids: [
-                base.associated_level_id,
-                base.family_id,
-                base.unplaced_owner_id,
-                base.owner_view_id,
-                base.created_phase_id,
-                base.demolished_phase_id,
-                base.design_option_id,
-            ],
-            flags: [base.locked, base.moribund, base.dummy],
-        }),
-        Err(error) => Err(norm_msg(&format!("{error:#}"))),
-    };
+    let contract_error = native_element::decode_base(body, ctx.registry)
+        .err()
+        .map(|error| norm_msg(&format!("{error:#}")));
     let mut rec = Rec {
         partition,
         class,
         graph_error: None,
         id_agrees: None,
-        base,
+        contract_error,
+        base: Err("graph refused".to_string()),
+        raw_graph_error: None,
         metadata_error: None,
         params: Vec::new(),
         objects: Vec::new(),
@@ -611,8 +648,16 @@ fn decode_record(ctx: &Ctx<'_>, id: u64, partition: u32, body: &[u8]) -> Rec {
         &GraphLimits::default(),
         ctx.es,
     ) {
-        Err(error) => rec.graph_error = Some(norm_msg(&format!("{error:#}"))),
+        Err(error) => {
+            let raw = format!("{error:#}");
+            rec.graph_error = Some(norm_msg(&raw));
+            rec.raw_graph_error = Some(raw.chars().take(300).collect());
+        }
         Ok((graph, _usage)) => {
+            rec.base = match graph.objects.first() {
+                Some(root) => base_from_graph(root),
+                None => Err("no root".to_string()),
+            };
             rec.id_agrees = graph.objects.first().map(|root| {
                 owner_id(&root.fields).is_some_and(|named| u64::try_from(named).ok() == Some(id))
             });
@@ -678,6 +723,12 @@ impl Walk {
         }
         for layout in &grouping.declared {
             stats.layouts.entry(*layout).or_default().declared += 1;
+        }
+        for layout in &grouping.counted {
+            stats.layouts.entry(*layout).or_default().counted += 1;
+        }
+        for layout in &grouping.trailer {
+            stats.layouts.entry(*layout).or_default().trailer += 1;
         }
         let usual = if source.channel == 101 { 0 } else { 4 };
         let narrow = Layout {
@@ -858,6 +909,18 @@ fn preamble(rf: &mut RevitFile, out: &Out) -> Option<Pre> {
             Some(class) => out.line(format!("shape {name} {}", describe_class(&registry, class))),
             None => out.line(format!("shape {name} absent")),
         }
+    }
+    for class in registry
+        .classes
+        .iter()
+        .filter(|c| c.fields.iter().any(|f| f.name == "m_fieldTypeName"))
+        .take(4)
+    {
+        out.line(format!(
+            "shape {} {}",
+            class.name,
+            describe_class(&registry, class)
+        ));
     }
     let record = registry
         .named("ElemTable")
@@ -1152,10 +1215,12 @@ fn report_framing(out: &Out, walk: &Walk, expected_width: usize) {
         let mut layouts = Vec::new();
         for (layout, hits) in &stats.layouts {
             layouts.push(format!(
-                "{}={}/{}",
+                "{}={}/{}/{}/{}",
                 layout.name(),
                 hits.framed,
-                hits.declared
+                hits.declared,
+                hits.counted,
+                hits.trailer
             ));
         }
         let kinds: Vec<String> = stats
@@ -1164,7 +1229,7 @@ fn report_framing(out: &Out, walk: &Walk, expected_width: usize) {
             .map(|(k, n)| format!("{k}={n}"))
             .collect();
         out.line(format!(
-            "framing channel={channel} {kind} expected_id_width={expected_width} groups={} records={} bytes={} both_widths={} choice {} layouts framed/declared {}",
+            "framing channel={channel} {kind} expected_id_width={expected_width} groups={} records={} bytes={} both_widths={} choice {} layouts framed/declared/count_agrees/body_plus_4_per_record_agrees {}",
             stats.groups,
             stats.records,
             stats.bytes,
@@ -1197,12 +1262,15 @@ struct Summary {
     id_disagrees: usize,
     base_ok: usize,
     base_id_agrees: usize,
+    contract_ok: usize,
+    phased: usize,
+    leveled: usize,
+    contract_errors: Tally,
     metadata_ok: usize,
     parameter_records: usize,
     parameters: usize,
     graph_errors: Tally,
     graph_error_classes: Tally,
-    base_errors: Tally,
     metadata_errors: Tally,
 }
 
@@ -1227,23 +1295,30 @@ fn report_records(
             }
             Some(message) => {
                 bump(&mut sum.graph_errors, message.clone(), || {
-                    format!("id {id} {}", rec.class)
+                    format!(
+                        "id {id} {}: {}",
+                        rec.class,
+                        rec.raw_graph_error.as_deref().unwrap_or_default()
+                    )
                 });
                 bump(&mut sum.graph_error_classes, rec.class.clone(), || {
                     format!("id {id} {message}")
                 });
             }
         }
-        match &rec.base {
-            Ok(base) => {
-                sum.base_ok += 1;
-                if u64::try_from(base.id).ok() == Some(*id) {
-                    sum.base_id_agrees += 1;
-                }
-            }
-            Err(message) => bump(&mut sum.base_errors, message.clone(), || {
+        match &rec.contract_error {
+            None => sum.contract_ok += 1,
+            Some(message) => bump(&mut sum.contract_errors, message.clone(), || {
                 format!("id {id} {}", rec.class)
             }),
+        }
+        if let Ok(base) = &rec.base {
+            sum.base_ok += 1;
+            if u64::try_from(base.id).ok() == Some(*id) {
+                sum.base_id_agrees += 1;
+            }
+            sum.phased += usize::from(base.ids[4] != -1);
+            sum.leveled += usize::from(base.ids[0] != -1);
         }
         if rec.graph_error.is_none() {
             match &rec.metadata_error {
@@ -1272,10 +1347,13 @@ fn report_records(
         sum.id_disagrees
     ));
     out.line(format!(
-        "element base: ok={} refused={} id_agrees={}",
-        sum.base_ok,
-        sum.records - sum.base_ok,
-        sum.base_id_agrees
+        "element base contract (native_element::decode_base): ok={} refused={}",
+        sum.contract_ok,
+        sum.records - sum.contract_ok
+    ));
+    out.line(format!(
+        "element base from the graph: ok={} id_agrees={} created_phase_set={} associated_level_set={}",
+        sum.base_ok, sum.base_id_agrees, sum.phased, sum.leveled
     ));
     out.line(format!(
         "saved parameters: metadata_ok={} metadata_refused={} records_with_parameters={} parameters={}",
@@ -1286,10 +1364,10 @@ fn report_records(
     ));
     print_top(out, "graph refused", &sum.graph_errors);
     print_top(out, "graph refused class", &sum.graph_error_classes);
-    print_top(out, "element base refused", &sum.base_errors);
+    print_top(out, "element base contract refused", &sum.contract_errors);
     print_top(out, "saved parameters refused", &sum.metadata_errors);
     print_examples(out, "graph refused", &sum.graph_errors);
-    print_examples(out, "element base refused", &sum.base_errors);
+    print_examples(out, "element base contract refused", &sum.contract_errors);
     print_examples(out, "saved parameters refused", &sum.metadata_errors);
 }
 
