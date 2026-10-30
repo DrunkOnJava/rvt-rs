@@ -14,7 +14,10 @@
 # rule, with the walls it is wrong on as a count, the export's version, the
 # census of its wall representations, the hours between its save and its
 # export and the railing rules' counts), the count lines a probe prints for
-# such a model (`type refs:` and `type copies:`, RE-253) and
+# such a model (`type refs:` and `type copies:`, RE-253), the `native framing:`
+# lines of probe_re280_native_framing_pre2023 (RE-280: counts, schema class and
+# field names and normalised error text, in a restricted alphabet; its JSON
+# example lines, which carry ElementIds, are dropped) and
 # of its quantity census (the totals and each quantity's counts, the walls it
 # counts apart for their two lengths (RE-252), and for each value that
 # differs only the quantity and rvt-rs's value over Revit's), of
@@ -39,6 +42,7 @@ for dir in "$RESULTS"/holdout-*/ "$RESULTS"/bimcollab-*/; do
     for f in "$dir"probe.txt "$dir"probe-*.txt; do
       [ -f "$f" ] || continue
       grep -E '^type (refs|copies): [A-Za-z ,;:()-]+[0-9][0-9A-Za-z ,;:()-]*$' "$f" || true
+      grep -E '^native framing: [A-Za-z0-9 _:.,;()=#<>/+-]+$' "$f" || true
     done
     for f in "$dir"qtos_vs_ifc*.txt; do
       [ -f "$f" ] || continue
