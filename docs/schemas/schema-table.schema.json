@@ -192,15 +192,10 @@
             "ElementIdRef": {
               "type": "object",
               "required": [
-                "referenced_tag",
-                "sub"
+                "referenced_tag"
               ],
               "properties": {
                 "referenced_tag": {
-                  "type": "integer",
-                  "minimum": 0
-                },
-                "sub": {
                   "type": "integer",
                   "minimum": 0
                 }
