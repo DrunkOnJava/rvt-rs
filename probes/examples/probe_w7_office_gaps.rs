@@ -56,7 +56,7 @@ fn flatten(prefix: &str, value: &Value, depth: usize, out: &mut Map<String, Valu
     }
 }
 
-fn main() -> rvt::Result<()> {
+fn main() -> anyhow::Result<()> {
     let path = std::env::args().nth(1).expect("usage: MODEL.rvt");
     let mut rf = RevitFile::open(&path)?;
     let version = rf.basic_file_info()?.version;
