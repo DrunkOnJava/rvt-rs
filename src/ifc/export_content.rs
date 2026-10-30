@@ -903,6 +903,13 @@ pub fn append_typed_production_elements(
             &decoded,
             extrusion.as_ref().filter(|_| solid_shape.is_none()),
         );
+        add_wall_areas_and_volumes(
+            &mut reference_sets,
+            &ifc_type,
+            &decoded,
+            extrusion.as_ref().filter(|_| solid_shape.is_none()),
+            property_set.as_ref(),
+        );
         add_curtain_wall_length(&mut reference_sets, &ifc_type, &decoded);
         add_body_quantities(
             &mut reference_sets,
@@ -2627,6 +2634,95 @@ fn add_wall_height(
             properties: vec![property],
         }),
     }
+}
+
+/// Add a wall's `Qto_WallBaseQuantities` `GrossSideArea`, `NetSideArea`,
+/// `GrossVolume` and `NetVolume` to `sets`, where its native record holds no
+/// step that cuts, embeds or sweeps it
+/// ([`crate::partition_schema_mvp::WALL_WHOLE_FIELD`]) and no roof or floor
+/// joined to it, and its body is its record box cut back at its joins
+/// (`partition_element_record_join_trimmed`), a plain rectangle.
+/// revit-ifc's `PropertyUtil.CreateWallBaseQuantities` (CLEANROOM.md source 5)
+/// takes the side areas from the largest vertical face of the wall's solid,
+/// `NetVolume` from the solid's volume and `GrossVolume` as the wall type's
+/// width times the side area. On a rectangular prism those are the longer
+/// side's area, the rectangle's area times the height, and the width times
+/// that side's area: Revit's on all 97 of the BIM4LCA office's such walls
+/// (49 as built, 48 at building permit) and 91 of puzzbobb's R2025 walls, and
+/// Revit's export writes all four on each (RE-270). Nothing on any other wall,
+/// whose solid may be cut, staircased or open (#1046).
+fn add_wall_areas_and_volumes(
+    sets: &mut [PropertySet],
+    ifc_type: &str,
+    decoded: &DecodedElement,
+    extrusion: Option<&Extrusion>,
+    property_set: Option<&PropertySet>,
+) {
+    if !matches!(ifc_type, "IFCWALL" | "IFCWALLSTANDARDCASE") {
+        return;
+    }
+    let flagged = |wanted: &str| {
+        decoded
+            .fields
+            .iter()
+            .any(|(name, value)| name == wanted && matches!(value, InstanceField::Bool(true)))
+    };
+    let boxed = property_set.is_some_and(|set| {
+        set.properties.iter().any(|property| {
+            property.name == "BodySource"
+                && matches!(&property.value, PropertyValue::Text(source)
+                    if source == crate::element_record_wall_joins::WALL_BODY_JOIN_TRIMMED)
+        })
+    });
+    if !(flagged(crate::partition_schema_mvp::WALL_UNCUT_FIELD)
+        && flagged(crate::partition_schema_mvp::WALL_WHOLE_FIELD)
+        && boxed)
+    {
+        return;
+    }
+    let Some(body) = extrusion.filter(|body| body.profile_override.is_none()) else {
+        return;
+    };
+    let Some(set) = sets
+        .iter_mut()
+        .find(|set| set.name == "Qto_WallBaseQuantities")
+    else {
+        return;
+    };
+    let Some(width) = set
+        .properties
+        .iter()
+        .find_map(|property| match &property.value {
+            PropertyValue::PositiveLengthFeet(width) if property.name == "Width" => Some(*width),
+            _ => None,
+        })
+    else {
+        return;
+    };
+    let sizes = [body.width_feet, body.depth_feet, body.height_feet, width];
+    if !sizes.iter().all(|size| size.is_finite() && *size > 0.0) {
+        return;
+    }
+    let side = body.width_feet.max(body.depth_feet) * body.height_feet;
+    let volume = body.width_feet * body.depth_feet * body.height_feet;
+    set.properties.extend([
+        Property {
+            name: "GrossSideArea".into(),
+            value: PropertyValue::AreaSquareFeet(side),
+        },
+        Property {
+            name: "NetSideArea".into(),
+            value: PropertyValue::AreaSquareFeet(side),
+        },
+        Property {
+            name: "GrossVolume".into(),
+            value: PropertyValue::VolumeCubicFeet(width * side),
+        },
+        Property {
+            name: "NetVolume".into(),
+            value: PropertyValue::VolumeCubicFeet(volume),
+        },
+    ]);
 }
 
 /// Add `Span` (`IfcPositiveLengthMeasure`) to a curtain mullion's

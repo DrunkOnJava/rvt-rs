@@ -521,6 +521,7 @@ pub(super) fn attach_wall_layers(
         top_joined,
         uncut,
         top_cutters,
+        whole,
     } = if centreline_bodies {
         let ids: BTreeSet<u64> = wall_ids.iter().map(|&id| u64::from(id)).collect();
         crate::native_walls::native_walls_and_top_joins(rf, &ids).unwrap_or_default()
@@ -552,6 +553,10 @@ pub(super) fn attach_wall_layers(
                 wall.fields
                     .push((WALL_TOP_CUTTERS_FIELD.into(), InstanceField::Vector(items)));
             }
+        }
+        if wall.id.is_some_and(|id| whole.contains(&u64::from(id))) {
+            wall.fields
+                .push((WALL_WHOLE_FIELD.into(), InstanceField::Bool(true)));
         }
         let picked = wall.fields.iter().find_map(|(name, value)| match value {
             InstanceField::ElementId { id, .. } if name == TYPE_ID_FIELD => Some(u64::from(*id)),

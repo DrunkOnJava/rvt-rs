@@ -673,6 +673,10 @@ pub const WALL_UNCUT_FIELD: &str = "m_wall_uncut";
 /// roofs and footings the export may cut its top at.
 pub const WALL_TOP_CUTTERS_FIELD: &str = "m_wall_top_cutters";
 
+/// Field set on a wall whose native record holds no step that cuts, embeds or
+/// sweeps its solid ([`crate::native_walls::WallRecords::whole`], RE-270).
+pub const WALL_WHOLE_FIELD: &str = "m_wall_whole";
+
 /// Field carrying the name of the phase an element was created in
 /// ([`crate::partition_phases`], #755).
 pub const PHASE_CREATED_FIELD: &str = "m_phase_created";
