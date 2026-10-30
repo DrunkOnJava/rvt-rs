@@ -88,6 +88,25 @@ under those limits, so a small file reaches the same path. The browser test
 `tests/large-model-retry.spec.ts` opens the tier-1 fixture at
 `/?maxStreamBytes=200`, which stops its 236-byte BasicFileInfo, and retries.
 
+## Doors and windows from saved meshes
+
+The doors and windows of Revit 2023 to 2027 files are drawn from the meshes
+Revit saved for them, where the whole mesh decodes, as `rvt-ifc` and
+`rvt-gltf` draw them by default; the others keep their bounding box. File
+status has a "Draw doors and windows from saved meshes" option, on by default.
+Changing it reopens the open file with `savedMeshes` in the options of
+`openRvtBytesWithDiagnosticsModeAndOpenLimits`, and `?savedMeshes=0` in the
+address starts with it off (for every file, until the option is turned on).
+The Shapes row says how many bodies came from saved meshes.
+
+Reading the saved graphics is a second pass over the file, so it costs time
+and memory. `tests/saved-meshes-measure.spec.ts` opens each reference model
+with the option on and off in a fresh browser context and writes the load time,
+the wasm memory after the load and the number of bodies drawn from saved meshes
+to `measurements/saved-meshes.json`; Deploy viewer runs it and uploads the
+file. Run it with `RVT_VIEWER_MEASURE=1 pnpm exec playwright test`; the
+reference models are read from `_project_corpus/Revit`.
+
 ## Architecture
 
 ```text

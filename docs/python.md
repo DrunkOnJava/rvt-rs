@@ -103,8 +103,8 @@ Every signature below is verified against
 ```text
 rvt.__version__  # str — same as the Rust crate version (Cargo.toml)
 
-rvt.rvt_to_ifc(path: str, mode: str = "scaffold") -> str
-rvt.rvt_to_ifc_diagnostics(path: str) -> str
+rvt.rvt_to_ifc(path: str, mode: str = "scaffold", allow_partial: bool = False, saved_meshes: bool = True) -> str
+rvt.rvt_to_ifc_diagnostics(path: str, saved_meshes: bool = True) -> str
 rvt.read_metadata(path: str, redact: bool = False) -> dict
 ```
 
@@ -125,17 +125,18 @@ It raises `FileNotFoundError` / `OSError` on I/O failure and `ValueError`
 when the file is not a readable Revit file. `redact=True` scrubs the user
 name and Windows user folders.
 
-`rvt_to_ifc(path, mode="scaffold", allow_partial=False)` opens the file,
-runs the document-level IFC4 exporter (`ifc::RvtDocExporter`), and returns
-the IFC4 STEP text. Equivalent to
-`rvt.RevitFile(path).write_ifc(mode=mode, allow_partial=allow_partial)`.
+`rvt_to_ifc(path, mode="scaffold", allow_partial=False, saved_meshes=True)`
+opens the file, runs the document-level IFC4 exporter
+(`ifc::RvtDocExporter`), and returns the IFC4 STEP text, the same file
+`rvt-ifc` writes. Equivalent to
+`rvt.RevitFile(path).write_ifc(mode=mode, allow_partial=allow_partial, saved_meshes=saved_meshes)`.
 Raises `IOError` on open failure, `ValueError` if the file parses as CFB
 but the exporter can't build a model, the requested export mode cannot be
 satisfied, or a resource limit kept part of the file from being read and
 `allow_partial` is false.
 
-`rvt_to_ifc_diagnostics(path)` returns the JSON diagnostics sidecar
-for the same export path. The schema matches `rvt-ifc --diagnostics`
+`rvt_to_ifc_diagnostics(path, saved_meshes=True)` returns the JSON
+diagnostics sidecar for the same export path. The schema matches `rvt-ifc --diagnostics`
 and is documented in [`docs/export-diagnostics.md`](export-diagnostics.md);
 the machine-readable contract is
 [`docs/schemas/export-diagnostics.schema.json`](schemas/export-diagnostics.schema.json).
@@ -342,7 +343,7 @@ Field kinds:
 ```text
 decoded_elements(self) -> list[dict]
 element_counts(self) -> dict
-export_diagnostics(self) -> dict
+export_diagnostics(self, saved_meshes: bool = True) -> dict
 ```
 
 `decoded_elements()` returns production-walker elements. Each entry
@@ -363,8 +364,8 @@ CLI mirror: `rvt-elements file.rvt --counts`.
 export diagnostics sidecar (same payload as `rvt-ifc --diagnostics`).
 
 ```text
-write_ifc(self, mode: str = "scaffold", allow_partial: bool = False) -> str
-export_diagnostics_json(self) -> str
+write_ifc(self, mode: str = "scaffold", allow_partial: bool = False, saved_meshes: bool = True) -> str
+export_diagnostics_json(self, saved_meshes: bool = True) -> str
 ```
 Produce an IFC4 STEP string via `ifc::RvtDocExporter`, the same
 exporter `rvt-ifc` runs. On Revit 2023, 2024 and 2025 projects it writes
@@ -374,6 +375,15 @@ typed elements with bodies, storeys, types and materials (on
 family files, the spatial scaffold. What each release
 recovers is in [`status.md`](status.md). Raises `ValueError` if the file
 can't be parsed far enough to build a model.
+
+Doors and windows of Revit 2023 to 2027 files are drawn from the meshes
+Revit saved for them where all of a mesh decodes, as `rvt-ifc` draws them
+by default; `saved_meshes=False` keeps their bounding boxes, as
+`rvt-ifc --no-saved-meshes` does. When the saved graphics cannot be read,
+the export keeps the bounding boxes and a `RuntimeWarning` says so.
+`export_diagnostics()`, `export_diagnostics_json()` and
+`rvt_to_ifc_diagnostics()` take the same `saved_meshes` and describe the
+export it gives.
 
 `mode` is one of `scaffold`, `typed-no-geometry`, `geometry`, or
 `strict`. `scaffold` accepts the historical spec-valid framework

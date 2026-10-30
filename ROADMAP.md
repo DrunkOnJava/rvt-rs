@@ -130,7 +130,8 @@ the four levels a file can reach are in the
 - **0.11.0, 2026-10-30.** A model over the reader's resource limits is
   reported instead of exporting empty, with `--large-model` and a viewer
   retry (#1075); files that kept an older release's schema read as that
-  release (puzzbobb, #421); elements outside the export phase left out
+  release (puzzbobb, #421), neither measured yet on the reporter's private
+  files; elements outside the export phase left out
   (puzzbobb, #328); doors and windows drawn from their saved meshes by
   default; windows' openings from their cut solids; walls' `Height` where
   nothing joins or cuts them; Revit 2008 to 2014 experimental (puzzbobb);
