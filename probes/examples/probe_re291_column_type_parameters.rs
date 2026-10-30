@@ -30,6 +30,9 @@ use rvt::research::partition_schema_mvp::{
 use rvt::research::partition_type_parameters::partition_length_entries;
 use rvt::walker::{DecodedElement, InstanceField, WalkerLimits};
 
+/// A column type's name, its columns' ElementIds and the sides of the first one's record box.
+type TypeColumns = (String, Vec<u32>, [Option<f64>; 2]);
+
 fn text(element: &DecodedElement, wanted: &str) -> Option<String> {
     element.fields.iter().find_map(|(name, value)| match value {
         InstanceField::String(text) if name == wanted => Some(text.clone()),
@@ -53,7 +56,7 @@ fn main() -> anyhow::Result<()> {
     let mut rf = RevitFile::open(&path)?;
     let version = rf.basic_file_info()?.version;
     let mvp = recover_partition_schema_mvp(&mut rf, version, WalkerLimits::default())?;
-    let mut by_type: BTreeMap<u32, (String, Vec<u32>, [Option<f64>; 2])> = BTreeMap::new();
+    let mut by_type: BTreeMap<u32, TypeColumns> = BTreeMap::new();
     for element in mvp.columns.iter().chain(mvp.products.iter()) {
         if !matches!(element.class.as_str(), "Column" | "StructuralColumn") {
             continue;
