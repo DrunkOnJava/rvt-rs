@@ -487,6 +487,13 @@ function maybeShowScaffoldNote(diagnostics: ExportDiagnostics): void {
     hideScaffoldNote();
     return;
   }
+  if (unreadStreamCount(diagnostics) > 0) {
+    scaffoldNoteBodyEl.textContent = largeModelRetryOffered(diagnostics)
+      ? 'Part of the file was not read, so the model is missing what those streams hold. The File status panel can retry with large-model limits.'
+      : 'Part of the file was not read even with the large-model limits, so the model is missing what those streams hold.';
+    scaffoldNoteEl.classList.remove('hidden');
+    return;
+  }
   const level = diagnostics.confidence?.level ?? 'unknown';
   const score = diagnostics.confidence?.score;
   const pct = typeof score === 'number' ? ` at ${Math.round(score * 100)}% confidence` : '';
@@ -729,9 +736,67 @@ function selectedExportMode(): string {
   return exportModeEl.value || 'scaffold';
 }
 
+// ---------- Resource limits (#1075) ----------
+/**
+ * The reader's resource limits for one open, as the wasm binding
+ * `openRvtBytesWithDiagnosticsModeAndOpenLimits` takes them: absent fields
+ * keep the defaults, `largeModel` is `rvt-ifc --large-model`, and an
+ * explicit byte limit wins over it.
+ */
+interface OpenLimitsOptions {
+  largeModel?: boolean;
+  maxStreamBytes?: number;
+  maxInflateBytes?: number;
+}
+
+/** The limits the "Retry with large-model limits" button reopens the file with. */
+const LARGE_MODEL_LIMITS: OpenLimitsOptions = { largeModel: true };
+
+/** How each export warning about a stream not read whole begins (rvt::ifc::record_unread_streams). */
+const UNREAD_STREAM_WARNING = 'Not read whole: ';
+
+function wholeBytesParam(params: URLSearchParams, name: string): number | undefined {
+  const raw = params.get(name);
+  if (raw === null || !/^\d+$/.test(raw)) return undefined;
+  const bytes = Number(raw);
+  return Number.isSafeInteger(bytes) ? bytes : undefined;
+}
+
+/**
+ * `?maxStreamBytes=` and `?maxInflateBytes=` open the first file under those
+ * limits instead of the defaults, so a small file can reach the "Part of the
+ * file not read" path the way a client model over 256 MiB does. The browser
+ * test uses it on the 20 KiB tier-1 fixture, whose 236-byte BasicFileInfo a
+ * 200-byte stream limit stops. Anything else in the query is ignored.
+ */
+function limitsFromQuery(): OpenLimitsOptions | undefined {
+  const params = new URLSearchParams(window.location.search);
+  const limits: OpenLimitsOptions = {};
+  const maxStreamBytes = wholeBytesParam(params, 'maxStreamBytes');
+  if (maxStreamBytes !== undefined) limits.maxStreamBytes = maxStreamBytes;
+  const maxInflateBytes = wholeBytesParam(params, 'maxInflateBytes');
+  if (maxInflateBytes !== undefined) limits.maxInflateBytes = maxInflateBytes;
+  return Object.keys(limits).length > 0 ? limits : undefined;
+}
+
+/** Limits for the first open only; the query describes that file, not every later one. */
+let firstOpenLimits: OpenLimitsOptions | undefined = limitsFromQuery();
+/** The file now open, kept so the large-model retry can read it again. */
+let currentFile: File | null = null;
+/** The limits it was opened under; undefined means the defaults. */
+let currentOpenLimits: OpenLimitsOptions | undefined;
+
 // ---------- Load flow ----------
-async function loadBytes(file: File): Promise<void> {
-  setStatus(`Reading ${formatBytes(file.size)}…`);
+async function loadBytes(file: File, limits?: OpenLimitsOptions): Promise<void> {
+  const openLimits = limits ?? firstOpenLimits;
+  firstOpenLimits = undefined;
+  currentFile = file;
+  currentOpenLimits = openLimits;
+  setStatus(
+    openLimits?.largeModel
+      ? `Reopening ${file.name} with large-model limits…`
+      : `Reading ${formatBytes(file.size)}…`,
+  );
   startLoadOverlay(file);
   hideScaffoldNote();
   model = null;
@@ -828,14 +893,19 @@ async function loadBytes(file: File): Promise<void> {
       return;
     }
     if (msg.type === 'error') {
+      // The large-model limits stop at the tab's memory, not at a limit the
+      // reader can lift, so say what the failure most likely is.
+      const detail = openLimits?.largeModel
+        ? `${msg.message} A browser tab can use at most 4 GiB of memory, so this file may be too large to open here.`
+        : msg.message;
       stopLoadOverlay();
       clearDemoCardBusy();
-      setStatus(`Error: ${msg.message}`);
-      renderErrorStatusPanel(msg.message);
+      setStatus(`Error: ${detail}`);
+      renderErrorStatusPanel(detail);
       hideScaffoldNote();
       setDropzoneVisible(true);
       setExportHint('Open a file to export');
-      toast(`Could not open ${file.name}. ${msg.message}`, 'bad');
+      toast(`Could not open ${file.name}. ${detail}`, 'bad');
       return;
     }
     model = msg.model;
@@ -870,7 +940,7 @@ async function loadBytes(file: File): Promise<void> {
     const elapsed = Math.max(1, Math.round((performance.now() - loadStartedAt) / 1000));
     toast(`Loaded ${file.name} · ${msg.types.length} categories · ${elapsed} s`, 'ok');
   });
-  w.postMessage({ type: 'parse', bytes, mode: qualityMode }, [bytes.buffer]);
+  w.postMessage({ type: 'parse', bytes, mode: qualityMode, limits: openLimits }, [bytes.buffer]);
 }
 
 function renderEmptyStatusPanel(): void {
@@ -2310,6 +2380,7 @@ function renderStatusPanel(diagnostics: ExportDiagnostics): void {
   statusPanelEl.appendChild(
     statusRow('Mode', failureMode.kind, `${failureMode.title} · ${failureMode.summary}`),
   );
+  if (largeModelRetryOffered(diagnostics)) statusPanelEl.appendChild(largeModelRetryRow());
   statusPanelEl.appendChild(
     statusRow(
       'Schema',
@@ -2506,6 +2577,46 @@ interface FailureModeStatus {
   summary: string;
 }
 
+/** Streams a resource limit kept from being read whole (#1075): one warning each. */
+function unreadStreamCount(diagnostics: ExportDiagnostics): number {
+  const warnings = diagnostics.warnings ?? [];
+  return warnings.filter((warning) => warning.startsWith(UNREAD_STREAM_WARNING)).length;
+}
+
+/** True while raising the limits is still untried: the file was not opened under the large-model ones. */
+function largeModelRetryOffered(diagnostics: ExportDiagnostics): boolean {
+  const untried = currentFile !== null && !currentOpenLimits?.largeModel;
+  return untried && unreadStreamCount(diagnostics) > 0;
+}
+
+/**
+ * The retry offered under the Mode row when streams were not read: it reopens
+ * the same file with the limits `rvt-ifc --large-model` uses, and says what the
+ * browser cannot lift.
+ */
+function largeModelRetryRow(): HTMLElement {
+  const row = document.createElement('div');
+  row.className = 'status-action';
+  row.style.setProperty('--row-i', String(Math.min(statusRowIndex, 8)));
+  statusRowIndex += 1;
+  const note = document.createElement('p');
+  note.id = 'large-model-note';
+  note.textContent =
+    'Retrying reads those streams with the limits rvt-ifc --large-model uses: streams up to 2 GiB. A browser tab can use at most 4 GiB of memory, so a very large model can still fail to open.';
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.id = 'retry-large-model';
+  button.className = 'side-btn';
+  button.textContent = 'Retry with large-model limits';
+  button.setAttribute('aria-describedby', note.id);
+  button.addEventListener('click', () => {
+    if (currentFile) void loadBytes(currentFile, LARGE_MODEL_LIMITS);
+  });
+  row.appendChild(note);
+  row.appendChild(button);
+  return row;
+}
+
 function classifyFailureMode(diagnostics: ExportDiagnostics): FailureModeStatus {
   const input = diagnostics.input ?? {};
   const decoded = diagnostics.decoded ?? {};
@@ -2521,12 +2632,15 @@ function classifyFailureMode(diagnostics: ExportDiagnostics): FailureModeStatus 
 
   // #1075: a stream over the reader's resource limits was not read, so the
   // model is missing what it holds, however many elements came through.
-  const unreadStreams = warnings.filter((warning) => warning.startsWith('Not read whole: ')).length;
+  const unreadStreams = unreadStreamCount(diagnostics);
   if (unreadStreams > 0) {
+    const streams = `${unreadStreams} stream${unreadStreams === 1 ? '' : 's'}`;
     return {
       kind: 'bad',
       title: 'Part of the file not read',
-      summary: `${unreadStreams} stream${unreadStreams === 1 ? '' : 's'} over the browser's resource limits, so the model is incomplete; rvt-ifc --large-model reads it`,
+      summary: largeModelRetryOffered(diagnostics)
+        ? `${streams} over the browser's resource limits, so the model is incomplete`
+        : `${streams} still over the large-model limits, so the model is incomplete; rvt-ifc --large-model on a desktop inflates up to 8 GiB`,
     };
   }
   // The releases rvt-rs reads, 2015 to 2022 and 2027 experimentally, as rvt-inspect has it.

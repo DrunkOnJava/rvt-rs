@@ -4,7 +4,10 @@
  * when a family file has tens of thousands of instances.
  *
  * Protocol:
- *   main → worker: { type: 'parse', bytes: Uint8Array, mode?: string }
+ *   main → worker: { type: 'parse', bytes: Uint8Array, mode?: string,
+ *                    limits?: OpenLimitsOptions }
+ *                  `limits` are the reader's resource limits; absent means the
+ *                  defaults (the large-model retry sends `largeModel: true`).
  *   main → worker: { type: 'info', index: number }
  *   worker → main: { type: 'progress', step: string }
  *   worker → main: { type: 'summary', summary, document } (VW1-20 partial;
@@ -16,7 +19,7 @@
 
 import init, {
   elementInfoPanel,
-  openRvtBytesWithDiagnosticsMode,
+  openRvtBytesWithDiagnosticsModeAndOpenLimits,
   buildSceneGraph,
   modelToGlb,
   distinctIfcTypes,
@@ -25,8 +28,14 @@ import init, {
   quickSummary,
 } from '../pkg/rvt.js';
 
+interface OpenLimitsOptions {
+  largeModel?: boolean;
+  maxStreamBytes?: number;
+  maxInflateBytes?: number;
+}
+
 type ParseMsg =
-  | { type: 'parse'; bytes: Uint8Array; mode?: string }
+  | { type: 'parse'; bytes: Uint8Array; mode?: string; limits?: OpenLimitsOptions }
   | { type: 'info'; index: number };
 
 // Retained so `info` requests can re-run element_info_panel (host /
@@ -81,8 +90,13 @@ self.addEventListener('message', async (ev: MessageEvent<ParseMsg>) => {
     send({ type: 'summary', summary: quickSummary(msg.bytes), document });
 
     const qualityMode = (msg.mode ?? 'scaffold').trim() || 'scaffold';
-    send({ type: 'progress', step: `Parsing container · IFC bar ${qualityMode}` });
-    const exportResult = openRvtBytesWithDiagnosticsMode(msg.bytes, qualityMode) as {
+    const limitsNote = msg.limits?.largeModel ? ' · large-model limits' : '';
+    send({ type: 'progress', step: `Parsing container · IFC bar ${qualityMode}${limitsNote}` });
+    const exportResult = openRvtBytesWithDiagnosticsModeAndOpenLimits(
+      msg.bytes,
+      qualityMode,
+      msg.limits ?? null,
+    ) as {
       model: unknown;
       diagnostics: unknown;
     };

@@ -283,7 +283,7 @@ let svg = render_plan_svg(&model, &SheetOptions::default());
 
 ## The JavaScript bindings
 
-`rvt-wasm/src/lib.rs` exports these 11 functions through `wasm-bindgen`, and
+`rvt-wasm/src/lib.rs` exports these 12 functions through `wasm-bindgen`, and
 `wasm-pack` builds them into `viewer/pkg/`. They are the wasm API that 1.0
 keeps stable (`RELEASE.md`, "What 1.0 keeps stable"): CI fails a pull request
 that removes or renames one, removes, moves or retypes a parameter, adds one
@@ -300,6 +300,7 @@ describing the error.
 | Binding | Arguments | Returns | What it does |
 |---|---|---|---|
 | `openRvtBytesWithDiagnosticsMode` | `bytes`, `mode: string` | `{ model, diagnostics }` | The same at an export quality mode: `scaffold`, `typed-no-geometry`, `geometry` or `strict`, the stronger ones failing when the file cannot meet them |
+| `openRvtBytesWithDiagnosticsModeAndOpenLimits` | `bytes`, `mode: string`, `limits: { largeModel?, maxStreamBytes?, maxInflateBytes? }` or `null` | `{ model, diagnostics }` | `openRvtBytesWithDiagnosticsMode` under the reader's resource limits: `largeModel` is `rvt-ifc --large-model` (streams up to 2 GiB, inflating up to the 4 GiB wasm32 holds, the walker's scan cap lifted to match), `maxStreamBytes` and `maxInflateBytes` are whole numbers of bytes that win over it, and a field left out keeps its default. A stream a limit stops is listed in the diagnostics (`stream_not_read_resource_limit`, a `Not read whole:` warning each) and the viewer offers "Retry with large-model limits"; unknown fields and fractional or negative limits throw |
 | `quickSummary` | `bytes` | `Summary` | Release, build, PartAtom and the stream inventory, read without decoding the model |
 | `fileMetadata` | `bytes` | `FileMetadata` | Document identity (release, worksharing, last save, GUID, save counter), from the two identity streams only |
 | `scheduleCsv` | `model`, `kind: string`, `metric: boolean`, `excel: boolean` | `string` | The element (`kind` `"elements"`) or room (`"rooms"`) schedule as CSV, the columns of the [user guide](user-guide.md#get-a-schedule-into-excel) |

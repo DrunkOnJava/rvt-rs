@@ -1096,6 +1096,23 @@ header .export-hint[hidden] {
 .status-row:last-child {
   border-bottom: 0;
 }
+/* The retry under the Mode row when a resource limit kept streams from being read. */
+.status-action {
+  padding: 7px 10px 9px;
+  font-size: var(--sx-fs-xs);
+  line-height: var(--sx-lh-xs);
+  border-bottom: 1px solid var(--sx-color-border-subtle);
+  animation: viewer-enter var(--sx-duration-base) var(--sx-ease-out) both;
+  animation-delay: calc(var(--row-i, 0) * 22ms);
+}
+.status-action p {
+  margin: 0;
+  color: var(--sx-color-dimmed);
+  overflow-wrap: anywhere;
+}
+.status-action .side-btn {
+  margin: 8px 0 0;
+}
 .status-label {
   font-weight: var(--sx-fw-semibold);
   color: var(--sx-color-text);
