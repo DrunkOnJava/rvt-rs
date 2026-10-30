@@ -2534,7 +2534,7 @@ fn add_wall_quantities(sets: &mut Vec<PropertySet>, ifc_type: &str, decoded: &De
 /// revit-ifc's `WallExporter` (CLEANROOM.md source 5) writes the vertical
 /// span of Revit's body, and on those walls the record box rvt-rs extrudes
 /// is that tall: on all 81 of the BIM4LCA office's as built, 70 at building
-/// permit and 73 of puzzbobb's R2025 walls, with Revit writing a `Height` on
+/// permit and 93 of puzzbobb's R2025 walls, with Revit writing a `Height` on
 /// each (RE-266). Nothing on any other wall, whose body may be cut (#1067).
 fn add_wall_height(
     sets: &mut Vec<PropertySet>,

@@ -2,9 +2,9 @@
 
 **Date:** 2026-10-29
 **Issues:** #1016 (quantities), W7 of [`docs/release-1.0-criteria.md`](../../docs/release-1.0-criteria.md); follows RE-257 (a wall's `Height` is the span of Revit's body; rvt-rs's body is taller on 78 office walls, #1067) and RE-251; puzzbobb's measurement of the saved parameter -1001101 on #1016 (2026-10-27)
-**Artefacts:** the BIM4LCA office as built and at building permit (Revit 2024, Revit 24.0.5's IFC4 exports, CC BY-SA 4.0, `research/bim4lca-measure.tsv`) and puzzbobb's R2025 models (Revit 2025, Revit 25.0.2's IFC4 exports, Apache-2.0, `research/r2025-models.tsv`), as Measure fetches them
-**Runs:** Measure [40490349469](https://github.com/DrunkOnJava/rvt-rs/actions/runs/40490349469) (RE-257's probe output, read again by record class) and [40977753002](https://github.com/DrunkOnJava/rvt-rs/actions/runs/40977753002) (this change: `examples/probe_re251_wall_numbers.rs` with `tools/re/wall_height_vs_qtos.py`, and every scorer against main)
-**Result:** positive. On a wall whose native record holds no `JoinToRoofGStep`, no `CutPairGStep` and no `WallCutoutGStep`, the record box rvt-rs extrudes is exactly as tall as Revit's body, and Revit's export writes that as the wall's `Height` on every one: 81 office walls as built, 70 at permit, 73 R2025 walls, none different. rvt-rs now writes it there, and on no other wall.
+**Artefacts:** the BIM4LCA office as built and at building permit (Revit 2024, Revit 24.0.5's IFC4 exports, CC BY-SA 4.0, `research/bim4lca-measure.tsv`) and puzzbobb's R2025 models (Revit 2025, Revit 25.0.2's IFC4 exports, Apache-2.0, `research/r2025-models.tsv`, with `20_T_U_Roof` and the first export of `07_1Slope_ArrowDefined_2Cut50mmFascia` from #885), as Measure fetches them
+**Runs:** Measure [40490349469](https://github.com/DrunkOnJava/rvt-rs/actions/runs/40490349469) (RE-257's probe output, read again by record class) and [40977753002](https://github.com/DrunkOnJava/rvt-rs/actions/runs/40977753002) (this change, 7a635f47, against main at 91076f0b: `examples/probe_re251_wall_numbers.rs` with `tools/re/wall_height_vs_qtos.py`, and every scorer on both sides)
+**Result:** positive. On a wall whose native record holds no `JoinToRoofGStep`, no `CutPairGStep` and no `WallCutoutGStep`, the record box rvt-rs extrudes is exactly as tall as Revit's body, and Revit's export writes that as the wall's `Height` on every one: 81 office walls as built, 70 at permit, 93 R2025 walls, none different. rvt-rs now writes it there, and on no other wall.
 
 ## 1. The three steps
 
@@ -22,14 +22,14 @@ RE-257 found the roof join alone on 77 of the 78 walls rvt-rs draws too tall, bu
 
 | | as built | at permit | R2025 |
 |---|---:|---:|---:|
-| walls rvt-rs draws as an extrusion | 607 | 589 | 117 |
-| depth is Revit's `Height` | 501 | 481 | 117 |
-| record holds none of the three steps | 81 | 70 | 73 |
-| ... depth is Revit's `Height` | 81 | 70 | 73 |
+| walls rvt-rs draws as an extrusion | 607 | 589 | 138 |
+| depth is Revit's `Height` | 501 | 481 | 138 |
+| record holds none of the three steps | 81 | 70 | 93 |
+| ... depth is Revit's `Height` | 81 | 70 | 93 |
 | ... different | 0 | 0 | 0 |
 | ... Revit writes no `Height` | 0 | 0 | 0 |
 
-On those walls the saved parameter -1001101 equals the depth too (81 of 81 as built).
+On all 244 of those walls the saved parameter -1001101 equals the depth too.
 
 ## 3. Why a cutout leaves a wall out
 
@@ -46,9 +46,23 @@ RE-251 and RE-257 called the saved parameter -1001101 the wall's Unconnected Hei
 
 ## 5. What stays unwritten
 
-Every wall with one of the three steps: 420 of the office's 501 right depths as built, 411 of 481 at permit, 44 of the R2025 walls. Where the top is joined, puzzbobb found Revit's `Height` is the attached wall's (higher on the R2025 roofs, lower on 56 of 57 office walls), so it waits on the body Revit cuts (#1067).
+Every wall with one of the three steps: 420 of the office's 501 right depths as built, 411 of 481 at permit, 45 of the 138 R2025 walls. Where the top is joined, puzzbobb found Revit's `Height` is the attached wall's (higher on the R2025 roofs, lower on 56 of 57 office walls), so it waits on the body Revit cuts (#1067).
 
-## 6. Reproduce
+## 6. The export
+
+Against main, every export with a wall the rule takes moves and nothing else does: all 1,179 other scorer outputs are byte-identical. The quantity census (`tools/re/qtos_vs_ifc.py`):
+
+| | equal before | equal after | different | values Revit does not write |
+|---|---:|---:|---:|---:|
+| BIM4LCA office as built | 21,065 | 21,146 | 1 | 0 |
+| at permit | 20,980 | 21,050 | 1 | 0 |
+| R2025 models | 318 | 411 | 0 | 0 |
+
+"Different" and "values Revit does not write" are the same before and after.
+
+Core Interior's and RE1 Architecture's exports were made with base quantities off (RE-242): rvt-rs writes 238 and 4 more there, counted apart.
+
+## 7. Reproduce
 
 ```bash
 gh workflow run measure.yml --ref main -f ref=7a635f47bfd2adaa2a1ac35c4b9d0ddc3c26e7a1 -f base=main -f nordic=true -f r2025=true \

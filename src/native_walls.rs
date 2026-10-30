@@ -256,7 +256,7 @@ pub struct WallRecords {
 /// no element cutting it, no hosted instance's cutout. The record box of
 /// each is as tall as Revit's body, and Revit's export writes its `Height`
 /// on every one: 81 of the BIM4LCA office's walls as built, 70 at building
-/// permit and 73 of puzzbobb's R2025 walls (RE-266).
+/// permit and 93 of puzzbobb's R2025 walls (RE-266).
 pub fn native_walls_and_top_joins(
     rf: &mut RevitFile,
     walls: &BTreeSet<u64>,
