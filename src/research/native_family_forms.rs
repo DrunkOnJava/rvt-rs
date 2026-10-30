@@ -108,9 +108,11 @@ struct Document {
     unread: bool,
 }
 
-/// An ElementId field as `n`, in either shape of the schema.
+/// `{"m_id":{"m_id64":n}}` as `n`.
 fn element_id(value: Option<&serde_json::Value>) -> Option<i64> {
-    value.and_then(crate::native_json::element_id_i64)
+    value
+        .and_then(|v| v.pointer("/m_id/m_id64"))
+        .and_then(serde_json::Value::as_i64)
 }
 
 /// A graph's `FamilyParams` values: parameter ElementId and `m_int`.
