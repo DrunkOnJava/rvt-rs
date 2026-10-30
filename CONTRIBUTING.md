@@ -278,7 +278,7 @@ When you discover something new about the file format:
    the fact it proves and how to check it, with corpus paths taken from
    arguments or the `RVT_*` environment variables, never hardcoded. The
    `probe_re*.rs` files are the pattern. A new reader the probe needs is a
-   research module: put the file in `src/` and declare it in
+   research module: put the file in `src/research/` and declare it in
    `src/research.rs` (not `src/lib.rs`), and the probe imports it as
    `rvt::research::<module>`. Probes, tests and benches build with the
    `unstable-research` feature on; `cargo build` and the published crate do
