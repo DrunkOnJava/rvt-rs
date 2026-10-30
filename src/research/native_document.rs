@@ -40,6 +40,12 @@ pub struct Options {
     /// ([`Record::base`], [`crate::native_element::decode_base`]). That reads
     /// a whole file's phase fields without its graph cost (#328).
     pub graph_classes: Option<BTreeSet<String>>,
+    /// The releases the caller's reader is measured on. A release outside
+    /// [`NATIVE_RELEASES`] is always refused. The default is 2023 to 2027,
+    /// where every reader built on these records was calibrated; a reader
+    /// measured on 2015 to 2022 as well (saved parameters, the phase order:
+    /// RE-280, RE-281) names [`NATIVE_RELEASES`].
+    pub releases: std::ops::RangeInclusive<u32>,
 }
 impl Default for Options {
     fn default() -> Self {
@@ -52,6 +58,7 @@ impl Default for Options {
             max_graph_values: 100_000,
             max_graph_objects: 100_000,
             graph_classes: None,
+            releases: 2023..=2027,
         }
     }
 }
@@ -385,16 +392,25 @@ pub fn extract_graphs(
         emit,
     )
 }
+/// The releases whose native records frame: Revit 2015 to 2027. A record
+/// group frames as Revit 2023 does from 2015 to 2023 (a 4-byte id) and with
+/// an 8-byte id from 2024 (RE-280); earlier releases are not measured.
+/// [`Options::releases`] says which of them a reader is measured on.
+pub const NATIVE_RELEASES: std::ops::RangeInclusive<u32> = 2015..=2027;
+
 /// A record group's records, `(id, offset, body start, body end)`: a
-/// 4-byte (Revit 2023) or 8-byte id, a header, the body and its length
-/// repeated after it. The group's declared object count and body bytes must
-/// agree with what is read.
+/// 4-byte (Revit 2015 to 2023) or 8-byte id, a header, the body and its
+/// length repeated after it. The group's declared object count must equal
+/// the records, and its declared body bytes their bodies', or, on 2015 to
+/// 2017, their bodies plus the 4 bytes of trailing length each carries (all
+/// 12,005 groups of those releases, none of the 15,757 of 2018 to 2022:
+/// RE-280).
 pub(crate) fn group_records(
     source: &GroupSource,
     bytes: &[u8],
     version: u32,
 ) -> Result<Vec<(u64, usize, usize, usize)>> {
-    let id_bytes = if version == 2023 { 4 } else { 8 };
+    let id_bytes = if version <= 2023 { 4 } else { 8 };
     let header = match source.channel {
         101 => id_bytes + 4,
         102 | 103 => id_bytes + 8,
@@ -427,8 +443,11 @@ pub(crate) fn group_records(
         body_sum += length as u64;
         pos = end + 4;
     }
+    let count = records.len() as u64;
     ensure!(
-        records.len() as u64 == source.declared_objects && body_sum == source.declared_body_bytes,
+        count == source.declared_objects
+            && (body_sum == source.declared_body_bytes
+                || (version <= 2017 && body_sum + 4 * count == source.declared_body_bytes)),
         "native group record counts/body sizes disagree"
     );
     Ok(records)
@@ -442,8 +461,12 @@ fn extract_records(
 ) -> Result<Summary> {
     let version = file.layout_release()?;
     ensure!(
-        matches!(version, 2023..=2027),
+        NATIVE_RELEASES.contains(&version),
         "native record framing is unvalidated for Revit {version}"
+    );
+    ensure!(
+        options.releases.contains(&version),
+        "this native reader is not measured on Revit {version}"
     );
     let preamble = file.native_preamble()?;
     let Preamble {
