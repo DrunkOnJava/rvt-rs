@@ -4,7 +4,7 @@
 
 **Written:** 2026-10-23, from the record of #651, because the code cited RE-165 without a report. Nothing was re-measured for this report.
 
-**Evidence:** Measure runs 37211684944 and 37212205913; red run 37212982834 of the real-file target `tests/fitting_nominal_diameter.rs` on draft #649 (42 of 42 RE1 Plumbing fittings without Revit's value); the two readers that failed on the way (run 37214338189, connector records alone, 42 of 42 missing; run 37215748458, parameter pairs alone); green run 37217026749 (42 of 42), as `BACKLOG.md` B44 records. No probe: the target is the check.
+**Evidence:** Measure runs 37211684944 and 37212205913; red run 37212982834 of the real-file target `tests/fitting_nominal_diameter.rs` on draft #649 (42 of 42 RE1 Plumbing fittings without Revit's value); the two readers that failed on the way (run 37214338189, connector records alone, 42 of 42 missing; run 37215748458, parameter pairs alone); green run 37217026749 (42 of 42), as `docs/archive/BACKLOG.md` B44 records. No probe: the target is the check.
 
 **Files:** RE1 Plumbing (`ifc-ecs-re1-plumbing.rvt`, sha256 `03689df2…`) against Revit's IFC2X3 export of it (`ifc-ecs-re1-plumbing.ifc`, `294490b2…`). Full hashes are in `research/witness-registry.json`.
 

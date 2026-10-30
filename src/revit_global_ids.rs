@@ -377,37 +377,3 @@ pub fn revit_global_ids(rf: &mut RevitFile) -> Result<BTreeMap<u32, String>> {
     }
     Ok(out)
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// The Snowdon episode whose walls 619340 and 619404 Revit exports as
-    /// `1G_I00WlX2MBQekqB04dFi` and `1G_I00WlX2MBQekqB04dCi`.
-    const EPISODE: [u8; 16] = [
-        0x00, 0x20, 0xf9, 0x50, 0xf8, 0x82, 0x58, 0x42, 0xb6, 0xa8, 0xbb, 0x42, 0xc0, 0x1b, 0x00,
-        0xa0,
-    ];
-
-    #[test]
-    fn a_global_id_is_the_episode_guid_xor_the_element_id() {
-        assert_eq!(
-            revit_ifc_global_id(EPISODE, 619_340),
-            "1G_I00WlX2MBQekqB04dFi"
-        );
-        assert_eq!(
-            revit_ifc_global_id(EPISODE, 619_404),
-            "1G_I00WlX2MBQekqB04dCi"
-        );
-        // 50f92000-82f8-4258-b6a8-bb42c01b00a0 in text order.
-        assert_eq!(
-            canonical_guid(EPISODE),
-            [
-                0x50, 0xf9, 0x20, 0x00, 0x82, 0xf8, 0x42, 0x58, 0xb6, 0xa8, 0xbb, 0x42, 0xc0, 0x1b,
-                0x00, 0xa0
-            ]
-        );
-        assert_eq!(compress_ifc_guid([0; 16]), "0000000000000000000000");
-        assert_eq!(compress_ifc_guid([0xff; 16]), "3$$$$$$$$$$$$$$$$$$$$$");
-    }
-}

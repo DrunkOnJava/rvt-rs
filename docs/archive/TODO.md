@@ -1,6 +1,7 @@
 # TODO: S-tier rvt-rs
 
-> **Archived decomposition (reconciled 2026-10-03).** Every item below became a
+> **Archived decomposition (reconciled 2026-10-03; moved here from the
+> repository root on 2026-10-30).** Every item below became a
 > GitHub issue (#9 to #68), and each item now names its issue.
 > 59 of 60 are closed. Still open: M4-07 (#35). The plan is the GitHub
 > milestones and issues (see `ROADMAP.md`); this file is kept as the record they

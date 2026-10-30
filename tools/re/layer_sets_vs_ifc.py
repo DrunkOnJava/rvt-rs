@@ -35,7 +35,6 @@ Needs IfcOpenShell (the version tools/ci/requirements-ifc.txt pins).
 """
 
 import collections
-import re
 import sys
 
 import ifcopenshell
@@ -44,20 +43,10 @@ import ifcopenshell.util.element
 import ifcopenshell.util.placement
 import ifcopenshell.util.unit
 
+from ifc_common import report_mesh_error
+
 FEET = 0.3048
 VERBOSE = False
-
-
-MESH_ERRORS = set()
-
-
-def report_mesh_error(error):
-    """Print each distinct reason IfcOpenShell gives for not meshing an element, once (#773)."""
-    text = (str(error).strip().splitlines() or [""])[0]
-    message = f"{type(error).__name__}: {re.sub(r'#[0-9]+', '#N', text)[:200]}"
-    if message not in MESH_ERRORS:
-        MESH_ERRORS.add(message)
-        print(f"IfcOpenShell cannot mesh: {message}")
 
 
 def names_of(element):

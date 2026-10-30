@@ -36,7 +36,7 @@ parser, letting the attacker hijack control flow.
 - **Pure safe Rust.** The library crate compiles with
   `#![forbid(unsafe_code)]` on the pure-parser tier (the pyo3
   bindings live in the separate `rvt-py` workspace member — SEC-12 /
-  SEC-13 in `TODO.md`). All parsing logic —
+  SEC-13 in `docs/archive/TODO.md`). All parsing logic —
   CFB opening, gzip decompression, schema parsing, walker — runs
   with safe-Rust bounds checks.
 - **Panic-safe short inputs.** `FieldType::decode`, `find_chunks`,
