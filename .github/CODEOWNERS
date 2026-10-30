@@ -15,5 +15,3 @@
 # Release plumbing
 /.github/ @DrunkOnJava
 /Cargo.toml @DrunkOnJava
-/release-please-config.json @DrunkOnJava
-/.release-please-manifest.json @DrunkOnJava
