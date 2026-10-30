@@ -80,6 +80,7 @@ All 16 footings are in one storey of Revit's export, the lowest of its five, and
 - **`--revit-property-sets` and `--revit-set-placement` on 2015 to 2022** write sets from parameters that no export checks.
 - **Every default export is unchanged on every model measured**, but a file with a phase list that leaves an element out would change: the rule is RE-184's, measured on 2024 and 2025 exports only.
 - **The wall function, `IsExternal`, type, material and stair readers are not admitted** to 2015 to 2022, nor to 2023.
+- **A family file is not read.** The Autodesk family of every release 2016 to 2027 fails the preamble at `Global/DocumentIncrementTable` (`invalid increment episode range`), as 2023 to 2027 families did before: no parameter or phase is read from a `.rfa`. On 2016 to 2022 families `rvt-elements` and Python now say so (`saved-parameters-unread`) and the export diagnostics carry the phases warning, where they were silent (Measure 41121536238).
 
 ## 7. Reproduce
 
