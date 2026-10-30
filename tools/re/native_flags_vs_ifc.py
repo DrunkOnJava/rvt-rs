@@ -106,6 +106,31 @@ def thermal_candidates(doubles, rows):
             )
 
 
+def read_named(path):
+    named = collections.defaultdict(dict)
+    for line in open(path):
+        fields = line.split()
+        if len(fields) == 6 and fields[0] == "named" and fields[1].isdigit():
+            named[int(fields[1])][(fields[3], fields[4])] = fields[5]
+    return named
+
+
+def named_report(named, exported):
+    for flag in FLAGS:
+        cells = collections.defaultdict(collections.Counter)
+        for tag, (klass, values) in exported.items():
+            if flag not in values:
+                continue
+            for (level, name), value in named.get(tag, {}).items():
+                if flag.lower() in name.lower() or (flag == "LoadBearing" and "bearing" in name.lower()):
+                    cells[(klass, level, name, value)][values[flag]] += 1
+        for key, states in sorted(cells.items()):
+            counts = "; ".join(
+                f"{'true' if state else 'false'} {count}" for state, count in sorted(states.items())
+            )
+            print(f"native readers: named {key[0]} {flag} parameter {key[1]} {key[2]} value {key[3]} ({counts})")
+
+
 def main():
     args = sys.argv[1:]
     if len(args) < 2:
@@ -114,6 +139,7 @@ def main():
     model = ifcopenshell.open(args[1])
     thermal_candidates(read_params(args[0], "paramd"), thermal(model))
     exported = revit_flags(model)
+    named_report(read_named(args[0]), exported)
     for flag in FLAGS:
         classes = collections.defaultdict(list)
         for tag, (klass, values) in exported.items():

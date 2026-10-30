@@ -10,6 +10,8 @@
 //!
 //!   param <ElementId> <class> <level> <parameter id> <value>
 //!   paramd <ElementId> <class> <level> <parameter id> <value>   (a double)
+//!   named <ElementId> <class> <level> <name> <value>   (a parameter named
+//!   for external or bearing, spaces as underscores)
 //!
 //! `<class>` is the class of the element's own record, `<level>` `Instance`
 //! or `Type`. `tools/re/native_flags_vs_ifc.py` scores them against the
@@ -53,6 +55,17 @@ fn run(path: &str) -> anyhow::Result<()> {
             continue;
         }
         for parameter in parameters {
+            if let Some(name) = parameter.name.as_deref() {
+                let lower = name.to_lowercase();
+                if lower.contains("external") || lower.contains("bearing") {
+                    let value = parameter.value.to_string().replace(' ', "_");
+                    println!(
+                        "named {id} {class} {:?} {} {value}",
+                        parameter.level,
+                        name.replace(' ', "_")
+                    );
+                }
+            }
             if parameter.kind == ParameterKind::BuiltIn && parameter.storage_type == "Double" {
                 if let Some(value) = parameter.value.as_f64() {
                     println!(
