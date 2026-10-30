@@ -191,7 +191,7 @@ impl CapabilityManifest {
         ];
 
         Self {
-            schema_version: 1,
+            schema_version: 2,
             manifest_id: "rvt-rs-capability-manifest".into(),
             experimental: true,
             capabilities,
