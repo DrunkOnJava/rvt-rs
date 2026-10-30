@@ -145,9 +145,11 @@ fn exercise_full_pipeline(path: &PathBuf) -> Result<(), String> {
 }
 
 /// `ProjectInformation` is a ZIP holding the project's Atom entry, deflated,
-/// and its title is the name the project was saved under: the two MIT
-/// magnetar files, Revit 2023 and 2024, keep theirs. This reads the archive
-/// end to end through the reader's own inflate limit.
+/// and the entry's own `<title>` is the name the project was saved under: the
+/// two MIT magnetar files, Revit 2023 and 2024, keep theirs. (`PartAtom::title`
+/// is the last title-like element, a parameter group's on a project, such as
+/// "Other".) This reads the archive end to end through the reader's own
+/// inflate limit.
 #[test]
 fn project_information_titles_are_the_saved_names() {
     let dir = project_dir();
@@ -163,7 +165,11 @@ fn project_information_titles_are_the_saved_names() {
             .project_information()
             .expect("read ProjectInformation")
             .expect("a project file carries ProjectInformation");
-        assert_eq!(atom.title.as_deref(), Some(stem), "{stem}: title");
+        assert_eq!(
+            atom.entry_title.as_deref(),
+            Some(stem),
+            "{stem}: entry title"
+        );
         checked += 1;
     }
     eprintln!("ProjectInformation titles checked on {checked} files");
