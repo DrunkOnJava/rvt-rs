@@ -26,8 +26,14 @@ wall from its start, `-` where the body is not there):
        differ <A> low/high rvt-rs <z z> Revit <z z>
        plan rvt-rs <x0 x1 y0 y1> Revit <x0 x1 y0 y1> stations <n>
   top tag:<Tag> rvt-rs <runs> | Revit <runs> | hits <max distinct heights>
+  levels tag:<Tag> rvt-rs <z=area[x0 x1 y0 y1] ...> | Revit <...>
+                                          the horizontal faces in the upper half
+                                          of the body, highest first
   pair tag:<Tag> floor:<Tag> <entity> rvt-rs covers <fraction> gap <ft2>
        Revit covers <fraction> gap <ft2> | rvt-rs under <runs> | Revit under <runs>
+  gap tag:<Tag> floor:<Tag> rvt-rs <x0 x1 y0 y1 pieces n> | Revit <...>
+                                          the extent of the wall's plan outside
+                                          the floor's
 
 `covers` is the share of the wall's plan area that lies inside the floor's
 plan; `gap` the area of the wall's plan outside it.
@@ -200,11 +206,44 @@ def stations(plan):
 
 
 def cover(wall_plan, floor_plan):
-    """(share of `wall_plan` inside `floor_plan`, area of it outside)."""
+    """(share of `wall_plan` inside `floor_plan`, area of it outside, the part
+    of it outside)."""
     if wall_plan is None or floor_plan is None:
         return None
     inside = wall_plan.intersection(floor_plan).area
-    return inside / wall_plan.area, wall_plan.area - inside
+    return inside / wall_plan.area, wall_plan.area - inside, wall_plan.difference(floor_plan)
+
+
+def fmt_gap(found):
+    """The extent and piece count of the part of the wall outside the floor."""
+    if found is None or found[2].is_empty or found[1] <= 1e-6:
+        return "-"
+    pieces = len(found[2].geoms) if hasattr(found[2], "geoms") else 1
+    x0, y0, x1, y1 = found[2].bounds
+    return f"{x0:.4f} {x1:.4f} {y0:.4f} {y1:.4f} pieces {pieces}"
+
+
+def levels(triangles):
+    """The horizontal faces in the upper half of `triangles`' height, by
+    height (to 0.001 ft): `z=area[x0 x1 y0 y1]`, highest first."""
+    edge_a = triangles[:, 1] - triangles[:, 0]
+    edge_b = triangles[:, 2] - triangles[:, 0]
+    normal = np.cross(edge_a, edge_b)
+    size = np.linalg.norm(normal, axis=1)
+    flat = (size > 1e-12) & (np.abs(normal[:, 2]) >= 0.999 * np.where(size > 1e-12, size, 1))
+    middle_height = (triangles[:, :, 2].min() + triangles[:, :, 2].max()) / 2
+    heights = triangles[:, :, 2].mean(axis=1)
+    found = {}
+    for index in np.nonzero(flat & (heights > middle_height))[0]:
+        found.setdefault(round(float(heights[index]), 3), []).append(triangles[index])
+    out = []
+    for height in sorted(found, reverse=True):
+        plan = footprint(np.array(found[height]))
+        if plan is None:
+            continue
+        x0, y0, x1, y1 = plan.bounds
+        out.append(f"{height:.3f}={plan.area:.4f}[{x0:.4f} {x1:.4f} {y0:.4f} {y1:.4f}]")
+    return " ".join(out) if out else "-"
 
 
 def fmt_cover(found):
@@ -270,6 +309,7 @@ def main():
             f"plan rvt-rs {ours_box[0]:.4f} {ours_box[1]:.4f} {ours_box[2]:.4f} {ours_box[3]:.4f} "
             f"Revit {revit_box[0]:.4f} {revit_box[1]:.4f} {revit_box[2]:.4f} {revit_box[3]:.4f} stations {len(xs)}"
         )
+        print(f"levels tag:{tag} rvt-rs {levels(ours_body)} | Revit {levels(revit_body)}")
         _, ours_high, _ = heights_at(ours_body, xs, ys)
         _, revit_high, hits = heights_at(revit_body, xs, ys)
         print(
@@ -300,6 +340,8 @@ def main():
                 f"Revit covers {fmt_cover(revit_cover)} | rvt-rs under {runs(ours_under, cell, length)} "
                 f"| Revit under {runs(revit_under, cell, length)}"
             )
+            if fmt_gap(ours_cover) != "-" or fmt_gap(revit_cover) != "-":
+                print(f"gap tag:{tag} floor:{slab} rvt-rs {fmt_gap(ours_cover)} | Revit {fmt_gap(revit_cover)}")
     unmeshed = {}
     for (path, _), (kind, reason) in base.UNMESHED.items():
         key = ("rvt-rs" if path == args[0] else "Revit", kind, reason)
