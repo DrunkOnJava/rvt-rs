@@ -252,7 +252,9 @@ pub struct WallRecords {
     pub top_joined: BTreeMap<u64, bool>,
     /// The walls nothing is joined to or cuts.
     pub uncut: BTreeSet<u64>,
-    /// The walls whose record holds no step but those of [`HARMLESS_STEPS`]:
+    /// The walls whose record holds no step but the harmless ones (a wall's
+    /// base, ends, split faces, reference planes, join tweaks and layer
+    /// extensions):
     /// nothing cuts, embeds or sweeps the solid its joins and layers make
     /// (RE-269).
     pub whole: BTreeSet<u64>,
