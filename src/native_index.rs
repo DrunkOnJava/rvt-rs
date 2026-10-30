@@ -1,6 +1,7 @@
 //! Native project identities and creation-episode UniqueIds.
 //! Explicit four-field (2023) and five-field (2024 to 2027) ElemTable contracts.
 //! Original identity suffixes are retained; they are not current record locators.
+use crate::le_bytes;
 use crate::{native_extensible_storage::guid_string, native_parameters, schema_registry::Registry};
 use anyhow::{Result, ensure};
 use serde::{Deserialize, Serialize};
@@ -21,8 +22,8 @@ pub struct Increment {
 }
 /// The increment ordinal is distinct from its greatest modification episode.
 pub fn storage_increments(bytes: &[u8], registry: &Registry) -> Result<Vec<Increment>> {
-    ensure!(bytes.len() >= 2, "truncated increment class");
-    let tag = u16::from_le_bytes(bytes[..2].try_into()?);
+    let tag =
+        le_bytes::u16_at(bytes, 0).ok_or_else(|| anyhow::anyhow!("truncated increment class"))?;
     ensure!(
         registry
             .class(tag)
@@ -232,8 +233,8 @@ pub struct Identity {
 /// Decode the measured post-root episode section. Its start is determined by
 /// schema field traversal; it is not a fixed byte offset or byte-pattern scan.
 pub fn creation_episodes(history: &[u8], registry: &Registry) -> Result<Vec<String>> {
-    ensure!(history.len() >= 2, "truncated history tag");
-    let tag = u16::from_le_bytes(history[..2].try_into()?);
+    let tag =
+        le_bytes::u16_at(history, 0).ok_or_else(|| anyhow::anyhow!("truncated history tag"))?;
     ensure!(
         registry
             .class(tag)
@@ -247,10 +248,8 @@ pub fn creation_episodes(history: &[u8], registry: &Registry) -> Result<Vec<Stri
             .is_some_and(Vec::is_empty),
         "inline history episodes require a different contract"
     );
-    let count_bytes = history
-        .get(root.end..root.end + 4)
-        .ok_or_else(|| anyhow::anyhow!("history episode count absent"))?;
-    let count = u32::from_le_bytes(count_bytes.try_into()?) as usize;
+    let count = le_bytes::u32_at(history, root.end)
+        .ok_or_else(|| anyhow::anyhow!("history episode count absent"))? as usize;
     ensure!(count <= 1_000_000, "history episode count budget exceeded");
     let episode = registry
         .named("Episode")
@@ -453,11 +452,10 @@ pub fn parse(index: &[u8], registry: &Registry, episodes: &[String]) -> Result<P
     }
     let mut pos = end;
     let read_u32 = |pos: &mut usize| -> Result<u32> {
-        let b = index
-            .get(*pos..*pos + 4)
+        let value = le_bytes::u32_at(index, *pos)
             .ok_or_else(|| anyhow::anyhow!("truncated index trailer"))?;
         *pos += 4;
-        Ok(u32::from_le_bytes(b.try_into()?))
+        Ok(value)
     };
     let grave_count = read_u32(&mut pos)? as usize;
     ensure!(grave_count <= 1_000_000, "graveyard count budget");
@@ -483,12 +481,8 @@ pub fn parse(index: &[u8], registry: &Registry, episodes: &[String]) -> Result<P
         read_u32(&mut pos)? == u32::MAX,
         "unsupported identifier source pointer"
     );
-    let source_tag = u16::from_le_bytes(
-        index
-            .get(pos..pos + 2)
-            .ok_or_else(|| anyhow::anyhow!("source class absent"))?
-            .try_into()?,
-    );
+    let source_tag =
+        le_bytes::u16_at(index, pos).ok_or_else(|| anyhow::anyhow!("source class absent"))?;
     pos += 2;
     // Revit 2023 has only ExpandAllOnLoad. The later contract appends
     // LastElementIdOverride before the deferred source body; consuming it in

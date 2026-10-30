@@ -158,8 +158,7 @@ pub const RECORDS_ORIGIN: usize = 0x06;
 
 /// The record count the table states, the `u32` at `0x02`.
 fn stated_count(d: &[u8]) -> Option<usize> {
-    let bytes = d.get(2..6)?;
-    usize::try_from(u32::from_le_bytes(bytes.try_into().ok()?)).ok()
+    usize::try_from(le_bytes::u32_at(d, 2)?).ok()
 }
 
 /// `(second id, owner, owner width)` offsets of a record of `stride` bytes.
@@ -298,8 +297,8 @@ pub fn parse_records_from_bytes(
 fn owner_field(record: &[u8], at: usize, width: usize) -> Option<u32> {
     let field = record.get(at..at.checked_add(width)?)?;
     let value = match width {
-        4 => u64::from(u32::from_le_bytes(field.try_into().ok()?)),
-        8 => u64::from_le_bytes(field.try_into().ok()?),
+        4 => u64::from(le_bytes::u32_at(field, 0)?),
+        8 => le_bytes::u64_at(field, 0)?,
         _ => return None,
     };
     if field.iter().all(|&b| b == 0xFF) || value == 0 {

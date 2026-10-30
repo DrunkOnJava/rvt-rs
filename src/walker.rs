@@ -25,6 +25,7 @@
 //! | Other `FieldType` variants | not observed in current ADocument fixtures; retained as raw bytes until a validated wire shape is available |
 
 use crate::control::{PROGRESS_BYTE_INTERVAL, Stage, WalkerControl};
+use crate::le_bytes;
 use crate::{Error, Result, RevitFile, compression, formats, streams};
 
 /// One field's value as read by the walker.
@@ -2209,8 +2210,8 @@ fn heuristic_find(d: &[u8]) -> Option<usize> {
     let mut k = min_start;
     while k + 16 <= d.len() {
         if d[k..k + 8].iter().all(|&b| b == 0) {
-            let next_u32 = u32::from_le_bytes([d[k + 8], d[k + 9], d[k + 10], d[k + 11]]);
-            let next_next = u32::from_le_bytes([d[k + 12], d[k + 13], d[k + 14], d[k + 15]]);
+            let next_u32 = le_bytes::u32_at(d, k + 8)?;
+            let next_next = le_bytes::u32_at(d, k + 12)?;
             if (1..=100).contains(&next_u32) && (next_next == 0xffffffff || next_next <= 0x10000) {
                 return Some(k);
             }

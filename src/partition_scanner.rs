@@ -40,6 +40,7 @@ use crate::compression;
 use crate::control::{Stage, WalkerControl};
 use crate::elem_table::{self, ElemRecord};
 use crate::formats::{self, SchemaTable};
+use crate::le_bytes;
 use crate::streams::FORMATS_LATEST;
 use crate::{Result, RevitFile};
 use serde::{Deserialize, Serialize};
@@ -453,34 +454,10 @@ fn read_envelope(buf: &[u8], offset: usize) -> PartitionEnvelope {
         type_code: None,
         variant_marker: None,
     };
-    if offset + 8 <= buf.len() {
-        envelope.fixed_header_0 = Some(u32::from_le_bytes([
-            buf[offset + 4],
-            buf[offset + 5],
-            buf[offset + 6],
-            buf[offset + 7],
-        ]));
-    }
-    if offset + 12 <= buf.len() {
-        envelope.count_version = Some(u32::from_le_bytes([
-            buf[offset + 8],
-            buf[offset + 9],
-            buf[offset + 10],
-            buf[offset + 11],
-        ]));
-    }
-    if offset + 16 <= buf.len() {
-        envelope.type_code = Some(u32::from_le_bytes([
-            buf[offset + 12],
-            buf[offset + 13],
-            buf[offset + 14],
-            buf[offset + 15],
-        ]));
-    }
-    if offset + ENVELOPE_MIN_SIZE <= buf.len() {
-        envelope.variant_marker =
-            Some(u16::from_le_bytes([buf[offset + 0x10], buf[offset + 0x11]]));
-    }
+    envelope.fixed_header_0 = le_bytes::u32_at(buf, offset + 4);
+    envelope.count_version = le_bytes::u32_at(buf, offset + 8);
+    envelope.type_code = le_bytes::u32_at(buf, offset + 12);
+    envelope.variant_marker = le_bytes::u16_at(buf, offset + 0x10);
     envelope
 }
 

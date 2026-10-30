@@ -1,4 +1,5 @@
 //! Streaming current-record extraction with structural schemas and native IDs.
+use crate::le_bytes;
 use crate::{
     RevitFile, compression,
     native_index::{self, Identity},
@@ -477,9 +478,8 @@ fn extract_records(
         selected.contains(&id)
             || (!options.selected_classes.is_empty()
                 && index.identities.contains_key(&id)
-                && body
-                    .get(..2)
-                    .and_then(|b| registry.class(u16::from_le_bytes([b[0], b[1]])))
+                && le_bytes::u16_at(body, 0)
+                    .and_then(|tag| registry.class(tag))
                     .is_some_and(|class| options.selected_classes.contains(&class.name)))
     };
     let mut summary = Summary {
@@ -565,7 +565,7 @@ fn extract_records(
                 for (id, _, start, end) in group_records(source, bytes, version)? {
                     let body = &bytes[start..end];
                     if let Some(indexed) = indexed.as_mut() {
-                        let tag = body.get(..2).map(|b| u16::from_le_bytes([b[0], b[1]]));
+                        let tag = le_bytes::u16_at(body, 0);
                         indexed.push((source.channel, id, partition, tag));
                     }
                     if is_selected(id, body) {
@@ -637,18 +637,12 @@ fn extract_records(
                     );
                     seen_ids.insert(id);
                     let body = &bytes[start..end];
-                    let class_name = body
-                        .get(..2)
-                        .and_then(|b| registry.class(u16::from_le_bytes([b[0], b[1]])))
+                    let class_name = le_bytes::u16_at(body, 0)
+                        .and_then(|tag| registry.class(tag))
                         .map(|c| c.name.clone());
                     if definitions_only {
-                        let mut tag = u16::from_le_bytes(
-                            body.get(..2)
-                                .ok_or_else(|| {
-                                    anyhow::anyhow!("truncated definition candidate tag")
-                                })?
-                                .try_into()?,
-                        );
+                        let mut tag = le_bytes::u16_at(body, 0)
+                            .ok_or_else(|| anyhow::anyhow!("truncated definition candidate tag"))?;
                         let mut owns_definition = matches!(
                             class_name.as_deref(),
                             Some("UnitsElem" | "ParamBinding" | "Family" | "FamilySymbol")
