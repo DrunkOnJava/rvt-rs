@@ -186,17 +186,20 @@ Extending the entry-point detector to every release is
 *(not yet implemented)*.
 
 Per-element typed views live under [`src/elements/`](../src/elements/) —
-81 decoders (Level, Wall, Floor, Roof, Door, Window, Column, Beam,
-Stair, Railing, Room, Furniture, Rebar, Phase, DesignOption, Workset,
-and more). Each takes the generic `DecodedElement` produced by the
-walker and projects it into a typed struct. Sample call:
+81 registered classes (Level, Wall, Floor, Roof, Door, Window, Column,
+Beam, Stair, Railing, Room, Furniture, Rebar, Phase, DesignOption,
+Workset, and more), each decoded by a `SimpleDecoder`, and typed views
+of Level, Wall, Floor, Door, Window, Room and Material. A view takes the
+generic `DecodedElement` produced by the walker and projects it into a
+typed struct. Sample call:
 
 ```rust
-use rvt::elements::level::{Level, LevelDecoder};
+use rvt::elements::SimpleDecoder;
+use rvt::elements::level::Level;
 use rvt::walker::ElementDecoder;
 
 let entry    = schema.classes.iter().find(|c| c.name == "Level").unwrap();
-let decoded  = LevelDecoder.decode(bytes, entry, &handle_index)?;
+let decoded  = SimpleDecoder::new("Level").decode(bytes, entry, &handle_index)?;
 let level    = Level::from_decoded(&decoded);
 // Level { name: Some("Ground Floor"), elevation_feet: Some(0.0),
 //         level_type_id: Some(ElementId { tag: 201, id: 17 }),

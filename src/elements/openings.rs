@@ -39,84 +39,8 @@
 //! | `m_sill_height` | f64 | Height of windowsill above host level (feet) |
 
 use super::level::normalise_field_name;
-use crate::formats;
 use crate::geometry::Point3;
-use crate::walker::{DecodedElement, ElementDecoder, HandleIndex, InstanceField};
-use crate::{Error, Result};
-
-/// Registered decoder for the `Door` class.
-#[derive(Debug)]
-pub struct DoorDecoder;
-
-impl ElementDecoder for DoorDecoder {
-    fn class_name(&self) -> &'static str {
-        "Door"
-    }
-
-    fn decode(
-        &self,
-        bytes: &[u8],
-        schema: &formats::ClassEntry,
-        index: &HandleIndex,
-    ) -> Result<DecodedElement> {
-        self.decode_with_limits(bytes, schema, index, crate::walker::WalkerLimits::default())
-    }
-
-    fn decode_with_limits(
-        &self,
-        bytes: &[u8],
-        schema: &formats::ClassEntry,
-        _index: &HandleIndex,
-        limits: crate::walker::WalkerLimits,
-    ) -> Result<DecodedElement> {
-        if schema.name != "Door" {
-            return Err(Error::SchemaMismatch {
-                decoder: "Door",
-                schema: schema.name.clone(),
-            });
-        }
-        Ok(crate::walker::decode_instance_with_limits(
-            bytes, 0, schema, limits,
-        ))
-    }
-}
-
-/// Registered decoder for the `Window` class.
-#[derive(Debug)]
-pub struct WindowDecoder;
-
-impl ElementDecoder for WindowDecoder {
-    fn class_name(&self) -> &'static str {
-        "Window"
-    }
-
-    fn decode(
-        &self,
-        bytes: &[u8],
-        schema: &formats::ClassEntry,
-        index: &HandleIndex,
-    ) -> Result<DecodedElement> {
-        self.decode_with_limits(bytes, schema, index, crate::walker::WalkerLimits::default())
-    }
-
-    fn decode_with_limits(
-        &self,
-        bytes: &[u8],
-        schema: &formats::ClassEntry,
-        _index: &HandleIndex,
-        limits: crate::walker::WalkerLimits,
-    ) -> Result<DecodedElement> {
-        if schema.name != "Window" {
-            return Err(Error::SchemaMismatch {
-                decoder: "Window",
-                schema: schema.name.clone(),
-            });
-        }
-        Ok(crate::walker::decode_instance_with_limits(
-            bytes, 0, schema, limits,
-        ))
-    }
-}
+use crate::walker::{DecodedElement, InstanceField};
 
 /// Fields shared by every wall-hosted opening element (Door,
 /// Window, and future Opening). Gathered in one pass so neither

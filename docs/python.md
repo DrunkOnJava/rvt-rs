@@ -532,8 +532,8 @@ issue or drop to the Rust CLIs (`rvt-info`, `rvt-analyze`,
 
 Not in Python today:
 
-- **Per-element decoders.** The walker reads `ADocument`; the 80
-  Layer-5b element decoder structs in `elements::all_decoders()`
+- **Per-element decoders.** The walker reads `ADocument`; the 81
+  Layer-5b element classes registered in `elements::all_decoders()`
   (`Wall`, `Floor`, `Door`, etc. — see `compatibility.md` §3) aren't
   yet exposed to Python. Even in Rust they are a synthesized-fixture
   registry, not wired into `iter_elements` on real project files.

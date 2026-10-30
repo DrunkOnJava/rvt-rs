@@ -194,20 +194,15 @@ pub fn wall_segment_angle_radians(start: [f64; 2], end: [f64; 2]) -> f64 {
 }
 
 /// Build a rectangular `Extrusion` for a slab from its plan
-/// dimensions and a thickness from the
-/// [`crate::elements::floor::FloorType`].
+/// dimensions and its thickness in feet.
 ///
-/// Defaults: thickness 12 inches (1 ft) when `floor_type` is
-/// `None` or lacks a thickness.
-pub fn slab_extrusion(
-    length_feet: f64,
-    width_feet: f64,
-    floor_type: Option<&crate::elements::floor::FloorType>,
-) -> Extrusion {
+/// Defaults: thickness 12 inches (1 ft) when `thickness_feet` is
+/// `None`.
+pub fn slab_extrusion(length_feet: f64, width_feet: f64, thickness_feet: Option<f64>) -> Extrusion {
     Extrusion {
         width_feet: length_feet,
         depth_feet: width_feet,
-        height_feet: floor_type.and_then(|ft| ft.thickness_feet).unwrap_or(1.0),
+        height_feet: thickness_feet.unwrap_or(1.0),
         profile_override: None,
     }
 }

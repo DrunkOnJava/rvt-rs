@@ -5,6 +5,13 @@ This guide walks through adding a decoder for a Revit element class
 already done (ADocument walker); Layer 5b is "per-class decoders
 that produce typed element values from the object graph."
 
+Every registered class already decodes through `SimpleDecoder`: it
+refuses a schema entry for any other class, then walks the class's
+fields in the order `Formats/Latest` declares them. What a class adds
+on top is a typed view (a struct and a `from_decoded` constructor), and,
+only for a class that must fail closed on a malformed instance, a
+decoder of its own.
+
 **Time required per class**: 30–90 minutes for an experienced Rust
 programmer plus access to the `phi-ag/rvt` corpus via `_corpus/`
 (fetched by CI with LFS; can be cloned locally the same way).
@@ -12,8 +19,9 @@ programmer plus access to the `phi-ag/rvt` corpus via `_corpus/`
 **Prerequisites**:
 
 - Read `src/walker.rs` to understand `InstanceField` + `decode_instance`
-- Read `src/elements/level.rs` — it's the reference example this
-  guide walks through
+- Read `src/elements/level.rs` — it's the reference typed view this
+  guide walks through, and `src/elements/simple_decoder.rs`, the
+  decoder every registered class uses
 - Clone the corpus: `git clone --recurse-submodules
   https://github.com/phi-ag/rvt _corpus` in the repo root
 - `cargo test --release --test integration -- field_type_coverage::` passes (sanity
@@ -26,7 +34,7 @@ programmer plus access to the `phi-ag/rvt` corpus via `_corpus/`
 Adding a decoder for `MyClass` touches these files:
 
 ```
-src/elements/my_class.rs                    # decoder impl + typed view
+src/elements/my_class.rs                    # typed view (and a decoder, if it must fail closed)
 src/elements/mod.rs                         # register the decoder, and route production through it
 src/elements/typed_json.rs                  # its typed JSON for the CLI and Python
 tests/python/test_decoded_api.py            # the MVP class list it pins
@@ -54,11 +62,12 @@ If `MyClass` doesn't appear, that's useful: it means the class is
 out of scope for family files and you may need a project `.rvt` in
 the corpus. Check the discovery scripts under `tools/`.
 
-### Step 2 — Create the decoder file
+### Step 2 — Create the typed view
 
-Copy `src/elements/level.rs` as the starting template. Rename
-everything (`LevelDecoder` → `MyClassDecoder`, `Level` → `MyClass`,
-`"Level"` → `"MyClass"`). Shape:
+Copy `src/elements/level.rs` as the starting template (the `cargo
+generate` template in `templates/element-decoder/` writes the same
+shape). Rename `Level` → `MyClass`. The typed view is a struct and a
+`from_decoded` constructor, and it needs no decoder of its own:
 
 ```rust
 //! MyClass — one-line description of the Revit class.
@@ -69,8 +78,41 @@ everything (`LevelDecoder` → `MyClassDecoder`, `Level` → `MyClass`,
 //! | m_foo  | Primitive u32 | some value |
 //! | ... | ... | ... |
 
+use super::level::normalise_field_name;
+use crate::walker::{DecodedElement, InstanceField};
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct MyClass {
+    pub name: Option<String>,
+    pub foo: Option<i64>,
+    // ... typed fields you want to expose
+}
+
+impl MyClass {
+    pub fn from_decoded(decoded: &DecodedElement) -> Self {
+        let mut out = Self { name: None, foo: None };
+        for (field_name, value) in &decoded.fields {
+            let n = normalise_field_name(field_name);
+            match (n.as_str(), value) {
+                ("name", InstanceField::String(s)) => out.name = Some(s.clone()),
+                ("foo",  InstanceField::Integer { value, .. }) => out.foo = Some(*value),
+                _ => {}
+            }
+        }
+        out
+    }
+}
+```
+
+#### A decoder of its own
+
+A class that production decodes through `MVP_TYPED_CLASSES` (Step 3)
+must fail closed, which `SimpleDecoder` does not do beyond the schema
+name. Give such a class its own `ElementDecoder`, in the same file:
+
+```rust
 use crate::formats;
-use crate::walker::{DecodedElement, ElementDecoder, HandleIndex, InstanceField};
+use crate::walker::{ElementDecoder, HandleIndex};
 use crate::{Error, Result};
 
 pub struct MyClassDecoder;
@@ -108,7 +150,7 @@ impl ElementDecoder for MyClassDecoder {
         // spelling of the field (m_name, m_Name, ...) counts.
         let has_name = decoded.fields.iter().any(|(n, v)| {
             crate::elements::level::normalise_field_name(n) == "name"
-                && matches!(v, InstanceField::String(_))
+                && matches!(v, crate::walker::InstanceField::String(_))
         });
         if !has_name {
             return Err(Error::Malformed {
@@ -119,37 +161,16 @@ impl ElementDecoder for MyClassDecoder {
         Ok(decoded)
     }
 }
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct MyClass {
-    pub name: Option<String>,
-    pub foo: Option<i64>,
-    // ... typed fields you want to expose
-}
-
-impl MyClass {
-    pub fn from_decoded(decoded: &DecodedElement) -> Self {
-        let mut out = Self { name: None, foo: None };
-        for (field_name, value) in &decoded.fields {
-            let n = crate::elements::level::normalise_field_name(field_name);
-            match (n.as_str(), value) {
-                ("name", InstanceField::String(s)) => out.name = Some(s.clone()),
-                ("foo",  InstanceField::Integer { value, .. }) => out.foo = Some(*value),
-                _ => {}
-            }
-        }
-        out
-    }
-}
 ```
 
 `decode` is where failing closed happens: production skips an instance
 the decoder rejects, and `decode_instance` itself rejects nothing, so a
-decoder that only checks the schema name marks every same-class candidate
-typed, a truncated one or a false hit included. Before registering it,
-make `decode` return an `Error` for an instance missing a field `MyClass`
-needs, or holding one as `Bytes` or in a type the schema does not give it,
-and for any other check Step 4 lists.
+decoder that only checks the schema name (which is all `SimpleDecoder`
+does) marks every same-class candidate typed, a truncated one or a false
+hit included. Before registering a class of your own, make `decode`
+return an `Error` for an instance missing a field `MyClass` needs, or
+holding one as `Bytes` or in a type the schema does not give it, and for
+any other check Step 4 lists.
 
 ### Step 3 — Register in the dispatch table
 
@@ -160,15 +181,18 @@ pub mod my_class;     // <-- add this
 
 pub fn all_decoders() -> Vec<Box<dyn ElementDecoder>> {
     vec![
-        Box::new(level::LevelDecoder),
-        Box::new(my_class::MyClassDecoder),   // <-- and this
+        Box::new(SimpleDecoder::new("Level")),
+        Box::new(SimpleDecoder::new("MyClass")),   // <-- and this
     ]
 }
 ```
 
-`decoder_for_class` takes the first decoder registered for a class
-name, so check that `MyClass` has none yet
-(`grep -rn '"MyClass"' src/elements/`).
+Most classes already have their `SimpleDecoder` line; a class that
+needs its own decoder (the section above) replaces it with
+`Box::new(my_class::MyClassDecoder)`. `decoder_for_class` takes the
+first decoder registered for a class name, so check which entry
+`MyClass` has (`grep -rn '"MyClass"' src/elements/`) and never leave
+two.
 
 Production decoding (`walker::iter_elements`) uses a typed decoder only
 for a class listed in `elements::MVP_TYPED_CLASSES`, so add `MyClass`
@@ -329,10 +353,9 @@ Add to the `[Unreleased]` section:
 
 ```markdown
 ### Added
-- **`elements::my_class::MyClassDecoder`** — Layer 5b decoder for
-  Revit's `MyClass` (description). Produces
-  `elements::my_class::MyClass { name, foo, ... }` as the typed
-  view. Covers N fields, measured on <files> against <oracle>
+- **`elements::my_class::MyClass`** — Layer 5b typed view of
+  Revit's `MyClass` (description): `MyClass { name, foo, ... }`
+  over what `SimpleDecoder` decodes. Covers N fields, measured on <files> against <oracle>
   (<counts>, RE-NN); `tests/myclass_corpus.rs` checks it.
 ```
 
@@ -428,9 +451,11 @@ reading git blame.
 
 ## Priority classes for initial adoption
 
-If you're picking which class to tackle, the value-ordered list:
+If you're picking which class to tackle, the value-ordered list. Every
+class in it is already registered through `SimpleDecoder`; what is left
+is its typed view, as for `Level`:
 
-1. **Level** — already done, the reference
+1. **Level** — already done, the reference (Wall, Floor, Door, Window, Room and Material have views too)
 2. **Grid** + **ReferencePlane** — similar shape, small surface
 3. **Material** + **FillPattern** + **LinePattern** — used by every visible element
 4. **Category** + **Subcategory** — foundation for IFC category mapping
