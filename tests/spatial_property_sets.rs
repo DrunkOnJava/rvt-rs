@@ -12,14 +12,17 @@
 //! has no `Pset_ProductRequirements` and applies
 //! `Pset_AirSideSystemInformation` to spaces and zones only, and Revit's IFC4
 //! export of the BIM4LCA office gives neither, so rvt-rs must write neither.
-//! A storey or space is matched by its `Name`.
+//! A storey or space is matched by its `Name`. `NumberOfStoreys` is left out
+//! where a storey of Revit's export contains no element, as rvt-rs leaves it
+//! out there: Revit's exporters before and since IFC 26.1 count it otherwise
+//! (RE-263, the maintainer, 2026-10-29).
 //!
 //! Runs against `RVT_PROJECT_CORPUS_DIR`: `RE1-<discipline>.rvt` with
 //! `RE1-<discipline>.ifc`. Skips what is absent.
 
 use rvt::RevitFile;
 use rvt::ifc::{RvtDocExporter, write_step};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 
 const SETS: &[&str] = &[
@@ -91,6 +94,20 @@ fn reference(field: &str) -> Option<u64> {
     field.trim().strip_prefix('#')?.parse().ok()
 }
 
+/// Whether every storey of a STEP file contains an element through an
+/// `IfcRelContainedInSpatialStructure` (its sixth argument, the structure).
+fn every_storey_holds_an_element(step: &str) -> bool {
+    let ents = entities(step);
+    let holding: BTreeSet<u64> = ents
+        .values()
+        .filter(|(entity, _)| entity == "IFCRELCONTAINEDINSPATIALSTRUCTURE")
+        .filter_map(|(_, args)| reference(split_args(args).get(5)?))
+        .collect();
+    ents.iter()
+        .filter(|(_, (entity, _))| entity == "IFCBUILDINGSTOREY")
+        .all(|(id, _)| holding.contains(id))
+}
+
 /// Every set of [`SETS`] on a storey, the building or a space.
 fn spatial_sets(step: &str) -> Sets {
     let ents = entities(step);
@@ -159,11 +176,18 @@ fn re1_spatial_property_sets_are_revits() {
             continue;
         }
         models += 1;
-        let theirs = spatial_sets(&std::fs::read_to_string(&reference_ifc).expect("reference IFC"));
+        let reference_step = std::fs::read_to_string(&reference_ifc).expect("reference IFC");
+        let mut theirs = spatial_sets(&reference_step);
         assert!(
             theirs.contains_key(&("building".to_string(), "Pset_BuildingCommon".to_string())),
             "RE1 {discipline}: Revit's building has no Pset_BuildingCommon"
         );
+        if !every_storey_holds_an_element(&reference_step) {
+            let building = ("building".to_string(), "Pset_BuildingCommon".to_string());
+            if let Some(props) = theirs.get_mut(&building) {
+                props.remove("NumberOfStoreys");
+            }
+        }
         let mut rf = RevitFile::open(&rvt).expect("open");
         let result = RvtDocExporter
             .export_with_diagnostics(&mut rf)
