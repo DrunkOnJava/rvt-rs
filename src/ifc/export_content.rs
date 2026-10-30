@@ -59,8 +59,9 @@ pub struct TypedProductionAppend {
     pub element_type_ids: BTreeMap<u32, u32>,
     /// The standard property sets Revit's export gives each type object, by
     /// the type's ElementId and the STEP name of the type entity
-    /// (`IFCWALLTYPE`): its common set's `IsExternal` and `FireRating`
-    /// (RE-286). A type whose elements disagree has none.
+    /// (`IFCWALLTYPE`): its common set's `IsExternal`, `FireRating` and
+    /// `LoadBearing` (RE-286), and a stair or flight type's dimensions
+    /// (RE-287). A type whose elements disagree has none.
     pub type_entity_sets: BTreeMap<u32, BTreeMap<String, Vec<PropertySet>>>,
     /// Each family instance's original symbol, by ElementId (RE-167).
     pub element_original_symbols: BTreeMap<u32, u32>,
@@ -1435,13 +1436,14 @@ pub fn append_typed_production_elements(
     add_named_parameter_sets(entities, pending_named);
     add_piece_sets(entities, pieces_of);
     for ((type_id, entity), common) in type_commons {
-        let Some(set) = common.and_then(|common| common.into_set(&entity)) else {
+        let sets = common.map_or_else(Vec::new, |common| common.into_sets(&entity));
+        if sets.is_empty() {
             continue;
-        };
+        }
         out.type_entity_sets
             .entry(type_id)
             .or_default()
-            .insert(entity, vec![set]);
+            .insert(entity, sets);
     }
 
     out
@@ -2027,7 +2029,19 @@ fn add_is_external(
 struct TypeCommon {
     is_external: Option<bool>,
     fire_rating: Option<String>,
+    load_bearing: Option<bool>,
+    /// A stair type of a stair whose data is read: revit-ifc's stair
+    /// calculators, run on the type itself, give 0 (RE-287).
+    stair_type: bool,
+    /// A flight type's nosing length, feet: its run type's (RE-287).
+    nosing_feet: Option<f64>,
 }
+
+/// Classes of the categories revit-ifc's `LoadBearingCalculator` (CLEANROOM.md
+/// source 5) calls load bearing before it reads any parameter, which a type
+/// object's common set holds as it does the element's (RE-286): the BIM4LCA
+/// office's 10 structural column types and its structural framing type.
+const LOAD_BEARING_TYPE_CLASSES: &[&str] = &["StructuralColumn", "StructuralFraming"];
 
 /// The entities whose type objects Revit's IFC4 exports of the BIM4LCA office
 /// (exporter 24.0.5) and of the R2025 models (25.0.2) give their common set's
@@ -2046,37 +2060,97 @@ const TYPE_COMMON_ENTITIES: &[&str] = &[
     "IFCCOVERING",
     "IFCRAILING",
     "IFCSTAIR",
+    "IFCSTAIRFLIGHT",
     "IFCBUILDINGELEMENTPROXY",
     "IFCSPACE",
 ];
 
 impl TypeCommon {
-    /// The common set of the type entity `type_entity` (`IFCWALLTYPE`).
-    fn into_set(self, type_entity: &str) -> Option<PropertySet> {
-        let name = is_external_set(type_entity.strip_suffix("TYPE")?)?;
-        let mut properties = Vec::new();
-        if let Some(external) = self.is_external {
-            properties.push(Property {
-                name: "IsExternal".into(),
-                value: PropertyValue::Boolean(external),
+    /// The sets of the type entity `type_entity` (`IFCWALLTYPE`): its common
+    /// set, and for a stair or flight type the stair dimension sets.
+    fn into_sets(self, type_entity: &str) -> Vec<PropertySet> {
+        let Some(occurrence) = type_entity.strip_suffix("TYPE") else {
+            return Vec::new();
+        };
+        let mut sets = Vec::new();
+        if let Some(name) = is_external_set(occurrence) {
+            let mut properties = Vec::new();
+            if let Some(external) = self.is_external {
+                properties.push(Property {
+                    name: "IsExternal".into(),
+                    value: PropertyValue::Boolean(external),
+                });
+            }
+            if let Some(rating) = self.fire_rating {
+                properties.push(Property {
+                    name: "FireRating".into(),
+                    value: PropertyValue::Label(rating),
+                });
+            }
+            if let Some(bearing) = self.load_bearing.filter(|_| {
+                super::standard_property_sets::property_kind(name, "LoadBearing")
+                    == Some(super::standard_property_sets::StandardPropertyKind::Boolean)
+            }) {
+                properties.push(Property {
+                    name: "LoadBearing".into(),
+                    value: PropertyValue::Boolean(bearing),
+                });
+            }
+            if occurrence == "IFCSTAIR" && self.stair_type {
+                properties.extend(stair_type_zeros());
+            }
+            if !properties.is_empty() {
+                sets.push(PropertySet {
+                    name: name.into(),
+                    properties,
+                });
+            }
+        }
+        if occurrence == "IFCSTAIR" && self.stair_type {
+            sets.push(PropertySet {
+                name: "Pset_StairFlightCommon".into(),
+                properties: stair_type_zeros().into_iter().collect(),
             });
         }
-        if let Some(rating) = self.fire_rating {
-            properties.push(Property {
-                name: "FireRating".into(),
-                value: PropertyValue::Label(rating),
+        if let (true, Some(nosing)) = (occurrence == "IFCSTAIRFLIGHT", self.nosing_feet) {
+            sets.push(PropertySet {
+                name: "Pset_StairFlightCommon".into(),
+                properties: vec![Property {
+                    name: "NosingLength".into(),
+                    value: PropertyValue::LengthFeet(nosing),
+                }],
             });
         }
-        (!properties.is_empty()).then(|| PropertySet {
-            name: name.into(),
-            properties,
-        })
+        sets
     }
+}
+
+/// What revit-ifc's stair calculators give a stair type object, which is no
+/// stair and no flight: 0 risers, 0 treads and a nosing length of 0, in
+/// `Pset_StairCommon` and in `Pset_StairFlightCommon` (RE-287). The BIM4LCA
+/// office's three stair types of stairs with data and each R2025 stair model's
+/// hold them; its fourth stair type, of a family placed as a stair, holds none.
+fn stair_type_zeros() -> [Property; 3] {
+    [
+        Property {
+            name: "NosingLength".into(),
+            value: PropertyValue::LengthFeet(0.0),
+        },
+        Property {
+            name: "NumberOfRiser".into(),
+            value: PropertyValue::CountValue(0),
+        },
+        Property {
+            name: "NumberOfTreads".into(),
+            value: PropertyValue::CountValue(0),
+        },
+    ]
 }
 
 /// Note what the type object of `decoded`'s type holds in its common set
 /// (RE-286): the `IsExternal` Revit's exporter calculates for the type
-/// (`TYPE_IS_EXTERNAL_FIELD`) and the type's Fire Rating (RE-77), as revit-ifc
+/// (`TYPE_IS_EXTERNAL_FIELD`), the type's Fire Rating (RE-77) and its
+/// `LoadBearing` ([`LOAD_BEARING_TYPE_CLASSES`]), as revit-ifc
 /// runs the common set's entries on the type itself (CLEANROOM.md source 5).
 /// Two elements of one type that disagree leave it none.
 fn record_type_common(
@@ -2114,6 +2188,22 @@ fn record_type_common(
     let found = TypeCommon {
         is_external,
         fire_rating,
+        load_bearing: LOAD_BEARING_TYPE_CLASSES
+            .contains(&decoded.class.as_str())
+            .then_some(true),
+        stair_type: decoded.class == "Stair"
+            && decoded
+                .fields
+                .iter()
+                .any(|(name, _)| name == mvp::STAIR_RISER_COUNT_FIELD),
+        nosing_feet: decoded.fields.iter().find_map(|(name, value)| match value {
+            InstanceField::Float { value, .. }
+                if decoded.class == "StairsRun" && name == mvp::STAIR_NOSING_LENGTH_FIELD =>
+            {
+                Some(*value)
+            }
+            _ => None,
+        }),
     };
     commons
         .entry((type_id, format!("{upper}TYPE")))
