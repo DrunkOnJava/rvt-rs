@@ -5074,18 +5074,27 @@ fn attach_wall_layers(rf: &mut RevitFile, revit_version: u32, walls: &mut [Decod
     ) else {
         return;
     };
-    // W6: each wall's native record, for the walls its ends meet, and
-    // whether its top is joined to a roof or floor (RE-228).
-    let (native, top_joined) = if centreline_bodies {
+    // W6: each wall's native record, for the walls its ends meet, whether
+    // its top is joined to a roof or floor (RE-228), and whether anything
+    // joins to or cuts it (RE-266).
+    let crate::native_walls::WallRecords {
+        walls: native,
+        top_joined,
+        uncut,
+    } = if centreline_bodies {
         let ids: BTreeSet<u64> = wall_ids.iter().map(|&id| u64::from(id)).collect();
         crate::native_walls::native_walls_and_top_joins(rf, &ids).unwrap_or_default()
     } else {
-        (BTreeMap::new(), BTreeMap::new())
+        Default::default()
     };
     for wall in walls.iter_mut() {
         if let Some(joined) = wall.id.and_then(|id| top_joined.get(&u64::from(id))) {
             wall.fields
                 .push((WALL_TOP_JOINED_FIELD.into(), InstanceField::Bool(*joined)));
+        }
+        if wall.id.is_some_and(|id| uncut.contains(&u64::from(id))) {
+            wall.fields
+                .push((WALL_UNCUT_FIELD.into(), InstanceField::Bool(true)));
         }
         let picked = wall.fields.iter().find_map(|(name, value)| match value {
             InstanceField::ElementId { id, .. } if name == TYPE_ID_FIELD => Some(u64::from(*id)),
@@ -7401,6 +7410,12 @@ fn attach_named_parameters(
 /// native record ([`crate::native_walls::native_walls_and_top_joins`],
 /// RE-228): Revit's `Pset_WallCommon.ExtendToStructure`.
 pub const WALL_TOP_JOINED_FIELD: &str = "m_wall_top_joined";
+
+/// Field set on a wall whose native record holds no `JoinToRoofGStep`,
+/// `CutPairGStep` or `WallCutoutGStep`
+/// ([`crate::native_walls::native_walls_and_top_joins`], RE-266): its body
+/// is as tall as Revit's, and Revit's export writes that as its `Height`.
+pub const WALL_UNCUT_FIELD: &str = "m_wall_uncut";
 
 /// Field carrying the name of the phase an element was created in
 /// ([`crate::partition_phases`], #755).

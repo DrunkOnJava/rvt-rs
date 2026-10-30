@@ -192,7 +192,7 @@ pub fn native_walls(
     rf: &mut RevitFile,
     walls: &BTreeSet<u64>,
 ) -> anyhow::Result<BTreeMap<u64, NativeWall>> {
-    Ok(native_walls_and_top_joins(rf, walls)?.0)
+    Ok(native_walls_and_top_joins(rf, walls)?.walls)
 }
 
 /// The name of each curtain wall type in `types` whose native record is a
@@ -232,6 +232,17 @@ pub fn curtain_wall_type_names(
     Ok(out)
 }
 
+/// What [`native_walls_and_top_joins`] reads from walls' native records.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct WallRecords {
+    /// [`native_walls`].
+    pub walls: BTreeMap<u64, NativeWall>,
+    /// Whether each wall's top is joined to a roof or floor.
+    pub top_joined: BTreeMap<u64, bool>,
+    /// The walls nothing is joined to or cuts.
+    pub uncut: BTreeSet<u64>,
+}
+
 /// [`native_walls`], and for every one of `walls` whose `SWall` or `ArcWall`
 /// record is read, whether its top is joined to a roof or floor: one of its
 /// `JoinToRoofGStep` objects has `m_baseOrTop` 1 (a wall attached at its
@@ -239,14 +250,22 @@ pub fn curtain_wall_type_names(
 /// which revit-ifc's `ExtendToStructureCalculator` takes from Revit's
 /// `IsWallJoinedToTop` (CLEANROOM.md source 5): on all 607 walls of the
 /// BIM4LCA office as built and 589 at building permit (RE-228).
+///
+/// Also the walls whose record holds no `JoinToRoofGStep`, no
+/// `CutPairGStep` and no `WallCutoutGStep`: no roof or floor joined to it,
+/// no element cutting it, no hosted instance's cutout. The record box of
+/// each is as tall as Revit's body, and Revit's export writes its `Height`
+/// on every one: 81 of the BIM4LCA office's walls as built, 70 at building
+/// permit and 93 of puzzbobb's R2025 walls (RE-266).
 pub fn native_walls_and_top_joins(
     rf: &mut RevitFile,
     walls: &BTreeSet<u64>,
-) -> anyhow::Result<(BTreeMap<u64, NativeWall>, BTreeMap<u64, bool>)> {
+) -> anyhow::Result<WallRecords> {
     if walls.is_empty() {
-        return Ok((BTreeMap::new(), BTreeMap::new()));
+        return Ok(WallRecords::default());
     }
     let mut top_joined: BTreeMap<u64, bool> = BTreeMap::new();
+    let mut uncut: BTreeSet<u64> = BTreeSet::new();
     let options = Options {
         selected_ids: walls.clone(),
         selected_classes: BTreeSet::from(["BasicWallType".to_string()]),
@@ -281,6 +300,14 @@ pub fn native_walls_and_top_joins(
                     && object.fields.get("m_baseOrTop").and_then(Value::as_i64) == Some(1)
             }),
         );
+        if !graph.objects.iter().any(|object| {
+            matches!(
+                object.class_name.as_str(),
+                "JoinToRoofGStep" | "CutPairGStep" | "WallCutoutGStep"
+            )
+        }) {
+            uncut.insert(id);
+        }
         if class != "SWall" {
             return Ok(());
         }
@@ -396,7 +423,11 @@ pub fn native_walls_and_top_joins(
             (id, wall)
         })
         .collect();
-    Ok((walls, top_joined))
+    Ok(WallRecords {
+        walls,
+        top_joined,
+        uncut,
+    })
 }
 
 /// How far past the `end` (0 its start, 1 its end) of wall `id`'s curve its

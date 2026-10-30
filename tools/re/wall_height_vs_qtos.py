@@ -14,7 +14,10 @@ walls where they do not, which of the two Revit's is. It also counts the
 walls Revit's export writes more than once (a wall split by storey), and,
 for each wall whose `Height` rvt-rs's depth does not give, whether Revit's
 own body is as tall as that `Height` (its vertical span, from IfcOpenShell's
-geometry) and which representation Revit draws it with.
+geometry) and which representation Revit draws it with. Last, for the walls
+whose record holds no `JoinToRoofGStep`, `CutPairGStep` or `WallCutoutGStep`
+(RE-266), the ones whose `Height` rvt-rs writes as its depth: how many carry
+Revit's `Height`, a different one, or none.
 
 Usage:
 
@@ -33,10 +36,15 @@ from wall_numbers_vs_qtos import FOOT, read_probe  # noqa: E402
 
 DEPTH = "B.depth"
 UNCONNECTED = "P.-1001101"
+JOINED_OR_CUT = {"JoinToRoofGStep", "CutPairGStep", "WallCutoutGStep"}
 
 
 def same(a, b):
     return abs(a - b) <= 1e-6 * max(1.0, abs(a), abs(b))
+
+
+def uncut(fields):
+    return not any(name.split(".")[0].split("#")[0] in JOINED_OR_CUT for name in fields)
 
 
 def body_spans(f, tags):
@@ -106,6 +114,14 @@ def main():
             hits = [n for n, v in ((DEPTH, depth), (UNCONNECTED, unconnected)) if v is not None and same(v, revit)]
             outcome = " and ".join(hits) + " is Revit's" if hits else "neither is Revit's"
         counts[(group, outcome)] += 1
+        if uncut(fields) and depth is not None:
+            if revit is None:
+                verdict = "Revit writes none"
+            else:
+                verdict = "Revit's" if same(depth, revit) else "different"
+            counts[("uncut: depth", verdict)] += 1
+            if verdict != "Revit's":
+                lines.append(f"  tag:{tag} uncut: depth {depth}, Revit {revit}")
         if tag in spans:
             span, kinds = spans[tag]
             body = "no body" if span is None else ("as tall" if same(span, revit) else "not as tall")
