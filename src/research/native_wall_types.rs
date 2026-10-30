@@ -25,6 +25,7 @@ pub fn wall_type_functions(
     let mut wall_type: BTreeMap<u64, u64> = BTreeMap::new();
     let options = native_document::Options {
         selected_ids: walls.clone(),
+        releases: native_document::NATIVE_RELEASES,
         ..native_document::Options::default()
     };
     native_document::extract_graphs(rf, &options, |record| {
@@ -43,6 +44,7 @@ pub fn wall_type_functions(
     let mut function: BTreeMap<u64, i64> = BTreeMap::new();
     let options = native_document::Options {
         selected_ids: wall_type.values().copied().collect(),
+        releases: native_document::NATIVE_RELEASES,
         ..native_document::Options::default()
     };
     native_document::extract_graphs(rf, &options, |record| {

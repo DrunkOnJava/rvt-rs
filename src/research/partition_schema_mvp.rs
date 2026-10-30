@@ -254,6 +254,11 @@ pub fn recover_partition_schema_mvp(
         ] {
             attach_type_materials(&type_materials, elements);
         }
+        // --- A wall's type Function from its native type record (RE-185),
+        // and the IsExternal Revit's exporter calculates from it (RE-193);
+        // nothing else's IsExternal is read on these releases (RE-283) ---
+        attach_wall_type_functions(rf, revit_version, out.walls.iter_mut());
+        attach_calculated_is_external(out.walls.iter_mut(), false);
         return Ok(out);
     }
 

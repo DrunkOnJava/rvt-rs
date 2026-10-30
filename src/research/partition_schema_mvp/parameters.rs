@@ -130,7 +130,19 @@ pub(super) fn attach_is_external(
             }
         }
     }
-    for element in groups.into_iter().flat_map(|elements| elements.iter_mut()) {
+    attach_calculated_is_external(
+        groups.into_iter().flat_map(|elements| elements.iter_mut()),
+        last_step,
+    );
+}
+
+/// Give each of `elements` the value [`calculated_is_external`] finds for it
+/// ([`IS_EXTERNAL_FIELD`]).
+pub(super) fn attach_calculated_is_external<'a>(
+    elements: impl IntoIterator<Item = &'a mut DecodedElement>,
+    last_step: bool,
+) {
+    for element in elements {
         if let Some(external) = calculated_is_external(element, last_step) {
             element
                 .fields

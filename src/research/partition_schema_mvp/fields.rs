@@ -595,8 +595,12 @@ pub const CURVE_BOX_TOLERANCE_FEET: f64 = 2e-3;
 /// (RE-185).
 pub const TYPE_FUNCTION_FIELD: &str = "m_type_function";
 
-/// Releases whose walls' native type Function is measured (RE-185, RE-193).
-pub const WALL_TYPE_FUNCTION_REVIT_VERSIONS: &[u32] = &[2024, 2025];
+/// Releases whose walls' native type Function is measured (RE-185, RE-193;
+/// 2015 to 2023 against the same projects saved by a later release and
+/// against BIMcollab's and modelo_bim's exports, RE-283).
+pub const WALL_TYPE_FUNCTION_REVIT_VERSIONS: &[u32] = &[
+    2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025,
+];
 
 /// Prefix of a field carrying the Yes/No value of a project or shared
 /// parameter on an element, named by the parameter's name (RE-193).
