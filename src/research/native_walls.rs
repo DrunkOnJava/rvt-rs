@@ -226,6 +226,18 @@ pub fn curtain_wall_type_names(
     Ok(out)
 }
 
+/// The step classes of a wall's record that leave its solid as its joins and
+/// its type's layers make it (RE-270): every other class ending in `Step` may
+/// cut, join, embed or sweep it.
+const HARMLESS_STEPS: [&str; 6] = [
+    "BaseWallGStep",
+    "JoinEndGStep",
+    "VCWSplitFaceGStep",
+    "WallRefPlanesGStep",
+    "WallJoinTweakGStep",
+    "VerticalExtensionOfLayersGStep",
+];
+
 /// What [`native_walls_and_top_joins`] reads from walls' native records.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct WallRecords {
@@ -235,6 +247,12 @@ pub struct WallRecords {
     pub top_joined: BTreeMap<u64, bool>,
     /// The walls nothing is joined to or cuts.
     pub uncut: BTreeSet<u64>,
+    /// The walls whose record holds no step but the harmless ones (a wall's
+    /// base, ends, split faces, reference planes, join tweaks and layer
+    /// extensions):
+    /// nothing cuts, embeds or sweeps the solid its joins and layers make
+    /// (RE-270).
+    pub whole: BTreeSet<u64>,
 }
 
 /// [`native_walls`], and for every one of `walls` whose `SWall` or `ArcWall`
@@ -260,6 +278,7 @@ pub fn native_walls_and_top_joins(
     }
     let mut top_joined: BTreeMap<u64, bool> = BTreeMap::new();
     let mut uncut: BTreeSet<u64> = BTreeSet::new();
+    let mut whole: BTreeSet<u64> = BTreeSet::new();
     let options = Options {
         selected_ids: walls.clone(),
         selected_classes: BTreeSet::from(["BasicWallType".to_string()]),
@@ -301,6 +320,12 @@ pub fn native_walls_and_top_joins(
             )
         }) {
             uncut.insert(id);
+        }
+        if graph.objects.iter().all(|object| {
+            !object.class_name.ends_with("Step")
+                || HARMLESS_STEPS.contains(&object.class_name.as_str())
+        }) {
+            whole.insert(id);
         }
         if class != "SWall" {
             return Ok(());
@@ -421,6 +446,7 @@ pub fn native_walls_and_top_joins(
         walls,
         top_joined,
         uncut,
+        whole,
     })
 }
 
