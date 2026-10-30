@@ -1664,12 +1664,13 @@ fn level_parameter_property_set(decoded: &DecodedElement, ifc_type: &str) -> Opt
 /// As revit-ifc's calculators give them (CLEANROOM.md source 5): a flight's
 /// number of treads and nosing length are its own (RE-92, RE-52), and a
 /// stair's nosing length the one its runs share; `TreadLengthAtOffset` is
-/// the stair's tread depth, which a flight carries, and so is a flight's
-/// `TreadLengthAtInnerSide`, since its run type has no inside-boundary
-/// width. A stair's `TreadLengthAtInnerSide` is its stair type's
-/// inside-boundary width where that is set, which is not read, so it is not
-/// written; nor is `WalkingLineOffset`, which revit-ifc gives as half the
-/// run's width in feet and the export scales as millimetres.
+/// the stair's tread depth, which a flight carries, and so is
+/// `TreadLengthAtInnerSide` of a flight and of its stair, which revit-ifc
+/// takes from the stair type's inside-boundary width where that is set and
+/// else from the tread depth (RE-287); the flights' and stairs' of the BIM4LCA
+/// office, as built and at permit, and of the R2025 models equal the depth, as
+/// no type there sets one. `WalkingLineOffset` is not written: revit-ifc gives
+/// it as half the run's width in feet and the export scales it as millimetres.
 fn stair_property_set(decoded: &DecodedElement) -> Option<PropertySet> {
     use crate::partition_schema_mvp as mvp;
     let (name, flight) = match decoded.class.as_str() {
@@ -1686,12 +1687,10 @@ fn stair_property_set(decoded: &DecodedElement) -> Option<PropertySet> {
                 name: "TreadLengthAtOffset".into(),
                 value: PropertyValue::PositiveLengthFeet(*value),
             });
-            if flight {
-                properties.push(Property {
-                    name: "TreadLengthAtInnerSide".into(),
-                    value: PropertyValue::PositiveLengthFeet(*value),
-                });
-            }
+            properties.push(Property {
+                name: "TreadLengthAtInnerSide".into(),
+                value: PropertyValue::PositiveLengthFeet(*value),
+            });
         }
         let property = match (field.as_str(), value) {
             (mvp::STAIR_TREAD_COUNT_FIELD, InstanceField::Integer { value, .. }) if flight => {
@@ -2487,6 +2486,17 @@ fn add_beam_roll(sets: &mut Vec<PropertySet>, ifc_type: &str, decoded: &DecodedE
 /// length, and its `GrossVolume`, the area times that length. Its
 /// `Perimeter` is left out: Revit's export writes it in feet, unscaled, in
 /// a file whose length unit is millimetres (RE-235 §5).
+///
+/// Where the floor's type's layers are read and its record holds no step that
+/// cuts it ([`crate::partition_schema_mvp::SLAB_UNCUT_FIELD`]), also its
+/// `NetVolume` (RE-295, #1016), that area times the layers' total thickness:
+/// the volume of the floor's solid, which Revit's export writes, is that on
+/// every floor of the BIM4LCA office as built and at building permit that
+/// nothing cuts, flat or sloped, whatever its layers. Where the type has more
+/// than one layer, also its `Width`, the same total: Revit's export writes a
+/// compound floor's type thickness there, where on a floor of one layer it
+/// writes its profile's extent along the extrusion's Y axis, which no field of
+/// the floor's record gives.
 fn add_slab_gross_area(
     sets: &mut Vec<PropertySet>,
     ifc_type: &str,
@@ -2509,9 +2519,29 @@ fn add_slab_gross_area(
     }];
     const TOLERANCE_FEET: f64 = 1e-3;
     let depth = body.height_feet;
-    let layered = crate::partition_schema_mvp::element_layers_from_fields(&decoded.fields)
-        .filter(|layers| layers.stacked && layers.layers.len() == 1)
-        .is_some_and(|layers| (layers.layers[0].width_feet - depth).abs() <= TOLERANCE_FEET);
+    let layers = crate::partition_schema_mvp::element_layers_from_fields(&decoded.fields)
+        .filter(|layers| layers.stacked && !layers.layers.is_empty());
+    let layered = layers.as_ref().is_some_and(|layers| {
+        layers.layers.len() == 1 && (layers.layers[0].width_feet - depth).abs() <= TOLERANCE_FEET
+    });
+    let float = |wanted: &str| {
+        decoded.fields.iter().find_map(|(name, value)| match value {
+            InstanceField::Float { value, .. } if name == wanted => Some(*value),
+            _ => None,
+        })
+    };
+    let layer_count = decoded.fields.iter().find_map(|(name, value)| match value {
+        InstanceField::Integer { value, .. }
+            if name == crate::partition_schema_mvp::SLAB_TYPE_LAYER_COUNT_FIELD =>
+        {
+            Some(*value)
+        }
+        _ => None,
+    });
+    let uncut = decoded.fields.iter().any(|(name, value)| {
+        name == crate::partition_schema_mvp::SLAB_UNCUT_FIELD
+            && matches!(value, InstanceField::Bool(true))
+    });
     if layered && depth.is_finite() && depth > 0.0 {
         properties.push(Property {
             name: "Depth".into(),
@@ -2521,6 +2551,22 @@ fn add_slab_gross_area(
             name: "GrossVolume".into(),
             value: PropertyValue::VolumeCubicFeet(area * depth),
         });
+    }
+    if let Some(thickness) = float(crate::partition_schema_mvp::SLAB_TYPE_THICKNESS_FIELD)
+        .filter(|thickness| thickness.is_finite() && *thickness > 0.0)
+    {
+        if uncut {
+            properties.push(Property {
+                name: "NetVolume".into(),
+                value: PropertyValue::VolumeCubicFeet(area * thickness),
+            });
+        }
+        if layer_count.is_some_and(|count| count > 1) {
+            properties.push(Property {
+                name: "Width".into(),
+                value: PropertyValue::PositiveLengthFeet(thickness),
+            });
+        }
     }
     sets.push(PropertySet {
         name: "Qto_SlabBaseQuantities".into(),
