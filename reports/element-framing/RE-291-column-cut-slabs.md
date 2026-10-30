@@ -4,8 +4,8 @@
 **Issues:** #1046 (quantities Revit computes from its joined geometry), #1016 (quantities), W7 of [`docs/release-1.0-criteria.md`](../../docs/release-1.0-criteria.md); follows RE-247 (a column's `Length` and the 18 meshed columns nothing told apart), RE-202 (a column's joins) and RE-221 (hollow-section columns)
 **Artefacts:** the BIM4LCA office as built and at building permit (Revit 2024, Revit 24.0.5's IFC4 exports, CC BY-SA 4.0, `research/bim4lca-measure.tsv`) and puzzbobb's R2025 models (Revit 2025, Apache-2.0, `research/r2025-models.tsv`), as Measure fetches them
 **Probe:** `probes/examples/probe_re291_column_pairs.rs`
-**Runs:** Measure [41139043243](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41139043243) (the probe on both offices, joined offline to Revit's bodies and quantities by `Tag`), [41136551451](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41136551451) (`qto_candidates_misses`, `qto_presence_list` on `main`) and, for the shipped rule, [41146562639](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41146562639) (this change at 9f04ff8c against `main` at 9637d5ff, every model and scorer, rvt-rs's IFC kept) and [41140980550](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41140980550) (`probe_re291_column_type_parameters`)
-**Result:** positive. Revit's export draws a column as a cut mesh exactly where a slab its `CutPairGStep` names lies across one end of it: all 18 of the office's meshed columns at building permit have one, none of the 327 it draws as an extrusion has, and none of the 279 as built has. On a column drawn as its record box and joined by a clean pair, where nothing it is paired with cuts it or crosses an end of it, the box's `CrossSectionArea`, `OuterSurfaceArea`, `GrossVolume` and `NetVolume` are Revit's on every one: 186 columns as built, 250 at permit, none different and none Revit's export leaves out. A joined column's `Length` is left out, as the maintainer decided (2026-10-26); §5 says what this finding changes for it.
+**Runs:** Measure [41139043243](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41139043243) (the probe on both offices, joined offline to Revit's bodies and quantities by `Tag`), [41136551451](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41136551451) (`qto_candidates_misses`, `qto_presence_list` on `main`) and, for the shipped rule, [41147469913](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41147469913) (this change at c8d52649 against `main` at 9637d5ff, every model and scorer, rvt-rs's IFC kept) and [41140980550](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41140980550) (`probe_re291_column_type_parameters`)
+**Result:** positive. Revit's export draws a column as a cut mesh exactly where a slab its `CutPairGStep` names lies across one end of it: all 18 of the office's meshed columns at building permit have one, none of the 327 it draws as an extrusion has, and none of the 279 as built has. On a column drawn as its record box whose type is a plain rectangle, joined by no clean pair or by clean pairs where nothing it is paired with cuts it or crosses an end of it, the box's `CrossSectionArea`, `OuterSurfaceArea`, `GrossVolume` and `NetVolume` are Revit's on every one: 199 columns as built (186 joined by a clean pair), 265 at permit (250 joined), none different and none Revit's export leaves out. The one round column, whose type holds a `Diameter`, gets none. A joined column's `Length` is left out, as the maintainer decided (2026-10-26); §5 says what this finding changes for it.
 
 ## 1. What RE-247 could not tell apart
 
@@ -31,22 +31,24 @@ The three extruded columns with a `CutPairGStep` to a wall (1343914, 1343926 and
 
 ## 3. The rule
 
-The record's box is Revit's extrusion for a column drawn as that box (`partition_element_record_bbox`) when nothing cuts it or crosses an end of it. A column is taken when all of these hold:
+The record's box is Revit's extrusion for a column drawn as that box (`partition_element_record_bbox`) when its section is a rectangle and nothing cuts it or crosses an end of it. A column is taken when all of these hold:
 
-- its record holds a `CleanPairGStep` (the columns that hold none are RE-247's), and every pair step of its record names an element rvt-rs exports (`native_column_joins::ColumnJoins::cut_partners`, `clean_partners`; a step whose `m_otherId` is not read leaves the column out);
-- every element its cut pairs name is a slab lying wholly above or wholly below the column, so that it cannot cut it;
-- every element its clean pairs name is a wall, a covering or a column, or a slab lying wholly above or wholly below it. A beam, roof or footing is not accepted: the only columns the office pairs with a beam are 8 hollow-section ones (RE-221's), and no box-drawn column is paired with one, so a beam's extent is not measured here;
-- its body is the record box, a rectangle, with a positive size.
+- its body is the record box, a rectangle with a positive size;
+- its type is a plain rectangle. `partition_type_parameters::type_named_lengths` reads the length parameters of the column's type by the captions of their `ParamElemFamily` elements (the reading RE-221 uses for hollow sections, now shared); the type must hold a `b`, or an `h` and a `b`, and none of `Ht`, `t`, `kr` or `Diameter`, and its two sides must be the box's two sides in either order within 1e-4 ft. On the office as built (`probe_re291_column_type_parameters.rs`, run 41140980550) the square concrete types (PI-1, PI-7, PI-8 and PI-9) hold one length parameter, `b`, the box's side; the rectangular concrete types (PI-3, PI-10, PI-11) hold `h` and `b`, the box's two sides; the hollow sections hold `b`, `Ht`, `t` and `kr` (RE-221); and the one round column's type (`Round Column:PI-6`) holds one parameter, `Diameter` (0.492126 ft), and no `b`. A type read by other captions gets none until a file with one is measured;
+- no `CleanPairGStep` joins it (RE-247: Revit draws every such column as an extrusion, 93 as built and 71 at permit; its `Length` is RE-247's), or, where one does, the record's pair steps all name an element rvt-rs exports (`native_column_joins::ColumnJoins::cut_partners`, `clean_partners`; a step whose `m_otherId` is not read leaves the column out) and
+  - every element its cut pairs name is a slab lying wholly above or wholly below the column, so that it cannot cut it;
+  - every element its clean pairs name is a wall, a covering or a column, or a slab lying wholly above or wholly below it. A beam, roof or footing is not accepted: the only columns the office pairs with a beam are 8 hollow-section ones (RE-221's), and no box-drawn column is paired with one, so a beam's extent is not measured here.
 
-`export_content/column_quantities.rs` writes `CrossSectionArea` (width times depth), `OuterSurfaceArea` (the perimeter times the height), and `GrossVolume` and `NetVolume` (the area times the height). Any other pair step, a wall or covering that cuts it, a slab across an end, or an element rvt-rs does not export leaves the column out. The 3 extruded columns with a slab across their top by a clean pair are left out although Revit draws them as their extrusion: nothing measured says a clean pair alone never cuts, and 3 of 3 is not that.
+`export_content/column_quantities.rs` writes `CrossSectionArea` (width times depth), `OuterSurfaceArea` (the perimeter times the height), and `GrossVolume` and `NetVolume` (the area times the height). Any other pair step, a wall or covering that cuts it, a slab across an end, or an element rvt-rs does not export leaves a joined column out. The 3 extruded columns with a slab across their top by a clean pair are left out although Revit draws them as their extrusion: nothing measured says a clean pair alone never cuts, and 3 of 3 is not that.
 
-Measured offline on the probe's output joined to Revit's quantities (columns that are not hollow-section ones):
+Measured offline on the probes' output joined to Revit's quantities (columns that are not hollow-section ones), and confirmed by the census of the unfiltered run:
 
 | | office as built | office at permit |
 |---|---:|---:|
-| columns drawn as their box, joined by a clean pair | 186 | 274 |
-| ... taken by the rule | 186 | 250 |
-| ... the four quantities equal Revit's, of those taken | 186 | 250 |
+| columns drawn as their box whose type is a plain rectangle | 199 | 289 |
+| ... of them joined by a clean pair | 186 | 274 |
+| ... taken by the rule | 199 | 265 |
+| ... the four quantities equal Revit's, of those taken | 199 | 265 |
 | ... different, or Revit gives none | 0 | 0 |
 | left out: meshed | 0 | 18 |
 | left out: a cut pair with a wall (two of the three differ) | 0 | 3 |
@@ -68,7 +70,8 @@ The office as built has no meshed column. On the 327 extruded columns at permit 
 
 ## 4. What stays unwritten
 
-- A column no clean pair joins and that is drawn as its box (13 as built, 15 at permit): the box's four quantities are Revit's on all of them but the round column 3053209 (`Round Column:PI-6`, a 150 mm column whose `CrossSectionArea` is 0.01766 m² against the box's 0.0225), which has no pair at all and which rvt-rs draws as a box. Nothing the export reads yet says a box-drawn column is round, so they stay out (RE-247 §8). The family's parameters do: `probe_re291_column_type_parameters.rs` (run 41140980550) finds that the round column's type holds one length parameter, captioned `Diameter`, while every rectangular and square concrete column type holds a `b` (square) or an `h` and a `b` (rectangular) equal to its columns' record boxes' sides. A check that the type holds those would take the 13 and 15 columns and guard the joined rule against a round column it has not met; it is [#1203](https://github.com/DrunkOnJava/rvt-rs/issues/1203) item 2.
+- The round column (3053209, `Round Column:PI-6`, 150 mm; one on each file): its type holds a `Diameter` and no `b`, so it gets none. The box's `CrossSectionArea` is 0.0225 m² where Revit's is 0.01766, and rvt-rs draws it as a box (W6). Circle quantities from the diameter would be the next reading ([#1203](https://github.com/DrunkOnJava/rvt-rs/issues/1203)).
+- A column whose type does not hold `b` (another family's captions): none, until a file with one is measured.
 - A hollow-section column joined by a clean pair: none on either file.
 - The 18 meshed columns' `CrossSectionArea` and `NetVolume`, which Revit writes and the box does not give.
 - `Length`: see §5.
@@ -82,7 +85,7 @@ The maintainer left a joined column's `Length` out (2026-10-26) because Revit's 
 ```bash
 gh workflow run measure.yml --ref main -f ref=5458791ee0fe6dae21361b3e38066d4f65b826d1 -f base=none -f nordic=true \
   -f models="nordic-office-*" -f scorers=none -f probe=probe_re291_column_pairs -f probe_scorer=-
-gh workflow run measure.yml --ref main -f ref=9f04ff8cb3723a6e7c0dfb64e97f78aa3da0c960 -f base=main -f nordic=true -f r2025=true -f keep_ifc=true
+gh workflow run measure.yml --ref main -f ref=c8d5264ce3909dc61bb99e8daa0633bd23064f58 -f base=main -f nordic=true -f r2025=true -f keep_ifc=true
 ```
 
 The probe's lines `col <tag> z <base> box <w> <d> <h> pairs <step>:<other>:<entity>:<base>:<height> ...` join to Revit's bodies by `Tag` (a column is meshed where its `Qto_ColumnBaseQuantities` has no `Length`).
