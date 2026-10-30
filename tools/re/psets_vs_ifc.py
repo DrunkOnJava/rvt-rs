@@ -33,7 +33,9 @@ does not: its key, Revit's entity and value, and rvt-rs's entity and Name.
 Where Revit's export writes no standard property set at all, as its export
 of Core Interior (RE-239 §5), rvt-rs's values are counted apart rather than
 as values Revit does not write, as qtos_vs_ifc.py counts quantities where
-the export has none (RE-242).
+the export has none (RE-242). Where Revit's export is IFC2X3, an IFC4
+property that IFC2X3's definition of its set does not have (IfcOpenShell's
+buildingSMART templates) is counted apart too: that export cannot write it.
 
 Needs IfcOpenShell (the version tools/ci/requirements-ifc.txt pins).
 """
@@ -44,6 +46,7 @@ import re
 import sys
 
 import ifcopenshell
+import ifcopenshell.util.pset
 import ifcopenshell.util.unit
 
 
@@ -154,6 +157,20 @@ IFC2X3_TWICE = {("Pset_PrecastConcreteElementGeneral", "SerialNumber")}
 # so rvt-rs writes it in its own set, which this scorer does not read; counted
 # apart.
 IFC2X3_OWN_SET = {("Pset_PipeFittingTypeCommon", "NominalDiameter")}
+
+
+def ifc2x3_holds(pset, prop):
+    """Whether an IFC2X3 export can hold the IFC4 property `pset`.`prop`:
+    buildingSMART's IFC2X3 definition of the set has it (IfcOpenShell's
+    templates), or this scorer reads it from the IFC2X3 set that keeps it."""
+    if (pset == "Pset_SpaceCoveringRequirements" and prop in IFC2X3_SPACE_COVERINGS) or (
+        prop == "Reference" and (pset == "Pset_EnvironmentalImpactIndicators" or pset in IFC4_TYPE_SETS.values())
+    ):
+        return True
+    if (pset, prop) == ("Pset_PipeSegmentOccurrence", IFC2X3_INVERT[1]):
+        return True
+    template = ifcopenshell.util.pset.get_template("IFC2X3").get_by_name(pset)
+    return template is not None and any(t.Name == prop for t in template.HasPropertyTemplates or ())
 
 
 def properties(path):
@@ -323,6 +340,14 @@ def main(argv):
     # what rvt-rs writes cannot be scored against it, so it is counted apart.
     setup_apart = extra if not theirs else 0
     extra -= setup_apart
+    # An IFC2X3 export cannot write an IFC4 property IFC2X3's definition of its
+    # set does not have, as RE1's exports by Revit 26.2 cannot: counted apart.
+    beyond_ifc2x3 = collections.Counter(
+        (pset, prop)
+        for key, pset, prop in ours
+        if theirs and their_ifc2x3 and (key, pset, prop) not in theirs and not ifc2x3_holds(pset, prop)
+    )
+    extra -= sum(beyond_ifc2x3.values())
     print(
         f"Revit values on objects rvt-rs writes: {totals[0]}; equal: {totals[1]}; "
         f"different: {totals[2]}; missing: {totals[3]}; rvt-rs values Revit does not write: {extra}"
@@ -343,6 +368,13 @@ def main(argv):
             f"Revit's export writes no standard property set (its setup, RE-239 §5);"
             f" rvt-rs values not scored: {setup_apart}"
         )
+    if beyond_ifc2x3:
+        print(
+            f"IFC4 properties IFC2X3's definitions do not have, which Revit's IFC2X3 export cannot write,"
+            f" not scored: {sum(beyond_ifc2x3.values())}"
+        )
+        for (pset, prop), n in sorted(beyond_ifc2x3.items()):
+            print(f"  {pset}.{prop}: {n}")
     if as_quantities:
         print(f"IFC2X3 lengths IFC4 holds as quantities, not scored here: {as_quantities}")
     if twice:
@@ -351,7 +383,7 @@ def main(argv):
         print(f"IFC2X3 values no IFC4 set Revit's export writes holds, in rvt-rs's own set, not scored here: {in_own_set}")
     only = collections.defaultdict(lambda: [0, 0])
     for key, pset, prop in ours if theirs else ():
-        if (key, pset, prop) not in theirs:
+        if (key, pset, prop) not in theirs and (pset, prop) not in beyond_ifc2x3:
             only[(pset, prop)][0 if key in their_objects else 1] += 1
     print("rvt-rs values Revit does not write, on objects Revit writes and on others:")
     for (pset, prop), (written, other) in sorted(only.items()):
