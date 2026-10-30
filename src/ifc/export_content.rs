@@ -61,7 +61,7 @@ pub struct TypedProductionAppend {
     /// the type's ElementId and the STEP name of the type entity
     /// (`IFCWALLTYPE`): its common set's `IsExternal`, `FireRating` and
     /// `LoadBearing` (RE-286), and a stair or flight type's dimensions
-    /// (RE-287). A type whose elements disagree has none.
+    /// (RE-286). A type whose elements disagree has none.
     pub type_entity_sets: BTreeMap<u32, BTreeMap<String, Vec<PropertySet>>>,
     /// Each family instance's original symbol, by ElementId (RE-167).
     pub element_original_symbols: BTreeMap<u32, u32>,
@@ -2031,9 +2031,9 @@ struct TypeCommon {
     fire_rating: Option<String>,
     load_bearing: Option<bool>,
     /// A stair type of a stair whose data is read: revit-ifc's stair
-    /// calculators, run on the type itself, give 0 (RE-287).
+    /// calculators, run on the type itself, give 0 (RE-286).
     stair_type: bool,
-    /// A flight type's nosing length, feet: its run type's (RE-287).
+    /// A flight type's nosing length, feet: its run type's (RE-286).
     nosing_feet: Option<f64>,
 }
 
@@ -2121,7 +2121,7 @@ impl TypeCommon {
 
 /// What revit-ifc's stair calculators give a stair type object, which is no
 /// stair and no flight: 0 risers, 0 treads and a nosing length of 0, in
-/// `Pset_StairCommon` (RE-287), and with `--revit-set-placement` in
+/// `Pset_StairCommon` (RE-286), and with `--revit-set-placement` in
 /// `Pset_StairFlightCommon` too ([`super::revit_set_placement`]). The BIM4LCA
 /// office's three stair types of stairs with data and each R2025 stair model's
 /// hold them; its fourth stair type, of a family placed as a stair, holds none.

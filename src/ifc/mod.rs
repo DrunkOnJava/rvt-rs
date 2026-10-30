@@ -173,7 +173,7 @@ pub struct IfcModel {
     /// The standard property sets of each type object, by its type's
     /// ElementId and the STEP name of the type entity (`IFCWALLTYPE`): the
     /// common set's `IsExternal`, `FireRating` and `LoadBearing` (RE-286) and a
-    /// stair or flight type's dimensions (RE-287). The writer adds
+    /// stair or flight type's dimensions (RE-286). The writer adds
     /// each to the `HasPropertySets` of the type object of that type and
     /// entity.
     #[serde(default)]

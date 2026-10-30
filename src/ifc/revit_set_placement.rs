@@ -117,12 +117,12 @@ fn revit_placements(
 }
 
 /// The properties of a stair type's `Pset_StairCommon` that Revit's export
-/// repeats in the `Pset_StairFlightCommon` of the same type object (RE-287).
+/// repeats in the `Pset_StairFlightCommon` of the same type object (RE-286).
 const STAIR_TYPE_DIMENSIONS: [&str; 3] = ["NosingLength", "NumberOfRiser", "NumberOfTreads"];
 
 /// Give each stair type object that holds the stair dimensions of
 /// `Pset_StairCommon` the same in `Pset_StairFlightCommon`, which revit-ifc
-/// matches to it by the start of the flight entity's name (RE-287). Returns
+/// matches to it by the start of the flight entity's name (RE-286). Returns
 /// the properties written.
 fn add_stair_type_flight_sets(model: &mut IfcModel) -> usize {
     let mut added = 0;
