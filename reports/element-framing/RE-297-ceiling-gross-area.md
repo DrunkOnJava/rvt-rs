@@ -38,7 +38,7 @@ This change against RE-295's (Measure 41140501767, unfiltered, `-f nordic=true -
 | office as built | 0 → 57 of 90 | 59 → 99 of 111 | 0 | 0 |
 | office at permit | 0 → 45 of 75 | 55 → 75 of 75 | 0 | 0 |
 
-RESULTS_PLACEHOLDER
+The office as built goes from 28,065 to 28,162 of the 39,388 quantities equal and at permit from 28,011 to 28,076 of 39,679, with the mullion's one difference and none Revit's export leaves out. RE1 Architecture's 6 ceilings carry a `GrossArea` too, counted apart since that export has no base quantities (86 → 92). No R2025 export moves (they have no coverings), nor Core Interior's, and the only other output that moves is `diagnostics.json`'s `total_entities` (+87 as built). Every other scorer's output (properties, geometry, validation) is as RE-295's. The run measures the commit before the cut marker was made to read ceilings and roofs in the pass RE-295 adds; Measure [41141309271](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41141309271) at the commit after it gives the same census.
 
 ## 6. What stays open
 
@@ -49,6 +49,6 @@ RESULTS_PLACEHOLDER
 ## 7. Reproduce
 
 ```bash
-gh workflow run measure.yml --ref main -f ref=SHA_PLACEHOLDER -f base=main -f nordic=true -f r2025=true
+gh workflow run measure.yml --ref main -f ref=8ced5de49353bbf6afd3fbb27fd388d12ee3c0d8 -f base=main -f nordic=true -f r2025=true
 gh workflow run measure.yml --ref main -f ref=8090d379266f5e7ec7ddf508e9625b9b6804a85f -f base=none -f nordic=true -f models="nordic-office-*" -f scorers=none -f probe=probe_re297_covering_records -f probe_scorer=-
 ```
