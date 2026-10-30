@@ -31,6 +31,11 @@ pub struct Options {
     // Tracker: B79.
     pub selected_classes: BTreeSet<String>,
     pub channels: BTreeSet<u64>,
+    /// A cap on a stored stream tighter than the file's own
+    /// [`crate::reader::OpenLimits::max_stream_bytes`]. The default,
+    /// `u64::MAX`, leaves the file's limit, which `--large-model` raises; a
+    /// partition over the limit is named in [`RevitFile::unread_streams`] and
+    /// skipped, so the rest of the file is still read (#1075).
     pub max_stream_bytes: u64,
     pub max_group_bytes: usize,
     pub max_graph_values: usize,
@@ -53,7 +58,7 @@ impl Default for Options {
             selected_ids: BTreeSet::new(),
             selected_classes: BTreeSet::new(),
             channels: BTreeSet::from([102]),
-            max_stream_bytes: 512 * 1024 * 1024,
+            max_stream_bytes: u64::MAX,
             max_group_bytes: 256 * 1024 * 1024,
             max_graph_values: 100_000,
             max_graph_objects: 100_000,
@@ -183,13 +188,28 @@ fn decode_single(prepared: &[u8], offset: usize) -> Result<(Vec<u8>, StreamEnvel
     ))
 }
 
+/// Stored partition `name` under the file's own stream limit, or `cap` where
+/// that is tighter. `None` when it is over the limit: [`RevitFile::read_stream`]
+/// names it in [`RevitFile::unread_streams`] under the file's limit.
+fn read_partition(file: &mut RevitFile, name: &str, cap: u64) -> Result<Option<Vec<u8>>> {
+    let read = if cap < file.limits().max_stream_bytes {
+        file.read_stream_with_limit(name, cap)
+    } else {
+        file.read_stream(name)
+    };
+    match read {
+        Ok(stored) => Ok(Some(stored)),
+        Err(crate::Error::TooLarge { .. }) => Ok(None),
+        Err(err) => Err(err.into()),
+    }
+}
 /// Read one CRC/ISIZE-validated member. Callers needing storage coverage should
 /// use `extract`, whose summary records the uninterpreted suffix explicitly.
 pub fn read_single(file: &mut RevitFile, name: &str) -> Result<Vec<u8>> {
     Ok(read_single_envelope(file, name)?.0)
 }
 fn read_single_envelope(file: &mut RevitFile, name: &str) -> Result<(Vec<u8>, StreamEnvelope)> {
-    let stored = file.read_stream_with_limit(name, 512 * 1024 * 1024)?;
+    let stored = file.read_stream(name)?;
     let prepared = compression::prepare_stream_for_inflate(name, &stored);
     decode_single(&prepared, if name == "Formats/Latest" { 0 } else { 8 })
 }
@@ -507,7 +527,7 @@ fn extract_records(
     };
     let mut summary = Summary {
         budgets: ResourceBudget {
-            max_stream_bytes: options.max_stream_bytes,
+            max_stream_bytes: options.max_stream_bytes.min(file.limits().max_stream_bytes),
             max_group_bytes: options.max_group_bytes,
             max_graph_values: options.max_graph_values,
             max_graph_objects: options.max_graph_objects,
@@ -573,7 +593,9 @@ fn extract_records(
     });
     for name in names.iter().filter(|_| walked.is_none()) {
         let partition: u32 = name[11..].parse()?;
-        let stored = file.read_stream_with_limit(name, options.max_stream_bytes)?;
+        let Some(stored) = read_partition(file, name, options.max_stream_bytes)? else {
+            continue;
+        };
         let prepared = compression::prepare_stream_for_inflate(name, &stored);
         let inflated = file.inflated_partition(name).ok();
         native_segments::walk_inflated(
@@ -615,7 +637,9 @@ fn extract_records(
         {
             continue;
         }
-        let stored = file.read_stream_with_limit(&name, options.max_stream_bytes)?;
+        let Some(stored) = read_partition(file, &name, options.max_stream_bytes)? else {
+            continue;
+        };
         let prepared = compression::prepare_stream_for_inflate(&name, &stored);
         let inflated = file.inflated_partition(&name).ok();
         let stats = native_segments::walk_inflated(
