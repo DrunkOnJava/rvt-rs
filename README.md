@@ -24,7 +24,7 @@ Support depends on the Revit release, the file type and the feature. Opening a f
 
 The recovery figures in this README compare rvt-rs's export with Revit's own IFC export of the same file, element by element, on the models named in [What rvt-rs reads from real projects](#what-rvt-rs-reads-from-real-projects). Other models of the same releases are expected to behave alike but are not measured, and files saved by the same release can store their data differently. [`docs/support-matrix.json`](docs/support-matrix.json) records each capability with its evidence and its status ceiling.
 
-This README describes the development branch, `main`, which the browser viewer is also built from. Installed packages are the latest release; [Release 0.10.0 and main](#release-0100-and-main) says what differs.
+This README describes the development branch, `main`, which the browser viewer is also built from. Installed packages are the latest release; [Release 0.11.0 and main](#release-0110-and-main) says what differs.
 
 ## What you can rely on, by input
 
@@ -45,18 +45,21 @@ This README describes the development branch, `main`, which the browser viewer i
 
 `rvt-capabilities --matrix -f text` prints the support matrix; [`docs/status.md`](docs/status.md) and [`docs/supported-profile.md`](docs/supported-profile.md) summarise it.
 
-## Release 0.10.0 and main
+## Release 0.11.0 and main
 
-The latest release is [v0.10.0](https://github.com/DrunkOnJava/rvt-rs/releases/tag/v0.10.0) (2026-10-27). `cargo install rvt --locked`, `pip install rvt`, the release archives and the container image install it, and "Upgrading from 0.9" in the [changelog](CHANGELOG.md) says what a user of 0.9 has to change: nothing. What 0.10.0 added, in brief, each new value measured equal to Revit's export with none different ([#1016](https://github.com/DrunkOnJava/rvt-rs/issues/1016)):
+The latest release is [v0.11.0](https://github.com/DrunkOnJava/rvt-rs/releases/tag/v0.11.0) (2026-10-30). `cargo install rvt --locked`, `pip install rvt`, the release archives and the container image install it, and "Upgrading from 0.10" in the [changelog](CHANGELOG.md) says what a user of 0.10 has to change: Rust code that names a removed item, scripts that expect an empty model with exit status 0 from a model over the resource limits, and anyone who wants doors and windows drawn as boxes. What 0.11.0 changed, in brief:
 
-- **More base quantities:** walls' `Width` on slanted and unplaced walls too (all 607 of the BIM4LCA office's as built), a wall's `Length` where its curve cut back at its joins is as long as its curve (RE-252); straight curtain walls' `Length`, and beams' where they are drawn along their location line; floors' `GrossArea` (RE-249), and `Depth` and `GrossVolume` where the type has one layer; ceilings' `Width` (RE-250); unjoined hollow-section columns' `CrossSectionArea`, `OuterSurfaceArea` and `GrossVolume` (RE-247); spaces' `Height` where the room's record holds its solid's faces (RE-255); and the `Length` of a stair railing whose path is one line along its stair's runs (RE-254). On the BIM4LCA office as built, 21,065 of the quantities Revit's export writes, against 20,157 in 0.9.0.
-- **Type parameters:** `rvt-elements` and Python list a wall's, floor's, ceiling's or roof's type parameters after its own, from the type its native record names (RE-256, puzzbobb's #1065).
-- **Export diagnostics:** `rvt-ifc --diagnostics` lists each wall's native curve length and the walls whose native record names the type rvt-rs gives them, for the quantity census (RE-252, RE-253); the IFC does not change.
-- **Research:** what a mullion's `NetSurfaceArea` counts (RE-248), what a wall's record keeps of Revit's wall quantities (RE-251), which type a wall's records name (RE-253), how stair-well railings' `Length` follows their stair's runs (RE-254) and what a space's volume is not (RE-255).
+- **Large models ([#1075](https://github.com/DrunkOnJava/rvt-rs/issues/1075)):** a stream over the reader's resource limits is named in the export diagnostics, and `rvt-ifc` and `rvt-gltf` exit with status 3 instead of writing an empty model. `--large-model` (streams up to 2 GiB), `--max-stream-bytes` and `--max-inflate-bytes` raise the limits, `--allow-partial` writes what was read, and the viewer offers a retry with the large-model limits.
+- **Files that kept an older schema ([#421](https://github.com/DrunkOnJava/rvt-rs/issues/421), puzzbobb's #1081):** a project saved by Revit 2024 to 2027 that carries the schema of the release it passed through reads as that release, where it read as zero elements; the diagnostics say when a file is read as another release than the one that saved it.
+- **Phases ([#328](https://github.com/DrunkOnJava/rvt-rs/issues/328), RE-184, puzzbobb's #1074):** elements that do not exist in the last phase, which Revit's export shows by default, are left out as Revit's export leaves them out.
+- **Doors and windows:** drawn from the meshes Revit saved for them where the whole mesh decodes, every vertex within 0.001 ft of Revit's export on Core Interior's 132 doors and 6 windows and the BIM4LCA office's 269 windows (`--no-saved-meshes` keeps their boxes); a window whose family cuts a solid gets Revit's opening (RE-225).
+- **Quantities and properties:** a wall nothing joins to or cuts carries Revit's `Height` (RE-266); `IsWired`, `NumberOfStoreys` where it could differ from Revit's, and `Reference` outside the sets a Revit export confirms are no longer written; a one-storey project gets its storey.
+- **Releases:** Revit 2027 is in the family corpus (RE-264). Revit 2008 to 2013 files open, and 2008 to 2014 projects export their elements experimentally (RE-259, RE-260; puzzbobb's #1076 and #1077), outside the 1.0 range of 2015 to 2027.
+- **Breaking:** the stable API nothing used is removed, each item listed under "Removed" in the changelog with what to use instead. The crates.io package carries only what builds the crate, and the format probes are their own crate, `rvt-probes`.
 
-The browser viewer is built from `main`, so it runs what `main` has; each change `main` adds after 0.10.0 is a fragment in [`changelog.d/`](changelog.d/README.md), which the next release moves into [`CHANGELOG.md`](CHANGELOG.md). To use `main` before the next release, build from source ([`docs/install.md`](docs/install.md#build-from-source)).
+The browser viewer is built from `main`, so it runs what `main` has; each change `main` adds after 0.11.0 is a fragment in [`changelog.d/`](changelog.d/README.md), which the next release moves into [`CHANGELOG.md`](CHANGELOG.md). To use `main` before the next release, build from source ([`docs/install.md`](docs/install.md#build-from-source)).
 
-Rust 2024 edition (MSRV 1.87). **Nineteen CLIs ship** (`rvt-analyze`, `rvt-info`, `rvt-inspect`, `rvt-schema`, `rvt-history`, `rvt-diff`, `rvt-corpus`, `rvt-dump`, `rvt-doc`, `rvt-ifc`, `rvt-ifc-compare`, `rvt-write`, `rvt-gltf`, `rvt-sheet`, `rvt-elem-table`, `rvt-elements`, `rvt-capabilities`, `rvt-schedule`, `gen-fixture`) plus the reproducible probes under `examples/`, one or more per format finding. Python bindings via pyo3+maturin in the `rvt-py` workspace member (so the core `rvt` crate can stay unconditionally `#![forbid(unsafe_code)]`) — `pip install rvt`.
+Rust 2024 edition (MSRV 1.87). **Nineteen CLIs ship** (`rvt-analyze`, `rvt-info`, `rvt-inspect`, `rvt-schema`, `rvt-history`, `rvt-diff`, `rvt-corpus`, `rvt-dump`, `rvt-doc`, `rvt-ifc`, `rvt-ifc-compare`, `rvt-write`, `rvt-gltf`, `rvt-sheet`, `rvt-elem-table`, `rvt-elements`, `rvt-capabilities`, `rvt-schedule`, `gen-fixture`) plus the reproducible probes under `probes/examples/`, one or more per format finding. Python bindings via pyo3+maturin in the `rvt-py` workspace member (so the core `rvt` crate can stay unconditionally `#![forbid(unsafe_code)]`) — `pip install rvt`.
 
 ## What works today
 
@@ -242,7 +245,7 @@ Partition streams are inflated once per file and cached on the `RevitFile` handl
 
 ## Findings of the first reconnaissance
 
-Six reproducible findings from the first reconnaissance (April 2026), all documented in [`docs/rvt-moat-break-reconnaissance.md`](docs/rvt-moat-break-reconnaissance.md) and reproducible from `examples/`:
+Six reproducible findings from the first reconnaissance (April 2026), all documented in [`docs/rvt-moat-break-reconnaissance.md`](docs/rvt-moat-break-reconnaissance.md) and reproducible with the programs in `examples/` and `probes/examples/`:
 
 1. **The schema indexes the data.** Class names do not appear as ASCII in `Global/Latest`; class tags from `Formats/Latest` (u16 after class name, with 0x8000 flag set) occur ~340× the uniform-random rate. The top tag, `AbsCurveGStep`, appears 19,415 times in 938 KB of decompressed Global/Latest. [`examples/link_schema.rs`]
 

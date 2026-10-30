@@ -22,6 +22,9 @@ f = rvt.RevitFile("model.rvt")
 counts = f.element_counts()
 print(counts["total"], counts["by_class"])
 
+# write_ifc() raises ValueError when part of the file was over the reader's
+# resource limits (f.unread_streams() names it): open the file again with a
+# larger max_stream_bytes / max_inflate_bytes, or pass allow_partial=True.
 with open("model.ifc", "w", encoding="utf-8") as out:
     out.write(f.write_ifc())
 # The CSV already ends its rows with \r\n: write it with newline="".
