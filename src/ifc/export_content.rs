@@ -2647,8 +2647,8 @@ fn add_wall_height(
 /// `NetVolume` from the solid's volume and `GrossVolume` as the wall type's
 /// width times the side area. On a rectangular prism those are the longer
 /// side's area, the rectangle's area times the height, and the width times
-/// that side's area: Revit's on all 99 of the BIM4LCA office's such walls
-/// (50 as built, 49 at building permit) and 91 of puzzbobb's R2025 walls, and
+/// that side's area: Revit's on all 97 of the BIM4LCA office's such walls
+/// (49 as built, 48 at building permit) and 91 of puzzbobb's R2025 walls, and
 /// Revit's export writes all four on each (RE-269). Nothing on any other wall,
 /// whose solid may be cut, staircased or open (#1046).
 fn add_wall_areas_and_volumes(
