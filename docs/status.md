@@ -1011,8 +1011,9 @@ prints it from any installed build.
   `[0.11.0]` in [`CHANGELOG.md`](../CHANGELOG.md): a model over the
   reader's resource limits is reported, and `rvt-ifc` and `rvt-gltf` exit
   with status 3 instead of writing an empty model, with `--large-model` and
-  a viewer retry (#1075); files that kept an older release's schema read as
-  that release (#421); elements outside the export phase are left out
+  a viewer retry (#1075); files that kept an older release's schema are
+  read as that release (#421), neither fix measured yet on the reporter's
+  private files; elements outside the export phase are left out
   (#328); doors and windows are drawn from their saved meshes by default;
   windows' openings follow their cut solids; walls nothing joins or cuts
   carry their `Height`; Revit 2008 to 2014 export experimentally; and the

@@ -7,10 +7,12 @@
 //! validates the emitted STEP file against IFC4 structural
 //! requirements.
 //!
-//! The output, written at a fixed timestamp, must match the committed
-//! `tests/fixtures/synthetic-project.ifc` apart from the release version
-//! (`common::assert_matches_fixture`), which IfcOpenShell validates and the
-//! viewer offers as a demo. Setting `DUMP_IFC` rewrites the fixture.
+//! The output, written at a fixed timestamp, goes to
+//! `$CARGO_TARGET_TMPDIR/synthetic-fixtures/synthetic-project.ifc`
+//! (`common::write_synthetic_output`), where CI validates it with
+//! IfcOpenShell; `tests/fixtures/synthetic-project.ifc`, the viewer's
+//! download copy, is refreshed from it at each release. Setting `DUMP_IFC`
+//! rewrites that copy.
 //!
 //! # What gets emitted
 //!
@@ -536,7 +538,7 @@ fn synthetic_project_emits_valid_ifc4() {
         "E/W wall profile dims missing (10' × 8\")"
     );
 
-    common::assert_matches_fixture("synthetic-project.ifc", &fixture);
+    common::write_synthetic_output("synthetic-project.ifc", &fixture);
 }
 
 #[test]

@@ -160,8 +160,7 @@ pub fn instances_from_partition_category_records(
     Ok(instances_from_records(records, class, level_ids))
 }
 
-/// Instance selection over already-decoded category records — split
-/// out so the rule is unit-testable without a corpus file.
+/// Instance selection over already-decoded category records.
 ///
 /// The selector is the direct test
 /// [`crate::partition_element_records::PartitionElementRecord::is_exported_instance`]. It supersedes

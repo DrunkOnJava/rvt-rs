@@ -17,10 +17,12 @@
 //! mapped items, changes the profile emission — this test catches
 //! it with a specific failure message per entity category.
 //!
-//! The output, written at a fixed timestamp, must match the committed
-//! `tests/fixtures/synthetic-structural.ifc` apart from the release version
-//! (`common::assert_matches_fixture`). Setting `DUMP_IFC_STRUCTURAL` rewrites
-//! the fixture.
+//! The output, written at a fixed timestamp, goes to
+//! `$CARGO_TARGET_TMPDIR/synthetic-fixtures/synthetic-structural.ifc`
+//! (`common::write_synthetic_output`), where CI validates it with
+//! IfcOpenShell; `tests/fixtures/synthetic-structural.ifc`, the viewer's
+//! download copy, is refreshed from it at each release. Setting
+//! `DUMP_IFC_STRUCTURAL` rewrites that copy.
 
 use rvt::ifc::entities::{
     BrepTriangle, Extrusion, IfcEntity, MaterialProfile, MaterialProfileSet, RepresentationMap,
@@ -378,5 +380,5 @@ fn synthetic_structural_ifc_has_expected_entity_counts() {
         eprintln!("wrote {}", out_path.display());
     }
 
-    common::assert_matches_fixture("synthetic-structural.ifc", &fixture);
+    common::write_synthetic_output("synthetic-structural.ifc", &fixture);
 }

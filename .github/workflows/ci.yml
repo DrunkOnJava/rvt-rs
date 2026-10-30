@@ -241,11 +241,12 @@ jobs:
           RVT_SAMPLES_DIR: ${{ matrix.with_corpus && format('{0}/_corpus/examples/Autodesk', github.workspace) || '' }}
           RVT_REQUIRE_CORPUS: ${{ matrix.with_corpus && '1' || '' }}
         run: tools/ci/verify-real-files.sh --profile ci --no-fail-fast
-      # A committed synthetic IFC fixture that no longer matches the writer's
-      # output (tests/common, assert_matches_fixture) leaves the current
-      # output here: commit it to tests/fixtures/ if the change is intended.
-      - name: Upload the current synthetic IFC fixtures
-        if: failure() && matrix.os == 'ubuntu-24.04' && matrix.label != 'msrv'
+      # The synthetic IFC pair the integration tests write
+      # (tests/common, write_synthetic_output): each release pull request
+      # refreshes the viewer's download copies in tests/fixtures/ from it.
+      # The IfcOpenShell job validates the same output.
+      - name: Upload the synthetic IFC pair
+        if: ${{ !cancelled() && matrix.os == 'ubuntu-24.04' && matrix.label != 'msrv' }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: synthetic-fixtures
@@ -489,7 +490,8 @@ jobs:
     # the committed tests/fixtures/synthetic-*.ifc, which only a test that
     # never runs regenerates, so it checked a fixed file rather than the
     # current exporter (CI audit, 2026-10-05); it now exports the three
-    # tier-1 projects and real projects and validates those. The tier-1
+    # tier-1 projects and real projects and validates those, and the
+    # synthetic pair as the integration tests write it now. The tier-1
     # exports are small (24 instances each); the real projects carry most of
     # what this job validates.
     name: IfcOpenShell validates exports
@@ -549,6 +551,22 @@ jobs:
             python -m ifcopenshell.validate "$out"
           done
           python tools/ci/ifc_schema_arity.py /tmp/tier1-*.ifc
+      # The synthetic project and structural frame as the writer produces
+      # them now (tests/ifc_synthetic_*.rs, written at a fixed timestamp to
+      # target/tmp/synthetic-fixtures/). They reach writer paths the tier-1
+      # exports do not (IfcMember routing, representation maps, stairs), and
+      # ifc_schema_arity.py's placement probes pin their walls, slab and
+      # column. Validated rather than compared with tests/fixtures/, so a
+      # change to the writer's output fails only when it is wrong.
+      - name: Write and validate the synthetic IFC pair
+        run: |
+          set -euo pipefail
+          cargo test --profile ci --test integration -- ifc_synthetic_
+          for f in target/tmp/synthetic-fixtures/synthetic-project.ifc target/tmp/synthetic-fixtures/synthetic-structural.ifc; do
+            test -s "$f"
+            python -m ifcopenshell.validate "$f"
+          done
+          python tools/ci/ifc_schema_arity.py target/tmp/synthetic-fixtures/synthetic-project.ifc target/tmp/synthetic-fixtures/synthetic-structural.ifc
 
       # M5-03: real-project walker → IFC end-to-end gate. Emit a
       # fresh IFC4 STEP from the small 2023 Einhoven project via
