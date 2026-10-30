@@ -521,6 +521,10 @@ pub const STAIR_RUN_SHAPE_FIELD: &str = "m_stair_run_shape";
 /// give it ([`crate::native_stairs::stair_predefined_type`], #323).
 pub const STAIR_TYPE_FIELD: &str = "m_stair_type";
 
+/// Field holding a beam's Cross-Section Rotation, radians: the `m_rotation`
+/// of the `FamInstCurveDriver` in its native record (W7, RE-276).
+pub const BEAM_ROTATION_FIELD: &str = "m_beam_cross_section_rotation";
+
 /// Fields holding the first end of a beam's location line, model feet
 /// (RE-49).
 pub const BEAM_AXIS_START_FIELDS: [&str; 3] = [

@@ -369,6 +369,8 @@ pub fn recover_partition_schema_mvp(
     attach_landing_slabs(rf, revit_version, &mut out.products);
     // --- Beams along their location lines (RE-49) ---
     attach_beam_axes(rf, revit_version, &mut out.products);
+    // --- Beams' Cross-Section Rotation, from their native records (RE-276) ---
+    attach_beam_rotations(rf, &mut out.products);
     // --- Pipes as cylinders along their ends (RE-131) ---
     attach_pipe_axes(rf, revit_version, &mut out.products);
     // --- Which element each end of a duct or pipe is joined to (RE-138) ---
