@@ -24,10 +24,8 @@ the **minor** version, not the major. That is:
 The current version lives in `Cargo.toml` under `[package].version`. It
 is repeated in `rvt-py/Cargo.toml` (the wheel's version, and its `=X.Y.Z`
 dependency on `rvt`), `rvt-wasm/Cargo.toml`, the `rvt` dependency of
-`tools/stream_evidence/Cargo.toml`, `viewer/package.json`, `CITATION.cff`, the workspace crates' entries in
-`Cargo.lock` and `fuzz/Cargo.lock`, and the `FILE_NAME` and `IFCAPPLICATION` lines of
-`tests/fixtures/synthetic-project.ifc` and `synthetic-structural.ifc`, which the contract
-checks compare byte for byte (#1133). All of them must agree at tag time.
+`tools/stream_evidence/Cargo.toml`, `viewer/package.json`, `CITATION.cff`, and the workspace crates' entries in
+`Cargo.lock` and `fuzz/Cargo.lock`. All of them must agree at tag time.
 
 ## Release cadence
 
@@ -145,7 +143,11 @@ project treats a silent skipped step the same as an untested change.
    witness observations and their verdicts change: take them from the
    pull request's CI run (its `octetproof-core-interior` artifact) and
    push them. Only `witness_version` and the verdict hashes should
-   differ. Merging this pull request is not the release.
+   differ. From the same run's `synthetic-fixtures` artifact, refresh
+   `tests/fixtures/synthetic-project.ifc` and `synthetic-structural.ifc`,
+   the samples the viewer offers for download; CI validates that output
+   on every run, and no check compares it with the committed copies.
+   Merging this pull request is not the release.
 8. **Confirm the registries' trusted publishers.** crates.io and PyPI
    each need one for repository DrunkOnJava/rvt-rs, workflow
    `publish.yml`, environment `crates-io` or `pypi` (see
