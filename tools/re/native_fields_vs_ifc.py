@@ -35,7 +35,9 @@ import ifcopenshell.util.element
 FLAGS = ("LoadBearing", "IsExternal")
 # Fields printed with their values on every class, whether or not the flag
 # takes both states there: the ones a candidate scan found (RE-286).
-WATCHED = ("m_isStructuralSignificant", "m_wallStructuralUsage", "m_analyzesAs")
+WATCHED = ("m_isStructuralSignificant", "m_wallStructuralUsage", "m_analyzesAs", "m_function")
+# Pairs of fields whose joint values are printed against each flag.
+JOINTS = (("m_isStructuralSignificant", "m_function"),)
 
 
 def tagged(model):
@@ -115,6 +117,23 @@ def main():
                     )
                     print(
                         f"native readers: field {klass} {flag} watched {' '.join(key)} held by {have[key]} of {len(rows)} values ({triples})"
+                    )
+            for first, second in JOINTS:
+                joint = collections.defaultdict(collections.Counter)
+                for tag, state in rows:
+                    candidates = candidates_of(tag, fields, links)
+                    a = [v for k, v in candidates.items() if k[-1] == first]
+                    b = [v for k, v in candidates.items() if k[-1] == second]
+                    if len(a) == 1 and len(b) == 1:
+                        joint[(a[0], b[0])][state] += 1
+                if joint:
+                    cells = "; ".join(
+                        f"{text(x)} {text(y)} {'true' if state else 'false'} {count}"
+                        for (x, y), states in sorted(joint.items())
+                        for state, count in sorted(states.items())
+                    )
+                    print(
+                        f"native readers: field {klass} {flag} joint {first} {second} values ({cells})"
                     )
             if true in (0, len(rows)):
                 continue
