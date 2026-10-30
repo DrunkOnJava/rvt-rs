@@ -34,8 +34,8 @@ The three extruded columns with a `CutPairGStep` to a wall (1343914, 1343926 and
 The record's box is Revit's extrusion for a column drawn as that box (`partition_element_record_bbox`) when nothing cuts it or crosses an end of it. A column is taken when all of these hold:
 
 - its record holds a `CleanPairGStep` (the columns that hold none are RE-247's), and every pair step of its record names an element rvt-rs exports (`native_column_joins::ColumnJoins::cut_partners`, `clean_partners`; a step whose `m_otherId` is not read leaves the column out);
-- every element its cut pairs name is a slab or a beam lying wholly above or wholly below the column, so that it cannot cut it;
-- every element its clean pairs name is a wall, a covering or a column, or a slab or a beam lying wholly above or wholly below it;
+- every element its cut pairs name is a slab lying wholly above or wholly below the column, so that it cannot cut it;
+- every element its clean pairs name is a wall, a covering or a column, or a slab lying wholly above or wholly below it. A beam, roof or footing is not accepted: the only columns the office pairs with a beam are 8 hollow-section ones (RE-221's), and no box-drawn column is paired with one, so a beam's extent is not measured here;
 - its body is the record box, a rectangle, with a positive size.
 
 `export_content/column_quantities.rs` writes `CrossSectionArea` (width times depth), `OuterSurfaceArea` (the perimeter times the height), and `GrossVolume` and `NetVolume` (the area times the height). Any other pair step, a wall or covering that cuts it, a slab across an end, or an element rvt-rs does not export leaves the column out. The 3 extruded columns with a slab across their top by a clean pair are left out although Revit draws them as their extrusion: nothing measured says a clean pair alone never cuts, and 3 of 3 is not that.

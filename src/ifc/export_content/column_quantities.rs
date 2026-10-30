@@ -17,11 +17,13 @@
 //! the ones `add_body_quantities` covers), when every element its
 //! cut and clean pairs name is exported and
 //!
-//! - lies wholly above or wholly below the column, if it is a slab or a beam;
+//! - is a slab lying wholly above or wholly below the column;
 //! - is a wall, covering or column, if it is named by a clean pair only.
 //!
-//! Any other pair, a wall or covering that cuts it, or an element rvt-rs
-//! does not export, leaves the column out.
+//! Only these are accepted because they are the only pairs the office's
+//! box-drawn columns hold (RE-291 §2). Any other pair (a beam, roof or
+//! footing, say), a wall or covering that cuts it, or an element rvt-rs does
+//! not export, leaves the column out.
 
 use std::collections::HashMap;
 
@@ -95,7 +97,7 @@ fn partners(entities: &[IfcEntity]) -> HashMap<u32, Partner> {
     out
 }
 
-/// Whether `partner` lies wholly above or wholly below `base..top`.
+/// Whether a span lies wholly above or wholly below `base..top`.
 fn lies_clear(span: Option<(f64, f64)>, base: f64, top: f64) -> bool {
     matches!(span, Some((low, high)) if high <= base + EDGE_FEET || low >= top - EDGE_FEET)
 }
@@ -103,14 +105,12 @@ fn lies_clear(span: Option<(f64, f64)>, base: f64, top: f64) -> bool {
 /// Whether nothing the column's pairs name cuts it or crosses an end of it.
 fn unaffected(partners: &HashMap<u32, Partner>, column: &Pending, base: f64, top: f64) -> bool {
     let cut = column.cut.iter().all(|id| match partners.get(id) {
-        Some((kind, span)) => {
-            matches!(kind.as_str(), "IFCSLAB" | "IFCBEAM") && lies_clear(*span, base, top)
-        }
+        Some((kind, span)) => kind == "IFCSLAB" && lies_clear(*span, base, top),
         None => false,
     });
     let clean = column.clean.iter().all(|id| match partners.get(id) {
         Some((kind, span)) => match kind.as_str() {
-            "IFCSLAB" | "IFCBEAM" => lies_clear(*span, base, top),
+            "IFCSLAB" => lies_clear(*span, base, top),
             "IFCWALL" | "IFCCOVERING" | "IFCCOLUMN" => true,
             _ => false,
         },
