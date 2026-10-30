@@ -4115,8 +4115,9 @@ fn stable_guid(document: &str, key: &[&str]) -> String {
     crate::revit_global_ids::compress_ifc_guid(value)
 }
 
-/// The elements a space contains (B63), by their entity index: each maps
-/// to its space's, and is left out of its storey's containment.
+// Tracker: B63.
+/// The elements a space contains, by their entity index: each maps to its
+/// space's, and is left out of its storey's containment.
 fn elements_in_spaces(model: &IfcModel) -> HashMap<usize, usize> {
     model
         .entities
