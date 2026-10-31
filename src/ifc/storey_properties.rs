@@ -25,6 +25,10 @@ use std::collections::{BTreeMap, BTreeSet};
 const ENTRANCE_LEVEL_PARAMETERS: [&str; 2] =
     ["Pset_BuildingStoreyCommon.EntranceLevel", "EntranceLevel"];
 
+fn is_entrance_level_name(name: &str) -> bool {
+    ENTRANCE_LEVEL_PARAMETERS.contains(&name)
+}
+
 /// The properties of each of `levels` (a storey's index and its Level's
 /// ElementId), by storey index. A Level whose record gives neither has no
 /// entry; a file whose native records are not read gives none.
@@ -42,7 +46,11 @@ pub(super) fn read(
         .collect();
     let names = crate::native_element_types::system_type_names(rf, &classes).unwrap_or_default();
     let ids: BTreeSet<u64> = classes.keys().copied().collect();
-    let parameters = native_element_parameters::read(rf, &ids).unwrap_or_default();
+    // A Level has no type, so its own record is all that is read, and only
+    // where the file defines a parameter by one of these names.
+    let parameters =
+        native_element_parameters::read_own_defined(rf, &ids, Some(is_entrance_level_name))
+            .unwrap_or_default();
     for (index, id) in levels {
         let id = u64::from(*id);
         let reference = names.get(&id).map(|(_, name)| name.clone());
