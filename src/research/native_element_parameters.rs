@@ -150,16 +150,41 @@ pub fn read_defined(
     ids: &BTreeSet<u64>,
     filter: Option<fn(&str) -> bool>,
 ) -> Result<ElementParameters> {
+    read_selected(file, ids, filter, true)
+}
+
+/// [`read_defined`] reading the records of `ids` alone: no type, family or
+/// material record is selected, so an element gets no type value and an
+/// ElementId value no target name. For elements with no type, such as Levels.
+pub fn read_own_defined(
+    file: &mut RevitFile,
+    ids: &BTreeSet<u64>,
+    filter: Option<fn(&str) -> bool>,
+) -> Result<ElementParameters> {
+    read_selected(file, ids, filter, false)
+}
+
+fn read_selected(
+    file: &mut RevitFile,
+    ids: &BTreeSet<u64>,
+    filter: Option<fn(&str) -> bool>,
+    types: bool,
+) -> Result<ElementParameters> {
     if !native_document::NATIVE_RELEASES.contains(&file.layout_release()?) || ids.is_empty() {
         return Ok(ElementParameters::default());
     }
-    let options = Options {
-        selected_ids: ids.clone(),
-        selected_classes: ["FamilySymbol", "Family", "MaterialElem"]
+    let selected_classes = if types {
+        ["FamilySymbol", "Family", "MaterialElem"]
             .into_iter()
             .chain(SYSTEM_TYPE_LINKS.iter().map(|link| link.2))
             .map(String::from)
-            .collect(),
+            .collect()
+    } else {
+        BTreeSet::new()
+    };
+    let options = Options {
+        selected_ids: ids.clone(),
+        selected_classes,
         releases: native_document::NATIVE_RELEASES,
         definition_filter: filter,
         ..Default::default()

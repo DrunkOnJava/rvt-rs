@@ -196,6 +196,12 @@ pub struct RevitFile {
     /// the declared ids they were read for: half a dozen material steps of
     /// an export each asked for them.
     material_names: std::collections::HashMap<(u32, u64), Arc<BTreeMap<u32, String>>>,
+    /// Memoised material appearances, keyed as `material_names` is:
+    /// the material, wall and layer steps of an export each ask for them.
+    material_appearances: std::collections::HashMap<
+        (u32, u64),
+        Arc<BTreeMap<u32, crate::partition_materials::MaterialAppearance>>,
+    >,
     /// Memoised materials each category's graphics styles name (RE-206).
     category_style_materials: Option<Arc<BTreeMap<i64, BTreeSet<u32>>>>,
     /// Streams a resource limit kept from being read whole (#1075).
@@ -414,6 +420,7 @@ impl RevitFile {
             schema_classes_memo: None,
             layout_release_memo: None,
             material_names: std::collections::HashMap::new(),
+            material_appearances: std::collections::HashMap::new(),
             category_style_materials: None,
             unread_streams: Vec::new(),
         })
@@ -588,6 +595,23 @@ impl RevitFile {
         names: Arc<BTreeMap<u32, String>>,
     ) {
         self.material_names.insert(key, names);
+    }
+
+    /// The memoised material appearances for `key`.
+    pub(crate) fn cached_material_appearances(
+        &self,
+        key: (u32, u64),
+    ) -> Option<Arc<BTreeMap<u32, crate::partition_materials::MaterialAppearance>>> {
+        self.material_appearances.get(&key).cloned()
+    }
+
+    /// Memoise the material appearances for `key`.
+    pub(crate) fn cache_material_appearances(
+        &mut self,
+        key: (u32, u64),
+        appearances: Arc<BTreeMap<u32, crate::partition_materials::MaterialAppearance>>,
+    ) {
+        self.material_appearances.insert(key, appearances);
     }
 
     /// The memoised materials each category's graphics styles name (RE-206).
