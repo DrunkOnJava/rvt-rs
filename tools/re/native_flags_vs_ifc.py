@@ -6,7 +6,8 @@ Reads `probe_re285_flag_candidates`' `param <id> <class> <level> <parameter id>
 <value>` and `paramd` (a double) lines and Revit's own IFC export, pairs the
 elements by `Tag` (the ElementId), and prints counts only, in the
 `native readers:` lines `tools/ci/scrub-holdout-results.sh` keeps for a model
-without a licence: never an ElementId or a name.
+without a licence: never an ElementId, and no parameter name but the flag's
+own, bare or after a `Pset_` set's name.
 
 For each (IFC class, flag) it prints how many elements Revit's export writes
 the flag true and false on, and then every parameter that could be the flag:
@@ -122,8 +123,11 @@ def named_report(named, exported):
             if flag not in values:
                 continue
             for (level, name), value in named.get(tag, {}).items():
-                if flag.lower() in name.lower() or (flag == "LoadBearing" and "bearing" in name.lower()):
-                    cells[(klass, level, name, value)][values[flag]] += 1
+                if name != flag and not (name.startswith("Pset_") and name.endswith("." + flag)):
+                    continue
+                if not value.lstrip("-").isdigit():
+                    value = "other"
+                cells[(klass, level, name, value)][values[flag]] += 1
         for key, states in sorted(cells.items()):
             counts = "; ".join(
                 f"{'true' if state else 'false'} {count}" for state, count in sorted(states.items())

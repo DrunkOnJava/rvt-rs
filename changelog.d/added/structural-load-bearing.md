@@ -9,4 +9,4 @@
   Revit 26.2's exporter) 8 of 8 beams and columns for `IsExternal` and 9 of 9
   for `LoadBearing` (the ninth on the type objects RE-286 writes); on the
   BIM4LCA office as built one column with no such parameter gains Revit's
-  value. None different, and nothing written that Revit's export leaves out.
+  value. None different, and no new value that Revit's export leaves out.
