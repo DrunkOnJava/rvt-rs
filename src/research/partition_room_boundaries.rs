@@ -70,6 +70,11 @@ pub const ROOM_SOLID_WINDOW: usize = 0x1_0000;
 /// feet.
 pub const BOX_TOLERANCE_FEET: f64 = 1e-3;
 
+/// How far a vertical face's span may fall short of a room's box, and a
+/// horizontal face lie from its floor or ceiling, and still be it, feet
+/// (RE-296).
+pub const PRISM_TOLERANCE_FEET: f64 = 1e-3;
+
 /// How far apart two wall faces' ends may lie and still meet. Where two
 /// walls stand on marginally different lines the room's faces are cut from
 /// both and leave a step with no face across it: 3e-5 ft on RE1's room
@@ -119,6 +124,43 @@ impl RoomFace {
             ],
             bottom,
         ))
+    }
+}
+
+/// What a face of a room's solid is, by its normal (RE-296).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum FaceKind {
+    /// In a horizontal plane at this height, feet.
+    Horizontal(f64),
+    /// In a vertical plane, within its box between these heights, feet.
+    Vertical { low: f64, high: f64 },
+    /// In a plane that is neither.
+    Other,
+}
+
+impl RoomFace {
+    /// Whether the face is horizontal, vertical or neither, by the vertical
+    /// component of its normal, the cross product of its two directions.
+    pub fn kind(&self) -> FaceKind {
+        let normal_z = self.u[0] * self.v[1] - self.u[1] * self.v[0];
+        if (normal_z.abs() - 1.0).abs() < AXIS_EPS {
+            return FaceKind::Horizontal(self.origin[2]);
+        }
+        if normal_z.abs() >= AXIS_EPS {
+            return FaceKind::Other;
+        }
+        let [u_min, v_min, u_max, v_max] = self.uv_box;
+        let heights = [
+            (u_min, v_min),
+            (u_min, v_max),
+            (u_max, v_min),
+            (u_max, v_max),
+        ]
+        .map(|(u, v)| self.origin[2] + self.u[2] * u + self.v[2] * v);
+        FaceKind::Vertical {
+            low: heights.iter().copied().fold(f64::INFINITY, f64::min),
+            high: heights.iter().copied().fold(f64::NEG_INFINITY, f64::max),
+        }
     }
 }
 
@@ -229,6 +271,52 @@ pub fn room_outline_at(buf: &[u8], header: usize, bbox: [f64; 6]) -> Option<Plan
         .zip(wanted)
         .all(|(got, want)| (got - want).abs() <= BOX_TOLERANCE_FEET)
         .then_some(profile)
+}
+
+/// Whether `faces`, the faces of a room's solid, make a prism of the room's
+/// plan outline between the floor and ceiling of `bbox` (RE-296): there is a
+/// vertical face, every vertical face runs from the floor to the ceiling, and
+/// there is no face that is neither vertical nor horizontal and no horizontal
+/// face between the two. A vertical face that stops short is a step in the
+/// ceiling, and a horizontal face in between is the step's tread: the solid is
+/// then more than its outline's area times its height.
+pub fn faces_form_prism(faces: &[RoomFace], bbox: [f64; 6]) -> bool {
+    let (floor, ceiling) = (bbox[2], bbox[5]);
+    let mut walls = 0;
+    for face in faces {
+        match face.kind() {
+            FaceKind::Horizontal(z) => {
+                if z > floor + PRISM_TOLERANCE_FEET && z < ceiling - PRISM_TOLERANCE_FEET {
+                    return false;
+                }
+            }
+            FaceKind::Vertical { low, high } => {
+                if low > floor + PRISM_TOLERANCE_FEET || high < ceiling - PRISM_TOLERANCE_FEET {
+                    return false;
+                }
+                walls += 1;
+            }
+            FaceKind::Other => return false,
+        }
+    }
+    walls > 0
+}
+
+/// Whether the room's solids whose headers are at `headers` that give an
+/// outline against `bbox` ([`outline_of_solids`]) are all prisms of it
+/// ([`faces_form_prism`]), and at least one gives an outline.
+pub fn prism_of_solids(buf: &[u8], headers: &[usize], bbox: [f64; 6]) -> bool {
+    let mut found = false;
+    for &at in headers {
+        if room_outline_at(buf, at, bbox).is_none() {
+            continue;
+        }
+        if !faces_form_prism(&solid_faces(buf, at), bbox) {
+            return false;
+        }
+        found = true;
+    }
+    found
 }
 
 /// Where the solids of room `room_id` start in `buf`: each place its `u64`

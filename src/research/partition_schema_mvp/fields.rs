@@ -615,8 +615,20 @@ pub const CURVE_BOX_TOLERANCE_FEET: f64 = 2e-3;
 /// (RE-185).
 pub const TYPE_FUNCTION_FIELD: &str = "m_type_function";
 
-/// Releases whose walls' native type Function is measured (RE-185, RE-193).
-pub const WALL_TYPE_FUNCTION_REVIT_VERSIONS: &[u32] = &[2024, 2025];
+/// Releases whose parameters named for `IsExternal` or for a standard
+/// property are read from the elements' saved parameters
+/// ([`crate::native_element_parameters`], RE-281), where the partition data's
+/// entries are read on 2024 and later (RE-193, RE-194): Revit 2015 to 2023,
+/// measured against BIMcollab's Revit 2015 export and modelo_bim's (RE-283).
+pub const NATIVE_NAMED_PARAMETER_REVIT_VERSIONS: &[u32] =
+    &[2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023];
+
+/// Releases whose walls' native type Function is measured (RE-185, RE-193;
+/// 2015 to 2023 against the same projects saved by a later release and
+/// against BIMcollab's and modelo_bim's exports, RE-283).
+pub const WALL_TYPE_FUNCTION_REVIT_VERSIONS: &[u32] = &[
+    2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025,
+];
 
 /// Prefix of a field carrying the Yes/No value of a project or shared
 /// parameter on an element, named by the parameter's name (RE-193).
@@ -651,6 +663,14 @@ pub(super) const IS_EXTERNAL_FUNCTION_CLASSES: &[&str] = &[
 /// Revit's export writes most curtain mullions and panels as not external
 /// where their curtain wall is, and some as external (RE-193).
 pub(super) const IS_EXTERNAL_UNKNOWN_CLASSES: &[&str] = &["CurtainWallMullion", "CurtainWallPanel"];
+
+/// Classes whose `IsExternal` is calculated as not external, the last step of
+/// RE-193's calculation, on the releases that read elements from their
+/// element records ([`crate::partition_element_records_2023`], Revit 2015 to
+/// 2023), where no parameter or type Function says otherwise. Only the
+/// classes measured against a Revit export of such a release. None yet
+/// (RE-283).
+pub(super) const IS_EXTERNAL_LAST_STEP_RECORD_CLASSES: &[&str] = &[];
 
 /// Releases where the calculation's last step, not external, is measured
 /// (RE-193). The parameters and a type's Function are read on every release
@@ -779,6 +799,17 @@ pub const ROOM_HEIGHT_REVIT_VERSIONS: &[u32] = &[2024, 2025, 2026];
 
 /// Field holding a room's height, feet (RE-255).
 pub const ROOM_HEIGHT_FIELD: &str = "m_room_height";
+
+/// Set on a room whose stored solid is a prism of its outline (RE-296): every
+/// vertical face runs the whole height of the room's box, and no face is
+/// neither vertical nor horizontal or a horizontal one between the floor and
+/// the ceiling.
+pub const ROOM_PRISM_FIELD: &str = "m_room_prism";
+
+/// Releases a room is marked a prism on (RE-296), and so gets its `NetVolume`:
+/// the only exports it is measured against are the BIM4LCA office's (Revit
+/// 2024) and the R2025 models' (Revit 2025).
+pub const ROOM_PRISM_REVIT_VERSIONS: &[u32] = &[2024, 2025];
 
 /// Field carrying a recovered room number.
 pub const ROOM_NUMBER_FIELD: &str = "m_number";
