@@ -681,10 +681,23 @@ pub(super) const IS_EXTERNAL_UNKNOWN_CLASSES: &[&str] = &["CurtainWallMullion", 
 /// Classes whose `IsExternal` is calculated as not external, the last step of
 /// RE-193's calculation, on the releases that read elements from their
 /// element records ([`crate::partition_element_records_2023`], Revit 2015 to
-/// 2023), where no parameter or type Function says otherwise. Only the
-/// classes measured against a Revit export of such a release. None yet
-/// (RE-283).
-pub(super) const IS_EXTERNAL_LAST_STEP_RECORD_CLASSES: &[&str] = &[];
+/// 2023), where no parameter or type Function says otherwise (RE-285). Only
+/// the classes measured against a Revit export of such a release: the
+/// structural framing and columns of BIMcollab's Revit 2015 example and of
+/// modelo_bim. Any other class gets none there.
+pub(super) const IS_EXTERNAL_LAST_STEP_RECORD_CLASSES: &[&str] =
+    &["StructuralColumn", "StructuralFraming"];
+
+/// Field carrying whether an element is load bearing, where Revit's exporter
+/// takes it from the element's category alone (RE-285): revit-ifc's
+/// `LoadBearingCalculator` (CLEANROOM.md source 5) calls load bearing every
+/// element of the structural columns, structural framing, framing systems and
+/// trusses categories before it reads any parameter.
+pub const LOAD_BEARING_FIELD: &str = "m_load_bearing";
+
+/// Classes of the categories `LoadBearingCalculator` calls load bearing
+/// that this crate reads (RE-285).
+pub(super) const LOAD_BEARING_CLASSES: &[&str] = &["StructuralColumn", "StructuralFraming"];
 
 /// Releases where the calculation's last step, not external, is measured
 /// (RE-193). The parameters and a type's Function are read on every release

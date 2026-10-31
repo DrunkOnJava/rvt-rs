@@ -996,6 +996,18 @@ file), all false: the value true is measured against an export on 2024 and
 Revit 2015 to 2023, and every file of 2024 to 2027 is identical
 (`reports/element-framing/RE-284-wall-top-join-pre2024.md`).
 
+**RE-285 (2026-10-30)** writes `LoadBearing`, true, on every structural column
+and structural framing element, as Revit's exporter gives it by category,
+unless the element's own parameter named for it says otherwise; on Revit 2015
+to 2023, experimentally, it also writes their `IsExternal`, not external, the
+calculation's last step. Against Revit's exports: BIMcollab's Revit 2015
+example 91 of 91 beams and 15 of 15 columns for each property, modelo_bim (a
+Revit 2023 file) 8 of 8 beams and columns for `IsExternal` and 9 of 9 for
+`LoadBearing`, and the BIM4LCA office as built all 289 columns, none
+different. A parameter named for it on the element's type is not read. 58 of
+94 exports of the unfiltered run move: every file with structural columns or
+framing (`reports/element-framing/RE-285-structural-load-bearing.md`).
+
 ## Performance
 
 Opening a large project is no longer a minutes-long wait. Every partition
