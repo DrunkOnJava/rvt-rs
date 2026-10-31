@@ -1,4 +1,4 @@
-# rvt-rs — Python bindings (v0.11.0)
+# rvt-rs — Python bindings (v0.12.0)
 
 `rvt` is a Python package built on top of the Rust `rvt` crate. It
 exposes the file reader, metadata, schema introspection, the
@@ -25,12 +25,12 @@ For all installation paths, including release smoke tests, see
 pip install rvt
 ```
 
-**PyPI `rvt` 0.11.0 is the current release.** Wheels target Python ≥ 3.8
+**PyPI `rvt` 0.12.0 is the current release.** Wheels target Python ≥ 3.8
 via pyo3's `abi3-py38` feature, so one wheel per OS/architecture covers
 every supported Python minor. The matching Rust crate is on crates.io
 (`cargo add rvt`); platforms and the other install channels are in
 [`install.md`](install.md). This page describes `main`, which can be ahead
-of the latest release: what has landed since 0.11.0 is in the fragments
+of the latest release: what has landed since 0.12.0 is in the fragments
 under [`changelog.d/`](../changelog.d/README.md).
 
 ### From source
@@ -96,7 +96,7 @@ with open("my-family.ifc", "w") as out:
 ## API reference
 
 Every signature below is verified against
-[`rvt-py/src/lib.rs`](../rvt-py/src/lib.rs) on `main` (0.11.0).
+[`rvt-py/src/lib.rs`](../rvt-py/src/lib.rs) on `main` (0.12.0).
 
 ### Module-level
 
