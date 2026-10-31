@@ -315,23 +315,25 @@ impl InflatedStream {
     /// header and DEFLATE stream take there.
     // Tracker: B82.
     pub fn member_at(&self, offset: usize) -> Option<(&[u8], usize)> {
+        let (i, member) = self.member_index(offset)?;
+        Some((member, self.members[i].1))
+    }
+
+    /// The index of the member whose gzip header starts at `offset`, and its
+    /// inflated bytes.
+    fn member_index(&self, offset: usize) -> Option<(usize, &[u8])> {
         let i = self
             .members
             .binary_search_by_key(&offset, |&(start, _)| start)
             .ok()?;
         let start = i.checked_sub(1).map_or(0, |prev| self.chunk_ends[prev]);
-        Some((&self.concat[start..self.chunk_ends[i]], self.members[i].1))
+        Some((i, &self.concat[start..self.chunk_ends[i]]))
     }
 
     /// The CRC-32 of the member [`Self::member_at`] gives for `offset`,
     /// computed once for the stream's lifetime.
     pub(crate) fn member_crc_at(&self, offset: usize) -> Option<u32> {
-        let i = self
-            .members
-            .binary_search_by_key(&offset, |&(start, _)| start)
-            .ok()?;
-        let start = i.checked_sub(1).map_or(0, |prev| self.chunk_ends[prev]);
-        let member = &self.concat[start..self.chunk_ends[i]];
+        let (i, member) = self.member_index(offset)?;
         Some(*self.crcs.get(i)?.get_or_init(|| {
             let mut crc = flate2::Crc::new();
             crc.update(member);
