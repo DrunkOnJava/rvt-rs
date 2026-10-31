@@ -124,8 +124,16 @@ fn retain_boundary_points(
     boundary_edges: &BTreeSet<(u32, u32)>,
     triangles: &mut Vec<[u32; 3]>,
 ) -> Result<()> {
+    // Which points a triangle uses, kept as splits add them, instead of a
+    // search of every triangle for every point.
+    let mut used = vec![false; points.len()];
+    for &vertex in triangles.iter().flatten() {
+        if let Some(slot) = used.get_mut(vertex as usize) {
+            *slot = true;
+        }
+    }
     for pi in 0..points.len() {
-        if triangles.iter().any(|t| t.contains(&(pi as u32))) {
+        if used[pi] {
             continue;
         }
         let p = points[pi];
@@ -175,6 +183,7 @@ fn retain_boundary_points(
         };
         triangles[ti] = first;
         triangles.push(second);
+        used[pi] = true;
     }
     Ok(())
 }

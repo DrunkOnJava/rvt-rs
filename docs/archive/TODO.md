@@ -1428,8 +1428,8 @@ Observed local checks (`tools/check-local.sh`, default gates):
 - Optional gates (`--viewer`, `--deny`, `--audit`, `--corpus`,
   `--ifcopenshell`) were not re-run in this snapshot.
 
-Observed model extraction state: see [`docs/status.md`](docs/status.md)
-(reviewed 2026-08-29) and [`docs/support-matrix.json`](docs/support-matrix.json).
+Observed model extraction state: see [`docs/status.md`](../status.md)
+(reviewed 2026-08-29) and [`docs/support-matrix.json`](../support-matrix.json).
 The 2026-04-25 numbers previously listed here are superseded by the RE-19 /
 RE-20 negatives and the partition MVP work on `main`.
 
