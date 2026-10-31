@@ -57,6 +57,12 @@ pub struct TypedProductionAppend {
     pub element_type_materials: BTreeMap<u32, Vec<String>>,
     /// Each element's type, by ElementId (RE-110).
     pub element_type_ids: BTreeMap<u32, u32>,
+    /// The standard property sets Revit's export gives each type object, by
+    /// the type's ElementId and the STEP name of the type entity
+    /// (`IFCWALLTYPE`): its common set's `IsExternal`, `FireRating` and
+    /// `LoadBearing` (RE-286), and a stair or flight type's dimensions
+    /// (RE-286). A type whose elements disagree has none.
+    pub type_entity_sets: BTreeMap<u32, BTreeMap<String, Vec<PropertySet>>>,
     /// Each family instance's original symbol, by ElementId (RE-167).
     pub element_original_symbols: BTreeMap<u32, u32>,
     /// Whether Revit's exporter takes each door's and window's symbol as
@@ -399,6 +405,9 @@ pub fn append_typed_production_elements(
     // pairs name, for the cut at the floor that covers it.
     let mut pending_tops: Vec<(usize, Vec<u32>)> = Vec::new();
     let mut level_bind = crate::level_bind::LevelStoreyBind::new();
+    // RE-286: what each type object's common set holds, by type and type
+    // entity; `None` once two of its elements disagree.
+    let mut type_commons: BTreeMap<(u32, String), Option<TypeCommon>> = BTreeMap::new();
 
     for decoded in decoded_iter {
         *out.production_class_counts
@@ -945,6 +954,13 @@ pub fn append_typed_production_elements(
         add_railing_height(&mut reference_sets, &ifc_type, &decoded);
         add_railing_length(&mut reference_sets, &ifc_type, &decoded);
         add_space_height(&mut reference_sets, &ifc_type, &decoded);
+        add_space_net_volume(
+            &mut reference_sets,
+            &ifc_type,
+            &decoded,
+            extrusion.as_ref(),
+            solid_shape.is_none() && piece_bodies.is_empty(),
+        );
         add_extend_to_structure(&mut reference_sets, &ifc_type, &decoded);
         let mut serial_sets = serial_number_property_sets(&decoded);
         serial_sets.extend(revit_parameter_property_sets(&decoded));
@@ -1008,6 +1024,7 @@ pub fn append_typed_production_elements(
             }
         });
         let level_set = level_parameter_property_set(&decoded, &ifc_type);
+        record_type_common(&mut type_commons, &ifc_type, &decoded);
         // #823: Revit's export writes a ceiling of separate loops as one
         // covering whose body holds every piece, where it splits a floor.
         let pieces_in_body =
@@ -1427,6 +1444,16 @@ pub fn append_typed_production_elements(
     }
     add_named_parameter_sets(entities, pending_named);
     add_piece_sets(entities, pieces_of);
+    for ((type_id, entity), common) in type_commons {
+        let sets = common.map_or_else(Vec::new, |common| common.into_sets(&entity));
+        if sets.is_empty() {
+            continue;
+        }
+        out.type_entity_sets
+            .entry(type_id)
+            .or_default()
+            .insert(entity, sets);
+    }
 
     out
 }
@@ -2005,6 +2032,184 @@ fn add_is_external(
     }
 }
 
+/// What the common property set of a type object holds (RE-286).
+#[derive(Clone, PartialEq)]
+struct TypeCommon {
+    fire_rating: Option<String>,
+    load_bearing: Option<bool>,
+    /// A stair type of a stair whose data is read: revit-ifc's stair
+    /// calculators, run on the type itself, give 0 (RE-286).
+    stair_type: bool,
+    /// A flight type's nosing length, feet: its run type's (RE-286).
+    nosing_feet: Option<f64>,
+}
+
+/// Classes of the categories revit-ifc's `LoadBearingCalculator` (CLEANROOM.md
+/// source 5) calls load bearing before it reads any parameter, which a type
+/// object's common set holds as it does the element's (RE-286): the BIM4LCA
+/// office's 10 structural column types and its structural framing type.
+const LOAD_BEARING_TYPE_CLASSES: &[&str] = &["StructuralColumn", "StructuralFraming"];
+
+/// The entities whose type objects Revit's IFC4 exports of the BIM4LCA office
+/// (exporter 24.0.5) and of the R2025 models (25.0.2) give a common set, among
+/// those rvt-rs writes a type object for (RE-286). Not a
+/// ramp's, which holds no set in the office's export; a railing's, which that
+/// export writes no type object for at all, though the R2025 models' write one;
+/// nor a curtain member's, which is the exporter's cache (RE-269).
+const TYPE_COMMON_ENTITIES: &[&str] = &[
+    "IFCWALL",
+    "IFCCURTAINWALL",
+    "IFCDOOR",
+    "IFCWINDOW",
+    "IFCSLAB",
+    "IFCROOF",
+    "IFCCOLUMN",
+    "IFCBEAM",
+    "IFCCOVERING",
+    "IFCSTAIR",
+    "IFCSTAIRFLIGHT",
+    "IFCBUILDINGELEMENTPROXY",
+    "IFCSPACE",
+];
+
+impl TypeCommon {
+    /// The sets of the type entity `type_entity` (`IFCWALLTYPE`): its common
+    /// set, and for a stair or flight type the stair dimension sets.
+    fn into_sets(self, type_entity: &str) -> Vec<PropertySet> {
+        let Some(occurrence) = type_entity.strip_suffix("TYPE") else {
+            return Vec::new();
+        };
+        let mut sets = Vec::new();
+        if let Some(name) = is_external_set(occurrence) {
+            let mut properties = Vec::new();
+            let defines = |property: &str| {
+                super::standard_property_sets::property_kind(name, property).is_some()
+            };
+            if let Some(rating) = self.fire_rating.filter(|_| defines("FireRating")) {
+                properties.push(Property {
+                    name: "FireRating".into(),
+                    value: PropertyValue::Label(rating),
+                });
+            }
+            if let Some(bearing) = self.load_bearing.filter(|_| {
+                super::standard_property_sets::property_kind(name, "LoadBearing")
+                    == Some(super::standard_property_sets::StandardPropertyKind::Boolean)
+            }) {
+                properties.push(Property {
+                    name: "LoadBearing".into(),
+                    value: PropertyValue::Boolean(bearing),
+                });
+            }
+            if occurrence == "IFCSTAIR" && self.stair_type {
+                properties.extend(stair_type_zeros());
+            }
+            if !properties.is_empty() {
+                sets.push(PropertySet {
+                    name: name.into(),
+                    properties,
+                });
+            }
+        }
+        if let (true, Some(nosing)) = (occurrence == "IFCSTAIRFLIGHT", self.nosing_feet) {
+            sets.push(PropertySet {
+                name: "Pset_StairFlightCommon".into(),
+                properties: vec![Property {
+                    name: "NosingLength".into(),
+                    value: PropertyValue::LengthFeet(nosing),
+                }],
+            });
+        }
+        sets
+    }
+}
+
+/// What revit-ifc's stair calculators give a stair type object, which is no
+/// stair and no flight: 0 risers, 0 treads and a nosing length of 0, in
+/// `Pset_StairCommon` (RE-286), and with `--revit-set-placement` in
+/// `Pset_StairFlightCommon` too ([`super::revit_set_placement`]). The BIM4LCA
+/// office's three stair types of stairs with data and each R2025 stair model's
+/// hold them; its fourth stair type, of a family placed as a stair, holds none.
+/// Measured only: why the calculators give 0 on a type is not read.
+fn stair_type_zeros() -> [Property; 3] {
+    [
+        Property {
+            name: "NosingLength".into(),
+            value: PropertyValue::LengthFeet(0.0),
+        },
+        Property {
+            name: "NumberOfRiser".into(),
+            value: PropertyValue::CountValue(0),
+        },
+        Property {
+            name: "NumberOfTreads".into(),
+            value: PropertyValue::CountValue(0),
+        },
+    ]
+}
+
+/// Note what the type object of `decoded`'s type holds in its common set
+/// (RE-286): the type's Fire Rating (RE-77) and its `LoadBearing`
+/// ([`LOAD_BEARING_TYPE_CLASSES`]), as revit-ifc runs the common set's
+/// entries on the type itself (CLEANROOM.md source 5). No `IsExternal`:
+/// Revit's newer exporters write none on a type object (RE-286).
+/// Two elements of one type that disagree leave it none.
+fn record_type_common(
+    commons: &mut BTreeMap<(u32, String), Option<TypeCommon>>,
+    ifc_type: &str,
+    decoded: &DecodedElement,
+) {
+    use crate::partition_schema_mvp as mvp;
+    let upper = ifc_type.to_ascii_uppercase();
+    if !TYPE_COMMON_ENTITIES.contains(&upper.as_str()) {
+        return;
+    }
+    let Some(type_id) = decoded.fields.iter().find_map(|(name, value)| match value {
+        InstanceField::ElementId { id, .. } if name == mvp::TYPE_ID_FIELD => Some(*id),
+        _ => None,
+    }) else {
+        return;
+    };
+    let fire_rating = decoded
+        .fields
+        .iter()
+        .find_map(|(field, value)| match value {
+            InstanceField::String(text)
+                if field.strip_prefix(mvp::TYPE_PARAMETER_FIELD_PREFIX) == Some("Fire Rating")
+                    && !text.is_empty() =>
+            {
+                Some(text.clone())
+            }
+            _ => None,
+        });
+    let found = TypeCommon {
+        fire_rating,
+        load_bearing: LOAD_BEARING_TYPE_CLASSES
+            .contains(&decoded.class.as_str())
+            .then_some(true),
+        stair_type: decoded.class == "Stair"
+            && decoded
+                .fields
+                .iter()
+                .any(|(name, _)| name == mvp::STAIR_RISER_COUNT_FIELD),
+        nosing_feet: decoded.fields.iter().find_map(|(name, value)| match value {
+            InstanceField::Float { value, .. }
+                if decoded.class == "StairsRun" && name == mvp::STAIR_NOSING_LENGTH_FIELD =>
+            {
+                Some(*value)
+            }
+            _ => None,
+        }),
+    };
+    commons
+        .entry((type_id, format!("{upper}TYPE")))
+        .and_modify(|seen| {
+            if seen.as_ref() != Some(&found) {
+                *seen = None;
+            }
+        })
+        .or_insert(Some(found));
+}
+
 /// Add `ExtendToStructure` (`IfcBoolean`) to a wall's `Pset_WallCommon`
 /// among `sets`: whether its top is joined to a roof or floor, as its native
 /// record says (RE-228). Nothing where the record is not read.
@@ -2136,6 +2341,54 @@ fn add_space_height(sets: &mut Vec<PropertySet>, ifc_type: &str, decoded: &Decod
         properties: vec![Property {
             name: "Height".into(),
             value: PropertyValue::PositiveLengthFeet(height),
+        }],
+    });
+}
+
+/// Add a space's `Qto_SpaceBaseQuantities.NetVolume` to `sets` (#1016,
+/// RE-296): the area of its outline, its holes taken off, times the height of
+/// its box, where the room's stored solid is a prism of that outline
+/// ([`crate::partition_schema_mvp::ROOM_PRISM_FIELD`]). Revit's export writes
+/// the volume of the room's closed shell, which on such a room is that: on
+/// every one of the 167 rooms of the BIM4LCA office as built and the 178 at
+/// building permit that are prisms, and on none of the rooms whose ceiling
+/// steps. `GrossVolume` is left out: Revit's export writes it only on the
+/// rooms it draws as an extrusion, 88 of those 167, and nothing in the file
+/// tells them from the other 79 it draws as a tessellation.
+fn add_space_net_volume(
+    sets: &mut Vec<PropertySet>,
+    ifc_type: &str,
+    decoded: &DecodedElement,
+    extrusion: Option<&Extrusion>,
+    single: bool,
+) {
+    if ifc_type != "IFCSPACE" || !single {
+        return;
+    }
+    let prism = decoded.fields.iter().any(|(name, value)| {
+        name == crate::partition_schema_mvp::ROOM_PRISM_FIELD
+            && matches!(value, InstanceField::Bool(true))
+    });
+    let from_solid = decoded.fields.iter().any(|(name, value)| {
+        name == crate::element_record_plan_profiles::PLAN_PROFILE_SOURCE_FIELD
+            && matches!(value, InstanceField::String(source)
+                if source == crate::partition_room_boundaries::ROOM_OUTLINE_SOURCE)
+    });
+    let Some(body) = extrusion.filter(|_| prism && from_solid) else {
+        return;
+    };
+    let Some(area) = profile_area(body) else {
+        return;
+    };
+    let height = body.height_feet;
+    if !(height.is_finite() && height > 0.0) {
+        return;
+    }
+    sets.push(PropertySet {
+        name: "Qto_SpaceBaseQuantities".into(),
+        properties: vec![Property {
+            name: "NetVolume".into(),
+            value: PropertyValue::VolumeCubicFeet(area * height),
         }],
     });
 }

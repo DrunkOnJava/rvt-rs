@@ -971,6 +971,19 @@ Element base, `-1001352` and `-1002062` are all unset, as are the 15
 columns', which Revit still puts on a storey (#879;
 `reports/element-framing/RE-281-native-admission.md`).
 
+**RE-283 (2026-10-30)** reads a wall's type Function and the project and
+shared parameters named for `IsExternal` or for a standard property from the
+saved parameters on Revit 2015 to 2023, experimentally, so a wall's
+`IsExternal` and any parameter named for a property are written there as on
+2024 and 2025 (RE-193, RE-194). The Function is equal to the same project's
+later copy on 1,982 of 1,983 walls (24 pairs of 2015 to 2022 against 2023; the
+other is an edit between the saves). Against Revit's exports: BIMcollab's 114
+walls' `IsExternal` and `LoadBearing`, which two parameters on the walls
+give, and modelo_bim's 4 walls' `IsExternal`, which the Function gives, are
+all Revit's value where they were missing. 36 of 94 exports of the unfiltered
+run move, all files of Revit 2015 to 2023
+(`reports/element-framing/RE-283-wall-function-and-named-parameters-pre2024.md`).
+
 **RE-284 (2026-10-30)** writes each wall's `ExtendToStructure` on Revit 2015 to
 2023, experimentally, from the same flag of its native record that RE-228
 reads on 2024 and 2025: a `JoinToRoofGStep` with `m_baseOrTop` 1. Against the
