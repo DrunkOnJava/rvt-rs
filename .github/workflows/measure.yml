@@ -513,7 +513,7 @@ jobs:
             echo "base: $(cat base-commit.txt)"
             echo "runner: $(grep -m1 'model name' /proc/cpuinfo | cut -d: -f2- | xargs)"
             echo
-            echo "Median of three exports each, in turn on the same runner."
+            echo "Median of three exports each, in turn on the same runner, with each export's peak resident memory."
             echo
             cat timing.md
           } >> "$GITHUB_STEP_SUMMARY"
