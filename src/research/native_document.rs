@@ -16,6 +16,19 @@ use std::{
     sync::Arc,
 };
 
+/// Lower-case hex of `bytes`, the string `format!("{b:02x}")` per byte gives,
+/// without a formatting call per byte: every selected record's body digest
+/// is written this way (#1237).
+fn lower_hex(bytes: &[u8]) -> String {
+    const DIGITS: &[u8; 16] = b"0123456789abcdef";
+    let mut out = String::with_capacity(bytes.len() * 2);
+    for &byte in bytes {
+        out.push(char::from(DIGITS[usize::from(byte >> 4)]));
+        out.push(char::from(DIGITS[usize::from(byte & 0x0f)]));
+    }
+    out
+}
+
 #[derive(Debug, Clone, Copy, Default, Serialize)]
 pub struct ResourceBudget {
     pub max_stream_bytes: u64,
@@ -186,10 +199,7 @@ fn decode_single(prepared: &[u8], offset: usize) -> Result<(Vec<u8>, StreamEnvel
             member_offset: offset,
             member_bytes: compressed.len() - suffix.len(),
             opaque_suffix_bytes: suffix.len(),
-            opaque_suffix_sha256: Sha256::digest(suffix)
-                .iter()
-                .map(|b| format!("{b:02x}"))
-                .collect::<String>(),
+            opaque_suffix_sha256: lower_hex(&Sha256::digest(suffix)),
             suffix_interpreted: suffix.is_empty(),
         },
     ))
@@ -975,10 +985,7 @@ fn extract_records(
                             group: source.clone(),
                             group_record_offset: offset,
                             body_bytes: body.len(),
-                            body_sha256: Sha256::digest(body)
-                                .iter()
-                                .map(|b| format!("{b:02x}"))
-                                .collect::<String>(),
+                            body_sha256: lower_hex(&Sha256::digest(body)),
                         },
                         graph,
                         saved_metadata,
