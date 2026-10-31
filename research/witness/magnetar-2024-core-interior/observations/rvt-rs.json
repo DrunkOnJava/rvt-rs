@@ -44,8 +44,8 @@
       "IFCPROPERTYSET": 6508,
       "IFCPROPERTYSINGLEVALUE": 29096,
       "IFCQUANTITYAREA": 491,
-      "IFCQUANTITYLENGTH": 1341,
-      "IFCQUANTITYVOLUME": 438,
+      "IFCQUANTITYLENGTH": 1340,
+      "IFCQUANTITYVOLUME": 553,
       "IFCRECTANGLEPROFILEDEF": 754,
       "IFCRELAGGREGATES": 13,
       "IFCRELASSOCIATESMATERIAL": 412,
@@ -705,7 +705,7 @@
       ]
     }
   },
-  "observation_hash_sha256": "09262b1a8cfea000f1ba135c02541747c3223552a94f6f2bbe6143f314a07c60",
+  "observation_hash_sha256": "c7f09578e9b28e7767e8f4be4e567c7402597320824d9dd8b94bfc75630bfffc",
   "schema_version": "1.1.0",
   "semantic_surface_covered": [
     "entity_counts",

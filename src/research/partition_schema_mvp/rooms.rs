@@ -166,6 +166,13 @@ pub(super) fn attach_room_outlines(
                 }
             }
             room.fields.extend(fields);
+            // RE-296: a room whose solid is a prism of that outline.
+            if ROOM_PRISM_REVIT_VERSIONS.contains(&revit_version)
+                && prb::prism_of_solids(inflated.bytes(), headers, bbox)
+            {
+                room.fields
+                    .push((ROOM_PRISM_FIELD.into(), InstanceField::Bool(true)));
+            }
         }
     }
 }
