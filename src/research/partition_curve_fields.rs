@@ -24,6 +24,7 @@
 //! fields do not tell a round duct from a square one.
 
 use crate::le_bytes;
+use crate::partition_pipe_axes::{BoxGrid, holds};
 use crate::{Result, RevitFile};
 use std::collections::BTreeMap;
 
@@ -46,8 +47,6 @@ pub const HEIGHT_OFFSET: usize = 16;
 /// Offset of `m_idType` from the anchor.
 pub const TYPE_OFFSET: usize = 64;
 
-/// How far outside an element's box a connector entry's point may fall, feet.
-const POINT_TOLERANCE_FEET: f64 = 1e-3;
 /// Largest connector index an entry is taken to have.
 const MAX_CONNECTOR_INDEX: u32 = 255;
 
@@ -224,11 +223,14 @@ pub fn scan_curve_fields(
         if anchors.is_empty() {
             continue;
         }
-        let inside = |point: [f64; 3], bbox: &[f64; 6]| {
-            (0..3).all(|axis| {
-                point[axis] >= bbox[axis] - POINT_TOLERANCE_FEET
-                    && point[axis] <= bbox[axis + 3] + POINT_TOLERANCE_FEET
-            })
+        // Only the boxes near a point, and those too large to index, can
+        // hold it within the tolerance.
+        let grid = BoxGrid::new(boxes.iter().map(|(_, bbox)| bbox));
+        let candidates = |point: [f64; 3]| {
+            grid.near(point)
+                .iter()
+                .chain(&grid.oversized)
+                .map(|&index| &boxes[index])
         };
         // An anchor belongs to the one element whose box holds the points of
         // the first two entries after it within the window: a curve's own two
@@ -240,15 +242,15 @@ pub fn scan_curve_fields(
             let window = &buf[at + 1..buf.len().min(at + ANCHOR_WINDOW + 4)];
             let points: Vec<[f64; 3]> = memchr::memmem::find_iter(window, &1u32.to_le_bytes())
                 .filter_map(|offset| entry_point(buf, at + 1 + offset))
-                .filter(|point| boxes.iter().any(|(_, bbox)| inside(*point, bbox)))
+                .filter(|point| candidates(*point).any(|(_, bbox)| holds(bbox, *point)))
                 .take(2)
                 .collect();
             if points.is_empty() {
                 continue;
             }
-            let mut owners = boxes
-                .iter()
-                .filter(|(_, bbox)| points.iter().all(|point| inside(*point, bbox)));
+            // A box holding every point holds the first.
+            let mut owners = candidates(points[0])
+                .filter(|(_, bbox)| points.iter().all(|point| holds(bbox, *point)));
             let (Some((id, _)), None) = (owners.next(), owners.next()) else {
                 continue;
             };

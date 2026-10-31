@@ -81,7 +81,7 @@ const MAX_POINTS_PER_PIPE: usize = 64;
 /// Edge of the cells pipes' boxes are indexed in, feet.
 const CELL_FEET: f64 = 1.0;
 
-/// Most cells one pipe's box may cover; a pipe spanning more is not indexed.
+/// Most cells one box may cover; a box spanning more is not indexed.
 const MAX_CELLS_PER_PIPE: i64 = 4096;
 
 /// A pipe's cylinder: its axis and outside radius, model feet.
@@ -194,6 +194,69 @@ fn cell(value: f64) -> i64 {
     (value / CELL_FEET).floor() as i64
 }
 
+/// Whether `point` is in `bbox` grown by [`POINT_TOLERANCE_FEET`].
+pub(crate) fn holds(bbox: &[f64; 6], point: [f64; 3]) -> bool {
+    (0..3).all(|axis| {
+        point[axis] >= bbox[axis] - POINT_TOLERANCE_FEET
+            && point[axis] <= bbox[axis + 3] + POINT_TOLERANCE_FEET
+    })
+}
+
+/// Boxes indexed by the cells of [`CELL_FEET`] they cover once grown by
+/// [`POINT_TOLERANCE_FEET`], so a point is tested against the boxes of its
+/// own cell rather than all of them. A box covering more than
+/// [`MAX_CELLS_PER_PIPE`] cells, or with a coordinate that is not finite, is
+/// not indexed but listed in `oversized`.
+pub(crate) struct BoxGrid {
+    cells: HashMap<[i64; 3], Vec<usize>>,
+    pub(crate) oversized: Vec<usize>,
+}
+
+impl BoxGrid {
+    pub(crate) fn new<'a>(boxes: impl IntoIterator<Item = &'a [f64; 6]>) -> Self {
+        let mut grid = BoxGrid {
+            cells: HashMap::new(),
+            oversized: Vec::new(),
+        };
+        for (index, bbox) in boxes.into_iter().enumerate() {
+            let first = [0, 1, 2].map(|axis| cell(bbox[axis] - POINT_TOLERANCE_FEET));
+            let last = [0, 1, 2].map(|axis| cell(bbox[axis + 3] + POINT_TOLERANCE_FEET));
+            if !bbox.iter().all(|value| value.is_finite()) {
+                grid.oversized.push(index);
+                continue;
+            }
+            // A finite box inverted on any axis by more than the tolerance
+            // holds no point, and its cell count is no bound on the fill below.
+            if (0..3).any(|axis| last[axis] < first[axis]) {
+                continue;
+            }
+            let span = |axis: usize| last[axis].saturating_sub(first[axis]).saturating_add(1);
+            let cells = span(0).saturating_mul(span(1)).saturating_mul(span(2));
+            if cells > MAX_CELLS_PER_PIPE {
+                grid.oversized.push(index);
+                continue;
+            }
+            for x in first[0]..=last[0] {
+                for y in first[1]..=last[1] {
+                    for z in first[2]..=last[2] {
+                        grid.cells.entry([x, y, z]).or_default().push(index);
+                    }
+                }
+            }
+        }
+        grid
+    }
+
+    /// The indexed boxes whose cells include `point`'s, in index order: every
+    /// indexed box that [`holds`] it is among them.
+    pub(crate) fn near(&self, point: [f64; 3]) -> &[usize] {
+        self.cells
+            .get(&point.map(cell))
+            .map(Vec::as_slice)
+            .unwrap_or_default()
+    }
+}
+
 /// The point of the connector entry whose marker `u32` 1 starts at `at`.
 fn entry_point(buf: &[u8], at: usize) -> Option<[f64; 3]> {
     let index = le_bytes::u32_at(buf, at.checked_sub(4)?)?;
@@ -216,41 +279,9 @@ fn entry_point(buf: &[u8], at: usize) -> Option<[f64; 3]> {
 /// repeats.
 fn connector_points(buf: &[u8], boxes: &[(u32, [f64; 6])]) -> Vec<Vec<[f64; 3]>> {
     let mut found: Vec<Vec<[f64; 3]>> = vec![Vec::new(); boxes.len()];
-    let mut grid: HashMap<[i64; 3], Vec<usize>> = HashMap::new();
-    let mut low = [f64::INFINITY; 3];
-    let mut high = [f64::NEG_INFINITY; 3];
-    for (index, (_, bbox)) in boxes.iter().enumerate() {
-        if !bbox.iter().all(|value| value.is_finite()) {
-            continue;
-        }
-        let first = [
-            cell(bbox[0] - POINT_TOLERANCE_FEET),
-            cell(bbox[1] - POINT_TOLERANCE_FEET),
-            cell(bbox[2] - POINT_TOLERANCE_FEET),
-        ];
-        let last = [
-            cell(bbox[3] + POINT_TOLERANCE_FEET),
-            cell(bbox[4] + POINT_TOLERANCE_FEET),
-            cell(bbox[5] + POINT_TOLERANCE_FEET),
-        ];
-        let span = |axis: usize| last[axis].saturating_sub(first[axis]).saturating_add(1);
-        let cells = span(0).saturating_mul(span(1)).saturating_mul(span(2));
-        if cells > MAX_CELLS_PER_PIPE {
-            continue;
-        }
-        for x in first[0]..=last[0] {
-            for y in first[1]..=last[1] {
-                for z in first[2]..=last[2] {
-                    grid.entry([x, y, z]).or_default().push(index);
-                }
-            }
-        }
-        for axis in 0..3 {
-            low[axis] = low[axis].min(bbox[axis] - POINT_TOLERANCE_FEET);
-            high[axis] = high[axis].max(bbox[axis + 3] + POINT_TOLERANCE_FEET);
-        }
-    }
-    if grid.is_empty() {
+    // A pipe whose box is not indexed gets no points.
+    let grid = BoxGrid::new(boxes.iter().map(|(_, bbox)| bbox));
+    if grid.cells.is_empty() {
         return found;
     }
     let marker = ENTRY_MARKER;
@@ -258,19 +289,8 @@ fn connector_points(buf: &[u8], boxes: &[(u32, [f64; 6])]) -> Vec<Vec<[f64; 3]>>
         let Some(point) = entry_point(buf, at) else {
             continue;
         };
-        if (0..3).any(|axis| point[axis] < low[axis] || point[axis] > high[axis]) {
-            continue;
-        }
-        let key = [cell(point[0]), cell(point[1]), cell(point[2])];
-        let Some(candidates) = grid.get(&key) else {
-            continue;
-        };
-        for &index in candidates {
-            let bbox = boxes[index].1;
-            let inside = (0..3).all(|axis| {
-                point[axis] >= bbox[axis] - POINT_TOLERANCE_FEET
-                    && point[axis] <= bbox[axis + 3] + POINT_TOLERANCE_FEET
-            });
+        for &index in grid.near(point) {
+            let inside = holds(&boxes[index].1, point);
             let points = &mut found[index];
             if inside
                 && points.len() < MAX_POINTS_PER_PIPE
