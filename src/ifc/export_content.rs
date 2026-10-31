@@ -952,7 +952,6 @@ pub fn append_typed_production_elements(
             &piece_bodies,
             solid_shape.is_none(),
         );
-        add_wall_covering_width(&mut reference_sets, &ifc_type, &decoded);
         add_stair_flight_quantities(&mut reference_sets, &ifc_type, &decoded);
         add_railing_height(&mut reference_sets, &ifc_type, &decoded);
         add_railing_length(&mut reference_sets, &ifc_type, &decoded);
@@ -2736,11 +2735,12 @@ fn add_beam_roll(sets: &mut Vec<PropertySet>, ifc_type: &str, decoded: &DecodedE
 /// `NetVolume` (RE-295, #1016), that area times the layers' total thickness:
 /// the volume of the floor's solid, which Revit's export writes, is that on
 /// every floor of the BIM4LCA office as built and at building permit that
-/// nothing cuts, flat or sloped, whatever its layers. Where the type has more
-/// than one layer, also its `Width`, the same total: Revit's export writes a
-/// compound floor's type thickness there, where on a floor of one layer it
-/// writes its profile's extent along the extrusion's Y axis, which no field of
-/// the floor's record gives.
+/// nothing cuts, flat or sloped, whatever its layers. Its `Width` is left out
+/// (RE-294): Revit 2024's exporter writes a compound floor's type thickness
+/// there and a later exporter (Revit 2026) writes none on one, so the
+/// exporters disagree; on a floor of one layer Revit writes its profile's
+/// extent along the extrusion's Y axis, which no field of the floor's record
+/// gives.
 fn add_slab_gross_area(
     sets: &mut Vec<PropertySet>,
     ifc_type: &str,
@@ -2774,14 +2774,6 @@ fn add_slab_gross_area(
             _ => None,
         })
     };
-    let layer_count = decoded.fields.iter().find_map(|(name, value)| match value {
-        InstanceField::Integer { value, .. }
-            if name == crate::partition_schema_mvp::SLAB_TYPE_LAYER_COUNT_FIELD =>
-        {
-            Some(*value)
-        }
-        _ => None,
-    });
     let uncut = decoded.fields.iter().any(|(name, value)| {
         name == crate::partition_schema_mvp::SLAB_UNCUT_FIELD
             && matches!(value, InstanceField::Bool(true))
@@ -2803,12 +2795,6 @@ fn add_slab_gross_area(
             properties.push(Property {
                 name: "NetVolume".into(),
                 value: PropertyValue::VolumeCubicFeet(area * thickness),
-            });
-        }
-        if layer_count.is_some_and(|count| count > 1) {
-            properties.push(Property {
-                name: "Width".into(),
-                value: PropertyValue::PositiveLengthFeet(thickness),
             });
         }
     }
@@ -2902,18 +2888,19 @@ fn curve_area_length(curve: &entities::IndexedCurve) -> Option<(f64, f64)> {
 }
 
 /// Add a ceiling's `Qto_CoveringBaseQuantities` to `sets` (#1016, RE-250,
-/// RE-297): its `Width`, the depth of the extrusion it is drawn as, where that
-/// is its type's layers' total thickness (as RE-238 tells a level slab) and
-/// every further piece of a sketch of separate loops (#331) is as deep; and,
-/// on a ceiling drawn as one extrusion of its sketch's outline whose record
-/// holds no step that cuts it
-/// ([`crate::partition_schema_mvp::SLAB_UNCUT_FIELD`]), its `GrossArea`, the
-/// area of that profile, its holes taken off. Revit's export writes a cut
-/// ceiling's area less the cut: the sketch's area is 0.7 to 1.1 percent larger
-/// than Revit's on the 2 of the BIM4LCA office's ceilings as built and the 9
-/// at permit whose records hold a `CutPairGStep`, and on no other. On a ceiling
-/// of several pieces Revit's export gives the area of one of them, which no
-/// field of the record says.
+/// RE-297): on a ceiling drawn as one extrusion of its sketch's outline whose
+/// record holds no step that cuts it
+/// ([`crate::partition_schema_mvp::SLAB_UNCUT_FIELD`]), where the extrusion is
+/// as deep as its type's layers' total thickness (as RE-238 tells a level
+/// slab), its `GrossArea`, the area of that profile, its holes taken off.
+/// Revit's export writes a cut ceiling's area less the cut: the sketch's area
+/// is 0.7 to 1.1 percent larger than Revit's on the 2 of the BIM4LCA office's
+/// ceilings as built and the 9 at permit whose records hold a `CutPairGStep`,
+/// and on no other. On a ceiling of several pieces Revit's export gives the
+/// area of one of them, which no field of the record says. Its `Width` is left
+/// out (RE-294): Revit 2024's exporter writes the extrusion's depth there and
+/// a later one (Revit 2025 or 2026) writes none on a covering, so the exporters
+/// disagree.
 fn add_ceiling_quantities(
     sets: &mut Vec<PropertySet>,
     ifc_type: &str,
@@ -2955,43 +2942,12 @@ fn add_ceiling_quantities(
             });
         }
     }
-    if layered && body.height_feet.is_finite() && body.height_feet > 0.0 {
-        properties.push(Property {
-            name: "Width".into(),
-            value: PropertyValue::PositiveLengthFeet(body.height_feet),
-        });
-    }
     if properties.is_empty() {
         return;
     }
     sets.push(PropertySet {
         name: "Qto_CoveringBaseQuantities".into(),
         properties,
-    });
-}
-
-/// Add the `Qto_CoveringBaseQuantities.Width` of a wall Revit's export writes
-/// as an `IfcCovering` to `sets` (#1016, RE-297): the wall's type's width, as
-/// a wall's own `Width` is (RE-251). All 21 of the BIM4LCA office's walls of
-/// the type `AK-1.otsa` as built.
-fn add_wall_covering_width(sets: &mut Vec<PropertySet>, ifc_type: &str, decoded: &DecodedElement) {
-    use crate::partition_schema_mvp as mvp;
-    if ifc_type != "IFCCOVERING" || !matches!(decoded.class.as_str(), "Wall" | "ArcWall") {
-        return;
-    }
-    let thickness = mvp::wall_axis_from_fields(&decoded.fields)
-        .map(|axis| axis.thickness_feet)
-        .or_else(|| mvp::wall_arc_from_fields(&decoded.fields).map(|arc| arc.thickness_feet))
-        .or_else(|| mvp::wall_layers_width_from_fields(&decoded.fields));
-    let Some(thickness) = thickness.filter(|t| t.is_finite() && *t > 0.0) else {
-        return;
-    };
-    sets.push(PropertySet {
-        name: "Qto_CoveringBaseQuantities".into(),
-        properties: vec![Property {
-            name: "Width".into(),
-            value: PropertyValue::PositiveLengthFeet(thickness),
-        }],
     });
 }
 
@@ -3181,6 +3137,12 @@ fn add_wall_height(
 /// (49 as built, 48 at building permit) and 91 of puzzbobb's R2025 walls, and
 /// Revit's export writes all four on each (RE-270). Nothing on any other wall,
 /// whose solid may be cut, staircased or open (#1046).
+///
+/// Such a wall is drawn as an extrusion, and revit-ifc's `WallExporter`
+/// (CLEANROOM.md source 5) hands `CreateWallBaseQuantities` the area of its
+/// footprint loop, which becomes `GrossFootprintArea`: its length times its
+/// thickness, Revit's on every one of those walls but the shortest, which is
+/// as long as it is thick and which Revit's export gives none (RE-292).
 fn add_wall_areas_and_volumes(
     sets: &mut [PropertySet],
     ifc_type: &str,
@@ -3233,7 +3195,21 @@ fn add_wall_areas_and_volumes(
         return;
     };
     set.properties.extend(quantities);
+    let along = body.width_feet.max(body.depth_feet);
+    if along > FOOTPRINT_MIN_LENGTH_FACTOR * width {
+        set.properties.push(Property {
+            name: "GrossFootprintArea".into(),
+            value: PropertyValue::AreaSquareFeet(along * width),
+        });
+    }
 }
+
+/// How many times its thickness a wall must be longer than to get a
+/// `GrossFootprintArea` (RE-292): the one such wall Revit's export writes
+/// none on is as long as it is thick (1.0 times), and the shortest it writes
+/// one on is 3.12 times. Nothing is measured in between; three is a round
+/// bound just under the measured 3.12.
+const FOOTPRINT_MIN_LENGTH_FACTOR: f64 = 3.0;
 
 /// A rectangular wall's `GrossSideArea`, `NetSideArea`, `GrossVolume` and
 /// `NetVolume` (RE-270): the longer side's area twice, the type's `width`
