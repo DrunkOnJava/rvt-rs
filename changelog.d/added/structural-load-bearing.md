@@ -6,6 +6,7 @@
   element's `IsExternal`, not external, as the calculation's last step gives
   it. Against Revit's exports: BIMcollab's Revit 2015 example 91 of 91 beams
   and 15 of 15 columns for each property, and modelo_bim (a Revit 2023 file,
-  Revit 26.2's exporter) 8 of 8 beams and columns for `IsExternal` and 8 of 9
-  for `LoadBearing`; on the BIM4LCA office as built one column with no such
-  parameter gains Revit's value. None different.
+  Revit 26.2's exporter) 8 of 8 beams and columns for `IsExternal` and 9 of 9
+  for `LoadBearing` (the ninth on the type objects RE-286 writes); on the
+  BIM4LCA office as built one column with no such parameter gains Revit's
+  value. None different, and nothing written that Revit's export leaves out.

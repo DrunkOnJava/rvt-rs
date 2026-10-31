@@ -45,6 +45,10 @@ On the BIM4LCA office, whose structural columns and beams carry parameters named
 - **Beams' `Span` and `Slope`**, 91 each on BIMcollab, need the beam's axis, which only the 2024 layout reads.
 - That an exporter of another release writes the same: BIMcollab's is Revit 2015's, modelo_bim's Revit 26.2's.
 
+## 4a. Measured again on `main` (2026-10-31)
+
+Measure [41206921249](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41206921249), this change rebuilt on `main` (`888c043a` against `5d863fba`, unfiltered with the samples, BIMcollab and the held-out models). BIMcollab gains 212 equal values (`IsExternal` and `LoadBearing` on 91 beams and 15 columns). modelo_bim gains 32: 8 of 8 beams' and columns' `IsExternal`, and `LoadBearing` on all 9 of each, where the ninth is on the type objects RE-286 writes. The office as built gains its one column. Nothing that differed before differs, and "rvt-rs values Revit does not write" is unchanged on every model. 58 exports move, as in §3.
+
 ## 5. Reproduce
 
 ```text
