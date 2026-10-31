@@ -66,6 +66,11 @@ for dir in "$RESULTS"/holdout-*/ "$RESULTS"/bimcollab-*/; do
              q = $2; sub(/:$/, "", q); a = $4; sub(/,$/, "", a)
              printf "different %s: rvt-rs over Revit %.6f\n", q, a / $6
            }' "$f"
+      # How many values of each quantity rvt-rs writes that Revit's export does
+      # not: a count per quantity name, never the objects the scorer lists under it.
+      awk '/^rvt-rs quantities Revit does not write:/ { on = 1; next }
+           on && /^  Qto_[A-Za-z]+\.[A-Za-z]+: [0-9]+$/ { sub(/^  /, ""); print "extra " $0; next }
+           on && !/^ / { on = 0 }' "$f"
     done
     for f in "$dir"names_vs_ifc.txt; do
       [ -f "$f" ] || continue
