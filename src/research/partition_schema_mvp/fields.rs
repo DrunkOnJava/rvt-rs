@@ -464,6 +464,14 @@ pub const WALL_TYPE_CONFIRMED_FIELD: &str = "m_wall_type_confirmed";
 /// wall whose two lengths differ (the maintainer, 2026-10-26 and 2026-10-27).
 pub const WALL_CURVE_LENGTH_FIELD: &str = "m_wall_curve_length";
 
+/// Field holding the length of a wall's centreline cut back where its body
+/// meets the walls joined at its ends, feet, on every wall whose two ends the
+/// record and the join reaches read alike ([`crate::native_walls::trimmed_ends`],
+/// RE-252): Revit's exported `Axis`, and on a plain wall the length of the
+/// longest vertical face of its solid (RE-290). Unlike
+/// [`WALL_LENGTH_FIELD`] it is given whether or not the curve is as long.
+pub const WALL_CUTBACK_LENGTH_FIELD: &str = "m_wall_cutback_length";
+
 /// How close a wall's native curve's ends must be to its centreline's to be
 /// taken as the same line, feet.
 pub(super) const NATIVE_WALL_LINE_TOLERANCE_FEET: f64 = 1e-4;
