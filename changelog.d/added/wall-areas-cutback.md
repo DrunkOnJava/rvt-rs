@@ -8,5 +8,5 @@
   only when the record confirms its `Length`. They are Revit's on all 29 such
   walls of the BIM4LCA office as built and 36 at building permit, none
   different and none that Revit's export leaves out: the office goes from
-  28,065 to 28,181 of the 39,388 quantities equal as built (Measure run
-  41146179183).
+  28,162 to 28,278 of the 39,388 quantities equal as built (Measure run
+  41182651693).
