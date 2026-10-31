@@ -12,7 +12,7 @@
   - `Extrusion::t_shape`, `l_shape`, `u_shape`, `rectangle_hollow`,
     `circle_hollow` and `arbitrary_with_voids`: build the `ProfileDef`
     variant directly.
-  - `MaterialLayerSetUsage::total_thickness_feet`: sum the layers.
+  - `MaterialLayerSet::total_thickness_feet`: sum the layers.
   - `ifc::category_map::is_ifc_member`, `EvidenceTier::meets_verified_gate`,
     `InflateShortfall::is_complete` and `RoundTripReport::is_typed_clean`.
   - `RevitFile::preview_png_untrimmed`, `preview_raw` and

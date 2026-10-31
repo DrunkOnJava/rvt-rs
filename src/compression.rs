@@ -96,8 +96,6 @@ pub struct InflateShortfall {
     pub stopped_at_total: bool,
 }
 
-impl InflateShortfall {}
-
 /// Stored bytes in a full checksum page (`PagedStreamImplReader<..., 65249>`).
 ///
 /// Independently documented by ahzs645/reviter's ODA loader analysis and

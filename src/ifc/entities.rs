@@ -848,8 +848,6 @@ pub struct MaterialLayerSetUsage {
     pub offset_feet: f64,
 }
 
-impl MaterialLayerSet {}
-
 /// One material assigned to a structural profile in a
 /// [`MaterialProfileSet`]. `material_index` references
 /// `IfcModel.materials`; `profile_name` identifies the profile

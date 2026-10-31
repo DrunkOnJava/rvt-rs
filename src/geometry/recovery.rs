@@ -279,8 +279,6 @@ pub struct FloorBoundaryLoop {
     pub source: FloorBoundarySource,
 }
 
-impl FloorBoundaryLoop {}
-
 /// Recover a floor boundary loop from decoded schema fields.
 ///
 /// Accepts:
