@@ -180,8 +180,27 @@ pub fn appearance_at(buf: &[u8], id_at: usize) -> Option<MaterialAppearance> {
 
 /// Every material's shading, by ElementId, read from every partition. Only
 /// ids in `declared` count; an id whose copies disagree is dropped. Empty
-/// for a release the layout is not measured on.
+/// for a release the layout is not measured on. Memoised on the handle by
+/// release and `declared`, as [`scan_material_names`] is.
 pub fn scan_material_appearances(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    declared: &BTreeSet<u32>,
+) -> Result<BTreeMap<u32, MaterialAppearance>> {
+    use std::hash::{Hash, Hasher};
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    declared.hash(&mut hasher);
+    let key = (revit_version, hasher.finish());
+    if let Some(cached) = rf.cached_material_appearances(key) {
+        return Ok((*cached).clone());
+    }
+    let appearances = scan_material_appearances_uncached(rf, revit_version, declared)?;
+    rf.cache_material_appearances(key, std::sync::Arc::new(appearances.clone()));
+    Ok(appearances)
+}
+
+/// [`scan_material_appearances`], read afresh.
+fn scan_material_appearances_uncached(
     rf: &mut RevitFile,
     revit_version: u32,
     declared: &BTreeSet<u32>,

@@ -199,26 +199,6 @@ impl SchemaTable {
             current = entry.parent.as_deref()?;
         }
     }
-
-    /// Build a full `name → (ancestor, tag)` resolution map for every
-    /// class in the schema (RE-18). Useful for partition-chunk tag
-    /// scanning where you want a single pass over all classes to know
-    /// "given a chunk tagged 0x0191, what's the most specific class
-    /// name I should call it?" without re-walking the parent chain
-    /// per-record.
-    ///
-    /// Entries where no ancestor carries a tag are omitted — callers
-    /// who need the untagged set should filter `self.classes` by
-    /// checking `tagged_ancestor().is_none()`.
-    pub fn tagged_ancestor_map(&self) -> std::collections::BTreeMap<String, (String, u16)> {
-        let mut out = std::collections::BTreeMap::new();
-        for c in &self.classes {
-            if let Some((anc, tag)) = self.tagged_ancestor(&c.name) {
-                out.insert(c.name.clone(), (anc.to_string(), tag));
-            }
-        }
-        out
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

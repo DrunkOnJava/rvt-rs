@@ -19,7 +19,7 @@ use crate::elements::floor::Floor;
 use crate::elements::level::{Level, normalise_field_name};
 use crate::elements::openings::{Door, Window};
 use crate::elements::wall::Wall;
-use crate::geometry::{Curve, CurveLoop, Point3};
+use crate::geometry::{Curve, Point3};
 use crate::vector_math::polygon_area_xy;
 use crate::walker::{DecodedElement, InstanceField};
 
@@ -277,45 +277,6 @@ pub struct FloorBoundaryLoop {
     pub vertices_xy: Vec<(f64, f64)>,
     pub closed: bool,
     pub source: FloorBoundarySource,
-}
-
-impl FloorBoundaryLoop {
-    /// Unsigned shoelace area in square feet.
-    pub fn area_sqft(&self) -> f64 {
-        polygon_area_xy(&self.vertices_xy)
-    }
-
-    /// Convert to a [`CurveLoop`] of straight segments (Z = 0).
-    pub fn to_curve_loop(&self) -> CurveLoop {
-        let n = self.vertices_xy.len();
-        if n < 2 {
-            return CurveLoop {
-                curves: vec![],
-                closed: self.closed,
-            };
-        }
-        let mut curves = Vec::with_capacity(n);
-        for i in 0..n.saturating_sub(1) {
-            let (x0, y0) = self.vertices_xy[i];
-            let (x1, y1) = self.vertices_xy[i + 1];
-            curves.push(Curve::Line {
-                start: Point3::new(x0, y0, 0.0),
-                end: Point3::new(x1, y1, 0.0),
-            });
-        }
-        if self.closed && n >= 3 {
-            let (x0, y0) = self.vertices_xy[n - 1];
-            let (x1, y1) = self.vertices_xy[0];
-            curves.push(Curve::Line {
-                start: Point3::new(x0, y0, 0.0),
-                end: Point3::new(x1, y1, 0.0),
-            });
-        }
-        CurveLoop {
-            curves,
-            closed: self.closed,
-        }
-    }
 }
 
 /// Recover a floor boundary loop from decoded schema fields.

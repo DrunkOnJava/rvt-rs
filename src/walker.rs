@@ -382,36 +382,6 @@ pub fn write_adocument_field(value: &InstanceField, ft: &formats::FieldType, out
     }
 }
 
-/// Serialise an ADocument instance back to its wire bytes.
-/// Inverse of the read_adocument decode path.
-///
-/// Walks `adoc.fields` in schema order (not decoded order, so the
-/// caller's decoded `InstanceField` list is paired by index with
-/// `schema.fields`) and uses [`write_adocument_field`] per field.
-///
-/// Callers producing a new Global/Latest payload append the result
-/// to the decoded prefix bytes (everything before `entry_offset`),
-/// then pass it to `write_with_patches` as a `CustomPrefix8` stream
-/// patch, which encodes it.
-// Tracker: WRT-02.
-pub fn encode_adocument_fields(
-    schema: &formats::ClassEntry,
-    fields: &[(String, InstanceField)],
-) -> Vec<u8> {
-    let mut out = Vec::new();
-    for (idx, schema_field) in schema.fields.iter().enumerate() {
-        let Some((_, value)) = fields.get(idx) else {
-            break;
-        };
-        if let Some(ft) = schema_field.field_type.as_ref() {
-            write_adocument_field(value, ft, &mut out);
-        } else if let InstanceField::Bytes(raw) = value {
-            out.extend_from_slice(raw);
-        }
-    }
-    out
-}
-
 /// Encode a 2-column reference container — the inverse of
 /// `read_field`'s `Container { kind: 0x0e, .. }` path. The on-
 /// disk layout for this field shape is:
@@ -1129,73 +1099,6 @@ impl Completeness {
 }
 
 impl ADocumentInstance {
-    /// Pointer bytes from the `m_elem_table` field, when the schema
-    /// and decoded payload surfaced it.
-    ///
-    /// ADocument carries a pointer to the document-wide element
-    /// index table — the map from `ElementId` to per-element record
-    /// location in `Global/Latest`. The pointer appears in the
-    /// schema as a field named `m_elem_table` (sometimes
-    /// `m_elemTable` or a normalised variant), typed as
-    /// [`crate::formats::FieldType::Pointer`]. The walker decodes
-    /// the field to [`InstanceField::Pointer`] carrying the raw
-    /// 8-byte `[u32 slot_a][u32 slot_b]` payload.
-    ///
-    /// This helper looks up that field by name (accepting the
-    /// common spelling variants) and returns the raw pointer
-    /// tuple. Returns `None` when:
-    ///
-    /// - No field named `m_elem_table` (or its variants) is
-    ///   present. This happens on older Revit releases where the
-    ///   ADocument wire layout hasn't been fully decoded.
-    /// - The field IS present but wasn't decoded to
-    ///   `InstanceField::Pointer` — e.g. the typed walker fell
-    ///   back to raw `Bytes` when the `FieldType` classification
-    ///   didn't produce a pointer. This is a sign of schema drift
-    ///   or cross-version wire changes.
-    /// - The pointer payload is the sentinel NULL `[0, 0]` or
-    ///   `[0xFFFF_FFFF, 0xFFFF_FFFF]` value (Revit uses both to
-    ///   mean "no element table"; treating them uniformly as
-    ///   `None` matches the walker's semantic).
-    ///
-    /// Non-None return means the pointer exists and is non-null.
-    /// Consuming it (following into the referenced bytes and
-    /// parsing an actual element index) is separate — see the
-    /// `walk_elem_table_*` entry points on `RevitFile`.
-    // Tracker: L5B-01.
-    pub fn elem_table_pointer(&self) -> Option<[u32; 2]> {
-        const NAMES: &[&str] = &[
-            "m_elem_table",
-            "m_elemtable",
-            "elem_table",
-            "elemtable",
-            "elementtable",
-            "m_element_table",
-        ];
-        for (field_name, value) in &self.fields {
-            let norm = field_name
-                .trim_start_matches('m')
-                .trim_start_matches('_')
-                .to_lowercase();
-            let compacted = norm.replace('_', "");
-            let matched = NAMES
-                .iter()
-                .any(|n| n.eq_ignore_ascii_case(field_name) || *n == compacted);
-            if !matched {
-                continue;
-            }
-            if let InstanceField::Pointer { raw } = value {
-                // Revit sentinels: [0, 0] = NULL, [!0, !0] = "not
-                // yet set." Both mean "no element table to walk."
-                if *raw == [0, 0] || *raw == [u32::MAX, u32::MAX] {
-                    return None;
-                }
-                return Some(*raw);
-            }
-        }
-        None
-    }
-
     /// Compute completeness markers for this instance. O(n) in the
     /// field count; cheap enough to call ad-hoc.
     pub fn completeness(&self) -> Completeness {

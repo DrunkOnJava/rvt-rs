@@ -139,11 +139,6 @@ impl WalkerControl {
         self
     }
 
-    /// The token, if one was attached (so callers can cancel from elsewhere).
-    pub fn cancel_token(&self) -> Option<&CancelToken> {
-        self.cancel.as_ref()
-    }
-
     /// `Err(Error::Cancelled)` if a token is attached and cancelled.
     pub fn check(&self) -> Result<()> {
         match &self.cancel {

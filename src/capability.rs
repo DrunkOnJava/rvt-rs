@@ -249,9 +249,4 @@ impl EvidenceTier {
             Self::E5 => "E5",
         }
     }
-
-    /// True when the tier is high enough for a `verified` capability claim.
-    pub fn meets_verified_gate(self) -> bool {
-        self >= Self::E4
-    }
 }

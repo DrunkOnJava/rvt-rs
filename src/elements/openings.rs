@@ -119,17 +119,6 @@ impl Door {
         }
         out
     }
-
-    /// True when the door has been flipped from its family-default
-    /// orientation (either hand or facing).
-    pub fn is_flipped(&self) -> Option<bool> {
-        match (self.flip_hand, self.flip_facing) {
-            (Some(h), Some(f)) => Some(h ^ f),
-            (Some(h), None) => Some(h),
-            (None, Some(f)) => Some(f),
-            (None, None) => None,
-        }
-    }
 }
 
 /// Typed view of a decoded Window.
@@ -163,10 +152,5 @@ impl Window {
             }
         }
         out
-    }
-
-    /// Sill height in inches — convenience for US-customary callers.
-    pub fn sill_height_inches(&self) -> Option<f64> {
-        self.sill_height_feet.map(|ft| ft * 12.0)
     }
 }

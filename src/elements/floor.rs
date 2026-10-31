@@ -61,9 +61,4 @@ impl Floor {
         }
         out
     }
-
-    /// True for depressed slabs (e.g. shower floors, depressed bays).
-    pub fn is_depressed(&self) -> Option<bool> {
-        self.height_offset_feet.map(|h| h < 0.0)
-    }
 }

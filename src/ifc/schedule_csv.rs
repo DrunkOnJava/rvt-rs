@@ -121,6 +121,17 @@ pub fn room_columns(unit: LengthUnit) -> Vec<String> {
 pub fn elements_csv(model: &IfcModel, options: &CsvOptions) -> String {
     let unit = options.unit;
     let mut rows: Vec<(f64, String, Vec<String>)> = Vec::new();
+    // The first constituent set naming each entity, found once rather than
+    // by a search of every set for every entity.
+    let mut constituent_set_of: std::collections::HashMap<
+        usize,
+        &super::entities::MaterialConstituentSet,
+    > = std::collections::HashMap::new();
+    for set in &model.material_constituent_sets {
+        for &element in &set.elements {
+            constituent_set_of.entry(element).or_insert(set);
+        }
+    }
     for (entity_index, entity) in model.entities.iter().enumerate() {
         let IfcEntity::BuildingElement {
             ifc_type,
@@ -169,10 +180,7 @@ pub fn elements_csv(model: &IfcModel, options: &CsvOptions) -> String {
             // materials where its body is not a layer set (RE-88), each
             // once, in the order the STEP writer lists them.
             .or_else(|| {
-                let set = model
-                    .material_constituent_sets
-                    .iter()
-                    .find(|set| set.elements.contains(&entity_index))?;
+                let set = constituent_set_of.get(&entity_index)?;
                 let mut names: Vec<&str> = Vec::new();
                 for name in set
                     .material_indices

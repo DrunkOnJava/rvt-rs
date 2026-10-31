@@ -65,6 +65,6 @@ Core Interior's and RE1 Architecture's exports were made with base quantities of
 ## 7. Reproduce
 
 ```bash
-gh workflow run measure.yml --ref main -f ref=7a635f47bfd2adaa2a1ac35c4b9d0ddc3c26e7a1 -f base=main -f nordic=true -f r2025=true \
+gh workflow run measure.yml --ref main -f ref=7a635f477d08116c8f4d6293ca1a93660347d7cd -f base=main -f nordic=true -f r2025=true \
   -f probe=probe_re251_wall_numbers -f probe_scorer=wall_height_vs_qtos
 ```
