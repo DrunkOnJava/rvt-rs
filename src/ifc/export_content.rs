@@ -375,7 +375,7 @@ pub fn append_typed_production_elements(
     // RE-84: doors and windows whose type draws no geometry.
     let mut without_geometry: std::collections::BTreeSet<usize> = Default::default();
     let mut pending_parts: Vec<(usize, u32)> = Vec::new();
-    let mut pending_bounded: Vec<(usize, Vec<u32>)> = Vec::new();
+    let mut pending_bounded: Vec<wall_areas::Pending> = Vec::new();
     // RE-194: each element's parameters named for a standard set's property,
     // written once the entity it is written as is final.
     let mut pending_named: Vec<(usize, Vec<(String, Property)>)> = Vec::new();
@@ -1052,17 +1052,27 @@ pub fn append_typed_production_elements(
                 pending_tops.push((entity_index, named));
             }
         }
-        // RE-270: a wall joined to a roof or floor, whose length is confirmed.
+        // RE-270, RE-290: a wall joined to a roof or floor, whose length the
+        // record confirms or whose cut-back length the pass can check.
         if policy.include_geometry && decoded.class == "Wall" {
             if let Some(named) =
                 crate::partition_schema_mvp::wall_bounded_from_fields(&decoded.fields)
             {
-                let confirmed = decoded.fields.iter().any(|(name, value)| {
-                    name == crate::partition_schema_mvp::WALL_LENGTH_FIELD
-                        && matches!(value, InstanceField::Float { .. })
-                });
-                if confirmed {
-                    pending_bounded.push((entity_index, named));
+                let float = |wanted: &str| {
+                    decoded.fields.iter().find_map(|(name, value)| match value {
+                        InstanceField::Float { value, .. } if name == wanted => Some(*value),
+                        _ => None,
+                    })
+                };
+                let confirmed = float(crate::partition_schema_mvp::WALL_LENGTH_FIELD).is_some();
+                let cutback = float(crate::partition_schema_mvp::WALL_CUTBACK_LENGTH_FIELD);
+                if confirmed || cutback.is_some() {
+                    pending_bounded.push(wall_areas::Pending {
+                        index: entity_index,
+                        named,
+                        confirmed,
+                        cutback_feet: cutback,
+                    });
                 }
             }
         }
