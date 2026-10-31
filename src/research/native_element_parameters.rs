@@ -150,7 +150,21 @@ pub fn read_defined(
     ids: &BTreeSet<u64>,
     filter: Option<fn(&str) -> bool>,
 ) -> Result<ElementParameters> {
-    read_selected(file, ids, filter, true)
+    read_selected(file, ids, filter, Types::Named)
+}
+
+/// [`read_defined`] without the family and material records, which only
+/// name an ElementId value: every value, its level and the type values it
+/// takes are the same, but `target_name` and `target_family` are not filled
+/// for a material or family target. For readers that use
+/// values alone, such as the parameters named for a property (#1237: on a
+/// Revit 2015 to 2023 file those records were most of the read).
+pub fn read_defined_values(
+    file: &mut RevitFile,
+    ids: &BTreeSet<u64>,
+    filter: Option<fn(&str) -> bool>,
+) -> Result<ElementParameters> {
+    read_selected(file, ids, filter, Types::Values)
 }
 
 /// [`read_defined`] reading the records of `ids` alone: no type, family or
@@ -161,26 +175,40 @@ pub fn read_own_defined(
     ids: &BTreeSet<u64>,
     filter: Option<fn(&str) -> bool>,
 ) -> Result<ElementParameters> {
-    read_selected(file, ids, filter, false)
+    read_selected(file, ids, filter, Types::None)
+}
+
+/// Which records besides those of the selected ids a read selects by class.
+enum Types {
+    /// Types, for their values, and families and materials, which name
+    /// ElementId values.
+    Named,
+    /// Types, for their values.
+    Values,
+    /// None.
+    None,
 }
 
 fn read_selected(
     file: &mut RevitFile,
     ids: &BTreeSet<u64>,
     filter: Option<fn(&str) -> bool>,
-    types: bool,
+    types: Types,
 ) -> Result<ElementParameters> {
     if !native_document::NATIVE_RELEASES.contains(&file.layout_release()?) || ids.is_empty() {
         return Ok(ElementParameters::default());
     }
-    let selected_classes = if types {
-        ["FamilySymbol", "Family", "MaterialElem"]
-            .into_iter()
+    let naming: &[&str] = match types {
+        Types::Named => &["Family", "MaterialElem"],
+        Types::Values | Types::None => &[],
+    };
+    let selected_classes = match types {
+        Types::None => BTreeSet::new(),
+        Types::Named | Types::Values => std::iter::once("FamilySymbol")
+            .chain(naming.iter().copied())
             .chain(SYSTEM_TYPE_LINKS.iter().map(|link| link.2))
             .map(String::from)
-            .collect()
-    } else {
-        BTreeSet::new()
+            .collect(),
     };
     let options = Options {
         selected_ids: ids.clone(),
