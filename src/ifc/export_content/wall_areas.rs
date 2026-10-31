@@ -4,8 +4,8 @@
 //! prism as one nothing is joined to, except where the element cuts it: Revit
 //! cuts the top at the underside of a floor that covers it, and the base at
 //! the top of one beneath it. This pass writes the quantities of
-//! `prism_quantities` on such a wall when all of these hold, measured
-//! on rvt-rs's own bodies:
+//! `prism_quantities` and the wall's `Height`, the body's (RE-293), on such a
+//! wall when all of these hold, measured on rvt-rs's own bodies:
 //!
 //! - its native record holds no step but the harmless ones, a roof or floor
 //!   join and a clean join, and its length is confirmed by its record: it
@@ -32,7 +32,7 @@
 use std::collections::HashMap;
 
 use super::{add_element_set, prism_quantities};
-use crate::ifc::entities::{IfcEntity, PropertySet, PropertyValue};
+use crate::ifc::entities::{IfcEntity, Property, PropertySet, PropertyValue};
 
 /// The entities a wall may be joined to that this pass can measure.
 const JOINED_TYPES: [&str; 3] = ["IFCSLAB", "IFCROOF", "IFCFOOTING"];
@@ -184,16 +184,24 @@ pub(super) fn add_bounded_wall_quantities(entities: &mut Vec<IfcEntity>, pending
         if !clear {
             continue;
         }
-        let Some(properties) =
+        let Some(quantities) =
             written_width(entities, *index).and_then(|width| prism_quantities(body, width))
         else {
             continue;
         };
+        // Revit's export writes a wall's `Height` on exactly the walls it
+        // writes these four on (RE-270 §1), and it is the body's: rvt-rs's
+        // extrusion is as tall as Revit's solid on every such wall (RE-293).
+        let mut properties = Vec::from(quantities);
+        properties.push(Property {
+            name: "Height".into(),
+            value: PropertyValue::PositiveLengthFeet(body.height_feet),
+        });
         found.push((
             *index,
             PropertySet {
                 name: "Qto_WallBaseQuantities".into(),
-                properties: properties.into(),
+                properties,
             },
         ));
     }
