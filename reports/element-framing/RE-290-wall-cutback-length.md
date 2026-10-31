@@ -4,7 +4,7 @@
 **Issues:** #1046 (quantities Revit computes from its joined geometry, step 1: walls), #1016 (quantities), W7 of [`docs/release-1.0-criteria.md`](../../docs/release-1.0-criteria.md); follows RE-252 (a wall's cut-back centreline), RE-267 (the top cut at a covering floor) and RE-270 (a wall's side areas and volumes)
 **Artefacts:** the BIM4LCA office as built and at building permit (Revit 2024, Revit 24.0.5's IFC4 exports, CC BY-SA 4.0, `research/bim4lca-measure.tsv`) and puzzbobb's R2025 models (Revit 2025, Apache-2.0, `research/r2025-models.tsv`), as Measure fetches them
 **Probe:** `probes/examples/probe_re290_wall_cutbacks.rs`. **Scorer:** `tools/re/wall_quantities_vs_ifc.py` (RE-270)
-**Runs:** Measure [41136551451](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41136551451) (`main` at f73908bf: the scorer and `probe_1067_native_dump` on both offices and the R2025 models), [41138696192](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41138696192) (this change as first pushed, 46e7dacf, against `main` at f73908bf: the scorer, `probe_1067_native_dump` and `probe_re290_wall_cutbacks`), [41141451552](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41141451552) (this change, 0a3d6d3d, against `main` at 13fc635f, every model and scorer)
+**Runs:** Measure [41136551451](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41136551451) (`main` at f73908bf: the scorer and `probe_1067_native_dump` on both offices and the R2025 models), [41138696192](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41138696192) (this change as first pushed, 46e7dacf, against `main` at f73908bf: the scorer, `probe_1067_native_dump` and `probe_re290_wall_cutbacks`), [41146179183](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41146179183) (this change at 48589c62 against `main` at 9637d5ff, every model and scorer)
 **Result:** positive. A wall's `Length` in Revit's export, the length of its cut-back centreline or of its curve, is also the length of the longest vertical face of its solid, and rvt-rs reads that cut-back length wherever both ends of the wall are read twice alike. On a wall whose body is the record's box and joined to roofs or floors, the box is that long on every wall for which the length is read, and on none else it is known to be right: the second RE-270 rule now takes a wall whose cut-back length is its box's long side, as well as one whose record confirms its `Length`. It adds 29 office walls as built and 36 at permit to RE-270's 67 and 70, Revit's on all four quantities on every one, none different and none Revit's export leaves out.
 
 ## 1. Revit's face is its cut-back length
@@ -41,19 +41,19 @@ RE-270's second rule takes a wall of its pool when all of these hold: a body tha
 
 ## 4. Measured
 
-This change against `main`, filtered to the two offices and the R2025 models with the scorer (run 41138696192, `main` at f73908bf):
+This change at 48589c62 against `main` at 9637d5ff, every model and every scorer (run [41146179183](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41146179183), `-f base=main -f nordic=true -f r2025=true`). Only `ifc.sha256`, `qtos_vs_ifc` and Core Interior's witness observations move; the other 1,465 scorer outputs are byte-identical to `main`'s.
 
 | | office as built | at permit |
 |---|---:|---:|
 | walls carrying the four quantities, before | 67 | 70 |
 | ... after | 96 | 106 |
 | the four equal to Revit's, of those | 96 | 106 |
-| quantities equal, before | 28,020 | 27,966 |
-| ... after | 28,136 | 28,110 |
+| quantities equal, before | 28,065 | 28,011 |
+| ... after | 28,181 | 28,155 |
 | different, before and after | 1 (the mullion) | 1 |
-| written that Revit's export omits | 0 | 0 |
+| written that Revit's export omits, before and after | 0 | 0 |
 
-Every model and every scorer against `main` (run 41141451552): the table of the other models follows when that run completes.
+By quantity (equal, of the walls Revit writes it on), `GrossSideArea`, `NetSideArea` and `GrossVolume` 67 to 96 of 579 as built and 70 to 106 of 565 at permit, `NetVolume` 67 to 96 of 607 and 70 to 106 of 589; none different. The R2025 models stay at 775 of 1,515 quantities, RE1 Mechanical and Plumbing at 31 of 31 and 63 of 63. Core Interior's and RE1 Architecture's exports were made with base quantities off (RE-242): the 24 quantities rvt-rs now writes more on Core Interior (12 walls) are counted apart (2,268 to 2,292), RE1 Architecture's 86 are as they were, and Core Interior's witness observations gain 12 `IFCQUANTITYAREA` and 12 `IFCQUANTITYVOLUME`; both verdicts replay PASS, their files unchanged.
 
 ## 5. What stays unwritten
 
@@ -67,10 +67,10 @@ Every model and every scorer against `main` (run 41141451552): the table of the 
 ## 6. Reproduce
 
 ```bash
-gh workflow run measure.yml --ref main -f ref=0a3d6d3d1f9d91c1e8510557d4f6d46c2836c597 -f base=main \
+gh workflow run measure.yml --ref main -f ref=48589c62cd866b869ce2772b1c442777b259ab7b -f base=main \
   -f nordic=true -f r2025=true -f models="nordic-office-* r2025-*" -f scorers="qtos_vs_ifc wall_quantities_vs_ifc" \
   -f probe="probe_1067_native_dump probe_re290_wall_cutbacks" -f probe_scorer="- -"
-gh workflow run measure.yml --ref main -f ref=0a3d6d3d1f9d91c1e8510557d4f6d46c2836c597 -f base=main -f nordic=true -f r2025=true
+gh workflow run measure.yml --ref main -f ref=48589c62cd866b869ce2772b1c442777b259ab7b -f base=main -f nordic=true -f r2025=true
 ```
 
 The scorer and `probe_1067_native_dump` are `main`'s; join the probe's `wall <id> classes` lines with the scorer's `wall` lines and `probe_re290_wall_cutbacks`'s `wallcut` lines by ElementId.
