@@ -221,9 +221,18 @@ impl BoxGrid {
         for (index, bbox) in boxes.into_iter().enumerate() {
             let first = [0, 1, 2].map(|axis| cell(bbox[axis] - POINT_TOLERANCE_FEET));
             let last = [0, 1, 2].map(|axis| cell(bbox[axis + 3] + POINT_TOLERANCE_FEET));
+            if !bbox.iter().all(|value| value.is_finite()) {
+                grid.oversized.push(index);
+                continue;
+            }
+            // A finite box inverted on any axis by more than the tolerance
+            // holds no point, and its cell count is no bound on the fill below.
+            if (0..3).any(|axis| last[axis] < first[axis]) {
+                continue;
+            }
             let span = |axis: usize| last[axis].saturating_sub(first[axis]).saturating_add(1);
             let cells = span(0).saturating_mul(span(1)).saturating_mul(span(2));
-            if !bbox.iter().all(|value| value.is_finite()) || cells > MAX_CELLS_PER_PIPE {
+            if cells > MAX_CELLS_PER_PIPE {
                 grid.oversized.push(index);
                 continue;
             }
