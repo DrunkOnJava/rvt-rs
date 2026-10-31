@@ -117,7 +117,7 @@ each pipe's `GrossCrossSectionArea` and `OuterSurfaceArea` from its cylinder, ea
 each floor's `Qto_SlabBaseQuantities.GrossArea` where it is drawn as one extrusion, its profile's area less its holes (RE-249), and, where its type has one layer as deep as that extrusion, its `Depth` and `GrossVolume` (#1016), its `NetVolume`, that area times its type's layers' total thickness, where its native record holds no step that cuts it, and its `Width`, that thickness, where the type has more than one layer (RE-295), and each ceiling's `Qto_CoveringBaseQuantities.Width` where its body's depth is its layers' thickness (RE-250), each space's `Qto_SpaceBaseQuantities.Height`, its room's, where the room's record holds its solid's faces (RE-255), each stair railing's `Qto_RailingBaseQuantities.Length` where its path is one line along its stair's runs (RE-254),
 each of these base quantities left out by `rvt-ifc --no-base-quantities`, as Revit's exporter leaves them out with "Export base quantities" off; Revit's built-in IFC4 setups turn it on, so rvt-ifc does by default (RE-242),
 the type of each pipe, wall sweep and ramp that neither its stored layout nor its reference list types, the one its own native record names (RE-240),
-each wall's `ExtendToStructure`, whether its top is joined to a roof or floor (RE-228),
+each wall's `ExtendToStructure`, whether its top is joined to a roof or floor (RE-228; on Revit 2015 to 2023 too, experimentally, RE-284),
 each railing's `Height`, its type's top rail height (RE-231),
 a slab's `PitchAngle` 0 where its top is known to be level (RE-238),
 the project and shared parameters named for a property of one of IFC4's

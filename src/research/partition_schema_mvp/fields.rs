@@ -685,6 +685,13 @@ pub(super) const REVIT_OMITTED_PARAMETERS: &[&str] = &["Pset_DoorWindowGlazingTy
 /// RE-228): Revit's `Pset_WallCommon.ExtendToStructure`.
 pub const WALL_TOP_JOINED_FIELD: &str = "m_wall_top_joined";
 
+/// Releases that read walls from their element records
+/// ([`crate::partition_element_records_2023`]) whose native record's top join
+/// is measured (RE-284), where [`WALL_TOP_JOINED_FIELD`] comes from
+/// [`crate::native_walls::wall_top_joins`] alone.
+pub const WALL_TOP_JOIN_RECORD_REVIT_VERSIONS: &[u32] =
+    &[2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023];
+
 /// Field set on a wall whose native record holds no `JoinToRoofGStep`,
 /// `CutPairGStep` or `WallCutoutGStep`
 /// ([`crate::native_walls::native_walls_and_top_joins`], RE-266): its body
