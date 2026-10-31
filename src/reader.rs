@@ -181,6 +181,10 @@ pub struct RevitFile {
     /// partition for them.
     // Tracker: B80.
     data_objects: std::collections::HashMap<String, PartitionDataObjects>,
+    /// Memoised offsets of an element-data header in a partition, by stream
+    /// and header: a dozen element-data readers each searched every partition
+    /// for the release's header.
+    header_hits: std::collections::HashMap<(String, Vec<u8>), Arc<Vec<usize>>>,
     /// Memoised native extraction preamble: each native consumer read
     /// the schema, the element index and the increments again.
     // Tracker: B82.
@@ -415,6 +419,7 @@ impl RevitFile {
             walk: None,
             arc_wall_scan: None,
             data_objects: std::collections::HashMap::new(),
+            header_hits: std::collections::HashMap::new(),
             native_preamble: None,
             native_record_index: None,
             schema_classes_memo: None,
@@ -526,6 +531,20 @@ impl RevitFile {
         self.data_objects
             .insert(name.to_string(), Arc::clone(&objects));
         Ok(objects)
+    }
+
+    /// Every offset of `header` in partition `name`'s inflated bytes, in
+    /// order, memoised.
+    pub(crate) fn header_hits(&mut self, name: &str, header: &[u8]) -> Result<Arc<Vec<usize>>> {
+        let key = (name.to_string(), header.to_vec());
+        if let Some(cached) = self.header_hits.get(&key) {
+            return Ok(Arc::clone(cached));
+        }
+        let inflated = self.inflated_partition(name)?;
+        let hits =
+            Arc::new(memchr::memmem::find_iter(inflated.bytes(), header).collect::<Vec<_>>());
+        self.header_hits.insert(key, Arc::clone(&hits));
+        Ok(hits)
     }
 
     /// What every native extraction reads before the partitions

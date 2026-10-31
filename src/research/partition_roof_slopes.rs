@@ -127,7 +127,9 @@ pub fn scan_edge_slopes(
             continue;
         };
         let buf = inflated.bytes();
-        let hits: Vec<usize> = memchr::memmem::find_iter(buf, &header).collect();
+        let Ok(hits) = rf.header_hits(&stream, &header) else {
+            continue;
+        };
         for (index, &hit) in hits.iter().enumerate() {
             let id_at = hit + header.len();
             let Some(id) = le_bytes::u64_at(buf, id_at)
@@ -262,7 +264,9 @@ pub fn scan_arrow_heights(
             continue;
         };
         let buf = inflated.bytes();
-        let hits: Vec<usize> = memchr::memmem::find_iter(buf, &header).collect();
+        let Ok(hits) = rf.header_hits(&stream, &header) else {
+            continue;
+        };
         for (index, &hit) in hits.iter().enumerate() {
             let id_at = hit + header.len();
             let Some(id) = le_bytes::u64_at(buf, id_at)
@@ -330,7 +334,9 @@ pub fn scan_fascia_depths(
             continue;
         };
         let buf = inflated.bytes();
-        let hits: Vec<usize> = memchr::memmem::find_iter(buf, &header).collect();
+        let Ok(hits) = rf.header_hits(&stream, &header) else {
+            continue;
+        };
         for (index, &hit) in hits.iter().enumerate() {
             let id_at = hit + header.len();
             let Some(id) = le_bytes::u64_at(buf, id_at)

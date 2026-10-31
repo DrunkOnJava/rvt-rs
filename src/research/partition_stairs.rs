@@ -742,7 +742,9 @@ fn scan_run_data<T: PartialEq>(
             continue;
         };
         let buf = inflated.bytes();
-        let hits: Vec<usize> = memchr::memmem::find_iter(buf, &header).collect();
+        let Ok(hits) = rf.header_hits(&stream, &header) else {
+            continue;
+        };
         for (index, &hit) in hits.iter().enumerate() {
             let id_at = hit + header.len();
             let Some(id) = le_bytes::u64_at(buf, id_at)

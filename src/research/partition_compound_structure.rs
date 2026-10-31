@@ -316,7 +316,9 @@ pub fn scan_type_layers(
             continue;
         };
         let buf = inflated.bytes();
-        let hits: Vec<usize> = memchr::memmem::find_iter(buf, &header).collect();
+        let Ok(hits) = rf.header_hits(&stream, &header) else {
+            continue;
+        };
         for (index, &hit) in hits.iter().enumerate() {
             let id_at = hit + header.len();
             let id = if layout.wide_ids {
@@ -435,7 +437,9 @@ pub fn scan_wall_orientations(
             continue;
         };
         let buf = inflated.bytes();
-        let hits: Vec<usize> = memchr::memmem::find_iter(buf, &header).collect();
+        let Ok(hits) = rf.header_hits(&stream, &header) else {
+            continue;
+        };
         for (index, &hit) in hits.iter().enumerate() {
             let id_at = hit + header.len();
             let Some(id) = layout.id_at(buf, id_at).filter(|id| walls.contains(id)) else {
@@ -596,7 +600,9 @@ pub fn scan_wall_joined_entries(
             continue;
         };
         let buf = inflated.bytes();
-        let hits: Vec<usize> = memchr::memmem::find_iter(buf, &header).collect();
+        let Ok(hits) = rf.header_hits(&stream, &header) else {
+            continue;
+        };
         for (index, &hit) in hits.iter().enumerate() {
             let id_at = hit + header.len();
             let Some(id) = le_bytes::u64_at(buf, id_at)
@@ -738,7 +744,9 @@ pub fn scan_wall_type_face_angles(
             continue;
         };
         let buf = inflated.bytes();
-        let hits: Vec<usize> = memchr::memmem::find_iter(buf, &header).collect();
+        let Ok(hits) = rf.header_hits(&stream, &header) else {
+            continue;
+        };
         for (index, &hit) in hits.iter().enumerate() {
             let id_at = hit + header.len();
             let Some(id) = le_bytes::u64_at(buf, id_at)
@@ -872,7 +880,9 @@ pub fn scan_wall_join_partners(
             continue;
         };
         let buf = inflated.bytes();
-        let hits: Vec<usize> = memchr::memmem::find_iter(buf, &header).collect();
+        let Ok(hits) = rf.header_hits(&stream, &header) else {
+            continue;
+        };
         for (index, &hit) in hits.iter().enumerate() {
             let id_at = hit + header.len();
             let Some(id) = le_bytes::u64_at(buf, id_at)
