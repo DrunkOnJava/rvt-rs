@@ -45,6 +45,11 @@ pub struct Options {
     /// measured on 2015 to 2022 as well (saved parameters, the phase order:
     /// RE-280, RE-281) names [`NATIVE_RELEASES`].
     pub releases: std::ops::RangeInclusive<u32>,
+    /// When set, [`extract`] reads no selected record unless one of the
+    /// file's parameter definitions has a name this accepts: a reader that
+    /// needs only some parameters skips the per-element pass on a file that
+    /// defines none of them.
+    pub definition_filter: Option<fn(&str) -> bool>,
 }
 impl Default for Options {
     fn default() -> Self {
@@ -57,6 +62,7 @@ impl Default for Options {
             max_graph_objects: 100_000,
             graph_classes: None,
             releases: 2023..=2027,
+            definition_filter: None,
         }
     }
 }
@@ -377,7 +383,27 @@ pub fn extract(
             },
         )?;
     definitions.enable_builtin_catalog(&definition_summary.schema_sha256)?;
-    let mut summary = extract_records(file, options, false, &definitions, emit)?;
+    let defined = options.definition_filter.is_none_or(|accepts| {
+        definitions
+            .definitions
+            .values()
+            .map(|definition| definition.caption.as_str())
+            .chain(
+                definitions
+                    .builtin_definitions
+                    .values()
+                    .map(|definition| definition.caption.as_str()),
+            )
+            .any(accepts)
+    });
+    let mut nothing = options.clone();
+    if !defined {
+        // Both selections empty would select every record: select the one
+        // class no record has instead, so nothing is read.
+        nothing.selected_ids.clear();
+        nothing.selected_classes = BTreeSet::from([String::new()]);
+    }
+    let mut summary = extract_records(file, &nothing, false, &definitions, emit)?;
     summary.parameter_binding_context = serde_json::json!({
         "bindings": definitions.bindings,
         "family_categories": definitions.family_categories,

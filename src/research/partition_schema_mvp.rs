@@ -254,6 +254,33 @@ pub fn recover_partition_schema_mvp(
         ] {
             attach_type_materials(&type_materials, elements);
         }
+        // --- A wall's type Function from its native type record (RE-185),
+        // the parameters named for IsExternal or a standard property from the
+        // saved parameters (RE-193, RE-194), and the IsExternal Revit's
+        // exporter calculates from them (RE-283) ---
+        attach_wall_type_functions(rf, revit_version, out.walls.iter_mut());
+        attach_native_named_parameters(
+            rf,
+            revit_version,
+            out.walls
+                .iter_mut()
+                .chain(out.columns.iter_mut())
+                .chain(out.doors.iter_mut())
+                .chain(out.windows.iter_mut())
+                .chain(out.slabs.iter_mut())
+                .chain(out.rooms.iter_mut())
+                .chain(out.products.iter_mut()),
+        );
+        attach_record_is_external(
+            out.walls
+                .iter_mut()
+                .chain(out.columns.iter_mut())
+                .chain(out.doors.iter_mut())
+                .chain(out.windows.iter_mut())
+                .chain(out.slabs.iter_mut())
+                .chain(out.rooms.iter_mut())
+                .chain(out.products.iter_mut()),
+        );
         // --- Whether a wall's top is joined to a roof or floor, from its
         // native record (RE-228, RE-284) ---
         attach_wall_top_joins(rf, revit_version, &mut out.walls);
