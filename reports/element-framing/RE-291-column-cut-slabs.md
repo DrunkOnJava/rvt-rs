@@ -66,7 +66,7 @@ The maintainer's rule (2026-10-26) is that nothing is written where Revit's expo
 | `GrossVolume` | none | 0 of 18 |
 | `NetVolume` | its mesh's, not the box's | 0 of 18 |
 
-The office as built has no meshed column. On the 327 extruded columns at permit rvt-rs gives `Length` to 71 (RE-247's, none joined by a clean pair), `CrossSectionArea`, `OuterSurfaceArea` and `GrossVolume` to 305 and `NetVolume` to 250; the unfiltered census agrees: none different and none Revit's export leaves out.
+The office as built has no meshed column. On the 327 extruded columns at permit rvt-rs gives `Length` to 71 (RE-247's: none joined by a clean pair), `CrossSectionArea`, `OuterSurfaceArea` and `GrossVolume` to 320 and `NetVolume` to 265, and on the 279 as built `Length` to 93, the three to 278 and `NetVolume` to 199 (checked in rvt-rs's own IFC from run 41147469913 against Revit's). The unfiltered census agrees: of Revit's column quantities, none is different and none is one Revit's export leaves out (0 to 0 on both offices, the R2025 models and RE1).
 
 ## 4. What stays unwritten
 
@@ -78,7 +78,7 @@ The office as built has no meshed column. On the 327 extruded columns at permit 
 
 ## 5. What this changes for a joined column's Length
 
-The maintainer left a joined column's `Length` out (2026-10-26) because Revit's export draws 18 of them as a mesh without one and no field tells them apart (RE-247 §7). On the columns this rule takes, Revit writes a `Length` on every one (186 of 186, 250 of 250) equal to the box's height. A `Length` on exactly those columns would therefore be written equal on 436 more column quantities, none Revit's export omits: it is the rule's own set, and the rule separates the meshes. rvt-rs does not write it here: the decision is the maintainer's, and the finding is the issue's (#1046).
+The maintainer left a joined column's `Length` out (2026-10-26) because Revit's export draws 18 of them as a mesh without one and no field tells them apart (RE-247 §7). On the columns this rule takes that a clean pair joins, Revit writes a `Length` on every one (186 of 186 as built, 250 of 250 at permit) equal to the box's height. A `Length` on exactly those columns would therefore be written equal on 436 more column quantities, none Revit's export omits: it is the rule's own set, and the rule separates the meshes. rvt-rs does not write it here and leaves joined columns' `Length` out as decided on 2026-10-26: whether to write it is the maintainer's call, tracked in [#1203](https://github.com/DrunkOnJava/rvt-rs/issues/1203).
 
 ## 6. Reproduce
 
