@@ -31,13 +31,15 @@ Of the walls whose `Length` is not the curve's (65 as built, 67 at permit), the 
 | ... the box is Revit's face | 21 | 21 |
 | ... the box is not (or Revit writes no `Height`) | 9 | 4 |
 
-Where it is read, the cut-back length is the box's long side on every wall, so the box and the record's join reaches agree with a second reading; and where the box is not Revit's face the cut-back length is not read. The one wall at permit where it is read and the face differs (2601954, an 18.86 ft wall whose face is 12.74 ft in Revit's solid) is not written wrongly: no value of the run differs from Revit's.
+Where it is read, the cut-back length is the box's long side on every wall of these files, so the box and the record's join reaches agree with a second reading; and where the box is not Revit's face the cut-back length is not read. That also means the 1e-4 ft comparison with the box's long side has never rejected a wall on the corpus: what limits the rule is that the cut-back length is read at all (both ends of the wall read twice alike, RE-252) and the other conditions of §3.
+
+The one wall at permit where the cut-back length is read and Revit's face differs from the box (2601954, a box 18.86 ft long whose face is 12.74 ft in Revit's solid, so that its `GrossSideArea` is 156.7 ft² where the box gives 232.1) is kept out by the join gate, not by the cut-back length: its record confirms its `Length` (18.86 ft, so RE-270's first condition would take it) but its top join names slab 1451421 and ceiling 2094524 (`Compound Ceiling:AK-3`, an `IfcCovering`), and the pass measures only slabs, roofs and footings (`wall_areas::JOINED_TYPES`), so a wall joined to anything else is left out. It carries none of the four, and Revit's solid is the shorter one because the ceiling cuts it.
 
 The two Revit-exact readings (the box and the cut-back length) fail together or not at all on these walls, so the cut-back length is a confirmation, not a source: the rule still writes the box's values (`prism_quantities`), after RE-267's top cut, on walls whose joins clear the wall (RE-270 §4).
 
 ## 3. The rule
 
-RE-270's second rule takes a wall of its pool when all of these hold: a body that is the record's box cut back at its joins, a plain rectangle; a `Length` confirmed by its record, **or a cut-back length within 1e-4 ft of the box's long side**; every element its roof and floor joins name is a slab, roof or footing drawn as a plain extrusion lying wholly above its top or wholly below its base.
+RE-270's second rule takes a wall of its pool when all of these hold: a body that is the record's box cut back at its joins, a plain rectangle; a `Length` confirmed by its record, **or a cut-back length within 1e-4 ft of the box's long side**; every element its roof and floor joins name is a slab, roof or footing drawn as a plain extrusion lying wholly above its top or wholly below its base (`wall_areas::JOINED_TYPES`: a join naming a ceiling or any other element leaves the wall out).
 
 ## 4. Measured
 
@@ -53,7 +55,7 @@ This change at 48589c62 against `main` at 9637d5ff, every model and every scorer
 | different, before and after | 1 (the mullion) | 1 |
 | written that Revit's export omits, before and after | 0 | 0 |
 
-By quantity (equal, of the walls Revit writes it on), `GrossSideArea`, `NetSideArea` and `GrossVolume` 67 to 96 of 579 as built and 70 to 106 of 565 at permit, `NetVolume` 67 to 96 of 607 and 70 to 106 of 589; none different. The R2025 models stay at 775 of 1,515 quantities, RE1 Mechanical and Plumbing at 31 of 31 and 63 of 63. Core Interior's and RE1 Architecture's exports were made with base quantities off (RE-242): the 24 quantities rvt-rs now writes more on Core Interior (12 walls) are counted apart (2,268 to 2,292), RE1 Architecture's 86 are as they were, and Core Interior's witness observations gain 12 `IFCQUANTITYAREA` and 12 `IFCQUANTITYVOLUME`; both verdicts replay PASS, their files unchanged.
+By quantity (equal, of the walls Revit writes it on), `GrossSideArea`, `NetSideArea` and `GrossVolume` 67 to 96 of 579 as built and 70 to 106 of 565 at permit, `NetVolume` 67 to 96 of 607 and 70 to 106 of 589; none different. The R2025 models stay at 775 of 1,515 quantities, RE1 Mechanical and Plumbing at 31 of 31 and 63 of 63. Core Interior's and RE1 Architecture's exports were made with base quantities off (RE-242): the 24 quantities rvt-rs now writes more on Core Interior (6 walls, four quantities each) are counted apart (2,268 to 2,292), RE1 Architecture's 86 are as they were, and Core Interior's witness observations gain 12 `IFCQUANTITYAREA` and 12 `IFCQUANTITYVOLUME`; both verdicts replay PASS, their files unchanged.
 
 ## 5. What stays unwritten
 
