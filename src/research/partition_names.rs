@@ -588,8 +588,10 @@ pub fn find_mep_curve_type_names(buf: &[u8], wanted: &BTreeSet<u32>) -> BTreeMap
     // B70: one pass, each offset first asked whether a `u64` there repeats
     // MEP_CURVE_TYPE_ID_REPEAT bytes on, rather than a search per id.
     let last = buf.len().saturating_sub(MEP_CURVE_TYPE_ID_REPEAT + 8);
-    for at in 0..last {
-        let value = le_bytes::u64_at(buf, at).expect("in bounds");
+    for (at, window) in buf.windows(8).take(last).enumerate() {
+        let mut word = [0u8; 8];
+        word.copy_from_slice(window);
+        let value = u64::from_le_bytes(word);
         if value < u64::from(low)
             || value > u64::from(high)
             || le_bytes::u64_at(buf, at + MEP_CURVE_TYPE_ID_REPEAT) != Some(value)
