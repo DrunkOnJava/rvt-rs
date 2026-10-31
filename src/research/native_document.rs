@@ -13,6 +13,7 @@ use sha2::{Digest, Sha256};
 use std::{
     collections::{BTreeMap, BTreeSet},
     io::Read,
+    sync::Arc,
 };
 
 #[derive(Debug, Clone, Copy, Default, Serialize)]
@@ -328,6 +329,73 @@ pub fn extract(
     options: &Options,
     emit: impl FnMut(Record) -> Result<()>,
 ) -> Result<Summary> {
+    let pass = definition_pass(file, options)?;
+    let definitions = &pass.registry;
+    let defined = options.definition_filter.is_none_or(|accepts| {
+        definitions
+            .definitions
+            .values()
+            .map(|definition| definition.caption.as_str())
+            .chain(
+                definitions
+                    .builtin_definitions
+                    .values()
+                    .map(|definition| definition.caption.as_str()),
+            )
+            .any(accepts)
+    });
+    let mut nothing = options.clone();
+    if !defined {
+        // Both selections empty would select every record: select the one
+        // class no record has instead, so nothing is read.
+        nothing.selected_ids.clear();
+        nothing.selected_classes = BTreeSet::from([String::new()]);
+    }
+    let mut summary = extract_records(file, &nothing, false, definitions, emit)?;
+    summary.parameter_binding_context = serde_json::json!({
+        "bindings": definitions.bindings,
+        "family_categories": definitions.family_categories,
+        "symbol_families": definitions.symbol_families,
+    });
+    summary.parameter_definitions = definitions.definitions.clone();
+    summary.unit_formats = definitions.unit_formats.clone();
+    summary.builtin_catalog_provenance = definitions.builtin_catalog_provenance.clone();
+    summary.definition_diagnostics = pass.diagnostics.clone();
+    Ok(summary)
+}
+
+/// What [`extract`]'s first pass reads: the file's parameter definitions,
+/// units and bindings, and why any definition owner did not decode. Every
+/// call with the same budgets reads the same, so the handle keeps it
+/// (#1237: an export of a Revit 2015 to 2023 file made the pass twice, for
+/// its named parameters and its storeys, 0.4 s to 0.9 s each).
+pub(crate) struct DefinitionPass {
+    registry: crate::native_parameter_definitions::Registry,
+    diagnostics: BTreeMap<u64, String>,
+}
+
+/// The [`Options`] a [`DefinitionPass`] depends on: its budgets, graph
+/// classes and releases (it sets the channel and clears the selections).
+pub(crate) type DefinitionKey = (
+    usize,
+    usize,
+    usize,
+    Option<BTreeSet<String>>,
+    std::ops::RangeInclusive<u32>,
+);
+
+/// The handle's [`DefinitionPass`] for `options`, read if it has none.
+fn definition_pass(file: &mut RevitFile, options: &Options) -> Result<Arc<DefinitionPass>> {
+    let key: DefinitionKey = (
+        options.max_group_bytes,
+        options.max_graph_values,
+        options.max_graph_objects,
+        options.graph_classes.clone(),
+        options.releases.clone(),
+    );
+    if let Some(cached) = file.native_definitions(&key) {
+        return Ok(cached);
+    }
     // Definition owners may follow their users physically. A bounded first pass
     // decodes only schema-declared definition owners; selected output still streams.
     let mut definitions = crate::native_parameter_definitions::Registry::default();
@@ -383,37 +451,12 @@ pub fn extract(
             },
         )?;
     definitions.enable_builtin_catalog(&definition_summary.schema_sha256)?;
-    let defined = options.definition_filter.is_none_or(|accepts| {
-        definitions
-            .definitions
-            .values()
-            .map(|definition| definition.caption.as_str())
-            .chain(
-                definitions
-                    .builtin_definitions
-                    .values()
-                    .map(|definition| definition.caption.as_str()),
-            )
-            .any(accepts)
+    let pass = Arc::new(DefinitionPass {
+        registry: definitions,
+        diagnostics,
     });
-    let mut nothing = options.clone();
-    if !defined {
-        // Both selections empty would select every record: select the one
-        // class no record has instead, so nothing is read.
-        nothing.selected_ids.clear();
-        nothing.selected_classes = BTreeSet::from([String::new()]);
-    }
-    let mut summary = extract_records(file, &nothing, false, &definitions, emit)?;
-    summary.parameter_binding_context = serde_json::json!({
-        "bindings": definitions.bindings,
-        "family_categories": definitions.family_categories,
-        "symbol_families": definitions.symbol_families,
-    });
-    summary.parameter_definitions = definitions.definitions;
-    summary.unit_formats = definitions.unit_formats;
-    summary.builtin_catalog_provenance = definitions.builtin_catalog_provenance;
-    summary.definition_diagnostics = diagnostics;
-    Ok(summary)
+    file.remember_native_definitions(key, Arc::clone(&pass));
+    Ok(pass)
 }
 /// Every current or historical record of every partition in [`Options`]'
 /// default channels (#1032): its channel, ElementId, partition and the class

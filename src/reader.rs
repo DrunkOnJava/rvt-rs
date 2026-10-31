@@ -189,6 +189,12 @@ pub struct RevitFile {
     /// the schema, the element index and the increments again.
     // Tracker: B82.
     native_preamble: Option<Arc<crate::native_document::Preamble>>,
+    /// Memoised parameter-definition pass of native extraction, with the
+    /// options it was read under (#1237).
+    native_definitions: Option<(
+        crate::native_document::DefinitionKey,
+        Arc<crate::native_document::DefinitionPass>,
+    )>,
     /// Memoised index of every native record's partitions (#1032): each
     /// native pass walked every partition again to find its records.
     native_record_index: Option<Arc<crate::native_document::RecordIndex>>,
@@ -421,6 +427,7 @@ impl RevitFile {
             data_objects: std::collections::HashMap::new(),
             header_hits: std::collections::HashMap::new(),
             native_preamble: None,
+            native_definitions: None,
             native_record_index: None,
             schema_classes_memo: None,
             layout_release_memo: None,
@@ -559,6 +566,26 @@ impl RevitFile {
         let preamble = Arc::new(crate::native_document::read_preamble(self)?);
         self.native_preamble = Some(Arc::clone(&preamble));
         Ok(preamble)
+    }
+
+    /// The parameter-definition pass read under `key`, if one has been.
+    pub(crate) fn native_definitions(
+        &self,
+        key: &crate::native_document::DefinitionKey,
+    ) -> Option<Arc<crate::native_document::DefinitionPass>> {
+        self.native_definitions
+            .as_ref()
+            .filter(|(held, _)| held == key)
+            .map(|(_, pass)| Arc::clone(pass))
+    }
+
+    /// Keep a parameter-definition pass for later extractions under `key`.
+    pub(crate) fn remember_native_definitions(
+        &mut self,
+        key: crate::native_document::DefinitionKey,
+        pass: Arc<crate::native_document::DefinitionPass>,
+    ) {
+        self.native_definitions = Some((key, pass));
     }
 
     /// Where every native record is (`crate::native_document::RecordIndex`),
