@@ -247,10 +247,11 @@ where CI and Measure run, only when it is ready to release.
 5. **Review it.** The branch has no pull request, and crates.io and
    PyPI show its README and changelog for good: read its whole diff
    against the tag (`git diff vX.Y.Z hotfix/vX.Y.(Z+1)`) before tagging.
-   So that Codex reviews it too, push a branch at `vX.Y.Z`
-   (`review/vX.Y.Z-base`) and open a review-only pull request of the
-   hotfix branch into it, as 0.6.1 did (#854). Nothing waits for that
-   review, but a finding that arrives before the tag is acted on. A
+   So that it gets the review a pull request gets (ADR-005), push a
+   branch at `vX.Y.Z` (`review/vX.Y.Z-base`) and open a review-only pull
+   request of the hotfix branch into it, as 0.6.1 did (#854). Nothing
+   waits for that review, but a finding that arrives before the tag is
+   acted on. A
    commit that fixes what the reading or the review finds needs step 4
    again on the new head: CI runs on any push that changes more than the paths
    `ci.yml` ignores (Markdown, `docs/`, `CITATION.cff` and a few others),
