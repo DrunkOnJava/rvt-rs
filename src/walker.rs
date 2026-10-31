@@ -316,7 +316,8 @@ pub fn write_field_by_type(value: &InstanceField, ty: &formats::FieldType, out: 
         (FieldType::Container { kind, .. }, InstanceField::Vector(_))
             if matches!(*kind, 0x01 | 0x02 | 0x04 | 0x05 | 0x07 | 0x0b | 0x0d) =>
         {
-            // L5B-09.5: scalar-base Container round-trips through the
+            // Tracker: L5B-09.5.
+            // A scalar-base Container round-trips through the
             // same `[u32 count][count × element]` wire layout as
             // Vector (reader delegates in the opposite direction).
             // Recurse with a synthesised Vector FieldType so the
@@ -466,9 +467,8 @@ pub struct ElementProvenance {
     /// Decoder identity (`LevelDecoder`, `generic_decode_instance`,
     /// `ArcWallRecord`, `partition_schema_mvp::floor_plan_loop`, …).
     pub decoder: Option<String>,
-    /// Trust score in `[0.0, 1.0]`. Unspecified constructors default
-    /// to `1.0` so legacy test fixtures stay visible until they set
-    /// an honest score.
+    /// Trust score in `[0.0, 1.0]`. A constructor that sets none gives
+    /// `1.0`, meaning no doubt is recorded.
     pub confidence: f32,
     /// Schema / MVP fields that were required but absent.
     pub missing_required_fields: Vec<String>,
@@ -736,7 +736,8 @@ pub fn read_field_by_type(
             InstanceField::Pointer { raw: [a, b] }
         }
         FieldType::Vector { kind, .. } => {
-            // L5B-08: decode vectors of known-size primitive elements
+            // Tracker: L5B-08.
+            // Decode vectors of known-size primitive elements
             // into `InstanceField::Vector(Vec<InstanceField>)`. Wire
             // format for these kinds: `[u32 count][count × element]`
             // where element size is driven by the outer-type byte.
@@ -859,7 +860,8 @@ pub fn read_field_by_type(
             InstanceField::Vector(items)
         }
         FieldType::Container { kind, .. } => {
-            // L5B-09.4: scalar-base Container (kinds 0x01/0x02/0x04/
+            // Tracker: L5B-09.4.
+            // A scalar-base Container (kinds 0x01/0x02/0x04/
             // 0x05/0x07/0x0b/0x0d) use the same `[u32 count][count ×
             // element]` wire layout as Vector — the sub=0x0050 tag
             // only distinguishes semantic role (std::set / std::map
@@ -1418,7 +1420,8 @@ pub fn iter_elements_with_control(
     control: &WalkerControl,
 ) -> Result<impl Iterator<Item = DecodedElement> + use<>> {
     control.check()?;
-    // B71: an export walks once to write and again for its diagnostics'
+    // Tracker: B71.
+    // An export walks once to write and again for its diagnostics'
     // class counts; the second reuses the first.
     if let Some(elements) = rf.cached_walk(min_score, limits) {
         control.report(Stage::PartitionScan, 1, Some(1));

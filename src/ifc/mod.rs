@@ -170,6 +170,17 @@ pub struct IfcModel {
     /// `HasPropertySets`, merged into a set of the same name.
     #[serde(default)]
     pub type_property_sets: std::collections::BTreeMap<u32, Vec<entities::PropertySet>>,
+    /// The standard property sets of each type object, by its type's
+    /// ElementId and the STEP name of the type entity (`IFCWALLTYPE`): the
+    /// common set's `IsExternal`, `FireRating` and `LoadBearing` (RE-286) and a
+    /// stair or flight type's dimensions (RE-286). The writer adds
+    /// each to the `HasPropertySets` of the type object of that type and
+    /// entity.
+    #[serde(default)]
+    pub type_entity_sets: std::collections::BTreeMap<
+        u32,
+        std::collections::BTreeMap<String, Vec<entities::PropertySet>>,
+    >,
     /// Material constituent sets (RE-82): an element without a layer,
     /// profile or single material gets the materials its type's geometry
     /// uses, written as IFC4 `IfcMaterialConstituentSet`, as Revit's
@@ -878,6 +889,7 @@ impl Exporter for PlaceholderExporter {
             element_type_materials: Default::default(),
             element_type_ids: Default::default(),
             type_property_sets: Default::default(),
+            type_entity_sets: Default::default(),
             material_constituent_sets: Vec::new(),
             opening_cuts: Default::default(),
             body_pieces: Default::default(),
@@ -1171,6 +1183,7 @@ fn export_rvt_doc(
         element_flips,
         _,
         body_pieces,
+        type_entity_sets,
     ) = append_production_walker_elements(
         rf,
         &mut entities,
@@ -1338,6 +1351,7 @@ fn export_rvt_doc(
         element_type_materials,
         element_type_ids,
         type_property_sets: Default::default(),
+        type_entity_sets,
         material_constituent_sets,
         opening_cuts,
         body_pieces,
@@ -3298,6 +3312,7 @@ type WalkerElementData = (
     std::collections::BTreeMap<u32, bool>,
     Vec<usize>,
     std::collections::BTreeMap<usize, Vec<usize>>,
+    std::collections::BTreeMap<u32, std::collections::BTreeMap<String, Vec<entities::PropertySet>>>,
 );
 
 fn append_production_walker_elements(
@@ -3339,6 +3354,7 @@ fn append_production_walker_elements(
             append.element_flips,
             append.computed_inverts,
             append.body_pieces,
+            append.type_entity_sets,
         ));
     }
     Ok(Default::default())
@@ -4629,7 +4645,7 @@ fn pset_property_value_count(model: &IfcModel) -> usize {
             model.building_storeys.len(),
         )) - usize::from(!step_writer::every_storey_holds_an_element(model))
     };
-    elements + storeys + building + openings
+    elements + storeys + building + openings + step_writer::type_object_pset_values(model)
 }
 
 fn export_confidence_summary(

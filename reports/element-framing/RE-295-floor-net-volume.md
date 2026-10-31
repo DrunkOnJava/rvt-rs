@@ -5,6 +5,8 @@
 **Artefacts:** the BIM4LCA office as built and at building permit (Revit 2024, Revit 24.0.5's IFC4 exports), Core Interior and RE1 Architecture (whose exports have base quantities off, RE-242) and puzzbobb's R2025 models, as Measure fetches them
 **Runs:** Measure [41138429994](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41138429994) (`probes/examples/probe_re295_slab_records.rs`), [41139584512](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41139584512) (the quantity census) and [41140153113](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41140153113) (this change against `main`, unfiltered)
 **Result:** positive, narrowed: a floor's `Qto_SlabBaseQuantities.NetVolume` is its `GrossArea` times its type's layers' total thickness where nothing cuts it, and a compound floor's `Width` is that thickness; both are written, none different. A single-layer floor's `Width`, the volumes of the stair landings Revit draws as a mesh and of the roofs written as slabs stay unwritten.
+**Update (RE-294, 2026-10-31):** The compound floor `Width` rule is withdrawn: Revit 2024's exporter writes it and a Revit 2026 export of a held-out model does not, and where Revit's exporters disagree rvt-rs leaves a value out. The `NetVolume` stands. See [RE-294](RE-294-slab-covering-width-exporters-disagree.md).
+
 
 ## 1. Revit's values
 

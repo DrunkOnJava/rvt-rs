@@ -190,7 +190,8 @@ pub const MAPPINGS: &[Mapping] = &[
         ifc_type: "IFCREINFORCINGBAR",
         predefined_type: None,
     },
-    // Structural — secondary members (IFC-10).
+    // Tracker: IFC-10.
+    // Structural — secondary members.
     // IfcMember is IFC4's entity for structural elements that aren't
     // the primary load path: bracing, trusses, studs, girts, purlins,
     // mullions, posts. Revit distinguishes these via the Family

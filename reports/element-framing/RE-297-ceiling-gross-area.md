@@ -5,6 +5,8 @@
 **Artefacts:** the BIM4LCA office as built and at building permit (Revit 2024, Revit 24.0.5's IFC4 exports), RE1 Architecture (whose export has no base quantities, RE-242) and puzzbobb's R2025 models (no coverings), as Measure fetches them
 **Runs:** Measure [41138942086](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41138942086) (`probes/examples/probe_re297_covering_records.rs`), [41140001298](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41140001298) (the quantity census) and [41140501767](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41140501767) (this change against RE-295's, unfiltered)
 **Result:** positive, narrowed: a compound ceiling drawn as one extrusion of its sketch's outline has Revit's `Qto_CoveringBaseQuantities.GrossArea` as that outline's area, its holes taken off, unless its native record holds a `CutPairGStep`, which marks the ceilings Revit cuts; a ceiling of several pieces and a wall Revit writes as a covering have its `Width`. All written, none different. The area of a ceiling in pieces or one a join cuts, and the covering Revit writes for the office's ventilation units, stay unwritten.
+**Update (RE-294, 2026-10-31):** The `Width` of a ceiling in pieces and of a wall written as a covering is withdrawn with the other covering `Width` rules: Revit 2024's exporter writes it and a later one does not. The `GrossArea` stands. See [RE-294](RE-294-slab-covering-width-exporters-disagree.md).
+
 
 ## 1. A ceiling's GrossArea
 

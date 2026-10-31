@@ -233,7 +233,8 @@ pub fn scan_curve_fields(
         // An anchor belongs to the one element whose box holds the points of
         // the first two entries after it within the window: a curve's own two
         // ends, of which a neighbour joined at one end holds only that one.
-        // Only the windows are searched for entries (B87): the whole stream
+        // Tracker: B87.
+        // Only the windows are searched for entries: the whole stream
         // has millions of `u32 1`s, each tested against every box.
         for &at in &anchors {
             let window = &buf[at + 1..buf.len().min(at + ANCHOR_WINDOW + 4)];

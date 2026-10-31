@@ -422,7 +422,7 @@ impl FieldType {
             // Historical note: this arm previously delegated to
             // `extract_container(k, &body_after_header)`, which
             // greedily captured the next ~28 bytes of the schema
-            // record as "body". The L5B-09.1/.2 probes found those
+            // record as "body". Probes found those
             // bytes were actually the next field's header spilling
             // into this one's payload. Empty-body is the correct
             // wire semantics for scalar-base containers.
