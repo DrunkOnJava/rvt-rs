@@ -108,7 +108,7 @@ derived from the document and their own identity, stable between exports,
 number of treads and nosing length (RE-92, RE-236), a stair's `TreadLengthAtInnerSide` and, with `--revit-set-placement`, its `Pset_StairFlightCommon` summed or shared from its flights (RE-287), on Revit 2024 its run type as its `Reference`
 and each landing's type as its `Reference`, each element's `IsExternal` as Revit's
 exporter sets it (a parameter named for its property set, its type's
-Function, else its class's rule; on curtain mullions and panels their curtain wall's, RE-193, RE-288), each type object's common set (`IsExternal` from its type's Function, a roof's, else not external, `FireRating` and `LoadBearing`, a stair type's and flight type's dimensions, RE-286),
+Function, else its class's rule; on curtain mullions and panels their curtain wall's, RE-193, RE-288), each type object's common set (`FireRating`, `LoadBearing`, a stair type's and flight type's dimensions; no `IsExternal`, which Revit's newer exporters write on no type object; RE-286),
 each curtain mullion's `Span`, its length along its own axis (RE-226), which is also its `Qto_MemberBaseQuantities.Length` (#1016), and its `NetVolume`, its section times that length, where Revit's export draws it as an extrusion of its section: a mullion whose type has its own rectangular or square section, told by the class of its type's section object in whatever language the model is in (RE-246), on a straight curtain wall whose profile is not edited (RE-243),
 each door's and window's `Width`, `Height` and `Area` base quantities, its type's size where the symbol that draws it has the same (#1016),
 each curtain wall's type, named as its type's native record names it (RE-230),
