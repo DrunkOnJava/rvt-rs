@@ -2026,7 +2026,6 @@ fn add_is_external(
 /// What the common property set of a type object holds (RE-286).
 #[derive(Clone, PartialEq)]
 struct TypeCommon {
-    is_external: Option<bool>,
     fire_rating: Option<String>,
     load_bearing: Option<bool>,
     /// A stair type of a stair whose data is read: revit-ifc's stair
@@ -2043,8 +2042,8 @@ struct TypeCommon {
 const LOAD_BEARING_TYPE_CLASSES: &[&str] = &["StructuralColumn", "StructuralFraming"];
 
 /// The entities whose type objects Revit's IFC4 exports of the BIM4LCA office
-/// (exporter 24.0.5) and of the R2025 models (25.0.2) give their common set's
-/// `IsExternal`, among those rvt-rs writes a type object for (RE-286). Not a
+/// (exporter 24.0.5) and of the R2025 models (25.0.2) give a common set, among
+/// those rvt-rs writes a type object for (RE-286). Not a
 /// ramp's, which holds no set in the office's export; a railing's, which that
 /// export writes no type object for at all, though the R2025 models' write one;
 /// nor a curtain member's, which is the exporter's cache (RE-269).
@@ -2077,12 +2076,6 @@ impl TypeCommon {
             let defines = |property: &str| {
                 super::standard_property_sets::property_kind(name, property).is_some()
             };
-            if let Some(external) = self.is_external.filter(|_| defines("IsExternal")) {
-                properties.push(Property {
-                    name: "IsExternal".into(),
-                    value: PropertyValue::Boolean(external),
-                });
-            }
             if let Some(rating) = self.fire_rating.filter(|_| defines("FireRating")) {
                 properties.push(Property {
                     name: "FireRating".into(),
@@ -2146,10 +2139,10 @@ fn stair_type_zeros() -> [Property; 3] {
 }
 
 /// Note what the type object of `decoded`'s type holds in its common set
-/// (RE-286): the `IsExternal` Revit's exporter calculates for the type
-/// (`TYPE_IS_EXTERNAL_FIELD`), the type's Fire Rating (RE-77) and its
-/// `LoadBearing` ([`LOAD_BEARING_TYPE_CLASSES`]), as revit-ifc
-/// runs the common set's entries on the type itself (CLEANROOM.md source 5).
+/// (RE-286): the type's Fire Rating (RE-77) and its `LoadBearing`
+/// ([`LOAD_BEARING_TYPE_CLASSES`]), as revit-ifc runs the common set's
+/// entries on the type itself (CLEANROOM.md source 5). No `IsExternal`:
+/// Revit's newer exporters write none on a type object (RE-286).
 /// Two elements of one type that disagree leave it none.
 fn record_type_common(
     commons: &mut BTreeMap<(u32, String), Option<TypeCommon>>,
@@ -2167,10 +2160,6 @@ fn record_type_common(
     }) else {
         return;
     };
-    let is_external = decoded.fields.iter().find_map(|(name, value)| match value {
-        InstanceField::Bool(flag) if name == mvp::TYPE_IS_EXTERNAL_FIELD => Some(*flag),
-        _ => None,
-    });
     let fire_rating = decoded
         .fields
         .iter()
@@ -2184,7 +2173,6 @@ fn record_type_common(
             _ => None,
         });
     let found = TypeCommon {
-        is_external,
         fire_rating,
         load_bearing: LOAD_BEARING_TYPE_CLASSES
             .contains(&decoded.class.as_str())

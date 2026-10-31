@@ -767,18 +767,6 @@ pub fn recover_partition_schema_mvp(
             &mut out.products,
         ],
     );
-    // --- IsExternal of each element's type object (RE-286) ---
-    attach_type_is_external(
-        revit_version,
-        [
-            &mut out.walls,
-            &mut out.columns,
-            &mut out.doors,
-            &mut out.windows,
-            &mut out.slabs,
-            &mut out.products,
-        ],
-    );
     // --- A curtain mullion's or panel's IsExternal: its curtain wall's (RE-193, RE-269) ---
     attach_curtain_member_is_external(&out.walls, &mut out.products);
     // --- The parameters named for a standard set's other properties (RE-194) ---

@@ -625,11 +625,6 @@ pub const IS_EXTERNAL_PARAMETER_NAME: &str = "IsExternal";
 /// takes precedence over ([`crate::ifc::export_content`]).
 pub const IS_EXTERNAL_FIELD: &str = "m_is_external";
 
-/// Field carrying the `IsExternal` Revit's exporter calculates for an
-/// element's type object (RE-286): the type's own parameter, its Function,
-/// a roof's, else not external, where the element's class allows it.
-pub const TYPE_IS_EXTERNAL_FIELD: &str = "m_type_is_external";
-
 /// Classes whose `IsExternal` Revit's exporter takes from their type's
 /// Function, so one whose Function is not read gets none: a value calculated
 /// without it would be a guess (fail closed). A window's host does not give
