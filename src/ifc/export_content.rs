@@ -932,13 +932,15 @@ pub fn append_typed_production_elements(
             extrusion.as_ref(),
             solid_shape.is_none() && piece_bodies.is_empty(),
         );
-        add_ceiling_width(
+        add_ceiling_quantities(
             &mut reference_sets,
             &ifc_type,
             &decoded,
             extrusion.as_ref(),
-            solid_shape.is_none() && piece_bodies.is_empty(),
+            &piece_bodies,
+            solid_shape.is_none(),
         );
+        add_wall_covering_width(&mut reference_sets, &ifc_type, &decoded);
         add_stair_flight_quantities(&mut reference_sets, &ifc_type, &decoded);
         add_railing_height(&mut reference_sets, &ifc_type, &decoded);
         add_railing_length(&mut reference_sets, &ifc_type, &decoded);
@@ -2613,40 +2615,96 @@ fn curve_area_length(curve: &entities::IndexedCurve) -> Option<(f64, f64)> {
     Some((area, length))
 }
 
-/// Add a ceiling's `Qto_CoveringBaseQuantities.Width` to `sets` (#1016,
-/// RE-250): the depth of the extrusion it is drawn as, where that is its
-/// type's layers' total thickness (as RE-238 tells a level slab), as Revit's
-/// export writes it. Its `GrossArea` is left out: the area of the profile its
-/// sketch gives it differs from Revit's on 2 of the BIM4LCA office's ceilings
-/// as built and 9 at permit.
-fn add_ceiling_width(
+/// Add a ceiling's `Qto_CoveringBaseQuantities` to `sets` (#1016, RE-250,
+/// RE-297): its `Width`, the depth of the extrusion it is drawn as, where that
+/// is its type's layers' total thickness (as RE-238 tells a level slab) and
+/// every further piece of a sketch of separate loops (#331) is as deep; and,
+/// on a ceiling drawn as one extrusion of its sketch's outline whose record
+/// holds no step that cuts it
+/// ([`crate::partition_schema_mvp::SLAB_UNCUT_FIELD`]), its `GrossArea`, the
+/// area of that profile, its holes taken off. Revit's export writes a cut
+/// ceiling's area less the cut: the sketch's area is 0.7 to 1.1 percent larger
+/// than Revit's on the 2 of the BIM4LCA office's ceilings as built and the 9
+/// at permit whose records hold a `CutPairGStep`, and on no other. On a ceiling
+/// of several pieces Revit's export gives the area of one of them, which no
+/// field of the record says.
+fn add_ceiling_quantities(
     sets: &mut Vec<PropertySet>,
     ifc_type: &str,
     decoded: &DecodedElement,
     extrusion: Option<&Extrusion>,
-    single: bool,
+    pieces: &[Extrusion],
+    extruded: bool,
 ) {
     const TOLERANCE_FEET: f64 = 1e-3;
-    if ifc_type != "IFCCOVERING" || decoded.class != "Ceiling" || !single {
+    if ifc_type != "IFCCOVERING" || decoded.class != "Ceiling" || !extruded {
         return;
     }
     let Some(body) = extrusion else {
         return;
     };
+    let mut properties = Vec::new();
+    let from_sketch = decoded.fields.iter().any(|(name, value)| {
+        name == crate::element_record_plan_profiles::PLAN_PROFILE_SOURCE_FIELD
+            && matches!(value, InstanceField::String(source)
+                if source == crate::element_record_plan_profiles::PLAN_PROFILE_SOURCE)
+    });
+    let uncut = decoded.fields.iter().any(|(name, value)| {
+        name == crate::partition_schema_mvp::SLAB_UNCUT_FIELD
+            && matches!(value, InstanceField::Bool(true))
+    });
+    // A ceiling whose layers fill its body's depth is level (RE-238); a
+    // sloped one's profile is only its plan projection, so it gets neither.
     let layered = crate::partition_schema_mvp::element_layers_from_fields(&decoded.fields)
         .filter(|layers| layers.stacked && !layers.layers.is_empty())
         .is_some_and(|layers| {
             let total: f64 = layers.layers.iter().map(|layer| layer.width_feet).sum();
             (total - body.height_feet).abs() <= TOLERANCE_FEET
         });
-    if !(layered && body.height_feet.is_finite() && body.height_feet > 0.0) {
+    if layered && pieces.is_empty() && from_sketch && uncut {
+        if let Some(area) = profile_area(body) {
+            properties.push(Property {
+                name: "GrossArea".into(),
+                value: PropertyValue::AreaSquareFeet(area),
+            });
+        }
+    }
+    if layered && body.height_feet.is_finite() && body.height_feet > 0.0 {
+        properties.push(Property {
+            name: "Width".into(),
+            value: PropertyValue::PositiveLengthFeet(body.height_feet),
+        });
+    }
+    if properties.is_empty() {
         return;
     }
     sets.push(PropertySet {
         name: "Qto_CoveringBaseQuantities".into(),
+        properties,
+    });
+}
+
+/// Add the `Qto_CoveringBaseQuantities.Width` of a wall Revit's export writes
+/// as an `IfcCovering` to `sets` (#1016, RE-297): the wall's type's width, as
+/// a wall's own `Width` is (RE-251). All 21 of the BIM4LCA office's walls of
+/// the type `AK-1.otsa` as built.
+fn add_wall_covering_width(sets: &mut Vec<PropertySet>, ifc_type: &str, decoded: &DecodedElement) {
+    use crate::partition_schema_mvp as mvp;
+    if ifc_type != "IFCCOVERING" || !matches!(decoded.class.as_str(), "Wall" | "ArcWall") {
+        return;
+    }
+    let thickness = mvp::wall_axis_from_fields(&decoded.fields)
+        .map(|axis| axis.thickness_feet)
+        .or_else(|| mvp::wall_arc_from_fields(&decoded.fields).map(|arc| arc.thickness_feet))
+        .or_else(|| mvp::wall_layers_width_from_fields(&decoded.fields));
+    let Some(thickness) = thickness.filter(|t| t.is_finite() && *t > 0.0) else {
+        return;
+    };
+    sets.push(PropertySet {
+        name: "Qto_CoveringBaseQuantities".into(),
         properties: vec![Property {
             name: "Width".into(),
-            value: PropertyValue::PositiveLengthFeet(body.height_feet),
+            value: PropertyValue::PositiveLengthFeet(thickness),
         }],
     });
 }
