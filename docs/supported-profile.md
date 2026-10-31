@@ -57,7 +57,9 @@ read, so the elements it holds are not exported. `rvt-ifc` and `rvt-gltf` then
 name each such stream, write no model and exit with status 3 unless
 `--allow-partial`, and the diagnostics list them; `--large-model` raises the
 limits for models whose largest partition is several hundred MiB to 1 GiB
-(#1075). The browser viewer opens a file at the default limits and, when a
+(#1075). The readers of native records (types, materials, stairs, phases, saved
+parameters and others) follow the same limits and skip only the stream they could
+not read. The browser viewer opens a file at the default limits and, when a
 stream is not read, reports "Part of the file not read" and offers "Retry
 with large-model limits" (streams up to 2 GiB); it stays under wasm32's 4 GiB
 memory ceiling, so a very large model can still fail to open there. This is
@@ -108,7 +110,7 @@ derived from the document and their own identity, stable between exports,
 number of treads and nosing length (RE-92, RE-236), a stair's `TreadLengthAtInnerSide` and, with `--revit-set-placement`, its `Pset_StairFlightCommon` summed or shared from its flights (RE-287), on Revit 2024 its run type as its `Reference`
 and each landing's type as its `Reference`, each element's `IsExternal` as Revit's
 exporter sets it (a parameter named for its property set, its type's
-Function, else its class's rule; on curtain mullions and panels their curtain wall's, RE-193, RE-288),
+Function, else its class's rule; on curtain mullions and panels their curtain wall's, RE-193, RE-288; on Revit 2015 to 2023 a wall's, from its type's Function or a parameter named for it, experimentally, RE-283),
 each curtain mullion's `Span`, its length along its own axis (RE-226), which is also its `Qto_MemberBaseQuantities.Length` (#1016), and its `NetVolume`, its section times that length, where Revit's export draws it as an extrusion of its section: a mullion whose type has its own rectangular or square section, told by the class of its type's section object in whatever language the model is in (RE-246), on a straight curtain wall whose profile is not edited (RE-243),
 each door's and window's `Width`, `Height` and `Area` base quantities, its type's size where the symbol that draws it has the same (#1016),
 each curtain wall's type, named as its type's native record names it (RE-230),
