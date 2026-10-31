@@ -552,8 +552,8 @@ pub fn gzip_header_len(data: &[u8], offset: usize) -> Option<usize> {
     // optional flag fields fire when those flags are clear. Verify
     // the base header actually fits in the buffer before returning —
     // otherwise a caller using the returned length to slice past
-    // `data.len()` will panic. Discovered by the Q-04 regression
-    // harness on a 9-byte `[0x1f, 0x8b, 0x08, 0x00, ...]` input.
+    // `data.len()` will panic, as a 9-byte `[0x1f, 0x8b, 0x08, 0x00, ...]`
+    // input once did.
     if pos > data.len() {
         return None;
     }

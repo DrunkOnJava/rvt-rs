@@ -7,7 +7,7 @@
 //! carries [`IFC_EXPORT_ELEMENT_TYPE_AS`] for its elements, each with a
 //! predefined type beside it. That read works on Revit 2024 and 2025 and
 //! gives the same 21 owners on `2024_Core_Interior.rvt` as the owner-offset
-//! read below, which is kept for API compatibility.
+//! read below. Nothing calls that read now; it records RE-22's framing.
 //!
 //! Revit's IFC exporter maps a Revit category to an IFC entity type,
 //! but a single element may carry an instance-level override — the
