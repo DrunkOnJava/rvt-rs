@@ -87,6 +87,16 @@ Python and the browser viewer draw the doors and windows of Revit 2023 to
 whole plan. A wall a floor covers only in part keeps its full height where
 Revit steps its top: 29 office walls as built and 26 at permit.
 
+Exports of Revit 2015 to 2023 files take longer, for the native records now
+read on those releases (#1237). On Autodesk's sample projects:
+- 2015 to 2022 exports take 2.8 to 3.4 times as long as with 0.11.0, about
+  1 s to 3 s each;
+- 2023 exports take twice as long;
+- peak memory is up to 19% higher.
+
+Revit 2024 to 2027 exports take as long as before, 0.99 to 1.04 times, all
+on one runner (Measure run 41228075400).
+
 The public API that nothing used is removed, and other public types change;
 "Upgrading from 0.11" lists each.
 
@@ -119,6 +129,8 @@ AhmadAnzar brought two out-of-date statements in `docs/status.md` and
   above the model's zero, not above its storey.
 - An export no longer writes a floor's or a covering's
   `Qto_*BaseQuantities.Width`, which Revit's exporters disagree on.
+- Exports of Revit 2015 to 2023 files take two to three and a half times as
+  long, with up to 19% more peak memory (#1237).
 
 ### Added
 
