@@ -77,9 +77,12 @@ pub fn extract_at_detail_with_control(
     let roots: BTreeSet<_> = records.keys().copied().collect();
     let mut summaries = vec![first];
     let mut attempted = roots.clone();
+    let mut added = roots.clone();
     for depth in 0..=128 {
         let mut wanted = BTreeSet::new();
-        for r in records.values() {
+        // Only the records the last pass added can name a symbol not yet
+        // attempted: every earlier record's were attempted then.
+        for r in added.iter().filter_map(|id| records.get(id)) {
             if let Some(g) = &r.graph {
                 for o in &g.objects {
                     if o.class_name == "InstanceInfo" {
@@ -104,13 +107,16 @@ pub fn extract_at_detail_with_control(
         control.check()?;
         attempted.extend(&wanted);
         opts.selected_ids = wanted;
+        let mut fresh = BTreeSet::new();
         summaries.push(native_document::extract_graphs(file, &opts, |r| {
+            fresh.insert(r.identity.element_id);
             ensure!(
                 records.insert(r.identity.element_id, r).is_none(),
                 "duplicate shared graphics owner"
             );
             Ok(())
         })?);
+        added = fresh;
     }
     control.check()?;
     control.report(Stage::SavedGraphics, 1, Some(1));
