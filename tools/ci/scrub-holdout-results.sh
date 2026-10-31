@@ -21,8 +21,10 @@
 # count lines of the RE-283 probes (the same alphabet; their `native readers
 # example:` lines name ElementIds and are dropped) and
 # of its quantity census (the totals and each quantity's counts, the walls it
-# counts apart for their two lengths (RE-252), and for each value that
-# differs only the quantity and rvt-rs's value over Revit's), of
+# counts apart for their two lengths (RE-252), for each value that
+# differs only the quantity and rvt-rs's value over Revit's, and for the
+# quantities rvt-rs writes that Revit's export does not only each quantity's
+# name and count), of
 # its names census (counts by category, entity and agreement) and of its layer
 # set census (its counts, not its worst elements), of its identity censuses
 # (Griffin, 2026-10-29: counts only, never an ElementId or a name): the
