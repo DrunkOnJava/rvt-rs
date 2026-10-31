@@ -323,7 +323,27 @@ pub fn current_partitions(
 /// Extract selected current indexed records. Unsupported individual object
 /// graphs produce explicit records and do not discard other decoded owners.
 /// Framing, identity and routing errors abort instead of choosing a candidate.
+#[track_caller]
 pub fn extract(
+    file: &mut RevitFile,
+    options: &Options,
+    emit: impl FnMut(Record) -> Result<()>,
+) -> Result<Summary> {
+    let caller = std::panic::Location::caller();
+    let started = std::time::Instant::now();
+    let result = extract_timed(file, options, emit);
+    eprintln!(
+        "PASS extract {}:{} {} ms ids={} classes={}",
+        caller.file(),
+        caller.line(),
+        started.elapsed().as_millis(),
+        options.selected_ids.len(),
+        options.selected_classes.len()
+    );
+    result
+}
+
+fn extract_timed(
     file: &mut RevitFile,
     options: &Options,
     emit: impl FnMut(Record) -> Result<()>,
@@ -437,18 +457,30 @@ type IndexedRecord = (u64, u64, u32, Option<u16>);
 /// values. Each record's saved metadata is read against no
 /// definitions.
 // Tracker: B80.
+#[track_caller]
 pub fn extract_graphs(
     file: &mut RevitFile,
     options: &Options,
     emit: impl FnMut(Record) -> Result<()>,
 ) -> Result<Summary> {
-    extract_records(
+    let caller = std::panic::Location::caller();
+    let started = std::time::Instant::now();
+    let result = extract_records(
         file,
         options,
         false,
         &crate::native_parameter_definitions::Registry::default(),
         emit,
-    )
+    );
+    eprintln!(
+        "PASS graphs {}:{} {} ms ids={} classes={}",
+        caller.file(),
+        caller.line(),
+        started.elapsed().as_millis(),
+        options.selected_ids.len(),
+        options.selected_classes.len()
+    );
+    result
 }
 /// The releases whose native records frame: Revit 2015 to 2027. A record
 /// group frames as Revit 2023 does from 2015 to 2023 (a 4-byte id) and with
