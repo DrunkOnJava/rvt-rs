@@ -59,5 +59,5 @@ Of the 167 prisms, Revit draws 88 as an extrusion (a `GrossVolume`; the outer lo
 
 ```bash
 gh workflow run measure.yml --ref main -f ref=c7dc3e5f2d509e503270ab02f0a7ecec6cf69a5d -f base=9637d5ffb18b132d5c12cb09dda5be3e106a772e -f nordic=true -f r2025=true
-gh workflow run measure.yml --ref main -f ref=2219ae1631d6eb65b0d3b3a7b63c7ee6e2c1d6a4 -f base=none -f nordic=true -f models="nordic-office-*" -f scorers=none -f probe=probe_re296_space_prisms -f probe_scorer=-
+gh workflow run measure.yml --ref main -f ref=2aa3f0c841d4a03b458daad03f32f9b405d3de31 -f base=none -f nordic=true -f models="nordic-office-*" -f scorers=none -f probe=probe_re296_space_prisms -f probe_scorer=-
 ```
