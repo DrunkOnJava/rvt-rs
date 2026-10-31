@@ -68,7 +68,6 @@ The requirements these serve, each with its bar, status and evidence, are in
 | [#1191](https://github.com/DrunkOnJava/rvt-rs/issues/1191) | W6: draw family instances from their saved meshes by default (decode the remaining saved-graphics faces) |
 | [#1190](https://github.com/DrunkOnJava/rvt-rs/issues/1190) | W2, W6, W7: geometry and properties on Revit 2015 to 2023, 2026 and 2027 projects, beyond each element's box |
 | [#1189](https://github.com/DrunkOnJava/rvt-rs/issues/1189) | W3: read family (`.rfa`) and template (`.rte`, `.rft`) files like projects: types, parameters and geometry |
-| [#1186](https://github.com/DrunkOnJava/rvt-rs/issues/1186) | W7: the BIM4LCA office's stair values on `IfcStair` and the stair and flight types |
 | [#1185](https://github.com/DrunkOnJava/rvt-rs/issues/1185) | W7: type objects' common-set values (`IsExternal`, `LoadBearing`, `FireRating`, `Manufacturer`) on the BIM4LCA office's types |
 | [#1075](https://github.com/DrunkOnJava/rvt-rs/issues/1075) | Models with a partition stream over 256 MiB opened empty: reported since 0.11.0, with `--large-model`, not yet measured on a model over the limits |
 | [#1046](https://github.com/DrunkOnJava/rvt-rs/issues/1046) | W7: base quantities Revit computes from its joined geometry (wall areas and volumes, mullion surfaces) |
