@@ -16,7 +16,7 @@
   - the parameters named `<set>.<property>`, or the property alone for each standard set that defines it, for a property of one of IFC4's sets, a qualified name before a bare one, `REVIT_OMITTED_PARAMETERS` left out, each as the field 2024's `attach_named_parameters` gives it. Instance parameters only, as there.
 
   It reads every parameter that has a name, whatever its kind (family, shared, project): revit-ifc looks a parameter up by name on the element, so a family parameter named for a property is read there too (CLEANROOM.md source 5, read and cited).
-- `attach_record_is_external` gives a record-backed wall, or any element a parameter named for `IsExternal` was read for, the value `calculated_is_external` finds: the parameter, then the type's Function. No element gets the calculation's last step, not external, on these releases (RE-285 names the two classes that do). A window, door or slab with no parameter gets none: their Function is a saved type parameter (`FUNCTION_PARAM`, RE-158) that is not read on these releases, and BIMcollab's slab types hold none (RE-300).
+- `attach_record_is_external` gives a record-backed wall, or any element a parameter named for `IsExternal` was read for, the value `calculated_is_external` finds: the parameter, then the type's Function. No element gets the calculation's last step, not external, on these releases. A window, door or slab with no parameter gets none: their Function is a saved type parameter (`FUNCTION_PARAM`, RE-158) that is not read on these releases.
 - `probe_re283_wall_function_pairs` and `tools/ci/scrub-holdout-results.sh` (which keeps the probe's count lines for a model without a licence).
 
 ## 2. Against the same project in a later release

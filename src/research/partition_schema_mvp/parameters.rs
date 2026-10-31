@@ -276,7 +276,7 @@ pub(super) fn attach_native_named_parameters<'a>(
 
 /// Give each of `elements` the `IsExternal` revit-ifc calculates for it
 /// ([`calculated_is_external`], [`IS_EXTERNAL_FIELD`]) on the releases that
-/// read elements from their element records (RE-283, RE-285): where a
+/// read elements from their element records (RE-283): where a
 /// parameter named for it says (RE-193), a wall's type Function says, or, for
 /// the classes in [`IS_EXTERNAL_LAST_STEP_RECORD_CLASSES`], the calculation's
 /// last step, not external. Any other element gets none.
