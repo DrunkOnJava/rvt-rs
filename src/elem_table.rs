@@ -118,8 +118,8 @@ pub struct ElemRecord {
     pub raw: Vec<u8>,
 }
 
-/// Backward-compat record type from the pre-corpus-probe parser. Kept so
-/// existing callers and tests keep compiling; prefer `ElemRecord` for new work.
+/// Record type of the first, rough parser, which the ElemTable probes and
+/// examples still use; prefer `ElemRecord` for new work.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[non_exhaustive]
 pub struct ElemRecordRough {
@@ -434,8 +434,8 @@ pub fn declared_ids(records: &[ElemRecord]) -> std::collections::BTreeSet<u32> {
 }
 
 /// Attempt to enumerate records after the header. Conservative: stops at
-/// `max_records` or stream end. Prefer `parse_records` for new work — this
-/// wrapper is kept for backward-compat with pre-corpus-probe callers.
+/// `max_records` or stream end. Prefer `parse_records` for new work; the
+/// ElemTable probes and examples still use this one.
 pub fn parse_records_rough(rf: &mut RevitFile, max_records: usize) -> Result<Vec<ElemRecordRough>> {
     let d = inflate(rf)?;
     let layout = detect_layout(&d);

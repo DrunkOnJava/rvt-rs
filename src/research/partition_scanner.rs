@@ -510,5 +510,5 @@ fn fnv1a64_hex(bytes: &[u8]) -> String {
     format!("{hash:016x}")
 }
 
-// Re-export ElemTable helpers so M3-04 callers have one import path.
+// Re-export the ElemTable helpers so callers have one import path.
 pub use elem_table::{declared_element_ids, index_by_element_id};

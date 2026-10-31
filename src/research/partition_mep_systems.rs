@@ -156,7 +156,8 @@ pub fn scan_mep_systems(
             }
         }
     }
-    // B70: one pass per stream over the objects of `elements`, looking in each
+    // Tracker: B70.
+    // One pass per stream over the objects of `elements`, looking in each
     // payload for a system's id, instead of a backward search for the object
     // around every place a system's id occurs.
     let (Some(&low), Some(&high)) = (systems.keys().next(), systems.keys().next_back()) else {
