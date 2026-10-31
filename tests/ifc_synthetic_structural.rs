@@ -285,6 +285,7 @@ fn synthetic_structural_ifc_has_expected_entity_counts() {
         material_constituent_sets: Vec::new(),
         opening_cuts: Default::default(),
         body_pieces: Default::default(),
+        storey_properties: Default::default(),
     };
 
     let step = write_step(&model);

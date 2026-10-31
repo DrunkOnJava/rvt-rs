@@ -382,6 +382,18 @@ pub const WALL_JOIN_THROUGH_FIELDS: [&str; 2] =
 /// form of [`WALL_LAYERS_FIELD`] (RE-57).
 pub const SLAB_LAYERS_FIELD: &str = "m_slab_layers";
 
+/// Field holding the total thickness of a floor's type's layers, feet,
+/// whether or not the floor's record box is that deep (RE-295).
+pub const SLAB_TYPE_THICKNESS_FIELD: &str = "m_slab_type_thickness";
+
+/// Field holding how many layers of that thickness a floor's type has
+/// (RE-295).
+pub const SLAB_TYPE_LAYER_COUNT_FIELD: &str = "m_slab_type_layer_count";
+
+/// Set on a floor, ceiling or roof whose native record was read and holds no
+/// step that cuts its solid, a `CutPairGStep` or a `WallCutoutGStep` (RE-295).
+pub const SLAB_UNCUT_FIELD: &str = "m_slab_uncut";
+
 /// Field holding a railing's height, its type's top rail height, feet
 /// (RE-231).
 pub const RAILING_HEIGHT_FIELD: &str = "m_railing_height";
@@ -664,6 +676,13 @@ pub(super) const REVIT_OMITTED_PARAMETERS: &[&str] = &["Pset_DoorWindowGlazingTy
 /// native record ([`crate::native_walls::native_walls_and_top_joins`],
 /// RE-228): Revit's `Pset_WallCommon.ExtendToStructure`.
 pub const WALL_TOP_JOINED_FIELD: &str = "m_wall_top_joined";
+
+/// Releases that read walls from their element records
+/// ([`crate::partition_element_records_2023`]) whose native record's top join
+/// is measured (RE-284), where [`WALL_TOP_JOINED_FIELD`] comes from
+/// [`crate::native_walls::wall_top_joins`] alone.
+pub const WALL_TOP_JOIN_RECORD_REVIT_VERSIONS: &[u32] =
+    &[2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023];
 
 /// Field set on a wall whose native record holds no `JoinToRoofGStep`,
 /// `CutPairGStep` or `WallCutoutGStep`

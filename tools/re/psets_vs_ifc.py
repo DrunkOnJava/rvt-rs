@@ -42,8 +42,21 @@ exporter that made the BIM4LCA office's exports does (a cache of element types
 that gives every curtain wall's members of a type after the first wall's the
 value false, RE-269), the `IsExternal` of the curtain members (IfcMember and
 IfcPlate under an IfcCurtainWall) of those types and of the type objects is
-counted apart, not as missing: rvt-rs does not write it (the maintainer,
-2026-10-30). A later exporter's (RE1 Architecture's) is scored.
+counted apart, not as missing: those are the exporter's cache, not the model's
+value, and rvt-rs does not replay it. rvt-rs writes the curtain members' own
+IsExternal by revit-ifc's host rule, the value of exporters from IFC_v24.2.20
+on (the maintainer, 2026-10-30, RE-288), so a member of the office the cache
+bucket does not hold is scored against it, and so are RE1 Architecture's
+(exporter 26.2), which the rule gives equal. The type objects' own values stay
+counted apart: rvt-rs writes none on a member type, a later exporter's
+IsElementExternal returning null for an element type.
+
+What a project's own user-defined property set file places is out of W7's
+scope (the maintainer, 2026-10-26, RE-239) and counted apart: in an IFC4
+Reference View export, the glazing set on an element that is not a door or a
+window, and the space occupancy set, which revit-ifc's certified list for that
+view does not create, so only such a file writes them (RE-239 §1). The glazing
+set on doors and windows, where IFC4 applies it and rvt-rs writes it, is scored.
 
 Needs IfcOpenShell (the version tools/ci/requirements-ifc.txt pins).
 """
@@ -165,8 +178,9 @@ REVIT_DEFECTS = {
 # Revit 24.0's IsElementExternal also evaluates a type, and caches it as not
 # external, after the first curtain wall that uses it has had its members'
 # sets created, so every later wall's members of that type read false. It is
-# left out of rvt-rs's export (the maintainer, 2026-10-30) and counted apart
-# here, in the same bucket as REVIT_DEFECTS. A curtain member is an IfcMember
+# not replayed by rvt-rs (the maintainer, 2026-10-30), which writes the host
+# rule's value on the members instead (RE-288), and counted apart here, in the
+# same bucket as REVIT_DEFECTS. A curtain member is an IfcMember
 # or IfcPlate aggregated under an IfcCurtainWall, and the export is one of that
 # exporter when the member's type object holds the IsExternal itself, as an
 # exporter that does not cache types (24.2.20 on, RE1's 26.2) leaves it out.
@@ -200,6 +214,32 @@ def curtain_cache_values(f, out):
         for key in keys
         for pset in CURTAIN_MEMBER_SETS
         if (key, pset, "IsExternal") in out
+    }
+
+
+# What a project's own user-defined property set file places (RE-239), out of
+# W7's scope (the maintainer, 2026-10-26): in an IFC4 Reference View export,
+# revit-ifc's certified list of the sets that view creates
+# (IFCCertifiedEntitiesAndPSets.json, CLEANROOM.md source 5) holds neither set,
+# so only such a file writes them. IFC4 applies the glazing set to doors and
+# windows, where rvt-rs writes it; there it is scored.
+EXPORT_FILE_GLAZING = "Pset_DoorWindowGlazingType"
+EXPORT_FILE_OCCUPANCY = "Pset_SpaceOccupancyRequirements"
+GLAZED_ENTITIES = ("IfcDoor", "IfcWindow", "IfcDoorType", "IfcWindowType")
+
+
+def export_file_values(f, out, entities):
+    """The (object key, set, property) triples of `out` that a project's own
+    property set file placed (RE-239): none unless `f` is an IFC4 Reference
+    View export."""
+    views = " ".join(f.header.file_description.description or ())
+    if f.schema != "IFC4" or "ReferenceView" not in views:
+        return set()
+    return {
+        (key, pset, prop)
+        for (key, pset, prop) in out
+        if pset == EXPORT_FILE_OCCUPANCY
+        or (pset == EXPORT_FILE_GLAZING and entities.get(key) not in GLAZED_ENTITIES)
     }
 
 
@@ -301,7 +341,7 @@ def properties(path):
         for pset in kind.HasPropertySets or ():
             if standard(pset):
                 add(key, pset)
-    return out, objects, entities, ifc2x3, curtain_cache_values(f, out)
+    return out, objects, entities, ifc2x3, curtain_cache_values(f, out), export_file_values(f, out, entities)
 
 
 def main(argv):
@@ -314,7 +354,7 @@ def main(argv):
     if len(args) != 2:
         print(__doc__, file=sys.stderr)
         return 2
-    (ours, our_objects, our_entities, _, _), (theirs, their_objects, their_entities, their_ifc2x3, their_cache) = (
+    (ours, our_objects, our_entities, _, _, _), (theirs, their_objects, their_entities, their_ifc2x3, their_cache, their_file) = (
         properties(args[0]),
         properties(args[1]),
     )
@@ -341,10 +381,14 @@ def main(argv):
     defects = collections.Counter()
     cache_defects = collections.Counter()
     unwritten_openings = collections.Counter()
+    from_file = collections.Counter()
     for (key, pset, prop), value in sorted(theirs.items()):
         if key not in our_objects:
             if key.startswith("opening:"):
                 unwritten_openings[(pset, prop)] += 1
+            continue
+        if (key, pset, prop) in their_file:
+            from_file[(pset, prop)] += 1
             continue
         if (key, pset, prop) in their_cache:
             cache_defects[(pset, prop, "types" if key.startswith("type:") else "curtain members")] += 1
@@ -399,6 +443,13 @@ def main(argv):
         print(f"Revit values known to be wrong, left out (RE-235 §5): {pset}.{prop} {n}")
     for (pset, prop, where), n in sorted(cache_defects.items()):
         print(f"Revit values known to be wrong, left out (RE-235 §5, RE-269): {pset}.{prop} on {where} {n}")
+    if from_file:
+        print(
+            f"Revit values the project's own property set file places, out of scope (RE-239),"
+            f" not scored: {sum(from_file.values())}"
+        )
+        for (pset, prop), n in sorted(from_file.items()):
+            print(f"  {pset}.{prop}: {n}")
     if unwritten_openings:
         print(
             f"Revit values on openings rvt-rs does not write (a door or wall cut in a further host,"
