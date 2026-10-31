@@ -2074,13 +2074,16 @@ impl TypeCommon {
         let mut sets = Vec::new();
         if let Some(name) = is_external_set(occurrence) {
             let mut properties = Vec::new();
-            if let Some(external) = self.is_external {
+            let defines = |property: &str| {
+                super::standard_property_sets::property_kind(name, property).is_some()
+            };
+            if let Some(external) = self.is_external.filter(|_| defines("IsExternal")) {
                 properties.push(Property {
                     name: "IsExternal".into(),
                     value: PropertyValue::Boolean(external),
                 });
             }
-            if let Some(rating) = self.fire_rating {
+            if let Some(rating) = self.fire_rating.filter(|_| defines("FireRating")) {
                 properties.push(Property {
                     name: "FireRating".into(),
                     value: PropertyValue::Label(rating),
@@ -2124,6 +2127,7 @@ impl TypeCommon {
 /// `Pset_StairFlightCommon` too ([`super::revit_set_placement`]). The BIM4LCA
 /// office's three stair types of stairs with data and each R2025 stair model's
 /// hold them; its fourth stair type, of a family placed as a stair, holds none.
+/// Measured only: why the calculators give 0 on a type is not read.
 fn stair_type_zeros() -> [Property; 3] {
     [
         Property {

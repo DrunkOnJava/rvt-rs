@@ -15,6 +15,7 @@
   writes it on count as values Revit's export does not write (whether that is
   the exporter's version or its view is not measured). `IfcModel` gains
   `type_entity_sets`, by type and type entity, which the writer adds to the
-  type object's `HasPropertySets`, and the diagnostics' `parameter_value_count`
+  type object's `HasPropertySets` (code that builds an `IfcModel` with a
+  struct literal adds `type_entity_sets: Default::default()`), and the diagnostics' `parameter_value_count`
   counts a type object's `Pset_` values. Core Interior's `IFCPROPERTYSET`
   count and its witness observations move with them.
