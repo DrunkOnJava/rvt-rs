@@ -3231,6 +3231,12 @@ fn add_wall_height(
 /// (49 as built, 48 at building permit) and 91 of puzzbobb's R2025 walls, and
 /// Revit's export writes all four on each (RE-270). Nothing on any other wall,
 /// whose solid may be cut, staircased or open (#1046).
+///
+/// Such a wall is drawn as an extrusion, and revit-ifc's `WallExporter`
+/// (CLEANROOM.md source 5) hands `CreateWallBaseQuantities` the area of its
+/// footprint loop, which becomes `GrossFootprintArea`: its length times its
+/// thickness, Revit's on every one of those walls but the shortest, which is
+/// as long as it is thick and which Revit's export gives none (RE-292).
 fn add_wall_areas_and_volumes(
     sets: &mut [PropertySet],
     ifc_type: &str,
@@ -3283,7 +3289,21 @@ fn add_wall_areas_and_volumes(
         return;
     };
     set.properties.extend(quantities);
+    let along = body.width_feet.max(body.depth_feet);
+    if along > FOOTPRINT_MIN_LENGTH_FACTOR * width {
+        set.properties.push(Property {
+            name: "GrossFootprintArea".into(),
+            value: PropertyValue::AreaSquareFeet(along * width),
+        });
+    }
 }
+
+/// How many times its thickness a wall must be longer than to get a
+/// `GrossFootprintArea` (RE-292): the one such wall Revit's export writes
+/// none on is as long as it is thick (1.0 times), and the shortest it writes
+/// one on is 3.12 times. Nothing is measured in between; three is a round
+/// bound just under the measured 3.12.
+const FOOTPRINT_MIN_LENGTH_FACTOR: f64 = 3.0;
 
 /// A rectangular wall's `GrossSideArea`, `NetSideArea`, `GrossVolume` and
 /// `NetVolume` (RE-270): the longer side's area twice, the type's `width`
