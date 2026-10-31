@@ -212,6 +212,61 @@ fn type_entity_for(ifc_upper: &str, predefined: Option<&str>) -> Option<(String,
     Some((format!("{ifc_upper}TYPE"), tail))
 }
 
+/// The values of the `Pset_` sets the writer gives the type objects from
+/// [`IfcModel::type_entity_sets`] (RE-286), for the diagnostics' parameter
+/// value count: the sets of each type object the writer makes, which are the
+/// groups of elements named `Family:Type` by type, entity, predefined type
+/// and GlobalId (see the grouping in the writer, which this follows).
+pub(super) fn type_object_pset_values(model: &IfcModel) -> usize {
+    let mut groups: std::collections::BTreeSet<(u32, String, String, Option<String>)> =
+        Default::default();
+    for entity in &model.entities {
+        let super::entities::IfcEntity::BuildingElement {
+            ifc_type,
+            type_guid,
+            predefined_type,
+            property_set,
+            ..
+        } = entity
+        else {
+            continue;
+        };
+        let element = type_guid.as_deref().and_then(|tag| tag.parse::<u32>().ok());
+        let Some(type_id) = element.and_then(|id| model.element_type_ids.get(&id)) else {
+            continue;
+        };
+        let has_text = |key: &str| {
+            property_set.as_ref().is_some_and(|set| {
+                set.properties.iter().any(|property| {
+                    matches!(property.value, super::entities::PropertyValue::Text(_))
+                        && property.name == key
+                })
+            })
+        };
+        if !has_text(super::export_content::FAMILY_NAME_PROPERTY)
+            || !has_text(super::export_content::TYPE_NAME_PROPERTY)
+        {
+            continue;
+        }
+        let Some((entity_name, tail)) =
+            type_entity_for(&ifc_type.to_ascii_uppercase(), predefined_type.as_deref())
+        else {
+            continue;
+        };
+        let global_id = element
+            .and_then(|id| model.global_ids.element_types.get(&id))
+            .cloned();
+        groups.insert((*type_id, entity_name, tail, global_id));
+    }
+    groups
+        .iter()
+        .filter_map(|(type_id, entity, _, _)| model.type_entity_sets.get(type_id)?.get(entity))
+        .flatten()
+        .filter(|set| set.name.starts_with("Pset_"))
+        .map(|set| set.properties.len())
+        .sum()
+}
+
 /// A port's element (index into the model's entities), its point (model
 /// feet) and the direction its Z axis points along (#847).
 type PortPoint = (usize, [f64; 3], Option<[f64; 3]>);
@@ -3801,7 +3856,19 @@ impl StepWriter {
             ];
             // RE-210: Revit's own sets of the type's parameters, each into
             // the set of its name, the properties it does not hold yet.
-            for extra in model.type_property_sets.get(type_id).into_iter().flatten() {
+            let by_entity = model
+                .type_entity_sets
+                .get(type_id)
+                .and_then(|sets| sets.get(entity_name.as_str()))
+                .into_iter()
+                .flatten();
+            for extra in model
+                .type_property_sets
+                .get(type_id)
+                .into_iter()
+                .flatten()
+                .chain(by_entity)
+            {
                 match type_sets.iter_mut().find(|set| set.name == extra.name) {
                     Some(set) => {
                         for property in &extra.properties {

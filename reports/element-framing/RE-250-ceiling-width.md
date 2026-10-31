@@ -5,6 +5,8 @@
 **Artefacts:** the BIM4LCA office as built and at building permit (Revit 2024, Revit's IFC4 exports), RE1 Architecture (whose export has no base quantities, RE-242) and puzzbobb's R2025 models, as Measure fetches them
 **Runs:** Measure [40376669754](https://github.com/DrunkOnJava/rvt-rs/actions/runs/40376669754) (`tools/re/qto_candidates_list.py --misses`), [40377441925](https://github.com/DrunkOnJava/rvt-rs/actions/runs/40377441925) (`tools/re/covering_qtos_list.py`), [40378309356](https://github.com/DrunkOnJava/rvt-rs/actions/runs/40378309356) (`Width` and `GrossArea` against `main`) and [40379026534](https://github.com/DrunkOnJava/rvt-rs/actions/runs/40379026534) (`Width` alone, unfiltered)
 **Result:** positive, narrowed: a compound ceiling's `Qto_CoveringBaseQuantities.Width` is its type's layers' thickness, which rvt-rs's body depth is wherever the two agree; its `GrossArea` is not its sketch's area on every ceiling, and is left out.
+**Update (RE-294, 2026-10-31):** The ceiling `Width` rule is withdrawn: Revit 2024's exporter writes it and the exporters of later releases do not, and where Revit's exporters disagree rvt-rs leaves a value out. See [RE-294](RE-294-slab-covering-width-exporters-disagree.md).
+
 
 ## 1. Revit's values
 
