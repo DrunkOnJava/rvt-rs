@@ -85,8 +85,9 @@ beams' `Span` (RE-49),
 beams' `Slope` 0 where drawn along a level location line (RE-49),
 unrotated beams' `Roll` (RE-276),
 walls' `ExtendToStructure` (RE-228),
-type objects' `IsExternal` from their type's Function, a roof's, else not external, and their `FireRating` and `LoadBearing`, with stair types' and flight types' dimensions
-(RE-286, [#1185](https://github.com/DrunkOnJava/rvt-rs/issues/1185); RE1 Architecture's IFC2X3 export by Revit 26.2 writes no `IsExternal` on a type, so the 8 of its types rvt-rs writes it on count as values Revit's export does not write),
+type objects' `FireRating` and `LoadBearing`, with stair types' and flight types' dimensions
+(RE-286, [#1185](https://github.com/DrunkOnJava/rvt-rs/issues/1185); no `IsExternal` on a type object: the office's and the R2025 models' exporters write it, but Revit's newer exporters, those of the held-out models and of RE1 Architecture, write none),
+walls' `ExtendToStructure` on Revit 2015 to 2023 (RE-284),
 railings' `Height` (RE-231),
 level slabs' `PitchAngle` (RE-238),
 pipes' `InvertElevation` (RE-157),
