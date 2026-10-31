@@ -6,7 +6,8 @@
   exports byte-identical on Measure's unfiltered run (all 30 samples of 2015
   to 2022, BIMcollab, the held-out models, all 25 samples of 2024 to 2027,
   the R2025 models, the offices, Core Interior and RE1) and moves Einhoven
-  and two of Autodesk's 2023 samples: 36 and 30 connector ports, and wall
-  layer sets, appear that nothing measures on Revit 2023. So each reader is
+  and two of Autodesk's 2023 samples: 36 and 30 connector ports, a wall
+  layer set and material associations appear that nothing measures on
+  Revit 2023. So each reader is
   admitted to 2015 to 2022 on its own measurement, reading the ids it needs
   itself, and the other readers stay silent on 2023.
