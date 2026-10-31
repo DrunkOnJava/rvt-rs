@@ -51,6 +51,12 @@ pub struct ColumnJoins {
     pub order: BTreeMap<u64, Vec<u64>>,
     /// The columns none of whose records holds a `CleanPairGStep` (RE-247).
     pub without_clean_steps: BTreeSet<u64>,
+    /// The elements the `CutPairGStep` objects of each column's records
+    /// name, by the column's ElementId: one entry for every column whose
+    /// pair steps all name an element (RE-291).
+    pub cut_partners: BTreeMap<u64, BTreeSet<u64>>,
+    /// The same for `CleanPairGStep`.
+    pub clean_partners: BTreeMap<u64, BTreeSet<u64>>,
 }
 
 /// The joins of each of `columns`, read in one pass. Errs where the native
@@ -58,6 +64,9 @@ pub struct ColumnJoins {
 pub fn joins(rf: &mut RevitFile, columns: &BTreeSet<u64>) -> anyhow::Result<ColumnJoins> {
     let mut out = BTreeMap::new();
     let mut cleaned: BTreeMap<u64, bool> = BTreeMap::new();
+    let mut cut_partners: BTreeMap<u64, BTreeSet<u64>> = BTreeMap::new();
+    let mut clean_partners: BTreeMap<u64, BTreeSet<u64>> = BTreeMap::new();
+    let mut unreadable: BTreeSet<u64> = BTreeSet::new();
     if columns.is_empty() {
         return Ok(ColumnJoins::default());
     }
@@ -74,6 +83,26 @@ pub fn joins(rf: &mut RevitFile, columns: &BTreeSet<u64>) -> anyhow::Result<Colu
             .iter()
             .any(|object| object.class_name == "CleanPairGStep");
         *cleaned.entry(record.identity.element_id).or_default() |= clean;
+        for (class, partners) in [
+            ("CutPairGStep", &mut cut_partners),
+            ("CleanPairGStep", &mut clean_partners),
+        ] {
+            let steps = graph
+                .objects
+                .iter()
+                .filter(|object| object.class_name == class);
+            let held = partners.entry(record.identity.element_id).or_default();
+            for object in steps {
+                match object.fields.get("m_otherId").and_then(element_id) {
+                    Some(other) => {
+                        held.insert(other);
+                    }
+                    None => {
+                        unreadable.insert(record.identity.element_id);
+                    }
+                }
+            }
+        }
         let mut steps: Vec<(i64, u64)> = graph
             .objects
             .iter()
@@ -92,12 +121,18 @@ pub fn joins(rf: &mut RevitFile, columns: &BTreeSet<u64>) -> anyhow::Result<Colu
         }
         Ok(())
     })?;
+    for id in &unreadable {
+        cut_partners.remove(id);
+        clean_partners.remove(id);
+    }
     Ok(ColumnJoins {
         order: out,
         without_clean_steps: cleaned
             .into_iter()
             .filter_map(|(id, clean)| (!clean).then_some(id))
             .collect(),
+        cut_partners,
+        clean_partners,
     })
 }
 

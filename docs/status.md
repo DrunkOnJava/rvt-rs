@@ -971,6 +971,19 @@ Element base, `-1001352` and `-1002062` are all unset, as are the 15
 columns', which Revit still puts on a storey (#879;
 `reports/element-framing/RE-281-native-admission.md`).
 
+**RE-283 (2026-10-30)** reads a wall's type Function and the project and
+shared parameters named for `IsExternal` or for a standard property from the
+saved parameters on Revit 2015 to 2023, experimentally, so a wall's
+`IsExternal` and any parameter named for a property are written there as on
+2024 and 2025 (RE-193, RE-194). The Function is equal to the same project's
+later copy on 1,982 of 1,983 walls (24 pairs of 2015 to 2022 against 2023; the
+other is an edit between the saves). Against Revit's exports: BIMcollab's 114
+walls' `IsExternal` and `LoadBearing`, which two parameters on the walls
+give, and modelo_bim's 4 walls' `IsExternal`, which the Function gives, are
+all Revit's value where they were missing. 36 of 94 exports of the unfiltered
+run move, all files of Revit 2015 to 2023
+(`reports/element-framing/RE-283-wall-function-and-named-parameters-pre2024.md`).
+
 **RE-284 (2026-10-30)** writes each wall's `ExtendToStructure` on Revit 2015 to
 2023, experimentally, from the same flag of its native record that RE-228
 reads on 2024 and 2025: a `JoinToRoofGStep` with `m_baseOrTop` 1. Against the
@@ -982,6 +995,18 @@ file), all false: the value true is measured against an export on 2024 and
 2025 only. 36 of 94 exports of the unfiltered run move, all of files of
 Revit 2015 to 2023, and every file of 2024 to 2027 is identical
 (`reports/element-framing/RE-284-wall-top-join-pre2024.md`).
+
+**RE-285 (2026-10-30)** writes `LoadBearing`, true, on every structural column
+and structural framing element, as Revit's exporter gives it by category,
+unless the element's own parameter named for it says otherwise; on Revit 2015
+to 2023, experimentally, it also writes their `IsExternal`, not external, the
+calculation's last step. Against Revit's exports: BIMcollab's Revit 2015
+example 91 of 91 beams and 15 of 15 columns for each property, modelo_bim (a
+Revit 2023 file) 8 of 8 beams and columns for `IsExternal` and 9 of 9 for
+`LoadBearing`, and the BIM4LCA office as built all 289 columns, none
+different. A parameter named for it on the element's type is not read. 58 of
+94 exports of the unfiltered run move: every file with structural columns or
+framing (`reports/element-framing/RE-285-structural-load-bearing.md`).
 
 ## Performance
 
@@ -1012,9 +1037,10 @@ budget was changed to make that true.
 
 **The IFC output is byte-identical.** Both emitted STEP files match the
 pre-change binary once the two wall-clock stamps the writer emits are
-normalised (`FILE_NAME` and the `IFCOWNERHISTORY` epoch); there is no
-`SOURCE_DATE_EPOCH` switch, so those two fields cannot be pinned without
-a behaviour change.
+normalised (`FILE_NAME` and the `IFCOWNERHISTORY` epoch). This comparison
+was made before `rvt-ifc` honoured `SOURCE_DATE_EPOCH`; with it set, those
+two fields are now pinned and two exports are byte-identical, as
+[`tests/reproducible_outputs.rs`](../tests/reproducible_outputs.rs) checks.
 
 In the browser the same change takes the 33.7 MB Core Interior demo from
 about 28 s to **about 3 s** of decode, measured live on the deployed
