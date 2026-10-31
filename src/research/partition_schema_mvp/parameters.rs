@@ -197,7 +197,7 @@ pub(super) fn attach_native_named_parameters<'a>(
     elements: impl IntoIterator<Item = &'a mut DecodedElement>,
 ) {
     use crate::ifc::standard_property_sets::{self as sps, StandardPropertyKind as Kind};
-    use crate::native_element_parameters::{ParameterLevel, read};
+    use crate::native_element_parameters::{ParameterLevel, read_defined};
     if !NATIVE_NAMED_PARAMETER_REVIT_VERSIONS.contains(&revit_version) {
         return;
     }
@@ -209,7 +209,7 @@ pub(super) fn attach_native_named_parameters<'a>(
     if ids.is_empty() {
         return;
     }
-    let Ok(saved) = read(rf, &ids) else {
+    let Ok(saved) = read_defined(rf, &ids, Some(names_a_property)) else {
         return;
     };
     let is_external_suffix = format!(".{IS_EXTERNAL_PARAMETER_NAME}");
@@ -271,6 +271,24 @@ pub(super) fn attach_native_named_parameters<'a>(
                 element.fields.push((field_name, field));
             }
         }
+    }
+}
+
+/// Whether a parameter named `name` is one [`attach_native_named_parameters`]
+/// reads: `IsExternal`, `<set>.IsExternal`, `<set>.<property>` of a standard
+/// set, or a property some standard set defines.
+fn names_a_property(name: &str) -> bool {
+    use crate::ifc::standard_property_sets as sps;
+    if name == IS_EXTERNAL_PARAMETER_NAME {
+        return true;
+    }
+    match name.split_once('.') {
+        Some((set, property)) => {
+            property == IS_EXTERNAL_PARAMETER_NAME || sps::property_kind(set, property).is_some()
+        }
+        None => sps::STANDARD_PROPERTY_SETS
+            .iter()
+            .any(|set| set.property_kind(name).is_some()),
     }
 }
 
