@@ -48,6 +48,7 @@ const exportIfcBtn = $('export-ifc') as HTMLButtonElement;
 const exportSvgBtn = $('export-svg') as HTMLButtonElement;
 const exportQualityEl = $('export-quality');
 const exportModeEl = $('export-mode') as HTMLSelectElement;
+const savedMeshesEl = $('saved-meshes') as HTMLInputElement;
 const demoListEl = $('demo-list');
 const demoAttributionEl = $('demo-attribution');
 const loadOverlayEl = $('load-overlay');
@@ -450,6 +451,8 @@ function startLoadOverlay(file: File): void {
   loadHintEl.textContent = loadExpectation(file.size);
   loadElapsedEl.textContent = '0 s elapsed';
   loadOverlayEl.classList.remove('hidden');
+  // The option applies to the read in progress; a change reopens the file.
+  savedMeshesEl.disabled = true;
   setStatusBusy(true);
   if (loadTimer !== null) window.clearInterval(loadTimer);
   loadTimer = window.setInterval(() => {
@@ -468,6 +471,7 @@ function stopLoadOverlay(): void {
     loadTimer = null;
   }
   loadOverlayEl.classList.add('hidden');
+  savedMeshesEl.disabled = false;
   setStatusBusy(false);
 }
 
@@ -738,15 +742,19 @@ function selectedExportMode(): string {
 
 // ---------- Resource limits (#1075) ----------
 /**
- * The reader's resource limits for one open, as the wasm binding
+ * The options of one open, as the wasm binding
  * `openRvtBytesWithDiagnosticsModeAndOpenLimits` takes them: absent fields
- * keep the defaults, `largeModel` is `rvt-ifc --large-model`, and an
- * explicit byte limit wins over it.
+ * keep the defaults, `largeModel` is `rvt-ifc --large-model`, an explicit
+ * byte limit wins over it, and `savedMeshes` draws doors and windows from the
+ * meshes Revit saved for them. The limits are the file's own, kept in
+ * `currentOpenLimits`; `savedMeshes` follows the toggle on every open, so
+ * `loadBytes` adds it.
  */
 interface OpenLimitsOptions {
   largeModel?: boolean;
   maxStreamBytes?: number;
   maxInflateBytes?: number;
+  savedMeshes?: boolean;
 }
 
 /** The limits the "Retry with large-model limits" button reopens the file with. */
@@ -781,17 +789,42 @@ function limitsFromQuery(): OpenLimitsOptions | undefined {
 
 /** Limits for the first open only; the query describes that file, not every later one. */
 let firstOpenLimits: OpenLimitsOptions | undefined = limitsFromQuery();
+
+/**
+ * `?savedMeshes=0` (or `false`) starts the toggle off, so every open draws
+ * doors and windows as their boxes until the toggle is turned on. Unlike the
+ * limits it is not for the first open only: the toggle shows what applies, so
+ * it must not turn itself back on after one file.
+ */
+function savedMeshesFromQuery(): boolean {
+  const raw = new URLSearchParams(window.location.search).get('savedMeshes');
+  return raw !== '0' && raw !== 'false';
+}
+savedMeshesEl.checked = savedMeshesFromQuery();
+
 /** The file now open, kept so the large-model retry can read it again. */
 let currentFile: File | null = null;
 /** The limits it was opened under; undefined means the defaults. */
 let currentOpenLimits: OpenLimitsOptions | undefined;
 
 // ---------- Load flow ----------
+/** What the worker reports about one open (worker.ts). */
+interface LoadStats {
+  /** Milliseconds in the wasm open call, saved meshes included. */
+  openMs: number;
+  /** Milliseconds from wasm init to the last message. */
+  workerMs: number;
+  /** The wasm linear memory after the open, which only grows: the peak against the 4 GiB a tab holds. */
+  wasmMemoryBytes: number;
+}
+
 async function loadBytes(file: File, limits?: OpenLimitsOptions): Promise<void> {
   const openLimits = limits ?? firstOpenLimits;
+  const savedMeshes = savedMeshesEl.checked;
   firstOpenLimits = undefined;
   currentFile = file;
   currentOpenLimits = openLimits;
+  delete statusEl.dataset.loadStats;
   setStatus(
     openLimits?.largeModel
       ? `Reopening ${file.name} with large-model limits…`
@@ -860,6 +893,7 @@ async function loadBytes(file: File, limits?: OpenLimitsOptions): Promise<void> 
           glb: Uint8Array;
           schedule: Schedule;
           diagnostics: ExportDiagnostics;
+          stats: LoadStats;
         }
       | { type: 'info'; index: number; panel: ElementInfoPanel | null }
       | { type: 'error'; message: string };
@@ -933,6 +967,12 @@ async function loadBytes(file: File, limits?: OpenLimitsOptions): Promise<void> 
     // building element decoded, a room schedule only when rooms did.
     downloadScheduleBtn.disabled = !scheduleHasType(msg.schedule, null);
     downloadRoomsBtn.disabled = !scheduleHasType(msg.schedule, 'IFCSPACE');
+    // What this open cost, for tests/saved-meshes-measure.spec.ts; cleared when
+    // the next open starts.
+    statusEl.dataset.loadStats = JSON.stringify({
+      ...msg.stats,
+      loadMs: Math.round(performance.now() - loadStartedAt),
+    });
     setStatus(`Loaded · ${msg.types.length} categories · IFC bar ${qualityMode}`);
     stopLoadOverlay();
     clearDemoCardBusy();
@@ -940,7 +980,10 @@ async function loadBytes(file: File, limits?: OpenLimitsOptions): Promise<void> 
     const elapsed = Math.max(1, Math.round((performance.now() - loadStartedAt) / 1000));
     toast(`Loaded ${file.name} · ${msg.types.length} categories · ${elapsed} s`, 'ok');
   });
-  w.postMessage({ type: 'parse', bytes, mode: qualityMode, limits: openLimits }, [bytes.buffer]);
+  w.postMessage(
+    { type: 'parse', bytes, mode: qualityMode, limits: { ...openLimits, savedMeshes } },
+    [bytes.buffer],
+  );
 }
 
 function renderEmptyStatusPanel(): void {
@@ -2488,14 +2531,16 @@ function renderStatusPanel(diagnostics: ExportDiagnostics): void {
       0,
     );
     const boxBodies = exported.bounding_box_bodies ?? 0;
+    const savedBodies = exported.body_sources?.saved_graphics_mesh ?? 0;
+    const savedNote = savedBodies > 0 ? ` · ${savedBodies} from the meshes Revit saved` : '';
     if (bodyTotal > 0) {
       statusPanelEl.appendChild(
         statusRow(
           'Shapes',
           boxBodies > 0 ? 'warn' : 'ok',
           boxBodies > 0
-            ? `${bodyTotal - boxBodies} of ${bodyTotal} drawn from the element's own data; ${boxBodies} are the element's bounding box, placed and sized with its shape not decoded`
-            : `all ${bodyTotal} drawn from the element's own data`,
+            ? `${bodyTotal - boxBodies} of ${bodyTotal} drawn from the element's own data; ${boxBodies} are the element's bounding box, placed and sized with its shape not decoded${savedNote}`
+            : `all ${bodyTotal} drawn from the element's own data${savedNote}`,
         ),
       );
     }
@@ -3077,6 +3122,12 @@ exportIfcBtn.addEventListener('click', () => {
       toast(`IFC export failed. ${message}`, 'bad');
     }
   })();
+});
+
+// The doors and windows are part of the model the worker builds, so the file
+// is read again with the option rather than redrawn.
+savedMeshesEl.addEventListener('change', () => {
+  if (currentFile) void loadBytes(currentFile, currentOpenLimits);
 });
 
 exportModeEl.addEventListener('change', () => {

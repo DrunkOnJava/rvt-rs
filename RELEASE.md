@@ -143,7 +143,11 @@ project treats a silent skipped step the same as an untested change.
    witness observations and their verdicts change: take them from the
    pull request's CI run (its `octetproof-core-interior` artifact) and
    push them. Only `witness_version` and the verdict hashes should
-   differ. Merging this pull request is not the release.
+   differ. From the same run's `synthetic-fixtures` artifact, refresh
+   `tests/fixtures/synthetic-project.ifc` and `synthetic-structural.ifc`,
+   the samples the viewer offers for download; CI validates that output
+   on every run, and no check compares it with the committed copies.
+   Merging this pull request is not the release.
 8. **Confirm the registries' trusted publishers.** crates.io and PyPI
    each need one for repository DrunkOnJava/rvt-rs, workflow
    `publish.yml`, environment `crates-io` or `pypi` (see

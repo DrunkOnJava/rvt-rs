@@ -12,7 +12,12 @@
  *   worker → main: { type: 'progress', step: string }
  *   worker → main: { type: 'summary', summary, document } (VW1-20 partial;
  *                   `document` is the FileMetadata or null)
- *   worker → main: { type: 'ready', model, scene, glb, types, diagnostics }
+ *   worker → main: { type: 'ready', model, scene, glb, types, diagnostics, stats }
+ *                  `stats` is { openMs, workerMs, wasmMemoryBytes }: the
+ *                  milliseconds spent in the wasm open (saved meshes included)
+ *                  and in the whole parse, and the wasm linear memory after it,
+ *                  which only grows, so it is the peak against the 4 GiB a tab
+ *                  can hold.
  *   worker → main: { type: 'info', index, panel }
  *   worker → main: { type: 'error', message: string }
  */
@@ -32,6 +37,8 @@ interface OpenLimitsOptions {
   largeModel?: boolean;
   maxStreamBytes?: number;
   maxInflateBytes?: number;
+  /** Draw doors and windows from their saved meshes; the binding's default is true. */
+  savedMeshes?: boolean;
 }
 
 type ParseMsg =
@@ -72,7 +79,8 @@ self.addEventListener('message', async (ev: MessageEvent<ParseMsg>) => {
 
   try {
     send({ type: 'progress', step: 'Initializing wasm' });
-    await init();
+    const startedAt = performance.now();
+    const wasm = await init();
 
     // VW1-20 — progressive streaming. Emit the cheap metadata
     // first (sub-second even on hundreds-of-MB files) so the UI
@@ -91,7 +99,12 @@ self.addEventListener('message', async (ev: MessageEvent<ParseMsg>) => {
 
     const qualityMode = (msg.mode ?? 'scaffold').trim() || 'scaffold';
     const limitsNote = msg.limits?.largeModel ? ' · large-model limits' : '';
-    send({ type: 'progress', step: `Parsing container · IFC bar ${qualityMode}${limitsNote}` });
+    const meshesNote = msg.limits?.savedMeshes === false ? ' · door and window boxes' : '';
+    send({
+      type: 'progress',
+      step: `Parsing container · IFC bar ${qualityMode}${limitsNote}${meshesNote}`,
+    });
+    const openStartedAt = performance.now();
     const exportResult = openRvtBytesWithDiagnosticsModeAndOpenLimits(
       msg.bytes,
       qualityMode,
@@ -100,6 +113,7 @@ self.addEventListener('message', async (ev: MessageEvent<ParseMsg>) => {
       model: unknown;
       diagnostics: unknown;
     };
+    const openMs = performance.now() - openStartedAt;
     const model = exportResult.model;
     parsedModel = model;
 
@@ -113,6 +127,13 @@ self.addEventListener('message', async (ev: MessageEvent<ParseMsg>) => {
     send({ type: 'progress', step: 'Building schedule' });
     const schedule = buildSchedule(model);
 
+    // Read last, so the memory is what the whole pipeline needed.
+    const stats = {
+      openMs,
+      workerMs: performance.now() - startedAt,
+      wasmMemoryBytes: wasm.memory.buffer.byteLength,
+    };
+
     send(
       {
         type: 'ready',
@@ -122,6 +143,7 @@ self.addEventListener('message', async (ev: MessageEvent<ParseMsg>) => {
         glb,
         schedule,
         diagnostics: exportResult.diagnostics,
+        stats,
       },
       // Cast for lib.dom.d.ts variants that parameterise
       // ArrayBufferView over ArrayBufferLike: the underlying

@@ -391,7 +391,7 @@ impl SavedParameters {
     }
 }
 
-/// Read the saved parameters of `elements`: on a Revit 2023 to 2027 file, the
+/// Read the saved parameters of `elements`: on a Revit 2015 to 2027 file, the
 /// values each element's native record saves, named by the file's own
 /// parameter definitions, with a family instance's type values after its own
 /// (RE-207). An older file's elements have none. When the file's parameters

@@ -360,8 +360,8 @@ fn run(args: Args) -> anyhow::Result<()> {
 
 /// Which bodies to draw from the saved graphics: every boxed one with
 /// `--saved-meshes`, none with `--no-saved-meshes` or `--placeholder`, and
-/// otherwise doors and windows (the maintainer, 2026-10-29) on the releases
-/// whose saved graphics are read, Revit 2023 to 2027.
+/// otherwise the default ([`rvt::ifc::saved_meshes::default_scope`]: doors
+/// and windows on Revit 2023 to 2027).
 fn saved_mesh_scope(
     rf: &mut RevitFile,
     args: &Args,
@@ -373,10 +373,7 @@ fn saved_mesh_scope(
     if args.saved_meshes {
         return Some(SavedMeshScope::All);
     }
-    let release = rf.basic_file_info().ok()?.version;
-    (2023..=2027)
-        .contains(&release)
-        .then_some(SavedMeshScope::DoorsAndWindows)
+    rvt::ifc::saved_meshes::default_scope(rf)
 }
 
 fn walker_limits_from_args(args: &Args) -> WalkerLimits {

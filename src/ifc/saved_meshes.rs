@@ -17,7 +17,8 @@
 //! difference #227 measured against Revit's own export.
 //!
 //! Doors and windows are drawn from their saved meshes by default
-//! ([`SavedMeshScope::DoorsAndWindows`]: the maintainer, 2026-10-29), where
+//! ([`default_scope`], [`SavedMeshScope::DoorsAndWindows`]: the maintainer,
+//! 2026-10-29, for the CLIs and 2026-10-30 for Python and the viewer), where
 //! every vertex is Revit's within 0.001 ft on Core Interior's 132 doors and
 //! 6 windows and the BIM4LCA office's 269 windows (Measure run
 //! 40932136360). Every other class is opt-in ([`SavedMeshScope::All`],
@@ -64,6 +65,17 @@ impl SavedMeshScope {
             Self::DoorsAndWindows => matches!(ifc_type, "IFCDOOR" | "IFCWINDOW"),
         }
     }
+}
+
+/// The bodies drawn from saved graphics by default, by `rvt-ifc`, `rvt-gltf`,
+/// the Python package and the viewer alike: doors and windows on Revit 2023
+/// to 2027, the releases whose saved graphics are read, and none on any
+/// other release.
+pub fn default_scope(rf: &mut crate::RevitFile) -> Option<SavedMeshScope> {
+    let release = rf.basic_file_info().ok()?.version;
+    (2023..=2027)
+        .contains(&release)
+        .then_some(SavedMeshScope::DoorsAndWindows)
 }
 
 /// Replace each bounding-box body with the element's saved mesh, where the

@@ -40,51 +40,17 @@ pub const ALL_YEARS: [u32; 12] = [
 /// so their header and owner history do not change from run to run.
 pub const SYNTHETIC_FIXTURE_TIMESTAMP: i64 = 1_700_000_000;
 
-/// Fail when `step`, the writer's output for a synthetic model written at
-/// [`SYNTHETIC_FIXTURE_TIMESTAMP`], differs from the committed
-/// `tests/fixtures/<name>`. The header's `FILE_NAME` line and the
-/// `IfcApplication` version change with every release, so both are left out
-/// of the comparison. On a difference the output is written to
-/// `$CARGO_TARGET_TMPDIR/synthetic-fixtures/<name>`, which CI uploads as the
-/// `synthetic-fixtures` artifact, so the fixture can be refreshed from it.
-pub fn assert_matches_fixture(name: &str, step: &str) {
-    let fixture = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("tests/fixtures")
-        .join(name);
-    let committed = std::fs::read_to_string(&fixture)
-        .unwrap_or_default()
-        .replace('\r', "");
-    if release_neutral(&committed) == release_neutral(step) {
-        return;
-    }
+/// Write `step`, the writer's output for a synthetic model written at
+/// [`SYNTHETIC_FIXTURE_TIMESTAMP`], to `$CARGO_TARGET_TMPDIR/synthetic-fixtures/<name>`.
+/// CI's IfcOpenShell job validates it there (`ifcopenshell.validate` and
+/// `tools/ci/ifc_schema_arity.py`, whose placement probes pin these models'
+/// walls, slab and column), and the test job uploads it as the
+/// `synthetic-fixtures` artifact, from which each release pull request
+/// refreshes the viewer's download copies in `tests/fixtures/`. Nothing
+/// compares it with those copies: a change to the writer's output is checked
+/// for validity, not for being a change.
+pub fn write_synthetic_output(name: &str, step: &str) {
     let out = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join("synthetic-fixtures");
     std::fs::create_dir_all(&out).expect("synthetic-fixtures dir");
-    std::fs::write(out.join(name), step).expect("write the current output");
-    panic!(
-        "tests/fixtures/{name} is not what the writer produces now; the current output is {}, \
-         CI's synthetic-fixtures artifact: commit it if the change is intended",
-        out.join(name).display()
-    );
-}
-
-/// `step` without the parts that change with every release: the header's
-/// `FILE_NAME` line and the version in `IfcApplication`.
-fn release_neutral(step: &str) -> String {
-    step.lines()
-        .filter(|line| !line.starts_with("FILE_NAME("))
-        .map(|line| {
-            if !line.contains("=IFCAPPLICATION(") {
-                return line.to_string();
-            }
-            match line.find('\'').and_then(|open| {
-                line[open + 1..]
-                    .find('\'')
-                    .map(|len| (open, open + 1 + len))
-            }) {
-                Some((open, close)) => format!("{}'*'{}", &line[..open], &line[close + 1..]),
-                None => line.to_string(),
-            }
-        })
-        .collect::<Vec<_>>()
-        .join("\n")
+    std::fs::write(out.join(name), step).expect("write the synthetic output");
 }

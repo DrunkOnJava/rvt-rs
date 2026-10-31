@@ -41,11 +41,11 @@
       "IFCPRESENTATIONSTYLEASSIGNMENT": 86,
       "IFCPRODUCTDEFINITIONSHAPE": 1171,
       "IFCPROJECT": 1,
-      "IFCPROPERTYSET": 6508,
-      "IFCPROPERTYSINGLEVALUE": 29081,
-      "IFCQUANTITYAREA": 211,
-      "IFCQUANTITYLENGTH": 1339,
-      "IFCQUANTITYVOLUME": 78,
+      "IFCPROPERTYSET": 6510,
+      "IFCPROPERTYSINGLEVALUE": 29098,
+      "IFCQUANTITYAREA": 642,
+      "IFCQUANTITYLENGTH": 1346,
+      "IFCQUANTITYVOLUME": 565,
       "IFCRECTANGLEPROFILEDEF": 754,
       "IFCRELAGGREGATES": 13,
       "IFCRELASSOCIATESMATERIAL": 412,
@@ -705,7 +705,7 @@
       ]
     }
   },
-  "observation_hash_sha256": "d3179df1d674eeaf1003db73b161a9ba3e075ef5bd146b573b39d2d285fa6f6e",
+  "observation_hash_sha256": "5296e2809ca9e1da7728a5c483a2e4fb0f8ef91288e384262f0eee5e8e032d37",
   "schema_version": "1.1.0",
   "semantic_surface_covered": [
     "entity_counts",
@@ -723,5 +723,5 @@
     "15 building storey name(s) came from partition Level records; 970 building element(s) reached their storey through the Level ElementId their own element record names (#219, RE-27; the base constraint where it names two, RE-59), the rest through a measured elevation match."
   ],
   "witness_id": "rvt-rs",
-  "witness_version": "0.10.0"
+  "witness_version": "0.11.0"
 }

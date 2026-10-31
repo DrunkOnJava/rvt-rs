@@ -32,6 +32,8 @@ RE-241's probe now also prints the record of each mullion's host's type (`HT.`, 
 
 Nothing changes: `NetSurfaceArea` is not written, and stays missing on all 10,003 mullions. Writing the section's sides plus the ends no box covers would be wrong on about half of them.
 
+Update (2026-10-30, RE-268): the ends follow from the boxes after all, read as which end coincides with its own continuation's end, not which end a box covers; 6,606 of the 10,003 are written.
+
 ## 5. Reproduce
 
 ```bash

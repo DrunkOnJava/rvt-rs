@@ -116,7 +116,6 @@ pub struct CapabilityManifest {
     pub manifest_id: String,
     pub experimental: bool,
     pub capabilities: Vec<CapabilityRecord>,
-    pub relation_domains: RelationDomainRegistry,
     pub honesty: Vec<String>,
 }
 
@@ -144,14 +143,9 @@ impl CapabilityManifest {
                 status: CapabilityStatus::Unsupported,
                 evidence_tier: EvidenceTier::E1,
                 claims: vec![],
-                non_claims: vec![
-                    "No compound-opening decoder".into(),
-                    "Marker tokenization is research-only when present".into(),
-                ],
+                non_claims: vec!["No compound-opening decoder".into()],
                 support_matrix_row: Some("typed-door-window".into()),
-                notes: Some(
-                    "Lane C framing harness only — do not name decode_compound_openings".into(),
-                ),
+                notes: Some("Nothing reads the compound variant's openings (RE-15)".into()),
             },
             CapabilityRecord {
                 capability_id: "es.elementid_remap".into(),
@@ -160,10 +154,10 @@ impl CapabilityManifest {
                 claims: vec![],
                 non_claims: vec![
                     "ES ElementId remapping not implemented".into(),
-                    "Phase 2 fixture families blocked on Revit API oracle".into(),
+                    "Its fixtures need Revit API output the project does not have".into(),
                 ],
                 support_matrix_row: None,
-                notes: Some("research/es-remap scaffold + contracts only".into()),
+                notes: Some("research/es-remap holds its fixture contracts only".into()),
             },
             CapabilityRecord {
                 capability_id: "typed-door-window".into(),
@@ -184,23 +178,6 @@ impl CapabilityManifest {
                 notes: None,
             },
             CapabilityRecord {
-                capability_id: "relations.typed_domains".into(),
-                status: CapabilityStatus::Experimental,
-                evidence_tier: EvidenceTier::E0,
-                claims: vec![
-                    "RelationDomain registry + SCC/condensation/quarantine stubs exist".into(),
-                ],
-                non_claims: vec![
-                    "Not wired into production IFC or topology claims".into(),
-                    format!(
-                        "ES domains isolated from {}",
-                        RelationDomain::ElemTableOwnership.as_str()
-                    ),
-                ],
-                support_matrix_row: None,
-                notes: Some("Phase 1 leftover architecture — experimental".into()),
-            },
-            CapabilityRecord {
                 capability_id: "transmission_data.detect".into(),
                 status: CapabilityStatus::Partial,
                 evidence_tier: EvidenceTier::E2,
@@ -214,11 +191,10 @@ impl CapabilityManifest {
         ];
 
         Self {
-            schema_version: 1,
+            schema_version: 2,
             manifest_id: "rvt-rs-capability-manifest".into(),
             experimental: true,
             capabilities,
-            relation_domains: RelationDomainRegistry::phase1_stub(),
             honesty: vec![
                 "Statuses are fail-closed; verified requires E4+ and a support-matrix update."
                     .into(),
@@ -277,126 +253,5 @@ impl EvidenceTier {
     /// True when the tier is high enough for a `verified` capability claim.
     pub fn meets_verified_gate(self) -> bool {
         self >= Self::E4
-    }
-}
-
-/// Isolated relation domain. Edges must not silently migrate across domains.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-#[non_exhaustive]
-pub enum RelationDomain {
-    /// ES-held ElementId / reference candidates.
-    EsRefGraph,
-    /// ES value-tree containment (separate from BIM topology).
-    EsValueTree,
-    /// BIM host/opening/connect — only after evidence gates.
-    BimTopology,
-    /// ElemTable ownership candidates (#152) — scored separately from ES.
-    ElemTableOwnership,
-    /// Catch-all research-only domain.
-    ResearchOther,
-}
-
-impl RelationDomain {
-    /// Stable id for manifests / CLI output.
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Self::EsRefGraph => "es_ref_graph",
-            Self::EsValueTree => "es_value_tree",
-            Self::BimTopology => "bim_topology",
-            Self::ElemTableOwnership => "elem_table_ownership",
-            Self::ResearchOther => "research_other",
-        }
-    }
-
-    /// Domains that must never contribute to each other's promotion scores.
-    pub fn isolation_peers(self) -> &'static [RelationDomain] {
-        match self {
-            Self::EsRefGraph | Self::EsValueTree => &[Self::ElemTableOwnership],
-            Self::ElemTableOwnership => &[Self::EsRefGraph, Self::EsValueTree],
-            Self::BimTopology | Self::ResearchOther => &[],
-        }
-    }
-}
-
-/// Registry of known relation domains with honesty notes.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[non_exhaustive]
-pub struct RelationDomainRegistry {
-    pub domains: Vec<RelationDomainEntry>,
-    pub experimental: bool,
-    pub notes: Vec<String>,
-}
-
-/// One registered domain row.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[non_exhaustive]
-pub struct RelationDomainEntry {
-    pub domain: RelationDomain,
-    pub id: String,
-    /// Production wiring status; every domain is experimental today.
-    pub status: DomainStatus,
-    pub isolation_peers: Vec<RelationDomain>,
-    pub notes: Vec<String>,
-}
-
-/// Domain promotion status (intentionally coarse).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-#[non_exhaustive]
-pub enum DomainStatus {
-    /// Architecture stub only — not wired to product claims.
-    Experimental,
-    /// Research observations may be recorded; no verified claims.
-    Research,
-    /// Do not use for product / IFC defaults.
-    Quarantined,
-}
-
-impl RelationDomainRegistry {
-    /// The registry as it stands: every domain experimental, with its
-    /// isolation peers and notes.
-    pub fn phase1_stub() -> Self {
-        let domains = [
-            RelationDomain::EsRefGraph,
-            RelationDomain::EsValueTree,
-            RelationDomain::BimTopology,
-            RelationDomain::ElemTableOwnership,
-            RelationDomain::ResearchOther,
-        ]
-        .into_iter()
-        .map(|domain| RelationDomainEntry {
-            domain,
-            id: domain.as_str().to_string(),
-            status: DomainStatus::Experimental,
-            isolation_peers: domain.isolation_peers().to_vec(),
-            notes: match domain {
-                RelationDomain::EsRefGraph => {
-                    vec!["ES ElementId remapping not claimed (H-ES5 Phase 2 Revit-blocked)".into()]
-                }
-                RelationDomain::EsValueTree => {
-                    vec!["Separate from BIM topology per governing decision §3.2".into()]
-                }
-                RelationDomain::BimTopology => {
-                    vec!["Bound by RE-19 / RE-20 negatives; no invented Door/Window joins".into()]
-                }
-                RelationDomain::ElemTableOwnership => {
-                    vec!["#152 scoring wall — ES refs must not contribute".into()]
-                }
-                RelationDomain::ResearchOther => {
-                    vec!["Catch-all; never promote without an explicit domain move".into()]
-                }
-            },
-        })
-        .collect();
-        Self {
-            domains,
-            experimental: true,
-            notes: vec![
-                "RelationDomainRegistry is experimental architecture — not production topology."
-                    .into(),
-                "Default IFC must not emit ES-derived edges (G-IFC).".into(),
-            ],
-        }
     }
 }

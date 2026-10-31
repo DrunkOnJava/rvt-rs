@@ -12,7 +12,7 @@
 //! probe_scorer=element_parameters_vs_ifc`.
 //!
 //! The values come from `native_element_parameters::read`
-//! (`src/native_element_parameters.rs`): each element's typed parameter sets
+//! (`src/research/native_element_parameters.rs`): each element's typed parameter sets
 //! (`m_pParamValueSet*`), the family slots of its own `FamilyParams` that a
 //! definition resolves, and the native fields validated as built-in
 //! parameters; then, for a family instance, its type's values for the

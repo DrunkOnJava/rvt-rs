@@ -347,9 +347,8 @@ families and elements in non-primary design options. A family file
 ## Demo 5: Round-trip verification (byte-stable IFC output)
 
 Goal: re-running the IFC writer with the same inputs produces
-byte-identical output. This is what lets
-`tests/fixtures/synthetic-project.ifc` be treated as a regression
-artefact that `diff` can assert against.
+byte-identical output, so a sample written at a fixed timestamp, like
+`tests/fixtures/synthetic-project.ifc`, is reproducible.
 
 The second test in
 [`tests/ifc_synthetic_project.rs`](../tests/ifc_synthetic_project.rs),
@@ -370,15 +369,14 @@ writer on the same `IfcModel` twice produces byte-equal strings, and
 re-running the fixture-generating test with `DUMP_IFC=1` produces a
 file whose only varying line is line 4 (the timestamp).
 
-This matters for CI: if someone changes `src/ifc/step_writer.rs` and
-the diff of `tests/fixtures/synthetic-project.ifc` isn't what they
-expected, the failure surfaces in a pull request as a concrete textual
-diff rather than a flaky integration test. The 157-line fixture pins
-the IFC4 header, the spatial-tree topology (1 site → 1 building → 3
-storeys), the seven `IFCEXTRUDEDAREASOLID` chain (4 walls + 1 slab + 1
-door + 1 opening clone), the opening-element chain, two materials with
-colour + transparency, the two property sets, and per-element
-containment into the correct storey.
+CI writes the synthetic project and structural frame on every run and
+validates them with IfcOpenShell and `tools/ci/ifc_schema_arity.py`; it
+does not compare them with the committed copies, which are refreshed at
+each release for the viewer's downloads. The test's assertions check
+the IFC4 header, the spatial tree (one site, one building, three
+storeys), which storey or building contains each element, the seven
+extruded solids, the opening chain (opening, voids and fills), the
+materials and their surface styles, and the property sets.
 
 Anything that regresses any of the above breaks the test — which is
 exactly what you want.

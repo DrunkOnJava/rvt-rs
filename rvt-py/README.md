@@ -22,6 +22,9 @@ f = rvt.RevitFile("model.rvt")
 counts = f.element_counts()
 print(counts["total"], counts["by_class"])
 
+# write_ifc() raises ValueError when part of the file was over the reader's
+# resource limits (f.unread_streams() names it): open the file again with a
+# larger max_stream_bytes / max_inflate_bytes, or pass allow_partial=True.
 with open("model.ifc", "w", encoding="utf-8") as out:
     out.write(f.write_ifc())
 # The CSV already ends its rows with \r\n: write it with newline="".
@@ -35,7 +38,7 @@ diagnostics = f.export_diagnostics()
 
 ## What to expect
 
-Support depends on the Revit release, the file type and the feature. Opening a file and reading its metadata does not mean its elements or geometry can be recovered. `RevitFile.decoded_elements()` lists each element's saved parameters on Revit 2023 to 2027 files; the CLI `rvt-ifc --revit-property-sets` writes them into IFC exports as Revit's property sets, and a default export leaves most of them out. What each release gives is in the [support table](https://github.com/DrunkOnJava/rvt-rs#what-you-can-rely-on-by-input), and every export comes with the diagnostics above.
+Support depends on the Revit release, the file type and the feature. Opening a file and reading its metadata does not mean its elements or geometry can be recovered. `RevitFile.decoded_elements()` lists each element's saved parameters on Revit 2023 to 2027 files, and experimentally on 2015 to 2022 ones; the CLI `rvt-ifc --revit-property-sets` writes them into IFC exports as Revit's property sets, and a default export leaves most of them out. What each release gives is in the [support table](https://github.com/DrunkOnJava/rvt-rs#what-you-can-rely-on-by-input), and every export comes with the diagnostics above.
 
 ## Documentation
 

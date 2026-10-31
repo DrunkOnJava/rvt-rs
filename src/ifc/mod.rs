@@ -92,6 +92,7 @@ pub mod share;
 pub mod sheet;
 pub mod standard_property_sets;
 pub mod step_writer;
+mod storey_properties;
 
 pub use export_content::{
     ELEMENT_RECORD_PROPERTY_SET, ExportContentPolicy, is_misleading_proxy_class,
@@ -169,6 +170,17 @@ pub struct IfcModel {
     /// `HasPropertySets`, merged into a set of the same name.
     #[serde(default)]
     pub type_property_sets: std::collections::BTreeMap<u32, Vec<entities::PropertySet>>,
+    /// The standard property sets of each type object, by its type's
+    /// ElementId and the STEP name of the type entity (`IFCWALLTYPE`): the
+    /// common set's `IsExternal`, `FireRating` and `LoadBearing` (RE-286) and a
+    /// stair or flight type's dimensions (RE-286). The writer adds
+    /// each to the `HasPropertySets` of the type object of that type and
+    /// entity.
+    #[serde(default)]
+    pub type_entity_sets: std::collections::BTreeMap<
+        u32,
+        std::collections::BTreeMap<String, Vec<entities::PropertySet>>,
+    >,
     /// Material constituent sets (RE-82): an element without a layer,
     /// profile or single material gets the materials its type's geometry
     /// uses, written as IFC4 `IfcMaterialConstituentSet`, as Revit's
@@ -187,6 +199,11 @@ pub struct IfcModel {
     /// `entities`, so the glTF export and the viewer still draw them.
     #[serde(default)]
     pub body_pieces: std::collections::BTreeMap<usize, Vec<usize>>,
+    /// What each storey's Level gives beyond its name and elevation (W7,
+    /// RE-275), by index into `building_storeys`: the name of its type and
+    /// its `EntranceLevel` parameter.
+    #[serde(default)]
+    pub storey_properties: std::collections::BTreeMap<usize, entities::StoreyProperties>,
 }
 
 /// A layered element's layers across its thickness (RE-53).
@@ -828,20 +845,11 @@ fn require_geometry(diagnostics: &ExportDiagnostics, failures: &mut Vec<String>)
     }
 }
 
-/// Trait every IFC exporter implements. Multiple implementations exist
-/// as we phase this up: a null exporter that returns `NotYetImplemented`
-/// for everything, a partial one that emits only project+units, and
-/// eventually a full one.
+/// Trait every IFC exporter implements: [`RvtDocExporter`], the production
+/// exporter, [`DiagnosticRvtDocExporter`], which keeps low-confidence
+/// candidates for research, and [`PlaceholderExporter`].
 pub trait Exporter {
     fn export(&self, rf: &mut crate::RevitFile) -> Result<IfcModel>;
-}
-
-/// Returned by exporters that cannot yet produce a given entity class.
-#[derive(Debug, Clone, thiserror::Error)]
-#[error("IFC export not yet implemented: {reason}")]
-#[non_exhaustive]
-pub struct NotYetImplemented {
-    pub reason: String,
 }
 
 /// Placeholder exporter — returns an `IfcModel` whose only filled
@@ -852,9 +860,6 @@ pub struct NotYetImplemented {
 ///
 /// For the real document-level exporter with spatial hierarchy +
 /// classifications, use [`RvtDocExporter`] instead.
-///
-/// (Renamed from `NullExporter` in v0.1.3 — the old name implied
-/// it returns `NotYetImplemented`, which it does not.)
 #[derive(Debug)]
 pub struct PlaceholderExporter;
 
@@ -884,9 +889,11 @@ impl Exporter for PlaceholderExporter {
             element_type_materials: Default::default(),
             element_type_ids: Default::default(),
             type_property_sets: Default::default(),
+            type_entity_sets: Default::default(),
             material_constituent_sets: Vec::new(),
             opening_cuts: Default::default(),
             body_pieces: Default::default(),
+            storey_properties: Default::default(),
         })
     }
 }
@@ -1174,8 +1181,9 @@ fn export_rvt_doc(
         element_type_ids,
         element_original_symbols,
         element_flips,
-        computed_inverts,
+        _,
         body_pieces,
+        type_entity_sets,
     ) = append_production_walker_elements(
         rf,
         &mut entities,
@@ -1196,6 +1204,7 @@ fn export_rvt_doc(
     // `apply_element_record_storeys`, whose replacement half is a
     // no-op once the storeys carry real, distinct elevations.
     let mut level_storey_bind = crate::level_bind::LevelStoreyBind::new();
+    let mut storey_properties = std::collections::BTreeMap::new();
     if let Some(revit_version) = layout {
         apply_partition_level_storeys(
             rf,
@@ -1203,6 +1212,7 @@ fn export_rvt_doc(
             &mut entities,
             &mut building_storeys,
             &mut level_storey_bind,
+            &mut storey_properties,
         );
     }
 
@@ -1285,9 +1295,7 @@ fn export_rvt_doc(
     // sees the whole record set, and before the geometry strip so the
     // no-geometry modes (where no record bbox was attached in the
     // first place) find nothing to bind and change nothing.
-    apply_element_record_storeys(&mut entities, &mut building_storeys);
-    // RE-157: a pipe's invert is above its storey, known only now.
-    export_content::pipe_inverts_above_storeys(&mut entities, &building_storeys, &computed_inverts);
+    apply_element_record_storeys(&mut entities, &mut building_storeys, &mut storey_properties);
     // B63: a room's furniture, fixtures and equipment are contained in its
     // space, which needs both on their storeys.
     export_content::contain_in_spaces(&mut entities);
@@ -1343,9 +1351,11 @@ fn export_rvt_doc(
         element_type_materials,
         element_type_ids,
         type_property_sets: Default::default(),
+        type_entity_sets,
         material_constituent_sets,
         opening_cuts,
         body_pieces,
+        storey_properties,
     })
 }
 
@@ -2840,6 +2850,7 @@ fn apply_partition_level_storeys(
     entities: &mut [entities::IfcEntity],
     building_storeys: &mut Vec<Storey>,
     level_storey_bind: &mut crate::level_bind::LevelStoreyBind,
+    storey_properties: &mut std::collections::BTreeMap<usize, entities::StoreyProperties>,
 ) {
     let Ok(levels) = crate::partition_level_records::recover_partition_levels(rf, revit_version)
     else {
@@ -2855,6 +2866,7 @@ fn apply_partition_level_storeys(
     }
     // RE-118: only a building story is a storey of Revit's export; a Level
     // that is not binds no element, which the later rules place.
+    let mut level_ids = Vec::new();
     *building_storeys = levels
         .into_iter()
         .filter(|level| level.building_story != Some(false))
@@ -2864,12 +2876,15 @@ fn apply_partition_level_storeys(
             // record names (#219, RE-27), so the storey it became is
             // reachable by id rather than by rank or elevation.
             level_storey_bind.record_level(Some(level.element_id), index);
+            level_ids.push((index, level.element_id));
             Storey {
                 name: level.name,
                 elevation_feet: level.elevation_feet,
             }
         })
         .collect();
+    // W7, RE-275: what each Level's own record gives its storey.
+    *storey_properties = storey_properties::read(rf, &level_ids);
 }
 
 /// Value of [`STOREY_BIND_SOURCE_PROPERTY`] for the #219 join.
@@ -2994,6 +3009,7 @@ fn record_level_element_id(entity: &entities::IfcEntity) -> Option<u32> {
 fn apply_element_record_storeys(
     entities: &mut [entities::IfcEntity],
     building_storeys: &mut Vec<Storey>,
+    storey_properties: &mut std::collections::BTreeMap<usize, entities::StoreyProperties>,
 ) {
     use crate::element_record_storeys as records;
 
@@ -3023,6 +3039,9 @@ fn apply_element_record_storeys(
                 *storey_index = None;
             }
         }
+        // A Level's type name belongs to the storey that Level became, by
+        // index; none of the replacement list's storeys is that Level.
+        storey_properties.clear();
         *building_storeys = recovery.storeys;
     }
 
@@ -3282,8 +3301,8 @@ fn ifc_mapping_label(emission: &entities::IfcUnitEmission) -> String {
 /// What the production walker's elements give beside their entities: each
 /// layered element's layers (RE-53), the materials each element's type
 /// draws in (RE-82), and the layers of walls their data does not place
-/// (RE-88), all by ElementId, and the pipe inverts worked out in model
-/// height (RE-157), by entity index.
+/// (RE-88), all by ElementId, and the pipe inverts worked out (RE-157), by
+/// entity index.
 type WalkerElementData = (
     std::collections::BTreeMap<u32, ElementLayers>,
     std::collections::BTreeMap<u32, Vec<String>>,
@@ -3293,6 +3312,7 @@ type WalkerElementData = (
     std::collections::BTreeMap<u32, bool>,
     Vec<usize>,
     std::collections::BTreeMap<usize, Vec<usize>>,
+    std::collections::BTreeMap<u32, std::collections::BTreeMap<String, Vec<entities::PropertySet>>>,
 );
 
 fn append_production_walker_elements(
@@ -3334,6 +3354,7 @@ fn append_production_walker_elements(
             append.element_flips,
             append.computed_inverts,
             append.body_pieces,
+            append.type_entity_sets,
         ));
     }
     Ok(Default::default())
@@ -4611,10 +4632,10 @@ fn pset_property_value_count(model: &IfcModel) -> usize {
             _ => false,
         })
         .count();
-    let storeys: usize = model
-        .building_storeys
-        .iter()
-        .flat_map(|_| entities::PropertySet::storey_sets())
+    let storeys: usize = (0..model.building_storeys.len())
+        .flat_map(|index| {
+            entities::PropertySet::storey_sets_for(model.storey_properties.get(&index))
+        })
         .map(|set| values(&set))
         .sum();
     let building = if model.building_storeys.is_empty() {
@@ -4624,7 +4645,7 @@ fn pset_property_value_count(model: &IfcModel) -> usize {
             model.building_storeys.len(),
         )) - usize::from(!step_writer::every_storey_holds_an_element(model))
     };
-    elements + storeys + building + openings
+    elements + storeys + building + openings + step_writer::type_object_pset_values(model)
 }
 
 fn export_confidence_summary(

@@ -3,8 +3,10 @@
 //! Revit's IFC2X3 export (Coordination View 2.0) of the RE1 Mechanical and
 //! Plumbing models gives every pipe
 //! `Pset_FlowSegmentPipeSegment.InvertElevation` (`IfcLengthMeasure`): the
-//! height above its storey of a horizontal pipe's inside bottom, or of a
-//! vertical pipe's lower end (69 pipes). rvt-rs writes IFC4, which has no
+//! height above the model's zero of a horizontal pipe's inside bottom, or of
+//! a vertical pipe's lower end (69 pipes, all on RE1's storey at zero, so
+//! the height above it is the same number, RE-157 section 6). rvt-rs writes
+//! IFC4, which has no
 //! flow-segment sets: the invert is in `Pset_PipeSegmentOccurrence` ([`SET`]),
 //! as Revit's IFC4 export of the BIM4LCA office writes it. For every pipe
 //! rvt-rs writes with Revit's `Tag`, Revit's invert, read from [`REVIT_SET`]

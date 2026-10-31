@@ -110,15 +110,16 @@ WITNESS_PREDEFINED_TYPES = {
 # own axis back in the `Position` slot every one of them moves by the
 # element translation.
 #
-# `synthetic-project` / `synthetic-structural` are the committed
-# fixtures; `20375` / `20345` are a column and a floor slab of the
+# `synthetic-project` / `synthetic-structural` are the synthetic pair
+# the integration tests write (CI validates it as written, and
+# tests/fixtures/ keeps the viewer's copies); `20375` / `20345` are a column and a floor slab of the
 # recorded artifact, whose fixed values were read back out of the
 # export at 1e-9 agreement with the composition below.
 PLACEMENT_PROBES = {
-    # tests/fixtures/synthetic-project.ifc
+    # synthetic-project.ifc
     ("IfcWall", "W-N-001"): (-3.048, 2.9464, 0.0),
     ("IfcSlab", "SLAB-001"): (-3.048, -1.524, -0.3048),
-    # tests/fixtures/synthetic-structural.ifc
+    # synthetic-structural.ifc
     ("IfcColumn", "C-W12x26-1"): (-0.082423, -0.15494, 0.0),
     # The recorded artifact: a 24" x 24" column on Level 1 and an
     # arch topping slab, both of the 2024 Core Interior project.

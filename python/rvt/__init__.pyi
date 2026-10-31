@@ -62,7 +62,7 @@ Keys:
   decompressed stream bytes.
 - ``fields`` (list[TypedField]): decoded schema fields.
 - ``parameters`` (list[dict]): AProperty* value carriers, then, on Revit
-  2023 to 2027 files, the saved parameters of the element and its type,
+  2015 to 2027 files (2015 to 2022 experimentally), the saved parameters of the element and its type,
   as ``rvt-elements`` lists them: ``name`` (str | None), ``parameter_id``
   (int), ``kind``, ``storage_type``, ``spec_type_id``, ``group_type_id``,
   ``value`` (internal units), ``si_value`` / ``si_unit``, ``target_name``,
@@ -307,7 +307,9 @@ class RevitFile:
         ["production_walker_elements"]`` for ``total``.
         """
 
-    def write_ifc(self, mode: str = "scaffold", allow_partial: bool = False) -> str:
+    def write_ifc(
+        self, mode: str = "scaffold", allow_partial: bool = False, saved_meshes: bool = True
+    ) -> str:
         """Produce an IFC4 STEP string for this file via the
         ``RvtDocExporter``.
 
@@ -322,17 +324,24 @@ class RevitFile:
         file from being read (``unread_streams()`` lists it), unless
         ``allow_partial=True``; open the file with a larger
         ``max_stream_bytes`` / ``max_inflate_bytes`` to read it.
+
+        Doors and windows of Revit 2023 to 2027 files are drawn from the
+        meshes Revit saved for them where all of a mesh decodes, as
+        ``rvt-ifc`` draws them; ``saved_meshes=False`` keeps their
+        bounding boxes (``rvt-ifc --no-saved-meshes``). A ``RuntimeWarning``
+        says when the saved graphics could not be read.
         """
 
-    def export_diagnostics_json(self) -> str:
+    def export_diagnostics_json(self, saved_meshes: bool = True) -> str:
         """Produce the JSON diagnostics sidecar for the default IFC
         export. The schema matches ``rvt-ifc --diagnostics`` and
-        ``docs/schemas/export-diagnostics.schema.json``.
+        ``docs/schemas/export-diagnostics.schema.json``. ``saved_meshes``
+        is ``write_ifc``'s: the diagnostics describe the export it writes.
         """
 
-    def export_diagnostics(self) -> dict[str, Any]:
+    def export_diagnostics(self, saved_meshes: bool = True) -> dict[str, Any]:
         """Produce the default IFC export diagnostics as a Python
-        dict. Equivalent to ``json.loads(export_diagnostics_json())``.
+        dict. Equivalent to ``json.loads(export_diagnostics_json(saved_meshes))``.
         """
 
     def elem_table_header(self) -> dict[str, int]:
@@ -372,14 +381,18 @@ def read_metadata(path: str, redact: bool = False) -> FileMetadata:
     """
 
 
-def rvt_to_ifc(path: str, mode: str = "scaffold", allow_partial: bool = False) -> str:
+def rvt_to_ifc(
+    path: str, mode: str = "scaffold", allow_partial: bool = False, saved_meshes: bool = True
+) -> str:
     """One-shot: open ``path``, run ``RvtDocExporter``, return the
     IFC4 STEP text. Equivalent to
-    ``RevitFile(path).write_ifc(mode=mode, allow_partial=allow_partial)``.
+    ``RevitFile(path).write_ifc(mode=mode, allow_partial=allow_partial,
+    saved_meshes=saved_meshes)``.
     """
 
 
-def rvt_to_ifc_diagnostics(path: str) -> str:
+def rvt_to_ifc_diagnostics(path: str, saved_meshes: bool = True) -> str:
     """One-shot: open ``path``, run ``RvtDocExporter``, return the
-    JSON diagnostics sidecar.
+    JSON diagnostics sidecar of the export ``rvt_to_ifc`` writes with the
+    same ``saved_meshes``.
     """

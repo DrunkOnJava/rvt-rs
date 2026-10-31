@@ -74,23 +74,76 @@ fn parse_export_quality_mode(mode: &str) -> PyResult<ifc::ExportQualityMode> {
     ifc::ExportQualityMode::parse(mode).map_err(to_py_val)
 }
 
+/// Draw `result`'s default saved-mesh bodies (doors and windows on Revit
+/// 2023 to 2027, `ifc::saved_meshes::default_scope`) when `saved_meshes`, and
+/// recount its diagnostics, as `rvt-ifc` does by default. Saved graphics only
+/// improve bodies: when they cannot be read, the export keeps the bodies it
+/// has and a `RuntimeWarning` says so.
+fn attach_saved_meshes(
+    py: Python<'_>,
+    rf: &mut RustRevitFile,
+    result: &mut ifc::ExportResult,
+    saved_meshes: bool,
+) -> PyResult<()> {
+    if !saved_meshes {
+        return Ok(());
+    }
+    let Some(scope) = ifc::saved_meshes::default_scope(rf) else {
+        return Ok(());
+    };
+    match ifc::saved_meshes::attach_scoped_with_control(
+        rf,
+        &mut result.model,
+        scope,
+        &rvt::control::WalkerControl::default(),
+    ) {
+        Ok(_) => {
+            ifc::recount_exported(&mut result.diagnostics, &result.model);
+            ifc::record_unread_streams(&mut result.diagnostics, rf.unread_streams());
+        }
+        Err(e) => {
+            let category = py.import("builtins")?.getattr("RuntimeWarning")?;
+            py.import("warnings")?.call_method1(
+                "warn",
+                (
+                    format!("saved graphics not read, bodies unchanged: {e}"),
+                    category,
+                ),
+            )?;
+        }
+    }
+    Ok(())
+}
+
 fn write_ifc_with_quality_mode(
+    py: Python<'_>,
     rf: &mut RustRevitFile,
     mode: ifc::ExportQualityMode,
     allow_partial: bool,
+    saved_meshes: bool,
 ) -> PyResult<String> {
-    write_ifc_with_quality_mode_and_limits(rf, mode, walker::WalkerLimits::default(), allow_partial)
+    write_ifc_with_quality_mode_and_limits(
+        py,
+        rf,
+        mode,
+        walker::WalkerLimits::default(),
+        allow_partial,
+        saved_meshes,
+    )
 }
 
 fn write_ifc_with_quality_mode_and_limits(
+    py: Python<'_>,
     rf: &mut RustRevitFile,
     mode: ifc::ExportQualityMode,
     walker_limits: walker::WalkerLimits,
     allow_partial: bool,
+    saved_meshes: bool,
 ) -> PyResult<String> {
-    let result = ifc::RvtDocExporter
+    let mut result = ifc::RvtDocExporter
         .export_with_diagnostics_mode_and_limits(rf, mode, walker_limits)
         .map_err(to_py_val)?;
+    attach_saved_meshes(py, rf, &mut result, saved_meshes)?;
     // #1075: a stream a resource limit kept from being read leaves the
     // export without what it holds; refuse unless the caller accepts that.
     if !allow_partial && !rf.unread_streams().is_empty() {
@@ -657,7 +710,7 @@ impl PyRevitFile {
         .map_err(to_py_val)?
         .collect();
 
-        // Revit 2023 to 2027 only; a file whose parameters cannot be read
+        // Revit 2015 to 2027 only; a file whose parameters cannot be read
         // keeps its elements, with a warning.
         let saved = elements::parameters::saved_parameters_lossy(&mut self.inner, &elements);
         for warning in &saved.diagnostics.warnings {
@@ -722,14 +775,27 @@ impl PyRevitFile {
     /// Raises `ValueError` when a resource limit kept part of the file from
     /// being read (`unread_streams()` lists it), unless
     /// `allow_partial=True`.
-    #[pyo3(signature = (mode = "scaffold", allow_partial = false))]
-    fn write_ifc(&mut self, mode: &str, allow_partial: bool) -> PyResult<String> {
+    ///
+    /// Doors and windows of Revit 2023 to 2027 files are drawn from the
+    /// meshes Revit saved for them where all of a mesh decodes, as `rvt-ifc`
+    /// draws them; `saved_meshes=False` keeps their bounding boxes
+    /// (`rvt-ifc --no-saved-meshes`).
+    #[pyo3(signature = (mode = "scaffold", allow_partial = false, saved_meshes = true))]
+    fn write_ifc(
+        &mut self,
+        py: Python<'_>,
+        mode: &str,
+        allow_partial: bool,
+        saved_meshes: bool,
+    ) -> PyResult<String> {
         let mode = parse_export_quality_mode(mode)?;
         write_ifc_with_quality_mode_and_limits(
+            py,
             &mut self.inner,
             mode,
             self.walker_limits,
             allow_partial,
+            saved_meshes,
         )
     }
 
@@ -771,16 +837,25 @@ impl PyRevitFile {
     ///
     /// The returned string matches `rvt-ifc --diagnostics` and is intended
     /// for bug reports, support bundles, and automated readiness checks.
-    fn export_diagnostics_json(&mut self) -> PyResult<String> {
-        let result = ifc::RvtDocExporter
+    /// `saved_meshes` is `write_ifc`'s: the diagnostics describe the export
+    /// it writes.
+    #[pyo3(signature = (saved_meshes = true))]
+    fn export_diagnostics_json(&mut self, py: Python<'_>, saved_meshes: bool) -> PyResult<String> {
+        let mut result = ifc::RvtDocExporter
             .export_with_diagnostics_and_limits(&mut self.inner, self.walker_limits)
             .map_err(to_py_val)?;
+        attach_saved_meshes(py, &mut self.inner, &mut result, saved_meshes)?;
         serde_json::to_string(&result.diagnostics).map_err(to_py_val)
     }
 
     /// Produce the default IFC export diagnostics as a Python dict.
-    fn export_diagnostics<'py>(&mut self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
-        let json = self.export_diagnostics_json()?;
+    #[pyo3(signature = (saved_meshes = true))]
+    fn export_diagnostics<'py>(
+        &mut self,
+        py: Python<'py>,
+        saved_meshes: bool,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let json = self.export_diagnostics_json(py, saved_meshes)?;
         let json_module = py.import("json")?;
         json_module.call_method1("loads", (json,))
     }
@@ -854,15 +929,22 @@ impl PyRevitFile {
 
 /// One-shot helper: open a Revit file, run the document-level IFC
 /// exporter, return the STEP string. Equivalent to
-/// `rvt.RevitFile(path).write_ifc(mode, allow_partial)`: raises
-/// `ValueError` when a resource limit kept part of the file from being read,
-/// unless `allow_partial=True`.
+/// `rvt.RevitFile(path).write_ifc(mode, allow_partial, saved_meshes)`:
+/// raises `ValueError` when a resource limit kept part of the file from being
+/// read, unless `allow_partial=True`, and draws doors and windows from their
+/// saved meshes unless `saved_meshes=False`.
 #[pyfunction]
-#[pyo3(signature = (path, mode = "scaffold", allow_partial = false))]
-fn rvt_to_ifc(path: &str, mode: &str, allow_partial: bool) -> PyResult<String> {
+#[pyo3(signature = (path, mode = "scaffold", allow_partial = false, saved_meshes = true))]
+fn rvt_to_ifc(
+    py: Python<'_>,
+    path: &str,
+    mode: &str,
+    allow_partial: bool,
+    saved_meshes: bool,
+) -> PyResult<String> {
     let mut rf = RustRevitFile::open(path).map_err(to_py_io)?;
     let mode = parse_export_quality_mode(mode)?;
-    write_ifc_with_quality_mode(&mut rf, mode, allow_partial)
+    write_ifc_with_quality_mode(py, &mut rf, mode, allow_partial, saved_meshes)
 }
 
 /// Document identity for the file at `path` without loading the whole
@@ -881,13 +963,16 @@ fn read_metadata<'py>(py: Python<'py>, path: &str, redact: bool) -> PyResult<Bou
 }
 
 /// One-shot helper: open a Revit file, run the default IFC exporter,
-/// and return the JSON diagnostics sidecar.
+/// and return the JSON diagnostics sidecar of the export `rvt_to_ifc`
+/// writes with the same `saved_meshes`.
 #[pyfunction]
-fn rvt_to_ifc_diagnostics(path: &str) -> PyResult<String> {
+#[pyo3(signature = (path, saved_meshes = true))]
+fn rvt_to_ifc_diagnostics(py: Python<'_>, path: &str, saved_meshes: bool) -> PyResult<String> {
     let mut rf = RustRevitFile::open(path).map_err(to_py_io)?;
-    let result = ifc::RvtDocExporter
+    let mut result = ifc::RvtDocExporter
         .export_with_diagnostics(&mut rf)
         .map_err(to_py_val)?;
+    attach_saved_meshes(py, &mut rf, &mut result, saved_meshes)?;
     serde_json::to_string(&result.diagnostics).map_err(to_py_val)
 }
 

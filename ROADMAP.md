@@ -1,6 +1,6 @@
 # Roadmap
 
-Last reviewed: 2026-10-27
+Last reviewed: 2026-10-30
 
 This roadmap is the public, contributor-facing view of where rvt-rs is headed.
 The support boundary lives in [`docs/status.md`](docs/status.md) and the
@@ -82,8 +82,8 @@ the four levels a file can reach are in the
   took from Revit's IFC2X3 exports moved to where IFC4 and Revit's own IFC4
   export put them, checked against buildingSMART's published IFC4 property
   set definitions on every measured export. Exports carry parameters named
-  for a standard set's property, `IsExternal` (on every class but curtain
-  mullions and panels), type Fire
+  for a standard set's property, `IsExternal` (curtain mullions' and panels'
+  by their curtain wall's, RE-288), type Fire
   Ratings, door sizes, Revit 2024 Areas as spaces, and port types, with
   electrical ports' direction (HVAC and piping directions are not read yet,
   #834); Revit 2015 to 2022 and 2027 projects export their elements,
@@ -127,16 +127,25 @@ the four levels a file can reach are in the
   hollow-section columns' areas and volume, spaces' `Height` and stair
   railings' `Length`; and system-family elements' type parameters
   (puzzbobb, #1065).
+- **0.11.0, 2026-10-30.** A model over the reader's resource limits is
+  reported instead of exporting empty, with `--large-model` and a viewer
+  retry (#1075); files that kept an older release's schema read as that
+  release (puzzbobb, #421), neither measured yet on the reporter's private
+  files; elements outside the export phase left out
+  (puzzbobb, #328); doors and windows drawn from their saved meshes by
+  default; windows' openings from their cut solids; walls' `Height` where
+  nothing joins or cuts them; Revit 2008 to 2014 experimental (puzzbobb);
+  and the unused stable API removed.
 
-### 0.11.0: IFC geometry and element data
+### 0.12.0: IFC geometry and element data
 
-The geometry and element-data work that continues after 0.10.0, moved from the
-0.10.0 milestone when 0.10.0 shipped. Each
+The geometry and element-data work that continues after 0.11.0, moved from the
+0.11.0 milestone when 0.11.0 shipped. Each
 slice records a baseline, an improvement and a residual against Revit's own
 exports on the reference pack (#407), approximations stay labelled (#409), and
 a slice ships in the next release that contains it. Geometry open now: wall
-bodies thicker or thinner than their type's layers (#358) and walls Revit
-draws cut, drawn taller than its body (#1067), stair flights
+bodies thicker or thinner than their type's layers (#358) and the tops of walls Revit
+steps over a floor that covers them in part (#1067), stair flights
 (#357), roofs Revit splits into slab parts (#323), hip roofs over T and U footprints and roof cases
 with no oracle (#884, #885), the openings on releases other than 2024 and 2025
 (#227), room boundaries whose solid does not

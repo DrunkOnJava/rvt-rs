@@ -116,6 +116,41 @@ fn revit_placements(
         .collect()
 }
 
+/// The properties of a stair type's `Pset_StairCommon` that Revit's export
+/// repeats in the `Pset_StairFlightCommon` of the same type object (RE-286).
+const STAIR_TYPE_DIMENSIONS: [&str; 3] = ["NosingLength", "NumberOfRiser", "NumberOfTreads"];
+
+/// Give each stair type object that holds the stair dimensions of
+/// `Pset_StairCommon` the same in `Pset_StairFlightCommon`, which revit-ifc
+/// matches to it by the start of the flight entity's name (RE-286). Returns
+/// the properties written.
+fn add_stair_type_flight_sets(model: &mut IfcModel) -> usize {
+    let mut added = 0;
+    for by_entity in model.type_entity_sets.values_mut() {
+        let Some(sets) = by_entity.get_mut("IFCSTAIRTYPE") else {
+            continue;
+        };
+        let Some(common) = sets.iter().find(|set| set.name == "Pset_StairCommon") else {
+            continue;
+        };
+        let properties: Vec<Property> = common
+            .properties
+            .iter()
+            .filter(|property| STAIR_TYPE_DIMENSIONS.contains(&property.name.as_str()))
+            .cloned()
+            .collect();
+        if properties.is_empty() {
+            continue;
+        }
+        added += properties.len();
+        sets.push(PropertySet {
+            name: "Pset_StairFlightCommon".into(),
+            properties,
+        });
+    }
+    added
+}
+
 /// Add to each building element of `model` the sets and properties Revit's
 /// export writes beyond IFC4's definitions (see the module doc), merged
 /// into a set of the same name the element has: a parameter's text where a
@@ -229,6 +264,7 @@ pub fn attach(file: &mut RevitFile, model: &mut IfcModel) -> Result<Report> {
             }
         }
     }
+    additions.extend(stair_flight_additions(&model.entities));
     let mut report = Report {
         left_out,
         ..Report::default()
@@ -266,6 +302,123 @@ pub fn attach(file: &mut RevitFile, model: &mut IfcModel) -> Result<Report> {
             report.properties += added;
         }
     }
+    report.properties += add_stair_type_flight_sets(model);
     report.elements = touched.len();
     Ok(report)
+}
+
+/// The counts of `Pset_StairFlightCommon` a stair holds as the sum over its
+/// flights.
+const STAIR_FLIGHT_COUNTS: [&str; 2] = ["NumberOfRiser", "NumberOfTreads"];
+
+/// The lengths of `Pset_StairFlightCommon` a stair holds as its flights'
+/// common value.
+const STAIR_FLIGHT_LENGTHS: [&str; 5] = [
+    "RiserHeight",
+    "TreadLength",
+    "NosingLength",
+    "TreadLengthAtOffset",
+    "TreadLengthAtInnerSide",
+];
+
+/// Whether two lengths in feet are one value, within the rounding of the
+/// flights' own computations.
+fn same_length(a: &PropertyValue, b: &PropertyValue) -> bool {
+    match (a, b) {
+        (PropertyValue::PositiveLengthFeet(a), PropertyValue::PositiveLengthFeet(b))
+        | (PropertyValue::LengthFeet(a), PropertyValue::LengthFeet(b)) => {
+            (a - b).abs() <= 1e-9 * a.abs().max(b.abs()).max(1.0)
+        }
+        _ => false,
+    }
+}
+
+/// The `Pset_StairFlightCommon` values Revit's export gives a stair, beside
+/// the flights' own (RE-287): `NumberOfRiser` and `NumberOfTreads` are the sums
+/// over the stair's flights, and each length is the flights' value, which
+/// their calculators take from the stair itself. Measured on the BIM4LCA
+/// office, as built and at permit: all 14 stairs with flights (one to three).
+/// A property is written only where every flight holds it and, for a length,
+/// all agree.
+fn stair_flight_additions(entities: &[IfcEntity]) -> Vec<(usize, &'static str, Vec<Property>)> {
+    const SET: &str = "Pset_StairFlightCommon";
+    let is_entity = |index: usize, wanted: &str| {
+        matches!(
+            entities.get(index),
+            Some(IfcEntity::BuildingElement { ifc_type, .. }) if ifc_type == wanted
+        )
+    };
+    let mut flights: BTreeMap<usize, &PropertySet> = BTreeMap::new();
+    for entity in entities {
+        if let IfcEntity::ElementPropertySet { element, set } = entity {
+            if set.name == SET && is_entity(*element, "IFCSTAIRFLIGHT") {
+                flights.entry(*element).or_insert(set);
+            }
+        }
+    }
+    let mut additions = Vec::new();
+    for entity in entities {
+        let IfcEntity::Aggregate { whole, parts } = entity else {
+            continue;
+        };
+        if !is_entity(*whole, "IFCSTAIR") {
+            continue;
+        }
+        let runs: Vec<&PropertySet> = parts
+            .iter()
+            .filter(|part| is_entity(**part, "IFCSTAIRFLIGHT"))
+            .map(|part| flights.get(part).copied())
+            .collect::<Option<_>>()
+            .unwrap_or_default();
+        if runs.is_empty() {
+            continue;
+        }
+        let mut properties = Vec::new();
+        for name in STAIR_FLIGHT_COUNTS {
+            let counts: Option<Vec<i64>> = runs
+                .iter()
+                .map(|set| {
+                    set.properties
+                        .iter()
+                        .find_map(|property| match &property.value {
+                            PropertyValue::CountValue(count) if property.name == name => {
+                                Some(*count)
+                            }
+                            _ => None,
+                        })
+                })
+                .collect();
+            if let Some(counts) = counts {
+                properties.push(Property {
+                    name: name.into(),
+                    value: PropertyValue::CountValue(counts.iter().sum()),
+                });
+            }
+        }
+        for name in STAIR_FLIGHT_LENGTHS {
+            let found: Option<Vec<&PropertyValue>> = runs
+                .iter()
+                .map(|set| {
+                    set.properties
+                        .iter()
+                        .find(|property| property.name == name)
+                        .map(|property| &property.value)
+                })
+                .collect();
+            let Some(found) = found else {
+                continue;
+            };
+            let first = found[0];
+            if found.iter().all(|value| same_length(first, value)) {
+                properties.push(Property {
+                    name: name.into(),
+                    value: first.clone(),
+                });
+            }
+        }
+        if !properties.is_empty() {
+            additions.push((*whole, SET, properties));
+        }
+    }
+    additions
 }

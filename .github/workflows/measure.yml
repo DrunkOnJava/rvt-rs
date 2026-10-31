@@ -112,6 +112,10 @@ on:
         description: With samples, only the releases from the first year to the last (e.g. "2026 2027"; one year reads from it on), empty for every release
         required: false
         default: ""
+      psets_missing:
+        description: "tools/re/psets_vs_ifc.py's PSETS_MISSING: <set>.<property>[,...] whose missing objects the census lists by key, entity and value (e.g. Pset_ColumnCommon.Slope); empty for none"
+        required: false
+        default: ""
       timing:
         description: Also time rvt-ifc at base and head on one runner, in turn, three rounds per file (the base and head jobs run on different runners, whose speed alone moves an export's time by up to about 1.7x)
         type: boolean
@@ -175,11 +179,36 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      # A ref given as an abbreviated SHA is not a ref checkout can fetch:
+      # it is expanded to the full SHA here. Branches, tags and full SHAs pass
+      # through unchanged. The timing job, which saves its cache from the
+      # code it checks out, keeps the inputs as given (CodeQL's cache-poisoning
+      # rule flags a checkout of a step's output there), so it takes full SHAs.
+      - name: Resolve the refs
+        id: refs
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_REF: ${{ inputs.ref || github.sha }}
+          BASE_REF: ${{ inputs.base || 'main' }}
+        run: |
+          full() {
+            if [[ "$1" =~ ^[0-9a-f]{7,39}$ ]]; then
+              gh api "repos/$GITHUB_REPOSITORY/commits/$1" --jq .sha
+            else
+              echo "$1"
+            fi
+          }
+          head=$(full "$HEAD_REF")
+          base=$(full "$BASE_REF")
+          echo "head=$head" >> "$GITHUB_OUTPUT"
+          echo "base=$base" >> "$GITHUB_OUTPUT"
+          echo "head ${HEAD_REF} -> ${head}; base ${BASE_REF} -> ${base}"
       - name: Measured source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          ref: ${{ matrix.side == 'base' && (inputs.base || 'main') || (inputs.ref || github.sha) }}
+          ref: ${{ matrix.side == 'base' && steps.refs.outputs.base || steps.refs.outputs.head }}
           path: measured
       - name: Install Rust stable
         shell: bash
@@ -320,6 +349,7 @@ jobs:
           PROBE_SCORER_DIR: measured/tools/re
           MEASURE_MODELS: ${{ inputs.models }}
           MEASURE_SCORERS: ${{ inputs.scorers }}
+          PSETS_MISSING: ${{ inputs.psets_missing }}
           KEEP_IFC: ${{ inputs.keep_ifc && '1' || '' }}
           FAMILY_DIR: ${{ (inputs.families || github.event_name == 'pull_request') && format('{0}/_corpus/examples/Autodesk', github.workspace) || '' }}
           SAMPLE_DIR: ${{ inputs.samples && format('{0}/_samples', github.workspace) || '' }}

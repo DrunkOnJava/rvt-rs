@@ -8,6 +8,477 @@ fragments a release moves into this file.
 
 ## [Unreleased]
 
+## [0.11.0] — 2026-10-30
+
+0.11.0 stops a model too large for the reader's limits from exporting
+empty without a word, reads projects that kept an older release's schema,
+and leaves out what Revit's own export leaves out: elements that do not
+exist in the export phase, and property values Revit does not write. It
+also removes, in one breaking change, the stable API that nothing used.
+
+A stream over the reader's resource limits is now named in the diagnostics,
+and `rvt-ifc` and `rvt-gltf` exit with status 3 instead of writing an empty
+model; `--large-model` reads streams up to 2 GiB, and the viewer offers the
+same retry (#1075). A project saved by Revit 2024 to 2027 that kept the
+schema of the release it passed through is read as that release, where it
+read as zero elements (#421). Neither fix is measured yet on the files that
+showed the problem, which are private. #1075 is measured by lowering the
+limits below the streams of the reference files (Core Interior's 17 MB
+partition against an 8 MiB limit), and no model over the default limits has
+been read with `--large-model`. #421 is measured only on the reference and
+sample files, none of which keeps an older schema. Doors and windows are
+drawn from the meshes Revit saved for them where the whole mesh decodes,
+windows whose family cuts a solid get Revit's opening, a one-storey project
+gets its storey, and walls nothing joins to or cuts carry Revit's `Height`.
+Revit 2027 joins the family corpus. Revit 2008 to 2013 files now open, and
+2008 to 2014 projects export their elements experimentally, outside the 1.0
+range.
+
+puzzbobb wrote the phase filter (#1074), the reader for files that kept an
+older schema (#1081) and the Revit 2008 to 2014 readers (#1076, #1077), and
+n3ur0m4n `rvt-gltf --progress` (#1073). Thank you.
+
+### Upgrading from 0.10
+
+- Rust code that names a removed public item stops compiling: "Removed"
+  below lists each one and what to use instead. The decoders become
+  `SimpleDecoder::new("<class>")`, and `ifc::from_decoded::slab_extrusion`
+  takes the slab's thickness in feet (`Option<f64>`).
+- `rvt-ifc` and `rvt-gltf` exit with status 3 and write no model when a
+  stream is over a resource limit. Pass `--large-model` (or
+  `--max-stream-bytes` / `--max-inflate-bytes`) to read it, or
+  `--allow-partial` to write what was read. Python's `write_ifc()` and
+  `rvt_to_ifc()` raise `ValueError` in that case unless
+  `allow_partial=True`.
+- Doors and windows are drawn from their saved meshes by default;
+  `--no-saved-meshes` draws them as their boxes, as 0.10 did.
+- An export no longer writes `Pset_DoorWindowGlazingType.IsWired`,
+  `Pset_BuildingCommon.NumberOfStoreys` where a storey holds no element,
+  or `Reference` outside the 34 sets a Revit export confirms, and its
+  `IfcOwnerHistory` says `.NOCHANGE.`.
+- A consumer of the schema-table JSON sees `Flagged` fields on Revit 2027.
+- The format probes run as `cargo run -p rvt-probes --example <name>`.
+
+### Added
+
+- **A family's types and type parameters, from its PartAtom type table.**
+  `PartAtom::family_types()` reads the table a family's `PartAtom` stream
+  holds: each type's name, and each type parameter's name, display name,
+  kind (built-in, the family's own or shared), parameter type, units and value as
+  Revit printed it. `rvt-info` shows it (`family_types` in `--json`). It is
+  Revit's text at save, not a reading of the family's own records.
+
+- **Revit 2008 to 2010 projects export their elements, and Revit 2008 to
+  2012 projects their storeys, as experimental and outside the 1.0 range
+  (RE-260).** Revit 2009 and
+  2010 frame their element records as 2011 does, and Revit 2008 four bytes
+  shorter; each is read with its release's schema tags. Materials of Revit
+  2008 to 2011, whose names no later rule found, are named, and the Levels
+  of Revit 2008 to 2012, whose elevations follow a framed `Plane`
+  reference, become storeys. On local files a 2009 wall and its 8 doors
+  export on two storeys and a 2008 causeway as one generic model. The files
+  are closed source and measured locally only, with no Revit export or
+  same-model copy to check them against. The 1.0 release covers 2015 to
+  2027; these releases stay experimental outside it.
+
+- **Revit 2008 to 2013 files open, and Revit 2011 to 2014 projects export
+  their elements, as experimental and outside the 1.0 range (RE-259).** No file written before 2014
+  opened: `BasicFileInfo` was read only for a year from 2014 on, and the
+  schema grammar expected a GUID list that schemas before 2014 do not
+  write. Now every local 2008 to 2013 file opens and reports its release;
+  2008 and 2009, which state none, get it from their build date. Revit 2011
+  to 2014 frame their element records as 2015 does and are read with each
+  release's schema tags. Two layouts differ: a material's shading frame
+  holds two more ElementIds on 2011 to 2013, and some 2011 to 2013 value
+  blocks hold no type's map. On a local copy of Autodesk's 2013
+  `rac_advanced` sample, every ElementId shared with its 2015 copy keeps its
+  class and 62,071 of 62,153 fields agree, the rest in the files' own
+  bytes; its export has the 2015 copy's building elements, class for class,
+  but for a re-divided curtain wall. The pre-2015 files are closed source
+  and measured locally only, with no Revit export of them. The 1.0
+  release covers 2015 to 2027; these releases stay experimental outside it.
+
+- **Revit 2027 in the family corpus (#1092, RE-264).** Autodesk's 2027
+  sample family joins the twelve-release corpus, so PartAtom, previews,
+  `BasicFileInfo` and the schema are measured on 2027 as on 2016 to 2026,
+  and `streams::partition_for_year(2027)` is `Partitions/70`. Its schema
+  lists 325 fields no earlier release lists, each with byte 2 of its type
+  header set to 0x02, 0x12 or 0x22; `FieldType::Flagged` decodes them to
+  their base type (77 bool, 79 reference containers, 59 ElementId
+  references and so on) and keeps the flag. What the flag means for their
+  instance bytes is not measured, so readers treat them as unknown, as
+  before.
+  Breaking for a consumer of the schema-table JSON
+  (`docs/schemas/schema-table.schema.json`): a 2027 schema's field can now
+  be `Flagged`, where it was `Unknown`.
+
+- **`rvt-gltf --progress`.** The conversion prints its progress to stderr
+  in the `progress: <stage> <done>/<total>` lines of `rvt-elements
+  --progress`, and `WalkerControl` gains two stages for saved graphics:
+  `saved-graphics` (reading them, 0 then 1/1) and `saved-meshes` (one line
+  per element meshed). A cancelled token stops the export with
+  `Error::Cancelled`. The .glb is byte-identical with and without the flag.
+
+- **A per-release table in `docs/support-matrix.json`.** `releases` lists
+  Revit 2015 to 2027, oldest first. For each release it names the row that
+  rates its projects' element records (the row `rvt::capability` already
+  cites) and the rows measured on its family files (none for 2015 and 2027,
+  which the family corpus does not have). Statuses stay in the capabilities.
+  `rvt-capabilities --matrix` prints the table, and
+  `tests/support_matrix.rs` pins it to the crate and the family corpus.
+
+- **The viewer retries a model its limits stopped, with the large-model limits
+  (#1075).** A stream over the reader's resource limits was named in the File
+  status panel ("Part of the file not read") but the browser could only point
+  at `rvt-ifc --large-model`. The panel now offers "Retry with large-model
+  limits", which reads the same file again with the stream and inflate limits
+  `rvt-ifc --large-model` uses (streams up to 2 GiB), and says a browser tab
+  can use at most 4 GiB of memory, so a very large model can still fail to
+  open. It comes from one new wasm binding,
+  `openRvtBytesWithDiagnosticsModeAndOpenLimits(bytes, mode, limits)`, where
+  `limits` is `{ largeModel?, maxStreamBytes?, maxInflateBytes? }` or `null`
+  for the defaults; `openRvtBytesWithDiagnosticsMode` is unchanged. The viewer
+  also reads `?maxStreamBytes=` and `?maxInflateBytes=` from its address for
+  the first open, which is how the browser test reaches the path on a 20 KiB
+  fixture with `?maxStreamBytes=200`.
+
+- **A wall's `Qto_WallBaseQuantities.Height` (#1016, RE-266).** Written as
+  the depth of the wall's body where its native record names no roof or
+  floor joined to it, no element cutting it and no instance's cutout: Revit's
+  `Height` on all 81 such walls of the BIM4LCA office as built, 70 at permit
+  and 93 of puzzbobb's R2025 walls, none different and none Revit's export
+  leaves out. Every other wall still gets no `Height`, as its body may be
+  cut (#1067).
+
+### Changed
+
+- **A Revit 2023 file's partition ArcWalls are scanned once per export, not up
+  to four times.** The production walk, the partition recovery and the IFC
+  export each ran the same scan over every `Partitions` stream. The file now
+  keeps the scan for its release and limits. The exports are unchanged.
+
+- **The crates.io package carries only what builds the crate.** It held
+  the whole repository (`cargo package --list` gave 1,252 files: 286
+  research probes, 258 RE reports, the tooling and the maintainers'
+  backlog), 3.6 MB compressed for 0.10.0 of crates.io's 10 MB limit. It now
+  packs 185 files, 1.0 MiB compressed: the source, the support matrix and
+  tag-drift table the source embeds, the README and the licence files. CI
+  builds the packaged crate on every pull request.
+
+- **`Pset_DoorWindowGlazingType.IsWired` is no longer written.** Every door
+  and window of the BIM4LCA office holds 0 for it, which rvt-rs wrote as No
+  (494 as built, 490 at permit), and Revit's export writes it on none
+  (RE-194 §4). No property value Revit's export omits is written, as for
+  quantities: W7 now says so.
+
+- **`Pset_BuildingCommon.NumberOfStoreys` only where it cannot be wrong
+  (RE-263, #1097).** Revit's exporter counts the storeys that contain an
+  element up to IFC 26.0 and every storey from IFC 26.1, and a `.rvt` does not
+  say which will export it. rvt-rs now writes the count only where every
+  storey contains an element, so both give the same number; elsewhere the
+  property is left out (the maintainer, 2026-10-29).
+
+- **The format probes are a crate of their own, `rvt-probes`.** The 244
+  `probe_*.rs` programs behind the RE reports moved from `examples/` to
+  `probes/examples/`. They are no longer compiled by every `rvt` build,
+  clippy run and MSRV check; CI's clippy job checks them once. Run one with
+  `cargo run -p rvt-probes --example probe_re70_wall_join_lists -- <file>`,
+  and Measure's `probe` input takes the same names as before. The user
+  examples (`basics_*`) and the earlier research tools stay in `examples/`.
+
+- **Doors and windows are drawn from the meshes Revit saved for them, by
+  default.** `rvt-ifc` and `rvt-gltf` now draw every door and window whose
+  body would be its record's bounding box from its saved mesh, on Revit
+  2023 to 2027, where the whole mesh decodes: every vertex within 0.001 ft
+  of Revit's export on all 132 of Core Interior's doors and 6 windows and
+  all 269 of the BIM4LCA office's windows (Measure run 40932136360). A door
+  whose saved graphics do not decode whole keeps its box (221 of the
+  office's 269 doors). `--no-saved-meshes` keeps every box; `--saved-meshes`
+  still draws every other family from its mesh too.
+  `saved_meshes::attach_scoped_with_control` with `SavedMeshScope` does the
+  same from Rust; Python's `write_ifc()` and the viewer are unchanged.
+
+- **`Reference` only in the sets a Revit export confirms (RE-239 §7).**
+  rvt-rs writes an element's type name as `Reference` in the 34 IFC4
+  standard sets where a measured Revit export writes it with the same value,
+  and in no other set until one does (the maintainer, 2026-10-29). Shading
+  devices, alarms, footings,
+  reinforcing bars, transport elements and ramp flights get none for now.
+
+- **The viewer's first screen leads with what it can read.** A support
+  grid shows, for each Revit release from 2015 to 2027, whether its
+  projects open with typed elements or export experimentally and whether
+  its family files have verified metadata and schema or are not measured.
+  The grid is drawn from `docs/support-matrix.json`. Below it, the drop
+  target sits beside a compact demo list. Core Interior and Einhoven show
+  captures of the viewer drawing them, and every other demo shows a
+  neutral glyph. While the export buttons are disabled, the header says
+  why. File status rows that are waiting show neutral rings instead of
+  amber dots. The workflow and the profile notes are collapsed rows, and
+  the profile notes move to the right panel once a file is open. The
+  panel's own text no longer says that typed elements come only from
+  Revit 2024 and 2025.
+
+### Fixed
+
+- **`rvt-ifc-compare` reads each file in its own length unit.** It
+  compared storey elevations and the bounding box as the numbers each file
+  writes, so rvt-rs's metres against Revit's feet or millimetres differed
+  by 3.28 or 1,000 times on every storey. Both sides are now converted to
+  metres by the file's own `LENGTHUNIT` (`compare::length_unit_scale_to_metres`),
+  and RE1's storeys come out the same as Revit's.
+
+- **Openings of windows whose family cuts a solid are cut as Revit cuts
+  them (RE-225, #227).** A window set in a wall whose symbol cuts a solid
+  (`m_complexCutGeoms`) and no outline had its opening cut to the wall's
+  thickness and its box's height; Revit's export cuts it to the solid,
+  deeper across the wall and lower at the bottom (on the BIM4LCA office's
+  windows 0.328 ft deeper each side and 0.059 ft lower). The opening is now
+  as deep as the solid's extent across the wall and as tall as its height,
+  down from the body's top: all 269 of the office's windows as built and 265
+  at permit within 0.001 ft of Revit's openings. A door's opening keeps its
+  box: on the office the solid of a door's symbol brings 4 doors' openings
+  closer to Revit's and none within 0.001 ft. No door or window of Core
+  Interior, RE1 or puzzbobb's Revit 2025 models cuts a solid.
+
+- **The owner history meets IFC4's `CorrectChangeAction` rule.** Every
+  export wrote `IfcOwnerHistory` with `ChangeAction` `.ADDED.` and no
+  `LastModifiedDate`, which IFC4's WHERE rule forbids (IfcOpenShell's
+  EXPRESS rule check found it on every reference export). It is now
+  `.NOCHANGE.` with no last-modifying user or application, as Revit's own
+  export writes it.
+
+- **Elements that do not exist in the export phase are left out (#328,
+  RE-184).** A project's `AllProjectPhases` record lists its phases in
+  order, and with no phase chosen Revit's export shows the last: an element
+  is written when it was created in that phase or before it and not
+  demolished in it or before it, as Revit 2025's exports of two models made
+  for this show. On Snowdon Towers, whose phases run Legends, Existing, New
+  Construction, the six slabs created and demolished in Legends are no
+  longer written, and nothing else changes. The diagnostics count what is
+  left out as `element_record_not_in_export_phase`. Rooms are not checked:
+  Revit's exporter skips a room by its own phase parameter, which no model
+  here shows to be its created phase, so a room created in an earlier phase
+  is still written. A read of the phases that fails on a Revit 2023 to 2027
+  file is a warning in the diagnostics, and the export then writes every
+  element.
+
+- **The IfcProject description no longer names an internal decoder.** On
+  every file not saved by Revit 2023 it read "Revit 2024 export; ArcWall
+  standard decoder skipped: Revit 2024 is outside supported versions
+  [2023]", a note about one of rvt-rs's readers that told a user of the IFC
+  nothing about the model. It is now "Revit 2024 export" and the family's id
+  where there is one.
+  `rvt-ifc --placeholder`'s description no longer names internal work
+  phases; it says the file holds the project only.
+
+- **The crate's, the wheel's and the API docs' summaries say 2016 to
+  2027.** They named 2016 to 2026 as the releases whose metadata,
+  previews and schema rvt-rs reads; the 2027 sample family has been
+  measured with the rest since #1092, as `docs/status.md` and the support
+  matrix say.
+
+- **A model with a stream over a resource limit no longer exports empty
+  without a word (#1075).** A partition larger than 256 MiB, a compressed
+  member that inflates past 256 MiB, or a partition that inflates past
+  1 GiB in total used to be skipped by every reader, so a large client
+  model came out with 0 elements, 0 storeys and exit status 0. Each such
+  stream is now recorded (`RevitFile::unread_streams`), listed in the
+  export diagnostics (`stream_not_read_resource_limit`, with a warning per
+  stream), and `rvt-ifc` and `rvt-gltf` write no model and exit with
+  status 3 unless `--allow-partial`. `--large-model` (streams up to 2 GiB,
+  8 GiB inflated), `--max-stream-bytes` and `--max-inflate-bytes` raise the
+  limits. Partition streams and the walker's `Global/Latest` now inflate
+  under the file's `OpenLimits` instead of the defaults, so Python's
+  `max_inflate_bytes` reaches them; a stream's inflated total is
+  `max_inflate_bytes` or 1 GiB, whichever is larger. Python's `write_ifc()`
+  and `rvt_to_ifc()` raise `ValueError` while a stream is unread unless
+  `allow_partial=True`, and `RevitFile.unread_streams()` lists them. Not
+  measured on the reporter's files, which are private.
+
+- **Exports with saved meshes skip a pass over the file that nothing
+  used.** After reading doors' and windows' saved meshes (on by default),
+  the saved-graphics reader made a second pass over every element's
+  graphics to resolve render materials into two fields that no exporter,
+  binding or probe read. That pass, and the unused saved-graphics glTF
+  writer that was their only reader, are gone. Exports are byte-identical
+  on all 32 reference models, and `rvt-ifc` takes 24% to 52% less time on
+  those with saved door and window meshes: 3.5 s instead of 5.8 s on Core
+  Interior, 17.9 s instead of 24.7 s on the BIM4LCA office as built
+  (medians of three rounds on one runner).
+
+- **A file that kept an older release's schema reads as that release
+  (#421).** A project saved by Revit 2024 to 2027 can carry the schema, and
+  so the element-record marker, of the release it passed through: in a
+  field report, 25 of 49 such project files carried the marker of 2022,
+  2023, 2024 or 2025, and all 25 read as zero elements and zero Levels,
+  because the marker did not match the saving release's. The readers now
+  take the release the file's schema belongs to (`schema_release`: a 2024
+  to 2027 marker, or a 2015 to 2023 release's class tags) when it is older
+  than the saving release (`RevitFile::layout_release`). A schema that
+  matches no measured release still reads nothing. Metadata, reports and
+  the export's GlobalIds keep the saving release; the diagnostics say when
+  a file is read as another release than the one that saved it, and give
+  the support status of the release it is read as. On Autodesk's 58 sample
+  projects of 2015 to 2027 each schema is its own release's and every
+  export is byte-identical (Measure run 40928760469). Not yet measured on
+  an affected file. A file whose `Global/ElemTable` fits neither record
+  size still reads no element records, and the diagnostics now say so;
+  `probe_421_schema_marker` prints the table's fit as counts only.
+
+- **A one-storey project gets its storey.** The Level reader asked for at
+  least two Levels before writing any storey, so a project with one Level
+  exported every element on no storey: R2025 `01_Walls`' five walls, which
+  Revit's export puts on `Level 1`. On Revit 2024 to 2027, one Level is now
+  a storey set when the broader Level-id scan finds no other Level, so a
+  Level the full recovery misses still keeps the export from guessing.
+  Releases before 2024 keep asking for two: Revit 2023's Einhoven model
+  reads one Level while its walls stand at two or more base elevations.
+
+### Removed
+
+- **Three research modules nothing used are removed.**
+  `rvt::research::class_tag_map` (a 2016 to 2026 tag lookup from
+  `docs/data/tag-drift-2016-2026.csv`; `formats::SchemaClasses` reads each
+  file's own tags), `compound_framing` (a marker tokenizer for the RE-15
+  compound ArcWall study) and `relations` (typed-relation domains its own
+  documentation called architecture stubs, wired into nothing). They were
+  behind `unstable-research`, outside the semver promise. The CSV stays for
+  `examples/tag_drift_svg.rs`.
+
+- **Stable API that nothing in the workspace used (the maintainer,
+  2026-10-30).** One breaking change before 1.0 removes the public items
+  that no exporter, binary, Python binding, viewer call, test, example or
+  fuzz target called. Code that names any of them stops compiling and the
+  next release is a minor one; the entries below list each removal and what
+  to use instead. Nothing the exporter, the CLIs or the Python package
+  write changes.
+
+- **`elements`: one `SimpleDecoder` per class, and 46 unused typed views
+  gone.** Fourteen decoder structs repeated `SimpleDecoder` line for line
+  (check the schema entry's class name, then walk its fields):
+  `LevelDecoder`, `CategoryDecoder`, `SubcategoryDecoder`,
+  `ReferencePlaneDecoder`, `WallDecoder`, `WallTypeDecoder`,
+  `FloorDecoder`, `FloorTypeDecoder`, `RoofDecoder`, `RoofTypeDecoder`,
+  `CeilingDecoder`, `CeilingTypeDecoder`, `DoorDecoder` and
+  `WindowDecoder`. Use `SimpleDecoder::new("Wall")` and so on;
+  `all_decoders()` registers the same 81 classes, `decoder_for_class`
+  finds the same ones, and a wrong schema entry fails with the same
+  `SchemaMismatch`. The typed views nothing called are removed with their
+  modules (`annotations`, `category`, `ceiling`, `circulation`,
+  `curtain_wall`, `drafting`, `family`, `foundation_and_furnishings`,
+  `generic`, `grid`, `mep`, `project_organization`, `reference_planes`,
+  `reference_points`, `roof`, `structural`): `Category`, `Subcategory`,
+  `ReferencePlane`, `Roof`, `RoofType`, `Ceiling`, `CeilingType`, `Column`,
+  `Beam`, `Stair`, `StairType`, `Railing`, `RailingType`, `CurtainWall`,
+  `CurtainGrid`, `CurtainMullion`, `CurtainPanel`, `Grid`, `GridType`,
+  `Tag`, `TextNote`, `Dimension`, `View`, `Sheet`, `Schedule`, `Symbol`,
+  `FamilyInstance`, `StructuralFoundation`, `Furnishing`, `Rebar`,
+  `GenericModel`, `Mass`, `MepInstance`, `Phase`, `DesignOption`,
+  `Workset`, `Revision`, `BasePoint`, `SurveyPoint` and `ProjectPosition`,
+  with their enums. `FloorType`, `FloorFunction`, `FillPattern`,
+  `LinePattern`, `LineStyle`, `ParameterElement`, `SharedParameter`,
+  `ParameterValueSource`, `ParameterBundle`, `effective_value` and
+  `merge_effective` go too. To read a class's fields, take them from
+  `DecodedElement::fields` as the views did; `Level`, `Wall`, `WallType`,
+  `Floor`, `Door`, `Window`, `Zone`, `Material` and `ParameterValue`
+  stay, as the exporter and the typed JSON use them.
+
+- **`ifc::from_decoded` keeps the bridge `build_ifc_model` needs.** The
+  module lost 48 public items nothing called: the roof, ceiling, column,
+  beam, stair, door and window extrusion builders,
+  `floor_extrusion_from_boundary` and its quantities,
+  `polygon_perimeter_feet`, `storeys_from_levels`, `materials_from_revit`,
+  `door_property_set`, `stair_property_set`, `column_property_set`,
+  `beam_property_set` and the rest. It keeps
+  `build_ifc_model`, `ElementInput`, `BuilderOptions`, `wall_extrusion`,
+  `slab_extrusion`, `wall_segment_length_feet`,
+  `wall_segment_angle_radians`, `polygon_area_sqft`, `wall_property_set`
+  and `window_property_set`. Build an `Extrusion` or a `Storey` directly
+  where a removed helper made one. `slab_extrusion` takes the slab's
+  thickness in feet, `Option<f64>`, where it took `Option<&FloorType>`.
+  `ifc::entity_type_histogram` is removed with them.
+
+- **`ifc::measure` and `ifc::annotation` are removed.** Their distance,
+  angle and area helpers and their markup layer had no caller in the
+  crate, the binaries, the bindings, the viewer or the tests.
+
+- **The viewer-state helpers behind the unused wasm bindings.**
+  `ClippingPlane`, every method of `SectionBox`, `ViewMode` (its
+  `default_section_box`, `is_orthographic` and `label`) and
+  `CameraState` (`eye`, `orbit`, `pan`, `zoom`, `focus_on` and
+  `frame_bbox`), `CategoryFilter`'s `new`, `hide`, `show`, `is_hidden`
+  and `apply`, `SceneNode`'s `descendants_count`, `find_by_name` and
+  `flatten`, `Schedule::filter_by_ifc_type` and `Schedule::to_csv`, and
+  `share::encode_to_fragment`. The data types stay, because `ViewerState`
+  carries them and `share::decode_from_fragment`, which the fuzz target
+  and the tests call, reads them back. For a CSV schedule use
+  `ifc::schedule_csv`; the viewer drives its own camera.
+
+- **`geometry` keeps `Point3`, `Vector3`, `Curve`, `CurveLoop` and
+  `recovery`.** `Solid`, `Face`, `BooleanOp`, `Mesh`, `PointCloud`,
+  `BoundingBox`, `Transform3`, `Point3::ORIGIN` and the `Vector3` axis
+  constants are removed: only the recovery of wall curves, floor loops,
+  opening hosts and levels used the module.
+
+- **Eleven wasm bindings the viewer never calls.** `openRvtBytes`,
+  `openRvtBytesWithLimits`, `openRvtBytesWithDiagnostics`,
+  `openRvtBytesWithDiagnosticsAndLimits`,
+  `openRvtBytesWithDiagnosticsModeAndLimits`, `applyCategoryFilter`,
+  `encodeToFragment`, `decodeFromFragment`, `cameraEye`,
+  `defaultSectionBoxForView` and `defaultSheetOptions`. The 11 that
+  remain are the ones `viewer/src` calls, and `docs/viewer-api.md` lists
+  them. Call `openRvtBytesWithDiagnosticsMode(bytes, mode)` for a model
+  and its diagnostics at an export quality mode, and pass `null` as
+  `renderPlanSvg`'s options for the defaults. The walker's scan limits are
+  no longer settable from JavaScript.
+
+- **`elem_table::link_partition_element_ids` (`unstable-research`).** A
+  wrapper nothing called; use
+  `research::partition_scanner::link_elem_table_to_partitions`.
+
+### Research
+
+- **Revit's "Export to IFC" parameter does not explain the single elements
+  rvt-rs writes that Revit's export leaves out (RE-262, #792).** Neither
+  `IFC_EXPORT_ELEMENT` nor `IFC_EXPORT_ELEMENT_TYPE` is saved, in a parameter set or a family parameter slot, on RE1
+  Plumbing's tank 442378 or the BIM4LCA office permit model's column
+  1927742, or on any element of those models, RE1 Architecture or Core
+  Interior; 24 office instances as built carry it, all with value 1.
+
+- **Two bits of the element record's flag word (RE-261, #223).** Checked
+  against Revit's exports, bit 12 of `+0x46` is exactly a room Revit exports
+  as a space (302 of 302 rooms on Core Interior, RE1 and the R2025 models)
+  and a wall with an end joined (8 of 8 on RE1, the only export that writes
+  wall joins). That confirms two rows of puzzbobb's bit table. Bit 7 reads as
+  a type record, as RE-128 found; their `WallSweep` row for it is not
+  testable on these models, and the rest of the table needs member values or
+  one-change saves. Nothing reads the word yet.
+
+- **The storey count Revit's exporter writes (RE-263, #1097).** Up to IFC
+  26.0 Revit's exporter writes `Pset_BuildingCommon.NumberOfStoreys` as the
+  number of storeys that contain an element, and from IFC 26.1 as the number
+  of storeys (24 of 24 and 5 of 5 reference exports). rvt-rs writes the
+  number of storeys, IFC4's definition, only where every storey contains
+  an element, where the two rules agree.
+
+- **Where Revit cuts a wall's top and base (RE-258, #1067).** On the BIM4LCA
+  office, rvt-rs's walls differ from Revit's at one end only: 65 tops and 20
+  bases as built. Revit cuts a top at the underside of a floor the wall's
+  top join names, which gives 63 of the 65, but that rule also cuts 5
+  walls Revit leaves whole, and nothing read tells them apart, so no wall
+  is cut yet. `tools/re/wall_heights_vs_ifc.py` measures every wall's base
+  and top against Revit's export: Core Interior's 360 and puzzbobb's 117
+  R2025 walls all match.
+
+- **What a wall's `Height` is (RE-257, #1016).** Revit's export writes the
+  vertical span of its own body: rvt-rs's wall body is that tall on 501 of
+  the BIM4LCA office's 579 walls as built and all 117 of puzzbobb's R2025
+  walls, but taller on the office's other 78, which Revit draws cut (#1067).
+  Neither the wall's saved height (-1001101) nor any single field of its
+  record tells those apart; RE-266 narrows it to the walls nothing joins to
+  or cuts.
+
 ## [0.10.0] — 2026-10-27
 
 0.10.0 writes more of the base quantities Revit's own IFC export writes,

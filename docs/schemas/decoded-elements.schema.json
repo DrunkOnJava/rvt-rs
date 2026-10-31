@@ -54,7 +54,7 @@
           "items": { "$ref": "#/$defs/field" }
         },
         "parameters": {
-          "description": "AProperty* value carriers for this row, then, on Revit 2023 to 2027 files, the saved parameters of the element's native record and its type's (#35, RE-207).",
+          "description": "AProperty* value carriers for this row, then, on Revit 2015 to 2027 files (2015 to 2022 experimentally), the saved parameters of the element's native record and its type's (#35, RE-207, RE-281).",
           "type": "array",
           "items": {
             "type": "object",

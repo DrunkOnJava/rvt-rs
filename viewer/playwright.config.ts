@@ -6,8 +6,15 @@ import { defineConfig, devices } from '@playwright/test';
 const previewPort = Number(process.env.RVT_VIEWER_PORT ?? 4173);
 const previewUrl = `http://127.0.0.1:${previewPort}`;
 
+// The saved-mesh measurement opens every reference model twice and reads the
+// CPU and memory it takes, so it runs on its own, in one worker, and not with
+// the rest of the suite: RVT_VIEWER_MEASURE=1 runs it and only it.
+const measure = process.env.RVT_VIEWER_MEASURE === '1';
+const measureSpec = /saved-meshes-measure\.spec\.ts$/;
+
 export default defineConfig({
   testDir: './tests',
+  ...(measure ? { testMatch: measureSpec, workers: 1 } : { testIgnore: measureSpec }),
   timeout: 120_000,
   expect: {
     timeout: 60_000,

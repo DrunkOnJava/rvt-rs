@@ -305,22 +305,20 @@ pub enum FieldType {
     String,
     /// 16-byte GUID / UUID. `0x09` family.
     Guid,
-    /// `0x0e 0x00 0x00 0x00 0x14 0x00 0x00 0x00` — the canonical ElementId,
-    /// referencing the root `ElementId` class (tag 0x0014). This is the
-    /// common case; see `ElementIdRef` for references that carry a
-    /// specific referenced-class tag.
+    /// `0x0e 0x00 0x00 0x00 0x14 0x00`: a by-value reference to the root
+    /// `ElementId` class (tag 0x0014). See `ElementIdRef` for references to
+    /// any other class.
     ElementId,
-    /// `0x0e 0x00 0x00 0x00 <tag:u16> <sub:u16>` where `<tag>` is the
-    /// referenced class's 15-bit tag (high bit stripped). Revit encodes
-    /// "pointer to element of known class" by embedding the target's
-    /// tag here. The `sub` u16 refines the reference kind (0x0000
-    /// bare-ref, 0x0009/0x0014/0x0080 observed modifiers).
+    /// `0x0e 0x00 0x00 0x00 <reference:u16>`: a by-value reference to the
+    /// class whose tag is the reference's low 15 bits. The type is these six
+    /// bytes (the schema grammar, [`schema_classes`]); where bit 15 is set,
+    /// the referenced class is defined inline right after them, behind a
+    /// zero `u16`. Whatever follows (the next field's name length, that
+    /// pad, or the class's GUID-list count) is not part of the field
+    /// (#1101).
     ElementIdRef {
-        /// The tag of the referenced class, as it appears in the schema.
+        /// The tag of the referenced class, bit 15 cleared.
         referenced_tag: u16,
-        /// Secondary discriminator (meaning unknown; empirically varies
-        /// per-field and per-version).
-        sub: u16,
     },
     /// `0x0e 0xNN 0x00 0x00` where NN ∈ {0x01, 0x02, 0x03} — a pointer
     /// or singular reference to another class instance. The low byte
@@ -462,20 +460,13 @@ impl FieldType {
             // recon report, truncated 2-byte headers (`0e 50`, `0e 10`)
             // are accepted as Container / Vector with empty bodies.
             0x0e => match sub {
-                0x0000 if bytes.len() >= 8 => {
-                    let ref_tag = u16::from_le_bytes([bytes[4], bytes[5]]);
-                    let sub2 = u16::from_le_bytes([bytes[6], bytes[7]]);
-                    if ref_tag == 0x0014 && sub2 == 0x0000 {
-                        FieldType::ElementId
-                    } else {
-                        FieldType::ElementIdRef {
-                            referenced_tag: ref_tag,
-                            sub: sub2,
-                        }
+                // A by-value class reference: a u16 after the kind word,
+                // bit 15 set where the class is defined inline (#1101).
+                0x0000 if bytes.len() >= 6 => {
+                    match u16::from_le_bytes([bytes[4], bytes[5]]) & 0x7fff {
+                        0x0014 => FieldType::ElementId,
+                        referenced_tag => FieldType::ElementIdRef { referenced_tag },
                     }
-                }
-                0x0000 if bytes.len() >= 6 && bytes[4] == 0x14 && bytes[5] == 0x00 => {
-                    FieldType::ElementId
                 }
                 0x0001..=0x0003 if bytes.len() >= 4 => FieldType::Pointer { kind: bytes[1] },
                 0x0010 | 0x0011 => FieldType::Vector {
@@ -494,9 +485,9 @@ impl FieldType {
     }
 
     /// Encode a `FieldType` back to its wire type-encoding
-    /// block — the inverse of [`FieldType::decode`]. Used by the
-    /// write path (`write_with_patches` field-level edits and the
-    /// forthcoming `ADocument` writer) to serialise schema records.
+    /// block — the inverse of [`FieldType::decode`]. No writer uses it:
+    /// `writer.rs` copies `Formats/Latest` byte for byte, and the schema
+    /// probes compare it with the bytes they read.
     ///
     /// Canonical-form guarantees:
     ///
@@ -506,6 +497,10 @@ impl FieldType {
     ///   alias collapses to 0x0010 on round-trip).
     /// - `Container`-with-base-`0x0e` emits `sub = 0x0050` (0x0051
     ///   alias similarly collapses).
+    /// - `ElementId` and `ElementIdRef` emit the six bytes of a class
+    ///   reference with bit 15 clear: an inline definition of the
+    ///   referenced class, which the source may carry after them, is not
+    ///   reproduced (#1101).
     /// - `Unknown` variants emit their captured bytes unchanged.
     ///
     /// Round-trip: `FieldType::decode(&x.encode()) == x` for every
@@ -518,25 +513,10 @@ impl FieldType {
             FieldType::Primitive { kind, .. } => vec![*kind, 0x00, 0x00, 0x00],
             FieldType::String => vec![0x08, 0x00, 0x60, 0x00],
             FieldType::Guid => vec![0x09, 0x00, 0x00, 0x00],
-            FieldType::ElementId => {
-                vec![0x0e, 0x00, 0x00, 0x00, 0x14, 0x00, 0x00, 0x00]
-            }
-            FieldType::ElementIdRef {
-                referenced_tag,
-                sub,
-            } => {
-                let tag_bytes = referenced_tag.to_le_bytes();
-                let sub_bytes = sub.to_le_bytes();
-                vec![
-                    0x0e,
-                    0x00,
-                    0x00,
-                    0x00,
-                    tag_bytes[0],
-                    tag_bytes[1],
-                    sub_bytes[0],
-                    sub_bytes[1],
-                ]
+            FieldType::ElementId => vec![0x0e, 0x00, 0x00, 0x00, 0x14, 0x00],
+            FieldType::ElementIdRef { referenced_tag } => {
+                let tag_bytes = (referenced_tag & 0x7fff).to_le_bytes();
+                vec![0x0e, 0x00, 0x00, 0x00, tag_bytes[0], tag_bytes[1]]
             }
             FieldType::Pointer { kind } => vec![0x0e, *kind, 0x00, 0x00],
             FieldType::Vector { kind, body } => {

@@ -2,7 +2,7 @@
 """Score `rvt-elements`' saved parameters against Revit's export (RE-207).
 
 `rvt-elements MODEL.rvt` lists, per element, the parameters its native record
-and its type's hold (`src/native_element_parameters.rs`), each named by its
+and its type's hold (`src/research/native_element_parameters.rs`), each named by its
 definition's caption. Revit's exporter writes a property `<set>.<property>`
 from the element's parameter of that name before anything else (RE-194), so
 such a parameter's value is the value Revit writes there. A Revit export made

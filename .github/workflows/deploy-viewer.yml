@@ -179,6 +179,29 @@ jobs:
           RVT_VIEWER_REQUIRE_JOURNEYS: "1"
         run: pnpm run test:browser
 
+      # The viewer draws doors and windows from their saved meshes by default,
+      # on the condition (Griffin, 2026-10-30) that its memory and load time
+      # are measured in Playwright on the reference models. Each is opened
+      # with the option on and off; the spec asserts behaviour, not timings,
+      # and writes the figures to viewer/measurements/ and the job summary.
+      # It runs after the suite, alone, so nothing else competes for the CPU.
+      - name: Measure the viewer with and without saved meshes
+        if: ${{ !cancelled() }}
+        working-directory: viewer
+        env:
+          RVT_VIEWER_MEASURE: "1"
+          RVT_VIEWER_REQUIRE_JOURNEYS: "1"
+        run: pnpm exec playwright test --config playwright.config.ts --reporter=list --output=test-results/measure
+
+      - name: Upload the saved-mesh measurement
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
+        with:
+          name: viewer-saved-meshes-measurement
+          path: viewer/measurements/
+          if-no-files-found: ignore
+          retention-days: 30
+
       # The HTML report and each failed test's trace, kept for 14 days.
       - name: Upload Playwright report
         if: failure()

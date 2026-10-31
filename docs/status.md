@@ -1,6 +1,6 @@
 # Project Status
 
-Last reviewed: 2026-10-27
+Last reviewed: 2026-10-30
 
 This page is the public source of truth for what rvt-rs can do today. It is
 intentionally blunt so users can decide quickly whether the tool fits their
@@ -56,7 +56,7 @@ Autodesk's six 2015 sample projects, where previews and PartAtom are not
 measured. On Revit 2024 and 2025 project files it reads
 the building: each element's ElementId, category, name, type (written as
 an IFC type object of its Revit type, RE-110), storey, materials, layers,
-GlobalId, `IsExternal` (RE-193), curtain mullions' `Span` (RE-226), walls'
+GlobalId, `IsExternal` (RE-193), curtain mullions' `Span` (RE-226) and, where the boxes of their wall's mullions say which ends Revit's solid keeps, `NetSurfaceArea` (RE-268), walls'
 `ExtendToStructure` (RE-228), railings' `Height` (RE-231), stair flights' treads, nosing and run type
 and landings' type (RE-92) and the parameters named for a standard property
 set's property (RE-194), and a body that is exact where the element's
@@ -95,7 +95,7 @@ own IFC export of the same file wherever one exists; the measured tables are in 
 [README](../README.md#what-rvt-rs-reads-from-real-projects) and the four
 levels a file can reach (opened, elements identified, geometry, properties)
 are in the [supported profile](supported-profile.md). On Revit 2023 to 2027
-files, `rvt-elements` and Python also list each element's saved parameters,
+files, and experimentally on 2015 to 2022 ones (RE-281), `rvt-elements` and Python also list each element's saved parameters,
 named where the file defines them (RE-207), and `rvt-ifc --revit-property-sets`
 writes the named ones in Revit's own property sets (RE-210). With
 `--revit-set-placement` it also writes properties where Revit's own exporter
@@ -108,8 +108,8 @@ as Revit's exporter does with "Export base quantities" off (RE-242).
 It is not a converter for arbitrary models: most parameters, family
 geometry (doors and windows are drawn from the mesh Revit saved for their
 display by default, and any other family instance with the experimental
-`--saved-meshes` option, RE-78), roofs over a T or U footprint and roofs by extrusion outside Revit 2025, the height of
-walls Revit draws cut (78 of the BIM4LCA office's, #1067), the boundaries of
+`--saved-meshes` option, RE-78), roofs over a T or U footprint and roofs by extrusion outside Revit 2025, the top of
+walls Revit steps over a floor that covers them in part (29 of the BIM4LCA office's as built and 26 at permit, #1067), the boundaries of
 rooms whose stored solid does not close and opening profiles are not
 decoded, and rvt-rs does not edit Revit model data.
 
@@ -733,7 +733,7 @@ outline; 154 of Snowdon's slabs now match Revit's area within 0.1%
 
 **RE-207 (2026-10-22)** lists each element's saved parameters in
 `rvt-elements` and Python's `decoded_elements()`, on Revit 2023 to 2027
-files (#35). They are read from the element's native record: its typed
+files (#35; 2015 to 2022 since RE-281, experimentally). They are read from the element's native record: its typed
 parameter sets, the family slots of its own `FamilyParams` that a
 definition resolves, and the native fields read as built-in parameters,
 each named by the file's own definition (family, shared, project and
@@ -954,6 +954,48 @@ parameter to be the room's created phase, so a room created in an earlier
 phase is still written (revit-ifc `ElementFilteringUtil.IsRoomInInvalidPhase`;
 `reports/element-framing/RE-184-phase-order.md`).
 
+**RE-281 (2026-10-30)** reads the project's phases and each element's saved
+parameters on Revit 2015 to 2022, experimentally, and the phase order on
+Revit 2023, which `native_element::decode_base` refused with every 2015 to
+2023 record because it took `Identifier` for the 8-byte `m_id64` of Revit
+2024: before 2024 it is a 4-byte `m_id`. On Autodesk's 33 sample projects of
+2015 to 2023 every file lists its phases (two or three) and no element is
+left out of the last; on BIMcollab's Revit 2015 example 8 are, none of them
+written. So no export moves. Parameters, read by name, hold the values of the same
+project's Revit 2023 copy (932,645 equal, 243 different, over 23 projects).
+Every other native reader (types, stairs, symbol cuts, mullion hosts, ports,
+saved meshes) stays on 2023 to 2027, and a record that needs the
+extensible-storage catalogue before Revit 2021 or is one of 2015 to 2017's
+`VarSketch` records is refused. BIMcollab's 16 footings name no Level: their
+Element base, `-1001352` and `-1002062` are all unset, as are the 15
+columns', which Revit still puts on a storey (#879;
+`reports/element-framing/RE-281-native-admission.md`).
+
+**RE-283 (2026-10-30)** reads a wall's type Function and the project and
+shared parameters named for `IsExternal` or for a standard property from the
+saved parameters on Revit 2015 to 2023, experimentally, so a wall's
+`IsExternal` and any parameter named for a property are written there as on
+2024 and 2025 (RE-193, RE-194). The Function is equal to the same project's
+later copy on 1,982 of 1,983 walls (24 pairs of 2015 to 2022 against 2023; the
+other is an edit between the saves). Against Revit's exports: BIMcollab's 114
+walls' `IsExternal` and `LoadBearing`, which two parameters on the walls
+give, and modelo_bim's 4 walls' `IsExternal`, which the Function gives, are
+all Revit's value where they were missing. 36 of 94 exports of the unfiltered
+run move, all files of Revit 2015 to 2023
+(`reports/element-framing/RE-283-wall-function-and-named-parameters-pre2024.md`).
+
+**RE-284 (2026-10-30)** writes each wall's `ExtendToStructure` on Revit 2015 to
+2023, experimentally, from the same flag of its native record that RE-228
+reads on 2024 and 2025: a `JoinToRoofGStep` with `m_baseOrTop` 1. Against the
+same project saved by a later release it is equal on all 1,983 walls both
+files hold (24 pairs of 2015 to 2022 against 2023) and on the 249 walls of the
+2023 samples against their 2024 copies. Revit's own exports agree on the 114
+walls of BIMcollab's Revit 2015 example and the 4 of modelo_bim (a Revit 2023
+file), all false: the value true is measured against an export on 2024 and
+2025 only. 36 of 94 exports of the unfiltered run move, all of files of
+Revit 2015 to 2023, and every file of 2024 to 2027 is identical
+(`reports/element-framing/RE-284-wall-top-join-pre2024.md`).
+
 ## Performance
 
 Opening a large project is no longer a minutes-long wait. Every partition
@@ -1004,11 +1046,22 @@ prints it from any installed build.
 
 ## Roadmap Position
 
-- **v0.10.0** (2026-10-27) is the latest release: crates.io and docs.rs,
+- **v0.11.0** (2026-10-30) is the latest release: crates.io and docs.rs,
   the `rvt` wheels on PyPI, GitHub Release archives for Linux, macOS and
   Windows, and the container image, each checked from its published
   artifacts ([`install.md`](install.md)). It carries everything under
-  `[0.10.0]` in [`CHANGELOG.md`](../CHANGELOG.md): more of the base
+  `[0.11.0]` in [`CHANGELOG.md`](../CHANGELOG.md): a model over the
+  reader's resource limits is reported, and `rvt-ifc` and `rvt-gltf` exit
+  with status 3 instead of writing an empty model, with `--large-model` and
+  a viewer retry (#1075); files that kept an older release's schema are
+  read as that release (#421), neither fix measured yet on the reporter's
+  private files; elements outside the export phase are left out
+  (#328); doors and windows are drawn from their saved meshes by default;
+  windows' openings follow their cut solids; walls nothing joins or cuts
+  carry their `Height`; Revit 2008 to 2014 export experimentally; and the
+  stable API nothing used is removed. Its "Upgrading from 0.10" section
+  lists what a 0.10 user has to change.
+- **v0.10.0** (2026-10-27) is the release before: more of the base
   quantities Revit's export writes (21,065 equal on the BIM4LCA office as
   built, one different, none that Revit's export leaves out), among them
   walls' `Length` and every wall's `Width`, curtain walls' and beams'
@@ -1016,19 +1069,8 @@ prints it from any installed build.
   `Width`, hollow-section columns' areas and volume, spaces' `Height` and
   stair railings' `Length`; two diagnostics fields for the quantity census;
   and the type parameters of walls, floors, ceilings and roofs in
-  `rvt-elements` and Python. Its "Upgrading from 0.9" section says no code
-  change is needed.
-- **v0.9.0** (2026-10-26) is the release before: IFC4 base quantities as
-  Revit's export writes them, on by default and left out by
-  `rvt-ifc --no-base-quantities` (20,157 equal on the BIM4LCA office as
-  built, one different, none that Revit's export leaves out); curtain
-  mullions' `Span`, walls' `ExtendToStructure`, railings' `Height`, level
-  slabs' `PitchAngle`, stair flights' treads and nosing, and the
-  `Reference` of stairs, runs, landings, openings and furniture; types from
-  native records for curtain walls, pipes, wall sweeps and ramps; doors and
-  windows in the wall their native record names; `--revit-set-placement`;
-  and faster exports of Revit 2023 to 2027 files.
-- `main` has everything v0.10.0 has, and is ahead of it by the fragments
+  `rvt-elements` and Python.
+- `main` has everything v0.11.0 has, and is ahead of it by the fragments
   under [`changelog.d/`](../changelog.d/README.md).
 
 Open work is tracked as GitHub issues; [`docs/archive/TODO.md`](archive/TODO.md) is
