@@ -86,6 +86,8 @@ beams' `Span` (RE-49),
 beams' `Slope` 0 where drawn along a level location line (RE-49),
 unrotated beams' `Roll` (RE-276),
 walls' `ExtendToStructure` (RE-228),
+type objects' `FireRating` and `LoadBearing`, with stair types' and flight types' dimensions
+(RE-286, [#1185](https://github.com/DrunkOnJava/rvt-rs/issues/1185); no `IsExternal` on a type object: the office's and the R2025 models' exporters write it, but Revit's newer exporters, those of the held-out models and of RE1 Architecture, write none),
 walls' `ExtendToStructure` on Revit 2015 to 2023 (RE-284),
 railings' `Height` (RE-231),
 level slabs' `PitchAngle` (RE-238),
@@ -149,7 +151,7 @@ since Revit's export gives none on 18 meshed columns and 3 panels that nothing t
 Core Interior's and RE1 Architecture's exports were made with Revit's "Export base quantities" off, so the census counts the quantities rvt-rs writes on them apart (2,292 and 92,
 and RE1 Mechanical's and Plumbing's pipe areas,
 12 and 126), and `rvt-ifc --no-base-quantities` leaves them out, base quantities being on by default as in each of Revit's built-in IFC4 setups (RE-242);
-the census scores type objects' own sets too ([#1018](https://github.com/DrunkOnJava/rvt-rs/issues/1018)): of the values Revit's export writes on the type objects rvt-rs writes, 184 on the office as built, mostly `IsExternal`, none is written yet (four more,
+the census scores type objects' own sets too ([#1018](https://github.com/DrunkOnJava/rvt-rs/issues/1018)): of the 182 values Revit's export writes on the type objects rvt-rs writes on the office as built, 34 are written equal (`FireRating`, `LoadBearing` and stair types' dimensions, RE-286, [#1185](https://github.com/DrunkOnJava/rvt-rs/issues/1185)), and the other 148 are their `IsExternal` (135), which rvt-rs writes on no type object because Revit's newer exporters write none (the maintainer, 2026-10-31), the door types' `FireRating` (6) and `ThermalTransmittance` (1) and the family types' `Manufacturer` (6, RE-289) (four more,
 the mullion types' `IsExternal`,
 are counted apart,
 RE-269).
