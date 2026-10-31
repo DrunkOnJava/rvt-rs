@@ -31,7 +31,6 @@ pub struct Options {
     // Tracker: B79.
     pub selected_classes: BTreeSet<String>,
     pub channels: BTreeSet<u64>,
-    pub max_stream_bytes: u64,
     pub max_group_bytes: usize,
     pub max_graph_values: usize,
     pub max_graph_objects: usize,
@@ -46,6 +45,11 @@ pub struct Options {
     /// measured on 2015 to 2022 as well (saved parameters, the phase order:
     /// RE-280, RE-281) names [`NATIVE_RELEASES`].
     pub releases: std::ops::RangeInclusive<u32>,
+    /// When set, [`extract`] reads no selected record unless one of the
+    /// file's parameter definitions has a name this accepts: a reader that
+    /// needs only some parameters skips the per-element pass on a file that
+    /// defines none of them.
+    pub definition_filter: Option<fn(&str) -> bool>,
 }
 impl Default for Options {
     fn default() -> Self {
@@ -53,12 +57,12 @@ impl Default for Options {
             selected_ids: BTreeSet::new(),
             selected_classes: BTreeSet::new(),
             channels: BTreeSet::from([102]),
-            max_stream_bytes: 512 * 1024 * 1024,
             max_group_bytes: 256 * 1024 * 1024,
             max_graph_values: 100_000,
             max_graph_objects: 100_000,
             graph_classes: None,
             releases: 2023..=2027,
+            definition_filter: None,
         }
     }
 }
@@ -129,6 +133,13 @@ pub struct Summary {
     /// records because the partition its stored revision routes to holds
     /// none of them (RE-145, #548).
     pub current_records_outside_route: usize,
+    /// Partitions over the file's stream limit, not read (#1075).
+    pub unread_partitions: BTreeSet<u32>,
+    /// Selected elements with a copy in a partition that was read whose
+    /// current record may be in one of [`Self::unread_partitions`]: left out,
+    /// not read from that older copy. An element whose only copy is in an
+    /// unread partition is in [`Self::selected_ids_without_records`].
+    pub routed_to_unread_partitions: BTreeSet<u64>,
     pub requested_ids_absent_from_index: Vec<u64>,
     pub selected_ids_without_records: Vec<u64>,
     pub partitions: BTreeMap<String, native_segments::Statistics>,
@@ -183,13 +194,25 @@ fn decode_single(prepared: &[u8], offset: usize) -> Result<(Vec<u8>, StreamEnvel
     ))
 }
 
+/// Stored partition `name` under the file's own stream limit
+/// ([`crate::reader::OpenLimits::max_stream_bytes`], which `--large-model`
+/// raises). `None` when it is over the limit: [`RevitFile::read_stream`] names
+/// it in [`RevitFile::unread_streams`], and the rest of the file is still read
+/// (#1075).
+fn read_partition(file: &mut RevitFile, name: &str) -> Result<Option<Vec<u8>>> {
+    match file.read_stream(name) {
+        Ok(stored) => Ok(Some(stored)),
+        Err(crate::Error::TooLarge { .. }) => Ok(None),
+        Err(err) => Err(err.into()),
+    }
+}
 /// Read one CRC/ISIZE-validated member. Callers needing storage coverage should
 /// use `extract`, whose summary records the uninterpreted suffix explicitly.
 pub fn read_single(file: &mut RevitFile, name: &str) -> Result<Vec<u8>> {
     Ok(read_single_envelope(file, name)?.0)
 }
 fn read_single_envelope(file: &mut RevitFile, name: &str) -> Result<(Vec<u8>, StreamEnvelope)> {
-    let stored = file.read_stream_with_limit(name, 512 * 1024 * 1024)?;
+    let stored = file.read_stream(name)?;
     let prepared = compression::prepare_stream_for_inflate(name, &stored);
     decode_single(&prepared, if name == "Formats/Latest" { 0 } else { 8 })
 }
@@ -258,7 +281,8 @@ pub(crate) fn routed_partitions(
 /// hold a copy of its data, the partition whose copy is current: the one its
 /// stored revision routes to where that holds a copy, else the latest that
 /// does, as [`extract`] reads records (RE-145, RE-216). An id the element
-/// index does not route is left out.
+/// index does not route is left out, and so is one that routes to a partition
+/// over the file's stream limit, whose copy was not read (#1075).
 pub fn current_partitions(
     file: &mut RevitFile,
     holders: &BTreeMap<u32, BTreeSet<u32>>,
@@ -268,14 +292,28 @@ pub fn current_partitions(
     }
     let ids: BTreeSet<u64> = holders.keys().map(|&id| u64::from(id)).collect();
     let routed = routed_partitions(file, &ids).unwrap_or_default();
+    let limit = file.limits().max_stream_bytes;
+    let unread: BTreeSet<u32> = file
+        .stream_names()
+        .iter()
+        .filter(|name| file.stream_size(name).is_some_and(|size| size > limit))
+        .filter_map(|name| name.strip_prefix("Partitions/")?.parse().ok())
+        .collect();
     holders
         .iter()
         .filter_map(|(&id, held)| {
             let routed = *routed.get(&u64::from(id))?;
+            if unread.contains(&routed) {
+                return None;
+            }
             let current = if held.contains(&routed) {
                 routed
             } else {
-                *held.last()?
+                let latest = *held.last()?;
+                if unread.iter().any(|&partition| partition > latest) {
+                    return None;
+                }
+                latest
             };
             Some((id, current))
         })
@@ -345,7 +383,27 @@ pub fn extract(
             },
         )?;
     definitions.enable_builtin_catalog(&definition_summary.schema_sha256)?;
-    let mut summary = extract_records(file, options, false, &definitions, emit)?;
+    let defined = options.definition_filter.is_none_or(|accepts| {
+        definitions
+            .definitions
+            .values()
+            .map(|definition| definition.caption.as_str())
+            .chain(
+                definitions
+                    .builtin_definitions
+                    .values()
+                    .map(|definition| definition.caption.as_str()),
+            )
+            .any(accepts)
+    });
+    let mut nothing = options.clone();
+    if !defined {
+        // Both selections empty would select every record: select the one
+        // class no record has instead, so nothing is read.
+        nothing.selected_ids.clear();
+        nothing.selected_classes = BTreeSet::from([String::new()]);
+    }
+    let mut summary = extract_records(file, &nothing, false, &definitions, emit)?;
     summary.parameter_binding_context = serde_json::json!({
         "bindings": definitions.bindings,
         "family_categories": definitions.family_categories,
@@ -487,6 +545,15 @@ fn extract_records(
         .iter()
         .map(|n| n[11..].parse())
         .collect::<Result<_, _>>()?;
+    // #1075: a partition over the stream limit is not read, so an element
+    // whose current copy it holds is left out rather than read from an older
+    // copy in another partition (RE-216).
+    let limit = file.limits().max_stream_bytes;
+    let unread: BTreeSet<u32> = names
+        .iter()
+        .filter(|name| file.stream_size(name).is_some_and(|size| size > limit))
+        .map(|name| name[11..].parse())
+        .collect::<Result<_, _>>()?;
     let selected: BTreeSet<_> = index
         .identities
         .keys()
@@ -507,7 +574,7 @@ fn extract_records(
     };
     let mut summary = Summary {
         budgets: ResourceBudget {
-            max_stream_bytes: options.max_stream_bytes,
+            max_stream_bytes: file.limits().max_stream_bytes,
             max_group_bytes: options.max_group_bytes,
             max_graph_values: options.max_graph_values,
             max_graph_objects: options.max_graph_objects,
@@ -525,6 +592,7 @@ fn extract_records(
             .filter(|id| !index.identities.contains_key(id))
             .copied()
             .collect(),
+        unread_partitions: unread.clone(),
         ..Default::default()
     };
     match es_catalog {
@@ -549,9 +617,9 @@ fn extract_records(
     // this without a walk, and the walk below visits only the partitions
     // holding a selected record.
     let defaults = Options::default();
-    let indexable = options.max_stream_bytes == defaults.max_stream_bytes
-        && options.max_group_bytes == defaults.max_group_bytes
-        && options.channels == defaults.channels;
+    let indexable = options.max_group_bytes == defaults.max_group_bytes
+        && options.channels == defaults.channels
+        && unread.is_empty();
     let record_index = indexable.then(|| file.native_record_index()).flatten();
     let mut indexed: Option<Vec<IndexedRecord>> =
         (indexable && record_index.is_none()).then(Vec::new);
@@ -573,7 +641,9 @@ fn extract_records(
     });
     for name in names.iter().filter(|_| walked.is_none()) {
         let partition: u32 = name[11..].parse()?;
-        let stored = file.read_stream_with_limit(name, options.max_stream_bytes)?;
+        let Some(stored) = read_partition(file, name)? else {
+            continue;
+        };
         let prepared = compression::prepare_stream_for_inflate(name, &stored);
         let inflated = file.inflated_partition(name).ok();
         native_segments::walk_inflated(
@@ -615,7 +685,9 @@ fn extract_records(
         {
             continue;
         }
-        let stored = file.read_stream_with_limit(&name, options.max_stream_bytes)?;
+        let Some(stored) = read_partition(file, &name)? else {
+            continue;
+        };
         let prepared = compression::prepare_stream_for_inflate(&name, &stored);
         let inflated = file.inflated_partition(&name).ok();
         let stats = native_segments::walk_inflated(
@@ -642,9 +714,21 @@ fn extract_records(
                         increments,
                         &present,
                     )?;
+                    if unread.contains(&routed) {
+                        summary.routed_to_unread_partitions.insert(id);
+                        continue;
+                    }
                     let current = match holders.get(&(source.channel, id)) {
                         Some(held) if !held.contains(&routed) => {
-                            *held.last().expect("an element in holders has a partition")
+                            let latest =
+                                *held.last().expect("an element in holders has a partition");
+                            // A later partition that was not read may hold
+                            // the current copy (#1075).
+                            if unread.iter().any(|&partition| partition > latest) {
+                                summary.routed_to_unread_partitions.insert(id);
+                                continue;
+                            }
+                            latest
                         }
                         _ => routed,
                     };
