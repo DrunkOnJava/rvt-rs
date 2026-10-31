@@ -5,7 +5,7 @@
 **Artefacts:** the BIM4LCA office as built and at building permit (Revit 2024, Revit 24.0.5's IFC4 exports, CC BY-SA 4.0, `research/bim4lca-measure.tsv`) and puzzbobb's R2025 models (Revit 2025, Apache-2.0, `research/r2025-models.tsv`), as Measure fetches them; the held-out models of `research/holdout-models.tsv` (counts only)
 **Scorer:** `tools/re/wall_quantities_vs_ifc.py` (RE-270)
 **Runs:** Measure [41136551451](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41136551451) (`main` at f73908bf: the scorer, which lists Revit's and rvt-rs's `Height` of each wall), [41178688180](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41178688180) (this change at 9c39b0c3 against RE-290's head ada5ca73, every model and scorer) [41180588895](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41180588895) (this change at 6317d42f against RE-290's head a07a850d, every model and scorer, with the held-out models: what `Height` alone moves) and [41183229365](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41183229365) (this change at f5d4ab5e, RE-290 and `main` merged in, against `main` at 9066ded5, every model and scorer, with the held-out models)
-**Result:** positive. Revit's export writes a wall's `Height` on exactly the walls it writes `GrossSideArea`, `NetSideArea`, `GrossVolume` and `NetVolume` on (RE-270 §1), and on every wall of the office where those are Revit's, rvt-rs's extrusion is as tall as Revit's solid: 117 of 117 as built and 128 of 128 at permit, none different. The pass that gives a roof-joined wall the four (RE-270's second rule, RE-290) now gives it `Height` too: 47 more office walls as built and 58 at building permit, Revit's on every one, none different and none Revit's export leaves out.
+**Result:** positive. Revit's export writes a wall's `Height` on exactly the walls it writes `GrossSideArea`, `NetSideArea`, `GrossVolume` and `NetVolume` on (RE-270 §1), and on every wall of the office where those are Revit's, rvt-rs's extrusion is as tall as Revit's solid: 117 of 117 as built and 128 of 128 at permit, none different. The pass that gives a roof-joined wall the four (RE-270's second rule, RE-290) now gives it `Height` too: 47 more office walls as built and 58 at building permit, Revit's on every one, none different and none Revit's export leaves out. The evidence is one building, the BIM4LCA office in Revit 2024, with no out-of-sample test: the R2025 models and the held-out models take no wall by the second rule, so none of them tests it.
 
 ## 1. Why the four and `Height` go together
 
@@ -28,7 +28,7 @@ Walls were matched by `Tag`, heights compared to a relative 1e-5.
 
 ## 3. The rule
 
-`export_content::wall_areas::add_bounded_wall_quantities` writes `Height`, the extrusion's height, beside the four on each wall it vouches for. It adds no condition: a wall is taken exactly as RE-270 and RE-290 say. A wall Revit writes only a `NetVolume` on has no `Height` in Revit's export, and the rule takes none of them (the measured censuses below count none).
+`export_content::wall_areas::add_bounded_wall_quantities` writes `Height`, the extrusion's height, beside the four on each wall it vouches for. It adds no condition: a wall is taken exactly as RE-270 and RE-290 say. A wall Revit writes only a `NetVolume` on has no `Height` in Revit's export. The rule takes none of them on the corpus, as the censuses below measure (no `Height` is written where Revit writes none); that is a measured result, not a guard in the rule, which has nothing of its own to keep one out.
 
 ## 4. Measured
 
