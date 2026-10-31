@@ -366,8 +366,10 @@ pub fn extract(
     });
     let mut nothing = options.clone();
     if !defined {
+        // Both selections empty would select every record: select the one
+        // class no record has instead, so nothing is read.
         nothing.selected_ids.clear();
-        nothing.selected_classes.clear();
+        nothing.selected_classes = BTreeSet::from([String::new()]);
     }
     let mut summary = extract_records(file, &nothing, false, &definitions, emit)?;
     summary.parameter_binding_context = serde_json::json!({

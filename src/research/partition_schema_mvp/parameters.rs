@@ -279,13 +279,13 @@ pub(super) fn attach_native_named_parameters<'a>(
 /// set, or a property some standard set defines.
 fn names_a_property(name: &str) -> bool {
     use crate::ifc::standard_property_sets as sps;
-    if name == IS_EXTERNAL_PARAMETER_NAME {
+    if name == IS_EXTERNAL_PARAMETER_NAME
+        || name.ends_with(&format!(".{IS_EXTERNAL_PARAMETER_NAME}"))
+    {
         return true;
     }
     match name.split_once('.') {
-        Some((set, property)) => {
-            property == IS_EXTERNAL_PARAMETER_NAME || sps::property_kind(set, property).is_some()
-        }
+        Some((set, property)) => sps::property_kind(set, property).is_some(),
         None => sps::STANDARD_PROPERTY_SETS
             .iter()
             .any(|set| set.property_kind(name).is_some()),
