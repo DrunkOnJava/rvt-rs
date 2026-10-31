@@ -4,7 +4,7 @@
 **Issues:** #1046 (quantities Revit computes from its joined geometry, step 1: walls), #1016 (quantities), W7 of [`docs/release-1.0-criteria.md`](../../docs/release-1.0-criteria.md); follows RE-252 (`GrossFootprintArea` is `Length` × `Width` on every wall that has one, and Revit writes it only where its exporter draws the wall as an extrusion) and RE-270 (the walls whose side areas and volumes rvt-rs writes)
 **Artefacts:** the BIM4LCA office as built and at building permit (Revit 2024, Revit 24.0.5's IFC4 exports, CC BY-SA 4.0, `research/bim4lca-measure.tsv`) and puzzbobb's R2025 models (Revit 2025, Apache-2.0, `research/r2025-models.tsv`), as Measure fetches them
 **Scorer:** `tools/re/wall_quantities_vs_ifc.py` (RE-270)
-**Runs:** Measure [41136551451](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41136551451) (`main` at f73908bf: the scorer and `probe_1067_native_dump`, both offices and the R2025 models) and [41141471438](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41141471438) (this change, 1a2c793e, against `main` at 13fc635f, every model and scorer; [41139531513](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41139531513) measured it first at 84bd4db6 against `main` at 88e28894, head job only)
+**Runs:** Measure [41136551451](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41136551451) (`main` at f73908bf: the scorer and `probe_1067_native_dump`, both offices and the R2025 models) and [41146199810](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41146199810) (this change at e2e273bd against `main` at 9637d5ff, every model and scorer)
 **Result:** positive, narrowed. Revit's export writes a wall's `GrossFootprintArea` on every wall it draws as an extrusion with nothing joined to or cutting it, but the shortest, which is as long as it is thick. rvt-rs writes it, `Length` times `Width`, on the walls it writes the four RE-270 quantities on by the first rule (a record box cut back at its joins, nothing joined to or cutting the wall) that are longer than twice their thickness: 48 of the office's walls as built, 47 at permit and 91 R2025 walls, Revit's on every one, none different and none Revit's export leaves out.
 
 ## 1. Where Revit's export gets it
@@ -33,12 +33,24 @@ The layered walls rvt-rs draws from their layers (a body that is not the box) ar
 
 ## 4. Measured
 
-Every model and every scorer against `main` (run 41141471438): the table follows when that run completes.
+This change at e2e273bd against `main` at 9637d5ff, every model and every scorer (run [41146199810](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41146199810), `-f base=main -f nordic=true -f r2025=true`). The exports of both offices, Core Interior, RE1 Architecture and the 23 R2025 models that have walls change (their `ifc.sha256` and `qtos_vs_ifc` outputs, and Core Interior's witness observations); the other 1,398 scorer outputs are byte-identical to `main`'s.
+
+| | office as built | at permit | R2025 (24 models) |
+|---|---:|---:|---:|
+| `GrossFootprintArea` equal, before | 0 of 279 | 0 of 276 | 0 of 138 |
+| ... after | 48 of 279 | 47 of 276 | 91 of 138 |
+| different, before and after | 0 | 0 | 0 |
+| written that Revit's export omits, before and after | 0 | 0 | 0 |
+| quantities equal, before | 28,065 | 28,011 | 775 |
+| ... after | 28,113 | 28,058 | 866 |
+| quantities scored | 39,388 | 39,679 | 1,515 |
+
+`GrossSideArea` and the other three walls' quantities are as on `main` (67 of 579 as built, 70 of 565 at permit, 91 of 138 on R2025). Core Interior's and RE1 Architecture's exports were made with base quantities off (RE-242): the 139 and 1 footprint areas rvt-rs now writes on their walls are counted apart (Core Interior 2,268 to 2,407, RE1 Architecture 86 to 87), and Core Interior's witness observations gain 139 `IFCQUANTITYAREA` (491 to 630); both verdicts replay PASS with the verdict files unchanged.
 
 ## 5. Reproduce
 
 ```bash
-gh workflow run measure.yml --ref main -f ref=1a2c793ecd3961fb6863a6fa4d64b0846788bdf8 -f base=main -f nordic=true -f r2025=true
+gh workflow run measure.yml --ref main -f ref=e2e273bd9962946c78d7b74771e436c904cdd3ea -f base=main -f nordic=true -f r2025=true
 gh workflow run measure.yml --ref main -f ref=f73908bf1b04c0b6d9c9acd8340fe3b5f73af67a -f base=none -f nordic=true -f r2025=true \
   -f models="nordic-office-* r2025-*" -f scorers=wall_quantities_vs_ifc -f probe=probe_1067_native_dump -f probe_scorer=-
 ```

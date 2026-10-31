@@ -142,7 +142,7 @@ spaces' `Height` where the room's record holds its solid's faces (RE-255),
 stair railings' `Length` where the path is one line along the stair's runs (RE-254)), 1 differs (the mullion whose `Span` differs) and 11,274 are missing (Measure run 41146199810, `main` at 9637d5ff; the 527 quantities Revit's export writes on openings rvt-rs does not write, a door's further cuts and the cuts of curtain walls and cabinets, are counted apart, [#1165](https://github.com/DrunkOnJava/rvt-rs/issues/1165)), none written that Revit's export leaves out (the maintainer,
 2026-10-26: a joined column's `Length` and a curtain panel's `Width` are left out,
 since Revit's export gives none on 18 meshed columns and 3 panels that nothing tells apart), and RE1's 94 IFC2X3 pipe and duct lengths all are written;
-Core Interior's and RE1 Architecture's exports were made with Revit's "Export base quantities" off, so the census counts the quantities rvt-rs writes on them apart (2,268 and 86,
+Core Interior's and RE1 Architecture's exports were made with Revit's "Export base quantities" off, so the census counts the quantities rvt-rs writes on them apart (2,407 and 87,
 and RE1 Mechanical's and Plumbing's pipe areas,
 12 and 126), and `rvt-ifc --no-base-quantities` leaves them out, base quantities being on by default as in each of Revit's built-in IFC4 setups (RE-242);
 the census scores type objects' own sets too ([#1018](https://github.com/DrunkOnJava/rvt-rs/issues/1018)): of the values Revit's export writes on the type objects rvt-rs writes, 184 on the office as built, mostly `IsExternal`, none is written yet (four more,
