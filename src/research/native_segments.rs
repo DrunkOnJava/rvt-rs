@@ -71,9 +71,8 @@ fn whole_member<'a>(
     if compressed.get(3) != Some(&0) || trailer.len() != 8 || member.len() > max_group_bytes {
         return None;
     }
-    let mut crc = flate2::Crc::new();
-    crc.update(member);
-    (trailer[..4] == crc.sum().to_le_bytes() && trailer[4..] == (member.len() as u32).to_le_bytes())
+    let crc = inflated.member_crc_at(offset)?;
+    (trailer[..4] == crc.to_le_bytes() && trailer[4..] == (member.len() as u32).to_le_bytes())
         .then_some(member)
 }
 /// Walk a checksum-prepared partition. Each callback receives a complete
