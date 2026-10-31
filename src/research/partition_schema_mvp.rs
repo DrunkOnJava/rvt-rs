@@ -254,9 +254,40 @@ pub fn recover_partition_schema_mvp(
         ] {
             attach_type_materials(&type_materials, elements);
         }
+        // --- A wall's type Function from its native type record (RE-185),
+        // the parameters named for IsExternal or a standard property from the
+        // saved parameters (RE-193, RE-194), and the IsExternal Revit's
+        // exporter calculates from them (RE-283) ---
+        attach_wall_type_functions(rf, revit_version, out.walls.iter_mut());
+        attach_native_named_parameters(
+            rf,
+            revit_version,
+            out.walls
+                .iter_mut()
+                .chain(out.columns.iter_mut())
+                .chain(out.doors.iter_mut())
+                .chain(out.windows.iter_mut())
+                .chain(out.slabs.iter_mut())
+                .chain(out.rooms.iter_mut())
+                .chain(out.products.iter_mut()),
+        );
+        attach_record_is_external(
+            out.walls
+                .iter_mut()
+                .chain(out.columns.iter_mut())
+                .chain(out.doors.iter_mut())
+                .chain(out.windows.iter_mut())
+                .chain(out.slabs.iter_mut())
+                .chain(out.rooms.iter_mut())
+                .chain(out.products.iter_mut()),
+        );
         // --- Whether a wall's top is joined to a roof or floor, from its
         // native record (RE-228, RE-284) ---
         attach_wall_top_joins(rf, revit_version, &mut out.walls);
+
+        // --- A structural beam's or column's LoadBearing is its category's
+        // (RE-285), unless a parameter named for it says otherwise ---
+        attach_load_bearing(out.columns.iter_mut().chain(out.products.iter_mut()));
         return Ok(out);
     }
 
@@ -706,6 +737,38 @@ pub fn recover_partition_schema_mvp(
                     .push((COLUMN_UNJOINED_FIELD.into(), InstanceField::Bool(true)));
             }
         }
+        // --- The elements each column's pair steps name (RE-291) ---
+        for element in out.columns.iter_mut().chain(out.products.iter_mut()) {
+            if !is_column_class(&element.class) {
+                continue;
+            }
+            let Some(id) = element.id.map(u64::from) else {
+                continue;
+            };
+            let named = |partners: &BTreeMap<u64, BTreeSet<u64>>| {
+                partners
+                    .get(&id)?
+                    .iter()
+                    .map(|&other| {
+                        Some(InstanceField::ElementId {
+                            tag: 0,
+                            id: u32::try_from(other).ok()?,
+                        })
+                    })
+                    .collect::<Option<Vec<InstanceField>>>()
+            };
+            if let (Some(cut), Some(clean)) =
+                (named(&joins.cut_partners), named(&joins.clean_partners))
+            {
+                element
+                    .fields
+                    .push((COLUMN_CUT_PARTNERS_FIELD.into(), InstanceField::Vector(cut)));
+                element.fields.push((
+                    COLUMN_CLEAN_PARTNERS_FIELD.into(),
+                    InstanceField::Vector(clean),
+                ));
+            }
+        }
     }
 
     // --- Curtain mullions' and panels' materials, from their types (RE-166, B66) ---
@@ -740,7 +803,7 @@ pub fn recover_partition_schema_mvp(
     // --- Steel beams' and columns' I sections from their type (RE-103, RE-104) ---
     attach_beam_sections(rf, revit_version, &mut out.products);
     // --- Hollow structural sections from their type's family parameters (W6) ---
-    attach_hollow_sections(rf, revit_version, [&mut out.columns, &mut out.products]);
+    attach_column_sections(rf, revit_version, [&mut out.columns, &mut out.products]);
     // --- A wall's and a curtain panel wall's type Function, from its native
     // type record (RE-185), after RE-72 has relabelled the panels ---
     attach_wall_type_functions(
@@ -784,6 +847,9 @@ pub fn recover_partition_schema_mvp(
             &mut out.products,
         ],
     );
+    // --- A structural beam's or column's LoadBearing is its category's
+    // (RE-285), unless a parameter named for it says otherwise ---
+    attach_load_bearing(out.columns.iter_mut().chain(out.products.iter_mut()));
     Ok(out)
 }
 

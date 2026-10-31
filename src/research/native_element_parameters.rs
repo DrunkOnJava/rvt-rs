@@ -140,6 +140,16 @@ pub const SYSTEM_TYPE_LINKS: [(&str, &str, &str); 7] = [
 /// with no native record, or whose record does not decode, get none, as
 /// does every element of a file from before Revit 2015.
 pub fn read(file: &mut RevitFile, ids: &BTreeSet<u64>) -> Result<ElementParameters> {
+    read_defined(file, ids, None)
+}
+
+/// [`read`], reading nothing where `filter` accepts the name of none of the
+/// file's parameter definitions ([`native_document::Options::definition_filter`]).
+pub fn read_defined(
+    file: &mut RevitFile,
+    ids: &BTreeSet<u64>,
+    filter: Option<fn(&str) -> bool>,
+) -> Result<ElementParameters> {
     if !native_document::NATIVE_RELEASES.contains(&file.layout_release()?) || ids.is_empty() {
         return Ok(ElementParameters::default());
     }
@@ -151,6 +161,7 @@ pub fn read(file: &mut RevitFile, ids: &BTreeSet<u64>) -> Result<ElementParamete
             .map(String::from)
             .collect(),
         releases: native_document::NATIVE_RELEASES,
+        definition_filter: filter,
         ..Default::default()
     };
     let mut records: BTreeMap<i64, RecordParameters> = BTreeMap::new();

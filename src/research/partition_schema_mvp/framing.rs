@@ -43,11 +43,48 @@ pub(super) fn is_column_class(class: &str) -> bool {
     matches!(class, "Column" | "StructuralColumn")
 }
 
+/// The ElementIds [`COLUMN_CUT_PARTNERS_FIELD`] and
+/// [`COLUMN_CLEAN_PARTNERS_FIELD`] record: what a column's cut pairs and
+/// clean pairs name (RE-291). `None` where either is absent.
+pub fn column_partners_from_fields(
+    fields: &[(String, InstanceField)],
+) -> Option<(Vec<u32>, Vec<u32>)> {
+    let ids = |wanted: &str| {
+        fields.iter().find_map(|(name, value)| match value {
+            InstanceField::Vector(items) if name == wanted => items
+                .iter()
+                .map(|item| match item {
+                    InstanceField::ElementId { id, .. } => Some(*id),
+                    _ => None,
+                })
+                .collect::<Option<Vec<u32>>>(),
+            _ => None,
+        })
+    };
+    Some((
+        ids(COLUMN_CUT_PARTNERS_FIELD)?,
+        ids(COLUMN_CLEAN_PARTNERS_FIELD)?,
+    ))
+}
+
+/// The sides [`COLUMN_RECTANGLE_FIELDS`] record.
+pub fn column_rectangle_from_fields(fields: &[(String, InstanceField)]) -> Option<[f64; 2]> {
+    let [b, h] = COLUMN_RECTANGLE_FIELDS.map(|wanted| {
+        fields.iter().find_map(|(name, value)| match value {
+            InstanceField::Float { value, .. } if name == wanted => Some(*value),
+            _ => None,
+        })
+    });
+    Some([b?, h?])
+}
+
 /// Give each column whose type is a hollow structural section
-/// ([`crate::partition_type_parameters::type_hollow_sections`]) and holds no
-/// I section that section (W6). The exporter draws it only where its record
-/// box is the section's outside.
-pub(super) fn attach_hollow_sections(
+/// ([`crate::partition_type_parameters::hollow_section`]) and holds no I
+/// section that section (W6), and each whose type is a plain rectangle
+/// ([`crate::partition_type_parameters::rectangular_section`]) its two sides
+/// (RE-291). The exporter draws a hollow section only where its record box is
+/// the section's outside.
+pub(super) fn attach_column_sections(
     rf: &mut RevitFile,
     revit_version: u32,
     groups: [&mut Vec<DecodedElement>; 2],
@@ -71,22 +108,29 @@ pub(super) fn attach_hollow_sections(
     if types.is_empty() {
         return;
     }
-    let sections =
-        crate::partition_type_parameters::type_hollow_sections(rf, revit_version, &types);
+    let held = crate::partition_type_parameters::type_named_lengths(rf, revit_version, &types);
     for element in elements.iter_mut() {
-        let Some(section) = type_of(element).and_then(|id| sections.get(&id)).copied() else {
+        let Some(by_name) = type_of(element).and_then(|id| held.get(&id)) else {
             continue;
         };
-        let values = [
-            section.width_feet,
-            section.height_feet,
-            section.wall_feet,
-            section.outer_radius_feet,
-        ];
-        for (name, value) in HOLLOW_SECTION_FIELDS.iter().zip(values) {
-            element
-                .fields
-                .push(((*name).into(), InstanceField::Float { value, size: 8 }));
+        if let Some(section) = crate::partition_type_parameters::hollow_section(by_name) {
+            let values = [
+                section.width_feet,
+                section.height_feet,
+                section.wall_feet,
+                section.outer_radius_feet,
+            ];
+            for (name, value) in HOLLOW_SECTION_FIELDS.iter().zip(values) {
+                element
+                    .fields
+                    .push(((*name).into(), InstanceField::Float { value, size: 8 }));
+            }
+        } else if let Some(sides) = crate::partition_type_parameters::rectangular_section(by_name) {
+            for (name, value) in COLUMN_RECTANGLE_FIELDS.iter().zip(sides) {
+                element
+                    .fields
+                    .push(((*name).into(), InstanceField::Float { value, size: 8 }));
+            }
         }
     }
 }

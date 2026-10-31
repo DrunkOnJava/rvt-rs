@@ -130,7 +130,215 @@ pub(super) fn attach_is_external(
             }
         }
     }
-    for element in groups.into_iter().flat_map(|elements| elements.iter_mut()) {
+    attach_calculated_is_external(
+        groups.into_iter().flat_map(|elements| elements.iter_mut()),
+        last_step,
+    );
+}
+
+/// Whether `value` is a Yes/No parameter's: a boolean, or a 0 or 1.
+fn yes_no(value: &serde_json::Value) -> Option<bool> {
+    match value {
+        serde_json::Value::Bool(flag) => Some(*flag),
+        other => match other.as_i64() {
+            Some(0) => Some(false),
+            Some(1) => Some(true),
+            _ => None,
+        },
+    }
+}
+
+/// The field a parameter's saved `value` gives a property of IFC4 type
+/// `kind`, as [`attach_named_parameters`] reads it from the partition data.
+fn named_field(
+    kind: crate::ifc::standard_property_sets::StandardPropertyKind,
+    value: &serde_json::Value,
+) -> Option<InstanceField> {
+    use crate::ifc::standard_property_sets::StandardPropertyKind as Kind;
+    match kind {
+        Kind::Boolean => yes_no(value).map(InstanceField::Bool),
+        Kind::Count | Kind::Integer => {
+            let count = value.as_i64().filter(|n| i32::try_from(*n).is_ok())?;
+            Some(InstanceField::Integer {
+                value: count,
+                signed: false,
+                size: 4,
+            })
+        }
+        Kind::Identifier | Kind::Label | Kind::Text => {
+            let text = value.as_str().filter(|text| !text.is_empty())?;
+            Some(InstanceField::String(text.to_string()))
+        }
+        Kind::Length | Kind::PositiveLength | Kind::ThermalTransmittance => {
+            let number = value.as_f64()?;
+            if kind == Kind::PositiveLength && number <= 0.0 {
+                return None;
+            }
+            (number == 0.0 || number.is_normal()).then_some(InstanceField::Float {
+                value: number,
+                size: 8,
+            })
+        }
+    }
+}
+
+/// Give each of `elements` the values of the parameters it holds that are
+/// named `IsExternal` or `<property set>.IsExternal` (on the element and, for
+/// the plain name, its type) and of those named `<property set>.<property>`,
+/// or for the property alone, for a property of a standard set, as the
+/// fields [`attach_is_external`] and [`attach_named_parameters`] give them
+/// from the partition data on 2024 and later, here read from the saved
+/// parameters on the releases in [`NATIVE_NAMED_PARAMETER_REVIT_VERSIONS`]
+/// (RE-283). A qualified name is read before a bare one; a bare name
+/// fills the property of each standard set that defines it.
+pub(super) fn attach_native_named_parameters<'a>(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    elements: impl IntoIterator<Item = &'a mut DecodedElement>,
+) {
+    use crate::ifc::standard_property_sets::{self as sps, StandardPropertyKind as Kind};
+    use crate::native_element_parameters::{ParameterLevel, read_defined};
+    if !NATIVE_NAMED_PARAMETER_REVIT_VERSIONS.contains(&revit_version) {
+        return;
+    }
+    let mut elements: Vec<&mut DecodedElement> = elements.into_iter().collect();
+    let ids: BTreeSet<u64> = elements
+        .iter()
+        .filter_map(|element| element.id.map(u64::from))
+        .collect();
+    if ids.is_empty() {
+        return;
+    }
+    let Ok(saved) = read_defined(rf, &ids, Some(names_a_property)) else {
+        return;
+    };
+    let is_external_suffix = format!(".{IS_EXTERNAL_PARAMETER_NAME}");
+    for element in elements.iter_mut() {
+        let Some(parameters) = element.id.and_then(|id| saved.elements.get(&u64::from(id))) else {
+            continue;
+        };
+        let mut qualified: Vec<(String, Kind, &serde_json::Value)> = Vec::new();
+        let mut bare: Vec<(String, Kind, &serde_json::Value)> = Vec::new();
+        let mut flags: Vec<(String, bool)> = Vec::new();
+        for parameter in parameters {
+            let Some(name) = parameter.name.as_deref() else {
+                continue;
+            };
+            if name == IS_EXTERNAL_PARAMETER_NAME || name.ends_with(&is_external_suffix) {
+                let Some(flag) = yes_no(&parameter.value) else {
+                    continue;
+                };
+                match parameter.level {
+                    ParameterLevel::Instance => {
+                        flags.push((format!("{NAMED_PARAMETER_FIELD_PREFIX}{name}"), flag));
+                    }
+                    ParameterLevel::Type if name == IS_EXTERNAL_PARAMETER_NAME => {
+                        flags.push((format!("{TYPE_NAMED_PARAMETER_FIELD_PREFIX}{name}"), flag));
+                    }
+                    ParameterLevel::Type => {}
+                }
+                continue;
+            }
+            if parameter.level != ParameterLevel::Instance {
+                continue;
+            }
+            if let Some((set, property)) = name.split_once('.') {
+                if let Some(kind) = sps::property_kind(set, property) {
+                    qualified.push((name.to_string(), kind, &parameter.value));
+                }
+                continue;
+            }
+            for set in sps::STANDARD_PROPERTY_SETS {
+                if let Some(kind) = set.property_kind(name) {
+                    bare.push((format!("{}.{name}", set.name), kind, &parameter.value));
+                }
+            }
+        }
+        for (field_name, flag) in flags {
+            if !element.fields.iter().any(|(held, _)| *held == field_name) {
+                element.fields.push((field_name, InstanceField::Bool(flag)));
+            }
+        }
+        for (name, kind, value) in qualified.into_iter().chain(bare) {
+            if REVIT_OMITTED_PARAMETERS.contains(&name.as_str()) {
+                continue;
+            }
+            let field_name = format!("{NAMED_PARAMETER_FIELD_PREFIX}{name}");
+            if element.fields.iter().any(|(held, _)| *held == field_name) {
+                continue;
+            }
+            if let Some(field) = named_field(kind, value) {
+                element.fields.push((field_name, field));
+            }
+        }
+    }
+}
+
+/// Whether a parameter named `name` is one [`attach_native_named_parameters`]
+/// reads: `IsExternal`, `<set>.IsExternal`, `<set>.<property>` of a standard
+/// set, or a property some standard set defines.
+fn names_a_property(name: &str) -> bool {
+    use crate::ifc::standard_property_sets as sps;
+    if name == IS_EXTERNAL_PARAMETER_NAME
+        || name.ends_with(&format!(".{IS_EXTERNAL_PARAMETER_NAME}"))
+    {
+        return true;
+    }
+    match name.split_once('.') {
+        Some((set, property)) => sps::property_kind(set, property).is_some(),
+        None => sps::STANDARD_PROPERTY_SETS
+            .iter()
+            .any(|set| set.property_kind(name).is_some()),
+    }
+}
+
+/// Give each of `elements` of a class revit-ifc calls load bearing by its
+/// category alone ([`LOAD_BEARING_CLASSES`]) [`LOAD_BEARING_FIELD`] (RE-285).
+pub(super) fn attach_load_bearing<'a>(elements: impl IntoIterator<Item = &'a mut DecodedElement>) {
+    for element in elements {
+        if LOAD_BEARING_CLASSES.contains(&element.class.as_str()) {
+            element
+                .fields
+                .push((LOAD_BEARING_FIELD.into(), InstanceField::Bool(true)));
+        }
+    }
+}
+
+/// Give each of `elements` the `IsExternal` revit-ifc calculates for it
+/// ([`calculated_is_external`], [`IS_EXTERNAL_FIELD`]) on the releases that
+/// read elements from their element records (RE-283): where a
+/// parameter named for it says (RE-193), a wall's type Function says, or, for
+/// the classes in [`IS_EXTERNAL_LAST_STEP_RECORD_CLASSES`], the calculation's
+/// last step, not external. Any other element gets none.
+pub(super) fn attach_record_is_external<'a>(
+    elements: impl IntoIterator<Item = &'a mut DecodedElement>,
+) {
+    let suffix = format!(".{IS_EXTERNAL_PARAMETER_NAME}");
+    for element in elements {
+        let named = element.fields.iter().any(|(name, _)| {
+            name.strip_prefix(NAMED_PARAMETER_FIELD_PREFIX)
+                .or_else(|| name.strip_prefix(TYPE_NAMED_PARAMETER_FIELD_PREFIX))
+                .is_some_and(|rest| rest == IS_EXTERNAL_PARAMETER_NAME || rest.ends_with(&suffix))
+        });
+        let last_step = IS_EXTERNAL_LAST_STEP_RECORD_CLASSES.contains(&element.class.as_str());
+        if !(named || last_step || element.class == "Wall") {
+            continue;
+        }
+        if let Some(external) = calculated_is_external(element, last_step) {
+            element
+                .fields
+                .push((IS_EXTERNAL_FIELD.into(), InstanceField::Bool(external)));
+        }
+    }
+}
+
+/// Give each of `elements` the value [`calculated_is_external`] finds for it
+/// ([`IS_EXTERNAL_FIELD`]).
+pub(super) fn attach_calculated_is_external<'a>(
+    elements: impl IntoIterator<Item = &'a mut DecodedElement>,
+    last_step: bool,
+) {
+    for element in elements {
         if let Some(external) = calculated_is_external(element, last_step) {
             element
                 .fields
