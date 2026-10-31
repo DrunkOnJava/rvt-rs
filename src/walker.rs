@@ -393,23 +393,6 @@ pub fn write_adocument_field(value: &InstanceField, ft: &formats::FieldType, out
 /// then pass it to `write_with_patches` as a `CustomPrefix8` stream
 /// patch, which encodes it.
 // Tracker: WRT-02.
-pub fn encode_adocument_fields(
-    schema: &formats::ClassEntry,
-    fields: &[(String, InstanceField)],
-) -> Vec<u8> {
-    let mut out = Vec::new();
-    for (idx, schema_field) in schema.fields.iter().enumerate() {
-        let Some((_, value)) = fields.get(idx) else {
-            break;
-        };
-        if let Some(ft) = schema_field.field_type.as_ref() {
-            write_adocument_field(value, ft, &mut out);
-        } else if let InstanceField::Bytes(raw) = value {
-            out.extend_from_slice(raw);
-        }
-    }
-    out
-}
 
 /// Encode a 2-column reference container — the inverse of
 /// `read_field`'s `Container { kind: 0x0e, .. }` path. The on-
@@ -1161,38 +1144,6 @@ impl ADocumentInstance {
     /// parsing an actual element index) is separate — see the
     /// `walk_elem_table_*` entry points on `RevitFile`.
     // Tracker: L5B-01.
-    pub fn elem_table_pointer(&self) -> Option<[u32; 2]> {
-        const NAMES: &[&str] = &[
-            "m_elem_table",
-            "m_elemtable",
-            "elem_table",
-            "elemtable",
-            "elementtable",
-            "m_element_table",
-        ];
-        for (field_name, value) in &self.fields {
-            let norm = field_name
-                .trim_start_matches('m')
-                .trim_start_matches('_')
-                .to_lowercase();
-            let compacted = norm.replace('_', "");
-            let matched = NAMES
-                .iter()
-                .any(|n| n.eq_ignore_ascii_case(field_name) || *n == compacted);
-            if !matched {
-                continue;
-            }
-            if let InstanceField::Pointer { raw } = value {
-                // Revit sentinels: [0, 0] = NULL, [!0, !0] = "not
-                // yet set." Both mean "no element table to walk."
-                if *raw == [0, 0] || *raw == [u32::MAX, u32::MAX] {
-                    return None;
-                }
-                return Some(*raw);
-            }
-        }
-        None
-    }
 
     /// Compute completeness markers for this instance. O(n) in the
     /// field count; cheap enough to call ad-hoc.

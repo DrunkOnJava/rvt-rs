@@ -96,12 +96,7 @@ pub struct InflateShortfall {
     pub stopped_at_total: bool,
 }
 
-impl InflateShortfall {
-    /// True when no limit left anything out.
-    pub fn is_complete(&self) -> bool {
-        self.members_over_limit == 0 && !self.stopped_at_total
-    }
-}
+impl InflateShortfall {}
 
 /// Stored bytes in a full checksum page (`PagedStreamImplReader<..., 65249>`).
 ///

@@ -400,104 +400,6 @@ impl Extrusion {
         }
     }
 
-    /// T-shape profile (structural tee, WT/ST/MT cut from I-beams).
-    /// Emits `IFCTShapeProfileDef`.
-    pub fn t_shape(
-        overall_depth_feet: f64,
-        flange_width_feet: f64,
-        web_thickness_feet: f64,
-        flange_thickness_feet: f64,
-        height_feet: f64,
-    ) -> Self {
-        Self {
-            width_feet: flange_width_feet,
-            depth_feet: overall_depth_feet,
-            height_feet,
-            profile_override: Some(ProfileDef::TShape {
-                overall_depth_feet,
-                flange_width_feet,
-                web_thickness_feet,
-                flange_thickness_feet,
-            }),
-        }
-    }
-
-    /// L-shape (angle) profile — equal-leg when `width == depth`.
-    /// Emits `IFCLShapeProfileDef`.
-    pub fn l_shape(
-        overall_depth_feet: f64,
-        overall_width_feet: f64,
-        thickness_feet: f64,
-        height_feet: f64,
-    ) -> Self {
-        Self {
-            width_feet: overall_width_feet,
-            depth_feet: overall_depth_feet,
-            height_feet,
-            profile_override: Some(ProfileDef::LShape {
-                overall_depth_feet,
-                overall_width_feet,
-                thickness_feet,
-            }),
-        }
-    }
-
-    /// U-shape (channel) profile. Emits `IFCUShapeProfileDef`.
-    pub fn u_shape(
-        overall_depth_feet: f64,
-        flange_width_feet: f64,
-        web_thickness_feet: f64,
-        flange_thickness_feet: f64,
-        height_feet: f64,
-    ) -> Self {
-        Self {
-            width_feet: flange_width_feet,
-            depth_feet: overall_depth_feet,
-            height_feet,
-            profile_override: Some(ProfileDef::UShape {
-                overall_depth_feet,
-                flange_width_feet,
-                web_thickness_feet,
-                flange_thickness_feet,
-            }),
-        }
-    }
-
-    /// Rectangular hollow section (HSS tube). Emits
-    /// `IFCRectangleHollowProfileDef`.
-    pub fn rectangle_hollow(
-        overall_width_feet: f64,
-        overall_depth_feet: f64,
-        wall_thickness_feet: f64,
-        height_feet: f64,
-    ) -> Self {
-        Self {
-            width_feet: overall_width_feet,
-            depth_feet: overall_depth_feet,
-            height_feet,
-            profile_override: Some(ProfileDef::RectangleHollow {
-                overall_width_feet,
-                overall_depth_feet,
-                wall_thickness_feet,
-            }),
-        }
-    }
-
-    /// Circular hollow section (round HSS pipe). Emits
-    /// `IFCCIRCLEHOLLOWPROFILEDEF`.
-    pub fn circle_hollow(radius_feet: f64, wall_thickness_feet: f64, height_feet: f64) -> Self {
-        let diameter = radius_feet * 2.0;
-        Self {
-            width_feet: diameter,
-            depth_feet: diameter,
-            height_feet,
-            profile_override: Some(ProfileDef::CircleHollow {
-                radius_feet,
-                wall_thickness_feet,
-            }),
-        }
-    }
-
     /// Arbitrary closed polyline profile (e.g. curtain-mullion
     /// cross-section, custom sketched shape). Emits
     /// `IFCArbitraryClosedProfileDef` + an `IFCPOLYLINE` as the
@@ -523,23 +425,6 @@ impl Extrusion {
             height_feet,
             profile_override: Some(ProfileDef::ArbitraryClosed { points }),
         }
-    }
-
-    /// Extrusion of an arbitrary closed polygon with holes
-    /// (`IFCArbitraryProfileDefWithVoids`). `width_feet` /
-    /// `depth_feet` are set from the **outer** polygon's plan
-    /// bounding box, so a consumer that ignores the override still
-    /// reads a sane envelope.
-    pub fn arbitrary_with_voids(
-        points: Vec<(f64, f64)>,
-        voids: Vec<Vec<(f64, f64)>>,
-        height_feet: f64,
-    ) -> Self {
-        let mut base = Self::arbitrary_closed(points, height_feet);
-        if let Some(ProfileDef::ArbitraryClosed { points }) = base.profile_override.take() {
-            base.profile_override = Some(ProfileDef::ArbitraryWithVoids { points, voids });
-        }
-        base
     }
 }
 
@@ -963,14 +848,7 @@ pub struct MaterialLayerSetUsage {
     pub offset_feet: f64,
 }
 
-impl MaterialLayerSet {
-    /// Total thickness in feet (sum of layer thicknesses). Useful
-    /// for sanity-checking that the declared wall thickness matches
-    /// the layer-set composition.
-    pub fn total_thickness_feet(&self) -> f64 {
-        self.layers.iter().map(|l| l.thickness_feet).sum()
-    }
-}
+impl MaterialLayerSet {}
 
 /// One material assigned to a structural profile in a
 /// [`MaterialProfileSet`]. `material_index` references
