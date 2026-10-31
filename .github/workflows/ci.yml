@@ -1231,6 +1231,10 @@ jobs:
       # docs.
       - name: API docs cite only reported RE findings and no planning labels
         run: python3 tools/ci/api-doc-ids.py
+      - name: Reports cite only commits the repository has
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 tools/ci/cited-commits.py
       # The README's count and docs/viewer-api.md's table name exactly the
       # bindings rvt-wasm exports.
       - name: The docs list every wasm binding
