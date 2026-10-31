@@ -16,7 +16,8 @@ where Revit's own exporters disagree on it.
 
 Base quantities Revit computes from its joined geometry are written where
 the records decide them:
-- walls' side areas, volumes, `Height` and `GrossFootprintArea`;
+- walls' side areas, volumes and `Height`, and the `GrossFootprintArea` of a
+  wall nothing joins to or cuts;
 - the areas and volumes of box-drawn columns nothing cuts or crosses;
 - floors' `NetVolume` and flat roofs' slab quantities where nothing cuts
   them, and ceilings' `GrossArea`;
@@ -29,7 +30,8 @@ them, later ones do not.
 
 These property values are written:
 - unrotated beams' `Roll`, level beams' `Slope` and the `Span` of beams drawn
-  along their location line (a rotated or sloped beam gets none);
+  along their location line (a rotated beam gets no `Roll`, a sloped one no
+  `Slope`);
 - storeys' `Reference` and `EntranceLevel`;
 - structural columns' and framing's `LoadBearing`;
 - type objects' common sets, without `IsExternal`, which Revit's newer
@@ -50,9 +52,13 @@ On the BIM4LCA office as built, counting the objects rvt-rs writes:
   equal (run 41215480967);
 - 1 differs in each.
 
-What the census counts apart is not in those totals: openings rvt-rs does
-not write, the values the project's own property-set file places, and the
-curtain members' values the exporter took from its cache. No quantity is
+What the census counts apart is not in those totals:
+- values Revit's export gets wrong (10,390 quantities as built: mullions'
+  `CrossSectionArea`, door openings' `Width` and `Height`, floors'
+  `Perimeter`; RE-235 §5);
+- openings rvt-rs does not write;
+- the values the project's own property-set file places;
+- the curtain members' values the exporter took from its cache. No quantity is
 written that Revit's IFC4 exports leave out. rvt-rs writes 10 property
 values Revit's export does not as built and 14 at permit:
 - 9 and 8 on openings and, at permit, 5 on one column, all on elements
@@ -87,15 +93,18 @@ Python and the browser viewer draw the doors and windows of Revit 2023 to
 whole plan. A wall a floor covers only in part keeps its full height where
 Revit steps its top: 29 office walls as built and 26 at permit.
 
-Exports of Revit 2015 to 2023 files take longer, for the native records now
-read on those releases (#1237). On Autodesk's sample projects:
-- 2015 to 2022 exports take 2.8 to 3.4 times as long as with 0.11.0, about
-  1 s to 3 s each;
-- 2023 exports take twice as long;
+Exports of Revit 2015 to 2023 files take longer. The time comes with the
+native records now read on those releases, and is not yet broken down by
+stage (#1237). Timed on one runner against 0.11.0 (Measure run 41228075400),
+on Autodesk's sample projects:
+- 2015 to 2022 projects take 2.1 to 3.9 times as long, 0.9 s to 5.6 s more
+  each (2.8 to 3.4 times over each release's samples together);
+- 2023 projects take 1.6 to 2.4 times as long;
 - peak memory is up to 19% higher.
 
-Revit 2024 to 2027 exports take as long as before, 0.99 to 1.04 times, all
-on one runner (Measure run 41228075400).
+Revit 2024 to 2027 exports take as long as before in total per release,
+within 4%. Single files take 0.93 to 1.15 times as long, and small ones about
+0.1 s more.
 
 The public API that nothing used is removed, and other public types change;
 "Upgrading from 0.11" lists each.
@@ -129,8 +138,9 @@ AhmadAnzar brought two out-of-date statements in `docs/status.md` and
   above the model's zero, not above its storey.
 - An export no longer writes a floor's or a covering's
   `Qto_*BaseQuantities.Width`, which Revit's exporters disagree on.
-- Exports of Revit 2015 to 2023 files take two to three and a half times as
-  long, with up to 19% more peak memory (#1237).
+- Exports of Revit 2015 to 2023 files take 1.6 to 3.9 times as long, 0.9 s
+  to 5.6 s more on Autodesk's sample projects, with up to 19% more peak
+  memory (#1237).
 
 ### Added
 

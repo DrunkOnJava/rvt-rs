@@ -58,7 +58,7 @@ The latest release is [v0.12.0](https://github.com/DrunkOnJava/rvt-rs/releases/t
 What 0.12.0 changed, in brief:
 
 - **Base quantities ([#1016](https://github.com/DrunkOnJava/rvt-rs/issues/1016), [#1046](https://github.com/DrunkOnJava/rvt-rs/issues/1046)):** quantities Revit computes from its joined geometry are written where the model's records decide them:
-  - walls' side areas, volumes, `Height` and `GrossFootprintArea` (RE-270, RE-290, RE-292, RE-293);
+  - walls' side areas, volumes and `Height`, and the `GrossFootprintArea` of walls nothing joins to or cuts (RE-270, RE-290, RE-292, RE-293);
   - the areas and volumes of box-drawn columns nothing cuts or crosses (RE-291);
   - floors' `NetVolume` and flat roofs' slab quantities where nothing cuts them (RE-295, RE-298), and ceilings' `GrossArea` (RE-297);
   - spaces' `NetVolume` where the room's solid is a prism (RE-296);
@@ -66,7 +66,7 @@ What 0.12.0 changed, in brief:
 
   A floor's and a covering's `Width` are left out, as Revit's exporters disagree on them (RE-294).
 - **Property values:**
-  - unrotated beams' `Roll` (RE-276), level beams' `Slope` and the `Span` of beams drawn along their location line; a rotated or sloped beam gets none;
+  - unrotated beams' `Roll` (RE-276), level beams' `Slope` and the `Span` of beams drawn along their location line; a rotated beam gets no `Roll`, a sloped one no `Slope`;
   - storeys' `Reference` and `EntranceLevel` (RE-275);
   - structural columns' and framing's `LoadBearing` (RE-285);
   - type objects' common sets, without `IsExternal`, which Revit's newer exporters leave out (RE-286);
@@ -78,7 +78,12 @@ What 0.12.0 changed, in brief:
 - **Large models ([#1075](https://github.com/DrunkOnJava/rvt-rs/issues/1075)):** the readers of native records read under the file's own limits, which `--large-model` raises. A partition over the limit is named in the diagnostics and skipped, where it used to stop every such reader. At the default limits they stop at 256 MiB. Not yet measured on a model over the limits: a contributor's model with a 1.33 GB partition (#1117) is the first such file.
 - **Doors and windows** of Revit 2023 to 2027 files are drawn from Revit's saved meshes in Python and the browser viewer, where the whole mesh decodes, as `rvt-ifc` has drawn them since 0.11.0.
 - **Wall tops:** a wall's top is cut at the floor that covers its whole plan. A wall a floor covers only in part keeps its full height where Revit steps its top (29 office walls as built, 26 at permit; RE-267).
-- **Slower on Revit 2015 to 2023 ([#1237](https://github.com/DrunkOnJava/rvt-rs/issues/1237)):** for the native records now read on those releases, exports of Autodesk's 2015 to 2022 sample projects take 2.8 to 3.4 times as long as with 0.11.0 (about 1 s to 3 s each), 2023's twice as long, with up to 19% more peak memory. Revit 2024 to 2027 exports take as long as before (Measure run 41228075400).
+- **Slower on Revit 2015 to 2023 ([#1237](https://github.com/DrunkOnJava/rvt-rs/issues/1237)):** timed on one runner against 0.11.0 (Measure run 41228075400):
+  - Autodesk's 2015 to 2022 sample projects take 2.1 to 3.9 times as long, 0.9 s to 5.6 s more each;
+  - the 2023 projects take 1.6 to 2.4 times as long;
+  - peak memory is up to 19% higher.
+
+  The time comes with the native records now read on those releases and is not yet broken down by stage. Revit 2024 to 2027 exports take as long in total per release, within 4%; single files take 0.93 to 1.15 times as long.
 - **Breaking:** the public API that nothing used is removed, each item listed under "Removed" in the changelog with what to use instead. `FieldType::ElementIdRef` has no `sub`, and `IfcModel` gains `storey_properties` and `type_entity_sets`.
 
 The browser viewer is built from `main`, so it runs what `main` has; each change `main` adds after 0.12.0 is a fragment in [`changelog.d/`](changelog.d/README.md), which the next release moves into [`CHANGELOG.md`](CHANGELOG.md). To use `main` before the next release, build from source ([`docs/install.md`](docs/install.md#build-from-source)).
