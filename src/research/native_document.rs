@@ -129,8 +129,10 @@ pub struct Summary {
     pub current_records_outside_route: usize,
     /// Partitions over the file's stream limit, not read (#1075).
     pub unread_partitions: BTreeSet<u32>,
-    /// Selected elements whose current record is in one of
-    /// [`Self::unread_partitions`]: left out, not read from an older copy.
+    /// Selected elements with a copy in a partition that was read whose
+    /// current record may be in one of [`Self::unread_partitions`]: left out,
+    /// not read from that older copy. An element whose only copy is in an
+    /// unread partition is in [`Self::selected_ids_without_records`].
     pub routed_to_unread_partitions: BTreeSet<u64>,
     pub requested_ids_absent_from_index: Vec<u64>,
     pub selected_ids_without_records: Vec<u64>,
@@ -301,7 +303,11 @@ pub fn current_partitions(
             let current = if held.contains(&routed) {
                 routed
             } else {
-                *held.last()?
+                let latest = *held.last()?;
+                if unread.iter().any(|&partition| partition > latest) {
+                    return None;
+                }
+                latest
             };
             Some((id, current))
         })
@@ -688,7 +694,15 @@ fn extract_records(
                     }
                     let current = match holders.get(&(source.channel, id)) {
                         Some(held) if !held.contains(&routed) => {
-                            *held.last().expect("an element in holders has a partition")
+                            let latest =
+                                *held.last().expect("an element in holders has a partition");
+                            // A later partition that was not read may hold
+                            // the current copy (#1075).
+                            if unread.iter().any(|&partition| partition > latest) {
+                                summary.routed_to_unread_partitions.insert(id);
+                                continue;
+                            }
+                            latest
                         }
                         _ => routed,
                     };
