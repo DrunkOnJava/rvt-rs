@@ -199,11 +199,12 @@ line names what to fix (its rulesets check needs an admin token). The list:
    maintainer keeps, with a list of its commits, and the branch is then
    deleted. The audit lists such a branch once its last commit is more than
    14 days old. A commit a report's reproduce commands cite (`-f ref=<sha>`)
-   that no branch, archive ref or pull request head holds, such as the head of
-   a branch rebuilt before it landed, is pushed to
-   `refs/archive/<date>/cited/<sha>` so GitHub keeps it, and the PII guard
-   job's `tools/ci/cited-commits.py` fails on a cited commit GitHub does not
-   have at all.
+   that no branch, archive ref or pull request head reaches, such as the head
+   of a branch rebuilt before it landed, is pushed by hand to
+   `refs/archive/<date>/cited/<first 12 characters of the sha>` so GitHub
+   keeps it. The PII guard job's `tools/ci/cited-commits.py` fails only on a
+   cited commit GitHub does not have at all; whether a ref reaches it is not
+   checked automatically.
 3. The Actions cache is under its 10 GB limit. `python3
    tools/maintainer/clean_caches.py` (a dry run; `--delete` acts) removes the
    caches of closed pull requests and deleted branches, and `main`'s superseded

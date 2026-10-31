@@ -1232,6 +1232,7 @@ jobs:
       - name: API docs cite only reported RE findings and no planning labels
         run: python3 tools/ci/api-doc-ids.py
       - name: Reports cite only commits the repository has
+        timeout-minutes: 5
         env:
           GH_TOKEN: ${{ github.token }}
         run: python3 tools/ci/cited-commits.py
