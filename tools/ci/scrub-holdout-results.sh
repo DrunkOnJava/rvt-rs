@@ -21,8 +21,10 @@
 # count lines of the RE-283 probes (the same alphabet; their `native readers
 # example:` lines name ElementIds and are dropped) and
 # of its quantity census (the totals and each quantity's counts, the walls it
-# counts apart for their two lengths (RE-252), and for each value that
-# differs only the quantity and rvt-rs's value over Revit's), of
+# counts apart for their two lengths (RE-252), for each value that
+# differs only the quantity and rvt-rs's value over Revit's, and for the
+# quantities rvt-rs writes that Revit's export does not only each quantity's
+# name and count), of
 # its names census (counts by category, entity and agreement) and of its layer
 # set census (its counts, not its worst elements), of its identity censuses
 # (Griffin, 2026-10-29: counts only, never an ElementId or a name): the
@@ -66,6 +68,11 @@ for dir in "$RESULTS"/holdout-*/ "$RESULTS"/bimcollab-*/; do
              q = $2; sub(/:$/, "", q); a = $4; sub(/,$/, "", a)
              printf "different %s: rvt-rs over Revit %.6f\n", q, a / $6
            }' "$f"
+      # How many values of each quantity rvt-rs writes that Revit's export does
+      # not: a count per quantity name, never the objects the scorer lists under it.
+      awk '/^rvt-rs quantities Revit does not write:/ { on = 1; next }
+           on && /^  Qto_[A-Za-z]+\.[A-Za-z]+: [0-9]+$/ { sub(/^  /, ""); print "extra " $0; next }
+           on && !/^ / { on = 0 }' "$f"
     done
     for f in "$dir"names_vs_ifc.txt; do
       [ -f "$f" ] || continue
