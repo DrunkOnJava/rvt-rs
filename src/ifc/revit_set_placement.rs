@@ -116,6 +116,41 @@ fn revit_placements(
         .collect()
 }
 
+/// The properties of a stair type's `Pset_StairCommon` that Revit's export
+/// repeats in the `Pset_StairFlightCommon` of the same type object (RE-286).
+const STAIR_TYPE_DIMENSIONS: [&str; 3] = ["NosingLength", "NumberOfRiser", "NumberOfTreads"];
+
+/// Give each stair type object that holds the stair dimensions of
+/// `Pset_StairCommon` the same in `Pset_StairFlightCommon`, which revit-ifc
+/// matches to it by the start of the flight entity's name (RE-286). Returns
+/// the properties written.
+fn add_stair_type_flight_sets(model: &mut IfcModel) -> usize {
+    let mut added = 0;
+    for by_entity in model.type_entity_sets.values_mut() {
+        let Some(sets) = by_entity.get_mut("IFCSTAIRTYPE") else {
+            continue;
+        };
+        let Some(common) = sets.iter().find(|set| set.name == "Pset_StairCommon") else {
+            continue;
+        };
+        let properties: Vec<Property> = common
+            .properties
+            .iter()
+            .filter(|property| STAIR_TYPE_DIMENSIONS.contains(&property.name.as_str()))
+            .cloned()
+            .collect();
+        if properties.is_empty() {
+            continue;
+        }
+        added += properties.len();
+        sets.push(PropertySet {
+            name: "Pset_StairFlightCommon".into(),
+            properties,
+        });
+    }
+    added
+}
+
 /// Add to each building element of `model` the sets and properties Revit's
 /// export writes beyond IFC4's definitions (see the module doc), merged
 /// into a set of the same name the element has: a parameter's text where a
@@ -267,6 +302,7 @@ pub fn attach(file: &mut RevitFile, model: &mut IfcModel) -> Result<Report> {
             report.properties += added;
         }
     }
+    report.properties += add_stair_type_flight_sets(model);
     report.elements = touched.len();
     Ok(report)
 }
