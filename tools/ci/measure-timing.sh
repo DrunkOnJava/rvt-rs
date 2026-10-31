@@ -29,7 +29,8 @@ run() { # bin file -> "milliseconds peak-KiB" (peak "-" without GNU time), or "f
   rm -f "$tmp/peak"
   started=$(date +%s%N)
   # shellcheck disable=SC2086 # RVT_IFC_FLAGS is a list of flags.
-  if "${timer[@]}" "$1/rvt-ifc" "$2" -o "$tmp/model.ifc" --diagnostics "$tmp/diagnostics.json" ${RVT_IFC_FLAGS:-} > /dev/null 2>&1; then
+  # ${timer[@]+...}: an empty array is "unbound" to bash 3.2 under set -u.
+  if ${timer[@]+"${timer[@]}"} "$1/rvt-ifc" "$2" -o "$tmp/model.ifc" --diagnostics "$tmp/diagnostics.json" ${RVT_IFC_FLAGS:-} > /dev/null 2>&1; then
     ms=$(( ($(date +%s%N) - started) / 1000000 ))
     [ -s "$tmp/peak" ] && peak=$(awk 'END { print $1 }' "$tmp/peak")
     echo "$ms $peak"
@@ -54,7 +55,7 @@ mib() { # KiB -> MiB, or the value as it is
 }
 
 {
-  echo "| file | base (ms) | head (ms) | head / base | base peak (MiB) | head peak (MiB) | head / base |"
+  echo "| file | base (ms) | head (ms) | head / base | base peak (MiB) | head peak (MiB) | peak head / base |"
   echo "|---|---:|---:|---:|---:|---:|---:|"
 } > "$OUT"
 for file in "$@"; do
