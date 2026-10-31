@@ -46,9 +46,9 @@
 //! Usage:
 //!   cargo run --profile ci -p rvt-probes --example probe_1117_viewports -- MODEL.rvt [--records] [--large-model]
 //!
-//! `--large-model` opens the file with `rvt-ifc --large-model`'s limits and
-//! lifts the native reader's own stream and group budgets to match, for a
-//! model with a partition stream over 512 MiB.
+//! `--large-model` opens the file with `rvt-ifc --large-model`'s limits, whose
+//! stream limit the native reader also reads under, and lifts its group budget
+//! to match, for a model with a partition stream over 512 MiB.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -128,7 +128,6 @@ fn main() -> anyhow::Result<()> {
         RevitFile::open_with_limits(&path, rvt::cli::open_limits(None, None, large_model))?;
     let budgets = if large_model {
         Options {
-            max_stream_bytes: rvt::cli::LARGE_MODEL_MAX_STREAM_BYTES,
             max_group_bytes: rvt::cli::LARGE_MODEL_MAX_INFLATE_BYTES,
             ..Options::default()
         }
