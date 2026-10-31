@@ -6,5 +6,5 @@
   as tall as Revit's solid on every one. 47 more walls of the BIM4LCA
   office as built and 58 at building permit carry it, Revit's on every
   one, none different and none that Revit's export leaves out: the office
-  goes from 28,278 to 28,325 of the 39,388 quantities equal as built
+  goes from 28,278 to 28,492 of the 39,388 quantities equal as built
   (Measure run 41183229365).
