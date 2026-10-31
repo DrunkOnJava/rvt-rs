@@ -7,8 +7,8 @@
     they wrapped.
   - `WallKind::is_basic` and `WallFunction::to_ifc_predefined`: match on the
     enum.
-  - `FloorBoundaryLoop::area_sqft` and `to_curve_loop`:
-    `vector_math::polygon_area_xy` gives the area.
+  - `FloorBoundaryLoop::area_sqft` and `to_curve_loop`: the loop's points
+    stay public, so compute the area from them.
   - `Extrusion::t_shape`, `l_shape`, `u_shape`, `rectangle_hollow`,
     `circle_hollow` and `arbitrary_with_voids`: build the `ProfileDef`
     variant directly.
