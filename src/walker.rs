@@ -1419,13 +1419,26 @@ pub fn iter_elements_with_control(
     limits: WalkerLimits,
     control: &WalkerControl,
 ) -> Result<impl Iterator<Item = DecodedElement> + use<>> {
+    let elements = walk_shared(rf, min_score, limits, control)?;
+    Ok(std::sync::Arc::unwrap_or_clone(elements).into_iter())
+}
+
+/// [`iter_elements_with_control`]'s elements as the handle keeps them,
+/// shared rather than copied: a caller that only reads them, such as the
+/// export's diagnostics, takes no copy of each element.
+pub(crate) fn walk_shared(
+    rf: &mut RevitFile,
+    min_score: i64,
+    limits: WalkerLimits,
+    control: &WalkerControl,
+) -> Result<std::sync::Arc<Vec<DecodedElement>>> {
     control.check()?;
     // Tracker: B71.
     // An export walks once to write and again for its diagnostics'
     // class counts; the second reuses the first.
     if let Some(elements) = rf.cached_walk(min_score, limits) {
         control.report(Stage::PartitionScan, 1, Some(1));
-        return Ok(Vec::clone(&elements).into_iter());
+        return Ok(elements);
     }
     control.report(Stage::SchemaParse, 0, None);
     // #1075: both inflates run under the handle's limits, and a limit that
@@ -1541,8 +1554,9 @@ pub fn iter_elements_with_control(
 
     control.check()?;
     control.report(Stage::PartitionScan, 1, Some(1));
-    rf.store_walk(min_score, limits, std::sync::Arc::new(out.clone()));
-    Ok(out.into_iter())
+    let out = std::sync::Arc::new(out);
+    rf.store_walk(min_score, limits, std::sync::Arc::clone(&out));
+    Ok(out)
 }
 
 /// Which strategy resolved the ADocument entry offset.
