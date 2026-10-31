@@ -4508,24 +4508,25 @@ fn production_walker_stats(
     walker_limits: crate::walker::WalkerLimits,
 ) -> ProductionWalkerStats {
     let mut stats = ProductionWalkerStats::default();
-    let Ok(iter) = crate::walker::iter_elements_with_limits(
+    let Ok(elements) = crate::walker::walk_shared(
         rf,
         crate::walker::PRODUCTION_ELEMENT_MIN_SCORE,
         walker_limits,
+        &crate::control::WalkerControl::default(),
     ) else {
         return stats;
     };
     let mut sum = 0.0_f32;
     let mut n = 0usize;
     let min_c = crate::walker::DEFAULT_MIN_ELEMENT_CONFIDENCE;
-    for el in iter {
+    for el in elements.iter() {
         *stats.class_counts.entry(el.class.clone()).or_insert(0) += 1;
         sum += el.provenance.confidence;
         n += 1;
         if !el.meets_confidence(min_c) {
             stats.elements_below_min_confidence += 1;
         } else {
-            if let Some(value) = export_content::unapplied_export_value(&el) {
+            if let Some(value) = export_content::unapplied_export_value(el) {
                 *stats
                     .unapplied_export_values
                     .entry(format!("{value} on {}", el.class))
