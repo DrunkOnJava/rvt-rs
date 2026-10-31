@@ -197,7 +197,7 @@ pub(super) fn attach_native_named_parameters<'a>(
     elements: impl IntoIterator<Item = &'a mut DecodedElement>,
 ) {
     use crate::ifc::standard_property_sets::{self as sps, StandardPropertyKind as Kind};
-    use crate::native_element_parameters::{ParameterLevel, read_defined};
+    use crate::native_element_parameters::{ParameterLevel, read_defined_values};
     if !NATIVE_NAMED_PARAMETER_REVIT_VERSIONS.contains(&revit_version) {
         return;
     }
@@ -209,7 +209,7 @@ pub(super) fn attach_native_named_parameters<'a>(
     if ids.is_empty() {
         return;
     }
-    let Ok(saved) = read_defined(rf, &ids, Some(names_a_property)) else {
+    let Ok(saved) = read_defined_values(rf, &ids, Some(names_a_property)) else {
         return;
     };
     let is_external_suffix = format!(".{IS_EXTERNAL_PARAMETER_NAME}");
