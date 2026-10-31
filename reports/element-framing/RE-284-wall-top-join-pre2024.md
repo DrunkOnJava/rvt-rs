@@ -53,10 +53,10 @@ Of the 94 exports of the unfiltered run, 58 are byte-identical to `main`'s and 3
 ## 6. Reproduce
 
 ```text
-gh workflow run measure.yml --ref re/284-extend-to-structure-pre2024 -f ref=51e745884b367c2d0b6c406323656c5d27827fe0 -f base=3811a6545aff148b14b6e69c28be2e26501c812b \
+gh workflow run measure.yml --ref main -f ref=51e745884b367c2d0b6c406323656c5d27827fe0 -f base=3811a6545aff148b14b6e69c28be2e26501c812b \
   -f nordic=true -f r2025=true -f samples=true -f bimcollab=true -f holdout=true \
   -f probe=probe_re284_wall_top_join_pairs -f probe_scorer=- -f probe_pair_release=2023
-gh workflow run measure.yml --ref re/284-extend-to-structure-pre2024 -f ref=51e745884b367c2d0b6c406323656c5d27827fe0 -f base=none \
+gh workflow run measure.yml --ref main -f ref=51e745884b367c2d0b6c406323656c5d27827fe0 -f base=none \
   -f samples=true -f sample_years="2023 2024" -f probe_pair_release=2024 -f models=einhoven -f scorers=none \
   -f probe=probe_re284_wall_top_join_pairs -f probe_scorer=-
 gh run download <run id>   # measure-head/sample-*/probe-pair.txt; bimcollab-str-2015/counts.txt
