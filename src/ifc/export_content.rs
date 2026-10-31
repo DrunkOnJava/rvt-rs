@@ -908,6 +908,7 @@ pub fn append_typed_production_elements(
             })
             .unwrap_or_default();
         add_is_external(&mut reference_sets, &ifc_type, &decoded, opening_only);
+        add_load_bearing(&mut reference_sets, &ifc_type, &decoded, opening_only);
         add_covering_finish(&mut reference_sets, &ifc_type, &decoded);
         add_mullion_span(&mut reference_sets, &ifc_type, &decoded);
         add_door_window_quantities(&mut reference_sets, &ifc_type, &decoded);
@@ -2055,6 +2056,49 @@ fn add_is_external(
     let property = Property {
         name: "IsExternal".into(),
         value: PropertyValue::Boolean(external),
+    };
+    match sets.iter_mut().find(|set| set.name == common) {
+        Some(set) => set.properties.push(property),
+        None => sets.push(PropertySet {
+            name: common.into(),
+            properties: vec![property],
+        }),
+    }
+}
+
+/// Add `LoadBearing` (`IfcBoolean`) to the common property set of the entity
+/// an element is exported as, among `sets`, where its category alone gives it
+/// (`crate::partition_schema_mvp::LOAD_BEARING_FIELD`, RE-285) and IFC4's set
+/// defines the property. A parameter named for the property replaces it
+/// ([`add_named_parameter_sets`]). Nothing for a door written as its opening
+/// alone (RE-84).
+fn add_load_bearing(
+    sets: &mut Vec<PropertySet>,
+    ifc_type: &str,
+    decoded: &DecodedElement,
+    opening_only: bool,
+) {
+    use super::standard_property_sets::{self as sps, StandardPropertyKind as Kind};
+    if opening_only {
+        return;
+    }
+    let Some(common) = is_external_set(ifc_type) else {
+        return;
+    };
+    if sps::property_kind(common, "LoadBearing") != Some(Kind::Boolean) {
+        return;
+    }
+    let Some(bearing) = decoded.fields.iter().find_map(|(name, value)| match value {
+        InstanceField::Bool(flag) if name == crate::partition_schema_mvp::LOAD_BEARING_FIELD => {
+            Some(*flag)
+        }
+        _ => None,
+    }) else {
+        return;
+    };
+    let property = Property {
+        name: "LoadBearing".into(),
+        value: PropertyValue::Boolean(bearing),
     };
     match sets.iter_mut().find(|set| set.name == common) {
         Some(set) => set.properties.push(property),

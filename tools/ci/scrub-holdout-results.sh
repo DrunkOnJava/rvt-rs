@@ -18,8 +18,8 @@
 # lines of probe_re280_native_framing_pre2023 (RE-280: counts, schema class and
 # field names and normalised error text, in a restricted alphabet; its JSON
 # example lines, which carry ElementIds, are dropped), the `native readers:`
-# count lines of the RE-283 probes (the same alphabet; their `native readers
-# example:` lines name ElementIds and are dropped) and
+# count lines of the RE-283 to RE-285 probes and scorers (the same alphabet;
+# their `native readers example:` lines name ElementIds and are dropped) and
 # of its quantity census (the totals and each quantity's counts, the walls it
 # counts apart for their two lengths (RE-252), and for each value that
 # differs only the quantity and rvt-rs's value over Revit's), of
@@ -47,6 +47,7 @@ for dir in "$RESULTS"/holdout-*/ "$RESULTS"/bimcollab-*/; do
     for f in "$dir"probe_score*.txt; do
       [ -f "$f" ] || continue
       grep -E '^native levels: [A-Za-z0-9 _:.,;()=#<>/+-]+$' "$f" || true
+      grep -E '^native readers: [A-Za-z0-9 _:.,;()=#<>/+-]+$' "$f" || true
     done
     for f in "$dir"psets_vs_ifc.txt; do
       [ -f "$f" ] || continue

@@ -284,6 +284,10 @@ pub fn recover_partition_schema_mvp(
         // --- Whether a wall's top is joined to a roof or floor, from its
         // native record (RE-228, RE-284) ---
         attach_wall_top_joins(rf, revit_version, &mut out.walls);
+
+        // --- A structural beam's or column's LoadBearing is its category's
+        // (RE-285), unless a parameter named for it says otherwise ---
+        attach_load_bearing(out.columns.iter_mut().chain(out.products.iter_mut()));
         return Ok(out);
     }
 
@@ -843,6 +847,9 @@ pub fn recover_partition_schema_mvp(
             &mut out.products,
         ],
     );
+    // --- A structural beam's or column's LoadBearing is its category's
+    // (RE-285), unless a parameter named for it says otherwise ---
+    attach_load_bearing(out.columns.iter_mut().chain(out.products.iter_mut()));
     Ok(out)
 }
 
