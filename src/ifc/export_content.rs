@@ -31,6 +31,7 @@ use crate::geometry::{
 use crate::walker::{DecodedElement, InstanceField};
 use std::collections::{BTreeMap, HashMap};
 
+mod column_quantities;
 mod wall_areas;
 mod wall_tops;
 
@@ -376,6 +377,8 @@ pub fn append_typed_production_elements(
     let mut without_geometry: std::collections::BTreeSet<usize> = Default::default();
     let mut pending_parts: Vec<(usize, u32)> = Vec::new();
     let mut pending_bounded: Vec<wall_areas::Pending> = Vec::new();
+    // RE-291: each column whose type is a plain rectangle, and the elements its pairs name.
+    let mut pending_columns: Vec<column_quantities::Pending> = Vec::new();
     // RE-194: each element's parameters named for a standard set's property,
     // written once the entity it is written as is final.
     let mut pending_named: Vec<(usize, Vec<(String, Property)>)> = Vec::new();
@@ -1051,6 +1054,22 @@ pub fn append_typed_production_elements(
                 pending_tops.push((entity_index, named));
             }
         }
+        // RE-291: a column whose type is a plain rectangle, with the elements its pairs name.
+        if policy.include_geometry
+            && matches!(decoded.class.as_str(), "Column" | "StructuralColumn")
+        {
+            if let (Some(sides), Some((cut, clean))) = (
+                crate::partition_schema_mvp::column_rectangle_from_fields(&decoded.fields),
+                crate::partition_schema_mvp::column_partners_from_fields(&decoded.fields),
+            ) {
+                pending_columns.push(column_quantities::Pending {
+                    index: entity_index,
+                    cut,
+                    clean,
+                    sides,
+                });
+            }
+        }
         // RE-270, RE-290: a wall joined to a roof or floor, whose length the
         // record confirms or whose cut-back length the pass can check.
         if policy.include_geometry && decoded.class == "Wall" {
@@ -1294,6 +1313,10 @@ pub fn append_typed_production_elements(
     // has the underside of the floor that cut it for its top, which that
     // floor then clears.
     wall_areas::add_bounded_wall_quantities(entities, &pending_bounded);
+
+    // RE-291: the base quantities of the columns a clean pair joins, where
+    // nothing they are paired with cuts them.
+    column_quantities::add_joined_column_quantities(entities, &pending_columns);
 
     // #323: group each whole's parts into one aggregate.
     let mut parts_by_whole: BTreeMap<usize, Vec<usize>> = BTreeMap::new();

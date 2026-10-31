@@ -194,6 +194,20 @@ pub const HOLLOW_SECTION_FIELDS: [&str; 4] = [
 /// depth as its `Qto_ColumnBaseQuantities.Length` (RE-247).
 pub const COLUMN_UNJOINED_FIELD: &str = "m_column_unjoined";
 
+/// Fields holding the ElementIds a column's `CutPairGStep` and
+/// `CleanPairGStep` objects name, on every column whose pair steps all name
+/// an element ([`crate::native_column_joins::ColumnJoins::cut_partners`],
+/// RE-291). The export reads the elements' extents to tell the columns Revit
+/// cuts at an end from the ones it draws as their extrusion.
+pub const COLUMN_CUT_PARTNERS_FIELD: &str = "m_column_cut_partners";
+/// See [`COLUMN_CUT_PARTNERS_FIELD`].
+pub const COLUMN_CLEAN_PARTNERS_FIELD: &str = "m_column_clean_partners";
+
+/// Fields holding the two sides, feet, of a column's plain rectangular
+/// section, read from its type's parameters `b` and `h`
+/// ([`crate::partition_type_parameters::rectangular_section`], RE-291).
+pub const COLUMN_RECTANGLE_FIELDS: [&str; 2] = ["m_column_rect_b", "m_column_rect_h"];
+
 /// Classes whose type's hollow section is read (W6).
 pub const HOLLOW_SECTION_CLASSES: [&str; 2] = ["StructuralColumn", "Column"];
 
