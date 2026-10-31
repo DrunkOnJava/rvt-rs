@@ -57,7 +57,9 @@ read, so the elements it holds are not exported. `rvt-ifc` and `rvt-gltf` then
 name each such stream, write no model and exit with status 3 unless
 `--allow-partial`, and the diagnostics list them; `--large-model` raises the
 limits for models whose largest partition is several hundred MiB to 1 GiB
-(#1075). The browser viewer opens a file at the default limits and, when a
+(#1075). The readers of native records (types, materials, stairs, phases, saved
+parameters and others) follow the same limits and skip only the stream they could
+not read. The browser viewer opens a file at the default limits and, when a
 stream is not read, reports "Part of the file not read" and offers "Retry
 with large-model limits" (streams up to 2 GiB); it stays under wasm32's 4 GiB
 memory ceiling, so a very large model can still fail to open there. This is
