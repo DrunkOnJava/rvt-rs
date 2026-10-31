@@ -1049,22 +1049,14 @@ pub fn append_typed_production_elements(
         if policy.include_geometry
             && matches!(decoded.class.as_str(), "Column" | "StructuralColumn")
         {
-            let unjoined = decoded.fields.iter().any(|(name, value)| {
-                name == crate::partition_schema_mvp::COLUMN_UNJOINED_FIELD
-                    && matches!(value, InstanceField::Bool(true))
-            });
-            let partners =
-                crate::partition_schema_mvp::column_partners_from_fields(&decoded.fields)
-                    .or_else(|| unjoined.then(Default::default));
             if let (Some(sides), Some((cut, clean))) = (
                 crate::partition_schema_mvp::column_rectangle_from_fields(&decoded.fields),
-                partners,
+                crate::partition_schema_mvp::column_partners_from_fields(&decoded.fields),
             ) {
                 pending_columns.push(column_quantities::Pending {
                     index: entity_index,
                     cut,
                     clean,
-                    unjoined,
                     sides,
                 });
             }

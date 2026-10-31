@@ -2,33 +2,36 @@
 //!
 //! Revit's export draws a column as an extrusion, with its
 //! `Qto_ColumnBaseQuantities` from the extrusion's profile and length, unless
-//! the column is cut where it meets another element: a slab whose body lies
-//! across one end of it (its `CutPairGStep` names the slab) makes Revit's
-//! export draw a cut mesh, which has a `CrossSectionArea` and a `NetVolume`
-//! that are not the box's and no `Length`, `OuterSurfaceArea` or
-//! `GrossVolume`. A wall that cuts it (`CutPairGStep`) changes its section.
-//! On the BIM4LCA office's 345 columns at building permit, 18 columns are
-//! drawn as a mesh and every one has a cut slab that straddles its top; no
-//! other column has (RE-291).
+//! the column is cut where it meets another element: on the BIM4LCA office
+//! (Revit 2024), a slab whose body lies across one end of a column (its
+//! `CutPairGStep` names the slab) makes Revit's export draw a cut mesh, which
+//! has a `CrossSectionArea` and a `NetVolume` that are not the box's and no
+//! `Length`, `OuterSurfaceArea` or `GrossVolume`. A wall that cuts it
+//! (`CutPairGStep`) changes its section. Of the office's 345 columns at
+//! building permit, 18 are drawn as a mesh and every one has a cut slab that
+//! straddles its top; no other column has (RE-291).
 //!
 //! This pass writes a column's `CrossSectionArea`, `OuterSurfaceArea`,
 //! `GrossVolume` and `NetVolume` as its record box's, on a column drawn as
-//! that box whose type is a plain rectangle (its parameters `b` and `h`, or
-//! `b` alone, are the box's sides: a round column is drawn as a box too, and
-//! its type holds a `Diameter`), and
+//! that box whose type is a plain rectangle (its length parameters are
+//! exactly `b`, or `b` and `h`, the box's sides: a round column is drawn as a
+//! box too, and its type holds a `Diameter`), when every pair step of its
+//! record is read (a column whose steps are not all read is left out) and
 //!
-//! - that no `CleanPairGStep` joins (`add_body_quantities` gives its
-//!   `Length`; Revit draws it as an extrusion on every one); or
-//! - that a clean pair joins, when every element its cut and clean pairs
-//!   name is exported and
+//! - every element its cut pairs name is an exported slab lying wholly above
+//!   or wholly below the column;
+//! - every element its clean pairs name is an exported slab lying wholly
+//!   above or wholly below it, or an exported wall, covering or column.
 //!
-//! - is a slab lying wholly above or wholly below the column;
-//! - is a wall, covering or column, if it is named by a clean pair only.
-//!
-//! Only these are accepted because they are the only pairs the office's
-//! box-drawn columns hold (RE-291 §2). Any other pair (a beam, roof or
-//! footing, say), a wall or covering that cuts it, or an element rvt-rs does
-//! not export, leaves the column out.
+//! A column no `CleanPairGStep` joins is checked the same way
+//! (`add_body_quantities` gives its `Length`, as Revit draws it as an
+//! extrusion on every one of them): a Cut Geometry command can leave a
+//! `CutPairGStep` with no `CleanPairGStep`, and a slab across its end would
+//! make Revit draw it as a mesh all the same. Only these partners are accepted
+//! because they are the only ones the office's box-drawn columns hold
+//! (RE-291 §2). Any other pair (a beam, roof or footing, say), a wall or
+//! covering that cuts it, or an element rvt-rs does not export, leaves the
+//! column out.
 
 use std::collections::HashMap;
 
@@ -50,8 +53,6 @@ pub(super) struct Pending {
     pub cut: Vec<u32>,
     /// The ElementIds its clean pairs name.
     pub clean: Vec<u32>,
-    /// Whether no clean pair joins it.
-    pub unjoined: bool,
     /// The sides of its type's rectangle, feet.
     pub sides: [f64; 2],
 }
@@ -67,12 +68,13 @@ fn fills_section(body_sides: [f64; 2], sides: [f64; 2]) -> bool {
     (long - wanted_long).abs() <= SIDE_FEET && (short - wanted_short).abs() <= SIDE_FEET
 }
 
-/// An element's entity type and, where it is drawn as one extrusion, its
-/// lowest and highest point.
+/// An element's entity type and, where every piece of it is drawn as one
+/// extrusion, its lowest and highest point.
 type Partner = (String, Option<(f64, f64)>);
 
-/// Each exported element's entity and extent, by ElementId. An element
-/// written in pieces of different extents has none.
+/// Each exported element's entity and extent, by ElementId: the union of the
+/// spans of its pieces, which is none only when a piece has no span (is not
+/// one plain extrusion).
 fn partners(entities: &[IfcEntity]) -> HashMap<u32, Partner> {
     let mut out: HashMap<u32, Partner> = HashMap::new();
     for entity in entities {
@@ -182,7 +184,7 @@ pub(super) fn add_joined_column_quantities(entities: &mut Vec<IfcEntity>, pendin
             continue;
         }
         let (base, top) = (location[2], location[2] + body.height_feet);
-        if !column.unjoined && !unaffected(&partners, column, base, top) {
+        if !unaffected(&partners, column, base, top) {
             continue;
         }
         let [width, depth, height] = sizes;

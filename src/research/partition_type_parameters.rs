@@ -599,29 +599,24 @@ pub fn hollow_section(by_name: &BTreeMap<String, f64>) -> Option<HollowSection> 
         .then_some(section)
 }
 
-/// Captions whose presence means a column type's section is not the plain
-/// rectangle `b` and `h` give: a hollow section's thickness, height and
-/// corner radius ([`HOLLOW_SECTION_PARAMETER_NAMES`]) or a round column's
-/// diameter.
-const NOT_RECTANGULAR_NAMES: [&str; 4] = ["Ht", "t", "kr", "Diameter"];
-
 /// The two sides, feet, of the plain rectangular section a column type holds
 /// as its parameters `b` and `h` (`b` alone for a square one), from `by_name`
 /// (a type's [`type_named_lengths`]). On the BIM4LCA office the square and
 /// rectangular concrete column types hold exactly these, equal to their
 /// columns' record boxes, and the one round column's type holds a `Diameter`
-/// and no `b` (RE-291). `None` for a type that holds a hollow section's
-/// `Ht`, `t` or `kr` or a round column's `Diameter`, no `b`, or a side that
-/// is not a positive number.
+/// and no `b` (RE-291). `None` unless the type's named length parameters are
+/// exactly `b`, or `b` and `h` (a hollow section's `Ht`, `t` and `kr`, a
+/// round column's `Diameter`, an I, T or channel section's flange and web
+/// thicknesses, or any other named length leave it out), and each side is a
+/// positive number. A length parameter whose element is not read is not in
+/// `by_name`, so it is not seen.
 pub fn rectangular_section(by_name: &BTreeMap<String, f64>) -> Option<[f64; 2]> {
-    if NOT_RECTANGULAR_NAMES
-        .iter()
-        .any(|name| by_name.contains_key(*name))
-    {
-        return None;
-    }
     let b = *by_name.get("b")?;
-    let h = by_name.get("h").copied().unwrap_or(b);
+    let h = match by_name.len() {
+        1 => b,
+        2 => *by_name.get("h")?,
+        _ => return None,
+    };
     [b, h]
         .iter()
         .all(|side| side.is_finite() && *side > 0.0)
