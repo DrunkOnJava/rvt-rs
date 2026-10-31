@@ -913,7 +913,9 @@ pub fn sketch_curve_list_copies(
             continue;
         };
         let buf = inflated.bytes();
-        let hits: Vec<usize> = memchr::memmem::find_iter(buf, &header).collect();
+        let Ok(hits) = rf.header_hits(&stream, &header) else {
+            continue;
+        };
         for (index, &hit) in hits.iter().enumerate() {
             let end = hits
                 .get(index + 1)
