@@ -2240,6 +2240,10 @@ Revit's export writes a floor's `Qto_SlabBaseQuantities.GrossArea` as the area o
 
 Revit's export writes a compound ceiling's `Qto_CoveringBaseQuantities.Width` as its type's thickness: on the BIM4LCA office, all 78 compound ceilings as built and 75 at permit have it equal to the depth of their record box. rvt-rs writes it where that depth is the type's layers' total, as RE-238 tells a level slab. The ceiling's `GrossArea` is its sketch's area on most but larger by about 1% on 11, and is left out. Report: `reports/element-framing/RE-250-ceiling-width.md`.
 
+## Addendum — RE-297 a ceiling's GrossArea (2026-10-30)
+
+A ceiling's `GrossArea` in Revit's export is the area of the profile its sketch gives, less the cut where Revit cuts it, and a cut shows in the ceiling's native record as a `CutPairGStep`: of the BIM4LCA office's ceilings drawn as one extrusion of their sketch, the 57 as built and 45 at permit whose record holds none have Revit's value, and the 2 as built and 9 at permit RE-250 found 0.7 to 1.1 percent short all hold one. rvt-rs writes it on the first, and the `Width` of a ceiling of several pieces (RE-250 left them out: 19 as built, 20 at permit) and of the 21 walls of the type `AK-1.otsa` that Revit's export writes as coverings (their type's thickness). The area of a ceiling in pieces is one piece's in Revit's export, which no field says; the roofing coverings, the office's ventilation units, are boxes whose footprint is not read. Report: `reports/element-framing/RE-297-ceiling-gross-area.md`.
+
 ## Addendum — RE-251 a wall's record does not keep Revit's wall quantities (2026-10-26)
 
 No number in a wall's native record or its saved parameters is Revit's wall side area, footprint area or volume on the BIM4LCA office: Revit computes those when it exports. A wall's `Height` is its saved parameter -1001101 on 496 of 579 walls (478 of 565 at permit); the rest are mostly walls whose top is joined to a roof or floor, and no field read tells them apart (the best, the `JoinToRoofGStep` it holds, is right on 529). Not written. Report: `reports/element-framing/RE-251-wall-saved-dimensions.md`.
@@ -2283,6 +2287,10 @@ A wall whose native record holds no `JoinToRoofGStep`, `CutPairGStep` or `WallCu
 ## Addendum — RE-283 a wall's IsExternal and the parameters named for a property on Revit 2015 to 2023 (2026-10-30)
 
 A wall's `BasicWallType.m_function` reads on Revit 2015 to 2023 once the wall's type id is read in the 4-byte `Identifier` (`native_json::identifier_i64`), and equals the same project's later copy on 1,982 of 1,983 walls (24 pairs of Autodesk's 2015 to 2022 samples against their 2023 copies; both values occur: 122 walls of Function 0 and 58 of 1 on the 2015 `rac_advanced`). The project and shared parameters named for `IsExternal` or a standard property read from the saved parameters (RE-281) on those releases. BIMcollab's Revit 2015 export writes `IsExternal` (true on 71, false on 43) and `LoadBearing` (true on 114) on its 114 walls from two parameters on the walls, which a parameter named for the property reads before anything else (RE-193); the Function alone is Revit's value on 113 of the 114. `probes/examples/probe_re283_wall_function_pairs.rs`; `reports/element-framing/RE-283-wall-function-and-named-parameters-pre2024.md`.
+
+## Addendum — RE-282 an ElementId in a 4-byte Identifier (2026-10-30)
+
+Every native reader but the Element base and the phase order reads an ElementId as `{"m_id":{"m_id64":n}}`, Revit 2024's `Identifier`, and finds none in the 4-byte `{"m_id":{"m_id":n}}` of 2015 to 2023. Reading either shape in all of them (the six places that read `/m_id/m_id64`) leaves 91 of 94 exports of Measure's unfiltered run byte-identical, among them every sample of 2015 to 2022 and of 2024 to 2027, and moves three Revit 2023 files: 36 and 30 `IfcDistributionPort`s on `rac_basic` and `rac_advanced`, a wall layer set and four material associations on `rac_advanced`, and one material association on Einhoven, none of which a Revit export checks. It was reverted: each reader reads the ids it needs in either shape itself when it is admitted to a release (`reports/element-framing/RE-282-element-id-both-shapes.md`).
 
 ## Addendum — RE-284 a wall's top join on Revit 2015 to 2023 (2026-10-30)
 
