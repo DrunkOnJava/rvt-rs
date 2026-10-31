@@ -66,7 +66,7 @@ pub struct StreamDeltaReport {
     /// Byte-class histogram across the prefix we could align
     /// (min decomp length when comparing decompressed, else min raw length).
     pub counts: BTreeMap<String, usize>,
-    /// Invariant byte runs longer than `invariant_run_threshold` (default 8).
+    /// Invariant byte runs of at least 8 bytes.
     /// Each entry is `(offset, run_length, hex_preview)`.
     pub invariant_runs: Vec<InvariantRun>,
     /// Length of the prefix we aligned on.

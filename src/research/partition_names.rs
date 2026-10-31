@@ -585,7 +585,8 @@ pub fn find_mep_curve_type_names(buf: &[u8], wanted: &BTreeSet<u32>) -> BTreeMap
     let (Some(&low), Some(&high)) = (wanted.first(), wanted.last()) else {
         return BTreeMap::new();
     };
-    // B70: one pass, each offset first asked whether a `u64` there repeats
+    // Tracker: B70.
+    // One pass, each offset first asked whether a `u64` there repeats
     // MEP_CURVE_TYPE_ID_REPEAT bytes on, rather than a search per id.
     let last = buf.len().saturating_sub(MEP_CURVE_TYPE_ID_REPEAT + 8);
     for at in 0..last {
