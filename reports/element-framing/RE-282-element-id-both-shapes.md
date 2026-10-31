@@ -24,13 +24,13 @@
 The 2015 to 2022 files do not move because the readers that would now find ids refuse their release (`Options::releases`). The 2024 to 2027 files do not move because their JSON has `m_id64` and `identifier_i64` reads that first. The 2023 files are inside the default gate, so the readers that found no id on them before now find them:
 
 - **Connector ports**: the 2023 `rac_basic` gains 36 `IfcDistributionPort`s and the `IfcRelNests` that nest them, and `rac_advanced` 30 (`ifc/mod.rs`, `native_connectors::connector_ports`). `rst_basic` has none either way. RE-131, RE-138 and RE-169 measured ports on RE1 (2025); nothing measures them on 2023.
-- **Wall layer sets**: the 2023 `rac_advanced` gains an `IfcMaterialLayerSet` ("Basic Wall:Generic - 200mm") and four `IfcRelAssociatesMaterial`s, and Einhoven one `IfcRelAssociatesMaterial` (a wall associated with a material already in the file, no layer set), where a layer takes its category's material and the object-styles entry does not give it. By the code path, the only reader of this kind the 2023 record path reaches is `scan_category_material`'s fallback to the category's graphics styles (`native_category_material`, RE-206), which was measured on Revit 2025 (Snowdon Towers) and never on 2023.
+- **Wall layer sets**: the 2023 `rac_advanced` gains an `IfcMaterialLayerSet` ("Basic Wall:Generic - 200mm") and four `IfcRelAssociatesMaterial`s, where a layer takes its category's material and the object-styles entry does not give it; Einhoven gains one `IfcRelAssociatesMaterial` (a wall associated with a material already in the file, no layer set). By the code path, the only reader of this kind the 2023 record path reaches is `scan_category_material`'s fallback to the category's graphics styles (`native_category_material`, RE-206), which was measured on Revit 2025 (Snowdon Towers) and never on 2023.
 
 No Revit export of these files exists, and the one held-out Revit 2023 model with one (modelo_bim, exported by Revit 26.2) did not move. So the new ports and layer sets are values that are written and not checked.
 
 ## 3. What follows
 
-- `31ec7edc` is reverted. A reader's ids are read in either shape inside that reader (`identifier_i64`), when the reader is admitted to a release: RE-283 does it for a wall's type, and RE-284 and RE-285 need no id at all.
+- `31ec7edc` is reverted. A reader's ids are read in either shape inside that reader (`identifier_i64`), when the reader is admitted to a release: RE-283 does it for a wall's type, and RE-284 needs no id at all.
 - The readers that stay refused on 2015 to 2022 and silent on 2023 are the ones that read an ElementId through `native_json::element_id`: types, stairs and landings, symbol cuts, mullion hosts, connectors and ports, column joins, family forms, instance and type materials, saved meshes. Each of them is a separate admission, measured against the 2024 copy of the same sample project or a Revit export, and several move an export when admitted (the two items above are the first two).
 - The measurement that decided this is one command and does not need a probe:
 
