@@ -18,11 +18,13 @@
 # lines of probe_re280_native_framing_pre2023 (RE-280: counts, schema class and
 # field names and normalised error text, in a restricted alphabet; its JSON
 # example lines, which carry ElementIds, are dropped), the `native readers:`
-# count lines of the RE-283 probes (the same alphabet; their `native readers
-# example:` lines name ElementIds and are dropped) and
+# count lines of the RE-283 to RE-285 probes and scorers (the same alphabet;
+# their `native readers example:` lines name ElementIds and are dropped) and
 # of its quantity census (the totals and each quantity's counts, the walls it
-# counts apart for their two lengths (RE-252), and for each value that
-# differs only the quantity and rvt-rs's value over Revit's), of
+# counts apart for their two lengths (RE-252), for each value that
+# differs only the quantity and rvt-rs's value over Revit's, and for the
+# quantities rvt-rs writes that Revit's export does not only each quantity's
+# name and count), of
 # its names census (counts by category, entity and agreement) and of its layer
 # set census (its counts, not its worst elements), of its identity censuses
 # (Griffin, 2026-10-29: counts only, never an ElementId or a name): the
@@ -47,6 +49,7 @@ for dir in "$RESULTS"/holdout-*/ "$RESULTS"/bimcollab-*/; do
     for f in "$dir"probe_score*.txt; do
       [ -f "$f" ] || continue
       grep -E '^native levels: [A-Za-z0-9 _:.,;()=#<>/+-]+$' "$f" || true
+      grep -E '^native readers: [A-Za-z0-9 _:.,;()=#<>/+-]+$' "$f" || true
     done
     for f in "$dir"psets_vs_ifc.txt; do
       [ -f "$f" ] || continue
@@ -66,6 +69,11 @@ for dir in "$RESULTS"/holdout-*/ "$RESULTS"/bimcollab-*/; do
              q = $2; sub(/:$/, "", q); a = $4; sub(/,$/, "", a)
              printf "different %s: rvt-rs over Revit %.6f\n", q, a / $6
            }' "$f"
+      # How many values of each quantity rvt-rs writes that Revit's export does
+      # not: a count per quantity name, never the objects the scorer lists under it.
+      awk '/^rvt-rs quantities Revit does not write:/ { on = 1; next }
+           on && /^  Qto_[A-Za-z]+\.[A-Za-z]+: [0-9]+$/ { sub(/^  /, ""); print "extra " $0; next }
+           on && !/^ / { on = 0 }' "$f"
     done
     for f in "$dir"names_vs_ifc.txt; do
       [ -f "$f" ] || continue

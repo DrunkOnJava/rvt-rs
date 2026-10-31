@@ -194,6 +194,20 @@ pub const HOLLOW_SECTION_FIELDS: [&str; 4] = [
 /// depth as its `Qto_ColumnBaseQuantities.Length` (RE-247).
 pub const COLUMN_UNJOINED_FIELD: &str = "m_column_unjoined";
 
+/// Fields holding the ElementIds a column's `CutPairGStep` and
+/// `CleanPairGStep` objects name, on every column whose pair steps all name
+/// an element ([`crate::native_column_joins::ColumnJoins::cut_partners`],
+/// RE-291). The export reads the elements' extents to tell the columns Revit
+/// cuts at an end from the ones it draws as their extrusion.
+pub const COLUMN_CUT_PARTNERS_FIELD: &str = "m_column_cut_partners";
+/// See [`COLUMN_CUT_PARTNERS_FIELD`].
+pub const COLUMN_CLEAN_PARTNERS_FIELD: &str = "m_column_clean_partners";
+
+/// Fields holding the two sides, feet, of a column's plain rectangular
+/// section, read from its type's parameters `b` and `h`
+/// ([`crate::partition_type_parameters::rectangular_section`], RE-291).
+pub const COLUMN_RECTANGLE_FIELDS: [&str; 2] = ["m_column_rect_b", "m_column_rect_h"];
+
 /// Classes whose type's hollow section is read (W6).
 pub const HOLLOW_SECTION_CLASSES: [&str; 2] = ["StructuralColumn", "Column"];
 
@@ -450,6 +464,14 @@ pub const WALL_TYPE_CONFIRMED_FIELD: &str = "m_wall_type_confirmed";
 /// wall whose two lengths differ (the maintainer, 2026-10-26 and 2026-10-27).
 pub const WALL_CURVE_LENGTH_FIELD: &str = "m_wall_curve_length";
 
+/// Field holding the length of a wall's centreline cut back where its body
+/// meets the walls joined at its ends, feet, on every wall whose two ends the
+/// record and the join reaches read alike ([`crate::native_walls::trimmed_ends`],
+/// RE-252): Revit's exported `Axis`, and on a plain wall the length of the
+/// longest vertical face of its solid (RE-290). Unlike
+/// [`WALL_LENGTH_FIELD`] it is given whether or not the curve is as long.
+pub const WALL_CUTBACK_LENGTH_FIELD: &str = "m_wall_cutback_length";
+
 /// How close a wall's native curve's ends must be to its centreline's to be
 /// taken as the same line, feet.
 pub(super) const NATIVE_WALL_LINE_TOLERANCE_FEET: f64 = 1e-4;
@@ -607,8 +629,20 @@ pub const CURVE_BOX_TOLERANCE_FEET: f64 = 2e-3;
 /// (RE-185).
 pub const TYPE_FUNCTION_FIELD: &str = "m_type_function";
 
-/// Releases whose walls' native type Function is measured (RE-185, RE-193).
-pub const WALL_TYPE_FUNCTION_REVIT_VERSIONS: &[u32] = &[2024, 2025];
+/// Releases whose parameters named for `IsExternal` or for a standard
+/// property are read from the elements' saved parameters
+/// ([`crate::native_element_parameters`], RE-281), where the partition data's
+/// entries are read on 2024 and later (RE-193, RE-194): Revit 2015 to 2023,
+/// measured against BIMcollab's Revit 2015 export and modelo_bim's (RE-283).
+pub const NATIVE_NAMED_PARAMETER_REVIT_VERSIONS: &[u32] =
+    &[2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023];
+
+/// Releases whose walls' native type Function is measured (RE-185, RE-193;
+/// 2015 to 2023 against the same projects saved by a later release and
+/// against BIMcollab's and modelo_bim's exports, RE-283).
+pub const WALL_TYPE_FUNCTION_REVIT_VERSIONS: &[u32] = &[
+    2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025,
+];
 
 /// Prefix of a field carrying the Yes/No value of a project or shared
 /// parameter on an element, named by the parameter's name (RE-193).
@@ -643,6 +677,27 @@ pub(super) const IS_EXTERNAL_FUNCTION_CLASSES: &[&str] = &[
 /// Revit's export writes most curtain mullions and panels as not external
 /// where their curtain wall is, and some as external (RE-193).
 pub(super) const IS_EXTERNAL_UNKNOWN_CLASSES: &[&str] = &["CurtainWallMullion", "CurtainWallPanel"];
+
+/// Classes whose `IsExternal` is calculated as not external, the last step of
+/// RE-193's calculation, on the releases that read elements from their
+/// element records ([`crate::partition_element_records_2023`], Revit 2015 to
+/// 2023), where no parameter or type Function says otherwise (RE-285). Only
+/// the classes measured against a Revit export of such a release: the
+/// structural framing and columns of BIMcollab's Revit 2015 example and of
+/// modelo_bim. Any other class gets none there.
+pub(super) const IS_EXTERNAL_LAST_STEP_RECORD_CLASSES: &[&str] =
+    &["StructuralColumn", "StructuralFraming"];
+
+/// Field carrying whether an element is load bearing, where Revit's exporter
+/// takes it from the element's category alone (RE-285): revit-ifc's
+/// `LoadBearingCalculator` (CLEANROOM.md source 5) calls load bearing every
+/// element of the structural columns, structural framing, framing systems and
+/// trusses categories before it reads any parameter.
+pub const LOAD_BEARING_FIELD: &str = "m_load_bearing";
+
+/// Classes of the categories `LoadBearingCalculator` calls load bearing
+/// that this crate reads (RE-285).
+pub(super) const LOAD_BEARING_CLASSES: &[&str] = &["StructuralColumn", "StructuralFraming"];
 
 /// Releases where the calculation's last step, not external, is measured
 /// (RE-193). The parameters and a type's Function are read on every release
@@ -771,6 +826,17 @@ pub const ROOM_HEIGHT_REVIT_VERSIONS: &[u32] = &[2024, 2025, 2026];
 
 /// Field holding a room's height, feet (RE-255).
 pub const ROOM_HEIGHT_FIELD: &str = "m_room_height";
+
+/// Set on a room whose stored solid is a prism of its outline (RE-296): every
+/// vertical face runs the whole height of the room's box, and no face is
+/// neither vertical nor horizontal or a horizontal one between the floor and
+/// the ceiling.
+pub const ROOM_PRISM_FIELD: &str = "m_room_prism";
+
+/// Releases a room is marked a prism on (RE-296), and so gets its `NetVolume`:
+/// the only exports it is measured against are the BIM4LCA office's (Revit
+/// 2024) and the R2025 models' (Revit 2025).
+pub const ROOM_PRISM_REVIT_VERSIONS: &[u32] = &[2024, 2025];
 
 /// Field carrying a recovered room number.
 pub const ROOM_NUMBER_FIELD: &str = "m_number";

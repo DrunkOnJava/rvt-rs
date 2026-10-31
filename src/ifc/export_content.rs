@@ -31,6 +31,7 @@ use crate::geometry::{
 use crate::walker::{DecodedElement, InstanceField};
 use std::collections::{BTreeMap, HashMap};
 
+mod column_quantities;
 mod wall_areas;
 mod wall_tops;
 
@@ -57,6 +58,12 @@ pub struct TypedProductionAppend {
     pub element_type_materials: BTreeMap<u32, Vec<String>>,
     /// Each element's type, by ElementId (RE-110).
     pub element_type_ids: BTreeMap<u32, u32>,
+    /// The standard property sets Revit's export gives each type object, by
+    /// the type's ElementId and the STEP name of the type entity
+    /// (`IFCWALLTYPE`): its common set's `IsExternal`, `FireRating` and
+    /// `LoadBearing` (RE-286), and a stair or flight type's dimensions
+    /// (RE-286). A type whose elements disagree has none.
+    pub type_entity_sets: BTreeMap<u32, BTreeMap<String, Vec<PropertySet>>>,
     /// Each family instance's original symbol, by ElementId (RE-167).
     pub element_original_symbols: BTreeMap<u32, u32>,
     /// Whether Revit's exporter takes each door's and window's symbol as
@@ -369,7 +376,9 @@ pub fn append_typed_production_elements(
     // RE-84: doors and windows whose type draws no geometry.
     let mut without_geometry: std::collections::BTreeSet<usize> = Default::default();
     let mut pending_parts: Vec<(usize, u32)> = Vec::new();
-    let mut pending_bounded: Vec<(usize, Vec<u32>)> = Vec::new();
+    let mut pending_bounded: Vec<wall_areas::Pending> = Vec::new();
+    // RE-291: each column whose type is a plain rectangle, and the elements its pairs name.
+    let mut pending_columns: Vec<column_quantities::Pending> = Vec::new();
     // RE-194: each element's parameters named for a standard set's property,
     // written once the entity it is written as is final.
     let mut pending_named: Vec<(usize, Vec<(String, Property)>)> = Vec::new();
@@ -399,6 +408,9 @@ pub fn append_typed_production_elements(
     // pairs name, for the cut at the floor that covers it.
     let mut pending_tops: Vec<(usize, Vec<u32>)> = Vec::new();
     let mut level_bind = crate::level_bind::LevelStoreyBind::new();
+    // RE-286: what each type object's common set holds, by type and type
+    // entity; `None` once two of its elements disagree.
+    let mut type_commons: BTreeMap<(u32, String), Option<TypeCommon>> = BTreeMap::new();
 
     for decoded in decoded_iter {
         *out.production_class_counts
@@ -896,6 +908,7 @@ pub fn append_typed_production_elements(
             })
             .unwrap_or_default();
         add_is_external(&mut reference_sets, &ifc_type, &decoded, opening_only);
+        add_load_bearing(&mut reference_sets, &ifc_type, &decoded, opening_only);
         add_covering_finish(&mut reference_sets, &ifc_type, &decoded);
         add_mullion_span(&mut reference_sets, &ifc_type, &decoded);
         add_door_window_quantities(&mut reference_sets, &ifc_type, &decoded);
@@ -940,11 +953,17 @@ pub fn append_typed_production_elements(
             &piece_bodies,
             solid_shape.is_none(),
         );
-        add_wall_covering_width(&mut reference_sets, &ifc_type, &decoded);
         add_stair_flight_quantities(&mut reference_sets, &ifc_type, &decoded);
         add_railing_height(&mut reference_sets, &ifc_type, &decoded);
         add_railing_length(&mut reference_sets, &ifc_type, &decoded);
         add_space_height(&mut reference_sets, &ifc_type, &decoded);
+        add_space_net_volume(
+            &mut reference_sets,
+            &ifc_type,
+            &decoded,
+            extrusion.as_ref(),
+            solid_shape.is_none() && piece_bodies.is_empty(),
+        );
         add_extend_to_structure(&mut reference_sets, &ifc_type, &decoded);
         let mut serial_sets = serial_number_property_sets(&decoded);
         serial_sets.extend(revit_parameter_property_sets(&decoded));
@@ -1008,6 +1027,7 @@ pub fn append_typed_production_elements(
             }
         });
         let level_set = level_parameter_property_set(&decoded, &ifc_type);
+        record_type_common(&mut type_commons, &ifc_type, &decoded);
         // #823: Revit's export writes a ceiling of separate loops as one
         // covering whose body holds every piece, where it splits a floor.
         let pieces_in_body =
@@ -1035,17 +1055,43 @@ pub fn append_typed_production_elements(
                 pending_tops.push((entity_index, named));
             }
         }
-        // RE-270: a wall joined to a roof or floor, whose length is confirmed.
+        // RE-291: a column whose type is a plain rectangle, with the elements its pairs name.
+        if policy.include_geometry
+            && matches!(decoded.class.as_str(), "Column" | "StructuralColumn")
+        {
+            if let (Some(sides), Some((cut, clean))) = (
+                crate::partition_schema_mvp::column_rectangle_from_fields(&decoded.fields),
+                crate::partition_schema_mvp::column_partners_from_fields(&decoded.fields),
+            ) {
+                pending_columns.push(column_quantities::Pending {
+                    index: entity_index,
+                    cut,
+                    clean,
+                    sides,
+                });
+            }
+        }
+        // RE-270, RE-290: a wall joined to a roof or floor, whose length the
+        // record confirms or whose cut-back length the pass can check.
         if policy.include_geometry && decoded.class == "Wall" {
             if let Some(named) =
                 crate::partition_schema_mvp::wall_bounded_from_fields(&decoded.fields)
             {
-                let confirmed = decoded.fields.iter().any(|(name, value)| {
-                    name == crate::partition_schema_mvp::WALL_LENGTH_FIELD
-                        && matches!(value, InstanceField::Float { .. })
-                });
-                if confirmed {
-                    pending_bounded.push((entity_index, named));
+                let float = |wanted: &str| {
+                    decoded.fields.iter().find_map(|(name, value)| match value {
+                        InstanceField::Float { value, .. } if name == wanted => Some(*value),
+                        _ => None,
+                    })
+                };
+                let confirmed = float(crate::partition_schema_mvp::WALL_LENGTH_FIELD).is_some();
+                let cutback = float(crate::partition_schema_mvp::WALL_CUTBACK_LENGTH_FIELD);
+                if confirmed || cutback.is_some() {
+                    pending_bounded.push(wall_areas::Pending {
+                        index: entity_index,
+                        named,
+                        confirmed,
+                        cutback_feet: cutback,
+                    });
                 }
             }
         }
@@ -1269,6 +1315,10 @@ pub fn append_typed_production_elements(
     // floor then clears.
     wall_areas::add_bounded_wall_quantities(entities, &pending_bounded);
 
+    // RE-291: the base quantities of the columns a clean pair joins, where
+    // nothing they are paired with cuts them.
+    column_quantities::add_joined_column_quantities(entities, &pending_columns);
+
     // #323: group each whole's parts into one aggregate.
     let mut parts_by_whole: BTreeMap<usize, Vec<usize>> = BTreeMap::new();
     for (part_index, whole_id) in pending_parts {
@@ -1427,6 +1477,16 @@ pub fn append_typed_production_elements(
     }
     add_named_parameter_sets(entities, pending_named);
     add_piece_sets(entities, pieces_of);
+    for ((type_id, entity), common) in type_commons {
+        let sets = common.map_or_else(Vec::new, |common| common.into_sets(&entity));
+        if sets.is_empty() {
+            continue;
+        }
+        out.type_entity_sets
+            .entry(type_id)
+            .or_default()
+            .insert(entity, sets);
+    }
 
     out
 }
@@ -2005,6 +2065,227 @@ fn add_is_external(
     }
 }
 
+/// Add `LoadBearing` (`IfcBoolean`) to the common property set of the entity
+/// an element is exported as, among `sets`, where its category alone gives it
+/// (`crate::partition_schema_mvp::LOAD_BEARING_FIELD`, RE-285) and IFC4's set
+/// defines the property. A parameter named for the property replaces it
+/// ([`add_named_parameter_sets`]). Nothing for a door written as its opening
+/// alone (RE-84).
+fn add_load_bearing(
+    sets: &mut Vec<PropertySet>,
+    ifc_type: &str,
+    decoded: &DecodedElement,
+    opening_only: bool,
+) {
+    use super::standard_property_sets::{self as sps, StandardPropertyKind as Kind};
+    if opening_only {
+        return;
+    }
+    let Some(common) = is_external_set(ifc_type) else {
+        return;
+    };
+    if sps::property_kind(common, "LoadBearing") != Some(Kind::Boolean) {
+        return;
+    }
+    let Some(bearing) = decoded.fields.iter().find_map(|(name, value)| match value {
+        InstanceField::Bool(flag) if name == crate::partition_schema_mvp::LOAD_BEARING_FIELD => {
+            Some(*flag)
+        }
+        _ => None,
+    }) else {
+        return;
+    };
+    let property = Property {
+        name: "LoadBearing".into(),
+        value: PropertyValue::Boolean(bearing),
+    };
+    match sets.iter_mut().find(|set| set.name == common) {
+        Some(set) => set.properties.push(property),
+        None => sets.push(PropertySet {
+            name: common.into(),
+            properties: vec![property],
+        }),
+    }
+}
+
+/// What the common property set of a type object holds (RE-286).
+#[derive(Clone, PartialEq)]
+struct TypeCommon {
+    fire_rating: Option<String>,
+    load_bearing: Option<bool>,
+    /// A stair type of a stair whose data is read: revit-ifc's stair
+    /// calculators, run on the type itself, give 0 (RE-286).
+    stair_type: bool,
+    /// A flight type's nosing length, feet: its run type's (RE-286).
+    nosing_feet: Option<f64>,
+}
+
+/// Classes of the categories revit-ifc's `LoadBearingCalculator` (CLEANROOM.md
+/// source 5) calls load bearing before it reads any parameter, which a type
+/// object's common set holds as it does the element's (RE-286): the BIM4LCA
+/// office's 10 structural column types and its structural framing type.
+const LOAD_BEARING_TYPE_CLASSES: &[&str] = &["StructuralColumn", "StructuralFraming"];
+
+/// The entities whose type objects Revit's IFC4 exports of the BIM4LCA office
+/// (exporter 24.0.5) and of the R2025 models (25.0.2) give a common set, among
+/// those rvt-rs writes a type object for (RE-286). Not a
+/// ramp's, which holds no set in the office's export; a railing's, which that
+/// export writes no type object for at all, though the R2025 models' write one;
+/// nor a curtain member's, which is the exporter's cache (RE-269).
+const TYPE_COMMON_ENTITIES: &[&str] = &[
+    "IFCWALL",
+    "IFCCURTAINWALL",
+    "IFCDOOR",
+    "IFCWINDOW",
+    "IFCSLAB",
+    "IFCROOF",
+    "IFCCOLUMN",
+    "IFCBEAM",
+    "IFCCOVERING",
+    "IFCSTAIR",
+    "IFCSTAIRFLIGHT",
+    "IFCBUILDINGELEMENTPROXY",
+    "IFCSPACE",
+];
+
+impl TypeCommon {
+    /// The sets of the type entity `type_entity` (`IFCWALLTYPE`): its common
+    /// set, and for a stair or flight type the stair dimension sets.
+    fn into_sets(self, type_entity: &str) -> Vec<PropertySet> {
+        let Some(occurrence) = type_entity.strip_suffix("TYPE") else {
+            return Vec::new();
+        };
+        let mut sets = Vec::new();
+        if let Some(name) = is_external_set(occurrence) {
+            let mut properties = Vec::new();
+            let defines = |property: &str| {
+                super::standard_property_sets::property_kind(name, property).is_some()
+            };
+            if let Some(rating) = self.fire_rating.filter(|_| defines("FireRating")) {
+                properties.push(Property {
+                    name: "FireRating".into(),
+                    value: PropertyValue::Label(rating),
+                });
+            }
+            if let Some(bearing) = self.load_bearing.filter(|_| {
+                super::standard_property_sets::property_kind(name, "LoadBearing")
+                    == Some(super::standard_property_sets::StandardPropertyKind::Boolean)
+            }) {
+                properties.push(Property {
+                    name: "LoadBearing".into(),
+                    value: PropertyValue::Boolean(bearing),
+                });
+            }
+            if occurrence == "IFCSTAIR" && self.stair_type {
+                properties.extend(stair_type_zeros());
+            }
+            if !properties.is_empty() {
+                sets.push(PropertySet {
+                    name: name.into(),
+                    properties,
+                });
+            }
+        }
+        if let (true, Some(nosing)) = (occurrence == "IFCSTAIRFLIGHT", self.nosing_feet) {
+            sets.push(PropertySet {
+                name: "Pset_StairFlightCommon".into(),
+                properties: vec![Property {
+                    name: "NosingLength".into(),
+                    value: PropertyValue::LengthFeet(nosing),
+                }],
+            });
+        }
+        sets
+    }
+}
+
+/// What revit-ifc's stair calculators give a stair type object, which is no
+/// stair and no flight: 0 risers, 0 treads and a nosing length of 0, in
+/// `Pset_StairCommon` (RE-286), and with `--revit-set-placement` in
+/// `Pset_StairFlightCommon` too ([`super::revit_set_placement`]). The BIM4LCA
+/// office's three stair types of stairs with data and each R2025 stair model's
+/// hold them; its fourth stair type, of a family placed as a stair, holds none.
+/// Measured only: why the calculators give 0 on a type is not read.
+fn stair_type_zeros() -> [Property; 3] {
+    [
+        Property {
+            name: "NosingLength".into(),
+            value: PropertyValue::LengthFeet(0.0),
+        },
+        Property {
+            name: "NumberOfRiser".into(),
+            value: PropertyValue::CountValue(0),
+        },
+        Property {
+            name: "NumberOfTreads".into(),
+            value: PropertyValue::CountValue(0),
+        },
+    ]
+}
+
+/// Note what the type object of `decoded`'s type holds in its common set
+/// (RE-286): the type's Fire Rating (RE-77) and its `LoadBearing`
+/// ([`LOAD_BEARING_TYPE_CLASSES`]), as revit-ifc runs the common set's
+/// entries on the type itself (CLEANROOM.md source 5). No `IsExternal`:
+/// Revit's newer exporters write none on a type object (RE-286).
+/// Two elements of one type that disagree leave it none.
+fn record_type_common(
+    commons: &mut BTreeMap<(u32, String), Option<TypeCommon>>,
+    ifc_type: &str,
+    decoded: &DecodedElement,
+) {
+    use crate::partition_schema_mvp as mvp;
+    let upper = ifc_type.to_ascii_uppercase();
+    if !TYPE_COMMON_ENTITIES.contains(&upper.as_str()) {
+        return;
+    }
+    let Some(type_id) = decoded.fields.iter().find_map(|(name, value)| match value {
+        InstanceField::ElementId { id, .. } if name == mvp::TYPE_ID_FIELD => Some(*id),
+        _ => None,
+    }) else {
+        return;
+    };
+    let fire_rating = decoded
+        .fields
+        .iter()
+        .find_map(|(field, value)| match value {
+            InstanceField::String(text)
+                if field.strip_prefix(mvp::TYPE_PARAMETER_FIELD_PREFIX) == Some("Fire Rating")
+                    && !text.is_empty() =>
+            {
+                Some(text.clone())
+            }
+            _ => None,
+        });
+    let found = TypeCommon {
+        fire_rating,
+        load_bearing: LOAD_BEARING_TYPE_CLASSES
+            .contains(&decoded.class.as_str())
+            .then_some(true),
+        stair_type: decoded.class == "Stair"
+            && decoded
+                .fields
+                .iter()
+                .any(|(name, _)| name == mvp::STAIR_RISER_COUNT_FIELD),
+        nosing_feet: decoded.fields.iter().find_map(|(name, value)| match value {
+            InstanceField::Float { value, .. }
+                if decoded.class == "StairsRun" && name == mvp::STAIR_NOSING_LENGTH_FIELD =>
+            {
+                Some(*value)
+            }
+            _ => None,
+        }),
+    };
+    commons
+        .entry((type_id, format!("{upper}TYPE")))
+        .and_modify(|seen| {
+            if seen.as_ref() != Some(&found) {
+                *seen = None;
+            }
+        })
+        .or_insert(Some(found));
+}
+
 /// Add `ExtendToStructure` (`IfcBoolean`) to a wall's `Pset_WallCommon`
 /// among `sets`: whether its top is joined to a roof or floor, as its native
 /// record says (RE-228). Nothing where the record is not read.
@@ -2136,6 +2417,54 @@ fn add_space_height(sets: &mut Vec<PropertySet>, ifc_type: &str, decoded: &Decod
         properties: vec![Property {
             name: "Height".into(),
             value: PropertyValue::PositiveLengthFeet(height),
+        }],
+    });
+}
+
+/// Add a space's `Qto_SpaceBaseQuantities.NetVolume` to `sets` (#1016,
+/// RE-296): the area of its outline, its holes taken off, times the height of
+/// its box, where the room's stored solid is a prism of that outline
+/// ([`crate::partition_schema_mvp::ROOM_PRISM_FIELD`]). Revit's export writes
+/// the volume of the room's closed shell, which on such a room is that: on
+/// every one of the 167 rooms of the BIM4LCA office as built and the 178 at
+/// building permit that are prisms, and on none of the rooms whose ceiling
+/// steps. `GrossVolume` is left out: Revit's export writes it only on the
+/// rooms it draws as an extrusion, 88 of those 167, and nothing in the file
+/// tells them from the other 79 it draws as a tessellation.
+fn add_space_net_volume(
+    sets: &mut Vec<PropertySet>,
+    ifc_type: &str,
+    decoded: &DecodedElement,
+    extrusion: Option<&Extrusion>,
+    single: bool,
+) {
+    if ifc_type != "IFCSPACE" || !single {
+        return;
+    }
+    let prism = decoded.fields.iter().any(|(name, value)| {
+        name == crate::partition_schema_mvp::ROOM_PRISM_FIELD
+            && matches!(value, InstanceField::Bool(true))
+    });
+    let from_solid = decoded.fields.iter().any(|(name, value)| {
+        name == crate::element_record_plan_profiles::PLAN_PROFILE_SOURCE_FIELD
+            && matches!(value, InstanceField::String(source)
+                if source == crate::partition_room_boundaries::ROOM_OUTLINE_SOURCE)
+    });
+    let Some(body) = extrusion.filter(|_| prism && from_solid) else {
+        return;
+    };
+    let Some(area) = profile_area(body) else {
+        return;
+    };
+    let height = body.height_feet;
+    if !(height.is_finite() && height > 0.0) {
+        return;
+    }
+    sets.push(PropertySet {
+        name: "Qto_SpaceBaseQuantities".into(),
+        properties: vec![Property {
+            name: "NetVolume".into(),
+            value: PropertyValue::VolumeCubicFeet(area * height),
         }],
     });
 }
@@ -2438,10 +2767,13 @@ fn add_beam_roll(sets: &mut Vec<PropertySet>, ifc_type: &str, decoded: &DecodedE
 /// holes, as Revit's export writes it. Only on a floor drawn as one extrusion
 /// (`single`): a sketch of separate loops is several elements sharing its
 /// `Tag`, and a stair landing's slab gets none from Revit's export. Where the
-/// floor's type has one layer and the extrusion is as deep (RE-238), also,
-/// as revit-ifc's `DepthCalculator` and `GrossVolumeCalculator` take them
-/// from that extrusion (CLEANROOM.md source 5), its `Depth`, the extrusion's
-/// length, and its `GrossVolume`, the area times that length. Its
+/// floor's type's layers add up to the extrusion's depth (RE-238), also, as
+/// revit-ifc's `DepthCalculator` and `GrossVolumeCalculator` take them from
+/// the extrusion Revit's export builds last (CLEANROOM.md source 5), its
+/// `Depth`, the one layer's thickness of a floor of one layer, and its
+/// `GrossVolume`, the area times it. A floor of several layers gets neither:
+/// the office's export (24.0.5) gives it its bottom layer's thickness, a
+/// newer exporter (26.4) another value (RE-298). Its
 /// `Perimeter` is left out: Revit's export writes it in feet, unscaled, in
 /// a file whose length unit is millimetres (RE-235 §5).
 ///
@@ -2450,11 +2782,20 @@ fn add_beam_roll(sets: &mut Vec<PropertySet>, ifc_type: &str, decoded: &DecodedE
 /// `NetVolume` (RE-295, #1016), that area times the layers' total thickness:
 /// the volume of the floor's solid, which Revit's export writes, is that on
 /// every floor of the BIM4LCA office as built and at building permit that
-/// nothing cuts, flat or sloped, whatever its layers. Where the type has more
-/// than one layer, also its `Width`, the same total: Revit's export writes a
-/// compound floor's type thickness there, where on a floor of one layer it
-/// writes its profile's extent along the extrusion's Y axis, which no field of
-/// the floor's record gives.
+/// nothing cuts, flat or sloped, whatever its layers. Its `Width` is left out
+/// (RE-294): Revit 2024's exporter writes a compound floor's type thickness
+/// there and a later exporter (Revit 2026) writes none on one, so the
+/// exporters disagree; on a floor of one layer Revit writes its profile's
+/// extent along the extrusion's Y axis, which no field of the floor's record
+/// gives.
+///
+/// A flat roof Revit's export writes as a slab, drawn as one extrusion of its
+/// sketch's outline, gets the same from its layers (RE-298): its `Depth` is
+/// the extrusion's, the layers' total, whatever their number, and its
+/// `NetVolume`, when its record holds no cutting step, the area times it. Its
+/// `Width` is its profile's extent, as a floor of one layer's is, and is left
+/// out. All 10 of the office's roofs as built and at permit are Revit's, the
+/// one a hatch cuts (`YP-1`) but for its `NetVolume`.
 fn add_slab_gross_area(
     sets: &mut Vec<PropertySet>,
     ifc_type: &str,
@@ -2462,8 +2803,25 @@ fn add_slab_gross_area(
     extrusion: Option<&Extrusion>,
     single: bool,
 ) {
-    if ifc_type != "IFCSLAB" || decoded.class != "Floor" || !single {
+    const TOLERANCE_FEET: f64 = 1e-3;
+    if ifc_type != "IFCSLAB" || !single {
         return;
+    }
+    let roof = match decoded.class.as_str() {
+        "Floor" => false,
+        "Roof" => true,
+        _ => return,
+    };
+    if roof {
+        let from_sketch = decoded.fields.iter().any(|(name, value)| {
+            name == crate::element_record_plan_profiles::PLAN_PROFILE_SOURCE_FIELD
+                && matches!(value, InstanceField::String(source)
+                    if source == crate::element_record_plan_profiles::PLAN_PROFILE_SOURCE)
+        });
+        let sloped = crate::partition_schema_mvp::roof_slope_from_fields(&decoded.fields).is_some();
+        if !from_sketch || sloped {
+            return;
+        }
     }
     let Some(body) = extrusion else {
         return;
@@ -2471,59 +2829,67 @@ fn add_slab_gross_area(
     let Some(area) = profile_area(body) else {
         return;
     };
+    let depth = body.height_feet;
+    let layers = crate::partition_schema_mvp::element_layers_from_fields(&decoded.fields)
+        .filter(|layers| layers.stacked && !layers.layers.is_empty());
+    let level = layers.as_ref().is_some_and(|layers| {
+        let total: f64 = layers.layers.iter().map(|layer| layer.width_feet).sum();
+        (total - depth).abs() <= TOLERANCE_FEET
+    });
+    // A roof whose layers do not fill its body is not level: its profile is
+    // only its plan projection, so it gets none of these (RE-298).
+    if roof && !level {
+        return;
+    }
     let mut properties = vec![Property {
         name: "GrossArea".into(),
         value: PropertyValue::AreaSquareFeet(area),
     }];
-    const TOLERANCE_FEET: f64 = 1e-3;
-    let depth = body.height_feet;
-    let layers = crate::partition_schema_mvp::element_layers_from_fields(&decoded.fields)
-        .filter(|layers| layers.stacked && !layers.layers.is_empty());
-    let layered = layers.as_ref().is_some_and(|layers| {
-        layers.layers.len() == 1 && (layers.layers[0].width_feet - depth).abs() <= TOLERANCE_FEET
-    });
-    let float = |wanted: &str| {
-        decoded.fields.iter().find_map(|(name, value)| match value {
-            InstanceField::Float { value, .. } if name == wanted => Some(*value),
-            _ => None,
-        })
-    };
-    let layer_count = decoded.fields.iter().find_map(|(name, value)| match value {
-        InstanceField::Integer { value, .. }
-            if name == crate::partition_schema_mvp::SLAB_TYPE_LAYER_COUNT_FIELD =>
-        {
-            Some(*value)
-        }
-        _ => None,
-    });
+    // A floor of one layer only: on floors of several layers Revit's
+    // exporters disagree (RE-298).
+    let one_layer = layers
+        .as_ref()
+        .is_some_and(|layers| layers.layers.len() == 1);
+    let depth_quantity = (level && (roof || one_layer)).then_some(depth);
+    if let Some(quantity) =
+        depth_quantity.filter(|quantity| quantity.is_finite() && *quantity > 0.0)
+    {
+        properties.push(Property {
+            name: "Depth".into(),
+            value: PropertyValue::PositiveLengthFeet(quantity),
+        });
+        properties.push(Property {
+            name: "GrossVolume".into(),
+            value: PropertyValue::VolumeCubicFeet(area * quantity),
+        });
+    }
     let uncut = decoded.fields.iter().any(|(name, value)| {
         name == crate::partition_schema_mvp::SLAB_UNCUT_FIELD
             && matches!(value, InstanceField::Bool(true))
     });
-    if layered && depth.is_finite() && depth > 0.0 {
-        properties.push(Property {
-            name: "Depth".into(),
-            value: PropertyValue::PositiveLengthFeet(depth),
-        });
-        properties.push(Property {
-            name: "GrossVolume".into(),
-            value: PropertyValue::VolumeCubicFeet(area * depth),
-        });
-    }
-    if let Some(thickness) = float(crate::partition_schema_mvp::SLAB_TYPE_THICKNESS_FIELD)
-        .filter(|thickness| thickness.is_finite() && *thickness > 0.0)
-    {
-        if uncut {
+    if roof {
+        if level && uncut && depth.is_finite() && depth > 0.0 {
             properties.push(Property {
                 name: "NetVolume".into(),
-                value: PropertyValue::VolumeCubicFeet(area * thickness),
+                value: PropertyValue::VolumeCubicFeet(area * depth),
             });
         }
-        if layer_count.is_some_and(|count| count > 1) {
-            properties.push(Property {
-                name: "Width".into(),
-                value: PropertyValue::PositiveLengthFeet(thickness),
-            });
+    } else {
+        let float = |wanted: &str| {
+            decoded.fields.iter().find_map(|(name, value)| match value {
+                InstanceField::Float { value, .. } if name == wanted => Some(*value),
+                _ => None,
+            })
+        };
+        if let Some(thickness) = float(crate::partition_schema_mvp::SLAB_TYPE_THICKNESS_FIELD)
+            .filter(|thickness| thickness.is_finite() && *thickness > 0.0)
+        {
+            if uncut {
+                properties.push(Property {
+                    name: "NetVolume".into(),
+                    value: PropertyValue::VolumeCubicFeet(area * thickness),
+                });
+            }
         }
     }
     sets.push(PropertySet {
@@ -2616,18 +2982,19 @@ fn curve_area_length(curve: &entities::IndexedCurve) -> Option<(f64, f64)> {
 }
 
 /// Add a ceiling's `Qto_CoveringBaseQuantities` to `sets` (#1016, RE-250,
-/// RE-297): its `Width`, the depth of the extrusion it is drawn as, where that
-/// is its type's layers' total thickness (as RE-238 tells a level slab) and
-/// every further piece of a sketch of separate loops (#331) is as deep; and,
-/// on a ceiling drawn as one extrusion of its sketch's outline whose record
-/// holds no step that cuts it
-/// ([`crate::partition_schema_mvp::SLAB_UNCUT_FIELD`]), its `GrossArea`, the
-/// area of that profile, its holes taken off. Revit's export writes a cut
-/// ceiling's area less the cut: the sketch's area is 0.7 to 1.1 percent larger
-/// than Revit's on the 2 of the BIM4LCA office's ceilings as built and the 9
-/// at permit whose records hold a `CutPairGStep`, and on no other. On a ceiling
-/// of several pieces Revit's export gives the area of one of them, which no
-/// field of the record says.
+/// RE-297): on a ceiling drawn as one extrusion of its sketch's outline whose
+/// record holds no step that cuts it
+/// ([`crate::partition_schema_mvp::SLAB_UNCUT_FIELD`]), where the extrusion is
+/// as deep as its type's layers' total thickness (as RE-238 tells a level
+/// slab), its `GrossArea`, the area of that profile, its holes taken off.
+/// Revit's export writes a cut ceiling's area less the cut: the sketch's area
+/// is 0.7 to 1.1 percent larger than Revit's on the 2 of the BIM4LCA office's
+/// ceilings as built and the 9 at permit whose records hold a `CutPairGStep`,
+/// and on no other. On a ceiling of several pieces Revit's export gives the
+/// area of one of them, which no field of the record says. Its `Width` is left
+/// out (RE-294): Revit 2024's exporter writes the extrusion's depth there and
+/// a later one (Revit 2025 or 2026) writes none on a covering, so the exporters
+/// disagree.
 fn add_ceiling_quantities(
     sets: &mut Vec<PropertySet>,
     ifc_type: &str,
@@ -2669,43 +3036,12 @@ fn add_ceiling_quantities(
             });
         }
     }
-    if layered && body.height_feet.is_finite() && body.height_feet > 0.0 {
-        properties.push(Property {
-            name: "Width".into(),
-            value: PropertyValue::PositiveLengthFeet(body.height_feet),
-        });
-    }
     if properties.is_empty() {
         return;
     }
     sets.push(PropertySet {
         name: "Qto_CoveringBaseQuantities".into(),
         properties,
-    });
-}
-
-/// Add the `Qto_CoveringBaseQuantities.Width` of a wall Revit's export writes
-/// as an `IfcCovering` to `sets` (#1016, RE-297): the wall's type's width, as
-/// a wall's own `Width` is (RE-251). All 21 of the BIM4LCA office's walls of
-/// the type `AK-1.otsa` as built.
-fn add_wall_covering_width(sets: &mut Vec<PropertySet>, ifc_type: &str, decoded: &DecodedElement) {
-    use crate::partition_schema_mvp as mvp;
-    if ifc_type != "IFCCOVERING" || !matches!(decoded.class.as_str(), "Wall" | "ArcWall") {
-        return;
-    }
-    let thickness = mvp::wall_axis_from_fields(&decoded.fields)
-        .map(|axis| axis.thickness_feet)
-        .or_else(|| mvp::wall_arc_from_fields(&decoded.fields).map(|arc| arc.thickness_feet))
-        .or_else(|| mvp::wall_layers_width_from_fields(&decoded.fields));
-    let Some(thickness) = thickness.filter(|t| t.is_finite() && *t > 0.0) else {
-        return;
-    };
-    sets.push(PropertySet {
-        name: "Qto_CoveringBaseQuantities".into(),
-        properties: vec![Property {
-            name: "Width".into(),
-            value: PropertyValue::PositiveLengthFeet(thickness),
-        }],
     });
 }
 
@@ -2895,6 +3231,12 @@ fn add_wall_height(
 /// (49 as built, 48 at building permit) and 91 of puzzbobb's R2025 walls, and
 /// Revit's export writes all four on each (RE-270). Nothing on any other wall,
 /// whose solid may be cut, staircased or open (#1046).
+///
+/// Such a wall is drawn as an extrusion, and revit-ifc's `WallExporter`
+/// (CLEANROOM.md source 5) hands `CreateWallBaseQuantities` the area of its
+/// footprint loop, which becomes `GrossFootprintArea`: its length times its
+/// thickness, Revit's on every one of those walls but the shortest, which is
+/// as long as it is thick and which Revit's export gives none (RE-292).
 fn add_wall_areas_and_volumes(
     sets: &mut [PropertySet],
     ifc_type: &str,
@@ -2947,7 +3289,21 @@ fn add_wall_areas_and_volumes(
         return;
     };
     set.properties.extend(quantities);
+    let along = body.width_feet.max(body.depth_feet);
+    if along > FOOTPRINT_MIN_LENGTH_FACTOR * width {
+        set.properties.push(Property {
+            name: "GrossFootprintArea".into(),
+            value: PropertyValue::AreaSquareFeet(along * width),
+        });
+    }
 }
+
+/// How many times its thickness a wall must be longer than to get a
+/// `GrossFootprintArea` (RE-292): the one such wall Revit's export writes
+/// none on is as long as it is thick (1.0 times), and the shortest it writes
+/// one on is 3.12 times. Nothing is measured in between; three is a round
+/// bound just under the measured 3.12.
+const FOOTPRINT_MIN_LENGTH_FACTOR: f64 = 3.0;
 
 /// A rectangular wall's `GrossSideArea`, `NetSideArea`, `GrossVolume` and
 /// `NetVolume` (RE-270): the longer side's area twice, the type's `width`
