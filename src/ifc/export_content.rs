@@ -2904,11 +2904,12 @@ fn add_wall_areas_and_volumes(
     }
 }
 
-/// How many times its thickness a wall is at least as long to get a
+/// How many times its thickness a wall must be longer than to get a
 /// `GrossFootprintArea` (RE-292): the one such wall Revit's export writes
-/// none on is as long as it is thick, and the shortest it writes one on is
-/// 3.12 times.
-const FOOTPRINT_MIN_LENGTH_FACTOR: f64 = 2.0;
+/// none on is as long as it is thick (1.0 times), and the shortest it writes
+/// one on is 3.12 times. Nothing is measured in between, so the bound is the
+/// measured one.
+const FOOTPRINT_MIN_LENGTH_FACTOR: f64 = 3.0;
 
 /// A rectangular wall's `GrossSideArea`, `NetSideArea`, `GrossVolume` and
 /// `NetVolume` (RE-270): the longer side's area twice, the type's `width`

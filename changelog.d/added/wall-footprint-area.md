@@ -1,6 +1,6 @@
 - **A wall's `GrossFootprintArea` (#1046, RE-292).** A wall nothing joins
   to or cuts, whose body is its record's box cut back at its joins and that
-  is more than twice as long as it is thick, carries `GrossFootprintArea`,
+  is more than three times as long as it is thick, carries `GrossFootprintArea`,
   its length times its width, beside the side areas and volumes it already
   gets. Revit's export writes it on the walls it draws as an extrusion, and
   it is Revit's on all 48 such walls of the BIM4LCA office as built, 47 at
