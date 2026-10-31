@@ -484,6 +484,36 @@ pub fn profile_openings_from_fields(
         .collect()
 }
 
+/// Give each of `walls` whether its top is joined to a roof or floor
+/// ([`WALL_TOP_JOINED_FIELD`], RE-228) from its native record, on the
+/// releases in [`WALL_TOP_JOIN_RECORD_REVIT_VERSIONS`], whose walls come from
+/// their element records and take nothing else from the native records but
+/// their type Function (RE-284). The other facts [`attach_wall_layers`] reads
+/// from them on 2024 and later (a wall's height, its top cut, its areas) are
+/// not measured on these releases.
+pub(super) fn attach_wall_top_joins(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    walls: &mut [DecodedElement],
+) {
+    if !WALL_TOP_JOIN_RECORD_REVIT_VERSIONS.contains(&revit_version) {
+        return;
+    }
+    let ids: BTreeSet<u64> = walls
+        .iter()
+        .filter_map(|wall| wall.id.map(u64::from))
+        .collect();
+    let Ok(joined) = crate::native_walls::wall_top_joins(rf, &ids) else {
+        return;
+    };
+    for wall in walls.iter_mut() {
+        if let Some(joined) = wall.id.and_then(|id| joined.get(&u64::from(id))) {
+            wall.fields
+                .push((WALL_TOP_JOINED_FIELD.into(), InstanceField::Bool(*joined)));
+        }
+    }
+}
+
 pub(super) fn attach_wall_layers(
     rf: &mut RevitFile,
     revit_version: u32,

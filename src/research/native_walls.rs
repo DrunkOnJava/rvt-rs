@@ -297,6 +297,47 @@ pub struct WallRecords {
     pub bounded: BTreeMap<u64, Vec<u64>>,
 }
 
+/// Whether a wall's top is joined to a roof or floor: one of the
+/// `JoinToRoofGStep` objects of its record has `m_baseOrTop` 1.
+fn is_top_joined(graph: &crate::native_parameters::ObjectGraph) -> bool {
+    graph.objects.iter().any(|object| {
+        object.class_name == "JoinToRoofGStep"
+            && object.fields.get("m_baseOrTop").and_then(Value::as_i64) == Some(1)
+    })
+}
+
+/// Whether the top of each of `walls` whose `SWall` or `ArcWall` record is
+/// read is joined to a roof or floor ([`WallRecords::top_joined`]), without
+/// the rest of [`native_walls_and_top_joins`]. Read on Revit 2015 to 2027
+/// (RE-284). Errs where the native record path does not read the file's
+/// release.
+pub fn wall_top_joins(
+    rf: &mut RevitFile,
+    walls: &BTreeSet<u64>,
+) -> anyhow::Result<BTreeMap<u64, bool>> {
+    let mut top_joined: BTreeMap<u64, bool> = BTreeMap::new();
+    if walls.is_empty() {
+        return Ok(top_joined);
+    }
+    let options = Options {
+        selected_ids: walls.clone(),
+        releases: crate::native_document::NATIVE_RELEASES,
+        ..Options::default()
+    };
+    extract_graphs(rf, &options, |record| {
+        let (Some(class), Some(graph)) = (record.class_name.as_deref(), record.graph.as_ref())
+        else {
+            return Ok(());
+        };
+        let id = record.identity.element_id;
+        if matches!(class, "SWall" | "ArcWall") && walls.contains(&id) {
+            top_joined.insert(id, is_top_joined(graph));
+        }
+        Ok(())
+    })?;
+    Ok(top_joined)
+}
+
 /// [`native_walls`], and for every one of `walls` whose `SWall` or `ArcWall`
 /// record is read, whether its top is joined to a roof or floor: one of its
 /// `JoinToRoofGStep` objects has `m_baseOrTop` 1 (a wall attached at its
@@ -353,13 +394,7 @@ pub fn native_walls_and_top_joins(
         if !matches!(class, "SWall" | "ArcWall") || !walls.contains(&id) {
             return Ok(());
         }
-        top_joined.insert(
-            id,
-            graph.objects.iter().any(|object| {
-                object.class_name == "JoinToRoofGStep"
-                    && object.fields.get("m_baseOrTop").and_then(Value::as_i64) == Some(1)
-            }),
-        );
+        top_joined.insert(id, is_top_joined(graph));
         if !graph.objects.iter().any(|object| {
             matches!(
                 object.class_name.as_str(),
