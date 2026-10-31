@@ -984,6 +984,18 @@ all Revit's value where they were missing. 36 of 94 exports of the unfiltered
 run move, all files of Revit 2015 to 2023
 (`reports/element-framing/RE-283-wall-function-and-named-parameters-pre2024.md`).
 
+**RE-284 (2026-10-30)** writes each wall's `ExtendToStructure` on Revit 2015 to
+2023, experimentally, from the same flag of its native record that RE-228
+reads on 2024 and 2025: a `JoinToRoofGStep` with `m_baseOrTop` 1. Against the
+same project saved by a later release it is equal on all 1,983 walls both
+files hold (24 pairs of 2015 to 2022 against 2023) and on the 249 walls of the
+2023 samples against their 2024 copies. Revit's own exports agree on the 114
+walls of BIMcollab's Revit 2015 example and the 4 of modelo_bim (a Revit 2023
+file), all false: the value true is measured against an export on 2024 and
+2025 only. 36 of 94 exports of the unfiltered run move, all of files of
+Revit 2015 to 2023, and every file of 2024 to 2027 is identical
+(`reports/element-framing/RE-284-wall-top-join-pre2024.md`).
+
 ## Performance
 
 Opening a large project is no longer a minutes-long wait. Every partition

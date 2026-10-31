@@ -281,6 +281,9 @@ pub fn recover_partition_schema_mvp(
                 .chain(out.rooms.iter_mut())
                 .chain(out.products.iter_mut()),
         );
+        // --- Whether a wall's top is joined to a roof or floor, from its
+        // native record (RE-228, RE-284) ---
+        attach_wall_top_joins(rf, revit_version, &mut out.walls);
         return Ok(out);
     }
 
