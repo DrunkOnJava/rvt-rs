@@ -154,8 +154,9 @@ pub fn read_defined(
 }
 
 /// [`read_defined`] without the family and material records, which only
-/// name an ElementId value (`target_name`, `target_family`): every value, its
-/// level and the type values it takes are the same. For readers that use
+/// name an ElementId value: every value, its level and the type values it
+/// takes are the same, but `target_name` and `target_family` are not filled
+/// for a material or family target. For readers that use
 /// values alone, such as the parameters named for a property (#1237: on a
 /// Revit 2015 to 2023 file those records were most of the read).
 pub fn read_defined_values(
