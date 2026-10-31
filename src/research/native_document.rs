@@ -386,12 +386,26 @@ pub(crate) type DefinitionKey = (
 
 /// The handle's [`DefinitionPass`] for `options`, read if it has none.
 fn definition_pass(file: &mut RevitFile, options: &Options) -> Result<Arc<DefinitionPass>> {
+    // Every field is named, so a new one has to be put in the key or left out
+    // of it on purpose: the selections and channel are the pass's own, and
+    // the filter applies after it.
+    let Options {
+        selected_ids: _,
+        selected_classes: _,
+        channels: _,
+        max_group_bytes,
+        max_graph_values,
+        max_graph_objects,
+        graph_classes,
+        releases,
+        definition_filter: _,
+    } = options;
     let key: DefinitionKey = (
-        options.max_group_bytes,
-        options.max_graph_values,
-        options.max_graph_objects,
-        options.graph_classes.clone(),
-        options.releases.clone(),
+        *max_group_bytes,
+        *max_graph_values,
+        *max_graph_objects,
+        graph_classes.clone(),
+        releases.clone(),
     );
     if let Some(cached) = file.native_definitions(&key) {
         return Ok(cached);

@@ -2885,6 +2885,10 @@ fn apply_partition_level_storeys(
         .collect();
     // W7, RE-275: what each Level's own record gives its storey.
     *storey_properties = storey_properties::read(rf, &level_ids);
+    // The storeys' read is the export's last native extraction: a Revit 2015
+    // to 2023 file's named parameters made the first (#1237). The definition
+    // pass they shared is dropped so the rest of the export does not hold it.
+    rf.forget_native_definitions();
 }
 
 /// Value of [`STOREY_BIND_SOURCE_PROPERTY`] for the #219 join.

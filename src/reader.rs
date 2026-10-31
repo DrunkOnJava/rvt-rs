@@ -579,6 +579,13 @@ impl RevitFile {
             .map(|(_, pass)| Arc::clone(pass))
     }
 
+    /// Drop the kept parameter-definition pass, whose registry an MEP model
+    /// makes tens of MiB: the export does once it has made its last
+    /// extraction, so a file read once keeps nothing.
+    pub(crate) fn forget_native_definitions(&mut self) {
+        self.native_definitions = None;
+    }
+
     /// Keep a parameter-definition pass for later extractions under `key`.
     pub(crate) fn remember_native_definitions(
         &mut self,
