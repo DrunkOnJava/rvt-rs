@@ -2240,6 +2240,10 @@ Revit's export writes a floor's `Qto_SlabBaseQuantities.GrossArea` as the area o
 
 Revit's export writes a compound ceiling's `Qto_CoveringBaseQuantities.Width` as its type's thickness: on the BIM4LCA office, all 78 compound ceilings as built and 75 at permit have it equal to the depth of their record box. rvt-rs writes it where that depth is the type's layers' total, as RE-238 tells a level slab. The ceiling's `GrossArea` is its sketch's area on most but larger by about 1% on 11, and is left out. Report: `reports/element-framing/RE-250-ceiling-width.md`.
 
+## Addendum — RE-297 a ceiling's GrossArea (2026-10-30)
+
+A ceiling's `GrossArea` in Revit's export is the area of the profile its sketch gives, less the cut where Revit cuts it, and a cut shows in the ceiling's native record as a `CutPairGStep`: of the BIM4LCA office's ceilings drawn as one extrusion of their sketch, the 57 as built and 45 at permit whose record holds none have Revit's value, and the 2 as built and 9 at permit RE-250 found 0.7 to 1.1 percent short all hold one. rvt-rs writes it on the first, and the `Width` of a ceiling of several pieces (RE-250 left them out: 19 as built, 20 at permit) and of the 21 walls of the type `AK-1.otsa` that Revit's export writes as coverings (their type's thickness). The area of a ceiling in pieces is one piece's in Revit's export, which no field says; the roofing coverings, the office's ventilation units, are boxes whose footprint is not read. Report: `reports/element-framing/RE-297-ceiling-gross-area.md`.
+
 ## Addendum — RE-251 a wall's record does not keep Revit's wall quantities (2026-10-26)
 
 No number in a wall's native record or its saved parameters is Revit's wall side area, footprint area or volume on the BIM4LCA office: Revit computes those when it exports. A wall's `Height` is its saved parameter -1001101 on 496 of 579 walls (478 of 565 at permit); the rest are mostly walls whose top is joined to a roof or floor, and no field read tells them apart (the best, the `JoinToRoofGStep` it holds, is right on 529). Not written. Report: `reports/element-framing/RE-251-wall-saved-dimensions.md`.
@@ -2247,6 +2251,10 @@ No number in a wall's native record or its saved parameters is Revit's wall side
 ## Addendum — RE-252 a wall's Length (2026-10-26)
 
 Revit's export writes a wall's `Qto_WallBaseQuantities.Length` as either the length of its curve (the native `GLine`, which ends on a joined wall's middle) or the length of that curve cut back where its body meets the walls joined at its ends, the exported `Axis`, by how it draws the wall. The cut-back ends are read from the wall's native record (its face planes, the walls its control join sets and `CDJoinInfo` name, the far face where `JoinEndGStep.m_exposedFaceMap` names a wall) and from its join reaches, and taken where the two agree; where the cut-back curve is as long as the curve, rvt-rs writes that length: 88 office walls as built, 81 at permit, all 46 of the R2025 models' and 5 of the held-out flowbim.ee house's, each Revit's, none different. Report: `reports/element-framing/RE-252-wall-length.md`.
+
+## Addendum — RE-296 a space's NetVolume (2026-10-30)
+
+Revit's export writes a space's `Qto_SpaceBaseQuantities.NetVolume` as the volume of the room's closed shell, and on the BIM4LCA office it is the room's outline area, its holes taken off, times the height of the room's record box on every room whose stored solid (RE-101) has every vertical face running from the box's floor to its ceiling and no slanted face: 167 of 167 as built, 178 of 178 at permit, on both of puzzbobb's R2025 rooms in each of 6 models, and on 1 of the 54 rooms with a stepped ceiling. rvt-rs marks such a room (`m_room_prism`) and writes the volume there. `GrossVolume` is written only where Revit draws the room as an extrusion, 88 of the 167 prisms, and no field tells them from the 79 it tessellates; the area quantities of Revit 25's export are not in the office's 24.0.5 export. Report: `reports/element-framing/RE-296-space-net-volume.md`.
 
 ## Addendum — RE-256 a wall's, floor's, ceiling's and roof's type parameters (2026-10-27)
 
@@ -2279,6 +2287,18 @@ Revit 2009 and 2010 frame their element records as 2011 does; Revit 2008's envel
 ## Addendum — RE-266 a wall's Height where nothing joins to or cuts it (2026-10-29)
 
 A wall whose native record holds no `JoinToRoofGStep`, `CutPairGStep` or `WallCutoutGStep` is drawn exactly as tall as Revit's body, and Revit's export writes that as its `Qto_WallBaseQuantities.Height` on every one: 81 BIM4LCA office walls as built, 70 at permit and 93 of puzzbobb's R2025 walls, none different. rvt-rs writes it there. With cutouts allowed, two office walls cut by an instance Revit's export gives no `Height`, so walls with a cutout are left out. The saved parameter -1001101 is the wall's height from its base and top constraints, not its Unconnected Height, as puzzbobb measured (`reports/element-framing/RE-266-wall-height-uncut.md`).
+
+## Addendum — RE-283 a wall's IsExternal and the parameters named for a property on Revit 2015 to 2023 (2026-10-30)
+
+A wall's `BasicWallType.m_function` reads on Revit 2015 to 2023 once the wall's type id is read in the 4-byte `Identifier` (`native_json::identifier_i64`), and equals the same project's later copy on 1,982 of 1,983 walls (24 pairs of Autodesk's 2015 to 2022 samples against their 2023 copies; both values occur: 122 walls of Function 0 and 58 of 1 on the 2015 `rac_advanced`). The project and shared parameters named for `IsExternal` or a standard property read from the saved parameters (RE-281) on those releases. BIMcollab's Revit 2015 export writes `IsExternal` (true on 71, false on 43) and `LoadBearing` (true on 114) on its 114 walls from two parameters on the walls, which a parameter named for the property reads before anything else (RE-193); the Function alone is Revit's value on 113 of the 114. `probes/examples/probe_re283_wall_function_pairs.rs`; `reports/element-framing/RE-283-wall-function-and-named-parameters-pre2024.md`.
+
+## Addendum — RE-282 an ElementId in a 4-byte Identifier (2026-10-30)
+
+Every native reader but the Element base and the phase order reads an ElementId as `{"m_id":{"m_id64":n}}`, Revit 2024's `Identifier`, and finds none in the 4-byte `{"m_id":{"m_id":n}}` of 2015 to 2023. Reading either shape in all of them (the six places that read `/m_id/m_id64`) leaves 91 of 94 exports of Measure's unfiltered run byte-identical, among them every sample of 2015 to 2022 and of 2024 to 2027, and moves three Revit 2023 files: 36 and 30 `IfcDistributionPort`s on `rac_basic` and `rac_advanced`, a wall layer set and four material associations on `rac_advanced`, and one material association on Einhoven, none of which a Revit export checks. It was reverted: each reader reads the ids it needs in either shape itself when it is admitted to a release (`reports/element-framing/RE-282-element-id-both-shapes.md`).
+
+## Addendum — RE-284 a wall's top join on Revit 2015 to 2023 (2026-10-30)
+
+A wall's `JoinToRoofGStep` with `m_baseOrTop` 1 (RE-228) reads on Revit 2015 to 2023 as on 2024 and 2025, without an ElementId, so the 4-byte `Identifier` does not matter. It is equal to the same project's later copy on all 1,983 walls both files hold (24 pairs of Autodesk's 2015 to 2022 samples against their 2023 copies; the 2015 `rac_advanced` has 56 walls not joined and 124 joined, the `rac_basic` 44 and 16) and on the 249 walls of the 2023 samples against their 2024 copies, and it is Revit's value on the 114 walls of BIMcollab's Revit 2015 export and the 4 of modelo_bim's, all false. `probes/examples/probe_re284_wall_top_join_pairs.rs`; `reports/element-framing/RE-284-wall-top-join-pre2024.md`.
 
 ## Addendum — RE-281 saved parameters and the phase order on Revit 2015 to 2022 (2026-10-30)
 
