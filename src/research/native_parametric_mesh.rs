@@ -465,11 +465,19 @@ pub fn tessellate_uv(
             && trim[1][1] <= bounds[1][1],
         "trim outside surface envelope"
     );
+    let (Some(u_first), Some(u_last), Some(v_first), Some(v_last)) = (
+        u_knots.first(),
+        u_knots.last(),
+        v_knots.first(),
+        v_knots.last(),
+    ) else {
+        anyhow::bail!("empty knot vector");
+    };
     ensure!(
-        u_knots.first().unwrap() >= &trim[0][0]
-            && u_knots.last().unwrap() <= &trim[1][0]
-            && v_knots.first().unwrap() >= &trim[0][1]
-            && v_knots.last().unwrap() <= &trim[1][1],
+        *u_first >= trim[0][0]
+            && *u_last <= trim[1][0]
+            && *v_first >= trim[0][1]
+            && *v_last <= trim[1][1],
         "knots outside trim rectangle"
     );
     let count = u_knots
@@ -497,8 +505,8 @@ pub fn tessellate_uv(
     let cells = u_knots
         .len()
         .checked_sub(1)
-        .unwrap()
-        .checked_mul(v_knots.len().checked_sub(1).unwrap())
+        .zip(v_knots.len().checked_sub(1))
+        .and_then(|(u, v)| u.checked_mul(v))
         .ok_or_else(|| anyhow::anyhow!("parametric mesh cell count overflow"))?;
     let mut triangles = Vec::with_capacity(
         cells

@@ -104,15 +104,14 @@ pub struct InventoryBuilder {
 impl InventoryBuilder {
     pub fn ingest(&mut self, record: &crate::native_document::Record) -> Result<()> {
         let Some(graph) = &record.graph else {
-            if record
+            if let Some(diagnostic) = record
                 .diagnostic
                 .as_deref()
-                .is_some_and(|d| d.contains("ES ") || d.contains("ESEntity"))
+                .filter(|d| d.contains("ES ") || d.contains("ESEntity"))
             {
                 self.diagnostics.push(format!(
                     "owner {}: {}",
-                    record.identity.element_id,
-                    record.diagnostic.as_deref().unwrap()
+                    record.identity.element_id, diagnostic
                 ));
             }
             return Ok(());
