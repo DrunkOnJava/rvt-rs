@@ -10,38 +10,85 @@ fragments a release moves into this file.
 
 ## [0.12.0] — 2026-10-31
 
-0.12.0 writes much more of what Revit's own IFC4 export writes, and only
-where it is Revit's value. Base quantities Revit computes from its joined
-geometry are written where the model's records decide them: walls' side
-areas, volumes, heights and footprints, box-drawn columns' areas and
-volumes, floors', flat roofs' and ceilings' areas and volumes, spaces' net
-volume and curtain mullions' surface area. So are more common property
-values: beams' roll, slope and span, storeys' reference and entrance level,
-structural columns' and framing's `LoadBearing`, type objects' common sets,
-a stair's flight values and curtain members' `IsExternal`. Where Revit's own
-exporters disagree on a value, as on a floor's and a covering's `Width` or a
-type object's `IsExternal`, it is left out. On the BIM4LCA office as built,
-29,262 of the 39,388 base quantities and, with `--revit-set-placement`,
-45,235 of the 45,525 property values Revit's export writes on the objects
-rvt-rs writes are now equal, 1 different each. No quantity is written that
-Revit's export leaves out. The property values it leaves out that rvt-rs
-writes are on elements Revit's export does not hold, but for one: a fixture's
-`Reference`, which Revit's export writes as another class (#792)
-(`docs/release-1.0-criteria.md`, W7).
+0.12.0 writes much more of what Revit's own IFC4 export writes, each value
+where the model's records show what Revit writes, and leaves a value out
+where Revit's own exporters disagree on it.
+
+Base quantities Revit computes from its joined geometry are written where
+the records decide them:
+- walls' side areas, volumes, `Height` and `GrossFootprintArea`;
+- the areas and volumes of box-drawn columns nothing cuts or crosses;
+- floors' `NetVolume` and flat roofs' slab quantities where nothing cuts
+  them, and ceilings' `GrossArea`;
+- spaces' `NetVolume` where the room's solid is a prism of its outline;
+- curtain mullions' `NetSurfaceArea` where their wall's mullions say which
+  ends Revit keeps.
+
+A floor's and a covering's `Width` are left out: Revit 2024's exporter writes
+them, later ones do not.
+
+These property values are written:
+- unrotated beams' `Roll`, level beams' `Slope` and the `Span` of beams drawn
+  along their location line (a rotated or sloped beam gets none);
+- storeys' `Reference` and `EntranceLevel`;
+- structural columns' and framing's `LoadBearing`;
+- type objects' common sets, without `IsExternal`, which Revit's newer
+  exporters leave out;
+- a stair's `TreadLengthAtInnerSide`, and with `--revit-set-placement` its
+  flights' `Pset_StairFlightCommon`, measured on 14 and 5 stairs;
+- curtain members' `IsExternal` by their curtain wall's value. Exterior
+  members' values are checked against revit-ifc's source only, since no
+  newer exporter's model has an exterior curtain wall.
+
+A pipe's `InvertElevation` is now its height above the model's zero, as
+Revit's export writes it.
+
+On the BIM4LCA office as built, counting the objects rvt-rs writes:
+- 29,262 of the 39,388 base quantities Revit's export writes are equal
+  (Measure run 41213779326);
+- with `--revit-set-placement`, 45,235 of the 45,525 property values are
+  equal (run 41215480967);
+- 1 differs in each.
+
+What the census counts apart is not in those totals: openings rvt-rs does
+not write, the values the project's own property-set file places, and the
+curtain members' values the exporter took from its cache. No quantity is
+written that Revit's IFC4 exports leave out. rvt-rs writes 10 property
+values Revit's export does not as built and 14 at permit:
+- 9 and 8 on openings and, at permit, 5 on one column, all on elements
+  Revit's export does not hold;
+- one on a fixture Revit's export writes as another class (#792).
+
+`docs/release-1.0-criteria.md`, W7, has the details.
 
 Native records are read on Revit 2015 to 2022 too: each element's saved
-parameters by name, experimentally, and the phase order, measured against
-the same projects saved by Revit 2023.
-Walls' `IsExternal` and `ExtendToStructure`, and structural columns' and
-framing's `IsExternal`, are written on Revit 2015 to 2023 experimentally,
-measured against the same projects' later copies and two Revit exports
-(BIMcollab's Revit 2015 example and modelo_bim, a Revit 2023 file). A model
-with a partition over 512 MiB no longer loses every value the native records
-give: those readers read under the file's own limits, which `--large-model`
-raises, and name a partition over the limit (#1075). That is not yet
-measured on a model over the limits. Python and the browser viewer draw
-doors and windows from Revit's saved meshes, as `rvt-ifc` has since 0.11.0.
-The public API that nothing used is removed, in one breaking change.
+parameters, experimentally, and the phase order, measured against the same
+projects saved by Revit 2023. Records that need the extensible-storage
+catalogue before Revit 2021, and 2015 to 2017 `VarSketch` records, are
+refused. On Revit 2015 to 2023, experimentally, walls' `IsExternal` and
+`ExtendToStructure` and structural columns' and framing's `IsExternal` are
+written. They are measured against:
+- the same projects' later copies;
+- modelo_bim's Revit IFC4 export;
+- Revit 2015's IFC2X3 export of BIMcollab's example, passed through an
+  optimizer and counted apart.
+
+`ExtendToStructure`'s joined value is measured against an export only on
+Revit 2024 and 2025.
+
+A model with a partition over 512 MiB no longer loses every value the native
+records give. Those readers read under the file's own limits, which
+`--large-model` raises, and name a partition over the limit (#1075). That is
+not yet measured on a model over the limits.
+
+Python and the browser viewer draw the doors and windows of Revit 2023 to
+2027 files from Revit's saved meshes where the whole mesh decodes, as
+`rvt-ifc` has since 0.11.0. A wall's top is cut at the floor that covers its
+whole plan. A wall a floor covers only in part keeps its full height where
+Revit steps its top: 29 office walls as built and 26 at permit.
+
+The public API that nothing used is removed, and other public types change;
+"Upgrading from 0.11" lists each.
 
 AhmadAnzar brought two out-of-date statements in `docs/status.md` and
 `ROADMAP.md` up to date (#1214), a first contribution. Thank you.
@@ -49,21 +96,27 @@ AhmadAnzar brought two out-of-date statements in `docs/status.md` and
 ### Upgrading from 0.11
 
 - Rust code that names a removed public item stops compiling. "Removed"
-  below lists each one and what to use instead. `FieldType::ElementIdRef`
-  has no `sub`, and `rvt::capability`'s relation-domain types and
-  `ifc::NotYetImplemented` are gone.
+  below lists each one and what to use instead. `rvt::capability`'s
+  relation-domain types and `ifc::NotYetImplemented` are gone.
+- `FieldType::ElementIdRef` has no `sub`, `referenced_tag` no longer keeps
+  bit 15, and `FieldType::encode` writes the reference's six bytes.
 - Code that builds an `IfcModel` with a struct literal adds
   `storey_properties` and `type_entity_sets` (`Default::default()`), and
   `PropertySet::storey_sets_for` takes the storey properties.
 - `rvt-capabilities --json` writes `schema_version` 2, without the
-  `relation_domains` section, and `rvt-schema --json` writes no `sub` on an
-  `ElementIdRef` field.
+  `relation_domains` section. `rvt-schema --json` writes no `sub` on an
+  `ElementIdRef` field. The diagnostics' `parameter_value_count` counts the
+  values on type objects too.
 - Python's `write_ifc()` and `rvt_to_ifc()` draw doors and windows from their
-  saved meshes. Pass `saved_meshes=False` for their boxes, as before. The
-  viewer does the same, with a File status option and `?savedMeshes=0`.
-- At the default limits the native-record readers now stop at 256 MiB, as
-  the rest of the reader does, where they read up to 512 MiB before. Pass
+  saved meshes. Pass `saved_meshes=False` for their boxes, as before.
+- The viewer draws them from saved meshes too, with a File status option.
+  `?savedMeshes=0` starts it off, and `openRvtBytesWithDiagnosticsModeAndOpenLimits`
+  takes `savedMeshes`.
+- At the default limits the native-record readers stop at 256 MiB, as the
+  rest of the reader does, where they read up to 512 MiB before. Pass
   `--large-model` for a larger partition.
+- A pipe on a raised storey gets a different `InvertElevation`: its height
+  above the model's zero, not above its storey.
 - An export no longer writes a floor's or a covering's
   `Qto_*BaseQuantities.Width`, which Revit's exporters disagree on.
 
