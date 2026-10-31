@@ -17,6 +17,8 @@ RE-250 found a ceiling's `GrossArea` equal to the area of the profile its sketch
 
 Every ceiling Revit cuts holds the join step; rvt-rs's sketch outline is the ceiling before the cut. Revit's value for those is the area of what is left, 8.8207 m2 against the sketch's 8.9203 m2 on ceiling 2095292. The same step marks a floor Revit cuts (RE-295), so the reader that finds it for floors reads ceilings too: `attach_slab_uncut`.
 
+`GrossArea` is also written only on a level ceiling, one whose type's layers fill its extrusion's depth (RE-238's test, the one `Width` uses): a sloped ceiling's sketch profile is only its plan projection. Every compound ceiling of the office is level (RE-250), so the guard leaves the counts above unchanged; no sloped ceiling with a Revit export has been measured.
+
 ## 2. A ceiling of several pieces
 
 A sketch of separate loops is several elements sharing one `Tag` (#331): 19 of the office's compound ceilings as built and 20 at permit, which RE-250 left out. Revit's `Width` is the type's thickness on all of them, as on the others, and rvt-rs writes it where every piece is as deep as the type's layers are thick. Their `GrossArea` is the area of one piece, and which one is Revit's: of the pieces of ceiling 2095436 (5.520, 3.910 and 3.244 m2) it is the last and smallest, of those of 2095364 (1.455, 4.639 and 1.467 m2) the middle and largest. Nothing in the record says, and it stays unwritten.

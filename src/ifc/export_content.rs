@@ -2653,7 +2653,15 @@ fn add_ceiling_quantities(
         name == crate::partition_schema_mvp::SLAB_UNCUT_FIELD
             && matches!(value, InstanceField::Bool(true))
     });
-    if pieces.is_empty() && from_sketch && uncut {
+    // A ceiling whose layers fill its body's depth is level (RE-238); a
+    // sloped one's profile is only its plan projection, so it gets neither.
+    let layered = crate::partition_schema_mvp::element_layers_from_fields(&decoded.fields)
+        .filter(|layers| layers.stacked && !layers.layers.is_empty())
+        .is_some_and(|layers| {
+            let total: f64 = layers.layers.iter().map(|layer| layer.width_feet).sum();
+            (total - body.height_feet).abs() <= TOLERANCE_FEET
+        });
+    if layered && pieces.is_empty() && from_sketch && uncut {
         if let Some(area) = profile_area(body) {
             properties.push(Property {
                 name: "GrossArea".into(),
@@ -2661,15 +2669,6 @@ fn add_ceiling_quantities(
             });
         }
     }
-    let layered = crate::partition_schema_mvp::element_layers_from_fields(&decoded.fields)
-        .filter(|layers| layers.stacked && !layers.layers.is_empty())
-        .is_some_and(|layers| {
-            let total: f64 = layers.layers.iter().map(|layer| layer.width_feet).sum();
-            (total - body.height_feet).abs() <= TOLERANCE_FEET
-                && pieces
-                    .iter()
-                    .all(|piece| (total - piece.height_feet).abs() <= TOLERANCE_FEET)
-        });
     if layered && body.height_feet.is_finite() && body.height_feet > 0.0 {
         properties.push(Property {
             name: "Width".into(),
