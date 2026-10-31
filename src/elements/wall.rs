@@ -110,11 +110,6 @@ impl WallKind {
             _ => Self::Basic,
         }
     }
-
-    /// `true` when the wall is a plain Basic wall (most common case).
-    pub fn is_basic(self) -> bool {
-        matches!(self, Self::Basic)
-    }
 }
 
 /// The functional role a wall plays architecturally — drives IFC
@@ -140,18 +135,6 @@ impl WallFunction {
             4 => Self::Soffit,
             5 => Self::CoreShaft,
             _ => Self::Interior,
-        }
-    }
-
-    /// Map to the closest IFC `IfcWallTypeEnum` predefined type.
-    pub fn to_ifc_predefined(self) -> &'static str {
-        match self {
-            Self::Interior => "PARTITIONING",
-            Self::Exterior => "STANDARD",
-            Self::Foundation => "ELEMENTEDWALL",
-            Self::Retaining => "SOLIDWALL",
-            Self::Soffit => "PARAPET",
-            Self::CoreShaft => "SHEAR",
         }
     }
 }
@@ -264,12 +247,6 @@ impl Wall {
         }
         out
     }
-
-    /// `true` when the wall's top isn't bound to a level — in that case
-    /// height comes from `unconnected_height_feet`.
-    pub fn is_unconnected(&self) -> bool {
-        self.top_level_id.is_none_or(|id| id.get() == 0)
-    }
 }
 
 /// Typed view of a decoded WallType.
@@ -304,11 +281,5 @@ impl WallType {
             }
         }
         out
-    }
-
-    /// Total thickness in inches — convenience for US-customary
-    /// readouts in UIs and reports.
-    pub fn width_inches(&self) -> Option<f64> {
-        self.width_feet.map(|ft| ft * 12.0)
     }
 }

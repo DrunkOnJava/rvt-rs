@@ -143,7 +143,8 @@ pub fn all_decoders() -> Vec<Box<dyn ElementDecoder>> {
         Box::new(SimpleDecoder::new("PipeFitting")),
         Box::new(SimpleDecoder::new("PlumbingFixture")),
         Box::new(SimpleDecoder::new("SpecialtyEquipment")),
-        // L5B-54: AProperty* value-carrier classes. The schema
+        // Tracker: L5B-54.
+        // AProperty* value-carrier classes. The schema
         // represents every element's parameter values as instances
         // of one of these subclasses, keyed by name to a matching
         // ParameterElement definition.

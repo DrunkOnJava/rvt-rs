@@ -190,7 +190,8 @@ pub const MAPPINGS: &[Mapping] = &[
         ifc_type: "IFCREINFORCINGBAR",
         predefined_type: None,
     },
-    // Structural — secondary members (IFC-10).
+    // Tracker: IFC-10.
+    // Structural — secondary members.
     // IfcMember is IFC4's entity for structural elements that aren't
     // the primary load path: bracing, trusses, studs, girts, purlins,
     // mullions, posts. Revit distinguishes these via the Family
@@ -766,22 +767,4 @@ pub fn lookup_export_override(value: &str) -> Option<&'static Mapping> {
     EXPORT_OVERRIDE_TARGETS
         .iter()
         .find(|m| m.revit_class.eq_ignore_ascii_case(value.trim()))
-}
-
-/// True when the mapping routes a Revit class through `IfcMember`
-/// (as opposed to `IfcBeam` / `IfcColumn` / `IfcFooting`). Useful
-/// for downstream code that wants to emit IfcMember-specific
-/// property-sets (`Pset_MemberCommon`) or group members into an
-/// `IfcRelAggregates` under a truss / frame assembly.
-///
-/// IfcMember is IFC4's dedicated entity for secondary
-/// structural elements. Routing through it (rather than the
-/// fallback `IfcBeam`) lets validators and downstream tools
-/// distinguish primary beams from bracing / purlins / studs /
-/// trusses, which matters for load-path visualization and
-/// structural schedules.
-pub fn is_ifc_member(revit_class: &str) -> bool {
-    lookup(revit_class)
-        .map(|m| m.ifc_type == "IFCMEMBER")
-        .unwrap_or(false)
 }
