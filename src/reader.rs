@@ -916,32 +916,6 @@ impl RevitFile {
         extract_preview_png(&bytes)
     }
 
-    /// Like [`Self::preview_png`], but never trims after `IEND` — returns
-    /// every byte from PNG magic through end of the OLE stream. Useful for
-    /// forensic inspection of trailing payload.
-    pub fn preview_png_untrimmed(&mut self) -> Result<Vec<u8>> {
-        let bytes = self.read_stream(REVIT_PREVIEW_4_0)?;
-        extract_preview_png_untrimmed(&bytes)
-    }
-
-    /// Raw bytes of the `RevitPreview4.0` stream including Revit's
-    /// custom wrapper. Use `preview_png` for just the PNG.
-    pub fn preview_raw(&mut self) -> Result<Vec<u8>> {
-        self.read_stream(REVIT_PREVIEW_4_0)
-    }
-
-    /// Probe `TransmissionData` (UTF-16LE vs opaque vs empty) with
-    /// opportunistic UUID / path / XML-node extracts when UTF-16LE.
-    ///
-    /// Does **not** resolve linked models or decode Autodesk transmission
-    /// field layouts — see [`crate::transmission_data`]. Empty extracts
-    /// ≠ “no links”.
-    pub fn transmission_data_probe(
-        &mut self,
-    ) -> Result<crate::transmission_data::TransmissionDataProbe> {
-        crate::transmission_data::probe_transmission_data(self)
-    }
-
     /// Decompress `Formats/Latest` and extract the class/schema inventory.
     pub fn class_names(&mut self) -> Result<BTreeSet<String>> {
         let bytes = self.read_stream(FORMATS_LATEST)?;

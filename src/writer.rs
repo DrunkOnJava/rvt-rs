@@ -260,14 +260,16 @@ pub fn write_with_patches(src: &Path, dst: &Path, patches: &[StreamPatch]) -> Re
             return Err(crate::Error::StreamNotFound(p.stream_name.clone()));
         }
     }
-    // B69: every patch is framed before any file is touched, so a refused
+    // Tracker: B69.
+    // Every patch is framed before any file is touched, so a refused
     // one leaves nothing behind.
     let framed: Vec<Vec<u8>> = patches
         .iter()
         .map(framed_patch_bytes)
         .collect::<Result<_>>()?;
 
-    // WRT-10.3 fast-path: empty-patch round-trip bypasses CFB
+    // Tracker: WRT-10.3.
+    // Fast path: an empty-patch round-trip bypasses CFB
     // round-tripping entirely and copies the source file byte-for-
     // byte. This gives us byte-identical output for the
     // "verify the pipeline" use case (corpus re-emission, canonical
@@ -296,7 +298,8 @@ pub fn write_with_patches(src: &Path, dst: &Path, patches: &[StreamPatch]) -> Re
         return Ok(());
     }
 
-    // WRT-10.3: non-empty patch sector-preservation path.
+    // Tracker: WRT-10.3.
+    // Non-empty patch: the sector-preservation path.
     //
     // Strategy: copy src to a temp file, open it with `cfb::open_rw`,
     // and rewrite ONLY the patched streams in-place. The `cfb` crate
@@ -492,7 +495,8 @@ pub fn write_with_patches(src: &Path, dst: &Path, patches: &[StreamPatch]) -> Re
     Ok(())
 }
 
-// ---- WRT-05: GUID preservation across write ----
+// Tracker: WRT-05.
+// ---- GUID preservation across write ----
 
 /// Read the BasicFileInfo GUID from a Revit file. Returns
 /// `Ok(None)` when the stream exists but no GUID was embedded. Used
@@ -525,7 +529,8 @@ pub fn guid_preserved(src: &Path, dst: &Path) -> Result<bool> {
     Ok(a == b)
 }
 
-// ---- WRT-06: History chain preservation ----
+// Tracker: WRT-06.
+// ---- History chain preservation ----
 
 /// Read the document-history entries from a Revit file.
 /// Returns the ordered list of Revit-version strings embedded in
@@ -562,7 +567,8 @@ pub fn history_entries_preserved(src: &Path, dst: &Path) -> Result<bool> {
     Ok(a == b)
 }
 
-// ---- WRT-13: Stream hash verification per write ----
+// Tracker: WRT-13.
+// ---- Stream hash verification per write ----
 
 /// Per-stream verification outcome. One entry per
 /// expected stream; the `match_`/`first_diff_at` pair distinguishes

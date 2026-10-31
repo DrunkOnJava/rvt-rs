@@ -150,7 +150,8 @@
 #![warn(rust_2024_compatibility)]
 #![warn(missing_debug_implementations)]
 #![cfg_attr(docsrs, feature(doc_cfg))]
-// SEC-11 + SEC-12 + SEC-13: forbid `unsafe` in the core library.
+// Tracker: SEC-11, SEC-12, SEC-13.
+// Forbid `unsafe` in the core library.
 // Revit files come from untrusted sources, so any raw-pointer or
 // uninit-memory manoeuvre is a potential parser vulnerability.
 // `forbid` is one step stronger than `deny` — it cannot be locally
@@ -159,7 +160,7 @@
 //
 // The pyo3 Python bindings are the one legitimate place where
 // `unsafe fn` / `unsafe impl` appear (pyo3's `#[pyclass]` macros
-// expand into them). SEC-12 moved those bindings to the separate
+// expand into them), so those bindings live in the separate
 // `rvt-py` workspace member crate, which has its own `unsafe_code`
 // allowance. This root crate is unconditionally `forbid`-ed —
 // there is no feature flag or cfg that can turn this off.
@@ -236,13 +237,14 @@ pub(crate) use research::{
 };
 
 // Python bindings live in their own workspace member crate
-// (`rvt-py/`) as of SEC-12 / SEC-13, so pyo3's unavoidable
+// (`rvt-py/`), so pyo3's unavoidable
 // `unsafe impl` / `unsafe fn` macro-expansions don't require
 // this crate to relax its unconditional `#![forbid(unsafe_code)]`.
 // The wheel on PyPI is still called `rvt`; build it with
 // `maturin build --manifest-path rvt-py/Cargo.toml`.
 
-// The WASM bindings (VW1-01) are their own crate, `rvt-wasm` (C6).
+// Tracker: VW1-01, C6.
+// The WASM bindings are their own crate, `rvt-wasm`.
 
 pub use element_id::ElementId;
 pub use error::{Error, Result};

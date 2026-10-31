@@ -5,7 +5,7 @@
 //!
 //! Contract: never silently remove data. Always replace the sensitive
 //! region with an explicit `<redacted...>` marker that indicates what
-//! class of info was scrubbed. Tests below are the canonical examples.
+//! class of info was scrubbed.
 
 /// Scrub `\Users\<name>\` and `/Users/<name>/` usernames while
 /// preserving the path shape. The username segment is replaced by

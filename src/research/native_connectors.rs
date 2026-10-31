@@ -261,8 +261,9 @@ pub fn connector_ports(
     let mut family_directions: BTreeMap<u64, BTreeMap<i64, i64>> = BTreeMap::new();
     let mut calculated: BTreeMap<u64, BTreeMap<u32, i64>> = BTreeMap::new();
     let mut segment_directions: BTreeMap<(u64, u32), i64> = BTreeMap::new();
+    // Tracker: B79.
     // One pass reads the instances, their symbols, the segments and every
-    // family (B79):
+    // family:
     // which families the symbols name is known only once they are read, and
     // a second pass over the partitions costs more than decoding the
     // families none names.
