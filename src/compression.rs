@@ -281,12 +281,17 @@ impl InflatedStream {
         stored: &[u8],
         limits: InflateLimits,
     ) -> (Self, InflateShortfall) {
-        let prepared = prepare_stream_for_inflate(stream_name, stored);
-        let (chunks, shortfall) = inflate_all_members_with_limits(
-            prepared.as_ref(),
-            limits,
-            limits.max_stream_total_bytes(),
-        );
+        Self::from_prepared_with_limits(&prepare_stream_for_inflate(stream_name, stored), limits)
+    }
+
+    /// [`Self::from_stored_with_limits`] for a stream already prepared
+    /// ([`prepare_stream_for_inflate`]).
+    pub(crate) fn from_prepared_with_limits(
+        prepared: &[u8],
+        limits: InflateLimits,
+    ) -> (Self, InflateShortfall) {
+        let (chunks, shortfall) =
+            inflate_all_members_with_limits(prepared, limits, limits.max_stream_total_bytes());
         let total: usize = chunks.iter().map(|(_, _, chunk)| chunk.len()).sum();
         let mut concat = Vec::with_capacity(total);
         let mut chunk_ends = Vec::with_capacity(chunks.len());

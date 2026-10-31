@@ -151,6 +151,9 @@ pub struct RevitFile {
     /// the handle — `RevitFile` never writes — so one inflate serves
     /// all of them.
     inflated: std::collections::HashMap<String, Arc<compression::InflatedStream>>,
+    /// Memoised partition streams as stored, with Revit's page checksums
+    /// stripped: every native pass walked each one again from the file.
+    prepared: std::collections::HashMap<String, Arc<Vec<u8>>>,
     /// Memoised `Partitions/NN` string-record extraction. The UTF-16
     /// decode over the whole partition is the single most expensive
     /// step after inflate, and unit recovery, storey names and the
@@ -407,6 +410,7 @@ impl RevitFile {
             cfb,
             limits,
             inflated: std::collections::HashMap::new(),
+            prepared: std::collections::HashMap::new(),
             partition_strings: None,
             second_prologue_ids: None,
             element_names: None,
@@ -475,14 +479,15 @@ impl RevitFile {
         if let Some(cached) = self.inflated.get(name) {
             return Ok(Arc::clone(cached));
         }
-        let raw = self.read_stream(name)?;
+        let prepared = self.prepared_partition(name)?;
+        let stored_bytes = self.stream_size(name).unwrap_or(prepared.len() as u64);
         let limits = self.limits.inflate_limits;
         let (inflated, shortfall) =
-            compression::InflatedStream::from_stored_with_limits(name, &raw, limits);
+            compression::InflatedStream::from_prepared_with_limits(&prepared, limits);
         if shortfall.members_over_limit > 0 {
             self.note_unread(UnreadStream {
                 name: name.to_string(),
-                stored_bytes: raw.len() as u64,
+                stored_bytes,
                 kind: UnreadKind::MemberTooLarge,
                 limit: limits.max_output_bytes as u64,
             });
@@ -490,7 +495,7 @@ impl RevitFile {
         if shortfall.stopped_at_total {
             self.note_unread(UnreadStream {
                 name: name.to_string(),
-                stored_bytes: raw.len() as u64,
+                stored_bytes,
                 kind: UnreadKind::InflatedTotalTooLarge,
                 limit: limits.max_stream_total_bytes() as u64,
             });
@@ -499,6 +504,24 @@ impl RevitFile {
         self.inflated
             .insert(name.to_string(), Arc::clone(&inflated));
         Ok(inflated)
+    }
+
+    /// Partition stream `name` as stored, with Revit's page checksums
+    /// stripped ([`compression::prepare_stream_for_inflate`]), memoised for
+    /// the handle's lifetime like [`Self::inflated_partition`].
+    pub(crate) fn prepared_partition(&mut self, name: &str) -> Result<Arc<Vec<u8>>> {
+        if let Some(cached) = self.prepared.get(name) {
+            return Ok(Arc::clone(cached));
+        }
+        let stored = self.read_stream(name)?;
+        let stripped = match compression::prepare_stream_for_inflate(name, &stored) {
+            std::borrow::Cow::Owned(stripped) => Some(stripped),
+            std::borrow::Cow::Borrowed(_) => None,
+        };
+        let prepared = Arc::new(stripped.unwrap_or(stored));
+        self.prepared
+            .insert(name.to_string(), Arc::clone(&prepared));
+        Ok(prepared)
     }
 
     /// The data objects (RE-153) of partition stream `name`, each at its

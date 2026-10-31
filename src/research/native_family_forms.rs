@@ -32,7 +32,7 @@
 
 use crate::le_bytes;
 use crate::native_parameters::ObjectGraph;
-use crate::{RevitFile, compression, native_document, native_parameters, native_segments};
+use crate::{RevitFile, native_document, native_parameters, native_segments};
 use std::collections::{BTreeMap, BTreeSet};
 
 /// The model geometry classes read: solid forms, free-form (imported or
@@ -156,8 +156,7 @@ fn read_documents(
     let instance_tag = tag("FamilyInstance");
     let mut documents: BTreeMap<u64, Document> = BTreeMap::new();
     for name in streams {
-        let stored = rf.read_stream(name)?;
-        let prepared = compression::prepare_stream_for_inflate(name, &stored);
+        let prepared = rf.prepared_partition(name)?;
         let inflated = rf.inflated_partition(name).ok();
         native_segments::walk_inflated(
             &prepared,
@@ -313,8 +312,7 @@ pub fn family_forms(
     let mut bodies: Vec<(u64, Vec<u8>)> = Vec::new();
     let mut keys: BTreeSet<[u8; 16]> = BTreeSet::new();
     for name in &streams {
-        let stored = rf.read_stream(name)?;
-        let prepared = compression::prepare_stream_for_inflate(name, &stored);
+        let prepared = rf.prepared_partition(name)?;
         let inflated = rf.inflated_partition(name).ok();
         native_segments::walk_inflated(
             &prepared,

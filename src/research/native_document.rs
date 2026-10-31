@@ -194,14 +194,15 @@ fn decode_single(prepared: &[u8], offset: usize) -> Result<(Vec<u8>, StreamEnvel
     ))
 }
 
-/// Stored partition `name` under the file's own stream limit
-/// ([`crate::reader::OpenLimits::max_stream_bytes`], which `--large-model`
-/// raises). `None` when it is over the limit: [`RevitFile::read_stream`] names
+/// Partition `name` as stored, with its page checksums stripped and kept for
+/// the handle's lifetime ([`RevitFile::prepared_partition`]), under the
+/// file's own stream limit ([`crate::reader::OpenLimits::max_stream_bytes`],
+/// which `--large-model` raises). `None` when it is over the limit: [`RevitFile::read_stream`] names
 /// it in [`RevitFile::unread_streams`], and the rest of the file is still read
 /// (#1075).
-fn read_partition(file: &mut RevitFile, name: &str) -> Result<Option<Vec<u8>>> {
-    match file.read_stream(name) {
-        Ok(stored) => Ok(Some(stored)),
+fn read_partition(file: &mut RevitFile, name: &str) -> Result<Option<std::sync::Arc<Vec<u8>>>> {
+    match file.prepared_partition(name) {
+        Ok(prepared) => Ok(Some(prepared)),
         Err(crate::Error::TooLarge { .. }) => Ok(None),
         Err(err) => Err(err.into()),
     }
@@ -641,10 +642,9 @@ fn extract_records(
     });
     for name in names.iter().filter(|_| walked.is_none()) {
         let partition: u32 = name[11..].parse()?;
-        let Some(stored) = read_partition(file, name)? else {
+        let Some(prepared) = read_partition(file, name)? else {
             continue;
         };
-        let prepared = compression::prepare_stream_for_inflate(name, &stored);
         let inflated = file.inflated_partition(name).ok();
         native_segments::walk_inflated(
             &prepared,
@@ -685,10 +685,9 @@ fn extract_records(
         {
             continue;
         }
-        let Some(stored) = read_partition(file, &name)? else {
+        let Some(prepared) = read_partition(file, &name)? else {
             continue;
         };
-        let prepared = compression::prepare_stream_for_inflate(&name, &stored);
         let inflated = file.inflated_partition(&name).ok();
         let stats = native_segments::walk_inflated(
             &prepared,
