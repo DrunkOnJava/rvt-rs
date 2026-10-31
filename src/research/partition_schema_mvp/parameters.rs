@@ -292,6 +292,18 @@ fn names_a_property(name: &str) -> bool {
     }
 }
 
+/// Give each of `elements` of a class revit-ifc calls load bearing by its
+/// category alone ([`LOAD_BEARING_CLASSES`]) [`LOAD_BEARING_FIELD`] (RE-285).
+pub(super) fn attach_load_bearing<'a>(elements: impl IntoIterator<Item = &'a mut DecodedElement>) {
+    for element in elements {
+        if LOAD_BEARING_CLASSES.contains(&element.class.as_str()) {
+            element
+                .fields
+                .push((LOAD_BEARING_FIELD.into(), InstanceField::Bool(true)));
+        }
+    }
+}
+
 /// Give each of `elements` the `IsExternal` revit-ifc calculates for it
 /// ([`calculated_is_external`], [`IS_EXTERNAL_FIELD`]) on the releases that
 /// read elements from their element records (RE-283): where a

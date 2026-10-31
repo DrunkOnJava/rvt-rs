@@ -13,7 +13,7 @@ AEC users without overstating current capability.
 | Tests | Add fixture assertions that prevent false-positive decode claims | `tests/project_corpus_smoke.rs`, `tests/walker_to_ifc_integration.rs` |
 | Viewer UX | Make unsupported-file states clearer and accessible | `viewer/`, [`docs/viewer-privacy-posture.md`](viewer-privacy-posture.md) |
 
-## Open Remainders (as of 2026-10-30)
+## Open Remainders (as of 2026-10-31)
 
 The issue tracker is the source of truth; this is its state today, by
 milestone, with each issue's own title. Pick one rather than re-opening a
@@ -59,13 +59,15 @@ The requirements these serve, each with its bar, status and evidence, are in
 
 | Issue | Remainder |
 |---|---|
+| [#1209](https://github.com/DrunkOnJava/rvt-rs/issues/1209) | W7: coverings' `GrossArea` on ceilings in pieces and cut ceilings, and the roofing coverings (RE-297) |
+| [#1208](https://github.com/DrunkOnJava/rvt-rs/issues/1208) | W7: single-layer slabs' `Width` and `Length`, sloped floors' `Depth` and the stair landings' volume (RE-295) |
+| [#1207](https://github.com/DrunkOnJava/rvt-rs/issues/1207) | W7: spaces' `GrossVolume`, stepped rooms' `NetVolume` and Revit 25's area quantities |
+| [#1203](https://github.com/DrunkOnJava/rvt-rs/issues/1203) | W7: a joined column's `Length` and the round column |
 | [#1193](https://github.com/DrunkOnJava/rvt-rs/issues/1193) | W7: the BIM4LCA office's remaining property values without a rule (column Slope, opening Reference, mullion Span, sloped slab PitchAngle) |
 | [#1192](https://github.com/DrunkOnJava/rvt-rs/issues/1192) | W10: check that every number in the README and the supported profile names its model |
 | [#1191](https://github.com/DrunkOnJava/rvt-rs/issues/1191) | W6: draw family instances from their saved meshes by default (decode the remaining saved-graphics faces) |
 | [#1190](https://github.com/DrunkOnJava/rvt-rs/issues/1190) | W2, W6, W7: geometry and properties on Revit 2015 to 2023, 2026 and 2027 projects, beyond each element's box |
 | [#1189](https://github.com/DrunkOnJava/rvt-rs/issues/1189) | W3: read family (`.rfa`) and template (`.rte`, `.rft`) files like projects: types, parameters and geometry |
-| [#1187](https://github.com/DrunkOnJava/rvt-rs/issues/1187) | W7: curtain members' `IsExternal` by the host rule, the office export's cache values counted apart (RE-269) |
-| [#1186](https://github.com/DrunkOnJava/rvt-rs/issues/1186) | W7: the BIM4LCA office's stair values on `IfcStair` and the stair and flight types |
 | [#1185](https://github.com/DrunkOnJava/rvt-rs/issues/1185) | W7: type objects' common-set values (`IsExternal`, `LoadBearing`, `FireRating`, `Manufacturer`) on the BIM4LCA office's types |
 | [#1075](https://github.com/DrunkOnJava/rvt-rs/issues/1075) | Models with a partition stream over 256 MiB opened empty: reported since 0.11.0, with `--large-model`, not yet measured on a model over the limits |
 | [#1046](https://github.com/DrunkOnJava/rvt-rs/issues/1046) | W7: base quantities Revit computes from its joined geometry (wall areas and volumes, mullion surfaces) |

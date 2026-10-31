@@ -94,14 +94,6 @@ impl RoundTripReport {
     pub fn is_byte_exact(&self) -> bool {
         self.byte_exact && self.original_len == self.encoded_len
     }
-
-    /// Soft pass: every decoded field is a typed (non-`Bytes`)
-    /// variant. Good enough for "the reader understood this
-    /// instance"; not sufficient for "we can round-trip" —
-    /// weakened promise useful for reader-only audits.
-    pub fn is_typed_clean(&self) -> bool {
-        self.completeness.raw_bytes_fallback == 0 && self.completeness.total > 0
-    }
 }
 
 /// Run one round-trip check: decode instance bytes, re-encode them,

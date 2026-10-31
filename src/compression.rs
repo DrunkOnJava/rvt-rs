@@ -96,13 +96,6 @@ pub struct InflateShortfall {
     pub stopped_at_total: bool,
 }
 
-impl InflateShortfall {
-    /// True when no limit left anything out.
-    pub fn is_complete(&self) -> bool {
-        self.members_over_limit == 0 && !self.stopped_at_total
-    }
-}
-
 /// Stored bytes in a full checksum page (`PagedStreamImplReader<..., 65249>`).
 ///
 /// Independently documented by ahzs645/reviter's ODA loader analysis and
@@ -552,8 +545,8 @@ pub fn gzip_header_len(data: &[u8], offset: usize) -> Option<usize> {
     // optional flag fields fire when those flags are clear. Verify
     // the base header actually fits in the buffer before returning —
     // otherwise a caller using the returned length to slice past
-    // `data.len()` will panic. Discovered by the Q-04 regression
-    // harness on a 9-byte `[0x1f, 0x8b, 0x08, 0x00, ...]` input.
+    // `data.len()` will panic, as a 9-byte `[0x1f, 0x8b, 0x08, 0x00, ...]`
+    // input once did.
     if pos > data.len() {
         return None;
     }
