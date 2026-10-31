@@ -2762,10 +2762,6 @@ fn add_slab_gross_area(
     let Some(area) = profile_area(body) else {
         return;
     };
-    let mut properties = vec![Property {
-        name: "GrossArea".into(),
-        value: PropertyValue::AreaSquareFeet(area),
-    }];
     let depth = body.height_feet;
     let layers = crate::partition_schema_mvp::element_layers_from_fields(&decoded.fields)
         .filter(|layers| layers.stacked && !layers.layers.is_empty());
@@ -2773,19 +2769,21 @@ fn add_slab_gross_area(
         let total: f64 = layers.layers.iter().map(|layer| layer.width_feet).sum();
         (total - depth).abs() <= TOLERANCE_FEET
     });
-    let depth_quantity = if !level {
-        None
-    } else if roof {
-        Some(depth)
-    } else {
-        // A floor of one layer only: on floors of several layers Revit's
-        // exporters disagree (RE-298).
-        layers
-            .as_ref()
-            .filter(|layers| layers.layers.len() == 1)
-            .and_then(|layers| layers.layers.first())
-            .map(|layer| layer.width_feet)
-    };
+    // A roof whose layers do not fill its body is not level: its profile is
+    // only its plan projection, so it gets none of these (RE-298).
+    if roof && !level {
+        return;
+    }
+    let mut properties = vec![Property {
+        name: "GrossArea".into(),
+        value: PropertyValue::AreaSquareFeet(area),
+    }];
+    // A floor of one layer only: on floors of several layers Revit's
+    // exporters disagree (RE-298).
+    let one_layer = layers
+        .as_ref()
+        .is_some_and(|layers| layers.layers.len() == 1);
+    let depth_quantity = (level && (roof || one_layer)).then_some(depth);
     if let Some(quantity) =
         depth_quantity.filter(|quantity| quantity.is_finite() && *quantity > 0.0)
     {
