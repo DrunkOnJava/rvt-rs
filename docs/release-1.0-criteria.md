@@ -145,7 +145,7 @@ ceilings' `Width` (RE-250), also of those in pieces,
 ceilings' `GrossArea` where they are level and their record holds no step that cuts them,
 and the `Width` of walls Revit's export writes as coverings (RE-297, [#1016](https://github.com/DrunkOnJava/rvt-rs/issues/1016); what remains of the coverings, [#1209](https://github.com/DrunkOnJava/rvt-rs/issues/1209)),
 spaces' `Height` where the room's record holds its solid's faces (RE-255),
-stair railings' `Length` where the path is one line along the stair's runs (RE-254)), 1 differs (the mullion whose `Span` differs) and 10,429 are missing (Measure run RUN_PENDING, `main` at MAIN_PENDING; the 527 quantities Revit's export writes on openings rvt-rs does not write, a door's further cuts and the cuts of curtain walls and cabinets, are counted apart, [#1165](https://github.com/DrunkOnJava/rvt-rs/issues/1165)), none written that Revit's export leaves out (the maintainer,
+stair railings' `Length` where the path is one line along the stair's runs (RE-254)), 1 differs (the mullion whose `Span` differs) and 10,429 are missing (Measure run 41183092458, `main` at 9066ded5; the 527 quantities Revit's export writes on openings rvt-rs does not write, a door's further cuts and the cuts of curtain walls and cabinets, are counted apart, [#1165](https://github.com/DrunkOnJava/rvt-rs/issues/1165)), none written that Revit's export leaves out (the maintainer,
 2026-10-26: a joined column's `Length` and a curtain panel's `Width` are left out,
 since Revit's export gives none on 18 meshed columns and 3 panels that nothing tells apart;
 RE-291 now tells the columns apart,
