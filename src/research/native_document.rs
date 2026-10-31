@@ -356,6 +356,7 @@ fn extract_timed(
     definition_options.selected_ids.clear();
     definition_options.selected_classes.clear();
     definition_options.channels = BTreeSet::from([102]);
+    let definitions_started = std::time::Instant::now();
     let definition_summary =
         extract_records(
             file,
@@ -403,6 +404,11 @@ fn extract_timed(
             },
         )?;
     definitions.enable_builtin_catalog(&definition_summary.schema_sha256)?;
+    eprintln!(
+        "PASS-PART definitions {} ms ({} definitions)",
+        definitions_started.elapsed().as_millis(),
+        definitions.definitions.len()
+    );
     let defined = options.definition_filter.is_none_or(|accepts| {
         definitions
             .definitions
@@ -423,7 +429,13 @@ fn extract_timed(
         nothing.selected_ids.clear();
         nothing.selected_classes = BTreeSet::from([String::new()]);
     }
+    let selected_started = std::time::Instant::now();
     let mut summary = extract_records(file, &nothing, false, &definitions, emit)?;
+    eprintln!(
+        "PASS-PART selected {} ms (defined={})",
+        selected_started.elapsed().as_millis(),
+        defined
+    );
     summary.parameter_binding_context = serde_json::json!({
         "bindings": definitions.bindings,
         "family_categories": definitions.family_categories,

@@ -139,12 +139,14 @@ pub const SYSTEM_TYPE_LINKS: [(&str, &str, &str); 7] = [
 /// Read the saved parameters of `ids` (ElemTable element ids). Elements
 /// with no native record, or whose record does not decode, get none, as
 /// does every element of a file from before Revit 2015.
+#[track_caller]
 pub fn read(file: &mut RevitFile, ids: &BTreeSet<u64>) -> Result<ElementParameters> {
     read_defined(file, ids, None)
 }
 
 /// [`read`], reading nothing where `filter` accepts the name of none of the
 /// file's parameter definitions ([`native_document::Options::definition_filter`]).
+#[track_caller]
 pub fn read_defined(
     file: &mut RevitFile,
     ids: &BTreeSet<u64>,
@@ -156,6 +158,7 @@ pub fn read_defined(
 /// [`read_defined`] reading the records of `ids` alone: no type, family or
 /// material record is selected, so an element gets no type value and an
 /// ElementId value no target name. For elements with no type, such as Levels.
+#[track_caller]
 pub fn read_own_defined(
     file: &mut RevitFile,
     ids: &BTreeSet<u64>,
@@ -164,6 +167,7 @@ pub fn read_own_defined(
     read_selected(file, ids, filter, false)
 }
 
+#[track_caller]
 fn read_selected(
     file: &mut RevitFile,
     ids: &BTreeSet<u64>,
@@ -173,6 +177,15 @@ fn read_selected(
     if !native_document::NATIVE_RELEASES.contains(&file.layout_release()?) || ids.is_empty() {
         return Ok(ElementParameters::default());
     }
+    let caller = std::panic::Location::caller();
+    eprintln!(
+        "PASS-CALLER parameters from {}:{} ids={} types={} filter={}",
+        caller.file(),
+        caller.line(),
+        ids.len(),
+        types,
+        filter.is_some()
+    );
     let selected_classes = if types {
         ["FamilySymbol", "Family", "MaterialElem"]
             .into_iter()
