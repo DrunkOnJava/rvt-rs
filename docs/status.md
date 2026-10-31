@@ -1000,9 +1000,10 @@ budget was changed to make that true.
 
 **The IFC output is byte-identical.** Both emitted STEP files match the
 pre-change binary once the two wall-clock stamps the writer emits are
-normalised (`FILE_NAME` and the `IFCOWNERHISTORY` epoch); there is no
-`SOURCE_DATE_EPOCH` switch, so those two fields cannot be pinned without
-a behaviour change.
+normalised (`FILE_NAME` and the `IFCOWNERHISTORY` epoch). This comparison
+was made before `rvt-ifc` honoured `SOURCE_DATE_EPOCH`; with it set, those
+two fields are now pinned and two exports are byte-identical, as
+[`tests/reproducible_outputs.rs`](../tests/reproducible_outputs.rs) checks.
 
 In the browser the same change takes the 33.7 MB Core Interior demo from
 about 28 s to **about 3 s** of decode, measured live on the deployed
