@@ -792,6 +792,17 @@ pub const ROOM_HEIGHT_REVIT_VERSIONS: &[u32] = &[2024, 2025, 2026];
 /// Field holding a room's height, feet (RE-255).
 pub const ROOM_HEIGHT_FIELD: &str = "m_room_height";
 
+/// Set on a room whose stored solid is a prism of its outline (RE-296): every
+/// vertical face runs the whole height of the room's box, and no face is
+/// neither vertical nor horizontal or a horizontal one between the floor and
+/// the ceiling.
+pub const ROOM_PRISM_FIELD: &str = "m_room_prism";
+
+/// Releases a room is marked a prism on (RE-296), and so gets its `NetVolume`:
+/// the only exports it is measured against are the BIM4LCA office's (Revit
+/// 2024) and the R2025 models' (Revit 2025).
+pub const ROOM_PRISM_REVIT_VERSIONS: &[u32] = &[2024, 2025];
+
 /// Field carrying a recovered room number.
 pub const ROOM_NUMBER_FIELD: &str = "m_number";
 
