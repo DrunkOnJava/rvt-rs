@@ -1059,31 +1059,40 @@ prints it from any installed build.
 
 ## Roadmap Position
 
-- **v0.11.0** (2026-10-30) is the latest release: crates.io and docs.rs,
+- **v0.12.0** (2026-10-31) is the latest release: crates.io and docs.rs,
   the `rvt` wheels on PyPI, GitHub Release archives for Linux, macOS and
   Windows, and the container image, each checked from its published
   artifacts ([`install.md`](install.md)). It carries everything under
-  `[0.11.0]` in [`CHANGELOG.md`](../CHANGELOG.md): a model over the
-  reader's resource limits is reported, and `rvt-ifc` and `rvt-gltf` exit
-  with status 3 instead of writing an empty model, with `--large-model` and
-  a viewer retry (#1075); files that kept an older release's schema are
-  read as that release (#421), neither fix measured yet on the reporter's
-  private files; elements outside the export phase are left out
-  (#328); doors and windows are drawn from their saved meshes by default;
-  windows' openings follow their cut solids; walls nothing joins or cuts
-  carry their `Height`; Revit 2008 to 2014 export experimentally; and the
-  stable API nothing used is removed. Its "Upgrading from 0.10" section
-  lists what a 0.10 user has to change.
-- **v0.10.0** (2026-10-27) is the release before: more of the base
-  quantities Revit's export writes (21,065 equal on the BIM4LCA office as
-  built, one different, none that Revit's export leaves out), among them
-  walls' `Length` and every wall's `Width`, curtain walls' and beams'
-  `Length`, floors' `GrossArea`, `Depth` and `GrossVolume`, ceilings'
-  `Width`, hollow-section columns' areas and volume, spaces' `Height` and
-  stair railings' `Length`; two diagnostics fields for the quantity census;
-  and the type parameters of walls, floors, ceilings and roofs in
-  `rvt-elements` and Python.
-- `main` has everything v0.11.0 has, and is ahead of it by the fragments
+  `[0.12.0]` in [`CHANGELOG.md`](../CHANGELOG.md):
+  - more of the base quantities and common property values Revit's IFC4
+    export writes, each where the model's records decide it, and none where
+    Revit's own exporters disagree. On the BIM4LCA office as built, counting
+    the objects rvt-rs writes and leaving out what the census counts apart,
+    29,262 of 39,388 quantities and, with `--revit-set-placement`, 45,235 of
+    45,525 property values are equal, 1 different each;
+  - native records read on Revit 2015 to 2022, saved parameters
+    experimentally;
+  - walls' and structural members' flags on Revit 2015 to 2023,
+    experimentally;
+  - native-record readers kept under the file's own limits (#1075, not yet
+    measured on a model over them);
+  - Python and the viewer drawing doors and windows from their saved
+    meshes;
+  - the public API nothing used removed.
+
+  Exports of Revit 2015 to 2023 files take 1.6 to 3.9 times as long as
+  with 0.11.0 (#1237). Its "Upgrading from 0.11" section lists what a 0.11
+  user has to change.
+- **v0.11.0** (2026-10-30) is the release before. A model over the reader's
+  resource limits is reported, and `rvt-ifc` and `rvt-gltf` exit with
+  status 3 instead of writing an empty model, with `--large-model` and a
+  viewer retry (#1075). Files that kept an older release's schema are read
+  as that release (#421). Neither fix is measured yet on the reporter's
+  private files. It also brought:
+  - elements outside the export phase left out (#328);
+  - doors and windows drawn from their saved meshes by default in `rvt-ifc`;
+  - Revit 2008 to 2014 exported experimentally.
+- `main` has everything v0.12.0 has, and is ahead of it by the fragments
   under [`changelog.d/`](../changelog.d/README.md).
 
 Open work is tracked as GitHub issues; [`docs/archive/TODO.md`](archive/TODO.md) is
