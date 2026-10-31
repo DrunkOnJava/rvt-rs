@@ -517,6 +517,10 @@ fn extract_records(
     definitions: &crate::native_parameter_definitions::Registry,
     mut emit: impl FnMut(Record) -> Result<()>,
 ) -> Result<Summary> {
+    let mut t_graph = std::time::Duration::ZERO;
+    let mut t_meta = std::time::Duration::ZERO;
+    let mut t_rest = std::time::Duration::ZERO;
+    let mut n_rec = 0usize;
     let version = file.layout_release()?;
     ensure!(
         NATIVE_RELEASES.contains(&version),
@@ -803,6 +807,8 @@ fn extract_records(
                             continue;
                         }
                     }
+                    let t0 = std::time::Instant::now();
+                    n_rec += 1;
                     let decoded = native_parameters::decode_graph_with_catalog_usage(
                         body,
                         registry,
@@ -828,6 +834,7 @@ fn extract_records(
                         }
                         Ok((graph, usage))
                     });
+                    t_graph += t0.elapsed();
                     let (status, diagnostic, graph) = match decoded {
                         Ok((graph, usage)) => {
                             summary.max_graph_objects_observed =
@@ -869,6 +876,7 @@ fn extract_records(
                             .entry(diagnostic.clone().unwrap_or_default())
                             .or_default() += 1;
                     }
+                    let t1 = std::time::Instant::now();
                     let (saved_metadata, metadata_diagnostic) = match graph.as_ref().map(|graph| {
                         crate::native_metadata::project_with_definitions(graph, definitions)
                     }) {
@@ -876,6 +884,8 @@ fn extract_records(
                         Some(Err(error)) => (None, Some(error.to_string())),
                         None => (None, None),
                     };
+                    t_meta += t1.elapsed();
+                    let t2 = std::time::Instant::now();
                     summary.projected_metadata_records += usize::from(saved_metadata.is_some());
                     summary.unsupported_metadata_records +=
                         usize::from(metadata_diagnostic.is_some());
@@ -928,6 +938,7 @@ fn extract_records(
                         metadata_diagnostic,
                         base: None,
                     })?;
+                    t_rest += t2.elapsed();
                 }
                 Ok(())
             },
@@ -935,5 +946,14 @@ fn extract_records(
         summary.partitions.insert(name, stats);
     }
     summary.selected_ids_without_records = selected.difference(&seen_ids).copied().collect();
+    eprintln!(
+        "RECORDS n={} graph={} ms meta={} ms rest={} ms ids={} classes={}",
+        n_rec,
+        t_graph.as_millis(),
+        t_meta.as_millis(),
+        t_rest.as_millis(),
+        options.selected_ids.len(),
+        options.selected_classes.len()
+    );
     Ok(summary)
 }
