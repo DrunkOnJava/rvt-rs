@@ -778,6 +778,11 @@ pub const ROOM_HEIGHT_FIELD: &str = "m_room_height";
 /// the ceiling.
 pub const ROOM_PRISM_FIELD: &str = "m_room_prism";
 
+/// Releases a room is marked a prism on (RE-296), and so gets its `NetVolume`:
+/// the only exports it is measured against are the BIM4LCA office's (Revit
+/// 2024) and the R2025 models' (Revit 2025).
+pub const ROOM_PRISM_REVIT_VERSIONS: &[u32] = &[2024, 2025];
+
 /// Field carrying a recovered room number.
 pub const ROOM_NUMBER_FIELD: &str = "m_number";
 

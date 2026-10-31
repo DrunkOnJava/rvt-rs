@@ -33,7 +33,7 @@ No room that passes the test is one Revit gives no `NetVolume`: all 167 as built
 
 ## 4. Measured
 
-This change against `main` (Measure 41140315951, unfiltered, `-f nordic=true -f r2025=true`, every scorer):
+This change against `main` (Measure [41178232879](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41178232879), unfiltered, `-f nordic=true -f r2025=true`, every scorer, `c7dc3e5f` against `9637d5ff`; the earlier run 41140315951 gave the same counts):
 
 | model | `NetVolume` equal | different | Revit does not write |
 |---|---:|---:|---:|
@@ -41,7 +41,9 @@ This change against `main` (Measure 41140315951, unfiltered, `-f nordic=true -f 
 | office at permit | 0 → 178 of 278 | 0 | 0 |
 | R2025 12 to 17 | 0 → 2 of 2 each | 0 | 0 |
 
-RESULTS_PLACEHOLDER
+The quantity census (`qtos_vs_ifc`) goes from 28,065 to 28,232 equal on the office as built and from 28,011 to 28,189 at permit, and from 775 to 787 on the R2025 models. The one different value (a mullion's) is unchanged, and so is "rvt-rs quantities Revit does not write", 0 on every model. The exports that move are those of the two offices, the six R2025 models with rooms, Core Interior and RE1 Architecture. Core Interior's and RE1's exports have base quantities off (RE-242), so their 116 and 2 new values are not scored.
+
+**What the rule cannot see.** The test reads each vertical face as the box of its own plane, and the stored horizontal faces are few. Of the office's rooms whose vertical faces all span the box, 137 store only the floor, 24 the floor and the ceiling, and 13 neither (as built; 141, 31 and 9 at permit). No room of the office stores a face that is neither vertical nor horizontal. A sloped ceiling is caught where its low side's wall faces stop short of the box. But a ceiling lower in its middle than at its walls (a valley, a butterfly, or a vault springing from the box's top) would pass, and get the area times its highest point, a larger volume than Revit's. No such room is in any model measured. Requiring a stored ceiling face would keep 24 of the rooms, not 167, so the rule is not narrowed that way. It is written on Revit 2024 and 2025 only (`ROOM_PRISM_REVIT_VERSIONS`), the releases of the BIM4LCA office and the R2025 models, and its evidence is one building (as built and at permit) and the R2025 models' 12 flat rooms. The held-out Revit 2026 house's 13 spaces fall outside those releases, so they don't test it.
 
 ## 5. GrossVolume
 
@@ -56,6 +58,6 @@ Of the 167 prisms, Revit draws 88 as an extrusion (a `GrossVolume`; the outer lo
 ## 7. Reproduce
 
 ```bash
-gh workflow run measure.yml --ref main -f ref=SHA_PLACEHOLDER -f base=main -f nordic=true -f r2025=true
+gh workflow run measure.yml --ref main -f ref=c7dc3e5f2d509e503270ab02f0a7ecec6cf69a5d -f base=9637d5ffb18b132d5c12cb09dda5be3e106a772e -f nordic=true -f r2025=true
 gh workflow run measure.yml --ref main -f ref=2219ae1631d6eb65b0d3b3a7b63c7ee6e2c1d6a4 -f base=none -f nordic=true -f models="nordic-office-*" -f scorers=none -f probe=probe_re296_space_prisms -f probe_scorer=-
 ```
