@@ -58,9 +58,10 @@ What the census counts apart is not in those totals:
   `Perimeter`; RE-235 §5);
 - openings rvt-rs does not write;
 - the values the project's own property-set file places;
-- the curtain members' values the exporter took from its cache. No quantity is
-written that Revit's IFC4 exports leave out. rvt-rs writes 10 property
-values Revit's export does not as built and 14 at permit:
+- the curtain members' values the exporter took from its cache.
+
+No quantity is written that Revit's IFC4 exports leave out. rvt-rs writes 10
+property values Revit's export does not as built and 14 at permit:
 - 9 and 8 on openings and, at permit, 5 on one column, all on elements
   Revit's export does not hold;
 - one on a fixture Revit's export writes as another class (#792).

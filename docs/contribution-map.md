@@ -21,11 +21,11 @@ solved carrier: the reports under `reports/element-framing/` say what each
 negative result ruled out, and [`ROADMAP.md`](../ROADMAP.md) says what each
 milestone is for.
 
-### 0.12.0: IFC geometry and element data
+### 0.13.0: IFC geometry and element data
 
 | Issue | Remainder |
 |---|---|
-| [#1198](https://github.com/DrunkOnJava/rvt-rs/issues/1198) | Docs: two out-of-date statements in `docs/status.md` and `ROADMAP.md` (a good first issue) |
+| [#1237](https://github.com/DrunkOnJava/rvt-rs/issues/1237) | Exports of Revit 2015 to 2023 files take 1.6 to 3.9 times as long as with 0.11.0: measure which native passes cost the time and narrow them |
 | [#1197](https://github.com/DrunkOnJava/rvt-rs/issues/1197) | Help wanted: outputs only Revit can produce (a DWG export for the second witness edge, API fixtures for extensible storage) |
 | [#1196](https://github.com/DrunkOnJava/rvt-rs/issues/1196) | `Formats/Latest`: classify the residual field encodings and Revit 2027's flagged runtime-state fields from byte evidence |
 | [#1195](https://github.com/DrunkOnJava/rvt-rs/issues/1195) | Viewer: show real decode progress, and say clearly when a model is too large for the browser |
@@ -86,9 +86,7 @@ None: every open issue has a user-facing acceptance criterion and a milestone.
 
 ### Good first issues
 
-- [#1198](https://github.com/DrunkOnJava/rvt-rs/issues/1198): two out-of-date statements in the docs, each a one-line fix.
-
-The `good first issue` label marks the next ones. Issues labelled `help wanted` are where outside help counts most: openly licensed models with Revit's own export ([#408](https://github.com/DrunkOnJava/rvt-rs/issues/408), [#421](https://github.com/DrunkOnJava/rvt-rs/issues/421)), templates and families ([#1189](https://github.com/DrunkOnJava/rvt-rs/issues/1189)), outputs only Revit can produce ([#1197](https://github.com/DrunkOnJava/rvt-rs/issues/1197)) and practitioners' reports ([#874](https://github.com/DrunkOnJava/rvt-rs/issues/874)).
+None is open now: #1198, the last, was fixed in a first contribution (#1214). The `good first issue` label marks the next ones. Issues labelled `help wanted` are where outside help counts most: openly licensed models with Revit's own export ([#408](https://github.com/DrunkOnJava/rvt-rs/issues/408), [#421](https://github.com/DrunkOnJava/rvt-rs/issues/421)), templates and families ([#1189](https://github.com/DrunkOnJava/rvt-rs/issues/1189)), outputs only Revit can produce ([#1197](https://github.com/DrunkOnJava/rvt-rs/issues/1197)) and practitioners' reports ([#874](https://github.com/DrunkOnJava/rvt-rs/issues/874)).
 
 ## Work That Needs Design Discussion
 

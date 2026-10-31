@@ -36,7 +36,7 @@ only in a pull request that links the new evidence.
 
 | | Requirement | Bar | Measured now | Status |
 |---|---|---|---|---|
-| W1 | A new user installs it | Every channel (crates.io, the PyPI wheels, the CLI archives, the container image, the viewer) is checked from what was published, as [Post-publish install verification](../RELEASE.md#post-publish-install-verification) describes | All five checked from what was published for v0.12.0 ([`install.md`](install.md)) | **passed** for 0.12.0; repeated at the 1.0 tag |
+| W1 | A new user installs it | Every channel (crates.io, the PyPI wheels, the CLI archives, the container image, the viewer) is checked from what was published, as [Post-publish install verification](../RELEASE.md#post-publish-install-verification) describes | All five checked from what was published for v0.12.0 ([`install.md`](install.md)); `cargo install` from crates.io itself was not run, only on the tagged source in the publish workflow | **passed** for 0.12.0, but for that install; repeated at the 1.0 tag |
 | W2 | Every release from 2015 to 2027 is supported | No release in that range is experimental. Each has at least one project with Revit's own IFC export of that release that meets W4, W6 and W7 | 2024 has exact element sets against a same-release export (Core Interior, RE-21). 2025's same-release evidence is puzzbobb's Revit 2025 models (22 with a Revit export, all exact by ElementId, Measure only) and `teste_export_2025` (a Revit 25.4 export, local only); RE1's exports are by Revit 26.2, a cross-release pair (RE-32). 2023 has 37 of 37 and 37 of 45, the other 8 being window trims nested in families (RE-81). 2026 has 113 of 115 on one project (RE-124). 2015 has one: BIMcollab's structural example against Revit 2015's own export, all 241 of its elements by ElementId, in Revit's class or IFC4's for its IFC2X3 one, plus 3 it leaves out ([RE-198](../reports/element-framing/RE-198-revit-2015-bimcollab-export.md), [#879](https://github.com/DrunkOnJava/rvt-rs/issues/879)). 2016 to 2022 and 2027 have no same-release export, and are measured only against the same models saved by a neighbouring release (RE-179 to RE-181, [#421](https://github.com/DrunkOnJava/rvt-rs/issues/421)); the native readers on 2015 to 2022 are [#1158](https://github.com/DrunkOnJava/rvt-rs/issues/1158), and geometry and properties beyond each element's box on 2015 to 2023, 2026 and 2027 are [#1190](https://github.com/DrunkOnJava/rvt-rs/issues/1190) | **failed** |
 | W3 | Family and template files are read like projects | A family (`.rfa`) or template (`.rte`, `.rft`) of every supported release yields its types, parameters and geometry, measured against Revit's export of the family placed in a project | Metadata, previews, schema and OmniClass, and a family's types and type parameters as its `PartAtom` stream lists them, Revit's text at save rather than the family's records, and not compared with an export of the family placed in a project ([supported profile](supported-profile.md#by-input)) ([#1189](https://github.com/DrunkOnJava/rvt-rs/issues/1189)) | **failed** |
 | W4 | Correct elements on the models the decoder was developed on | On every reference model, the elements written and their IFC classes equal Revit's export of that model in every category: none missing, none extra | Core Interior (2024): exact in its six instance categories (RE-21, run in CI). RE1 (2025): Architecture 84, Electrical 49 and Mechanical 74 exact by ElementId; Plumbing writes one element Revit's export leaves out, a water closet tank (442378, pinned in `tests/element_records_2025.rs`). puzzbobb's Revit 2025 models: all 22 with an export exact. BIM4LCA office (2024): all 12,974 as built; at building permit one column Revit's export leaves out (1927742), and on both files one fixture in another class (3095244) ([#792](https://github.com/DrunkOnJava/rvt-rs/issues/792)) (Measure run 40927543524, 2026-10-29). Snowdon Towers (2024, local only): 5,945 of 5,968 in Revit's export; the other 23 are curtain panels with no resolved type ([#309](https://github.com/DrunkOnJava/rvt-rs/issues/309)), and the 6 slabs in the Legends phase of [#328](https://github.com/DrunkOnJava/rvt-rs/issues/328) are no longer written (RE-184; Measure run 40930512289: `IfcSlab` 224 to 218, the only change on any CI model; [README](../README.md#what-rvt-rs-reads-from-real-projects)) | **failed** |
@@ -64,7 +64,7 @@ RE-223).
 Wall tops: a wall whose top join or cut pair names a floor, roof or footing that covers its whole plan is cut at its underside, which is Revit's top on 64 of the office's 65 cut tops as built and 70 of 70 at permit (RE-267);
 the 29 walls as built and 26 at permit that Revit steps over a floor that covers them in part keep their full height, and so does the one wall as built that Revit cuts although 0.0243 ft² of its plan lies outside the floor.
 Per-category results are in the [supported profile](supported-profile.md#geometry-on-revit-2024-and-2025-projects);
-the residuals are the issues under the 0.12.0 milestone, and `tools/re/box_bodies_vs_ifc.py` counts in Measure, per class, the bodies still drawn as their box and how much of it Revit's body fills
+the residuals are the issues under the 0.13.0 milestone, and `tools/re/box_bodies_vs_ifc.py` counts in Measure, per class, the bodies still drawn as their box and how much of it Revit's body fills
 Open: family instances other than doors and windows drawn from their saved meshes by default ([#1191](https://github.com/DrunkOnJava/rvt-rs/issues/1191)),
 and geometry on releases other than 2024 and 2025 ([#1190](https://github.com/DrunkOnJava/rvt-rs/issues/1190)).
 
@@ -202,7 +202,7 @@ Before the curtain members' `IsExternal` was counted apart, 12,672 of 57,773 wer
 The held-out and BIMcollab runs keep quantity counts only, so no property census of them is published.
 Most instance and type parameters are not ([#35](https://github.com/DrunkOnJava/rvt-rs/issues/35),
 [#155](https://github.com/DrunkOnJava/rvt-rs/issues/155),
-the 0.12.0 milestone)
+the 0.13.0 milestone)
 Open: type objects' values ([#1185](https://github.com/DrunkOnJava/rvt-rs/issues/1185)),
 joined columns' `Length`, the round column and the meshed columns' values ([#1203](https://github.com/DrunkOnJava/rvt-rs/issues/1203)),
 and the remaining values with no rule yet ([#1193](https://github.com/DrunkOnJava/rvt-rs/issues/1193)).
@@ -227,7 +227,7 @@ and the remaining values with no rule yet ([#1193](https://github.com/DrunkOnJav
 None. The maintainer decided on 2026-10-21 that 1.0 ships with no gaps or
 limitations, so every row of the [supported profile](supported-profile.md)
 has to read as exact before the tag. The work that blocks this is the set of
-issues open under the 0.12.0 (geometry and element data) and 1.0.0
+issues open under the 0.13.0 (geometry and element data) and 1.0.0
 milestones.
 
 Out of scope, and so not counted as limitations: Revit 2014 and earlier,

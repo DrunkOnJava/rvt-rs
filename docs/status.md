@@ -1066,9 +1066,10 @@ prints it from any installed build.
   `[0.12.0]` in [`CHANGELOG.md`](../CHANGELOG.md):
   - more of the base quantities and common property values Revit's IFC4
     export writes, each where the model's records decide it, and none where
-    Revit's own exporters disagree. On the BIM4LCA office as built, 29,262
-    of 39,388 quantities and, with `--revit-set-placement`, 45,235 of 45,525
-    property values are equal, 1 different each;
+    Revit's own exporters disagree. On the BIM4LCA office as built, counting
+    the objects rvt-rs writes and leaving out what the census counts apart,
+    29,262 of 39,388 quantities and, with `--revit-set-placement`, 45,235 of
+    45,525 property values are equal, 1 different each;
   - native records read on Revit 2015 to 2022, saved parameters
     experimentally;
   - walls' and structural members' flags on Revit 2015 to 2023,
