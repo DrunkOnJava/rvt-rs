@@ -2441,10 +2441,10 @@ fn add_beam_roll(sets: &mut Vec<PropertySet>, ifc_type: &str, decoded: &DecodedE
 /// floor's type's layers add up to the extrusion's depth (RE-238), also, as
 /// revit-ifc's `DepthCalculator` and `GrossVolumeCalculator` take them from
 /// the extrusion Revit's export builds last (CLEANROOM.md source 5), its
-/// `Depth`, that of its last layer, and its `GrossVolume`, the area times it
-/// (RE-298): the one layer's thickness of a floor of one layer, and on all 10
-/// of the BIM4LCA office's level floors of several layers (`VP-1`, `VP-2`,
-/// `AP-1`), as built and at building permit, their bottom layer's. Its
+/// `Depth`, the one layer's thickness of a floor of one layer, and its
+/// `GrossVolume`, the area times it. A floor of several layers gets neither:
+/// the office's export (24.0.5) gives it its bottom layer's thickness, a
+/// newer exporter (26.4) another value (RE-298). Its
 /// `Perimeter` is left out: Revit's export writes it in feet, unscaled, in
 /// a file whose length unit is millimetres (RE-235 §5).
 ///
@@ -2515,9 +2515,12 @@ fn add_slab_gross_area(
     } else if roof {
         Some(depth)
     } else {
+        // A floor of one layer only: on floors of several layers Revit's
+        // exporters disagree (RE-298).
         layers
             .as_ref()
-            .and_then(|layers| layers.layers.last())
+            .filter(|layers| layers.layers.len() == 1)
+            .and_then(|layers| layers.layers.first())
             .map(|layer| layer.width_feet)
     };
     if let Some(quantity) =
