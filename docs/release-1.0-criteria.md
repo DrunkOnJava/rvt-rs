@@ -89,6 +89,7 @@ walls' `ExtendToStructure` (RE-228),
 type objects' `FireRating` and `LoadBearing`, with stair types' and flight types' dimensions
 (RE-286, [#1185](https://github.com/DrunkOnJava/rvt-rs/issues/1185); no `IsExternal` on a type object: the office's and the R2025 models' exporters write it, but Revit's newer exporters, those of the held-out models and of RE1 Architecture, write none),
 walls' `ExtendToStructure` on Revit 2015 to 2023 (RE-284),
+structural columns' and framing's `LoadBearing` from their category, and on Revit 2015 to 2023 their `IsExternal` (RE-285),
 railings' `Height` (RE-231),
 level slabs' `PitchAngle` (RE-238),
 pipes' `InvertElevation` (RE-157),
