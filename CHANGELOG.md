@@ -8,6 +8,42 @@ fragments a release moves into this file.
 
 ## [Unreleased]
 
+## [0.12.1] — 2026-10-31
+
+0.12.1 makes exports of Revit 2015 to 2023 files faster than 0.12.0 made them,
+with every export byte-identical (#1237). Timed on one runner against 0.12.0:
+2015 to 2022 projects take 0.84 to 0.97 of the time, 2023's 0.89 to 0.99, and
+2024 to 2027 take as long as before. They are still slower than with 0.11.0:
+2015 to 2022 projects take 1.6 to 2.9 times as long and 2023's 1.3 to 1.9
+times. That remaining cost comes with the native records 0.12.0 reads on those
+releases, and #1237 tracks it.
+
+### Upgrading from 0.12.0
+
+Nothing changes: exports, diagnostics and the stable public API are the same.
+
+### Changed
+
+- **Exports of Revit 2015 to 2023 files are faster than in 0.12.0 (#1237).**
+  Two changes:
+  - every native-record read of an export now shares one read of the file's
+    parameter definitions (#1239);
+  - the read of the parameters named for a property leaves out the family
+    and material records, which only name ElementId values (#1240).
+
+  Timed on one runner against 0.12.0 (Measure run 41255129905), on Autodesk's
+  sample projects:
+  - 2015 to 2022 projects take 0.84 to 0.97 of 0.12.0's time, 12.7% less over
+    all thirty;
+  - 2023's take 0.89 to 0.99;
+  - 2024 to 2027 take as long as before (0.99 to 1.03);
+  - no export changes, and no 2015 to 2023 file's peak memory rises.
+
+  Against 0.11.0 (run 41249804617), 2015 to 2022 projects still take 1.6 to
+  2.9 times as long, 2.36 over all thirty, and 2023's 1.3 to 1.9 times.
+  2024 to 2027 exports take 0.97 of 0.11.0's time. Most of what remains is
+  the named-parameter read decoding each element's native record (#1237).
+
 ## [0.12.0] — 2026-10-31
 
 0.12.0 writes much more of what Revit's own IFC4 export writes, each value
