@@ -345,10 +345,10 @@ AI changes all four:
 
 ### 6.4 Regulatory & legal context
 
-- **Autodesk v. ODA (2006)** — trademark suit. Settled. Autodesk lost the ability to use trademark to stop RVT reimplementations.
+- **Autodesk v. ODA (2006)** — a trademark suit over DWG, settled. It concerned DWG, not RVT, and decides nothing about RVT readers.
 - **ODA BimRv SDK** — commercial, ~$500–5k/yr member pricing. Not available to non-members. Gated by NDA.
 - **No cryptographic protection on RVT files themselves** — confirmed in this recon. Data is structured; not obfuscated.
-- **GPL-3 / Apache-2 clean-room implementation has no legal risk** — DMCA doesn't apply (no DRM circumvention), copyright doesn't apply (interoperability exception under 17 USC 1201(f)).
+- **A clean-room Apache-2.0 implementation keeps legal risk low, without ruling it out** — RVT files carry no DRM, so no technical protection is circumvented, and 17 USC 1201(f) allows reverse engineering for interoperability; copyright in Autodesk's code is respected by never using it (`CLEANROOM.md`). This is not legal advice: `CLEANROOM.md`'s legal posture applies.
 - **Autodesk Forge ToS** does restrict "deriving the RVT format" — but those ToS only bind Forge users, not independent researchers.
 
 ## 7. Status & next steps
