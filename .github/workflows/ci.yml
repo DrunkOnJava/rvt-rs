@@ -244,7 +244,7 @@ jobs:
       # cargo-nextest runs the manifest's test binaries in parallel (C6).
       - name: Install cargo-nextest
         if: matrix.label != 'msrv'
-        uses: taiki-e/install-action@1e29709c0ec63babbe8f266397a465f29a825f91 # v2.87.31
+        uses: taiki-e/install-action@86f7a0ffb25f40114606501a311ebcfaf882ea32 # v2.88.0
         with:
           tool: cargo-nextest@0.9.146
       - name: Real-file, CLI and contract verification
@@ -319,7 +319,7 @@ jobs:
           save-if: ${{ github.ref == 'refs/heads/main' }}
           shared-key: ci-i686
       - name: Install cargo-nextest
-        uses: taiki-e/install-action@1e29709c0ec63babbe8f266397a465f29a825f91 # v2.87.31
+        uses: taiki-e/install-action@86f7a0ffb25f40114606501a311ebcfaf882ea32 # v2.88.0
         with:
           tool: cargo-nextest@0.9.146
       - name: Real-file, CLI, contract and hardening checks on i686
@@ -420,7 +420,7 @@ jobs:
       # corpus-reading target is gated the moment it exists.
       # cargo-nextest runs the manifest's test binaries in parallel (C6).
       - name: Install cargo-nextest
-        uses: taiki-e/install-action@1e29709c0ec63babbe8f266397a465f29a825f91 # v2.87.31
+        uses: taiki-e/install-action@86f7a0ffb25f40114606501a311ebcfaf882ea32 # v2.88.0
         with:
           tool: cargo-nextest@0.9.146
       - name: Tier-two gates (real-file, CLI and contract targets against the project corpus)
@@ -821,7 +821,7 @@ jobs:
           echo CARGO_TERM_COLOR=always >> "$GITHUB_ENV"
           rustc --version
       - name: Install cargo-semver-checks and cargo-public-api
-        uses: taiki-e/install-action@1e29709c0ec63babbe8f266397a465f29a825f91 # v2.87.31
+        uses: taiki-e/install-action@86f7a0ffb25f40114606501a311ebcfaf882ea32 # v2.88.0
         with:
           tool: cargo-semver-checks@0.51.0,cargo-public-api@0.52.0
       - name: The stable API breaks nothing the pull request does not announce
@@ -1080,7 +1080,7 @@ jobs:
       # `curl --silent -L` and failed the check when GitHub returned an
       # error page ("gzip: invalid magic").
       - name: Install cargo-deny
-        uses: taiki-e/install-action@1e29709c0ec63babbe8f266397a465f29a825f91 # v2.87.31
+        uses: taiki-e/install-action@86f7a0ffb25f40114606501a311ebcfaf882ea32 # v2.88.0
         with:
           tool: cargo-deny@0.20.2
       - run: cargo deny check
@@ -1105,7 +1105,7 @@ jobs:
           echo CARGO_TERM_COLOR=always >> "$GITHUB_ENV"
           rustc --version
       - name: Install cargo-audit
-        uses: taiki-e/install-action@1e29709c0ec63babbe8f266397a465f29a825f91 # v2.87.31
+        uses: taiki-e/install-action@86f7a0ffb25f40114606501a311ebcfaf882ea32 # v2.88.0
         with:
           tool: cargo-audit@0.22.2
       - name: Audit Rust dependencies
