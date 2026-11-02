@@ -1,12 +1,18 @@
 //! RE-300: what a saved graphics `GImposter` holds (#1247, RE-224).
 //!
-//! FACT under test: `native_graphics_traversal` stops at any graphics class
-//! it does not know, and `saved_meshes::attach` then keeps the element's
-//! box (RE-224). `GImposter` is the class that stops most of them: 1,813 of
-//! the 3,020 such elements on the BIM4LCA office, RE1 and Autodesk's 2024
+//! FACT: a `GImposter` is a light source. It holds a transform (`m_trf`) and
+//! a rendering `Asset` of scalar properties, and no surface. Its parent is
+//! always a `GFilter` of its own (`m_flags` 557060) that also holds the shape
+//! and lines that draw the light: a `Geometry`, and often a `GPolyMesh`
+//! whose normal binding is 2. Revit's export draws none of that filter:
+//! with it left out, the 39 BIM4LCA office and 2 RE1 Electrical bodies it
+//! kept as boxes are exact to 0.001 ft. With only the `GImposter` left out,
+//! the office's exit signs were 12 times Revit's volume.
+//!
+//! `native_graphics_traversal` stopped at the class, and
+//! `saved_meshes::attach` then kept the element's box (RE-224): 1,813 of the
+//! 3,020 such elements on the BIM4LCA office, RE1 and Autodesk's 2024
 //! samples, every one of Snowdon Towers electrical's 511 light fixtures.
-//! This prints what each `GImposter` is: its fields, the classes that point
-//! to it and those it points to, and the classes under it.
 //!
 //! Output: one `imposter` line per object for the first 8 per file, with
 //! its owner ElementId, scalar fields, parents and pointer targets, and a
