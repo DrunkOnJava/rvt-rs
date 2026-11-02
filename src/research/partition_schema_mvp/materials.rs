@@ -74,9 +74,17 @@ pub(super) fn refine_type_materials(
         return partly_unset;
     };
     let materials: BTreeSet<u32> = names.keys().copied().collect();
-    let Ok(found) = crate::native_type_materials::geometry_materials(rf, &types, &materials) else {
+    let Ok((found, mapped)) = crate::native_type_materials::geometry_maps(rf, &types, &materials)
+    else {
         return partly_unset;
     };
+    // RE-299: a type whose native map holds entries draws geometry, though
+    // the scan read no map in its block, every value being −1 or a material
+    // whose name it did not read. Left with no list it would read as a type
+    // that draws nothing, whose hosted doors and windows are written as
+    // their openings alone (RE-84).
+    type_materials
+        .retain(|type_id, list| !list.is_empty() || !mapped.contains(&u64::from(*type_id)));
     // A family whose geometry with no material is all hidden or void has
     // no `<Unnamed>` in Revit's export (RE-204), and a material only its
     // hidden forms have is not exported (RE-205).

@@ -36,9 +36,22 @@ pub fn geometry_materials(
     types: &BTreeSet<u64>,
     materials: &BTreeSet<u32>,
 ) -> anyhow::Result<BTreeMap<u64, GeometryMaterials>> {
+    Ok(geometry_maps(rf, types, materials)?.0)
+}
+
+/// [`geometry_materials`], and the types of `types` whose
+/// `m_geomTag2MaterialId` holds any entry, whatever its values: types that
+/// draw geometry, though their map may name no material (every value −1,
+/// RE-149) or only materials not among `materials` (RE-299).
+pub fn geometry_maps(
+    rf: &mut RevitFile,
+    types: &BTreeSet<u64>,
+    materials: &BTreeSet<u32>,
+) -> anyhow::Result<(BTreeMap<u64, GeometryMaterials>, BTreeSet<u64>)> {
     let mut out = BTreeMap::new();
+    let mut mapped = BTreeSet::new();
     if types.is_empty() {
-        return Ok(out);
+        return Ok((out, mapped));
     }
     let options = native_document::Options {
         selected_ids: types.clone(),
@@ -59,6 +72,9 @@ pub fn geometry_materials(
         else {
             return Ok(());
         };
+        if !map.is_empty() {
+            mapped.insert(record.identity.element_id);
+        }
         let mut found = GeometryMaterials {
             family: root.fields.get("m_familyId").and_then(element_id),
             ..GeometryMaterials::default()
@@ -84,5 +100,5 @@ pub fn geometry_materials(
         }
         Ok(())
     })?;
-    Ok(out)
+    Ok((out, mapped))
 }

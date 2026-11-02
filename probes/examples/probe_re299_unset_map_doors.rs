@@ -1,15 +1,16 @@
-//! RE-299: doors and windows whose type draws all its geometry with no
-//! material (#1247, RE-84, RE-149).
+//! RE-299: which doors and windows only cut their host (#1247, RE-84).
 //!
-//! FACT under test: RE-84 writes a door or window whose type has a value
-//! block with no geometry-material map as its opening alone, as Revit's
-//! export does for a family that only cuts its host. RE-82's map reader
-//! takes a map only where some value is a material, so a type whose every
-//! map value is unset (`0xff` x 8: geometry drawn with no material of its
-//! own, RE-149) reads as having no map too. RE-149 gives such a column or
-//! product `<Unnamed>` and clears RE-84's flag; a door or window keeps the
-//! flag and is written as an opening. If the all-unset map means the type
-//! draws geometry, Revit exports these doors and windows as the elements.
+//! FACT: RE-84 writes a door or window as its opening alone where RE-82's
+//! scan of its type's value block finds no geometry-material map. That scan
+//! takes a map only where every value is a material whose name it read, so
+//! a type whose map values are all unset (−1, RE-149), or name a material
+//! the name scan dropped, reads as having none. The type's native
+//! `m_geomTag2MaterialId` (RE-203) tells them apart: every door and window
+//! Revit exports as its opening alone (RE1 Architecture's CasedOpening,
+//! Snowdon Towers' 9 Door-Opening and 38 Schematic Opening Cut) has a type
+//! whose native map is empty, and no saved graphics, while the byte scan's
+//! all-unset map (`unset_material_types`) also fires on CasedOpening and
+//! Door-Opening, so it cannot.
 //!
 //! Prints each door and window record, with the five columns of
 //! `probe_re84_void_only_families` (ElementId, class, type ElementId, the
@@ -25,7 +26,7 @@
 //!   map itself, whatever either byte scan makes of it.
 //!
 //! `tools/re/void_only_vs_ifc.py` reads the first five columns, and counts
-//! the sixth where present.
+//! the rest where present.
 //!
 //! ```text
 //! cargo run --profile ci -p rvt-probes --example probe_re299_unset_map_doors -- model.rvt
