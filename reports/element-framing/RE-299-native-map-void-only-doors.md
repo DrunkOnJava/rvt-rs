@@ -31,7 +31,9 @@ The native map holds entries on every door and window type Revit exports as the 
 
 ## 3. What rvt-rs does
 
-`refine_type_materials` already reads each column, door, window and product type's native record (RE-203); `native_type_materials::geometry_maps` now also returns the types whose `m_geomTag2MaterialId` holds any entry. A type among them that the scan left with an empty list is dropped from the list instead, so it is a type whose materials are not read rather than one that draws nothing, and its doors and windows are written as the elements, with no type material: what Revit's export gives such a door or window is not measured, so nothing is written for it. Where the native record is not read the scan decides, as before.
+`refine_type_materials` already reads each column, door, window and product type's native record (RE-203); `native_type_materials::geometry_maps` now also returns the types whose `m_geomTag2MaterialId` holds any entry, with whether every value is −1 and the type's family. A type among them that the scan left with an empty list is dropped from the list instead, so it is a type whose materials are not read rather than one that draws nothing. Its doors and windows are written as the elements, sized and named as other doors and windows are (the flag also gated RE-215's cut-loop sizes, the opening-index sizes and RE-154's type name), with no type material: what Revit's export gives such a door or window is not measured, so nothing is written for it.
+
+One case keeps the flag: a map whose every value is −1, of a family whose own document shows none of that geometry (`native_family_forms`, RE-204: every such form hidden or void, or no form and no nested instance). Such a type draws nothing visible, as the scan read it. No measured file holds one. Where the native record or the family is not read, the scan decides, as before.
 
 Every export of the corpora above is unchanged: the 48 openings-only keep an empty native map, and no other door or window had the flag. The positive case is #1247's project, which is not public.
 
@@ -39,6 +41,7 @@ Every export of the corpora above is unchanged: the 48 openings-only keep an emp
 
 - What material Revit's export gives a door or window whose map is all unset (RE-149 measured `<Unnamed>` on products only).
 - Whether #1247's 73 doors have entries in their native map: the reporter's run of the probe decides it.
+- The all −1, hidden-or-void case of §3 is reasoned from RE-204, not measured: no file in the corpora has such a door or window type.
 
 ## 5. Reproduce
 
@@ -48,4 +51,4 @@ gh workflow run measure.yml --ref research/1247-unset-map-doors -f ref=1fcad647 
   -f nordic=true -f r2025=true -f samples=true -f holdout=true -f scorers=none
 ```
 
-Where the branch is gone, push 1fcad647 to a branch first. The probe has the name `probe_re299_unset_map_doors` from 43bcb6b5 on.
+Where the branch is gone, push 1fcad647 to a branch first. The probe has the name `probe_re299_unset_map_doors` from 43bcb6b5 on; once this lands, `--ref main` carries the scorer and `-f ref=<the merge commit>` the probe.

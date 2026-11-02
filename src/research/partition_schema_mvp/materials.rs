@@ -38,8 +38,10 @@ pub(super) fn attach_type_materials(
 /// name the same set. Returns the replaced types that also map geometry to
 /// no material that their family shows ([`crate::native_family_forms`]),
 /// whose instances take their own material parameters' or
-/// `<Unnamed>` for it ([`attach_partly_unset_materials`]). Left as scanned
-/// where the native record path or the material names are not read.
+/// `<Unnamed>` for it ([`attach_partly_unset_materials`]). A type the scan
+/// found no map for whose native map holds geometry loses its empty list
+/// (RE-299). Left as scanned where the native record path or the material
+/// names are not read.
 pub(super) fn refine_type_materials(
     rf: &mut RevitFile,
     revit_version: u32,
@@ -78,18 +80,33 @@ pub(super) fn refine_type_materials(
     else {
         return partly_unset;
     };
-    // RE-299: a type whose native map holds entries draws geometry, though
-    // the scan read no map in its block, every value being −1 or a material
-    // whose name it did not read. Left with no list it would read as a type
-    // that draws nothing, whose hosted doors and windows are written as
-    // their openings alone (RE-84).
-    type_materials
-        .retain(|type_id, list| !list.is_empty() || !mapped.contains(&u64::from(*type_id)));
     // A family whose geometry with no material is all hidden or void has
     // no `<Unnamed>` in Revit's export (RE-204), and a material only its
     // hidden forms have is not exported (RE-205).
-    let families: BTreeSet<u64> = found.values().filter_map(|found| found.family).collect();
+    let families: BTreeSet<u64> = found
+        .values()
+        .filter_map(|found| found.family)
+        .chain(mapped.values().filter_map(|map| map.family))
+        .collect();
     let forms = crate::native_family_forms::family_forms(rf, &families).unwrap_or_default();
+    // RE-299: a type whose native map holds entries has geometry, though the
+    // scan read no map in its block, every value being −1 or a material whose
+    // name it did not read. Left with no list it would read as a type that
+    // draws nothing, whose hosted doors and windows are written as their
+    // openings alone (RE-84). One whose map is all −1 and whose family shows
+    // none of that geometry (RE-204: every such form hidden or void, or none)
+    // still draws nothing, and keeps the empty list.
+    let draws = |type_id: u32| {
+        mapped.get(&u64::from(type_id)).is_some_and(|map| {
+            !map.all_unset
+                || map
+                    .family
+                    .and_then(|family| forms.get(&family))
+                    .and_then(|forms| forms.shows_unset)
+                    != Some(false)
+        })
+    };
+    type_materials.retain(|type_id, list| !list.is_empty() || !draws(*type_id));
     for (type_id, found) in found {
         let Ok(type_id) = u32::try_from(type_id) else {
             continue;
