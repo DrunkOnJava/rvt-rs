@@ -24,7 +24,7 @@ Support depends on the Revit release, the file type and the feature. Opening a f
 
 The recovery figures in this README compare rvt-rs's export with Revit's own IFC export of the same file, element by element, on the models named in [What rvt-rs reads from real projects](#what-rvt-rs-reads-from-real-projects). Other models of the same releases are expected to behave alike but are not measured, and files saved by the same release can store their data differently. [`docs/support-matrix.json`](docs/support-matrix.json) records each capability with its evidence and its status ceiling.
 
-This README describes the development branch, `main`, which the browser viewer is also built from. Installed packages are the latest release; [Release 0.12.0 and main](#release-0120-and-main) says what differs.
+This README describes the development branch, `main`, which the browser viewer is also built from. Installed packages are the latest release; [Release 0.12.1 and main](#release-0121-and-main) says what differs.
 
 ## What you can rely on, by input
 
@@ -45,9 +45,9 @@ This README describes the development branch, `main`, which the browser viewer i
 
 `rvt-capabilities --matrix -f text` prints the support matrix; [`docs/status.md`](docs/status.md) and [`docs/supported-profile.md`](docs/supported-profile.md) summarise it.
 
-## Release 0.12.0 and main
+## Release 0.12.1 and main
 
-The latest release is [v0.12.0](https://github.com/DrunkOnJava/rvt-rs/releases/tag/v0.12.0) (2026-10-31). `cargo install rvt --locked`, `pip install rvt`, the release archives and the container image install it. "Upgrading from 0.11" in the [changelog](CHANGELOG.md) says what a user of 0.11 has to change:
+The latest release is [v0.12.1](https://github.com/DrunkOnJava/rvt-rs/releases/tag/v0.12.1) (2026-11-01). `cargo install rvt --locked`, `pip install rvt`, the release archives and the container image install it. 0.12.1 makes exports of Revit 2015 to 2023 files faster than 0.12.0 made them, each the same as 0.12.0's but for the version its IFC header records, with nothing to change on upgrading (below, #1237). "Upgrading from 0.11" in the [changelog](CHANGELOG.md) says what a user of 0.11 has to change:
 - Rust code that names a removed item or builds an `IfcModel` with a struct literal;
 - readers of `rvt-capabilities --json` (schema version 2) and `rvt-schema --json`;
 - Python and viewer users who want doors and windows drawn as boxes (`saved_meshes=False`, `?savedMeshes=0`);
@@ -55,7 +55,7 @@ The latest release is [v0.12.0](https://github.com/DrunkOnJava/rvt-rs/releases/t
 - pipes' `InvertElevation` on a raised storey;
 - a floor's and a covering's `Width`, no longer written.
 
-What 0.12.0 changed, in brief:
+What 0.12.0 and 0.12.1 changed, in brief:
 
 - **Base quantities ([#1016](https://github.com/DrunkOnJava/rvt-rs/issues/1016), [#1046](https://github.com/DrunkOnJava/rvt-rs/issues/1046)):** quantities Revit computes from its joined geometry are written where the model's records decide them:
   - walls' side areas, volumes and `Height`, and the `GrossFootprintArea` of walls nothing joins to or cuts (RE-270, RE-290, RE-292, RE-293);
@@ -78,15 +78,15 @@ What 0.12.0 changed, in brief:
 - **Large models ([#1075](https://github.com/DrunkOnJava/rvt-rs/issues/1075)):** the readers of native records read under the file's own limits, which `--large-model` raises. A partition over the limit is named in the diagnostics and skipped, where it used to stop every such reader. At the default limits they stop at 256 MiB. Not yet measured on a model over the limits: a contributor's model with a 1.33 GB partition (#1117) is the first such file.
 - **Doors and windows** of Revit 2023 to 2027 files are drawn from Revit's saved meshes in Python and the browser viewer, where the whole mesh decodes, as `rvt-ifc` has drawn them since 0.11.0.
 - **Wall tops:** a wall's top is cut at the floor that covers its whole plan. A wall a floor covers only in part keeps its full height where Revit steps its top (29 office walls as built, 26 at permit; RE-267).
-- **Slower on Revit 2015 to 2023 ([#1237](https://github.com/DrunkOnJava/rvt-rs/issues/1237)):** timed on one runner against 0.11.0 (Measure run 41228075400):
-  - Autodesk's 2015 to 2022 sample projects take 2.1 to 3.9 times as long, 0.9 s to 5.6 s more each;
-  - the 2023 projects take 1.6 to 2.4 times as long;
-  - peak memory is up to 19% higher.
+- **Slower on Revit 2015 to 2023 than 0.11.0 ([#1237](https://github.com/DrunkOnJava/rvt-rs/issues/1237)):** the native records 0.12.0 reads on those releases cost time. 0.12.1 exports Autodesk's 2015 to 2022 sample projects in 12.7% less time than 0.12.0, with the same contents (Measure run 41255129905). Against 0.11.0 on one runner (run 41249804617):
+  - 2015 to 2022 projects still take 1.6 to 2.9 times as long;
+  - 2023's take 1.3 to 1.9 times as long;
+  - 2024 to 2027 exports take 0.97 of the time in total, single files 0.90 to 1.11.
 
-  The time comes with the native records now read on those releases and is not yet broken down by stage. Revit 2024 to 2027 exports take as long in total per release, within 4%; single files take 0.93 to 1.15 times as long.
+  0.12.1 still peaks up to 19% higher in memory than 0.11.0 on some 2016 to 2022 files, as 0.12.0 did.
 - **Breaking:** the public API that nothing used is removed, each item listed under "Removed" in the changelog with what to use instead. `FieldType::ElementIdRef` has no `sub`, and `IfcModel` gains `storey_properties` and `type_entity_sets`.
 
-The browser viewer is built from `main`, so it runs what `main` has; each change `main` adds after 0.12.0 is a fragment in [`changelog.d/`](changelog.d/README.md), which the next release moves into [`CHANGELOG.md`](CHANGELOG.md). To use `main` before the next release, build from source ([`docs/install.md`](docs/install.md#build-from-source)).
+The browser viewer is built from `main`, so it runs what `main` has; each change `main` adds after 0.12.1 is a fragment in [`changelog.d/`](changelog.d/README.md), which the next release moves into [`CHANGELOG.md`](CHANGELOG.md). To use `main` before the next release, build from source ([`docs/install.md`](docs/install.md#build-from-source)).
 
 Rust 2024 edition (MSRV 1.87). **Nineteen CLIs ship** (`rvt-analyze`, `rvt-info`, `rvt-inspect`, `rvt-schema`, `rvt-history`, `rvt-diff`, `rvt-corpus`, `rvt-dump`, `rvt-doc`, `rvt-ifc`, `rvt-ifc-compare`, `rvt-write`, `rvt-gltf`, `rvt-sheet`, `rvt-elem-table`, `rvt-elements`, `rvt-capabilities`, `rvt-schedule`, `gen-fixture`) plus the reproducible probes under `probes/examples/`, one or more per format finding. Python bindings via pyo3+maturin in the `rvt-py` workspace member (so the core `rvt` crate can stay unconditionally `#![forbid(unsafe_code)]`) — `pip install rvt`.
 
