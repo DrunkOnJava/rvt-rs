@@ -735,10 +735,9 @@ pub fn cylinder_face(
         x_vec[2] * y_vec[0] - x_vec[0] * y_vec[2],
         x_vec[0] * y_vec[1] - x_vec[1] * y_vec[0],
     ];
-    ensure!(
-        dot(cross_xy, z_vec) > 1. - 1e-7,
-        "left-handed cylinder basis"
-    );
+    // A left-handed basis is the same cylinder: only the surface's own
+    // normal, ∂P/∂u × ∂P/∂v as on a plane, turns inward (#1247).
+    let handed = if dot(cross_xy, z_vec) > 0. { 1. } else { -1. };
     let envelope = surface.fields["m_Envelope"]["m_corners"]
         .as_array()
         .context("cylinder envelope")?;
@@ -901,14 +900,12 @@ pub fn cylinder_face(
         for &u in u_values.iter().take(nu + 1) {
             vertices.push(eval(u, v));
             let (s, c) = u.sin_cos();
-            let mut n = [
-                c * x_vec[0] + s * y_vec[0],
-                c * x_vec[1] + s * y_vec[1],
-                c * x_vec[2] + s * y_vec[2],
+            let sign = if orient { handed } else { -handed };
+            let n = [
+                sign * (c * x_vec[0] + s * y_vec[0]),
+                sign * (c * x_vec[1] + s * y_vec[1]),
+                sign * (c * x_vec[2] + s * y_vec[2]),
             ];
-            if !orient {
-                n = [-n[0], -n[1], -n[2]];
-            }
             normals.push(n);
         }
     }
