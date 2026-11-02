@@ -1,4 +1,4 @@
-//! RE-298: doors and windows whose type draws all its geometry with no
+//! RE-299: doors and windows whose type draws all its geometry with no
 //! material (#1247, RE-84, RE-149).
 //!
 //! FACT under test: RE-84 writes a door or window whose type has a value
@@ -28,7 +28,7 @@
 //! the sixth where present.
 //!
 //! ```text
-//! cargo run --profile ci -p rvt-probes --example probe_re298_unset_map_doors -- model.rvt
+//! cargo run --profile ci -p rvt-probes --example probe_re299_unset_map_doors -- model.rvt
 //! ```
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -42,7 +42,7 @@ use rvt::walker::InstanceField;
 
 fn main() -> anyhow::Result<()> {
     let Some(path) = std::env::args().nth(1) else {
-        anyhow::bail!("usage: probe_re298_unset_map_doors FILE.rvt");
+        anyhow::bail!("usage: probe_re299_unset_map_doors FILE.rvt");
     };
     let mut rf = rvt::RevitFile::open(&path)?;
     let version = rf.basic_file_info()?.version;

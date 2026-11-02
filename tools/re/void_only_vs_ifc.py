@@ -15,7 +15,7 @@ family) and finds each ElementId in Revit's export:
 It prints the count of each outcome for types with a map (`n`), types with a
 value block and no map (`0`), types with no value block (`-`) and elements
 with no type (`?`). Where the probe prints more columns
-(`probe_re298_unset_map_doors`: all-unset map, saved triangles, family
+(`probe_re299_unset_map_doors`: all-unset map, saved triangles, family
 forms, native map), it also prints the counts of each map count by those
 columns, the saved triangles as `mesh` or `-` and the native map as
 `none`, `unset` (every entry unset), `mixed` or `named` (no entry unset).
