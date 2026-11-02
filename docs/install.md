@@ -4,24 +4,24 @@ This guide covers the supported ways to install or run rvt-rs on a fresh
 machine. Use [user-guide.md](user-guide.md) after installation to decide which
 workflow fits your file.
 
-**Publication status (as of 2026-10-31, release `v0.12.0`):**
+**Publication status (as of 2026-11-02, release `v0.12.1`):**
 
 | Channel | Status |
 |---|---|
-| **PyPI** (`rvt`) | **Published** — `pip install rvt` installs **0.12.0** (wheels for Linux x86_64 and aarch64 with glibc 2.17 or later, musl Linux x86_64 and aarch64, macOS Apple Silicon and Intel, and Windows x86_64, plus the sdist; see [the platform table](#python-package-from-pypi-available)) |
-| **Prebuilt CLI binaries** (GitHub Releases) | **Published** — [v0.12.0](https://github.com/DrunkOnJava/rvt-rs/releases/tag/v0.12.0) carries archives for Linux (x86_64, aarch64), macOS (Apple Silicon, Intel) and Windows (x86_64), plus `SHA256SUMS` and build attestations |
-| **Container image** (`ghcr.io/drunkonjava/rvt-rs`) | **Published** — `ghcr.io/drunkonjava/rvt-rs:0.12.0`, `linux/amd64` + `linux/arm64`; see [Docker](#docker) |
-| **crates.io** (`rvt`) | **Published** — `cargo install rvt --locked` installs **0.12.0** (the CLIs) and `cargo add rvt` adds the library |
+| **PyPI** (`rvt`) | **Published** — `pip install rvt` installs **0.12.1** (wheels for Linux x86_64 and aarch64 with glibc 2.17 or later, musl Linux x86_64 and aarch64, macOS Apple Silicon and Intel, and Windows x86_64, plus the sdist; see [the platform table](#python-package-from-pypi-available)) |
+| **Prebuilt CLI binaries** (GitHub Releases) | **Published** — [v0.12.1](https://github.com/DrunkOnJava/rvt-rs/releases/tag/v0.12.1) carries archives for Linux (x86_64, aarch64), macOS (Apple Silicon, Intel) and Windows (x86_64), plus `SHA256SUMS` and build attestations |
+| **Container image** (`ghcr.io/drunkonjava/rvt-rs`) | **Published** — `ghcr.io/drunkonjava/rvt-rs:0.12.1`, `linux/amd64` + `linux/arm64`; see [Docker](#docker) |
+| **crates.io** (`rvt`) | **Published** — `cargo install rvt --locked` installs **0.12.1** (the CLIs) and `cargo add rvt` adds the library |
 | **docs.rs** (`rvt`) | <https://docs.rs/rvt> (built by docs.rs after each crates.io publish) |
 
-Each 0.12.0 channel was checked from what was published, on 2026-10-31.
+Each 0.12.1 channel was checked from what was published, on 2026-11-02.
 
-- **crates.io** records the publish workflow's run (41232473510) and the tagged commit (`98ec3024`) as the source of the version (Trusted Publishing), and its page shows the 0.12.0 README.
+- **crates.io** records the publish workflow's run (41543156775) and the tagged commit (`eea153de`) as the source of the version (Trusted Publishing), and its page shows the 0.12.1 README.
 - **docs.rs** built it, with an example on every entry point the [1.0 criteria](release-1.0-criteria.md) list (S3).
-- **The macOS arm64 archive** matched `SHA256SUMS`, and its build attestation names the release workflow at the tag. It converted Core Interior, Einhoven and RE1 Architecture into the same IFC as Measure's export of the tag (run 41232498092), line for line once the export time (`FILE_NAME`, `IFCOWNERHISTORY`) is set aside, with diagnostics byte-identical to Measure's.
+- **The macOS arm64 archive** matched `SHA256SUMS`, and its build attestation names the release workflow at the tag. It converted Core Interior, Einhoven and RE1 Architecture into the same IFC as Measure's export of the tag (run 41547212310), line for line once the export time (`FILE_NAME`, `IFCOWNERHISTORY`) is set aside, with diagnostics byte-identical to Measure's.
 - **The PyPI wheel**, installed in a clean environment, converted the same three models into the same IFC as Measure's, with the same diagnostics as JSON (which `rvt_to_ifc_diagnostics` returns without indentation). Since 0.12.0 Python draws doors and windows from their saved meshes, as `rvt-ifc` does.
 - **The container image**, whose attestation verifies, ran on `linux/amd64` and `linux/arm64` and converted RE1 Architecture into the same IFC as the archive.
-- **The deployed viewer**, built from `main` at the release commit, reports `rvt-rs 0.12.0`.
+- **The deployed viewer**, built from `main` at the release commit, reports `rvt-rs 0.12.1`.
 - **The publish workflow** also installed each wheel and opened a model on all seven wheel platforms, and ran `cargo install` on the tagged source with the CLI sample smoke. `cargo install` from crates.io itself was not run.
 
 ## Browser Viewer
@@ -46,7 +46,7 @@ python -c "import rvt; print(rvt.__version__)"
 
 Each wheel is one `abi3` build for CPython 3.8 and later.
 
-| Platform | 0.2.0 | 0.3.0 to 0.12.0 |
+| Platform | 0.2.0 | 0.3.0 to 0.12.1 |
 |---|---|---|
 | Linux x86_64 | glibc 2.35 or later (`manylinux_2_35`) | glibc 2.17 or later (`manylinux2014`) |
 | Linux aarch64 (Graviton, Raspberry Pi 4/5, Docker on Apple Silicon) | none | glibc 2.17 or later |
