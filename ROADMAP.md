@@ -152,6 +152,9 @@ the four levels a file can reach are in the
   - the unused public API removed.
 
   Exports of Revit 2015 to 2023 files take longer (#1237).
+- **0.12.1, 2026-11-01.** Exports of Revit 2015 to 2023 files faster than in
+  0.12.0, each the same as 0.12.0's but for the version its IFC header
+  records; still slower than with 0.11.0 (#1237).
 
 ### 0.13.0: IFC geometry and element data
 
