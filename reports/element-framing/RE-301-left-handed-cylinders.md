@@ -46,11 +46,13 @@ Against Revit's own export (`mesh_bodies_vs_ifc`, the bodies scored):
 
 | file | scored, before → after | exact (0.001 ft) | within 0.01 ft | volume within 1% |
 |---|---|---|---|---|
-| office as built | 1,352 → 1,452 | 1,294 → 1,360 | 1,378 → 1,471 | 1,340 → 1,434 |
-| office at permit | 1,438 → 1,540 | 1,376 → 1,444 | 1,460 → 1,555 | 1,425 → 1,521 |
+| office as built | 1,352 → 1,452 | 1,294 → 1,360 | 1,345 → 1,438 | 1,340 → 1,434 |
+| office at permit | 1,438 → 1,540 | 1,376 → 1,444 | 1,427 → 1,522 | 1,425 → 1,521 |
 | RE1 Architecture | 51 → 52 | 45 → 45 | 49 → 50 | 51 → 52 |
 
-The office's doors drawn from saved meshes rise from 46 scored to 114, all 114 exact; the default export draws them, so this change reaches it as well as `--saved-meshes`. The new bodies that are not within 0.01 ft are seven "Sink Kitchen-Single" at 0.0106 ft (Revit's vertices within 0.0040 ft of rvt-rs's surface, volume within 1.3%), a tessellation difference; RE1's new chair is within 0.0021 ft. The IFC4 schema check is unchanged but for 100 fewer swept solids.
+The office's doors drawn from saved meshes rise from 48 scored (46 at permit) to 114, all 114 exact; the default export draws them, so this change reaches it as well as `--saved-meshes`. The new bodies that are not within 0.01 ft are seven "Sink Kitchen-Single" at 0.0106 ft (Revit's vertices within 0.0040 ft of rvt-rs's surface, volume within 1.3%), a tessellation difference; RE1's new chair is within 0.0021 ft. The IFC4 schema check is unchanged but for 100 fewer swept solids.
+
+The meshes cost size: with `--saved-meshes` the office as built goes from 331,302 to 447,784 triangles and its IFC from 70.6 MB to 75.1 MB, and Snowdon Towers architectural from 648,933 to 974,573 triangles (12.8 MB more).
 
 ## 4. Not claimed
 
