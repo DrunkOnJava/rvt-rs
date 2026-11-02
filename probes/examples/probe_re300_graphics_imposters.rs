@@ -1,0 +1,171 @@
+//! RE-300: what a saved graphics `GImposter` holds (#1247, RE-224).
+//!
+//! FACT under test: `native_graphics_traversal` stops at any graphics class
+//! it does not know, and `saved_meshes::attach` then keeps the element's
+//! box (RE-224). `GImposter` is the class that stops most of them: 1,813 of
+//! the 3,020 such elements on the BIM4LCA office, RE1 and Autodesk's 2024
+//! samples, every one of Snowdon Towers electrical's 511 light fixtures.
+//! This prints what each `GImposter` is: its fields, the classes that point
+//! to it and those it points to, and the classes under it.
+//!
+//! Output: one `imposter` line per object for the first 8 per file, with
+//! its owner ElementId, scalar fields, parents and pointer targets, then
+//! `census` lines over all of them: field sets, parents, flags and the
+//! classes found under them within 8 pointer steps.
+//!
+//! ```text
+//! cargo run --profile ci -p rvt-probes --example probe_re300_graphics_imposters -- model.rvt
+//! ```
+
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
+
+use rvt::research::native_document::{Options, extract_graphs};
+use serde_json::Value;
+
+fn scalars(fields: &Value) -> String {
+    let Some(map) = fields.as_object() else {
+        return String::new();
+    };
+    map.iter()
+        .map(|(key, value)| {
+            let text = match value {
+                Value::Object(inner) if inner.contains_key("pointer_token") => "->".to_string(),
+                Value::Array(items) => format!("[{}]", items.len()),
+                Value::Object(_) => {
+                    let text = value.to_string();
+                    text.chars().take(80).collect()
+                }
+                other => other.to_string(),
+            };
+            format!("{key}={text}")
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+fn main() -> anyhow::Result<()> {
+    let Some(path) = std::env::args().nth(1) else {
+        anyhow::bail!("usage: probe_re300_graphics_imposters FILE.rvt");
+    };
+    let mut rf = rvt::RevitFile::open(&path)?;
+    let records = rvt::elem_table::parse_records(&mut rf)?;
+    let options = Options {
+        selected_ids: rvt::elem_table::declared_ids(&records)
+            .into_iter()
+            .map(u64::from)
+            .collect(),
+        channels: BTreeSet::from([103]),
+        max_graph_values: 1_000_000,
+        max_graph_objects: 1_000_000,
+        ..Options::default()
+    };
+    let mut printed = 0;
+    let mut total = 0usize;
+    let mut owners = BTreeSet::new();
+    let mut field_sets: BTreeMap<String, usize> = BTreeMap::new();
+    let mut parents: BTreeMap<String, usize> = BTreeMap::new();
+    let mut flags: BTreeMap<String, usize> = BTreeMap::new();
+    let mut under: BTreeMap<String, usize> = BTreeMap::new();
+    extract_graphs(&mut rf, &options, |record| {
+        let Some(graph) = record.graph.as_ref() else {
+            return Ok(());
+        };
+        let mut out_edges: BTreeMap<usize, Vec<(usize, usize)>> = BTreeMap::new();
+        let mut in_edges: BTreeMap<usize, Vec<usize>> = BTreeMap::new();
+        for edge in &graph.edges {
+            out_edges
+                .entry(edge.source_object_index)
+                .or_default()
+                .push((edge.pointer_offset, edge.target_object_index));
+            in_edges
+                .entry(edge.target_object_index)
+                .or_default()
+                .push(edge.source_object_index);
+        }
+        for (index, object) in graph.objects.iter().enumerate() {
+            if object.class_name != "GImposter" {
+                continue;
+            }
+            total += 1;
+            owners.insert(record.identity.element_id);
+            let keys: Vec<&str> = object
+                .fields
+                .as_object()
+                .map(|map| map.keys().map(String::as_str).collect())
+                .unwrap_or_default();
+            *field_sets.entry(keys.join(",")).or_default() += 1;
+            let parent_classes: Vec<&str> = in_edges
+                .get(&index)
+                .map(|sources| {
+                    sources
+                        .iter()
+                        .map(|&s| graph.objects[s].class_name.as_str())
+                        .collect()
+                })
+                .unwrap_or_default();
+            for class in &parent_classes {
+                *parents.entry((*class).to_string()).or_default() += 1;
+            }
+            *flags
+                .entry(object.fields["m_GInfo"]["m_flags"].to_string())
+                .or_default() += 1;
+            let mut seen = BTreeSet::from([index]);
+            let mut queue = VecDeque::from([(index, 0)]);
+            let mut classes: BTreeMap<&str, usize> = BTreeMap::new();
+            while let Some((at, depth)) = queue.pop_front() {
+                if depth == 8 {
+                    continue;
+                }
+                for &(_, target) in out_edges.get(&at).map(Vec::as_slice).unwrap_or(&[]) {
+                    if seen.insert(target) {
+                        *classes
+                            .entry(graph.objects[target].class_name.as_str())
+                            .or_default() += 1;
+                        queue.push_back((target, depth + 1));
+                    }
+                }
+            }
+            for (class, n) in &classes {
+                *under.entry((*class).to_string()).or_default() += n;
+            }
+            if printed < 8 {
+                printed += 1;
+                let targets: Vec<String> = out_edges
+                    .get(&index)
+                    .map(|edges| {
+                        edges
+                            .iter()
+                            .map(|(offset, target)| {
+                                format!("+{offset}:{}", graph.objects[*target].class_name)
+                            })
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                println!(
+                    "imposter owner={} record={} parents={:?} targets={:?} under={:?} fields: {}",
+                    record.identity.element_id,
+                    record.class_name.as_deref().unwrap_or("?"),
+                    parent_classes,
+                    targets,
+                    classes,
+                    scalars(&object.fields)
+                );
+            }
+        }
+        Ok(())
+    })?;
+    println!("census imposters={total} owners={}", owners.len());
+    for (set, n) in &field_sets {
+        println!("census fields {n} {set}");
+    }
+    for (class, n) in &parents {
+        println!("census parent {n} {class}");
+    }
+    for (value, n) in &flags {
+        println!("census flags {n} {value}");
+    }
+    for (class, n) in &under {
+        println!("census under {n} {class}");
+    }
+    Ok(())
+}
