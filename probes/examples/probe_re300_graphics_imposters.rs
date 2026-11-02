@@ -9,9 +9,11 @@
 //! to it and those it points to, and the classes under it.
 //!
 //! Output: one `imposter` line per object for the first 8 per file, with
-//! its owner ElementId, scalar fields, parents and pointer targets, then
-//! `census` lines over all of them: field sets, parents, flags and the
-//! classes found under them within 8 pointer steps.
+//! its owner ElementId, scalar fields, parents and pointer targets, and a
+//! `siblings` line with what else its parent points to (a `GPolyMesh`'s
+//! normal binding and counts, a condition's fields), then `census` lines
+//! over all of them: field sets, parents, flags, the classes found under
+//! them within 8 pointer steps, and their parents' sets of children.
 //!
 //! ```text
 //! cargo run --profile ci -p rvt-probes --example probe_re300_graphics_imposters -- model.rvt
@@ -43,6 +45,31 @@ fn scalars(fields: &Value) -> String {
         .join(" ")
 }
 
+/// A `GPolyMesh`'s normal binding and its points, normals and facets.
+fn polymesh(
+    graph: &rvt::research::native_parameters::ObjectGraph,
+    out_edges: &BTreeMap<usize, Vec<(usize, usize)>>,
+    index: usize,
+) -> String {
+    let Some(topology) = out_edges.get(&index).and_then(|edges| {
+        edges
+            .iter()
+            .map(|(_, target)| &graph.objects[*target])
+            .find(|object| object.class_name.starts_with("FacetedTopology"))
+    }) else {
+        return "no topology".into();
+    };
+    let f = &topology.fields;
+    let len = |key: &str| f[key].as_array().map_or(0, Vec::len);
+    format!(
+        "flag={} points={} normals={} facets={}",
+        f["m_normalsFlag"],
+        len("m_pointsArr"),
+        len("m_normalsArr"),
+        len("m_facetsArr")
+    )
+}
+
 fn main() -> anyhow::Result<()> {
     let Some(path) = std::env::args().nth(1) else {
         anyhow::bail!("usage: probe_re300_graphics_imposters FILE.rvt");
@@ -66,6 +93,7 @@ fn main() -> anyhow::Result<()> {
     let mut parents: BTreeMap<String, usize> = BTreeMap::new();
     let mut flags: BTreeMap<String, usize> = BTreeMap::new();
     let mut under: BTreeMap<String, usize> = BTreeMap::new();
+    let mut sibling_sets: BTreeMap<String, usize> = BTreeMap::new();
     extract_graphs(&mut rf, &options, |record| {
         let Some(graph) = record.graph.as_ref() else {
             return Ok(());
@@ -128,6 +156,51 @@ fn main() -> anyhow::Result<()> {
             for (class, n) in &classes {
                 *under.entry((*class).to_string()).or_default() += n;
             }
+            if let Some(&parent) = in_edges.get(&index).and_then(|p| p.first()) {
+                let siblings: Vec<String> = out_edges
+                    .get(&parent)
+                    .map(|edges| {
+                        edges
+                            .iter()
+                            .map(|(offset, target)| {
+                                let object = &graph.objects[*target];
+                                let detail = match object.class_name.as_str() {
+                                    "GPolyMesh" => polymesh(graph, &out_edges, *target),
+                                    name if name.starts_with("GCondition") => {
+                                        scalars(&object.fields)
+                                    }
+                                    _ => String::new(),
+                                };
+                                format!("+{offset}:{}{{{detail}}}", object.class_name)
+                            })
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                *sibling_sets
+                    .entry(
+                        siblings
+                            .iter()
+                            .map(|s| s.split(['{', ':']).nth(1).unwrap_or("").to_string())
+                            .collect::<Vec<_>>()
+                            .join(","),
+                    )
+                    .or_default() += 1;
+                if printed < 8 {
+                    println!(
+                        "siblings owner={} filter={} grandparents={:?} {}",
+                        record.identity.element_id,
+                        scalars(&graph.objects[parent].fields),
+                        in_edges
+                            .get(&parent)
+                            .map(|g| g
+                                .iter()
+                                .map(|&i| graph.objects[i].class_name.clone())
+                                .collect::<Vec<_>>())
+                            .unwrap_or_default(),
+                        siblings.join(" ")
+                    );
+                }
+            }
             if printed < 8 {
                 printed += 1;
                 let targets: Vec<String> = out_edges
@@ -166,6 +239,9 @@ fn main() -> anyhow::Result<()> {
     }
     for (class, n) in &under {
         println!("census under {n} {class}");
+    }
+    for (set, n) in &sibling_sets {
+        println!("census siblings {n} {set}");
     }
     Ok(())
 }
