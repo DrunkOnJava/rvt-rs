@@ -5,4 +5,4 @@
 # pip installs it with --require-hashes; after changing a pin here or in
 # requirements-test.in, regenerate it with the uv command at its top.
 -r requirements-test.in
-maturin==1.15.0
+maturin==1.16.0
