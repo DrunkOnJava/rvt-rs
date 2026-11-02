@@ -19,7 +19,10 @@
 //! - the triangles of the element's saved graphics at fine detail, `-` where
 //!   it has none;
 //! - its family's `shows_unset` (`native_family_forms`, RE-204): `t`, `f`,
-//!   `?` where undecided, `-` where the family is not read.
+//!   `?` where undecided, `-` where the family is not read;
+//! - the type's native `m_geomTag2MaterialId` (RE-203) as
+//!   `<entries>/<unset entries>`, `-` where the type record is not read: the
+//!   map itself, whatever either byte scan makes of it.
 //!
 //! `tools/re/void_only_vs_ifc.py` reads the first five columns, and counts
 //! the sixth where present.
@@ -64,15 +67,32 @@ fn main() -> anyhow::Result<()> {
         .map(u64::from)
         .collect();
     let mut family_of: BTreeMap<u64, u64> = BTreeMap::new();
+    let mut native_map: BTreeMap<u64, (usize, usize)> = BTreeMap::new();
     let options = Options {
         selected_ids: types,
         ..Options::default()
     };
     if let Err(e) = extract_graphs(&mut rf, &options, |record| {
-        let family = record
+        let root = record
             .graph
             .as_ref()
-            .and_then(|graph| graph.objects.first())
+            .and_then(|graph| graph.objects.first());
+        if let Some(map) = root
+            .and_then(|root| root.fields.get("m_geomTag2MaterialId"))
+            .and_then(serde_json::Value::as_array)
+        {
+            let unset = map
+                .iter()
+                .filter(|entry| {
+                    entry
+                        .pointer("/second/m_id/m_id64")
+                        .and_then(serde_json::Value::as_i64)
+                        == Some(-1)
+                })
+                .count();
+            native_map.insert(record.identity.element_id, (map.len(), unset));
+        }
+        let family = root
             .and_then(|root| root.fields.get("m_familyId"))
             .and_then(|id| id.pointer("/m_id/m_id64"))
             .and_then(serde_json::Value::as_i64)
@@ -145,8 +165,11 @@ fn main() -> anyhow::Result<()> {
                 Some(false) => "f",
                 None => "?",
             });
+        let native = type_id
+            .and_then(|id| native_map.get(&u64::from(id)))
+            .map_or("-".to_string(), |(n, unset)| format!("{n}/{unset}"));
         println!(
-            "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
+            "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
             element.id.map_or(String::new(), |id| id.to_string()),
             element.class,
             type_id.map_or(String::new(), |id| id.to_string()),
@@ -155,6 +178,7 @@ fn main() -> anyhow::Result<()> {
             unset_map,
             saved,
             shows,
+            native,
         );
     }
     Ok(())
