@@ -1085,7 +1085,10 @@ pub fn graphics_with_resolver_at_detail<'a>(
                     .iter()
                     .map(point::<3>)
                     .collect::<Result<Vec<_>>>()?;
-                let binding = f["m_normalsFlag"].as_u64().context("normal binding")?;
+                ensure!(
+                    f["m_normalsFlag"].as_u64() == Some(0),
+                    "unsupported normal binding"
+                );
                 let triangles = f["m_facetsArr"]
                     .as_array()
                     .context("mesh facets")?
@@ -1101,20 +1104,11 @@ pub fn graphics_with_resolver_at_detail<'a>(
                         Ok(t)
                     })
                     .collect::<Result<Vec<_>>>()?;
-                // Binding 0 gives one normal per facet. Any other binding with
-                // one normal per point gives them per vertex (#1247); the
-                // points and facets do not depend on it.
-                let vertex_normals =
-                    binding != 0 && !normals.is_empty() && normals.len() == vertices.len();
                 ensure!(
-                    binding == 0 || normals.is_empty() || vertex_normals,
-                    "unsupported normal binding"
-                );
-                ensure!(
-                    binding != 0 || normals.is_empty() || normals.len() == triangles.len(),
+                    normals.is_empty() || normals.len() == triangles.len(),
                     "unsupported normal cardinality"
                 );
-                let facet_normals = binding == 0 && !normals.is_empty();
+                let facet_normals = !normals.is_empty();
 
                 let mut expanded_vertices = Vec::new();
                 let mut expanded_normals = Vec::new();
@@ -1137,11 +1131,7 @@ pub fn graphics_with_resolver_at_detail<'a>(
                     };
                     for idx in t {
                         expanded_vertices.push(vertices[*idx as usize]);
-                        expanded_normals.push(if vertex_normals {
-                            normals[*idx as usize]
-                        } else {
-                            normal
-                        });
+                        expanded_normals.push(normal);
                     }
                     expanded_triangles.push([base, base + 1, base + 2]);
                 }

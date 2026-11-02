@@ -198,6 +198,17 @@ impl Walker<'_, '_> {
                     if children.is_empty() {
                         return Ok(());
                     }
+                    // A light source: a `GImposter` (a transform and a
+                    // rendering asset of scalar properties) with the shape and
+                    // lines that draw it. No part of the fixture's body
+                    // (RE-300).
+                    if children
+                        .iter()
+                        .any(|&i| self.graph.objects[i].class_name == "GImposter")
+                    {
+                        self.result.excluded_non_surface_branches += 1;
+                        return Ok(());
+                    }
                     // Curves are deliberately outside this surface-only selector.
                     if children
                         .iter()
@@ -356,9 +367,6 @@ impl Walker<'_, '_> {
             }
             "GLine" | "GArc" | "GEllipse" | "GCurve" | "GNurbSpline" | "GPolyLine"
             | "GPolyline" | "GPoint" => self.result.excluded_non_surface_branches += 1,
-            // A transform and a rendering asset of scalar properties, a light
-            // fixture's light source: no surface (RE-300).
-            "GImposter" => self.result.excluded_non_surface_branches += 1,
             other => return Err(format!("unsupported reachable graphics class {other}")),
         }
         Ok(())
@@ -369,7 +377,7 @@ impl Walker<'_, '_> {
         }
         let result = match self.graph.objects[index].class_name.as_str() {
             "GLine" | "GArc" | "GEllipse" | "GCurve" | "GNurbSpline" | "GPolyLine"
-            | "GPolyline" | "GPoint" | "GImposter" => true,
+            | "GPolyline" | "GPoint" => true,
             "GElement" | "GGroup" | "GFilter" => self
                 .children(index)
                 .is_ok_and(|c| c.iter().all(|&i| self.only_curves(i, seen))),
