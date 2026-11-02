@@ -2244,6 +2244,10 @@ Revit's export writes a floor's `Qto_SlabBaseQuantities.NetVolume` as the volume
 
 Revit's export writes a floor's `Qto_SlabBaseQuantities.GrossArea` as the area of the profile its slab extrudes, its sketch outline less its holes: equal to rvt-rs's profile on all 40 of the BIM4LCA office's slabs drawn from their record box, where the slab's other quantities follow its body less often (a sloped slab's record box is deeper than its layers). Stair landings' slabs get none. rvt-rs writes it on each floor drawn as one extrusion: 31 equal on the office, none different. Report: `reports/element-framing/RE-249-slab-gross-area.md`.
 
+## Addendum — RE-301 a saved cylinder with a left-handed basis (2026-11-02)
+
+A saved `CylSurf` whose `m_xVec × m_yVec` is `−m_zVec` is the same cylinder; only its parametric normal ∂P/∂u × ∂P/∂v points inward. Read as a plane is (the normal is the parametric one, turned by the orientation), such faces no longer keep their whole element's box: 100 more saved-mesh bodies on the BIM4LCA office, 66 exact to 0.001 ft against Revit's export, and 172 more on Snowdon Towers' architectural sample. Report: `reports/element-framing/RE-301-left-handed-cylinders.md`.
+
 ## Addendum — RE-299 a door or window that only cuts its host (2026-11-02)
 
 RE-84 writes a door or window as its opening alone where the scan of its type's value block finds no geometry-material map, and the scan rejects a map whose values are all unset or name a material whose name it did not read. The type's native `m_geomTag2MaterialId` is empty on every door and window Revit exports as its opening alone (RE1's CasedOpening, Snowdon Towers' 9 Door-Opening and 38 Schematic Opening Cut, none with saved graphics), while the byte scan's all-unset map also fires on CasedOpening and Door-Opening. A type whose native map holds entries is no longer read as drawing nothing; no corpus export changes, and #1247's 73 doors are the case it is for. Report: `reports/element-framing/RE-299-native-map-void-only-doors.md`.
