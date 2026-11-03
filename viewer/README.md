@@ -94,21 +94,30 @@ inflated member). When a stream is over them, File status reports "Part of the
 file not read" and offers "Retry with large-model limits", which reads the same
 file again with the limits `rvt-ifc --large-model` uses (streams up to 2 GiB).
 A browser tab can use at most 4 GiB of memory, so a very large model can still
-fail to open; `rvt-ifc --large-model` has no such ceiling. The button calls
+fail to open; `rvt-ifc --large-model` is not held to a tab's 4 GiB (its caps are
+a 2 GiB stream and 8 GiB inflated, on a machine with the memory). The button calls
 `openRvtBytesWithDiagnosticsModeAndOpenLimits` with `{ largeModel: true }`.
 
-A file whose size says it may need more than a tab's 4 GiB (an open takes about
-ten times the file's size) is warned about in the loading card before the
-decode, and still tried. When the wasm instance does run out of memory, the
-viewer says the model is too large for the browser, how much memory the tab
-reached, and that `rvt-ifc`, `rvt-gltf` and the Python package open it, instead
-of `RuntimeError: unreachable`. How it tells, the measured estimate and the
-options for larger models are in
+A file whose size says it may need more than a tab's 4 GiB (an open has taken
+at least about ten times the file's size, and the warning can fire on a file
+that fits) is warned about in the loading card before the decode, and still
+tried. When the wasm instance does run out of memory, the viewer says the model
+is too large for the browser, how much memory the tab reached, and what reads a
+larger file (`rvt-ifc` and `rvt-gltf` with `--large-model`; the Python
+`RevitFile` with a larger `max_stream_bytes` and `max_inflate_bytes`), instead of
+`RuntimeError: unreachable`; the engine's own message is in the status panel.
+A stop a long way short of the ceiling on a small file says "Ran out of memory"
+and that the file may be damaged, since nothing measured says it needs more. How
+it tells, the measured estimate and the options for larger models are in
 [`docs/viewer-api.md`](../docs/viewer-api.md#models-too-large-for-the-browser).
 `?memoryCeilingBytes=` in the address lowers the ceiling the warning compares
-with. `tests/memory-ceiling.spec.ts` uses it with a Chromium whose V8 caps wasm
-memory at 16 MiB (`--js-flags=--wasm-max-mem-pages=256`), where Einhoven really
-stops, because no model of several hundred MiB is in CI.
+with. `tests/memory-ceiling.spec.ts` uses it for the warning, and
+`tests/memory-ceiling-capped.spec.ts` for the stop, in a Chromium whose V8 caps
+wasm memory (`--js-flags=--wasm-max-mem-pages=256` is 16 MiB), where Einhoven
+really stops, because no model of several hundred MiB is in CI.
+`tests/worker-failures.spec.ts` covers the other engines' wording of the trap, a
+panic that is not memory, and a stop after the open call, by failing one wasm
+export in a replacement worker; nothing in it ships.
 
 `?maxStreamBytes=` and `?maxInflateBytes=` in the address open the first file
 under those limits, so a small file reaches the same path. The browser test

@@ -961,6 +961,16 @@ header .export-hint[hidden] {
 #scaffold-note.is-failure {
   z-index: 11;
 }
+/* A failure is red, as its toast is; the note's amber is for a file that opened
+   with nothing to draw. */
+#scaffold-note.is-failure .note-card {
+  background:
+    linear-gradient(var(--sx-color-danger-light), var(--sx-color-danger-light)),
+    var(--sx-color-surface);
+}
+#scaffold-note.is-failure .note-title {
+  color: var(--sx-color-danger);
+}
 .note-card {
   width: min(460px, 86%);
   padding: var(--sx-space-sm) var(--sx-space-md);

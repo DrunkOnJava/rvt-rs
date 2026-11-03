@@ -30,7 +30,9 @@
  *   worker → main: { type: 'error', message: string, tooLarge?: TooLarge }
  *                  `tooLarge` is set when the failure is the wasm instance
  *                  running out of memory (see `outOfMemory`), with what the
- *                  worker knew when it stopped.
+ *                  worker knew when it stopped: the wasm memory reached, the
+ *                  last decoder report (or null once the open call returned),
+ *                  the worker step it was in, and the engine's own message.
  */
 
 import init, {
@@ -52,13 +54,22 @@ interface OpenLimitsOptions {
   savedMeshes?: boolean;
 }
 
+/** The decoder's last report before a stop. */
+interface StageReport {
+  stage: string;
+  done: number;
+  total: number | null;
+}
+
 /** What the worker reports when a decode stops for want of memory. */
 interface TooLarge {
   /** The wasm linear memory when it stopped: how far the decode got. */
   wasmMemoryBytes: number;
-  /** The decoder stage it was in, or null before the first report. */
-  stage: string | null;
-  /** The raw message of the failure, for the diagnostics. */
+  /** The decoder's last report inside the open call, or null outside it. */
+  report: StageReport | null;
+  /** The worker step it was in when it stopped, or null inside the open call. */
+  step: string | null;
+  /** The engine's own message (the panic's, when there was one), shown in the status panel. */
   detail: string;
 }
 
@@ -74,7 +85,8 @@ let parsedModel: unknown = null;
 // `console.error` before the trap. A trap with none of those first is not a
 // panic: an allocation the wasm memory could not grow to hold aborts the
 // instance without running the hook, and reaches here as a bare
-// `RuntimeError: unreachable`.
+// `RuntimeError: unreachable` (V8), `unreachable executed` (Firefox) or
+// `Unreachable code should not be executed` (Safari).
 const PANIC_PREFIX = 'rvt-rs wasm panic:';
 let lastPanic: string | null = null;
 const nativeConsoleError = console.error.bind(console);
@@ -99,7 +111,7 @@ function outOfMemory(err: unknown, panic: string | null): boolean {
   const message = err instanceof Error ? err.message : String(err);
   if (panic !== null) return OUT_OF_MEMORY_MESSAGE.test(panic);
   if (err instanceof WebAssembly.RuntimeError) {
-    return message === 'unreachable' || OUT_OF_MEMORY_MESSAGE.test(message);
+    return /unreach/i.test(message) || OUT_OF_MEMORY_MESSAGE.test(message);
   }
   return OUT_OF_MEMORY_MESSAGE.test(message) && !(err instanceof TypeError);
 }
@@ -133,19 +145,24 @@ self.addEventListener('message', async (ev: MessageEvent<ParseMsg>) => {
   if (msg.type !== 'parse') return;
 
   let wasmMemory: WebAssembly.Memory | null = null;
-  let currentStage: string | null = null;
+  let report: StageReport | null = null;
+  let currentStep: string | null = null;
+  // A step the page is told about, and the one a stop is then blamed on.
+  const step = (text: string): void => {
+    currentStep = text;
+    send({ type: 'progress', step: text });
+  };
   try {
-    send({ type: 'progress', step: 'Initializing wasm' });
+    step('Initializing wasm');
     const startedAt = performance.now();
     const wasm = await init();
     wasmMemory = wasm.memory;
-    lastPanic = null;
 
     // VW1-20 — progressive streaming. Emit the cheap metadata
     // first (sub-second even on hundreds-of-MB files) so the UI
     // can populate the top bar while the expensive full-model
     // parse continues.
-    send({ type: 'progress', step: 'Reading file metadata' });
+    step('Reading file metadata');
     // Worksharing / last-saved identity is a nicety: a file whose
     // BasicFileInfo text block is unreadable still parses.
     let document: unknown = null;
@@ -153,21 +170,23 @@ self.addEventListener('message', async (ev: MessageEvent<ParseMsg>) => {
       document = fileMetadata(msg.bytes);
     } catch {
       document = null;
+      // A panic this swallowed is not the one a later stop is judged by.
+      lastPanic = null;
     }
     send({ type: 'summary', summary: quickSummary(msg.bytes), document });
 
     const qualityMode = (msg.mode ?? 'scaffold').trim() || 'scaffold';
     const limitsNote = msg.limits?.largeModel ? ' · large-model limits' : '';
     const meshesNote = msg.limits?.savedMeshes === false ? ' · door and window boxes' : '';
-    send({
-      type: 'progress',
-      step: `Parsing container · IFC bar ${qualityMode}${limitsNote}${meshesNote}`,
-    });
+    step(`Parsing container · IFC bar ${qualityMode}${limitsNote}${meshesNote}`);
     const openStartedAt = performance.now();
     const onStage = (stage: string, done: number, total: number | null): void => {
-      currentStage = stage;
+      report = { stage, done, total };
+      currentStep = null;
       send({ type: 'stage', stage, done, total, wasmMemoryBytes: wasm.memory.buffer.byteLength });
     };
+    // Only a panic from the open call itself bears on how it stopped.
+    lastPanic = null;
     const exportResult = openRvtBytesWithDiagnosticsModeAndOpenLimits(
       msg.bytes,
       qualityMode,
@@ -178,17 +197,19 @@ self.addEventListener('message', async (ev: MessageEvent<ParseMsg>) => {
       diagnostics: unknown;
     };
     const openMs = performance.now() - openStartedAt;
+    // The open call is over: a stop after it is in the worker's own steps.
+    report = null;
     const model = exportResult.model;
     parsedModel = model;
 
-    send({ type: 'progress', step: 'Building scene graph' });
+    step('Building scene graph');
     const scene = buildSceneGraph(model);
     const types = distinctIfcTypes(scene);
 
-    send({ type: 'progress', step: 'Rendering glTF' });
+    step('Rendering glTF');
     const glb = modelToGlb(model);
 
-    send({ type: 'progress', step: 'Building schedule' });
+    step('Building schedule');
     const schedule = buildSchedule(model);
 
     // Read last, so the memory is what the whole pipeline needed.
@@ -219,12 +240,15 @@ self.addEventListener('message', async (ev: MessageEvent<ParseMsg>) => {
     if (outOfMemory(err, lastPanic)) {
       const tooLarge: TooLarge = {
         wasmMemoryBytes: wasmMemory?.buffer.byteLength ?? 0,
-        stage: currentStage,
-        detail: lastPanic ?? message,
+        report,
+        step: report ? null : currentStep,
+        detail: lastPanic ?? (err instanceof Error ? `${err.name}: ${err.message}` : message),
       };
       send({ type: 'error', message, tooLarge });
       return;
     }
-    send({ type: 'error', message });
+    // A panic's text is on console.error, and the trap carries only
+    // `unreachable`: say the panic's, which is the failure's own message.
+    send({ type: 'error', message: lastPanic ?? message });
   }
 });

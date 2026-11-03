@@ -6,15 +6,20 @@ import { fileURLToPath } from 'node:url';
 // #1195: while a model decodes, the loading card shows the decoder's own
 // progress (the stages `rvt-gltf --progress` prints) instead of a sweep and a
 // guess from the file size. The worker posts each report from inside the wasm
-// call, so the page sees them while the decode runs; the page keeps the whole
-// list on #status as `data-load-progress`.
+// call, so the page sees them while the decode runs. The page keeps every
+// report on #status as `data-load-progress`, with what the card showed once it
+// had applied that report (its step, the bar's value, its hint), so these
+// tests read the card's behaviour from that record rather than sampling the
+// page, which a decode 3 s into its partition stage would make a coin flip:
 //
-//   - on the tier-1 fixture, which opens in milliseconds, the list is checked:
-//     the stages, their counts, and the steps after the decode;
-//   - on Core Interior (24 s on Deploy viewer's runner), the card itself is
-//     watched while it loads: the bar must turn determinate and fill, and the
-//     card must name the stages. A screenshot of the bar part-way and the
-//     samples go to measurements/, which Deploy viewer uploads.
+//   - on the tier-1 fixture, which opens in milliseconds: the stages, their
+//     counts and the steps after the decode;
+//   - on Core Interior (17 to 24 s on Deploy viewer's runner): the bar is
+//     determinate for the counted stage at the percent of each report, sweeps
+//     for the stretch the decoder reports nothing in, and says "Building the
+//     model" once. A screenshot is taken while the partition stage runs, and it
+//     is the only thing that depends on timing, so it is best effort: what it
+//     shows is written beside it.
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const tier1 = path.resolve(
@@ -44,12 +49,42 @@ interface LoadEvent {
   total?: number | null;
   memoryBytes?: number;
   step?: string;
+  card?: { step: string; value: number | null; hint: string };
 }
 
 async function loadEvents(page: Page): Promise<LoadEvent[]> {
   const raw = await page.locator('#status').getAttribute('data-load-progress');
   expect(raw, 'the page keeps what the worker reported').not.toBeNull();
   return JSON.parse(raw!) as LoadEvent[];
+}
+
+/** Records every text #status takes, so what a live region was told can be counted. */
+async function logStatusText(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    const status = document.getElementById('status')!;
+    const log: string[] = [];
+    (window as unknown as { __statusLog: string[] }).__statusLog = log;
+    new MutationObserver(() => log.push(status.textContent ?? '')).observe(status, {
+      childList: true,
+      characterData: true,
+      subtree: true,
+    });
+  });
+}
+
+async function statusLog(page: Page): Promise<string[]> {
+  return page.evaluate(() => (window as unknown as { __statusLog: string[] }).__statusLog);
+}
+
+/** A report with a count the bar is a fraction of: a total above one, not yet reached. */
+function isCounted(event: LoadEvent): boolean {
+  return (
+    event.stage !== undefined &&
+    event.total !== null &&
+    event.total !== undefined &&
+    event.total > 1 &&
+    event.done! < event.total
+  );
 }
 
 test('the decoder reports its stages to the page, and the steps after it follow', async ({
@@ -75,6 +110,7 @@ test('the decoder reports its stages to the page, and the steps after it follow'
       );
     }
     expect(event.memoryBytes, 'the wasm memory at that moment').toBeGreaterThan(0);
+    expect(event.card, 'the card applied it').toBeDefined();
   }
   // Within a stage the count only grows until the stage starts over.
   let previous: LoadEvent | null = null;
@@ -115,70 +151,99 @@ coreInteriorTest('the loading card fills while Core Interior decodes', async ({ 
 
   await page.goto('/');
   await expect(page.locator('#status')).toHaveText(/Ready/);
+  await logStatusText(page);
   await page.locator('#file-input').setInputFiles(coreInterior);
 
-  interface Sample {
-    t: number;
-    step: string;
-    hint: string;
-    determinate: boolean;
-    value: number | null;
-  }
-  const samples: Sample[] = [];
-  const started = Date.now();
-  let screenshot = false;
-  const deadline = started + 500_000;
-  for (;;) {
-    expect(Date.now(), 'Core Interior loads').toBeLessThan(deadline);
-    const loaded = await page.locator('#status').getAttribute('data-load-stats');
-    if (loaded !== null) break;
-    const sample = await page.evaluate(() => {
-      const rail = document.getElementById('load-rail')!;
-      const now = rail.getAttribute('aria-valuenow');
-      return {
-        step: document.getElementById('load-step')!.textContent ?? '',
-        hint: document.getElementById('load-hint')!.textContent ?? '',
-        determinate: rail.classList.contains('is-determinate'),
-        value: now === null ? null : Number(now),
-        visible: !document.getElementById('load-overlay')!.classList.contains('hidden'),
-      };
+  // The screenshot is the only thing here that depends on timing. Wait, polling
+  // every animation frame, for the bar to be a quarter full or more while the
+  // partition stage runs, and take it at once; a decode that is past that by
+  // the time the page looks, or a screenshot that lands after it, only means
+  // no picture, which is written down rather than failed on.
+  const screenshot: { taken: boolean; cardAtCapture: unknown; note: string } = {
+    taken: false,
+    cardAtCapture: null,
+    note: '',
+  };
+  try {
+    await page.waitForFunction(
+      () => Number(document.getElementById('load-rail')?.getAttribute('aria-valuenow')) >= 25,
+      null,
+      { polling: 'raf', timeout: 120_000 },
+    );
+    screenshot.cardAtCapture = await page.evaluate(() => ({
+      step: document.getElementById('load-step')?.textContent,
+      value: document.getElementById('load-rail')?.getAttribute('aria-valuenow'),
+      hint: document.getElementById('load-hint')?.textContent,
+    }));
+    await page.locator('#load-overlay').screenshot({
+      path: path.join(outDir, 'load-progress-core-interior.png'),
+      timeout: 10_000,
     });
-    if (sample.visible) {
-      samples.push({ ...sample, t: Date.now() - started });
-      if (!screenshot && sample.determinate && sample.value! >= 25 && sample.value! <= 75) {
-        await page.locator('#load-overlay').screenshot({
-          path: path.join(outDir, 'load-progress-core-interior.png'),
-        });
-        screenshot = true;
-      }
-    }
-    await page.waitForTimeout(200);
+    screenshot.taken = true;
+    screenshot.note =
+      'taken when the bar first read 25% or more; the card may have moved on while the picture was taken, so cardAtCapture is what the page said just before';
+  } catch (err) {
+    screenshot.note = `no screenshot: ${(err as Error).message.split('\n')[0]}`;
   }
-  await expect(page.locator('#status')).toHaveText(/Loaded/);
+
+  await expect(page.locator('#status')).toHaveText(/Loaded/, { timeout: 500_000 });
+  const events = await loadEvents(page);
   fs.writeFileSync(
     path.join(outDir, 'load-progress-core-interior.json'),
-    `${JSON.stringify({ samples, events: await loadEvents(page) }, null, 2)}\n`,
+    `${JSON.stringify({ screenshot, events }, null, 2)}\n`,
   );
 
-  // The card named the decoder's stages, not just "Opening".
-  const labels = new Set(samples.map((sample) => sample.step));
-  const stageLabels = [...labels].filter((label) =>
-    /^(Reading the schema|Scanning for elements|Decoding elements|Reading partition streams|Reading saved graphics|Drawing doors and windows from saved meshes|Building the model|Finishing the model)$/.test(
-      label,
-    ),
-  );
-  expect(stageLabels.length, `stages named on the card: ${[...labels].join(' | ')}`).toBeGreaterThanOrEqual(2);
+  // Every report the decoder made was applied by the card, and the bar says
+  // what the report said: the percent of its count where it has one, and a
+  // sweep where it has none or the stage has ended.
+  const reports = events.filter((event) => event.stage !== undefined);
+  expect(reports.length).toBeGreaterThan(0);
+  for (const event of reports) {
+    expect(event.card, `${event.stage} ${event.done}/${event.total} was applied`).toBeDefined();
+    if (isCounted(event)) {
+      expect(event.card!.value, `${event.stage} ${event.done}/${event.total}`).toBe(
+        Math.round((event.done! / event.total!) * 100),
+      );
+      expect(event.card!.hint).toMatch(/^\d+% · /);
+    } else {
+      expect(event.card!.value, `${event.stage} ${event.done}/${event.total} sweeps`).toBeNull();
+      expect(event.card!.hint).toBe('');
+    }
+  }
 
-  // The bar turned determinate, at more than one fill, and a fill was
-  // somewhere between empty and full.
-  const fills = new Set(samples.filter((s) => s.determinate).map((s) => s.value));
-  expect(fills.size, `fills seen: ${[...fills].join(', ')}`).toBeGreaterThanOrEqual(2);
+  // The partition stage is counted on this project: the bar was determinate at
+  // more than one value, rising within the stage, and the card named the stage
+  // and what it counted.
+  const counted = reports.filter(isCounted);
+  expect(counted.length, 'reports with a count').toBeGreaterThanOrEqual(2);
+  const values = counted.map((event) => event.card!.value!);
+  expect(new Set(values).size, `fills: ${values.join(', ')}`).toBeGreaterThanOrEqual(2);
+  for (const value of values) {
+    expect(value).toBeGreaterThanOrEqual(0);
+    expect(value).toBeLessThanOrEqual(100);
+  }
+  const partition = counted.filter((event) => event.stage === 'partition-scan');
+  expect(partition.length, 'the partition streams are counted').toBeGreaterThanOrEqual(2);
+  const rising = partition.map((event) => event.card!.value!);
+  expect([...rising].sort((a, b) => a - b), 'the partition bar rises').toEqual(rising);
   expect(
-    [...fills].some((value) => value !== null && value > 0 && value < 100),
-    'a part-way fill',
-  ).toBe(true);
-  // A determinate bar says what it counts.
-  const counted = samples.filter((s) => s.determinate && s.value! > 0 && s.value! < 100);
-  expect(counted.every((s) => /^\d+% · /.test(s.hint))).toBe(true);
-  expect(screenshot, 'a screenshot of the bar part-way').toBe(true);
+    new Set(rising).size,
+    `partition fills: ${rising.join(', ')}`,
+  ).toBeGreaterThanOrEqual(2);
+  for (const event of partition) {
+    expect(event.card!.step).toBe('Reading partition streams');
+    expect(event.card!.hint).toMatch(new RegExp(`^\\d+% · ${event.done} of ${event.total} streams$`));
+  }
+
+  // The stretch after the last stream is inflated reports nothing until the
+  // saved graphics. The card names it, and says so once: #status is a live
+  // region, and it was told "Building the model" a single time.
+  const building = reports.filter((event) => event.card!.step === 'Building the model');
+  expect(building.length, 'reports that left the card on Building the model').toBeGreaterThan(0);
+  for (const event of building) expect(event.card!.value).toBeNull();
+  const log = await statusLog(page);
+  expect(
+    log.filter((text) => text === 'Building the model'),
+    `status text: ${log.join(' | ')}`,
+  ).toHaveLength(1);
 });

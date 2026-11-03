@@ -20,13 +20,14 @@ const tier1 = path.resolve(
   '../../corpus/tier1/architectural-2024/architectural-2024.rvt',
 );
 
-test.describe('under the real ceiling', () => {
+test.describe('the warning before the decode', () => {
   test('a file whose estimate passes the ceiling is warned about, and still opens', async ({
     page,
   }) => {
     expect(fs.existsSync(tier1), `${tier1} is committed`).toBe(true);
     const fileBytes = fs.statSync(tier1).size;
-    // The estimate is ten times the file; a ceiling under it warns.
+    // The estimate is ten times the file; a ceiling under it warns. The real
+    // one is 4 GiB, which a file of this size does not reach.
     const ceiling = fileBytes * 10 - 1;
     await page.goto(`/?memoryCeilingBytes=${ceiling}`);
     await expect(page.locator('#status')).toHaveText(/Ready/);

@@ -317,21 +317,38 @@ file is also held twice in wasm memory: the binding copies `bytes` in, and
 What the viewer does (#1195):
 
 - **Before the decode**, from the file's size alone: it expects the open to need
-  about ten times the file (`PEAK_MEMORY_PER_FILE_BYTE` in `viewer/src/main.ts`),
-  and when that passes 4 GiB (a file over about 410 MiB) the card says the file
-  may be too large, with the estimate and the figure it rests on, and the open
-  goes ahead. It is a warning, never a refusal.
+  at least about ten times the file (`PEAK_MEMORY_PER_FILE_BYTE` in
+  `viewer/src/main.ts`), and when that passes 4 GiB (a file over about 410 MiB)
+  the card says the file may be too large, with the estimate and the figure it
+  rests on, and the open goes ahead. It is a warning, never a refusal, and it
+  can fire on a file that fits (below).
 - **When the instance stops**, the worker decides whether it ran out of memory:
-  a `RuntimeError: unreachable` with no `rvt-rs wasm panic:` line on
-  `console.error` before it, or a panic or engine message that names an
-  allocation (`capacity overflow`, `memory allocation of N bytes failed`, `Array
-  buffer allocation failed`). Any other panic is a bug and keeps its message.
-  It reports the wasm memory the instance had reached and the stage it was in;
-  the page says the model is too large for the browser, how far it got, that
-  a tab holds at most 4 GiB and an open takes about ten times the file, and that
-  `rvt-ifc --large-model`, `rvt-gltf` and the Python package open models of any
-  size. A tab the browser kills outright sends nothing; the page shows an error
-  for a worker that stops.
+  a `RuntimeError` of the trap with no `rvt-rs wasm panic:` line on
+  `console.error` before it (`unreachable` in V8, `unreachable executed` in
+  Firefox, `Unreachable code should not be executed` in Safari, matched as
+  `/unreach/i`), or a panic or engine message that names an allocation
+  (`capacity overflow`, `memory allocation of N bytes failed`, `Array buffer
+  allocation failed`). Any other panic is a bug, and the page shows the panic's
+  own message and nothing about memory. The worker reports the wasm memory the
+  instance had reached, the decoder's last report (so a stop in the stretch it
+  reports nothing in says "building the model") or, once the open call has
+  returned, the worker step it was in, and the engine's own message, which the
+  status panel shows as "Engine message". The worker is ended afterwards.
+- **What the page says of a memory stop** depends on how far the instance got.
+  When it reached half the ceiling, or the file's estimate passes the ceiling,
+  the page says "Too large for the browser": how far it got, that a tab holds at
+  most 4 GiB and an open has taken at least about ten times the file, and what
+  reads a larger file as the code takes it: `rvt-ifc` and `rvt-gltf` with
+  `--large-model` (streams up to 2 GiB, inflating up to 8 GiB, on a machine with
+  the memory), and the Python `RevitFile` with a larger `max_stream_bytes` and
+  `max_inflate_bytes`, which has no `--large-model` preset. When the instance
+  stopped a long way short of the ceiling on a file whose estimate fits, such as
+  a damaged file tripping `capacity overflow` at 60 MiB, a claim that the file
+  needs more memory would be one nothing measured, so the page says "Ran out of
+  memory", that the file may be damaged or may have hit a limit other than the
+  browser's memory, and that running the CLI on it tells which. A tab the
+  browser kills outright sends nothing; the page shows an error for a worker
+  that stops.
 
 The pre-check's figure is measured, not assumed. Deploy viewer's
 `tests/saved-meshes-measure.spec.ts` opens each reference model in a fresh
@@ -352,17 +369,18 @@ before it):
 | Revit_IFC5_Einhoven | 0.9 | 23 | 27 | 9 | 0.37 |
 
 The estimate is under the peak on every model (0.37 to 0.99), tightest on the
-largest, because fixed costs weigh more on a small file. That is the direction
-the warning needs: it says "may not fit" only where even the lowest multiple
-measured, 10, passes the ceiling. The
-multiple falls as files grow, and no model past 32 MiB is in CI. Two
-client models in #1075 are the only larger evidence, and from outside the
-browser: native peaks of 3.7 GB for a 438 MB file (8.4 times, with the stream and
-inflate limits raised) and 5.1 GB for a 1.13 GB file (4.5 times). Both are
-past 4 GiB once wasm's second copy of the file is added, and both are warned
-about (10 times 438 MB is 4.1 GiB); a model of several hundred MiB can sit near
-the line, which is why the estimate warns and the stop is the verdict. The
-size of the file is the basis because the sizes the reader knows before
+largest, because fixed costs weigh more on a small file; "at least about ten
+times" is the lowest multiple measured, and it is the largest model's. The
+multiple falls as files grow (27 times down to 10 across these six), no model
+past 32 MiB is in CI, and the only larger evidence goes the other way: native
+peaks of 3.7 GB for a 438 MB file (8.4 times, with the stream and inflate limits
+raised) and 5.1 GB for a 1.13 GB file (4.5 times), both from #1075 and from
+outside the browser. So the estimate under-counts every small model and may
+over-count a large one: a 438 MB file is warned about (10 times is 4.1 GiB)
+though 8.4 times is 3.4 GiB, and may fit once wasm's second copy of the file is
+added (0.4 GiB more). The warning can therefore fire on a file that fits, which
+is why it is a warning, and the stop is the verdict. The size of the file is the
+basis because the sizes the reader knows before
 inflating add nothing to it: a partition's stored size is nearly all of the
 file (the largest stream is 96% of the 438 MB file and 98% of the 1.13 GB
 one in #1075), and the inflated size is not stored (Revit's truncated gzip has
