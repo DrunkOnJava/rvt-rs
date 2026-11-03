@@ -19,10 +19,12 @@
 //! compiled `.wasm` for those imports and fails the build if any
 //! appear.
 
+use std::cell::RefCell;
+
 use wasm_bindgen::prelude::*;
 
 use rvt::RevitFile;
-use rvt::control::WalkerControl;
+use rvt::control::{ProgressEvent, Stage, WalkerControl};
 use rvt::ifc::{
     ExportQualityMode, ExportResult, IfcModel, RvtDocExporter,
     gltf::model_to_glb,
@@ -78,6 +80,7 @@ pub fn open_rvt_bytes_with_diagnostics_mode(bytes: &[u8], mode: &str) -> Result<
         OpenLimits::default(),
         rvt::walker::WalkerLimits::default(),
         true,
+        None,
     )
 }
 
@@ -106,15 +109,105 @@ pub fn open_rvt_bytes_with_diagnostics_mode(bytes: &[u8], mode: &str) -> Result<
 /// skipped item and a `Not read whole:` warning per stream, #1075), and the
 /// model is missing what it holds. Unknown fields and fractional, negative
 /// or non-finite byte limits throw.
+///
+/// `progress`, when given, is a JS function `(stage, done, total)` called as
+/// the decoder works: `stage` is a [`Stage`] name as `rvt-gltf --progress`
+/// prints it (`schema-parse`, `candidate-scan`, `element-decode`,
+/// `partition-scan`, `saved-graphics`, `saved-meshes`), `done` a count and
+/// `total` the count it is out of, or `null` where the stage has no
+/// denominator yet (#1195). It is called when a stage begins, when it ends,
+/// and each time a stage with a total passes another whole percent, so a
+/// stage costs at most about a hundred calls. An exception it throws is
+/// ignored.
 #[wasm_bindgen(js_name = openRvtBytesWithDiagnosticsModeAndOpenLimits)]
 pub fn open_rvt_bytes_with_diagnostics_mode_and_open_limits(
     bytes: &[u8],
     mode: &str,
     limits: JsValue,
+    progress: Option<js_sys::Function>,
 ) -> Result<JsValue, JsValue> {
     install_panic_hook();
     let (open_limits, walker_limits, saved_meshes) = limits_from_js(limits)?;
-    export_with_limits(bytes, mode, open_limits, walker_limits, saved_meshes)
+    export_with_limits(
+        bytes,
+        mode,
+        open_limits,
+        walker_limits,
+        saved_meshes,
+        progress,
+    )
+}
+
+/// The JS function a decode reports its progress to, and the last report it
+/// forwarded. A `js_sys::Function` is not `Send + Sync`, which
+/// [`WalkerControl::with_progress`] requires, so it sits here, where one
+/// single-threaded wasm instance reads it, and the closure handed to the
+/// control captures nothing.
+struct ProgressSink {
+    callback: js_sys::Function,
+    last: Option<(Stage, Option<u64>)>,
+}
+
+thread_local! {
+    static PROGRESS: RefCell<Option<ProgressSink>> = const { RefCell::new(None) };
+}
+
+/// The control of one decode: reports to `progress` when a function is given
+/// and does nothing otherwise.
+fn progress_control(progress: Option<js_sys::Function>) -> WalkerControl {
+    match progress {
+        Some(callback) => {
+            PROGRESS.with(|slot| {
+                *slot.borrow_mut() = Some(ProgressSink {
+                    callback,
+                    last: None,
+                });
+            });
+            WalkerControl::new().with_progress(forward_progress)
+        }
+        None => WalkerControl::default(),
+    }
+}
+
+fn clear_progress() {
+    PROGRESS.with(|slot| {
+        slot.borrow_mut().take();
+    });
+}
+
+/// Hands `event` to the JS function unless it is a report within the same
+/// whole percent of the same stage as the last one handed over. The decoder
+/// reports each megabyte scanned and every 256th candidate, which the page
+/// has no use for; a stage with no total reports once, when it begins.
+fn forward_progress(event: ProgressEvent) {
+    PROGRESS.with(|slot| {
+        let Ok(mut slot) = slot.try_borrow_mut() else {
+            return;
+        };
+        let Some(sink) = slot.as_mut() else {
+            return;
+        };
+        let percent = event
+            .total
+            .filter(|total| *total > 0)
+            .map(|total| event.done.saturating_mul(100) / total);
+        let finished = event.total.is_some_and(|total| event.done >= total);
+        let same_stage = sink.last.is_some_and(|(stage, _)| stage == event.stage);
+        let same_percent = sink.last.is_some_and(|(_, last)| last == percent);
+        if same_stage && same_percent && !finished {
+            return;
+        }
+        sink.last = Some((event.stage, percent));
+        let total = event
+            .total
+            .map_or(JsValue::NULL, |total| JsValue::from_f64(total as f64));
+        let _ = sink.callback.call3(
+            &JsValue::NULL,
+            &JsValue::from_str(event.stage.as_str()),
+            &JsValue::from_f64(event.done as f64),
+            &total,
+        );
+    });
 }
 
 fn export_with_limits(
@@ -123,14 +216,41 @@ fn export_with_limits(
     open_limits: OpenLimits,
     walker_limits: rvt::walker::WalkerLimits,
     saved_meshes: bool,
+    progress: Option<js_sys::Function>,
+) -> Result<JsValue, JsValue> {
+    let control = progress_control(progress);
+    let result = export_with_control(
+        bytes,
+        mode,
+        open_limits,
+        walker_limits,
+        saved_meshes,
+        &control,
+    );
+    clear_progress();
+    result
+}
+
+fn export_with_control(
+    bytes: &[u8],
+    mode: &str,
+    open_limits: OpenLimits,
+    walker_limits: rvt::walker::WalkerLimits,
+    saved_meshes: bool,
+    control: &WalkerControl,
 ) -> Result<JsValue, JsValue> {
     let quality_mode = ExportQualityMode::parse(mode).map_err(err_str)?;
     let mut rf = RevitFile::open_bytes_with_limits(bytes.to_vec(), open_limits).map_err(err_str)?;
     let mut result = RvtDocExporter
-        .export_with_diagnostics_mode_and_limits(&mut rf, quality_mode, walker_limits)
+        .export_with_diagnostics_mode_limits_and_control(
+            &mut rf,
+            quality_mode,
+            walker_limits,
+            control,
+        )
         .map_err(err_str)?;
     if saved_meshes {
-        attach_saved_meshes(&mut rf, &mut result);
+        attach_saved_meshes(&mut rf, &mut result, control);
     }
     serde_wasm_bindgen::to_value(&result).map_err(err_str)
 }
@@ -140,16 +260,12 @@ fn export_with_limits(
 /// 2027 only), and recount its diagnostics. Saved graphics only improve
 /// bodies: when they cannot be read the model keeps its bounding boxes and the
 /// diagnostics carry a warning saying so.
-fn attach_saved_meshes(rf: &mut RevitFile, result: &mut ExportResult) {
+fn attach_saved_meshes(rf: &mut RevitFile, result: &mut ExportResult, control: &WalkerControl) {
     let Some(scope) = rvt::ifc::saved_meshes::default_scope(rf) else {
         return;
     };
-    match rvt::ifc::saved_meshes::attach_scoped_with_control(
-        rf,
-        &mut result.model,
-        scope,
-        &WalkerControl::default(),
-    ) {
+    match rvt::ifc::saved_meshes::attach_scoped_with_control(rf, &mut result.model, scope, control)
+    {
         Ok(_) => rvt::ifc::recount_exported(&mut result.diagnostics, &result.model),
         Err(e) => result.diagnostics.warnings.push(format!(
             "Saved graphics not read, door and window bodies unchanged: {e}"

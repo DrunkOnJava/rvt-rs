@@ -10,6 +10,14 @@
  *                  defaults (the large-model retry sends `largeModel: true`).
  *   main → worker: { type: 'info', index: number }
  *   worker → main: { type: 'progress', step: string }
+ *   worker → main: { type: 'stage', stage, done, total, wasmMemoryBytes } (#1195)
+ *                  the decoder's own progress, as `rvt-gltf --progress` prints
+ *                  it: `stage` is schema-parse, candidate-scan, element-decode,
+ *                  partition-scan, saved-graphics or saved-meshes, `done` and
+ *                  `total` are counts (`total` null while the stage has none),
+ *                  and `wasmMemoryBytes` is the wasm linear memory at that
+ *                  moment. The decoder reports a stage when it begins, when it
+ *                  ends and once per whole percent in between.
  *   worker → main: { type: 'summary', summary, document } (VW1-20 partial;
  *                   `document` is the FileMetadata or null)
  *   worker → main: { type: 'ready', model, scene, glb, types, diagnostics, stats }
@@ -19,7 +27,10 @@
  *                  which only grows, so it is the peak against the 4 GiB a tab
  *                  can hold.
  *   worker → main: { type: 'info', index, panel }
- *   worker → main: { type: 'error', message: string }
+ *   worker → main: { type: 'error', message: string, tooLarge?: TooLarge }
+ *                  `tooLarge` is set when the failure is the wasm instance
+ *                  running out of memory (see `outOfMemory`), with what the
+ *                  worker knew when it stopped.
  */
 
 import init, {
@@ -41,6 +52,16 @@ interface OpenLimitsOptions {
   savedMeshes?: boolean;
 }
 
+/** What the worker reports when a decode stops for want of memory. */
+interface TooLarge {
+  /** The wasm linear memory when it stopped: how far the decode got. */
+  wasmMemoryBytes: number;
+  /** The decoder stage it was in, or null before the first report. */
+  stage: string | null;
+  /** The raw message of the failure, for the diagnostics. */
+  detail: string;
+}
+
 type ParseMsg =
   | { type: 'parse'; bytes: Uint8Array; mode?: string; limits?: OpenLimitsOptions }
   | { type: 'info'; index: number };
@@ -48,6 +69,40 @@ type ParseMsg =
 // Retained so `info` requests can re-run element_info_panel (host /
 // hosted relationships, M4-04) without shipping a panel per element.
 let parsedModel: unknown = null;
+
+// The panic hook the bindings install writes `rvt-rs wasm panic: <info>` to
+// `console.error` before the trap. A trap with none of those first is not a
+// panic: an allocation the wasm memory could not grow to hold aborts the
+// instance without running the hook, and reaches here as a bare
+// `RuntimeError: unreachable`.
+const PANIC_PREFIX = 'rvt-rs wasm panic:';
+let lastPanic: string | null = null;
+const nativeConsoleError = console.error.bind(console);
+console.error = (...args: unknown[]): void => {
+  const first = args[0];
+  if (typeof first === 'string' && first.startsWith(PANIC_PREFIX)) lastPanic = first;
+  nativeConsoleError(...args);
+};
+
+/** Panic messages and engine errors that mean an allocation could not be made. */
+const OUT_OF_MEMORY_MESSAGE =
+  /capacity overflow|memory allocation of \d+ bytes failed|out of memory|cannot allocate|array buffer allocation failed|invalid (typed )?array length|maximum memory size exceeded|invalid string length/i;
+
+/**
+ * True when `err` is the wasm instance, or the engine around it, running out
+ * of memory. wasm32 holds at most 4 GiB, a `Vec` at most 2 GiB, and a failed
+ * allocation aborts without a message, so the evidence is: a bare
+ * `unreachable` trap with no panic message before it, or a message that names
+ * an allocation. Any other panic is a bug and keeps its message.
+ */
+function outOfMemory(err: unknown, panic: string | null): boolean {
+  const message = err instanceof Error ? err.message : String(err);
+  if (panic !== null) return OUT_OF_MEMORY_MESSAGE.test(panic);
+  if (err instanceof WebAssembly.RuntimeError) {
+    return message === 'unreachable' || OUT_OF_MEMORY_MESSAGE.test(message);
+  }
+  return OUT_OF_MEMORY_MESSAGE.test(message) && !(err instanceof TypeError);
+}
 
 // DedicatedWorkerGlobalScope.postMessage has a slightly shifty
 // TS signature across lib.dom.d.ts versions — strictly-typed
@@ -77,10 +132,14 @@ self.addEventListener('message', async (ev: MessageEvent<ParseMsg>) => {
   }
   if (msg.type !== 'parse') return;
 
+  let wasmMemory: WebAssembly.Memory | null = null;
+  let currentStage: string | null = null;
   try {
     send({ type: 'progress', step: 'Initializing wasm' });
     const startedAt = performance.now();
     const wasm = await init();
+    wasmMemory = wasm.memory;
+    lastPanic = null;
 
     // VW1-20 — progressive streaming. Emit the cheap metadata
     // first (sub-second even on hundreds-of-MB files) so the UI
@@ -105,10 +164,15 @@ self.addEventListener('message', async (ev: MessageEvent<ParseMsg>) => {
       step: `Parsing container · IFC bar ${qualityMode}${limitsNote}${meshesNote}`,
     });
     const openStartedAt = performance.now();
+    const onStage = (stage: string, done: number, total: number | null): void => {
+      currentStage = stage;
+      send({ type: 'stage', stage, done, total, wasmMemoryBytes: wasm.memory.buffer.byteLength });
+    };
     const exportResult = openRvtBytesWithDiagnosticsModeAndOpenLimits(
       msg.bytes,
       qualityMode,
       msg.limits ?? null,
+      onStage,
     ) as {
       model: unknown;
       diagnostics: unknown;
@@ -152,6 +216,15 @@ self.addEventListener('message', async (ev: MessageEvent<ParseMsg>) => {
     );
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
+    if (outOfMemory(err, lastPanic)) {
+      const tooLarge: TooLarge = {
+        wasmMemoryBytes: wasmMemory?.buffer.byteLength ?? 0,
+        stage: currentStage,
+        detail: lastPanic ?? message,
+      };
+      send({ type: 'error', message, tooLarge });
+      return;
+    }
     send({ type: 'error', message });
   }
 });

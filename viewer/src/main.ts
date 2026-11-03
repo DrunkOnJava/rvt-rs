@@ -55,7 +55,10 @@ const loadOverlayEl = $('load-overlay');
 const loadStepEl = $('load-step');
 const loadElapsedEl = $('load-elapsed');
 const loadHintEl = $('load-hint');
+const loadRailEl = $('load-rail');
+const loadWarningEl = $('load-warning');
 const scaffoldNoteEl = $('scaffold-note');
+const scaffoldNoteTitleEl = $('scaffold-note-title');
 const scaffoldNoteBodyEl = $('scaffold-note-body');
 const showRealProjectsBtn = $('show-real-projects') as HTMLButtonElement;
 const dismissScaffoldNoteBtn = $('dismiss-scaffold-note') as HTMLButtonElement;
@@ -425,12 +428,11 @@ function toast(message: string, kind: ToastKind = 'info'): void {
 
 // ---------- Viewport loading treatment ----------
 /**
- * Observed decode throughput across the staged demos: since the
- * partition streams are inflated once per file (#266) the 33.7 MB
- * project decodes in about 3 s in the browser, measured on the deployed
- * site. Only ever used to set an expectation — the decoder cannot report
- * real progress, so the bar stays indeterminate rather than faking a
- * percentage.
+ * What the loading card says before the decoder has reported anything, and
+ * all it says for a file whose stages are too quick to show: the throughput
+ * observed when the 33.7 MB project decoded in about 3 s on the deployed site
+ * (a laptop's; Deploy viewer's runner takes about 24 s for it). Once the
+ * decoder reports a stage (#1195) the card shows that stage's own counts.
  */
 const DECODE_BYTES_PER_SECOND = 11e6;
 
@@ -442,15 +444,157 @@ function loadExpectation(bytes: number): string {
   return `${size}, about ${seconds} s`;
 }
 
+/** The most memory a wasm32 instance can address, and so a tab can give the decoder. */
+const WASM32_CEILING_BYTES = 4 * 2 ** 30;
+
+/**
+ * The memory an open takes, per byte of the file, as the figure to warn with:
+ * Core Interior, the largest reference model (32 MiB), peaks at 324 MiB, 10.1
+ * times, and the smaller ones need 13 to 25 times (#1150, and the estimate
+ * columns of tests/saved-meshes-measure.spec.ts). Models of hundreds of MiB
+ * have been seen to need less per byte natively (#1075), so this is the floor
+ * of what was measured, not a promise of what a large model takes.
+ */
+const PEAK_MEMORY_PER_FILE_BYTE = 10;
+
+/** `?memoryCeilingBytes=` lowers the ceiling the warning compares with, for the browser test; a browser capped the same way (V8's `--wasm-max-mem-pages`) then really stops there. */
+const memoryCeilingBytes =
+  wholeBytesParam(new URLSearchParams(window.location.search), 'memoryCeilingBytes') ??
+  WASM32_CEILING_BYTES;
+
+function estimatePeakBytes(fileBytes: number): number {
+  return fileBytes * PEAK_MEMORY_PER_FILE_BYTE;
+}
+
+/** Memory in the binary units the 4 GiB ceiling is spoken in. */
+function formatMemory(bytes: number): string {
+  const trim = (value: number): number => Number(value.toFixed(1));
+  if (bytes >= 2 ** 30) return `${trim(bytes / 2 ** 30)} GiB`;
+  if (bytes >= 2 ** 20) return `${trim(bytes / 2 ** 20)} MiB`;
+  return `${trim(bytes / 2 ** 10)} KiB`;
+}
+
+/** The decoder's stages (`rvt::control::Stage`) as the card names them, and how it counts each. */
+const DECODE_STAGES: Record<string, { label: string; count: (done: number, total: number) => string }> = {
+  'schema-parse': { label: 'Reading the schema', count: () => '' },
+  'candidate-scan': {
+    label: 'Scanning for elements',
+    count: (done, total) => `${formatMemory(done)} of ${formatMemory(total)}`,
+  },
+  'element-decode': {
+    label: 'Decoding elements',
+    count: (done, total) =>
+      `${done.toLocaleString('en-US')} of ${total.toLocaleString('en-US')} candidates`,
+  },
+  'partition-scan': {
+    label: 'Reading partition streams',
+    count: (done, total) => `${done} of ${total} streams`,
+  },
+  'saved-graphics': { label: 'Reading saved graphics', count: () => '' },
+  'saved-meshes': {
+    label: 'Drawing doors and windows from saved meshes',
+    count: (done, total) => `${done.toLocaleString('en-US')} of ${total.toLocaleString('en-US')} elements`,
+  },
+};
+
+/**
+ * What the decoder is doing after these stages end, when it reports nothing
+ * until the next one: the walk's last stage hands over to building the
+ * model, and the saved meshes to the diagnostics and the copy out of wasm.
+ */
+const AFTER_STAGE: Record<string, string> = {
+  'partition-scan': 'Building the model',
+  'saved-meshes': 'Finishing the model',
+};
+
+/** One thing the worker told the card, with the milliseconds since the open began. */
+interface LoadEvent {
+  t: number;
+  stage?: string;
+  done?: number;
+  total?: number | null;
+  /** The wasm linear memory at that moment. */
+  memoryBytes?: number;
+  step?: string;
+}
+
 let loadStartedAt = 0;
 let loadTimer: number | null = null;
+let loadEvents: LoadEvent[] = [];
+let loadStage: string | null = null;
+let loadMemoryWarned = false;
+
+/** A determinate bar at `fraction`, or the indeterminate sweep for null. */
+function setLoadFraction(fraction: number | null): void {
+  if (fraction === null) {
+    loadRailEl.classList.remove('is-determinate');
+    loadRailEl.style.removeProperty('--load-fraction');
+    loadRailEl.removeAttribute('aria-valuenow');
+    return;
+  }
+  const clamped = Math.min(1, Math.max(0, fraction));
+  loadRailEl.classList.add('is-determinate');
+  loadRailEl.style.setProperty('--load-fraction', clamped.toFixed(3));
+  loadRailEl.setAttribute('aria-valuenow', String(Math.round(clamped * 100)));
+}
+
+/**
+ * The decoder reported `done` of `total` in `stage`. The bar is determinate
+ * while the stage has a count to be a fraction of (a stage that reports 0 and
+ * then 1 of 1 has none), and sweeps otherwise.
+ */
+function onDecodeStage(stage: string, done: number, total: number | null, memoryBytes: number): void {
+  loadEvents.push({ t: Math.round(performance.now() - loadStartedAt), stage, done, total, memoryBytes });
+  const info = DECODE_STAGES[stage];
+  const finished = total !== null && done >= total;
+  const after = finished ? AFTER_STAGE[stage] : undefined;
+  const step = after ?? info?.label ?? stage;
+  const counted = !after && total !== null && total > 1;
+  setLoadStep(step);
+  setLoadFraction(counted ? done / total : null);
+  loadHintEl.textContent =
+    counted && info
+      ? [`${Math.round((done / total) * 100)}%`, info.count(done, total)].filter(Boolean).join(' · ')
+      : '';
+  // #status is a live region: say a stage once, not each percent of it.
+  if (stage !== loadStage || after) setStatus(step);
+  loadStage = stage;
+}
+
+/** What the worker said, kept on #status for tests/load-progress.spec.ts and the measurement. */
+function saveLoadEvents(): void {
+  statusEl.dataset.loadProgress = JSON.stringify(loadEvents);
+}
+
+/**
+ * Says before the decode when the file is likely to need more memory than a
+ * tab has (#1195). It is an estimate from the file's size alone, so it
+ * warns and the open goes ahead; the worker reports the real stop.
+ */
+function showMemoryWarning(file: File): void {
+  const estimate = estimatePeakBytes(file.size);
+  loadMemoryWarned = estimate >= memoryCeilingBytes;
+  loadWarningEl.classList.toggle('hidden', !loadMemoryWarned);
+  if (!loadMemoryWarned) return;
+  loadWarningEl.textContent =
+    `This file may be too large for the browser. Opening a file takes about ${PEAK_MEMORY_PER_FILE_BYTE} times its size in memory ` +
+    `(measured on the largest reference model), so about ${formatMemory(estimate)} for ${formatMemory(file.size)}, ` +
+    `past the ${formatMemory(memoryCeilingBytes)} a browser tab can hold. It is tried anyway; ` +
+    'rvt-ifc and rvt-gltf open models of any size.';
+  toast(`${file.name} may be too large for the browser. Trying anyway.`, 'info');
+}
 
 function startLoadOverlay(file: File): void {
   loadStartedAt = performance.now();
+  loadEvents = [];
+  loadStage = null;
+  delete statusEl.dataset.loadProgress;
+  setLoadFraction(null);
   loadStepEl.textContent = `Opening ${file.name}`;
   loadHintEl.textContent = loadExpectation(file.size);
   loadElapsedEl.textContent = '0 s elapsed';
   loadOverlayEl.classList.remove('hidden');
+  showMemoryWarning(file);
   // The option applies to the read in progress; a change reopens the file.
   savedMeshesEl.disabled = true;
   setStatusBusy(true);
@@ -471,6 +615,7 @@ function stopLoadOverlay(): void {
     loadTimer = null;
   }
   loadOverlayEl.classList.add('hidden');
+  loadWarningEl.classList.add('hidden');
   savedMeshesEl.disabled = false;
   setStatusBusy(false);
 }
@@ -491,6 +636,7 @@ function maybeShowScaffoldNote(diagnostics: ExportDiagnostics): void {
     hideScaffoldNote();
     return;
   }
+  scaffoldNoteTitleEl.textContent = 'Nothing to draw';
   if (unreadStreamCount(diagnostics) > 0) {
     scaffoldNoteBodyEl.textContent = largeModelRetryOffered(diagnostics)
       ? 'Part of the file was not read, so the model is missing what those streams hold. The File status panel can retry with large-model limits.'
@@ -808,6 +954,13 @@ let currentFile: File | null = null;
 let currentOpenLimits: OpenLimitsOptions | undefined;
 
 // ---------- Load flow ----------
+/** What the worker knew when a decode stopped for want of memory (worker.ts). */
+interface TooLarge {
+  wasmMemoryBytes: number;
+  stage: string | null;
+  detail: string;
+}
+
 /** What the worker reports about one open (worker.ts). */
 interface LoadStats {
   /** Milliseconds in the wasm open call, saved meshes included. */
@@ -825,6 +978,7 @@ async function loadBytes(file: File, limits?: OpenLimitsOptions): Promise<void> 
   currentFile = file;
   currentOpenLimits = openLimits;
   delete statusEl.dataset.loadStats;
+  delete statusEl.dataset.loadFailure;
   setStatus(
     openLimits?.largeModel
       ? `Reopening ${file.name} with large-model limits…`
@@ -877,9 +1031,26 @@ async function loadBytes(file: File, limits?: OpenLimitsOptions): Promise<void> 
 
   currentDocument = null;
   const w = resetWorker();
+  // A worker the browser stopped sends nothing: say so rather than leave the
+  // loading card up.
+  const workerStopped = (detail: string): void => {
+    if (worker !== w) return;
+    failLoad(file, `The browser stopped the worker that reads the file${detail}.`);
+  };
+  w.addEventListener('error', (ev: ErrorEvent) => {
+    workerStopped(ev.message ? `: ${ev.message}` : ' (it may have run out of memory)');
+  });
+  w.addEventListener('messageerror', () => workerStopped(' while it returned the model'));
   w.addEventListener('message', (ev: MessageEvent<unknown>) => {
     const msg = ev.data as
       | { type: 'progress'; step: string }
+      | {
+          type: 'stage';
+          stage: string;
+          done: number;
+          total: number | null;
+          wasmMemoryBytes: number;
+        }
       | {
           type: 'summary';
           summary: { version: number; build?: string; guid?: string; class_name_count?: number };
@@ -896,7 +1067,7 @@ async function loadBytes(file: File, limits?: OpenLimitsOptions): Promise<void> 
           stats: LoadStats;
         }
       | { type: 'info'; index: number; panel: ElementInfoPanel | null }
-      | { type: 'error'; message: string };
+      | { type: 'error'; message: string; tooLarge?: TooLarge };
     if (msg.type === 'info') {
       // Stale reply for an element the user already clicked past.
       if (msg.index !== pendingInfoIndex) return;
@@ -904,7 +1075,15 @@ async function loadBytes(file: File, limits?: OpenLimitsOptions): Promise<void> 
       else renderScaffoldPanel(msg.index);
       return;
     }
+    if (msg.type === 'stage') {
+      onDecodeStage(msg.stage, msg.done, msg.total, msg.wasmMemoryBytes);
+      return;
+    }
     if (msg.type === 'progress') {
+      loadEvents.push({ t: Math.round(performance.now() - loadStartedAt), step: msg.step });
+      // The steps after the decode count nothing, so the bar sweeps again.
+      setLoadFraction(null);
+      loadHintEl.textContent = '';
       setStatus(msg.step);
       setLoadStep(msg.step);
       return;
@@ -927,19 +1106,18 @@ async function loadBytes(file: File, limits?: OpenLimitsOptions): Promise<void> 
       return;
     }
     if (msg.type === 'error') {
+      if (msg.tooLarge) {
+        showTooLarge(file, msg.tooLarge);
+        return;
+      }
       // The large-model limits stop at the tab's memory, not at a limit the
       // reader can lift, so say what the failure most likely is.
-      const detail = openLimits?.largeModel
-        ? `${msg.message} A browser tab can use at most 4 GiB of memory, so this file may be too large to open here.`
-        : msg.message;
-      stopLoadOverlay();
-      clearDemoCardBusy();
-      setStatus(`Error: ${detail}`);
-      renderErrorStatusPanel(detail);
-      hideScaffoldNote();
-      setDropzoneVisible(true);
-      setExportHint('Open a file to export');
-      toast(`Could not open ${file.name}. ${detail}`, 'bad');
+      failLoad(
+        file,
+        openLimits?.largeModel
+          ? `${msg.message} A browser tab can use at most 4 GiB of memory, so this file may be too large to open here.`
+          : msg.message,
+      );
       return;
     }
     model = msg.model;
@@ -972,7 +1150,10 @@ async function loadBytes(file: File, limits?: OpenLimitsOptions): Promise<void> 
     statusEl.dataset.loadStats = JSON.stringify({
       ...msg.stats,
       loadMs: Math.round(performance.now() - loadStartedAt),
+      estimatedPeakBytes: estimatePeakBytes(file.size),
+      memoryWarning: loadMemoryWarned,
     });
+    saveLoadEvents();
     setStatus(`Loaded · ${msg.types.length} categories · IFC bar ${qualityMode}`);
     stopLoadOverlay();
     clearDemoCardBusy();
@@ -984,6 +1165,53 @@ async function loadBytes(file: File, limits?: OpenLimitsOptions): Promise<void> 
     { type: 'parse', bytes, mode: qualityMode, limits: { ...openLimits, savedMeshes } },
     [bytes.buffer],
   );
+}
+
+/** The card, the status line, the panel and a toast for a file that did not open. */
+function failLoad(file: File, detail: string): void {
+  stopLoadOverlay();
+  clearDemoCardBusy();
+  saveLoadEvents();
+  setStatus(`Error: ${detail}`);
+  renderErrorStatusPanel(detail);
+  hideScaffoldNote();
+  setDropzoneVisible(true);
+  setExportHint('Open a file to export');
+  toast(`Could not open ${file.name}. ${detail}`, 'bad');
+}
+
+/**
+ * The decode stopped for want of memory (#1195): wasm32 holds at most 4 GiB,
+ * and a failed allocation ends the instance with a bare `unreachable`. Says
+ * that plainly, with how far it got, and what opens a model of any size.
+ */
+function showTooLarge(file: File, tooLarge: TooLarge): void {
+  const reached = formatMemory(tooLarge.wasmMemoryBytes);
+  const stage = tooLarge.stage ? DECODE_STAGES[tooLarge.stage]?.label.toLowerCase() : undefined;
+  const where = stage ? `, while ${stage},` : '';
+  const summary =
+    tooLarge.wasmMemoryBytes > 0
+      ? `The browser would not give this tab more than ${reached}${where} and ${file.name} (${formatBytes(file.size)}) needs more.`
+      : `The browser did not have the memory to start the decoder for ${file.name} (${formatBytes(file.size)}).`;
+  const advice =
+    `A browser tab can hold at most ${formatMemory(memoryCeilingBytes)}, and opening a file takes about ${PEAK_MEMORY_PER_FILE_BYTE} times its size. ` +
+    'The command-line tools read models of any size: rvt-ifc with --large-model writes the IFC, rvt-gltf the glTF, and the Python package opens the same files.';
+  stopLoadOverlay();
+  clearDemoCardBusy();
+  saveLoadEvents();
+  statusEl.dataset.loadFailure = 'too-large';
+  setStatus(`Too large for the browser · stopped at ${reached}`);
+  renderErrorStatusPanel(
+    summary,
+    'Too large for the browser',
+    `Not decoded · the tab ran out of memory at ${reached}`,
+  );
+  scaffoldNoteTitleEl.textContent = 'Too large for the browser';
+  scaffoldNoteBodyEl.textContent = `${summary} ${advice}`;
+  scaffoldNoteEl.classList.remove('hidden');
+  setDropzoneVisible(true);
+  setExportHint('Open a file to export');
+  toast(`${file.name} is too large for the browser. rvt-ifc and rvt-gltf can open it.`, 'bad');
 }
 
 function renderEmptyStatusPanel(): void {
@@ -1015,17 +1243,15 @@ function renderLoadingStatusPanel(filename: string): void {
   statusPanelEl.appendChild(statusRow('Warnings', 'ok', 'No export warnings'));
 }
 
-function renderErrorStatusPanel(message: string): void {
+function renderErrorStatusPanel(
+  message: string,
+  fileText = 'Could not open file',
+  modeText = 'Corrupt or unreadable file · not a readable Revit OLE/CFB container',
+): void {
   statusPanelEl.innerHTML = '';
   resetStatusRowStagger();
-  statusPanelEl.appendChild(statusRow('File', 'bad', 'Could not open file'));
-  statusPanelEl.appendChild(
-    statusRow(
-      'Mode',
-      'bad',
-      'Corrupt or unreadable file · not a readable Revit OLE/CFB container',
-    ),
-  );
+  statusPanelEl.appendChild(statusRow('File', 'bad', fileText));
+  statusPanelEl.appendChild(statusRow('Mode', 'bad', modeText));
   statusPanelEl.appendChild(statusRow('Schema', 'warn', 'Not parsed'));
   statusPanelEl.appendChild(statusRow('Elements', 'warn', 'Not decoded'));
   statusPanelEl.appendChild(statusRow('Geometry', 'warn', 'Not decoded'));

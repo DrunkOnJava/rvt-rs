@@ -119,26 +119,36 @@
           </div>
         </div>
         <!--
-          Loading treatment. Visually indeterminate (no fake percentage —
-          the decoder cannot report one), but it carries elapsed seconds
-          and a size-derived expectation so a long decode reads as work,
-          not as a hang. aria-hidden because #status already announces
-          every worker step on the same polite channel.
+          Loading treatment. The bar sweeps until the decoder reports a stage
+          with a count (rvt::control::Stage, #1195), then fills with that
+          stage's own progress and names it; the elapsed seconds and the
+          size-derived expectation stay as the fallback before the first
+          report. A file likely to need more memory than a tab has says so
+          here before the decode. aria-hidden because #status already
+          announces every stage on the same polite channel.
         -->
         <div id="load-overlay" class="hidden" aria-hidden="true">
           <div class="load-card">
             <div id="load-step">Opening file</div>
-            <div class="sweep-rail"></div>
+            <div
+              id="load-rail"
+              class="sweep-rail"
+              role="progressbar"
+              aria-label="Decoding progress"
+              aria-valuemin="0"
+              aria-valuemax="100"
+            ></div>
             <div id="load-metrics">
               <span id="load-elapsed">0 s elapsed</span>
               <span id="load-hint"></span>
             </div>
+            <div id="load-warning" class="hidden" role="note"></div>
             <div class="load-privacy">Parsed in this tab. Nothing is uploaded.</div>
           </div>
         </div>
         <div id="scaffold-note" class="hidden">
           <div class="note-card" role="note">
-            <div class="note-title">Nothing to draw</div>
+            <div class="note-title" id="scaffold-note-title">Nothing to draw</div>
             <p id="scaffold-note-body"></p>
             <div class="note-actions">
               <button class="note-btn" id="show-real-projects" type="button">
