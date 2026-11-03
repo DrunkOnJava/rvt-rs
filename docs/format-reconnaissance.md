@@ -2244,13 +2244,13 @@ Revit's export writes a floor's `Qto_SlabBaseQuantities.NetVolume` as the volume
 
 Revit's export writes a floor's `Qto_SlabBaseQuantities.GrossArea` as the area of the profile its slab extrudes, its sketch outline less its holes: equal to rvt-rs's profile on all 40 of the BIM4LCA office's slabs drawn from their record box, where the slab's other quantities follow its body less often (a sloped slab's record box is deeper than its layers). Stair landings' slabs get none. rvt-rs writes it on each floor drawn as one extrusion: 31 equal on the office, none different. Report: `reports/element-framing/RE-249-slab-gross-area.md`.
 
-## Addendum — RE-305 a cylinder face trimmed by several loops (2026-11-03)
-
-A cylinder face's loops after its first are holes. Meshed with them, 30 more BIM4LCA office bodies are drawn from their saved meshes, all `Stay_Wall_Mounted_:VAR-1` and none Revit's body: 1.109 to 1.120 of its volume, the extra surface in two of five shells, the signature of RE-302's toilets. So the change stays off `main`. Report: `reports/element-framing/RE-305-cylinder-holes.md`.
-
 ## Addendum — RE-304 a cylinder face trimmed by any loop (2026-11-03)
 
 A saved cylinder face whose trim loop does not run round its UV box (a door's curved faces, cut by its leaf and frame) is meshed in strips across its angle: the cylinder is straight along its axis, so only U needs the chord bound. 155 more BIM4LCA office doors are then drawn from their saved meshes, 151 exact to 0.001 ft against Revit's export and all within 0.01 ft. Report: `reports/element-framing/RE-304-cylinder-trims.md`.
+
+## Addendum — RE-305 a cylinder face trimmed by several loops (2026-11-03)
+
+A cylinder face's loops after its first are holes. Meshed with them, 30 more BIM4LCA office bodies are drawn from their saved meshes, all `Stay_Wall_Mounted_:VAR-1` and none Revit's body: 1.109 to 1.120 of its volume, the extra surface in two of five shells, the signature of RE-302's toilets. So the change stays off `main`. Report: `reports/element-framing/RE-305-cylinder-holes.md`.
 
 ## Addendum — RE-303 a saved flip control (2026-11-03)
 
