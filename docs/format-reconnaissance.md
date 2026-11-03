@@ -2254,7 +2254,7 @@ A saved cylinder face whose trim loop does not run round its UV box (a door's cu
 
 ## Addendum — RE-306 why a beam keeps its record box (2026-11-03)
 
-A beam is drawn along its location line only where its element data holds one line that fits its record box (RE-49); since RE-216 a beam whose copies in different partitions hold different lines keeps its box. On the 2024 samples, Core Interior and the BIM4LCA office, every boxed beam has one line its box rejects, or none (19 on Snowdon Towers structural, 25 on rst basic, 9 on rac advanced), and none has disagreeing copies. `probe_re306_beam_copies` is for #1247's 341 boxed beams. Report: `reports/element-framing/RE-306-boxed-beams.md`.
+A beam is drawn along its location line only where its element data holds one line that fits its record box (RE-49); a beam whose copies in different partitions hold different lines keeps its box, as in v0.6.1. On the 2024 samples every boxed beam has one line its box rejects, or none (19 on Snowdon Towers structural, 25 on rst basic, 9 on rac advanced), and none has disagreeing copies; Core Interior and the BIM4LCA office have no boxed beam. `probe_re306_beam_copies` is for #1247's 341 boxed beams. Report: `reports/element-framing/RE-306-boxed-beams.md`.
 
 ## Addendum — RE-305 a cylinder face trimmed by several loops (2026-11-03)
 

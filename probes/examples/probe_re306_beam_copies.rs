@@ -3,15 +3,16 @@
 //! FACT under test: a structural-framing element is drawn along its location
 //! line only where `partition_beam_axes::scan_bounded_lines` finds one line
 //! for it and `beam_body` builds a solid from that line and its record box
-//! (RE-49). Since RE-216 an element whose copies of its element data in
-//! different partitions hold different lines gets none, and keeps its box.
-//! #1247 reports 341 beams of a Revit 2024 project drawn as boxes where
-//! v0.6.1, before RE-216, drew them. This sorts every beam the default export
-//! draws as its record box by what the line scan finds for it:
+//! (RE-49). An element whose copies of its element data in different
+//! partitions hold different lines gets none (`Copies::Agreeing`, as in
+//! v0.6.1 already), and keeps its box. #1247 reports 341 beams of a Revit
+//! 2024 project drawn as boxes in v0.12.0 where v0.6.1 drew their shape. This
+//! sorts every beam the default export draws as its record box by what the
+//! line scan finds for it:
 //! - `no_data`: no partition's element data names it;
 //! - `no_line`: its element data holds no bounded line;
 //! - `one_line`: its copies hold one line, so `beam_body` rejected it;
-//! - `disagree`: its copies hold different lines, and RE-216 drops it.
+//! - `disagree`: its copies hold different lines, and `Copies::Agreeing` drops it.
 //!
 //! For `disagree` it also counts the beams whose current partition
 //! (`native_document::current_partitions`) holds one line, as RE-216's
