@@ -2250,7 +2250,7 @@ A saved cylinder face whose trim loop does not run round its UV box (a door's cu
 
 ## Addendum — RE-305 a cylinder face trimmed by several loops (2026-11-03)
 
-A cylinder face's loops after its first are holes. Meshed with them, 30 more BIM4LCA office bodies are drawn from their saved meshes, all `Stay_Wall_Mounted_:VAR-1` and none Revit's body: 1.109 to 1.120 of its volume, the extra surface in two of five shells, the signature of RE-302's toilets. So the change stays off `main`. Report: `reports/element-framing/RE-305-cylinder-holes.md`.
+A loop inside another of a cylinder face's loops is a hole. Meshed with them, 30 more BIM4LCA office bodies are drawn from their saved meshes, all `Stay_Wall_Mounted_:VAR-1` and none Revit's body: 1.109 to 1.120 of its volume where the scorer lists them, the extra surface in three of five shells, as on RE-302's toilets, with no shared cause shown. So the change stays off `main`. Report: `reports/element-framing/RE-305-cylinder-holes.md`.
 
 ## Addendum — RE-303 a saved flip control (2026-11-03)
 
