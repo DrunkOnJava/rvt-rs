@@ -567,16 +567,16 @@ pub fn faces_form_prism(faces: &[RoomFace], bbox: [f64; 6]) -> bool {
 
 /// Whether the room's solids whose headers are at `headers` that give an
 /// outline against `bbox` ([`outline_of_solids`]) are all prisms of it
-/// ([`faces_form_prism`]), and at least one gives an outline.
+/// ([`faces_form_prism`]), and at least one gives an outline. An outline
+/// resolved from the faces up to the next solid's tag (RE-316) is never a
+/// prism here: no room's volume is measured against Revit's for them yet.
 pub fn prism_of_solids(buf: &[u8], headers: &[usize], bbox: [f64; 6]) -> bool {
     let mut found = false;
     for &at in headers {
         let Some((_, faces, resolved)) = outline_with_faces(buf, at, bbox) else {
             continue;
         };
-        if !faces_form_prism(&faces, bbox)
-            || (resolved && faces.iter().any(|face| face.cylinder.is_some()))
-        {
+        if resolved || !faces_form_prism(&faces, bbox) {
             return false;
         }
         found = true;
