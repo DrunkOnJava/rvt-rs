@@ -325,6 +325,11 @@ fn area_property_set(decoded: &DecodedElement) -> PropertySet {
             ),
         });
     }
+    // RE-313: an Area is written without a body, so without an outline.
+    properties.push(Property {
+        name: SPACE_OUTLINE_SOURCE_PROPERTY.into(),
+        value: PropertyValue::Text(SPACE_OUTLINE_NONE.into()),
+    });
     PropertySet {
         name: ELEMENT_RECORD_PROPERTY_SET.into(),
         properties,
@@ -4161,6 +4166,35 @@ pub const WALL_TOP_COVER_BODY_HEIGHT_SOURCE: &str = "wall_top_cut_at_covering_fl
 /// no carrier refines it (#409).
 pub const RECORD_BBOX_BODY_SOURCE: &str = "partition_element_record_bbox";
 
+/// Property of an `IfcSpace`'s [`ELEMENT_RECORD_PROPERTY_SET`] saying where its
+/// outline, and so the plan area of its body, came from (RE-313). A room's
+/// `BodySource` stays [`RECORD_BBOX_BODY_SOURCE`] even when its outline was
+/// read from the room's stored solid, because the placement and the height
+/// are the record box's; this property is the one to read.
+pub const SPACE_OUTLINE_SOURCE_PROPERTY: &str = "SpaceOutlineSource";
+
+/// [`SPACE_OUTLINE_SOURCE_PROPERTY`] of a room whose outline was read from the
+/// faces of its stored solid.
+pub const SPACE_OUTLINE_STORED_SOLID: &str = "stored_solid";
+
+/// [`SPACE_OUTLINE_SOURCE_PROPERTY`] of a space drawn as its record's bounding
+/// box (a room whose outline was not read, a Revit Space or a family instance
+/// written as a space): placed and sized by the box, its plan area the box's,
+/// not the space's.
+pub const SPACE_OUTLINE_RECORD_BOX: &str = "record_box";
+
+/// [`SPACE_OUTLINE_SOURCE_PROPERTY`] of a room drawn from the mesh Revit saved
+/// for it (`rvt-ifc --saved-meshes`).
+pub const SPACE_OUTLINE_SAVED_MESH: &str = "saved_mesh";
+
+/// [`SPACE_OUTLINE_SOURCE_PROPERTY`] of an Area, which has no body.
+pub const SPACE_OUTLINE_NONE: &str = "none";
+
+/// [`SPACE_OUTLINE_SOURCE_PROPERTY`] of a Revit Space or a family instance
+/// written as an `IfcSpace` whose body is more than its record's box: its
+/// `BodySource` says how it was drawn.
+pub const SPACE_OUTLINE_FAMILY_BODY: &str = "family_body";
+
 /// `BodySource` of a family instance turned off the model's axes, drawn as
 /// the rectangle at its angle whose box is its record box (RE-87).
 pub const INSTANCE_TURNED_BODY_SOURCE: &str = "partition_family_instance_turned_box";
@@ -6519,6 +6553,53 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
                 value: PropertyValue::Integer(i64::from(id)),
             });
         }
+    }
+    // RE-313: a Revit Space, or a family instance written as an `IfcSpace`,
+    // is its record's box (turned with the instance where it is turned) unless
+    // a carrier drew more.
+    if class == "Space" || space_by_export_value(decoded) {
+        let resolved = properties.iter().any(|property| {
+            property.name == "ProfileResolved"
+                && matches!(property.value, PropertyValue::Boolean(true))
+        });
+        let boxed = properties.iter().any(|property| {
+            property.name == "BodySource"
+                && matches!(&property.value, PropertyValue::Text(source)
+                    if source == RECORD_BBOX_BODY_SOURCE
+                        || source == INSTANCE_TURNED_BODY_SOURCE
+                        || source == INSTANCE_ORIENTED_BODY_SOURCE)
+        });
+        properties.push(Property {
+            name: SPACE_OUTLINE_SOURCE_PROPERTY.into(),
+            value: PropertyValue::Text(
+                if boxed && !resolved {
+                    SPACE_OUTLINE_RECORD_BOX
+                } else {
+                    SPACE_OUTLINE_FAMILY_BODY
+                }
+                .into(),
+            ),
+        });
+    }
+    // RE-313: whether the room's outline is its stored solid's or its box.
+    if class == "Room" {
+        let from_solid = profile.is_some()
+            && decoded.fields.iter().any(|(name, value)| {
+                name == crate::element_record_plan_profiles::PLAN_PROFILE_SOURCE_FIELD
+                    && matches!(value, InstanceField::String(source)
+                        if source == crate::partition_room_boundaries::ROOM_OUTLINE_SOURCE)
+            });
+        properties.push(Property {
+            name: SPACE_OUTLINE_SOURCE_PROPERTY.into(),
+            value: PropertyValue::Text(
+                if from_solid {
+                    SPACE_OUTLINE_STORED_SOLID
+                } else {
+                    SPACE_OUTLINE_RECORD_BOX
+                }
+                .into(),
+            ),
+        });
     }
     if let Some(number) = room_number {
         properties.push(Property {

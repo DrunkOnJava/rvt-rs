@@ -26,8 +26,8 @@
 #     property sets is beside the model as <model>.revit-sets.ifc: an export
 #     with `--revit-property-sets` (its log rvt-ifc-revit-sets.log) scored
 #     against it (RE-210);
-#   - timings.log: each step's wall time in milliseconds, and the item's
-#     after its export (the export's is in rvt-ifc.log);
+#   - timings.log: each step's wall time in milliseconds, taken while other
+#     steps run beside it (the export's is in rvt-ifc.log);
 #   - info.json and info.exit: `rvt-info --redact --json` on it (the identity,
 #     the document's Atom entry, the streams) and its exit status. The Atom
 #     entry goes through the PartAtom parser, from the model's
@@ -60,8 +60,14 @@
 # into probe-pair.txt, ending with its exit status: the cross-release
 # comparisons of #740 and #742.
 # A scorer that fails is recorded, not fatal: its output is the evidence.
-# Every export runs first, alone, one at a time; then MEASURE_JOBS items run
-# at once, by default one per CPU; then every probe, alone, one at a time.
+# These runs check what the exports hold; their times are not benchmarks
+# (the workflow's `timing` job times both refs on one runner,
+# tools/ci/measure-timing.sh). Every export runs first, MEASURE_JOBS at once,
+# by default one per CPU; then every step of every model (each scorer, the
+# schema check, the glTF export and its scorers, the witness exports) runs as
+# a task of its own, MEASURE_JOBS at once, the heaviest first, while at least
+# MEASURE_MIN_FREE_KB of memory is free (by default 3 GiB); then every probe,
+# alone, one at a time.
 set -uo pipefail
 BIN="$1"; MODELS="$2"; OUT="$3"
 SCORERS="$(dirname "$0")/../re"
@@ -127,7 +133,7 @@ IFC_SCORERS="class_sets_vs_ifc aggregates_vs_ifc global_ids_vs_ifc names_vs_ifc 
 room_names_vs_ifc type_objects_vs_ifc layer_sets_vs_ifc element_materials_vs_ifc
 material_colours_vs_ifc openings_vs_ifc opening_hosts_vs_ifc opening_boxes_vs_ifc
 door_bodies_vs_ifc door_window_sizes_vs_ifc oriented_boxes_vs_ifc plan_profiles_vs_ifc
-pipe_bodies_vs_ifc duct_bodies_vs_ifc roof_bodies_vs_ifc stair_bodies_vs_ifc ports_vs_ifc psets_vs_ifc qtos_vs_ifc saved_meshes_vs_ifc tagged_spaces_vs_ifc port_places_vs_ifc predefined_types_vs_ifc box_bodies_vs_ifc column_bodies_vs_ifc mesh_bodies_vs_ifc wall_ends_list wall_heights_vs_ifc frames_vs_ifc"
+pipe_bodies_vs_ifc duct_bodies_vs_ifc roof_bodies_vs_ifc stair_bodies_vs_ifc ports_vs_ifc psets_vs_ifc qtos_vs_ifc saved_meshes_vs_ifc tagged_spaces_vs_ifc port_places_vs_ifc predefined_types_vs_ifc box_bodies_vs_ifc column_bodies_vs_ifc mesh_bodies_vs_ifc wall_ends_list wall_heights_vs_ifc frames_vs_ifc space_profiles_vs_ifc"
 GLB_SCORERS="wall_bodies_vs_ifc wall_ends_cv_vs_ifc wall_layers_vs_ifc slab_layers_vs_ifc glb_material_colours_vs_ifc"
 
 read -ra MODEL_PATTERNS <<< "${MEASURE_MODELS:-}"
@@ -185,10 +191,14 @@ timed() { # dir step command...
   return "$status"
 }
 
+# A step's time limit. Steps share the runner's cores, and under that load the
+# office's mesh_bodies_vs_ifc took 940 s against 418 s alone (#1285); runners
+# differ up to 1.7 times in speed, so the limit leaves twice that and more.
+STEP_TIMEOUT="${MEASURE_STEP_TIMEOUT:-2400}"
 score() { # name args...
   local out="$1" dir step; shift
   dir=$(dirname "$out"); step=$(basename "$out" .txt)
-  timed "$dir" "$step" timeout 1200 python "$@" > "$out" 2>&1
+  timed "$dir" "$step" timeout "$STEP_TIMEOUT" python "$@" > "$out" 2>&1
   echo "exit $?" >> "$out"
 }
 
@@ -209,22 +219,20 @@ schema() { # dir max_bytes
       | grep -v '^IFC schema conformance passed\|^  instances checked' || true
     if [ "$(stat -c %s "$1/model.ifc")" -le "$2" ]; then
       echo "validate:"
-      timed "$1" schema-validate timeout 1200 python "$(dirname "$0")/ifc_validate_summary.py" "$1/model.ifc" "$1/validation.jsonl" 2>&1
+      timed "$1" schema-validate timeout "$STEP_TIMEOUT" python "$(dirname "$0")/ifc_validate_summary.py" "$1/model.ifc" "$1/validation.jsonl" 2>&1
       echo "rules:"
-      timed "$1" schema-rules timeout 1200 python "$(dirname "$0")/ifc_validate_summary.py" --rules "$1/model.ifc" 2>&1
+      timed "$1" schema-rules timeout "$STEP_TIMEOUT" python "$(dirname "$0")/ifc_validate_summary.py" --rules "$1/model.ifc" 2>&1
     else
       echo "validate: skipped, over $(( $2 / 1048576 )) MB"
     fi
     echo "property sets:"
-    timed "$1" schema-psets timeout 1200 python "$(dirname "$0")/ifc4_property_sets.py" "$1/model.ifc" \
+    timed "$1" schema-psets timeout "$STEP_TIMEOUT" python "$(dirname "$0")/ifc4_property_sets.py" "$1/model.ifc" \
       --definitions "$PSET_DEFINITIONS" 2>&1
   } > "$1/schema.txt"
 }
 
-# Each export runs alone, before the items start, so its wall time in
-# rvt-ifc.log is taken as it always was: the summary compares those times
-# across commits, and items running beside an export would move its time
-# by up to about 2x.
+# Every export runs before the steps that read it, several at once; its wall
+# time in rvt-ifc.log is taken beside the others, so it is not a benchmark.
 model_dir() { echo "$OUT/$1"; }
 sample_dir() { echo "$OUT/sample-$(basename "$1" .rvt)"; }
 export_ifc() { # file dir
@@ -245,66 +253,107 @@ finished() { # dir name started
   printf '::group::%s\n%s ms\n::endgroup::\n' "$2" "$ms"
 }
 
-measure_model() { # name rvt ref
-  local name="$1" rvt="$2" ref="$3" dir item_started artifact s sets flags
-  item_started=$(date +%s%N)
-  dir=$(model_dir "$name"); mkdir -p "$dir"
-  if wanted_glb; then
-    timed "$dir" rvt-gltf "$BIN/rvt-gltf" "$MODELS/$rvt" -o "$dir/model.glb" > "$dir/rvt-gltf.log" 2>&1
-    echo "exit $?" >> "$dir/rvt-gltf.log"
-  fi
-  wanted info && timed "$dir" rvt-info info "$MODELS/$rvt" "$dir"
-  grep -v -E '^FILE_NAME\(|IFCOWNERHISTORY' "$dir/model.ifc" | sha256sum | cut -d' ' -f1 > "$dir/ifc.sha256"
-  # A writer path only these models reach, such as the office files'
-  # thermal transmittance unit (RE-194), is checked here.
-  [ -s "$dir/model.ifc" ] && wanted schema && schema "$dir" 125829120
-  # The witness observations committed for this model (research/witness/),
-  # regenerated so a change to its IFC can commit them from the results.
-  if wanted witness; then
-    for artifact in $(witness_artifacts "$name"); do
-      timed "$dir" "witness-$artifact" "$BIN/rvt-ifc" "$MODELS/$rvt" -o "$dir/witness.ifc" --observation "$dir/witness-$artifact.json" --artifact-id "$artifact" > /dev/null 2>&1
-      rm -f "$dir/witness.ifc"
-    done
-  fi
+# A model's steps, one task each, as `<weight factor> <task>` lines: the
+# factor, times the model's size, orders the tasks, the heaviest first, so the
+# longest ones do not start last (the BIM4LCA office's mesh_bodies_vs_ifc took
+# 477 s of its 1,953 run one after another, run 41589642386).
+model_tasks() { # name rvt ref
+  local name="$1" rvt="$2" ref="$3" s
+  echo "1 base"
+  # ports_vs_ifc reads the findings the schema step's validation wrote, so it
+  # runs after it, in the same task.
+  wanted schema && echo "5 schema"
+  wanted witness && [ -n "$(witness_artifacts "$name")" ] && echo "2 witness"
+  wanted_glb && echo "4 glb"
   if [ "$ref" != "-" ]; then
     for s in $IFC_SCORERS; do
       wanted "$s" || continue
-      # ports_vs_ifc reads the findings the schema step's validation wrote,
-      # rather than validating the export again.
-      extra=()
-      [ "$s" = ports_vs_ifc ] && [ -f "$dir/validation.jsonl" ] && extra=(--validation "$dir/validation.jsonl")
-      score "$dir/$s.txt" "$SCORERS/$s.py" "$dir/model.ifc" "$MODELS/$ref" "${extra[@]}"
-    done
-    for s in $GLB_SCORERS; do
-      wanted "$s" || continue
-      score "$dir/$s.txt" "$SCORERS/$s.py" "$dir/model.glb" "$MODELS/$ref"
+      [ "$s" = ports_vs_ifc ] && wanted schema && continue
+      case "$s" in
+        mesh_bodies_vs_ifc) echo "10 ifc:$s" ;;
+        saved_meshes_vs_ifc) echo "8 ifc:$s" ;;
+        layer_sets_vs_ifc | wall_heights_vs_ifc | door_bodies_vs_ifc) echo "2 ifc:$s" ;;
+        *) echo "1 ifc:$s" ;;
+      esac
     done
     for s in "${STEPS[@]}"; do
       listed "$s" && continue
       [ -f "$SCORERS/$s.py" ] || continue
-      score "$dir/$s.txt" "$SCORERS/$s.py" "$dir/model.ifc" "$MODELS/$ref"
+      echo "1 ifc:$s"
     done
   fi
-  # RE-210: where Revit's export with its own property sets is beside the
-  # model (<model>.revit-sets.ifc, the R2025 models), an export with
-  # `--revit-property-sets` scored against it.
-  sets="${rvt%.rvt}.revit-sets.ifc"
-  if [ -f "$MODELS/$sets" ] && wanted revit_property_sets_vs_ifc; then
-    case " ${RVT_IFC_FLAGS:-} " in
-      *" --revit-property-sets "*) flags=() ;;
-      *) flags=(--revit-property-sets) ;;
-    esac
-    # shellcheck disable=SC2086 # RVT_IFC_FLAGS is a list of flags.
-    timed "$dir" rvt-ifc-revit-sets "$BIN/rvt-ifc" "$MODELS/$rvt" -o "$dir/revit-sets.ifc" ${RVT_IFC_FLAGS:-} "${flags[@]}" \
-      > "$dir/rvt-ifc-revit-sets.log" 2>&1
-    echo "exit $?" >> "$dir/rvt-ifc-revit-sets.log"
-    score "$dir/revit_property_sets_vs_ifc.txt" "$SCORERS/revit_property_sets_vs_ifc.py" "$dir/revit-sets.ifc" "$MODELS/$sets" --list
-    rm -f "$dir/revit-sets.ifc"
-  fi
-  # The bulky outputs stay out of the uploaded results.
+  [ -f "$MODELS/${rvt%.rvt}.revit-sets.ifc" ] && wanted revit_property_sets_vs_ifc && echo "2 sets"
+  return 0
+}
+
+model_task() { # name rvt ref task
+  local name="$1" rvt="$2" ref="$3" task="$4" dir s artifact sets flags extra
+  dir=$(model_dir "$name")
+  case "$task" in
+    base)
+      wanted info && timed "$dir" rvt-info info "$MODELS/$rvt" "$dir"
+      grep -v -E '^FILE_NAME\(|IFCOWNERHISTORY' "$dir/model.ifc" | sha256sum | cut -d' ' -f1 > "$dir/ifc.sha256"
+      ;;
+    schema)
+      # A writer path only these models reach, such as the office files'
+      # thermal transmittance unit (RE-194), is checked here.
+      [ -s "$dir/model.ifc" ] && schema "$dir" 125829120
+      if [ "$ref" != "-" ] && wanted ports_vs_ifc; then
+        extra=()
+        [ -f "$dir/validation.jsonl" ] && extra=(--validation "$dir/validation.jsonl")
+        score "$dir/ports_vs_ifc.txt" "$SCORERS/ports_vs_ifc.py" "$dir/model.ifc" "$MODELS/$ref" "${extra[@]}"
+      fi
+      ;;
+    witness)
+      # The witness observations committed for this model (research/witness/),
+      # regenerated so a change to its IFC can commit them from the results.
+      for artifact in $(witness_artifacts "$name"); do
+        timed "$dir" "witness-$artifact" "$BIN/rvt-ifc" "$MODELS/$rvt" -o "$dir/witness-$artifact.ifc" --observation "$dir/witness-$artifact.json" --artifact-id "$artifact" > /dev/null 2>&1
+        rm -f "$dir/witness-$artifact.ifc"
+      done
+      ;;
+    glb)
+      timed "$dir" rvt-gltf "$BIN/rvt-gltf" "$MODELS/$rvt" -o "$dir/model.glb" > "$dir/rvt-gltf.log" 2>&1
+      echo "exit $?" >> "$dir/rvt-gltf.log"
+      if [ "$ref" != "-" ]; then
+        for s in $GLB_SCORERS; do
+          wanted "$s" || continue
+          score "$dir/$s.txt" "$SCORERS/$s.py" "$dir/model.glb" "$MODELS/$ref"
+        done
+      fi
+      ;;
+    ifc:*)
+      s=${task#ifc:}
+      score "$dir/$s.txt" "$SCORERS/$s.py" "$dir/model.ifc" "$MODELS/$ref"
+      ;;
+    sets)
+      # RE-210: where Revit's export with its own property sets is beside the
+      # model (<model>.revit-sets.ifc, the R2025 models), an export with
+      # `--revit-property-sets` scored against it.
+      sets="${rvt%.rvt}.revit-sets.ifc"
+      case " ${RVT_IFC_FLAGS:-} " in
+        *" --revit-property-sets "*) flags=() ;;
+        *) flags=(--revit-property-sets) ;;
+      esac
+      # shellcheck disable=SC2086 # RVT_IFC_FLAGS is a list of flags.
+      timed "$dir" rvt-ifc-revit-sets "$BIN/rvt-ifc" "$MODELS/$rvt" -o "$dir/revit-sets.ifc" ${RVT_IFC_FLAGS:-} "${flags[@]}" \
+        > "$dir/rvt-ifc-revit-sets.log" 2>&1
+      echo "exit $?" >> "$dir/rvt-ifc-revit-sets.log"
+      score "$dir/revit_property_sets_vs_ifc.txt" "$SCORERS/revit_property_sets_vs_ifc.py" "$dir/revit-sets.ifc" "$MODELS/$sets" --list
+      rm -f "$dir/revit-sets.ifc"
+      ;;
+  esac
+}
+
+# After every task of a model: the bulky outputs stay out of the uploaded
+# results, and the log gets the model's group with the sum of its steps.
+model_done() { # name
+  local dir ms
+  dir=$(model_dir "$1")
   rm -f "$dir/model.glb" "$dir/validation.jsonl"
   [ -n "${KEEP_IFC:-}" ] || rm -f "$dir/model.ifc"
-  finished "$dir" "$name" "$item_started"
+  ms=$(awk '{ms += $2} END {print ms + 0}' "$dir/timings.log" 2>/dev/null || echo 0)
+  printf '::group::%s\n%s ms in its steps\n::endgroup::\n' "$1" "$ms"
 }
 
 family_dir() { echo "$OUT/family-$(basename "$1" .rfa)"; }
@@ -392,13 +441,18 @@ probe_sample() { # probe sample
   fi
 }
 
-# Every export runs first, alone; then every item runs in its own folder,
-# MEASURE_JOBS at once (by default one per CPU), the longest first: the
-# models scored against Revit's export, then the rest, each by file size;
-# then every probe, alone.
+# Every export runs first; then every model's steps, each a task of its own,
+# and every family and sample item; MEASURE_JOBS at once (by default one per
+# CPU), the heaviest first: the models scored against Revit's export, then the
+# rest, by file size times the step's weight; then every probe, alone.
 JOBS="${MEASURE_JOBS:-$(nproc)}"
-spawn() { # command...: run it once fewer than JOBS items are running
-  while [ "$(jobs -rp | wc -l)" -ge "$JOBS" ]; do
+MIN_FREE_KB="${MEASURE_MIN_FREE_KB:-3145728}"
+free_kb() { awk '/^MemAvailable:/ {print $2}' /proc/meminfo; }
+spawn() { # command...: run it once fewer than JOBS are running, and while
+  # nothing runs or MIN_FREE_KB of memory is free: two office scorers
+  # meshing an 82 MB IFC each beside two more could fill the runner's 16 GB.
+  while [ "$(jobs -rp | wc -l)" -ge "$JOBS" ] \
+    || { [ "$(jobs -rp | wc -l)" -gt 0 ] && [ "$(free_kb)" -lt "$MIN_FREE_KB" ]; }; do
     wait -n
   done
   "$@" &
@@ -440,15 +494,37 @@ fi
 items=$(printf '%s\n' "$items" | sort -t'|' -k1,1nr)
 while IFS='|' read -r _ run first second _; do
   case "$run" in
-    measure_model) export_ifc "$MODELS/$second" "$(model_dir "$first")" ;;
-    measure_sample) export_ifc "$first" "$(sample_dir "$first")" ;;
+    measure_model) spawn export_ifc "$MODELS/$second" "$(model_dir "$first")" ;;
+    measure_sample) spawn export_ifc "$first" "$(sample_dir "$first")" ;;
   esac
 done <<< "$items"
-while IFS='|' read -r _ run first second third; do
-  [ -n "$run" ] || continue
-  spawn "$run" "$first" "$second" "$third"
-done <<< "$items"
 wait
+tasks=""
+while IFS='|' read -r rank run first second third; do
+  case "$run" in
+    measure_model)
+      while read -r factor task; do
+        tasks="$tasks
+$(( rank * factor ))|model_task|$first|$second|$third|$task"
+      done < <(model_tasks "$first" "$second" "$third")
+      ;;
+    measure_sample) tasks="$tasks
+$(( rank * 3 ))|measure_sample|$first|||" ;;
+    measure_family) tasks="$tasks
+$rank|measure_family|$first|||" ;;
+  esac
+done <<< "$items"
+tasks=$(printf '%s\n' "$tasks" | sort -t'|' -k1,1nr)
+while IFS='|' read -r _ run first second third task; do
+  case "$run" in
+    model_task) spawn model_task "$first" "$second" "$third" "$task" ;;
+    measure_sample | measure_family) spawn "$run" "$first" ;;
+  esac
+done <<< "$tasks"
+wait
+while IFS='|' read -r _ run first _; do
+  [ "$run" = measure_model ] && model_done "$first"
+done <<< "$items"
 for i in "${!PROBES[@]}"; do
   name=${PROBES[$i]}
   scorer=${PROBE_SCORERS[$i]:--}
