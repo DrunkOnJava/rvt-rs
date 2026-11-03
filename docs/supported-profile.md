@@ -81,9 +81,13 @@ older schema, so it is measured only on the reporter's files (not shared,
 counts reported on 2026-11-02 and 2026-11-03 on 0.12.0):
 
 - 17 keep a 2024 or 2025 schema: the warning names the right releases on all
-  17, and their element and storey counts equal the reporter's own reading
-  except one file that leaves out 63 elements outside the export phase, as
-  Revit's export does (RE-184), and one with 10 storeys where theirs had 4.
+  17. Against the reporter's own patched reader, element counts are equal on
+  6 and within 0.8% on 10, and storeys equal on 16; one file has 10 storeys
+  where theirs had 4, which they think is right. One file exports 897
+  elements where theirs gives 1,075: 63 of the difference are elements
+  outside the export phase, which rvt-rs leaves out as Revit's export does
+  (RE-184), and their reader keeps earlier phases. No Revit export of these
+  files has been compared.
 - 8 keep a 2022 or 2023 schema: their `Global/ElemTable` was read as 12-byte
   records because the layout check tested the record's second id, which on
   these files holds an older number. With the check on the ElementId (#421),

@@ -187,16 +187,17 @@ fn element_id_at(stride: usize) -> Option<usize> {
 /// (a 40-byte table also fits at 28). Falls back to the 12-byte implicit
 /// layout from `0x30` when neither fits.
 ///
-/// The id that rises is the ElementId ([`element_id_at`]). On 40 bytes it is
+/// The id that rises is the ElementId (`element_id_at`). On 40 bytes it is
 /// the record's second id ([`ElemRecord::id_secondary`], `+20`): the first
 /// rises with it wherever the two agree, but on Autodesk's Snowdon Towers
 /// samples they differ on 27 (Structural) and 84 (Architectural) records,
 /// and there the first id falls back below its predecessor 2 and 3 times. On
-/// 28 bytes it is the first id (`+0`): the two are equal on every record of
-/// the 41 tables of that size read from Revit 2008 to 2023, but on 8 client
-/// files saved by later releases the second holds an older, lower number on
-/// 1% to 37% of records, and a table tested at `+4` fell back to 12-byte
-/// records (#421; found by @puzzbobb, measured by @hemanth1986).
+/// 28 bytes it is the first id (`+0`), the one [`declared_ids`] reads: the two
+/// are equal on every record of the 41 tables of that size puzzbobb read from
+/// Revit 2008 to 2023, but on 8 client files saved by Revit 2024 to 2026 the
+/// second holds an older, lower number on 1% to 37% of records, and a table
+/// tested at `+4` fell back to 12-byte records (#421; found by puzzbobb,
+/// measured by hemanth1986).
 pub fn detect_layout(d: &[u8]) -> ElemTableLayout {
     let fallback = ElemTableLayout {
         start: 0x30,
