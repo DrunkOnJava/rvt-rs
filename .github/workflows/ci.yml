@@ -310,10 +310,23 @@ jobs:
           echo CARGO_INCREMENTAL=0 >> "$GITHUB_ENV"
           rustc --version
       # The 32-bit C runtime and libgcc the i686 test binaries link against.
+      # Each apt call is bounded and retried: on 2026-11-01 an Ubuntu mirror
+      # stopped answering mid `apt-get update` and the hang used the whole job
+      # timeout, a cancelled job that failed `CI passed` with no test run.
+      # Three failed attempts still fail the job.
       - name: Install gcc-multilib
+        timeout-minutes: 15
         run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends gcc-multilib
+          apt=(sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30)
+          for attempt in 1 2 3; do
+            if timeout 120 "${apt[@]}" update \
+              && timeout 180 "${apt[@]}" install -y --no-install-recommends gcc-multilib; then
+              exit 0
+            fi
+            echo "::warning::apt attempt $attempt did not finish; retrying"
+            sleep 15
+          done
+          exit 1
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}
