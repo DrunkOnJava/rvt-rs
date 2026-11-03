@@ -176,10 +176,14 @@ timed() { # dir step command...
   return "$status"
 }
 
+# A step's time limit. Steps share the runner's cores, and under that load the
+# office's mesh_bodies_vs_ifc took 940 s against 418 s alone (#1285); runners
+# differ up to 1.7 times in speed, so the limit leaves twice that and more.
+STEP_TIMEOUT="${MEASURE_STEP_TIMEOUT:-2400}"
 score() { # name args...
   local out="$1" dir step; shift
   dir=$(dirname "$out"); step=$(basename "$out" .txt)
-  timed "$dir" "$step" timeout 1200 python "$@" > "$out" 2>&1
+  timed "$dir" "$step" timeout "$STEP_TIMEOUT" python "$@" > "$out" 2>&1
   echo "exit $?" >> "$out"
 }
 
@@ -200,14 +204,14 @@ schema() { # dir max_bytes
       | grep -v '^IFC schema conformance passed\|^  instances checked' || true
     if [ "$(stat -c %s "$1/model.ifc")" -le "$2" ]; then
       echo "validate:"
-      timed "$1" schema-validate timeout 1200 python "$(dirname "$0")/ifc_validate_summary.py" "$1/model.ifc" "$1/validation.jsonl" 2>&1
+      timed "$1" schema-validate timeout "$STEP_TIMEOUT" python "$(dirname "$0")/ifc_validate_summary.py" "$1/model.ifc" "$1/validation.jsonl" 2>&1
       echo "rules:"
-      timed "$1" schema-rules timeout 1200 python "$(dirname "$0")/ifc_validate_summary.py" --rules "$1/model.ifc" 2>&1
+      timed "$1" schema-rules timeout "$STEP_TIMEOUT" python "$(dirname "$0")/ifc_validate_summary.py" --rules "$1/model.ifc" 2>&1
     else
       echo "validate: skipped, over $(( $2 / 1048576 )) MB"
     fi
     echo "property sets:"
-    timed "$1" schema-psets timeout 1200 python "$(dirname "$0")/ifc4_property_sets.py" "$1/model.ifc" \
+    timed "$1" schema-psets timeout "$STEP_TIMEOUT" python "$(dirname "$0")/ifc4_property_sets.py" "$1/model.ifc" \
       --definitions "$PSET_DEFINITIONS" 2>&1
   } > "$1/schema.txt"
 }
