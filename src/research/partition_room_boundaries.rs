@@ -593,11 +593,11 @@ fn crosses(segments: &[[f64; 4]]) -> bool {
 
 /// The outline the faces of a span make (RE-316): with the plan edges of its
 /// walls that reach `anchor`, ends within [`ROOM_STEP_TOLERANCE_FEET`] joined,
-/// and a flag, set where those edges are exactly one simple loop (every end
-/// shared by two edges, no edge crossing another, no loop inside it) and
-/// otherwise unset, the outline then being the boundary of the region the
-/// edges wind around ([`region_boundary`]), which subtracts a column that
-/// overlaps a wall or stands in the room. `None` unless the outline spans
+/// and a flag, set where those edges close as RE-101's walk reads them (every
+/// end shared by two edges, loops that nest, one outer loop, no edge crossing
+/// another) and otherwise unset, the outline then being the boundary of the
+/// region the edges wind around ([`region_boundary`]), which subtracts a
+/// column that overlaps a wall. `None` unless the outline spans
 /// `bbox` as `read` allows; a face outside `bbox`, a cylinder not read as an
 /// arc and more than [`RESOLVE_FACES_MAX`] faces rule the span out.
 fn span_outline(
@@ -615,7 +615,7 @@ fn span_outline(
     let mut lines = wall_edges(faces, bbox, anchor, Some(read))?;
     snap_ends_within(&mut lines, ROOM_STEP_TOLERANCE_FEET);
     if let Some(profile) = plan_profile_from_lines(&lines) {
-        if profile.inner_xy.is_empty() && profile.pieces.is_empty() && !crosses(&lines) {
+        if profile.pieces.is_empty() && !crosses(&lines) {
             return profile_on_box(profile, bbox, read.slack).map(|profile| (profile, true));
         }
     }
@@ -669,24 +669,26 @@ pub fn span_outline_at(
 /// (RE-316).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ResolvedKind {
-    /// The wall edges of the span are exactly one simple loop, spanning the
-    /// record box to [`BOX_TOLERANCE_FEET`] on every side: no column is
-    /// subtracted, no edge crosses another and no loop stands inside it. A
-    /// face of another element would have to close that loop to be read.
+    /// The wall edges of the span close as the walk of RE-101 reads them:
+    /// one outer loop, the loops inside it nested, no edge crossing another,
+    /// and the outline spanning the record box to [`BOX_TOLERANCE_FEET`] on
+    /// every side. A face of another element would have to close a loop of
+    /// its own inside the box, within the gap and the count that bound the
+    /// span, to be read.
     Faces,
-    /// The outline is the boundary of the region the edges wind around, a
-    /// column overlapping a wall or standing in the room taken off it, or it
-    /// falls up to [`ROOM_SLIVER_FEET`] short of the record box on a side.
-    /// Revit's export does not always take such a column off the room's
-    /// area, so the area is approximate: 0.45% to 0.7% under Revit's floor
-    /// area on the four office rooms where it does not.
+    /// The outline is the boundary of the region the edges wind around,
+    /// because a column overlaps a wall and its loop lies partly inside the
+    /// wall's, or it falls up to [`ROOM_SLIVER_FEET`] short of the record box
+    /// on a side. Revit's export does not always take such a column off the
+    /// room's area, so the area is approximate: 0.45% to 0.7% under Revit's
+    /// floor area on the four office rooms where it does not.
     Approximate,
 }
 
 /// The outline of a room whose solids at `headers` none gives an outline the
 /// walk reads ([`outline_of_solids`] is `None`), from the faces of each
-/// solid's span (RE-316): [`ResolvedKind::Faces`] where they are one simple
-/// loop, else [`ResolvedKind::Approximate`], also tried with
+/// solid's span (RE-316): [`ResolvedKind::Faces`] where they close as the walk
+/// reads them, else [`ResolvedKind::Approximate`], also tried with
 /// [`ROOM_SLIVER_FEET`] of slack. Where more than one solid gives one, every
 /// one must give the same.
 pub fn resolved_outline_of_solids(
