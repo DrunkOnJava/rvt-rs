@@ -1278,7 +1278,8 @@ fn convex_hull(mut points: Vec<Point2>) -> Ring {
 }
 
 /// What an element covers in plan, in model feet: an extrusion's profile
-/// (holes kept) where it stands, and the convex hull of any other body.
+/// (holes kept) where it stands, the profile of a stepped wall's first item
+/// where the rest stand within it, and the convex hull of any other body.
 pub fn plan_outline(body: Body<'_>, placement: &Placement) -> Option<(Ring, Vec<Ring>)> {
     let to_model = |ring: &Ring| -> Ring {
         ring.iter()
@@ -1306,7 +1307,24 @@ pub fn plan_outline(body: Body<'_>, placement: &Placement) -> Option<(Ring, Vec<
                     })
                     .collect(),
             );
-            (hull.len() >= 3).then_some((hull, Vec::new()))
+            if hull.len() < 3 {
+                return None;
+            }
+            // A stepped wall (RE-320) is its own plan to a height and pieces of
+            // it above: its first item is that plan, and the rest stand
+            // within it, so the hull of the first item is the hull of all.
+            if let SolidShape::Compound(items) = shape {
+                if let Some(SolidShape::ExtrudedArea(first)) = items.first() {
+                    if let Some((outer, holes)) = plan_outline(Body::Extrusion(first), placement) {
+                        let first_hull = convex_hull(outer.clone());
+                        if (signed_area(&first_hull).abs() - signed_area(&hull).abs()).abs() <= 1e-6
+                        {
+                            return Some((outer, holes));
+                        }
+                    }
+                }
+            }
+            Some((hull, Vec::new()))
         }
     }
 }
