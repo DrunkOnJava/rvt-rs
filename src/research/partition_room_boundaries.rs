@@ -31,6 +31,16 @@
 //! vertical face that stops short of the floor is a step in the room's
 //! ceiling, inside the outline.
 //!
+//! A record the walk does not read can sit between two faces and be longer
+//! than [`FACE_GAP`] (626 bytes in office room 1422302), and a face's box is
+//! the box of its plane, not its outline: where a column stands in the room
+//! and overlaps a wall, the wall's face runs across the column's footprint.
+//! When the faces the walk reads do not close, the faces up to the next
+//! solid's tag are read instead ([`solid_faces_to_next_solid`]), each plan
+//! edge directed so the room is on its left, and the room's outline is the
+//! boundary of the region those edges wind around ([`region_boundary`],
+//! RE-316).
+//!
 //! Core Interior keeps a room's record and solid in more than one partition,
 //! and the copies can disagree: room 20832's outline spans 10.5 ft in one and
 //! 10.4167 ft in the other. The copy kept is the one in the partition of the
@@ -80,6 +90,16 @@ pub const PRISM_TOLERANCE_FEET: f64 = 1e-3;
 /// both and leave a step with no face across it: 3e-5 ft on RE1's room
 /// 355008.
 pub const ROOM_VERTEX_TOLERANCE_FEET: f64 = 1e-4;
+
+/// The most plan segments [`region_boundary`] resolves.
+pub const BOUNDARY_SEGMENTS_MAX: usize = 4096;
+
+/// How far apart two points of a resolved boundary may lie and be one,
+/// feet.
+const BOUNDARY_POINT_EPS: f64 = 1e-6;
+
+/// How far to either side of a boundary piece its winding is read, feet.
+const BOUNDARY_SIDE_EPS: f64 = 1e-5;
 
 const FACE_LEN: usize = 158;
 const UNIT_EPS: f64 = 1e-6;
@@ -246,24 +266,37 @@ pub fn solid_faces(buf: &[u8], header: usize) -> Vec<RoomFace> {
     faces
 }
 
-/// The room's outline from the solid whose header starts at `header`, where
-/// its wall faces (vertical, reaching the floor of `bbox`, a record box
-/// `[min x, min y, min z, max x, max y, max z]`) close into loops whose plan
-/// extent is `bbox`'s within
-/// [`BOX_TOLERANCE_FEET`]. A face's origin is its plane's, not a point on
-/// the face, so only the plan edges are checked.
-pub fn room_outline_at(buf: &[u8], header: usize, bbox: [f64; 6]) -> Option<PlanProfile> {
-    let faces = solid_faces(buf, header);
-    let mut lines = Vec::new();
-    for face in &faces {
-        if let Some((edge, bottom)) = face.plan_edge() {
-            if (bottom - bbox[2]).abs() <= BOX_TOLERANCE_FEET {
-                lines.push(edge);
-            }
-        }
-    }
-    snap_ends(&mut lines);
-    let profile = plan_profile_from_lines(&lines)?;
+/// Which end of the room its wall faces must reach to be a wall of its
+/// outline.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OutlineAnchor {
+    /// The room's floor, the bottom of its record box.
+    Floor,
+    /// The room's ceiling, the top of its record box.
+    Ceiling,
+}
+
+fn reaches_anchor(face: &RoomFace, bbox: [f64; 6], anchor: OutlineAnchor) -> Option<[f64; 4]> {
+    let (edge, bottom) = face.plan_edge()?;
+    let reached = match anchor {
+        OutlineAnchor::Floor => (bottom - bbox[2]).abs() <= BOX_TOLERANCE_FEET,
+        OutlineAnchor::Ceiling => match face.kind() {
+            FaceKind::Vertical { high, .. } => (high - bbox[5]).abs() <= BOX_TOLERANCE_FEET,
+            _ => false,
+        },
+    };
+    reached.then_some(edge)
+}
+
+fn edge_within_box(edge: [f64; 4], bbox: [f64; 6]) -> bool {
+    let tolerance = BOX_TOLERANCE_FEET;
+    edge[0].min(edge[2]) >= bbox[0] - tolerance
+        && edge[0].max(edge[2]) <= bbox[3] + tolerance
+        && edge[1].min(edge[3]) >= bbox[1] - tolerance
+        && edge[1].max(edge[3]) <= bbox[4] + tolerance
+}
+
+fn profile_on_box(profile: PlanProfile, bbox: [f64; 6]) -> Option<PlanProfile> {
     let extent = profile.plan_extent_feet()?;
     let wanted = [bbox[0], bbox[1], bbox[3], bbox[4]];
     extent
@@ -271,6 +304,75 @@ pub fn room_outline_at(buf: &[u8], header: usize, bbox: [f64; 6]) -> Option<Plan
         .zip(wanted)
         .all(|(got, want)| (got - want).abs() <= BOX_TOLERANCE_FEET)
         .then_some(profile)
+}
+
+/// The outline the wall faces among `faces` make, kept where it spans
+/// `bbox`. With `resolve` off, the faces' plan edges must close into loops as
+/// they are (RE-101). With it on, only the edges inside the box are used,
+/// and the outline is the boundary of the region they wind around
+/// ([`region_boundary`]).
+fn outline_from_faces(
+    faces: &[RoomFace],
+    bbox: [f64; 6],
+    anchor: OutlineAnchor,
+    resolve: bool,
+) -> Option<PlanProfile> {
+    let mut lines = Vec::new();
+    for face in faces {
+        if let Some(edge) = reaches_anchor(face, bbox, anchor) {
+            if !resolve || edge_within_box(edge, bbox) {
+                lines.push(edge);
+            }
+        }
+    }
+    snap_ends(&mut lines);
+    let profile = if resolve {
+        plan_profile_from_lines(&region_boundary(&lines)?)?
+    } else {
+        plan_profile_from_lines(&lines)?
+    };
+    profile_on_box(profile, bbox)
+}
+
+/// The room's outline from the solid whose header starts at `header` and the
+/// faces it was made from. Its wall faces (vertical, reaching the floor of
+/// `bbox`, a record box `[min x, min y, min z, max x, max y, max z]`) close
+/// into loops whose plan extent is `bbox`'s within [`BOX_TOLERANCE_FEET`];
+/// where the faces the walk reads do not close, the faces up to the next
+/// solid's tag are resolved to a boundary instead (RE-316). A face's origin is
+/// its plane's, not a point on the face, so only the plan edges are checked.
+fn outline_with_faces(
+    buf: &[u8],
+    header: usize,
+    bbox: [f64; 6],
+) -> Option<(PlanProfile, Vec<RoomFace>)> {
+    let walked = solid_faces(buf, header);
+    if let Some(profile) = outline_from_faces(&walked, bbox, OutlineAnchor::Floor, false) {
+        return Some((profile, walked));
+    }
+    let span = solid_faces_to_next_solid(buf, header);
+    let profile = outline_from_faces(&span, bbox, OutlineAnchor::Floor, true)?;
+    Some((profile, span))
+}
+
+/// The room's outline from the solid whose header starts at `header`: its
+/// wall faces' plan edges as they stand where the walk's faces close (RE-101),
+/// and resolved to a boundary where the faces up to the next solid's tag do
+/// (RE-316). Kept only where it spans `bbox`.
+pub fn room_outline_at(buf: &[u8], header: usize, bbox: [f64; 6]) -> Option<PlanProfile> {
+    outline_with_faces(buf, header, bbox).map(|(profile, _)| profile)
+}
+
+/// The outline the faces up to the next solid's tag make, resolved to a
+/// boundary, for walls that reach `anchor` (RE-316). A probe's reading:
+/// [`room_outline_at`] uses only [`OutlineAnchor::Floor`].
+pub fn span_outline_at(
+    buf: &[u8],
+    header: usize,
+    bbox: [f64; 6],
+    anchor: OutlineAnchor,
+) -> Option<PlanProfile> {
+    outline_from_faces(&solid_faces_to_next_solid(buf, header), bbox, anchor, true)
 }
 
 /// Whether `faces`, the faces of a room's solid, make a prism of the room's
@@ -308,10 +410,10 @@ pub fn faces_form_prism(faces: &[RoomFace], bbox: [f64; 6]) -> bool {
 pub fn prism_of_solids(buf: &[u8], headers: &[usize], bbox: [f64; 6]) -> bool {
     let mut found = false;
     for &at in headers {
-        if room_outline_at(buf, at, bbox).is_none() {
+        let Some((_, faces)) = outline_with_faces(buf, at, bbox) else {
             continue;
-        }
-        if !faces_form_prism(&solid_faces(buf, at), bbox) {
+        };
+        if !faces_form_prism(&faces, bbox) {
             return false;
         }
         found = true;
@@ -351,6 +453,191 @@ pub fn solid_headers_by_id(buf: &[u8]) -> BTreeMap<u64, Vec<usize>> {
         headers.sort_unstable();
     }
     out
+}
+
+/// Every face of the solid whose header starts at `header`, from its first
+/// face to the tag of the next solid in `buf` or [`ROOM_SOLID_WINDOW`] bytes
+/// past its start, whatever the gap between faces (RE-316).
+pub fn solid_faces_to_next_solid(buf: &[u8], header: usize) -> Vec<RoomFace> {
+    let Some(start) = solid_start(buf, header) else {
+        return Vec::new();
+    };
+    let window_end = buf.len().min(start.saturating_add(ROOM_SOLID_WINDOW));
+    let Some(window) = buf.get(start..window_end) else {
+        return Vec::new();
+    };
+    let end = memchr::memmem::find(window, &ROOM_SOLID_TAG).unwrap_or(window.len());
+    memchr::memmem::find_iter(&window[..end], &FACE_TAG)
+        .filter_map(|offset| face_at(buf, start + offset))
+        .collect()
+}
+
+/// Where each of two segments is cut by the other, as parameters from 0 at
+/// its start to 1 at its end: at a crossing, and, where they overlap along
+/// one line, at the other's ends.
+fn cut_parameters(a: [f64; 4], b: [f64; 4]) -> (Vec<f64>, Vec<f64>) {
+    let (mut on_a, mut on_b) = (Vec::new(), Vec::new());
+    let (ax, ay) = (a[2] - a[0], a[3] - a[1]);
+    let (bx, by) = (b[2] - b[0], b[3] - b[1]);
+    let (alen, blen) = (ax.hypot(ay), bx.hypot(by));
+    if alen <= BOUNDARY_POINT_EPS || blen <= BOUNDARY_POINT_EPS {
+        return (on_a, on_b);
+    }
+    let (dx, dy) = (b[0] - a[0], b[1] - a[1]);
+    let cross = ax * by - ay * bx;
+    if cross.abs() > 1e-9 * alen * blen {
+        let t = (dx * by - dy * bx) / cross;
+        let u = (dx * ay - dy * ax) / cross;
+        let (t_slack, u_slack) = (BOUNDARY_POINT_EPS / alen, BOUNDARY_POINT_EPS / blen);
+        if t >= -t_slack && t <= 1.0 + t_slack && u >= -u_slack && u <= 1.0 + u_slack {
+            on_a.push(t);
+            on_b.push(u);
+        }
+    } else if ((dx * ay - dy * ax) / alen).abs() <= 10.0 * BOUNDARY_POINT_EPS {
+        let along_a = |x: f64, y: f64| ((x - a[0]) * ax + (y - a[1]) * ay) / (alen * alen);
+        let along_b = |x: f64, y: f64| ((x - b[0]) * bx + (y - b[1]) * by) / (blen * blen);
+        on_a.push(along_a(b[0], b[1]));
+        on_a.push(along_a(b[2], b[3]));
+        on_b.push(along_b(a[0], a[1]));
+        on_b.push(along_b(a[2], a[3]));
+    }
+    (on_a, on_b)
+}
+
+/// How many times the oriented `segments` wind around `p`: each upward
+/// crossing of the ray to its right with `p` on the segment's left adds one,
+/// each downward crossing with `p` on its right takes one off.
+fn winding(segments: &[[f64; 4]], p: (f64, f64)) -> i32 {
+    let mut total = 0;
+    for &[x0, y0, x1, y1] in segments {
+        let side = (x1 - x0) * (p.1 - y0) - (p.0 - x0) * (y1 - y0);
+        if y0 <= p.1 {
+            if y1 > p.1 && side > 0.0 {
+                total += 1;
+            }
+        } else if y1 <= p.1 && side < 0.0 {
+            total -= 1;
+        }
+    }
+    total
+}
+
+fn intern_point(points: &mut Vec<(f64, f64)>, p: (f64, f64)) -> usize {
+    let found = points.iter().position(|q| {
+        (q.0 - p.0).abs() <= BOUNDARY_POINT_EPS && (q.1 - p.1).abs() <= BOUNDARY_POINT_EPS
+    });
+    match found {
+        Some(index) => index,
+        None => {
+            points.push(p);
+            points.len() - 1
+        }
+    }
+}
+
+/// The boundary of the region that the oriented plan `segments` wind around
+/// at least once, as undirected segments that close into loops (RE-316). A
+/// segment's room is on its left, so a wall of the room runs counter-clockwise
+/// around it and a column's walls clockwise around the column, and a column
+/// that overlaps a wall takes its footprint off the room where they overlap
+/// and adds nothing outside it. Every segment is cut where another crosses it
+/// or touches it, a piece is kept where the region lies on one side of it
+/// only, and `None` is returned unless the kept pieces leave every point with
+/// one piece in and one out.
+#[allow(clippy::needless_range_loop)]
+pub fn region_boundary(segments: &[[f64; 4]]) -> Option<Vec<[f64; 4]>> {
+    let count = segments.len();
+    if !(3..=BOUNDARY_SEGMENTS_MAX).contains(&count) {
+        return None;
+    }
+    if segments.iter().flatten().any(|v| !v.is_finite()) {
+        return None;
+    }
+    let mut cuts: Vec<Vec<f64>> = vec![Vec::new(); count];
+    for first in 0..count {
+        for second in first + 1..count {
+            let (on_first, on_second) = cut_parameters(segments[first], segments[second]);
+            cuts[first].extend(on_first);
+            cuts[second].extend(on_second);
+        }
+    }
+    let mut points: Vec<(f64, f64)> = Vec::new();
+    let mut pieces: Vec<(usize, usize)> = Vec::new();
+    for (index, segment) in segments.iter().enumerate() {
+        let length = (segment[2] - segment[0]).hypot(segment[3] - segment[1]);
+        if length <= BOUNDARY_POINT_EPS {
+            continue;
+        }
+        let mut params = vec![0.0, 1.0];
+        params.extend(cuts[index].iter().copied().filter(|t| {
+            t * length > BOUNDARY_POINT_EPS && (1.0 - t) * length > BOUNDARY_POINT_EPS
+        }));
+        params.sort_by(f64::total_cmp);
+        params.dedup_by(|a, b| (*a - *b).abs() * length <= BOUNDARY_POINT_EPS);
+        let at = |t: f64| {
+            (
+                segment[0] + t * (segment[2] - segment[0]),
+                segment[1] + t * (segment[3] - segment[1]),
+            )
+        };
+        for pair in params.windows(2) {
+            let from = intern_point(&mut points, at(pair[0]));
+            let to = intern_point(&mut points, at(pair[1]));
+            if from != to {
+                pieces.push((from, to));
+            }
+        }
+    }
+    let mut kept: Vec<(usize, usize)> = Vec::new();
+    for &(from, to) in &pieces {
+        let (a, b) = (points[from], points[to]);
+        let (dx, dy) = (b.0 - a.0, b.1 - a.1);
+        let length = dx.hypot(dy);
+        let (nx, ny) = (-dy / length, dx / length);
+        let middle = ((a.0 + b.0) / 2.0, (a.1 + b.1) / 2.0);
+        let left = winding(
+            segments,
+            (
+                middle.0 + nx * BOUNDARY_SIDE_EPS,
+                middle.1 + ny * BOUNDARY_SIDE_EPS,
+            ),
+        ) >= 1;
+        let right = winding(
+            segments,
+            (
+                middle.0 - nx * BOUNDARY_SIDE_EPS,
+                middle.1 - ny * BOUNDARY_SIDE_EPS,
+            ),
+        ) >= 1;
+        match (left, right) {
+            (true, false) => kept.push((from, to)),
+            (false, true) => kept.push((to, from)),
+            _ => {}
+        }
+    }
+    kept.sort_unstable();
+    kept.dedup();
+    if kept.len() < 3 {
+        return None;
+    }
+    let mut leaving = vec![0usize; points.len()];
+    let mut entering = vec![0usize; points.len()];
+    for &(from, to) in &kept {
+        leaving[from] += 1;
+        entering[to] += 1;
+    }
+    if leaving
+        .iter()
+        .zip(&entering)
+        .any(|(out, into)| out != into || *out > 1)
+    {
+        return None;
+    }
+    Some(
+        kept.iter()
+            .map(|&(from, to)| [points[from].0, points[from].1, points[to].0, points[to].1])
+            .collect(),
+    )
 }
 
 /// Move every end within [`ROOM_VERTEX_TOLERANCE_FEET`] of an earlier one
