@@ -1,27 +1,37 @@
 //! RE-317: where a Revit 2024 project keeps an Area's boundary.
 //!
 //! FACT under test: Revit's export draws each Area as an
-//! `IfcExtrudedAreaSolid` of the Area's boundary (RE-191 §3). An Area's
-//! chain record (RE-35) names its area scheme (`OST_AreaSchemes`, -2003201)
-//! and two elements of `OST_AreaSchemeLines` (-2000079), the area boundary
-//! lines. This probe prints what the file holds around each Area so
-//! `tools/re/area_boundaries_vs_ifc.py` can match Revit's profile against it:
+//! `IfcExtrudedAreaSolid` of the Area's boundary, from its Level to the next
+//! storey (RE-191 §3). The Area stores no boundary. Its chain record (RE-35)
+//! names its Level, its area scheme (`OST_AreaSchemes`, -2003201) and two
+//! elements of `OST_AreaSchemeLines` (-2000079), area boundary lines, each a
+//! chain record with a bounding box of its own: for a straight line along an
+//! axis, the line itself. The two `f64`s at byte 107 of the payload of the
+//! Area's data object (RE-153) are a point of plan feet inside the Area. The
+//! Area's region is the one of the arrangement of its scheme's lines on its
+//! Level that holds the point, less the loops directly inside it. Verify with
+//! `tools/re/area_boundaries_vs_ifc.py <probe output> <Revit's export>`, which
+//! prints Revit's profile of each Area, its depth against the storeys, whether
+//! the point lies in it, and the lines on its outline.
+//!
+//! This probe prints, tab-separated:
 //!
 //! - `level`: every recovered Level, with its elevation;
 //! - `cat`: a census of the chain records' categories;
-//! - `area`: every Area's ElementId, GlobalId, number, name, Level, whether
-//!   its placement word is the placed-instance kind, and the ids its record
-//!   names with their categories;
+//! - `area`: every Area's ElementId, GlobalId, number, name, the one Level its
+//!   record names (`-` for none or several, and ids below 1000 are not read
+//!   here), whether its placement word is the placed-instance kind, and the ids
+//!   its record names with their categories;
 //! - `rec`, `obj`: the bytes of its chain record and of each data object it
 //!   owns (RE-153);
-//! - `occ`: where else its ElementId appears as a `u64`, with the chain
-//!   record that holds it;
+//! - `occ`: where else its ElementId appears as a `u64`, with the chain record
+//!   that holds it;
 //! - `solid`: the stored solids (RE-101's layout) keyed by an Area or by an
 //!   element its record names;
-//! - `chain`: the bytes of every chain record an Area names, and of a sample
-//!   of the area boundary lines and polylines;
-//! - `line`: every area boundary line and area polyline whose element
-//!   record decodes: category, bounding box, references, owner.
+//! - `chain`: the bytes of every chain record an Area names, and of a sample of
+//!   the area boundary lines and polylines;
+//! - `line`: every area boundary line and area polyline whose element record
+//!   decodes: category, bounding box, references, owner.
 //!
 //! Usage:
 //!   cargo run --profile ci -p rvt-probes --example probe_re317_area_boundaries -- FILE.rvt

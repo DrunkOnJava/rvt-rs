@@ -16,7 +16,10 @@ Area, found by Revit's GlobalId, this prints:
   much of the outline's length they cover and whether the Area's own record
   names them;
 - every `f64` in the probe's byte dumps that equals a coordinate of Revit's
-  outline within 0.0002 ft, with the dump and offset it was found at.
+  outline within 0.0002 ft, with the dump and offset it was found at;
+- whether the two `f64`s at byte 107 of the Area's data object (the point
+  `partition_area_records` reads, `AREA_POINT_OFFSET`) lie inside Revit's
+  profile, its holes taken out.
 
 Usage:
     python3 tools/re/area_boundaries_vs_ifc.py PROBE.txt REVIT.ifc [--list]
@@ -25,6 +28,7 @@ Needs IfcOpenShell (the version tools/ci/requirements-ifc.txt pins), NumPy and S
 """
 
 import collections
+import struct
 import sys
 
 import ifcopenshell
@@ -285,6 +289,14 @@ def main(argv):
         )
         outer, inners, has_arc = profile_points(space, scale, frame)
         print(f"profile\t{area_id}\t{has_arc}\t{outer}\t{inners}")
+        point = None
+        for obj in probe["obj"]:
+            if obj[0] == str(area_id) and len(obj[-1]) >= 2 * (107 + 16):
+                point = struct.unpack_from("<2d", bytes.fromhex(obj[-1]), 107)
+        if point is not None and outer:
+            inside = Polygon(outer, inners).contains(Point(point))
+            print(f"    point {point[0]:.3f} {point[1]:.3f} inside Revit's profile: {inside}")
+            counts["point inside Revit's profile" if inside else "point outside Revit's profile"] += 1
         outline = rings(surface)
         if not outline:
             counts["no top surface"] += 1
