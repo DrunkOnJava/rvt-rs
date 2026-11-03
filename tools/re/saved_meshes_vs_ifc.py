@@ -8,11 +8,18 @@ the element with the same `Tag` in Revit's export, and buckets the largest
 of the six corner differences (feet). `IfcOpeningElement` is skipped on
 both sides: Revit tags an opening with the id of the element that cuts it.
 
-rvt-rs writes Revit's internal coordinates. When the reference export uses
-shared coordinates, pass the internal-to-shared transform (`--rotate-deg`,
-`--translate-ft X,Y,Z`). A published transform is rounded; `--offset-ft`
-removes the residual as one translation for the whole file, and without it
-the residual is taken as the median difference over the scored elements.
+Each file's bodies are taken in Revit's internal feet by undoing that
+file's own IfcSite placement (`ifc_common.site_frame`), as the other body
+scorers do, so a reference export in shared coordinates, turned to true
+north (the BIM4LCA office), compares box for box. With `--rotate-deg` or
+`--translate-ft X,Y,Z`, rvt-rs's bodies are instead moved into the
+reference's world coordinates by that internal-to-shared transform, and the
+reference's are taken as they are. Either way any residual is removed as
+one translation for the whole file: `--offset-ft`, or by default the median
+difference over the scored elements.
+
+Only the rvt-rs elements with a wanted `BodySource`, and the reference's
+elements with their Tags, are meshed.
 
 Needs IfcOpenShell (the version tools/ci/requirements-ifc.txt pins).
 
@@ -31,6 +38,9 @@ import statistics
 
 import ifcopenshell
 import ifcopenshell.geom
+import numpy as np
+
+from ifc_common import site_frame
 
 FT = 0.3048
 
@@ -45,8 +55,11 @@ def body_sources(element):
     return None
 
 
-def world_boxes(path, tags=None, transform=None):
-    """Tag -> (class, box in feet, BodySource) for elements with a body."""
+def world_boxes(path, tags=None, transform=None, wanted=None, frame=True):
+    """Tag -> (class, box in feet, BodySource) for elements with a body: in
+    the file's internal feet through its site placement (`frame`), else in
+    its world feet, moved by `transform` when given. With `wanted`, only the
+    elements with one of those BodySources are meshed."""
     model = ifcopenshell.open(path)
     settings = ifcopenshell.geom.settings()
     settings.set("use-world-coords", True)
@@ -59,18 +72,26 @@ def world_boxes(path, tags=None, transform=None):
         and (tags is None or e.Tag in tags)
     ]
     sources = {e.Tag: body_sources(e) for e in elements}
+    if wanted is not None:
+        elements = [e for e in elements if sources.get(e.Tag) in wanted]
     out = {}
+    if not elements:
+        return out
+    to_internal = site_frame(model) if frame else None
     it = ifcopenshell.geom.iterator(settings, model, multiprocessing.cpu_count(), include=elements)
     if not it.initialize():
         return out
     while True:
         shape = it.get()
-        verts = shape.geometry.verts
-        points = [(verts[i] / FT, verts[i + 1] / FT, verts[i + 2] / FT) for i in range(0, len(verts), 3)]
-        if points:
-            if transform:
-                points = [transform(p) for p in points]
-            box = [min(p[k] for p in points) for k in range(3)] + [max(p[k] for p in points) for k in range(3)]
+        verts = np.array(shape.geometry.verts, dtype=float).reshape(-1, 3)
+        if len(verts):
+            if to_internal is not None:
+                points = to_internal(verts)
+            else:
+                points = verts / FT
+                if transform:
+                    points = np.array([transform(p) for p in points])
+            box = [float(v) for v in points.min(axis=0)] + [float(v) for v in points.max(axis=0)]
             element = model.by_id(shape.id)
             out[element.Tag] = (element.is_a(), box, sources.get(element.Tag))
         if not it.next():
@@ -83,20 +104,23 @@ def main():
     ap.add_argument("ours")
     ap.add_argument("reference")
     ap.add_argument("--source", action="append", default=None)
-    ap.add_argument("--rotate-deg", type=float, default=0.0)
-    ap.add_argument("--translate-ft", default="0,0,0")
+    ap.add_argument("--rotate-deg", type=float, default=None)
+    ap.add_argument("--translate-ft", default=None)
     ap.add_argument("--offset-ft", default=None)
     args = ap.parse_args()
     wanted = set(args.source or ["saved_graphics_mesh"])
-    tx, ty, tz = (float(v) for v in args.translate_ft.split(","))
-    c, s = math.cos(math.radians(args.rotate_deg)), math.sin(math.radians(args.rotate_deg))
+    frames = args.rotate_deg is None and args.translate_ft is None
+    tx, ty, tz = (float(v) for v in (args.translate_ft or "0,0,0").split(","))
+    angle = math.radians(args.rotate_deg or 0.0)
+    c, s = math.cos(angle), math.sin(angle)
 
     def to_shared(p):
         x, y, z = p
         return (x * c - y * s + tx, x * s + y * c + ty, z + tz)
 
-    ours = {t: v for t, v in world_boxes(args.ours, transform=to_shared).items() if v[2] in wanted}
-    ref = world_boxes(args.reference, tags=set(ours))
+    ours = world_boxes(args.ours, transform=None if frames else to_shared, wanted=wanted, frame=frames)
+    ref = world_boxes(args.reference, tags=set(ours), frame=frames)
+    print("frames:", "each file's site placement undone" if frames else "rvt-rs moved by the given transform")
     pairs = [(ours[t][1], ref[t][1]) for t in ours if t in ref]
     if args.offset_ft:
         offset = [float(v) for v in args.offset_ft.split(",")]
