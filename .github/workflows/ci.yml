@@ -628,6 +628,37 @@ jobs:
           python -m ifcopenshell.validate /tmp/walker-real-project.ifc
           python -m ifcopenshell.validate /tmp/core-interior.ifc
           python tools/ci/ifc_schema_arity.py /tmp/walker-real-project.ifc /tmp/core-interior.ifc
+      # RE-313: every room's plan area and outline against Revit's own export
+      # of the same project (tools/re/space_profiles_vs_ifc.py), on the two
+      # projects whose rooms were measured whole: Core Interior (Revit 2024)
+      # and RE1 Architecture (Revit 2025). The minimums are the measured
+      # counts, so a room that stops matching fails the job. A model's
+      # rooms are scored here, not by `Corpus health`, because only this
+      # job has IfcOpenShell, NumPy and Shapely.
+      - name: Fetch RE1 Architecture and Revit's export of it (Drshelden/IFC-ECS, MIT)
+        run: |
+          set -euo pipefail
+          base=https://raw.githubusercontent.com/Drshelden/IFC-ECS/9e8b37175a0fba1397f7011aeee917fe52de7623/data/RE1
+          dir="${GITHUB_WORKSPACE}/_project_corpus/Revit"
+          while read -r name sum; do
+            curl -sSfL --retry 5 --retry-all-errors -o "${dir}/${name}" "${base}/${name}"
+            echo "${sum}  ${dir}/${name}" | sha256sum -c -
+          done <<'LIST'
+          RE1-Architecture.rvt 4a78bdd68e7f4dd7806060db07c222da9a810e20b3f303c17a443294b91c8ce4
+          RE1-Architecture.ifc a9b5d36677aa6a8bb91b77d8bc354ed9028a7ca3e9e2491a47ba14cfd8e26200
+          LIST
+      - name: Room areas and outlines against Revit's exports
+        env:
+          RVT_PROJECT_CORPUS_DIR: ${{ github.workspace }}/_project_corpus/Revit
+        run: |
+          set -euo pipefail
+          ./target/ci/rvt-ifc "${RVT_PROJECT_CORPUS_DIR}/RE1-Architecture.rvt" -o /tmp/re1-architecture.ifc
+          python tools/re/space_profiles_vs_ifc.py /tmp/core-interior.ifc \
+            "${RVT_PROJECT_CORPUS_DIR}/../IFC Exports/2024_Core_Interior_slim.ifc" \
+            --min-in-both 116 --min-area 116 --min-outline 116
+          python tools/re/space_profiles_vs_ifc.py /tmp/re1-architecture.ifc \
+            "${RVT_PROJECT_CORPUS_DIR}/RE1-Architecture.ifc" \
+            --min-in-both 11 --min-area 11 --min-outline 11
       # #908: doors and windows are drawn from their saved graphics by
       # default (2026-10-29); every other class only with --saved-meshes, so
       # no other job reads theirs. Export both real projects with it, fail

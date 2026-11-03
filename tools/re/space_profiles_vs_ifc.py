@@ -10,7 +10,8 @@ adds what an importer needs to know about rooms:
 - which spaces pair: by Revit's GlobalId, or, for a file whose rooms carry
   none of Revit's (Revit 2023), by the nearest top-surface centroid, one
   space to one;
-- the spaces in only one file, and those with no body;
+- the spaces in only one file, those of Revit's that rvt-rs writes without a
+  body (its Areas), and those whose top surface has no area;
 - area within 0.1% and within 1%, the outline within 0.01 ft, and both;
 - the same counts split by where rvt-rs's outline came from (its stored
   solid, or the record box);
@@ -163,6 +164,13 @@ def main(argv):
     print(
         f"space profiles: in both {in_both}, only in rvt-rs {len(ours) - len(pairs)},"
         f" only in Revit {len(revit) - len(pairs)}"
+    )
+    paired_revit = set(pairs.values())
+    unpaired = [key for key in revit if key not in paired_revit]
+    bodiless = sum(key in held for key in unpaired) if match == "globalid" else 0
+    print(
+        f"space profiles: only in Revit and in rvt-rs without a body {bodiless},"
+        f" paired where the Revit top surface has no area {len(pairs) - in_both}"
     )
     print(
         f"space profiles: area within 0.1% {n_area}, within 1% {n_area_1},"
