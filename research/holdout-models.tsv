@@ -10,6 +10,13 @@
 # gives it a 200 mm type, the export (made hours after the last save) a 300 mm one the file also
 # holds (RE-253). The maintainer chose (2026-10-27) to treat that as an inconsistency of the pair
 # (#1048): tools/re/qtos_vs_ifc.py counts that wall's Width apart.
+# hemanth1986's held-out pairs (#408, 2026-11-02): two projects (a two-storey house, a one-storey
+# L-shaped office) built by a Revit add-in for this purpose, each saved by Revit 2022, 2024, 2025,
+# 2026 and 2027 and exported by the same release's "IFC4 Reference View [Architecture]" setup with
+# base quantities on, at commit b9499a43 of hemanth1986/rvt-holdout-models. The modelling is
+# CC BY 4.0 (credit "hemanth1986"); their door, window and furniture families are Autodesk's
+# template content, which that licence does not cover, so they are handled like the models above:
+# fetched for a run, never committed, counts only. Reference View writes no wall joins.
 # name	url	sha256	bytes
 AA-SingleDwellingHouse-RVT-CIADD.rvt	https://flowbim.ee/files/content/cci/ENG/AA-SingleDwellingHouse-RVT-CIADD.rvt	eeff78f3d07dc23397d276f870f42240cb453cfdd39d965531a9d0ccc7d0a654	66670592
 AA-SingleDwellingHouse-RVT-CIADD.ifc	https://flowbim.ee/files/content/cci/ENG/AA-SingleDwellingHouse-RVT-CIADD.ifc	c9e2986c0f349b3aee0973a15d598c9fc82955e0b4d75b4e8ff99808be767342	77456430
@@ -17,3 +24,23 @@ modelo_bim.rvt	https://raw.githubusercontent.com/255ribeiro/intro_ifc/5a0e9fa2d8
 modelo_bim.ifc	https://raw.githubusercontent.com/255ribeiro/intro_ifc/5a0e9fa2d8d68166e7c123a457ea24474a02c413/docs/testes/modelo_bim.ifc	58a6aa2872a818a43ed383e833a3a88ec768ef20ef75658bcbd9f7e846fab47f	221653
 teste_export_2025.rvt	https://raw.githubusercontent.com/255ribeiro/intro_ifc/5a0e9fa2d8d68166e7c123a457ea24474a02c413/docs/IDS/teste_export_2025.rvt	73ee5cba253535f97afc9d6e2bd13a8c19a60d82a61b5b5c422a4a1173427115	4476928
 teste_export_2025.ifc	https://raw.githubusercontent.com/255ribeiro/intro_ifc/5a0e9fa2d8d68166e7c123a457ea24474a02c413/docs/IDS/teste_export_2025.ifc	f98dd81b02ccf8ee55c1846edb42cb6d1ba293bc0217a3d281d75fa2d952b445	50644
+rvt-holdout-office-2022.ifc	https://raw.githubusercontent.com/hemanth1986/rvt-holdout-models/b9499a43a9b7d20bdad6111babedc4affe47b095/2022-office/rvt-holdout-office-2022.ifc	3a2057868fbdc10463ce4661ed78ce03b925e6b80cc614538feba48c89f9bb64	343992
+rvt-holdout-office-2022.rvt	https://raw.githubusercontent.com/hemanth1986/rvt-holdout-models/b9499a43a9b7d20bdad6111babedc4affe47b095/2022-office/rvt-holdout-office-2022.rvt	1b421b8b717a030acb5eef600191b62d1bcbc9eae2f095c4193e2ba78f2c639e	9764864
+rvt-holdout-2022.ifc	https://raw.githubusercontent.com/hemanth1986/rvt-holdout-models/b9499a43a9b7d20bdad6111babedc4affe47b095/2022/rvt-holdout-2022.ifc	7d0a01d7258256977aa95726a07b48c971ff4d0fc01d2049e6e9129e5ba33be5	435863
+rvt-holdout-2022.rvt	https://raw.githubusercontent.com/hemanth1986/rvt-holdout-models/b9499a43a9b7d20bdad6111babedc4affe47b095/2022/rvt-holdout-2022.rvt	59216547964bf69855fb14260cd52fa41c2d0e2ffba63c96ec4ca33d2307788f	9846784
+rvt-holdout-office-2024.ifc	https://raw.githubusercontent.com/hemanth1986/rvt-holdout-models/b9499a43a9b7d20bdad6111babedc4affe47b095/2024-office/rvt-holdout-office-2024.ifc	c022547c8803835c84dd1a033251771b2ddf09332b8ac9d8d598173ea13fe692	435199
+rvt-holdout-office-2024.rvt	https://raw.githubusercontent.com/hemanth1986/rvt-holdout-models/b9499a43a9b7d20bdad6111babedc4affe47b095/2024-office/rvt-holdout-office-2024.rvt	6f44f60f3997396f2058571fbabda766c8d71c7603c41710ad91f221a9280c7f	38592512
+rvt-holdout-2024.ifc	https://raw.githubusercontent.com/hemanth1986/rvt-holdout-models/b9499a43a9b7d20bdad6111babedc4affe47b095/2024/rvt-holdout-2024.ifc	8ffad1234a5ee7d57f6022d08c6a5d464f2367f2f04618b9a26ff42ab8f481ed	1076863
+rvt-holdout-2024.rvt	https://raw.githubusercontent.com/hemanth1986/rvt-holdout-models/b9499a43a9b7d20bdad6111babedc4affe47b095/2024/rvt-holdout-2024.rvt	062d0931ace66553ee8a16c9e1abeeb27ccc80a37c35a3a2abf994fd647fd7bf	38764544
+rvt-holdout-office-2025.ifc	https://raw.githubusercontent.com/hemanth1986/rvt-holdout-models/b9499a43a9b7d20bdad6111babedc4affe47b095/2025-office/rvt-holdout-office-2025.ifc	f83a29149f9c502aa1240b0326f86116453236c09b4cde05d05d637482cf573f	437014
+rvt-holdout-office-2025.rvt	https://raw.githubusercontent.com/hemanth1986/rvt-holdout-models/b9499a43a9b7d20bdad6111babedc4affe47b095/2025-office/rvt-holdout-office-2025.rvt	b95f2e0046ab592199c920c4c66b67487dbbe97c468c75183e82c9938296fd16	38658048
+rvt-holdout-2025.ifc	https://raw.githubusercontent.com/hemanth1986/rvt-holdout-models/b9499a43a9b7d20bdad6111babedc4affe47b095/2025/rvt-holdout-2025.ifc	79bb951ec9cc4477c6b401f923d955d306ca1ba20065e59d6053f97db6f52b6c	1078679
+rvt-holdout-2025.rvt	https://raw.githubusercontent.com/hemanth1986/rvt-holdout-models/b9499a43a9b7d20bdad6111babedc4affe47b095/2025/rvt-holdout-2025.rvt	f6b5dc1229ba363e8dff7fd8754bd1e5515afdea3e4b9ea103a639f2f2990e5b	38830080
+rvt-holdout-office-2026.ifc	https://raw.githubusercontent.com/hemanth1986/rvt-holdout-models/b9499a43a9b7d20bdad6111babedc4affe47b095/2026-office/rvt-holdout-office-2026.ifc	245403d03c9b8467a0219ad6a29c9f865fb3b27e589b5e1ff90eb5c2ce569711	437595
+rvt-holdout-office-2026.rvt	https://raw.githubusercontent.com/hemanth1986/rvt-holdout-models/b9499a43a9b7d20bdad6111babedc4affe47b095/2026-office/rvt-holdout-office-2026.rvt	4291439232de8219a4b8b05ca8b4cfd16115cb1111776ff4045f0174277447dd	38535168
+rvt-holdout-2026.ifc	https://raw.githubusercontent.com/hemanth1986/rvt-holdout-models/b9499a43a9b7d20bdad6111babedc4affe47b095/2026/rvt-holdout-2026.ifc	445d6fa453b86e1d0822f1c60765250f2d0c89a26f26ec405e5264a718086c02	1077704
+rvt-holdout-2026.rvt	https://raw.githubusercontent.com/hemanth1986/rvt-holdout-models/b9499a43a9b7d20bdad6111babedc4affe47b095/2026/rvt-holdout-2026.rvt	401eb1c3445f1bbbded0fc305a5751058f688df8d6407507808ff47461fcbfae	38711296
+rvt-holdout-office-2027.ifc	https://raw.githubusercontent.com/hemanth1986/rvt-holdout-models/b9499a43a9b7d20bdad6111babedc4affe47b095/2027-office/rvt-holdout-office-2027.ifc	79a8128eff2915d6c72faba02a2ec43f3e8f242e7ec9cda74bf67960ae464897	442910
+rvt-holdout-office-2027.rvt	https://raw.githubusercontent.com/hemanth1986/rvt-holdout-models/b9499a43a9b7d20bdad6111babedc4affe47b095/2027-office/rvt-holdout-office-2027.rvt	c1266621e6044daf1d1d6ff49b395c398287f26fca4374350db13bf74eaa3b4a	38719488
+rvt-holdout-2027.ifc	https://raw.githubusercontent.com/hemanth1986/rvt-holdout-models/b9499a43a9b7d20bdad6111babedc4affe47b095/2027/rvt-holdout-2027.ifc	63d65f7382e223a0c3f327461668a906be3b8fb772ab5e516521b479ba76f9c9	1083555
+rvt-holdout-2027.rvt	https://raw.githubusercontent.com/hemanth1986/rvt-holdout-models/b9499a43a9b7d20bdad6111babedc4affe47b095/2027/rvt-holdout-2027.rvt	7d1301e1a924996ad56ace01ec30246cb8e26d355a38b2f70db526a01321ccca	38891520
