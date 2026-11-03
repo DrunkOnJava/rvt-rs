@@ -68,8 +68,10 @@ def sources(path):
             source = f"other: {props['ProfileSource']}"
         else:
             source = "not stated"
-        revit_class = props.get("RevitClass")
-        kind = {"Room": "room", "Area": "area", None: "space"}.get(revit_class, "family instance")
+        # A room has its number or its name; a family instance written as a
+        # space has neither.
+        named = "RoomNumber" in props or "RoomName" in props
+        kind = "room" if named else "family instance" if props else "space"
         out[space.GlobalId] = (source, kind)
     return out
 
