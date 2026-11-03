@@ -2252,6 +2252,10 @@ A saved `GEllipse` is `centre + xLen·cos t·x + yLen·sin t·y` over `m_endPara
 
 A saved cylinder face whose trim loop does not run round its UV box (a door's curved faces, cut by its leaf and frame) is meshed in strips across its angle: the cylinder is straight along its axis, so only U needs the chord bound. 155 more BIM4LCA office doors are then drawn from their saved meshes, 151 exact to 0.001 ft against Revit's export and all within 0.01 ft. Report: `reports/element-framing/RE-304-cylinder-trims.md`.
 
+## Addendum — RE-306 why a beam keeps its record box (2026-11-03)
+
+A beam is drawn along its location line only where its element data holds one line that fits its record box (RE-49); a beam whose copies in different partitions hold different lines keeps its box, as in v0.6.1. On the 2024 samples every boxed beam has one line its box rejects, or none (19 on Snowdon Towers structural, 25 on rst basic, 9 on rac advanced), and none has disagreeing copies; Core Interior and the BIM4LCA office have no boxed beam. `probe_re306_beam_copies` is for #1247's 341 boxed beams. Report: `reports/element-framing/RE-306-boxed-beams.md`.
+
 ## Addendum — RE-305 a cylinder face trimmed by several loops (2026-11-03)
 
 A loop inside another of a cylinder face's loops is a hole. Meshed with them, 30 more BIM4LCA office bodies are drawn from their saved meshes, all `Stay_Wall_Mounted_:VAR-1` and none Revit's body: 1.109 to 1.120 of its volume where the scorer lists them, the extra surface in three of five shells, as on RE-302's toilets, with no shared cause shown. So the change stays off `main`. Report: `reports/element-framing/RE-305-cylinder-holes.md`.
