@@ -1059,11 +1059,16 @@ prints it from any installed build.
 
 ## Roadmap Position
 
-- **v0.12.0** (2026-10-31) is the latest release: crates.io and docs.rs,
+- **v0.12.1** (2026-11-01) is the latest release: crates.io and docs.rs,
   the `rvt` wheels on PyPI, GitHub Release archives for Linux, macOS and
   Windows, and the container image, each checked from its published
-  artifacts ([`install.md`](install.md)). It carries everything under
-  `[0.12.0]` in [`CHANGELOG.md`](../CHANGELOG.md):
+  artifacts ([`install.md`](install.md)). It makes exports of Revit 2015 to
+  2023 files faster than 0.12.0 made them (2015 to 2022 projects take 0.84
+  to 0.97 of the time, 2023's 0.89 to 0.96), each the same as 0.12.0's but
+  for the version its IFC header records (#1237). They still take 1.6 to 2.9
+  times as long as with 0.11.0 (2023's 1.3 to 1.9 times).
+- **v0.12.0** (2026-10-31) carries everything under `[0.12.0]` in
+  [`CHANGELOG.md`](../CHANGELOG.md):
   - more of the base quantities and common property values Revit's IFC4
     export writes, each where the model's records decide it, and none where
     Revit's own exporters disagree. On the BIM4LCA office as built, counting
@@ -1092,7 +1097,7 @@ prints it from any installed build.
   - elements outside the export phase left out (#328);
   - doors and windows drawn from their saved meshes by default in `rvt-ifc`;
   - Revit 2008 to 2014 exported experimentally.
-- `main` has everything v0.12.0 has, and is ahead of it by the fragments
+- `main` has everything v0.12.1 has, and is ahead of it by the fragments
   under [`changelog.d/`](../changelog.d/README.md).
 
 Open work is tracked as GitHub issues; [`docs/archive/TODO.md`](archive/TODO.md) is

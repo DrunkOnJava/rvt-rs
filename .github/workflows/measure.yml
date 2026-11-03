@@ -423,13 +423,37 @@ jobs:
               echo
               echo "### Scorer differences (base → head)"
               echo
+              # The kept IFCs and GLBs are compared by hash above; diffed as
+              # text they made a 3 GB summary GitHub refused (run
+              # 41537426493). The whole diff is the compare-scorer-diff
+              # artifact; the summary shows its start, under GitHub's 1 MiB.
+              diff -r -U0 -x commit.txt -x runner.txt -x '*.log' -x ifc.sha256 -x diagnostics.json \
+                -x '*.ifc' -x '*.glb' measure-base measure-head > scorer-diff.txt || true
+              limit=$((640 * 1024))
+              size=$(stat -c %s scorer-diff.txt)
               echo '```diff'
-              diff -r -U0 -x commit.txt -x runner.txt -x '*.log' -x ifc.sha256 -x diagnostics.json measure-base measure-head || true
+              head -c "$limit" scorer-diff.txt
+              echo
               echo '```'
+              if [ "$size" -gt "$limit" ]; then
+                echo
+                echo "**Truncated:** the scorer diff is $size bytes and this shows its first $limit; the whole diff is the \`compare-scorer-diff\` artifact."
+              fi
             else
               echo "No base; the scores are in the measure-head artifact."
             fi
-          } >> "$GITHUB_STEP_SUMMARY"
+          } > summary.md
+          size=$(stat -c %s summary.md)
+          if [ "$size" -gt 1000000 ]; then
+            echo "::error::the summary is $size bytes, over GitHub's 1 MiB step summary limit"
+            exit 1
+          fi
+          cat summary.md >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: ${{ hashFiles('scorer-diff.txt') != '' }}
+        with:
+          name: compare-scorer-diff
+          path: scorer-diff.txt
 
   # B81: the base and head jobs above run on different runners, so their wall
   # times compare machines as much as code. With `timing`, one runner builds
