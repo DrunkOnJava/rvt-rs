@@ -1,7 +1,13 @@
 """Helpers the tools/re scorers share, one copy of each so they cannot drift."""
 
+import concurrent.futures
+import concurrent.futures.process
+import multiprocessing
+import os
 import re
+import sys
 
+import ifcopenshell.geom
 import ifcopenshell.util.placement
 import numpy as np
 
@@ -36,3 +42,44 @@ def report_mesh_error(error):
     if message not in MESH_ERRORS:
         MESH_ERRORS.add(message)
         print(f"IfcOpenShell cannot mesh: {message}")
+
+
+_MESHING = {}
+
+
+def _mesh_one(part_id):
+    try:
+        shape = ifcopenshell.geom.create_shape(_MESHING["settings"], _MESHING["model"].by_id(part_id))
+    except RuntimeError:
+        return None
+    return (
+        np.array(shape.geometry.verts, dtype=float).reshape(-1, 3),
+        np.array(shape.geometry.faces, dtype=int).reshape(-1, 3),
+    )
+
+
+def mesh_parts(model, settings, parts):
+    """Instance id -> (vertices (N, 3), faces (M, 3)) for each of `parts` that
+    IfcOpenShell meshes, one `create_shape` per part spread over the CPUs. The
+    triangles are those `create_shape` gives, in the same order (the
+    iterator's are the same, but it took twice the CPU time per element in
+    a measurement on the BIM4LCA office, and no less wall time with 12 threads
+    than with 4); a part it cannot mesh is left out."""
+    ids = list(dict.fromkeys(part.id() for part in parts))
+    cpus = len(os.sched_getaffinity(0)) if hasattr(os, "sched_getaffinity") else os.cpu_count() or 1
+    workers = min(cpus, len(ids))
+    _MESHING.update(model=model, settings=settings)
+    meshes = None
+    if workers > 1:
+        # A forked worker flushes the buffered output it inherits when it ends.
+        sys.stdout.flush()
+        sys.stderr.flush()
+        try:
+            with concurrent.futures.ProcessPoolExecutor(workers, mp_context=multiprocessing.get_context("fork")) as pool:
+                meshes = list(pool.map(_mesh_one, ids, chunksize=1))
+        except concurrent.futures.process.BrokenProcessPool:
+            meshes = None
+    if meshes is None:
+        meshes = [_mesh_one(i) for i in ids]
+    _MESHING.clear()
+    return {i: mesh for i, mesh in zip(ids, meshes) if mesh is not None}
