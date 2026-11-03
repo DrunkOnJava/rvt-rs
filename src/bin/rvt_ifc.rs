@@ -931,6 +931,20 @@ fn export_summary(diagnostics: &ExportDiagnostics, has_sidecar: bool) -> Vec<Str
                 exported.by_ifc_type.get("IFCSPACE").copied().unwrap_or(0)
             ));
         }
+        // RE-316: rooms read from their stored solid by a rule that is not
+        // the exact one.
+        if exported.resolved_outline_spaces > 0 {
+            lines.push(format!(
+                "  {} rooms take an outline read from the faces their stored solid lists, where the exact walk did not close them (SpaceOutlineSource stored_solid_faces)",
+                exported.resolved_outline_spaces
+            ));
+        }
+        if exported.approximate_outline_spaces > 0 {
+            lines.push(format!(
+                "  {} rooms take an approximate outline, a column that overlaps a wall taken off it or up to 0.02 ft short of their record box on a side: the area is within about 1% of the space's, not 0.1% (SpaceOutlineSource stored_solid_approximate)",
+                exported.approximate_outline_spaces
+            ));
+        }
     }
     let left_out: Vec<String> = diagnostics
         .skipped
