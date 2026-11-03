@@ -40,8 +40,11 @@ pub(super) fn attach_type_materials(
 /// whose instances take their own material parameters' or
 /// `<Unnamed>` for it ([`attach_partly_unset_materials`]). A type the scan
 /// found no map for whose native map holds geometry loses its empty list
-/// (RE-299). Left as scanned where the native record path or the material
-/// names are not read.
+/// (RE-299). On a release the native records are read on, a type keeps an
+/// empty list only where its native record was read: one the read did not
+/// reach, or every type where the read or the material names failed, loses
+/// it, so its doors and windows are not written as openings alone on no
+/// evidence (#1247). Left as scanned on other releases.
 pub(super) fn refine_type_materials(
     rf: &mut RevitFile,
     revit_version: u32,
@@ -67,17 +70,29 @@ pub(super) fn refine_type_materials(
             })
         })
         .collect();
+    let native = crate::native_document::Options::default()
+        .releases
+        .contains(&revit_version);
+    let unproven = |type_materials: &mut BTreeMap<u32, Vec<String>>| {
+        if native {
+            type_materials.retain(|_, list| !list.is_empty());
+        }
+    };
     let Ok(records) = crate::elem_table::parse_records(rf) else {
+        unproven(type_materials);
         return partly_unset;
     };
     let declared = crate::elem_table::declared_ids(&records);
     let Ok(names) = crate::partition_materials::scan_material_names(rf, revit_version, &declared)
     else {
+        unproven(type_materials);
         return partly_unset;
     };
     let materials: BTreeSet<u32> = names.keys().copied().collect();
-    let Ok((found, mapped)) = crate::native_type_materials::geometry_maps(rf, &types, &materials)
+    let Ok((found, mapped, read)) =
+        crate::native_type_materials::geometry_maps(rf, &types, &materials)
     else {
+        unproven(type_materials);
         return partly_unset;
     };
     // A family whose geometry with no material is all hidden or void has
@@ -106,7 +121,9 @@ pub(super) fn refine_type_materials(
                     != Some(false)
         })
     };
-    type_materials.retain(|type_id, list| !list.is_empty() || !draws(*type_id));
+    type_materials.retain(|type_id, list| {
+        !list.is_empty() || (!draws(*type_id) && (!native || read.contains(&u64::from(*type_id))))
+    });
     for (type_id, found) in found {
         let Ok(type_id) = u32::try_from(type_id) else {
             continue;

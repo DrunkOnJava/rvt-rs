@@ -48,19 +48,30 @@ pub struct GeometryMap {
     pub family: Option<u64>,
 }
 
-/// [`geometry_materials`], and each type of `types` whose
+/// The types of a [`geometry_maps`] read: what their maps name, which hold
+/// any entry, and which were read at all.
+pub type TypeMaps = (
+    BTreeMap<u64, GeometryMaterials>,
+    BTreeMap<u64, GeometryMap>,
+    BTreeSet<u64>,
+);
+
+/// [`geometry_materials`], each type of `types` whose
 /// `m_geomTag2MaterialId` holds any entry, whatever its values: a type with
 /// geometry, though its map may name no material (every value −1, RE-149)
-/// or only materials not among `materials` (RE-299).
+/// or only materials not among `materials` (RE-299); and every type whose
+/// record the read decoded with that field, so a caller can tell a type
+/// whose map is empty from one the read did not reach (#1247).
 pub fn geometry_maps(
     rf: &mut RevitFile,
     types: &BTreeSet<u64>,
     materials: &BTreeSet<u32>,
-) -> anyhow::Result<(BTreeMap<u64, GeometryMaterials>, BTreeMap<u64, GeometryMap>)> {
+) -> anyhow::Result<TypeMaps> {
     let mut out = BTreeMap::new();
     let mut mapped = BTreeMap::new();
+    let mut read = BTreeSet::new();
     if types.is_empty() {
-        return Ok((out, mapped));
+        return Ok((out, mapped, read));
     }
     let options = native_document::Options {
         selected_ids: types.clone(),
@@ -81,6 +92,7 @@ pub fn geometry_maps(
         else {
             return Ok(());
         };
+        read.insert(record.identity.element_id);
         let mut found = GeometryMaterials {
             family: root.fields.get("m_familyId").and_then(element_id),
             ..GeometryMaterials::default()
@@ -121,5 +133,5 @@ pub fn geometry_maps(
         }
         Ok(())
     })?;
-    Ok((out, mapped))
+    Ok((out, mapped, read))
 }
