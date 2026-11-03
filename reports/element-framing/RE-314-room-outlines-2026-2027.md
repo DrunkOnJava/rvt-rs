@@ -4,12 +4,13 @@
 **Issues:** #1260 (reported by inevitable-co-ai); follows RE-101 (a room's outline from its stored solid's faces) and RE-102 (the same on Revit 2023)
 **Artefacts:** Autodesk's `rac_basic`, `rac_advanced`, `rme_basic`, `rme_advanced` and `rst_basic` sample projects, 2025, 2026 and 2027 saves, as Measure fetches and pins them (`research/autodesk-sample-projects.tsv`); none is committed
 **Probe:** `probes/examples/probe_re101_room_solids.rs` (unchanged; it calls the outline reader with no release gate)
+**Reproduce the third run** with RE-313's scorer, which is on PR #1281's branch until it lands: `gh workflow run measure.yml --ref feat/rooms-space-outlines-measured -f ref=ba28a1a1 -f base=main -f holdout=true -f models="holdout-*" -f scorers=space_profiles_vs_ifc`.
 **Runs:** Measure [41653302934](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41653302934) (the probe on `main` at 1340ca8d, the 2025 to 2027 samples), [41655496833](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41655496833) (the fix, ba28a1a1, against `main` at a98bd316) and [41668846939](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41668846939) (the held-out models scored by RE-313's `space_profiles_vs_ifc.py`, PR #1281)
 **Result:** positive. The stored-solid layout of RE-101 is unchanged on Revit 2026 and 2027, and the reader was gated off there.
 
 ## 1. The report
 
-On Revit 2026 and 2027 saves of Autodesk's `rac_basic_sample_project`, 7 of its 14 rooms came out larger than in the 2015 to 2025 saves of the same project, the Entry Hall 72.80 m² against 30.28 m², overlapping its neighbours. On flowbim's 2026 house, one corridor was 116.8 m² against 36.6 m² in Revit's IFC.
+On Revit 2026 and 2027 saves of Autodesk's `rac_basic_sample_project`, 7 of its 14 rooms came out larger than in the 2015 to 2025 saves of the same project, the Entry Hall 72.80 m² against 30.28 m², overlapping its neighbours. The report also names a room of a 2026 house that Measure holds out (#1260), so it is not quoted here.
 
 ## 2. The cause
 
@@ -35,7 +36,7 @@ Measure 41655496833 exported 60 models with the fix and with `main` (`-f samples
 - the 2026 and 2027 saves of `rac_basic`, `rac_advanced`, `rme_basic` and `rme_advanced`;
 - the five held-out 2026 and 2027 models.
 
-The other 47 are byte-identical: Core Interior, Einhoven, RE1, the office, the 24 Revit 2025 models, every 2025 sample and `rst_basic` 2026 and 2027, which has no rooms. No scorer output on `main` moves, since none of its scorers measured a room's outline.
+The other 47 are byte-identical: Core Interior, Einhoven, RE1, the office, the 24 Revit 2025 models, every 2025 sample, `rst_basic` 2026 and 2027, which has no rooms, and the 8 other held-out models. No scorer output on `main` moves, since none of its scorers measured a room's outline.
 
 RE-313's space scorer (Measure 41668846939, `--ref` its branch, the fix against `main`) gives these counts on the held-out models; the rest of their output is not uploaded:
 
@@ -47,6 +48,12 @@ RE-313's space scorer (Measure 41668846939, `--ref` its branch, the fix against 
 The four projects' rooms are rectangles, which their record box already drew. On the house, 3 more rooms take Revit's area, and 2 remain off. No room's outline is within 0.01 ft of Revit's either way. The house is held out, so why is not examined.
 
 ## 5. Not claimed
+
+- That the rooms' outlines sit where Revit's do on 2026 and 2027. The samples prove the same verdict and area as 2025, and position only so far as the outline spans the record box. On the held-out house no outline is within 0.01 ft of Revit's before or after (§4), and the counts cannot show whether the reported room is among the 2 still off.
+- What else follows the outline on the 13 changed exports, none of it scored:
+  - which space a piece of furniture, a sanitary terminal or a proxy is contained in (`contain_in_spaces`, point in outline; `storeys_vs_ifc` scores only storey against other container);
+  - the room schedule (`schedule_csv.rs`);
+  - the plan SVG.
 
 - That a 2026 or 2027 room's outline equals Revit's own export of it. No Revit export of a 2026 or 2027 sample is in CI. On the one held-out house, no outline is within 0.01 ft of Revit's (§4).
 - A room's prism volume (RE-296) on 2026 or 2027: `ROOM_PRISM_REVIT_VERSIONS` stays 2024 and 2025.
