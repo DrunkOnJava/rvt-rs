@@ -669,6 +669,12 @@ pub struct ExportedModelDiagnostics {
     /// (#409).
     #[serde(default)]
     pub bounding_box_bodies: usize,
+    /// Of the exported `IfcSpace`s, those drawn as their room's record
+    /// bounding box: the room's outline was not read from its stored solid
+    /// (`SpaceOutlineSource` is `record_box`), so their plan area is the box's,
+    /// not the room's (RE-313).
+    #[serde(default)]
+    pub bounding_box_spaces: usize,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -4140,6 +4146,7 @@ fn exported_model_diagnostics(model: &IfcModel) -> ExportedModelDiagnostics {
     let mut building_elements_carried_by_parts = 0usize;
     let mut body_sources = std::collections::BTreeMap::<String, usize>::new();
     let mut bounding_box_bodies = 0usize;
+    let mut bounding_box_spaces = 0usize;
     for (index, entity) in model.entities.iter().enumerate() {
         if let entities::IfcEntity::BuildingElement {
             ifc_type,
@@ -4160,10 +4167,15 @@ fn exported_model_diagnostics(model: &IfcModel) -> ExportedModelDiagnostics {
             }
             let properties = property_set.iter().flat_map(|set| &set.properties);
             let mut source = None;
+            let mut space_outline = None;
             let mut profile_resolved = false;
             for property in properties {
                 match (property.name.as_str(), &property.value) {
                     ("BodySource", entities::PropertyValue::Text(text)) => source = Some(text),
+                    (
+                        export_content::SPACE_OUTLINE_SOURCE_PROPERTY,
+                        entities::PropertyValue::Text(text),
+                    ) => space_outline = Some(text),
                     ("ProfileResolved", entities::PropertyValue::Boolean(true)) => {
                         profile_resolved = true
                     }
@@ -4175,6 +4187,12 @@ fn exported_model_diagnostics(model: &IfcModel) -> ExportedModelDiagnostics {
                 if source == export_content::RECORD_BBOX_BODY_SOURCE && !profile_resolved {
                     bounding_box_bodies += 1;
                 }
+            }
+            if ifc_type == "IFCSPACE"
+                && space_outline
+                    .is_some_and(|text| text == export_content::SPACE_OUTLINE_RECORD_BOX)
+            {
+                bounding_box_spaces += 1;
             }
             building_elements += 1;
             *by_ifc_type.entry(ifc_type.clone()).or_insert(0) += 1;
@@ -4224,6 +4242,7 @@ fn exported_model_diagnostics(model: &IfcModel) -> ExportedModelDiagnostics {
         layered_element_count: model.element_layers.len(),
         body_sources,
         bounding_box_bodies,
+        bounding_box_spaces,
     }
 }
 

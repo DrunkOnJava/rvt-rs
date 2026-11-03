@@ -899,6 +899,14 @@ fn export_summary(diagnostics: &ExportDiagnostics, has_sidecar: bool) -> Vec<Str
                 exported.bounding_box_bodies
             ));
         }
+        // RE-313: say how many rooms are a box, as their area is the box's.
+        if exported.bounding_box_spaces > 0 {
+            lines.push(format!(
+                "  {} of {} spaces are their room's bounding box: the area of their body is the box's, not the room's (SpaceOutlineSource record_box)",
+                exported.bounding_box_spaces,
+                exported.by_ifc_type.get("IFCSPACE").copied().unwrap_or(0)
+            ));
+        }
     }
     let left_out: Vec<String> = diagnostics
         .skipped

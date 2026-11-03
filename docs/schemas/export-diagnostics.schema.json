@@ -279,6 +279,11 @@
           "type": "integer",
           "minimum": 0,
           "description": "Bodies that are only the element record's bounding box, with no recovered plan profile: placed and sized correctly, not the element's shape (#409)."
+        },
+        "bounding_box_spaces": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Exported IfcSpaces drawn as their room's record bounding box (SpaceOutlineSource record_box): their body's plan area is the box's, not the room's (RE-313). Also counted in bounding_box_bodies."
         }
       }
     },
