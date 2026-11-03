@@ -542,28 +542,14 @@ pub struct SpanRead {
     pub slack: f64,
 }
 
-/// The outline the wall faces among `faces` make, kept where it spans
-/// `bbox`. With `span` unset, the faces' plan edges must close into loops as
-/// they are (RE-101). With it set, the outline is the boundary of the region
-/// they wind around ([`region_boundary`]), and a vertical face that reaches
-/// outside the box rules the solid out.
-fn outline_from_faces(
+/// The plan edges of the wall faces among `faces` that reach `anchor`, and,
+/// where `span` reads arcs, of the round columns that do.
+fn wall_edges(
     faces: &[RoomFace],
     bbox: [f64; 6],
     anchor: OutlineAnchor,
     span: Option<SpanRead>,
-) -> Option<PlanProfile> {
-    if faces.len() > RESOLVE_FACES_MAX && span.is_some() {
-        return None;
-    }
-    if let Some(read) = span {
-        if faces.iter().any(|face| strays_from_box(face, bbox)) {
-            return None;
-        }
-        if !read.arcs && faces.iter().any(|face| face.cylinder.is_some()) {
-            return None;
-        }
-    }
+) -> Option<Vec<[f64; 4]>> {
     let mut lines = Vec::new();
     for face in faces {
         if span.is_none() || face.cylinder.is_none() {
@@ -583,16 +569,77 @@ fn outline_from_faces(
             }
         }
     }
+    Some(lines)
+}
+
+/// Whether any two of the plan `segments` cross, or overlap along a line,
+/// anywhere but at an end both have.
+fn crosses(segments: &[[f64; 4]]) -> bool {
+    const END: f64 = 1e-9;
+    for (index, first) in segments.iter().enumerate() {
+        for second in &segments[index + 1..] {
+            let (on_first, on_second) = cut_parameters(*first, *second);
+            if on_first
+                .iter()
+                .chain(&on_second)
+                .any(|t| *t > END && *t < 1.0 - END)
+            {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+/// The outline the faces of a span make (RE-316): with the plan edges of its
+/// walls that reach `anchor`, ends within [`ROOM_STEP_TOLERANCE_FEET`] joined,
+/// and a flag, set where those edges are exactly one simple loop (every end
+/// shared by two edges, no edge crossing another, no loop inside it) and
+/// otherwise unset, the outline then being the boundary of the region the
+/// edges wind around ([`region_boundary`]), which subtracts a column that
+/// overlaps a wall or stands in the room. `None` unless the outline spans
+/// `bbox` as `read` allows; a face outside `bbox`, a cylinder not read as an
+/// arc and more than [`RESOLVE_FACES_MAX`] faces rule the span out.
+fn span_outline(
+    faces: &[RoomFace],
+    bbox: [f64; 6],
+    anchor: OutlineAnchor,
+    read: SpanRead,
+) -> Option<(PlanProfile, bool)> {
+    if faces.len() > RESOLVE_FACES_MAX
+        || faces.iter().any(|face| strays_from_box(face, bbox))
+        || (!read.arcs && faces.iter().any(|face| face.cylinder.is_some()))
+    {
+        return None;
+    }
+    let mut lines = wall_edges(faces, bbox, anchor, Some(read))?;
+    snap_ends_within(&mut lines, ROOM_STEP_TOLERANCE_FEET);
+    if let Some(profile) = plan_profile_from_lines(&lines) {
+        if profile.inner_xy.is_empty() && profile.pieces.is_empty() && !crosses(&lines) {
+            return profile_on_box(profile, bbox, read.slack).map(|profile| (profile, true));
+        }
+    }
+    let boundary = region_boundary(&lines).ok()?;
+    profile_on_box(plan_profile_from_lines(&boundary)?, bbox, read.slack)
+        .map(|profile| (profile, false))
+}
+
+/// The outline the wall faces among `faces` make, kept where it spans
+/// `bbox`: for the walk of RE-101 (`span` unset) the faces' plan edges must
+/// close into loops as they are; for a span they are read by [`span_outline`].
+fn outline_from_faces(
+    faces: &[RoomFace],
+    bbox: [f64; 6],
+    anchor: OutlineAnchor,
+    span: Option<SpanRead>,
+) -> Option<PlanProfile> {
     match span {
         None => {
+            let mut lines = wall_edges(faces, bbox, anchor, None)?;
             snap_ends(&mut lines);
             profile_on_box(plan_profile_from_lines(&lines)?, bbox, 0.0)
         }
-        Some(read) => {
-            snap_ends_within(&mut lines, ROOM_STEP_TOLERANCE_FEET);
-            let boundary = region_boundary(&lines).ok()?;
-            profile_on_box(plan_profile_from_lines(&boundary)?, bbox, read.slack)
-        }
+        Some(read) => span_outline(faces, bbox, anchor, read).map(|(profile, _)| profile),
     }
 }
 
@@ -622,21 +669,24 @@ pub fn span_outline_at(
 /// (RE-316).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ResolvedKind {
-    /// The faces up to the solid's end wind around a region whose boundary
-    /// spans the record box to [`BOX_TOLERANCE_FEET`] on every side.
+    /// The wall edges of the span are exactly one simple loop, spanning the
+    /// record box to [`BOX_TOLERANCE_FEET`] on every side: no column is
+    /// subtracted, no edge crosses another and no loop stands inside it. A
+    /// face of another element would have to close that loop to be read.
     Faces,
-    /// The same, spanning the box to [`ROOM_SLIVER_FEET`] short of it on a
-    /// side: a column that overlaps a wall and whose back stands behind the
-    /// wall's face leaves the outline that far short. Revit's export does not
-    /// always take such a column off the room's area, so this is
-    /// approximate: 0.5% and 0.7% under Revit's area on the two office rooms
-    /// scored.
+    /// The outline is the boundary of the region the edges wind around, a
+    /// column overlapping a wall or standing in the room taken off it, or it
+    /// falls up to [`ROOM_SLIVER_FEET`] short of the record box on a side.
+    /// Revit's export does not always take such a column off the room's
+    /// area, so the area is approximate: 0.45% to 0.7% under Revit's floor
+    /// area on the four office rooms where it does not.
     Approximate,
 }
 
 /// The outline of a room whose solids at `headers` none gives an outline the
-/// walk reads ([`outline_of_solids`] is `None`), from the faces up to each
-/// solid's end resolved to a boundary (RE-316): exactly, else with
+/// walk reads ([`outline_of_solids`] is `None`), from the faces of each
+/// solid's span (RE-316): [`ResolvedKind::Faces`] where they are one simple
+/// loop, else [`ResolvedKind::Approximate`], also tried with
 /// [`ROOM_SLIVER_FEET`] of slack. Where more than one solid gives one, every
 /// one must give the same.
 pub fn resolved_outline_of_solids(
@@ -655,11 +705,18 @@ pub fn resolved_outline_of_solids(
             arcs: false,
             slack: ROOM_SLIVER_FEET,
         };
-        let Some(this) = outline_from_faces(&faces, bbox, OutlineAnchor::Floor, Some(exact))
-            .map(|profile| (profile, ResolvedKind::Faces))
+        let Some(this) = span_outline(&faces, bbox, OutlineAnchor::Floor, exact)
+            .map(|(profile, simple)| {
+                let kind = if simple {
+                    ResolvedKind::Faces
+                } else {
+                    ResolvedKind::Approximate
+                };
+                (profile, kind)
+            })
             .or_else(|| {
-                outline_from_faces(&faces, bbox, OutlineAnchor::Floor, Some(slack))
-                    .map(|profile| (profile, ResolvedKind::Approximate))
+                span_outline(&faces, bbox, OutlineAnchor::Floor, slack)
+                    .map(|(profile, _)| (profile, ResolvedKind::Approximate))
             })
         else {
             continue;
