@@ -177,7 +177,7 @@ that is not in Revit's export (#309); and the export time on Revit 2015 to 2023
 (#1237). Element data: instance and type parameters with units and precedence
 (#35, #155) and the element-record fields that carry them (#223), written to
 IFC property sets and shown in the viewer; door and window sizes where the
-symbol cuts no outline, two doors still wide (#810); and ports' system classification (#834).
+symbol cuts no outline, measured on one building's families (#810, RE-318); and ports' system classification (#834).
 
 ### 1.0.0: first-class utility
 
