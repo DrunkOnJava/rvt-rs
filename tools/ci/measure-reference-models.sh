@@ -98,15 +98,28 @@ if [ -f "$MODELS/bimcollab/02_BIMcollab_Example_STR.rvt" ]; then
   MODELS_LIST="$MODELS_LIST
 bimcollab-str-2015|bimcollab/02_BIMcollab_Example_STR.rvt|bimcollab/02_BIMcollab_Example_STR_optimized.ifc"
 fi
-# The held-out models (research/holdout-models.tsv, RE-252), only with
+# The held-out models (research/holdout-models.tsv, RE-252, and the archived
+# ones research/holdout-archive-models.tsv lists, #408, #1261), only with
 # `-f holdout=true`, each scored against Revit's export beside it; the workflow
 # keeps only their counts (tools/ci/scrub-holdout-results.sh).
 if [ -d "$MODELS/holdout" ]; then
   for model in "$MODELS"/holdout/*.rvt; do
     [ -f "$model" ] || continue
     stem=$(basename "$model" .rvt)
+    [ -f "$MODELS/holdout/$stem.ifc" ] || { echo "holdout-$stem: no Revit export beside it, not measured" >&2; continue; }
     MODELS_LIST="$MODELS_LIST
 holdout-$stem|holdout/$stem.rvt|holdout/$stem.ifc"
+  done
+fi
+# Pairs fetched with them that are no longer held out (research/holdout-archive-models.tsv
+# names them under spent/), measured and uploaded in full.
+if [ -d "$MODELS/spent" ]; then
+  for model in "$MODELS"/spent/*.rvt; do
+    [ -f "$model" ] || continue
+    stem=$(basename "$model" .rvt)
+    [ -f "$MODELS/spent/$stem.ifc" ] || { echo "spent-$stem: no Revit export beside it, not measured" >&2; continue; }
+    MODELS_LIST="$MODELS_LIST
+spent-$stem|spent/$stem.rvt|spent/$stem.ifc"
   done
 fi
 # Scorers taking <rvt-rs.ifc> <revit-export.ifc>, and <model.glb> <revit-export.ifc>.

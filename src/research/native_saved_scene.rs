@@ -66,6 +66,8 @@ pub fn extract_at_detail_with_control(
     control.report(Stage::SavedGraphics, 0, None);
     let mut opts = options.clone();
     opts.channels = BTreeSet::from([103]);
+    // Each element's `source` below carries its record's body digest.
+    opts.record_extras = true;
     let mut records = BTreeMap::<u64, Record>::new();
     let first = native_document::extract_graphs(file, &opts, |r| {
         ensure!(

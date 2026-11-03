@@ -100,7 +100,7 @@ pub enum UnreadKind {
     /// [`compression::InflateLimits::max_output_bytes`] and was left out.
     MemberTooLarge,
     /// Its members together would inflate past
-    /// [`compression::InflateLimits::max_stream_total_bytes`]; those after
+    /// [`compression::InflateLimits::max_stream_total_bytes_for`]; those after
     /// the cap were left out.
     InflatedTotalTooLarge,
 }
@@ -548,7 +548,7 @@ impl RevitFile {
                 name: name.to_string(),
                 stored_bytes: raw.len() as u64,
                 kind: UnreadKind::InflatedTotalTooLarge,
-                limit: limits.max_stream_total_bytes() as u64,
+                limit: limits.max_stream_total_bytes_for(raw.len()) as u64,
             });
         }
         let inflated = Arc::new(inflated);

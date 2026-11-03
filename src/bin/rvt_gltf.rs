@@ -77,8 +77,9 @@ struct Cli {
     max_stream_bytes: Option<u64>,
 
     /// Maximum inflated bytes of one compressed member (default 256 MiB). The
-    /// members of one stream may inflate to this or 1 GiB together,
-    /// whichever is larger.
+    /// members of one stream may inflate to this or, whichever is larger,
+    /// 16 times their stored size, at least 1 GiB and at most 4 GiB (1 GiB
+    /// on a 32-bit build).
     #[arg(long, value_name = "BYTES")]
     max_inflate_bytes: Option<usize>,
 

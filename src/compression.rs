@@ -25,9 +25,26 @@ pub const GZIP_MAGIC: [u8; 3] = [0x1F, 0x8B, 0x08];
 pub const DEFAULT_MAX_INFLATE_BYTES: usize = 256 * 1024 * 1024;
 
 /// Default maximum inflated bytes of one multi-member stream, all its members
-/// together: what [`InflateLimits::max_stream_total_bytes`] gives at the
-/// default per-member cap.
+/// together, for a stream stored in at most a sixteenth of it: the floor of
+/// [`InflateLimits::max_stream_total_bytes_for`] at the default per-member cap.
 pub const DEFAULT_MAX_INFLATED_STREAM_BYTES: usize = 1024 * 1024 * 1024;
+
+/// How many times its stored size a multi-member stream may inflate to at the
+/// default limits, above [`DEFAULT_MAX_INFLATED_STREAM_BYTES`] and up to
+/// [`MAX_SCALED_INFLATED_STREAM_BYTES`]. A 202 MB Revit 2024 model's 141 MiB
+/// partition (148,279,248 bytes stored) inflates past 1 GiB, more than 7.2 times
+/// its stored size, the one such ratio measured (#1075); 16 leaves twice that.
+pub const INFLATED_STREAM_RATIO: usize = 16;
+
+/// The most a multi-member stream may inflate to at the default per-member
+/// cap, however large it is stored: 4 GiB on a 64-bit target; 1 GiB on a 32-bit
+/// one, WebAssembly included, whose whole address space is 4 GiB. A larger
+/// stream needs a raised per-member cap (`--large-model`).
+pub const MAX_SCALED_INFLATED_STREAM_BYTES: usize = if usize::BITS >= 64 {
+    (4u64 << 30) as usize
+} else {
+    DEFAULT_MAX_INFLATED_STREAM_BYTES
+};
 
 /// Upper bound on the capacity reserved before a DEFLATE member is
 /// decoded. The reservation must not scale with the input that follows
@@ -72,12 +89,29 @@ impl Default for InflateLimits {
 }
 
 impl InflateLimits {
-    /// The cap on one multi-member stream's inflated members together:
-    /// [`DEFAULT_MAX_INFLATED_STREAM_BYTES`], or `max_output_bytes` when that
-    /// is larger, so raising the per-member cap for a large model raises
-    /// the stream's total with it (#1075).
+    /// The cap on one multi-member stream's inflated members together, for a
+    /// stream of any stored size: [`DEFAULT_MAX_INFLATED_STREAM_BYTES`], or
+    /// `max_output_bytes` when that is larger, so raising the per-member cap
+    /// for a large model raises the stream's total with it (#1075).
+    /// [`Self::max_stream_total_bytes_for`] is the cap the readers apply.
     pub fn max_stream_total_bytes(&self) -> usize {
         DEFAULT_MAX_INFLATED_STREAM_BYTES.max(self.max_output_bytes)
+    }
+
+    /// The cap on the inflated members together of a stream stored in
+    /// `stored_bytes`: [`INFLATED_STREAM_RATIO`] times its stored size, at
+    /// least [`DEFAULT_MAX_INFLATED_STREAM_BYTES`] and at most
+    /// [`MAX_SCALED_INFLATED_STREAM_BYTES`], or `max_output_bytes` when that
+    /// is larger. A small file cannot make a reader hold more than 1 GiB of
+    /// one stream; a stream that is itself large may inflate further (#1075).
+    pub fn max_stream_total_bytes_for(&self, stored_bytes: usize) -> usize {
+        stored_bytes
+            .saturating_mul(INFLATED_STREAM_RATIO)
+            .clamp(
+                DEFAULT_MAX_INFLATED_STREAM_BYTES,
+                MAX_SCALED_INFLATED_STREAM_BYTES,
+            )
+            .max(self.max_output_bytes)
     }
 }
 
@@ -91,7 +125,7 @@ pub struct InflateShortfall {
     /// [`InflateLimits::max_output_bytes`].
     pub members_over_limit: usize,
     /// True when the members stopped at the stream's inflated total
-    /// ([`InflateLimits::max_stream_total_bytes`]) and the rest were not
+    /// ([`InflateLimits::max_stream_total_bytes_for`]) and the rest were not
     /// inflated.
     pub stopped_at_total: bool,
 }
@@ -275,7 +309,8 @@ impl InflatedStream {
 
     /// [`Self::from_stored`] under `limits`: each member is capped at
     /// `max_output_bytes` and the members together at
-    /// [`InflateLimits::max_stream_total_bytes`], with what the caps left out.
+    /// [`InflateLimits::max_stream_total_bytes_for`] its stored size, with
+    /// what the caps left out.
     pub fn from_stored_with_limits(
         stream_name: &str,
         stored: &[u8],
@@ -285,7 +320,7 @@ impl InflatedStream {
         let (chunks, shortfall) = inflate_all_members_with_limits(
             prepared.as_ref(),
             limits,
-            limits.max_stream_total_bytes(),
+            limits.max_stream_total_bytes_for(stored.len()),
         );
         let total: usize = chunks.iter().map(|(_, _, chunk)| chunk.len()).sum();
         let mut concat = Vec::with_capacity(total);
@@ -803,13 +838,11 @@ fn inflate_all_members_with_limits(
 /// byte triples in random compressed data are false positives).
 ///
 /// Backwards-compatible wrapper around [`inflate_all_chunks_with_limits`].
-/// Uses default per-chunk limits (256 MiB) and a 1 GiB aggregate cap.
+/// Uses default per-chunk limits (256 MiB) and the default aggregate cap for
+/// `data`'s size ([`InflateLimits::max_stream_total_bytes_for`]).
 pub fn inflate_all_chunks(data: &[u8]) -> Vec<Vec<u8>> {
-    inflate_all_chunks_with_limits(
-        data,
-        InflateLimits::default(),
-        1024 * 1024 * 1024, // 1 GiB aggregate
-    )
+    let limits = InflateLimits::default();
+    inflate_all_chunks_with_limits(data, limits, limits.max_stream_total_bytes_for(data.len()))
 }
 
 /// Encode `bytes` as Revit's "truncated-gzip" stream format: a minimal
