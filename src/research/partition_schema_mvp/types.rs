@@ -914,27 +914,31 @@ pub(super) fn attach_type_functions(
     }
 }
 
+/// Whether `element` has a [`TYPE_FUNCTION_FIELD`].
+pub(super) fn has_type_function(element: &DecodedElement) -> bool {
+    element
+        .fields
+        .iter()
+        .any(|(name, _)| name == TYPE_FUNCTION_FIELD)
+}
+
 /// Give each of `walls` with no [`TYPE_FUNCTION_FIELD`] its type's Function
 /// from the type's native record ([`crate::native_wall_types`], RE-185).
 /// Nothing on a release not measured, or where the native records are not
-/// read.
+/// read. `reads` holds what earlier reads of the walls' records found, and
+/// takes what this one does.
 pub(super) fn attach_wall_type_functions<'a>(
     rf: &mut RevitFile,
     revit_version: u32,
     walls: impl IntoIterator<Item = &'a mut DecodedElement>,
+    reads: &mut crate::native_walls::WallReads,
 ) {
     if !WALL_TYPE_FUNCTION_REVIT_VERSIONS.contains(&revit_version) {
         return;
     }
-    let has_function = |element: &DecodedElement| {
-        element
-            .fields
-            .iter()
-            .any(|(name, _)| name == TYPE_FUNCTION_FIELD)
-    };
     let mut walls: Vec<&mut DecodedElement> = walls
         .into_iter()
-        .filter(|element| !has_function(element))
+        .filter(|element| !has_type_function(element))
         .collect();
     let ids: BTreeSet<u64> = walls
         .iter()
@@ -943,7 +947,7 @@ pub(super) fn attach_wall_type_functions<'a>(
     if ids.is_empty() {
         return;
     }
-    let Ok(functions) = crate::native_wall_types::wall_type_functions(rf, &ids) else {
+    let Ok(functions) = reads.type_functions(rf, &ids) else {
         return;
     };
     for element in walls.iter_mut() {

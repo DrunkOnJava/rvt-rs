@@ -51,6 +51,15 @@ pub struct Options {
     /// needs only some parameters skips the per-element pass on a file that
     /// defines none of them.
     pub definition_filter: Option<fn(&str) -> bool>,
+    /// Whether each [`Record`] carries what is derived from it beyond its
+    /// graph and saved metadata: [`RecordSource::body_sha256`], the default
+    /// IFC GUID and the effective IFC parameter. A record read without them
+    /// has an empty digest and `None` for the rest, as an element base record
+    /// does. Off by default: no reader of the export path uses them, and
+    /// deriving them for every record was part of 0.12.0's slower native
+    /// passes (#1237). A caller that dumps records with their provenance, as
+    /// `native_saved_scene` does, turns it on.
+    pub record_extras: bool,
 }
 /// The default [`Options::max_group_bytes`]: one reassembled continuation
 /// group's bytes.
@@ -97,6 +106,7 @@ impl Default for Options {
             graph_classes: None,
             releases: 2023..=2027,
             definition_filter: None,
+            record_extras: false,
         }
     }
 }
@@ -194,6 +204,17 @@ pub struct StreamEnvelope {
     pub opaque_suffix_sha256: String,
     pub suffix_interpreted: bool,
 }
+/// `bytes` as lowercase hex, two digits a byte: `format!("{byte:02x}")` for
+/// each, without a `String` for every one (#1237).
+fn lower_hex(bytes: &[u8]) -> String {
+    const DIGITS: &[u8; 16] = b"0123456789abcdef";
+    let mut hex = String::with_capacity(bytes.len() * 2);
+    for &byte in bytes {
+        hex.push(char::from(DIGITS[usize::from(byte >> 4)]));
+        hex.push(char::from(DIGITS[usize::from(byte & 15)]));
+    }
+    hex
+}
 fn decode_single(prepared: &[u8], offset: usize) -> Result<(Vec<u8>, StreamEnvelope)> {
     let compressed = prepared
         .get(offset..)
@@ -219,10 +240,7 @@ fn decode_single(prepared: &[u8], offset: usize) -> Result<(Vec<u8>, StreamEnvel
             member_offset: offset,
             member_bytes: compressed.len() - suffix.len(),
             opaque_suffix_bytes: suffix.len(),
-            opaque_suffix_sha256: Sha256::digest(suffix)
-                .iter()
-                .map(|b| format!("{b:02x}"))
-                .collect::<String>(),
+            opaque_suffix_sha256: lower_hex(&Sha256::digest(suffix)),
             suffix_interpreted: suffix.is_empty(),
         },
     ))
@@ -432,6 +450,7 @@ fn definition_pass(file: &mut RevitFile, options: &Options) -> Result<Arc<Defini
         graph_classes,
         releases,
         definition_filter: _,
+        record_extras: _,
     } = options;
     let key: DefinitionKey = (
         *max_group_bytes,
@@ -451,6 +470,7 @@ fn definition_pass(file: &mut RevitFile, options: &Options) -> Result<Arc<Defini
     definition_options.selected_ids.clear();
     definition_options.selected_classes.clear();
     definition_options.channels = BTreeSet::from([102]);
+    definition_options.record_extras = false;
     let definition_summary =
         extract_records(
             file,
@@ -979,11 +999,16 @@ fn extract_records(
                     summary.unsupported_metadata_records +=
                         usize::from(metadata_diagnostic.is_some());
                     summary.emitted_records += 1;
-                    let (derived_default_ifc_guid, derived_identifier_diagnostic) =
+                    let (derived_default_ifc_guid, derived_identifier_diagnostic) = if options
+                        .record_extras
+                    {
                         match crate::native_metadata::derive_default_ifc_guid(&identity.unique_id) {
                             Ok(value) => (Some(value), None),
                             Err(error) => (None, Some(error.to_string())),
-                        };
+                        }
+                    } else {
+                        (None, None)
+                    };
                     let (effective_ifc_parameter, effective_ifc_parameter_diagnostic) = match (
                         class_name.as_deref(),
                         saved_metadata.as_ref(),
@@ -1017,10 +1042,11 @@ fn extract_records(
                             group: source.clone(),
                             group_record_offset: offset,
                             body_bytes: body.len(),
-                            body_sha256: Sha256::digest(body)
-                                .iter()
-                                .map(|b| format!("{b:02x}"))
-                                .collect::<String>(),
+                            body_sha256: if options.record_extras {
+                                lower_hex(&Sha256::digest(body))
+                            } else {
+                                String::new()
+                            },
                         },
                         graph,
                         saved_metadata,

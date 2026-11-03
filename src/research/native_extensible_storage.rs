@@ -102,6 +102,8 @@ pub struct InventoryBuilder {
     diagnostics: Vec<String>,
 }
 impl InventoryBuilder {
+    /// Each entity's and owner's `source` has the record's `body_sha256` only
+    /// where the record was read with `Options::record_extras`.
     pub fn ingest(&mut self, record: &crate::native_document::Record) -> Result<()> {
         let Some(graph) = &record.graph else {
             if let Some(diagnostic) = record

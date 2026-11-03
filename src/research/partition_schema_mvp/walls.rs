@@ -484,6 +484,34 @@ pub fn profile_openings_from_fields(
         .collect()
 }
 
+/// Read in one pass what [`attach_wall_type_functions`] and
+/// [`attach_wall_top_joins`] take from `walls`' native records: the type ids
+/// of the walls with no type Function yet and whether each wall's top is
+/// joined, on the releases each is measured on. The records are the same, so
+/// two passes over them would decode each wall twice (#1237). An error is
+/// left to those two to meet again.
+pub(super) fn read_wall_records(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    walls: &[DecodedElement],
+    reads: &mut crate::native_walls::WallReads,
+) {
+    let mut type_walls: BTreeSet<u64> = BTreeSet::new();
+    let mut join_walls: BTreeSet<u64> = BTreeSet::new();
+    for wall in walls {
+        let Some(id) = wall.id.map(u64::from) else {
+            continue;
+        };
+        if WALL_TYPE_FUNCTION_REVIT_VERSIONS.contains(&revit_version) && !has_type_function(wall) {
+            type_walls.insert(id);
+        }
+        if WALL_TOP_JOIN_RECORD_REVIT_VERSIONS.contains(&revit_version) {
+            join_walls.insert(id);
+        }
+    }
+    let _ = reads.read(rf, &type_walls, &join_walls);
+}
+
 /// Give each of `walls` whether its top is joined to a roof or floor
 /// ([`WALL_TOP_JOINED_FIELD`], RE-228) from its native record, on the
 /// releases in [`WALL_TOP_JOIN_RECORD_REVIT_VERSIONS`], whose walls come from
@@ -495,6 +523,7 @@ pub(super) fn attach_wall_top_joins(
     rf: &mut RevitFile,
     revit_version: u32,
     walls: &mut [DecodedElement],
+    reads: &mut crate::native_walls::WallReads,
 ) {
     if !WALL_TOP_JOIN_RECORD_REVIT_VERSIONS.contains(&revit_version) {
         return;
@@ -503,7 +532,7 @@ pub(super) fn attach_wall_top_joins(
         .iter()
         .filter_map(|wall| wall.id.map(u64::from))
         .collect();
-    let Ok(joined) = crate::native_walls::wall_top_joins(rf, &ids) else {
+    let Ok(joined) = reads.top_joins(rf, &ids) else {
         return;
     };
     for wall in walls.iter_mut() {
@@ -518,6 +547,7 @@ pub(super) fn attach_wall_layers(
     rf: &mut RevitFile,
     revit_version: u32,
     walls: &mut [DecodedElement],
+    reads: &mut crate::native_walls::WallReads,
 ) {
     use crate::partition_compound_structure as pcs;
     if !pcs::WALL_LINE_SUPPORTED_REVIT_VERSIONS.contains(&revit_version)
@@ -573,7 +603,7 @@ pub(super) fn attach_wall_layers(
         bounded,
     } = if centreline_bodies {
         let ids: BTreeSet<u64> = wall_ids.iter().map(|&id| u64::from(id)).collect();
-        crate::native_walls::native_walls_and_top_joins(rf, &ids).unwrap_or_default()
+        crate::native_walls::native_walls_and_top_joins_into(rf, &ids, reads).unwrap_or_default()
     } else {
         Default::default()
     };

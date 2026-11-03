@@ -741,13 +741,31 @@ pub fn envelope_slab_mesh(
     undersides: &[(PlanPlane, f64)],
     domains: &[Vec<PlanPlane>],
 ) -> Option<Mesh> {
+    envelope_slab_mesh_split(outer, holes, tops, undersides, domains, None)
+}
+
+/// [`envelope_slab_mesh`] with the underside's planes counting within
+/// `bottom_domains`, where given, rather than the same domains as the top's
+/// (RE-307): where each plane's top lies a different height above its
+/// underside, the lines where the tops meet and the lines where the
+/// undersides meet differ, and so do the wedges each surface is cut into.
+pub(super) fn envelope_slab_mesh_split(
+    outer: &[Point2],
+    holes: &[Ring],
+    tops: &[PlanPlane],
+    undersides: &[(PlanPlane, f64)],
+    domains: &[Vec<PlanPlane>],
+    bottom_domains: Option<&[Vec<PlanPlane>]>,
+) -> Option<Mesh> {
     if tops.is_empty()
         || tops.len() != undersides.len()
         || tops.len() != domains.len()
+        || bottom_domains.is_some_and(|b| b.len() != tops.len())
         || tops.len() > MAX_ENVELOPE_PLANES
     {
         return None;
     }
+    let bottom_domains = bottom_domains.unwrap_or(domains);
     let section = section(outer, holes)?;
     let difference = |p: PlanPlane, q: PlanPlane| [p[0] - q[0], p[1] - q[1], p[2] - q[2]];
     let mut lines: Vec<PlanPlane> = Vec::new();
@@ -763,17 +781,22 @@ pub fn envelope_slab_mesh(
         );
     }
     lines.extend(domains.iter().flatten().copied());
+    if !std::ptr::eq(bottom_domains, domains) {
+        lines.extend(bottom_domains.iter().flatten().copied());
+    }
     lines.retain(|l| l[0].hypot(l[1]) > ENVELOPE_SPLIT_EPS);
-    let covers = |i: usize, p: Point2| domains[i].iter().all(|&d| plane_at(d, p) >= -1e-7);
+    let covers_in = |dom: &[Vec<PlanPlane>], i: usize, p: Point2| {
+        dom[i].iter().all(|&d| plane_at(d, p) >= -1e-7)
+    };
     let top = |p: Point2| {
         (0..tops.len())
-            .filter(|&i| covers(i, p))
+            .filter(|&i| covers_in(domains, i, p))
             .map(|i| plane_at(tops[i], p))
             .fold(f64::INFINITY, f64::min)
     };
     let bottom = |p: Point2| {
         (0..undersides.len())
-            .filter(|&i| covers(i, p))
+            .filter(|&i| covers_in(bottom_domains, i, p))
             .map(|i| plane_at(undersides[i].0, p).max(undersides[i].1))
             .fold(f64::INFINITY, f64::min)
     };

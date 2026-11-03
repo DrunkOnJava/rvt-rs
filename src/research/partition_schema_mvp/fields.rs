@@ -735,7 +735,7 @@ pub const WALL_TOP_JOINED_FIELD: &str = "m_wall_top_joined";
 /// Releases that read walls from their element records
 /// ([`crate::partition_element_records_2023`]) whose native record's top join
 /// is measured (RE-284), where [`WALL_TOP_JOINED_FIELD`] comes from
-/// [`crate::native_walls::wall_top_joins`] alone.
+/// [`crate::native_walls::WallReads::top_joins`] alone.
 pub const WALL_TOP_JOIN_RECORD_REVIT_VERSIONS: &[u32] =
     &[2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023];
 
@@ -964,6 +964,12 @@ pub const ROOF_RAFTER_CUT_FIELD: &str = "m_roof_rafter_cut";
 
 /// Field holding a roof's fascia depth, feet, where it is read (RE-199).
 pub const ROOF_FASCIA_DEPTH_FIELD: &str = "m_roof_fascia_depth";
+
+/// Field marking a roof whose planes are its several slope arrows', one per
+/// edge field set (RE-307): each plane rises from the boundary line its
+/// arrow starts on, square to it, at the arrow's slope, and its top lies a
+/// plane's own `T / cos θ` above its underside at that line.
+pub const ROOF_ARROW_PLANES_FIELD: &str = "m_roof_arrow_planes";
 
 /// Classes whose type's layers stack from the top down (RE-57).
 pub const STACKED_LAYER_CLASSES: &[&str] = &["Floor", "BuildingPad", "Roof", "Ceiling"];
