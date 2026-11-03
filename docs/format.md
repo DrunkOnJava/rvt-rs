@@ -10,7 +10,7 @@ The schema work here, decoding the whole of `Formats/Latest` and classifying all
 
 If you are building BIM or AEC tooling and want an Apache-2.0 Revit reader to build on:
 
-- **Revit 2016 to 2027 files** (and 2008 to 2015, measured on fewer files, [by input](evidence.md#what-you-can-rely-on-by-input)): container open, stream decompression, metadata, previews, schema introspection (the whole schema, all but about ten field encodings per release classified) and stream-level byte-preserving writes.
+- **Revit 2016 to 2027 files**: container open, stream decompression, metadata, previews, schema introspection (the whole schema, all but about ten field encodings per release classified) and stream-level byte-preserving writes. Revit 2008 to 2015 files open too, with less measured ([by input](evidence.md#what-you-can-rely-on-by-input)).
 - **Revit 2024 and 2025 projects** — typed elements with Revit's ElementIds, names, types, storeys, materials, layers and GlobalIds, as IFC4, glTF 2.0, plan SVG and CSV, each export with a diagnostics sidecar naming what was approximated or left out.
 - **Revit 2023 projects** — typed elements with Revit's ElementIds and categories, each drawn as its bounding box (RE-81), walls cut back at their joins (RE-120), beams at their columns (RE-122), rooms as their outline (RE-102), on the storeys of Revit's own Levels (RE-107), family instances named as Revit names them (RE-109), walls, floors and roofs with their type, read from its layers (RE-111, RE-112).
 - **Revit 2026 projects, experimentally (since 0.5.0)**: typed elements, storeys, rooms, doors and windows, type names and layer sets, measured on one project (RE-124).
@@ -18,7 +18,7 @@ If you are building BIM or AEC tooling and want an Apache-2.0 Revit reader to bu
 - **Revit 2008 to 2014 projects, experimentally and outside the 1.0 range (2015 to 2027)**: typed elements, measured on a local copy of Autodesk's 2013 `rac_advanced` sample against its 2015 copy (RE-259); 2008 to 2010 only on their own files' consistency, with storeys and named materials (RE-260). The pre-2015 files are closed source and measured locally only.
 - **Not yet**: element records of Revit 2007 and earlier, most parameters, family geometry, and semantic editing of a Revit file.
 
-[`tests/fixtures/synthetic-project.ifc`](../tests/fixtures/synthetic-project.ifc) is a committed IFC from synthesized inputs, useful for testing a consumer without a Revit file. The [browser viewer](https://drunkonjava.github.io/rvt-rs/) runs the same pipeline in the tab: drop a 2023, 2024 or 2025 project, or a 2008 to 2022, 2026 or 2027 one experimentally, and Export IFC writes its typed elements; earlier releases give the metadata and the spatial scaffold. The viewer is built from `main`, not from a release.
+[`tests/fixtures/synthetic-project.ifc`](../tests/fixtures/synthetic-project.ifc) is a committed IFC from synthesized inputs, useful for testing a consumer without a Revit file. The [browser viewer](https://drunkonjava.github.io/rvt-rs/) runs the same pipeline in the tab: drop a 2023, 2024 or 2025 project, or a 2008 to 2022, 2026 or 2027 one experimentally, and Export IFC writes its typed elements; files from before Revit 2008 are not read. The viewer is built from `main`, not from a release.
 
 ## Results at a glance
 

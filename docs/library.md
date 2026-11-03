@@ -4,7 +4,7 @@ The command-line tools, the Rust library's modules, the research probes, and a l
 
 ## Quick demo
 
-One command produces the full forensic picture — identity, upgrade history, format anchors, schema table, schema-to-data link histogram, content metadata, and a disclosure scan:
+One command produces a full file report — identity, upgrade history, format anchors, schema table, schema-to-data link histogram, content metadata, and a disclosure scan:
 
 ```bash
 cargo build --release
@@ -45,7 +45,7 @@ The supported end-to-end shell is intentionally honest about partial decode:
 4. Export IFC / glTF / plan only after checking the export-quality label.
 5. Download diagnostics when the export is scaffold-only or partial.
 
-What still depends on decoder work: element records of Revit 2007 and earlier (2008 to 2022's, 2026's and 2027's are experimental, and 2008 to 2014 outside the 1.0 range), and on 2023 geometry beyond each element's box, wall joins and beam cuts, layered or angled joins, design options and IFC export overrides; roofs by extrusion outside Revit 2025 or over a T or U footprint, family geometry and opening profiles; most element parameters; and compound layers of elements drawn whole or sloped, which get no layer set. **RE-19 / RE-20 (2026-08-29) closed negative** on the magnetar corpora: there is no Door vs Window discriminator *in the opening-index bytes* and no recoverable Level ElementId map there, so do not re-probe those without a new corpus or signal. Typed categories come from each element record's `BuiltInCategory` instead (RE-21 onward). On Revit 2008 to 2022, 2026 and 2027 the export is experimental: typed elements as listed [by input](evidence.md#what-you-can-rely-on-by-input), measured against the same models saved by a neighbouring release rather than against Revit's export, except one 2015 project; on 2023 elements are their boxes with the joins and properties listed there; before 2008, treat IFC export as the spatial scaffold plus diagnostics. See [`docs/status.md`](status.md) and [`docs/supported-profile.md`](supported-profile.md).
+What still depends on decoder work: files from before Revit 2008, which are not read; 2008 to 2022's, 2026's and 2027's element records, which are experimental (2008 to 2014 outside the 1.0 range); and on 2023 geometry beyond each element's box, wall joins and beam cuts, layered or angled joins, design options and IFC export overrides; roofs by extrusion outside Revit 2025 or over a T or U footprint, family geometry and opening profiles; most element parameters; and compound layers of elements drawn whole or sloped, which get no layer set. **RE-19 / RE-20 (2026-08-29) closed negative** on the magnetar corpora: there is no Door vs Window discriminator *in the opening-index bytes* and no recoverable Level ElementId map there, so do not re-probe those without a new corpus or signal. Typed categories come from each element record's `BuiltInCategory` instead (RE-21 onward). On Revit 2008 to 2022, 2026 and 2027 the export is experimental: typed elements as listed [by input](evidence.md#what-you-can-rely-on-by-input), whose rows say what each release is measured against; on 2023 elements are their boxes with the joins and properties listed there. See [`docs/status.md`](status.md) and [`docs/supported-profile.md`](supported-profile.md).
 
 **Sample output** (all pre-scrubbed with `--redact`, committed for review):
 
@@ -102,7 +102,7 @@ Runtime capabilities:
 ```bash
 cargo build --release
 
-# One-shot forensic analysis — all subsystems in one report
+# One-shot file report — all subsystems in one report
 ./target/release/rvt-analyze --redact my-project.rvt
 ./target/release/rvt-analyze --redact --json my-project.rvt > report.json
 

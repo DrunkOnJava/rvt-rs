@@ -73,7 +73,7 @@ print(f.version)                 # the Revit release year, or None
 counts = f.element_counts()      # {"total": int, "by_class": {class name: count}}
 elements = f.decoded_elements()  # dicts with id, class_name, byte_range, fields, parameters, typed
 with open("model.ifc", "w") as out:
-    out.write(f.write_ifc())     # IFC4 STEP as a str; mode="scaffold" is the default
+    out.write(f.write_ifc())     # IFC4 STEP as a str, every element that decodes
 ```
 
 The [Python guide](docs/python.md) documents the rest, with a [Jupyter notebook](docs/rvt-python-quickstart.ipynb).
@@ -88,7 +88,7 @@ Every deploy checks the viewer's privacy posture three ways. `viewer/scripts/aud
 
 The full list, with each gap's status and evidence, is in [`docs/evidence.md`](docs/evidence.md#what-does-not-work-yet). In brief:
 
-- Element records of Revit 2007 and earlier are not decoded, and 2008 to 2014 files are experimental, measured on local files only and outside the 1.0 range.
+- Files from before Revit 2008 are not read, and 2008 to 2014 files are experimental, measured on local files only and outside the 1.0 range.
 - Revit 2015 to 2022 and 2027 projects are experimental: measured against the same models saved by a neighbouring release, not against Revit's own export (one 2015 project aside). Revit 2026 is experimental too, measured on one project.
 - Where the bytes are not decoded a body is the element's bounding box: roofs by extrusion outside Revit 2025, hip roofs over a T or U footprint, monolithic spiral stair flights and straight riserless ones with a nosing, edited wall profiles, ducts and pipe fittings.
 - `rvt-elements` and Python list each element's saved parameters, but built-in parameters have no name, a wall's or floor's type parameters are not joined to it, and only `rvt-ifc --revit-property-sets` writes the rest into IFC.
@@ -126,7 +126,7 @@ corpus-backed tests skip themselves while `RVT_PROJECT_CORPUS_DIR` is unset.
   corpus); `tests/fuzz_regressions.rs` replays crash-shaped inputs on every
   pull request; libFuzzer targets are in `fuzz/`, Playwright browser tests in
   `viewer/tests/` and Python tests in `tests/python/`. The unit tests
-  written before this policy were removed (#1126), and new ones are not
+  written before this policy were removed from the crate's source (#1126), and new ones are not
   accepted ([`CONTRIBUTING.md`](CONTRIBUTING.md) says why).
 - **What "done" looks like:** the gate is green, the pull-request template's
   checklist is filled in, and any change to user-visible capability updates
