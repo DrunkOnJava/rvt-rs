@@ -81,8 +81,13 @@ exports their elements, measured against the same sample projects saved by
 Revit 2019 (for 2015 to 2018, RE-181), 2023 (for 2019 to 2022, RE-180) and
 2026 (for 2027, RE-179) rather than against a Revit export of them, except two
 projects against Revit's own export of their release: BIMcollab's 2015
-structural example (RE-198) and Vitoria's 2018 `ALD26 Before` (RE-315); 2015's
-`rst_basic` is another model than its 2019 copy, so it is not measured. On
+structural example (RE-198) and Vitoria's 2018 `ALD26 Before` (RE-315, RE-319);
+2015's `rst_basic` is another model than its 2019 copy, so it is not measured.
+Conduits, conduit fittings and gutters export on every release the exporter
+reads and are measured against Revit's own export on `ALD26 Before` only (all
+178 it holds are Revit's elements, RE-319); Autodesk's MEP samples and Snowdon
+Towers Electrical export them too, counted and not scored, and cable trays do
+not export, since no Revit export holds one. On
 projects saved by Revit 2011 to 2014, experimentally and outside the 1.0
 range (2015 to 2027), it exports their elements too, measured on a local copy
 of Autodesk's 2013 `rac_advanced` sample against its 2015 copy, and files of
