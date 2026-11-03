@@ -163,7 +163,7 @@ fn read_documents(
             &prepared,
             inflated.as_deref(),
             registry,
-            256 * 1024 * 1024,
+            native_document::group_budget(rf, native_document::DEFAULT_MAX_GROUP_BYTES),
             |source, bytes| {
                 let Some(family) = source.content_key.and_then(|key| blocks.get(&key)) else {
                     return Ok(());
@@ -320,7 +320,7 @@ pub fn family_forms(
             &prepared,
             inflated.as_deref(),
             &registry,
-            256 * 1024 * 1024,
+            native_document::group_budget(rf, native_document::DEFAULT_MAX_GROUP_BYTES),
             |source, bytes| {
                 if let Some(key) = source.content_key {
                     keys.insert(key);

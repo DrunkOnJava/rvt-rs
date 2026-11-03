@@ -52,13 +52,31 @@ pub struct Options {
     /// defines none of them.
     pub definition_filter: Option<fn(&str) -> bool>,
 }
+/// The default [`Options::max_group_bytes`]: one reassembled continuation
+/// group's bytes.
+pub const DEFAULT_MAX_GROUP_BYTES: usize = 256 * 1024 * 1024;
+
+/// The group budget a read of `file` takes for `requested`. The default
+/// follows the file's inflate limit, so `--large-model`, which raises the
+/// limit, raises the budget with it: a group is part of a partition the read
+/// has inflated, so it is never larger. A budget a caller sets is kept
+/// (#1247: a 438 MB project's group stopped every native read with
+/// `--large-model` at 256 MiB).
+pub(crate) fn group_budget(file: &RevitFile, requested: usize) -> usize {
+    if requested == DEFAULT_MAX_GROUP_BYTES {
+        requested.max(file.limits().inflate_limits.max_output_bytes)
+    } else {
+        requested
+    }
+}
+
 impl Default for Options {
     fn default() -> Self {
         Self {
             selected_ids: BTreeSet::new(),
             selected_classes: BTreeSet::new(),
             channels: BTreeSet::from([102]),
-            max_group_bytes: 256 * 1024 * 1024,
+            max_group_bytes: DEFAULT_MAX_GROUP_BYTES,
             max_graph_values: 100_000,
             max_graph_objects: 100_000,
             graph_classes: None,
@@ -629,10 +647,11 @@ fn extract_records(
                     .and_then(|tag| registry.class(tag))
                     .is_some_and(|class| options.selected_classes.contains(&class.name)))
     };
+    let max_group_bytes = group_budget(file, options.max_group_bytes);
     let mut summary = Summary {
         budgets: ResourceBudget {
             max_stream_bytes: file.limits().max_stream_bytes,
-            max_group_bytes: options.max_group_bytes,
+            max_group_bytes,
             max_graph_values: options.max_graph_values,
             max_graph_objects: options.max_graph_objects,
         },
@@ -707,7 +726,7 @@ fn extract_records(
             &prepared,
             inflated.as_deref(),
             registry,
-            options.max_group_bytes,
+            max_group_bytes,
             |source, bytes| {
                 if source.content_key.is_some() || !options.channels.contains(&source.channel) {
                     return Ok(());
@@ -751,7 +770,7 @@ fn extract_records(
             &prepared,
             inflated.as_deref(),
             registry,
-            options.max_group_bytes,
+            max_group_bytes,
             |source, bytes| {
                 if source.content_key.is_some() {
                     summary.skipped_embedded_content_groups += 1;
