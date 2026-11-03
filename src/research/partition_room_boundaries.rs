@@ -39,10 +39,15 @@
 //! (RE-316): its faces are followed with a gap of up to [`SPAN_FACE_GAP`]
 //! bytes, and no more than its list of objects counts ([`solid_span`],
 //! [`solid_object_count`]), so the faces of the element that follows it are
-//! not read. Each plan edge is directed so the room is on its left, and the
-//! room's outline is the boundary of the region those edges wind around
-//! ([`region_boundary`]). A room read this way says so in its profile source
-//! ([`ROOM_OUTLINE_SOURCE_FACES`], [`ROOM_OUTLINE_SOURCE_APPROXIMATE`]), never
+//! not read. Where the span's wall edges close as the walk reads them (one
+//! outer loop, the loops inside it nested, no edge crossing another) that is
+//! the outline ([`ROOM_OUTLINE_SOURCE_FACES`]). Where a column overlaps a wall
+//! and its loop lies partly inside the wall's, each plan edge is directed so
+//! the room is on its left and the outline is the boundary of the region those
+//! edges wind around ([`region_boundary`]), the column taken off
+//! ([`ROOM_OUTLINE_SOURCE_APPROXIMATE`]: whether Revit's export takes it off is
+//! not settled by the file). A room read either way says so in its profile
+//! source, never
 //! as the walk's. A face whose record is 44 bytes longer than a plane's is a
 //! cylinder's (a round column): its axis, a unit vector at right angles to
 //! the face's u and v, at +158, and its radius at +182 ([`RoomCylinder`]). Its
@@ -68,16 +73,18 @@ use std::collections::BTreeMap;
 /// are (RE-101).
 pub const ROOM_OUTLINE_SOURCE: &str = "partition_room_solid_faces";
 
-/// Value of the same field on a room outline resolved from the faces up to
-/// the solid's end, spanning the record box (RE-316). Not the walk's: a face
-/// of another element inside the box could still be read into it, so an
-/// importer tells the two apart.
+/// Value of the same field on a room outline read from the faces its solid
+/// lists, up to the solid's own end, where the walk did not close them and
+/// the span's wall edges close as the walk reads them (RE-316). Not the
+/// walk's: a closed loop of another element's faces inside the box could still
+/// be read into it, so an importer tells the two apart.
 pub const ROOM_OUTLINE_SOURCE_FACES: &str = "partition_room_solid_faces_resolved";
 
-/// Value of the same field on a room outline resolved the same way that
-/// falls up to [`ROOM_SLIVER_FEET`] short of the record box on a side
-/// (RE-316): approximate, 0.5% and 0.7% under Revit's area on the two office
-/// rooms scored.
+/// Value of the same field on a room outline that is the boundary of the region
+/// the span's edges wind around, a column overlapping a wall taken off it, or
+/// falls up to [`ROOM_SLIVER_FEET`] short of the record box on a side (RE-316):
+/// approximate, up to 0.68% under Revit's floor area where its export does not
+/// take the column off.
 pub const ROOM_OUTLINE_SOURCE_APPROXIMATE: &str = "partition_room_solid_faces_approximate";
 
 /// Whether `source` is a value of the profile source field that a room's

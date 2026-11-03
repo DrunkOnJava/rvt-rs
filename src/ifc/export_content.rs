@@ -4177,21 +4177,25 @@ pub const SPACE_OUTLINE_SOURCE_PROPERTY: &str = "SpaceOutlineSource";
 /// faces of its stored solid, which close into loops as they are (RE-101).
 pub const SPACE_OUTLINE_STORED_SOLID: &str = "stored_solid";
 
-/// [`SPACE_OUTLINE_SOURCE_PROPERTY`] of a room whose outline was resolved from
-/// the faces of its stored solid up to the solid's end, the boundary of the
-/// region its wall faces wind around, spanning the record box (RE-316). Equal
-/// to Revit's area to 0.1% on every room of the BIM4LCA office and the
-/// held-out project it was measured on; a face of another element inside the
-/// box would not be told from the room's own, which is why it is not
-/// `stored_solid`.
+/// [`SPACE_OUTLINE_SOURCE_PROPERTY`] of a room whose outline was read from the
+/// faces its stored solid lists, up to the solid's own end, where the walk of
+/// RE-101 did not close them (RE-316): the wall edges close as that walk reads
+/// them (one outer loop, the loops inside it nested, no edge crossing
+/// another) and span the record box. Equal to Revit's area to 0.1% on every
+/// such room measured, 9 of 9 on the BIM4LCA office as built. It is not
+/// `stored_solid`: the solid's end is bounded by its list of objects and a gap,
+/// not by the walk, so a closed loop of another element's faces inside the box
+/// would be read as one of the room's.
 pub const SPACE_OUTLINE_STORED_SOLID_FACES: &str = "stored_solid_faces";
 
-/// [`SPACE_OUTLINE_SOURCE_PROPERTY`] of a room whose outline was resolved as
-/// [`SPACE_OUTLINE_STORED_SOLID_FACES`] but falls up to 0.02 ft short of its
-/// record box on a side, a column's back behind the wall's face (RE-316). The
-/// area is approximate: 0.5% and 0.7% under Revit's on the two such rooms of
-/// the BIM4LCA office that Revit's export pairs, which does not take that
-/// column off the room.
+/// [`SPACE_OUTLINE_SOURCE_PROPERTY`] of a room whose outline was read as
+/// [`SPACE_OUTLINE_STORED_SOLID_FACES`] but is the boundary of the region the
+/// edges wind around, because a column overlaps a wall and its loop lies partly
+/// inside the wall's, or falls up to 0.02 ft short of its record box on a side
+/// (RE-316). Whether the area has the column taken off depends on Revit's
+/// export, which does not always: of the 15 room scores of the BIM4LCA office
+/// so read (4 as built, 11 at building permit), 5 are 0.45% to 0.68% under
+/// Revit's floor area (four rooms, 1671995 in both files) and 10 are equal.
 pub const SPACE_OUTLINE_STORED_SOLID_APPROXIMATE: &str = "stored_solid_approximate";
 
 /// [`SPACE_OUTLINE_SOURCE_PROPERTY`] of a space drawn as its record's bounding

@@ -678,18 +678,21 @@ pub struct ExportedModelDiagnostics {
     /// names the turned box.
     #[serde(default)]
     pub bounding_box_spaces: usize,
-    /// Of the exported `IfcSpace`s, the rooms whose outline was resolved from
-    /// the faces of their stored solid up to the solid's end
-    /// (`SpaceOutlineSource` is `stored_solid_faces`, RE-316): equal to
-    /// Revit's area on every such room measured, but read by a rule that
-    /// cannot tell a face of another element inside the room's box from the
-    /// room's own.
+    /// Of the exported `IfcSpace`s, the rooms whose outline was read from the
+    /// faces their stored solid lists, up to the solid's own end, where the
+    /// walk of RE-101 did not close them (`SpaceOutlineSource` is
+    /// `stored_solid_faces`, RE-316): equal to Revit's area on every such room
+    /// measured, but bounded by the solid's list of objects and a gap, so a
+    /// closed loop of another element's faces inside the room's box would be
+    /// read as the room's.
     #[serde(default)]
     pub resolved_outline_spaces: usize,
-    /// Of the exported `IfcSpace`s, the rooms whose resolved outline falls up
-    /// to 0.02 ft short of their record box on a side
+    /// Of the exported `IfcSpace`s, the rooms whose resolved outline is the
+    /// boundary of a region, a column overlapping a wall having been taken
+    /// off it, or falls up to 0.02 ft short of their record box on a side
     /// (`SpaceOutlineSource` is `stored_solid_approximate`, RE-316): their
-    /// area is approximate, 0.5% and 0.7% under Revit's on the two measured.
+    /// area is approximate, up to 0.68% under Revit's floor area where
+    /// Revit's export does not take the column off.
     #[serde(default)]
     pub approximate_outline_spaces: usize,
 }
