@@ -8,6 +8,40 @@ fragments a release moves into this file.
 
 ## [Unreleased]
 
+## [0.12.2] — 2026-11-03
+
+0.12.2 draws more of a model from the meshes Revit saved for display, and
+keeps a door whose type draws geometry from being written as its opening
+alone. Both were found from a user's comparison of 0.6.1 and 0.12.0
+(#1247; thanks to hemanth1986). Measured against 0.12.1 on every reference
+model (Measure run 41589642386), in the default export, which draws doors
+and windows from their saved meshes:
+- the BIM4LCA office draws 269 doors from their saved meshes, against 48 as
+  built and 46 at building permit, 265 of them exact to 0.001 ft against
+  Revit's export and all within 0.01 ft;
+- six R2025 models (12 to 17) each draw one storefront door from its saved
+  mesh, within 0.01 ft of Revit's body and at 1.0002 of its volume, where
+  0.12.1 drew a box;
+- no other reference model's export changes: Core Interior, the RE1 models
+  and the other R2025 models are byte-identical. The held-out models change
+  too; they are counted, not scored.
+
+The office as built's IFC grows from 58.6 to 67.8 MB, its saved-mesh
+triangles from 66,872 to 257,108. With `--saved-meshes`, light fixtures and
+more bodies are drawn too (below).
+
+### Upgrading from 0.12.1
+
+- A door or window whose saved mesh now decodes whole is drawn from it
+  instead of its box, in `rvt-ifc`, Python and the viewer.
+  `--no-saved-meshes`, `saved_meshes=False` and `?savedMeshes=0` keep the
+  boxes.
+- `rvt-capabilities --matrix` gives the Revit 2023 and 2024 project
+  capabilities new names, in its text and JSON; their ids and statuses do
+  not change.
+- The stable public API does not change. `rvt::research` (unstable) gains
+  `native_type_materials::GeometryMap` and `geometry_maps`.
+
 ### Changed
 
 - **`rvt-capabilities --matrix` names the Revit 2023 and 2024 project
