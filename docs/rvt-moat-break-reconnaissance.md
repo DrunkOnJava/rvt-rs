@@ -2246,7 +2246,7 @@ Revit's export writes a floor's `Qto_SlabBaseQuantities.GrossArea` as the area o
 
 ## Addendum — RE-300 a light source's saved graphics (2026-11-02)
 
-The saved graphics class `GImposter` is a light source: a transform and a rendering `Asset` of scalar properties, with no surface, always in a `GFilter` of its own beside the `Geometry` (and often a `GPolyMesh` of normal binding 2) that draws the light. Revit's export draws none of that filter. Left out, it no longer keeps a fixture's box: 39 more office bodies and 2 on RE1 Electrical drawn from saved meshes, all exact to 0.001 ft, and 372 more of Snowdon Towers electrical's light fixtures. Report: `reports/element-framing/RE-300-light-source-filters.md`.
+The saved graphics class `GImposter` is a light source: a transform and a rendering `Asset` of scalar properties, with no surface, always in a `GFilter` of its own beside the `Geometry` (and often a `GPolyMesh` of normal binding 2) that draws the light. Revit's export draws none of that filter. Left out, it no longer keeps a fixture's box: 43 more office bodies and 2 on RE1 Electrical drawn from saved meshes, all exact to 0.001 ft, and 417 more Snowdon Towers electrical bodies. Report: `reports/element-framing/RE-300-light-source-filters.md`.
 
 ## Addendum — RE-301 a saved cylinder with a left-handed basis (2026-11-02)
 
