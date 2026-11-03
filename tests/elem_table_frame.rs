@@ -12,9 +12,11 @@
 //!    fewer.
 //! 2. The records' ElementIds rise strictly: the table is in ascending id
 //!    order, so no record is read from the bytes after the last one. The
-//!    ElementId is the record's second id (`id_secondary`); the first agrees
-//!    with it except on Autodesk's Snowdon Towers samples, where it does not
-//!    rise.
+//!    test reads the record's second id (`id_secondary`), the ElementId on 40
+//!    bytes; on 40 bytes the first agrees with it except on Autodesk's
+//!    Snowdon Towers samples, where it does not rise, and on the 28-byte
+//!    tables here the two are equal on every record (the ElementId there is
+//!    the first, #421).
 //! 3. Every owner a record names is an ElementId of the same table, no
 //!    record owns itself and no owner chain loops.
 //! 4. On a family file the first record's owner is element 17, the value

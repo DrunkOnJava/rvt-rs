@@ -172,7 +172,7 @@ Resource limits map directly to the Rust `OpenLimits` /
 |---|---|---|
 | `max_file_bytes` | 2 GiB (`2 * 1024³`) | File size cap, enforced before reading |
 | `max_stream_bytes` | 256 MiB (`256 * 1024²`) | Per-stream size cap in `read_stream` |
-| `max_inflate_bytes` | 256 MiB (`256 * 1024²`) | Decompressed output cap per inflate call; a multi-member stream such as `Partitions/NN` may inflate to this or 1 GiB in total, whichever is larger |
+| `max_inflate_bytes` | 256 MiB (`256 * 1024²`) | Decompressed output cap per inflate call; a multi-member stream such as `Partitions/NN` may inflate in total to this or, whichever is larger, 16 times its stored size, at least 1 GiB and at most 4 GiB (1 GiB on a 32-bit build) |
 | `max_walker_scan_bytes` | 128 MiB (`128 * 1024²`) | Decompressed `Global/Latest` bytes scanned by walker fallback paths |
 | `max_walker_candidates` | 100,000 | Maximum schema-scan candidates retained |
 | `max_walker_trial_offsets` | 16,000,000 | Maximum trial decodes attempted by walker scans |
@@ -465,8 +465,9 @@ caps from [`src/walker.rs`](../src/walker.rs):
 - `max_inflate_bytes` (default 256 MiB) — enforced per inflate
   call in the truncated-gzip decompressor; protects against
   compressed-bomb input. The members of one multi-member stream
-  (`Partitions/NN`) may together inflate to this or 1 GiB, whichever
-  is larger.
+  (`Partitions/NN`) may together inflate to this or, whichever is
+  larger, 16 times the stream's stored size, at least 1 GiB and at most
+  4 GiB (1 GiB on a 32-bit build).
 - `max_walker_scan_bytes`, `max_walker_candidates`,
   `max_walker_trial_offsets`, `max_walker_record_decode_bytes`,
   and `max_walker_container_records` — bound schema-directed

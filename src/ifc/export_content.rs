@@ -4909,6 +4909,240 @@ fn roof_planes_solid(
     })
 }
 
+/// How near a slope arrow's edge must lie to an outline edge to be it, feet
+/// (RE-307).
+const ROOF_ARROW_EDGE_FEET: f64 = 1e-4;
+
+/// Whether a footprint roof's sloped edges meet in a way Revit is measured
+/// not to resolve as their planes' wedges do (RE-307).
+///
+/// On `20_T_U_Roof`'s U, the two long outer walls (5962, 5956) are each met
+/// inside by the extension of a reflex edge, and Revit slopes them along the
+/// arms alone: the bar they continue past stays upright between its other
+/// planes, with no hip where the wall meets the bar's eave. The wedges slope
+/// the whole edge, so a roof holding a sloped edge so met, with a sloped
+/// neighbour at a convex corner (the hip the wedges would draw), is left to
+/// its record box. Only the U is measured: whether Revit slopes every edge of
+/// this configuration along part of its length is not known, and the guard
+/// boxes the class on that account. The T's long eave (4166) is met inside by
+/// the stem's walls the same way, but its corners lie against upright gable
+/// ends, and the wedges are exact there.
+///
+/// `sloped` holds the outline edges (`ring[k]` to `ring[k + 1]`) the roof's
+/// arrows slope.
+fn arrow_roof_hip_ambiguous(ring: &[(f64, f64)], sloped: &[usize]) -> bool {
+    let n = ring.len();
+    let area: f64 = (0..n)
+        .map(|i| {
+            let (a, b) = (ring[i], ring[(i + 1) % n]);
+            a.0 * b.1 - b.0 * a.1
+        })
+        .sum::<f64>()
+        / 2.0;
+    if !(area.is_finite() && area.abs() > 1e-9) {
+        return true;
+    }
+    // Sine of the turn at a vertex, positive where it is convex.
+    let turn = |i: usize| {
+        let (p, c, q) = (ring[(i + n - 1) % n], ring[i], ring[(i + 1) % n]);
+        let (u, v) = ((c.0 - p.0, c.1 - p.1), (q.0 - c.0, q.1 - c.1));
+        let scale = u.0.hypot(u.1) * v.0.hypot(v.1);
+        if scale > 0.0 {
+            (u.0 * v.1 - u.1 * v.0) * area.signum() / scale
+        } else {
+            0.0
+        }
+    };
+    let mut met: Vec<usize> = Vec::new();
+    for i in (0..n).filter(|&i| turn(i) < -1e-9) {
+        let (p, c, q) = (ring[(i + n - 1) % n], ring[i], ring[(i + 1) % n]);
+        for d in [(c.0 - p.0, c.1 - p.1), (c.0 - q.0, c.1 - q.1)] {
+            // The nearest edge the extension of a reflex edge reaches: its
+            // distance along the ray, the edge, and the distance along the
+            // edge.
+            let mut nearest: Option<(f64, usize, f64)> = None;
+            for k in (0..n).filter(|&k| k != i && k != (i + n - 1) % n) {
+                let (a, b) = (ring[k], ring[(k + 1) % n]);
+                let e = (b.0 - a.0, b.1 - a.1);
+                let denom = d.0 * e.1 - d.1 * e.0;
+                if denom.abs() < 1e-12 {
+                    continue;
+                }
+                let ac = (a.0 - c.0, a.1 - c.1);
+                let t = (ac.0 * e.1 - ac.1 * e.0) / denom;
+                let s = (ac.0 * d.1 - ac.1 * d.0) / denom;
+                if t > 1e-9
+                    && (-1e-9..=1.0 + 1e-9).contains(&s)
+                    && nearest.is_none_or(|(best, _, _)| t < best - 1e-12)
+                {
+                    nearest = Some((t, k, s * e.0.hypot(e.1)));
+                }
+            }
+            // Meeting an edge at one of its ends is meeting a vertex.
+            if let Some((_, k, along)) = nearest {
+                let (a, b) = (ring[k], ring[(k + 1) % n]);
+                let length = (b.0 - a.0).hypot(b.1 - a.1);
+                if along > 1e-6 && length - along > 1e-6 && sloped.contains(&k) && !met.contains(&k)
+                {
+                    met.push(k);
+                }
+            }
+        }
+    }
+    met.into_iter().any(|k| {
+        [(k, (k + n - 1) % n), ((k + 1) % n, (k + 1) % n)]
+            .into_iter()
+            .any(|(vertex, other)| turn(vertex) > 1e-9 && sloped.contains(&other))
+    })
+}
+
+/// A roof sloped by several slope arrows and no defining edge (RE-307): one
+/// plane per arrow, rising from the outline edge its tail lies on, square to
+/// it, at the arrow's slope. The plane is the underside: it is level with the
+/// record box's base at the edge, and the top lies the plane's own
+/// `T / cos θ` above it there, so the eaves of two arrows of different slopes
+/// stand at different heights. Each top is the lowest counting top plane at
+/// each point and each underside the lowest counting underside plane, never
+/// below the base, with upright sides.
+///
+/// A plane counts within the wedge between the lines where it meets the
+/// planes of the edges that share an end with its own (RE-199), and each
+/// surface has its own wedges: the lines where the tops meet differ from the
+/// lines where the undersides meet by the planes' different verticals. An
+/// underside also counts only on its edge's side, while a top does not: a top
+/// plane reaches past its edge's line to where it meets its neighbour's top,
+/// which is how Revit's valley between two tops lies beyond the line of the
+/// edge whose underside it rises from.
+///
+/// Revit's export of `20_T_U_Roof`'s T (roof 4149, six arrows of five
+/// slopes, a stem hipped at its end on a bar with upright gable ends) is
+/// this shape at every point of its top and underside. `None` unless every
+/// sloped edge is an outline edge, the outline is a single loop, no
+/// configuration [`arrow_roof_hip_ambiguous`] names is present, and the
+/// highest point of the top reproduces `height` and the lowest the base,
+/// within [`ROOF_SLOPE_CLOSURE_FEET`].
+fn roof_arrow_planes_solid(
+    slopes: &[crate::partition_schema_mvp::RoofSlope],
+    [x, y]: [f64; 2],
+    outer: &[(f64, f64)],
+    inner: &[Vec<(f64, f64)>],
+    height: f64,
+) -> Option<entities::SolidShape> {
+    if outer.len() < 3 || !inner.is_empty() || slopes.len() < 2 {
+        return None;
+    }
+    let near = |a: (f64, f64), b: (f64, f64)| {
+        (a.0 - b.0).abs() < ROOF_ARROW_EDGE_FEET && (a.1 - b.1).abs() < ROOF_ARROW_EDGE_FEET
+    };
+    let mut tops: Vec<super::body_geometry::PlanPlane> = Vec::new();
+    let mut under_planes: Vec<super::body_geometry::PlanPlane> = Vec::new();
+    let mut top_domains: Vec<Vec<super::body_geometry::PlanPlane>> = Vec::new();
+    let mut bottom_domains: Vec<Vec<super::body_geometry::PlanPlane>> = Vec::new();
+    let mut edge_of: Vec<usize> = Vec::new();
+    let mut ends: Vec<[(f64, f64); 2]> = Vec::new();
+    let mut probes: Vec<(f64, f64)> = Vec::new();
+    for slope in slopes {
+        let [sx, sy] = slope.edge_start;
+        let [ex, ey] = slope.edge_end;
+        let length = (ex - sx).hypot(ey - sy);
+        let angle = slope.angle_radians;
+        if !(length > 1e-9
+            && angle.is_finite()
+            && angle > 0.0
+            && angle < std::f64::consts::FRAC_PI_2
+            && slope.thickness_feet > 0.0
+            && slope.plate_offset_feet == 0.0)
+        {
+            return None;
+        }
+        let (start, end) = ((sx - x, sy - y), (ex - x, ey - y));
+        let k = (0..outer.len()).find(|&k| {
+            let (a, b) = (outer[k], outer[(k + 1) % outer.len()]);
+            (near(a, start) && near(b, end)) || (near(a, end) && near(b, start))
+        })?;
+        if edge_of.contains(&k) {
+            return None;
+        }
+        edge_of.push(k);
+        let (ux, uy) = ((ex - sx) / length, (ey - sy) / length);
+        // Distance from the edge in local coordinates: -uy·px + ux·py + c.
+        let c = (x - sx) * -uy + (y - sy) * ux;
+        let mid = ((start.0 + end.0) / 2.0, (start.1 + end.1) / 2.0);
+        let probe = (mid.0 - uy * 1e-3, mid.1 + ux * 1e-3);
+        let sign = if point_in_ring(probe, outer) {
+            1.0
+        } else {
+            -1.0
+        };
+        let rise = sign * angle.tan();
+        let under = [-uy * rise, ux * rise, c * rise];
+        let vertical = slope.thickness_feet / angle.cos();
+        tops.push([under[0], under[1], under[2] + vertical]);
+        under_planes.push(under);
+        top_domains.push(Vec::new());
+        bottom_domains.push(vec![[-uy * sign, ux * sign, c * sign]]);
+        ends.push([start, end]);
+        probes.push((mid.0 - uy * sign * 1e-3, mid.1 + ux * sign * 1e-3));
+    }
+    if arrow_roof_hip_ambiguous(outer, &edge_of) {
+        return None;
+    }
+    let at = |[a, b, c]: super::body_geometry::PlanPlane, (px, py): (f64, f64)| a * px + b * py + c;
+    for i in 0..slopes.len() {
+        for j in 0..slopes.len() {
+            let shared = i != j && ends[i].iter().any(|&p| ends[j].iter().any(|&q| near(p, q)));
+            if !shared {
+                continue;
+            }
+            let wedge = |planes: &[super::body_geometry::PlanPlane]| {
+                let mut line = [
+                    planes[i][0] - planes[j][0],
+                    planes[i][1] - planes[j][1],
+                    planes[i][2] - planes[j][2],
+                ];
+                if line[0].hypot(line[1]) < 1e-12 {
+                    return None;
+                }
+                if at(line, probes[i]) < 0.0 {
+                    line = line.map(|v| -v);
+                }
+                Some(line)
+            };
+            if let Some(line) = wedge(&tops) {
+                top_domains[i].push(line);
+            }
+            if let Some(line) = wedge(&under_planes) {
+                bottom_domains[i].push(line);
+            }
+        }
+    }
+    let undersides: Vec<(super::body_geometry::PlanPlane, f64)> =
+        under_planes.iter().map(|&plane| (plane, 0.0)).collect();
+    let mesh = super::body_geometry::envelope_slab_mesh_split(
+        outer,
+        inner,
+        &tops,
+        &undersides,
+        &top_domains,
+        Some(bottom_domains.as_slice()),
+    )?;
+    let heights = mesh.vertices.iter().map(|v| v[2]);
+    let highest = heights.clone().fold(f64::NEG_INFINITY, f64::max);
+    let lowest = heights.fold(f64::INFINITY, f64::min);
+    if (highest - height).abs() > ROOF_SLOPE_CLOSURE_FEET || lowest.abs() > ROOF_SLOPE_CLOSURE_FEET
+    {
+        return None;
+    }
+    Some(entities::SolidShape::FacetedBrep {
+        vertices_feet: mesh.vertices,
+        triangles: mesh
+            .triangles
+            .into_iter()
+            .map(|[a, b, c]| entities::BrepTriangle(a, b, c))
+            .collect(),
+    })
+}
+
 /// `BodySource` of a wall drawn its type's thickness either side of its
 /// centreline (RE-54).
 pub const WALL_CENTRELINE_BODY_SOURCE: &str = "partition_wall_centreline";
@@ -5863,6 +6097,21 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
                 .map(|ring| ring.iter().map(|(px, py)| (px - x, py - y)).collect())
                 .collect();
             use crate::partition_roof_slopes::RafterCut;
+            // RE-307: several slope arrows. Measured on one loop, a plumb cut
+            // and a fascia depth read as 0 only.
+            if crate::partition_schema_mvp::roof_arrow_planes_from_fields(&decoded.fields) {
+                let plumb =
+                    crate::partition_schema_mvp::roof_rafter_cut_from_fields(&decoded.fields)
+                        == Some(RafterCut::Plumb);
+                let no_fascia =
+                    crate::partition_schema_mvp::roof_fascia_depth_from_fields(&decoded.fields)
+                        == Some(0.0);
+                return if plumb && no_fascia && profile.pieces.is_empty() {
+                    roof_arrow_planes_solid(&slopes, [x, y], &outer, &inner, height)
+                } else {
+                    None
+                };
+            }
             let plain = || match slopes.as_slice() {
                 [] => None,
                 [slope] => roof_slope_solid(*slope, [x, y], &outer, &inner, height),
