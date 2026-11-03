@@ -39,7 +39,12 @@
 //! solid's tag are read instead ([`solid_faces_to_next_solid`]), each plan
 //! edge directed so the room is on its left, and the room's outline is the
 //! boundary of the region those edges wind around ([`region_boundary`],
-//! RE-316).
+//! RE-316). A face whose record is 44 bytes longer than a plane's is a
+//! cylinder's (a round column): its axis, a unit vector at right angles to
+//! the face's u and v, at +158, and its radius at +182 ([`RoomCylinder`]). Its
+//! arc closes the loops of the six `rac_advanced` rooms RE-101 left open, but
+//! whether Revit takes a column off a room's area is unmeasured (it does not
+//! on two office rooms), so a solid with one is left unresolved.
 //!
 //! Core Interior keeps a room's record and solid in more than one partition,
 //! and the copies can disagree: room 20832's outline spans 10.5 ft in one and
@@ -104,12 +109,6 @@ pub const ROOM_VERTEX_TOLERANCE_FEET: f64 = 1e-4;
 /// ft apart leave a step the room's faces do not cross on six rooms of the
 /// BIM4LCA office; Revit's own short-curve tolerance is 1/32 inch, 0.0026 ft.
 pub const ROOM_STEP_TOLERANCE_FEET: f64 = 0.0025;
-
-/// How far a resolved outline may fall short of the room's record box on a
-/// side and still span it, feet: the back of a column that overlaps a wall
-/// stands 0.0164 ft behind the wall's face on three rooms of the BIM4LCA
-/// office, and the box holds it.
-pub const ROOM_SLIVER_FEET: f64 = 0.02;
 
 /// How far a chord of a column's arc may stray from the arc, feet (as
 /// [`crate::element_record_plan_profiles::SKETCH_ARC_TOLERANCE_FEET`]).
@@ -437,20 +436,13 @@ fn strays_from_box(face: &RoomFace, bbox: [f64; 6]) -> bool {
     face.plan_edge().is_some_and(|(edge, _)| outside(edge))
 }
 
-/// `profile` where its plan extent is within `bbox`'s by [`BOX_TOLERANCE_FEET`]
-/// and falls short of it by at most `slack` on each side.
-fn profile_on_box(profile: PlanProfile, bbox: [f64; 6], slack: f64) -> Option<PlanProfile> {
+fn profile_on_box(profile: PlanProfile, bbox: [f64; 6]) -> Option<PlanProfile> {
     let extent = profile.plan_extent_feet()?;
-    let inward = [1.0, 1.0, -1.0, -1.0];
     let wanted = [bbox[0], bbox[1], bbox[3], bbox[4]];
     extent
         .iter()
         .zip(wanted)
-        .zip(inward)
-        .all(|((got, want), sign)| {
-            let short = (got - want) * sign;
-            short >= -BOX_TOLERANCE_FEET && short <= slack + BOX_TOLERANCE_FEET
-        })
+        .all(|(got, want)| (got - want).abs() <= BOX_TOLERANCE_FEET)
         .then_some(profile)
 }
 
@@ -464,8 +456,12 @@ fn outline_from_faces(
     bbox: [f64; 6],
     anchor: OutlineAnchor,
     resolve: bool,
+    arcs: bool,
 ) -> Option<PlanProfile> {
     if resolve && faces.iter().any(|face| strays_from_box(face, bbox)) {
+        return None;
+    }
+    if resolve && !arcs && faces.iter().any(|face| face.cylinder.is_some()) {
         return None;
     }
     let mut lines = Vec::new();
@@ -473,7 +469,7 @@ fn outline_from_faces(
         if let Some(edge) = reaches_anchor(face, bbox, anchor) {
             lines.push(edge);
         }
-        if resolve {
+        if resolve && arcs {
             if let Some((low, high)) = face.vertical_cylinder_heights() {
                 let reached = match anchor {
                     OutlineAnchor::Floor => (low - bbox[2]).abs() <= BOX_TOLERANCE_FEET,
@@ -492,7 +488,7 @@ fn outline_from_faces(
         snap_ends(&mut lines);
         plan_profile_from_lines(&lines)?
     };
-    profile_on_box(profile, bbox, if resolve { ROOM_SLIVER_FEET } else { 0.0 })
+    profile_on_box(profile, bbox)
 }
 
 /// The room's outline from the solid whose header starts at `header` and the
@@ -508,11 +504,11 @@ fn outline_with_faces(
     bbox: [f64; 6],
 ) -> Option<(PlanProfile, Vec<RoomFace>, bool)> {
     let walked = solid_faces(buf, header);
-    if let Some(profile) = outline_from_faces(&walked, bbox, OutlineAnchor::Floor, false) {
+    if let Some(profile) = outline_from_faces(&walked, bbox, OutlineAnchor::Floor, false, false) {
         return Some((profile, walked, false));
     }
     let span = solid_faces_to_next_solid(buf, header);
-    let profile = outline_from_faces(&span, bbox, OutlineAnchor::Floor, true)?;
+    let profile = outline_from_faces(&span, bbox, OutlineAnchor::Floor, true, false)?;
     Some((profile, span, true))
 }
 
@@ -525,15 +521,24 @@ pub fn room_outline_at(buf: &[u8], header: usize, bbox: [f64; 6]) -> Option<Plan
 }
 
 /// The outline the faces up to the next solid's tag make, resolved to a
-/// boundary, for walls that reach `anchor` (RE-316). A probe's reading:
-/// [`room_outline_at`] uses only [`OutlineAnchor::Floor`].
+/// boundary, for walls that reach `anchor`, with the arcs of round columns
+/// where `arcs` is set (RE-316). A probe's reading: [`room_outline_at`] uses
+/// only [`OutlineAnchor::Floor`] and leaves a solid with a cylinder unresolved,
+/// since whether Revit takes a column off a room's area is unmeasured.
 pub fn span_outline_at(
     buf: &[u8],
     header: usize,
     bbox: [f64; 6],
     anchor: OutlineAnchor,
+    arcs: bool,
 ) -> Option<PlanProfile> {
-    outline_from_faces(&solid_faces_to_next_solid(buf, header), bbox, anchor, true)
+    outline_from_faces(
+        &solid_faces_to_next_solid(buf, header),
+        bbox,
+        anchor,
+        true,
+        arcs,
+    )
 }
 
 /// Whether `faces`, the faces of a room's solid, make a prism of the room's
