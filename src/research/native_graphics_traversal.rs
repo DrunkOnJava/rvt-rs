@@ -386,9 +386,6 @@ impl Walker<'_, '_> {
             }
             "GLine" | "GArc" | "GEllipse" | "GCurve" | "GNurbSpline" | "GPolyLine"
             | "GPolyline" | "GPoint" => self.result.excluded_non_surface_branches += 1,
-            // A flip control: an origin, a base vector and a length, with no
-            // pointer and no surface (RE-303).
-            "GBiFlipControl" => self.result.excluded_non_surface_branches += 1,
             other => return Err(format!("unsupported reachable graphics class {other}")),
         }
         Ok(())
@@ -399,7 +396,7 @@ impl Walker<'_, '_> {
         }
         let result = match self.graph.objects[index].class_name.as_str() {
             "GLine" | "GArc" | "GEllipse" | "GCurve" | "GNurbSpline" | "GPolyLine"
-            | "GPolyline" | "GPoint" | "GBiFlipControl" => true,
+            | "GPolyline" | "GPoint" => true,
             "GElement" | "GGroup" | "GFilter" => self
                 .children(index)
                 .is_ok_and(|c| c.iter().all(|&i| self.only_curves(i, seen))),

@@ -1,12 +1,10 @@
 //! RE-303: what a saved graphics `GBiFlipControl` holds (#1247, RE-224).
 //!
-//! FACT under test: `native_graphics_traversal` stops at a `GBiFlipControl`,
-//! and RE-224 keeps the element's box: 117 of the 1,213 partial saved meshes
-//! left after RE-300 and RE-301 on the BIM4LCA office, RE1 and Autodesk's
-//! 2024 samples, 52 for that alone, 14 of them on the office, whose Revit
-//! export scores them. This prints what each one holds: its fields, the
-//! classes pointing to it and those it points to, what sits beside it, and
-//! the classes under it.
+//! FACT: a `GBiFlipControl` holds no geometry: four fields (`m_GInfo`,
+//! `m_origin`, `m_base`, `m_length`) and no pointer, a flip control drawn in
+//! a view. It is not left out of the walk, though: on the BIM4LCA office the
+//! 14 bodies it alone keeps as boxes are railings whose saved mesh is not
+//! Revit's body (RE-303), so its failure is what keeps their boxes.
 //!
 //! Output: one `control` line per object for the first 8 per file, with
 //! its owner ElementId, scalar fields, parents and pointer targets, and a
