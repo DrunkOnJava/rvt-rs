@@ -143,6 +143,11 @@ line with the view definition and exporter version, `redistributable`, and
 the observations you checked) and open a pull request with the entry only.
 See [`corpus-intake.md`](corpus-intake.md) for the three intake lanes.
 
+A pair offered as held out for 1.0's W5 (#408) is pinned sealed and measured
+by no run until the final 1.0 check: W5 counts a pair only if its first
+measurement meets W4, W6 and W7, and no model meets W6 and W7 yet, so a pair
+measured now would be used up (`docs/release-1.0-criteria.md`, W5).
+
 If you cannot share the file, share what rvt-rs says about it:
 `rvt-inspect model.rvt --json --anonymize` and
 `rvt-ifc model.rvt -o /tmp/out.ifc --diagnostics diag.json --anonymize`
