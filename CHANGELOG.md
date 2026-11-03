@@ -8,6 +8,61 @@ fragments a release moves into this file.
 
 ## [Unreleased]
 
+### Changed
+
+- **`rvt-capabilities --matrix` names the Revit 2023 and 2024 project
+  capabilities for what they give.** `element-records-revit-2023` was
+  "Revit 2023 elements from their partition element records: identity,
+  category and box (RE-81)", though 2023 projects also get wall joins, beam
+  cuts, room outlines, storeys, hosts, family and type names, materials and
+  layer sets; `typed-project-elements`, the Revit 2024 row, was "Decode typed
+  elements from real project files". The two names change, and their notes,
+  which still said names, types, storeys and joins were not read on 2023, in
+  the text and JSON of the built-in matrix; ids, statuses and evidence do not.
+  `rvt-doc`'s note on older releases names the reconnaissance document by its
+  new path, `docs/format-reconnaissance.md`. The
+  README's support-by-release table is now rendered from the matrix, and CI
+  fails when the two disagree (`tools/ci/readme-matrix.py`).
+
+### Fixed
+
+- **Saved meshes read cylinder faces whose trim is not a rectangle in their
+  UV box.** Such a face was rejected, and with it the whole element, which
+  kept its box. The face is now meshed in strips across its angle, each no
+  wider than the chord bound. On the BIM4LCA office 155 more doors are drawn
+  from their saved meshes, as the default export draws doors: 151 exact to
+  0.001 ft against Revit's export, and all within 0.01 ft and 1% of its
+  volume (#1247, RE-304).
+
+- **Saved meshes read cylinders whose saved basis is left-handed.** Such a
+  face was rejected, and with it the whole element, which kept its box.
+  It is the same cylinder with its surface normal turned. On the BIM4LCA
+  office 100 more bodies are drawn from their saved meshes (102 at permit),
+  among them doors that the default export draws, 66 exact to 0.001 ft
+  against Revit's export and 93 within 0.01 ft. Snowdon Towers'
+  architectural sample gains 172, counted, not scored: it has no Revit
+  export (#1247, RE-301).
+
+- **With `--saved-meshes`, a light fixture's light source is left out of
+  its body, instead of keeping the fixture's box.** The light source is saved as a
+  filter of its own: a `GImposter` (a rendering asset with no surface)
+  with the shape and lines that draw the light, none of it in Revit's
+  export. On the BIM4LCA office 43 more bodies are drawn from their saved
+  meshes, all exact to 0.001 ft against Revit's export, as are RE1
+  Electrical's 2. Snowdon Towers' electrical sample draws 1,324 of its
+  1,465 bodies from saved meshes instead of 907; it has no Revit export,
+  so those are counted, not scored (#1247, RE-300).
+
+- **A door or window is no longer written as its opening alone when its
+  type draws geometry in no material of its own.** RE-84 takes a type
+  whose value block holds no geometry-material map as one that only cuts
+  its host; the scan of that block missed a map whose values are all unset
+  or name a material whose name it did not read. The type's native map
+  now decides: it is empty on every door and window Revit exports as its
+  opening alone (RE1's CasedOpening, Snowdon Towers' 47), and those keep
+  their openings; no export of the reference models, the BIM4LCA office,
+  the R2025 models or Autodesk's samples changes (#1247, RE-299).
+
 ## [0.12.1] — 2026-11-01
 
 0.12.1 makes exports of Revit 2015 to 2023 files faster than 0.12.0 made them,
