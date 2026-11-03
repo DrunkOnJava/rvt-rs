@@ -235,6 +235,11 @@ pub const CUT_LOOP_SIZE_FIELDS: [&str; 2] = ["m_cut_loop_width", "m_cut_loop_hei
 /// axis and its height, where its symbol cuts no loop (#810), feet.
 pub const INSTANCE_BOX_SIZE_FIELDS: [&str; 2] = ["m_instance_box_width", "m_instance_box_height"];
 
+/// Field carrying the extent along X of the lines of no category in the
+/// saved graphics of the symbol that draws a door or window whose symbol cuts
+/// no loop: the edges of its bounding boxes (RE-318), feet.
+pub const SYMBOL_WIRE_WIDTH_FIELD: &str = "m_symbol_wire_width";
+
 /// Fields carrying the extents along X, Y and Z of the solid a door's or
 /// window's symbol cuts where it cuts no loop (RE-225), feet.
 pub const CUT_SOLID_SIZE_FIELDS: [&str; 3] = [
