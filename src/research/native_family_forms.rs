@@ -296,6 +296,7 @@ struct Loaded {
     version: u32,
     streams: Vec<String>,
     keys: BTreeSet<[u8; 16]>,
+    blocks: BTreeMap<[u8; 16], u64>,
     documents: BTreeMap<u64, Document>,
 }
 
@@ -369,6 +370,7 @@ fn load(rf: &mut RevitFile, families: &BTreeSet<u64>) -> anyhow::Result<Option<L
         version,
         streams,
         keys,
+        blocks,
         documents,
     }))
 }
@@ -388,6 +390,7 @@ pub fn family_forms(
         streams,
         keys,
         documents,
+        ..
     }) = load(rf, families)?
     else {
         return Ok(out);
@@ -537,6 +540,69 @@ pub fn family_solids(
                 incomplete: !document.nested.is_empty() || document.unread || document.partial,
             },
         );
+    }
+    Ok(out)
+}
+
+/// The records of loaded families' own documents whose class is one of
+/// `classes` (every record when it is empty), each as its decoded graph, by
+/// the family's ElementId (RE-318). A family whose document is not found is
+/// left out, as is a record that does not decode. Errs where the file's
+/// partitions or schema are not read.
+pub fn family_records(
+    rf: &mut RevitFile,
+    families: &BTreeSet<u64>,
+    classes: &BTreeSet<String>,
+) -> anyhow::Result<BTreeMap<u64, Vec<(u64, ObjectGraph)>>> {
+    let mut out: BTreeMap<u64, Vec<(u64, ObjectGraph)>> = BTreeMap::new();
+    let Some(loaded) = load(rf, families)? else {
+        return Ok(out);
+    };
+    let tags: BTreeSet<u16> = classes
+        .iter()
+        .filter_map(|name| loaded.registry.named(name).map(|class| class.tag))
+        .collect();
+    let budget = native_document::group_budget(rf, native_document::DEFAULT_MAX_GROUP_BYTES);
+    for name in &loaded.streams {
+        let stored = rf.read_stream(name)?;
+        let prepared = compression::prepare_stream_for_inflate(name, &stored);
+        let inflated = rf.inflated_partition(name).ok();
+        native_segments::walk_inflated(
+            &prepared,
+            inflated.as_deref(),
+            &loaded.registry,
+            native_document::partition_budget(
+                budget,
+                native_document::DEFAULT_MAX_GROUP_BYTES,
+                inflated.as_deref(),
+            ),
+            |source, bytes| {
+                let Some(family) = source.content_key.and_then(|key| loaded.blocks.get(&key))
+                else {
+                    return Ok(());
+                };
+                if !CHANNELS.contains(&source.channel) {
+                    return Ok(());
+                }
+                let Ok(records) = native_document::group_records(source, bytes, loaded.version)
+                else {
+                    return Ok(());
+                };
+                for (id, _, start, end) in records {
+                    let body = &bytes[start..end];
+                    let Some(class) = le_bytes::u16_at(body, 0) else {
+                        continue;
+                    };
+                    if !tags.is_empty() && !tags.contains(&class) {
+                        continue;
+                    }
+                    if let Ok(graph) = native_parameters::decode_graph(body, &loaded.registry) {
+                        out.entry(*family).or_default().push((id, graph));
+                    }
+                }
+                Ok(())
+            },
+        )?;
     }
     Ok(out)
 }

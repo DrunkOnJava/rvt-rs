@@ -1083,6 +1083,19 @@ pub struct Primitive {
     pub vertices: Vec<[f64; 3]>,
     pub normals: Vec<[f64; 3]>,
     pub triangles: Vec<[u32; 3]>,
+    /// Whether a branch flagged not visible lies on the way to it. Only a
+    /// decode that includes hidden branches ([`graphics_including_hidden`])
+    /// holds any (RE-318).
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub hidden: bool,
+    /// Whether a filter that rejects the context lies on the way to it. Only
+    /// a decode that includes filtered branches ([`graphics_including_filtered`])
+    /// holds any (RE-318).
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub filtered: bool,
+}
+fn is_false(value: &bool) -> bool {
+    !*value
 }
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub struct GraphicsMeshes {
@@ -1118,11 +1131,54 @@ pub fn graphics_with_resolver_at_detail<'a>(
     resolver: &dyn Fn(u64) -> Option<&'a ObjectGraph>,
     detail_level: i64,
 ) -> GraphicsMeshes {
-    let selection = crate::native_graphics_traversal::select_graphics_with_resolver_at_detail(
-        g,
-        resolver,
-        detail_level,
-    );
+    graphics_impl(g, resolver, detail_level, false, false)
+}
+/// [`graphics_with_resolver_at_detail`], also decoding the branches whose
+/// visibility flags hide them; each [`Primitive`] one lies on the way to is
+/// marked [`Primitive::hidden`] (RE-318).
+pub fn graphics_including_hidden<'a>(
+    g: &'a ObjectGraph,
+    resolver: &dyn Fn(u64) -> Option<&'a ObjectGraph>,
+    detail_level: i64,
+) -> GraphicsMeshes {
+    graphics_impl(g, resolver, detail_level, true, false)
+}
+/// [`graphics_including_hidden`], also decoding the children of a filter
+/// whose conditions reject the context or are not read; each [`Primitive`]
+/// one lies on the way to is marked [`Primitive::filtered`] (RE-318).
+pub fn graphics_including_filtered<'a>(
+    g: &'a ObjectGraph,
+    resolver: &dyn Fn(u64) -> Option<&'a ObjectGraph>,
+    detail_level: i64,
+) -> GraphicsMeshes {
+    graphics_impl(g, resolver, detail_level, true, true)
+}
+fn graphics_impl<'a>(
+    g: &'a ObjectGraph,
+    resolver: &dyn Fn(u64) -> Option<&'a ObjectGraph>,
+    detail_level: i64,
+    include_hidden: bool,
+    include_filtered: bool,
+) -> GraphicsMeshes {
+    let selection = if include_filtered {
+        crate::native_graphics_traversal::select_graphics_including_filtered_at_detail(
+            g,
+            resolver,
+            detail_level,
+        )
+    } else if include_hidden {
+        crate::native_graphics_traversal::select_graphics_including_hidden_at_detail(
+            g,
+            resolver,
+            detail_level,
+        )
+    } else {
+        crate::native_graphics_traversal::select_graphics_with_resolver_at_detail(
+            g,
+            resolver,
+            detail_level,
+        )
+    };
     let mut out = GraphicsMeshes {
         diagnostics: selection
             .diagnostics
@@ -1177,6 +1233,8 @@ pub fn graphics_with_resolver_at_detail<'a>(
                                 vertices: m.vertices,
                                 normals,
                                 triangles: m.triangles,
+                                hidden: selected.hidden,
+                                filtered: selected.filtered,
                             })
                         }
                         None => {
@@ -1278,6 +1336,8 @@ pub fn graphics_with_resolver_at_detail<'a>(
                     vertices,
                     normals,
                     triangles,
+                    hidden: selected.hidden,
+                    filtered: selected.filtered,
                 })
             }
             for mesh in &mut decoded {

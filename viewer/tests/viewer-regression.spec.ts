@@ -317,10 +317,14 @@ largeProjectDemoTest(
     await card.click();
 
     // A 30 s decode with a static status line reads as a hang. The
-    // overlay has to show motion, elapsed seconds and a size-derived
-    // expectation for the whole wait.
+    // overlay has to show motion, elapsed seconds and, from the decoder's
+    // own reports (#1195), which stage it is in and how far; the size-derived
+    // "about N s" is only what it says before the first report.
     await expect(page.locator('#load-overlay')).toBeVisible();
-    await expect(page.locator('#load-hint')).toHaveText(/MB, about \d+ s/);
+    await expect(page.locator('#load-step')).toHaveText(
+      /Scanning for elements|Decoding elements|Reading partition streams|Building the model/,
+      { timeout: 120_000 },
+    );
     await expect(page.locator('#load-elapsed')).toHaveText(/^\d+ s elapsed$/);
     await expect(card).toHaveAttribute('aria-busy', 'true');
     await expect(page.locator('#status')).toHaveClass(/is-busy/);

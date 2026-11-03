@@ -79,9 +79,9 @@ measured on one project against Revit's own export (RE-124). On projects
 saved by Revit 2015 to 2022 and by Revit 2027, experimentally since 0.6.0, it
 exports their elements, measured against the same sample projects saved by
 Revit 2019 (for 2015 to 2018, RE-181), 2023 (for 2019 to 2022, RE-180) and
-2026 (for 2027, RE-179) rather than against a Revit export of them, except one
-2015 project, BIMcollab's structural example, against Revit 2015's own export
-(RE-198); 2015's
+2026 (for 2027, RE-179) rather than against a Revit export of them, except two
+projects against Revit's own export of their release: BIMcollab's 2015
+structural example (RE-198) and Vitoria's 2018 `ALD26 Before` (RE-315); 2015's
 `rst_basic` is another model than its 2019 copy, so it is not measured. On
 projects saved by Revit 2011 to 2014, experimentally and outside the 1.0
 range (2015 to 2027), it exports their elements too, measured on a local copy
@@ -110,10 +110,10 @@ geometry (doors and windows are drawn from the mesh Revit saved for their
 display by default, and any other family instance with the experimental
 `--saved-meshes` option, RE-78), hip roofs over a T or U footprint, roofs sloped by several slope arrows of the configuration of puzzbobb's U, where Revit slopes the two long outer walls along the arms only (RE-307; no other roof of the configuration is measured), and roofs by extrusion outside Revit 2025, the top of
 walls Revit steps over a floor that covers them in part (29 of the BIM4LCA office's as built and 26 at permit, #1067), the boundaries of
-rooms whose stored solid does not close and opening profiles are not
-decoded, and rvt-rs does not edit Revit model data.
+the rooms whose stored solid still does not close (RE-316 §4) and opening
+profiles are not decoded, and rvt-rs does not edit Revit model data.
 
-**Rooms.** Each `IfcSpace` says in `RvtElementRecordGeometry.SpaceOutlineSource` whether its outline was read from the room's stored solid (`stored_solid`), is the record's bounding box (`record_box`), was drawn from a saved mesh or a family's body, is an Area's region among its boundary lines (`area_boundary`, RE-317), or has no body (an Area whose boundary is not proven), and the diagnostics count the boxes (`exported.bounding_box_spaces`) and, by reason, the Areas that have no body (`exported.area_body_refusals`, RE-317). Measure scores every space's plan area and outline against Revit's export, and CI gates Core Interior (116 of 116 rooms) and RE1 Architecture (11 of 11). The rooms of Revit 2026 and 2027 are boxes until their stored solids are read (#1260, PR #1288). [docs/rooms.md](rooms.md) says what to trust per release, and RE-313 has the runs.
+**Rooms.** Each `IfcSpace` says in `RvtElementRecordGeometry.SpaceOutlineSource` whether its outline was read from the room's stored solid (`stored_solid`), is the record's bounding box (`record_box`), was drawn from a saved mesh or a family's body, is an Area's region among its boundary lines (`area_boundary`, RE-317), or has no body (an Area whose boundary is not proven), and the diagnostics count the boxes (`exported.bounding_box_spaces`) and, by reason, the Areas that have no body (`exported.area_body_refusals`, RE-317). Measure scores every space's plan area and outline against Revit's export, and CI gates Core Interior (116 of 116 rooms) and RE1 Architecture (11 of 11). A room whose stored solid the exact walk did not close is read again from the faces its solid lists, up to the solid's own end, and says so: `stored_solid_faces` where the faces' edges close as the walk reads them (9 of the BIM4LCA office's 13 such rooms as built, all at Revit's area to 0.1%) or `stored_solid_approximate` where a column overlaps a wall, an end of one wall edge lies on another, or the outline falls up to 0.02 ft short of the box (4 as built and 11 of the 12 at building permit: 10 of the 15 at Revit's floor area to 0.1%, the 5 others, four rooms, 0.45% to 0.68% under it); the diagnostics count them (`exported.resolved_outline_spaces`, `exported.approximate_outline_spaces`). The scorer's upward-face area reads one of them (1671995) as 323% over and RE-313's 66% room as 66% off; by Revit's floor both are within 0.5% and 0.1%. The 6 `rac_advanced` rooms with round columns, 49 of the 50 `rme` rooms, Snowdon Towers' 7 and office room 3095831 at permit keep their box (RE-316). [docs/rooms.md](rooms.md) says what to trust per release, and RE-313 has the runs.
 
 ## Finding history
 
@@ -805,7 +805,18 @@ does RE1 Architecture's curtain-wall door. Its addendum sizes one whose
 record names no wall along its own Y axis, as revit-ifc measures the
 height of a family no wall hosts: 266 of the office's 269 doors are then
 Revit's, and two are 0.1137 ft wider than Revit's
-(`reports/element-framing/RE-218-box-sizes.md`, #810).
+(`reports/element-framing/RE-218-box-sizes.md`, #810). **RE-318
+(2026-11-03)** takes the width of such a door or window from the lines of no
+category in its symbol's saved graphics, the edges of the boxes that bound
+its forms, hidden forms included, ahead of the record box's: the two wide
+doors are wall hatches whose 90 degree type hides the 180 degree leaf Revit's
+width includes, and the office's doors and windows then all have Revit's
+`OverallWidth` (268 of 268 doors Revit sizes, 269 of 269 windows as built; 268
+and 265 at building permit). It fires only where the record box sized the
+door or window before: of the other measured models only RE1 Architecture's
+curtain-wall door, whose width is unchanged. One building's families, and
+what the boxes are is inferred from Revit's widths
+(`reports/element-framing/RE-318-symbol-wire-width.md`).
 
 **RE-216 (2026-10-24)** gives a family instance whose element data sits in
 two partitions, with transforms that disagree, the copy its current record is
@@ -1053,10 +1064,11 @@ two fields are now pinned and two exports are byte-identical, as
 In the browser the same change takes the 33.7 MB Core Interior demo from
 about 28 s to **about 3 s** of decode, measured live on the deployed
 site (6.7 s including the 32 MB download). The viewer's loading card
-derives its "about N s" hint from that measurement —
+opened with an "about N s" hint from that measurement —
 `DECODE_BYTES_PER_SECOND` is 11 MB/s since #271, up from the 1.15 MB/s
-the pre-#266 figure implied — and the progress bar stays indeterminate
-because the decoder cannot report real progress.
+the pre-#266 figure implied. It is a laptop's figure, and since #1195 the
+card shows the decoder's own progress as soon as it reports (see
+[`viewer-api.md`](viewer-api.md#decode-progress)).
 
 ## Capability Matrix
 

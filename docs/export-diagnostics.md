@@ -125,7 +125,10 @@ reads the primary from the set's name entry and does the same. These are
 omitted by design too, and do not count toward `unexported_element_records`.
 A set whose primary cannot be read keeps all its options. On Snowdon Towers
 the count is 27 (9 floors, 9 slab edges, 8 walls, one generic model), none of
-which Revit's export holds (RE-40).
+which Revit's export holds (RE-40). On Revit 2016 to 2023 the item is
+reported too (RE-315): Autodesk's `rst_basic_sample_project` of each of those
+releases counts one `Mass`, which Revit does not export, so its `Mass` leaves
+the production class counts and the exported IFC does not change.
 
 `element_record_not_in_export_phase` counts placed instances of a recovered
 category that do not exist in the export phase: created after it, or
@@ -135,7 +138,10 @@ and they do not count toward `unexported_element_records`. Rooms are never
 counted or left out, because Revit's exporter skips a room by its own phase
 parameter, which is not measured to be its created phase. On Snowdon Towers
 Architectural (2024) the count is 6 (Floor), the slabs of #328, which are
-created and demolished in the Legends phase (RE-184). A read of the phases
+created and demolished in the Legends phase (RE-184). On Revit 2016 to 2023
+the same filter applies (RE-315); no Autodesk sample has an element outside
+its last phase, and the held-out Vitoria Project's counts are the only
+evidence that it is right on a 32-bit file. A read of the phases
 that fails on a Revit 2015 to 2027 file is reported in `warnings` ("The
 project's phases could not be read"), and the export then writes every
 element.
@@ -198,6 +204,8 @@ Important nested fields:
 | `exported.layered_element_count` | integer | Elements whose compound layers and layer colours were read (RE-53). The glTF export draws each in its layers where they add up to its body's thickness; the rest are drawn whole. |
 | `exported.bounding_box_spaces` | integer | Exported `IfcSpace`s whose body is their record's bounding box (`RvtElementRecordGeometry.SpaceOutlineSource` is `record_box`): a room whose outline was not read from its stored solid, or a family instance written as a space and drawn as its box. The body's plan area is the box's, not the space's (RE-313, [rooms](rooms.md)). Each is also in `exported.bounding_box_bodies`, except a family instance turned or tilted off the model's axes. |
 | `exported.area_body_refusals` | object | Of the exported Areas that have no body, why, by reason, counted from each Area's `RvtElementRecordGeometry.AreaBodyRefusal` (RE-317): `levels_not_recovered`, `boundary_line_not_read` (a declared area boundary line was not read or cannot be placed on a Level, so no Area of the file is drawn), `no_boundary_lines`, `point_not_read`, `level_or_scheme_not_named`, `named_lines_not_in_scheme_and_level` (a line the Area's record names is not a declared line of its scheme on its Level that was read: its copies disagree, it has no Level or scheme, or it is in a non-primary design option), `next_storey_not_proven` (the Area's Level and the one above are not both building stories, or another Level lies between or at them), `boundary_lines_not_readable` (a line of the group is not straight along an axis, overlaps another, may be missing, or is in a non-primary design option), `point_in_no_single_region`, `named_lines_not_on_region` and `two_areas_one_region` (another placed Area of the same scheme and Level has the same region, whether or not that one is drawn). Empty when every Area is drawn or the export has no geometry. |
+| `exported.resolved_outline_spaces` | integer | Exported rooms whose outline was read from the faces their stored solid lists, up to the solid's own end, where the walk of RE-101 did not close them (`RvtElementRecordGeometry.SpaceOutlineSource` is `stored_solid_faces`, RE-316, [rooms](rooms.md)). Equal to Revit's area on every such room measured, but bounded by the solid's list of objects and a gap of 1,024 bytes, so a closed loop of another element's faces inside the room's box would be read as the room's. |
+| `exported.approximate_outline_spaces` | integer | Exported rooms whose resolved outline is the boundary of a region, a column that overlaps a wall having been taken off it or an end of one wall edge lying on another, or falls up to 0.02 ft short of their record box on a side (`SpaceOutlineSource` is `stored_solid_approximate`, RE-316, [rooms](rooms.md)). The area is approximate: up to 0.68% under Revit's floor area where Revit's export does not take that column off the room, and equal to it on 10 of the 15 BIM4LCA office room scores. |
 | `confidence.level` | string | `scaffold`, `typed_no_geometry`, `geometry`, `diagnostic_partial`, or `proxy_only`. |
 | `confidence.score` | number | Heuristic 0..1 readiness score for UI sorting and dashboards. Its element terms (elements, typed elements, geometry) are scaled by the exported share when `unexported_element_records` is non-zero. |
 | `confidence.unexported_element_records` | integer | Element records of a recovered category (walls, doors, windows, columns, floors, rooms and the RE-33 product categories) the partition scan found but could not export because no ElementId is attributable (RE-30). Non-zero means the model is incomplete. Zero is not a completeness claim. |

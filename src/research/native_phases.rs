@@ -172,20 +172,26 @@ pub fn scan_phase_excluded_instances(
         RECOVERED_CATEGORIES, scan_category_records_multi, supports_revit_version,
     };
     let mut by_class = BTreeMap::new();
-    if !supports_revit_version(revit_version) {
+    let filtered_32bit =
+        crate::partition_element_records_2023::applies_export_filters(revit_version);
+    if !filtered_32bit && !supports_revit_version(revit_version) {
         return Ok(by_class);
     }
     let phases = rf.memoised_phase_filter();
     if phases.excluded.is_empty() {
         return Ok(by_class);
     }
-    let declared: BTreeSet<u32> = match crate::elem_table::parse_records(rf) {
-        Ok(records) => crate::elem_table::declared_ids(&records),
-        Err(_) => return Ok(by_class),
-    };
     let options = rf.memoised_design_options();
-    let categories: Vec<i64> = RECOVERED_CATEGORIES.iter().map(|(c, _)| *c).collect();
-    let records = scan_category_records_multi(rf, revit_version, &categories, &declared)?;
+    let records = if filtered_32bit {
+        crate::partition_element_records_2023::scan_records(rf, revit_version)
+    } else {
+        let declared: BTreeSet<u32> = match crate::elem_table::parse_records(rf) {
+            Ok(records) => crate::elem_table::declared_ids(&records),
+            Err(_) => return Ok(by_class),
+        };
+        let categories: Vec<i64> = RECOVERED_CATEGORIES.iter().map(|(c, _)| *c).collect();
+        scan_category_records_multi(rf, revit_version, &categories, &declared)?
+    };
     let mut excluded: BTreeMap<u32, i64> = BTreeMap::new();
     for record in records
         .iter()

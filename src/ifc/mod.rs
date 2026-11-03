@@ -683,6 +683,23 @@ pub struct ExportedModelDiagnostics {
     /// `boundary_lines_not_readable` or `point_in_no_single_region`.
     #[serde(default)]
     pub area_body_refusals: std::collections::BTreeMap<String, usize>,
+    /// Of the exported `IfcSpace`s, the rooms whose outline was read from the
+    /// faces their stored solid lists, up to the solid's own end, where the
+    /// walk of RE-101 did not close them (`SpaceOutlineSource` is
+    /// `stored_solid_faces`, RE-316): equal to Revit's area on every such room
+    /// measured, but bounded by the solid's list of objects and a gap, so a
+    /// closed loop of another element's faces inside the room's box would be
+    /// read as the room's.
+    #[serde(default)]
+    pub resolved_outline_spaces: usize,
+    /// Of the exported `IfcSpace`s, the rooms whose resolved outline is the
+    /// boundary of a region, a column overlapping a wall having been taken
+    /// off it, or falls up to 0.02 ft short of their record box on a side
+    /// (`SpaceOutlineSource` is `stored_solid_approximate`, RE-316): their
+    /// area is approximate, up to 0.68% under Revit's floor area where
+    /// Revit's export does not take the column off.
+    #[serde(default)]
+    pub approximate_outline_spaces: usize,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -1021,7 +1038,27 @@ impl RvtDocExporter {
         quality_mode: ExportQualityMode,
         limits: crate::walker::WalkerLimits,
     ) -> Result<ExportResult> {
-        let model = self.export_with_mode_and_limits(rf, quality_mode, limits)?;
+        self.export_with_diagnostics_mode_limits_and_control(
+            rf,
+            quality_mode,
+            limits,
+            &crate::control::WalkerControl::default(),
+        )
+    }
+
+    /// Same as [`Self::export_with_diagnostics_mode_and_limits`], with the
+    /// walk's progress reported to `control` and a cancelled token stopping
+    /// the export with [`crate::Error::Cancelled`], as
+    /// [`Self::export_with_mode_limits_and_control`] does for the model alone.
+    /// The diagnostics are built after the walk and report nothing.
+    pub fn export_with_diagnostics_mode_limits_and_control(
+        &self,
+        rf: &mut crate::RevitFile,
+        quality_mode: ExportQualityMode,
+        limits: crate::walker::WalkerLimits,
+        control: &crate::control::WalkerControl,
+    ) -> Result<ExportResult> {
+        let model = self.export_with_mode_limits_and_control(rf, quality_mode, limits, control)?;
         let diagnostics = build_export_diagnostics_with_limits(
             rf,
             &model,
@@ -1113,6 +1150,19 @@ fn original_file_stem(path: &str) -> Option<String> {
 }
 
 fn export_rvt_doc(
+    rf: &mut crate::RevitFile,
+    mode: RvtDocExportMode,
+    quality_mode: ExportQualityMode,
+    walker_limits: crate::walker::WalkerLimits,
+    control: &crate::control::WalkerControl,
+) -> Result<IfcModel> {
+    rf.report_partition_inflates_to(control);
+    let result = export_rvt_doc_reporting(rf, mode, quality_mode, walker_limits, control);
+    rf.stop_reporting_partition_inflates();
+    result
+}
+
+fn export_rvt_doc_reporting(
     rf: &mut crate::RevitFile,
     mode: RvtDocExportMode,
     quality_mode: ExportQualityMode,
@@ -3798,7 +3848,22 @@ pub fn build_export_diagnostics_with_limits(
         layout.filter(|&version| crate::partition_element_records_2023::is_32bit_release(version))
     {
         // RE-81, RE-102, RE-107, RE-109, RE-111 to RE-115, RE-180: what a
-        // 2015 to 2023 export carries, and what it does not (RE-181).
+        // 2008 to 2023 export carries, and what it does not (RE-181). The
+        // export phase and design options are applied on 2016 to 2023 only
+        // (RE-315).
+        let filters = if crate::partition_element_records_2023::applies_export_filters(version) {
+            format!(
+                "The export phase and design options are applied for {version}: elements that \
+                 do not exist in the last phase or are in a non-primary design option are left \
+                 out."
+            )
+        } else {
+            format!(
+                "Neither the export phase nor design options are applied for {version} (they \
+                 are on 2016 to 2023): elements outside the last phase or in a non-primary \
+                 design option are written."
+            )
+        };
         warnings.push(format!(
             "Revit {version}: elements come from their records with their ElementId, category and \
              bounding box, doors and windows with their host wall, rooms with their outline, \
@@ -3807,7 +3872,7 @@ pub fn build_export_diagnostics_with_limits(
              type names, and family instances their type's materials. Layers become \
              material layer sets where their materials are named, a layer that takes its \
              category's material taking the object styles' one, and walls keep their record box. \
-             Wall joins and profiles, design options, parameters and \
+             {filters} Wall joins and profiles, parameters and \
              \"Export to IFC As\" overrides are not read for {version}, and components \
              nested in doors and windows are left out."
         ));
@@ -4175,6 +4240,8 @@ fn exported_model_diagnostics(model: &IfcModel) -> ExportedModelDiagnostics {
     let mut bounding_box_bodies = 0usize;
     let mut bounding_box_spaces = 0usize;
     let mut area_body_refusals = std::collections::BTreeMap::<String, usize>::new();
+    let mut resolved_outline_spaces = 0usize;
+    let mut approximate_outline_spaces = 0usize;
     for (index, entity) in model.entities.iter().enumerate() {
         if let entities::IfcEntity::BuildingElement {
             ifc_type,
@@ -4226,6 +4293,17 @@ fn exported_model_diagnostics(model: &IfcModel) -> ExportedModelDiagnostics {
             {
                 bounding_box_spaces += 1;
             }
+            if ifc_type == "IFCSPACE" {
+                match space_outline.map(String::as_str) {
+                    Some(export_content::SPACE_OUTLINE_STORED_SOLID_FACES) => {
+                        resolved_outline_spaces += 1;
+                    }
+                    Some(export_content::SPACE_OUTLINE_STORED_SOLID_APPROXIMATE) => {
+                        approximate_outline_spaces += 1;
+                    }
+                    _ => {}
+                }
+            }
             building_elements += 1;
             *by_ifc_type.entry(ifc_type.clone()).or_insert(0) += 1;
             if storey_index.is_some() {
@@ -4276,6 +4354,8 @@ fn exported_model_diagnostics(model: &IfcModel) -> ExportedModelDiagnostics {
         bounding_box_bodies,
         bounding_box_spaces,
         area_body_refusals,
+        resolved_outline_spaces,
+        approximate_outline_spaces,
     }
 }
 
