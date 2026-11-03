@@ -120,7 +120,7 @@ def curve_points(curve):
     return [], True
 
 
-def profile_points(space, scale):
+def profile_points(space, scale, frame):
     """(outer, inners, arcs) of the first extrusion's profile in Revit's internal
     feet: each curve a list of (x, y), as written, through the extrusion's
     position, the space's placement and the site's."""
@@ -129,9 +129,10 @@ def profile_points(space, scale):
             if not item.is_a("IfcExtrudedAreaSolid"):
                 continue
             area = item.SweptArea
+            if not area.is_a("IfcArbitraryClosedProfileDef"):
+                continue
             matrix = ifcopenshell.util.placement.get_local_placement(space.ObjectPlacement)
             matrix = matrix @ ifcopenshell.util.placement.get_axis2placement(item.Position)
-            frame = site_frame(space.wrapped_data.file)
             out, arcs = [], False
             curves = [area.OuterCurve] + list(getattr(area, "InnerCurves", None) or [])
             for curve in curves:
@@ -282,7 +283,7 @@ def main(argv):
             f" depth minus next-storey gap {None if profile == [] or gap is None else round(profile[0][4] - gap, 4)};"
             f" Qto Height {height}"
         )
-        outer, inners, has_arc = profile_points(space, scale)
+        outer, inners, has_arc = profile_points(space, scale, frame)
         print(f"profile\t{area_id}\t{has_arc}\t{outer}\t{inners}")
         outline = rings(surface)
         if not outline:
