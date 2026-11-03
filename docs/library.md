@@ -97,7 +97,7 @@ Runtime capabilities:
 - Produce a byte-for-byte round-trip copy of a `.rfa` / `.rvt` file
 - Run across the 11-release family corpus in under 500 ms per file (release build, measured in April 2026; for large projects see [Performance on large projects](format.md#performance-on-large-projects))
 
-The CLIs that ship, the ones the [README](../README.md#command-line-tools) lists, with an example of each:
+The CLIs that ship are the ones the [README](../README.md#command-line-tools) lists. Examples:
 
 ```bash
 cargo build --release

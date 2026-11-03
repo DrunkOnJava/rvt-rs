@@ -283,7 +283,7 @@ let svg = render_plan_svg(&model, &SheetOptions::default());
 
 ## The JavaScript bindings
 
-`rvt-wasm/src/lib.rs` exports these 12 functions through `wasm-bindgen`, and
+`rvt-wasm/src/lib.rs` exports these functions through `wasm-bindgen`, and
 `wasm-pack` builds them into `viewer/pkg/`. They are the wasm API that 1.0
 keeps stable (`RELEASE.md`, "What 1.0 keeps stable"): CI fails a pull request
 that removes or renames one, removes, moves or retypes a parameter, adds one
