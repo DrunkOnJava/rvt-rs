@@ -4,4 +4,5 @@
   office 100 more bodies are drawn from their saved meshes (102 at permit),
   among them doors that the default export draws, 66 exact to 0.001 ft
   against Revit's export and 93 within 0.01 ft. Snowdon Towers'
-  architectural sample gains 172 (#1247, RE-301).
+  architectural sample gains 172, counted, not scored: it has no Revit
+  export (#1247, RE-301).
