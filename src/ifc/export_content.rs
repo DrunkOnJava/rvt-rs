@@ -411,7 +411,7 @@ pub fn append_typed_production_elements(
     let mut opening_hosts: Vec<(usize, u32, u32)> = Vec::new();
     // RE-267: each wall's entity index and the elements its top join and cut
     // pairs name, for the cut at the floor that covers it.
-    let mut pending_tops: Vec<(usize, Vec<u32>)> = Vec::new();
+    let mut pending_tops: Vec<wall_tops::Pending> = Vec::new();
     let mut level_bind = crate::level_bind::LevelStoreyBind::new();
     // RE-286: what each type object's common set holds, by type and type
     // entity; `None` once two of its elements disagree.
@@ -1057,7 +1057,13 @@ pub fn append_typed_production_elements(
         if policy.include_geometry && decoded.class == "Wall" {
             let named = crate::partition_schema_mvp::wall_top_cutters_from_fields(&decoded.fields);
             if !named.is_empty() {
-                pending_tops.push((entity_index, named));
+                pending_tops.push(wall_tops::Pending {
+                    index: entity_index,
+                    named,
+                    pair_only: crate::partition_schema_mvp::wall_top_pair_only_from_fields(
+                        &decoded.fields,
+                    ),
+                });
             }
         }
         // RE-291: a column whose type is a plain rectangle, with the elements its pairs name.

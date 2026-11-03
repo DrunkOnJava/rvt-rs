@@ -41,7 +41,11 @@
 //! it is convex, else its ear-clipped triangles joined where two make a convex
 //! piece) less each triangle of an outline in turn, with the pieces that share
 //! an edge and make a convex piece together joined. The holes and openings of
-//! an element count as uncovered, where one element alone is named. A wall
+//! an element count as uncovered, where one element alone is named. An element
+//! that only a cut pair names, and never the top join, cuts the top only where
+//! it reaches the wall's top: a Join Geometry cut takes the volume the two
+//! share, which is the wall's top only where the element rises to it (RE-320
+//! §5). A wall
 //! whose pieces pass [`MAX_RISERS`], whose plan does not break into convex
 //! pieces, or whose several elements share a hole or opening that lies over
 //! it, is left as it was. The wall's `extrusion` stays the full prism, which
@@ -103,10 +107,21 @@ struct Wall {
     bounds: [f64; 4],
 }
 
-/// A floor, roof or footing: its underside, the triangles of its outline and
-/// the triangles of its holes and openings, in model feet.
+/// A wall whose top join or cut pairs name elements, waiting for the pass.
+pub(super) struct Pending {
+    /// The wall's entity index.
+    pub index: usize,
+    /// The ElementIds its top join and cut pairs name.
+    pub named: Vec<u32>,
+    /// Those that only a cut pair names (RE-320).
+    pub pair_only: Vec<u32>,
+}
+
+/// A floor, roof or footing: its underside and top, the triangles of its
+/// outline and the triangles of its holes and openings, in model feet.
 struct Cutter {
     underside: f64,
+    top: f64,
     outline: Vec<Triangle>,
     cutouts: Vec<Triangle>,
 }
@@ -524,6 +539,7 @@ fn build_cutter(
     voids: &HashMap<usize, Vec<&[Point2]>>,
 ) -> Option<Cutter> {
     let mut heights: Option<(f64, f64)> = None;
+    let mut top = f64::NEG_INFINITY;
     let mut outline = Vec::new();
     let mut cutouts = Vec::new();
     for &index in pieces {
@@ -545,6 +561,7 @@ fn build_cutter(
         }
         let (least, greatest) = heights.unwrap_or((location[2], location[2]));
         heights = Some((least.min(location[2]), greatest.max(location[2])));
+        top = top.max(location[2] + body.height_feet);
         let placement = Placement::new(Some(*location), *rotation_radians);
         let (outer, holes) = extrusion_rings(body)?;
         outline.extend(ring_triangles(&outer, &placement)?);
@@ -561,6 +578,7 @@ fn build_cutter(
     let (least, greatest) = heights?;
     (greatest - least <= UNDERSIDE_TOLERANCE_FEET).then_some(Cutter {
         underside: least,
+        top,
         outline,
         cutouts,
     })
@@ -583,7 +601,7 @@ enum Cut {
 
 /// For each of `pending` (a wall's entity index and the ElementIds its top
 /// join and cut pairs name) that is cut: its index and how.
-fn decide(entities: &[IfcEntity], pending: &[(usize, Vec<u32>)]) -> Vec<(usize, Cut)> {
+fn decide(entities: &[IfcEntity], pending: &[Pending]) -> Vec<(usize, Cut)> {
     let mut pieces: HashMap<u32, Vec<usize>> = HashMap::new();
     let mut voids: HashMap<usize, Vec<&[Point2]>> = HashMap::new();
     let mut profiled: HashSet<usize> = HashSet::new();
@@ -612,7 +630,12 @@ fn decide(entities: &[IfcEntity], pending: &[(usize, Vec<u32>)]) -> Vec<(usize, 
     }
     let mut cutters: HashMap<u32, Option<Cutter>> = HashMap::new();
     let mut cuts = Vec::new();
-    for (index, named) in pending {
+    for Pending {
+        index,
+        named,
+        pair_only,
+    } in pending
+    {
         if profiled.contains(index) {
             continue;
         }
@@ -636,6 +659,9 @@ fn decide(entities: &[IfcEntity], pending: &[(usize, Vec<u32>)]) -> Vec<(usize, 
             if !(level > wall.base + UNDERSIDE_TOLERANCE_FEET
                 && level < wall.top - UNDERSIDE_TOLERANCE_FEET)
             {
+                continue;
+            }
+            if pair_only.contains(&id) && cutter.top < wall.top - UNDERSIDE_TOLERANCE_FEET {
                 continue;
             }
             if covers(cutter, &wall) {
@@ -713,7 +739,7 @@ fn to_local(placement: &Placement, point: Point2) -> Point2 {
 /// covers it (see the module): a whole wall's extrusion height becomes the
 /// underside less its base, and a wall a floor covers in part gets the stepped
 /// body of the module as its `solid_shape`.
-pub(super) fn cut_wall_tops(entities: &mut [IfcEntity], pending: &[(usize, Vec<u32>)]) {
+pub(super) fn cut_wall_tops(entities: &mut [IfcEntity], pending: &[Pending]) {
     if pending.is_empty() {
         return;
     }
