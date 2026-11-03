@@ -281,16 +281,22 @@ const VISIBILITY_FLAG_BITS: u64 = 0x1e0;
 /// at building permit, where the surfaces and the record box each miss
 /// some. Only lines whose visibility bits are clear count. A symbol whose
 /// graphics hold an instance or a component reference, whose lines would
-/// sit in another frame, or none of those lines, is left out. Errs where
-/// the native record path does not read the file's release.
+/// sit in another frame, one with none of those lines or with an extent that
+/// is not finite and positive, and one read twice with different extents, is
+/// left out: its door or window keeps the width it had. The reader walks the
+/// graph's object list once, which the native record path bounds
+/// ([`native_document::Options::max_graph_objects`]), and takes no value from
+/// the file without checking it. Errs where the native record path does not
+/// read the file's release.
 pub fn symbol_wire_widths(
     rf: &mut RevitFile,
     symbols: &BTreeSet<u64>,
 ) -> anyhow::Result<BTreeMap<u64, f64>> {
-    let mut out = BTreeMap::new();
     if symbols.is_empty() {
-        return Ok(out);
+        return Ok(BTreeMap::new());
     }
+    // A symbol read twice with different extents is left out.
+    let mut widths: BTreeMap<u64, Option<f64>> = BTreeMap::new();
     let options = native_document::Options {
         selected_ids: symbols.clone(),
         channels: BTreeSet::from([103]),
@@ -338,11 +344,22 @@ pub fn symbol_wire_widths(
             }
         }
         if low.is_finite() && high.is_finite() && high > low {
-            out.insert(record.identity.element_id, high - low);
+            let width = high - low;
+            widths
+                .entry(record.identity.element_id)
+                .and_modify(|seen| {
+                    if seen.is_some_and(|seen| (seen - width).abs() > JOIN_TOLERANCE_FEET) {
+                        *seen = None;
+                    }
+                })
+                .or_insert(Some(width));
         }
         Ok(())
     })?;
-    Ok(out)
+    Ok(widths
+        .into_iter()
+        .filter_map(|(symbol, width)| Some((symbol, width?)))
+        .collect())
 }
 
 /// A family instance hosted on a face of another element through a
