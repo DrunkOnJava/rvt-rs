@@ -5,5 +5,5 @@
 # installs it with --require-hashes; after changing a pin here, regenerate it
 # with the uv command at its top.
 jsonschema==4.26.0
-mypy==2.4.0
-pytest==9.1.1
+mypy==2.4.1
+pytest==9.2.0
