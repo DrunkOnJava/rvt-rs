@@ -84,6 +84,10 @@ pub const ROOM_SOLID_WINDOW: usize = 0x1_0000;
 /// feet.
 pub const BOX_TOLERANCE_FEET: f64 = 1e-3;
 
+/// How many bytes past a room's solid header the next solid's tag is looked
+/// for (RE-316): the largest solid measured, 115 faces, ends 84 KB in.
+pub const ROOM_SOLID_SPAN_MAX: usize = 4 << 20;
+
 /// How far a vertical face's span may fall short of a room's box, and a
 /// horizontal face lie from its floor or ceiling, and still be it, feet
 /// (RE-296).
@@ -292,12 +296,23 @@ fn reaches_anchor(face: &RoomFace, bbox: [f64; 6], anchor: OutlineAnchor) -> Opt
     reached.then_some(edge)
 }
 
-fn edge_within_box(edge: [f64; 4], bbox: [f64; 6]) -> bool {
+/// Whether a vertical `face` reaches outside the room's record box, which
+/// holds the whole solid: a face of another element, read because the span
+/// ran on past the solid's end.
+fn strays_from_box(face: &RoomFace, bbox: [f64; 6]) -> bool {
     let tolerance = BOX_TOLERANCE_FEET;
-    edge[0].min(edge[2]) >= bbox[0] - tolerance
-        && edge[0].max(edge[2]) <= bbox[3] + tolerance
-        && edge[1].min(edge[3]) >= bbox[1] - tolerance
-        && edge[1].max(edge[3]) <= bbox[4] + tolerance
+    let FaceKind::Vertical { low, high } = face.kind() else {
+        return false;
+    };
+    if low < bbox[2] - tolerance || high > bbox[5] + tolerance {
+        return true;
+    }
+    face.plan_edge().is_some_and(|(edge, _)| {
+        edge[0].min(edge[2]) < bbox[0] - tolerance
+            || edge[0].max(edge[2]) > bbox[3] + tolerance
+            || edge[1].min(edge[3]) < bbox[1] - tolerance
+            || edge[1].max(edge[3]) > bbox[4] + tolerance
+    })
 }
 
 fn profile_on_box(profile: PlanProfile, bbox: [f64; 6]) -> Option<PlanProfile> {
@@ -312,21 +327,22 @@ fn profile_on_box(profile: PlanProfile, bbox: [f64; 6]) -> Option<PlanProfile> {
 
 /// The outline the wall faces among `faces` make, kept where it spans
 /// `bbox`. With `resolve` off, the faces' plan edges must close into loops as
-/// they are (RE-101). With it on, only the edges inside the box are used,
-/// and the outline is the boundary of the region they wind around
-/// ([`region_boundary`]).
+/// they are (RE-101). With it on, the outline is the boundary of the region
+/// they wind around ([`region_boundary`]), and a vertical face that reaches
+/// outside the box rules the solid out.
 fn outline_from_faces(
     faces: &[RoomFace],
     bbox: [f64; 6],
     anchor: OutlineAnchor,
     resolve: bool,
 ) -> Option<PlanProfile> {
+    if resolve && faces.iter().any(|face| strays_from_box(face, bbox)) {
+        return None;
+    }
     let mut lines = Vec::new();
     for face in faces {
         if let Some(edge) = reaches_anchor(face, bbox, anchor) {
-            if !resolve || edge_within_box(edge, bbox) {
-                lines.push(edge);
-            }
+            lines.push(edge);
         }
     }
     snap_ends(&mut lines);
@@ -460,17 +476,21 @@ pub fn solid_headers_by_id(buf: &[u8]) -> BTreeMap<u64, Vec<usize>> {
 }
 
 /// Every face of the solid whose header starts at `header`, from its first
-/// face to the tag of the next solid in `buf` or [`ROOM_SOLID_WINDOW`] bytes
-/// past its start, whatever the gap between faces (RE-316).
+/// face to the tag of the next solid in `buf`, whatever the gap between faces
+/// (RE-316). Empty where no tag follows within [`ROOM_SOLID_SPAN_MAX`] bytes:
+/// without it the solid's end is not known, and the faces past it are another
+/// element's.
 pub fn solid_faces_to_next_solid(buf: &[u8], header: usize) -> Vec<RoomFace> {
     let Some(start) = solid_start(buf, header) else {
         return Vec::new();
     };
-    let window_end = buf.len().min(start.saturating_add(ROOM_SOLID_WINDOW));
+    let window_end = buf.len().min(start.saturating_add(ROOM_SOLID_SPAN_MAX));
     let Some(window) = buf.get(start..window_end) else {
         return Vec::new();
     };
-    let end = memchr::memmem::find(window, &ROOM_SOLID_TAG).unwrap_or(window.len());
+    let Some(end) = memchr::memmem::find(window, &ROOM_SOLID_TAG) else {
+        return Vec::new();
+    };
     memchr::memmem::find_iter(&window[..end], &FACE_TAG)
         .filter_map(|offset| face_at(buf, start + offset))
         .collect()
