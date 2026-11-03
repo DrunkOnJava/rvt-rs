@@ -8,6 +8,130 @@ fragments a release moves into this file.
 
 ## [Unreleased]
 
+## [0.12.2] — 2026-11-03
+
+0.12.2 draws more doors from the meshes Revit saved for display in the
+default export, and more bodies with `--saved-meshes`. It also changes how
+a door's type decides whether the door is written as its opening alone.
+Both changes come from a user's comparison of 0.6.1 and 0.12.0 (#1247;
+thanks to hemanth1986). Not every case that comparison found is fixed:
+- the user's 341 beams lost their meshes on no file measured here, so
+  their cause is open;
+- toilets, railings and wall-mounted fittings whose saved meshes RE-302,
+  RE-303 and RE-305 measured stay boxes, because those meshes are not
+  Revit's body;
+- the door change measures on no file here: its positive case is the
+  user's own project, which has not been measured with it.
+
+Measured against 0.12.1 on every reference model (Measure run 41589642386,
+`main` before the version bump), in the default export, which draws doors
+and windows from their saved meshes:
+- the BIM4LCA office draws 269 doors from their saved meshes, against 48 as
+  built and 46 at building permit, 265 of them exact to 0.001 ft against
+  Revit's export and all within 0.01 ft;
+- six R2025 models (12 to 17) each draw one storefront door from its saved
+  mesh, within 0.01 ft of Revit's body and at 1.0002 of its volume, where
+  0.12.1 drew a box;
+- Core Interior, Einhoven, the RE1 models and the other R2025 models export
+  the same IFC as with 0.12.1, but for the version its header records;
+- 8 of the 13 held-out models change; they are counted, not scored.
+
+The office as built's IFC grows from 58.6 to 67.8 MB, its saved-mesh
+triangles from 66,872 to 257,108. With `--saved-meshes`, light fixtures and
+more bodies are drawn too, with each entry's own caveats (below).
+
+The viewer no longer calls a Revit 2008 to 2014 file an unsupported version
+(below).
+
+### Upgrading from 0.12.1
+
+- A door or window whose saved mesh now decodes whole is drawn from it
+  instead of its box, in `rvt-ifc`, `rvt-gltf`, Python and the viewer.
+  `--no-saved-meshes`, `saved_meshes=False` and `?savedMeshes=0` keep the
+  boxes.
+- A door or window whose type's native map holds entries is written as an
+  `IfcDoor` or `IfcWindow` filling its opening, where 0.12.1 may have
+  written only its `IfcOpeningElement` (no measured file has such a door).
+- `rvt-inspect`'s `unsupported_revit_version` message names 2008 to 2027;
+  the `failure_mode.kind` value does not change.
+- `rvt-capabilities --matrix` gives the Revit 2023 and 2024 project
+  capabilities new names, in its text and JSON; their ids and statuses do
+  not change.
+- The stable public API does not change. `rvt::research` (unstable) gains
+  `native_type_materials::GeometryMap` and `geometry_maps`.
+
+### Changed
+
+- **`rvt-capabilities --matrix` names the Revit 2023 and 2024 project
+  capabilities for what they give.** `element-records-revit-2023` was
+  "Revit 2023 elements from their partition element records: identity,
+  category and box (RE-81)", though 2023 projects also get wall joins, beam
+  cuts, room outlines, storeys, hosts, family and type names, materials and
+  layer sets; `typed-project-elements`, the Revit 2024 row, was "Decode typed
+  elements from real project files". The two names change, and their notes,
+  which still said names, types, storeys and joins were not read on 2023, in
+  the text and JSON of the built-in matrix; ids, statuses and evidence do not.
+  `rvt-doc`'s note on older releases names the reconnaissance document by its
+  new path, `docs/format-reconnaissance.md`. The
+  README's support-by-release table is now rendered from the matrix, and CI
+  fails when the two disagree (`tools/ci/readme-matrix.py`).
+
+### Fixed
+
+- **Saved meshes read cylinder faces whose trim is not a rectangle in their
+  UV box.** Such a face was rejected, and with it the whole element, which
+  kept its box. The face is now meshed in strips across its angle, each no
+  wider than the chord bound. On the BIM4LCA office 155 more doors are drawn
+  from their saved meshes, as the default export draws doors: 151 exact to
+  0.001 ft against Revit's export, and all within 0.01 ft and 1% of its
+  volume. Other files' new meshes with `--saved-meshes` are not all Revit's
+  body: RE1 Plumbing draws 11 more pipe fittings, within 0.01 ft of Revit's
+  surface but at 1.44 to 1.47 of its volume, and RE1 Architecture a toilet
+  within 0.0126 ft. Autodesk's 2024 samples gain 163 and 124 (rme basic and
+  advanced), 265 (Snowdon Towers plumbing), 34, 24 and 15 (Snowdon
+  architectural and HVAC, rac basic), counted, not scored: no Revit export
+  of them is scored (#1247, RE-304).
+
+- **Saved meshes read cylinders whose saved basis is left-handed.** Such a
+  face was rejected, and with it the whole element, which kept its box.
+  It is the same cylinder with its surface normal turned. On the BIM4LCA
+  office 100 more bodies are drawn from their saved meshes (102 at permit),
+  among them doors that the default export draws, 66 exact to 0.001 ft
+  against Revit's export and 93 within 0.01 ft. Snowdon Towers'
+  architectural sample gains 172, counted, not scored: no Revit export of
+  it is scored (#1247, RE-301).
+
+- **With `--saved-meshes`, a light fixture's light source is left out of
+  its body, instead of keeping the fixture's box.** The light source is saved as a
+  filter of its own: a `GImposter` (a rendering asset with no surface)
+  with the shape and lines that draw the light, none of it in Revit's
+  export. On the BIM4LCA office 43 more bodies are drawn from their saved
+  meshes, all exact to 0.001 ft against Revit's export, as are RE1
+  Electrical's 2. Snowdon Towers' electrical sample draws 1,324 bodies from
+  saved meshes instead of 907 and keeps 139 boxes instead of 556; no Revit
+  export of it is scored, so those are counted, not scored (#1247, RE-300).
+
+- **A door or window is no longer written as its opening alone when its
+  type draws geometry in no material of its own.** RE-84 takes a type
+  whose value block holds no geometry-material map as one that only cuts
+  its host; the scan of that block missed a map whose values are all unset
+  or name a material whose name it did not read. The type's native map
+  now decides: it is empty on every door and window Revit exports as its
+  opening alone (RE1's CasedOpening, and Snowdon Towers' 47 in Revit's
+  export, which is local only), and those keep their openings. This fix alone
+  changes no export of the reference models, the BIM4LCA office, the R2025
+  models or Autodesk's samples. The case it was found on, the 73 doors of #1247's
+  project written as openings, is the user's own file and has not been
+  measured with it (#1247, RE-299).
+
+- **The viewer no longer calls a Revit 2008 to 2014 file an unsupported
+  version.** Its file status warned "Unsupported Revit version" for any file
+  before Revit 2015, though rvt-rs reads 2008 to 2014 element records
+  experimentally since RE-259 and RE-260 (#1076, #1077); it now warns only
+  outside 2008 to 2027, as `rvt-inspect` decides. `rvt-inspect`'s
+  `unsupported_revit_version` message, and the docs that quote it, name the
+  same 2008 to 2027 range.
+
 ## [0.12.1] — 2026-11-01
 
 0.12.1 makes exports of Revit 2015 to 2023 files faster than 0.12.0 made them,
