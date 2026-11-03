@@ -581,19 +581,18 @@ enum Copies {
     Current,
 }
 
-/// What `read` finds in the element data of each id in `ids`, from every
-/// partition. An id whose copies disagree is dropped, or takes its current
-/// partition's copy where `copies` says so; one whose current copy cannot be
-/// told, or holds copies that disagree, is dropped.
-fn scan_first_records<T: PartialEq>(
+/// Every copy of each id's element data in `ids`, from every partition: the
+/// partitions whose data names the id, and what `read` finds in each copy.
+type Copied<T> = (BTreeMap<u32, Vec<(u32, T)>>, BTreeMap<u32, BTreeSet<u32>>);
+
+fn collect_copies<T>(
     rf: &mut RevitFile,
     revit_version: u32,
     ids: &BTreeSet<u32>,
     read: fn(&[u8]) -> Option<T>,
-    copies: Copies,
-) -> Result<BTreeMap<u32, T>> {
+) -> Result<Copied<T>> {
     let Some(layout) = crate::partition_names::element_data_layout(revit_version) else {
-        return Ok(BTreeMap::new());
+        return Ok((BTreeMap::new(), BTreeMap::new()));
     };
     let header = layout.header;
     let mut found: BTreeMap<u32, Vec<(u32, T)>> = BTreeMap::new();
@@ -633,6 +632,52 @@ fn scan_first_records<T: PartialEq>(
             found.entry(id).or_default().push((partition, line));
         }
     }
+    Ok((found, holders))
+}
+
+/// What [`scan_bounded_lines`] finds for each id in `ids`, without choosing
+/// among copies: the partitions whose element data names the id, and the
+/// line each copy holds, for a probe of why a beam keeps its box (#1247).
+/// Empty for a release this layout is not measured on.
+pub fn line_copies(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    ids: &BTreeSet<u32>,
+) -> Result<BTreeMap<u32, LineCopies>> {
+    if !supports_revit_version(revit_version) {
+        return Ok(BTreeMap::new());
+    }
+    let (mut found, holders) = collect_copies(rf, revit_version, ids, first_bounded_line)?;
+    Ok(holders
+        .into_iter()
+        .map(|(id, partitions)| {
+            let lines = found.remove(&id).unwrap_or_default();
+            (id, LineCopies { partitions, lines })
+        })
+        .collect())
+}
+
+/// An element's copies of its element data ([`line_copies`]).
+#[derive(Debug, Clone)]
+pub struct LineCopies {
+    /// The partitions whose element data names the element.
+    pub partitions: BTreeSet<u32>,
+    /// Each copy's partition and the line it holds, where it holds one.
+    pub lines: Vec<(u32, BoundedLine)>,
+}
+
+/// What `read` finds in the element data of each id in `ids`, from every
+/// partition. An id whose copies disagree is dropped, or takes its current
+/// partition's copy where `copies` says so; one whose current copy cannot be
+/// told, or holds copies that disagree, is dropped.
+fn scan_first_records<T: PartialEq>(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    ids: &BTreeSet<u32>,
+    read: fn(&[u8]) -> Option<T>,
+    copies: Copies,
+) -> Result<BTreeMap<u32, T>> {
+    let (found, holders) = collect_copies(rf, revit_version, ids, read)?;
     // RE-216: where an element's copies in different partitions disagree,
     // the copy taken is its current partition's (#824).
     let disagreeing: BTreeMap<u32, BTreeSet<u32>> = found
