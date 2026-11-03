@@ -3793,7 +3793,22 @@ pub fn build_export_diagnostics_with_limits(
         layout.filter(|&version| crate::partition_element_records_2023::is_32bit_release(version))
     {
         // RE-81, RE-102, RE-107, RE-109, RE-111 to RE-115, RE-180: what a
-        // 2015 to 2023 export carries, and what it does not (RE-181).
+        // 2008 to 2023 export carries, and what it does not (RE-181). The
+        // export phase and design options are applied on 2016 to 2023 only
+        // (RE-315).
+        let filters = if crate::partition_element_records_2023::applies_export_filters(version) {
+            format!(
+                "The export phase and design options are applied for {version}: elements that \
+                 do not exist in the last phase or are in a non-primary design option are left \
+                 out."
+            )
+        } else {
+            format!(
+                "Neither the export phase nor design options are applied for {version} (they \
+                 are on 2016 to 2023): elements outside the last phase or in a non-primary \
+                 design option are written."
+            )
+        };
         warnings.push(format!(
             "Revit {version}: elements come from their records with their ElementId, category and \
              bounding box, doors and windows with their host wall, rooms with their outline, \
@@ -3802,7 +3817,7 @@ pub fn build_export_diagnostics_with_limits(
              type names, and family instances their type's materials. Layers become \
              material layer sets where their materials are named, a layer that takes its \
              category's material taking the object styles' one, and walls keep their record box. \
-             Wall joins and profiles, design options, parameters and \
+             {filters} Wall joins and profiles, parameters and \
              \"Export to IFC As\" overrides are not read for {version}, and components \
              nested in doors and windows are left out."
         ));

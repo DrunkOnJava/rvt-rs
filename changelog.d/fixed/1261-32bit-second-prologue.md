@@ -1,5 +1,6 @@
-- **A Revit 2015 to 2023 project whose element frames carry no ElementId of
-  their own now exports those elements, on their storeys.** Revit 2018's
+- **A Revit 2008 to 2023 project whose element frames carry no ElementId of
+  their own now exports those elements, on their storeys (measured on one
+  Revit 2018 project).** Revit 2018's
   `ALD26 Before` exported none of the 1,394 elements and spaces in Revit's own
   export (#1261): most of its frames in `Partitions/0` do not open with a
   declared `u32` ElementId, but sit inside their element's partition record, as

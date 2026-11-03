@@ -1,4 +1,4 @@
-# RE-315: Revit 2008 to 2023 frames with no ElementId of their own sit inside a declared partition record
+# RE-315: Revit 2008 to 2023 frames with no ElementId of their own sit inside a declared partition record (measured on Revit 2018), and the export phase and design options on 2016 to 2023
 
 **Date:** 2026-11-03
 **Issues:** #1261 (a Revit 2018 project exports no element), #408 (W5); follows RE-30 and RE-35 (the second prologue on 2024 and later), RE-81, RE-180 and RE-181 (the 32-bit layout), RE-107 (a Level named by an element's list), RE-135 (loaded families' documents)

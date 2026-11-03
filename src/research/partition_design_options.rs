@@ -54,8 +54,9 @@
 //!
 //! A set whose name entry is missing, or whose entries disagree about the
 //! primary, stays unresolved, and elements in its options are kept as
-//! before. Only an option of a resolved set that is not its primary is
-//! reported as non-primary.
+//! before. So does every set past the first [`OPTION_SETS_MAX`] of a file,
+//! by ElementId: each set costs a search of every partition. Only an option
+//! of a resolved set that is not its primary is reported as non-primary.
 
 use crate::le_bytes;
 use crate::partition_element_records::{
@@ -79,6 +80,13 @@ pub const OPTIONS_PER_SET_MAX: usize = 64;
 
 /// Longest set name, in UTF-16 code units, read from a name entry.
 pub const SET_NAME_MAX_UNITS: usize = 256;
+
+/// Most option sets a file's primaries are looked for. Each set costs a
+/// search of every partition for its name entry, and the most any file here
+/// has is 2 (Snowdon Towers). The sets past it, by ElementId, are left
+/// unresolved: their options are neither primary nor non-primary, so their
+/// elements are kept, as for a set with no name entry (RE-315).
+pub const OPTION_SETS_MAX: usize = 64;
 
 /// A design option set whose primary option was read.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -332,10 +340,16 @@ pub fn compute_design_options(rf: &mut RevitFile) -> Result<DesignOptions> {
             }
         }
     }
+    let mut searched = 0usize;
     for (set_id, options) in members {
         if out.unresolved_sets.contains(&set_id) {
             continue;
         }
+        if searched >= OPTION_SETS_MAX {
+            out.unresolved_sets.insert(set_id);
+            continue;
+        }
+        searched += 1;
         let mut entries: BTreeSet<(String, u32)> = BTreeSet::new();
         for stream in &streams {
             let Ok(inflated) = rf.inflated_partition(stream) else {
