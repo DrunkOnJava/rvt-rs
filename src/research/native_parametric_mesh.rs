@@ -30,6 +30,9 @@ pub(crate) struct FaceGrid {
     pub v: Vec<f64>,
     pub trim: Vec<[f64; 2]>,
     pub bounds: [[f64; 2]; 2],
+    /// The trim loop in UV, in order, where it does not run round its UV box
+    /// (RE-302); `None` for a box, meshed as the grid.
+    pub ring: Option<Vec<[f64; 2]>>,
 }
 
 // Only complete rectangular boundaries (including analytic collapsed poles)
@@ -178,6 +181,8 @@ pub(crate) fn face_grid(g: &ObjectGraph, fi: usize) -> Result<FaceGrid> {
         }
     }
     let mut closes = false;
+    // The loop in UV, in order, where it is continuous in UV (no seam).
+    let mut ordered: Option<Vec<[f64; 2]>> = None;
     for reverse in [false, true] {
         let first = if reverse {
             *segments[0].last().unwrap()
@@ -189,19 +194,31 @@ pub(crate) fn face_grid(g: &ObjectGraph, fi: usize) -> Result<FaceGrid> {
         } else {
             *segments[0].last().unwrap()
         };
+        let mut path: Vec<[f64; 2]> = if reverse {
+            segments[0].iter().rev().copied().collect()
+        } else {
+            segments[0].clone()
+        };
+        let mut continuous = true;
         let mut valid = true;
         for seg in &segments[1..] {
             let p = surface.evaluate(last[0], last[1])?;
             let a = seg[0];
             let b = *seg.last().unwrap();
-            if distance(p, surface.evaluate(a[0], a[1])?) < 1e-7 {
+            let next: Vec<[f64; 2]> = if distance(p, surface.evaluate(a[0], a[1])?) < 1e-7 {
                 last = b;
+                seg.clone()
             } else if distance(p, surface.evaluate(b[0], b[1])?) < 1e-7 {
                 last = a;
+                seg.iter().rev().copied().collect()
             } else {
                 valid = false;
                 break;
-            }
+            };
+            let joint = path.last().copied().unwrap_or(next[0]);
+            continuous &=
+                (joint[0] - next[0][0]).abs() < 1e-7 && (joint[1] - next[0][1]).abs() < 1e-7;
+            path.extend_from_slice(&next[1..]);
         }
         if valid
             && distance(
@@ -210,6 +227,13 @@ pub(crate) fn face_grid(g: &ObjectGraph, fi: usize) -> Result<FaceGrid> {
             ) < 1e-7
         {
             closes = true;
+            if continuous && path.len() >= 4 {
+                let (f, l) = (path[0], path[path.len() - 1]);
+                if (f[0] - l[0]).abs() < 1e-7 && (f[1] - l[1]).abs() < 1e-7 {
+                    path.pop();
+                    ordered = Some(path);
+                }
+            }
             break;
         }
     }
@@ -222,7 +246,8 @@ pub(crate) fn face_grid(g: &ObjectGraph, fi: usize) -> Result<FaceGrid> {
         "degenerate parametric domain"
     );
     let mut sides: [Vec<[f64; 2]>; 4] = std::array::from_fn(|_| Vec::new());
-    for seg in &segments {
+    let mut rectangular = true;
+    'sides: for seg in &segments {
         for pair in seg.windows(2) {
             let a = pair[0];
             let b = pair[1];
@@ -238,12 +263,20 @@ pub(crate) fn face_grid(g: &ObjectGraph, fi: usize) -> Result<FaceGrid> {
             } else if (a[0] - min[0]).abs() < 1e-7 && (b[0] - min[0]).abs() < 1e-7 {
                 (3, 1)
             } else {
-                anyhow::bail!("nonrectangular parametric trim");
+                rectangular = false;
+                break 'sides;
             };
             sides[side].push([a[axis].min(b[axis]), a[axis].max(b[axis])]);
         }
     }
-    for (side, intervals) in sides.iter_mut().enumerate() {
+    // A loop that does not run round its UV box is meshed from its own
+    // outline (RE-302), where it is continuous in UV.
+    let ring = if rectangular {
+        None
+    } else {
+        Some(ordered.context("nonrectangular parametric trim")?)
+    };
+    for (side, intervals) in sides.iter_mut().enumerate().filter(|_| rectangular) {
         let axis = if side % 2 == 0 { 0 } else { 1 };
         if intervals.is_empty() {
             // A revolution's horizontal UV edge can collapse to a pole. The
@@ -413,6 +446,7 @@ pub(crate) fn face_grid(g: &ObjectGraph, fi: usize) -> Result<FaceGrid> {
         surface,
         trim,
         bounds: [min, max],
+        ring,
     })
 }
 
@@ -420,14 +454,24 @@ pub fn face(g: &ObjectGraph, fi: usize) -> Result<FaceMesh> {
     let grid = face_grid(g, fi)?;
     let f = &g.objects[fi];
     let flags = f.fields["m_faceFlags_v9"].as_u64().context("face flags")?;
-    let mesh = tessellate_uv(
-        &grid.surface,
-        &grid.u,
-        &grid.v,
-        grid.bounds,
-        flags & 2 == 0,
-        2_000_000,
-    )?;
+    let mesh = match &grid.ring {
+        Some(ring) => tessellate_trimmed(
+            &grid.surface,
+            &grid.u,
+            &grid.v,
+            ring,
+            flags & 2 == 0,
+            4_000_000,
+        )?,
+        None => tessellate_uv(
+            &grid.surface,
+            &grid.u,
+            &grid.v,
+            grid.bounds,
+            flags & 2 == 0,
+            2_000_000,
+        )?,
+    };
     Ok(FaceMesh {
         face_index: fi,
         face_tag: f.fields["m_GInfo"]["m_tag"].as_i64().unwrap_or(-1),
@@ -438,6 +482,154 @@ pub fn face(g: &ObjectGraph, fi: usize) -> Result<FaceMesh> {
         triangles: mesh.triangles,
         analytic_surface: None,
         trim_uv: grid.trim,
+    })
+}
+
+/// The part of `ring` on one side of `p[axis] = at`: at or above it where
+/// `lower`, else at or below it (Sutherland–Hodgman against one line).
+fn clip_axis(ring: &[[f64; 2]], axis: usize, at: f64, lower: bool) -> Vec<[f64; 2]> {
+    let keep = |p: [f64; 2]| if lower { p[axis] >= at } else { p[axis] <= at };
+    let mut out = Vec::new();
+    for (&a, &b) in ring
+        .iter()
+        .zip(ring.iter().cycle().skip(1))
+        .take(ring.len())
+    {
+        if keep(a) {
+            out.push(a);
+        }
+        if keep(a) != keep(b) {
+            let t = (at - a[axis]) / (b[axis] - a[axis]);
+            let mut p = [a[0] + t * (b[0] - a[0]), a[1] + t * (b[1] - a[1])];
+            p[axis] = at;
+            out.push(p);
+        }
+    }
+    out
+}
+
+/// Twice the signed area of the UV triangle `a b c`.
+fn cross_uv(a: [f64; 2], b: [f64; 2], c: [f64; 2]) -> f64 {
+    (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0])
+}
+
+/// A parametric face trimmed by a loop that is not its UV box (RE-302): the
+/// loop is earcut in UV, and each triangle, being convex, is cut exactly at
+/// the grid's U and V values, so each piece lies in one cell of the grid the
+/// rectangular path would draw, and is fanned. The pieces must cover the
+/// loop's own UV area, or the loop is taken as self-intersecting.
+pub fn tessellate_trimmed(
+    surface: &ParametricSurface,
+    u_knots: &[f64],
+    v_knots: &[f64],
+    ring: &[[f64; 2]],
+    orient: bool,
+    max_triangles: usize,
+) -> Result<ParametricMesh> {
+    ensure!(
+        ring.len() >= 3 && u_knots.len() >= 2 && v_knots.len() >= 2,
+        "invalid trimmed parametric face"
+    );
+    let surface_orient = match surface {
+        ParametricSurface::SurfRev { orient, .. } | ParametricSurface::RuledSurf { orient, .. } => {
+            *orient
+        }
+    };
+    let winding = surface_orient == orient;
+    let mut ts = Vec::<u32>::new();
+    earcut::Earcut::new().earcut(ring.iter().copied(), &[], &mut ts);
+    let expected = (0..ring.len())
+        .map(|i| {
+            let (a, b) = (ring[i], ring[(i + 1) % ring.len()]);
+            a[0] * b[1] - b[0] * a[1]
+        })
+        .sum::<f64>()
+        .abs()
+        / 2.;
+    let mut covered = 0.;
+    let mut vertices = Vec::new();
+    let mut normals = Vec::new();
+    let mut triangles = Vec::new();
+    let windows = |knots: &[f64], lo: f64, hi: f64| {
+        let first = knots.partition_point(|&k| k <= lo).saturating_sub(1);
+        let last = knots.partition_point(|&k| k < hi).min(knots.len() - 1);
+        first..last.max(first)
+    };
+    for t in ts.chunks_exact(3) {
+        ensure!(
+            t.iter().all(|&k| (k as usize) < ring.len()),
+            "triangle bounds"
+        );
+        let tri = [
+            ring[t[0] as usize],
+            ring[t[1] as usize],
+            ring[t[2] as usize],
+        ];
+        if cross_uv(tri[0], tri[1], tri[2]).abs() <= 1e-15 {
+            continue;
+        }
+        let lo = |k: usize| tri.iter().map(|p| p[k]).fold(f64::INFINITY, f64::min);
+        let hi = |k: usize| tri.iter().map(|p| p[k]).fold(f64::NEG_INFINITY, f64::max);
+        for i in windows(u_knots, lo(0), hi(0)) {
+            let column = clip_axis(
+                &clip_axis(&tri, 0, u_knots[i], true),
+                0,
+                u_knots[i + 1],
+                false,
+            );
+            if column.len() < 3 {
+                continue;
+            }
+            for j in windows(v_knots, lo(1), hi(1)) {
+                let piece = clip_axis(
+                    &clip_axis(&column, 1, v_knots[j], true),
+                    1,
+                    v_knots[j + 1],
+                    false,
+                );
+                if piece.len() < 3 {
+                    continue;
+                }
+                let base =
+                    u32::try_from(vertices.len()).context("parametric vertex count overflow")?;
+                for p in &piece {
+                    vertices.push(surface.evaluate(p[0], p[1])?);
+                    let mut n = surface.normal(p[0], p[1])?;
+                    if !orient {
+                        for value in &mut n {
+                            *value = -*value;
+                        }
+                    }
+                    normals.push(n);
+                }
+                for k in 1..piece.len() - 1 {
+                    let a = cross_uv(piece[0], piece[k], piece[k + 1]);
+                    if a.abs() <= 1e-15 {
+                        continue;
+                    }
+                    covered += a.abs() / 2.;
+                    let k = k as u32;
+                    triangles.push(if (a > 0.) == winding {
+                        [base, base + k, base + k + 1]
+                    } else {
+                        [base, base + k + 1, base + k]
+                    });
+                }
+                ensure!(
+                    triangles.len() <= max_triangles,
+                    "parametric triangle count overflow"
+                );
+            }
+        }
+    }
+    ensure!(
+        !triangles.is_empty() && (covered - expected).abs() <= 1e-6 * expected.max(1e-9),
+        "self-intersecting parametric trim"
+    );
+    Ok(ParametricMesh {
+        vertices,
+        normals,
+        triangles,
     })
 }
 
