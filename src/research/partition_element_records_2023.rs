@@ -444,12 +444,13 @@ fn decode_at_marker(
 /// Only a placed instance gets one (no container reference and the
 /// placed-instance kind, the RE-21 rule), and only when the frame's own
 /// reference list names the record's id, as an element's does (RE-23). On
-/// Revit 2018's `ALD26 Before` every such frame in every partition of the
-/// file names it. A curtain panel frame that opens with a count instead of
-/// `ff ff ff ff` gets none: 96 of the 99 such frames sit in the record of a
-/// panel Revit's export does not write (a panel's shell), where the 98
-/// whose frames open with `ff ff ff ff` are all panels it writes. The 3
-/// panels that the 99 hold which it writes are left out with them.
+/// Revit 2018's `ALD26 Before` each of the 3,350 placed-instance frames
+/// without a declared id that a declared record encloses names it. A curtain
+/// panel frame that opens with a count instead of `ff ff ff ff` gets none:
+/// 96 of the 102 such frames sit in the record of a panel Revit's export does
+/// not write (a panel's shell), and the 6 panels it does write that they
+/// hold are left out with them; all 99 that open with `ff ff ff ff` are
+/// panels it writes.
 fn enclosing_instance_id(
     spans: &mut PartitionSpans<'_>,
     id_at: usize,

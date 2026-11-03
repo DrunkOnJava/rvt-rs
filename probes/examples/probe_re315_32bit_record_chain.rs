@@ -92,6 +92,29 @@ fn flag_rule_walk(buf: &[u8], header_tag: u16) -> (usize, usize, Option<u32>) {
     (records, at, None)
 }
 
+/// Every record of the partition, declared or not, walked as `record_spans`
+/// walks: `(start, end, element_id, flag word)`.
+fn walk_all(buf: &[u8], header_tag: u16) -> Vec<(usize, usize, u32, u32)> {
+    let needle = header_tag.to_le_bytes();
+    let mut records = Vec::new();
+    let mut at = 0usize;
+    loop {
+        if let Some((id, end, flag)) = record_at(buf, at, header_tag) {
+            records.push((at, end, id, flag));
+            at = end + 12;
+            continue;
+        }
+        let Some(rest) = buf.get(at + 9..) else {
+            break;
+        };
+        let Some(hit) = memchr::memmem::find(rest, &needle) else {
+            break;
+        };
+        at = at + 9 + hit - 8;
+    }
+    records
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let path = std::env::args()
         .skip(1)
@@ -129,37 +152,45 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         };
         let buf = inflated.bytes();
         let spans = per32::record_spans(buf, header_tag, &declared);
+        let all = walk_all(buf, header_tag);
         let hits: BTreeSet<usize> = memchr::memmem::find_iter(buf, &header_tag.to_le_bytes())
             .filter_map(|hit| hit.checked_sub(8))
-            .filter(|&at| {
-                record_at(buf, at, header_tag).is_some_and(|(id, _, _)| declared.contains(&id))
-            })
+            .filter(|&at| record_at(buf, at, header_tag).is_some())
             .collect();
-        let walked: BTreeSet<usize> = spans.iter().map(|span| span.start).collect();
+        let walked: BTreeSet<usize> = all.iter().map(|record| record.0).collect();
+        let library: BTreeSet<usize> = spans.iter().map(|span| span.start).collect();
+        let declared_walked: BTreeSet<usize> = all
+            .iter()
+            .filter(|record| declared.contains(&record.2))
+            .map(|record| record.0)
+            .collect();
         let mut runs: Vec<(usize, usize, usize)> = Vec::new();
-        for span in &spans {
+        for record in &all {
             match runs.last_mut() {
-                Some(run) if run.1 + 12 == span.start => {
-                    run.1 = span.end;
+                Some(run) if run.1 + 12 == record.0 => {
+                    run.1 = record.1;
                     run.2 += 1;
                 }
-                _ => runs.push((span.start, span.end, 1)),
+                _ => runs.push((record.0, record.1, 1)),
             }
         }
         let (legacy, legacy_stop, legacy_flag) = flag_rule_walk(buf, header_tag);
         let mut flags: BTreeMap<u32, usize> = BTreeMap::new();
-        for span in &spans {
-            if let Some((_, _, flag)) = record_at(buf, span.start, header_tag) {
-                *flags.entry(flag).or_default() += 1;
-            }
+        for record in &all {
+            *flags.entry(record.3).or_default() += 1;
         }
         println!("{stream}: {} bytes", buf.len());
         println!(
-            "  records walked {}, at every validating tag {}, only walked {}, only at a tag {}",
+            "  records walked {} ({} with a declared id), at every validating tag {}, only walked {}, only at a tag {}",
             walked.len(),
+            declared_walked.len(),
             hits.len(),
             walked.difference(&hits).count(),
             hits.difference(&walked).count()
+        );
+        println!(
+            "  record_spans equals the declared records walked: {}",
+            library == declared_walked
         );
         let longest = runs.iter().map(|run| run.2).max().unwrap_or(0);
         println!("  runs {}, longest {longest} records", runs.len());
