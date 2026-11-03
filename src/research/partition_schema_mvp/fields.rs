@@ -1040,6 +1040,8 @@ pub const FRAMING_TOP_LEVEL_SOURCE: &str = "structural_framing_top_level";
 /// light fixture, wall sweep, generic model, hardscape element and stair is
 /// on the Level [`crate::element_record_level_refs::elevation_band_level`]
 /// gives, while plumbing fixtures follow the Level object they name instead.
+/// A gutter is placed the same way (RE-319): both of `ALD26 Before`'s, whose
+/// records name no Level, are on the storey of Revit's export.
 pub const ELEVATION_PLACED_CLASSES: &[&str] = &[
     "SlabEdge",
     "LightingFixture",
@@ -1047,4 +1049,5 @@ pub const ELEVATION_PLACED_CLASSES: &[&str] = &[
     "GenericModel",
     "Hardscape",
     "Stair",
+    "Gutter",
 ];
