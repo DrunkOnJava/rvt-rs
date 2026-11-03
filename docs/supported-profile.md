@@ -77,9 +77,19 @@ so ("Saved by Revit X but keeps Revit Y's schema"). A schema that matches no
 measured release still reads no element records. The field report behind
 #421 found this on 25 of 49 client project files saved by Revit 2024 to 2027,
 which 0.10.0 read as empty. None of the reference or sample files keeps an
-older schema, so the reading is not yet measured on an affected file; the
-reporter was asked on 2026-10-30 to check 0.11.0 on theirs and has not
-reported back.
+older schema, so it is measured only on the reporter's files (not shared,
+counts reported on 2026-11-02 and 2026-11-03 on 0.12.0):
+
+- 17 keep a 2024 or 2025 schema: the warning names the right releases on all
+  17, and their element and storey counts equal the reporter's own reading
+  except one file that leaves out 63 elements outside the export phase, as
+  Revit's export does (RE-184), and one with 10 storeys where theirs had 4.
+- 8 keep a 2022 or 2023 schema: their `Global/ElemTable` was read as 12-byte
+  records because the layout check tested the record's second id, which on
+  these files holds an older number. With the check on the ElementId (#421),
+  the "fits neither" warning is gone on all 8; two files then export 10 and 1
+  elements, two keep their 1 and 4, and four still export none. Whether their
+  ElementIds are Revit's is not yet checked.
 
 ## Geometry on Revit 2024 and 2025 projects
 
