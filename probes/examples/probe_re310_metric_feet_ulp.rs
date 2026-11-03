@@ -6,15 +6,17 @@
 //! `mm / 304.8` by one unit in the last place, so an exact-bit search has to
 //! try both. This reads every `f64 feet · ff×8 · i64 parameter` entry of the
 //! type value blocks (RE-93, `partition_length_entries`), takes those whose
-//! value is a whole or tenth millimetre to within 1e-6 mm, and for each one
-//! where the candidate conversions give different bits counts which of them
+//! value is a whole or tenth millimetre to within 1e-6 mm and is not a whole
+//! number of 1/256 inches (an imperial value, which `div` reproduces from its
+//! millimetres trivially: 304.8 mm is 1 ft exactly), and for each one where
+//! the candidate conversions give different bits counts which of them
 //! the stored value equals: `div` (`mm / 304.8`), `chain` (`mm / 25.4 / 12`),
 //! `mul` (`mm * (1 / 304.8)`), `inch` (`(mm / 25.4) / 12` computed as
 //! `mm * (1 / 25.4) / 12`) or `none`.
 //!
 //! Output:
 //!   streams_not_read <n>          partitions the large-model limits still refused
-//!   census entries=<n> whole_mm=<n> tenth_mm=<n> agree=<n> disagree=<n>
+//!   census entries=<n> whole_mm=<n> tenth_mm=<n> imperial=<n> agree=<n> disagree=<n>
 //!   disagree <candidate set> <n>  per set of candidates the stored value equals
 //!   sample owner=<id> parameter=<id> mm=<mm> bits=<hex> ulps_from_div=<n> matches=<set>
 //!                                 the first 25 entries where the candidates disagree
@@ -62,6 +64,7 @@ fn main() -> anyhow::Result<()> {
     let mut entries = 0usize;
     let mut whole = 0usize;
     let mut tenth = 0usize;
+    let mut imperial = 0usize;
     let mut agree = 0usize;
     let mut disagree: BTreeMap<String, usize> = BTreeMap::new();
     let mut samples = Vec::new();
@@ -88,6 +91,11 @@ fn main() -> anyhow::Result<()> {
                 } else {
                     continue;
                 };
+                let steps = value * 3072.0;
+                if (steps - steps.round()).abs() < 1e-6 {
+                    imperial += 1;
+                    continue;
+                }
                 let all = candidates(mm);
                 if all.iter().all(|(_, c)| c.to_bits() == all[0].1.to_bits()) {
                     agree += 1;
@@ -135,7 +143,7 @@ fn main() -> anyhow::Result<()> {
     }
     println!("streams_not_read {}", rf.unread_streams().len());
     println!(
-        "census entries={entries} whole_mm={whole} tenth_mm={tenth} agree={agree} disagree={}",
+        "census entries={entries} whole_mm={whole} tenth_mm={tenth} imperial={imperial} agree={agree} disagree={}",
         disagree.values().sum::<usize>()
     );
     for (key, n) in &disagree {
