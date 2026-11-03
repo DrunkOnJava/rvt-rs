@@ -4162,6 +4162,13 @@ pub const LANDING_SLAB_BODY_HEIGHT_SOURCE: &str = "native_landing_top_and_type_t
 /// element covers the whole of the wall's plan (#1067, RE-267).
 pub const WALL_TOP_COVER_BODY_HEIGHT_SOURCE: &str = "wall_top_cut_at_covering_floor";
 
+/// `BodyHeightSource` of a wall whose top is cut at the underside of the
+/// floor, roof or footing its top join or a cut pair names over the part of
+/// the wall's plan the element covers, and left at the wall's own top over
+/// the rest: drawn as one prism of its plan to the underside and the pieces
+/// of the plan outside the element from there to the top (#1067, RE-320).
+pub const WALL_TOP_STEPPED_BODY_HEIGHT_SOURCE: &str = "wall_top_stepped_at_covering_floor";
+
 /// `BodySource` of a body that is the element record's bounding box, where
 /// no carrier refines it (#409).
 pub const RECORD_BBOX_BODY_SOURCE: &str = "partition_element_record_bbox";

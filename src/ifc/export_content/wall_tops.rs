@@ -16,10 +16,10 @@
 //!   wall's plan lies in an opening of the element: the wall's plan outside
 //!   the element's measures under [`COVER_TOLERANCE_SQUARE_FEET`].
 //!
-//! A wall the element covers in part is left at its full height, where Revit
-//! steps the top, and so is a wall of which any of this is not known. Several
-//! elements may qualify; the wall is cut at the lowest underside, since a
-//! wall cannot rise through a floor above one that has cut it.
+//! A wall the element covers in part is stepped, below (#1067, RE-320). A
+//! wall of which any of this is not known is left at its full height.
+//! Several elements may qualify; the wall is cut at the lowest underside,
+//! since a wall cannot rise through a floor above one that has cut it.
 //!
 //! The same body, a lower top: the placement and `BoundingBoxHeight` stay,
 //! and the wall carries a `BodyHeightSource` and the element's ElementId. The
@@ -27,6 +27,25 @@
 //! of the BIM4LCA office's 64 cut walls as built and 66 of 70 at permit, but
 //! Revit's export writes none on the others, and nothing read tells them apart
 //! (RE-267).
+//!
+//! # A wall the element covers in part
+//!
+//! Revit's top is the underside of the floor over the part of the wall's plan
+//! the floor covers and the wall's own top elsewhere (RE-267 §2). Where no
+//! element named by the wall covers the whole of its plan, and the named
+//! elements that reach it lie at one underside inside the wall's height, the
+//! wall is drawn as that: a prism of its own plan up to the underside, and
+//! over the part of the plan outside the elements' outlines (and inside their
+//! holes and openings) a prism from the underside to the wall's top, one item
+//! each in the one body representation. The plan outside is worked out as
+//! convex pieces: the wall's plan, which must be convex, less each triangle
+//! of an outline in turn, then the pieces that share an edge and make a convex
+//! piece together joined. A wall whose pieces pass [`MAX_RISERS`], whose
+//! elements lie at several undersides, or whose elements' holes and openings
+//! lie over the wall where several elements share the outline, is left as it
+//! was. The wall's `extrusion` stays the full prism, which the passes that
+//! read a wall's plan and its record's box use; the writer, the glTF and the
+//! plan outline draw its `solid_shape`.
 //!
 //! Areas are worked out on triangles. The wall's plan is clipped against
 //! each triangle of the element's outline (Sutherland-Hodgman, against a
@@ -39,11 +58,14 @@
 
 use std::collections::{HashMap, HashSet};
 
-use super::{ELEMENT_RECORD_PROPERTY_SET, WALL_TOP_COVER_BODY_HEIGHT_SOURCE};
+use super::{
+    ELEMENT_RECORD_PROPERTY_SET, WALL_TOP_COVER_BODY_HEIGHT_SOURCE,
+    WALL_TOP_STEPPED_BODY_HEIGHT_SOURCE,
+};
 use crate::ifc::body_geometry::{
     Body, Placement, Point2, Ring, extrusion_rings, plan_outline, section,
 };
-use crate::ifc::entities::{IfcEntity, Property, PropertyValue};
+use crate::ifc::entities::{Extrusion, IfcEntity, ProfileDef, Property, PropertyValue, SolidShape};
 
 /// How much of a wall's plan may lie outside its floor's, or inside the
 /// floor's openings, and still be covered, square feet. On the BIM4LCA office
@@ -57,6 +79,21 @@ const TRIANGULATION_TOLERANCE_SQUARE_FEET: f64 = 1e-6;
 /// How far a floor's underside must lie inside the wall's height, and how
 /// far its pieces may differ in height, feet.
 const UNDERSIDE_TOLERANCE_FEET: f64 = 1e-3;
+
+/// How much of a wall's plan the elements it is stepped at must cover, and
+/// how much it must leave uncovered, square feet: the same tolerance as
+/// [`COVER_TOLERANCE_SQUARE_FEET`].
+const STEP_TOLERANCE_SQUARE_FEET: f64 = COVER_TOLERANCE_SQUARE_FEET;
+
+/// The most convex pieces a wall's plan outside the elements may come to.
+const MAX_RISERS: usize = 32;
+
+/// The area under which a piece of a plan is no piece, square feet: rounding
+/// where a triangle's edge lies along another edge.
+const PIECE_ROUNDING_SQUARE_FEET: f64 = 1e-9;
+
+/// How near two points of two pieces must be to be one, feet.
+const JOIN_TOLERANCE_FEET: f64 = 1e-7;
 
 /// The entities a wall's top may be cut at (the scorer's `IfcSlab`,
 /// `IfcRoof` and `IfcFooting`).
@@ -163,6 +200,209 @@ fn covers(cutter: &Cutter, wall: &Wall) -> bool {
     }
     let cut: f64 = cutter.cutouts.iter().map(|t| overlap(wall, t)).sum();
     cut <= COVER_TOLERANCE_SQUARE_FEET
+}
+
+/// `ring` counter-clockwise.
+fn counter_clockwise(mut ring: Ring) -> Ring {
+    if area(&ring) < 0.0 {
+        ring.reverse();
+    }
+    ring
+}
+
+/// Which side of the line from `a` to `b` the point `p` lies on: positive on
+/// the left.
+fn side_of(a: Point2, b: Point2, p: Point2) -> f64 {
+    (b.0 - a.0) * (p.1 - a.1) - (b.1 - a.1) * (p.0 - a.0)
+}
+
+/// The part of the convex `ring` on the left of the line from `a` to `b`, or
+/// on its right.
+fn half_plane(ring: &[Point2], a: Point2, b: Point2, left: bool) -> Ring {
+    let sign = if left { 1.0 } else { -1.0 };
+    let mut kept: Ring = Vec::with_capacity(ring.len() + 2);
+    for (&p, &q) in ring.iter().zip(ring.iter().cycle().skip(1)) {
+        let (sp, sq) = (sign * side_of(a, b, p), sign * side_of(a, b, q));
+        if sp >= 0.0 {
+            kept.push(p);
+        }
+        if (sp >= 0.0) != (sq >= 0.0) {
+            let t = sp / (sp - sq);
+            kept.push((p.0 + t * (q.0 - p.0), p.1 + t * (q.1 - p.1)));
+        }
+    }
+    kept
+}
+
+/// The part of the convex `subject` inside the convex, counter-clockwise
+/// `clip`: fewer than three points where it has no area.
+fn clip_convex(subject: &[Point2], clip: &[Point2]) -> Ring {
+    let mut ring: Ring = subject.to_vec();
+    for (&a, &b) in clip.iter().zip(clip.iter().cycle().skip(1)) {
+        ring = half_plane(&ring, a, b, true);
+        if ring.len() < 3 {
+            return Vec::new();
+        }
+    }
+    ring
+}
+
+/// The convex pieces of the convex `piece` that lie outside the convex,
+/// counter-clockwise `clip`: where `clip` does not reach it, the piece
+/// whole.
+fn subtract_convex(piece: &[Point2], clip: &[Point2]) -> Vec<Ring> {
+    if area(&clip_convex(piece, clip)) <= PIECE_ROUNDING_SQUARE_FEET {
+        return vec![piece.to_vec()];
+    }
+    let mut outside = Vec::new();
+    let mut inside: Ring = piece.to_vec();
+    for (&a, &b) in clip.iter().zip(clip.iter().cycle().skip(1)) {
+        let part = half_plane(&inside, a, b, false);
+        if part.len() >= 3 && area(&part) > PIECE_ROUNDING_SQUARE_FEET {
+            outside.push(part);
+        }
+        inside = half_plane(&inside, a, b, true);
+        if inside.len() < 3 {
+            break;
+        }
+    }
+    outside
+}
+
+fn near(p: Point2, q: Point2) -> bool {
+    (p.0 - q.0).abs() <= JOIN_TOLERANCE_FEET && (p.1 - q.1).abs() <= JOIN_TOLERANCE_FEET
+}
+
+/// `ring` without a point that repeats its neighbour or lies on the line
+/// between its neighbours.
+fn tidy(mut ring: Ring) -> Ring {
+    loop {
+        let n = ring.len();
+        if n < 3 {
+            return ring;
+        }
+        let redundant = (0..n).find(|&i| {
+            let (a, b, c) = (ring[(i + n - 1) % n], ring[i], ring[(i + 1) % n]);
+            let span = ((c.0 - a.0).powi(2) + (c.1 - a.1).powi(2)).sqrt();
+            near(a, b)
+                || span <= JOIN_TOLERANCE_FEET
+                || side_of(a, c, b).abs() <= JOIN_TOLERANCE_FEET * span
+        });
+        match redundant {
+            Some(i) => {
+                ring.remove(i);
+            }
+            None => return ring,
+        }
+    }
+}
+
+/// Whether the counter-clockwise `ring` turns left at every corner.
+fn is_convex(ring: &[Point2]) -> bool {
+    let n = ring.len();
+    n >= 3 && (0..n).all(|i| side_of(ring[i], ring[(i + 1) % n], ring[(i + 2) % n]) >= -1e-9)
+}
+
+/// The convex pieces `a` and `b` make together, where they share an edge
+/// and the whole is convex.
+fn join_convex(a: &[Point2], b: &[Point2]) -> Option<Ring> {
+    let (n, m) = (a.len(), b.len());
+    for s in 0..n {
+        let (p0, p1) = (a[s], a[(s + 1) % n]);
+        for t in 0..m {
+            let (q0, q1) = (b[t], b[(t + 1) % m]);
+            if !(near(p0, q1) && near(p1, q0)) {
+                continue;
+            }
+            let mut ring: Ring = Vec::with_capacity(n + m - 2);
+            ring.extend((0..n).map(|k| a[(s + 1 + k) % n]));
+            ring.extend((0..m - 2).map(|k| b[(t + 2 + k) % m]));
+            let ring = tidy(ring);
+            return is_convex(&ring).then_some(ring);
+        }
+    }
+    None
+}
+
+/// `pieces` with every two that make a convex piece together joined.
+fn join_pieces(mut pieces: Vec<Ring>) -> Vec<Ring> {
+    loop {
+        let found = (0..pieces.len()).find_map(|i| {
+            ((i + 1)..pieces.len())
+                .find_map(|j| join_convex(&pieces[i], &pieces[j]).map(|ring| (i, j, ring)))
+        });
+        let Some((i, j, ring)) = found else {
+            return pieces;
+        };
+        pieces.remove(j);
+        pieces[i] = ring;
+    }
+}
+
+/// How much of the wall's plan `cutter` covers, square feet: inside its
+/// outline and not inside its holes and openings.
+fn reach(cutter: &Cutter, wall: &Wall) -> f64 {
+    let inside: f64 = cutter.outline.iter().map(|t| overlap(wall, t)).sum();
+    let cut: f64 = cutter.cutouts.iter().map(|t| overlap(wall, t)).sum();
+    inside - cut
+}
+
+/// The convex pieces of the wall's plan that the elements of `group` (at one
+/// underside) do not cover: outside their outlines, and inside their holes
+/// and openings. `None` where there are more than [`MAX_RISERS`], or where
+/// several elements share a hole or opening the wall crosses.
+fn outside_pieces(wall: &Wall, group: &[&Cutter]) -> Option<Vec<Ring>> {
+    if !is_convex(&wall.plan) {
+        return None;
+    }
+    let mut pieces: Vec<Ring> = vec![wall.plan.clone()];
+    for cutter in group {
+        for triangle in &cutter.outline {
+            if overlap(wall, triangle) <= PIECE_ROUNDING_SQUARE_FEET {
+                continue;
+            }
+            let clip = counter_clockwise(triangle.to_vec());
+            pieces = pieces
+                .iter()
+                .flat_map(|piece| subtract_convex(piece, &clip))
+                .collect();
+            if pieces.len() > 4 * MAX_RISERS {
+                return None;
+            }
+        }
+    }
+    let mut held: Vec<Ring> = Vec::new();
+    for cutter in group {
+        for triangle in &cutter.cutouts {
+            if overlap(wall, triangle) <= PIECE_ROUNDING_SQUARE_FEET {
+                continue;
+            }
+            if group.len() > 1 {
+                return None;
+            }
+            let part = clip_convex(&wall.plan, &counter_clockwise(triangle.to_vec()));
+            if part.len() < 3 || area(&part) <= PIECE_ROUNDING_SQUARE_FEET {
+                continue;
+            }
+            let mut parts = vec![part];
+            for other in pieces.iter().chain(held.iter()) {
+                parts = parts
+                    .iter()
+                    .flat_map(|piece| subtract_convex(piece, other))
+                    .collect();
+            }
+            held.extend(parts);
+            if held.len() > 4 * MAX_RISERS {
+                return None;
+            }
+        }
+    }
+    pieces.extend(held);
+    let pieces: Vec<Ring> = join_pieces(pieces.into_iter().map(tidy).collect())
+        .into_iter()
+        .filter(|piece| area(piece) >= STEP_TOLERANCE_SQUARE_FEET)
+        .collect();
+    (pieces.len() <= MAX_RISERS).then_some(pieces)
 }
 
 /// The wall `entity` is, where it is one plain extrusion with a plan and no
@@ -291,10 +531,23 @@ fn build_cutter(
     })
 }
 
+/// How a wall's top is cut: at one underside across its plan, or at one
+/// underside over part of it and at the wall's own top over the rest.
+enum Cut {
+    Whole {
+        level: f64,
+        id: u32,
+    },
+    Stepped {
+        level: f64,
+        id: u32,
+        risers: Vec<Ring>,
+    },
+}
+
 /// For each of `pending` (a wall's entity index and the ElementIds its top
-/// join and cut pairs name) that is cut: its index, the underside its top is
-/// cut at, and the ElementId of the element that gives it.
-fn decide(entities: &[IfcEntity], pending: &[(usize, Vec<u32>)]) -> Vec<(usize, f64, u32)> {
+/// join and cut pairs name) that is cut: its index and how.
+fn decide(entities: &[IfcEntity], pending: &[(usize, Vec<u32>)]) -> Vec<(usize, Cut)> {
     let mut pieces: HashMap<u32, Vec<usize>> = HashMap::new();
     let mut voids: HashMap<usize, Vec<&[Point2]>> = HashMap::new();
     let mut profiled: HashSet<usize> = HashSet::new();
@@ -331,6 +584,7 @@ fn decide(entities: &[IfcEntity], pending: &[(usize, Vec<u32>)]) -> Vec<(usize, 
             continue;
         };
         let mut lowest: Option<(f64, u32)> = None;
+        let mut partial: Vec<(f64, u32)> = Vec::new();
         for &id in named {
             let Some(found) = pieces.get(&id) else {
                 continue;
@@ -343,47 +597,124 @@ fn decide(entities: &[IfcEntity], pending: &[(usize, Vec<u32>)]) -> Vec<(usize, 
                 continue;
             };
             let level = cutter.underside;
-            if level > wall.base + UNDERSIDE_TOLERANCE_FEET
-                && level < wall.top - UNDERSIDE_TOLERANCE_FEET
-                && lowest.is_none_or(|(held, _)| level < held)
-                && covers(cutter, &wall)
+            if !(level > wall.base + UNDERSIDE_TOLERANCE_FEET
+                && level < wall.top - UNDERSIDE_TOLERANCE_FEET)
             {
-                lowest = Some((level, id));
+                continue;
+            }
+            if covers(cutter, &wall) {
+                if lowest.is_none_or(|(held, _)| level < held) {
+                    lowest = Some((level, id));
+                }
+            } else if reach(cutter, &wall) > STEP_TOLERANCE_SQUARE_FEET {
+                partial.push((level, id));
             }
         }
         if let Some((level, id)) = lowest {
-            cuts.push((*index, level, id));
+            cuts.push((*index, Cut::Whole { level, id }));
+            continue;
         }
+        let Some(&(level, id)) = partial.first() else {
+            continue;
+        };
+        if partial
+            .iter()
+            .any(|&(other, _)| (other - level).abs() > UNDERSIDE_TOLERANCE_FEET)
+        {
+            continue;
+        }
+        let group: Vec<&Cutter> = partial
+            .iter()
+            .filter_map(|(_, id)| cutters.get(id).and_then(Option::as_ref))
+            .collect();
+        let Some(risers) = outside_pieces(&wall, &group) else {
+            continue;
+        };
+        let lowest_level = partial.iter().map(|&(l, _)| l).fold(level, f64::min);
+        let id = partial.iter().map(|&(_, other)| other).fold(id, u32::min);
+        cuts.push((
+            *index,
+            if risers.is_empty() {
+                Cut::Whole {
+                    level: lowest_level,
+                    id,
+                }
+            } else {
+                Cut::Stepped {
+                    level: lowest_level,
+                    id,
+                    risers,
+                }
+            },
+        ));
     }
     cuts
 }
 
+/// `point` in the local frame of `placement`.
+fn to_local(placement: &Placement, point: Point2) -> Point2 {
+    let (dx, dy) = (point.0 - placement.origin[0], point.1 - placement.origin[1]);
+    (
+        placement.cos * dx + placement.sin * dy,
+        placement.cos * dy - placement.sin * dx,
+    )
+}
+
 /// Cut the top of each wall of `pending` at the underside of the floor that
-/// covers it (see the module), setting its extrusion's height to the
-/// underside less its base.
+/// covers it (see the module): a whole wall's extrusion height becomes the
+/// underside less its base, and a wall a floor covers in part gets the stepped
+/// body of the module as its `solid_shape`.
 pub(super) fn cut_wall_tops(entities: &mut [IfcEntity], pending: &[(usize, Vec<u32>)]) {
     if pending.is_empty() {
         return;
     }
     let cuts = decide(entities, pending);
-    for (index, level, floor) in cuts {
+    for (index, cut) in cuts {
         let Some(IfcEntity::BuildingElement {
             extrusion: Some(body),
             location_feet: Some(location),
+            rotation_radians,
+            solid_shape,
             property_set,
             ..
         }) = entities.get_mut(index)
         else {
             continue;
         };
-        body.height_feet = level - location[2];
+        let (floor, source) = match cut {
+            Cut::Whole { level, id } => {
+                body.height_feet = level - location[2];
+                (id, WALL_TOP_COVER_BODY_HEIGHT_SOURCE)
+            }
+            Cut::Stepped { level, id, risers } => {
+                let placement = Placement::new(Some(*location), *rotation_radians);
+                let under = level - location[2];
+                let rise = body.height_feet - under;
+                let mut items = Vec::with_capacity(risers.len() + 1);
+                items.push(SolidShape::ExtrudedArea(Extrusion {
+                    height_feet: under,
+                    ..body.clone()
+                }));
+                items.extend(risers.iter().map(|ring| SolidShape::PlacedExtrusion {
+                    profile: ProfileDef::ArbitraryClosed {
+                        points: ring.iter().map(|&p| to_local(&placement, p)).collect(),
+                    },
+                    origin_feet: [0.0, 0.0, under],
+                    axis: [0.0, 0.0, 1.0],
+                    ref_direction: [1.0, 0.0, 0.0],
+                    depth_feet: rise,
+                }));
+                *solid_shape = Some(SolidShape::Compound(items));
+                (id, WALL_TOP_STEPPED_BODY_HEIGHT_SOURCE)
+            }
+        };
         if let Some(set) = property_set
             .as_mut()
             .filter(|set| set.name == ELEMENT_RECORD_PROPERTY_SET)
         {
             set.properties.push(Property {
                 name: "BodyHeightSource".into(),
-                value: PropertyValue::Text(WALL_TOP_COVER_BODY_HEIGHT_SOURCE.into()),
+                value: PropertyValue::Text(source.into()),
             });
             set.properties.push(Property {
                 name: "TopCoverElementId".into(),
