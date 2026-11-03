@@ -4188,6 +4188,11 @@ pub const SPACE_OUTLINE_SAVED_MESH: &str = "saved_mesh";
 /// [`SPACE_OUTLINE_SOURCE_PROPERTY`] of an Area, which has no body.
 pub const SPACE_OUTLINE_NONE: &str = "none";
 
+/// [`SPACE_OUTLINE_SOURCE_PROPERTY`] of a family instance written as an
+/// `IfcSpace` whose body is more than its record's box: its `BodySource`
+/// says how it was drawn.
+pub const SPACE_OUTLINE_FAMILY_BODY: &str = "family_body";
+
 /// `BodySource` of a family instance turned off the model's axes, drawn as
 /// the rectangle at its angle whose box is its record box (RE-87).
 pub const INSTANCE_TURNED_BODY_SOURCE: &str = "partition_family_instance_turned_box";
@@ -6297,6 +6302,33 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
                 value: PropertyValue::Integer(i64::from(id)),
             });
         }
+    }
+    // RE-313: a family instance written as an `IfcSpace` is its record's box
+    // (turned with the instance where it is turned) unless a carrier drew
+    // more.
+    if space_by_export_value(decoded) {
+        let resolved = properties.iter().any(|property| {
+            property.name == "ProfileResolved"
+                && matches!(property.value, PropertyValue::Boolean(true))
+        });
+        let boxed = properties.iter().any(|property| {
+            property.name == "BodySource"
+                && matches!(&property.value, PropertyValue::Text(source)
+                    if source == RECORD_BBOX_BODY_SOURCE
+                        || source == INSTANCE_TURNED_BODY_SOURCE
+                        || source == INSTANCE_ORIENTED_BODY_SOURCE)
+        });
+        properties.push(Property {
+            name: SPACE_OUTLINE_SOURCE_PROPERTY.into(),
+            value: PropertyValue::Text(
+                if boxed && !resolved {
+                    SPACE_OUTLINE_RECORD_BOX
+                } else {
+                    SPACE_OUTLINE_FAMILY_BODY
+                }
+                .into(),
+            ),
+        });
     }
     // RE-313: whether the room's outline is its stored solid's or its box.
     if class == "Room" {

@@ -13,8 +13,9 @@ adds what an importer needs to know about rooms:
 - the spaces in only one file, those of Revit's that rvt-rs writes without a
   body (its Areas), and those whose top surface has no area;
 - area within 0.1% and within 1%, the outline within 0.01 ft, and both;
-- the same counts split by where rvt-rs's outline came from (its stored
-  solid, or the record box);
+- the same counts split by what the space is (a room, a family instance
+  written as a space) and where rvt-rs's outline came from (its stored solid,
+  or the record box);
 - every pair that is off in area or outline, with the reason rvt-rs's own
   property set gives (`SpaceOutlineSource`, or the older `ProfileSource`
   and `ProfileResolved` of `RvtElementRecordGeometry`).
@@ -50,22 +51,26 @@ ROOM_SOLID_SOURCE = "partition_room_solid_faces"
 
 
 def sources(path):
-    """GlobalId -> where rvt-rs's outline of the space came from."""
+    """GlobalId -> (where rvt-rs's outline of the space came from, what the
+    space is: a room, an area or a family instance)."""
     out = {}
     f = ifcopenshell.open(path)
     for space in f.by_type("IfcSpace"):
         props = ifcopenshell.util.element.get_psets(space).get(SET, {})
         marker = props.get("SpaceOutlineSource")
         if marker:
-            out[space.GlobalId] = marker
+            source = marker
         elif props.get("ProfileSource") == ROOM_SOLID_SOURCE:
-            out[space.GlobalId] = STORED_SOLID
+            source = STORED_SOLID
         elif props.get("ProfileResolved") is False:
-            out[space.GlobalId] = RECORD_BOX
+            source = RECORD_BOX
         elif props.get("ProfileSource"):
-            out[space.GlobalId] = f"other: {props['ProfileSource']}"
+            source = f"other: {props['ProfileSource']}"
         else:
-            out[space.GlobalId] = "not stated"
+            source = "not stated"
+        revit_class = props.get("RevitClass")
+        kind = {"Room": "room", "Area": "area", None: "space"}.get(revit_class, "family instance")
+        out[space.GlobalId] = (source, kind)
     return out
 
 
@@ -146,7 +151,8 @@ def main(argv):
                 "o_area": o_area,
                 "vertices": plan.spread(o_points, points),
                 "outline": plan.outline_spread(o_points, surface, points, o_surface),
-                "source": held.get(key, "not stated"),
+                "source": held.get(key, ("not stated", "space"))[0],
+                "kind": held.get(key, ("not stated", "space"))[1],
                 "shapes": (shape(o_surface), shape(surface)),
                 "apart": float(o_surface.centroid.distance(surface.centroid)),
             }
@@ -189,7 +195,7 @@ def main(argv):
     print(f"space profiles: area within 0.1% and outline within 0.01 ft {n_both}")
     split = collections.defaultdict(lambda: [0, 0, 0, 0])
     for r in rows:
-        counts = split[r["source"].split(":")[0]]
+        counts = split[f"{r['kind']} {r['source'].split(':')[0]}"]
         counts[0] += 1
         counts[1] += area_ok(r, 1e-3)
         counts[2] += outline_ok(r)
@@ -197,7 +203,7 @@ def main(argv):
     for source, (n, a, o, b) in sorted(split.items()):
         label = source.replace("_", " ")
         print(
-            f"space profiles: rvt-rs outline from {label}: {n},"
+            f"space profiles: rvt-rs {label}: {n},"
             f" area within 0.1% {a}, outline within 0.01 ft {o}, both {b}"
         )
 
@@ -208,7 +214,7 @@ def main(argv):
         print(
             f"  {r['key']}: area {r['o_area']:.2f} vs {r['area']:.2f} ft2 ({r['rel']:.2%}),"
             f" vertices {r['vertices']:.3f} ft, outline {r['outline']:.3f} ft,"
-            f" rvt-rs outline from {r['source']},"
+            f" {r['kind']}, rvt-rs outline from {r['source']},"
             f" pieces and holes {r['shapes'][0][0]} and {r['shapes'][0][1]} in rvt-rs,"
             f" {r['shapes'][1][0]} and {r['shapes'][1][1]} in Revit,"
             f" centroids {r['apart']:.3f} ft apart"
