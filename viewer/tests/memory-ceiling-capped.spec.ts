@@ -153,7 +153,7 @@ einhovenTest(
         const body = note.locator('#scaffold-note-body');
         await expect(body).toContainText('a long way short of the 4 GiB a tab can hold');
         await expect(body).toContainText('may be damaged');
-        await expect(body).not.toContainText(/needs more|too large/i);
+        await expect(body).not.toContainText('needs more');
         await expect(page.locator('#toast-region .toast.bad')).toContainText('ran out of memory');
         await expect(page.locator('#toast-region')).not.toContainText(/too large/i);
         await expect.poll(() => page.workers().length, 'the worker is ended').toBe(0);

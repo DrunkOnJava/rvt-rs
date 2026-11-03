@@ -1306,7 +1306,7 @@ function showTooLarge(file: File, tooLarge: TooLarge): void {
     summary = `The browser would not give this tab more than ${reached}${where ? `, while ${where},` : ''} and ${file.name} (${size}) needs more.`;
     advice = `A browser tab can hold at most ${ceiling}, and an open has taken at least about ${PEAK_MEMORY_PER_FILE_BYTE} times its file's size. ${LARGER_FILE_ADVICE}`;
   } else {
-    summary = `The decoder ran out of memory at ${reached}${where ? `, while ${where},` : ''}, a long way short of the ${ceiling} a tab can hold, on a ${size} file. The file may be damaged, or may have hit a limit other than the browser's memory, so this is not reported as too large.`;
+    summary = `The decoder ran out of memory at ${reached}${where ? `, while ${where}` : ''}, a long way short of the ${ceiling} a tab can hold, on a ${size} file. The file may be damaged, or may have hit a limit other than the browser's memory.`;
     advice =
       'Running rvt-ifc or rvt-gltf on the same file (with --large-model if it is large) shows whether it is damaged or only large.';
   }
