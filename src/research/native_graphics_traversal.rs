@@ -200,11 +200,30 @@ impl Walker<'_, '_> {
                     }
                     // A light source: a `GImposter` (a transform and a
                     // rendering asset of scalar properties) with the shape and
-                    // lines that draw it. No part of the fixture's body
-                    // (RE-300).
-                    if children
+                    // lines that draw it, no part of the fixture's body
+                    // (RE-300). Only a filter of such leaves is one; any
+                    // other child is walked as before.
+                    let classes: Vec<&str> = children
                         .iter()
-                        .any(|&i| self.graph.objects[i].class_name == "GImposter")
+                        .map(|&i| self.graph.objects[i].class_name.as_str())
+                        .collect();
+                    if classes.contains(&"GImposter")
+                        && classes.iter().all(|class| {
+                            matches!(
+                                *class,
+                                "GImposter"
+                                    | "Geometry"
+                                    | "GPolyMesh"
+                                    | "GLine"
+                                    | "GArc"
+                                    | "GEllipse"
+                                    | "GCurve"
+                                    | "GNurbSpline"
+                                    | "GPolyLine"
+                                    | "GPolyline"
+                                    | "GPoint"
+                            )
+                        })
                     {
                         self.result.excluded_non_surface_branches += 1;
                         return Ok(());
