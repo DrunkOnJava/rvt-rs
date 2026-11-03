@@ -294,6 +294,11 @@ pub(crate) fn face_grid(g: &ObjectGraph, fi: usize) -> Result<FaceGrid> {
                 angular(*radius),
             ),
         },
+        ParametricSurface::ConeSurf { half_angle, .. } => {
+            // The generators are straight: only the angle needs a chord bound.
+            let far = min[1].abs().max(max[1].abs());
+            (angular(far * half_angle.sin()), 1.)
+        }
         ParametricSurface::RuledSurf { .. } => {
             // A shared normalized grid across ruled patches preserves their
             // common straight generator edges even when profile lengths differ.
@@ -513,11 +518,7 @@ pub fn tessellate_uv(
             .checked_mul(2)
             .ok_or_else(|| anyhow::anyhow!("parametric triangle count overflow"))?,
     );
-    let surface_orient = match surface {
-        ParametricSurface::SurfRev { orient, .. } | ParametricSurface::RuledSurf { orient, .. } => {
-            *orient
-        }
-    };
+    let surface_orient = surface.orientation();
     let winding = surface_orient == orient;
     let stride = u_knots.len();
     for j in 0..v_knots.len() - 1 {

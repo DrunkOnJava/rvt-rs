@@ -965,6 +965,12 @@ pub const ROOF_RAFTER_CUT_FIELD: &str = "m_roof_rafter_cut";
 /// Field holding a roof's fascia depth, feet, where it is read (RE-199).
 pub const ROOF_FASCIA_DEPTH_FIELD: &str = "m_roof_fascia_depth";
 
+/// Field marking a roof whose planes are its several slope arrows', one per
+/// edge field set (RE-307): each plane rises from the boundary line its
+/// arrow starts on, square to it, at the arrow's slope, and its top lies a
+/// plane's own `T / cos θ` above its underside at that line.
+pub const ROOF_ARROW_PLANES_FIELD: &str = "m_roof_arrow_planes";
+
 /// Classes whose type's layers stack from the top down (RE-57).
 pub const STACKED_LAYER_CLASSES: &[&str] = &["Floor", "BuildingPad", "Roof", "Ceiling"];
 
