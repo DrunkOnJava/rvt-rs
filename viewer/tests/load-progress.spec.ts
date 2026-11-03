@@ -1,0 +1,313 @@
+import { expect, test, type Page } from '@playwright/test';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+// #1195: while a model decodes, the loading card shows the decoder's own
+// progress (the stages `rvt-gltf --progress` prints) instead of a sweep and a
+// guess from the file size. The worker posts each report from inside the wasm
+// call, so the page sees them while the decode runs. The page keeps every
+// report on #status as `data-load-progress`, with what the card showed once it
+// had applied that report (its step, the bar's value, its hint), and every
+// text `announceLoad` told #status (`data-load-announced`), so these tests read
+// the card's behaviour from those records rather than sampling the page, whose
+// counted stages last a second or less each on Deploy viewer's runner:
+//
+//   - on the tier-1 fixture, which opens in milliseconds: the stages, their
+//     counts and the steps after the decode;
+//   - on Core Interior (17 to 24 s on Deploy viewer's runner): the bar is
+//     determinate for the counted stage at the percent of each report, sweeps
+//     for the stretch the decoder reports nothing in, and says "Building the
+//     model" once. A screenshot is taken while the partition stage runs. That
+//     stage's eight streams are inflated in about a second (1.1 s to 2.1 s into
+//     the open in the runs so far), and the bar is at 25% or more for the last
+//     0.4 s of it, which a picture takes longer than. So the page holds back
+//     the worker's messages in the frame the card first reads "Reading
+//     partition streams" at 25% or more (not another stage's 25%: the candidate
+//     scan ends at 100%), takes the picture, and lets them through. That is the
+//     one thing here that depends on timing, so it is best effort, and what it
+//     shows is written beside it.
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const tier1 = path.resolve(
+  __dirname,
+  '../../corpus/tier1/architectural-2024/architectural-2024.rvt',
+);
+const corpus = path.resolve(__dirname, '../../_project_corpus/Revit');
+const coreInterior = path.join(corpus, '2024_Core_Interior.rvt');
+const outDir = path.resolve(__dirname, '../measurements');
+// Deploy viewer fetches every model and sets this, so a model missing there
+// fails; elsewhere it is a skip.
+const required = process.env.RVT_VIEWER_REQUIRE_JOURNEYS === '1';
+
+const STAGES = [
+  'schema-parse',
+  'candidate-scan',
+  'element-decode',
+  'partition-scan',
+  'saved-graphics',
+  'saved-meshes',
+];
+
+interface LoadEvent {
+  t: number;
+  stage?: string;
+  done?: number;
+  total?: number | null;
+  memoryBytes?: number;
+  step?: string;
+  card?: { step: string; value: number | null; hint: string };
+}
+
+async function loadEvents(page: Page): Promise<LoadEvent[]> {
+  const raw = await page.locator('#status').getAttribute('data-load-progress');
+  expect(raw, 'the page keeps what the worker reported').not.toBeNull();
+  return JSON.parse(raw!) as LoadEvent[];
+}
+
+/**
+ * Lets the test stop the card where it is: while `__holdMessages` is set, the
+ * worker's messages are queued, in order, and `__release` hands them to the page.
+ * Only the page's own listeners are wrapped; nothing is lost or reordered.
+ */
+async function canHoldWorkerMessages(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    const w = window as unknown as {
+      __holdMessages: boolean;
+      __held: Array<[(ev: MessageEvent) => void, MessageEvent]>;
+      __release: () => void;
+    };
+    w.__holdMessages = false;
+    w.__held = [];
+    w.__release = () => {
+      w.__holdMessages = false;
+      for (const [listener, event] of w.__held.splice(0)) listener(event);
+    };
+    const NativeWorker = window.Worker;
+    window.Worker = class extends NativeWorker {
+      addEventListener(type: string, listener: unknown, options?: unknown): void {
+        if (type !== 'message' || typeof listener !== 'function') {
+          super.addEventListener(type, listener as EventListener, options as boolean);
+          return;
+        }
+        const held = (event: Event): void => {
+          if (w.__holdMessages) w.__held.push([listener as (ev: MessageEvent) => void, event as MessageEvent]);
+          else (listener as (ev: Event) => void)(event);
+        };
+        super.addEventListener(type, held, options as boolean);
+      }
+    };
+  });
+}
+
+/**
+ * Every text the page told #status, a live region, while the file opened, in
+ * order, as the page recorded them when it said them. A MutationObserver would
+ * not do: it batches the mutations of one task, and a replay of held messages
+ * is one task.
+ */
+async function announced(page: Page): Promise<string[]> {
+  const raw = await page.locator('#status').getAttribute('data-load-announced');
+  expect(raw, 'the page keeps what it announced').not.toBeNull();
+  return JSON.parse(raw!) as string[];
+}
+
+/**
+ * The stages whose last report hands over to something the decoder reports
+ * nothing in, so the card names that and sweeps (AFTER_STAGE in main.ts).
+ */
+const HAS_AFTER = ['partition-scan', 'saved-meshes'];
+
+/**
+ * A report the card gives a determinate bar: a total above one, and not the end
+ * of a stage with something after it. The end of a stage with nothing after it
+ * (the candidate scan's 100%) is still a count, and the bar is full.
+ */
+function isCounted(event: LoadEvent): boolean {
+  return (
+    event.stage !== undefined &&
+    event.total !== null &&
+    event.total !== undefined &&
+    event.total > 1 &&
+    !(event.done! >= event.total && HAS_AFTER.includes(event.stage))
+  );
+}
+
+test('the decoder reports its stages to the page, and the steps after it follow', async ({
+  page,
+}) => {
+  expect(fs.existsSync(tier1), `${tier1} is committed`).toBe(true);
+  await page.goto('/');
+  await expect(page.locator('#status')).toHaveText(/Ready/);
+  await page.locator('#file-input').setInputFiles(tier1);
+  await expect(page.locator('#status')).toHaveText(/Loaded/);
+
+  const events = await loadEvents(page);
+  const stages = events.filter((event) => event.stage !== undefined);
+  expect(stages.length, 'the decoder reported').toBeGreaterThan(0);
+  // The walk begins with the schema, and every report names a stage the
+  // decoder has, with a count that is not past its total.
+  expect(stages[0].stage).toBe('schema-parse');
+  for (const event of stages) {
+    expect(STAGES, `stage ${event.stage}`).toContain(event.stage);
+    if (event.total !== null && event.total !== undefined) {
+      expect(event.done!, `${event.stage} ${event.done} of ${event.total}`).toBeLessThanOrEqual(
+        event.total,
+      );
+    }
+    expect(event.memoryBytes, 'the wasm memory at that moment').toBeGreaterThan(0);
+    expect(event.card, 'the card applied it').toBeDefined();
+  }
+  // Within a stage the count only grows until the stage starts over.
+  let previous: LoadEvent | null = null;
+  for (const event of stages) {
+    if (previous && previous.stage === event.stage && event.done !== 0) {
+      expect(event.done!, `${event.stage} went back`).toBeGreaterThanOrEqual(previous.done!);
+    }
+    previous = event;
+  }
+  // The element decode reaches its end: the walk finished.
+  expect(
+    stages.some(
+      (event) =>
+        event.stage === 'element-decode' &&
+        event.total !== null &&
+        event.total !== undefined &&
+        event.done === event.total,
+    ),
+    'element-decode ended',
+  ).toBe(true);
+
+  // The steps after the decode come after every report of it, in time.
+  const steps = events.filter((event) => event.step !== undefined).map((event) => event.step);
+  expect(steps).toEqual(
+    expect.arrayContaining(['Building scene graph', 'Rendering glTF', 'Building schedule']),
+  );
+  const lastStage = Math.max(...stages.map((event) => event.t));
+  const sceneGraph = events.find((event) => event.step === 'Building scene graph')!;
+  expect(sceneGraph.t).toBeGreaterThanOrEqual(lastStage);
+});
+
+const coreInteriorTest = required || fs.existsSync(coreInterior) ? test : test.skip;
+
+coreInteriorTest('the loading card fills while Core Interior decodes', async ({ page }) => {
+  test.setTimeout(600_000);
+  expect(fs.existsSync(coreInterior), `${coreInterior} was not fetched`).toBe(true);
+  fs.mkdirSync(outDir, { recursive: true });
+
+  await canHoldWorkerMessages(page);
+  await page.goto('/');
+  await expect(page.locator('#status')).toHaveText(/Ready/);
+  await page.locator('#file-input').setInputFiles(coreInterior);
+
+  // The screenshot is the only thing here that depends on timing. Wait, polling
+  // every animation frame, for the card to read "Reading partition streams"
+  // with the bar a quarter full or more, and in the same frame stop it where it
+  // is, so that the picture, which takes longer than what is left of the stage,
+  // shows it. Whatever happens, the worker's messages are let through again. A
+  // decode that is past that by the time the page looks, or a screenshot that
+  // fails, only means no picture, which is written down rather than failed on.
+  const screenshot: { taken: boolean; cardAtCapture: unknown; note: string } = {
+    taken: false,
+    cardAtCapture: null,
+    note: '',
+  };
+  try {
+    await page.waitForFunction(
+      () => {
+        const value = Number(document.getElementById('load-rail')?.getAttribute('aria-valuenow'));
+        const step = document.getElementById('load-step')?.textContent;
+        if (step !== 'Reading partition streams' || !(value >= 25)) return false;
+        (window as unknown as { __holdMessages: boolean }).__holdMessages = true;
+        return true;
+      },
+      null,
+      { polling: 'raf', timeout: 120_000 },
+    );
+    screenshot.cardAtCapture = await page.evaluate(() => ({
+      step: document.getElementById('load-step')?.textContent,
+      value: document.getElementById('load-rail')?.getAttribute('aria-valuenow'),
+      hint: document.getElementById('load-hint')?.textContent,
+    }));
+    await page.locator('#load-overlay').screenshot({
+      path: path.join(outDir, 'load-progress-core-interior.png'),
+      timeout: 10_000,
+    });
+    screenshot.taken = true;
+    screenshot.note =
+      'taken when the card first read Reading partition streams at 25% or more, with the worker\'s messages held, so the picture is the card as cardAtCapture says';
+  } catch (err) {
+    screenshot.note = `no screenshot: ${(err as Error).message.split('\n')[0]}`;
+  } finally {
+    await page.evaluate(() => (window as unknown as { __release: () => void }).__release());
+  }
+
+  await expect(page.locator('#status')).toHaveText(/Loaded/, { timeout: 500_000 });
+  const events = await loadEvents(page);
+  fs.writeFileSync(
+    path.join(outDir, 'load-progress-core-interior.json'),
+    `${JSON.stringify({ screenshot, events }, null, 2)}\n`,
+  );
+
+  // Every report the decoder made was applied by the card, and the bar says
+  // what the report said: the percent of its count where it has one, and a
+  // sweep where it has none or the stage has ended.
+  const reports = events.filter((event) => event.stage !== undefined);
+  expect(reports.length).toBeGreaterThan(0);
+  for (const event of reports) {
+    expect(event.card, `${event.stage} ${event.done}/${event.total} was applied`).toBeDefined();
+    if (isCounted(event)) {
+      expect(event.card!.value, `${event.stage} ${event.done}/${event.total}`).toBe(
+        Math.round((event.done! / event.total!) * 100),
+      );
+      expect(event.card!.hint).toMatch(/^\d+% · /);
+    } else {
+      expect(event.card!.value, `${event.stage} ${event.done}/${event.total} sweeps`).toBeNull();
+      expect(event.card!.hint).toBe('');
+    }
+  }
+
+  // The partition stage is counted on this project: the bar was determinate at
+  // more than one value, rising within the stage, and the card named the stage
+  // and what it counted.
+  const counted = reports.filter(isCounted);
+  expect(counted.length, 'reports with a count').toBeGreaterThanOrEqual(2);
+  const values = counted.map((event) => event.card!.value!);
+  expect(new Set(values).size, `fills: ${values.join(', ')}`).toBeGreaterThanOrEqual(2);
+  for (const value of values) {
+    expect(value).toBeGreaterThanOrEqual(0);
+    expect(value).toBeLessThanOrEqual(100);
+  }
+  const partition = counted.filter((event) => event.stage === 'partition-scan');
+  expect(partition.length, 'the partition streams are counted').toBeGreaterThanOrEqual(2);
+  const rising = partition.map((event) => event.card!.value!);
+  expect([...rising].sort((a, b) => a - b), 'the partition bar rises').toEqual(rising);
+  expect(
+    new Set(rising).size,
+    `partition fills: ${rising.join(', ')}`,
+  ).toBeGreaterThanOrEqual(2);
+  for (const event of partition) {
+    expect(event.card!.step).toBe('Reading partition streams');
+    expect(event.card!.hint).toMatch(new RegExp(`^\\d+% · ${event.done} of ${event.total} streams$`));
+  }
+
+  // The stretch after the last stream is inflated reports nothing until the
+  // saved graphics. The card names it, and says so once: #status is a live
+  // region, and the page told it "Building the model" a single time, though two
+  // reports left the card there (the last stream, and the end of the walk).
+  const building = reports.filter((event) => event.card!.step === 'Building the model');
+  expect(building.length, 'reports that left the card on Building the model').toBeGreaterThanOrEqual(2);
+  for (const event of building) expect(event.card!.value).toBeNull();
+  const said = await announced(page);
+  expect(
+    said.filter((text) => text === 'Building the model'),
+    `announced: ${said.join(' | ')}`,
+  ).toHaveLength(1);
+  said.forEach((text, i) => {
+    if (i > 0) expect(text, `announced twice in a row: ${text}`).not.toBe(said[i - 1]);
+  });
+  expect(said, 'the stages in the order they ran').toEqual(
+    expect.arrayContaining(['Reading partition streams', 'Building the model']),
+  );
+  expect(said.indexOf('Reading partition streams')).toBeLessThan(said.indexOf('Building the model'));
+});

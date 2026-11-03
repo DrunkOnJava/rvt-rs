@@ -847,6 +847,30 @@ const PLACEMENT_KIND_AFTER_CATEGORY_2023: usize = 24;
 /// Bytes from the category to the record marker.
 const MARKER_AFTER_CATEGORY_2023: usize = 38;
 
+/// Bytes from a Level frame's record marker back to its class word, the
+/// definition ordinal of its schema class (RE-315). Every Level instance
+/// frame of Revit 2018's `ALD26 Before` and `rst_basic_sample_project` holds
+/// the same word there (2130), and their type symbol another (2131).
+const CLASS_BEFORE_MARKER_2023: usize = 6;
+
+/// What a Level frame with no ElementId of its own must show before it takes
+/// the id of the record around it (RE-315). A Level frame's reference list is
+/// empty and its name block lies elsewhere in the stream (1.5 MB from the
+/// frame on `ALD26 Before`), so the proof is the frame's class and a name
+/// and elevation block of that id in the stream: a stray frame of the Level
+/// category inside another element adds no Level, and cannot drop the storeys
+/// by adding an id with no name.
+#[derive(Debug, Clone, Copy, Default)]
+struct EnclosedLevels {
+    /// The tag of the schema class `Level`, which the frame's class word
+    /// must be. `None` when the schema has none: no frame takes an
+    /// enclosing id.
+    level_tag: Option<u16>,
+    /// The elevation marker of the file's name blocks
+    /// ([`level_name_marker`]); `None` leaves no block to find.
+    name_marker: Option<[u8; 6]>,
+}
+
 /// Every Revit 2023 `OST_Levels` record in one inflated stream (RE-107).
 /// It is the 2024 record without the 24 sentinel bytes after the
 /// category, opened by the 32-bit chain header 2023's element records
@@ -862,12 +886,29 @@ pub fn find_level_records_2023(
     header_tag: u16,
     marker: &[u8; 6],
 ) -> Vec<PartitionLevelRecord> {
-    find_level_records_32(stream, buf, declared_ids, header_tag, marker, 0)
+    find_level_records_32(
+        stream,
+        buf,
+        declared_ids,
+        header_tag,
+        marker,
+        0,
+        EnclosedLevels::default(),
+    )
 }
 
 /// [`find_level_records_2023`] on a record envelope `shortfall` bytes
 /// shorter between the category and the placement kind, as Revit 2008's
 /// is ([`crate::partition_element_records_2023::envelope_shortfall`]).
+///
+/// A frame that does not open with its declared id (the second prologue,
+/// RE-30) takes the id of the declared record around it
+/// ([`crate::partition_element_records_2023::record_spans`], RE-315) when it
+/// is a standalone placed record, with no container reference and the
+/// placed kind of its release, and `enclosed` vouches for it: its class word
+/// is `Level`'s and the stream holds a name and elevation block of that id
+/// ([`levels_from_records_and_blocks`] joins on it). On Revit 2018's
+/// `ALD26 Before` all 7 of Revit's storeys are such frames.
 fn find_level_records_32(
     stream: &str,
     buf: &[u8],
@@ -875,41 +916,107 @@ fn find_level_records_32(
     header_tag: u16,
     marker: &[u8; 6],
     shortfall: usize,
+    enclosed: EnclosedLevels,
 ) -> Vec<PartitionLevelRecord> {
+    use crate::partition_element_records::PLACEMENT_KIND_INSTANCE;
     let needle = (OST_LEVELS as u64).to_le_bytes();
-    memchr::memmem::find_iter(buf, &needle)
-        .filter_map(|category| {
-            let id_at = category.checked_sub(ID_BEFORE_CATEGORY_2023)?;
-            let element_id = le_bytes::u32_at(buf, id_at)?;
-            if element_id == 0 || !declared_ids.contains(&element_id) {
-                return None;
+    let mut spans: Option<Vec<crate::partition_element_records_2023::RecordSpan>> = None;
+    let mut block_ids: Option<BTreeSet<u32>> = None;
+    let mut out = Vec::new();
+    for category in memchr::memmem::find_iter(buf, &needle) {
+        let Some(id_at) = category.checked_sub(ID_BEFORE_CATEGORY_2023) else {
+            continue;
+        };
+        let Some(leading) = le_bytes::u32_at(buf, id_at) else {
+            continue;
+        };
+        let marker_at = category + MARKER_AFTER_CATEGORY_2023 - shortfall;
+        if buf.get(marker_at..marker_at + marker.len()) != Some(&marker[..]) {
+            continue;
+        }
+        let (Some(flags), Some(container), Some(placement_kind)) = (
+            le_bytes::u32_at(buf, id_at + 4),
+            le_bytes::u32_at(buf, category + CONTAINER_AFTER_CATEGORY_2023 - shortfall),
+            le_bytes::u32_at(
+                buf,
+                category + PLACEMENT_KIND_AFTER_CATEGORY_2023 - shortfall,
+            ),
+        ) else {
+            continue;
+        };
+        let own = leading != 0
+            && declared_ids.contains(&leading)
+            && le_bytes::u16_at(buf, id_at + HEADER_TAG_AFTER_ID_2023) == Some(header_tag);
+        let element_id = if own {
+            leading
+        } else {
+            if container != u32::MAX
+                || !matches!(
+                    placement_kind,
+                    PLACEMENT_KIND_INSTANCE | LEVEL_PLACEMENT_KIND_2015
+                )
+            {
+                continue;
             }
-            if le_bytes::u16_at(buf, id_at + HEADER_TAG_AFTER_ID_2023)? != header_tag {
-                return None;
+            let class = marker_at
+                .checked_sub(CLASS_BEFORE_MARKER_2023)
+                .and_then(|at| le_bytes::u16_at(buf, at));
+            if enclosed.level_tag.is_none() || class != enclosed.level_tag {
+                continue;
             }
-            let marker_at = category + MARKER_AFTER_CATEGORY_2023 - shortfall;
-            if buf.get(marker_at..marker_at + marker.len())? != marker {
-                return None;
+            let spans = spans.get_or_insert_with(|| {
+                crate::partition_element_records_2023::record_spans(buf, header_tag, declared_ids)
+            });
+            let id = match crate::partition_element_records_2023::enclosing_span(spans, id_at) {
+                Some(span) if span.element_id != 0 => span.element_id,
+                _ => continue,
+            };
+            let block_ids = block_ids.get_or_insert_with(|| {
+                enclosed
+                    .name_marker
+                    .map(|name_marker| {
+                        find_name_blocks_sized(
+                            buf,
+                            declared_ids,
+                            &name_marker,
+                            4,
+                            OWNER_SENTINEL_RUN_LEN_2023,
+                        )
+                        .into_iter()
+                        .map(|block| block.element_id)
+                        .collect::<BTreeSet<u32>>()
+                    })
+                    .unwrap_or_default()
+            });
+            if !block_ids.contains(&id) {
+                continue;
             }
-            Some(PartitionLevelRecord {
-                stream: stream.to_string(),
-                offset: id_at,
-                element_id,
-                flags: le_bytes::u32_at(buf, id_at + 4)?,
-                container: match le_bytes::u32_at(
-                    buf,
-                    category + CONTAINER_AFTER_CATEGORY_2023 - shortfall,
-                )? {
-                    u32::MAX => u64::MAX,
-                    id => u64::from(id),
-                },
-                placement_kind: le_bytes::u32_at(
-                    buf,
-                    category + PLACEMENT_KIND_AFTER_CATEGORY_2023 - shortfall,
-                )?,
-            })
-        })
-        .collect()
+            id
+        };
+        out.push(PartitionLevelRecord {
+            stream: stream.to_string(),
+            offset: id_at,
+            element_id,
+            flags,
+            container: match container {
+                u32::MAX => u64::MAX,
+                id => u64::from(id),
+            },
+            placement_kind,
+        });
+    }
+    out
+}
+
+/// The elevation marker of a release's Level name blocks: Revit 2008 to 2012
+/// frame the `Plane` reference ([`framed_plane_marker`]), 2013 and later
+/// write it unframed ([`elevation_marker`], else the schema's).
+fn level_name_marker(rf: &mut RevitFile, revit_version: u32) -> Option<[u8; 6]> {
+    if revit_version < FRAMED_PLANE_UNTIL {
+        framed_plane_marker(rf)
+    } else {
+        elevation_marker(revit_version).or_else(|| schema_elevation_marker(rf))
+    }
 }
 
 /// The placement kind Revit 2015 to 2018 write on a Level element, where
@@ -937,6 +1044,16 @@ fn level_records(
         };
         let mut marker = [0u8; 6];
         marker.copy_from_slice(&full[2..]);
+        let enclosed = EnclosedLevels {
+            level_tag: rf.memoised_schema_classes().ok().and_then(|classes| {
+                classes
+                    .classes
+                    .iter()
+                    .find(|class| class.name == "Level")
+                    .map(|class| class.tag)
+            }),
+            name_marker: level_name_marker(rf, revit_version),
+        };
         let mut records = Vec::new();
         for stream in rf.partition_stream_names() {
             let Ok(inflated) = rf.inflated_partition(&stream) else {
@@ -949,6 +1066,7 @@ fn level_records(
                 header_tag,
                 &marker,
                 crate::partition_element_records_2023::envelope_shortfall(revit_version),
+                enclosed,
             ));
         }
         if revit_version < 2019 {
@@ -998,12 +1116,7 @@ pub fn scan_partition_levels(
     if !supports_revit_version(revit_version) || declared_ids.is_empty() {
         return Ok(Vec::new());
     }
-    let marker = if revit_version < FRAMED_PLANE_UNTIL {
-        framed_plane_marker(rf)
-    } else {
-        elevation_marker(revit_version).or_else(|| schema_elevation_marker(rf))
-    };
-    let Some(marker) = marker else {
+    let Some(marker) = level_name_marker(rf, revit_version) else {
         return Ok(Vec::new());
     };
     let records = level_records(rf, revit_version, declared_ids);
