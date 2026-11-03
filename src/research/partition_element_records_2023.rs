@@ -17,9 +17,10 @@
 //! element Tag of each export is a placed instance here
 //! (`reports/element-framing/RE-81-2023-element-records.md`). What 2024
 //! decodes on top of the records is read for 2023 as far as wall joins,
-//! whose reference-list partners trim walls as on 2024 (RE-120), and design
-//! options, whose id sits in the frame 26 bytes before the marker and whose
-//! sets [`crate::partition_design_options`] reads (RE-315). Family
+//! whose reference-list partners trim walls as on 2024 (RE-120), and, on 2016
+//! to 2023, design options, whose id sits in the frame 26 bytes before the
+//! marker and whose sets [`crate::partition_design_options`] reads
+//! ([`EXPORT_FILTER_RELEASES`], RE-315). Family
 //! instances' family and type names are read (RE-109), and so are
 //! system-family types and their layers (RE-111, RE-112). Door and window
 //! hosts are: the reference lists carry them as on 2024 (RE-85), and so they
@@ -69,6 +70,19 @@ pub const REVIT_32BIT_RELEASES: std::ops::RangeInclusive<u32> = 2008..=2023;
 /// 32-bit name, material, layer and Level frames that go with them.
 pub fn is_32bit_release(revit_version: u32) -> bool {
     REVIT_32BIT_RELEASES.contains(&revit_version)
+}
+
+/// The releases whose elements outside the export phase and in a non-primary
+/// design option are left out (RE-315): Revit 2016 to 2023. The design option
+/// layout is read on Autodesk's `rst_basic_sample_project` of each of them,
+/// and the phase filter's only evidence that it is right on a 32-bit file is
+/// a 2018 project. 2008 to 2015 have no evidence, and keep every element.
+pub const EXPORT_FILTER_RELEASES: std::ops::RangeInclusive<u32> = 2016..=2023;
+
+/// Whether `revit_version` leaves out the elements outside the export phase
+/// and in a non-primary design option ([`EXPORT_FILTER_RELEASES`]).
+pub fn applies_export_filters(revit_version: u32) -> bool {
+    EXPORT_FILTER_RELEASES.contains(&revit_version)
 }
 
 /// The schema tags the 32-bit readers match, each the tag of the named
@@ -265,6 +279,7 @@ fn record_at(buf: &[u8], start: usize, header_tag: u16) -> Option<(u32, usize)> 
 /// walk linear in `buf`.
 pub fn record_spans(buf: &[u8], header_tag: u16, declared: &BTreeSet<u32>) -> Vec<RecordSpan> {
     let needle = header_tag.to_le_bytes();
+    let finder = memchr::memmem::Finder::new(&needle);
     let mut spans = Vec::new();
     let mut at = 0usize;
     loop {
@@ -283,7 +298,7 @@ pub fn record_spans(buf: &[u8], header_tag: u16, declared: &BTreeSet<u32>) -> Ve
         let Some(rest) = buf.get(from..) else {
             break;
         };
-        let Some(hit) = memchr::memmem::find(rest, &needle) else {
+        let Some(hit) = finder.find(rest) else {
             break;
         };
         at = from + hit - HEADER_TAG_AFTER_ID;

@@ -172,8 +172,9 @@ pub fn scan_phase_excluded_instances(
         RECOVERED_CATEGORIES, scan_category_records_multi, supports_revit_version,
     };
     let mut by_class = BTreeMap::new();
-    let is_32bit = crate::partition_element_records_2023::is_32bit_release(revit_version);
-    if !is_32bit && !supports_revit_version(revit_version) {
+    let filtered_32bit =
+        crate::partition_element_records_2023::applies_export_filters(revit_version);
+    if !filtered_32bit && !supports_revit_version(revit_version) {
         return Ok(by_class);
     }
     let phases = rf.memoised_phase_filter();
@@ -181,7 +182,7 @@ pub fn scan_phase_excluded_instances(
         return Ok(by_class);
     }
     let options = rf.memoised_design_options();
-    let records = if is_32bit {
+    let records = if filtered_32bit {
         crate::partition_element_records_2023::scan_records(rf, revit_version)
     } else {
         let declared: BTreeSet<u32> = match crate::elem_table::parse_records(rf) {

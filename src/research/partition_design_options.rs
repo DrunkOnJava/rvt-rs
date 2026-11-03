@@ -36,15 +36,19 @@
 //! ids, and a set lists its options in ascending id order, so neither says
 //! which option is primary.
 //!
-//! # Revit 2008 to 2023
+//! # Revit 2016 to 2023
 //!
 //! The same three pieces are there with `u32` ids (RE-315, read on Autodesk's
 //! 2018 `rst_basic_sample_project`, whose set "Option Set 1" lists 875635,
 //! 875638 and 875641 with 875635 primary): the set record has its category at
 //! `+14` and the count at `+58`, the name entry writes each id as a `u32`,
 //! and an element's option is the `u32` 26 bytes before its record marker,
-//! `ff ff ff ff` for the main model. The 4 frames in a non-primary option on
-//! that file are all it has, and no Revit export of it is measured.
+//! `ff ff ff ff` for the main model. The same layout holds on the eight
+//! `rst_basic_sample_project` saves of 2016 to 2023: 1 set and 4 frames in a
+//! non-primary option each, a `Mass` Revit does not export. No Revit export
+//! of them is measured, and no other file has a set. Other releases of the
+//! 32-bit layout read no set
+//! ([`crate::partition_element_records_2023::EXPORT_FILTER_RELEASES`]).
 //!
 //! # Fail closed
 //!
@@ -278,6 +282,11 @@ pub fn compute_design_options(rf: &mut RevitFile) -> Result<DesignOptions> {
     let mut members: BTreeMap<u32, Vec<u32>> = BTreeMap::new();
     let entries_of: SetEntries;
     if crate::partition_element_records_2023::is_32bit_release(version) {
+        // Outside the releases measured no set is read, so no element is
+        // left out by option (RE-315).
+        if !crate::partition_element_records_2023::applies_export_filters(version) {
+            return Ok(out);
+        }
         entries_of = find_set_entries_32;
         let Some((_, header_tag)) = crate::partition_element_records_2023::record_marker(rf) else {
             return Ok(out);
@@ -384,15 +393,16 @@ pub fn scan_non_primary_option_instances(
 ) -> Result<BTreeMap<String, usize>> {
     use crate::partition_element_records::{RECOVERED_CATEGORIES, scan_category_records_multi};
     let mut by_class = BTreeMap::new();
-    let is_32bit = crate::partition_element_records_2023::is_32bit_release(revit_version);
-    if !is_32bit && !supports_revit_version(revit_version) {
+    let filtered_32bit =
+        crate::partition_element_records_2023::applies_export_filters(revit_version);
+    if !filtered_32bit && !supports_revit_version(revit_version) {
         return Ok(by_class);
     }
     let options = rf.memoised_design_options();
     if options.sets.is_empty() {
         return Ok(by_class);
     }
-    let records = if is_32bit {
+    let records = if filtered_32bit {
         crate::partition_element_records_2023::scan_records(rf, revit_version)
     } else {
         let declared: BTreeSet<u32> = match crate::elem_table::parse_records(rf) {

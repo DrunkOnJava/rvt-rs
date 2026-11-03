@@ -311,6 +311,50 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         level_ids.len(),
         levels.len()
     );
+    let level_tag = rf
+        .schema_classes()?
+        .classes
+        .iter()
+        .find(|class| class.name == "Level")
+        .map(|class| class.tag);
+    println!(
+        "schema class Level: {}",
+        level_tag.map_or("none".to_string(), |tag| format!("tag {tag}"))
+    );
+    let level_needle = (-2_000_240i64).to_le_bytes();
+    let mut level_words: BTreeMap<(u16, bool), usize> = BTreeMap::new();
+    for stream in rf.partition_stream_names() {
+        let Ok(inflated) = rf.inflated_partition(&stream) else {
+            continue;
+        };
+        let buf = inflated.bytes();
+        for category in memchr::memmem::find_iter(buf, &level_needle) {
+            let at = category + 38 - shortfall;
+            if buf.get(at..at + 6) != Some(&marker[2..]) {
+                continue;
+            }
+            let (Some(word), Some(container), Some(kind)) = (
+                at.checked_sub(6).and_then(|from| u16_at(buf, from)),
+                u32_at(buf, category + 16 - shortfall),
+                u32_at(buf, category + 24 - shortfall),
+            ) else {
+                continue;
+            };
+            let standalone = container == u32::MAX && matches!(kind, 0xffff_ef6f | 0xffff_ef7f);
+            *level_words.entry((word, standalone)).or_default() += 1;
+        }
+    }
+    println!(
+        "Level frames by class word, standalone placed or not: {}",
+        level_words
+            .iter()
+            .map(|((word, standalone), count)| format!(
+                "{word} {} x{count}",
+                if *standalone { "standalone" } else { "other" }
+            ))
+            .collect::<Vec<_>>()
+            .join(", ")
+    );
     let phases = rf.phase_filter();
     println!(
         "phases: {} in order, {} elements not in the last, read error: {}",
