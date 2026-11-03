@@ -62,7 +62,7 @@ At building permit the 10 rooms 1436086, 1480292, 1736676, 1736690, 1736720, 174
 | Core Interior | 116 | 116 | 0 |
 | RE1 Architecture | 11 | 11 | 0 |
 
-The one stored-solid room at permit that is off (2T7gRjEFvBgRaNLZHAfExM, 66% in area) is the one RE-313 left unexplained, and it is unchanged. PENDING: its ElementId.
+The one stored-solid room at permit that is off (2T7gRjEFvBgRaNLZHAfExM, 66% in area) is the one RE-313 left unexplained, and it is unchanged. It is room 2611271 (number 003, STAIRCASE; paired through the IfcSpace's `ElementId` property in a `keep_ifc` run, 41689880331): the walk closes a loop of 172.47 ft² on its box where Revit's area is 103.90, the same room as built is 166.77 ft² and not among those off, and the faces up to the next solid's tag do not resolve to an outline at permit (the rule gives up on it), so its cause stays open.
 
 ### The Autodesk samples (no Revit export)
 
