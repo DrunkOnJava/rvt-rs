@@ -19,7 +19,7 @@ Read `RvtElementRecordGeometry.SpaceOutlineSource` on the `IfcSpace`:
 
 | Value | The body is | Its plan area is |
 |---|---|---|
-| `stored_solid` | the outline of the room's stored solid, extruded to the room's height | Revit's room area: within 0.1% of Revit's export on 623 of the 624 `stored_solid` rooms scored below, the office counted at both stages; the other is 66% off (RE-313 §2, §3, RE-316 §3) |
+| `stored_solid` | the outline of the room's stored solid, extruded to the room's height | Revit's room area: within 0.1% of Revit's export on every `stored_solid` room scored below except one, the permit office's STAIRCASE room 2611271 at 66% (RE-313 §2, §3, RE-316 §3) |
 | `record_box` | the record's bounding box (turned with a family instance that is turned) | the box's area, not the space's. It equals the space's only when the space is a rectangle; the area is Revit's on none of the office's 5 room scores that keep their box (3 as built, 2 at permit; RE-316 §4) |
 | `saved_mesh` | the mesh Revit saved for the room (`rvt-ifc --saved-meshes`) | the mesh's; not scored |
 | `none` | no body (an Area) | not available |
@@ -67,6 +67,8 @@ Measure runs the scorer on every reference model (`-f scorers=space_profiles_vs_
 | One held-out house (2026) | 12 of 13 | 10 | 0 | 0 | 12 rooms, stored solid: 10, 0 |
 | Held-out Gdynia (2021, Revit's IFC2X3 export) | 18 of 19 | 18 | 0 | 0 | 18 rooms, stored solid: 18, 0 |
 | Held-out Warmond (2021, export passed through another tool) | 179 | 174 | 174 | 174 | 171 rooms, stored solid: 171, 171; 8 rooms, record box: 3, 3 |
+
+Held out (counts only), BIM Speed's Revit 2021 project: 6 more rooms take their stored solid's outline under RE-316, and all 177 of its stored-solid rooms are within 0.1% and 0.01 ft of Revit's (area within 0.1% 174 → 179 of 179 spaces; 2 rooms keep their box, both rectangles).
 
 A model with no rooms in Revit's export (the other R2025 models, RE1 Electrical, Mechanical and Plumbing) scores 0 of 0. Two held-out models write none of Revit's spaces: Vitoria's 2018 project (73), which exports no element until PR #1286 (#1261), and BIM Whale's 2021 project (8), whose spaces are Areas, which rvt-rs reads on Revit 2024 only.
 

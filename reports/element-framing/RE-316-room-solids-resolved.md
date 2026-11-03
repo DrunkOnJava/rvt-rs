@@ -66,7 +66,7 @@ The one stored-solid room at permit that is off (2T7gRjEFvBgRaNLZHAfExM, 66% in 
 
 ### The Autodesk samples (no Revit export)
 
-`probe_re316_room_closure` on the 2019 and 2023 saves:
+`probe_re316_room_closure` on the 2019 and 2023 saves (run 41689876297; Measure's export diagnostics give the same box counts on all 12 releases of `rme`):
 
 | Project | Rooms | Closed by RE-101 | Closed now | Box |
 |---|---:|---:|---:|---:|
@@ -78,7 +78,13 @@ With their arcs the six `rac_advanced` rooms would close (the probe's `with arcs
 
 ### Everything else
 
-PENDING: Measure unfiltered against `main`.
+Measure unfiltered, `-f base=main -f nordic=true -f r2025=true -f samples=true -f holdout=true` ([41689872644](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41689872644), this change at 669856bf against `main`; 93 models). Every scorer's output is identical on every model but three, and the exports' hashes move on exactly the models with a room that now closes:
+
+- **Office as built and at permit**: the rows above; their `exported.bounding_box_spaces` go from 57 to 48 and from 56 to 46.
+- **`rme_basic` and `rme_advanced`, all 12 releases 2015 to 2027**: one room each (576007, 1887.2 ft² against its box's 1917.9) takes an outline, 50 → 49 box spaces; no Revit export of them exists.
+- **Held out, counts only (BIM Speed's Revit 2021 project)**: the one model outside the office whose scorer output changes. Area within 0.1%: 174 → 179 of the 179 spaces paired, off 5 → 0; rooms on their record box 8 → 2, both within 0.1% (rectangles); stored-solid rooms 171 → 177, all 177 within 0.1% and 0.01 ft. This model was not read while the rule was found.
+- **Core Interior, RE1 Architecture, the R2025 models and the other held-out models**: unchanged, so no witness observation moves. `rac_advanced` and `rac_basic` in every release: unchanged.
+- **Cost**: Measure's `rvt-ifc` export times are 1.27 times main's at the median across the 93 models (the head job ran on a slower runner) and 1.40 on Core Interior, which this change does not touch; the office's 1.43 and 1.46 are within that spread.
 
 ## 4. What keeps its box
 
@@ -99,8 +105,8 @@ PENDING: Measure unfiltered against `main`.
 ## 6. Reproduce
 
 ```bash
-gh workflow run measure.yml --ref main -f ref=<sha> -f base=none -f samples=true -f sample_years="2019 2023" \
+gh workflow run measure.yml --ref main -f ref=669856bff569c56d9488381e22ea6bb0762cefc5 -f base=none -f samples=true -f sample_years="2019 2023" \
   -f nordic=true -f models="nordic-office-* core-interior re1-architecture" \
   -f probe=probe_re316_room_closure -f probe_scorer=- -f scorers=space_profiles_vs_ifc
-gh workflow run measure.yml --ref main -f ref=<sha> -f base=main -f nordic=true -f r2025=true -f samples=true -f holdout=true
+gh workflow run measure.yml --ref main -f ref=669856bff569c56d9488381e22ea6bb0762cefc5 -f base=main -f nordic=true -f r2025=true -f samples=true -f holdout=true
 ```
