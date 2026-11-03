@@ -72,7 +72,7 @@ A Level frame that is a standalone placed record and sits in a declared record n
 
 ## 7. Result
 
-Run 41707934595, main's side `8664b94a`, head `01b5af37` (the final code; later commits change documents and nothing else):
+Run 41707934595, main's side `8664b94a`, head `01b5af37` (the code of this report; the later commits change the export warning's text, cap the option sets searched at 64, merge main and change documents, and §10 repeats the held-out and identity runs at the final head):
 
 | `ALD26 Before` | main | head | Revit's export |
 |---|---:|---:|---:|
@@ -91,7 +91,7 @@ Of the 1,136 written, on a storey: 1,073 are Revit's; 26 are on one where Revit 
 
 **Unchanged:** the IFC hashes of Frigento (2020), Gdynia (2021), Warmond (2021) and the held-out BIM Whale `AdvancedProject` (2021) are byte for byte main's, and BIM Whale's counts lines are main's (run 41707934595).
 
-Run 41707942875 (`-f samples=true -f nordic=true -f r2025=true`, main's side `8664b94a`) exports the Autodesk sample projects of 2015 to 2027, Core Interior, Einhoven, both Nordic offices, the RE1 models and puzzbobb's 23: 92 models, 0 differ from main's IFC, the 33 Autodesk samples of 2015 to 2023 among them. No sample frame takes an enclosing id, no phase excludes an element on any sample, and the only diagnostics that change are the eight `rst_basic` saves of 2016 to 2023 (§10).
+Run 41707942875 (`-f samples=true -f nordic=true -f r2025=true`, main's side `8664b94a`, head `01b5af37`) exports the Autodesk sample projects of 2015 to 2027, Core Interior, Einhoven, both Nordic offices, the RE1 models and puzzbobb's 23: 92 models, 0 differ from main's IFC, the 33 Autodesk samples of 2015 to 2023 among them. No sample frame takes an enclosing id, no phase excludes an element on any sample, and the only diagnostics that change are the eight `rst_basic` saves of 2016 to 2023 (§10).
 
 ## 8. Reproduce
 
@@ -102,6 +102,9 @@ gh workflow run measure.yml --ref main -f ref=01b5af37f7e7d186ac7b60e4c49b85ffda
 gh workflow run measure.yml --ref main -f ref=01b5af37f7e7d186ac7b60e4c49b85ffdab36dd6 -f base=main -f holdout=true -f samples=true -f sample_years="2018 2023" -f models="spent-*" -f keep_ifc=true -f probe=probe_re315_32bit_record_chain -f probe_scorer=instances_vs_ifc_tags
 # byte identity
 gh workflow run measure.yml --ref main -f ref=01b5af37f7e7d186ac7b60e4c49b85ffdab36dd6 -f base=main -f samples=true -f nordic=true -f r2025=true
+# the final head: every held-out pair, counts only, and byte identity
+gh workflow run measure.yml --ref main -f ref=68ae7904d5b97350cd2aae670d262b8e982edcaf -f base=main -f holdout=true
+gh workflow run measure.yml --ref main -f ref=68ae7904d5b97350cd2aae670d262b8e982edcaf -f base=main -f samples=true -f nordic=true -f r2025=true -f scorers=none
 # the held-out Project before the filters of §10
 gh workflow run measure.yml --ref main -f ref=8fc583a165267ef842138d299472e7daecdd2bfe -f base=none -f holdout=true -f models="holdout-bimspeed-vitoria-project-2018"
 # the elements-only commit of §6
@@ -133,3 +136,9 @@ Result (run 41707934595, head `01b5af37`, counts only for the held-out):
 - `ALD26 Project`: 1,336 elements and spaces written (1,263 elements and 73 spaces) against Revit's 1,520; **no element written that Revit's export lacks** (198 before the filters); every class found in the same class as before, none lost; 1,255 of the 1,263 elements in Revit's class or IFC4's, 8 curtain walls as walls; 1,181 of 1,263 on Revit's storey and 14 on none.
 - `ALD26 Before`: unchanged by the filters and by the Level checks of §6, 1,136 of 1,321, none extra, 7 storeys; its IFC is the one of the previous head.
 - Frigento, Gdynia, Warmond and BIM Whale: IFC byte for byte main's. Frigento (22) and Gdynia (3) keep elements Revit's export lacks.
+- **The export warning** (`diagnostics.warnings`) said design options were not read for every 2008 to 2023 export. It now says per release: on 2016 to 2023 the export phase and design options are applied, on 2008 to 2015 neither is. A file's option sets are searched for at most 64 (`OPTION_SETS_MAX`); the sets past it, by ElementId, stay unresolved and keep their elements, as a set with no name entry does on 2024. The most any file here has is 2.
+
+**At the final head** (`68ae7904`, the merge of main `53e06c02` into `c04c92dc`):
+
+- Run 41722201615 (`-f holdout=true -f base=main`, no model filter: Core Interior, Einhoven, the four RE1 models, the spent `ALD26 Before` and every held-out pair of Measure, counts only for the held-out): the exported IFC of 23 of the 25 models is byte for byte main's. The two that move are the two Vitoria saves. The `counts.txt` of the other 17 held-out models is main's line for line, 0 lines differ: the Revit 2023 project `modelo_bim` (the only 2023 pair in Measure's held-out set; the other 2023 project of the 255ribeiro set, `Exemplo_data`, is local only and not measured here), the 2022 and 2024 to 2027 pairs and offices, Frigento, Gdynia, Warmond, BIM Whale, `AA-SingleDwellingHouse` and `teste_export_2025`. `ALD26 Before`'s class sets and storeys and `ALD26 Project`'s counts are those of run 41707934595.
+- Run 41722205132 (`-f samples=true -f nordic=true -f r2025=true -f scorers=none`): 92 models, 0 differ from main's IFC. The diagnostics change on the 33 samples of 2015 to 2023 (the warning's text) and, in the skipped items, on the eight `rst_basic` saves of 2016 to 2023.
