@@ -17,9 +17,12 @@ import { fileURLToPath } from 'node:url';
 //   - on Core Interior (17 to 24 s on Deploy viewer's runner): the bar is
 //     determinate for the counted stage at the percent of each report, sweeps
 //     for the stretch the decoder reports nothing in, and says "Building the
-//     model" once. A screenshot is taken while the partition stage runs, and it
-//     is the only thing that depends on timing, so it is best effort: what it
-//     shows is written beside it.
+//     model" once. A screenshot is taken while the partition stage runs: the
+//     page holds back the worker's messages the moment the bar first reads 25%
+//     or more (the stage's whole run is about a second, and a picture takes
+//     longer), takes it, and lets them through. It is the one thing here that
+//     depends on timing, so it is best effort, and what it shows is written
+//     beside it.
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const tier1 = path.resolve(
@@ -56,6 +59,41 @@ async function loadEvents(page: Page): Promise<LoadEvent[]> {
   const raw = await page.locator('#status').getAttribute('data-load-progress');
   expect(raw, 'the page keeps what the worker reported').not.toBeNull();
   return JSON.parse(raw!) as LoadEvent[];
+}
+
+/**
+ * Lets the test stop the card where it is: while `__holdMessages` is set, the
+ * worker's messages are queued, in order, and `__release` hands them to the page.
+ * Only the page's own listeners are wrapped; nothing is lost or reordered.
+ */
+async function canHoldWorkerMessages(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    const w = window as unknown as {
+      __holdMessages: boolean;
+      __held: Array<[(ev: MessageEvent) => void, MessageEvent]>;
+      __release: () => void;
+    };
+    w.__holdMessages = false;
+    w.__held = [];
+    w.__release = () => {
+      w.__holdMessages = false;
+      for (const [listener, event] of w.__held.splice(0)) listener(event);
+    };
+    const NativeWorker = window.Worker;
+    window.Worker = class extends NativeWorker {
+      addEventListener(type: string, listener: unknown, options?: unknown): void {
+        if (type !== 'message' || typeof listener !== 'function') {
+          super.addEventListener(type, listener as EventListener, options as boolean);
+          return;
+        }
+        const held = (event: Event): void => {
+          if (w.__holdMessages) w.__held.push([listener as (ev: MessageEvent) => void, event as MessageEvent]);
+          else (listener as (ev: Event) => void)(event);
+        };
+        super.addEventListener(type, held, options as boolean);
+      }
+    };
+  });
 }
 
 /** Records every text #status takes, so what a live region was told can be counted. */
@@ -159,6 +197,7 @@ coreInteriorTest('the loading card fills while Core Interior decodes', async ({ 
   expect(fs.existsSync(coreInterior), `${coreInterior} was not fetched`).toBe(true);
   fs.mkdirSync(outDir, { recursive: true });
 
+  await canHoldWorkerMessages(page);
   await page.goto('/');
   await expect(page.locator('#status')).toHaveText(/Ready/);
   await logStatusText(page);
@@ -166,9 +205,11 @@ coreInteriorTest('the loading card fills while Core Interior decodes', async ({ 
 
   // The screenshot is the only thing here that depends on timing. Wait, polling
   // every animation frame, for the bar to be a quarter full or more while the
-  // partition stage runs, and take it at once; a decode that is past that by
-  // the time the page looks, or a screenshot that lands after it, only means
-  // no picture, which is written down rather than failed on.
+  // partition stage runs, and in the same frame stop the card where it is, so
+  // that the picture, which takes longer than the stage's last second, shows
+  // it. Whatever happens, the worker's messages are let through again. A decode
+  // that is past that by the time the page looks, or a screenshot that fails,
+  // only means no picture, which is written down rather than failed on.
   const screenshot: { taken: boolean; cardAtCapture: unknown; note: string } = {
     taken: false,
     cardAtCapture: null,
@@ -176,7 +217,12 @@ coreInteriorTest('the loading card fills while Core Interior decodes', async ({ 
   };
   try {
     await page.waitForFunction(
-      () => Number(document.getElementById('load-rail')?.getAttribute('aria-valuenow')) >= 25,
+      () => {
+        const value = Number(document.getElementById('load-rail')?.getAttribute('aria-valuenow'));
+        if (!(value >= 25)) return false;
+        (window as unknown as { __holdMessages: boolean }).__holdMessages = true;
+        return true;
+      },
       null,
       { polling: 'raf', timeout: 120_000 },
     );
@@ -191,9 +237,11 @@ coreInteriorTest('the loading card fills while Core Interior decodes', async ({ 
     });
     screenshot.taken = true;
     screenshot.note =
-      'taken when the bar first read 25% or more; the card may have moved on while the picture was taken, so cardAtCapture is what the page said just before';
+      'taken when the bar first read 25% or more, with the worker\'s messages held, so the picture is the card as cardAtCapture says';
   } catch (err) {
     screenshot.note = `no screenshot: ${(err as Error).message.split('\n')[0]}`;
+  } finally {
+    await page.evaluate(() => (window as unknown as { __release: () => void }).__release());
   }
 
   await expect(page.locator('#status')).toHaveText(/Loaded/, { timeout: 500_000 });
