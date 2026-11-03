@@ -868,6 +868,14 @@ pub fn find_level_records_2023(
 /// [`find_level_records_2023`] on a record envelope `shortfall` bytes
 /// shorter between the category and the placement kind, as Revit 2008's
 /// is ([`crate::partition_element_records_2023::envelope_shortfall`]).
+///
+/// A frame that does not open with its declared id (the second prologue,
+/// RE-30) takes the id of the declared record around it
+/// ([`crate::partition_element_records_2023::record_spans`], RE-315) when it
+/// is a standalone placed record, with no container reference and the
+/// placed kind of its release: a Level's name and elevation block carries
+/// the Level's own id, which [`levels_from_records_and_blocks`] joins on.
+/// On Revit 2018's `ALD26 Before` all 7 of Revit's storeys are such frames.
 fn find_level_records_32(
     stream: &str,
     buf: &[u8],
@@ -876,40 +884,66 @@ fn find_level_records_32(
     marker: &[u8; 6],
     shortfall: usize,
 ) -> Vec<PartitionLevelRecord> {
+    use crate::partition_element_records::PLACEMENT_KIND_INSTANCE;
     let needle = (OST_LEVELS as u64).to_le_bytes();
-    memchr::memmem::find_iter(buf, &needle)
-        .filter_map(|category| {
-            let id_at = category.checked_sub(ID_BEFORE_CATEGORY_2023)?;
-            let element_id = le_bytes::u32_at(buf, id_at)?;
-            if element_id == 0 || !declared_ids.contains(&element_id) {
-                return None;
+    let mut spans: Option<Vec<crate::partition_element_records_2023::RecordSpan>> = None;
+    let mut out = Vec::new();
+    for category in memchr::memmem::find_iter(buf, &needle) {
+        let Some(id_at) = category.checked_sub(ID_BEFORE_CATEGORY_2023) else {
+            continue;
+        };
+        let Some(leading) = le_bytes::u32_at(buf, id_at) else {
+            continue;
+        };
+        let marker_at = category + MARKER_AFTER_CATEGORY_2023 - shortfall;
+        if buf.get(marker_at..marker_at + marker.len()) != Some(&marker[..]) {
+            continue;
+        }
+        let (Some(flags), Some(container), Some(placement_kind)) = (
+            le_bytes::u32_at(buf, id_at + 4),
+            le_bytes::u32_at(buf, category + CONTAINER_AFTER_CATEGORY_2023 - shortfall),
+            le_bytes::u32_at(
+                buf,
+                category + PLACEMENT_KIND_AFTER_CATEGORY_2023 - shortfall,
+            ),
+        ) else {
+            continue;
+        };
+        let own = leading != 0
+            && declared_ids.contains(&leading)
+            && le_bytes::u16_at(buf, id_at + HEADER_TAG_AFTER_ID_2023) == Some(header_tag);
+        let element_id = if own {
+            leading
+        } else {
+            if container != u32::MAX
+                || !matches!(
+                    placement_kind,
+                    PLACEMENT_KIND_INSTANCE | LEVEL_PLACEMENT_KIND_2015
+                )
+            {
+                continue;
             }
-            if le_bytes::u16_at(buf, id_at + HEADER_TAG_AFTER_ID_2023)? != header_tag {
-                return None;
+            let spans = spans.get_or_insert_with(|| {
+                crate::partition_element_records_2023::record_spans(buf, header_tag, declared_ids)
+            });
+            match crate::partition_element_records_2023::enclosing_span(spans, id_at) {
+                Some(span) if span.element_id != 0 => span.element_id,
+                _ => continue,
             }
-            let marker_at = category + MARKER_AFTER_CATEGORY_2023 - shortfall;
-            if buf.get(marker_at..marker_at + marker.len())? != marker {
-                return None;
-            }
-            Some(PartitionLevelRecord {
-                stream: stream.to_string(),
-                offset: id_at,
-                element_id,
-                flags: le_bytes::u32_at(buf, id_at + 4)?,
-                container: match le_bytes::u32_at(
-                    buf,
-                    category + CONTAINER_AFTER_CATEGORY_2023 - shortfall,
-                )? {
-                    u32::MAX => u64::MAX,
-                    id => u64::from(id),
-                },
-                placement_kind: le_bytes::u32_at(
-                    buf,
-                    category + PLACEMENT_KIND_AFTER_CATEGORY_2023 - shortfall,
-                )?,
-            })
-        })
-        .collect()
+        };
+        out.push(PartitionLevelRecord {
+            stream: stream.to_string(),
+            offset: id_at,
+            element_id,
+            flags,
+            container: match container {
+                u32::MAX => u64::MAX,
+                id => u64::from(id),
+            },
+            placement_kind,
+        });
+    }
+    out
 }
 
 /// The placement kind Revit 2015 to 2018 write on a Level element, where

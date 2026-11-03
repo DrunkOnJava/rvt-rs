@@ -270,6 +270,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         records.len(),
         enclosed_total
     );
+    let level_ids = rvt::research::partition_level_records::scan_partition_level_ids(
+        &mut rf, release, &declared,
+    )?;
+    let levels =
+        rvt::research::partition_level_records::recover_partition_levels(&mut rf, release)?;
+    println!(
+        "levels: {} standalone Level records by id, {} recovered with a name and an elevation",
+        level_ids.len(),
+        levels.len()
+    );
     let partition = |stream: &str| {
         stream
             .rsplit('/')
