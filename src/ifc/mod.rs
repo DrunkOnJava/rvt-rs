@@ -1016,7 +1016,27 @@ impl RvtDocExporter {
         quality_mode: ExportQualityMode,
         limits: crate::walker::WalkerLimits,
     ) -> Result<ExportResult> {
-        let model = self.export_with_mode_and_limits(rf, quality_mode, limits)?;
+        self.export_with_diagnostics_mode_limits_and_control(
+            rf,
+            quality_mode,
+            limits,
+            &crate::control::WalkerControl::default(),
+        )
+    }
+
+    /// Same as [`Self::export_with_diagnostics_mode_and_limits`], with the
+    /// walk's progress reported to `control` and a cancelled token stopping
+    /// the export with [`crate::Error::Cancelled`], as
+    /// [`Self::export_with_mode_limits_and_control`] does for the model alone.
+    /// The diagnostics are built after the walk and report nothing.
+    pub fn export_with_diagnostics_mode_limits_and_control(
+        &self,
+        rf: &mut crate::RevitFile,
+        quality_mode: ExportQualityMode,
+        limits: crate::walker::WalkerLimits,
+        control: &crate::control::WalkerControl,
+    ) -> Result<ExportResult> {
+        let model = self.export_with_mode_limits_and_control(rf, quality_mode, limits, control)?;
         let diagnostics = build_export_diagnostics_with_limits(
             rf,
             &model,
@@ -1108,6 +1128,19 @@ fn original_file_stem(path: &str) -> Option<String> {
 }
 
 fn export_rvt_doc(
+    rf: &mut crate::RevitFile,
+    mode: RvtDocExportMode,
+    quality_mode: ExportQualityMode,
+    walker_limits: crate::walker::WalkerLimits,
+    control: &crate::control::WalkerControl,
+) -> Result<IfcModel> {
+    rf.report_partition_inflates_to(control);
+    let result = export_rvt_doc_reporting(rf, mode, quality_mode, walker_limits, control);
+    rf.stop_reporting_partition_inflates();
+    result
+}
+
+fn export_rvt_doc_reporting(
     rf: &mut crate::RevitFile,
     mode: RvtDocExportMode,
     quality_mode: ExportQualityMode,

@@ -73,6 +73,20 @@ none it runs that cargo build itself; when cargo is unavailable it warns
 `synthetic-mvp: missing (gen-fixture not found …)` and the gallery marks the
 demo unavailable. Nothing is downloaded either way.
 
+## Progress while a model opens
+
+The loading card shows the decoder's own progress, the stages `rvt-gltf
+--progress` prints: the bar fills with a stage's count while it has one
+(scanning for elements, decoding elements, reading partition streams, drawing
+doors and windows from saved meshes) and sweeps for the rest, and the card
+names the stage and counts it. `src/worker.ts` passes a function to
+`openRvtBytesWithDiagnosticsModeAndOpenLimits` and posts each report from
+inside the wasm call; the page keeps the list on `#status` as
+`data-load-progress`. The "about N s" estimate from the file's size is what
+the card says until the first report. `tests/load-progress.spec.ts` watches
+the card fill on Core Interior. The stages and what the card cannot show are
+in [`docs/viewer-api.md`](../docs/viewer-api.md#decode-progress).
+
 ## Large models and resource limits
 
 A file opens under the reader's default limits (256 MiB per stream and per
@@ -80,8 +94,32 @@ inflated member). When a stream is over them, File status reports "Part of the
 file not read" and offers "Retry with large-model limits", which reads the same
 file again with the limits `rvt-ifc --large-model` uses (streams up to 2 GiB).
 A browser tab can use at most 4 GiB of memory, so a very large model can still
-fail to open; `rvt-ifc --large-model` has no such ceiling. The button calls
+fail to open; `rvt-ifc --large-model` is not held to a tab's 4 GiB (its caps are
+a 2 GiB stream and, on a 64-bit machine with the memory, 8 GiB inflated, and a
+file over 2 GiB is rejected whatever the flags). The button calls
 `openRvtBytesWithDiagnosticsModeAndOpenLimits` with `{ largeModel: true }`.
+
+A file whose size says it may need more than a tab's 4 GiB (an open has taken
+at least about ten times the file's size, and the warning can fire on a file
+that fits) is warned about in the loading card before the decode, and still
+tried. When the wasm instance does run out of memory, the viewer says the model
+is too large for the browser, how much memory the tab reached, and what reads a
+larger file (`rvt-ifc` and `rvt-gltf` with `--large-model`, up to a 2 GiB file;
+the Python `RevitFile` with a larger `max_stream_bytes`, `max_inflate_bytes` and,
+over 2 GiB, `max_file_bytes`), instead of
+`RuntimeError: unreachable`; the engine's own message is in the status panel.
+A stop a long way short of the ceiling on a small file says "Ran out of memory"
+and that the file may be damaged, since nothing measured says it needs more. How
+it tells, the measured estimate and the options for larger models are in
+[`docs/viewer-api.md`](../docs/viewer-api.md#models-too-large-for-the-browser).
+`?memoryCeilingBytes=` in the address lowers the ceiling the warning compares
+with. `tests/memory-ceiling.spec.ts` uses it for the warning, and
+`tests/memory-ceiling-capped.spec.ts` for the stop, in a Chromium whose V8 caps
+wasm memory (`--js-flags=--wasm-max-mem-pages=256` is 16 MiB), where Einhoven
+really stops, because no model of several hundred MiB is in CI.
+`tests/worker-failures.spec.ts` covers the other engines' wording of the trap, a
+panic that is not memory, and a stop after the open call, by failing one wasm
+export in a replacement worker; nothing in it ships.
 
 `?maxStreamBytes=` and `?maxInflateBytes=` in the address open the first file
 under those limits, so a small file reaches the same path. The browser test

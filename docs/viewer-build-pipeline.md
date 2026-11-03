@@ -318,9 +318,10 @@ Natively, `rvt-ifc --mode geometry` on Core Interior went from
 Silicon, `/usr/bin/time -l`, best of three); in the browser the same
 33.7 MB file decodes in **about 3 s**, measured on the deployed
 site. Output is byte-identical. The viewer's loading-card estimate
-follows that measurement — `DECODE_BYTES_PER_SECOND` is 11 MB/s
-since #271 — and the bar stays indeterminate, because a chunked
-progress signal is still the unshipped work described above.
+opened with that measurement — `DECODE_BYTES_PER_SECOND` is 11 MB/s
+since #271 — and the bar swept, because the decoder reported no
+progress. Since #1195 it does: the card shows the decoder's own stages
+(see [`viewer-api.md`](viewer-api.md#decode-progress)).
 
 ## VW1-23 — Drag-and-drop user RVT support
 
