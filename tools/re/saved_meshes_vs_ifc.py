@@ -35,14 +35,16 @@ Usage:
 import argparse
 import collections
 import math
-import multiprocessing
+import os
 import statistics
+import sys
 
 import ifcopenshell
 import ifcopenshell.geom
 import numpy as np
 
-from ifc_common import site_frame
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from ifc_common import mesh_parts, site_frame  # noqa: E402
 
 FT = 0.3048
 
@@ -80,12 +82,14 @@ def world_boxes(path, tags=None, transform=None, wanted=None, frame=True):
     if not elements:
         return out
     to_internal = site_frame(model) if frame else None
-    it = ifcopenshell.geom.iterator(settings, model, multiprocessing.cpu_count(), include=elements)
-    if not it.initialize():
-        return out
-    while True:
-        shape = it.get()
-        verts = np.array(shape.geometry.verts, dtype=float).reshape(-1, 3)
+    # The order the geometry iterator returned them in, one thread, which the
+    # tables' ties (equal counts) follow.
+    elements.sort(key=lambda e: e.id())
+    shapes = mesh_parts(model, settings, elements, path)
+    for element in elements:
+        if element.id() not in shapes:
+            continue
+        verts = shapes[element.id()][0]
         if len(verts):
             if to_internal is not None:
                 points = to_internal(verts)
@@ -94,10 +98,7 @@ def world_boxes(path, tags=None, transform=None, wanted=None, frame=True):
                 if transform:
                     points = np.array([transform(p) for p in points])
             box = [float(v) for v in points.min(axis=0)] + [float(v) for v in points.max(axis=0)]
-            element = model.by_id(shape.id)
             out[element.Tag] = (element.is_a(), box, sources.get(element.Tag))
-        if not it.next():
-            break
     return out
 
 
