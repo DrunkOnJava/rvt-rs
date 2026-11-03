@@ -67,6 +67,31 @@ pub fn write_step_with_options(model: &IfcModel, options: &StepOptions) -> Strin
     w.finish()
 }
 
+/// [`write_step_with_options`], writing the text to `out` as it is built
+/// instead of returning it, so a large model's text is never held whole in
+/// memory (#1075). The bytes are the same. Returns how many were written.
+/// Pass `&mut writer` to keep the writer.
+///
+/// # Errors
+///
+/// The first error `out` returns. What was written before it stays written.
+pub fn write_step_to<W: std::io::Write>(
+    model: &IfcModel,
+    options: &StepOptions,
+    mut out: W,
+) -> std::io::Result<u64> {
+    let now = options.timestamp.unwrap_or_else(unix_seconds);
+    let mut w = StepWriter::new(now);
+    w.sink = Some(Sink {
+        writer: &mut out,
+        written: 0,
+        error: None,
+    });
+    w.emit_header(model);
+    w.emit_data(model);
+    w.finish_to_sink()
+}
+
 /// Attribute layout of the tail an IFC4 building-element instance
 /// carries after `IfcProduct`'s seven common attributes
 /// (`GlobalId`, `OwnerHistory`, `Name`, `Description`, `ObjectType`,
@@ -357,8 +382,11 @@ fn element_attribute_tail(
     }
 }
 
-struct StepWriter {
+struct StepWriter<'a> {
     out: String,
+    /// Where [`write_step_to`] sends the text: `out` is handed on whenever it
+    /// passes [`SPILL_BYTES`].
+    sink: Option<Sink<'a>>,
     next_id: usize,
     /// Unix timestamp (seconds) used for FILE_NAME + IfcOwnerHistory.
     /// Injected at construction so the output is a pure function of
@@ -366,7 +394,18 @@ struct StepWriter {
     timestamp: i64,
 }
 
-impl StepWriter {
+/// A writer [`write_step_to`] streams to, the bytes it took and its first
+/// error.
+struct Sink<'a> {
+    writer: &'a mut dyn std::io::Write,
+    written: u64,
+    error: Option<std::io::Error>,
+}
+
+/// How much text [`StepWriter`] holds before handing it to its sink.
+const SPILL_BYTES: usize = 1 << 20;
+
+impl StepWriter<'_> {
     /// The `Position` and depth, metres, of an opening's extruded solid: the
     /// shared `solid_position` and the body's `depth_m`, or, for a cut with
     /// its own height (RE-93), a placement that far above the element's and
@@ -456,6 +495,7 @@ impl StepWriter {
     fn new(timestamp: i64) -> Self {
         Self {
             out: String::new(),
+            sink: None,
             next_id: 1,
             timestamp,
         }
@@ -470,10 +510,30 @@ impl StepWriter {
     fn emit_line<S: AsRef<str>>(&mut self, line: S) {
         self.out.push_str(line.as_ref());
         self.out.push('\n');
+        if self.out.len() >= SPILL_BYTES {
+            self.spill();
+        }
     }
 
     fn emit_entity<S: AsRef<str>>(&mut self, id: usize, body: S) {
         self.out.push_str(&format!("#{id}={};\n", body.as_ref()));
+        if self.out.len() >= SPILL_BYTES {
+            self.spill();
+        }
+    }
+
+    /// Hand the text held so far to the sink, if there is one; after the
+    /// sink's first error the text is dropped unwritten.
+    fn spill(&mut self) {
+        if let Some(sink) = &mut self.sink {
+            if sink.error.is_none() {
+                match sink.writer.write_all(self.out.as_bytes()) {
+                    Ok(()) => sink.written += self.out.len() as u64,
+                    Err(error) => sink.error = Some(error),
+                }
+            }
+            self.out.clear();
+        }
     }
 
     /// Emit `pset` as one `IfcPropertySingleValue` per property, the
@@ -4056,6 +4116,18 @@ impl StepWriter {
         let mut out = self.out;
         out.push_str("END-ISO-10303-21;\n");
         out
+    }
+
+    fn finish_to_sink(mut self) -> std::io::Result<u64> {
+        self.out.push_str("END-ISO-10303-21;\n");
+        self.spill();
+        match self.sink {
+            Some(Sink {
+                error: Some(error), ..
+            }) => Err(error),
+            Some(Sink { written, .. }) => Ok(written),
+            None => Ok(0),
+        }
     }
 }
 
