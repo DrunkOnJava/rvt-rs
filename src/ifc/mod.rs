@@ -1134,6 +1134,19 @@ fn export_rvt_doc(
     walker_limits: crate::walker::WalkerLimits,
     control: &crate::control::WalkerControl,
 ) -> Result<IfcModel> {
+    rf.report_partition_inflates_to(control);
+    let result = export_rvt_doc_reporting(rf, mode, quality_mode, walker_limits, control);
+    rf.stop_reporting_partition_inflates();
+    result
+}
+
+fn export_rvt_doc_reporting(
+    rf: &mut crate::RevitFile,
+    mode: RvtDocExportMode,
+    quality_mode: ExportQualityMode,
+    walker_limits: crate::walker::WalkerLimits,
+    control: &crate::control::WalkerControl,
+) -> Result<IfcModel> {
     let policy = ExportContentPolicy::for_quality_mode(quality_mode);
     // Identity from PartAtom if present; fall back to the file name in
     // BasicFileInfo's original path.

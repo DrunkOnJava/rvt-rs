@@ -277,7 +277,7 @@ the wasm boundary:
 | `schema-parse` | 0, then 1 of 1 | Reading the schema |
 | `candidate-scan` | bytes of `Global/Latest` scanned, of its size | Scanning for elements |
 | `element-decode` | scan candidates decoded, of the candidates | Decoding elements |
-| `partition-scan` | streams read, of the streams; 0, then 1 of 1 where the walk does not know the number | Reading partition streams |
+| `partition-scan` | 0 with no total where the walk reaches the partitions; then each `Partitions/*` stream inflated for the first time, of all of them (the first pass over the partitions inflates every one, and the handle keeps them, #266); 1 of 1 where the walk ends | Reading partition streams |
 | `saved-graphics` | 0, then 1 of 1 | Reading saved graphics |
 | `saved-meshes` | elements meshed, of the elements | Drawing doors and windows from saved meshes |
 

@@ -176,6 +176,9 @@ pub struct RevitFile {
     /// production walk, the partition MVP and the IFC export (twice) each ran
     /// the same scan over every partition.
     arc_wall_scan: Option<CachedArcWallScan>,
+    /// Where an export in progress reports each `Partitions/*` stream it
+    /// inflates, and how many there are ([`Self::report_partition_inflates_to`]).
+    partition_progress: Option<(crate::control::WalkerControl, u64)>,
     /// Memoised data objects (RE-153) of each partition stream: the
     /// original symbols, railing types and MEP systems each scanned every
     /// partition for them.
@@ -433,6 +436,7 @@ impl RevitFile {
             phase_filter: None,
             walk: None,
             arc_wall_scan: None,
+            partition_progress: None,
             data_objects: std::collections::HashMap::new(),
             header_hits: std::collections::HashMap::new(),
             native_preamble: None,
@@ -554,7 +558,35 @@ impl RevitFile {
         let inflated = Arc::new(inflated);
         self.inflated
             .insert(name.to_string(), Arc::clone(&inflated));
+        if let Some((control, total)) = &self.partition_progress {
+            let done = self
+                .inflated
+                .keys()
+                .filter(|key| key.starts_with("Partitions/"))
+                .count() as u64;
+            control.report(
+                crate::control::Stage::PartitionScan,
+                done.min(*total),
+                Some(*total),
+            );
+        }
         Ok(inflated)
+    }
+
+    /// From now until [`Self::stop_reporting_partition_inflates`], reports to
+    /// `control` each time a `Partitions/*` stream is inflated for the first
+    /// time, as [`crate::control::Stage::PartitionScan`] with the number
+    /// inflated so far out of the number of partition streams. Whichever pass
+    /// reads the partitions first inflates them all, in turn, and on a project
+    /// that is most of an open's time, in passes that have no control of their
+    /// own.
+    pub(crate) fn report_partition_inflates_to(&mut self, control: &crate::control::WalkerControl) {
+        let total = self.partition_stream_names().len() as u64;
+        self.partition_progress = Some((control.clone(), total));
+    }
+
+    pub(crate) fn stop_reporting_partition_inflates(&mut self) {
+        self.partition_progress = None;
     }
 
     /// The data objects (RE-153) of partition stream `name`, each at its
@@ -754,23 +786,6 @@ impl RevitFile {
         revit_version: u32,
         limits: crate::walker::WalkerLimits,
     ) -> Arc<crate::partition_arc_walls::PartitionArcWallScan> {
-        self.memoised_arc_wall_scan_with_control(
-            revit_version,
-            limits,
-            &crate::control::WalkerControl::default(),
-        )
-    }
-
-    /// [`Self::memoised_arc_wall_scan`], reporting the scan's progress, one
-    /// report per partition stream, to `control` when it has to run. The scan
-    /// inflates every partition stream the first time, which is most of an
-    /// open's time on a project, so this is where the walk's progress is.
-    pub(crate) fn memoised_arc_wall_scan_with_control(
-        &mut self,
-        revit_version: u32,
-        limits: crate::walker::WalkerLimits,
-        control: &crate::control::WalkerControl,
-    ) -> Arc<crate::partition_arc_walls::PartitionArcWallScan> {
         if let Some((version, held, scan)) = &self.arc_wall_scan {
             if *version == revit_version && *held == limits {
                 return Arc::clone(scan);
@@ -780,7 +795,6 @@ impl RevitFile {
             self,
             revit_version,
             limits,
-            control,
         ));
         self.arc_wall_scan = Some((revit_version, limits, Arc::clone(&computed)));
         computed

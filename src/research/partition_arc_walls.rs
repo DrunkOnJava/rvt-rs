@@ -10,7 +10,6 @@
 use crate::arc_wall_record::{
     ArcWallRecord, ArcWallScanStatus, ArcWallTrailer, STANDARD_RECORD_MIN_SIZE,
 };
-use crate::control::{Stage, WalkerControl};
 use crate::element_record_storeys::elevation_storey_name;
 use crate::ifc::Storey;
 use crate::walker::{WalkerLimitHit, WalkerLimits};
@@ -131,7 +130,6 @@ pub(crate) fn compute_partition_arc_walls(
     rf: &mut RevitFile,
     revit_version: u32,
     limits: WalkerLimits,
-    control: &WalkerControl,
 ) -> PartitionArcWallScan {
     let status = ArcWallRecord::standard_decoder_status(revit_version);
     if !status.is_supported() {
@@ -144,17 +142,15 @@ pub(crate) fn compute_partition_arc_walls(
     }
 
     let partition_streams = rf.partition_stream_names();
-    let stream_total = partition_streams.len() as u64;
 
     let mut walls = Vec::new();
     let mut scanned_bytes = 0usize;
     let mut limit_hit = None;
-    for (index, partition) in partition_streams.into_iter().enumerate() {
+    for partition in partition_streams {
         if walls.len() >= limits.max_candidates {
             limit_hit.get_or_insert(WalkerLimitHit::MaxCandidates);
             break;
         }
-        control.report(Stage::PartitionScan, index as u64, Some(stream_total));
         let Ok(inflated) = rf.inflated_partition(&partition) else {
             continue;
         };
@@ -200,7 +196,6 @@ pub(crate) fn compute_partition_arc_walls(
         }
     }
 
-    control.report(Stage::PartitionScan, stream_total, Some(stream_total));
     PartitionArcWallScan {
         status,
         walls,

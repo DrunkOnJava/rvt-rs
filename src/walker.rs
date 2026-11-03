@@ -1523,7 +1523,7 @@ pub(crate) fn walk_shared(
     // Partition ArcWall merge (version-gated). Fail closed: only
     // records that pass the standard envelope decoder are emitted.
     if let Ok(version) = rf.layout_release() {
-        let scan = rf.memoised_arc_wall_scan_with_control(version, limits, control);
+        let scan = rf.memoised_arc_wall_scan(version, limits);
         for wall in &scan.walls {
             let typed = crate::elements::arc_wall::ArcWall::from_parts(wall.record, wall.trailer);
             let decoded = typed.to_decoded_element(&wall.partition, wall.offset);
