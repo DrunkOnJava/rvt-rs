@@ -1,0 +1,40 @@
+# Held-out Revit 2018 to 2021 projects with the same release's own IFC export, redistributable,
+# measured before any fix is made for them (#408, W5; found through #1261, reported by
+# @inevitable-co-ai; Griffin, 2026-11-03: hold them out, develop on Autodesk's sample projects).
+# Fetched with `-f holdout=true` by tools/ci/fetch-holdout-archives.sh into the held-out folder,
+# never committed, and, like the other held-out models, only their summary counts are uploaded
+# (tools/ci/scrub-holdout-results.sh), so that no rule is tuned on what they hold.
+#
+# - BIM-Speed demonstration projects (TU Berlin DepositOnce, "BIM-Speed Demonstration Projects -
+#   BIM and BEM models", doi:10.14279/depositonce-16441, CC BY 4.0, credit the BIM-Speed project):
+#   - Vitoria, "ALD26 Before" and "ALD26 Project": Revit 2018 (build 20190510_1515), exported by
+#     the same release's exporter 18.4 as IFC2X3 Coordination View 2.0. One building before and
+#     after its renovation.
+#   - Frigento, "Modello palazzo Testa_Cipriano": Revit 2020 (build 20190327_2315), exporter
+#     20.0.0.377, IFC4 Design Transfer View.
+#   - Gdynia, "RO_18" with "RUCHU OPORU 18.ifc": exporter 21.0.0.383 (Revit 2021), IFC2X3
+#     Coordination View 2.0; RO_18_IN and RO_18_EL in the same folder are its MEP models.
+#   - Warmond, the baseline model with "ar.ifc": exporter 21.0.0.383 (Revit 2021), IFC4, then
+#     passed through BIMServer.center's IFC Preprocessor, so its values are counted apart.
+# - BIM Whale's "AdvancedProject" (andrewisen/bim-whale-ifc-samples, MIT, "feel free to use these
+#   files however you like"): the Revit 2021 project its README links, and the IFC2X3 Coordination
+#   View 2.0 export by exporter 21.1.10.26 in the repository at b6d0d88a.
+#
+# An archive is pinned whole, and each member again after extraction under the name given here.
+# kind	name	url, or archive:path	sha256	bytes
+archive	vitoria	https://api-depositonce.tu-berlin.de/server/api/core/bitstreams/7d063d7a-bf97-4fce-8507-3b134f857ed1/content	38180210ba9eed3de4e1a844787b16619d8ed90ac454928b1f6a893c0ac2f8ba	64238147
+member	bimspeed-vitoria-before-2018.rvt	vitoria:01 BIM Models/01 BIM Baseline/ALD26 Before.rvt	d3e5b04631e67265927be98352021ed6290b33ae67d39b1b6727fd76f014ff6f	23699456
+member	bimspeed-vitoria-before-2018.ifc	vitoria:01 BIM Models/01 BIM Baseline/ALD26 Before.ifc	a42c6f3b0c9b7575d4c37c675155ff53c02571ca81357a87023f9da5fbf45181	10873068
+member	bimspeed-vitoria-project-2018.rvt	vitoria:01 BIM Models/02 BIM Projected/ALD26 Project.rvt	3a03039709075d500a77d9003ba1e874083b457966f3f0522833f68fc9fa331f	24465408
+member	bimspeed-vitoria-project-2018.ifc	vitoria:01 BIM Models/02 BIM Projected/ALD26 Project.ifc	e9eba3aca6eca89ef28d38d9b5cc70335621502feac1a81687ffa115bd84f830	11490734
+archive	frigento	https://api-depositonce.tu-berlin.de/server/api/core/bitstreams/9240c8ec-b402-427c-9d65-db4f2ff532c4/content	00a972ff32ffcca943641c8d257d452480dfcf37b5ebee7476857f702847a53d	26947814
+member	bimspeed-frigento-2020.rvt	frigento:01 BIM Models/01 BIM Baseline/Modello palazzo Testa_Cipriano.rvt	e5b53d3d2832f0d6f3f63d54c84d406997b60ef340e0343689e488e2419069d9	10780672
+member	bimspeed-frigento-2020.ifc	frigento:01 BIM Models/01 BIM Baseline/Modello palazzo Testa_Cipriano.ifc	f40710decb2cb893f5ffac5366863124a08eba1d6f55eab1b2e2384691624845	2244047
+archive	gdynia	https://api-depositonce.tu-berlin.de/server/api/core/bitstreams/8b9f3f20-def8-4c40-bbb8-38d260f57337/content	c7a77c68326aba76236ffa16003260ec106fbc2986ad9feaf8a76fa7a18c0d03	49830254
+member	bimspeed-gdynia-2021.rvt	gdynia:01 BIM Models/RO_18.rvt	7a7eedf76b37d8d55ad2f68fae6b1c9a937e6ea4dac28f8ee093dfdba5b152b0	7184384
+member	bimspeed-gdynia-2021.ifc	gdynia:01 BIM Models/RUCHU OPORU 18.ifc	0420e8ae3dd8892d2be348a2f7becd03f90fb45eea67a97a641d40ad32956dfb	1001998
+archive	warmond	https://api-depositonce.tu-berlin.de/server/api/core/bitstreams/a61de4fe-b02a-4a2d-b137-cf0b3f368156/content	97562039491e849512f68d7790d592d7f475b2d58ffd1be816dc4f2db0b99088	49144046
+member	bimspeed-warmond-2021.rvt	warmond:01 BIM Models/01 BIM Baseline/BIM-Speed_WarmondDemoSite_HTV2020_1edificio.rvt	171b1a6b7cc6312d63a4a4102656c697195978844af8eaba9e37c4f187cd91c1	15413248
+member	bimspeed-warmond-2021.ifc	warmond:01 BIM Models/01 BIM Baseline/ar.ifc	c53731aeaa0f96c50b38c41dde4ee979a49d3bfeb76f8178123e7cc45081bacd	4099545
+file	bimwhale-advanced-2021.rvt	https://www.dropbox.com/s/iifpj9ax7v4bakm/AdvancedProject_Revit21.rvt?dl=1	eba808f9dc16fa9bb6519dca836bde9820a84a3b9305b76968f236e9e6fff4b2	119123968
+file	bimwhale-advanced-2021.ifc	https://raw.githubusercontent.com/andrewisen/bim-whale-ifc-samples/b6d0d88a16b1/AdvancedProject/IFC/AdvancedProject.ifc	86b068a7ca6947e398c1daaa8bede9d31048c3990adc308429faeb56ee01db94	44337371

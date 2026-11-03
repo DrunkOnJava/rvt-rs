@@ -137,7 +137,7 @@ on:
         required: false
         default: false
       holdout:
-        description: Also score the held-out models against Revit's exports of them (research/holdout-models.tsv, no licence stated, fetched for the run; only their summary counts are uploaded)
+        description: Also score the held-out models against Revit's exports of them (research/holdout-models.tsv and research/holdout-archive-models.tsv, fetched for the run; only their summary counts are uploaded)
         type: boolean
         required: false
         default: false
@@ -316,6 +316,10 @@ jobs:
           set +e
           tools/ci/fetch-holdout-models.sh research/holdout-models.tsv models
           status=$?
+          if [ "$status" = 0 ]; then
+            tools/ci/fetch-holdout-archives.sh research/holdout-archive-models.tsv models
+            status=$?
+          fi
           set -e
           case "$status" in
             0) ;;
