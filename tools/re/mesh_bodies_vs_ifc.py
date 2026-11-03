@@ -8,8 +8,11 @@ for every element whose `BodySource` in the rvt-rs export is
 meshes both in each file's own site frame, in Revit's internal feet, and
 measures the volume and how far each body's vertices lie from the other's
 surface. Per class, and under it per Revit type: how many have Revit's
-volume within 1% and 0.01%, and every vertex of each body within 0.01 ft
-and 0.001 ft of the other's surface. Then the elements furthest off.
+volume within 1% and 0.01%, every vertex of each body within 0.01 ft
+and 0.001 ft of the other's surface, and "ref on ours": every tested vertex
+of Revit's body within 0.001 ft of rvt-rs's surface, which tells a mesh of
+the same surface from a mesh of another one where Revit's export is the
+coarser (RE-311). Then the elements furthest off.
 
 A class with more than 300 such bodies is scored on an even stride of 300 of
 them by Tag, and at most 400 vertices of each body are tested, so a file
@@ -83,7 +86,9 @@ def volume(triangles):
     """The enclosed volume, taken about the body's own centre: a mesh with
     cracks between its faces (each curved face is meshed on its own) has a
     signed volume that grows with its distance from the origin, as a closed
-    mesh's does not (RE-311)."""
+    mesh's does not (RE-311). The centre takes away only the origin's part:
+    a body missing a face still differs by its open boundary's area vector
+    times the centre's distance from it."""
     centre = triangles.reshape(-1, 3).mean(axis=0)
     a, b, c = triangles[:, 0] - centre, triangles[:, 1] - centre, triangles[:, 2] - centre
     return abs(np.einsum("ij,ij->i", a, np.cross(b, c)).sum() / 6.0)

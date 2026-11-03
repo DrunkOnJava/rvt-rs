@@ -263,10 +263,9 @@ impl ParametricSurface {
                         && half_angle < std::f64::consts::FRAC_PI_2 - 1e-6,
                     "invalid cone half angle"
                 );
-                ensure!(
-                    envelope[0][1] * envelope[1][1] > 0.,
-                    "cone face spans its apex"
-                );
+                // Only `v` above the apex is measured (0.81 to 0.93, RE-311):
+                // a face across the apex or on the far nappe is refused.
+                ensure!(envelope[0][1] > 0., "cone face not above its apex");
                 Ok(Self::ConeSurf {
                     apex: p(&s.fields["m_center"], "cone apex")?,
                     x,

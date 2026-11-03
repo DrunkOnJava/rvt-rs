@@ -1069,7 +1069,8 @@ prints it from any installed build.
   Revit 2008 to 2014 file an unsupported version in the viewer (#1247,
   #1266). With `--saved-meshes` it draws more bodies, not all of them
   Revit's (RE1 Plumbing's new pipe fittings are 1.44 to 1.47 of Revit's
-  volume). Its door-type change measures on no file here. Not every case
+  volume; RE-311 found that figure the scorer's, taken about the file's
+  origin, and the tees 1.14 about their own centre). Its door-type change measures on no file here. Not every case
   #1247 reported is fixed; `[0.12.2]` in [`CHANGELOG.md`](../CHANGELOG.md)
   says which are not.
 - **v0.12.1** (2026-11-01) makes exports of Revit 2015 to
