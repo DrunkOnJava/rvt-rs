@@ -93,6 +93,8 @@ The door still `$` is 1746275, which Revit writes 0 by 0 and whose symbol has no
 - Height. `OverallHeight` is as RE-218 left it; the boxes' Z extent against Revit's height was not tried.
 - Releases other than 2024 and 2025 (`CUT_LOOP_REVIT_VERSIONS`).
 - The meaning of the boxes and of their view-direction filters, which is inferred from Revit's widths and not documented.
+- Exposure outside the office. The 31 measured models that write the same IFC, and the 18 held-out models, have no door or window the rule reaches but RE1's 445975, so they show it changes nothing there, not that it is right there. The `GInstance` and `GComponentRef` exclusion never fires on the office, so it is untested.
+- Edges wider than the record box. No measured symbol's edges reach past its instance's record box along the width; where they would by more than 0.001 ft, the record box's width is kept (`SYMBOL_WIRE_BOX_SLACK_FEET`, added after review, 2026-11-03), so a stray set of lines of no category cannot widen a door past its box.
 
 ## 8. Reproduce
 
