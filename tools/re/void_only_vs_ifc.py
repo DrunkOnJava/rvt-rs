@@ -14,7 +14,11 @@ family) and finds each ElementId in Revit's export:
 
 It prints the count of each outcome for types with a map (`n`), types with a
 value block and no map (`0`), types with no value block (`-`) and elements
-with no type (`?`).
+with no type (`?`). Where the probe prints more columns
+(`probe_re299_unset_map_doors`: all-unset map, saved triangles, family
+forms, native map), it also prints the counts of each map count by those
+columns, the saved triangles as `mesh` or `-` and the native map as
+`none`, `unset` (every entry unset), `mixed` or `named` (no entry unset).
 
 Usage:
 
@@ -48,6 +52,7 @@ def main(argv):
         o.Tag for o in f.by_type("IfcOpeningElement") if o.Tag and o.id() not in filled
     }
     table = collections.Counter()
+    extra = collections.Counter()
     rows = []
     for line in open(args[0], encoding="utf-8"):
         parts = line.rstrip("\n").split("\t")
@@ -63,11 +68,22 @@ def main(argv):
         else:
             outcome = "absent"
         table[(materials, outcome)] += 1
-        rows.append((materials, outcome, tag, cls, family))
+        more = parts[5:9]
+        if more:
+            if len(more) > 1:
+                more[1] = "-" if more[1] == "-" else "mesh"
+            if len(more) > 3 and more[3] != "-":
+                n, unset = (int(x) for x in more[3].split("/"))
+                more[3] = "none" if n == 0 else "unset" if unset == n else "mixed" if unset else "named"
+            extra[(materials, " ".join(more), outcome)] += 1
+        rows.append((materials, outcome, tag, cls, family, *parts[5:9]))
     for materials in ("n", "0", "-", "?"):
         counts = {o: table[(materials, o)] for o in ("element", "opening only", "absent")}
         if any(counts.values()):
             print(f"type map materials {materials}: {counts}")
+    for key in sorted({(m, k) for m, k, _ in extra}):
+        counts = {o: extra[(*key, o)] for o in ("element", "opening only", "absent")}
+        print(f"type map materials {key[0]}, unset map / saved / forms / native map {key[1]}: {counts}")
     if listing:
         for row in sorted(rows):
             if row[0] != "n" or row[1] != "element":
