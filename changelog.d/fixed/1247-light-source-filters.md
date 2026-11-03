@@ -5,4 +5,5 @@
   export. On the BIM4LCA office 43 more bodies are drawn from their saved
   meshes, all exact to 0.001 ft against Revit's export, as are RE1
   Electrical's 2. Snowdon Towers' electrical sample draws 1,324 of its
-  1,465 bodies from saved meshes instead of 907 (#1247, RE-300).
+  1,465 bodies from saved meshes instead of 907; it has no Revit export,
+  so those are counted, not scored (#1247, RE-300).
