@@ -399,13 +399,12 @@ pub(crate) fn plane_frame(g: &ObjectGraph, plane: usize) -> Result<([f64; 3], [f
 /// A curved face's UV points along an edge it shares with a plane, where the
 /// edge is not isoparametric on it (#1247, RE-302). Revit's samples are
 /// sparse, and the straight UV line between two of them strays from the
-/// plane by up to 0.01 ft, so where the line crosses one of `knots` (U, and
-/// V where given) the crossing is moved along that grid line onto the plane
-/// by Newton's method: onto the true edge, where the surface meets the plane.
-/// The curved face is cut there and the plane takes the same points. A
-/// crossing that does not converge or moves farther than its segment is long
-/// fails the edge, as does a line between two points that still crosses a
-/// grid line once both axes are cut.
+/// plane by up to 0.01 ft, so the edge is traced onto the plane between its
+/// samples, and cut where the trace crosses one of `knots` (U, and V where
+/// given), each crossing solved on its grid line: points on the true edge,
+/// where the surface meets the plane. The curved face is cut there and the
+/// plane takes the same points. A point with no root near it fails the edge,
+/// as does a line between two points that still crosses a grid line.
 pub(crate) fn edge_on_plane(
     samples: &[[f64; 2]],
     knots: [Option<&[f64]>; 2],
@@ -416,30 +415,52 @@ pub(crate) fn edge_on_plane(
         let q = eval(p)?;
         Ok((0..3).map(|k| (q[k] - origin[k]) * normal[k]).sum())
     };
-    let distance =
-        |a: [f64; 3], b: [f64; 3]| (0..3).map(|k| (a[k] - b[k]).powi(2)).sum::<f64>().sqrt();
     let crossed = |knots: &[f64], a: f64, b: f64| {
         let first = knots.partition_point(|&k| k <= a.min(b) + 1e-12);
         let last = knots.partition_point(|&k| k < a.max(b) - 1e-12);
         first..last.max(first)
     };
-    // One axis at a time: U crossings first, ordered along U, then V crossings
-    // within each U cell, ordered along V. Where the true edge runs one way in
-    // U and in V between two samples, that is its own order; crossings of both
-    // axes ordered along the straight line between samples are not, where the
-    // edge strays from it by more than the grid's spacing.
-    let mut points = samples.to_vec();
-    ensure!(!points.is_empty(), "empty shared edge");
-    for (axis, knots) in knots.iter().enumerate() {
-        let Some(knots) = knots else {
+    // Trace the true edge: each line between two samples is divided in
+    // `TRACE`, and each point moved across the line onto the plane, so the
+    // traced path keeps the edge's own order even where the edge turns back
+    // in U or V between samples.
+    const TRACE: usize = 8;
+    ensure!(!samples.is_empty(), "empty shared edge");
+    ensure!(
+        samples.len().saturating_mul(TRACE) <= 4_000_000,
+        "shared curved edge refinement budget exceeded"
+    );
+    let mut path = vec![samples[0]];
+    for pair in samples.windows(2) {
+        let (a, b) = (pair[0], pair[1]);
+        let d = [b[0] - a[0], b[1] - a[1]];
+        let span = d[0].hypot(d[1]);
+        if span <= 1e-12 {
             continue;
-        };
-        let free = 1 - axis;
-        let mut next = vec![points[0]];
-        for pair in points.windows(2) {
-            let (a, b) = (pair[0], pair[1]);
-            let chord = distance(eval(a)?, eval(b)?);
-            let mut cuts = Vec::new();
+        }
+        let n = [-d[1] / span, d[0] / span];
+        for i in 1..TRACE {
+            let t = i as f64 / TRACE as f64;
+            let m = [a[0] + t * d[0], a[1] + t * d[1]];
+            let across = |s: f64| [m[0] + s * n[0], m[1] + s * n[1]];
+            let s = nearest_root(&|s| height(across(s)), -span, span, 0.)?
+                .context("true edge strays from its samples")?;
+            path.push(across(s));
+        }
+        path.push(b);
+    }
+    // Cut the traced path where it crosses a grid line, each crossing solved
+    // on that grid line within a line's length of the traced line.
+    let mut points = vec![path[0]];
+    for pair in path.windows(2) {
+        let (a, b) = (pair[0], pair[1]);
+        let reach = (b[0] - a[0]).hypot(b[1] - a[1]) + 1e-9;
+        let mut cuts = Vec::new();
+        for (axis, knots) in knots.iter().enumerate() {
+            let Some(knots) = knots else {
+                continue;
+            };
+            let free = 1 - axis;
             for &k in &knots[crossed(knots, a[axis], b[axis])] {
                 let t = (k - a[axis]) / (b[axis] - a[axis]);
                 let at = |s: f64| {
@@ -448,40 +469,19 @@ pub(crate) fn edge_on_plane(
                     p
                 };
                 let guess = a[free] + t * (b[free] - a[free]);
-                let mut s = guess;
-                let mut solved = false;
-                for _ in 0..32 {
-                    let f = height(at(s))?;
-                    if f.abs() <= 1e-10 {
-                        solved = true;
-                        break;
-                    }
-                    let h = 1e-7 * s.abs().max(1.);
-                    let slope = (height(at(s + h))? - height(at(s - h))?) / (2. * h);
-                    ensure!(
-                        slope.is_finite() && slope.abs() > 1e-12,
-                        "true edge crossing has no slope"
-                    );
-                    s -= f / slope;
-                    ensure!(s.is_finite(), "true edge crossing diverges");
-                }
-                ensure!(solved, "true edge crossing does not converge");
-                ensure!(
-                    distance(eval(at(s))?, eval(at(guess))?) <= chord,
-                    "true edge crossing leaves its segment"
-                );
+                let s = nearest_root(&|s| height(at(s)), guess - reach, guess + reach, guess)?
+                    .context("true edge crossing is not near its line")?;
                 cuts.push((t, at(s)));
             }
-            ensure!(
-                next.len() + cuts.len() <= 4_000_000,
-                "shared curved edge refinement budget exceeded"
-            );
-            cuts.sort_by(|p, q| p.0.total_cmp(&q.0));
-            cuts.dedup_by(|p, q| (p.0 - q.0).abs() <= 1e-12);
-            next.extend(cuts.into_iter().map(|(_, p)| p));
-            next.push(b);
         }
-        points = next;
+        ensure!(
+            points.len() + cuts.len() <= 4_000_000,
+            "shared curved edge refinement budget exceeded"
+        );
+        cuts.sort_by(|p, q| p.0.total_cmp(&q.0));
+        cuts.dedup_by(|p, q| (p.0 - q.0).abs() <= 1e-12);
+        points.extend(cuts.into_iter().map(|(_, p)| p));
+        points.push(b);
     }
     // The mesher cuts the straight UV line between two points wherever it
     // crosses a grid line, and such a cut would be off the true edge.
@@ -496,6 +496,58 @@ pub(crate) fn edge_on_plane(
         }
     }
     Ok(points)
+}
+
+/// The root of `f` on `[lo, hi]` nearest `near`: the sign change nearest it
+/// among 32 equal steps, bisected; `None` where `f` keeps one sign.
+fn nearest_root(
+    f: &dyn Fn(f64) -> Result<f64>,
+    lo: f64,
+    hi: f64,
+    near: f64,
+) -> Result<Option<f64>> {
+    const STEPS: usize = 32;
+    let xs: Vec<f64> = (0..=STEPS)
+        .map(|i| lo + (hi - lo) * i as f64 / STEPS as f64)
+        .collect();
+    let fs = xs.iter().map(|&x| f(x)).collect::<Result<Vec<_>>>()?;
+    let mut best: Option<(f64, usize)> = None;
+    for i in 0..STEPS {
+        if fs[i] == 0. || fs[i] * fs[i + 1] < 0. || (i + 1 == STEPS && fs[STEPS] == 0.) {
+            let distance = (0.5 * (xs[i] + xs[i + 1]) - near).abs();
+            if best.is_none_or(|(d, _)| distance < d) {
+                best = Some((distance, i));
+            }
+        }
+    }
+    let Some((_, i)) = best else {
+        return Ok(None);
+    };
+    let (mut a, mut b) = (xs[i], xs[i + 1]);
+    let (mut fa, fb) = (fs[i], fs[i + 1]);
+    if fa == 0. {
+        return Ok(Some(a));
+    }
+    if fb == 0. {
+        return Ok(Some(b));
+    }
+    for _ in 0..200 {
+        let m = 0.5 * (a + b);
+        if m <= a || m >= b {
+            break;
+        }
+        let fm = f(m)?;
+        if fm == 0. {
+            return Ok(Some(m));
+        }
+        if (fm < 0.) == (fa < 0.) {
+            a = m;
+            fa = fm;
+        } else {
+            b = m;
+        }
+    }
+    Ok(Some(0.5 * (a + b)))
 }
 
 /// A curved face's samples along one of its loop's edges, moved onto the
