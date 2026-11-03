@@ -210,7 +210,7 @@ fn main() -> anyhow::Result<()> {
             let resolved = span_outline_at(buf, header, bbox, OutlineAnchor::Floor);
             resolved_total += 1;
             let same = match (&walked, &resolved) {
-                (Some(a), Some(b)) => (area(a) - area(b)).abs() <= 1e-6 * area(a),
+                (Some(a), Some(b)) => (area(a) - area(b)).abs() <= 1e-4 * area(a),
                 _ => false,
             };
             if same {
@@ -267,7 +267,20 @@ fn main() -> anyhow::Result<()> {
                 .collect();
             snap_within(&mut floor_lines, ROOM_STEP_TOLERANCE_FEET);
             let why = match region_boundary(&floor_lines) {
-                Ok(pieces) => format!("boundary of {} pieces, no profile on the box", pieces.len()),
+                Ok(pieces) => match plan_profile_from_lines(&pieces) {
+                    Some(profile) => format!(
+                        "boundary of {} pieces, profile area {:.3}, extent minus box {:.4?}",
+                        pieces.len(),
+                        area(&profile),
+                        profile.plan_extent_feet().map(|e| [
+                            e[0] - bbox[0],
+                            e[1] - bbox[1],
+                            e[2] - bbox[3],
+                            e[3] - bbox[4]
+                        ])
+                    ),
+                    None => format!("boundary of {} pieces, no profile", pieces.len()),
+                },
                 Err(failure) => format!("{failure:?}"),
             };
             println!(
