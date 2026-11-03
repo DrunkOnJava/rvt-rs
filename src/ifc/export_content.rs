@@ -4334,11 +4334,11 @@ pub const SPACE_OUTLINE_NONE: &str = "none";
 
 /// [`SPACE_OUTLINE_SOURCE_PROPERTY`] of an Area drawn as the region its
 /// scheme's boundary lines enclose around its point, from its Level to the
-/// next storey (RE-317).
+/// Level above, when both are building stories (RE-317).
 pub const SPACE_OUTLINE_AREA_BOUNDARY: &str = "area_boundary";
 
-/// `BodyHeightSource` of an Area's body: from its Level up to the next
-/// building-story Level (RE-317).
+/// `BodyHeightSource` of an Area's body: from its Level up to the Level above
+/// it, when both are building stories (RE-317).
 pub const AREA_BODY_HEIGHT_SOURCE: &str = "area_level_to_next_storey";
 
 /// Property of an Area's [`ELEMENT_RECORD_PROPERTY_SET`] that says why it has no

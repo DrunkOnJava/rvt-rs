@@ -323,27 +323,43 @@ impl Arrangement {
         }
 
         let count = nodes.points.len();
-        loop {
-            let mut degree = vec![0usize; count];
-            for &(u, v) in edges.keys() {
-                degree[u] += 1;
-                degree[v] += 1;
+        // Leave out the lines with a free end, and then those that the removal
+        // frees, by a worklist of points with one line left: each line is
+        // removed once, so the pass is linear in the lines.
+        let candidates: Vec<((usize, usize), u32)> =
+            edges.iter().map(|(&ends, &id)| (ends, id)).collect();
+        let mut alive = vec![true; candidates.len()];
+        let mut degree = vec![0usize; count];
+        let mut incident: Vec<Vec<usize>> = vec![Vec::new(); count];
+        for (index, &((u, v), _)) in candidates.iter().enumerate() {
+            degree[u] += 1;
+            degree[v] += 1;
+            incident[u].push(index);
+            incident[v].push(index);
+        }
+        let mut free: Vec<usize> = (0..count).filter(|&node| degree[node] == 1).collect();
+        while let Some(node) = free.pop() {
+            if degree[node] != 1 {
+                continue;
             }
-            let dead: Vec<(usize, usize)> = edges
-                .keys()
-                .copied()
-                .filter(|&(u, v)| degree[u] == 1 || degree[v] == 1)
-                .collect();
-            if dead.is_empty() {
-                break;
-            }
-            for key in dead {
-                edges.remove(&key);
+            let Some(&edge) = incident[node].iter().find(|&&index| alive[index]) else {
+                continue;
+            };
+            alive[edge] = false;
+            let ((u, v), _) = candidates[edge];
+            let other = if u == node { v } else { u };
+            degree[node] -= 1;
+            degree[other] -= 1;
+            if degree[other] == 1 {
+                free.push(other);
             }
         }
-
-        let edge_list: Vec<(usize, usize, u32)> =
-            edges.iter().map(|(&(u, v), &id)| (u, v, id)).collect();
+        let edge_list: Vec<(usize, usize, u32)> = candidates
+            .iter()
+            .zip(&alive)
+            .filter(|&(_, &kept)| kept)
+            .map(|(&((u, v), id), _)| (u, v, id))
+            .collect();
         let origin = |half: usize| {
             let (u, v, _) = edge_list[half / 2];
             if half.is_multiple_of(2) { u } else { v }

@@ -33,7 +33,8 @@
 //! # The body (RE-317)
 //!
 //! Revit's export draws each area space as an `IfcExtrudedAreaSolid` of the
-//! Area's boundary, from its Level up to the next storey. The boundary is not
+//! Area's boundary, from its Level up to the Level above, when both are
+//! building stories. The boundary is not
 //! in the Area. It is the region around the Area's point that the lines of
 //! its area scheme on its Level enclose ([`crate::partition_area_boundaries`]),
 //! and the point is two `f64`s at [`AREA_POINT_OFFSET`] in the payload of the
@@ -47,9 +48,15 @@
 //! - An Area has a body only where its point lies in exactly one region of
 //!   its scheme's lines on its Level, the lines it names bound that region,
 //!   every line of the scheme on the Level is a straight line along the plan
-//!   axes, and every declared area boundary line of the file was read and
-//!   placed on a Level. Two Areas with one region have none. Otherwise it has
-//!   none, as before, and says why in [`AREA_BODY_REFUSAL_FIELD`].
+//!   axes and in the primary design option, and every declared area boundary
+//!   line of the file was read and placed on a Level. The lines its record
+//!   names must be declared lines of that scheme on that Level whose copies
+//!   agree. An Area whose region another placed Area of its scheme and Level
+//!   shares has none, whatever stops the other from being drawn. Otherwise it
+//!   has none, as before, and says why in [`AREA_BODY_REFUSAL_FIELD`].
+//! - A line in a non-primary design option makes its group unreadable: no area
+//!   boundary line of the office or of Autodesk's 2024 samples has a design
+//!   option, so how Revit treats one is not measured.
 //! - The height is the distance to the Level above, where that Level and the
 //!   Area's own are building stories and no other Level lies between them or at
 //!   either elevation. Revit's exporter takes the Level's "story above" first
@@ -111,7 +118,7 @@ pub const AREA_BODY_HEIGHT_FIELD: &str = "m_area_body_height";
 /// How far a boundary line's height may lie from its Level's, feet.
 pub const AREA_LEVEL_TOLERANCE_FEET: f64 = 1e-3;
 
-/// The least distance to the next storey that gives an Area a body, feet.
+/// The least distance to the Level above that gives an Area a body, feet.
 pub const AREA_MIN_HEIGHT_FEET: f64 = 1e-3;
 
 /// The lowest ElementId read as an area boundary line in an Area's record.
@@ -131,19 +138,23 @@ pub const REFUSED_NO_LINES: &str = "no_boundary_lines";
 pub const REFUSED_NO_POINT: &str = "point_not_read";
 /// The Area's record does not name one Level and one area scheme.
 pub const REFUSED_UNNAMED: &str = "level_or_scheme_not_named";
-/// The lines the Area's record names are not in its scheme on its Level.
+/// A line the Area's record names is not a declared line of its scheme on its
+/// Level that was read: it has no Level or scheme, its copies disagree, or it is
+/// in a non-primary design option.
 pub const REFUSED_LINES: &str = "named_lines_not_in_scheme_and_level";
 /// The Area's Level and the Level above it are not both building stories, or
 /// another Level lies at the Area's.
 pub const REFUSED_HEIGHT: &str = "next_storey_not_proven";
 /// The lines of the Area's scheme on its Level cannot be read as an arrangement
-/// of straight lines along the axes, or one of them may be missing.
+/// of straight lines along the axes, one of them may be missing, or one is in a
+/// non-primary design option.
 pub const REFUSED_GROUP: &str = "boundary_lines_not_readable";
 /// The Area's point lies in no single region of the lines.
 pub const REFUSED_REGION: &str = "point_in_no_single_region";
 /// The lines the Area's record names do not bound its region.
 pub const REFUSED_OFF_REGION: &str = "named_lines_not_on_region";
-/// Another Area of the same scheme and Level has the same region.
+/// Another placed Area of the same scheme and Level has the same region,
+/// whether or not that Area is drawn.
 pub const REFUSED_REDUNDANT: &str = "two_areas_one_region";
 
 /// One Area record as its latest partition holds it.
@@ -270,6 +281,11 @@ struct BoundaryLines {
     seen: BTreeSet<u32>,
     /// A line whose height is not a number: it can be placed on no Level.
     unplaceable: bool,
+    /// The groups that hold a line in a non-primary design option. Revit's
+    /// handling of such a line is not measured (no area boundary line of the
+    /// office or of Autodesk's 2024 samples has a design option), so the group
+    /// is not read.
+    option_groups: BTreeSet<(u32, u32)>,
 }
 
 /// What an Area's body is: its region, the base and the height.
@@ -324,12 +340,6 @@ fn boundary_lines(
     };
     for record in records {
         out.seen.insert(record.element_id);
-        if record
-            .design_option
-            .is_some_and(|option| options.is_non_primary(option))
-        {
-            continue;
-        }
         let [x0, y0, z0, x1, y1, z1] = record.bbox_feet;
         let finite = record.bbox_feet.iter().all(|v| v.is_finite());
         let key = line_key(
@@ -337,6 +347,19 @@ fn boundary_lines(
             surroundings.level_ids,
             surroundings.scheme_ids,
         );
+        if record
+            .design_option
+            .is_some_and(|option| options.is_non_primary(option))
+        {
+            if let Some(key) = key {
+                out.option_groups.insert(key);
+            } else if z0.is_finite() {
+                out.stray_heights.push(z0);
+            } else {
+                out.unplaceable = true;
+            }
+            continue;
+        }
         let usable = finite
             && (z1 - z0).abs() <= AREA_LEVEL_TOLERANCE_FEET
             && record.is_placed_instance()
@@ -489,6 +512,9 @@ fn group_arrangement(
     {
         return None;
     }
+    if lines.option_groups.contains(&key) {
+        return None;
+    }
     let ids = lines.groups.get(&key)?;
     let mut group = Vec::with_capacity(ids.len());
     for id in ids {
@@ -520,17 +546,33 @@ type GroupKey = (u32, u32);
 /// A scheme on a Level and the corners of a region in it, by their bits.
 type RegionKey = (GroupKey, Vec<(u64, u64)>);
 
-/// The body of one Area: the region its point lies in among the lines of its
-/// scheme on its Level, where the lines its record names bound that region,
-/// from its Level to the next storey (RE-317); or why it has none.
-fn draw_area(
+/// Where an Area's point lies among the lines of its scheme on its Level.
+struct Located {
+    key: GroupKey,
+    /// The region, or why there is none: the lines cannot be read, or the point
+    /// is in no single region of them.
+    face: Result<AreaFace, &'static str>,
+}
+
+/// The elevation of the Level `level`, feet.
+fn level_elevation(levels: &[PartitionLevel], level: u32) -> Option<f64> {
+    let elevation = levels
+        .iter()
+        .find(|candidate| candidate.element_id == level)?
+        .elevation_feet;
+    elevation.is_finite().then_some(elevation)
+}
+
+/// The region of one Area, whatever else stops it from being drawn: its point
+/// among the lines of its scheme on its Level. `Err` where it has no point, or
+/// its Level or scheme is not named, or its Level's elevation is not known.
+fn locate(
     record: &AreaRecord,
     point: Option<(f64, f64)>,
     lines: &BoundaryLines,
-    line_ids: &BTreeSet<u32>,
     surroundings: &Surroundings<'_>,
     arrangements: &mut BTreeMap<GroupKey, Option<Arrangement>>,
-) -> Result<(GroupKey, AreaBody), &'static str> {
+) -> Result<Located, &'static str> {
     let point = point.ok_or(REFUSED_NO_POINT)?;
     let (Some(level), Some(scheme)) = (
         named_one(&record.bytes, surroundings.level_ids),
@@ -539,39 +581,57 @@ fn draw_area(
         return Err(REFUSED_UNNAMED);
     };
     let key = (level, scheme);
-    let named_lines = named_ids(&record.bytes, line_ids, AREA_LINE_ID_FLOOR);
-    let named_in_group = named_lines
-        .iter()
-        .all(|line| lines.by_id.get(line).is_some_and(|held| held.key == key));
+    let base_feet = level_elevation(surroundings.levels, level).ok_or(REFUSED_HEIGHT)?;
+    let face = match arrangements
+        .entry(key)
+        .or_insert_with(|| group_arrangement(lines, key, base_feet))
+    {
+        Some(arrangement) => arrangement.face_at(point).ok_or(REFUSED_REGION),
+        None => Err(REFUSED_GROUP),
+    };
+    Ok(Located { key, face })
+}
+
+/// The body of one Area: its region, where the lines its record names are all
+/// declared lines of its scheme on its Level, are not conflicted and bound that
+/// region, from its Level up to the Level above (RE-317); or why it has none.
+fn draw_area(
+    record: &AreaRecord,
+    located: &Located,
+    lines: &BoundaryLines,
+    declared_lines: &BTreeSet<u32>,
+    surroundings: &Surroundings<'_>,
+) -> Result<AreaBody, &'static str> {
+    let named_lines = named_ids(&record.bytes, declared_lines, AREA_LINE_ID_FLOOR);
+    let named_in_group = named_lines.iter().all(|line| {
+        !lines.conflicted.contains(line)
+            && lines
+                .by_id
+                .get(line)
+                .is_some_and(|held| held.key == located.key)
+    });
     if named_lines.is_empty() || !named_in_group {
         return Err(REFUSED_LINES);
     }
     let (base_feet, height_feet) =
-        level_and_storey_height(surroundings.levels, level).ok_or(REFUSED_HEIGHT)?;
-    let arrangement = arrangements
-        .entry(key)
-        .or_insert_with(|| group_arrangement(lines, key, base_feet))
-        .as_ref()
-        .ok_or(REFUSED_GROUP)?;
-    let face = arrangement.face_at(point).ok_or(REFUSED_REGION)?;
+        level_and_storey_height(surroundings.levels, located.key.0).ok_or(REFUSED_HEIGHT)?;
+    let face = located.face.as_ref().map_err(|reason| *reason)?;
     if !named_lines.is_subset(&face.line_ids) {
         return Err(REFUSED_OFF_REGION);
     }
-    Ok((
-        key,
-        AreaBody {
-            face,
-            base_feet,
-            height_feet,
-        },
-    ))
+    Ok(AreaBody {
+        face: face.clone(),
+        base_feet,
+        height_feet,
+    })
 }
 
 /// The body of each of `placed` that has one, and the reason for each that has
 /// none (RE-317). An Area of a file with a declared area boundary line that
 /// was not read, or cannot be placed on a Level, has none, since that line may
-/// belong to any group. Two Areas of one scheme and Level with the same region
-/// have none: Revit's second, redundant Area has no area of its own.
+/// belong to any group. An Area whose region another placed Area of its scheme
+/// and Level shares has none, whatever stops the other from being drawn:
+/// Revit's second, redundant Area has no area of its own.
 fn area_bodies(
     rf: &mut RevitFile,
     revit_version: u32,
@@ -603,34 +663,29 @@ fn area_bodies(
         return out;
     }
     let points = area_points(rf, placed);
-    let line_ids: BTreeSet<u32> = lines.by_id.keys().copied().collect();
     let mut arrangements: BTreeMap<GroupKey, Option<Arrangement>> = BTreeMap::new();
-    let mut candidates: Vec<(u32, GroupKey, AreaBody)> = Vec::new();
+    let mut located: BTreeMap<u32, Result<Located, &'static str>> = BTreeMap::new();
     for (&id, record) in placed {
         let point = points.get(&id).copied();
-        match draw_area(
-            record,
-            point,
-            &lines,
-            &line_ids,
-            surroundings,
-            &mut arrangements,
-        ) {
-            Ok((key, body)) => candidates.push((id, key, body)),
-            Err(reason) => {
-                out.refused.insert(id, reason);
-            }
-        }
+        located.insert(
+            id,
+            locate(record, point, &lines, surroundings, &mut arrangements),
+        );
     }
     let mut sharing: BTreeMap<RegionKey, Vec<u32>> = BTreeMap::new();
-    for (id, key, body) in &candidates {
-        let outline = body
-            .face
+    for (&id, place) in &located {
+        let Ok(place) = place else {
+            continue;
+        };
+        let Ok(face) = &place.face else {
+            continue;
+        };
+        let outline = face
             .outer
             .iter()
             .map(|p| (p.0.to_bits(), p.1.to_bits()))
             .collect();
-        sharing.entry((*key, outline)).or_default().push(*id);
+        sharing.entry((place.key, outline)).or_default().push(id);
     }
     let redundant: BTreeSet<u32> = sharing
         .values()
@@ -638,11 +693,22 @@ fn area_bodies(
         .flatten()
         .copied()
         .collect();
-    for (id, _, body) in candidates {
-        if redundant.contains(&id) {
-            out.refused.insert(id, REFUSED_REDUNDANT);
-        } else {
-            out.drawn.insert(id, body);
+    for (&id, record) in placed {
+        let result = match located.get(&id) {
+            Some(Ok(place)) => draw_area(record, place, &lines, declared_lines, surroundings),
+            Some(Err(reason)) => Err(*reason),
+            None => Err(REFUSED_NO_POINT),
+        };
+        match result {
+            Ok(_) if redundant.contains(&id) => {
+                out.refused.insert(id, REFUSED_REDUNDANT);
+            }
+            Ok(body) => {
+                out.drawn.insert(id, body);
+            }
+            Err(reason) => {
+                out.refused.insert(id, reason);
+            }
         }
     }
     out

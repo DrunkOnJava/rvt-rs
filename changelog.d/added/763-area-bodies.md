@@ -9,8 +9,9 @@
   keeps no body, as before, and says why in
   `RvtElementRecordGeometry.AreaBodyRefusal` and `exported.area_body_refusals`,
   wherever its boundary is not proven: a boundary line that is not straight
-  along the plan axes, or that was not read, a point in no single region, two
-  Areas with one region, or a Level that is not a building story. Not
+  along the plan axes, that was not read, or that is in a non-primary design
+  option, a point in no single region, two Areas that share a region, or a
+  Level that is not a building story. Not
   measured: the top storey (no Level above), Levels that are not building
   stories, a Level whose "Story Above" is not the next Level up (never read),
   Areas bounded partly by walls, and releases other than 2024.
