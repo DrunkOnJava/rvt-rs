@@ -1052,10 +1052,11 @@ two fields are now pinned and two exports are byte-identical, as
 In the browser the same change takes the 33.7 MB Core Interior demo from
 about 28 s to **about 3 s** of decode, measured live on the deployed
 site (6.7 s including the 32 MB download). The viewer's loading card
-derives its "about N s" hint from that measurement —
+opened with an "about N s" hint from that measurement —
 `DECODE_BYTES_PER_SECOND` is 11 MB/s since #271, up from the 1.15 MB/s
-the pre-#266 figure implied — and the progress bar stays indeterminate
-because the decoder cannot report real progress.
+the pre-#266 figure implied. It is a laptop's figure, and since #1195 the
+card shows the decoder's own progress as soon as it reports (see
+[`viewer-api.md`](viewer-api.md#decode-progress)).
 
 ## Capability Matrix
 

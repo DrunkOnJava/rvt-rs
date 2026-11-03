@@ -519,6 +519,8 @@ interface LoadEvent {
 }
 
 let loadStartedAt = 0;
+/** What the card says while a stage has no count to fill the bar with: the size-derived estimate. */
+let loadExpectationText = '';
 let loadTimer: number | null = null;
 let loadEvents: LoadEvent[] = [];
 let loadStage: string | null = null;
@@ -555,7 +557,7 @@ function onDecodeStage(stage: string, done: number, total: number | null, memory
   loadHintEl.textContent =
     counted && info
       ? [`${Math.round((done / total) * 100)}%`, info.count(done, total)].filter(Boolean).join(' · ')
-      : '';
+      : loadExpectationText;
   // #status is a live region: say a stage once, not each percent of it.
   if (stage !== loadStage || after) setStatus(step);
   loadStage = stage;
@@ -591,7 +593,8 @@ function startLoadOverlay(file: File): void {
   delete statusEl.dataset.loadProgress;
   setLoadFraction(null);
   loadStepEl.textContent = `Opening ${file.name}`;
-  loadHintEl.textContent = loadExpectation(file.size);
+  loadExpectationText = loadExpectation(file.size);
+  loadHintEl.textContent = loadExpectationText;
   loadElapsedEl.textContent = '0 s elapsed';
   loadOverlayEl.classList.remove('hidden');
   showMemoryWarning(file);
@@ -1018,6 +1021,12 @@ async function loadBytes(file: File, limits?: OpenLimitsOptions): Promise<void> 
     bytes = new Uint8Array(await file.arrayBuffer());
   } catch (err) {
     const message = (err as Error).message ?? String(err);
+    // A file the tab has no memory to hold is the same failure as one the
+    // decoder has no memory to open.
+    if (/allocation failed|out of memory|invalid array length/i.test(message)) {
+      showTooLarge(file, { wasmMemoryBytes: 0, stage: null, detail: message });
+      return;
+    }
     stopLoadOverlay();
     clearDemoCardBusy();
     setStatus(`Error: ${message}`);
@@ -1083,7 +1092,7 @@ async function loadBytes(file: File, limits?: OpenLimitsOptions): Promise<void> 
       loadEvents.push({ t: Math.round(performance.now() - loadStartedAt), step: msg.step });
       // The steps after the decode count nothing, so the bar sweeps again.
       setLoadFraction(null);
-      loadHintEl.textContent = '';
+      loadHintEl.textContent = loadExpectationText;
       setStatus(msg.step);
       setLoadStep(msg.step);
       return;
@@ -1192,7 +1201,7 @@ function showTooLarge(file: File, tooLarge: TooLarge): void {
   const summary =
     tooLarge.wasmMemoryBytes > 0
       ? `The browser would not give this tab more than ${reached}${where} and ${file.name} (${formatBytes(file.size)}) needs more.`
-      : `The browser did not have the memory to start the decoder for ${file.name} (${formatBytes(file.size)}).`;
+      : `The browser did not have the memory to read ${file.name} (${formatBytes(file.size)}).`;
   const advice =
     `A browser tab can hold at most ${formatMemory(memoryCeilingBytes)}, and opening a file takes about ${PEAK_MEMORY_PER_FILE_BYTE} times its size. ` +
     'The command-line tools read models of any size: rvt-ifc with --large-model writes the IFC, rvt-gltf the glTF, and the Python package opens the same files.';
@@ -1200,11 +1209,12 @@ function showTooLarge(file: File, tooLarge: TooLarge): void {
   clearDemoCardBusy();
   saveLoadEvents();
   statusEl.dataset.loadFailure = 'too-large';
-  setStatus(`Too large for the browser · stopped at ${reached}`);
+  const stopped = tooLarge.wasmMemoryBytes > 0 ? ` at ${reached}` : '';
+  setStatus(`Too large for the browser${stopped ? ` · stopped${stopped}` : ''}`);
   renderErrorStatusPanel(
     summary,
     'Too large for the browser',
-    `Not decoded · the tab ran out of memory at ${reached}`,
+    `Not decoded · the tab ran out of memory${stopped}`,
   );
   scaffoldNoteTitleEl.textContent = 'Too large for the browser';
   scaffoldNoteBodyEl.textContent = `${summary} ${advice}`;

@@ -257,9 +257,129 @@ the emitted IFC is byte-identical. In the browser the 33.7 MB demo
 decodes in **about 3 s**, measured on the deployed site — 6.7 s
 including the 32 MB download. That measurement is what
 `DECODE_BYTES_PER_SECOND` in `viewer/src/main.ts` encodes (11 MB/s
-since #271, up from 1.15 MB/s) to set the loading card's "about N s"
-hint; the progress bar stays indeterminate because the decoder
-cannot report real progress.
+since #271, up from 1.15 MB/s) for the "about N s" hint the loading card
+opens with. It is a laptop's figure: Deploy viewer's runner takes about
+24 s to open the same file (the measurement in
+[Models too large for the browser](#models-too-large-for-the-browser)), so
+since #1195 the card shows the decoder's own progress as soon as it reports,
+and the hint is only the first thing it says.
+
+## Decode progress
+
+`openRvtBytesWithDiagnosticsModeAndOpenLimits(bytes, mode, limits, progress)`
+takes an optional `progress` function, called as `progress(stage, done, total)`
+while the decoder works (#1195). They are the reports of the decoder's
+`WalkerControl` (#1072), the ones `rvt-gltf --progress` prints, passed across
+the wasm boundary:
+
+| `stage` | `done` of `total` | The card shows |
+|---|---|---|
+| `schema-parse` | 0, then 1 of 1 | Reading the schema |
+| `candidate-scan` | bytes of `Global/Latest` scanned, of its size | Scanning for elements |
+| `element-decode` | scan candidates decoded, of the candidates | Decoding elements |
+| `partition-scan` | streams read, of the streams; 0, then 1 of 1 where the walk does not know the number | Reading partition streams |
+| `saved-graphics` | 0, then 1 of 1 | Reading saved graphics |
+| `saved-meshes` | elements meshed, of the elements | Drawing doors and windows from saved meshes |
+
+`total` is `null` where a stage has none yet. The decoder reports every
+megabyte scanned and every 256th candidate; the binding calls `progress` at a
+stage's start, at its end and each time a stage with a total passes another
+whole percent, so a stage costs at most about a hundred calls and a decode a
+few hundred. The function is held in a `thread_local` and the closure handed to
+`WalkerControl::with_progress` captures nothing, because a `js_sys::Function`
+is not `Send + Sync`. The worker posts each report from inside the wasm call
+(`{ type: 'stage', stage, done, total, wasmMemoryBytes }`), and the browser
+delivers it to the page while the call runs, because posting does not wait for
+the worker's event loop.
+
+The bar fills while a stage has a total above one and sweeps otherwise. The
+decoder reports nothing between the end of the walk and the saved graphics
+(the model is built there) or after the saved meshes (the diagnostics and the
+copy out of wasm), so the card names those stretches "Building the model" and
+"Finishing the model" and sweeps; the steps after the open call (scene graph,
+glTF, schedule) are the worker's own and sweep too. Where an open's time goes
+is the second table of `tests/saved-meshes-measure.spec.ts` (below). The
+viewer does not cancel a decode: the call is synchronous in the worker, so a
+`CancelToken` has no one to set it. The "about N s" hint from the file's size
+is what the card says until the first report and while a stage has no count.
+
+## Models too large for the browser
+
+A wasm32 instance addresses at most 4 GiB, and a single `Vec` cannot pass
+2 GiB (`isize::MAX`). A `Vec` growing past that panics with `capacity overflow`,
+which the panic hook writes to `console.error`; an allocation that
+`memory.grow` cannot satisfy does not panic: Rust aborts, no hook runs, and
+JavaScript sees `RuntimeError: unreachable` and nothing else. During an open the
+file is also held twice in wasm memory: the binding copies `bytes` in, and
+`RevitFile::open_bytes_with_limits(bytes.to_vec())` copies it again.
+
+What the viewer does (#1195):
+
+- **Before the decode**, from the file's size alone: it expects the open to need
+  about ten times the file (`PEAK_MEMORY_PER_FILE_BYTE` in `viewer/src/main.ts`),
+  and when that passes 4 GiB (a file over about 410 MiB) the card says the file
+  may be too large, with the estimate and the figure it rests on, and the open
+  goes ahead. It is a warning, never a refusal.
+- **When the instance stops**, the worker decides whether it ran out of memory:
+  a `RuntimeError: unreachable` with no `rvt-rs wasm panic:` line on
+  `console.error` before it, or a panic or engine message that names an
+  allocation (`capacity overflow`, `memory allocation of N bytes failed`, `Array
+  buffer allocation failed`). Any other panic is a bug and keeps its message.
+  It reports the wasm memory the instance had reached and the stage it was in;
+  the page says the model is too large for the browser, how far it got, that
+  a tab holds at most 4 GiB and an open takes about ten times the file, and that
+  `rvt-ifc --large-model`, `rvt-gltf` and the Python package open models of any
+  size. A tab the browser kills outright sends nothing; the page shows an error
+  for a worker that stops.
+
+The pre-check's figure is measured, not assumed. Deploy viewer's
+`tests/saved-meshes-measure.spec.ts` opens each reference model in a fresh
+Chromium 156 context on GitHub's ubuntu-24.04 runner (4 CPUs, 16 GB) and
+records the wasm linear memory after the open, which only grows and so is the
+peak, beside the estimate (ten times the file) and their ratio (run
+[41695636243](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41695636243),
+saved meshes on; the same peaks with them off):
+
+| Model | File MiB | Wasm peak MiB | Peak / file (about) | Estimate MiB | Estimate / peak |
+|---|---|---|---|---|---|
+| 2024_Core_Interior | 32 | 324 | 10 | 322 | 0.99 |
+| RE1-Electrical | 13 | 170 | 13 | 128 | 0.76 |
+| RE1-Architecture | 6 | 100 | 16 | 63 | 0.63 |
+| RE1-Plumbing | 3 | 60 | 18 | 33 | 0.56 |
+| RE1-Mechanical | 3 | 71 | 22 | 32 | 0.45 |
+| Revit_IFC5_Einhoven | 0.9 | 23 | 26 | 9 | 0.37 |
+
+The estimate is under the peak on every model (0.37 to 0.99), tightest on the
+largest, because fixed costs weigh more on a small file. That is the direction
+the warning needs: it says "may not fit" only where even the lowest multiple
+measured, 10, passes the ceiling. The
+multiple falls as files grow, and no model past 32 MiB is in CI. Two
+client models in #1075 are the only larger evidence, and from outside the
+browser: native peaks of 3.7 GB for a 438 MB file (8.4 times, with the stream and
+inflate limits raised) and 5.1 GB for a 1.13 GB file (4.5 times). Both are
+past 4 GiB once wasm's second copy of the file is added, and both are warned
+about (10 times 438 MB is 4.1 GiB); a model of several hundred MiB can sit near
+the line, which is why the estimate warns and the stop is the verdict. The
+size of the file is the basis because the sizes the reader knows before
+inflating add nothing to it: a partition's stored size is nearly all of the
+file (the largest stream is 96% of the 438 MB file and 98% of the 1.13 GB
+one in #1075), and the inflated size is not stored (Revit's truncated gzip has
+no `ISIZE` trailer).
+
+The options for opening a larger model, as of 2026-11-03. Only the first three
+rows are measured here; the rest are read from the code and from the release
+notes cited, and none is built:
+
+| Option | What it would do | Status |
+|---|---|---|
+| Say so, and point to the CLI | The viewer's answer today: warn from the file size, report the stop, name `rvt-ifc`, `rvt-gltf` and Python | Shipped (#1195) |
+| Skip the saved-graphics pass | Free the memory of the pass that draws door and window meshes | No gain: peak memory is identical with it on and off on every reference model (#1150), so it stayed inside the export's peak |
+| Read fewer streams | Leave `Partitions/*` streams unread | The streams are the model: `stream_not_read_resource_limit` (#1075) already leaves a model empty of what they hold |
+| One copy of the file | A binding that takes the file as an owned `Vec<u8>` saves one copy of the file (a tenth of the peak at ten times) | Not done: retyping `bytes` is a breaking change to the stable wasm API (`tools/ci/wasm-api.py`), so it needs a new binding or a `!` PR |
+| Stream partitions | Inflate, use and drop one partition at a time | A library change: `RevitFile::inflated_partition` keeps every partition for the handle's lifetime on purpose (#266 took Core Interior from 26 s to 1.7 s natively by inflating each once), and a dozen passes read them |
+| wasm64 (memory64) | Raise the ceiling past 4 GiB | Chrome 133 and Firefox 134 ship memory64; Safari has it in Technology Preview, and an iOS Safari 27 report says a 64-bit `Memory` is accepted but a memory64 module does not compile ([wllama#297](https://github.com/ngxson/wllama/issues/297)). wasm-bindgen supports the `wasm64-unknown-unknown` target since 0.2.120 ([release notes](https://github.com/wasm-bindgen/wasm-bindgen/releases), 2026-04-28; the lock has 0.2.118). The target is tier 3 (nightly and `build-std`). It would be a second wasm build chosen by feature detection, with the 32-bit build kept for Safari |
+
+@@TIMELINE@@
 
 ## Full frontend pipeline
 
@@ -300,7 +420,7 @@ describing the error.
 | Binding | Arguments | Returns | What it does |
 |---|---|---|---|
 | `openRvtBytesWithDiagnosticsMode` | `bytes`, `mode: string` | `{ model, diagnostics }` | The same at an export quality mode: `scaffold`, `typed-no-geometry`, `geometry` or `strict`, the stronger ones failing when the file cannot meet them. Doors and windows are drawn from their saved meshes, as in the next row with the default options |
-| `openRvtBytesWithDiagnosticsModeAndOpenLimits` | `bytes`, `mode: string`, `limits: { largeModel?, maxStreamBytes?, maxInflateBytes?, savedMeshes? }` or `null` | `{ model, diagnostics }` | `openRvtBytesWithDiagnosticsMode` under the reader's resource limits: `largeModel` is `rvt-ifc --large-model` (streams up to 2 GiB, inflating up to the 4 GiB wasm32 holds, the walker's scan cap lifted to match), `maxStreamBytes` and `maxInflateBytes` are whole numbers of bytes that win over it, and a field left out keeps its default. `savedMeshes` (default `true`) draws the doors and windows of Revit 2023 to 2027 files from the meshes Revit saved for them, as `rvt-ifc` does by default; `false` keeps their bounding boxes and skips the pass over the saved graphics. A stream a limit stops is listed in the diagnostics (`stream_not_read_resource_limit`, a `Not read whole:` warning each) and the viewer offers "Retry with large-model limits"; unknown fields and fractional or negative limits throw. When the saved graphics cannot be read the model keeps its boxes and the diagnostics carry a warning |
+| `openRvtBytesWithDiagnosticsModeAndOpenLimits` | `bytes`, `mode: string`, `limits: { largeModel?, maxStreamBytes?, maxInflateBytes?, savedMeshes? }` or `null`, `progress?: (stage: string, done: number, total: number \| null) => void` | `{ model, diagnostics }` | `openRvtBytesWithDiagnosticsMode` under the reader's resource limits: `largeModel` is `rvt-ifc --large-model` (streams up to 2 GiB, inflating up to the 4 GiB wasm32 holds, the walker's scan cap lifted to match), `maxStreamBytes` and `maxInflateBytes` are whole numbers of bytes that win over it, and a field left out keeps its default. `savedMeshes` (default `true`) draws the doors and windows of Revit 2023 to 2027 files from the meshes Revit saved for them, as `rvt-ifc` does by default; `false` keeps their bounding boxes and skips the pass over the saved graphics. A stream a limit stops is listed in the diagnostics (`stream_not_read_resource_limit`, a `Not read whole:` warning each) and the viewer offers "Retry with large-model limits"; unknown fields and fractional or negative limits throw. When the saved graphics cannot be read the model keeps its boxes and the diagnostics carry a warning. `progress`, when given, is called as the decoder works with the stage name (`schema-parse`, `candidate-scan`, `element-decode`, `partition-scan`, `saved-graphics`, `saved-meshes`) and how many of how many it has done (`total` is `null` where the stage has no count yet), at a stage's start, its end and each whole percent between; see [Decode progress](#decode-progress). A function that throws is ignored |
 | `quickSummary` | `bytes` | `Summary` | Release, build, PartAtom and the stream inventory, read without decoding the model |
 | `fileMetadata` | `bytes` | `FileMetadata` | Document identity (release, worksharing, last save, GUID, save counter), from the two identity streams only |
 | `scheduleCsv` | `model`, `kind: string`, `metric: boolean`, `excel: boolean` | `string` | The element (`kind` `"elements"`) or room (`"rooms"`) schedule as CSV, the columns of the [user guide](user-guide.md#get-a-schedule-into-excel) |

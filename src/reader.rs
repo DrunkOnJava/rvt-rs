@@ -754,6 +754,23 @@ impl RevitFile {
         revit_version: u32,
         limits: crate::walker::WalkerLimits,
     ) -> Arc<crate::partition_arc_walls::PartitionArcWallScan> {
+        self.memoised_arc_wall_scan_with_control(
+            revit_version,
+            limits,
+            &crate::control::WalkerControl::default(),
+        )
+    }
+
+    /// [`Self::memoised_arc_wall_scan`], reporting the scan's progress, one
+    /// report per partition stream, to `control` when it has to run. The scan
+    /// inflates every partition stream the first time, which is most of an
+    /// open's time on a project, so this is where the walk's progress is.
+    pub(crate) fn memoised_arc_wall_scan_with_control(
+        &mut self,
+        revit_version: u32,
+        limits: crate::walker::WalkerLimits,
+        control: &crate::control::WalkerControl,
+    ) -> Arc<crate::partition_arc_walls::PartitionArcWallScan> {
         if let Some((version, held, scan)) = &self.arc_wall_scan {
             if *version == revit_version && *held == limits {
                 return Arc::clone(scan);
@@ -763,6 +780,7 @@ impl RevitFile {
             self,
             revit_version,
             limits,
+            control,
         ));
         self.arc_wall_scan = Some((revit_version, limits, Arc::clone(&computed)));
         computed
