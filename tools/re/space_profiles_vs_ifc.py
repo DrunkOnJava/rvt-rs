@@ -69,6 +69,12 @@ def sources(path):
     return out
 
 
+def shape(surface):
+    """Pieces and holes of a top surface."""
+    parts = list(surface.geoms) if hasattr(surface, "geoms") else [surface]
+    return len(parts), sum(len(part.interiors) for part in parts)
+
+
 def count_spaces(path):
     return len(ifcopenshell.open(path).by_type("IfcSpace"))
 
@@ -141,6 +147,8 @@ def main(argv):
                 "vertices": plan.spread(o_points, points),
                 "outline": plan.outline_spread(o_points, surface, points, o_surface),
                 "source": held.get(key, "not stated"),
+                "shapes": (shape(o_surface), shape(surface)),
+                "apart": float(o_surface.centroid.distance(surface.centroid)),
             }
         )
 
@@ -200,7 +208,10 @@ def main(argv):
         print(
             f"  {r['key']}: area {r['o_area']:.2f} vs {r['area']:.2f} ft2 ({r['rel']:.2%}),"
             f" vertices {r['vertices']:.3f} ft, outline {r['outline']:.3f} ft,"
-            f" rvt-rs outline from {r['source']}"
+            f" rvt-rs outline from {r['source']},"
+            f" pieces and holes {r['shapes'][0][0]} and {r['shapes'][0][1]} in rvt-rs,"
+            f" {r['shapes'][1][0]} and {r['shapes'][1][1]} in Revit,"
+            f" centroids {r['apart']:.3f} ft apart"
         )
     shortfalls = [
         f"{what} {got} below {minimums[key]}"
