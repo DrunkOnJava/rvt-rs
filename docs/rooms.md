@@ -22,7 +22,7 @@ Read `RvtElementRecordGeometry.SpaceOutlineSource` on the `IfcSpace`:
 | `stored_solid` | the outline of the room's stored solid, extruded to the room's height | Revit's room area: within 0.1% of Revit's export on 604 of the 605 `stored_solid` rooms scored below, the office counted at both stages (RE-313 §2, §3) |
 | `record_box` | the record's bounding box (turned with a family instance that is turned) | the box's area, not the space's. It equals the space's only when the space is a rectangle; the area is Revit's on none of the office's 24 room scores that keep their box |
 | `saved_mesh` | the mesh Revit saved for the room (`rvt-ifc --saved-meshes`) | the mesh's; not scored |
-| `area_boundary` | the region that the lines of the Area's scheme on its Level enclose around its point, its holes the loops directly inside, extruded from its Level up to the Level above it, both building stories | Revit's area space: within 0.1% of Revit's export, and within 0.01 ft in outline, on 60 of the 60 Area scores below, the office counted at both stages (RE-317 §5) |
+| `area_boundary` | the region that the lines of the Area's scheme on its Level enclose around its point, its holes the loops directly inside, extruded from its Level up to the Level above it, both building stories | Revit's area space: within 0.1% of Revit's export, within 0.01 ft in outline, and with its lowest and highest vertex within 0.01 ft, on 60 of the 60 Area scores below, the office counted at both stages (RE-317 §5) |
 | `none` | no body (an Area whose boundary is not proven) | not available |
 | `family_body` | a Revit Space or a family instance written as an `IfcSpace`, drawn as more than its box; its `BodySource` says how | not scored |
 
@@ -48,11 +48,12 @@ The export also counts the spaces drawn as their record's box (rooms and family 
 
 ## What is measured, and where
 
-`tools/re/space_profiles_vs_ifc.py` meshes both exports, moves them into Revit's internal feet and compares the plan union of each space's upward faces. It prints three figures, each on its own line:
+`tools/re/space_profiles_vs_ifc.py` meshes both exports, moves them into Revit's internal feet and compares the plan union of each space's upward faces. It prints four figures, each on its own line:
 
 - **area**: the plan area, within 0.1% of Revit's;
 - **boundary**: the largest distance from a point of either outline to the other's outline, within 0.01 ft. This is the room's outline, and the figure used for "outline" in the table and in the text below;
 - **outline**: the largest distance from a vertex of either mesh's upward faces to the other's outline, within 0.01 ft. Revit meshes a ceiling step inside a room as an upward face of its own, and its vertices count against this one, so it reads some correct outlines as wrong (RE-313 §3). The CI gate pins both.
+- **height**: the lowest and the highest vertex of either mesh, within 0.01 ft: the base and the top of the space, so its height. It is printed on its own line and for each kind of space (RE-317); it is 306 of 306 spaces in both exports on the office as built and 308 of 308 at building permit.
 
 Measure runs the scorer on every reference model (`-f scorers=space_profiles_vs_ifc`); the IfcOpenShell job of CI runs it on the first two rows, pairing by GlobalId (`--match globalid`), and fails below their counts in area, outline and boundary.
 
