@@ -20,9 +20,9 @@ adds what an importer needs to know about rooms:
   outline to the other's, which such a face does not move. `vertices` is the
   vertex-to-vertex distance. The lines print `outline`, `vertices` and
   `boundary` under those names, and `both` is area and `outline`;
-- the same counts split by what the space is (a room, a family instance
-  written as a space) and where rvt-rs's outline came from (its stored solid,
-  or the record box);
+- the same counts split by what the space is (a room, an Area, a family
+  instance written as a space) and where rvt-rs's outline came from (its
+  stored solid, the record box, or an Area's boundary lines);
 - every pair that is off in area or outline, with the reason rvt-rs's own
   property set gives (`SpaceOutlineSource`, or the older `ProfileSource`
   and `ProfileResolved` of `RvtElementRecordGeometry`).
@@ -55,6 +55,8 @@ import plan_profiles_vs_ifc as plan
 SET = "RvtElementRecordGeometry"
 STORED_SOLID = "stored_solid"
 RECORD_BOX = "record_box"
+AREA_BOUNDARY = "area_boundary"
+NO_BODY = "none"
 ROOM_SOLID_SOURCE = "partition_room_solid_faces"
 
 
@@ -80,6 +82,9 @@ def sources(path):
         # space has neither.
         named = "RoomNumber" in props or "RoomName" in props
         kind = "room" if named else "family instance" if props else "space"
+        # An Area is named as a room is; its marker tells it apart (RE-317).
+        if marker in (AREA_BOUNDARY, NO_BODY):
+            kind = "area"
         out[space.GlobalId] = (source, kind)
     return out
 
