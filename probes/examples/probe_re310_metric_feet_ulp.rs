@@ -18,6 +18,14 @@
 //!   disagree <candidate set> <n>  per set of candidates the stored value equals
 //!   sample owner=<id> parameter=<id> mm=<mm> bits=<hex> ulps_from_div=<n> matches=<set>
 //!                                 the first 25 entries where the candidates disagree
+//!   kind <kind> <candidate set> <n>
+//!                                 the same, by what the entry's i64 is: `builtin` (a
+//!                                 negative BuiltInParameter id), `declared` (a declared
+//!                                 ElementId, a family or shared parameter) or `other`
+//!   param <id> div_only=<n> chain_only=<n>
+//!                                 per builtin or declared parameter, entries matching
+//!                                 `div` and not `chain`, and the reverse; the 20 with
+//!                                 most `chain_only`, then the 20 with most `div_only`
 //!
 //! A file whose `disagree` lines name only `chain`, or only `div`, settles
 //! which conversion that release used for the values it holds; one with
@@ -58,6 +66,8 @@ fn main() -> anyhow::Result<()> {
     let mut disagree: BTreeMap<String, usize> = BTreeMap::new();
     let mut samples = Vec::new();
     let mut seen: BTreeSet<(u32, i64, u64)> = BTreeSet::new();
+    let mut by_kind: BTreeMap<(&'static str, String), usize> = BTreeMap::new();
+    let mut by_param: BTreeMap<i64, [usize; 2]> = BTreeMap::new();
     for stream in rf.partition_stream_names() {
         let Ok(inflated) = rf.inflated_partition(&stream) else {
             continue;
@@ -94,6 +104,25 @@ fn main() -> anyhow::Result<()> {
                     matched.join("+")
                 };
                 *disagree.entry(key.clone()).or_default() += 1;
+                let kind = if (-10_000_000..0).contains(&parameter) {
+                    "builtin"
+                } else if u32::try_from(parameter).is_ok_and(|id| declared.contains(&id)) {
+                    "declared"
+                } else {
+                    "other"
+                };
+                *by_kind.entry((kind, key.clone())).or_default() += 1;
+                if kind != "other" {
+                    let div = matched.contains(&"div");
+                    let chain = matched.contains(&"chain");
+                    let slot = by_param.entry(parameter).or_default();
+                    if div && !chain {
+                        slot[0] += 1;
+                    }
+                    if chain && !div {
+                        slot[1] += 1;
+                    }
+                }
                 if samples.len() < 25 {
                     samples.push(format!(
                         "sample owner={owner} parameter={parameter} mm={mm} bits={:016x} ulps_from_div={} matches={key}",
@@ -114,6 +143,24 @@ fn main() -> anyhow::Result<()> {
     }
     for line in samples {
         println!("{line}");
+    }
+    for ((kind, key), n) in &by_kind {
+        println!("kind {kind} {key} {n}");
+    }
+    let mut params: Vec<(i64, [usize; 2])> = by_param.into_iter().collect();
+    params.sort_by_key(|(id, [_, chain])| (std::cmp::Reverse(*chain), *id));
+    let mut shown: BTreeSet<i64> = BTreeSet::new();
+    for (id, [div, chain]) in params.iter().filter(|(_, [_, c])| *c > 0).take(20) {
+        shown.insert(*id);
+        println!("param {id} div_only={div} chain_only={chain}");
+    }
+    params.sort_by_key(|(id, [div, _])| (std::cmp::Reverse(*div), *id));
+    for (id, [div, chain]) in params
+        .iter()
+        .filter(|(id, [d, _])| *d > 0 && !shown.contains(id))
+        .take(20)
+    {
+        println!("param {id} div_only={div} chain_only={chain}");
     }
     Ok(())
 }
