@@ -293,6 +293,16 @@ pub(crate) fn face_grid(g: &ObjectGraph, fi: usize) -> Result<FaceGrid> {
                 angular(center[0].hypot(center[1]) + 2. * radius),
                 angular(*radius),
             ),
+            Curve::Nurbs { .. } | Curve::Hermite { .. } => {
+                let radius = (0..=32)
+                    .map(|i| {
+                        let q = profile.point_at(min[1] + (max[1] - min[1]) * i as f64 / 32.);
+                        q[0].hypot(q[1])
+                    })
+                    .fold(0., f64::max);
+                let n = profile.segments(min[1], max[1], CHORD);
+                (angular(radius), (max[1] - min[1]) / (n as f64 - 0.5))
+            }
         },
         ParametricSurface::ConeSurf { half_angle, .. } => {
             // The generators are straight: only the angle needs a chord bound.
@@ -318,27 +328,35 @@ pub(crate) fn face_grid(g: &ObjectGraph, fi: usize) -> Result<FaceGrid> {
                 }
                 let s = ParametricSurface::read(g, surface_index)?;
                 let ParametricSurface::RuledSurf {
-                    profile1:
-                        Curve::Line {
-                            direction: a,
-                            range: ra,
-                            ..
-                        },
-                    profile2:
-                        Curve::Line {
-                            direction: b,
-                            range: rb,
-                            ..
-                        },
-                    ..
+                    profile1, profile2, ..
                 } = s
                 else {
-                    anyhow::bail!("nonlinear ruled profiles need a curvature policy")
+                    anyhow::bail!("ruled surface expected")
                 };
-                let da = std::array::from_fn(|k| a[k] * (ra[1] - ra[0]));
-                let db = std::array::from_fn(|k| b[k] * (rb[1] - rb[0]));
+                if matches!(profile1, Curve::Arc { .. }) || matches!(profile2, Curve::Arc { .. }) {
+                    anyhow::bail!("nonlinear ruled profiles need a curvature policy")
+                }
+                let ends = |c: &Curve| match c {
+                    Curve::Line {
+                        direction, range, ..
+                    } => (
+                        std::array::from_fn::<f64, 3, _>(|k| direction[k] * (range[1] - range[0])),
+                        1,
+                    ),
+                    other => {
+                        let r = other.parameter_range();
+                        let (p0, p1) = (other.point_at(r[0]), other.point_at(r[1]));
+                        (
+                            std::array::from_fn::<f64, 3, _>(|k| p1[k] - p0[k]),
+                            other.segments(r[0], r[1], CHORD),
+                        )
+                    }
+                };
+                let (da, segments1) = ends(&profile1);
+                let (db, segments2) = ends(&profile2);
                 let mixed = length(std::array::from_fn(|k| da[k] - db[k]));
                 n = n
+                    .max(segments1.max(segments2) as f64)
                     .max((mixed / CHORD).sqrt().ceil())
                     .max(length(da).ceil())
                     .max(length(db).ceil());

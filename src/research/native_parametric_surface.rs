@@ -97,6 +97,15 @@ pub fn ruled_surface_point(g: &ObjectGraph, si: usize, u: f64, v: f64) -> Result
     surface.evaluate(u, v)
 }
 
+/// One node of a saved `GHermiteSpline`: the curve passes through `point` at
+/// parameter `t` with derivative `tangent` per unit of parameter.
+#[derive(Debug, Clone, Copy)]
+pub struct HermiteNode {
+    t: f64,
+    point: Point,
+    tangent: Point,
+}
+
 #[derive(Debug, Clone)]
 pub enum Curve {
     Line {
@@ -111,6 +120,55 @@ pub enum Curve {
         radius: f64,
         range: [f64; 2],
     },
+    /// A saved `GNurbSpline`: control points as `(w x, w y, w z, w)`.
+    Nurbs {
+        degree: usize,
+        knots: Vec<f64>,
+        control: Vec<[f64; 4]>,
+        range: [f64; 2],
+    },
+    /// A saved `GHermiteSpline`: a cubic Hermite segment between each pair of
+    /// consecutive nodes.
+    Hermite {
+        nodes: Vec<HermiteNode>,
+        range: [f64; 2],
+    },
+}
+
+/// The most segments a spline profile is cut into to hold a chord error.
+const SPLINE_SEGMENT_CAP: usize = 128;
+
+fn nurbs_homogeneous(degree: usize, knots: &[f64], control: &[[f64; 4]], t: f64) -> [f64; 4] {
+    let n = control.len();
+    let mut span = degree;
+    while span + 1 < n && t >= knots[span + 1] {
+        span += 1;
+    }
+    let mut d: Vec<[f64; 4]> = (0..=degree).map(|j| control[span - degree + j]).collect();
+    for r in 1..=degree {
+        for j in (r..=degree).rev() {
+            let i = span - degree + j;
+            let denominator = knots[i + degree - r + 1] - knots[i];
+            let a = if denominator.abs() < 1e-300 {
+                0.
+            } else {
+                (t - knots[i]) / denominator
+            };
+            let previous = d[j - 1];
+            for (value, before) in d[j].iter_mut().zip(previous) {
+                *value = (1. - a) * before + a * *value;
+            }
+        }
+    }
+    d[degree]
+}
+
+fn hermite_segment(nodes: &[HermiteNode], t: f64) -> (HermiteNode, HermiteNode) {
+    let mut i = 0;
+    while i + 2 < nodes.len() && t >= nodes[i + 1].t {
+        i += 1;
+    }
+    (nodes[i], nodes[i + 1])
 }
 
 impl Curve {
@@ -153,10 +211,142 @@ impl Curve {
                     range: range(&o.fields["m_endParams"], "arc range")?,
                 })
             }
+            "GNurbSpline" => {
+                let degree = o.fields["m_Degree"].as_u64().context("spline degree")? as usize;
+                ensure!((1..=5).contains(&degree), "unsupported spline degree");
+                ensure!(
+                    o.fields["m_Closed"] == false,
+                    "closed spline profiles are unsupported"
+                );
+                let knots = o.fields["m_Knots"]
+                    .as_array()
+                    .context("spline knots")?
+                    .iter()
+                    .map(|k| k.as_f64().filter(|k| k.is_finite()).context("spline knot"))
+                    .collect::<Result<Vec<_>>>()?;
+                let points = o.fields["m_ctrlPoints"]
+                    .as_array()
+                    .context("spline control points")?;
+                let mut control = Vec::with_capacity(points.len());
+                for c in points {
+                    let q = p(&c["m_Point"], "spline control point")?;
+                    let w = c["m_w"].as_f64().context("spline weight")?;
+                    ensure!(w.is_finite() && w > 0., "invalid spline weight");
+                    control.push([q[0] * w, q[1] * w, q[2] * w, w]);
+                }
+                ensure!(
+                    control.len() > degree && knots.len() == control.len() + degree + 1,
+                    "spline knot count"
+                );
+                ensure!(
+                    knots.windows(2).all(|w| w[1] >= w[0]),
+                    "spline knots decrease"
+                );
+                let range = range(&o.fields["m_endParams"], "spline range")?;
+                ensure!(
+                    range[0] >= knots[degree] - 1e-9 && range[1] <= knots[control.len()] + 1e-9,
+                    "spline range outside its knots"
+                );
+                Ok(Self::Nurbs {
+                    degree,
+                    knots,
+                    control,
+                    range,
+                })
+            }
+            "GHermiteSpline" => {
+                ensure!(
+                    o.fields["m_Periodic"] == false,
+                    "periodic spline profiles are unsupported"
+                );
+                let nodes = o.fields["m_NodeArray"]
+                    .as_array()
+                    .context("spline nodes")?
+                    .iter()
+                    .map(|n| {
+                        Ok(HermiteNode {
+                            t: n["m_iParametr"].as_f64().context("node parameter")?,
+                            point: p(&n["m_iPoint"], "node point")?,
+                            tangent: p(&n["m_iTangent"], "node tangent")?,
+                        })
+                    })
+                    .collect::<Result<Vec<_>>>()?;
+                ensure!(
+                    nodes.len() >= 2
+                        && nodes.iter().all(|n| n.t.is_finite())
+                        && nodes.windows(2).all(|w| w[1].t > w[0].t),
+                    "spline nodes"
+                );
+                let range = range(&o.fields["m_endParams"], "spline range")?;
+                ensure!(
+                    range[0] >= nodes[0].t - 1e-9 && range[1] <= nodes[nodes.len() - 1].t + 1e-9,
+                    "spline range outside its nodes"
+                );
+                Ok(Self::Hermite { nodes, range })
+            }
             name => bail!("unsupported parametric profile curve {name}"),
         }
     }
+    pub(crate) fn parameter_range(&self) -> [f64; 2] {
+        c_range(self)
+    }
+    pub(crate) fn point_at(&self, t: f64) -> Point {
+        self.eval(t)
+    }
+    /// How many equal parameter steps between `lo` and `hi` hold a spline's
+    /// chord error to `chord` feet (one for a line or an arc), by its second
+    /// differences.
+    pub(crate) fn segments(&self, lo: f64, hi: f64, chord: f64) -> usize {
+        if !matches!(self, Self::Nurbs { .. } | Self::Hermite { .. }) {
+            return 1;
+        }
+        const SAMPLES: usize = 64;
+        let h = (hi - lo) / SAMPLES as f64;
+        let mut second = 0.0_f64;
+        for i in 1..SAMPLES {
+            let t = lo + h * i as f64;
+            let (a, b, c) = (self.eval(t - h), self.eval(t), self.eval(t + h));
+            second = second.max(len(sub(add(a, c), mul(b, 2.))));
+        }
+        if !second.is_finite() {
+            return SPLINE_SEGMENT_CAP;
+        }
+        let n = (SAMPLES as f64 * (second / (8. * chord)).sqrt()).ceil();
+        (n as usize).clamp(1, SPLINE_SEGMENT_CAP)
+    }
     fn eval(&self, t: f64) -> Point {
+        match self {
+            Self::Nurbs {
+                degree,
+                knots,
+                control,
+                range,
+            } => {
+                let t = t.clamp(range[0], range[1]);
+                let h = nurbs_homogeneous(*degree, knots, control, t);
+                [h[0] / h[3], h[1] / h[3], h[2] / h[3]]
+            }
+            Self::Hermite { nodes, range } => {
+                let t = t.clamp(range[0], range[1]);
+                let (a, b) = hermite_segment(nodes, t);
+                let d = b.t - a.t;
+                let s = (t - a.t) / d;
+                let (s2, s3) = (s * s, s * s * s);
+                let h00 = 2. * s3 - 3. * s2 + 1.;
+                let h10 = s3 - 2. * s2 + s;
+                let h01 = -2. * s3 + 3. * s2;
+                let h11 = s3 - s2;
+                std::array::from_fn(|k| {
+                    h00 * a.point[k]
+                        + h10 * d * a.tangent[k]
+                        + h01 * b.point[k]
+                        + h11 * d * b.tangent[k]
+                })
+            }
+            _ => self.eval_analytic(t),
+        }
+    }
+    fn eval_analytic(&self, t: f64) -> Point {
         match self {
             Self::Line {
                 origin, direction, ..
@@ -171,6 +361,7 @@ impl Curve {
                 *center,
                 mul(add(mul(*x, t.cos()), mul(*y, t.sin())), *radius),
             ),
+            Self::Nurbs { .. } | Self::Hermite { .. } => self.eval(t),
         }
     }
     fn derivative(&self, t: f64) -> Point {
@@ -178,6 +369,13 @@ impl Curve {
             Self::Line { direction, .. } => *direction,
             Self::Arc { x, y, radius, .. } => {
                 mul(add(mul(*x, -t.sin()), mul(*y, t.cos())), *radius)
+            }
+            Self::Nurbs { .. } | Self::Hermite { .. } => {
+                let [lo, hi] = c_range(self);
+                let h = (hi - lo) * 1e-6;
+                let (a, b) = ((t - h).max(lo), (t + h).min(hi));
+                let span = (b - a).max(1e-300);
+                mul(sub(self.eval(b), self.eval(a)), 1. / span)
             }
         }
     }
@@ -459,6 +657,9 @@ impl ParametricSurface {
 
 fn c_range(c: &Curve) -> [f64; 2] {
     match c {
-        Curve::Line { range, .. } | Curve::Arc { range, .. } => *range,
+        Curve::Line { range, .. }
+        | Curve::Arc { range, .. }
+        | Curve::Nurbs { range, .. }
+        | Curve::Hermite { range, .. } => *range,
     }
 }
