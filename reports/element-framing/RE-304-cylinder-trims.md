@@ -41,11 +41,13 @@ Against Revit's own export (`mesh_bodies_vs_ifc`):
 | RE1 Architecture | 52 → 53 | 45 → 45 | 50 → 50 | 52 → 53 |
 | RE1 Plumbing | 41 → 52 | 7 → 7 | 27 → 38 | 7 → 7 |
 
-- **Office:** the 155 new bodies are all doors (`IfcDoor` 114 → 269 scored, 265 exact), among them 34 "O-3:O-3.10x21" and 22 each of "O-4" 10x21 and 8x21. The one listed short of exact, "O-9", is within 0.0048 ft at a volume ratio of 0.9998. The default export draws doors from their saved meshes, so these reach it.
+- **Office:** the 155 new bodies are all doors (`IfcDoor` 114 → 269 scored, 265 exact), among them 34 "O-3:O-3.10x21" and 22 each of "O-4" 10x21 and 8x21. Four are short of exact; the scorer lists one, "O-9", within 0.0048 ft at a volume ratio of 0.9998. The default export draws doors from their saved meshes, so these reach it.
 - **RE1 Architecture:** a toilet, within 0.0126 ft at 1.0035 of Revit's volume.
-- **RE1 Plumbing:** 11 more pipe fittings with the same profile as the 35 drawn before: Revit's surface and rvt-rs's within 0.01 ft of each other, at about 1.22 of Revit's volume (RE-78's fittings; no part is missing).
+- **RE1 Plumbing:** 11 more pipe fittings, like the 35 drawn before (RE-78's fittings, whose class median is 1.22 of Revit's volume): Revit's surface and rvt-rs's within 0.01 ft of each other (the listed tees' farthest vertices 0.006 to 0.007 ft), at 1.44 to 1.47 of Revit's volume; no part is missing, the volume difference is RE-78's open question.
 
-The size: the office as built goes from 473,681 to 568,965 triangles with `--saved-meshes`.
+The cost, with `--saved-meshes`: the office as built goes from 473,681 to 568,965 triangles (about 615 for each new door, against about 43 for the average body), its IFC from 76.6 to 82.1 MB, and its export from 33.8 s to 37.7 s on the same runner CPU type. The strips are cut at every trim vertex's `u` as well as at the chord step, as the grid's U values are, which keeps the strip edges on the plane faces' refined edges at the price of thin strips.
+
+Some samples count more boxes after than before (Snowdon Towers architectural 314 → 326): an element whose saved graphics gave no surface at all is not counted as kept, and one that now gives part of one is.
 
 ## 4. Not claimed
 

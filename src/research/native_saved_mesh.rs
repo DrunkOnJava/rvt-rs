@@ -994,6 +994,11 @@ fn strip_mesh(
     eval: impl Fn(f64, f64) -> [f64; 3],
     [x_vec, y_vec]: [[f64; 3]; 2],
 ) -> Result<CylinderStrips> {
+    // Each strip clips the whole loop: bound the work a hostile file can ask.
+    ensure!(
+        u_values.len().saturating_mul(trim_uv.len()) <= 20_000_000,
+        "cylinder trim strip budget exceeded"
+    );
     let sign = if orient { handed } else { -handed };
     let mut vertices = Vec::new();
     let mut normals = Vec::new();
