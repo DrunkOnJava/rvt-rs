@@ -1671,8 +1671,9 @@ fn level_parameter_property_set(decoded: &DecodedElement, ifc_type: &str) -> Opt
     // them), so none is written.
     if matches!(
         ifc_type,
-        "IFCCABLECARRIERSEGMENT" | "IFCCABLECARRIERFITTING" | "IFCFLOWSEGMENT"
-    ) {
+        "IFCCABLECARRIERSEGMENT" | "IFCCABLECARRIERFITTING"
+    ) || decoded.class == "Gutter"
+    {
         return None;
     }
     let text = |wanted: &str| {

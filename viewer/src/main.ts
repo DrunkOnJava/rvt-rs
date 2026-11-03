@@ -1504,7 +1504,6 @@ const IFC_ENTITY_NAMES = [
   'IfcDuctSegment',
   'IfcElectricAppliance',
   'IfcFlowController',
-  'IfcFlowSegment',
   'IfcFlowTerminal',
   'IfcFooting',
   'IfcFurnishingElement',

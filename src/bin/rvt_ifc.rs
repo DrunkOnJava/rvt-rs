@@ -985,7 +985,6 @@ fn ifc_type_display(upper: &str) -> String {
         "IfcDuctSegment",
         "IfcElectricAppliance",
         "IfcFlowController",
-        "IfcFlowSegment",
         "IfcFooting",
         "IfcFurniture",
         "IfcLightFixture",

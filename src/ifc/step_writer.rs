@@ -106,7 +106,7 @@ pub fn write_step_to<W: std::io::Write>(
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ElementTail {
     /// `Tag` only — the entity declares no `PredefinedType`
-    /// (`IfcFurnishingElement`, `IfcFlowController`, `IfcFlowSegment`). Arity 8.
+    /// (`IfcFurnishingElement`, `IfcFlowController`). Arity 8.
     Tag,
     /// `Tag, PredefinedType` — the shape almost every
     /// `IfcBuildingElement` subtype takes. Arity 9.
@@ -142,7 +142,7 @@ enum ElementTail {
 /// subtype in IFC4.
 fn element_tail_for(ifc_upper: &str) -> ElementTail {
     match ifc_upper {
-        "IFCFURNISHINGELEMENT" | "IFCFLOWCONTROLLER" | "IFCFLOWSEGMENT" => ElementTail::Tag,
+        "IFCFURNISHINGELEMENT" | "IFCFLOWCONTROLLER" => ElementTail::Tag,
         "IFCDOOR" | "IFCWINDOW" => ElementTail::Opening,
         "IFCSPACE" => ElementTail::Space,
         "IFCREINFORCINGBAR" => ElementTail::ReinforcingBar,
