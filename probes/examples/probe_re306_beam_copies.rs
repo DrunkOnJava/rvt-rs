@@ -18,9 +18,16 @@
 //! current-copy rule would take, and gives the largest distance between two
 //! copies' line ends.
 //!
-//! Output: `census <class> <count>` lines, then `disagree current_one_line
-//! <count>`, `disagree no_current <count>` and `disagree spread <decade> <count>`
-//! lines, counts only. No element id, name or coordinate is printed.
+//! The file is opened with `--large-model`'s limits, as `rvt-ifc --large-model`
+//! opens it: at the default limits a partition over them is not read, and its
+//! beams would count as `no_data`. `streams_not_read` says how many streams
+//! even those limits kept from being read whole; where it is not 0, read the
+//! census with that in mind.
+//!
+//! Output: `streams_not_read <count>`, `census <class> <count>` lines, then
+//! `disagree current_one_line <count>`, `disagree no_current <count>` and
+//! `disagree spread <decade> <count>` lines, counts only. No element id, name
+//! or coordinate is printed.
 //!
 //! ```text
 //! cargo run --profile ci -p rvt-probes --example probe_re306_beam_copies -- model.rvt
@@ -42,7 +49,7 @@ fn distance(a: [f64; 3], b: [f64; 3]) -> f64 {
 
 fn main() -> anyhow::Result<()> {
     let path = std::env::args().nth(1).expect("usage: MODEL.rvt");
-    let mut rf = RevitFile::open(&path)?;
+    let mut rf = RevitFile::open_with_limits(&path, rvt::cli::open_limits(None, None, true))?;
     let version = rf.basic_file_info()?.version;
     let model = RvtDocExporter.export_with_diagnostics(&mut rf)?.model;
     let mut boxed = BTreeSet::new();
@@ -103,6 +110,7 @@ fn main() -> anyhow::Result<()> {
         };
         *census.entry(class).or_default() += 1;
     }
+    println!("streams_not_read {}", rf.unread_streams().len());
     println!("census boxed_beams {}", boxed.len());
     for (class, n) in &census {
         println!("census {class} {n}");
