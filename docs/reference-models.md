@@ -93,9 +93,11 @@ against [`research/bim4lca-models.tsv`](../research/bim4lca-models.tsv):
 four `.rvt` models and Revit's IFC export of one. Locally, point
 `RVT_NORDIC_LCA_DIR` at a folder holding them
 ([`corpus/tier2/README.md`](../corpus/tier2/README.md)). Measure scores the
-concrete office, as built and at building permit, against Revit's exports of
-both with `-f nordic=true`
-([`research/bim4lca-measure.tsv`](../research/bim4lca-measure.tsv), #763).
+concrete office, as built and at building permit, and the small terrain
+offices (concrete and timber, at building permit), against Revit's exports of
+each with `-f nordic=true`
+([`research/bim4lca-measure.tsv`](../research/bim4lca-measure.tsv), #763,
+#1262).
 
 ## Revit 2025 models made for one feature each, fetched for a run
 
