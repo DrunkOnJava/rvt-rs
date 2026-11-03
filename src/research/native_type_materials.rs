@@ -36,9 +36,31 @@ pub fn geometry_materials(
     types: &BTreeSet<u64>,
     materials: &BTreeSet<u32>,
 ) -> anyhow::Result<BTreeMap<u64, GeometryMaterials>> {
+    Ok(geometry_maps(rf, types, materials)?.0)
+}
+
+/// A type's `m_geomTag2MaterialId` that holds entries, whatever its values.
+#[derive(Clone, Debug, Default)]
+pub struct GeometryMap {
+    /// Every value is −1: no geometry has a material of its own.
+    pub all_unset: bool,
+    /// The type's family (`m_familyId`).
+    pub family: Option<u64>,
+}
+
+/// [`geometry_materials`], and each type of `types` whose
+/// `m_geomTag2MaterialId` holds any entry, whatever its values: a type with
+/// geometry, though its map may name no material (every value −1, RE-149)
+/// or only materials not among `materials` (RE-299).
+pub fn geometry_maps(
+    rf: &mut RevitFile,
+    types: &BTreeSet<u64>,
+    materials: &BTreeSet<u32>,
+) -> anyhow::Result<(BTreeMap<u64, GeometryMaterials>, BTreeMap<u64, GeometryMap>)> {
     let mut out = BTreeMap::new();
+    let mut mapped = BTreeMap::new();
     if types.is_empty() {
-        return Ok(out);
+        return Ok((out, mapped));
     }
     let options = native_document::Options {
         selected_ids: types.clone(),
@@ -63,6 +85,21 @@ pub fn geometry_materials(
             family: root.fields.get("m_familyId").and_then(element_id),
             ..GeometryMaterials::default()
         };
+        if !map.is_empty() {
+            let all_unset = map.iter().all(|entry| {
+                entry
+                    .pointer("/second/m_id/m_id64")
+                    .and_then(serde_json::Value::as_i64)
+                    == Some(-1)
+            });
+            mapped.insert(
+                record.identity.element_id,
+                GeometryMap {
+                    all_unset,
+                    family: found.family,
+                },
+            );
+        }
         for entry in map {
             let Some(id) = entry
                 .pointer("/second/m_id/m_id64")
@@ -84,5 +121,5 @@ pub fn geometry_materials(
         }
         Ok(())
     })?;
-    Ok(out)
+    Ok((out, mapped))
 }
