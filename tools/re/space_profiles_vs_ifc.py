@@ -1,0 +1,208 @@
+#!/usr/bin/env python3
+"""Score every IfcSpace's plan area and outline against Revit's export (RE-313).
+
+`plan_profiles_vs_ifc.py` already meshes both files, moves them into Revit's
+internal feet through each export's site placement and compares the plan
+union of their upward faces, an area and an outline. It keys an IfcSpace,
+which has no Tag, by its GlobalId. This runs it with `--class IfcSpace` and
+adds what an importer needs to know about rooms:
+
+- which spaces pair: by Revit's GlobalId, or, for a file whose rooms carry
+  none of Revit's (Revit 2023), by the nearest top-surface centroid, one
+  space to one;
+- the spaces in only one file, and those with no body;
+- area within 0.1% and within 1%, the outline within 0.01 ft, and both;
+- the same counts split by where rvt-rs's outline came from (its stored
+  solid, or the record box);
+- every pair that is off in area or outline, with the reason rvt-rs's own
+  property set gives (`SpaceOutlineSource`, or the older `ProfileSource`
+  and `ProfileResolved` of `RvtElementRecordGeometry`).
+
+The lines starting `space profiles:` are counts only, so the Measure
+workflow keeps them for the held-out models.
+
+Usage:
+
+    python3 tools/re/space_profiles_vs_ifc.py <rvt-rs.ifc> <revit-export.ifc>
+        [--match globalid|centroid] [--list N]
+        [--min-in-both N] [--min-area N] [--min-outline N]
+
+`--match` is chosen from the files unless given: centroid when under half of
+rvt-rs's spaces carry a GlobalId of Revit's. The `--min-*` flags make the run
+a gate: it exits 1 when a count falls below its minimum.
+
+Needs IfcOpenShell (the version tools/ci/requirements-ifc.txt pins), NumPy and Shapely.
+"""
+
+import collections
+import sys
+
+import ifcopenshell
+import ifcopenshell.util.element
+
+import plan_profiles_vs_ifc as plan
+
+SET = "RvtElementRecordGeometry"
+STORED_SOLID = "stored_solid"
+RECORD_BOX = "record_box"
+ROOM_SOLID_SOURCE = "partition_room_solid_faces"
+
+
+def sources(path):
+    """GlobalId -> where rvt-rs's outline of the space came from."""
+    out = {}
+    f = ifcopenshell.open(path)
+    for space in f.by_type("IfcSpace"):
+        props = ifcopenshell.util.element.get_psets(space).get(SET, {})
+        marker = props.get("SpaceOutlineSource")
+        if marker:
+            out[space.GlobalId] = marker
+        elif props.get("ProfileSource") == ROOM_SOLID_SOURCE:
+            out[space.GlobalId] = STORED_SOLID
+        elif props.get("ProfileResolved") is False:
+            out[space.GlobalId] = RECORD_BOX
+        elif props.get("ProfileSource"):
+            out[space.GlobalId] = f"other: {props['ProfileSource']}"
+        else:
+            out[space.GlobalId] = "not stated"
+    return out
+
+
+def count_spaces(path):
+    return len(ifcopenshell.open(path).by_type("IfcSpace"))
+
+
+def pair_by_centroid(ours, revit):
+    """One rvt-rs space to one of Revit's, nearest centroids first."""
+    distances = sorted(
+        (ours[a][3].centroid.distance(revit[b][3].centroid), a, b) for a in ours for b in revit
+    )
+    taken_ours, taken_revit, pairs = set(), set(), {}
+    for _, a, b in distances:
+        if a in taken_ours or b in taken_revit:
+            continue
+        taken_ours.add(a)
+        taken_revit.add(b)
+        pairs[a] = b
+    return pairs
+
+
+def main(argv):
+    args = argv[1:]
+    listing = 0
+    match = None
+    minimums = {}
+    for flag, key in (
+        ("--list", None),
+        ("--match", None),
+        ("--min-in-both", "both"),
+        ("--min-area", "area"),
+        ("--min-outline", "outline"),
+    ):
+        if flag in args:
+            i = args.index(flag)
+            value = args[i + 1]
+            del args[i : i + 2]
+            if flag == "--list":
+                listing = int(value)
+            elif flag == "--match":
+                match = value
+            else:
+                minimums[key] = int(value)
+    if len(args) != 2:
+        print(__doc__, file=sys.stderr)
+        return 2
+    ours_path, revit_path = args
+    ours, revit = plan.tops(ours_path, ["IfcSpace"]), plan.tops(revit_path, ["IfcSpace"])
+    ours_total, revit_total = count_spaces(ours_path), count_spaces(revit_path)
+    held = sources(ours_path)
+
+    by_id = [key for key in ours if key in revit]
+    if match is None:
+        match = "globalid" if ours and 2 * len(by_id) >= len(ours) else "centroid"
+    if match == "centroid" and ours and revit:
+        pairs = pair_by_centroid(ours, revit)
+    else:
+        pairs = {key: key for key in by_id}
+
+    rows = []
+    for key, other in pairs.items():
+        o_area, o_points, _, o_surface = ours[key]
+        area, points, _, surface = revit[other]
+        if area <= 0:
+            continue
+        rows.append(
+            {
+                "key": key,
+                "rel": abs(o_area - area) / area,
+                "area": area,
+                "o_area": o_area,
+                "vertices": plan.spread(o_points, points),
+                "outline": plan.outline_spread(o_points, surface, points, o_surface),
+                "source": held.get(key, "not stated"),
+            }
+        )
+
+    def area_ok(r, tolerance):
+        return r["rel"] <= tolerance
+
+    def outline_ok(r):
+        return r["outline"] <= 0.01
+
+    in_both = len(rows)
+    n_area = sum(area_ok(r, 1e-3) for r in rows)
+    n_area_1 = sum(area_ok(r, 1e-2) for r in rows)
+    n_outline = sum(outline_ok(r) for r in rows)
+    n_vertices = sum(r["vertices"] <= 0.01 for r in rows)
+    n_both = sum(area_ok(r, 1e-3) and outline_ok(r) for r in rows)
+    print(f"space profiles: matched by {match}")
+    print(
+        f"space profiles: IfcSpace in rvt-rs {ours_total}, in Revit {revit_total},"
+        f" with a body {len(ours)} and {len(revit)}"
+    )
+    print(
+        f"space profiles: in both {in_both}, only in rvt-rs {len(ours) - len(pairs)},"
+        f" only in Revit {len(revit) - len(pairs)}"
+    )
+    print(
+        f"space profiles: area within 0.1% {n_area}, within 1% {n_area_1},"
+        f" off {in_both - n_area_1}"
+    )
+    print(f"space profiles: outline within 0.01 ft {n_outline}, off {in_both - n_outline}")
+    print(f"space profiles: vertices within 0.01 ft {n_vertices}, off {in_both - n_vertices}")
+    print(f"space profiles: area within 0.1% and outline within 0.01 ft {n_both}")
+    split = collections.defaultdict(lambda: [0, 0, 0, 0])
+    for r in rows:
+        counts = split[r["source"].split(":")[0]]
+        counts[0] += 1
+        counts[1] += area_ok(r, 1e-3)
+        counts[2] += outline_ok(r)
+        counts[3] += area_ok(r, 1e-3) and outline_ok(r)
+    for source, (n, a, o, b) in sorted(split.items()):
+        label = source.replace("_", " ")
+        print(
+            f"space profiles: rvt-rs outline from {label}: {n},"
+            f" area within 0.1% {a}, outline within 0.01 ft {o}, both {b}"
+        )
+
+    off = [r for r in rows if not (area_ok(r, 1e-3) and outline_ok(r))]
+    shown = sorted(off, key=lambda r: (-r["rel"], -r["outline"]))
+    extra = sorted(rows, key=lambda r: (-r["rel"], -r["outline"]))[:listing]
+    for r in shown + [r for r in extra if r not in shown]:
+        print(
+            f"  {r['key']}: area {r['o_area']:.2f} vs {r['area']:.2f} ft2 ({r['rel']:.2%}),"
+            f" vertices {r['vertices']:.3f} ft, outline {r['outline']:.3f} ft,"
+            f" rvt-rs outline from {r['source']}"
+        )
+    shortfalls = [
+        f"{what} {got} below {minimums[key]}"
+        for key, what, got in (("both", "in both", in_both), ("area", "area", n_area), ("outline", "outline", n_outline))
+        if key in minimums and got < minimums[key]
+    ]
+    for line in shortfalls:
+        print(f"space profiles gate: {line}")
+    return 1 if shortfalls else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv))
