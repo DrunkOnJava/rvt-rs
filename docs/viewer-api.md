@@ -293,15 +293,16 @@ delivers it to the page while the call runs, because posting does not wait for
 the worker's event loop.
 
 The bar fills while a stage has a total above one and sweeps otherwise. The
-decoder reports nothing between the end of the walk and the saved graphics
-(the model is built there) or after the saved meshes (the diagnostics and the
-copy out of wasm), so the card names those stretches "Building the model" and
-"Finishing the model" and sweeps; the steps after the open call (scene graph,
-glTF, schedule) are the worker's own and sweep too. Where an open's time goes
-is the second table of `tests/saved-meshes-measure.spec.ts` (below). The
+decoder reports nothing between the last partition stream's inflate and the
+saved graphics (the model is built there) or after the saved meshes (the
+diagnostics and the copy out of wasm), so the card names those stretches
+"Building the model" and "Finishing the model" and sweeps; the steps after the
+open call (scene graph, glTF, schedule) are the worker's own and sweep too.
+How much of an open that is, measured, is under
+[Models too large for the browser](#models-too-large-for-the-browser). The
 viewer does not cancel a decode: the call is synchronous in the worker, so a
 `CancelToken` has no one to set it. The "about N s" hint from the file's size
-is what the card says until the first report and while a stage has no count.
+is what the card says until the first report.
 
 ## Models too large for the browser
 
@@ -336,9 +337,10 @@ The pre-check's figure is measured, not assumed. Deploy viewer's
 `tests/saved-meshes-measure.spec.ts` opens each reference model in a fresh
 Chromium 156 context on GitHub's ubuntu-24.04 runner (4 CPUs, 16 GB) and
 records the wasm linear memory after the open, which only grows and so is the
-peak, beside the estimate (ten times the file) and their ratio (run
-[41695636243](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41695636243),
-saved meshes on; the same peaks with them off):
+peak, beside the estimate (ten times the file) and their ratio (Deploy viewer run
+[41700152800](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41700152800),
+saved meshes on; the same peaks with them off, and the same in the two runs
+before it):
 
 | Model | File MiB | Wasm peak MiB | Peak / file (about) | Estimate MiB | Estimate / peak |
 |---|---|---|---|---|---|
@@ -347,7 +349,7 @@ saved meshes on; the same peaks with them off):
 | RE1-Architecture | 6 | 100 | 16 | 63 | 0.63 |
 | RE1-Plumbing | 3 | 60 | 18 | 33 | 0.56 |
 | RE1-Mechanical | 3 | 71 | 22 | 32 | 0.45 |
-| Revit_IFC5_Einhoven | 0.9 | 23 | 26 | 9 | 0.37 |
+| Revit_IFC5_Einhoven | 0.9 | 23 | 27 | 9 | 0.37 |
 
 The estimate is under the peak on every model (0.37 to 0.99), tightest on the
 largest, because fixed costs weigh more on a small file. That is the direction
@@ -379,7 +381,30 @@ notes cited, and none is built:
 | Stream partitions | Inflate, use and drop one partition at a time | A library change: `RevitFile::inflated_partition` keeps every partition for the handle's lifetime on purpose (#266 took Core Interior from 26 s to 1.7 s natively by inflating each once), and a dozen passes read them |
 | wasm64 (memory64) | Raise the ceiling past 4 GiB | Chrome 133 and Firefox 134 ship memory64; Safari has it in Technology Preview, and an iOS Safari 27 report says a 64-bit `Memory` is accepted but a memory64 module does not compile ([wllama#297](https://github.com/ngxson/wllama/issues/297)). wasm-bindgen supports the `wasm64-unknown-unknown` target since 0.2.120 ([release notes](https://github.com/wasm-bindgen/wasm-bindgen/releases), 2026-04-28; the lock has 0.2.118). The target is tier 3 (nightly and `build-std`). It would be a second wasm build chosen by feature detection, with the 32-bit build kept for Safari |
 
-@@TIMELINE@@
+Where an open's time goes is in the second table of
+`tests/saved-meshes-measure.spec.ts`, built from the reports the page receives,
+and it limits what the progress bar can show. On Core Interior (Deploy viewer
+[41700152800](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41700152800),
+the open takes 17 s alone in this run, and 22 s and 24 s in earlier runs on other
+runners): the schema, the candidate scan and the element
+decode take 0.1 s (the file has no `Global/Latest` candidates; its elements
+come from the partition records), and the `partition-scan` stage covers 15.9 s,
+of which the first 2.5 s are real counts. `tests/load-progress.spec.ts` opens
+the same file while it samples the card, on a runner shared with another test,
+so it is slower (31.6 s) but has the same shape: the card fills 12% for each of
+the 8 partition streams inflated, from 0.65 s to 3.1 s, and after the last
+inflate the decoder reports nothing until the saved graphics start, 26.4 s later
+(84% of that open): the
+partition-schema recovery (levels, materials, rooms, walls, doors, windows,
+slabs and products, each a pass over the inflated partitions) and the export's
+own passes. The saved graphics take 0.3 s and the saved meshes 0.3 s, and
+the three worker steps 1.4 s. The RE1 models have the same shape: 4.6 s of
+Architecture's 5.1 s and 2.6 s of Plumbing's 3.0 s are under `partition-scan`.
+So the bar is determinate for a tenth of a Core Interior open, and the card says
+"Building the model" with a sweep for the rest. Reporting progress through the
+partition-schema recovery is the work that would change that; it needs a
+control passed into those passes, which is a library change this one does not
+make.
 
 ## Full frontend pipeline
 

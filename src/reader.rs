@@ -178,7 +178,12 @@ pub struct RevitFile {
     arc_wall_scan: Option<CachedArcWallScan>,
     /// Where an export in progress reports each `Partitions/*` stream it
     /// inflates, and how many there are ([`Self::report_partition_inflates_to`]).
-    partition_progress: Option<(crate::control::WalkerControl, u64)>,
+    /// Held as `AssertUnwindSafe` so the handle keeps the unwind-safety it
+    /// has without one: a control wraps a caller's closure, which is neither.
+    partition_progress: Option<(
+        std::panic::AssertUnwindSafe<crate::control::WalkerControl>,
+        u64,
+    )>,
     /// Memoised data objects (RE-153) of each partition stream: the
     /// original symbols, railing types and MEP systems each scanned every
     /// partition for them.
@@ -582,7 +587,7 @@ impl RevitFile {
     /// own.
     pub(crate) fn report_partition_inflates_to(&mut self, control: &crate::control::WalkerControl) {
         let total = self.partition_stream_names().len() as u64;
-        self.partition_progress = Some((control.clone(), total));
+        self.partition_progress = Some((std::panic::AssertUnwindSafe(control.clone()), total));
     }
 
     pub(crate) fn stop_reporting_partition_inflates(&mut self) {

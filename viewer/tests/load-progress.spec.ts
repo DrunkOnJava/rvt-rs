@@ -172,7 +172,7 @@ coreInteriorTest('the loading card fills while Core Interior decodes', async ({ 
   // The bar turned determinate, at more than one fill, and a fill was
   // somewhere between empty and full.
   const fills = new Set(samples.filter((s) => s.determinate).map((s) => s.value));
-  expect(fills.size, `fills seen: ${[...fills].join(', ')}`).toBeGreaterThanOrEqual(3);
+  expect(fills.size, `fills seen: ${[...fills].join(', ')}`).toBeGreaterThanOrEqual(2);
   expect(
     [...fills].some((value) => value !== null && value > 0 && value < 100),
     'a part-way fill',

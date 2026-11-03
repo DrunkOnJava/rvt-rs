@@ -956,6 +956,11 @@ header .export-hint[hidden] {
 #scaffold-note.hidden {
   display: none;
 }
+/* A failure to open sits above the empty state it leaves behind (the
+   dropzone is z-index 10), which Dismiss then uncovers. */
+#scaffold-note.is-failure {
+  z-index: 11;
+}
 .note-card {
   width: min(460px, 86%);
   padding: var(--sx-space-sm) var(--sx-space-md);

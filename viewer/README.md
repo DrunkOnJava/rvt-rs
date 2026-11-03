@@ -83,7 +83,7 @@ names the stage and counts it. `src/worker.ts` passes a function to
 `openRvtBytesWithDiagnosticsModeAndOpenLimits` and posts each report from
 inside the wasm call; the page keeps the list on `#status` as
 `data-load-progress`. The "about N s" estimate from the file's size is what
-the card says until the first report and while a stage has no count. `tests/load-progress.spec.ts` watches
+the card says until the first report. `tests/load-progress.spec.ts` watches
 the card fill on Core Interior. The stages and what the card cannot show are
 in [`docs/viewer-api.md`](../docs/viewer-api.md#decode-progress).
 

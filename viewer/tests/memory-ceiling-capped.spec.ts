@@ -42,6 +42,14 @@ modelTest('a model past it is reported as too large, not as unreachable', async 
   await expect(page.locator('#status')).toHaveText(/^Too large for the browser · stopped at /);
   const note = page.locator('#scaffold-note');
   await expect(note).toBeVisible();
+  // Visible to a person: the empty state the failure leaves behind is over
+  // the viewport too, and the note has to be above it.
+  const covered = await page.evaluate(() => {
+    const card = document.querySelector('#scaffold-note .note-card')!.getBoundingClientRect();
+    const top = document.elementFromPoint(card.x + card.width / 2, card.y + card.height / 2);
+    return top?.closest('#scaffold-note') === null;
+  });
+  expect(covered, 'the note is under the empty state').toBe(false);
   await expect(note.locator('#scaffold-note-title')).toHaveText('Too large for the browser');
   const body = note.locator('#scaffold-note-body');
   await expect(body).toContainText('Revit_IFC5_Einhoven.rvt');

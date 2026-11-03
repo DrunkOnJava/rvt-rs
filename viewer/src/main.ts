@@ -519,7 +519,7 @@ interface LoadEvent {
 }
 
 let loadStartedAt = 0;
-/** What the card says while a stage has no count to fill the bar with: the size-derived estimate. */
+/** What the card says until the decoder first reports: the size-derived estimate. */
 let loadExpectationText = '';
 let loadTimer: number | null = null;
 let loadEvents: LoadEvent[] = [];
@@ -557,7 +557,7 @@ function onDecodeStage(stage: string, done: number, total: number | null, memory
   loadHintEl.textContent =
     counted && info
       ? [`${Math.round((done / total) * 100)}%`, info.count(done, total)].filter(Boolean).join(' · ')
-      : loadExpectationText;
+      : '';
   // #status is a live region: say a stage once, not each percent of it.
   if (stage !== loadStage || after) setStatus(step);
   loadStage = stage;
@@ -626,6 +626,7 @@ function stopLoadOverlay(): void {
 // ---------- Scaffold-only empty state ----------
 function hideScaffoldNote(): void {
   scaffoldNoteEl.classList.add('hidden');
+  scaffoldNoteEl.classList.remove('is-failure');
 }
 
 /**
@@ -1092,7 +1093,9 @@ async function loadBytes(file: File, limits?: OpenLimitsOptions): Promise<void> 
       loadEvents.push({ t: Math.round(performance.now() - loadStartedAt), step: msg.step });
       // The steps after the decode count nothing, so the bar sweeps again.
       setLoadFraction(null);
-      loadHintEl.textContent = loadExpectationText;
+      // The estimate is for before the decoder has said anything; once it has,
+      // a step with no count has none to give.
+      loadHintEl.textContent = loadStage === null ? loadExpectationText : '';
       setStatus(msg.step);
       setLoadStep(msg.step);
       return;
@@ -1218,6 +1221,7 @@ function showTooLarge(file: File, tooLarge: TooLarge): void {
   );
   scaffoldNoteTitleEl.textContent = 'Too large for the browser';
   scaffoldNoteBodyEl.textContent = `${summary} ${advice}`;
+  scaffoldNoteEl.classList.add('is-failure');
   scaffoldNoteEl.classList.remove('hidden');
   setDropzoneVisible(true);
   setExportHint('Open a file to export');
