@@ -415,16 +415,9 @@ jobs:
                 if cmp -s "$d/info.json" "measure-base/$f/info.json" && cmp -s "$d/info.exit" "measure-base/$f/info.exit"; then echo "- $f: identical ($(cat "$d/info.exit"))"; else echo "- $f: **differs**"; fi
               done
               echo
-              echo "### rvt-ifc wall time, base → head (ms), on two runners"
+              echo "### Times"
               echo
-              echo "Base ran on $(cat measure-base/runner.txt 2>/dev/null || echo 'an unrecorded CPU'), head on $(cat measure-head/runner.txt 2>/dev/null || echo 'an unrecorded CPU'). Runner speed alone moves these times by up to about 1.7x, so they compare machines as much as code; dispatch with \`timing\` to time both refs on one runner."
-              echo
-              for d in measure-head/*/; do
-                m=$(basename "$d")
-                h=$(grep -h '^milliseconds' "$d/rvt-ifc.log" 2>/dev/null | cut -d' ' -f2)
-                b=$(grep -h '^milliseconds' "measure-base/$m/rvt-ifc.log" 2>/dev/null | cut -d' ' -f2)
-                [ -n "$h" ] && [ -n "$b" ] && echo "- $m: $b → $h"
-              done
+              echo "These jobs check what the exports hold. They run exports and scorers several at once, on two runners whose speed alone differs by up to about 1.7x, so their times are not benchmarks. Dispatch with \`timing\` to time both refs' exports on one runner (tools/ci/measure-timing.sh)."
               echo
               echo "### Scorer differences (base → head)"
               echo
