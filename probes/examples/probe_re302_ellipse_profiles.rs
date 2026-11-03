@@ -4,15 +4,14 @@
 //! FACT under test: `native_parametric_surface::Curve::read` takes a
 //! profile only as a `GLine` or a `GArc`, so a `RuledSurf` or `SurfRev`
 //! whose profile is a `GEllipse` fails, and RE-224 keeps the element's box:
-//! 407 of the 1,213 partial saved meshes left after RE-300 and RE-301 on the
-//! BIM4LCA office, RE1 and Autodesk's 2024 samples, 237 for that alone. This
+//! 51 BIM4LCA office elements after RE-304 (Measure 41572297689). This
 //! prints what a `GEllipse` holds, and which classes point to it, so the
 //! ellipse can be evaluated as an arc is.
 //!
 //! Output: one `ellipse` line per object for the first 8 per file, with its
 //! owner ElementId, the classes pointing to it and its fields, then `census`
-//! lines: field sets, parent classes, and the ratio of its two radii where
-//! two radius-like fields are present.
+//! lines: the ellipse and profile counts, the field sets, and the parent
+//! classes.
 //!
 //! ```text
 //! cargo run --profile ci -p rvt-probes --example probe_re302_ellipse_profiles -- model.rvt
