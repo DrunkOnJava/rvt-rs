@@ -293,7 +293,7 @@
         "approximate_outline_spaces": {
           "type": "integer",
           "minimum": 0,
-          "description": "Exported IfcSpaces that are rooms whose resolved outline is the boundary of a region, a column overlapping a wall having been taken off it, or falls up to 0.02 ft short of their record box on a side (SpaceOutlineSource stored_solid_approximate, RE-316): their area is approximate, up to 0.68% under Revit's floor area where Revit's export does not take the column off."
+          "description": "Exported IfcSpaces that are rooms whose resolved outline is the boundary of a region, a column overlapping a wall having been taken off it or an end of one wall edge lying on another, or falls up to 0.02 ft short of their record box on a side (SpaceOutlineSource stored_solid_approximate, RE-316): their area is approximate, up to 0.68% under Revit's floor area where Revit's export does not take the column off."
         }
       }
     },

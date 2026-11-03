@@ -40,7 +40,9 @@
 //! bytes, and no more than its list of objects counts ([`solid_span`],
 //! [`solid_object_count`]), so the faces of the element that follows it are
 //! not read. Where the span's wall edges close as the walk reads them (one
-//! outer loop, the loops inside it nested, no edge crossing another) that is
+//! outer loop, the loops inside it nested, no edge crossing another; their
+//! ends joined within [`ROOM_STEP_TOLERANCE_FEET`], where the walk joins them
+//! within 1e-4 ft) that is
 //! the outline ([`ROOM_OUTLINE_SOURCE_FACES`]). Where a column overlaps a wall
 //! and its loop lies partly inside the wall's, each plan edge is directed so
 //! the room is on its left and the outline is the boundary of the region those
@@ -53,7 +55,7 @@
 //! the face's u and v, at +158, and its radius at +182 ([`RoomCylinder`]). Its
 //! arc closes the loops of the six `rac_advanced` rooms RE-101 left open, but
 //! whether Revit takes a column off a room's area is unmeasured (it does not
-//! on two office rooms), so a solid with one is left unresolved.
+//! on four office rooms), so a solid with one is left unresolved.
 //!
 //! Core Interior keeps a room's record and solid in more than one partition,
 //! and the copies can disagree: room 20832's outline spans 10.5 ft in one and
@@ -685,7 +687,7 @@ pub enum ResolvedKind {
     Faces,
     /// The outline is the boundary of the region the edges wind around,
     /// because a column overlaps a wall and its loop lies partly inside the
-    /// wall's, or it falls up to [`ROOM_SLIVER_FEET`] short of the record box
+    /// wall's, or an end of one wall edge lies on another, or it falls up to [`ROOM_SLIVER_FEET`] short of the record box
     /// on a side. Revit's export does not always take such a column off the
     /// room's area, so the area is approximate: 0.45% to 0.7% under Revit's
     /// floor area on the four office rooms where it does not.

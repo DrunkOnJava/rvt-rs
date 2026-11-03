@@ -8,8 +8,9 @@
   is bounded (512 faces, 4,096 pieces; crafted solids take under 10 ms).
   `SpaceOutlineSource` is `stored_solid_faces` where the faces' edges close as
   the walk reads them, and `stored_solid_approximate` where a column overlaps
-  a wall (its area depends on whether Revit's export takes the column off) or
-  the outline falls up to 0.02 ft short of the record box; `stored_solid`
+  a wall (its area depends on whether Revit's export takes the column off),
+  an end of one wall edge lies on another, or the outline falls up to
+  0.02 ft short of the record box; `stored_solid`
   stays the exact walk's. The diagnostics count both
   (`exported.resolved_outline_spaces`, `exported.approximate_outline_spaces`)
   and the room schedule leaves an approximate room's area blank. On the

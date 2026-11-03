@@ -106,7 +106,7 @@ for dir in "$RESULTS"/holdout-*/ "$RESULTS"/bimcollab-*/; do
     done
     for f in "$dir"space_overlaps_vs_ifc.txt; do
       [ -f "$f" ] || continue
-      grep -E "^space overlaps: (upward|downward|every) faces, [a-z ]+: [0-9]+ paired rooms, area within 0\.1% of Revit's on [0-9]+$" "$f" || true
+      grep -E "^space overlaps: (upward|downward|every) faces?, [a-z ]+: [0-9]+ paired rooms, area within 0\.1% of Revit's on [0-9]+$" "$f" || true
     done
     for f in "$dir"storeys_vs_ifc.txt; do
       [ -f "$f" ] || continue
