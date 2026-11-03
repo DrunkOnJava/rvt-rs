@@ -531,3 +531,133 @@ pub fn family_solids(
     }
     Ok(out)
 }
+
+/// Each selected record's graph, by ElementId.
+fn read_graphs(
+    rf: &mut RevitFile,
+    ids: &BTreeSet<u64>,
+    mut each: impl FnMut(u64, &ObjectGraph),
+) -> anyhow::Result<()> {
+    if ids.is_empty() {
+        return Ok(());
+    }
+    let options = native_document::Options {
+        selected_ids: ids.clone(),
+        ..native_document::Options::default()
+    };
+    native_document::extract_graphs(rf, &options, |record| {
+        if let Some(graph) = record.graph.as_ref() {
+            each(record.identity.element_id, graph);
+        }
+        Ok(())
+    })?;
+    Ok(())
+}
+
+/// A graph's root element as the id in `field`.
+fn root_id(graph: &ObjectGraph, class: &str, field: &str) -> Option<u64> {
+    let root = graph.objects.first()?;
+    if root.class_name != class {
+        return None;
+    }
+    u64::try_from(element_id(root.fields.get(field))?).ok()
+}
+
+/// The family instances of `instances` that have no 3D body (RE-312, #1262).
+///
+/// Revit's exporter writes a family instance that is not a door or a window
+/// only when it has a 3D body (`FamilyInstanceExporter.
+/// ExportFamilyInstanceElement` in revit-ifc, CLEANROOM.md source 5). An
+/// instance has none when no model form of its family's document is drawn
+/// for its parameter values: a form is drawn unless it is a void or its
+/// `Visible` is 0, where `Visible` is the value of the family parameter it
+/// is bound to (the instance's, else its type's, matched to the family's by
+/// caption) or else its stored value. On the BIM4LCA terrain office the 92
+/// bicycle bays of "Parking Space" carry "Stripe Y/NA" as 0 and are not in
+/// Revit's export, and its 2 car bays do not.
+///
+/// An instance is left out of the result, so is not called bodiless, where
+/// its family's document is not found, holds no form, nests a family
+/// instance or has a form or instance that does not decode.
+pub fn instances_without_body(
+    rf: &mut RevitFile,
+    instances: &BTreeSet<u64>,
+) -> anyhow::Result<BTreeSet<u64>> {
+    let mut symbol_of: BTreeMap<u64, u64> = BTreeMap::new();
+    let mut instance_params: BTreeMap<u64, Vec<(u64, i64)>> = BTreeMap::new();
+    read_graphs(rf, instances, |id, graph| {
+        if let Some(symbol) = root_id(graph, "FamilyInstance", "m_masterSymbolId") {
+            symbol_of.insert(id, symbol);
+            instance_params.insert(id, family_params(graph));
+        }
+    })?;
+
+    // The types, and the captions of the parameters the instances set.
+    let symbols: BTreeSet<u64> = symbol_of.values().copied().collect();
+    let mut selected = symbols.clone();
+    selected.extend(instance_params.values().flatten().map(|(id, _)| *id));
+    let mut family_of: BTreeMap<u64, u64> = BTreeMap::new();
+    let mut symbol_params: BTreeMap<u64, Vec<(u64, i64)>> = BTreeMap::new();
+    let mut captions: BTreeMap<u64, String> = BTreeMap::new();
+    let caption_of = |graph: &ObjectGraph| {
+        graph
+            .objects
+            .iter()
+            .find_map(|object| object.fields.get("m_caption")?.as_str())
+            .map(str::to_string)
+    };
+    read_graphs(rf, &selected, |id, graph| {
+        if symbols.contains(&id) {
+            if let Some(family) = root_id(graph, "FamilySymbol", "m_familyId") {
+                family_of.insert(id, family);
+                symbol_params.insert(id, family_params(graph));
+            }
+        } else if let Some(caption) = caption_of(graph) {
+            captions.insert(id, caption);
+        }
+    })?;
+    let unread: BTreeSet<u64> = symbol_params
+        .values()
+        .flatten()
+        .map(|(id, _)| *id)
+        .filter(|id| !selected.contains(id))
+        .collect();
+    read_graphs(rf, &unread, |id, graph| {
+        if let Some(caption) = caption_of(graph) {
+            captions.insert(id, caption);
+        }
+    })?;
+
+    let families: BTreeSet<u64> = family_of.values().copied().collect();
+    let solids = family_solids(rf, &families)?;
+    let mut out = BTreeSet::new();
+    for (instance, symbol) in &symbol_of {
+        let Some(solid) = family_of.get(symbol).and_then(|family| solids.get(family)) else {
+            continue;
+        };
+        if solid.incomplete || solid.forms.is_empty() {
+            continue;
+        }
+        // The instance's value of a parameter, else its type's.
+        let mut by_caption: BTreeMap<&str, i64> = BTreeMap::new();
+        let own = instance_params.get(instance);
+        let of_type = symbol_params.get(symbol);
+        for (parameter, value) in of_type.into_iter().chain(own).flatten() {
+            if let Some(caption) = captions.get(parameter) {
+                by_caption.insert(caption.as_str(), *value);
+            }
+        }
+        let drawn = solid.forms.iter().filter(|form| !form.cutting).any(|form| {
+            let value = form
+                .bound_caption
+                .as_deref()
+                .and_then(|caption| by_caption.get(caption).copied())
+                .or(form.visible);
+            value != Some(0)
+        });
+        if !drawn {
+            out.insert(*instance);
+        }
+    }
+    Ok(out)
+}

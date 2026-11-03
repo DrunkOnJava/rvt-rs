@@ -58,6 +58,41 @@ pub(super) fn attach_ifc_export_overrides(
     }
 }
 
+/// Leave out the family instances written as spaces through their "Export to
+/// IFC As" that have no 3D body, as Revit's export leaves them out (RE-312,
+/// #1262). Revit writes a family instance that is not a door or a window
+/// only when it has a 3D body, and an instance has none when every model
+/// form of its family is a void or hidden for its parameter values
+/// ([`crate::native_family_forms::instances_without_body`]). On the BIM4LCA
+/// terrain office the 92 bicycle bays of "Parking Space", whose "Stripe
+/// Y/NA" is 0, are not in Revit's export and its 2 car bays are.
+pub(super) fn without_bodiless_family_spaces(
+    rf: &mut RevitFile,
+    products: &mut Vec<DecodedElement>,
+) {
+    let candidates: BTreeSet<u64> = products
+        .iter()
+        .filter(|element| {
+            element.fields.iter().any(|(name, value)| {
+                matches!(value, InstanceField::String(entity)
+                    if name == IFC_EXPORT_AS_FIELD && entity.trim().eq_ignore_ascii_case("IfcSpace"))
+            })
+        })
+        .filter_map(|element| element.id.map(u64::from))
+        .collect();
+    if candidates.is_empty() {
+        return;
+    }
+    let Ok(bodiless) = crate::native_family_forms::instances_without_body(rf, &candidates) else {
+        return;
+    };
+    products.retain(|element| {
+        !element
+            .id
+            .is_some_and(|id| bodiless.contains(&u64::from(id)))
+    });
+}
+
 /// Give elements of system families (walls, floors, roofs, ceilings,
 /// railings) their type's name (#322).
 ///
