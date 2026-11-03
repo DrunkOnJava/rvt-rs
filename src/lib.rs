@@ -93,6 +93,7 @@
 //! - [`formats`]: `Formats/Latest`: every serialized class, its tag, parent and field types
 //! - [`class_index`]: a fast inventory of the class names a file declares
 //! - [`elem_table`]: `Global/ElemTable`: the ElementIds a file declares
+//! - [`element_id`]: [`ElementId`], an element's id in its document
 //! - [`partitions`]: the `Partitions/NN` stream header and chunk splitter
 //! - [`object_graph`]: document history and string records
 //! - [`elements`]: typed elements and the per-class decoders
