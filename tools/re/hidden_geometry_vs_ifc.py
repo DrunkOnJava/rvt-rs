@@ -9,7 +9,9 @@ along the symbol's X of the primitives of the symbol that draws it:
 
 - visible: the primitives no hidden branch leads to (what the saved graphics
   show);
-- all: those and the ones the visibility flags hide.
+- hidden: those and the ones the visibility flags hide;
+- all: those and the ones a filter rejecting the default context leads to,
+  where the probe lists any (`filtered=1`).
 
 Per class it counts how often each is Revit's width, and lists every door and
 window where `all` is not, and every one where it is and `visible` is not.
@@ -39,7 +41,7 @@ def read_probe(path):
             if fields.get("box", "-") == "-":
                 continue
             box = tuple(float(v) for v in fields["box"].split(","))
-            prims[parts[1]].append((fields["hidden"] == "1", box))
+            prims[parts[1]].append((fields["hidden"] == "1", fields.get("filtered") == "1", box))
     return instances, prims
 
 
@@ -75,27 +77,34 @@ def main():
         if width is None:
             continue
         rows = prims[symbol]
-        visible = x_extent([b for hidden, b in rows if not hidden])
-        everything = x_extent([b for _, b in rows])
-        hidden_n = sum(1 for hidden, _ in rows if hidden)
+        visible = x_extent([b for hidden, filtered, b in rows if not hidden and not filtered])
+        with_hidden = x_extent([b for hidden, filtered, b in rows if not filtered])
+        everything = x_extent([b for _, _, b in rows])
+        hidden_n = sum(1 for hidden, _, _ in rows if hidden)
+        filtered_n = sum(1 for _, filtered, _ in rows if filtered)
         c = counts[cls]
         c["n"] += 1
         c["visible"] += close(visible, width)
+        c["hidden"] += close(with_hidden, width)
         c["all"] += close(everything, width)
         c["has hidden primitives"] += hidden_n > 0
+        c["has filtered primitives"] += filtered_n > 0
+        c["all differs from hidden"] += not close(everything, with_hidden)
         c["all differs from visible"] += not close(everything, visible)
-        if not close(everything, width) or (close(everything, width) and not close(visible, width)):
-            shown[cls].append((tag, symbol, width, visible, everything, hidden_n, len(rows)))
+        if not close(everything, width) or not close(with_hidden, width) or not close(visible, width):
+            shown[cls].append((tag, symbol, width, visible, with_hidden, everything, hidden_n, filtered_n, len(rows)))
     for cls, c in sorted(counts.items()):
         print(
-            f"{cls}: {c['n']} joined; visible = Revit on {c['visible']}, all = Revit on {c['all']}; "
-            f"{c['has hidden primitives']} symbols hold hidden primitives, "
-            f"{c['all differs from visible']} change width with them"
+            f"{cls}: {c['n']} joined; visible = Revit on {c['visible']}, with hidden = Revit on {c['hidden']}, "
+            f"all = Revit on {c['all']}; {c['has hidden primitives']} symbols hold hidden primitives, "
+            f"{c['has filtered primitives']} filtered ones; hidden changes the width of "
+            f"{c['all differs from visible'] - c['all differs from hidden']}, filtered of {c['all differs from hidden']}"
         )
-        for tag, symbol, width, visible, everything, hidden_n, n in shown[cls]:
+        for tag, symbol, width, visible, with_hidden, everything, hidden_n, filtered_n, n in shown[cls]:
+            r = lambda v: v if v is None else round(v, 4)
             print(
-                f"  {tag} symbol {symbol}: Revit {width:.4f}, visible {visible if visible is None else round(visible, 4)}, "
-                f"all {everything if everything is None else round(everything, 4)} ({hidden_n} of {n} hidden)"
+                f"  {tag} symbol {symbol}: Revit {width:.4f}, visible {r(visible)}, with hidden {r(with_hidden)}, "
+                f"all {r(everything)} ({hidden_n} hidden, {filtered_n} filtered of {n})"
             )
     return 0
 

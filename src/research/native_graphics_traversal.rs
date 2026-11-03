@@ -24,6 +24,11 @@ pub struct SelectedGraphics {
     /// Whether a node on the way here is flagged not visible. Only a
     /// selection made including hidden branches holds any (RE-318).
     pub hidden: bool,
+    /// Whether a filter on the way here rejects the context (a detail level,
+    /// a view direction) or holds a condition not read, and was walked
+    /// anyway. Only a selection made including filtered branches holds any
+    /// (RE-318).
+    pub filtered: bool,
 }
 #[derive(Debug, Clone, Serialize)]
 pub struct TraversalDiagnostic {
@@ -60,7 +65,7 @@ pub fn select_graphics_with_resolver_at_detail<'a>(
     resolver: &dyn Fn(u64) -> Option<&'a ObjectGraph>,
     detail_level: i64,
 ) -> GraphicsSelection {
-    select_graphics_impl(graph, resolver, detail_level, false)
+    select_graphics_impl(graph, resolver, detail_level, false, false)
 }
 /// [`select_graphics_with_resolver_at_detail`], also walking the branches
 /// whose visibility flags hide them, each selected carrier marked
@@ -71,13 +76,25 @@ pub fn select_graphics_including_hidden_at_detail<'a>(
     resolver: &dyn Fn(u64) -> Option<&'a ObjectGraph>,
     detail_level: i64,
 ) -> GraphicsSelection {
-    select_graphics_impl(graph, resolver, detail_level, true)
+    select_graphics_impl(graph, resolver, detail_level, true, false)
+}
+/// [`select_graphics_including_hidden_at_detail`], also walking the children
+/// of a filter whose conditions reject the context or are not read, each
+/// selected carrier marked [`SelectedGraphics::filtered`] where one lies on
+/// its way (RE-318).
+pub fn select_graphics_including_filtered_at_detail<'a>(
+    graph: &'a ObjectGraph,
+    resolver: &dyn Fn(u64) -> Option<&'a ObjectGraph>,
+    detail_level: i64,
+) -> GraphicsSelection {
+    select_graphics_impl(graph, resolver, detail_level, true, true)
 }
 fn select_graphics_impl<'a>(
     graph: &'a ObjectGraph,
     resolver: &dyn Fn(u64) -> Option<&'a ObjectGraph>,
     detail_level: i64,
     include_hidden: bool,
+    include_filtered: bool,
 ) -> GraphicsSelection {
     let mut walk = Walker {
         graph,
@@ -90,6 +107,8 @@ fn select_graphics_impl<'a>(
         visits: 0,
         include_hidden,
         hidden_depth: 0,
+        include_filtered,
+        filtered_depth: 0,
     };
     if !(1..=3).contains(&detail_level) {
         walk.fail(0, "detail level must be1,2,or3");
@@ -139,6 +158,8 @@ struct Walker<'a, 'r> {
     visits: usize,
     include_hidden: bool,
     hidden_depth: usize,
+    include_filtered: bool,
+    filtered_depth: usize,
 }
 impl Walker<'_, '_> {
     fn fail(&mut self, index: usize, message: &str) {
@@ -228,6 +249,7 @@ impl Walker<'_, '_> {
                 world_transform: matrix,
                 path: path.clone(),
                 hidden: self.hidden_depth > 0,
+                filtered: self.filtered_depth > 0,
             }),
             "GElement" | "GGroup" | "GFilter" => {
                 let children = self.children(index)?;
@@ -280,6 +302,7 @@ impl Walker<'_, '_> {
                         .as_array()
                         .ok_or("missing filter conditions")?;
                     let mut unknown = None;
+                    let mut rejected = false;
                     for p in conditions {
                         let ci = self.target(index, p)?;
                         let field = &self.graph.objects[ci].fields;
@@ -306,6 +329,7 @@ impl Walker<'_, '_> {
                                 self.detail_level,
                             )
                         } {
+                            Ok(false) if self.include_filtered => rejected = true,
                             Ok(false) => {
                                 self.result.rejected_filters += 1;
                                 return Ok(());
@@ -315,7 +339,18 @@ impl Walker<'_, '_> {
                         }
                     }
                     if let Some(e) = unknown {
-                        return Err(e);
+                        if !self.include_filtered {
+                            return Err(e);
+                        }
+                        rejected = true;
+                    }
+                    if rejected {
+                        self.filtered_depth += 1;
+                        for child in children {
+                            self.visit(child, matrix, path)
+                        }
+                        self.filtered_depth -= 1;
+                        return Ok(());
                     }
                 }
                 for child in children {

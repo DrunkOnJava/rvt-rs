@@ -1,5 +1,5 @@
 //! RE-318 (#810): where the 5.8629 ft `OverallWidth` of the BIM4LCA office's
-//! two door-with-sidelight doors (1756089, 1765267) comes from.
+//! two hatch doors (1756089, 1765267) comes from.
 //!
 //! FACT under test: Revit's export sizes a door from the symbol that draws it
 //! (revit-ifc's `GetDoorWindowDimensionFromSymbol`, which feeds
@@ -13,7 +13,7 @@
 //! 1. the cut solid's unbounded planes (origin, axes, orientation), and the
 //!    `FamilySymbol` root's `m_closurePlanes`, `m_cutDirs`, `m_cutIndices`
 //!    and `m_cutPlaneHeights`, which RE-215 dumped only for symbols with a
-//!    loop; the two sidelight symbols' every field and object;
+//!    loop; the two hatch symbols' every field and object;
 //! 2. the symbol's saved graphics (the 3D geometry Revit drew): each
 //!    primitive's owner, face tag, render style, material and box, for the
 //!    symbol's own record (symbol frame) and for the instance's (document
@@ -25,8 +25,8 @@
 //!   symclasses <symbol> objects=<n> <class:count,...>
 //!   symface <symbol> <solid> <face> surface=<class> mesh=<x0,y0,z0,x1,y1,z1|unbounded|error:..>
 //!     origin=.. x=.. y=.. orient=.. [face=<fields>]
-//!   symfield <symbol> <name> <value>          (sidelight symbols only)
-//!   symobj <symbol> <index> <class> <fields>  (sidelight symbols only)
+//!   symfield <symbol> <name> <value>          (the hatch symbols only)
+//!   symobj <symbol> <index> <class> <fields>  (the hatch symbols only)
 //!   scene <id> <instance|symbol> status=.. prims=<n> unbounded=<n> diag=<first>
 //!   prim <id> <instance|symbol> owner=<symbol|-> tag=<face tag> style=<render style>
 //!     material=<id|-> verts=<n> box=<x0,y0,z0,x1,y1,z1>

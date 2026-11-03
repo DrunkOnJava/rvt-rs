@@ -1,5 +1,5 @@
 //! RE-318 (#810): what the loaded family document of the BIM4LCA office's two
-//! door-with-sidelight doors (1756089, 1765267) holds that could size them.
+//! hatch doors (1756089, 1765267) holds that could size them.
 //!
 //! FACT under test: Revit's export writes 5.8629 ft as these doors'
 //! `OverallWidth`, from `ExporterIFCUtils.GetMinSymbolWidth` on the symbol
