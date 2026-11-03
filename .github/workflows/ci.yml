@@ -632,7 +632,10 @@ jobs:
       # of the same project (tools/re/space_profiles_vs_ifc.py), on the two
       # projects whose rooms were measured whole: Core Interior (Revit 2024)
       # and RE1 Architecture (Revit 2025). The minimums are the measured
-      # counts, so a room that stops matching fails the job. A model's
+      # counts, in area, in outline (the mesh's vertices to the other outline)
+      # and in boundary (outline to outline), so a room that stops matching
+      # fails the job, and `--match globalid` keeps a room that loses Revit's
+      # GlobalId from pairing by position instead. A model's
       # rooms are scored here, not by `Corpus health`, because only this
       # job has IfcOpenShell, NumPy and Shapely.
       - name: Fetch RE1 Architecture and Revit's export of it (Drshelden/IFC-ECS, MIT)
@@ -655,10 +658,10 @@ jobs:
           ./target/ci/rvt-ifc "${RVT_PROJECT_CORPUS_DIR}/RE1-Architecture.rvt" -o /tmp/re1-architecture.ifc
           python tools/re/space_profiles_vs_ifc.py /tmp/core-interior.ifc \
             "${RVT_PROJECT_CORPUS_DIR}/../IFC Exports/2024_Core_Interior_slim.ifc" \
-            --min-in-both 116 --min-area 116 --min-outline 116 --min-boundary 116
+            --match globalid --min-in-both 116 --min-area 116 --min-outline 116 --min-boundary 116
           python tools/re/space_profiles_vs_ifc.py /tmp/re1-architecture.ifc \
             "${RVT_PROJECT_CORPUS_DIR}/RE1-Architecture.ifc" \
-            --min-in-both 11 --min-area 11 --min-outline 11 --min-boundary 11
+            --match globalid --min-in-both 11 --min-area 11 --min-outline 11 --min-boundary 11
       # #908: doors and windows are drawn from their saved graphics by
       # default (2026-10-29); every other class only with --saved-meshes, so
       # no other job reads theirs. Export both real projects with it, fail

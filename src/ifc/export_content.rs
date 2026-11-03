@@ -4177,8 +4177,10 @@ pub const SPACE_OUTLINE_SOURCE_PROPERTY: &str = "SpaceOutlineSource";
 /// faces of its stored solid.
 pub const SPACE_OUTLINE_STORED_SOLID: &str = "stored_solid";
 
-/// [`SPACE_OUTLINE_SOURCE_PROPERTY`] of a room drawn as its record's bounding
-/// box: placed and sized by the box, its plan area the box's, not the room's.
+/// [`SPACE_OUTLINE_SOURCE_PROPERTY`] of a space drawn as its record's bounding
+/// box (a room whose outline was not read, a Revit Space or a family instance
+/// written as a space): placed and sized by the box, its plan area the box's,
+/// not the space's.
 pub const SPACE_OUTLINE_RECORD_BOX: &str = "record_box";
 
 /// [`SPACE_OUTLINE_SOURCE_PROPERTY`] of a room drawn from the mesh Revit saved
@@ -4188,9 +4190,9 @@ pub const SPACE_OUTLINE_SAVED_MESH: &str = "saved_mesh";
 /// [`SPACE_OUTLINE_SOURCE_PROPERTY`] of an Area, which has no body.
 pub const SPACE_OUTLINE_NONE: &str = "none";
 
-/// [`SPACE_OUTLINE_SOURCE_PROPERTY`] of a family instance written as an
-/// `IfcSpace` whose body is more than its record's box: its `BodySource`
-/// says how it was drawn.
+/// [`SPACE_OUTLINE_SOURCE_PROPERTY`] of a Revit Space or a family instance
+/// written as an `IfcSpace` whose body is more than its record's box: its
+/// `BodySource` says how it was drawn.
 pub const SPACE_OUTLINE_FAMILY_BODY: &str = "family_body";
 
 /// `BodySource` of a family instance turned off the model's axes, drawn as
@@ -6552,10 +6554,10 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
             });
         }
     }
-    // RE-313: a family instance written as an `IfcSpace` is its record's box
-    // (turned with the instance where it is turned) unless a carrier drew
-    // more.
-    if space_by_export_value(decoded) {
+    // RE-313: a Revit Space, or a family instance written as an `IfcSpace`,
+    // is its record's box (turned with the instance where it is turned) unless
+    // a carrier drew more.
+    if class == "Space" || space_by_export_value(decoded) {
         let resolved = properties.iter().any(|property| {
             property.name == "ProfileResolved"
                 && matches!(property.value, PropertyValue::Boolean(true))

@@ -669,10 +669,13 @@ pub struct ExportedModelDiagnostics {
     /// (#409).
     #[serde(default)]
     pub bounding_box_bodies: usize,
-    /// Of the exported `IfcSpace`s, those drawn as their room's record
-    /// bounding box: the room's outline was not read from its stored solid
-    /// (`SpaceOutlineSource` is `record_box`), so their plan area is the box's,
-    /// not the room's (RE-313).
+    /// Of the exported `IfcSpace`s, those drawn as their record's bounding
+    /// box (`SpaceOutlineSource` is `record_box`): a room whose outline was
+    /// not read from its stored solid, or a family instance written as a space
+    /// and drawn as its box. Their plan area is the box's, not the space's
+    /// (RE-313). Each is also in `bounding_box_bodies`, except a family
+    /// instance turned or tilted off the model's axes, whose `BodySource`
+    /// names the turned box.
     #[serde(default)]
     pub bounding_box_spaces: usize,
 }

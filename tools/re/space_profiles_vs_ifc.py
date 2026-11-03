@@ -12,11 +12,14 @@ adds what an importer needs to know about rooms:
   space to one;
 - the spaces in only one file, those of Revit's that rvt-rs writes without a
   body (its Areas), and those whose top surface has no area;
-- area within 0.1% and within 1%, the outline within 0.01 ft (the distance
-  between the meshes' upward-face vertices and the other's outline, as
-  `plan_profiles_vs_ifc.py` measures it), the boundary within 0.01 ft (outline
-  to outline, which a ceiling step inside Revit's room does not move), and
-  both area and outline;
+- area within 0.1% and within 1%, and two outline distances, each within
+  0.01 ft. `outline` is `plan_profiles_vs_ifc.py`'s: the largest distance from
+  a vertex of either mesh's upward faces to the other's top-surface outline,
+  so an upward face inside Revit's room (a ceiling step) counts against it.
+  `boundary` is the largest distance from a point of either top-surface
+  outline to the other's, which such a face does not move. `vertices` is the
+  vertex-to-vertex distance. The lines print `outline`, `vertices` and
+  `boundary` under those names, and `both` is area and `outline`;
 - the same counts split by what the space is (a room, a family instance
   written as a space) and where rvt-rs's outline came from (its stored solid,
   or the record box);
