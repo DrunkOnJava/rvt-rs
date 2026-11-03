@@ -52,7 +52,9 @@ apart:
 A file that is corrupt, encrypted, a zero-byte Git LFS placeholder, or not an
 OLE/CFB Revit container is refused with an error. A stream larger than
 rvt-rs's resource limits (by default 2 GiB for the file, 256 MiB for one
-stream and for one inflated member, and 1 GiB inflated per partition) is not
+stream and for one inflated member, and per partition 16 times its stored size
+inflated, at least 1 GiB and at most 4 GiB, 1 GiB in a 32-bit build and in the
+browser) is not
 read, so the elements it holds are not exported. `rvt-ifc` and `rvt-gltf` then
 name each such stream, write no model and exit with status 3 unless
 `--allow-partial`, and the diagnostics list them; `--large-model` raises the

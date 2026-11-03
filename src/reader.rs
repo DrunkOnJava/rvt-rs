@@ -520,7 +520,7 @@ impl RevitFile {
                 name: name.to_string(),
                 stored_bytes: raw.len() as u64,
                 kind: UnreadKind::InflatedTotalTooLarge,
-                limit: limits.max_stream_total_bytes() as u64,
+                limit: limits.max_stream_total_bytes_for(raw.len()) as u64,
             });
         }
         let inflated = Arc::new(inflated);
