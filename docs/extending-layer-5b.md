@@ -221,8 +221,8 @@ list is also advertised as typed, so the same change:
   `src/elements/mod.rs`, the doc comment in `rvt-py/src/lib.rs`, the
   stub `python/rvt/__init__.pyi`, `docs/python.md`, the description in
   `docs/schemas/decoded-elements.schema.json`, the list
-  `tests/python/test_decoded_api.py` pins, and the README's count of
-  them. `git grep -n -E 'Level.{1,6}Wall.{1,6}Floor' -- . ':!CHANGELOG.md' ':!reports'`
+  `tests/python/test_decoded_api.py` pins, and the counts of them in
+  `docs/evidence.md` and `docs/library.md`. `git grep -n -E 'Level.{1,6}Wall.{1,6}Floor' -- . ':!CHANGELOG.md' ':!reports'`
   finds them, and any later copy.
 
 ### Step 4 — Write down how it can fail
@@ -438,7 +438,7 @@ buried in comments. Example:
 //!
 //! - `m_phaseCreated` semantics on R2026 — appears to be a
 //!   PhaseRef but the ID space is different. Tracked as
-//!   `docs/rvt-moat-break-reconnaissance.md` §Q7.X.
+//!   `docs/format-reconnaissance.md` §Q7.X.
 //! - `m_designOption` is `0xFFFFFFFF` on all files in the sample
 //!   corpus; unclear what non-default value looks like. Need a
 //!   project `.rvt` with multiple design options for validation.

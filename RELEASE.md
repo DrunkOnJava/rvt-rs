@@ -132,8 +132,9 @@ project treats a silent skipped step the same as an untested change.
    `date-released:` to the ISO date. These two fields must agree with
    the git tag and the `Cargo.toml` version.
 7. **Open the release pull request,** `chore(release): prepare vX.Y.Z`,
-   with steps 4 to 6 and the README's release section
-   (`## Release X.Y.Z and main`) moved to the new version. crates.io and
+   with steps 4 to 6 and the README's release lines (the latest release
+   and the "after X.Y.Z" fragments sentence under "Install and quick
+   start") moved to the new version. crates.io and
    PyPI show the README packed into each version, which can never be
    edited once it is published, so it names the release it ships in; it
    states no channel checks, which come after (Post-release). `main`
@@ -231,7 +232,7 @@ where CI and Measure run, only when it is ready to release.
    does (unit tests are banned, see `CONTRIBUTING.md`).
 3. **Prepare the release on the branch.** Steps 4 to 6 above (the
    version files, `CHANGELOG.md` and `CITATION.cff`) and
-   the README's release section, committed to the branch: no pull
+   the README's release lines, committed to the branch: no pull
    request into `main` can test a branch cut from a tag.
 4. **Check it.** Pushing the branch runs CI on it with the full matrix
    `main` gets (`ci.yml` runs on `hotfix/**` pushes). The new version
@@ -266,7 +267,7 @@ where CI and Measure run, only when it is ready to release.
 7. **Bring `main` up to it** through a pull request, as merging the
    branch back would: the fix if `main` lacks it, the new `CHANGELOG.md`
    section (its entries moved out of `[Unreleased]`), the version files
-   and the README's release section. `main` exports differently from the
+   and the README's release lines. `main` exports differently from the
    branch, so take its Core Interior witness observations and verdicts
    from that pull request's own CI run, as in step 7, not from the
    branch. Then delete the branch; the tag keeps its commits.
@@ -278,7 +279,7 @@ where CI and Measure run, only when it is ready to release.
   a pull request moves the other latest-release statements to the new
   version and records the checks: `docs/install.md`, `docs/python.md`,
   `docs/status.md`, `docs/supported-profile.md` and `ROADMAP.md`. The
-  README's release section moved in the release pull request (step 7).
+  README's release lines moved in the release pull request (step 7).
 - **Monitor `docs.rs`.** The docs build is async and often trails the
   `cargo publish` by several minutes. If it fails, the package page
   shows a red banner; triage the build log and cut a `PATCH` with the

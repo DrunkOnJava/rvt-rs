@@ -1253,6 +1253,10 @@ jobs:
       # bindings rvt-wasm exports.
       - name: The docs list every wasm binding
         run: python3 tools/ci/wasm-api.py docs rvt-wasm/src/lib.rs README.md docs/viewer-api.md
+      # The README's support-by-release table is rendered from
+      # docs/support-matrix.json, so it cannot claim more than the matrix.
+      - name: The README support table matches the support matrix
+        run: python3 tools/ci/readme-matrix.py --check
 
   # Guards the development environments' config: shellcheck the Cursor
   # install script and the devcontainer's scripts, install the
