@@ -30,6 +30,7 @@ import sys
 import ifcopenshell
 import ifcopenshell.geom
 import ifcopenshell.util.element
+import ifcopenshell.util.placement
 import ifcopenshell.util.unit
 import numpy as np
 import shapely
@@ -106,6 +107,45 @@ def profile_of(space, scale):
                 )
             )
     return out
+
+
+def curve_points(curve):
+    """The points of a polyline or indexed poly curve, and whether it holds an arc."""
+    if curve.is_a("IfcPolyline"):
+        return [tuple(point.Coordinates) for point in curve.Points], False
+    if curve.is_a("IfcIndexedPolyCurve"):
+        points = [tuple(point) for point in curve.Points.CoordList]
+        arcs = any(segment.is_a("IfcArcIndex") for segment in curve.Segments or [])
+        return points, arcs
+    return [], True
+
+
+def profile_points(space, scale):
+    """(outer, inners, arcs) of the first extrusion's profile in Revit's internal
+    feet: each curve a list of (x, y), as written, through the extrusion's
+    position, the space's placement and the site's."""
+    for representation in space.Representation.Representations if space.Representation else []:
+        for item in representation.Items:
+            if not item.is_a("IfcExtrudedAreaSolid"):
+                continue
+            area = item.SweptArea
+            matrix = ifcopenshell.util.placement.get_local_placement(space.ObjectPlacement)
+            matrix = matrix @ ifcopenshell.util.placement.get_axis2placement(item.Position)
+            frame = site_frame(space.wrapped_data.file)
+            out, arcs = [], False
+            curves = [area.OuterCurve] + list(getattr(area, "InnerCurves", None) or [])
+            for curve in curves:
+                points, has_arc = curve_points(curve)
+                arcs = arcs or has_arc
+                if not points:
+                    out.append([])
+                    continue
+                local = np.array([[x, y, 0.0, 1.0] for x, y in points])
+                world = (matrix @ local.T).T[:, :3] * scale
+                feet = frame(world)
+                out.append([(round(float(x), 6), round(float(y), 6)) for x, y, _ in feet])
+            return out[0], out[1:], arcs
+    return [], [], False
 
 
 def rings(surface):
@@ -242,6 +282,8 @@ def main(argv):
             f" depth minus next-storey gap {None if profile == [] or gap is None else round(profile[0][4] - gap, 4)};"
             f" Qto Height {height}"
         )
+        outer, inners, has_arc = profile_points(space, scale)
+        print(f"profile\t{area_id}\t{has_arc}\t{outer}\t{inners}")
         outline = rings(surface)
         if not outline:
             counts["no top surface"] += 1
