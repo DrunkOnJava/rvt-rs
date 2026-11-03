@@ -113,6 +113,8 @@ walls Revit steps over a floor that covers them in part (29 of the BIM4LCA offic
 rooms whose stored solid does not close and opening profiles are not
 decoded, and rvt-rs does not edit Revit model data.
 
+**Rooms.** Each room's `IfcSpace` says in `RvtElementRecordGeometry.SpaceOutlineSource` whether its outline was read from the room's stored solid (`stored_solid`) or is the record's bounding box (`record_box`), and the diagnostics count the boxes (`exported.bounding_box_spaces`). Measure scores every space's plan area and outline against Revit's export, and CI gates Core Interior (116 of 116 rooms) and RE1 Architecture (11 of 11). The rooms of Revit 2026 and 2027 are boxes until their stored solids are read (#1260). [docs/rooms.md](rooms.md) says what to trust per release, and RE-313 has the runs.
+
 ## Finding history
 
 The paragraphs below record, finding by finding, how that came to be. They
