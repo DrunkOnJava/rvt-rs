@@ -18,7 +18,7 @@ should give such a symbol no lines. Prints every one `wire` misses.
 
 Usage:
 
-    python3 tools/re/symbol_curve_extents_vs_ifc.py <probe.txt> <revit.ifc>
+    python3 tools/re/symbol_curve_extents_vs_ifc.py <probe.txt> <revit.ifc> [--list]
 """
 
 import collections
@@ -59,11 +59,12 @@ def extent(ranges):
 
 
 def main():
-    if len(sys.argv) != 3:
+    args = [a for a in sys.argv[1:] if a != "--list"]
+    if len(args) != 2:
         print(__doc__)
         return 2
-    instances, curves = read_probe(sys.argv[1])
-    revit = revit_sizes(sys.argv[2])
+    instances, curves = read_probe(args[0])
+    revit = revit_sizes(args[1])
     for tag, (cls, width, height) in sorted(revit.items(), key=lambda kv: (len(kv[0]), kv[0])):
         if tag in instances:
             w = "-" if width is None else f"{width:.6f}"
