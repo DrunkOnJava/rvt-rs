@@ -16,19 +16,31 @@
 //! Measured on two 2023 projects against Revit's own IFC4 exports: every
 //! element Tag of each export is a placed instance here
 //! (`reports/element-framing/RE-81-2023-element-records.md`). What 2024
-//! decodes on top of the records (design options) is not established for
-//! 2023 and is not read, except wall joins, whose reference-list partners
-//! trim walls as on 2024 (RE-120); family instances' family and type
-//! names are (RE-109), and so are system-family types and their layers
-//! (RE-111, RE-112). Door and window hosts are:
-//! the reference lists carry them as on 2024 (RE-85), and so they carry
-//! each element's Level (RE-107).
+//! decodes on top of the records is read for 2023 as far as wall joins,
+//! whose reference-list partners trim walls as on 2024 (RE-120), and, on 2016
+//! to 2023, design options, whose id sits in the frame 26 bytes before the
+//! marker and whose sets [`crate::partition_design_options`] reads
+//! ([`EXPORT_FILTER_RELEASES`], RE-315). Family
+//! instances' family and type names are read (RE-109), and so are
+//! system-family types and their layers (RE-111, RE-112). Door and window
+//! hosts are: the reference lists carry them as on 2024 (RE-85), and so they
+//! carry each element's Level (RE-107).
+//!
+//! A frame with no declared ElementId 52 bytes before its marker (the
+//! second prologue, RE-30) sits inside its element's partition record, as
+//! on 2024 (RE-35). The record is `u32` ElementId, `u32` size, the tag of
+//! `ElementHeader` and a `u16` count, the body, and a 12-byte trailer: a
+//! `u32`, a flag word and the size again. [`record_spans`] walks them, and
+//! [`scan_records`] gives a placed-instance frame the id of the declared
+//! record around it when the frame's own reference list names that id
+//! (RE-315, #1261).
 
 use crate::RevitFile;
 use crate::le_bytes;
 use crate::partition_element_records::{
     BBOX_MARKER_OFFSET, BBOX_OFFSET, BUILTIN_CATEGORY_MAX, BUILTIN_CATEGORY_MIN, CLASS_TAG_OFFSET,
-    PLACEMENT_KIND_OFFSET, PartitionElementRecord,
+    CONTAINER_NONE, OST_CURTAIN_WALL_PANELS, PLACEMENT_KIND_INSTANCE, PLACEMENT_KIND_OFFSET,
+    PartitionElementRecord,
 };
 use std::collections::BTreeSet;
 
@@ -58,6 +70,19 @@ pub const REVIT_32BIT_RELEASES: std::ops::RangeInclusive<u32> = 2008..=2023;
 /// 32-bit name, material, layer and Level frames that go with them.
 pub fn is_32bit_release(revit_version: u32) -> bool {
     REVIT_32BIT_RELEASES.contains(&revit_version)
+}
+
+/// The releases whose elements outside the export phase and in a non-primary
+/// design option are left out (RE-315): Revit 2016 to 2023. The design option
+/// layout is read on Autodesk's `rst_basic_sample_project` of each of them,
+/// and the phase filter's only evidence that it is right on a 32-bit file is
+/// a 2018 project. 2008 to 2015 have no evidence, and keep every element.
+pub const EXPORT_FILTER_RELEASES: std::ops::RangeInclusive<u32> = 2016..=2023;
+
+/// Whether `revit_version` leaves out the elements outside the export phase
+/// and in a non-primary design option ([`EXPORT_FILTER_RELEASES`]).
+pub fn applies_export_filters(revit_version: u32) -> bool {
+    EXPORT_FILTER_RELEASES.contains(&revit_version)
 }
 
 /// The schema tags the 32-bit readers match, each the tag of the named
@@ -168,6 +193,12 @@ const CATEGORY_BEFORE_MARKER: usize = 38;
 /// 4,183 and 95, every container member among them
 /// (`probes/examples/probe_32bit_container.rs`).
 const CONTAINER_BEFORE_MARKER: usize = 22;
+/// Bytes from the design option reference to the marker. The 8 bytes after
+/// the category are two `u32` slots; the second holds the ElementId of the
+/// design option the element belongs to, and `ff ff ff ff` for the main
+/// model (RE-315). The first holds the id of an object a line belongs to on
+/// the frames that set it, and is not read.
+const DESIGN_OPTION_BEFORE_MARKER: usize = 26;
 /// Offset of the `ElementHeader` tag after the ElementId (after the `u32`
 /// id and the `u32` size).
 const HEADER_TAG_AFTER_ID: usize = 8;
@@ -196,9 +227,124 @@ pub fn record_marker(rf: &mut RevitFile) -> Option<([u8; 8], u16)> {
     Some((marker, header))
 }
 
+/// Length of the header that opens a 32-bit partition record: the `u32`
+/// ElementId, the `u32` record size, the tag of `ElementHeader` and a `u16`
+/// count (RE-315).
+pub const RECORD_HEADER_LEN: usize = 12;
+
+/// Length of the trailer that closes a 32-bit partition record: a `u32`, a
+/// flag word and the record size again (RE-315). The flag word is `0`,
+/// `0x0100_0000` or, on a record that holds more, another value
+/// (`0x0100_11cc` on one record of a Revit 2018 project), so it is not read.
+pub const RECORD_TRAILER_LEN: usize = 12;
+
+/// One record of a 32-bit partition: where it starts, where its body ends
+/// (its trailer starts there) and the ElementId in its header.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RecordSpan {
+    /// Offset of the record header.
+    pub start: usize,
+    /// Offset one past the record body, where its trailer starts.
+    pub end: usize,
+    /// The ElementId the header opens with, declared in `Global/ElemTable`.
+    pub element_id: u32,
+}
+
+/// The record that starts at `start`, as `(element_id, end)`, or `None` when
+/// `start` is not a record header whose trailer echoes its size.
+fn record_at(buf: &[u8], start: usize, header_tag: u16) -> Option<(u32, usize)> {
+    let element_id = le_bytes::u32_at(buf, start)?;
+    let size = le_bytes::u32_at(buf, start.checked_add(4)?)? as usize;
+    if le_bytes::u16_at(buf, start.checked_add(HEADER_TAG_AFTER_ID)?)? != header_tag
+        || size < RECORD_HEADER_LEN
+    {
+        return None;
+    }
+    let end = start.checked_add(size)?;
+    let echo = le_bytes::u32_at(buf, end.checked_add(8)?)? as usize;
+    (echo == size).then_some((element_id, end))
+}
+
+/// The records of one inflated 32-bit partition whose ElementId is in
+/// `declared`, in file order (RE-315).
+///
+/// A partition is runs of back-to-back records ([`RECORD_HEADER_LEN`],
+/// body, [`RECORD_TRAILER_LEN`]) with stretches between them that hold no
+/// record whose trailer echoes its size. The walk starts at offset 0, steps
+/// over each record that validates, and where one does not resumes at the
+/// next place the `ElementHeader` tag sits 8 bytes into a record that
+/// validates. A record of a loaded family's own document (RE-135) is stepped
+/// over and left out, as its id is not declared. A record is never entered,
+/// so the spans do not overlap and each step moves forward, which makes the
+/// walk linear in `buf`.
+pub fn record_spans(buf: &[u8], header_tag: u16, declared: &BTreeSet<u32>) -> Vec<RecordSpan> {
+    let needle = header_tag.to_le_bytes();
+    let finder = memchr::memmem::Finder::new(&needle);
+    let mut spans = Vec::new();
+    let mut at = 0usize;
+    loop {
+        if let Some((element_id, end)) = record_at(buf, at, header_tag) {
+            if declared.contains(&element_id) {
+                spans.push(RecordSpan {
+                    start: at,
+                    end,
+                    element_id,
+                });
+            }
+            at = end + RECORD_TRAILER_LEN;
+            continue;
+        }
+        let from = at + HEADER_TAG_AFTER_ID + 1;
+        let Some(rest) = buf.get(from..) else {
+            break;
+        };
+        let Some(hit) = finder.find(rest) else {
+            break;
+        };
+        at = from + hit - HEADER_TAG_AFTER_ID;
+    }
+    spans
+}
+
+/// The span of `spans` (from [`record_spans`]) whose body holds `offset`.
+pub fn enclosing_span(spans: &[RecordSpan], offset: usize) -> Option<&RecordSpan> {
+    let index = spans.partition_point(|span| span.start <= offset);
+    let span = spans.get(index.checked_sub(1)?)?;
+    (offset < span.end).then_some(span)
+}
+
+/// The spans of one partition, walked the first time a frame needs them.
+struct PartitionSpans<'a> {
+    buf: &'a [u8],
+    header_tag: u16,
+    declared: &'a BTreeSet<u32>,
+    spans: Option<Vec<RecordSpan>>,
+}
+
+impl<'a> PartitionSpans<'a> {
+    fn new(buf: &'a [u8], header_tag: u16, declared: &'a BTreeSet<u32>) -> Self {
+        Self {
+            buf,
+            header_tag,
+            declared,
+            spans: None,
+        }
+    }
+
+    fn enclosing_id(&mut self, offset: usize) -> Option<u32> {
+        let (buf, header_tag, declared) = (self.buf, self.header_tag, self.declared);
+        let spans = self
+            .spans
+            .get_or_insert_with(|| record_spans(buf, header_tag, declared));
+        enclosing_span(spans, offset).map(|span| span.element_id)
+    }
+}
+
 /// Every 2008 to 2023 element record in the file whose ElementId is
-/// declared in `Global/ElemTable`. Empty for any other release (fail
-/// closed).
+/// declared in `Global/ElemTable`: a frame that opens with its declared id,
+/// and a placed-instance frame without one (the second prologue) that sits
+/// in a declared record whose id its reference list names (RE-315). Empty
+/// for any other release (fail closed).
 pub fn scan_records(rf: &mut RevitFile, revit_version: u32) -> Vec<PartitionElementRecord> {
     if !is_32bit_release(revit_version) {
         return Vec::new();
@@ -216,6 +362,7 @@ pub fn scan_records(rf: &mut RevitFile, revit_version: u32) -> Vec<PartitionElem
             continue;
         };
         let buf = inflated.bytes();
+        let mut spans = PartitionSpans::new(buf, header_tag, &declared);
         for at in memchr::memmem::find_iter(buf, &marker) {
             if let Some(record) = decode_at_marker(
                 &stream,
@@ -224,6 +371,7 @@ pub fn scan_records(rf: &mut RevitFile, revit_version: u32) -> Vec<PartitionElem
                 &declared,
                 header_tag,
                 envelope_shortfall(revit_version),
+                &mut spans,
             ) {
                 out.push(record);
             }
@@ -240,16 +388,13 @@ fn decode_at_marker(
     declared: &BTreeSet<u32>,
     header_tag: u16,
     shortfall: usize,
+    spans: &mut PartitionSpans<'_>,
 ) -> Option<PartitionElementRecord> {
     let id_at = at.checked_sub(ID_BEFORE_MARKER - shortfall)?;
-    let element_id = le_bytes::u32_at(buf, id_at)?;
-    if !declared.contains(&element_id) {
-        return None;
-    }
-    let tag_at = id_at + HEADER_TAG_AFTER_ID;
-    if le_bytes::u16_at(buf, tag_at)? != header_tag {
-        return None;
-    }
+    let leading = le_bytes::u32_at(buf, id_at)?;
+    let own_id = (declared.contains(&leading)
+        && le_bytes::u16_at(buf, id_at + HEADER_TAG_AFTER_ID) == Some(header_tag))
+    .then_some(leading);
     let category_at = at - (CATEGORY_BEFORE_MARKER - shortfall);
     let builtin_category = le_bytes::i64_at(buf, category_at)?;
     if !(BUILTIN_CATEGORY_MIN..=BUILTIN_CATEGORY_MAX).contains(&builtin_category) {
@@ -282,6 +427,25 @@ fn decode_at_marker(
     }
     let list_at = at + 8 + 48;
     let references = u32_list(buf, list_at).unwrap_or_default();
+    let design_option = at
+        .checked_sub(DESIGN_OPTION_BEFORE_MARKER)
+        .and_then(|from| le_bytes::u32_at(buf, from))
+        .filter(|option| *option != u32::MAX);
+    let (element_id, id_from_enclosing_record) = match own_id {
+        Some(id) => (id, false),
+        None => {
+            let id = enclosing_instance_id(
+                spans,
+                id_at,
+                leading,
+                builtin_category,
+                container,
+                placement_kind,
+                &references,
+            )?;
+            (id, true)
+        }
+    };
     Some(PartitionElementRecord {
         stream: stream.to_string(),
         offset: id_at,
@@ -295,9 +459,41 @@ fn decode_at_marker(
         preceding_reference: None,
         owner_reference: None,
         references,
-        id_from_enclosing_record: false,
-        design_option: None,
+        id_from_enclosing_record,
+        design_option,
     })
+}
+
+/// The ElementId of a frame with no declared id of its own (the second
+/// prologue, RE-30), from the declared record around it (RE-315).
+///
+/// Only a placed instance gets one (no container reference and the
+/// placed-instance kind, the RE-21 rule), and only when the frame's own
+/// reference list names the record's id, as an element's does (RE-23). On
+/// Revit 2018's `ALD26 Before` each of the 3,350 placed-instance frames
+/// without a declared id that a declared record encloses names it. A curtain
+/// panel frame that opens with a count instead of `ff ff ff ff` gets none:
+/// 96 of the 102 such frames sit in the record of a panel Revit's export does
+/// not write (a panel's shell), and the 6 panels it does write that they
+/// hold are left out with them; all 99 that open with `ff ff ff ff` are
+/// panels it writes.
+fn enclosing_instance_id(
+    spans: &mut PartitionSpans<'_>,
+    id_at: usize,
+    leading: u32,
+    builtin_category: i64,
+    container: u64,
+    placement_kind: u32,
+    references: &[u64],
+) -> Option<u32> {
+    if container != CONTAINER_NONE || placement_kind != PLACEMENT_KIND_INSTANCE {
+        return None;
+    }
+    if leading != u32::MAX && builtin_category == OST_CURTAIN_WALL_PANELS {
+        return None;
+    }
+    let id = spans.enclosing_id(id_at)?;
+    references.contains(&u64::from(id)).then_some(id)
 }
 
 /// A `u32`-counted list of `u32` ElementIds at `at`, widened to `u64`.
