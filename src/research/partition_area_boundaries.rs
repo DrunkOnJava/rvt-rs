@@ -32,6 +32,10 @@ pub const NODE_TOLERANCE_FEET: f64 = 1e-5;
 /// The most lines one arrangement takes. A set of more is not read.
 pub const MAX_LINES: usize = 2048;
 
+/// The most points one arrangement takes, its lines' ends and the places they
+/// cross included. Lines that cross in more places are not read.
+pub const MAX_NODES: usize = 200_000;
+
 /// The largest coordinate taken, feet.
 pub const MAX_COORDINATE_FEET: f64 = 1.0e7;
 
@@ -158,6 +162,8 @@ impl Nodes {
 #[derive(Debug)]
 struct Ring {
     nodes: Vec<usize>,
+    polygon: Vec<(f64, f64)>,
+    bounds: [f64; 4],
     area: f64,
     ids: BTreeSet<u32>,
     component: usize,
@@ -170,6 +176,13 @@ pub struct Arrangement {
     points: Vec<(f64, f64)>,
     degree: Vec<usize>,
     rings: Vec<Ring>,
+    /// The rings of positive area: the regions.
+    bounded: Vec<usize>,
+    /// The ring of negative area that walks round each connected set of
+    /// lines, by the set.
+    outer_of: BTreeMap<usize, usize>,
+    /// The sets with more than one such ring.
+    unclear: BTreeSet<usize>,
 }
 
 fn find(parent: &mut [usize], node: usize) -> usize {
@@ -226,6 +239,20 @@ fn inside(ring: &[(f64, f64)], point: (f64, f64)) -> Option<bool> {
     Some(!crossings.is_multiple_of(2))
 }
 
+/// [`inside`] for a ring, with a quick answer for a point outside its box.
+fn inside_ring(ring: &Ring, point: (f64, f64)) -> Option<bool> {
+    let [min_x, min_y, max_x, max_y] = ring.bounds;
+    let reach = NODE_TOLERANCE_FEET * 2.0;
+    if point.0 < min_x - reach
+        || point.0 > max_x + reach
+        || point.1 < min_y - reach
+        || point.1 > max_y + reach
+    {
+        return Some(false);
+    }
+    inside(&ring.polygon, point)
+}
+
 impl Arrangement {
     /// The arrangement of `lines`, or `None` where they are not all straight
     /// lines along the plan axes, are more than [`MAX_LINES`], or overlap.
@@ -266,6 +293,10 @@ impl Arrangement {
             }
         }
 
+        let cut_count: usize = cuts.iter().map(Vec::len).sum();
+        if cut_count.saturating_add(axis.len().saturating_mul(2)) > MAX_NODES {
+            return None;
+        }
         let mut nodes = Nodes::default();
         let mut edges: BTreeMap<(usize, usize), u32> = BTreeMap::new();
         for (line, cut) in axis.iter().zip(cuts.iter_mut()) {
@@ -370,25 +401,45 @@ impl Arrangement {
             let points: Vec<(f64, f64)> = walk.iter().map(|&n| nodes.points[n]).collect();
             let distinct: BTreeSet<usize> = walk.iter().copied().collect();
             let component = find(&mut parent, walk[0]);
+            let bounds = points.iter().fold(
+                [
+                    f64::INFINITY,
+                    f64::INFINITY,
+                    f64::NEG_INFINITY,
+                    f64::NEG_INFINITY,
+                ],
+                |b, p| [b[0].min(p.0), b[1].min(p.1), b[2].max(p.0), b[3].max(p.1)],
+            );
             rings.push(Ring {
                 area: signed_area(&points),
                 simple: distinct.len() == walk.len(),
                 nodes: walk,
+                polygon: points,
+                bounds,
                 ids,
                 component,
             });
         }
 
         let degree = outgoing.iter().map(Vec::len).collect();
+        let bounded = (0..rings.len())
+            .filter(|&i| rings[i].area > MIN_RING_AREA)
+            .collect();
+        let mut outer_of: BTreeMap<usize, usize> = BTreeMap::new();
+        let mut unclear = BTreeSet::new();
+        for (index, ring) in rings.iter().enumerate() {
+            if ring.area < -MIN_RING_AREA && outer_of.insert(ring.component, index).is_some() {
+                unclear.insert(ring.component);
+            }
+        }
         Some(Arrangement {
             points: nodes.points,
             degree,
             rings,
+            bounded,
+            outer_of,
+            unclear,
         })
-    }
-
-    fn polygon(&self, ring: &Ring) -> Vec<(f64, f64)> {
-        ring.nodes.iter().map(|&n| self.points[n]).collect()
     }
 
     /// The ring's corners: its nodes, less those where two lines continue
@@ -417,12 +468,9 @@ impl Arrangement {
         if !point.0.is_finite() || !point.1.is_finite() {
             return None;
         }
-        let bounded: Vec<usize> = (0..self.rings.len())
-            .filter(|&i| self.rings[i].area > MIN_RING_AREA)
-            .collect();
         let mut chosen: Option<usize> = None;
-        for &i in &bounded {
-            if inside(&self.polygon(&self.rings[i]), point)? {
+        for &i in &self.bounded {
+            if inside_ring(&self.rings[i], point)? {
                 match chosen {
                     Some(held) if self.rings[held].area <= self.rings[i].area => {
                         if (self.rings[held].area - self.rings[i].area).abs() <= MIN_RING_AREA {
@@ -439,28 +487,25 @@ impl Arrangement {
         }
 
         let mut holes: Vec<&Ring> = Vec::new();
-        let mut outer_of: BTreeMap<usize, &Ring> = BTreeMap::new();
-        for ring in &self.rings {
-            if ring.area < -MIN_RING_AREA
-                && ring.component != face.component
-                && outer_of.insert(ring.component, ring).is_some()
-            {
+        for (component, &outer_index) in &self.outer_of {
+            if *component == face.component {
+                continue;
+            }
+            if self.unclear.contains(component) {
                 return None;
             }
-        }
-        let face_polygon = self.polygon(face);
-        for (component, &outer) in &outer_of {
+            let outer = &self.rings[outer_index];
             let probe = self.points[outer.nodes[0]];
-            if !inside(&face_polygon, probe)? {
+            if !inside_ring(face, probe)? {
                 continue;
             }
             let mut parent: Option<&Ring> = None;
-            for &i in &bounded {
+            for &i in &self.bounded {
                 let ring = &self.rings[i];
                 if ring.component == *component {
                     continue;
                 }
-                if inside(&self.polygon(ring), probe)? {
+                if inside_ring(ring, probe)? {
                     match parent {
                         Some(held) if held.area <= ring.area => {}
                         _ => parent = Some(ring),

@@ -45,9 +45,11 @@ import shapely
 from shapely.geometry import Polygon
 
 
-def tops(path, classes):
+def tops(path, classes, extents=None):
     """Tag -> (upward plan area, upward-face vertices in plan), every
-    element with the Tag (every piece of a sketch) taken together."""
+    element with the Tag (every piece of a sketch) taken together. Where
+    `extents` is a dict, it gets each Tag's lowest and highest vertex height,
+    feet, in Revit's internal frame."""
     f = ifcopenshell.open(path)
     frame = site_frame(f)
     settings = ifcopenshell.geom.settings()
@@ -74,6 +76,11 @@ def tops(path, classes):
             if not len(verts) or not len(faces):
                 continue
             v = frame(verts)
+            if extents is not None:
+                low, high = float(v[:, 2].min()), float(v[:, 2].max())
+                if tag in extents:
+                    low, high = min(low, extents[tag][0]), max(high, extents[tag][1])
+                extents[tag] = (low, high)
             a, b, c = v[faces[:, 0]], v[faces[:, 1]], v[faces[:, 2]]
             normal = np.cross(b - a, c - a)
             length = np.linalg.norm(normal, axis=1)

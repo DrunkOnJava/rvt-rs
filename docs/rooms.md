@@ -7,7 +7,7 @@ This page is for the importer of an rvt-rs export: what an `IfcSpace` holds for 
 | Source | `IfcSpace` | Body |
 |---|---|---|
 | A Revit room | `Name` is the room's number, `LongName` its name, `PredefinedType` `SPACE`, in the storey of the Level its record names | the outline of the room's stored solid, or the record's bounding box (below) |
-| A Revit area (Revit 2024) | the same naming | the region its area boundary lines enclose around its point, from its Level to the next storey (below); none where that is not proven: the space then has no `Representation` |
+| A Revit area (Revit 2024) | the same naming | the region its area boundary lines enclose around its point, up to the Level above it (below); none where that is not proven: the space then has no `Representation` |
 | A Revit Space (MEP), in a model that has one | `IfcSpace` without a predefined type; no measurement singles one out | its record's box (`record_box`) unless a carrier draws more (`family_body`) |
 | A family instance whose "Export to IFC As" names `IfcSpace` (#763) | named `Family:Type:ElementId` as Revit's export names other family instances | its record's box, turned with the instance (`record_box`), until a carrier draws its family. Where its family draws no model form, Revit's export leaves the instance out, and rvt-rs will too once PR #1279 (RE-312, for #1262, parking bays) lands |
 
@@ -22,7 +22,7 @@ Read `RvtElementRecordGeometry.SpaceOutlineSource` on the `IfcSpace`:
 | `stored_solid` | the outline of the room's stored solid, extruded to the room's height | Revit's room area: within 0.1% of Revit's export on 604 of the 605 `stored_solid` rooms scored below, the office counted at both stages (RE-313 §2, §3) |
 | `record_box` | the record's bounding box (turned with a family instance that is turned) | the box's area, not the space's. It equals the space's only when the space is a rectangle; the area is Revit's on none of the office's 24 room scores that keep their box |
 | `saved_mesh` | the mesh Revit saved for the room (`rvt-ifc --saved-meshes`) | the mesh's; not scored |
-| `area_boundary` | the region that the lines of the Area's scheme on its Level enclose around its point, its holes the loops directly inside, extruded from its Level to the next building-story Level | Revit's area space: within 0.1% of Revit's export, and within 0.01 ft in outline, on 60 of the 60 Area scores below, the office counted at both stages (RE-317 §5) |
+| `area_boundary` | the region that the lines of the Area's scheme on its Level enclose around its point, its holes the loops directly inside, extruded from its Level up to the Level above it, both building stories | Revit's area space: within 0.1% of Revit's export, and within 0.01 ft in outline, on 60 of the 60 Area scores below, the office counted at both stages (RE-317 §5) |
 | `none` | no body (an Area whose boundary is not proven) | not available |
 | `family_body` | a Revit Space or a family instance written as an `IfcSpace`, drawn as more than its box; its `BodySource` says how | not scored |
 
@@ -82,7 +82,16 @@ What the misses are:
 
 ## What is not measured
 
-- Areas of any release but Revit 2024, and an Area's body wherever its boundary lines are not all straight lines along the plan axes (a slanted line or an arc): the office has none, and such an Area keeps no body. An Area's base offset and its own "up to level" are read as zero and as the next storey, which is what the office measures. Revit writes `Qto_SpaceBaseQuantities.Height` on an Area, its depth; rvt-rs does not yet.
+- **Areas** (RE-317), measured on the BIM4LCA office only:
+  - releases other than Revit 2024;
+  - the top storey: an Area on the highest Level has no body, where Revit draws it one unit high;
+  - Levels that are not building stories: an Area has a body only where its Level and the Level above are both read as building stories and no other Level lies between them or at either elevation. All ten of the office's Levels are storeys, so every Area there meets that, and a Level that breaks it is unmeasured;
+  - the Level's "Story Above", which Revit's exporter takes first for an Area's height and rvt-rs never reads: the office's heights equal the distance to the next Level up, so a Level whose Story Above is another Level is unmeasured;
+  - an Area's base offset, read as zero;
+  - Areas bounded partly by walls: the Area's point then lies in no region of its boundary lines (4 of the 7 Areas on one Level of Autodesk's `rac_advanced`, not examined further), and the Area keeps no body;
+  - boundary lines that are not straight along the plan axes (a slanted line or an arc): the group is not read, and the office has none;
+  - `Qto_SpaceBaseQuantities.Height`, which Revit writes on an Area and rvt-rs does not yet.
+  The diagnostics count the Areas without a body by reason (`exported.area_body_refusals`).
 - Revit 2008 to 2020 and 2023 on any model Measure can run, beyond the held-out counts above: no reference model with a Revit room export exists for them in the corpus.
 - Revit Spaces (MEP): no measurement singles one out.
 - Room outlines of Revit 2026 and 2027 beyond the rectangles: on the held-out house none is within 0.01 ft of Revit's (#1260).

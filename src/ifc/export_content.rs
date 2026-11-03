@@ -423,6 +423,25 @@ fn area_property_set(decoded: &DecodedElement, drawn: Option<&AreaDrawn>) -> Pro
             });
         }
     }
+    if drawn.is_none() {
+        let refusal = decoded
+            .fields
+            .iter()
+            .find_map(|(field, value)| match value {
+                InstanceField::String(reason)
+                    if field == crate::partition_area_records::AREA_BODY_REFUSAL_FIELD =>
+                {
+                    Some(reason.clone())
+                }
+                _ => None,
+            });
+        if let Some(reason) = refusal {
+            properties.push(Property {
+                name: AREA_BODY_REFUSAL_PROPERTY.into(),
+                value: PropertyValue::Text(reason),
+            });
+        }
+    }
     properties.push(Property {
         name: SPACE_OUTLINE_SOURCE_PROPERTY.into(),
         value: PropertyValue::Text(
@@ -4321,6 +4340,10 @@ pub const SPACE_OUTLINE_AREA_BOUNDARY: &str = "area_boundary";
 /// `BodyHeightSource` of an Area's body: from its Level up to the next
 /// building-story Level (RE-317).
 pub const AREA_BODY_HEIGHT_SOURCE: &str = "area_level_to_next_storey";
+
+/// Property of an Area's [`ELEMENT_RECORD_PROPERTY_SET`] that says why it has no
+/// body, where its boundary was not proven (RE-317).
+pub const AREA_BODY_REFUSAL_PROPERTY: &str = "AreaBodyRefusal";
 
 /// [`SPACE_OUTLINE_SOURCE_PROPERTY`] of a Revit Space or a family instance
 /// written as an `IfcSpace` whose body is more than its record's box: its
