@@ -226,7 +226,7 @@ def main(argv):
     settings.set("use-world-coords", True)
     spaces = {space.GlobalId: space for space in model.by_type("IfcSpace")}
 
-    levels = sorted((float(elev), name, int(level_id)) for level_id, name, elev in probe["level"])
+    levels = sorted((float(elev), name, int(level_id)) for level_id, name, elev, *_ in probe["level"])
     storeys = sorted(
         elevation_of(storey, scale) for storey in model.by_type("IfcBuildingStorey")
         if storey.Elevation is not None

@@ -16,7 +16,8 @@
 //!
 //! This probe prints, tab-separated:
 //!
-//! - `level`: every recovered Level, with its elevation;
+//! - `level`: every recovered Level, with its elevation and its Building Story
+//!   setting (`Some(true)`, `Some(false)` or `None` where it is not read);
 //! - `cat`: a census of the chain records' categories;
 //! - `area`: every Area's ElementId, GlobalId, number, name, the one Level its
 //!   record names (`-` for none or several, and ids below 1000 are not read
@@ -100,14 +101,20 @@ fn main() -> rvt::Result<()> {
         return Ok(());
     };
     let declared = rvt::elem_table::declared_ids(&rvt::elem_table::parse_records(&mut rf)?);
-    let levels: BTreeMap<u32, (String, f64)> = recover_partition_levels(&mut rf, version)?
+    let recovered = recover_partition_levels(&mut rf, version)?;
+    let stories: BTreeMap<u32, Option<bool>> = recovered
+        .iter()
+        .map(|level| (level.element_id, level.building_story))
+        .collect();
+    let levels: BTreeMap<u32, (String, f64)> = recovered
         .into_iter()
         .map(|level| (level.element_id, (level.name, level.elevation_feet)))
         .collect();
     let global_ids = rvt::research::revit_global_ids::revit_global_ids(&mut rf).unwrap_or_default();
     println!("release {version}");
     for (id, (name, elevation)) in &levels {
-        println!("level\t{id}\t{name}\t{elevation:.6}");
+        let story = stories.get(id).copied().flatten();
+        println!("level\t{id}\t{name}\t{elevation:.6}\t{story:?}");
     }
 
     let streams = rf.partition_stream_names();
