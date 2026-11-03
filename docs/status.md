@@ -772,7 +772,12 @@ the same Tag, with Revit's value; Revit writes 79,907 more, nearly all
 built-in parameters. On Snowdon Architectural, 58,346 of 58,733 are: 369
 more are in sets Revit names with `(Type)` on 13 of its type objects, as
 the order of its export has it, and 18 are curtain panels' type category,
-written before. On the BIM4LCA office as
+written before. Against the exports with Revit's property sets of
+puzzbobb's 19 Revit 2025 models, which Measure scores in CI (run
+41636859789), 2,502 of the 2,646 properties written are Revit's: 126 differ,
+as Revit's export writes a window type's sill height and its nested
+families' lengths at 1/304.8² of their value, and 18, a stringer type's, are
+in no set Revit writes there. On the BIM4LCA office as
 built, `FireExit` in `Identity Data` equals Revit's `Pset_DoorCommon` and
 `Pset_WindowCommon.FireExit` on 498 of 498 doors and windows
 (`reports/element-framing/RE-210-revit-property-sets.md`). Built-in
