@@ -10,7 +10,7 @@
 //! release the readers take, `RevitFile::layout_release`), and
 //! `elem_table`: the record count `Global/ElemTable` states, the record size
 //! `detect_layout` takes (40, 28, or 12 for the fallback), and for 28 and 40
-//! how many ids rise, where the first one does not, and whether the stated
+//! how many of the ids it tests rise (`+0` on 28 bytes since #421, `+20` on 40), where the first one does not, and whether the stated
 //! count fits the stream. Counts and indices only, no ElementId, so a
 //! reporter can post it for a private file.
 //!
@@ -78,7 +78,7 @@ fn elem_table(rf: &mut RevitFile) -> String {
     format!(
         "{{\"count\":{count},\"stride\":{},\"fit28\":{},\"fit40\":{}}}",
         rvt::elem_table::detect_layout(&d).stride,
-        fit(28, 4),
+        fit(28, 0),
         fit(40, 20)
     )
 }

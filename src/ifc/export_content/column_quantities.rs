@@ -12,7 +12,10 @@
 //! straddles its top; no other column has (RE-291).
 //!
 //! This pass writes a column's `CrossSectionArea`, `OuterSurfaceArea`,
-//! `GrossVolume` and `NetVolume` as its record box's, on a column drawn as
+//! `GrossVolume` and `NetVolume` as its record box's, and, where a clean pair
+//! joins it, its `Length` as the box's height (#1203: Revit writes it on every
+//! such column, 186 of 186 as built and 250 of 250 at building permit), on a
+//! column drawn as
 //! that box whose type is a plain rectangle (its length parameters are
 //! exactly `b`, or `b` and `h`, the box's sides: a round column is drawn as a
 //! box too, and its type holds a `Diameter`), when every pair step of its
@@ -189,28 +192,35 @@ pub(super) fn add_joined_column_quantities(entities: &mut Vec<IfcEntity>, pendin
         }
         let [width, depth, height] = sizes;
         let area = width * depth;
+        let length = (!column.clean.is_empty()).then(|| Property {
+            name: "Length".into(),
+            value: PropertyValue::PositiveLengthFeet(height),
+        });
         found.push((
             column.index,
             PropertySet {
                 name: "Qto_ColumnBaseQuantities".into(),
-                properties: vec![
-                    Property {
-                        name: "CrossSectionArea".into(),
-                        value: PropertyValue::AreaSquareFeet(area),
-                    },
-                    Property {
-                        name: "OuterSurfaceArea".into(),
-                        value: PropertyValue::AreaSquareFeet(2.0 * (width + depth) * height),
-                    },
-                    Property {
-                        name: "GrossVolume".into(),
-                        value: PropertyValue::VolumeCubicFeet(area * height),
-                    },
-                    Property {
-                        name: "NetVolume".into(),
-                        value: PropertyValue::VolumeCubicFeet(area * height),
-                    },
-                ],
+                properties: length
+                    .into_iter()
+                    .chain([
+                        Property {
+                            name: "CrossSectionArea".into(),
+                            value: PropertyValue::AreaSquareFeet(area),
+                        },
+                        Property {
+                            name: "OuterSurfaceArea".into(),
+                            value: PropertyValue::AreaSquareFeet(2.0 * (width + depth) * height),
+                        },
+                        Property {
+                            name: "GrossVolume".into(),
+                            value: PropertyValue::VolumeCubicFeet(area * height),
+                        },
+                        Property {
+                            name: "NetVolume".into(),
+                            value: PropertyValue::VolumeCubicFeet(area * height),
+                        },
+                    ])
+                    .collect(),
             },
         ));
     }

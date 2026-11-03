@@ -328,8 +328,9 @@ valid Revit but outside the current rvt-rs support profile.
 ### Large models
 
 rvt-rs caps what it reads so that a hostile file cannot exhaust memory: 2 GiB
-for the file, 256 MiB for one stream, 256 MiB for one inflated member and 1 GiB
-inflated per stream. Large client models can keep most of their elements in
+for the file, 256 MiB for one stream, 256 MiB for one inflated member and, per
+stream, 16 times its stored size inflated, at least 1 GiB and at most 4 GiB (1
+GiB in a 32-bit build and in the browser viewer). Large client models can keep most of their elements in
 one partition stream of 400 MiB to 1 GiB. When a limit stops a stream,
 `rvt-ifc` names it, writes no IFC and exits with status 3:
 

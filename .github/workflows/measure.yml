@@ -41,10 +41,11 @@
 #
 #   gh workflow run measure.yml -f ref=my-branch -f base=main -f bimcollab=true
 #
-# With `holdout`, the held-out models (research/holdout-models.tsv, RE-252):
-# the flowbim.ee house (Revit 2026) and two 255ribeiro projects, for checking a
-# rule against files it was not derived on. They carry no licence, so only
-# their summary counts are uploaded (tools/ci/scrub-holdout-results.sh).
+# With `holdout`, the held-out models (research/holdout-models.tsv, RE-252,
+# and research/holdout-archive-models.tsv, #1261), for checking a rule against
+# files it was not derived on: only their summary counts are uploaded
+# (tools/ci/scrub-holdout-results.sh). The archive list's spent pairs, no
+# longer held out, are measured in full.
 #
 #   gh workflow run measure.yml -f ref=my-branch -f base=none -f holdout=true -f models="holdout-*"
 #
@@ -137,7 +138,7 @@ on:
         required: false
         default: false
       holdout:
-        description: Also score the held-out models against Revit's exports of them (research/holdout-models.tsv, no licence stated, fetched for the run; only their summary counts are uploaded)
+        description: Also score the held-out models against Revit's exports of them (research/holdout-models.tsv and research/holdout-archive-models.tsv, fetched for the run; only their summary counts are uploaded)
         type: boolean
         required: false
         default: false
@@ -316,11 +317,15 @@ jobs:
           set +e
           tools/ci/fetch-holdout-models.sh research/holdout-models.tsv models
           status=$?
+          if [ "$status" = 0 ]; then
+            tools/ci/fetch-holdout-archives.sh research/holdout-archive-models.tsv models
+            status=$?
+          fi
           set -e
           case "$status" in
             0) ;;
             2) echo "::warning::held-out models NOT MEASURED: a file could not be downloaded" ;;
-            *) echo "::error::a held-out model no longer matches research/holdout-models.tsv"; exit 1 ;;
+            *) echo "::error::a held-out model no longer matches its pin in research/holdout-models.tsv or research/holdout-archive-models.tsv"; exit 1 ;;
           esac
       - name: Fetch the family corpus
         if: inputs.families || github.event_name == 'pull_request'
@@ -410,16 +415,9 @@ jobs:
                 if cmp -s "$d/info.json" "measure-base/$f/info.json" && cmp -s "$d/info.exit" "measure-base/$f/info.exit"; then echo "- $f: identical ($(cat "$d/info.exit"))"; else echo "- $f: **differs**"; fi
               done
               echo
-              echo "### rvt-ifc wall time, base → head (ms), on two runners"
+              echo "### Times"
               echo
-              echo "Base ran on $(cat measure-base/runner.txt 2>/dev/null || echo 'an unrecorded CPU'), head on $(cat measure-head/runner.txt 2>/dev/null || echo 'an unrecorded CPU'). Runner speed alone moves these times by up to about 1.7x, so they compare machines as much as code; dispatch with \`timing\` to time both refs on one runner."
-              echo
-              for d in measure-head/*/; do
-                m=$(basename "$d")
-                h=$(grep -h '^milliseconds' "$d/rvt-ifc.log" 2>/dev/null | cut -d' ' -f2)
-                b=$(grep -h '^milliseconds' "measure-base/$m/rvt-ifc.log" 2>/dev/null | cut -d' ' -f2)
-                [ -n "$h" ] && [ -n "$b" ] && echo "- $m: $b → $h"
-              done
+              echo "These jobs check what the exports hold. They run exports and scorers several at once, on two runners whose speed alone differs by up to about 1.7x, so their times are not benchmarks. Dispatch with \`timing\` to time both refs' exports on one runner (tools/ci/measure-timing.sh)."
               echo
               echo "### Scorer differences (base → head)"
               echo
