@@ -29,6 +29,9 @@ use std::path::PathBuf;
 use anyhow::Result;
 use rvt::RevitFile;
 use rvt::research::native_document::{Options, Record, extract_graphs};
+use rvt::research::native_parameters::ObjectGraph;
+use rvt::research::native_saved_mesh::{face, pointer};
+use rvt::research::native_symbol_cuts::instance_cut_loops;
 use rvt::research::partition_element_records::{self as per};
 use serde_json::{Map, Value};
 
@@ -40,6 +43,7 @@ const SLABS: [&str; 5] = [
     "ProfileRoof",
     "BuildingPad",
 ];
+const OPENINGS: [&str; 2] = ["SWallRectOpening", "ArcWallRectOpening"];
 const CLIP: usize = 3000;
 const CONTROLS: usize = 12;
 const MAX_OBJECTS: usize = 80;
@@ -213,6 +217,40 @@ fn dump(id: u64, class: &str, objects: &[(&str, &Value)], all: bool) {
     }
 }
 
+/// The box of the vertices of the solid a symbol's `m_complexCutGeoms` names.
+fn cut_box(graph: &ObjectGraph) -> Option<String> {
+    let root = graph.objects.first()?;
+    let mut lo = [f64::INFINITY; 3];
+    let mut hi = [f64::NEG_INFINITY; 3];
+    let mut any = false;
+    for solid in root.fields.get("m_complexCutGeoms")?.as_array()? {
+        let Ok(Some(index)) = pointer(graph, 0, solid) else {
+            continue;
+        };
+        let Some(geometry) = graph.objects.get(index) else {
+            continue;
+        };
+        let Some(faces) = geometry.fields.get("m_pFaces").and_then(Value::as_array) else {
+            continue;
+        };
+        for item in faces {
+            let Ok(Some(face_index)) = pointer(graph, index, item) else {
+                continue;
+            };
+            if let Ok(Some(mesh)) = face(graph, face_index) {
+                for vertex in &mesh.vertices {
+                    for axis in 0..3 {
+                        lo[axis] = lo[axis].min(vertex[axis]);
+                        hi[axis] = hi[axis].max(vertex[axis]);
+                    }
+                    any = true;
+                }
+            }
+        }
+    }
+    any.then(|| format!("{lo:?} {hi:?}"))
+}
+
 fn probe(path: &str) -> Result<()> {
     let model = PathBuf::from(path);
     let stem = model.with_extension("");
@@ -263,11 +301,15 @@ fn probe(path: &str) -> Result<()> {
             };
             let buf = inflated.bytes();
             for span in per::partition_record_chain(buf, &marker) {
-                if !export.wanted.contains(&span.element_id) || !printed.insert(span.element_id) {
-                    continue;
-                }
                 let frame =
                     per::decode_frame_as(&stream, buf, span.start, span.element_id as u32, &marker);
+                let wanted = export.wanted.contains(&span.element_id)
+                    || frame
+                        .as_ref()
+                        .is_some_and(|f| OPENINGS.contains(&class_name(f.class_tag).as_str()));
+                if !wanted || !printed.insert(span.element_id) {
+                    continue;
+                }
                 match frame {
                     Some(f) => println!(
                         "frame {} {} category {} owner {} bbox {:?} refs {:?}",
@@ -296,10 +338,13 @@ fn probe(path: &str) -> Result<()> {
         selected_classes: WALLS
             .iter()
             .chain(SLABS.iter())
+            .chain(OPENINGS.iter())
             .map(|class| (*class).to_string())
             .collect(),
         ..Options::default()
     };
+    let mut symbols: BTreeSet<u64> = BTreeSet::new();
+    let mut instances: BTreeSet<u64> = BTreeSet::new();
     extract_graphs(&mut rf, &options, |record: Record| {
         let (Some(class), Some(graph)) = (record.class_name.as_deref(), record.graph.as_ref())
         else {
@@ -313,6 +358,16 @@ fn probe(path: &str) -> Result<()> {
             .collect();
         let structural = WALLS.contains(&class) || SLABS.contains(&class);
         let door = export.doors.contains(&id);
+        if class == "FamilyInstance" && (door || export.wanted.contains(&id)) {
+            instances.insert(id);
+            let symbol = graph
+                .objects
+                .iter()
+                .find(|object| object.class_name == "InstanceInfo")
+                .and_then(|object| object.fields.pointer("/m_symbolId/m_id/m_id64"))
+                .and_then(Value::as_u64);
+            symbols.extend(symbol);
+        }
         let all = if structural {
             false
         } else if door {
@@ -328,6 +383,28 @@ fn probe(path: &str) -> Result<()> {
             true
         };
         dump(id, class, &objects, all);
+        Ok(())
+    })?;
+    if let Ok(loops) = instance_cut_loops(&mut rf, &instances) {
+        for (instance, cut) in &loops {
+            println!("loop {instance} {:?} {:?}", cut.min, cut.max);
+        }
+    }
+    let options = Options {
+        selected_ids: symbols,
+        ..Options::default()
+    };
+    extract_graphs(&mut rf, &options, |record: Record| {
+        let Some(graph) = record.graph.as_ref() else {
+            return Ok(());
+        };
+        let id = record.identity.element_id;
+        if let Some(root) = graph.objects.first() {
+            println!("sym {id} root {}", trimmed(&root.fields));
+        }
+        if let Some(found) = cut_box(graph) {
+            println!("sym {id} cutbox {found}");
+        }
         Ok(())
     })?;
     Ok(())
