@@ -763,17 +763,24 @@ pub fn cylinder_face(
     let loop_index = index
         .resolve(fi, &face.fields["m_pFirstLoop"])?
         .context("cylinder trim loop")?;
-    ensure!(
-        index
-            .resolve(loop_index, &g.objects[loop_index].fields["m_nextLoop"])?
-            .is_none(),
-        "multiple cylinder trim loops unsupported"
-    );
+    // The face's further loops: holes, or further outer rings (#1247).
+    let mut other_rings = Vec::new();
+    let mut seen = BTreeSet::from([loop_index]);
+    let mut next = index.resolve(loop_index, &g.objects[loop_index].fields["m_nextLoop"])?;
+    while let Some(li) = next {
+        ensure!(seen.insert(li), "loop-list cycle");
+        ensure!(seen.len() <= 4096, "too many cylinder trim loops");
+        other_rings.push(ring(g, &index, fi, li)?);
+        next = index.resolve(li, &g.objects[li].fields["m_nextLoop"])?;
+    }
     let trim_uv = ring(g, &index, fi, loop_index)?;
-    ensure!(!trim_uv.is_empty(), "empty cylinder trim");
+    ensure!(
+        !trim_uv.is_empty() && other_rings.iter().all(|r| !r.is_empty()),
+        "empty cylinder trim"
+    );
     let mut trim_min = [f64::INFINITY; 2];
     let mut trim_max = [f64::NEG_INFINITY; 2];
-    for uv in &trim_uv {
+    for uv in trim_uv.iter().chain(other_rings.iter().flatten()) {
         for k in 0..2 {
             trim_min[k] = trim_min[k].min(uv[k]);
             trim_max[k] = trim_max[k].max(uv[k]);
@@ -784,30 +791,28 @@ pub fn cylinder_face(
         "degenerate cylinder trim"
     );
     let tol = 1e-7;
-    for (a, b) in trim_uv
-        .iter()
-        .zip(trim_uv.iter().cycle().skip(1))
-        .take(trim_uv.len())
-    {
-        ensure!(
-            a[0] >= u_range[0] - tol
-                && a[0] <= u_range[1] + tol
-                && a[1] >= v_range[0] - tol
-                && a[1] <= v_range[1] + tol
-                && b[0] >= u_range[0] - tol
-                && b[0] <= u_range[1] + tol
-                && b[1] >= v_range[0] - tol
-                && b[1] <= v_range[1] + tol,
-            "cylinder trim outside envelope"
-        );
-        ensure!(
-            (b[0] - a[0]).hypot(b[1] - a[1]) > tol,
-            "repeated cylinder trim vertex"
-        );
+    for r in std::iter::once(&trim_uv).chain(other_rings.iter()) {
+        for (a, b) in r.iter().zip(r.iter().cycle().skip(1)).take(r.len()) {
+            ensure!(
+                a[0] >= u_range[0] - tol
+                    && a[0] <= u_range[1] + tol
+                    && a[1] >= v_range[0] - tol
+                    && a[1] <= v_range[1] + tol
+                    && b[0] >= u_range[0] - tol
+                    && b[0] <= u_range[1] + tol
+                    && b[1] >= v_range[0] - tol
+                    && b[1] <= v_range[1] + tol,
+                "cylinder trim outside envelope"
+            );
+            ensure!(
+                (b[0] - a[0]).hypot(b[1] - a[1]) > tol,
+                "repeated cylinder trim vertex"
+            );
+        }
     }
     // A loop that runs round its UV box, side by side, is meshed as a grid;
     // any other is cut into strips across U (#1247).
-    let rectangular = trim_uv.len() >= 4 && {
+    let rectangular = other_rings.is_empty() && trim_uv.len() >= 4 && {
         let mut covered = [0.; 4];
         let mut perimeter = 0.;
         let mut on_sides = true;
@@ -858,14 +863,20 @@ pub fn cylinder_face(
         trim_min[0],
         trim_max[0],
         angular_step,
-        trim_uv.iter().map(|p| p[0]),
+        trim_uv
+            .iter()
+            .chain(other_rings.iter().flatten())
+            .map(|p| p[0]),
     )
     .context("cylinder tessellation grid too large")?;
     let v_values = tessellation_axis(
         trim_min[1],
         trim_max[1],
         profile.max_v_edge,
-        trim_uv.iter().map(|p| p[1]),
+        trim_uv
+            .iter()
+            .chain(other_rings.iter().flatten())
+            .map(|p| p[1]),
     )
     .context("cylinder tessellation grid too large")?;
     const MAX_GRID_VERTICES: usize = 2_000_000;
@@ -913,15 +924,30 @@ pub fn cylinder_face(
         v_range,
     });
     if !rectangular {
-        let (vertices, normals, triangles) = strip_mesh(
-            &trim_uv,
-            &u_values,
-            radius,
-            orient,
-            handed,
-            eval,
-            [x_vec, y_vec],
-        )?;
+        let (vertices, normals, triangles) = if other_rings.is_empty() {
+            strip_mesh(
+                &trim_uv,
+                &u_values,
+                radius,
+                orient,
+                handed,
+                eval,
+                [x_vec, y_vec],
+            )?
+        } else {
+            let rings: Vec<Vec<[f64; 2]>> = std::iter::once(trim_uv.clone())
+                .chain(other_rings.iter().cloned())
+                .collect();
+            loops_mesh(
+                &rings,
+                &u_values,
+                radius,
+                orient,
+                handed,
+                eval,
+                [x_vec, y_vec],
+            )?
+        };
         return Ok(FaceMesh {
             face_index: fi,
             face_tag: face.fields["m_GInfo"]["m_tag"].as_i64().unwrap_or(-1),
@@ -1046,6 +1072,126 @@ fn strip_mesh(
     }
     let scaled: Vec<[f64; 2]> = trim_uv.iter().map(|p| [p[0] * radius, p[1]]).collect();
     let expected = area(&scaled).abs();
+    ensure!(
+        !triangles.is_empty() && (covered - expected).abs() <= 1e-6 * expected.max(1e-6),
+        "self-intersecting cylinder trim"
+    );
+    Ok((vertices, normals, triangles))
+}
+
+/// A cylinder face trimmed by several loops: each outer ring, with the rings
+/// directly inside it as holes, is earcut in arc-length coordinates, and each
+/// triangle, being convex, is cut exactly into strips across U at the grid's
+/// U values, each piece fanned. The pieces must cover the outer rings' area
+/// less the holes', or the loops are taken as self-intersecting. A ring
+/// inside a hole is not read.
+fn loops_mesh(
+    rings: &[Vec<[f64; 2]>],
+    u_values: &[f64],
+    radius: f64,
+    orient: bool,
+    handed: f64,
+    eval: impl Fn(f64, f64) -> [f64; 3],
+    [x_vec, y_vec]: [[f64; 3]; 2],
+) -> Result<CylinderStrips> {
+    let points: usize = rings.iter().map(Vec::len).sum();
+    ensure!(
+        u_values.len().saturating_mul(points) <= 20_000_000,
+        "cylinder trim strip budget exceeded"
+    );
+    let scaled: Vec<Vec<[f64; 2]>> = rings
+        .iter()
+        .map(|r| r.iter().map(|p| [p[0] * radius, p[1]]).collect())
+        .collect();
+    let depths: Vec<usize> = scaled
+        .iter()
+        .enumerate()
+        .map(|(i, r)| {
+            scaled
+                .iter()
+                .enumerate()
+                .filter(|(j, other)| *j != i && inside(r[0], other))
+                .count()
+        })
+        .collect();
+    ensure!(
+        depths.iter().all(|&d| d <= 1),
+        "nested cylinder trim loops unsupported"
+    );
+    let sign = if orient { handed } else { -handed };
+    let mut vertices = Vec::new();
+    let mut normals = Vec::new();
+    let mut triangles = Vec::new();
+    let mut covered = 0.;
+    let mut expected = 0.;
+    for (i, outer) in scaled.iter().enumerate() {
+        if depths[i] != 0 {
+            continue;
+        }
+        let mut pts = outer.clone();
+        let mut holes = Vec::new();
+        expected += area(outer).abs();
+        for (j, hole) in scaled.iter().enumerate() {
+            if depths[j] == 1 && inside(hole[0], outer) {
+                holes.push(u32::try_from(pts.len()).context("cylinder trim point count")?);
+                pts.extend_from_slice(hole);
+                expected -= area(hole).abs();
+            }
+        }
+        let mut ts = Vec::<u32>::new();
+        earcut::Earcut::new().earcut(pts.iter().copied(), &holes, &mut ts);
+        for t in ts.chunks_exact(3) {
+            ensure!(
+                t.iter().all(|&k| (k as usize) < pts.len()),
+                "triangle bounds"
+            );
+            let tri = [pts[t[0] as usize], pts[t[1] as usize], pts[t[2] as usize]];
+            if cross(tri[0], tri[1], tri[2]).abs() <= 1e-12 {
+                continue;
+            }
+            let lo = tri.iter().map(|p| p[0]).fold(f64::INFINITY, f64::min);
+            let hi = tri.iter().map(|p| p[0]).fold(f64::NEG_INFINITY, f64::max);
+            for w in u_values.windows(2) {
+                let (a, b) = (w[0] * radius, w[1] * radius);
+                if b <= lo || a >= hi {
+                    continue;
+                }
+                let piece = clip_u(&clip_u(&tri, a, true), b, false);
+                if piece.len() < 3 {
+                    continue;
+                }
+                let base =
+                    u32::try_from(vertices.len()).context("cylinder vertex count overflow")?;
+                for p in &piece {
+                    let u = p[0] / radius;
+                    vertices.push(eval(u, p[1]));
+                    let (s, c) = u.sin_cos();
+                    normals.push([
+                        sign * (c * x_vec[0] + s * y_vec[0]),
+                        sign * (c * x_vec[1] + s * y_vec[1]),
+                        sign * (c * x_vec[2] + s * y_vec[2]),
+                    ]);
+                }
+                for k in 1..piece.len() - 1 {
+                    let a2 = cross(piece[0], piece[k], piece[k + 1]);
+                    if a2.abs() <= 1e-12 {
+                        continue;
+                    }
+                    covered += a2.abs() / 2.;
+                    let k = k as u32;
+                    triangles.push(if (a2 > 0.) == orient {
+                        [base, base + k, base + k + 1]
+                    } else {
+                        [base, base + k + 1, base + k]
+                    });
+                }
+                ensure!(
+                    triangles.len() <= 4_000_000,
+                    "cylinder triangle count overflow"
+                );
+            }
+        }
+    }
     ensure!(
         !triangles.is_empty() && (covered - expected).abs() <= 1e-6 * expected.max(1e-6),
         "self-intersecting cylinder trim"
