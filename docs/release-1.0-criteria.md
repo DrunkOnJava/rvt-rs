@@ -160,9 +160,7 @@ stair railings' `Length` where the path is one line along the stair's runs (RE-2
 and the `Length` of each column RE-291's rule takes that a clean pair joins, its box's height (186 of 186 as built, [#1203](https://github.com/DrunkOnJava/rvt-rs/issues/1203))), 1 differs (the mullion whose `Span` differs) and 9,939 are missing (Measure run 41656599871; the 527 quantities Revit's export writes on openings rvt-rs does not write, a door's further cuts and the cuts of curtain walls and cabinets, are counted apart, [#1165](https://github.com/DrunkOnJava/rvt-rs/issues/1165)), none written that Revit's export leaves out (the maintainer,
 2026-10-26: a curtain panel's `Width` is left out,
 since Revit's export gives none on 3 panels that nothing tells apart; a joined column's `Length`, left out then for 18 meshed columns, is written since RE-291 tells those apart, the maintainer, 2026-11-03;
-and the maintainer, 2026-10-31, left out too a value on which Revit's exporters disagree: floors', ceilings' and covering walls' `Width`, which Revit 2024's exporter writes and later ones' do not, RE-294;
-RE-291 now tells the columns apart,
-[#1203](https://github.com/DrunkOnJava/rvt-rs/issues/1203)), and RE1's 94 IFC2X3 pipe and duct lengths all are written;
+and the maintainer, 2026-10-31, left out too a value on which Revit's exporters disagree: floors', ceilings' and covering walls' `Width`, which Revit 2024's exporter writes and later ones' do not, RE-294), and RE1's 94 IFC2X3 pipe and duct lengths all are written;
 Core Interior's and RE1 Architecture's exports were made with Revit's "Export base quantities" off, so the census counts the quantities rvt-rs writes on them apart (2,437 and 85,
 and RE1 Mechanical's and Plumbing's pipe areas,
 12 and 126), and `rvt-ifc --no-base-quantities` leaves them out, base quantities being on by default as in each of Revit's built-in IFC4 setups (RE-242);
@@ -205,7 +203,7 @@ Most instance and type parameters are not ([#35](https://github.com/DrunkOnJava/
 [#155](https://github.com/DrunkOnJava/rvt-rs/issues/155),
 the 0.13.0 milestone)
 Open: type objects' values ([#1185](https://github.com/DrunkOnJava/rvt-rs/issues/1185)),
-joined columns' `Length`, the round column and the meshed columns' values ([#1203](https://github.com/DrunkOnJava/rvt-rs/issues/1203)),
+the round column and the meshed columns' values ([#1203](https://github.com/DrunkOnJava/rvt-rs/issues/1203)),
 and the remaining values with no rule yet ([#1193](https://github.com/DrunkOnJava/rvt-rs/issues/1193)).
 
 ## Interfaces 1.0 stabilizes
