@@ -76,14 +76,24 @@ async function statusLog(page: Page): Promise<string[]> {
   return page.evaluate(() => (window as unknown as { __statusLog: string[] }).__statusLog);
 }
 
-/** A report with a count the bar is a fraction of: a total above one, not yet reached. */
+/**
+ * The stages whose last report hands over to something the decoder reports
+ * nothing in, so the card names that and sweeps (AFTER_STAGE in main.ts).
+ */
+const HAS_AFTER = ['partition-scan', 'saved-meshes'];
+
+/**
+ * A report the card gives a determinate bar: a total above one, and not the end
+ * of a stage with something after it. The end of a stage with nothing after it
+ * (the candidate scan's 100%) is still a count, and the bar is full.
+ */
 function isCounted(event: LoadEvent): boolean {
   return (
     event.stage !== undefined &&
     event.total !== null &&
     event.total !== undefined &&
     event.total > 1 &&
-    event.done! < event.total
+    !(event.done! >= event.total && HAS_AFTER.includes(event.stage))
   );
 }
 
