@@ -109,7 +109,7 @@ It is not a converter for arbitrary models: most parameters, family
 geometry (doors and windows are drawn from the mesh Revit saved for their
 display by default, and any other family instance with the experimental
 `--saved-meshes` option, RE-78), hip roofs over a T or U footprint, roofs sloped by several slope arrows of the configuration of puzzbobb's U, where Revit slopes the two long outer walls along the arms only (RE-307; no other roof of the configuration is measured), and roofs by extrusion outside Revit 2025, the top of
-walls Revit steps over a floor that covers them in part (29 of the BIM4LCA office's as built and 26 at permit, #1067), the boundaries of
+walls whose layers Revit ends at different heights or cuts at a height no join names (#1067), the boundaries of
 the rooms whose stored solid still does not close (RE-316 §4) and opening
 profiles are not decoded, and rvt-rs does not edit Revit model data.
 
