@@ -13,6 +13,16 @@ value occurs and no value occurs in both groups; that is a candidate rule, not
 a proof, and it is only worth anything when both groups are large. Fields with
 more than 12 distinct values (ids, positions) are summarised.
 
+It then sets Revit's own rule against the result. Revit writes a family
+instance that is not a door or a window only when it has a 3D body
+(`FamilyInstanceExporter.ExportFamilyInstanceElement` in revit-ifc, CLEANROOM.md
+source 5). The probe reads the model forms of the instance's family document
+and the parameter values that show them: a form is drawn when its `Visible` is
+not 0, where `Visible` is the value of the family parameter it is bound to
+(matched to the instance's, else its type's, parameter by caption) or else its
+stored value. An instance with no drawn form has no body. The table at the end
+counts the instances with and without a body against those Revit wrote.
+
 The IFC is read as text, so nothing here needs IfcOpenShell.
 
 Usage:
@@ -53,6 +63,7 @@ def elsewhere(ifc_text, wanted):
 
 def parse(path):
     rows = {"instance": {}, "record": {}, "export": {}, "symbol": {}}
+    extra = {"params": {"instance": {}, "symbol": {}}, "caption": {}, "forms": collections.defaultdict(list), "incomplete": {}}
     release = None
     with open(path, encoding="utf-8") as handle:
         for line in handle:
@@ -62,6 +73,21 @@ def parse(path):
             if parts[0] == "release":
                 release = parts[1]
                 continue
+            if parts[0] == "params" and len(parts) >= 3:
+                extra["params"][parts[1]][parts[2]] = {
+                    key: int(value) for key, _, value in (token.partition("=") for token in parts[3:]) if value
+                }
+                continue
+            if parts[0] == "caption" and len(parts) >= 3:
+                extra["caption"][parts[1]] = parts[2]
+                continue
+            if parts[0] == "family" and len(parts) >= 4:
+                extra["incomplete"][parts[1]] = parts[3] == "incomplete=true"
+                continue
+            if parts[0] == "form" and len(parts) >= 5:
+                fields = dict(token.partition("=")[::2] for token in parts[2:])
+                extra["forms"][parts[1]].append(fields)
+                continue
             if parts[0] in rows and len(parts) >= 2:
                 fields = {}
                 for token in parts[2:]:
@@ -69,7 +95,7 @@ def parse(path):
                     if sep:
                         fields[key] = value
                 rows[parts[0]][parts[1]] = fields
-    return release, rows
+    return release, rows, extra
 
 
 def split_table(title, fields_by_id, written):
@@ -96,15 +122,62 @@ def split_table(title, fields_by_id, written):
     return separating
 
 
+def has_body(element, typed, rows, extra):
+    """True, False, or None where the probe could not say: does the instance have a drawn model form."""
+    link = typed.get(element)
+    if not link:
+        return None
+    family = rows["symbol"].get(link[1], {}).get("m_familyId.m_id.m_id64")
+    forms = extra["forms"].get(family)
+    if not forms:
+        return None
+    if extra["incomplete"].get(family):
+        return None
+    by_caption = {}
+    for source in (extra["params"]["symbol"].get(link[1], {}), extra["params"]["instance"].get(element, {})):
+        for parameter, value in source.items():
+            caption = extra["caption"].get(parameter)
+            if caption:
+                by_caption[caption] = value
+    for form in forms:
+        if form["cutting"] == "true":
+            continue
+        value = None
+        if form["bound"] != "-" and form["bound"] in by_caption:
+            value = by_caption[form["bound"]]
+        elif form["visible"] != "-":
+            value = int(form["visible"])
+        if value != 0:
+            return True
+    return False
+
+
+def print_body_table(ids, written, typed, rows, extra):
+    table = collections.Counter()
+    for element in ids:
+        verdict = has_body(element, typed, rows, extra)
+        label = {True: "has a drawn form", False: "no drawn form", None: "not decided"}[verdict]
+        table[(label, "written" if element in written else "left out")] += 1
+    print("-- Revit needs a 3D body (revit-ifc FamilyInstanceExporter)")
+    for (label, status), count in sorted(table.items()):
+        print(f"   {label}: {count} {status}")
+
+
 def main():
     probe_path, ifc_path = sys.argv[1:3]
-    release, rows = parse(probe_path)
+    release, rows, extra = parse(probe_path)
     with open(ifc_path, encoding="utf-8", errors="replace") as handle:
         ifc_text = handle.read()
     written_all = revit_written(ifc_text)
-    ids = sorted(rows["export"], key=int)
+    spatial = {"-2000160", "-2003200", "-2003600"}
+    everything = sorted(rows["export"], key=int)
+    ids = [i for i in everything if rows["record"].get(i, {}).get("category") not in spatial]
+    print(
+        f"{len(everything) - len(ids)} rooms, areas and spaces carry the value too; Revit names those spaces by number, "
+        "so they are left out of the counts below"
+    )
     written = {i for i in ids if i in written_all}
-    print(f"release {release}: {len(ids)} elements carry Export to IFC As IfcSpace; Revit wrote a space for {len(written)}")
+    print(f"release {release}: {len(ids)} family instances carry Export to IFC As IfcSpace; Revit wrote a space for {len(written)}")
     left = [i for i in ids if i not in written]
     where = elsewhere(ifc_text, set(left))
     classes = collections.Counter()
@@ -115,7 +188,7 @@ def main():
     named = collections.Counter()
     for name in SPACE.findall(ifc_text):
         match = re.fullmatch(r"(.*):(\d+)", name)
-        if match and match.group(2) in rows["export"]:
+        if match and match.group(2) in ids:
             named[match.group(1)] += 1
     print(f"   written names (family:type): {dict(named)}")
 
@@ -132,6 +205,8 @@ def main():
         kinds[(symbol, "written" if element in written else "left out")] += 1
     for (symbol, status), count in sorted(kinds.items()):
         print(f"   type symbol {symbol}: {count} {status}")
+
+    print_body_table(ids, written, typed, rows, extra)
 
     separating = []
     separating += split_table("record (partition frame)", {i: rows["record"].get(i, {}) for i in ids}, written)

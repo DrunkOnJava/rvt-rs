@@ -285,17 +285,21 @@ fn blocks_of(
     out
 }
 
-/// [`FamilyForms`] of each of `families`, by the family's ElementId. A family
-/// whose document is not found, or holds no form or nested instance that
-/// decodes, is left out. Errs where the file's partitions or schema are not
-/// read.
-pub fn family_forms(
-    rf: &mut RevitFile,
-    families: &BTreeSet<u64>,
-) -> anyhow::Result<BTreeMap<u64, FamilyForms>> {
-    let mut out = BTreeMap::new();
+/// What [`load`] reads: the schema, the release, the partitions, the block
+/// keys and the family documents.
+struct Loaded {
+    registry: crate::schema_registry::Registry,
+    version: u32,
+    streams: Vec<String>,
+    keys: BTreeSet<[u8; 16]>,
+    documents: BTreeMap<u64, Document>,
+}
+
+/// The documents of `families`, by ElementId, with what was read to find
+/// them. `None` where there are no families or none has a document.
+fn load(rf: &mut RevitFile, families: &BTreeSet<u64>) -> anyhow::Result<Option<Loaded>> {
     if families.is_empty() {
-        return Ok(out);
+        return Ok(None);
     }
     let version = rf.layout_release()?;
     anyhow::ensure!(
@@ -353,9 +357,37 @@ pub fn family_forms(
     }
     let blocks = blocks_of(&bodies, families, &keys);
     if blocks.is_empty() {
-        return Ok(out);
+        return Ok(None);
     }
     let documents = read_documents(rf, &registry, version, &streams, &blocks)?;
+    Ok(Some(Loaded {
+        registry,
+        version,
+        streams,
+        keys,
+        documents,
+    }))
+}
+
+/// [`FamilyForms`] of each of `families`, by the family's ElementId. A family
+/// whose document is not found, or holds no form or nested instance that
+/// decodes, is left out. Errs where the file's partitions or schema are not
+/// read.
+pub fn family_forms(
+    rf: &mut RevitFile,
+    families: &BTreeSet<u64>,
+) -> anyhow::Result<BTreeMap<u64, FamilyForms>> {
+    let mut out = BTreeMap::new();
+    let Some(Loaded {
+        registry,
+        version,
+        streams,
+        keys,
+        documents,
+    }) = load(rf, families)?
+    else {
+        return Ok(out);
+    };
 
     // The documents of the families nested in them.
     let mut nested_families: BTreeSet<u64> = BTreeSet::new();
@@ -441,6 +473,59 @@ pub fn family_forms(
             FamilyForms {
                 shows_unset,
                 hidden_only: hidden.difference(&visible).copied().collect(),
+            },
+        );
+    }
+    Ok(out)
+}
+
+/// A model form of a loaded family's document, and what shows it (RE-312).
+#[derive(Clone, Debug)]
+pub struct ModelForm {
+    /// Whether it is a void, which draws nothing.
+    pub cutting: bool,
+    /// Its stored `Visible`, where it holds one.
+    pub visible: Option<i64>,
+    /// The caption its `Visible` is bound to in the family's own document.
+    pub bound_caption: Option<String>,
+}
+
+/// The model forms of a loaded family's document (RE-312).
+#[derive(Clone, Debug, Default)]
+pub struct FamilySolids {
+    pub forms: Vec<ModelForm>,
+    /// True where the document nests a family instance, or a form or an
+    /// instance in it did not decode: the forms may not be all it draws.
+    pub incomplete: bool,
+}
+
+/// [`FamilySolids`] of each of `families`, by the family's ElementId. A
+/// family whose document is not found is left out. Errs where the file's
+/// partitions or schema are not read.
+pub fn family_solids(
+    rf: &mut RevitFile,
+    families: &BTreeSet<u64>,
+) -> anyhow::Result<BTreeMap<u64, FamilySolids>> {
+    let mut out = BTreeMap::new();
+    let Some(loaded) = load(rf, families)? else {
+        return Ok(out);
+    };
+    for (family, document) in &loaded.documents {
+        out.insert(
+            *family,
+            FamilySolids {
+                forms: document
+                    .forms
+                    .iter()
+                    .map(|form| ModelForm {
+                        cutting: form.cutting,
+                        visible: form.visible,
+                        bound_caption: form
+                            .bound
+                            .and_then(|id| document.captions.get(&id).cloned()),
+                    })
+                    .collect(),
+                incomplete: !document.nested.is_empty() || document.unread,
             },
         );
     }

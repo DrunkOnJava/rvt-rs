@@ -26,6 +26,14 @@
 //!                      every scalar of the element's native record (RE-153 graph)
 //!   symbol <id> class=<name> <path>=<value> ...
 //!                      the same for each type symbol an instance's integers name
+//!   params instance|symbol <id> <parameter ElementId>=<integer> ...
+//!                      every integer parameter value in the record's `FamilyParams`
+//!   caption <parameter ElementId> <caption>
+//!                      the project's name for each parameter a value names
+//!   family <id> forms=<n> incomplete=<bool>
+//!   form <family id> cutting=<bool> visible=<v|-> bound=<caption|->
+//!                      each model form of a type symbol's family document
+//!                      (`native_family_forms::family_solids`)
 //!
 //! Usage:
 //!   cargo run --profile ci -p rvt-probes --example probe_re312_parking_spaces -- FILE.rvt
@@ -99,6 +107,29 @@ fn integers(value: &Value, out: &mut BTreeSet<u64>) {
     }
 }
 
+/// A graph's `FamilyParams` values: parameter ElementId and `m_int`.
+fn family_params(graph: &rvt::research::native_parameters::ObjectGraph) -> Vec<(i64, i64)> {
+    graph
+        .objects
+        .iter()
+        .filter(|object| object.class_name == "FamilyParams")
+        .filter_map(|object| object.fields.get("m_params")?.as_array())
+        .flatten()
+        .filter_map(|entry| {
+            let id = entry.pointer("/m_paramId/m_id/m_id64")?.as_i64()?;
+            Some((id, entry.get("m_int")?.as_i64()?))
+        })
+        .collect()
+}
+
+fn show_params(params: &[(i64, i64)]) -> String {
+    params
+        .iter()
+        .map(|(id, value)| format!("{id}={value}"))
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
 fn main() -> anyhow::Result<()> {
     let path = PathBuf::from(std::env::args().nth(1).expect("usage: FILE.rvt"));
     let mut rf = RevitFile::open(&path)?;
@@ -156,6 +187,8 @@ fn main() -> anyhow::Result<()> {
     }
 
     let mut named: BTreeMap<u64, BTreeSet<u64>> = BTreeMap::new();
+    let mut parameter_ids: BTreeSet<i64> = BTreeSet::new();
+    let mut families: BTreeSet<u64> = BTreeSet::new();
     let options = Options {
         selected_ids: ids.clone(),
         ..Options::default()
@@ -176,6 +209,13 @@ fn main() -> anyhow::Result<()> {
         let mut found = BTreeSet::new();
         integers(&object.fields, &mut found);
         named.insert(record.identity.element_id, found);
+        let params = family_params(record.graph.as_ref().expect("graph checked above"));
+        println!(
+            "params instance {} {}",
+            record.identity.element_id,
+            show_params(&params)
+        );
+        parameter_ids.extend(params.iter().map(|(id, _)| *id));
         Ok(())
     })?;
 
@@ -200,7 +240,71 @@ fn main() -> anyhow::Result<()> {
             record.class_name.clone().unwrap_or_default(),
             line.join(" ")
         );
+        let params = family_params(record.graph.as_ref().expect("graph checked above"));
+        println!(
+            "params symbol {} {}",
+            record.identity.element_id,
+            show_params(&params)
+        );
+        parameter_ids.extend(params.iter().map(|(id, _)| *id));
+        if let Some(family) = object
+            .fields
+            .pointer("/m_familyId/m_id/m_id64")
+            .and_then(Value::as_i64)
+            .and_then(|id| u64::try_from(id).ok())
+        {
+            families.insert(family);
+        }
         Ok(())
     })?;
+
+    let wanted_parameters: BTreeSet<u64> = parameter_ids
+        .iter()
+        .filter_map(|id| u64::try_from(*id).ok())
+        .collect();
+    if !wanted_parameters.is_empty() {
+        let options = Options {
+            selected_ids: wanted_parameters,
+            ..Options::default()
+        };
+        extract_graphs(&mut rf, &options, |record| {
+            let caption = record.graph.as_ref().and_then(|graph| {
+                graph
+                    .objects
+                    .iter()
+                    .find_map(|object| object.fields.get("m_caption")?.as_str().map(text))
+            });
+            println!(
+                "caption {} {}",
+                record.identity.element_id,
+                caption.unwrap_or_else(|| "-".into())
+            );
+            Ok(())
+        })?;
+    }
+
+    match rvt::research::native_family_forms::family_solids(&mut rf, &families) {
+        Ok(solids) => {
+            for (family, solid) in solids {
+                println!(
+                    "family {family} forms={} incomplete={}",
+                    solid.forms.len(),
+                    solid.incomplete
+                );
+                for form in solid.forms {
+                    println!(
+                        "form {family} cutting={} visible={} bound={}",
+                        form.cutting,
+                        form.visible
+                            .map_or_else(|| "-".to_string(), |v| v.to_string()),
+                        form.bound_caption
+                            .as_deref()
+                            .map_or_else(|| "-".to_string(), text),
+                    );
+                }
+            }
+        }
+        Err(error) => println!("family_solids error {}", text(&error.to_string())),
+    }
     Ok(())
 }
