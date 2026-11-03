@@ -111,6 +111,15 @@ pub enum Curve {
         radius: f64,
         range: [f64; 2],
     },
+    /// `center + x_len·cos t·x + y_len·sin t·y` (RE-302).
+    Ellipse {
+        center: Point,
+        x: Point,
+        y: Point,
+        x_len: f64,
+        y_len: f64,
+        range: [f64; 2],
+    },
 }
 
 impl Curve {
@@ -153,7 +162,53 @@ impl Curve {
                     range: range(&o.fields["m_endParams"], "arc range")?,
                 })
             }
+            "GEllipse" => {
+                let x = p(&o.fields["m_xVec"], "ellipse x basis")?;
+                let y = p(&o.fields["m_yVec"], "ellipse y basis")?;
+                let x_len = o.fields["m_xLen"].as_f64().context("ellipse x length")?;
+                let y_len = o.fields["m_yLen"].as_f64().context("ellipse y length")?;
+                ensure!(
+                    x_len.is_finite()
+                        && y_len.is_finite()
+                        && x_len > 0.
+                        && y_len > 0.
+                        && (len(x) - 1.).abs() <= 1e-6
+                        && (len(y) - 1.).abs() <= 1e-6
+                        && dot(x, y).abs() <= 1e-6,
+                    "invalid ellipse basis"
+                );
+                Ok(Self::Ellipse {
+                    center: p(&o.fields["m_center"], "ellipse center")?,
+                    x,
+                    y,
+                    x_len,
+                    y_len,
+                    range: range(&o.fields["m_endParams"], "ellipse range")?,
+                })
+            }
             name => bail!("unsupported parametric profile curve {name}"),
+        }
+    }
+    /// The largest radius of curvature bound of a curved profile: an arc's
+    /// radius, an ellipse's longer semi-axis. `None` for a line.
+    pub fn bend_radius(&self) -> Option<f64> {
+        match self {
+            Self::Line { .. } => None,
+            Self::Arc { radius, .. } => Some(*radius),
+            Self::Ellipse { x_len, y_len, .. } => Some(x_len.max(*y_len)),
+        }
+    }
+    /// The curve's parameter range.
+    pub fn range(&self) -> [f64; 2] {
+        c_range(self)
+    }
+    /// A bound on the curve's speed over its range times that range: its
+    /// length for a line, at least its length for an arc or an ellipse.
+    pub fn span_length(&self) -> f64 {
+        let [a, b] = c_range(self);
+        match self {
+            Self::Line { direction, .. } => len(*direction) * (b - a),
+            _ => self.bend_radius().unwrap_or(0.) * (b - a).abs(),
         }
     }
     fn eval(&self, t: f64) -> Point {
@@ -171,6 +226,17 @@ impl Curve {
                 *center,
                 mul(add(mul(*x, t.cos()), mul(*y, t.sin())), *radius),
             ),
+            Self::Ellipse {
+                center,
+                x,
+                y,
+                x_len,
+                y_len,
+                ..
+            } => add(
+                *center,
+                add(mul(*x, x_len * t.cos()), mul(*y, y_len * t.sin())),
+            ),
         }
     }
     fn derivative(&self, t: f64) -> Point {
@@ -179,6 +245,9 @@ impl Curve {
             Self::Arc { x, y, radius, .. } => {
                 mul(add(mul(*x, -t.sin()), mul(*y, t.cos())), *radius)
             }
+            Self::Ellipse {
+                x, y, x_len, y_len, ..
+            } => add(mul(*x, -x_len * t.sin()), mul(*y, y_len * t.cos())),
         }
     }
 }
@@ -381,6 +450,8 @@ impl ParametricSurface {
 
 fn c_range(c: &Curve) -> [f64; 2] {
     match c {
-        Curve::Line { range, .. } | Curve::Arc { range, .. } => *range,
+        Curve::Line { range, .. } | Curve::Arc { range, .. } | Curve::Ellipse { range, .. } => {
+            *range
+        }
     }
 }

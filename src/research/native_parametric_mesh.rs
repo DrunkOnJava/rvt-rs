@@ -293,6 +293,18 @@ pub(crate) fn face_grid(g: &ObjectGraph, fi: usize) -> Result<FaceGrid> {
                 angular(center[0].hypot(center[1]) + 2. * radius),
                 angular(*radius),
             ),
+            Curve::Ellipse {
+                center,
+                x_len,
+                y_len,
+                ..
+            } => {
+                let radius = x_len.max(*y_len);
+                (
+                    angular(center[0].hypot(center[1]) + 2. * radius),
+                    angular(radius),
+                )
+            }
         },
         ParametricSurface::RuledSurf { .. } => {
             // A shared normalized grid across ruled patches preserves their
@@ -313,30 +325,50 @@ pub(crate) fn face_grid(g: &ObjectGraph, fi: usize) -> Result<FaceGrid> {
                 }
                 let s = ParametricSurface::read(g, surface_index)?;
                 let ParametricSurface::RuledSurf {
-                    profile1:
-                        Curve::Line {
-                            direction: a,
-                            range: ra,
-                            ..
-                        },
-                    profile2:
-                        Curve::Line {
-                            direction: b,
-                            range: rb,
-                            ..
-                        },
-                    ..
+                    profile1, profile2, ..
                 } = s
                 else {
-                    anyhow::bail!("nonlinear ruled profiles need a curvature policy")
+                    continue;
                 };
-                let da = std::array::from_fn(|k| a[k] * (ra[1] - ra[0]));
-                let db = std::array::from_fn(|k| b[k] * (rb[1] - rb[0]));
-                let mixed = length(std::array::from_fn(|k| da[k] - db[k]));
+                if let (
+                    Curve::Line {
+                        direction: a,
+                        range: ra,
+                        ..
+                    },
+                    Curve::Line {
+                        direction: b,
+                        range: rb,
+                        ..
+                    },
+                ) = (&profile1, &profile2)
+                {
+                    let da = std::array::from_fn(|k| a[k] * (ra[1] - ra[0]));
+                    let db = std::array::from_fn(|k| b[k] * (rb[1] - rb[0]));
+                    let mixed = length(std::array::from_fn(|k| da[k] - db[k]));
+                    n = n
+                        .max((mixed / CHORD).sqrt().ceil())
+                        .max(length(da).ceil())
+                        .max(length(db).ceil());
+                    continue;
+                }
+                // RE-302: a curved profile (an arc or an ellipse) gets as many
+                // steps as keep each chord within CHORD of it, at its largest
+                // radius, and the bound on the twist between the two profiles
+                // that straight ones get.
+                let turns = |c: &Curve| {
+                    c.bend_radius().map_or(0., |radius| {
+                        let [a, b] = c.range();
+                        ((b - a).abs() / angular(radius)).ceil()
+                    })
+                };
+                let mixed = profile1.span_length() + profile2.span_length();
                 n = n
                     .max((mixed / CHORD).sqrt().ceil())
-                    .max(length(da).ceil())
-                    .max(length(db).ceil());
+                    .max(profile1.span_length().ceil())
+                    .max(profile2.span_length().ceil())
+                    .max(turns(&profile1))
+                    .max(turns(&profile2));
             }
             (1. / n, 1. / n)
         }
