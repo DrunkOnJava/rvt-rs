@@ -52,6 +52,21 @@ wall from its start, `-` where the body is not there):
                                           floor covers cannot show on the centre
                                           line); form is how each file draws the
                                           wall's Body
+  faces tag:<Tag> top <z> rvt-rs <A> Revit <A> taller <A> lower <A> volume rvt-rs <V> Revit <V>
+                                          the plan area of the horizontal faces at
+                                          rvt-rs's highest point in each body, and,
+                                          inside the part of the plan both files
+                                          draw, the area where rvt-rs is at that
+                                          height and Revit's body is not (taller)
+                                          and where Revit's is and rvt-rs's is not
+                                          (lower), in square feet; and each body's
+                                          volume, cubic feet
+  piece tag:<Tag> area <A> width <W> inside Revit's plan <A> at Revit's full height <share>
+                                          for a wall rvt-rs steps: each piece of
+                                          its plan at its highest point, its area,
+                                          its least width, and the share of it
+                                          inside Revit's plan where Revit's body is
+                                          at that height too
   summary ...                             walls equal on the centre line, and
                                           over the whole plan, and the points
 
@@ -246,6 +261,39 @@ def plan_top(ours_body, revit_body, ours_plan, revit_plan, xs, ys, direction, th
     )
 
 
+def volume(triangles):
+    """The volume of the closed surface `triangles`, cubic feet."""
+    corner_a, corner_b, corner_c = triangles[:, 0], triangles[:, 1], triangles[:, 2]
+    return abs(float(np.einsum("ij,ij->i", corner_a, np.cross(corner_b, corner_c)).sum() / 6.0))
+
+
+def top_faces(triangles, top):
+    """The union, seen from above, of the upward horizontal faces of
+    `triangles` within 0.01 ft of the height `top`, or an empty polygon."""
+    corner_a = triangles[:, 1] - triangles[:, 0]
+    corner_b = triangles[:, 2] - triangles[:, 0]
+    normal = np.cross(corner_a, corner_b)
+    size = np.linalg.norm(normal, axis=1)
+    spread = triangles[:, :, 2].max(axis=1) - triangles[:, :, 2].min(axis=1)
+    heights = triangles[:, :, 2].mean(axis=1)
+    flat = (size > 1e-12) & (spread <= 0.001) & (normal[:, 2] > 0) & (np.abs(heights - top) <= 0.01)
+    found = triangles[flat]
+    plan = footprint(found) if len(found) else None
+    return shapely.Polygon() if plan is None else plan
+
+
+def pieces_of(plan):
+    return list(plan.geoms) if hasattr(plan, "geoms") else [plan]
+
+
+def least_width(polygon):
+    rectangle = shapely.minimum_rotated_rectangle(polygon)
+    if rectangle.geom_type != "Polygon":
+        return 0.0
+    corners = np.array(rectangle.exterior.coords)[:4]
+    return float(min(np.hypot(*(corners[1] - corners[0])), np.hypot(*(corners[2] - corners[1]))))
+
+
 def level_range(triangles, xs, ys, direction, thickness):
     """The lowest and highest underside of `triangles` over three rows of
     stations: the centre line and the two 0.45 thicknesses off it, or None
@@ -387,6 +435,7 @@ def main():
     ours_forms, revit_forms = forms(args[0]), forms(args[1])
     on_centre = on_plan = walls_planned = 0
     plan_points = [0, 0, 0, 0]
+    tallers = lowers = 0.0
 
     def slab_plan(source, tag, table):
         if (source, tag) not in plans:
@@ -433,6 +482,25 @@ def main():
                 f"plan tag:{tag} points {planned[0]} equal {planned[1]} taller {planned[2]} lower {planned[3]} "
                 f"| form rvt-rs {ours_forms.get(tag, '-')} | Revit {revit_forms.get(tag, '-')}"
             )
+        top = ours_box[5]
+        ours_full, revit_full = top_faces(ours_body, top), top_faces(revit_body, top)
+        common = ours_plan.intersection(revit_plan)
+        taller = ours_full.difference(revit_full).intersection(common).area
+        lower = revit_full.difference(ours_full).intersection(common).area
+        print(
+            f"faces tag:{tag} top {top:.4f} rvt-rs {ours_full.area:.4f} Revit {revit_full.area:.4f} "
+            f"taller {taller:.4f} lower {lower:.4f} volume rvt-rs {volume(ours_body):.4f} Revit {volume(revit_body):.4f}"
+        )
+        tallers += taller
+        lowers += lower
+        if ours_full.area < ours_plan.area - 1e-3:
+            for piece in pieces_of(ours_full):
+                inside = piece.intersection(common).area
+                if inside > 1e-6:
+                    print(
+                        f"piece tag:{tag} area {piece.area:.4f} width {least_width(piece):.4f} "
+                        f"inside Revit's plan {inside:.4f} at Revit's full height {piece.intersection(common).intersection(revit_full).area / inside:.4f}"
+                    )
         low, high = ours_box[4], ours_box[5]
         reach = (min(ours_box[0], revit_box[0]) - 0.1, max(ours_box[1], revit_box[1]) + 0.1,
                  min(ours_box[2], revit_box[2]) - 0.1, max(ours_box[3], revit_box[3]) + 0.1)
@@ -466,7 +534,8 @@ def main():
     print(
         f"summary walls {len(both)}; equal on the centre line {on_centre}; "
         f"equal over the plan {on_plan} of {walls_planned} compared; "
-        f"points {plan_points[0]} equal {plan_points[1]} taller {plan_points[2]} lower {plan_points[3]}"
+        f"points {plan_points[0]} equal {plan_points[1]} taller {plan_points[2]} lower {plan_points[3]}; "
+        f"full-height area taller {tallers:.4f} lower {lowers:.4f} ft2"
     )
     unmeshed = {}
     for (path, _), (kind, reason) in base.UNMESHED.items():
