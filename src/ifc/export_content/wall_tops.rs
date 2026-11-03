@@ -32,29 +32,21 @@
 //!
 //! Revit's top is the underside of the floor over the part of the wall's plan
 //! the floor covers and the wall's own top elsewhere (RE-267 §2). Where no
-//! element named by the wall covers the whole of its plan, and the named
-//! elements that reach it lie at one underside inside the wall's height, the
-//! wall is drawn as that: a prism of its own plan up to the underside, and
-//! over the part of the plan outside the elements' outlines (and inside their
-//! holes and openings) a prism from the underside to the wall's top, one item
-//! each in the one body representation. The plan outside is worked out as
-//! convex pieces: the wall's plan, which must be convex, less each triangle
-//! of an outline in turn, then the pieces that share an edge and make a convex
-//! piece together joined. A wall whose pieces pass [`MAX_RISERS`], whose
-//! elements lie at several undersides, or whose elements' holes and openings
-//! lie over the wall where several elements share the outline, is left as it
-//! was. The wall's `extrusion` stays the full prism, which the passes that
-//! read a wall's plan and its record's box use; the writer, the glTF and the
-//! plan outline draw its `solid_shape`.
-//!
-//! Areas are worked out on triangles. The wall's plan is clipped against
-//! each triangle of the element's outline (Sutherland-Hodgman, against a
-//! convex clip) and the pieces add up to the area the element covers; its
-//! holes and the openings that void it are triangulated one by one, so that
-//! a hole that cannot be joined to the outline does not leave the outline
-//! untriangulated, and the wall must lie clear of them. A ring that does not
-//! triangulate to its own area leaves the wall as it was, where it is the
-//! outline, and counts as its bounding box, where it is a hole.
+//! single element named by the wall covers the whole of its plan, and those
+//! that reach it lie inside the wall's height, the wall is drawn as that: a
+//! prism of its own plan up to the lowest underside, and, over each part of
+//! the plan not covered at or below an underside, a prism from that underside
+//! to the next one (the wall's top for the last), one item each in the one
+//! body representation. The parts are convex pieces: the plan (itself where
+//! it is convex, else its ear-clipped triangles joined where two make a convex
+//! piece) less each triangle of an outline in turn, with the pieces that share
+//! an edge and make a convex piece together joined. The holes and openings of
+//! an element count as uncovered, where one element alone is named. A wall
+//! whose pieces pass [`MAX_RISERS`], whose plan does not break into convex
+//! pieces, or whose several elements share a hole or opening that lies over
+//! it, is left as it was. The wall's `extrusion` stays the full prism, which
+//! the passes that read a wall's plan and its record's box use; the writer,
+//! the glTF and the plan outline draw its `solid_shape`.
 
 use std::collections::{HashMap, HashSet};
 
@@ -347,62 +339,105 @@ fn reach(cutter: &Cutter, wall: &Wall) -> f64 {
     inside - cut
 }
 
-/// The convex pieces of the wall's plan that the elements of `group` (at one
-/// underside) do not cover: outside their outlines, and inside their holes
-/// and openings. `None` where there are more than [`MAX_RISERS`], or where
-/// several elements share a hole or opening the wall crosses.
-fn outside_pieces(wall: &Wall, group: &[&Cutter]) -> Option<Vec<Ring>> {
-    if !is_convex(&wall.plan) {
+/// The convex pieces `plan` is made of: itself where it is convex, else its
+/// ear-clipped triangles with every two that make a convex piece together
+/// joined. `None` where the triangulation is not the plan's area.
+fn convex_pieces(plan: &[Point2]) -> Option<Vec<Ring>> {
+    if is_convex(plan) {
+        return Some(vec![plan.to_vec()]);
+    }
+    let cap = section(plan, &[])?;
+    let mut drawn = 0.0;
+    let mut triangles: Vec<Ring> = Vec::with_capacity(cap.cap_triangles.len());
+    for corners in &cap.cap_triangles {
+        let mut triangle: Ring = Vec::with_capacity(3);
+        for &corner in corners {
+            triangle.push(*cap.cap_points.get(usize::try_from(corner).ok()?)?);
+        }
+        let triangle = counter_clockwise(triangle);
+        drawn += area(&triangle);
+        triangles.push(triangle);
+    }
+    let expected = area(plan);
+    let tolerance = TRIANGULATION_TOLERANCE_SQUARE_FEET + 1e-9 * expected;
+    if (drawn - expected).abs() > tolerance {
         return None;
     }
-    let mut pieces: Vec<Ring> = vec![wall.plan.clone()];
-    for cutter in group {
-        for triangle in &cutter.outline {
-            if overlap(wall, triangle) <= PIECE_ROUNDING_SQUARE_FEET {
-                continue;
-            }
-            let clip = counter_clockwise(triangle.to_vec());
-            pieces = pieces
-                .iter()
-                .flat_map(|piece| subtract_convex(piece, &clip))
-                .collect();
-            if pieces.len() > 4 * MAX_RISERS {
-                return None;
-            }
-        }
-    }
-    let mut held: Vec<Ring> = Vec::new();
-    for cutter in group {
-        for triangle in &cutter.cutouts {
-            if overlap(wall, triangle) <= PIECE_ROUNDING_SQUARE_FEET {
-                continue;
-            }
-            if group.len() > 1 {
-                return None;
-            }
-            let part = clip_convex(&wall.plan, &counter_clockwise(triangle.to_vec()));
-            if part.len() < 3 || area(&part) <= PIECE_ROUNDING_SQUARE_FEET {
-                continue;
-            }
-            let mut parts = vec![part];
-            for other in pieces.iter().chain(held.iter()) {
-                parts = parts
+    let pieces = join_pieces(triangles);
+    pieces
+        .iter()
+        .all(|piece| is_convex(piece))
+        .then_some(pieces)
+}
+
+/// The elements a wall's top is stepped at, by underside, lowest first.
+type Levels<'a> = Vec<(f64, Vec<&'a Cutter>)>;
+
+/// The convex pieces of the wall's plan that lie above each underside of
+/// `levels`: outside the outlines of the elements at that underside and the
+/// lower ones, and inside their holes and openings. Each is the part of the
+/// plan whose top is higher than that underside. `None` where there are more
+/// than [`MAX_RISERS`] pieces, where the plan does not break into convex
+/// pieces, or where several elements share a hole or opening the wall
+/// crosses.
+fn steps(wall: &Wall, levels: &[(f64, Vec<&Cutter>)]) -> Option<Vec<(f64, Vec<Ring>)>> {
+    let alone = levels.len() == 1 && levels[0].1.len() == 1;
+    let base = convex_pieces(&wall.plan)?;
+    let mut pieces = base.clone();
+    let mut out = Vec::with_capacity(levels.len());
+    for (level, group) in levels {
+        for cutter in group {
+            for triangle in &cutter.outline {
+                if overlap(wall, triangle) <= PIECE_ROUNDING_SQUARE_FEET {
+                    continue;
+                }
+                let clip = counter_clockwise(triangle.to_vec());
+                pieces = pieces
                     .iter()
-                    .flat_map(|piece| subtract_convex(piece, other))
+                    .flat_map(|piece| subtract_convex(piece, &clip))
                     .collect();
-            }
-            held.extend(parts);
-            if held.len() > 4 * MAX_RISERS {
-                return None;
+                if pieces.len() > 4 * MAX_RISERS {
+                    return None;
+                }
             }
         }
+        let mut held: Vec<Ring> = Vec::new();
+        for cutter in group {
+            for triangle in &cutter.cutouts {
+                if overlap(wall, triangle) <= PIECE_ROUNDING_SQUARE_FEET {
+                    continue;
+                }
+                if !alone {
+                    return None;
+                }
+                let clip = counter_clockwise(triangle.to_vec());
+                let mut parts: Vec<Ring> = base
+                    .iter()
+                    .map(|piece| clip_convex(piece, &clip))
+                    .filter(|part| part.len() >= 3 && area(part) > PIECE_ROUNDING_SQUARE_FEET)
+                    .collect();
+                for other in pieces.iter().chain(held.iter()) {
+                    parts = parts
+                        .iter()
+                        .flat_map(|piece| subtract_convex(piece, other))
+                        .collect();
+                }
+                held.extend(parts);
+                if held.len() > 4 * MAX_RISERS {
+                    return None;
+                }
+            }
+        }
+        let above: Vec<Ring> = join_pieces(pieces.iter().cloned().chain(held).map(tidy).collect())
+            .into_iter()
+            .filter(|piece| area(piece) >= STEP_TOLERANCE_SQUARE_FEET)
+            .collect();
+        if above.len() > MAX_RISERS {
+            return None;
+        }
+        out.push((*level, above));
     }
-    pieces.extend(held);
-    let pieces: Vec<Ring> = join_pieces(pieces.into_iter().map(tidy).collect())
-        .into_iter()
-        .filter(|piece| area(piece) >= STEP_TOLERANCE_SQUARE_FEET)
-        .collect();
-    (pieces.len() <= MAX_RISERS).then_some(pieces)
+    Some(out)
 }
 
 /// The wall `entity` is, where it is one plain extrusion with a plan and no
@@ -531,17 +566,18 @@ fn build_cutter(
     })
 }
 
-/// How a wall's top is cut: at one underside across its plan, or at one
-/// underside over part of it and at the wall's own top over the rest.
+/// How a wall's top is cut: at one underside across its plan, or at an
+/// underside over part of it and higher over the rest.
 enum Cut {
     Whole {
         level: f64,
         id: u32,
     },
+    /// The undersides, lowest first, each with the pieces of the plan above
+    /// it, and the ElementIds of the elements they are cut at.
     Stepped {
-        level: f64,
-        id: u32,
-        risers: Vec<Ring>,
+        steps: Vec<(f64, Vec<Ring>)>,
+        ids: Vec<u32>,
     },
 }
 
@@ -614,39 +650,52 @@ fn decide(entities: &[IfcEntity], pending: &[(usize, Vec<u32>)]) -> Vec<(usize, 
             cuts.push((*index, Cut::Whole { level, id }));
             continue;
         }
-        let Some(&(level, id)) = partial.first() else {
-            continue;
-        };
-        if partial
-            .iter()
-            .any(|&(other, _)| (other - level).abs() > UNDERSIDE_TOLERANCE_FEET)
-        {
+        if partial.is_empty() {
             continue;
         }
-        let group: Vec<&Cutter> = partial
-            .iter()
-            .filter_map(|(_, id)| cutters.get(id).and_then(Option::as_ref))
-            .collect();
-        let Some(risers) = outside_pieces(&wall, &group) else {
-            continue;
-        };
-        let lowest_level = partial.iter().map(|&(l, _)| l).fold(level, f64::min);
-        let id = partial.iter().map(|&(_, other)| other).fold(id, u32::min);
-        cuts.push((
-            *index,
-            if risers.is_empty() {
-                Cut::Whole {
-                    level: lowest_level,
-                    id,
+        partial.sort_by(|a, b| a.0.total_cmp(&b.0).then(a.1.cmp(&b.1)));
+        let mut levels: Levels<'_> = Vec::new();
+        let mut ids: Vec<Vec<u32>> = Vec::new();
+        let mut held: Option<f64> = None;
+        for &(level, id) in &partial {
+            let Some(cutter) = cutters.get(&id).and_then(Option::as_ref) else {
+                continue;
+            };
+            if held.is_some_and(|first| (level - first).abs() <= UNDERSIDE_TOLERANCE_FEET) {
+                if let (Some((_, group)), Some(named)) = (levels.last_mut(), ids.last_mut()) {
+                    group.push(cutter);
+                    named.push(id);
                 }
             } else {
+                held = Some(level);
+                levels.push((level, vec![cutter]));
+                ids.push(vec![id]);
+            }
+        }
+        let Some(found) = steps(&wall, &levels) else {
+            continue;
+        };
+        let lowest_id = ids.first().and_then(|named| named.first()).copied();
+        let Some(lowest_id) = lowest_id else {
+            continue;
+        };
+        if found.first().is_some_and(|(_, above)| above.is_empty()) {
+            cuts.push((
+                *index,
+                Cut::Whole {
+                    level: found[0].0,
+                    id: lowest_id,
+                },
+            ));
+        } else {
+            cuts.push((
+                *index,
                 Cut::Stepped {
-                    level: lowest_level,
-                    id,
-                    risers,
-                }
-            },
-        ));
+                    steps: found,
+                    ids: ids.into_iter().flatten().collect(),
+                },
+            ));
+        }
     }
     cuts
 }
@@ -681,31 +730,36 @@ pub(super) fn cut_wall_tops(entities: &mut [IfcEntity], pending: &[(usize, Vec<u
         else {
             continue;
         };
-        let (floor, source) = match cut {
+        let (named, source) = match cut {
             Cut::Whole { level, id } => {
                 body.height_feet = level - location[2];
-                (id, WALL_TOP_COVER_BODY_HEIGHT_SOURCE)
+                (vec![id], WALL_TOP_COVER_BODY_HEIGHT_SOURCE)
             }
-            Cut::Stepped { level, id, risers } => {
+            Cut::Stepped { steps, ids } => {
                 let placement = Placement::new(Some(*location), *rotation_radians);
-                let under = level - location[2];
-                let rise = body.height_feet - under;
-                let mut items = Vec::with_capacity(risers.len() + 1);
+                let top = body.height_feet;
+                let under = steps[0].0 - location[2];
+                let mut items =
+                    Vec::with_capacity(1 + steps.iter().map(|s| s.1.len()).sum::<usize>());
                 items.push(SolidShape::ExtrudedArea(Extrusion {
                     height_feet: under,
                     ..body.clone()
                 }));
-                items.extend(risers.iter().map(|ring| SolidShape::PlacedExtrusion {
-                    profile: ProfileDef::ArbitraryClosed {
-                        points: ring.iter().map(|&p| to_local(&placement, p)).collect(),
-                    },
-                    origin_feet: [0.0, 0.0, under],
-                    axis: [0.0, 0.0, 1.0],
-                    ref_direction: [1.0, 0.0, 0.0],
-                    depth_feet: rise,
-                }));
+                for (k, (level, rings)) in steps.iter().enumerate() {
+                    let from = level - location[2];
+                    let to = steps.get(k + 1).map_or(top, |next| next.0 - location[2]);
+                    items.extend(rings.iter().map(|ring| SolidShape::PlacedExtrusion {
+                        profile: ProfileDef::ArbitraryClosed {
+                            points: ring.iter().map(|&p| to_local(&placement, p)).collect(),
+                        },
+                        origin_feet: [0.0, 0.0, from],
+                        axis: [0.0, 0.0, 1.0],
+                        ref_direction: [1.0, 0.0, 0.0],
+                        depth_feet: to - from,
+                    }));
+                }
                 *solid_shape = Some(SolidShape::Compound(items));
-                (id, WALL_TOP_STEPPED_BODY_HEIGHT_SOURCE)
+                (ids, WALL_TOP_STEPPED_BODY_HEIGHT_SOURCE)
             }
         };
         if let Some(set) = property_set
@@ -718,8 +772,20 @@ pub(super) fn cut_wall_tops(entities: &mut [IfcEntity], pending: &[(usize, Vec<u
             });
             set.properties.push(Property {
                 name: "TopCoverElementId".into(),
-                value: PropertyValue::Integer(i64::from(floor)),
+                value: PropertyValue::Integer(i64::from(named[0])),
             });
+            if named.len() > 1 {
+                set.properties.push(Property {
+                    name: "TopCoverElementIds".into(),
+                    value: PropertyValue::Text(
+                        named
+                            .iter()
+                            .map(u32::to_string)
+                            .collect::<Vec<_>>()
+                            .join(","),
+                    ),
+                });
+            }
         }
     }
 }
