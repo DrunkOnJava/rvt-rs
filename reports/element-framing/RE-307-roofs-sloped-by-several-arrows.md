@@ -11,7 +11,7 @@
 
 Both roofs are footprint roofs of one loop of eight boundary lines, with a rafter cut of Plumb (RE-199 §4), a fascia depth of 0, a roof type 0.5 ft thick, and no edge that defines a slope (every boundary line reads `defines_slope` false). Each also holds six slope arrows: sketch lines with RE-49's bounded line from the tail to the head and RE-199 §5's `SlopeCurveData`. On all twelve arrows the tail height is 0, the head height is the one set by "Height at Tail" (`m_useAngle` 0), and the angle field holds the unused 0.3217506 rad.
 
-The probe finds, for every arrow, one boundary line that the tail lies on (to 1e-15 ft) and the arrow is square to (to 3.3e-15 in cosine). The slope is the head's height over the arrow's run:
+The probe finds, for every arrow, one boundary line that the tail lies on (within 1e-4 ft) and the arrow is square to (the cosine between them at most 3.3e-15). The slope is the head's height over the arrow's run:
 
 | roof | arrow | boundary line it starts on | run (ft) | head height (ft) | rise over run |
 |---|---|---|---:|---:|---:|
@@ -40,7 +40,7 @@ Revit's export agrees with each arrow being a plane through its boundary line, r
 
 The T needs two refinements of RE-199's wedges, both visible only because the verticals now differ from plane to plane:
 
-1. **Each surface has its own wedges.** A plane counts between the lines where it meets the planes of the edges that share an end with its edge, and the line where two tops meet is not the line where their undersides meet. At the T's reflex vertex (2200, 2700 mm) the undersides of the stem's west plane and the bar's north-west plane meet on the line through that vertex, and the tops meet 63.2 mm (0.2073 ft) north of it, at Revit's vertex (2200, 2763.2).
+1. **Each surface has its own wedges.** A plane counts between the lines where it meets the planes of the edges that share an end with its edge, and the line where two tops meet is not the line where their undersides meet. At the T's reflex vertex (2200, 2700 mm) the undersides of the stem's west plane and the bar's north-west plane meet on the line through that vertex, and the tops meet 63.2 mm (0.2072 ft) north of it, at Revit's vertex (2200, 2763.2).
 2. **A top is not cut at its edge's line.** The underside counts only on its edge's side. The top plane reaches past the line to the valley with its neighbour's top: Revit's north-west top plane covers the strip between y = 2700 and 2763.2 mm on the stem's side of the bar's eave line.
 
 ## 3. The T, measured
@@ -64,9 +64,9 @@ Roof 5941 (Revit's body: 34 vertices): the wedges of §2 applied to the U's six 
 
 Fitted to Revit's export offline (numpy on the same 10 mm grid, over all 1,847,300 sample points of the outline), the underside is
 
-`min(S, max(N, min(W, E_w), min(W', E_e)))`
+`min(S, max(N, min(A1, A2), min(B1, B2)))`
 
-where S is the south arrow's plane (6975), N the notch's (6937), W and E_w the west arm's west and east planes (6733, 6762) and W' and E_e the east arm's (6810, 6845); the top is the same expression over the planes raised by their own `T / cos θ`. It agrees with Revit's top and underside at every sample to 0.5 mm, and the volumes agree (1,845.5613 ft³ against 1,845.5613 sampled from Revit's faces; Revit's exported body is 1,845.577001). The fit is the evidence that the U is a bar gable with two arms sitting on its north plane. It is not a rule for footprints: what makes the two long walls sloped along the arms alone, and the south wall along its whole length, is not established. The fit is not committed as a tool; the numbers above are from a session script, and the next oracle in §7 would settle it.
+where S is the south arrow's plane (6975), N the notch's (6937), A1 and A2 the west arm's west and east planes (6733, 6762) and B1 and B2 the east arm's (6810, 6845); the top is the same expression over the planes raised by their own `T / cos θ`. It agrees with Revit's top and underside at every sample to 0.5 mm, and the volumes agree (1,845.5613 ft³ against 1,845.5613 sampled from Revit's faces; Revit's exported body is 1,845.577001). The fit is the evidence that the U is a bar gable with two arms sitting on its north plane. It is not a rule for footprints: what makes the two long walls sloped along the arms alone, and the south wall along its whole length, is not established. The fit is not committed as a tool; the numbers above are from a session script, and the next oracle in §7 would settle it.
 
 ## 5. What rvt-rs does
 
@@ -78,7 +78,19 @@ where S is the south arrow's plane (6975), N the notch's (6937), W and E_w the w
 
 Run 41642988246 (`-f base=main -f nordic=true -f r2025=true`, every scorer):
 
-MEASURE_PLACEHOLDER
+Head `ab2f4804` against `main` at `66cd707c`, 32 models (Core Interior, Einhoven, the four RE1 models, both BIM4LCA office models, and puzzbobb's 20 R2025 models):
+
+- **Exports changed:** one of 32, `r2025-20_T_U_Roof`. The other 31 are byte-identical (`ifc.sha256`), and every scorer's output for them is unchanged.
+- **In `20_T_U_Roof`:** roof 4149 changes from a swept solid to a faceted brep and is scored as in §3. Roof 5941 is unchanged (37,356.98 ft³ against Revit's 1,845.58: its box). The scorers that moved with it are `roof_bodies_vs_ifc` (above), `schema` (swept solids carrying a Position distinct from their product placement, 18 to 17) and `wall_heights_vs_ifc` (the roof is a brep, rvt-rs's surfaces 56 to 996 triangles).
+- **Roofs against Revit's body**, over the R2025 models' 22 (20 files with one roof, `20_T_U_Roof` with two): vertices within 0.001 ft and volume within 1e-4, 19 on `main` and 20 here; every vertex of Revit's body within 0.001 ft of rvt-rs's surface, 20 and 21. No roof's score got worse. The two that stay short are the roof by extrusion (RE-211: the vertex-to-vertex test is 9.11 ft by design, its surface test passes) and the U.
+- The unfiltered run's probe output for `20_T_U_Roof` is byte-identical to the filtered run's (41642079234), whose head was the same commit.
+
+Reproduce:
+
+```text
+gh workflow run measure.yml --ref main -f ref=<commit> -f base=main -f nordic=true -f r2025=true \
+  -f probe=probe_re307_arrow_roofs -f probe_scorer=-
+```
 
 ## 7. What this does not cover
 
