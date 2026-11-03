@@ -82,7 +82,7 @@ All modules build for native targets and for `wasm32-unknown-unknown`, which the
 | `ifc` | Full IFC4 spatial tree + elements + materials + properties + openings + extrusion geometry + glTF 2.0 binary (`gltf::model_to_glb`) + plan-view SVG (`sheet::render_plan_svg`) + viewer data model (`scene_graph`, `camera`, `clipping`, `sheet`, `share`, `pbr`) |
 | `streams` | Named constants for every invariant OLE stream in a Revit file |
 | `redact` | Shared PII scrubbers for all CLIs (`--redact` flag) |
-| (`rvt-wasm` crate) | the 12 JS-callable wasm-bindgen bindings powering the browser viewer ([`docs/viewer-api.md`](viewer-api.md#the-javascript-bindings)), a crate of its own so `rvt` builds as a plain `rlib` |
+| (`rvt-wasm` crate) | the JS-callable wasm-bindgen bindings powering the browser viewer, which [`docs/viewer-api.md`](viewer-api.md#the-javascript-bindings) lists, a crate of its own so `rvt` builds as a plain `rlib` |
 | `error` | Structured error type (`Error` / `Result`) |
 
 Runtime capabilities:
@@ -97,7 +97,7 @@ Runtime capabilities:
 - Produce a byte-for-byte round-trip copy of a `.rfa` / `.rvt` file
 - Run across the 11-release family corpus in under 500 ms per file (release build, measured in April 2026; for large projects see [Performance on large projects](format.md#performance-on-large-projects))
 
-**Nineteen CLIs** ship in the box:
+The CLIs that ship are the ones the [README](../README.md#command-line-tools) lists. Examples:
 
 ```bash
 cargo build --release
