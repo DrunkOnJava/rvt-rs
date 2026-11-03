@@ -108,7 +108,7 @@ as Revit's exporter does with "Export base quantities" off (RE-242).
 It is not a converter for arbitrary models: most parameters, family
 geometry (doors and windows are drawn from the mesh Revit saved for their
 display by default, and any other family instance with the experimental
-`--saved-meshes` option, RE-78), roofs over a T or U footprint and roofs by extrusion outside Revit 2025, the top of
+`--saved-meshes` option, RE-78), hip roofs over a T or U footprint, roofs sloped by several slope arrows of the configuration of puzzbobb's U, where Revit slopes the two long outer walls along the arms only (RE-307; no other roof of the configuration is measured), and roofs by extrusion outside Revit 2025, the top of
 walls Revit steps over a floor that covers them in part (29 of the BIM4LCA office's as built and 26 at permit, #1067), the boundaries of
 rooms whose stored solid does not close and opening profiles are not
 decoded, and rvt-rs does not edit Revit model data.
@@ -1074,7 +1074,8 @@ prints it from any installed build.
   Revit 2008 to 2014 file an unsupported version in the viewer (#1247,
   #1266). With `--saved-meshes` it draws more bodies, not all of them
   Revit's (RE1 Plumbing's new pipe fittings are 1.44 to 1.47 of Revit's
-  volume). Its door-type change measures on no file here. Not every case
+  volume; RE-311 found that figure the scorer's, taken about the file's
+  origin, and the tees 1.14 about their own centre). Its door-type change measures on no file here. Not every case
   #1247 reported is fixed; `[0.12.2]` in [`CHANGELOG.md`](../CHANGELOG.md)
   says which are not.
 - **v0.12.1** (2026-11-01) makes exports of Revit 2015 to
