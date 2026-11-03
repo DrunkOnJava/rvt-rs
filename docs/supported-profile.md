@@ -52,7 +52,9 @@ apart:
 A file that is corrupt, encrypted, a zero-byte Git LFS placeholder, or not an
 OLE/CFB Revit container is refused with an error. A stream larger than
 rvt-rs's resource limits (by default 2 GiB for the file, 256 MiB for one
-stream and for one inflated member, and 1 GiB inflated per partition) is not
+stream and for one inflated member, and per partition 16 times its stored size
+inflated, at least 1 GiB and at most 4 GiB, 1 GiB in a 32-bit build and in the
+browser) is not
 read, so the elements it holds are not exported. `rvt-ifc` and `rvt-gltf` then
 name each such stream, write no model and exit with status 3 unless
 `--allow-partial`, and the diagnostics list them; `--large-model` raises the
@@ -64,11 +66,12 @@ stream is not read, reports "Part of the file not read" and offers "Retry
 with large-model limits" (streams up to 2 GiB); it stays under wasm32's 4 GiB
 memory ceiling, so a very large model can still fail to open there. This is
 measured by lowering the limits below the reference files' streams (Core
-Interior's 17 MB partition against an 8 MiB limit). No model over the default
-limits has been read with `--large-model` yet: the field report behind #1075
-(two client models of about 438 MB and 1.13 GB, whose largest partitions are
-403 MiB and 1,057 MiB) was measured on a patched 0.10.0; the reporter was
-asked on 2026-10-30 to repeat it on 0.11.0 and has not reported back.
+Interior's 17 MB partition against an 8 MiB limit). On the field report behind
+#1075 (client models, not shared; reported 2026-11-02 on 0.12.0), the 438 MB
+model, whose largest partition is 403 MiB stored, exits with status 3 at the
+defaults and reads with `--large-model` as 9,958 elements on 35 storeys at a
+10.3 GB peak; the 1.13 GB model, with a 1,057 MiB partition, was stopped at its
+machine's 16 GB memory limit, so a model that size is not yet read.
 
 A project saved by Revit 2024 to 2027 can keep the schema of the release it
 passed through, and with it that release's element-record layout. Such a
