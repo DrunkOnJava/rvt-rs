@@ -18,6 +18,17 @@
 //! lines counting edges by surface class, isoparametric or not, and decade of
 //! each distance.
 //!
+//! Second FACT under test (after RE-302 traced such edges, the WCs it then
+//! drew are 1.03 to 1.05 of Revit's volume): whether the trace could have
+//! followed the wrong branch. `edge_on_plane` moves each of 7 points between
+//! two samples across the line between them, within that line's length on
+//! either side, onto the plane, taking the sign change nearest the line
+//! among 32 steps. For every such point this counts the sign changes those
+//! 32 steps see: one `branch` line per record with a non-isoparametric
+//! shared edge, `traced` points, how many saw more than one sign change
+//! (`multi`), and how many saw none (`none`); then `census branch` lines by
+//! surface class and count.
+//!
 //! ```text
 //! cargo run --profile ci -p rvt-probes --example probe_re302_plane_edges -- model.rvt
 //! ```
@@ -122,6 +133,7 @@ fn main() -> anyhow::Result<()> {
     };
     let mut printed = 0;
     let mut census: BTreeMap<String, usize> = BTreeMap::new();
+    let mut branches: BTreeMap<(u64, &'static str), [usize; 3]> = BTreeMap::new();
     extract_graphs(&mut rf, &options, |record| {
         let Some(g) = record.graph.as_ref() else {
             return Ok(());
@@ -237,6 +249,48 @@ fn main() -> anyhow::Result<()> {
                 *census.entry(format!("{kind} unevaluated")).or_default() += 1;
                 continue;
             }
+            if !iso {
+                let height =
+                    |q: Point| dot([q[0] - origin[0], q[1] - origin[1], q[2] - origin[2]], n);
+                let entry = branches
+                    .entry((record.identity.element_id, kind))
+                    .or_default();
+                for w in pairs.windows(2) {
+                    let (a, b) = (w[0].0, w[1].0);
+                    let d = [b[0] - a[0], b[1] - a[1]];
+                    let span = d[0].hypot(d[1]);
+                    if span <= 1e-12 {
+                        continue;
+                    }
+                    let across = [-d[1] / span, d[0] / span];
+                    for i in 1..8 {
+                        let t = f64::from(i) / 8.;
+                        let m = [a[0] + t * d[0], a[1] + t * d[1]];
+                        let values: Vec<Option<f64>> = (0..=32)
+                            .map(|k| {
+                                let s = -span + 2. * span * f64::from(k) / 32.;
+                                curved
+                                    .eval([m[0] + s * across[0], m[1] + s * across[1]])
+                                    .map(height)
+                            })
+                            .collect();
+                        let changes = values
+                            .windows(2)
+                            .filter(|v| matches!((v[0], v[1]), (Some(x), Some(y)) if x == 0. || x * y < 0.))
+                            .count();
+                        entry[0] += 1;
+                        if changes > 1 {
+                            entry[1] += 1;
+                        }
+                        if changes == 0 {
+                            entry[2] += 1;
+                        }
+                        *census
+                            .entry(format!("branch {kind} changes={}", changes.min(3)))
+                            .or_default() += 1;
+                    }
+                }
+            }
             let shape = if iso { "iso" } else { "general" };
             *census
                 .entry(format!(
@@ -257,6 +311,9 @@ fn main() -> anyhow::Result<()> {
         }
         Ok(())
     })?;
+    for ((owner, kind), [traced, multi, none]) in &branches {
+        println!("branch owner={owner} {kind} traced={traced} multi={multi} none={none}");
+    }
     for (key, n) in &census {
         println!("census {n} {key}");
     }
