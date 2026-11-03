@@ -89,8 +89,8 @@ The viewer no longer calls a Revit 2008 to 2014 file an unsupported version
   surface but at 1.44 to 1.47 of its volume, and RE1 Architecture a toilet
   within 0.0126 ft. Autodesk's 2024 samples gain 163 and 124 (rme basic and
   advanced), 265 (Snowdon Towers plumbing), 34, 24 and 15 (Snowdon
-  architectural and HVAC, rac basic), counted, not scored: they have no
-  Revit export (#1247, RE-304).
+  architectural and HVAC, rac basic), counted, not scored: no Revit export
+  of them is scored (#1247, RE-304).
 
 - **Saved meshes read cylinders whose saved basis is left-handed.** Such a
   face was rejected, and with it the whole element, which kept its box.
@@ -98,8 +98,8 @@ The viewer no longer calls a Revit 2008 to 2014 file an unsupported version
   office 100 more bodies are drawn from their saved meshes (102 at permit),
   among them doors that the default export draws, 66 exact to 0.001 ft
   against Revit's export and 93 within 0.01 ft. Snowdon Towers'
-  architectural sample gains 172, counted, not scored: it has no Revit
-  export (#1247, RE-301).
+  architectural sample gains 172, counted, not scored: no Revit export of
+  it is scored (#1247, RE-301).
 
 - **With `--saved-meshes`, a light fixture's light source is left out of
   its body, instead of keeping the fixture's box.** The light source is saved as a
@@ -108,8 +108,8 @@ The viewer no longer calls a Revit 2008 to 2014 file an unsupported version
   export. On the BIM4LCA office 43 more bodies are drawn from their saved
   meshes, all exact to 0.001 ft against Revit's export, as are RE1
   Electrical's 2. Snowdon Towers' electrical sample draws 1,324 bodies from
-  saved meshes instead of 907 and keeps 139 boxes instead of 556; it has no
-  Revit export, so those are counted, not scored (#1247, RE-300).
+  saved meshes instead of 907 and keeps 139 boxes instead of 556; no Revit
+  export of it is scored, so those are counted, not scored (#1247, RE-300).
 
 - **A door or window is no longer written as its opening alone when its
   type draws geometry in no material of its own.** RE-84 takes a type
@@ -118,9 +118,9 @@ The viewer no longer calls a Revit 2008 to 2014 file an unsupported version
   or name a material whose name it did not read. The type's native map
   now decides: it is empty on every door and window Revit exports as its
   opening alone (RE1's CasedOpening, and Snowdon Towers' 47 in Revit's
-  export, which is local only), and those keep their openings. No export of
-  the reference models, the BIM4LCA office, the R2025 models or Autodesk's
-  samples changes. The case it was found on, the 73 doors of #1247's
+  export, which is local only), and those keep their openings. This fix alone
+  changes no export of the reference models, the BIM4LCA office, the R2025
+  models or Autodesk's samples. The case it was found on, the 73 doors of #1247's
   project written as openings, is the user's own file and has not been
   measured with it (#1247, RE-299).
 
