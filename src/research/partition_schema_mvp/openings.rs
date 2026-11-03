@@ -425,6 +425,14 @@ pub fn instance_box_size_from_fields(fields: &[(String, InstanceField)]) -> Opti
     Some([width?, height?])
 }
 
+/// The width [`SYMBOL_WIRE_WIDTH_FIELD`] records, feet.
+pub fn symbol_wire_width_from_fields(fields: &[(String, InstanceField)]) -> Option<f64> {
+    fields.iter().find_map(|(name, value)| match value {
+        InstanceField::Float { value, .. } if name == SYMBOL_WIRE_WIDTH_FIELD => Some(*value),
+        _ => None,
+    })
+}
+
 /// The extents [`CUT_SOLID_SIZE_FIELDS`] record, feet.
 pub fn cut_solid_size_from_fields(fields: &[(String, InstanceField)]) -> Option<[f64; 3]> {
     let [width, depth, height] = CUT_SOLID_SIZE_FIELDS.map(|wanted| {
@@ -611,6 +619,17 @@ pub(super) fn attach_cut_loop_sizes(
     ) else {
         return;
     };
+    // RE-318: where the symbol cuts no loop, its width is the extent along X
+    // of the lines of no category in its saved graphics, the edges of its
+    // bounding boxes: the hatch doors' width, which the record box exceeds.
+    let symbol_widths = crate::native_symbol_cuts::symbol_wire_widths(
+        rf,
+        &loopless
+            .iter()
+            .filter_map(|id| drawn_by.get(&u64::from(*id)).copied())
+            .collect(),
+    )
+    .unwrap_or_default();
     // #810: a door or window whose symbol cuts no loop is sized by its
     // record box, as Revit's export sizes it: its width along its own X
     // axis and, in a wall or a curtain wall that its element record names,
@@ -669,6 +688,18 @@ pub(super) fn attach_cut_loop_sizes(
             element
                 .fields
                 .push(((*name).into(), InstanceField::Float { value, size: 8 }));
+        }
+        if let Some(value) = drawn_by
+            .get(&u64::from(id))
+            .and_then(|symbol| symbol_widths.get(symbol))
+        {
+            element.fields.push((
+                SYMBOL_WIRE_WIDTH_FIELD.into(),
+                InstanceField::Float {
+                    value: *value,
+                    size: 8,
+                },
+            ));
         }
     }
     for element in elements.iter_mut() {

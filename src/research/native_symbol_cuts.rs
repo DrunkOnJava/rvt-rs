@@ -262,6 +262,106 @@ pub fn instance_cuts_and_symbols(
     Ok((loops, uncut, drawn_by, hosts, solids))
 }
 
+/// The category of the lines in a symbol's saved graphics that belong to no
+/// category: the edges of the boxes that bound its forms (RE-318).
+const WIRE_CATEGORY: i64 = -1;
+
+/// The visibility bits of a graphics node's `m_GInfo.m_flags`; a node with
+/// any of them set is hidden or drawn in a special mode.
+const VISIBILITY_FLAG_BITS: u64 = 0x1e0;
+
+/// The extent along X of the lines of no category in the saved graphics of
+/// each of `symbols` (FamilySymbol ElementIds), in the symbol's own frame,
+/// feet (RE-318). Those lines are the edges of the boxes that bound the
+/// symbol's forms, the hidden forms among them, and their extent along X is
+/// the `OverallWidth` Revit's export writes for the door or window the
+/// symbol draws (revit-ifc's `GetDoorWindowDimensionFromSymbol` takes it
+/// from `ExporterIFCUtils.GetMinSymbolWidth`, CLEANROOM.md source 5): on the
+/// BIM4LCA office all 537 doors and windows Revit sizes at as built and 533
+/// at building permit, where the surfaces and the record box each miss
+/// some. Only lines whose visibility bits are clear count. A symbol whose
+/// graphics hold an instance or a component reference, whose lines would
+/// sit in another frame, one with none of those lines or with an extent that
+/// is not finite and positive, and one read twice with different extents, is
+/// left out: its door or window keeps the width it had. The reader walks the
+/// graph's object list once, which the native record path bounds
+/// ([`native_document::Options::max_graph_objects`]), and takes no value from
+/// the file without checking it. Errs where the native record path does not
+/// read the file's release.
+pub fn symbol_wire_widths(
+    rf: &mut RevitFile,
+    symbols: &BTreeSet<u64>,
+) -> anyhow::Result<BTreeMap<u64, f64>> {
+    if symbols.is_empty() {
+        return Ok(BTreeMap::new());
+    }
+    // A symbol read twice with different extents is left out.
+    let mut widths: BTreeMap<u64, Option<f64>> = BTreeMap::new();
+    let options = native_document::Options {
+        selected_ids: symbols.clone(),
+        channels: BTreeSet::from([103]),
+        ..native_document::Options::default()
+    };
+    native_document::extract_graphs(rf, &options, |record| {
+        let Some(graph) = record.graph.as_ref() else {
+            return Ok(());
+        };
+        if graph
+            .objects
+            .iter()
+            .any(|object| matches!(object.class_name.as_str(), "GInstance" | "GComponentRef"))
+        {
+            return Ok(());
+        }
+        let (mut low, mut high) = (f64::INFINITY, f64::NEG_INFINITY);
+        for object in graph
+            .objects
+            .iter()
+            .filter(|object| object.class_name == "GLine")
+        {
+            let fields = &object.fields;
+            let category = fields
+                .pointer("/m_GInfo/m_categoryId/m_id/m_id64")
+                .and_then(serde_json::Value::as_i64);
+            let visible = fields
+                .pointer("/m_GInfo/m_flags")
+                .and_then(serde_json::Value::as_u64)
+                .is_some_and(|flags| flags & VISIBILITY_FLAG_BITS == 0);
+            if category != Some(WIRE_CATEGORY) || !visible {
+                continue;
+            }
+            let (Some(origin), Some(direction), Some(ends)) = (
+                fields.get("m_origin").and_then(finite_triple),
+                fields.get("m_dirVec").and_then(finite_triple),
+                point2(fields.get("m_endParams")),
+            ) else {
+                continue;
+            };
+            for t in ends {
+                let x = origin[0] + direction[0] * t;
+                low = low.min(x);
+                high = high.max(x);
+            }
+        }
+        if low.is_finite() && high.is_finite() && high > low {
+            let width = high - low;
+            widths
+                .entry(record.identity.element_id)
+                .and_modify(|seen| {
+                    if seen.is_some_and(|seen| (seen - width).abs() > JOIN_TOLERANCE_FEET) {
+                        *seen = None;
+                    }
+                })
+                .or_insert(Some(width));
+        }
+        Ok(())
+    })?;
+    Ok(widths
+        .into_iter()
+        .filter_map(|(symbol, width)| Some((symbol, width?)))
+        .collect())
+}
+
 /// A family instance hosted on a face of another element through a
 /// sketch plane, and the solid the symbol that draws it cuts (#824).
 #[derive(Debug, Clone, PartialEq)]

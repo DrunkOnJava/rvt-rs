@@ -804,7 +804,18 @@ does RE1 Architecture's curtain-wall door. Its addendum sizes one whose
 record names no wall along its own Y axis, as revit-ifc measures the
 height of a family no wall hosts: 266 of the office's 269 doors are then
 Revit's, and two are 0.1137 ft wider than Revit's
-(`reports/element-framing/RE-218-box-sizes.md`, #810).
+(`reports/element-framing/RE-218-box-sizes.md`, #810). **RE-318
+(2026-11-03)** takes the width of such a door or window from the lines of no
+category in its symbol's saved graphics, the edges of the boxes that bound
+its forms, hidden forms included, ahead of the record box's: the two wide
+doors are wall hatches whose 90 degree type hides the 180 degree leaf Revit's
+width includes, and the office's doors and windows then all have Revit's
+`OverallWidth` (268 of 268 doors Revit sizes, 269 of 269 windows as built; 268
+and 265 at building permit). It fires only where the record box sized the
+door or window before: of the other measured models only RE1 Architecture's
+curtain-wall door, whose width is unchanged. One building's families, and
+what the boxes are is inferred from Revit's widths
+(`reports/element-framing/RE-318-symbol-wire-width.md`).
 
 **RE-216 (2026-10-24)** gives a family instance whose element data sits in
 two partitions, with transforms that disagree, the copy its current record is
