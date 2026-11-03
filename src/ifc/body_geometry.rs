@@ -1035,6 +1035,82 @@ pub fn layered_extrusion_meshes(
     Some(meshes)
 }
 
+/// A stepped wall's body (RE-320): a [`SolidShape::Compound`] of the wall's
+/// plan to a height and pieces of that plan standing on it, cut into its
+/// layers like [`layered_extrusion_meshes`] cuts an extrusion. The layers are
+/// laid across the first item's plan, and every piece is clipped to them.
+/// `None` for any other shape.
+pub fn layered_stepped_meshes(
+    shape: &SolidShape,
+    exterior: [f64; 2],
+    widths: &[f64],
+) -> Option<Vec<Mesh>> {
+    let SolidShape::Compound(items) = shape else {
+        return None;
+    };
+    let Some(SolidShape::ExtrudedArea(base)) = items.first() else {
+        return None;
+    };
+    let (plan, holes) = extrusion_rings(base)?;
+    if !holes.is_empty() || plan.len() < 3 || widths.is_empty() {
+        return None;
+    }
+    let (min, max) = plan
+        .iter()
+        .map(|p| p.0 * exterior[0] + p.1 * exterior[1])
+        .fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), s| {
+            (lo.min(s), hi.max(s))
+        });
+    let total: f64 = widths.iter().sum();
+    if !total.is_finite()
+        || total <= 0.0
+        || ((max - min) - total).abs() > LAYER_THICKNESS_TOLERANCE_FEET
+    {
+        return None;
+    }
+    let mut parts: Vec<(Ring, f64, f64)> = vec![(plan, 0.0, base.height_feet)];
+    for item in &items[1..] {
+        let SolidShape::PlacedExtrusion {
+            profile,
+            origin_feet,
+            axis,
+            ref_direction,
+            depth_feet,
+        } = item
+        else {
+            return None;
+        };
+        if *axis != [0.0, 0.0, 1.0] || *ref_direction != [1.0, 0.0, 0.0] {
+            return None;
+        }
+        let (outer, holes) = profile_rings(profile)?;
+        if !holes.is_empty() {
+            return None;
+        }
+        parts.push((outer, origin_feet[2], *depth_feet));
+    }
+    if parts
+        .iter()
+        .any(|(_, z, height)| !(z.is_finite() && height.is_finite() && *height > 0.0))
+    {
+        return None;
+    }
+    let mut meshes = Vec::with_capacity(widths.len());
+    let mut face = max;
+    for &width in widths {
+        let mut mesh = Mesh::default();
+        for (ring, z, height) in &parts {
+            let band = clip_ring_to_band(ring, exterior, face - width, face);
+            if let Some(section) = section(&band, &[]) {
+                mesh.append(prism(&section, |(x, y), t| [x, y, z + t * height]));
+            }
+        }
+        face -= width;
+        meshes.push(mesh);
+    }
+    Some(meshes)
+}
+
 fn unit(v: [f64; 3]) -> Option<[f64; 3]> {
     let n = dot(v, v).sqrt();
     (n.is_finite() && n > 1e-12).then(|| [v[0] / n, v[1] / n, v[2] / n])
