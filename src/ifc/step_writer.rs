@@ -2719,10 +2719,18 @@ impl StepWriter<'_> {
                 // of the type's size, which on the BIM4LCA office is 10 mm
                 // short of Revit's.
                 let [box_width, box_height] = super::export_content::INSTANCE_BOX_SIZE_PROPERTIES;
+                // RE-318: where the symbol's saved graphics hold lines of no
+                // category, their extent along X is the width, ahead of the
+                // record box's.
+                let symbol_width =
+                    property_length(super::export_content::SYMBOL_WIRE_WIDTH_PROPERTY);
                 let overall = property_length(cut_height)
                     .zip(property_length(cut_width))
                     .or_else(|| property_length(height_key).zip(property_length(width_key)))
-                    .or_else(|| property_length(box_height).zip(property_length(box_width)))
+                    .or_else(|| {
+                        property_length(box_height)
+                            .zip(symbol_width.or_else(|| property_length(box_width)))
+                    })
                     .or_else(|| property_length(type_height).zip(property_length(type_width)));
                 let tail = element_attribute_tail(
                     &ifc_upper,
