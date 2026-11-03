@@ -42,7 +42,7 @@ SHRINK_FEET = 0.02
 LEVEL_FEET = 1.0
 
 
-def bodies(path, classes):
+def bodies(path, classes, full=False):
     """Every element of `classes` with its top surface (the union of its
     upward faces in plan) and the heights its mesh spans, in Revit's feet."""
     f = ifcopenshell.open(path)
@@ -76,10 +76,31 @@ def bodies(path, classes):
                 for tri in zip(a[up], b[up], c[up])
             ]
             surface = shapely.union_all(triangles) if triangles else Polygon()
+            floor = every = Polygon()
+            if full:
+                down = (length > 1e-12) & (normal[:, 2] < -0.9 * length)
+                floor = shapely.union_all(
+                    [
+                        Polygon([tuple(p[:2]) for p in tri]).buffer(1e-7)
+                        for tri in zip(a[down], b[down], c[down])
+                    ]
+                    or [Polygon()]
+                )
+                solid = length > 1e-12
+                every = shapely.union_all(
+                    [
+                        Polygon([tuple(p[:2]) for p in tri]).buffer(1e-7)
+                        for tri in zip(a[solid], b[solid], c[solid])
+                        if abs(Polygon([tuple(p[:2]) for p in tri]).area) > 1e-9
+                    ]
+                    or [Polygon()]
+                )
             out.append(
                 {
                     "id": element.GlobalId,
                     "surface": surface,
+                    "floor": floor,
+                    "every": every,
                     "z0": float(v[:, 2].min()),
                     "z1": float(v[:, 2].max()),
                     "props": ifcopenshell.util.element.get_psets(element).get(SET, {})
@@ -101,9 +122,9 @@ def main(argv):
         print(__doc__, file=sys.stderr)
         return 2
     ours_path, revit_path = argv[1], argv[2]
-    spaces = bodies(ours_path, ["IfcSpace"])
+    spaces = bodies(ours_path, ["IfcSpace"], full=True)
     walls = bodies(ours_path, ["IfcWall", "IfcWallStandardCase"])
-    revit = plan.tops(revit_path, ["IfcSpace"])
+    revit = {r["id"]: r for r in bodies(revit_path, ["IfcSpace"], full=True)}
     rooms = []
     for space in spaces:
         source = space["props"].get("SpaceOutlineSource")
@@ -138,7 +159,12 @@ def main(argv):
                 "area": area,
                 "walls": wall_over,
                 "rooms": room_over,
-                "revit": float(theirs[0]) if theirs else None,
+                "up": area,
+                "floor": float(room["floor"].area),
+                "every": float(room["every"].area),
+                "revit": float(theirs["surface"].area) if theirs else None,
+                "revit_floor": float(theirs["floor"].area) if theirs else None,
+                "revit_every": float(theirs["every"].area) if theirs else None,
             }
         )
 
@@ -159,15 +185,37 @@ def main(argv):
             f"above 5% on {sum(s > 0.05 for s in room_share)}, "
             f"largest {100 * max(room_share):.2f}%"
         )
+    paired = [r for r in rows if r["revit"] is not None and r["up"] > 0]
+    for name, ours_key, revit_key in (
+        ("upward faces", "up", "revit"),
+        ("downward faces", "floor", "revit_floor"),
+        ("every face", "every", "revit_every"),
+    ):
+        for source in ROOM_SOURCES:
+            mine = [r for r in paired if r["source"] == source]
+            if not mine:
+                continue
+            equal = sum(
+                abs(r[ours_key] - r[revit_key]) <= 0.001 * max(r[revit_key], 1e-9) for r in mine
+            )
+            print(
+                f"space overlaps: {name}, {source.replace('_', ' ')}: "
+                f"{len(mine)} paired rooms, area within 0.1% of Revit's on {equal}"
+            )
     listed = [r for r in rows if r["source"] != "stored_solid"]
     listed += sorted(
         (r for r in rows if r["source"] == "stored_solid"),
         key=lambda r: -(r["walls"] + r["rooms"]) / r["area"],
     )[:8]
     for r in listed:
-        revit_text = "no Revit space" if r["revit"] is None else f"Revit {r['revit']:.2f} ft2"
+        revit_text = (
+            "no Revit space"
+            if r["revit"] is None
+            else f"Revit up {r['revit']:.2f}, floor {r['revit_floor']:.2f}, every face {r['revit_every']:.2f} ft2"
+        )
         print(
-            f"  {r['id']}: {r['source']}, area {r['area']:.2f} ft2 ({revit_text}), "
+            f"  {r['id']}: {r['source']}, up {r['up']:.2f}, floor {r['floor']:.2f}, "
+            f"every face {r['every']:.2f} ft2 ({revit_text}), "
             f"inside walls {r['walls']:.2f} ft2 ({100 * r['walls'] / r['area']:.2f}%), "
             f"inside other rooms {r['rooms']:.2f} ft2 ({100 * r['rooms'] / r['area']:.2f}%)"
         )
