@@ -12,7 +12,7 @@ use rvt::{
     ifc::{
         DiagnosticRvtDocExporter, ExportDiagnostics, ExportQualityMode, PlaceholderExporter,
         RvtDocExporter,
-        step_writer::{StepOptions, write_step_with_options},
+        step_writer::{StepOptions, write_step_to, write_step_with_options},
     },
     walker::WalkerLimits,
 };
@@ -328,26 +328,36 @@ fn run(args: Args) -> anyhow::Result<()> {
 
     warn_about_export_quality(&diagnostics);
 
-    let step = write_step_with_options(&model, &StepOptions { timestamp });
-    std::fs::write(&out_path, step.as_bytes())?;
-    eprintln!(
-        "rvt-ifc: wrote {} bytes to {}",
-        step.len(),
-        out_path.display()
-    );
+    let options = StepOptions { timestamp };
+    // The witness observation reads the text back; otherwise it is written as
+    // it is built, after the file handle and the partitions it holds inflated
+    // are released (#1075).
+    let mut observed_step = None;
+    let written = if args.observation.is_some() {
+        let step = write_step_with_options(&model, &options);
+        std::fs::write(&out_path, step.as_bytes())?;
+        let written = step.len();
+        observed_step = Some(step);
+        written
+    } else {
+        drop(rf);
+        let mut file = std::fs::File::create(&out_path)?;
+        write_step_to(&model, &options, &mut file)?
+    };
+    eprintln!("rvt-ifc: wrote {written} bytes to {}", out_path.display());
     for line in export_summary(&diagnostics, args.diagnostics.is_some()) {
         eprintln!("{line}");
     }
     if let Some(diagnostics_path) = &args.diagnostics {
         write_diagnostics_sidecar(diagnostics_path, &diagnostics, args.anonymize)?;
     }
-    if let Some(observation_path) = &args.observation {
+    if let (Some(observation_path), Some(step)) = (&args.observation, &observed_step) {
         write_observation(
             observation_path,
             &args.input,
             args.artifact_id.as_deref(),
             &diagnostics,
-            &step,
+            step,
         )?;
     }
     if model.project_name.is_none() {
