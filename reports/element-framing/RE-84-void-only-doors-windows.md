@@ -44,6 +44,8 @@ Shape: each such opening takes #227's cut (RE-83), the element's box across and 
 
 The 11 Snowdon elements left are void-only doors and windows RE-23 does not bind to a host: their host wall is in their reference list but not in the slot before their own ElementId (#439). Without a host there is no wall to cut, so they stay the element for now.
 
+Update 2026-11-02 (RE-299): the scan misses a map whose values are all unset or name a material whose name it did not read, and so read such a type as drawing nothing; the type's native `m_geomTag2MaterialId` now overrides it where it holds entries. It is empty on all 48 void-only doors and windows above.
+
 Update 2026-09-27 (RE-85): with hosts read from anywhere in the reference list, all 47 Snowdon ones are openings voiding the wall Revit's opening voids, and no door or window is left that Revit does not export.
 
 ## Not claimed
