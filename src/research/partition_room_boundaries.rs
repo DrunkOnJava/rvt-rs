@@ -105,6 +105,16 @@ pub const ROOM_VERTEX_TOLERANCE_FEET: f64 = 1e-4;
 /// BIM4LCA office; Revit's own short-curve tolerance is 1/32 inch, 0.0026 ft.
 pub const ROOM_STEP_TOLERANCE_FEET: f64 = 0.0025;
 
+/// How far a resolved outline may fall short of the room's record box on a
+/// side and still span it, feet: the back of a column that overlaps a wall
+/// stands 0.0164 ft behind the wall's face on three rooms of the BIM4LCA
+/// office, and the box holds it.
+pub const ROOM_SLIVER_FEET: f64 = 0.02;
+
+/// How far a chord of a column's arc may stray from the arc, feet (as
+/// [`crate::element_record_plan_profiles::SKETCH_ARC_TOLERANCE_FEET`]).
+const ARC_CHORD_TOLERANCE_FEET: f64 = 0.0005;
+
 /// The most plan segments [`region_boundary`] resolves.
 pub const BOUNDARY_SEGMENTS_MAX: usize = 4096;
 
@@ -130,6 +140,21 @@ pub struct RoomFace {
     pub u: [f64; 3],
     /// Unit v direction.
     pub v: [f64; 3],
+    /// The axis and radius where the face is a cylinder's: its record is 44
+    /// bytes longer than a plane's, with the axis (a unit vector at right
+    /// angles to u and v) and the radius after the 158 bytes a plane's
+    /// has, and its uv box is an angle about the axis and a distance along it
+    /// (RE-316).
+    pub cylinder: Option<RoomCylinder>,
+}
+
+/// The axis and radius of a cylindrical face of a room's solid.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct RoomCylinder {
+    /// Unit axis.
+    pub axis: [f64; 3],
+    /// Radius, feet.
+    pub radius: f64,
 }
 
 impl RoomFace {
@@ -229,7 +254,21 @@ pub fn face_at(buf: &[u8], at: usize) -> Option<RoomFace> {
         origin,
         u,
         v,
+        cylinder: cylinder_at(buf, at, u, v),
     })
+}
+
+/// The cylinder the face record at `at` describes, where the 24 bytes after
+/// its 158 are a unit axis at right angles to `u` and `v` and the 8 after
+/// them a positive radius. A plane's record has `ff` bytes there.
+fn cylinder_at(buf: &[u8], at: usize, u: [f64; 3], v: [f64; 3]) -> Option<RoomCylinder> {
+    let axis: [f64; 3] = read_f64s(buf, at.checked_add(FACE_LEN)?)?;
+    let radius = le_bytes::f64_at(buf, at.checked_add(FACE_LEN + 24)?)?;
+    let dot = |a: [f64; 3], b: [f64; 3]| a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+    let unit = (dot(axis, axis) - 1.0).abs() < UNIT_EPS;
+    let square = dot(axis, u).abs() < UNIT_EPS && dot(axis, v).abs() < UNIT_EPS;
+    (unit && square && radius.is_finite() && radius > 1e-4 && radius < 1e4)
+        .then_some(RoomCylinder { axis, radius })
 }
 
 /// Where the solid whose header starts at `header` begins: past its
@@ -280,6 +319,69 @@ pub fn solid_faces(buf: &[u8], header: usize) -> Vec<RoomFace> {
     faces
 }
 
+impl RoomFace {
+    /// The heights, low and high, a cylindrical face with a vertical axis
+    /// spans, feet.
+    fn vertical_cylinder_heights(&self) -> Option<(f64, f64)> {
+        let cylinder = self.cylinder?;
+        let horizontal = |d: [f64; 3]| d[2].abs() < AXIS_EPS;
+        if (cylinder.axis[2].abs() - 1.0).abs() >= AXIS_EPS
+            || !horizontal(self.u)
+            || !horizontal(self.v)
+        {
+            return None;
+        }
+        let ends = [self.uv_box[1], self.uv_box[3]]
+            .map(|distance| self.origin[2] + cylinder.axis[2] * distance);
+        Some((ends[0].min(ends[1]), ends[0].max(ends[1])))
+    }
+
+    /// The chords of a vertical cylinder's arc as plan segments, run
+    /// clockwise around its axis, which is how the walls of a column run
+    /// round the room (the room is on their left); within
+    /// [`ARC_CHORD_TOLERANCE_FEET`] of the arc.
+    fn arc_segments(&self) -> Option<Vec<[f64; 4]>> {
+        let cylinder = self.cylinder?;
+        self.vertical_cylinder_heights()?;
+        let (start, end) = (self.uv_box[0], self.uv_box[2]);
+        let sweep = end - start;
+        if !(sweep > 0.0 && sweep <= std::f64::consts::TAU + 1e-6) {
+            return None;
+        }
+        let radius = cylinder.radius;
+        let largest_chord_angle = 2.0
+            * (1.0 - ARC_CHORD_TOLERANCE_FEET / radius)
+                .clamp(-1.0, 1.0)
+                .acos();
+        let chords = ((sweep / largest_chord_angle.max(1e-3)).ceil() as usize).clamp(1, 1024);
+        let point = |angle: f64| {
+            let (sine, cosine) = angle.sin_cos();
+            [
+                self.origin[0] + radius * (cosine * self.u[0] + sine * self.v[0]),
+                self.origin[1] + radius * (cosine * self.u[1] + sine * self.v[1]),
+            ]
+        };
+        let counter_clockwise = self.u[0] * self.v[1] - self.u[1] * self.v[0] > 0.0;
+        let angles: Vec<f64> = (0..=chords)
+            .map(|index| start + sweep * index as f64 / chords as f64)
+            .collect();
+        let ordered: Vec<f64> = if counter_clockwise {
+            angles.into_iter().rev().collect()
+        } else {
+            angles
+        };
+        Some(
+            ordered
+                .windows(2)
+                .map(|pair| {
+                    let (from, to) = (point(pair[0]), point(pair[1]));
+                    [from[0], from[1], to[0], to[1]]
+                })
+                .collect(),
+        )
+    }
+}
+
 /// Which end of the room its wall faces must reach to be a wall of its
 /// outline.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -291,6 +393,9 @@ pub enum OutlineAnchor {
 }
 
 fn reaches_anchor(face: &RoomFace, bbox: [f64; 6], anchor: OutlineAnchor) -> Option<[f64; 4]> {
+    if face.cylinder.is_some() {
+        return None;
+    }
     let (edge, bottom) = face.plan_edge()?;
     let reached = match anchor {
         OutlineAnchor::Floor => (bottom - bbox[2]).abs() <= BOX_TOLERANCE_FEET,
@@ -307,27 +412,45 @@ fn reaches_anchor(face: &RoomFace, bbox: [f64; 6], anchor: OutlineAnchor) -> Opt
 /// ran on past the solid's end.
 fn strays_from_box(face: &RoomFace, bbox: [f64; 6]) -> bool {
     let tolerance = BOX_TOLERANCE_FEET;
+    let outside = |edge: [f64; 4]| {
+        edge[0].min(edge[2]) < bbox[0] - tolerance
+            || edge[0].max(edge[2]) > bbox[3] + tolerance
+            || edge[1].min(edge[3]) < bbox[1] - tolerance
+            || edge[1].max(edge[3]) > bbox[4] + tolerance
+    };
+    if face.cylinder.is_some() {
+        let (Some((low, high)), Some(arc)) =
+            (face.vertical_cylinder_heights(), face.arc_segments())
+        else {
+            return true;
+        };
+        return low < bbox[2] - tolerance
+            || high > bbox[5] + tolerance
+            || arc.iter().any(|segment| outside(*segment));
+    }
     let FaceKind::Vertical { low, high } = face.kind() else {
         return false;
     };
     if low < bbox[2] - tolerance || high > bbox[5] + tolerance {
         return true;
     }
-    face.plan_edge().is_some_and(|(edge, _)| {
-        edge[0].min(edge[2]) < bbox[0] - tolerance
-            || edge[0].max(edge[2]) > bbox[3] + tolerance
-            || edge[1].min(edge[3]) < bbox[1] - tolerance
-            || edge[1].max(edge[3]) > bbox[4] + tolerance
-    })
+    face.plan_edge().is_some_and(|(edge, _)| outside(edge))
 }
 
-fn profile_on_box(profile: PlanProfile, bbox: [f64; 6]) -> Option<PlanProfile> {
+/// `profile` where its plan extent is within `bbox`'s by [`BOX_TOLERANCE_FEET`]
+/// and falls short of it by at most `slack` on each side.
+fn profile_on_box(profile: PlanProfile, bbox: [f64; 6], slack: f64) -> Option<PlanProfile> {
     let extent = profile.plan_extent_feet()?;
+    let inward = [1.0, 1.0, -1.0, -1.0];
     let wanted = [bbox[0], bbox[1], bbox[3], bbox[4]];
     extent
         .iter()
         .zip(wanted)
-        .all(|(got, want)| (got - want).abs() <= BOX_TOLERANCE_FEET)
+        .zip(inward)
+        .all(|((got, want), sign)| {
+            let short = (got - want) * sign;
+            short >= -BOX_TOLERANCE_FEET && short <= slack + BOX_TOLERANCE_FEET
+        })
         .then_some(profile)
 }
 
@@ -350,6 +473,17 @@ fn outline_from_faces(
         if let Some(edge) = reaches_anchor(face, bbox, anchor) {
             lines.push(edge);
         }
+        if resolve {
+            if let Some((low, high)) = face.vertical_cylinder_heights() {
+                let reached = match anchor {
+                    OutlineAnchor::Floor => (low - bbox[2]).abs() <= BOX_TOLERANCE_FEET,
+                    OutlineAnchor::Ceiling => (high - bbox[5]).abs() <= BOX_TOLERANCE_FEET,
+                };
+                if reached {
+                    lines.extend(face.arc_segments()?);
+                }
+            }
+        }
     }
     let profile = if resolve {
         snap_ends_within(&mut lines, ROOM_STEP_TOLERANCE_FEET);
@@ -358,7 +492,7 @@ fn outline_from_faces(
         snap_ends(&mut lines);
         plan_profile_from_lines(&lines)?
     };
-    profile_on_box(profile, bbox)
+    profile_on_box(profile, bbox, if resolve { ROOM_SLIVER_FEET } else { 0.0 })
 }
 
 /// The room's outline from the solid whose header starts at `header` and the
@@ -372,14 +506,14 @@ fn outline_with_faces(
     buf: &[u8],
     header: usize,
     bbox: [f64; 6],
-) -> Option<(PlanProfile, Vec<RoomFace>)> {
+) -> Option<(PlanProfile, Vec<RoomFace>, bool)> {
     let walked = solid_faces(buf, header);
     if let Some(profile) = outline_from_faces(&walked, bbox, OutlineAnchor::Floor, false) {
-        return Some((profile, walked));
+        return Some((profile, walked, false));
     }
     let span = solid_faces_to_next_solid(buf, header);
     let profile = outline_from_faces(&span, bbox, OutlineAnchor::Floor, true)?;
-    Some((profile, span))
+    Some((profile, span, true))
 }
 
 /// The room's outline from the solid whose header starts at `header`: its
@@ -387,7 +521,7 @@ fn outline_with_faces(
 /// and resolved to a boundary where the faces up to the next solid's tag do
 /// (RE-316). Kept only where it spans `bbox`.
 pub fn room_outline_at(buf: &[u8], header: usize, bbox: [f64; 6]) -> Option<PlanProfile> {
-    outline_with_faces(buf, header, bbox).map(|(profile, _)| profile)
+    outline_with_faces(buf, header, bbox).map(|(profile, _, _)| profile)
 }
 
 /// The outline the faces up to the next solid's tag make, resolved to a
@@ -437,10 +571,12 @@ pub fn faces_form_prism(faces: &[RoomFace], bbox: [f64; 6]) -> bool {
 pub fn prism_of_solids(buf: &[u8], headers: &[usize], bbox: [f64; 6]) -> bool {
     let mut found = false;
     for &at in headers {
-        let Some((_, faces)) = outline_with_faces(buf, at, bbox) else {
+        let Some((_, faces, resolved)) = outline_with_faces(buf, at, bbox) else {
             continue;
         };
-        if !faces_form_prism(&faces, bbox) {
+        if !faces_form_prism(&faces, bbox)
+            || (resolved && faces.iter().any(|face| face.cylinder.is_some()))
+        {
             return false;
         }
         found = true;
