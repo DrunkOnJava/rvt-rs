@@ -113,6 +113,7 @@ fn main() -> anyhow::Result<()> {
     .rooms;
     let mut tally: BTreeMap<&str, usize> = BTreeMap::new();
     let (mut oriented_ok, mut oriented_total) = (0, 0);
+    let (mut resolved_same, mut resolved_total) = (0, 0);
     let mut cached_new = (0, 0);
     let mut cached_ceiling = (0, 0);
     for room in &rooms {
@@ -200,6 +201,23 @@ fn main() -> anyhow::Result<()> {
             (None, None) => "still box",
         };
         *tally.entry(class).or_default() += 1;
+        if walked.is_some() {
+            let resolved = span_outline_at(buf, header, bbox, OutlineAnchor::Floor);
+            resolved_total += 1;
+            let same = match (&walked, &resolved) {
+                (Some(a), Some(b)) => (area(a) - area(b)).abs() <= 1e-6 * area(a),
+                _ => false,
+            };
+            if same {
+                resolved_same += 1;
+            } else {
+                println!(
+                    "room {id} {stream}: RE-101 outline {} but the resolved span gives {}",
+                    walked.as_ref().map_or(0.0, area),
+                    resolved.as_ref().map_or(f64::NAN, area)
+                );
+            }
+        }
         if walked.is_some() && now.is_some() && walked == now {
             continue;
         }
@@ -232,6 +250,9 @@ fn main() -> anyhow::Result<()> {
     println!("release {version}: {} rooms, {tally:?}", rooms.len());
     println!(
         "plan edges directed head to tail on {oriented_ok} of the {oriented_total} rooms RE-101 kept"
+    );
+    println!(
+        "the resolved span's outline has the area of the walk's on {resolved_same} of the {resolved_total} rooms RE-101 kept"
     );
     println!(
         "newly closed rooms whose area Revit's cache holds: {} of {}; ceiling-anchored outlines of rooms still boxes whose area it holds: {} of {}",
