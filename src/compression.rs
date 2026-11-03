@@ -32,12 +32,12 @@ pub const DEFAULT_MAX_INFLATED_STREAM_BYTES: usize = 1024 * 1024 * 1024;
 /// How many times its stored size a multi-member stream may inflate to at the
 /// default limits, above [`DEFAULT_MAX_INFLATED_STREAM_BYTES`] and up to
 /// [`MAX_SCALED_INFLATED_STREAM_BYTES`]. A 202 MB Revit 2024 model's 141 MiB
-/// partition inflates past 1 GiB, more than 7.6 times its stored size, the one
-/// such ratio measured (#1075); 16 leaves twice that.
+/// partition (148,279,248 bytes stored) inflates past 1 GiB, more than 7.2 times
+/// its stored size, the one such ratio measured (#1075); 16 leaves twice that.
 pub const INFLATED_STREAM_RATIO: usize = 16;
 
-/// The most a multi-member stream may inflate to at the default limits,
-/// however large it is stored: 4 GiB on a 64-bit target; 1 GiB on a 32-bit
+/// The most a multi-member stream may inflate to at the default per-member
+/// cap, however large it is stored: 4 GiB on a 64-bit target; 1 GiB on a 32-bit
 /// one, WebAssembly included, whose whole address space is 4 GiB. A larger
 /// stream needs a raised per-member cap (`--large-model`).
 pub const MAX_SCALED_INFLATED_STREAM_BYTES: usize = if usize::BITS >= 64 {
@@ -107,8 +107,10 @@ impl InflateLimits {
     pub fn max_stream_total_bytes_for(&self, stored_bytes: usize) -> usize {
         stored_bytes
             .saturating_mul(INFLATED_STREAM_RATIO)
-            .max(DEFAULT_MAX_INFLATED_STREAM_BYTES)
-            .min(MAX_SCALED_INFLATED_STREAM_BYTES)
+            .clamp(
+                DEFAULT_MAX_INFLATED_STREAM_BYTES,
+                MAX_SCALED_INFLATED_STREAM_BYTES,
+            )
             .max(self.max_output_bytes)
     }
 }
@@ -123,7 +125,7 @@ pub struct InflateShortfall {
     /// [`InflateLimits::max_output_bytes`].
     pub members_over_limit: usize,
     /// True when the members stopped at the stream's inflated total
-    /// ([`InflateLimits::max_stream_total_bytes`]) and the rest were not
+    /// ([`InflateLimits::max_stream_total_bytes_for`]) and the rest were not
     /// inflated.
     pub stopped_at_total: bool,
 }
