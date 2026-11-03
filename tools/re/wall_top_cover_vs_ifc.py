@@ -64,12 +64,14 @@ wall from its start, `-` where the body is not there):
                                           and where Revit's is and rvt-rs's is not
                                           (lower), in square feet; and each body's
                                           volume, cubic feet
-  piece tag:<Tag> area <A> width <W> at <x> <y> inside Revit's plan <A> at Revit's full height <share>
+  piece tag:<Tag> area <A> width <W> at <x> <y> inside Revit's plan <A> at Revit's full height <share> in other walls <share>
                                           for a wall rvt-rs steps: each piece of
                                           its plan at its highest point, its area,
                                           its least width, and the share of it
                                           inside Revit's plan where Revit's body is
-                                          at that height too
+                                          at that height too, and the share of it
+                                          that lies inside the plan of another wall
+                                          of rvt-rs's
   summary ...                             walls equal on the centre line, and
                                           over the whole plan, and the points
 
@@ -457,6 +459,9 @@ def main():
     }
     plans = {}
     ours_forms, revit_forms = forms(args[0]), forms(args[1])
+    wall_tags = list(both)
+    wall_plans = [footprint(ours_walls[t]) for t in wall_tags]
+    wall_index = shapely.STRtree([p if p is not None else shapely.Polygon() for p in wall_plans])
     on_centre = on_plan = walls_planned = 0
     plan_points = [0, 0, 0, 0]
     tallers = lowers = 0.0
@@ -524,9 +529,12 @@ def main():
             for piece in pieces_of(ours_full):
                 inside = piece.intersection(common).area
                 if inside > 1e-6:
+                    others = [wall_plans[i] for i in wall_index.query(piece) if wall_tags[i] != tag and wall_plans[i] is not None]
+                    beside = piece.intersection(shapely.union_all(others)).area / piece.area if others else 0.0
                     print(
                         f"piece tag:{tag} area {piece.area:.4f} width {least_width(piece):.4f} at {piece.centroid.x:.4f} {piece.centroid.y:.4f} "
-                        f"inside Revit's plan {inside:.4f} at Revit's full height {piece.intersection(common).intersection(revit_full).area / inside:.4f}"
+                        f"inside Revit's plan {inside:.4f} at Revit's full height {piece.intersection(common).intersection(revit_full).area / inside:.4f} "
+                        f"in other walls {beside:.4f}"
                     )
         low, high = ours_box[4], ours_box[5]
         reach = (min(ours_box[0], revit_box[0]) - 0.1, max(ours_box[1], revit_box[1]) + 0.1,
