@@ -40,7 +40,7 @@ fetch() { # url out
 while IFS=$'\t' read -r kind name source sha bytes; do
   case "$kind" in
     file)
-      fetch "$source" "$(dest "$name")" || { echo "could not download $name"; exit 2; }
+      fetch "$source" "$(dest "$name")" || { rm -f "$(dest "$name")"; echo "could not download $name"; exit 2; }
       check "$(dest "$name")" "$name" "$sha" "$bytes"
       ;;
     archive)
@@ -49,7 +49,7 @@ while IFS=$'\t' read -r kind name source sha bytes; do
       ;;
     member)
       archive="${source%%:*}" path="${source#*:}"
-      tar -xzf "$work/$archive.tar.gz" -C "$work" "$path"
+      tar -xzf "$work/$archive.tar.gz" -C "$work" "$path" || { echo "$name: $path not in $archive"; exit 1; }
       mv "$work/$path" "$(dest "$name")"
       check "$(dest "$name")" "$name" "$sha" "$bytes"
       ;;

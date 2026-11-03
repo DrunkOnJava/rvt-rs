@@ -104,6 +104,7 @@ if [ -d "$MODELS/holdout" ]; then
   for model in "$MODELS"/holdout/*.rvt; do
     [ -f "$model" ] || continue
     stem=$(basename "$model" .rvt)
+    [ -f "$MODELS/holdout/$stem.ifc" ] || { echo "holdout-$stem: no Revit export beside it, not measured" >&2; continue; }
     MODELS_LIST="$MODELS_LIST
 holdout-$stem|holdout/$stem.rvt|holdout/$stem.ifc"
   done
@@ -114,6 +115,7 @@ if [ -d "$MODELS/spent" ]; then
   for model in "$MODELS"/spent/*.rvt; do
     [ -f "$model" ] || continue
     stem=$(basename "$model" .rvt)
+    [ -f "$MODELS/spent/$stem.ifc" ] || { echo "spent-$stem: no Revit export beside it, not measured" >&2; continue; }
     MODELS_LIST="$MODELS_LIST
 spent-$stem|spent/$stem.rvt|spent/$stem.ifc"
   done
