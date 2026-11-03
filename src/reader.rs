@@ -219,6 +219,12 @@ pub struct RevitFile {
     /// Doors and windows written as such though their type's record was not
     /// read (#1247).
     unread_type_doors_windows: BTreeSet<u32>,
+    /// Family instances written as spaces that were left out because their
+    /// family draws no model form (RE-312, #1262), by class.
+    bodiless_family_spaces: BTreeMap<String, usize>,
+    /// How many family instances written as spaces were not checked for a 3D
+    /// body, and why, where the check could not run (RE-312).
+    bodiless_family_space_error: Option<(usize, String)>,
 }
 
 /// The limits it was opened with and how many streams it has inflated so
@@ -439,6 +445,8 @@ impl RevitFile {
             category_style_materials: None,
             unread_streams: Vec::new(),
             unread_type_doors_windows: BTreeSet::new(),
+            bodiless_family_spaces: BTreeMap::new(),
+            bodiless_family_space_error: None,
         })
     }
 
@@ -460,6 +468,26 @@ impl RevitFile {
 
     pub(crate) fn note_unread_type_doors_windows(&mut self, ids: impl IntoIterator<Item = u32>) {
         self.unread_type_doors_windows.extend(ids);
+    }
+
+    /// The family instances written as spaces that this handle's export left
+    /// out because their family draws no model form (RE-312), by class.
+    pub(crate) fn bodiless_family_spaces(&self) -> &BTreeMap<String, usize> {
+        &self.bodiless_family_spaces
+    }
+
+    pub(crate) fn note_bodiless_family_spaces(&mut self, classes: BTreeMap<String, usize>) {
+        self.bodiless_family_spaces = classes;
+    }
+
+    /// How many family instances written as spaces were not checked for a 3D
+    /// body, and why (RE-312).
+    pub(crate) fn bodiless_family_space_error(&self) -> Option<&(usize, String)> {
+        self.bodiless_family_space_error.as_ref()
+    }
+
+    pub(crate) fn note_bodiless_family_space_error(&mut self, checked: usize, error: String) {
+        self.bodiless_family_space_error = Some((checked, error));
     }
 
     fn note_unread(&mut self, unread: UnreadStream) {

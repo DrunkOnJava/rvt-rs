@@ -106,6 +106,9 @@ struct Document {
     /// The `Family` records it holds, with their bodies.
     families: Vec<(u64, Vec<u8>)>,
     unread: bool,
+    /// A group of its blocks did not parse, so records of it are missing
+    /// (RE-312). Kept apart from `unread`, which the material readers use.
+    partial: bool,
 }
 
 /// `{"m_id":{"m_id64":n}}` as `n`.
@@ -176,10 +179,11 @@ fn read_documents(
                 if !CHANNELS.contains(&source.channel) {
                     return Ok(());
                 }
+                let document = documents.entry(*family).or_default();
                 let Ok(records) = native_document::group_records(source, bytes, version) else {
+                    document.partial = true;
                     return Ok(());
                 };
-                let document = documents.entry(*family).or_default();
                 for (id, _, start, end) in records {
                     let body = &bytes[start..end];
                     let Some(class) = le_bytes::u16_at(body, 0) else {
@@ -486,7 +490,10 @@ pub struct ModelForm {
     pub cutting: bool,
     /// Its stored `Visible`, where it holds one.
     pub visible: Option<i64>,
-    /// The caption its `Visible` is bound to in the family's own document.
+    /// Whether its `Visible` is bound to a family parameter.
+    pub bound: bool,
+    /// The caption of that parameter in the family's own document, where it
+    /// was read.
     pub bound_caption: Option<String>,
 }
 
@@ -495,7 +502,8 @@ pub struct ModelForm {
 pub struct FamilySolids {
     pub forms: Vec<ModelForm>,
     /// True where the document nests a family instance, or a form or an
-    /// instance in it did not decode: the forms may not be all it draws.
+    /// instance in it did not decode, or a group of it did not parse: the
+    /// forms may not be all it draws.
     pub incomplete: bool,
 }
 
@@ -520,12 +528,13 @@ pub fn family_solids(
                     .map(|form| ModelForm {
                         cutting: form.cutting,
                         visible: form.visible,
+                        bound: form.bound.is_some(),
                         bound_caption: form
                             .bound
                             .and_then(|id| document.captions.get(&id).cloned()),
                     })
                     .collect(),
-                incomplete: !document.nested.is_empty() || document.unread,
+                incomplete: !document.nested.is_empty() || document.unread || document.partial,
             },
         );
     }
@@ -573,12 +582,15 @@ fn root_id(graph: &ObjectGraph, class: &str, field: &str) -> Option<u64> {
 /// `Visible` is 0, where `Visible` is the value of the family parameter it
 /// is bound to (the instance's, else its type's, matched to the family's by
 /// caption) or else its stored value. On the BIM4LCA terrain office the 92
-/// bicycle bays of "Parking Space" carry "Stripe Y/NA" as 0 and are not in
+/// bicycle bays of "Parking Space" carry "Stripe Y/N" as 0 and are not in
 /// Revit's export, and its 2 car bays do not.
 ///
 /// An instance is left out of the result, so is not called bodiless, where
 /// its family's document is not found, holds no form, nests a family
-/// instance or has a form or instance that does not decode.
+/// instance, has a form or instance that does not decode or a group that
+/// does not parse, or has a form bound to a parameter whose caption or value
+/// was not read: the stored `Visible` of a bound form says nothing of what
+/// the parameter shows.
 pub fn instances_without_body(
     rf: &mut RevitFile,
     instances: &BTreeSet<u64>,
@@ -647,15 +659,23 @@ pub fn instances_without_body(
                 by_caption.insert(caption.as_str(), *value);
             }
         }
-        let drawn = solid.forms.iter().filter(|form| !form.cutting).any(|form| {
-            let value = form
-                .bound_caption
-                .as_deref()
-                .and_then(|caption| by_caption.get(caption).copied())
-                .or(form.visible);
-            value != Some(0)
-        });
-        if !drawn {
+        let (mut drawn, mut unresolved) = (false, false);
+        for form in solid.forms.iter().filter(|form| !form.cutting) {
+            let shown = if form.bound {
+                form.bound_caption
+                    .as_deref()
+                    .and_then(|caption| by_caption.get(caption).copied())
+                    .map(|value| value != 0)
+            } else {
+                Some(form.visible != Some(0))
+            };
+            match shown {
+                Some(true) => drawn = true,
+                Some(false) => {}
+                None => unresolved = true,
+            }
+        }
+        if !drawn && !unresolved {
             out.insert(*instance);
         }
     }

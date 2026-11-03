@@ -32,7 +32,7 @@ The two groups differ in their type (`AP`, 5500 by 2500 mm, and `PP`, 2000 by 50
 
 ## 3. What does
 
-Revit's `FamilyInstanceExporter.ExportFamilyInstanceElement` (revit-ifc) builds the instance's 3D body and returns with nothing written when it has none and the element is not a door or a window ("We will allow a door or window to be exported without any geometry … Anything else doesn't really make sense").
+Revit's `FamilyInstanceExporter.ExportFamilyInstanceElement` (revit-ifc) builds the instance's 3D body and returns with nothing written when it has none and the element is not a door or a window (the method's own note is that only a door or a window may be exported without geometry).
 
 The "Parking Space" family document, embedded in the project, holds one model form, an extrusion (the parking stripe). Its `Visible` is bound to the family parameter "Stripe Y/N" (`FamilyParametrizedElemParamsCell`, the mechanism RE-206 reads for nested families):
 
@@ -46,7 +46,9 @@ The same holds on the office files: of the 78 family instances whose value is `I
 
 `native_family_forms::instances_without_body` reads, for the instances given, the symbol and the parameter values of the instance and its type, the captions of those parameters, and the model forms of the symbol's family document (`family_solids`). A form is drawn unless it is a void or its `Visible` is 0, where `Visible` is the value of the parameter it is bound to (the instance's, else the type's, matched to the family document's by caption) or else its stored value. An instance with no drawn form has no body.
 
-`partition_schema_mvp::without_bodiless_family_spaces` drops those of them whose "Export to IFC As" is `IfcSpace`. It leaves an instance in, as before, where its family's document is not found, holds no form, nests a family instance, or has a form or an instance that does not decode, and for any Revit release outside 2023 to 2027. Other categories are not touched.
+`partition_schema_mvp::without_bodiless_family_spaces` drops those of them whose "Export to IFC As" is `IfcSpace`. It keeps an instance, as before, where its family's document is not found, holds no form, nests a family instance, has a form or an instance that does not decode or a group that does not parse, or has a form bound to a parameter whose caption or value was not read (a bound form's stored `Visible` says nothing of what its parameter shows). It keeps every instance for a Revit release outside 2023 to 2027. Other categories are not touched.
+
+The export diagnostics count what it leaves out as `element_record_family_space_without_body` (by class), and a check that could not run is a warning that names how many instances were not checked and why, with every one written.
 
 ## 5. Measured
 
@@ -78,6 +80,9 @@ With the rule (run 41656473590, head 6eae7dd2 against `main`, `nordic`, `r2025`,
 - Schema validation: one finding (`IfcRelAssociatesMaterial.AllowedElements`) on each side, unchanged.
 
 ## 6. What is not shown
+
+- **How much evidence there is.** Two families on one building: "Parking Space" (the rule changes its output) and "Turning Free Space" (42 per office file, drawn, written; it changes nothing). The void-only family of the office's 34 is a third case, but those instances were never written by `main`. Every file in the measurement is a Revit 2024 file. The rule is exact on all of them, which is a small basis for applying it elsewhere.
+- **Cost.** For an affected file the rule adds up to three passes over the native records (the instances, then their types and the parameters they set, then the parameters the types set) and two walks over the partitions to find the family documents (`family_solids`). It is untimed here; a file with no `IfcSpace`-valued family instance pays nothing.
 
 - **Why the bicycle bays carry 0.** Their "Stripe Y/N" is 0 in their data. Whether the model's authors hid the stripe on purpose is not something the file says.
 - **That "no drawn form" is Revit's whole test.** Revit's body also needs geometry that survives its tessellation and the export view's visibility (`ElementFilteringUtil.IsElementVisible`: hidden elements, categories and filters of the export view). Two instances of one family can differ in either. The rule covers what the file decides: forms, voids, and the parameter values that show them. An element Revit's export view hides is not decided.

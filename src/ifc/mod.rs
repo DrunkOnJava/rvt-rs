@@ -3745,6 +3745,25 @@ pub fn build_export_diagnostics_with_limits(
              opening in Revit is its opening alone in Revit's export (#1247)."
         ));
     }
+    // RE-312: a family instance written as a space whose family draws no
+    // model form has no 3D body, and is left out as Revit's own export leaves
+    // it out. A check that could not run keeps every instance.
+    let bodiless_spaces: usize = rf.bodiless_family_spaces().values().sum();
+    if bodiless_spaces > 0 {
+        skipped.push(SkippedExportItem {
+            reason: "element_record_family_space_without_body".into(),
+            count: bodiless_spaces,
+            classes: rf.bodiless_family_spaces().clone(),
+            sample_names: Vec::new(),
+        });
+    }
+    if let Some((checked, error)) = rf.bodiless_family_space_error() {
+        warnings.push(format!(
+            "{checked} family instance(s) written as spaces could not be checked for a 3D body \
+             ({error}); they are written, though Revit's export leaves out one whose family draws \
+             no model form (RE-312)."
+        ));
+    }
     if !empty_panels.types_with_material.is_empty() {
         warnings.push(format!(
             "{} empty curtain panel type(s) carry a material, which an empty panel should not: {:?}",

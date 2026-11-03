@@ -161,6 +161,8 @@ panel types name "Glass" and "Default". An empty-family type that carries a
 material is reported in `warnings`. The material alone isn't used, because a
 panel set to "By Category" may store no material either (#309).
 
+`element_record_family_space_without_body` counts the family instances written as `IfcSpace` through their "Export to IFC As" that are left out because their family draws no model form for their parameter values (every model form is a void, or hidden by its `Visible` or by the parameter it is bound to). Revit's own IFC export writes a family instance that is not a door or a window only when it has a 3D body, and leaves these out: the 89 bicycle bays of the BIM4LCA terrain office, whose "Stripe Y/N" is 0 (RE-312). An instance whose family document is not found, holds no form, nests a family instance, or has a form bound to a parameter whose value was not read is written. When the check cannot run (a Revit release outside 2023 to 2027, or a read that fails), `warnings` gives how many instances were not checked and why, and all of them are written.
+
 `unsupported_features` carries exactly one geometry-coverage code:
 `real_file_element_geometry` when **no** exported building element has a
 recovered body, and `partial_element_geometry` when some do and some do not

@@ -8,4 +8,5 @@
   office's `IfcSpace` are now the 9 of Revit's export (9 of 98 before), and
   the six reference models, the other office files, the R2025 and the
   held-out models export byte for byte as before. Only instances written as
-  `IfcSpace` are tested; other categories are not (#1262).
+  `IfcSpace` are tested, other categories are not, and the export
+  diagnostics count what is left out (#1262).

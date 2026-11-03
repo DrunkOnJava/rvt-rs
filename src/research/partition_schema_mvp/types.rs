@@ -65,7 +65,9 @@ pub(super) fn attach_ifc_export_overrides(
 /// form of its family is a void or hidden for its parameter values
 /// ([`crate::native_family_forms::instances_without_body`]). On the BIM4LCA
 /// terrain office the 92 bicycle bays of "Parking Space", whose "Stripe
-/// Y/NA" is 0, are not in Revit's export and its 2 car bays are.
+/// Y/N" is 0, are not in Revit's export and its 2 car bays are. The
+/// export diagnostics count what is left out, and a check that could not
+/// run is reported there with every instance kept.
 pub(super) fn without_bodiless_family_spaces(
     rf: &mut RevitFile,
     products: &mut Vec<DecodedElement>,
@@ -83,14 +85,27 @@ pub(super) fn without_bodiless_family_spaces(
     if candidates.is_empty() {
         return;
     }
-    let Ok(bodiless) = crate::native_family_forms::instances_without_body(rf, &candidates) else {
-        return;
+    let bodiless = match crate::native_family_forms::instances_without_body(rf, &candidates) {
+        Ok(bodiless) => bodiless,
+        Err(error) => {
+            rf.note_bodiless_family_space_error(candidates.len(), error.to_string());
+            return;
+        }
     };
+    if bodiless.is_empty() {
+        return;
+    }
+    let mut classes: BTreeMap<String, usize> = BTreeMap::new();
     products.retain(|element| {
-        !element
+        let left_out = element
             .id
-            .is_some_and(|id| bodiless.contains(&u64::from(id)))
+            .is_some_and(|id| bodiless.contains(&u64::from(id)));
+        if left_out {
+            *classes.entry(element.class.clone()).or_default() += 1;
+        }
+        !left_out
     });
+    rf.note_bodiless_family_spaces(classes);
 }
 
 /// Give elements of system families (walls, floors, roofs, ceilings,
