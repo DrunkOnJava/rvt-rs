@@ -2248,6 +2248,10 @@ Revit's export writes a floor's `Qto_SlabBaseQuantities.GrossArea` as the area o
 
 A saved cylinder face whose trim loop does not run round its UV box (a door's curved faces, cut by its leaf and frame) is meshed in strips across its angle: the cylinder is straight along its axis, so only U needs the chord bound. 155 more BIM4LCA office doors are then drawn from their saved meshes, 151 exact to 0.001 ft against Revit's export and all within 0.01 ft. Report: `reports/element-framing/RE-304-cylinder-trims.md`.
 
+## Addendum — RE-303 a saved flip control (2026-11-03)
+
+The saved graphics class `GBiFlipControl` holds no geometry: an origin, a base vector and a length, with no pointer, a flip control drawn in a view. Left out of the walk, it lets 14 BIM4LCA office bodies be drawn from their saved meshes, and none of them is Revit's: all are railings whose saved mesh is a part of Revit's body (about 40% of its volume) or more than it. So it stays a decode failure, which keeps their boxes; what a railing's saved mesh lacks is the open question. Report: `reports/element-framing/RE-303-flip-controls-railings.md`.
+
 ## Addendum — RE-300 a light source's saved graphics (2026-11-02)
 
 The saved graphics class `GImposter` is a light source: a transform and a rendering `Asset` of scalar properties, with no surface, always in a `GFilter` of its own beside the `Geometry` (and often a `GPolyMesh` of normal binding 2) that draws the light. Revit's export draws none of that filter. Left out, it no longer keeps a fixture's box: 43 more office bodies and 2 on RE1 Electrical drawn from saved meshes, all exact to 0.001 ft, and 417 more Snowdon Towers electrical bodies. Report: `reports/element-framing/RE-300-light-source-filters.md`.
