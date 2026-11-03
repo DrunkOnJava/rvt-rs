@@ -10,8 +10,12 @@ MESH_ERRORS = set()
 
 
 def site_frame(f):
-    """Shared metres (IfcOpenShell world) -> Revit internal feet."""
-    site = f.by_type("IfcSite")[0]
+    """Shared metres (IfcOpenShell world) -> Revit internal feet; a file with
+    no IfcSite is taken as placed at the origin."""
+    sites = f.by_type("IfcSite")
+    if not sites:
+        return lambda v: v / FEET
+    site = sites[0]
     mat = ifcopenshell.util.placement.get_local_placement(site.ObjectPlacement)
     ox, oy, oz = mat[0][3], mat[1][3], mat[2][3]
     c, s = mat[0][0], mat[1][0]

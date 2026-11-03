@@ -16,7 +16,9 @@ north (the BIM4LCA office), compares box for box. With `--rotate-deg` or
 reference's world coordinates by that internal-to-shared transform, and the
 reference's are taken as they are. Either way any residual is removed as
 one translation for the whole file: `--offset-ft`, or by default the median
-difference over the scored elements.
+difference over the scored elements. The offset is in the frame the boxes
+are compared in: internal feet by default, the reference's world feet with
+a transform.
 
 Only the rvt-rs elements with a wanted `BodySource`, and the reference's
 elements with their Tags, are meshed.
@@ -26,8 +28,8 @@ Needs IfcOpenShell (the version tools/ci/requirements-ifc.txt pins).
 Usage:
 
     python3 tools/re/saved_meshes_vs_ifc.py <rvt-rs.ifc> <revit.ifc> \
-        [--source saved_graphics_mesh] [--rotate-deg 0] \
-        [--translate-ft 0,0,0] [--offset-ft X,Y,Z]
+        [--source saved_graphics_mesh] [--rotate-deg DEG] \
+        [--translate-ft X,Y,Z] [--offset-ft X,Y,Z]
 """
 
 import argparse
