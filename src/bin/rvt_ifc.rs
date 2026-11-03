@@ -917,6 +917,9 @@ fn export_summary(diagnostics: &ExportDiagnostics, has_sidecar: bool) -> Vec<Str
                 "element_record_without_volume" => "without a 3D body",
                 "element_record_in_non_primary_design_option" => "in non-primary design options",
                 "element_record_empty_curtain_panel" => "empty curtain panels",
+                "element_record_family_space_without_body" => {
+                    "family instances written as spaces whose family draws no model form"
+                }
                 _ => return None,
             };
             Some(format!("{} {what}", item.count))

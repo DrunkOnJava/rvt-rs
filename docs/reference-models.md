@@ -35,7 +35,7 @@ lists the local-only files with their source and hash, and never fetches them.
 | 255ribeiro `Exemplo_data`, `modelo_bim` | 2023 | none declared, local only | IFC4 ReferenceView 1.2, Revit 23.1 (`Exemplo_data`); IFC4 DesignTransferView 1.0, Revit 26.2 PTB (`modelo_bim`, exported from the 2023 file by a later Revit) | Revit 2023 element records (RE-81 to RE-122): 37 of 37 and 37 of 45 elements, storeys, types, layers, materials, wall joins, beams; files saved in `PTB` |
 | BIMcollab example, structural model (`02_BIMcollab_Example_STR`) | 2015 | none stated, local only; BIMcollab's public example project (`research/bimcollab-models.tsv`, fetched by Measure with `-f bimcollab=true`, STE1200's pointer) | IFC2X3 CoordinationView 2.0, Revit Architecture 2015, 2014-10-08, rewritten by Solibri's IFC Optimizer; the model was renamed after it | held out when measured (RE-198); RE-208 and RE-220 have since used it, so it no longer counts as held out: all 241 exported elements by ElementId, in Revit's class or IFC4's for its IFC2X3 one, 3 more written, GlobalIds not in the file (#878, RE-208), 16 footings on no storey (#879); wall faces and layer sets as Revit's |
 | BIM-Speed Vitoria (`ALD26 Before`, `ALD26 Project`), Frigento, Gdynia, Warmond | 2018, 2018, 2020, 2021, 2021 | CC BY 4.0 (TU Berlin DepositOnce, doi:10.14279/depositonce-16441); fetched by Measure with `-f holdout=true` (`research/holdout-archive-models.tsv`) | each release's own export: IFC2X3 CoordinationView 2.0 (Vitoria, Gdynia), IFC4 DesignTransferView (Frigento), IFC4 passed through BIMServer.center's preprocessor (Warmond); the IFC2X3 exports and Warmond's are counted apart and never remove a value | **held out** (Griffin, 2026-11-03): measured before any fix, counts only; the first same-release pairs for 2018, 2020 and 2021 (#408, #1261). Before any fix (run 41658225355): both Vitoria saves export no element against Revit's 1,394 and 1,520. Every Autodesk 2018 sample exports its elements, so `ALD26 Before` is spent to find why (measured in full as `spent-bimspeed-vitoria-before-2018`) and `ALD26 Project` stays held out as the check; Frigento 151 of 151 elements paired by Tag, Gdynia 199 of 203 (18 of 19 spaces), Warmond 710 of 710 (179 of 179 spaces); an element is counted as found by its Tag, whatever its class |
-| BIM Whale `AdvancedProject` | 2021 | the IFC from andrewisen/bim-whale-ifc-samples (MIT); the `.rvt` from the Dropbox link its README gives, under the README's "feel free to use these files however you like"; fetched by Measure with `-f holdout=true` | IFC2X3 CoordinationView 2.0, exporter 21.1.10.26, counted apart | held out, then spent (Griffin, 2026-11-03): before any fix it had 1,698 of 1,714 elements paired by Tag (456 of them in another class than Revit's: 407 `IfcFurniture` for `IfcFurnishingElement`, 49 `IfcSanitaryTerminal` for `IfcFlowTerminal`) and none of its 8 spaces, while every Autodesk 2016 to 2023 sample reads its rooms, so it is measured in full as `spent-bimwhale-advanced-2021` to find why (#1261) |
+| BIM Whale `AdvancedProject` | 2021 | the IFC from andrewisen/bim-whale-ifc-samples (MIT); the `.rvt` from the Dropbox link its README gives, under the README's "feel free to use these files however you like"; fetched by Measure with `-f holdout=true` | IFC2X3 CoordinationView 2.0, exporter 21.1.10.26, counted apart | **held out** (Griffin, 2026-11-03): before any fix it had 1,698 of 1,714 elements paired by Tag (456 of them in another class than Revit's: 407 `IfcFurniture` for `IfcFurnishingElement`, 49 `IfcSanitaryTerminal` for `IfcFlowTerminal`) and none of its 8 spaces. Those spaces are Revit Areas of a 'Rentable' scheme, not rooms; rvt-rs reads Areas on Revit 2024 only. It was briefly spent to look for the cause and restored: measured in full once (run 41661841411, its artifact deleted), with only its room probes, diagnostics and the spaces' category read (#1261) |
 
 ## Candidates, not yet measured here
 
@@ -93,9 +93,11 @@ against [`research/bim4lca-models.tsv`](../research/bim4lca-models.tsv):
 four `.rvt` models and Revit's IFC export of one. Locally, point
 `RVT_NORDIC_LCA_DIR` at a folder holding them
 ([`corpus/tier2/README.md`](../corpus/tier2/README.md)). Measure scores the
-concrete office, as built and at building permit, against Revit's exports of
-both with `-f nordic=true`
-([`research/bim4lca-measure.tsv`](../research/bim4lca-measure.tsv), #763).
+concrete office, as built and at building permit, and the small terrain
+offices (concrete and timber, at building permit), against Revit's exports of
+each with `-f nordic=true`
+([`research/bim4lca-measure.tsv`](../research/bim4lca-measure.tsv), #763,
+#1262).
 
 ## Revit 2025 models made for one feature each, fetched for a run
 
@@ -140,6 +142,11 @@ licence, Revit release, `derived_from` and `via` for the export, an `export`
 line with the view definition and exporter version, `redistributable`, and
 the observations you checked) and open a pull request with the entry only.
 See [`corpus-intake.md`](corpus-intake.md) for the three intake lanes.
+
+A pair offered as held out for 1.0's W5 (#408) is pinned sealed and measured
+by no run until the final 1.0 check: W5 counts a pair only if its first
+measurement meets W4, W6 and W7, and no model meets W6 and W7 yet, so a pair
+measured now would be used up (`docs/release-1.0-criteria.md`, W5).
 
 If you cannot share the file, share what rvt-rs says about it:
 `rvt-inspect model.rvt --json --anonymize` and
