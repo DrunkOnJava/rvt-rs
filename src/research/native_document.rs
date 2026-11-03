@@ -70,6 +70,21 @@ pub(crate) fn group_budget(file: &RevitFile, requested: usize) -> usize {
     }
 }
 
+/// The group budget of one partition's walk: `budget` ([`group_budget`]),
+/// but no more than the partition's inflated bytes where the handle holds
+/// them, since a group is part of them, and never below `requested`. Where
+/// they are not held, `requested`.
+pub(crate) fn partition_budget(
+    budget: usize,
+    requested: usize,
+    inflated: Option<&compression::InflatedStream>,
+) -> usize {
+    match inflated {
+        Some(stream) => budget.min(stream.bytes().len().max(requested)),
+        None => requested,
+    }
+}
+
 impl Default for Options {
     fn default() -> Self {
         Self {
@@ -726,7 +741,11 @@ fn extract_records(
             &prepared,
             inflated.as_deref(),
             registry,
-            max_group_bytes,
+            partition_budget(
+                max_group_bytes,
+                options.max_group_bytes,
+                inflated.as_deref(),
+            ),
             |source, bytes| {
                 if source.content_key.is_some() || !options.channels.contains(&source.channel) {
                     return Ok(());
@@ -770,7 +789,11 @@ fn extract_records(
             &prepared,
             inflated.as_deref(),
             registry,
-            max_group_bytes,
+            partition_budget(
+                max_group_bytes,
+                options.max_group_bytes,
+                inflated.as_deref(),
+            ),
             |source, bytes| {
                 if source.content_key.is_some() {
                     summary.skipped_embedded_content_groups += 1;

@@ -60,8 +60,8 @@ pub type TypeMaps = (
 /// `m_geomTag2MaterialId` holds any entry, whatever its values: a type with
 /// geometry, though its map may name no material (every value −1, RE-149)
 /// or only materials not among `materials` (RE-299); and every type whose
-/// record the read decoded, so a caller can tell a type with no map from
-/// one the read did not reach (#1247).
+/// record the read decoded with that field, so a caller can tell a type
+/// whose map is empty from one the read did not reach (#1247).
 pub fn geometry_maps(
     rf: &mut RevitFile,
     types: &BTreeSet<u64>,
@@ -85,7 +85,6 @@ pub fn geometry_maps(
         else {
             return Ok(());
         };
-        read.insert(record.identity.element_id);
         let Some(map) = root
             .fields
             .get("m_geomTag2MaterialId")
@@ -93,6 +92,7 @@ pub fn geometry_maps(
         else {
             return Ok(());
         };
+        read.insert(record.identity.element_id);
         let mut found = GeometryMaterials {
             family: root.fields.get("m_familyId").and_then(element_id),
             ..GeometryMaterials::default()

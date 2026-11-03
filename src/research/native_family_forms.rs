@@ -155,6 +155,7 @@ fn read_documents(
     let other_tags: BTreeSet<u16> = OTHER_CLASSES.iter().filter_map(|name| tag(name)).collect();
     let instance_tag = tag("FamilyInstance");
     let mut documents: BTreeMap<u64, Document> = BTreeMap::new();
+    let budget = native_document::group_budget(rf, native_document::DEFAULT_MAX_GROUP_BYTES);
     for name in streams {
         let stored = rf.read_stream(name)?;
         let prepared = compression::prepare_stream_for_inflate(name, &stored);
@@ -163,7 +164,11 @@ fn read_documents(
             &prepared,
             inflated.as_deref(),
             registry,
-            native_document::group_budget(rf, native_document::DEFAULT_MAX_GROUP_BYTES),
+            native_document::partition_budget(
+                budget,
+                native_document::DEFAULT_MAX_GROUP_BYTES,
+                inflated.as_deref(),
+            ),
             |source, bytes| {
                 let Some(family) = source.content_key.and_then(|key| blocks.get(&key)) else {
                     return Ok(());
@@ -312,6 +317,7 @@ pub fn family_forms(
     // Each wanted family's record outside every block, and every block key.
     let mut bodies: Vec<(u64, Vec<u8>)> = Vec::new();
     let mut keys: BTreeSet<[u8; 16]> = BTreeSet::new();
+    let budget = native_document::group_budget(rf, native_document::DEFAULT_MAX_GROUP_BYTES);
     for name in &streams {
         let stored = rf.read_stream(name)?;
         let prepared = compression::prepare_stream_for_inflate(name, &stored);
@@ -320,7 +326,11 @@ pub fn family_forms(
             &prepared,
             inflated.as_deref(),
             &registry,
-            native_document::group_budget(rf, native_document::DEFAULT_MAX_GROUP_BYTES),
+            native_document::partition_budget(
+                budget,
+                native_document::DEFAULT_MAX_GROUP_BYTES,
+                inflated.as_deref(),
+            ),
             |source, bytes| {
                 if let Some(key) = source.content_key {
                     keys.insert(key);

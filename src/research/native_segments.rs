@@ -194,7 +194,7 @@ pub fn walk_inflated(
                     let mut decoder = flate2::bufread::GzDecoder::new(compressed);
                     let mut bytes = Vec::new();
                     (&mut decoder)
-                        .take(max_group_bytes as u64 + 1)
+                        .take((max_group_bytes as u64).saturating_add(1))
                         .read_to_end(&mut bytes)?;
                     ensure!(
                         bytes.len() <= max_group_bytes,
