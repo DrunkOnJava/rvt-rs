@@ -82,7 +82,9 @@ def bodies(path, classes):
                     "surface": surface,
                     "z0": float(v[:, 2].min()),
                     "z1": float(v[:, 2].max()),
-                    "element": element,
+                    "props": ifcopenshell.util.element.get_psets(element).get(SET, {})
+                    if cls == "IfcSpace"
+                    else {},
                 }
             )
     return out
@@ -104,8 +106,7 @@ def main(argv):
     revit = plan.tops(revit_path, ["IfcSpace"])
     rooms = []
     for space in spaces:
-        props = ifcopenshell.util.element.get_psets(space["element"]).get(SET, {})
-        source = props.get("SpaceOutlineSource")
+        source = space["props"].get("SpaceOutlineSource")
         if source in ROOM_SOURCES and space["surface"].area > 0:
             space["source"] = source
             rooms.append(space)
