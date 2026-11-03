@@ -632,8 +632,9 @@ pub struct PartitionElementRecord {
     #[serde(default)]
     pub id_from_enclosing_record: bool,
     /// The design option the element belongs to, from `+0x2a`
-    /// ([`DESIGN_OPTION_OFFSET`]). `None` for the main model, and for a
-    /// value outside the `u32` ElementId range.
+    /// ([`DESIGN_OPTION_OFFSET`]), or on Revit 2008 to 2023 from the `u32`
+    /// 26 bytes before the record marker (RE-315). `None` for the main
+    /// model, and for a value outside the `u32` ElementId range.
     ///
     /// Whether the option is its set's primary one is document-level
     /// knowledge: see [`crate::partition_design_options`].

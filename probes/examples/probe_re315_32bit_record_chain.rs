@@ -311,6 +311,45 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         level_ids.len(),
         levels.len()
     );
+    let phases = rf.phase_filter();
+    println!(
+        "phases: {} in order, {} elements not in the last, read error: {}",
+        phases.order.len(),
+        phases.excluded.len(),
+        phases.read_error.as_deref().unwrap_or("none")
+    );
+    let options = rf.design_options();
+    println!(
+        "design options: {} sets with a primary, {} unresolved, {} frames name an option, {} in a non-primary one",
+        options.sets.len(),
+        options.unresolved_sets.len(),
+        records
+            .iter()
+            .filter(|record| record.design_option.is_some())
+            .count(),
+        records
+            .iter()
+            .filter(|record| options.excludes(record))
+            .count()
+    );
+    let instances = || {
+        records
+            .iter()
+            .filter(|record| record.is_exported_instance() && record.has_volume())
+    };
+    println!(
+        "placed instances with volume left out: {} by phase, {} by design option",
+        instances()
+            .filter(|record| phases.excludes(record))
+            .map(|record| record.element_id)
+            .collect::<BTreeSet<_>>()
+            .len(),
+        instances()
+            .filter(|record| options.excludes(record))
+            .map(|record| record.element_id)
+            .collect::<BTreeSet<_>>()
+            .len()
+    );
     let partition = |stream: &str| {
         stream
             .rsplit('/')
@@ -319,9 +358,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             .unwrap_or(0)
     };
     let mut selected: BTreeMap<u32, &per::PartitionElementRecord> = BTreeMap::new();
-    for record in records
-        .iter()
-        .filter(|record| record.is_exported_instance() && record.has_volume())
+    for record in instances().filter(|record| !options.excludes(record) && !phases.excludes(record))
     {
         let newer = selected.get(&record.element_id).is_none_or(|held| {
             (partition(&record.stream), record.offset) > (partition(&held.stream), held.offset)

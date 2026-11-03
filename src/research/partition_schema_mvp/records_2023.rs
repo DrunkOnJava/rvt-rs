@@ -8,8 +8,8 @@ use super::*;
 /// feeds. Components nested in doors and windows are left out
 /// ([`nested_in_openings`]). Doors and windows bind to their host wall by
 /// the 2024 rule (RE-85) on 2023's reference lists, and every element to
-/// the one Level its list names (RE-107). No names, types, joins or design
-/// options: their 2023 layouts are not decoded.
+/// the one Level its list names (RE-107). An element in a non-primary
+/// design option, or not in the export phase, is left out (RE-315).
 pub(super) fn recover_2023_records(
     rf: &mut RevitFile,
     revit_version: u32,
@@ -19,7 +19,13 @@ pub(super) fn recover_2023_records(
     let records = crate::partition_element_records_2023::scan_records(rf, revit_version);
     let names = type_and_family_names_2023(rf, &records);
     let system_types = system_type_names_2023(rf, revit_version, &records);
-    let selected = select_newest_instance_records(records);
+    let mut selected = select_newest_instance_records(records);
+    // Revit's export leaves out an element in a non-primary design option and
+    // one that does not exist in the export phase, as on 2024 (RE-40, RE-184,
+    // RE-315). Rooms are never left out by phase.
+    let options = rf.memoised_design_options();
+    let phases = rf.memoised_phase_filter();
+    selected.retain(|_, record| !options.excludes(record) && !phases.excludes(record));
     // Only a family instance can be nested; a host wall and the doors it
     // hosts name each other too (RE-76's class tag, at the same place on
     // 2023).

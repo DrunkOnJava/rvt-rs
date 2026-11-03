@@ -16,13 +16,14 @@
 //! Measured on two 2023 projects against Revit's own IFC4 exports: every
 //! element Tag of each export is a placed instance here
 //! (`reports/element-framing/RE-81-2023-element-records.md`). What 2024
-//! decodes on top of the records (design options) is not established for
-//! 2023 and is not read, except wall joins, whose reference-list partners
-//! trim walls as on 2024 (RE-120); family instances' family and type
-//! names are (RE-109), and so are system-family types and their layers
-//! (RE-111, RE-112). Door and window hosts are:
-//! the reference lists carry them as on 2024 (RE-85), and so they carry
-//! each element's Level (RE-107).
+//! decodes on top of the records is read for 2023 as far as wall joins,
+//! whose reference-list partners trim walls as on 2024 (RE-120), and design
+//! options, whose id sits in the frame 26 bytes before the marker and whose
+//! sets [`crate::partition_design_options`] reads (RE-315). Family
+//! instances' family and type names are read (RE-109), and so are
+//! system-family types and their layers (RE-111, RE-112). Door and window
+//! hosts are: the reference lists carry them as on 2024 (RE-85), and so they
+//! carry each element's Level (RE-107).
 //!
 //! A frame with no declared ElementId 52 bytes before its marker (the
 //! second prologue, RE-30) sits inside its element's partition record, as
@@ -178,6 +179,12 @@ const CATEGORY_BEFORE_MARKER: usize = 38;
 /// 4,183 and 95, every container member among them
 /// (`probes/examples/probe_32bit_container.rs`).
 const CONTAINER_BEFORE_MARKER: usize = 22;
+/// Bytes from the design option reference to the marker. The 8 bytes after
+/// the category are two `u32` slots; the second holds the ElementId of the
+/// design option the element belongs to, and `ff ff ff ff` for the main
+/// model (RE-315). The first holds the id of an object a line belongs to on
+/// the frames that set it, and is not read.
+const DESIGN_OPTION_BEFORE_MARKER: usize = 26;
 /// Offset of the `ElementHeader` tag after the ElementId (after the `u32`
 /// id and the `u32` size).
 const HEADER_TAG_AFTER_ID: usize = 8;
@@ -405,6 +412,10 @@ fn decode_at_marker(
     }
     let list_at = at + 8 + 48;
     let references = u32_list(buf, list_at).unwrap_or_default();
+    let design_option = at
+        .checked_sub(DESIGN_OPTION_BEFORE_MARKER)
+        .and_then(|from| le_bytes::u32_at(buf, from))
+        .filter(|option| *option != u32::MAX);
     let (element_id, id_from_enclosing_record) = match own_id {
         Some(id) => (id, false),
         None => {
@@ -434,7 +445,7 @@ fn decode_at_marker(
         owner_reference: None,
         references,
         id_from_enclosing_record,
-        design_option: None,
+        design_option,
     })
 }
 
