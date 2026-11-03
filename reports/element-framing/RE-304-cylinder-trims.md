@@ -30,6 +30,8 @@ Measure 41563982575, this change against `main`, both with `--saved-meshes`:
 | Snowdon Towers architectural, HVAC, rac basic (2024 samples) | +34, +24, +15 | |
 | Core Interior, RE1 Electrical and Mechanical, the other samples | unchanged | unchanged |
 
+The samples have no Revit export, so their counts are not scored; RE-303 shows a decoded mesh can still be incomplete, so they stay unverified until a file with Revit's export covers them.
+
 Against Revit's own export (`mesh_bodies_vs_ifc`):
 
 | file | scored, before → after | exact (0.001 ft) | within 0.01 ft | volume within 1% |
