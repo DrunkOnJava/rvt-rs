@@ -17,3 +17,11 @@
   still missing are 178 conduits, conduit fittings and gutters, whose
   categories are not yet recovered, 4 panel walls and 3 assemblies (RE-315).
   Files whose frames all open with their id export as before.
+- **Revit 2015 to 2023 exports leave out the elements Revit's own export
+  leaves out by phase and by design option.** Only 2024 and later applied the
+  export phase (RE-184) and the primary design option (RE-40). A Revit 2018
+  project wrote 198 pipes, fittings and other elements that Revit's export does
+  not hold, and writes none now. The phase is read as RE-281 reads it for 2015
+  to 2023. Design options are read as on 2024 with `u32` ids: on Autodesk's
+  `rst_basic` samples of 2016 to 2023 the one `Mass` in a non-primary option is
+  found and counted, as the 2024 and 2025 copies of the model count it (RE-315).
