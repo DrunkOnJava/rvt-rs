@@ -36,7 +36,7 @@ The export also counts the spaces drawn as their record's box (rooms and family 
 
 | Release | Outline | Measured against Revit's export |
 |---|---|---|
-| 2008 to 2021 | read from the stored solid where the reader finds one | held-out models (below): two 2021 projects; a Revit 2018 project exports no element at all until PR #1286 lands (#1261) |
+| 2008 to 2021 | read from the stored solid where the reader finds one | held-out models (below): two 2021 projects; Vitoria's Revit 2018 `ALD26 Before` (spent, below), whose frames sit in their records (RE-315, #1261) |
 | 2022 | stored solid | 8 held-out rooms |
 | 2023 | stored solid | 9 of 9 rooms of one project, local only (RE-102) |
 | 2024 | stored solid; Areas as spaces without a body | Core Interior, the BIM4LCA office, held-out models (below) |
@@ -67,8 +67,9 @@ Measure runs the scorer on every reference model (`-f scorers=space_profiles_vs_
 | One held-out house (2026) | 12 of 13 | 10 | 0 | 0 | 12 rooms, stored solid: 10, 0 |
 | Held-out Gdynia (2021, Revit's IFC2X3 export) | 18 of 19 | 18 | 0 | 0 | 18 rooms, stored solid: 18, 0 |
 | Held-out Warmond (2021, export passed through another tool) | 179 | 174 | 174 | 174 | 171 rooms, stored solid: 171, 171; 8 rooms, record box: 3, 3 |
+| Vitoria `ALD26 Before` (2018, Revit's IFC2X3 export; spent) | 73 | 72 | 72 | 71 | 73 rooms, stored solid: 73, 72 |
 
-A model with no rooms in Revit's export (the other R2025 models, RE1 Electrical, Mechanical and Plumbing) scores 0 of 0. Two held-out models write none of Revit's spaces: Vitoria's 2018 project (73), which exports no element until PR #1286 (#1261), and BIM Whale's 2021 project (8), whose spaces are Areas, which rvt-rs reads on Revit 2024 only.
+A model with no rooms in Revit's export (the other R2025 models, RE1 Electrical, Mechanical and Plumbing) scores 0 of 0. One held-out model writes none of Revit's spaces: BIM Whale's 2021 project (8), whose spaces are Areas, which rvt-rs reads on Revit 2024 only. Vitoria's 2018 project exported no element, and none of its 73 spaces, before PR #1286 (#1261): its spent `ALD26 Before` now writes all 73 (run 41707934595, full output, in the row above), and its held-out sibling `ALD26 Project` writes 73 `IfcSpace` against Revit's 73 (counts only, not scored here).
 
 Held-out figures are Measure run 41680717786 (`main` at 21cb2efd), counts only. On the 2026 house and on Gdynia, every room's area is right where it is scored, but none of their outlines is within 0.01 ft of Revit's; the files are held out, so why is not examined.
 

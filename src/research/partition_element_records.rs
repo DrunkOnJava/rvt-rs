@@ -625,13 +625,16 @@ pub struct PartitionElementRecord {
     pub references: Vec<u64>,
     /// `true` when the frame carries no ElementId at `+0x00` (the second
     /// prologue, RE-30) and [`Self::element_id`] is the id of the partition
-    /// record the frame sits in ([`assign_second_prologue_ids`], RE-35).
+    /// record the frame sits in ([`assign_second_prologue_ids`], RE-35; on
+    /// Revit 2008 to 2023, which write the id as a `u32` further back,
+    /// [`crate::partition_element_records_2023::record_spans`], RE-315).
     /// `false` for a frame that starts its record, with the id at `+0x00`.
     #[serde(default)]
     pub id_from_enclosing_record: bool,
     /// The design option the element belongs to, from `+0x2a`
-    /// ([`DESIGN_OPTION_OFFSET`]). `None` for the main model, and for a
-    /// value outside the `u32` ElementId range.
+    /// ([`DESIGN_OPTION_OFFSET`]), or on Revit 2008 to 2023 from the `u32`
+    /// 26 bytes before the record marker (RE-315). `None` for the main
+    /// model, and for a value outside the `u32` ElementId range.
     ///
     /// Whether the option is its set's primary one is document-level
     /// knowledge: see [`crate::partition_design_options`].

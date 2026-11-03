@@ -9,7 +9,9 @@ the IFC class each found category lands on.
 
 Usage:
 
-    python3 tools/re/instances_vs_ifc_tags.py <probe-output.txt> <revit-export.ifc>
+    python3 tools/re/instances_vs_ifc_tags.py <probe-output.txt> <revit-export.ifc> [--list]
+
+`--list` is what Measure passes to a probe's scorer; it changes nothing here.
 """
 
 import collections
@@ -19,6 +21,7 @@ import ifcopenshell
 
 
 def main(argv):
+    argv = [arg for arg in argv if arg != "--list"]
     if len(argv) != 3:
         print(__doc__, file=sys.stderr)
         return 2

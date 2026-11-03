@@ -36,12 +36,27 @@
 //! ids, and a set lists its options in ascending id order, so neither says
 //! which option is primary.
 //!
+//! # Revit 2016 to 2023
+//!
+//! The same three pieces are there with `u32` ids (RE-315, read on Autodesk's
+//! 2018 `rst_basic_sample_project`, whose set "Option Set 1" lists 875635,
+//! 875638 and 875641 with 875635 primary): the set record has its category at
+//! `+14` and the count at `+58`, the name entry writes each id as a `u32`,
+//! and an element's option is the `u32` 26 bytes before its record marker,
+//! `ff ff ff ff` for the main model. The same layout holds on the eight
+//! `rst_basic_sample_project` saves of 2016 to 2023: 1 set and 4 frames in a
+//! non-primary option each, a `Mass` Revit does not export. No Revit export
+//! of them is measured, and no other file has a set. Other releases of the
+//! 32-bit layout read no set
+//! ([`crate::partition_element_records_2023::EXPORT_FILTER_RELEASES`]).
+//!
 //! # Fail closed
 //!
 //! A set whose name entry is missing, or whose entries disagree about the
 //! primary, stays unresolved, and elements in its options are kept as
-//! before. Only an option of a resolved set that is not its primary is
-//! reported as non-primary.
+//! before. So does every set past the first [`OPTION_SETS_MAX`] of a file,
+//! by ElementId: each set costs a search of every partition. Only an option
+//! of a resolved set that is not its primary is reported as non-primary.
 
 use crate::le_bytes;
 use crate::partition_element_records::{
@@ -65,6 +80,13 @@ pub const OPTIONS_PER_SET_MAX: usize = 64;
 
 /// Longest set name, in UTF-16 code units, read from a name entry.
 pub const SET_NAME_MAX_UNITS: usize = 256;
+
+/// Most option sets a file's primaries are looked for. Each set costs a
+/// search of every partition for its name entry, and the most any file here
+/// has is 2 (Snowdon Towers). The sets past it, by ElementId, are left
+/// unresolved: their options are neither primary nor non-primary, so their
+/// elements are kept, as for a set with no name entry (RE-315).
+pub const OPTION_SETS_MAX: usize = 64;
 
 /// A design option set whose primary option was read.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -152,10 +174,27 @@ pub fn option_set_members(buf: &[u8], start: usize, end: usize, set_id: u64) -> 
 /// lists `options`. A primary that is not one of `options`, or a name with
 /// a control character or an unpaired surrogate, is not an entry.
 pub fn find_set_entries(buf: &[u8], options: &[u32]) -> Vec<(String, u32)> {
-    let mut needle = Vec::with_capacity(8 + options.len() * 8);
+    find_set_entries_of_width(buf, options, 8)
+}
+
+/// [`find_set_entries`] for Revit 2008 to 2023, whose name entries write
+/// each id as a `u32` (RE-315).
+pub fn find_set_entries_32(buf: &[u8], options: &[u32]) -> Vec<(String, u32)> {
+    find_set_entries_of_width(buf, options, 4)
+}
+
+fn find_set_entries_of_width(buf: &[u8], options: &[u32], id_bytes: usize) -> Vec<(String, u32)> {
+    let id = |value: u32| -> Vec<u8> {
+        if id_bytes == 8 {
+            u64::from(value).to_le_bytes().to_vec()
+        } else {
+            value.to_le_bytes().to_vec()
+        }
+    };
+    let mut needle = Vec::with_capacity(8 + options.len() * id_bytes);
     needle.extend_from_slice(&(options.len() as u32).to_le_bytes());
     for option in options {
-        needle.extend_from_slice(&u64::from(*option).to_le_bytes());
+        needle.extend_from_slice(&id(*option));
     }
     needle.extend_from_slice(&1u32.to_le_bytes());
     let mut out = Vec::new();
@@ -178,9 +217,13 @@ pub fn find_set_entries(buf: &[u8], options: &[u32]) -> Vec<(String, u32)> {
         if name.trim().is_empty() || name.chars().any(char::is_control) {
             continue;
         }
-        let Some(primary) =
-            le_bytes::u64_at(buf, name_at + units * 2).and_then(|v| u32::try_from(v).ok())
-        else {
+        let primary_at = name_at + units * 2;
+        let primary = if id_bytes == 8 {
+            le_bytes::u64_at(buf, primary_at).and_then(|v| u32::try_from(v).ok())
+        } else {
+            le_bytes::u32_at(buf, primary_at)
+        };
+        let Some(primary) = primary else {
             continue;
         };
         if options.contains(&primary) {
@@ -190,49 +233,129 @@ pub fn find_set_entries(buf: &[u8], options: &[u32]) -> Vec<(String, u32)> {
     out
 }
 
+/// Offset, from the start of a 32-bit option-set partition record, of its
+/// `BuiltInCategory`: after the 12-byte record header and two unread bytes.
+pub const OPTION_SET_CATEGORY_OFFSET_32: usize = 14;
+
+/// Offset, from the start of a 32-bit option-set partition record, of the
+/// `u32` count that opens the set's id list. The ids that follow are `u32`.
+pub const OPTION_LIST_OFFSET_32: usize = 58;
+
+/// [`option_set_members`] for the 32-bit record of Revit 2008 to 2023
+/// (RE-315): the category and the list sit at their own offsets and each id
+/// is a `u32`.
+pub fn option_set_members_32(
+    buf: &[u8],
+    start: usize,
+    end: usize,
+    set_id: u32,
+) -> Option<Vec<u32>> {
+    let category = le_bytes::i64_at(buf, start.checked_add(OPTION_SET_CATEGORY_OFFSET_32)?)?;
+    if category != OST_DESIGN_OPTION_SETS {
+        return None;
+    }
+    let list_at = start.checked_add(OPTION_LIST_OFFSET_32)?;
+    let count = le_bytes::u32_at(buf, list_at)? as usize;
+    if !(2..=OPTIONS_PER_SET_MAX + 1).contains(&count) {
+        return None;
+    }
+    let ids_at = list_at.checked_add(4)?;
+    if ids_at.checked_add(count.checked_mul(4)?)? > end {
+        return None;
+    }
+    if le_bytes::u32_at(buf, ids_at)? != set_id {
+        return None;
+    }
+    let mut options = Vec::with_capacity(count - 1);
+    for index in 1..count {
+        let id = le_bytes::u32_at(buf, ids_at + index * 4)?;
+        if id == set_id || options.contains(&id) {
+            return None;
+        }
+        options.push(id);
+    }
+    Some(options)
+}
+
+/// A reader of the `(name, primary)` entries a set has in a buffer.
+type SetEntries = fn(&[u8], &[u32]) -> Vec<(String, u32)>;
+
 /// The design option sets of a whole file and their primary options.
 /// Empty where the release's record shape is not proven.
 /// `RevitFile::design_options` memoises it.
 pub fn compute_design_options(rf: &mut RevitFile) -> Result<DesignOptions> {
-    let mut out = DesignOptions::default();
     let version = rf.layout_release()?;
-    let Some(marker) = crate::partition_element_records::file_bbox_marker(rf, version) else {
-        return Ok(out);
-    };
+    let mut out = DesignOptions::default();
     let streams = rf.partition_stream_names();
     let mut members: BTreeMap<u32, Vec<u32>> = BTreeMap::new();
-    for stream in &streams {
-        let Ok(inflated) = rf.inflated_partition(stream) else {
-            continue;
+    let entries_of: SetEntries;
+    if crate::partition_element_records_2023::is_32bit_release(version) {
+        // Outside the releases measured no set is read, so no element is
+        // left out by option (RE-315).
+        if !crate::partition_element_records_2023::applies_export_filters(version) {
+            return Ok(out);
+        }
+        entries_of = find_set_entries_32;
+        let Some((_, header_tag)) = crate::partition_element_records_2023::record_marker(rf) else {
+            return Ok(out);
         };
-        let buf = inflated.bytes();
-        for span in partition_record_chain(buf, &marker) {
-            let Ok(set_id) = u32::try_from(span.element_id) else {
+        let declared: BTreeSet<u32> = match crate::elem_table::parse_records(rf) {
+            Ok(records) => crate::elem_table::declared_ids(&records),
+            Err(_) => return Ok(out),
+        };
+        for stream in &streams {
+            let Ok(inflated) = rf.inflated_partition(stream) else {
                 continue;
             };
-            if let Some(options) = option_set_members(buf, span.start, span.end, span.element_id) {
-                // A set framed twice with different lists is unresolved.
-                match members.get(&set_id) {
-                    Some(held) if *held != options => {
-                        out.unresolved_sets.insert(set_id);
-                    }
-                    _ => {
-                        members.insert(set_id, options);
-                    }
+            let buf = inflated.bytes();
+            for span in
+                crate::partition_element_records_2023::record_spans(buf, header_tag, &declared)
+            {
+                if let Some(options) =
+                    option_set_members_32(buf, span.start, span.end, span.element_id)
+                {
+                    note_set(&mut members, &mut out, span.element_id, options);
+                }
+            }
+        }
+    } else {
+        entries_of = find_set_entries;
+        let Some(marker) = crate::partition_element_records::file_bbox_marker(rf, version) else {
+            return Ok(out);
+        };
+        for stream in &streams {
+            let Ok(inflated) = rf.inflated_partition(stream) else {
+                continue;
+            };
+            let buf = inflated.bytes();
+            for span in partition_record_chain(buf, &marker) {
+                let Ok(set_id) = u32::try_from(span.element_id) else {
+                    continue;
+                };
+                if let Some(options) =
+                    option_set_members(buf, span.start, span.end, span.element_id)
+                {
+                    note_set(&mut members, &mut out, set_id, options);
                 }
             }
         }
     }
+    let mut searched = 0usize;
     for (set_id, options) in members {
         if out.unresolved_sets.contains(&set_id) {
             continue;
         }
+        if searched >= OPTION_SETS_MAX {
+            out.unresolved_sets.insert(set_id);
+            continue;
+        }
+        searched += 1;
         let mut entries: BTreeSet<(String, u32)> = BTreeSet::new();
         for stream in &streams {
             let Ok(inflated) = rf.inflated_partition(stream) else {
                 continue;
             };
-            entries.extend(find_set_entries(inflated.bytes(), &options));
+            entries.extend(entries_of(inflated.bytes(), &options));
         }
         let primaries: BTreeSet<u32> = entries.iter().map(|(_, primary)| *primary).collect();
         match (primaries.len(), entries.into_iter().next()) {
@@ -255,6 +378,24 @@ pub fn compute_design_options(rf: &mut RevitFile) -> Result<DesignOptions> {
     Ok(out)
 }
 
+/// Record the options a set record lists. A set framed twice with different
+/// lists is unresolved.
+fn note_set(
+    members: &mut BTreeMap<u32, Vec<u32>>,
+    out: &mut DesignOptions,
+    set_id: u32,
+    options: Vec<u32>,
+) {
+    match members.get(&set_id) {
+        Some(held) if *held != options => {
+            out.unresolved_sets.insert(set_id);
+        }
+        _ => {
+            members.insert(set_id, options);
+        }
+    }
+}
+
 /// Placed instances of the
 /// [`crate::partition_element_records::RECOVERED_CATEGORIES`] that are in a
 /// non-primary design option, one per ElementId, keyed by class name. The
@@ -266,19 +407,25 @@ pub fn scan_non_primary_option_instances(
 ) -> Result<BTreeMap<String, usize>> {
     use crate::partition_element_records::{RECOVERED_CATEGORIES, scan_category_records_multi};
     let mut by_class = BTreeMap::new();
-    if !supports_revit_version(revit_version) {
+    let filtered_32bit =
+        crate::partition_element_records_2023::applies_export_filters(revit_version);
+    if !filtered_32bit && !supports_revit_version(revit_version) {
         return Ok(by_class);
     }
     let options = rf.memoised_design_options();
     if options.sets.is_empty() {
         return Ok(by_class);
     }
-    let declared: BTreeSet<u32> = match crate::elem_table::parse_records(rf) {
-        Ok(records) => crate::elem_table::declared_ids(&records),
-        Err(_) => return Ok(by_class),
+    let records = if filtered_32bit {
+        crate::partition_element_records_2023::scan_records(rf, revit_version)
+    } else {
+        let declared: BTreeSet<u32> = match crate::elem_table::parse_records(rf) {
+            Ok(records) => crate::elem_table::declared_ids(&records),
+            Err(_) => return Ok(by_class),
+        };
+        let categories: Vec<i64> = RECOVERED_CATEGORIES.iter().map(|(c, _)| *c).collect();
+        scan_category_records_multi(rf, revit_version, &categories, &declared)?
     };
-    let categories: Vec<i64> = RECOVERED_CATEGORIES.iter().map(|(c, _)| *c).collect();
-    let records = scan_category_records_multi(rf, revit_version, &categories, &declared)?;
     let mut excluded: BTreeMap<u32, i64> = BTreeMap::new();
     for record in records
         .iter()
