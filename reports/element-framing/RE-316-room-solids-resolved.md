@@ -75,45 +75,77 @@ Every one gives its outline or none and takes under 10 ms. The review measured t
 
 ### The office, against Revit's own IFC4 export
 
-As built, the rooms that kept their box (ft²):
+As built, the rooms that kept their box (ft²). Revit's area is its floor (the faces of its mesh that point down), which is the room's plan; its upward faces are in §3 below:
 
-| Room | Box | Revit | Outline | `SpaceOutlineSource` | Cause |
+| Room | Box | Revit | Outline | `SpaceOutlineSource` | Why the edges did not close as the walk reads them |
 |---|---:|---:|---:|---|---|
-| 1383998 | 1708.89 | 1020.46 | 1020.46 | `stored_solid_faces` | step |
-| 1422302 | 362.30 | 291.54 | 291.54 | `stored_solid_faces` | record between faces |
-| 1444351 | 362.31 | 291.56 | 291.56 | `stored_solid_faces` | record between faces |
-| 1493531 | 362.31 | 291.56 | 291.55 | `stored_solid_faces` | step |
-| 1681182 | 5963.96 | 3818.36 | 3818.36 | `stored_solid_faces` | step, long solid |
-| 1700966 | 4774.18 | 3259.86 | 3259.85 | `stored_solid_faces` | step |
-| 1736690 | 2846.73 | 2049.24 | 2049.25 | `stored_solid_faces` | step |
-| 1736726 | 367.14 | 293.43 | 293.43 | `stored_solid_faces` | record between faces |
-| 2297732 | 135.82 | 131.76 | 131.76 | `stored_solid_faces` | step |
-| 1671995 | 5228.48 | 1218.33 | 5154.12 | `stored_solid_faces` | **disagrees with Revit** |
-| 1832504 | 465.18 | 440.31 | 437.31 | `stored_solid_approximate` | column overlaps wall |
-| 2066902 | 1542.77 | 638.23 | 635.23 | `stored_solid_approximate` | column overlaps wall |
-| 1820322 | 1882.11 | not paired | 1865.97 | `stored_solid_approximate` | column overlaps wall |
+| 1383998 | 1708.89 | 1020.46 | 1020.46 | `stored_solid_faces` | a step, 0 holes |
+| 1422302 | 362.30 | 291.54 | 291.54 | `stored_solid_faces` | a record between faces, 1 hole |
+| 1444351 | 362.31 | 291.56 | 291.56 | `stored_solid_faces` | a record between faces, 1 hole |
+| 1493531 | 362.31 | 291.56 | 291.55 | `stored_solid_faces` | a step, 1 hole |
+| 1681182 | 5963.96 | 3818.36 | 3818.36 | `stored_solid_faces` | a step, a long solid, 1 hole |
+| 1700966 | 4774.18 | 3259.86 | 3259.85 | `stored_solid_faces` | a step, 1 hole |
+| 1736690 | 2846.73 | 2049.24 | 2049.25 | `stored_solid_faces` | a step, 3 holes |
+| 1736726 | 367.14 | 293.43 | 293.43 | `stored_solid_faces` | a record between faces, 1 hole |
+| 2297732 | 135.82 | 131.76 | 131.76 | `stored_solid_faces` | a step |
+| 1671995 | 5228.48 | 5177.37 | 5154.12 | `stored_solid_approximate` | a column overlaps a wall: 6 crossing pairs |
+| 1820322 | 1882.11 | 1877.97 | 1865.97 | `stored_solid_approximate` | 9 crossing pairs |
+| 1832504 | 465.18 | 440.31 | 437.31 | `stored_solid_approximate` | 2 crossing pairs |
+| 2066902 | 1542.77 | 638.23 | 635.23 | `stored_solid_approximate` | 3 crossing pairs |
 
-**Room 1671995 disagrees with Revit's export, as built and at permit.** Its stored solid is one region with 6 holes whose outline is 5154 ft² (the box, 5228); Revit's export gives it 9 pieces with 1 hole totalling 1218 ft² (1146 at permit), their centroids 25.8 ft apart. Its list counts 69 objects and the walk reads 67 faces, as for the rooms that agree; nothing in the file tells it from them. It was a box 329% over Revit's area (356% at permit) and is now an outline 323% over (350%), with its boundary 1.80 ft from Revit's (2.30 ft as a box). It is the one room of the office where the stored solid and Revit's export disagree; whether Revit's room is split by something the file does not say, or the stored solid is not the room Revit exports, is not found. It carries `stored_solid_faces`, so an importer can see that this reading is not the walk's.
+The first nine have no edge crossing or overlapping another (`probe_re316_room_closure`, run 41728640203) and Revit's area to 0.1% by the upward faces, the floor and every face. The four approximate rooms are 0.45% (1671995: 23.25 ft²), 0.64% (1820322: 12.00), 0.68% (1832504: 3.00) and 0.47% (2066902: 3.00) under Revit's floor area, the 3.0 ft² being a column's 3.001. Revit's export does not take those columns off the room, where it takes off the 1.722 ft² columns of eight rooms at permit.
 
-At building permit, 11 rooms are `stored_solid_faces`: 1436086, 1480292, 1736676, 1736690, 1736720, 1743273, 1743279, 1743309, 1743715 and 2302311 (all with Revit's area to 0.1%: their boxes were 2.6% to 58% over it) and 1671995. Room 3095831 keeps its box: 14 ends at y = 35.269 ft, in pairs 0.656 and 1.312 ft apart down a 100 ft wall, are not joined, since the columns along it share the wall's line.
+At building permit 11 rooms are `stored_solid_approximate`: 1671995 (6 crossing pairs; 5153.60 against Revit's floor of 5176.85, 0.45% under); 1736676, 1736690, 1736720, 1743273, 1743279, 1743309, 1743715 and 2302311 (1 to 3 pairs of edges overlapping along a line, no crossing: the columns); and 1436086 and 1480292 (neither crossing nor overlap: an end lies on another edge). Ten have Revit's floor area to 0.1%: their boxes were 2.6% to 58% over it. Room 3095831 keeps its box: 14 ends at y = 35.269 ft, in pairs 0.656 and 1.312 ft apart down a 100 ft wall, are not joined, since the columns along it share the wall's line.
 
-Rooms per outline source (the export's own counts, run 41712392709; the scorer pairs 276 of the as-built file's 308 spaces and 278 of the permit's):
+Rooms per outline source (the export's own counts, [41728355227](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41728355227); the scorer pairs 276 of the as-built file's 308 spaces and 278 of the permit's):
 
 | | `stored_solid` | `stored_solid_faces` | `stored_solid_approximate` | `record_box` | family instances, `record_box` |
 |---|---:|---:|---:|---:|---:|
-| Office as built (234 rooms) | 221 | 10 | 3 | 0 | 44 |
-| Office at permit (234 rooms) | 222 | 11 | 0 | 1 | 44 |
+| Office as built (234 rooms) | 221 | 9 | 4 | 0 | 44 |
+| Office at permit (234 rooms) | 222 | 0 | 11 | 1 | 44 |
 
-`space_profiles_vs_ifc`, `main` against this change (run 41712392709):
+`space_profiles_vs_ifc` (the existing scorer, which compares the faces of Revit's mesh that point up), `main` against this change:
 
 | | Area within 0.1% | `stored_solid` scored | `stored_solid_faces` scored, area within 0.1% | `stored_solid_approximate` scored, area within 0.1% | Room, record box |
 |---|---:|---|---|---|---:|
-| Office as built | 221 → 230 | 220, all | 10, 9 | 2, 0 | 12 → 0 |
-| Office at permit | 222 → 232 | 222, 221 | 11, 10 | 0 | 12 → 1 |
+| Office as built | 221 → 230 | 220, all | 9, 9 | 3, 0 | 12 → 0 |
+| Office at permit | 222 → 232 | 222, 221 | 0 | 11, 10 | 12 → 1 |
 | Core Interior | 116 | 116 | 0 | 0 | 0 |
 | RE1 Architecture | 11 | 11 | 0 | 0 | 0 |
 
-At permit the boundary distance is within 0.01 ft on 10 of the 11 `stored_solid_faces` rooms; the outline metric (which counts the vertices of Revit's ceiling steps, RE-313 §3) on 9: room 1436086 is 0.492 ft off on it and 0.000 ft on the boundary. The one `stored_solid` room at permit that is off (2T7gRjEFvBgRaNLZHAfExM, room 2611271, STAIRCASE, 66% in area) is RE-313's, unchanged; the walk closes a loop of 172.47 ft² on its box where Revit's area is 103.90, and the span does not change that, since the walk comes first.
+### Room 1671995, and what the scorer's top surface is
+
+Round 3 of the review found room 1671995 at 323% over Revit's area as built and 350% at permit, by this scorer. It compares the plan union of the faces of each mesh that point up, within 25 degrees of vertical (`normal.z > 0.9 · length`). Room 1671995's ceiling is mostly not that flat: Revit's export has 9 flat patches of 1218.33 ft² (1145.89 at permit) and 1 hole in its top surface. `tools/re/space_overlaps_vs_ifc.py` measures each space's plan three ways, in Revit's export and in rvt-rs's (run 41723543204, the office):
+
+| Room 1671995 | upward faces | floor (downward faces) | every face projected |
+|---|---:|---:|---:|
+| Revit, as built | 1218.33 | 5177.37 | 5178.07 |
+| rvt-rs, as built | 5154.12 | 5154.12 | 5154.12 |
+| Revit, at permit | 1145.89 | 5176.85 | 5178.38 |
+| rvt-rs, at permit | 5153.60 | 5153.60 | 5153.60 |
+
+The room is 5177 ft² in Revit's export, and rvt-rs is 0.45% under: its span's outer loop alone is 5176.72 ft² (run 41673400892) and the stored solid takes off the 6 holes and the notches of the columns that overlap its walls (22.6 ft²), which Revit's floor does not. Its box was 1.0% over. By the floor, over the whole office:
+
+| Area within 0.1% of Revit's | upward faces | floor | every face |
+|---|---:|---:|---:|
+| `stored_solid`, as built | 220 of 221 | 221 of 221 | 221 of 221 |
+| `stored_solid`, at permit | 221 of 222 | 222 of 222 | 222 of 222 |
+| `stored_solid_faces`, as built | 9 of 9 | 9 of 9 | 9 of 9 |
+| `stored_solid_approximate`, as built | 0 of 4 | 0 of 4 | 0 of 4 |
+| `stored_solid_approximate`, at permit | 10 of 11 | 10 of 11 | 10 of 11 |
+
+RE-313's 66% room at permit (2T7gRjEFvBgRaNLZHAfExM, room 2611271, STAIRCASE) is the one `stored_solid` room that the upward faces miss; by the floor it is within 0.1% of Revit's like the other 221. The scorer's top surface reads a room with a sloped or stepped ceiling as a fraction of itself. This change does not alter `space_profiles_vs_ifc` or its CI gates; the floor counts are in the new scorer, which Measure runs on every model, and the held-out models' floor counts are kept by the scrub.
+
+### A guard for 1671995: the four candidates
+
+The review asked for a discriminator that rejects 1671995 (both stages) and keeps every agreeing room, in four candidates. Measured on every room the span reads, and on the baseline of rooms the walk reads:
+
+1. **Wall overlap** (`space_overlaps_vs_ifc`, runs 41722753269 and 41723543204): the area of a room's top surface inside the top surfaces of the walls on its level, each shrunk by 0.02 ft. 1671995 has 1.65 ft² (0.03%) as built and 0.99 ft² (0.02%) at permit. The nine rooms that agree have 0.10% to 7.59% (7.59% is room 2297732, 10.01 ft²) and the 221 rooms the walk reads have 0.1% or more on 43, 1% on 34, 5% on 10 and up to 23.03%. The wall plans of rvt-rs's own export overlap the rooms that agree by more than they overlap 1671995. Not separating. The same test against the outlines of the other rooms on the level (what Revit's rooms cannot do) is 0.00% on every room of every source in both files.
+2. **Shell closure**: a closed shell needs the floor and ceiling faces, and `face_at` reads one or more on 3 of the 13 rooms as built (1383998: 1, 1671995: 1, 2297732: 2; `probe_re316_solid_extent`, run 41707078214). In plan form, every end shared by two edges, it holds on all 24 resolved rooms or they would not close. Not testable, and not separating where it is.
+3. **Volume**: the divergence-theorem volume needs the same faces. Not testable on 10 of the 13.
+4. **Containment**: every outline vertex inside the record box to 0.01 ft holds on all 24 (an outline spans its box to 0.001 ft, or up to 0.02 ft short of it). Not separating.
+
+None works, so no guard is applied. The reason none can: 1671995's outline is not wrong. The residual risk the review named, a face of another element within 1,024 bytes after the last listed face, is not closed by candidate 1 or 2 either: it would need a closed loop of the foreign faces inside the box and clear of every wall to be read as `stored_solid_faces`, and any foreign face that crosses or overlaps a wall makes the room `stored_solid_approximate`. No solid measured has a face of another element inside 6,826 bytes of its last where the list counts the walk's faces exactly.
 
 ### Revit's cached room areas
 
@@ -128,28 +160,28 @@ RE-101 §4 found a cache of each room's computed area in its partition (`u64 · 
 | `rac_advanced` 2019 | 0 of 21 | | |
 | `rac_basic` 2019 | 0 of 7 | | |
 
-For rooms 1422302, 1444351 and 1493531 the cache holds the record box's area (362.3 ft²), not the 291.5 ft² of Revit's export and of the outline. The cache is not there on every release (`rac_advanced`: none of 21 on 2019, 19 of 21 on 2024), so it is not used as evidence.
+(Counted under the first version's labels; the rooms are the same.) For rooms 1422302, 1444351 and 1493531 the cache holds the record box's area (362.3 ft²), not the 291.5 ft² of Revit's export and of the outline. The cache is not there on every release (`rac_advanced`: none of 21 on 2019, 19 of 21 on 2024), so it is not used as evidence.
 
 ### The Autodesk samples (no Revit export)
 
-`probe_re316_room_closure` on the 2019 and 2024 saves (run 41710248227):
+`probe_re316_room_closure` on the 2019 and 2024 saves (runs 41726486862 and 41728640203):
 
 | Project | Rooms | Closed by RE-101 | Resolved now | Box |
 |---|---:|---:|---:|---:|
 | `rac_basic` | 14 | 14 | 0 | 0 |
 | `rac_advanced` | 91 | 85 | 0 | 6 |
-| `rme_basic`, `rme_advanced` | 76 | 26 | 1 (`stored_solid_faces`, room 576007: 1887.2 ft² against its box's 1917.9) | 49 |
+| `rme_basic`, `rme_advanced` | 76 | 26 | 1 (`stored_solid_approximate`, room 576007: 1887.2 ft² against its box's 1917.9; 2 crossing and 2 overlapping pairs) | 49 |
 | Snowdon Towers (architectural, 2024) | 54 | 47 | 0 | 7 |
 
 ### Everything else
 
-Measure unfiltered, `-f base=main -f nordic=true -f r2025=true -f samples=true -f holdout=true` ([41712392709](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41712392709): this change at edd7a72a against `main` at 8664b94a; 93 models, every scorer including `space_profiles_vs_ifc`). Every scorer's output is identical on every model but three, and the exports' hashes move on exactly the models with a room that now closes:
+Measure unfiltered, `-f base=main -f nordic=true -f r2025=true -f samples=true -f holdout=true` ([41728355227](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41728355227): this change at a00e705d against `main` at 7fd339e2; every scorer including `space_profiles_vs_ifc` and the new `space_overlaps_vs_ifc`). Every scorer's output is identical on every model but five files, and the exports' hashes move on exactly the models with a room that now closes:
 
-- **Office as built and at permit**: the rows above. `exported.bounding_box_spaces` goes from 57 to 44 and from 56 to 45 (the 44 family instances, and room 3095831 at permit).
-- **`rme_basic` and `rme_advanced`, 12 files over the 6 releases 2015, 2019, 2024, 2025, 2026 and 2027**: one room each (576007, 1887.2 ft² against its box's 1917.9) takes an outline, `stored_solid_faces`, and box spaces go 50 → 49; no Revit export of them exists.
-- **Held out, counts only (BIM Speed's Revit 2021 project, Warmond)**: the one model outside the office whose scorer output changes. Area within 0.1%: 174 → 179 of the 179 paired spaces, off 5 → 0; outline and boundary within 0.01 ft 174 → 179; rooms on their record box 8 → 2 (both within 0.1%: rectangles), `stored_solid_faces` 6 (all within 0.1% and 0.01 ft), `stored_solid` 171 unchanged. Of the 8 rooms that kept their box, 5 were off in area and 6 now take an outline: the sixth was a rectangle already equal to Revit's. Vertices within 0.01 ft go from 127 to 126, which the scorer prints and no earlier summary did: that room's outline has vertices the box had not. This model was not read while the rule was found.
-- **Core Interior, RE1 Architecture, the R2025 models and the other held-out models**: unchanged, so no witness observation moves. `rac_advanced`, `rac_basic` and Snowdon Towers' architectural sample in every release: unchanged.
-- **Cost**: Measure's `rvt-ifc` export times are 0.98 times main's at the median across the 93 models, 1.03 and 1.05 on the office.
+- **Office as built and at permit**: the rows above. `exported.bounding_box_spaces` goes from 57 to 44 and from 56 to 45 (the 44 family instances, and room 3095831 at permit); the export counts 9 `stored_solid_faces` and 4 `stored_solid_approximate` as built, and 0 and 11 at permit.
+- **`rme_basic` and `rme_advanced`, 12 files over the 6 releases 2015, 2019, 2024, 2025, 2026 and 2027**: one room each (576007, 1887.2 ft² against its box's 1917.9) takes an outline, `stored_solid_approximate`, and box spaces go 50 → 49; no Revit export of them exists.
+- **Held out, counts only (BIM Speed's Revit 2021 project, Warmond)**: the one model outside the office whose scorer output changes. Area within 0.1%: 174 → 179 of the 179 paired spaces, off 5 → 0; outline and boundary within 0.01 ft 174 → 179; rooms on their record box 8 → 2 (both within 0.1%: rectangles), `stored_solid_faces` 6 (all within 0.1% and 0.01 ft, by the upward faces and by the floor), `stored_solid` 171 unchanged. Of the 8 rooms that kept their box, 5 were off in area and 6 now take an outline: the sixth was a rectangle already equal to Revit's. Vertices within 0.01 ft go from 127 to 126: that room's outline has vertices the box had not. This model was not read while the rule was found.
+- **Core Interior, RE1 Architecture, the R2025 models, Vitoria's spent pair and the other held-out models**: unchanged, so no witness observation moves. `rac_advanced`, `rac_basic` and Snowdon Towers' architectural sample in every release: unchanged.
+- **Refused**: no guard is applied, so no room is refused for a guard's reason. The rooms that keep their box are in §4.
 
 ## 4. What keeps its box
 
@@ -161,17 +193,20 @@ Measure unfiltered, `-f base=main -f nordic=true -f r2025=true -f samples=true -
 
 ## 5. Not claimed
 
-- That a `stored_solid_faces` outline equals Revit's outline on a release other than 2024: the evidence is one building, in two states, and one held-out project. 19 of the office's 21 scored `stored_solid_faces` rooms agree and 2 do not (1671995, twice), and nothing in the file tells them apart.
-- That the span holds no face of another element: no solid measured has one inside 6,826 bytes of its last face where the list counts the walk's faces exactly, and the rule admits at most the list's difference elsewhere.
+- That a `stored_solid_faces` or `stored_solid_approximate` outline equals Revit's on a release other than 2024: the evidence is one building, in two states, and one held-out project.
+- That the span holds no face of another element: the rule admits at most the list's difference within 1,024 bytes of the last listed face, and neither candidate 1 nor 2 of the review closes that (§3).
+- That the area of an approximate room is Revit's: 5 of the 15 office room scores are 0.45% to 0.68% under Revit's floor area, and 10 are equal. Whether Revit takes a column off the room is not in the file.
 - That a cylinder's arc is Revit's on any room: `rac_advanced` has no export.
 - Any volume of a resolved room (no prism marker is written).
-- That the 0.02 ft slack is Revit's: it is the 0.0164 ft the three rooms measured need, and the two paired are 0.68% and 0.47% under Revit's area.
 
 ## 6. Reproduce
 
 ```bash
-gh workflow run measure.yml --ref main -f ref=7d7c098c8ede1ae8bb55d559a4bfdf270a5e70fc -f base=none -f samples=true -f sample_years="2019 2024" \
+gh workflow run measure.yml --ref feat/rooms-unclosed-solids -f ref=b714122a343e659dc2834269fd0c217569069f8d -f base=none -f samples=true -f sample_years="2019" \
+  -f nordic=true -f models="nordic-office-as-built nordic-office-permit" -f probe=probe_re316_room_closure -f probe_scorer=- -f scorers=space_overlaps_vs_ifc
+gh workflow run measure.yml --ref feat/rooms-unclosed-solids -f ref=7d7c098c8ede1ae8bb55d559a4bfdf270a5e70fc -f base=none -f samples=true -f sample_years="2019 2024" \
   -f nordic=true -f models="nordic-office-* core-interior re1-architecture" \
   -f probe="probe_re316_solid_extent probe_re316_room_closure probe_re316_hostile_solid" -f probe_scorer="- - -" -f scorers=space_profiles_vs_ifc
-gh workflow run measure.yml --ref main -f ref=edd7a72a943ee0d99da416ecf86269722977c80c -f base=main -f nordic=true -f r2025=true -f samples=true -f holdout=true
+gh workflow run measure.yml --ref feat/rooms-unclosed-solids -f ref=a00e705d76ca728dbdbc3033df7c68aad94cd69e -f base=main -f nordic=true -f r2025=true -f samples=true -f holdout=true
+python3 tools/re/space_overlaps_vs_ifc.py model.ifc revit-export.ifc   # the floor and every-face areas, the walls and rooms a room covers
 ```
