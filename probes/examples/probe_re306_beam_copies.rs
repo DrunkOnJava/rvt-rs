@@ -56,7 +56,7 @@ fn main() -> anyhow::Result<()> {
         else {
             continue;
         };
-        if ifc_type != "IfcBeam" {
+        if !ifc_type.eq_ignore_ascii_case("IfcBeam") {
             continue;
         }
         let is_box = set.properties.iter().any(|p| {
