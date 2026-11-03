@@ -35,7 +35,7 @@ geometry were decoded.
 | Result | Meaning |
 |---|---|
 | `failure_mode.kind` is `corrupt_file` | The input could not be opened as a readable Revit OLE/CFB container. |
-| `failure_mode.kind` is `unsupported_revit_version` | The file opened, but its Revit version is outside the 2015 to 2027 releases rvt-rs reads. |
+| `failure_mode.kind` is `unsupported_revit_version` | The file opened, but its Revit version is outside the 2008 to 2027 releases rvt-rs reads. |
 | `failure_mode.kind` is `unsupported_model_layout` | The file is in a supported container/version range, but decoded records did not meet the production model confidence bar. |
 | `failure_mode.kind` is `incomplete_model` | Model elements were exported, but `export_diagnostics.confidence.unexported_element_records` records use an element-record layout whose ElementId this release cannot locate (RE-30), so the IFC is missing them. The readiness score is scaled down by the exported share. |
 | `failure_mode.kind` is `experimental_release` | Model elements were exported, but `file.release_support.status` is `experimental`: too few files of this Revit release are measured against Revit's own export to rely on its elements (#871). |
