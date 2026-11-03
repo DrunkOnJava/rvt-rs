@@ -16,7 +16,7 @@ The cause is the reader, not the file. `partition_element_records_2023::scan_rec
 
 Every record of a partition is `u32` ElementId, `u32` size, the `u16` tag of `ElementHeader` (1259 on this file), a `u16` count, the body, and a 12-byte trailer: a `u32`, a flag word and the size again. `ALD26 Before`'s `Partitions/0` (112,541,521 bytes) opens with one run of 12,626 of them from offset 0 to 2,534,666, 12,606 with an id `Global/ElemTable` declares. Revit's loaded families' own documents follow (RE-135), as runs of records with undeclared ids from 62,303,917 on. `Partitions/3` is one run of 941 records, `Partitions/1` one of 9. All 12,629 declared ids have a record.
 
-The 2024 walk cannot read this run: it accepts a flag word of `0` or `0x0100_0000` only, and the trailers of this partition's 86,081 records also hold `0x010008bd` (78), `0x010011cc` (22), `0x01000c54` (8) and `0x0100089b` (7). The flag test stops after 115 records, at offset 31,871 on `0x010011cc`. Testing the tag and the echo alone, and resuming at the next place the tag sits 8 bytes into a record that validates (`record_spans`), walks the whole run, and finds the same records as testing every place the tag sits (86,081 on `Partitions/0`, none only one way).
+What reads this run is a walk that tolerates any flag word. The 2024 walk cannot: it accepts a flag word of `0` or `0x0100_0000` only, and the trailers of this partition's 86,081 records also hold `0x010008bd` (78), `0x010011cc` (22), `0x01000c54` (8) and `0x0100089b` (7). The flag test stops after 115 records, at offset 31,871 on `0x010011cc`. Testing the tag and the echo alone (`record_spans`) walks the whole run. Where a record fails to validate the walk resumes at the next place the tag sits 8 bytes into one that does; that only matters after the run, through the loaded families' documents, and adds no declared span. Both ways find the same records as testing every place the tag sits (86,081 on `Partitions/0`, none only one way).
 
 A first measurement of this file stopped at offset 741,926 of 100,855,918 with a record-looking structure that repeated every few hundred bytes. It was the reader of that measurement, not the file: `Partitions/*` and the `Global` streams are stored in pages of 65,249 bytes that end in a 353-byte checksum, which `compression::strip_revit_page_checksums` removes before inflating, and a reader that does not loses the gzip members that straddle a checksum (11.7 MB of this partition). Nothing between runs in the stripped stream is a different record form.
 
@@ -38,7 +38,7 @@ Of the frames in the band, per partition:
 3. the frame's list names that record's id;
 4. the frame is not a curtain panel whose first word is a count (§5).
 
-A frame that fails one gets no id, as on 2024. The same rule gives `OST_Levels` frames an id (§6).
+A frame that fails one gets no id, as on 2024. `OST_Levels` frames are given an id by a related rule whose guard is a different one (§6).
 
 ## 4. The ids against Revit's export
 
@@ -66,7 +66,7 @@ On this file the curtain panels of one wall are pairs of elements: an even id th
 
 ## 6. Levels
 
-All seven `OST_Levels` frames that are standalone placed records, container unset and the 2015 to 2018 Level placement kind `0xffffef6f` (RE-181), are frames that do not open with their declared id (first word `ff ff ff ff`). `find_level_records_32` read first-prologue frames only, so the storey set was never recovered: with elements alone (run 41668542833) 687 of 1,136 elements sat on no storey, and rvt-rs wrote 9 storeys measured from element boxes, with no Level name, against Revit's 7. A Level frame that is a standalone placed record and sits in a declared record now takes that record's id, which the Level's name and elevation block, carrying the Level's own id, is joined to (`levels_from_records_and_blocks`) and checked against (`recovered_levels_are_a_storey_set`).
+All seven `OST_Levels` frames that are standalone placed records, container unset and the 2015 to 2018 Level placement kind `0xffffef6f` (RE-181), are frames that do not open with their declared id (first word `ff ff ff ff`). `find_level_records_32` read first-prologue frames only, so the storey set was never recovered: with elements alone (run 41668542833) 687 of 1,136 elements sat on no storey, and rvt-rs wrote 9 storeys measured from element boxes, with no Level name, against Revit's 7. A Level frame that is a standalone placed record and sits in a declared record now takes that record's id. The Level envelope's reference list is not read, so the guard here is not the one of §3: the Level's name and elevation block carries the Level's own id and is joined to the record's (`levels_from_records_and_blocks`), and the storey set is kept only if its Levels are as many as the records (`recovered_levels_are_a_storey_set`). All 7 Levels of this file pass it, with Revit's names and elevations.
 
 ## 7. Result
 
@@ -104,4 +104,4 @@ gh workflow run measure.yml --ref main -f ref=3a33d1161acb76a2346dadf926b843b81b
 - 4 curtain-panel walls and the 96 panel shells (§5).
 - 3 `IfcElementAssembly`, which are not instances.
 - Revit 2008 to 2017 and 2019 to 2023 files with frames of this kind: none is measured against an export. The records and the rule are the same bytes on every release of the 32-bit layout; the claim here is 2018's.
-- `ALD26 Project`'s 198 extra elements.
+- `ALD26 Project`'s 198 extra elements (95 pipe segments, 90 pipe fittings, 8 proxies, 2 roofs, 2 windows, 1 wall). `Before` writes none. Untested hypothesis, to be tried on files that may be opened: `Project` is the save after the renovation, and the 32-bit path has no phase filter (`native_phases` reads 2024 and later), so it may write elements of a phase Revit's export leaves out.
