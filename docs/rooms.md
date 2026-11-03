@@ -19,8 +19,8 @@ Read `RvtElementRecordGeometry.SpaceOutlineSource` on the `IfcSpace`:
 
 | Value | The body is | Its plan area is |
 |---|---|---|
-| `stored_solid` | the outline of the room's stored solid, extruded to the room's height | Revit's room area: within 0.1% of Revit's export on 623 of the 626 `stored_solid` rooms scored below, the office counted at both stages; the three others are 0.5%, 0.7% and 66% off (RE-313 §2, §3, RE-316 §3) |
-| `record_box` | the record's bounding box (turned with a family instance that is turned) | the box's area, not the space's. It equals the space's only when the space is a rectangle; the area is Revit's on none of the office's 3 room scores that keep their box (1 as built, 2 at permit; RE-316 §4) |
+| `stored_solid` | the outline of the room's stored solid, extruded to the room's height | Revit's room area: within 0.1% of Revit's export on 623 of the 624 `stored_solid` rooms scored below, the office counted at both stages; the other is 66% off (RE-313 §2, §3, RE-316 §3) |
+| `record_box` | the record's bounding box (turned with a family instance that is turned) | the box's area, not the space's. It equals the space's only when the space is a rectangle; the area is Revit's on none of the office's 5 room scores that keep their box (3 as built, 2 at permit; RE-316 §4) |
 | `saved_mesh` | the mesh Revit saved for the room (`rvt-ifc --saved-meshes`) | the mesh's; not scored |
 | `none` | no body (an Area) | not available |
 | `family_body` | a Revit Space or a family instance written as an `IfcSpace`, drawn as more than its box; its `BodySource` says how | not scored |
@@ -59,7 +59,7 @@ Measure runs the scorer on every reference model (`-f scorers=space_profiles_vs_
 |---|---:|---:|---:|---:|---|
 | Core Interior (2024) | 116 | 116 | 116 | 116 | 116 rooms, stored solid: 116, 116 |
 | RE1 Architecture (2025) | 11 | 11 | 11 | 11 | 11 rooms, stored solid: 11, 11 |
-| BIM4LCA office as built (2024) | 276 of Revit's 308 | 230 | 230 | 220 | 231 rooms, stored solid: 229, 229; 1 room, record box: 0, 0; 44 family instances, record box: 1, 1 |
+| BIM4LCA office as built (2024) | 276 of Revit's 308 | 230 | 230 | 220 | 229 rooms, stored solid: 229, 229; 3 rooms, record box: 0, 0; 44 family instances, record box: 1, 1 |
 | BIM4LCA office at building permit (2024) | 278 of Revit's 308 | 232 | 232 | 225 | 232 rooms, stored solid: 231, 231; 2 rooms, record box: 0, 0; 44 family instances, record box: 1, 1 |
 | R2025 purpose-made models with rooms (2025), 6 models | 12 | 12 | 12 | 12 | 12 rooms, stored solid: 12, 12 |
 | Held-out models (2022, 2024, 2025), 6 models | 24 | 24 | 24 | 24 | 24 rooms, stored solid: 24, 24 |
@@ -74,8 +74,7 @@ Held-out figures are Measure run 41680717786 (`main` at 21cb2efd), counts only. 
 
 What the misses are:
 
-- **Rooms that keep their box (1 on the office as built, 2 at building permit)**: the span to the next solid's tag holds other elements' faces (room 1671995, whose box is 329% over Revit's area as built), or collinear overlaps leave 14 ends unjoined (room 3095831, permit). 12 rooms on each file kept their box before RE-316 resolved the rest from the faces up to the next solid's tag (RE-316 §1, §4).
-- **Two rooms as built, 0.5% and 0.7% off in area** (2jhaHNpo55guKudM9wZa8C, 0qZtwNut1C6QT5uDplIc_N): the stored solid has a column that overlaps a wall and Revit's export does not take it off, as it does on seven rooms at building permit (RE-316 §3).
+- **Rooms that keep their box (4 on the office as built, 2 at building permit; 3 and 2 of them scored)**: the span to the next solid's tag holds other elements' faces (room 1671995, whose box is 329% over Revit's area as built); a column overlaps a wall and the outline falls 0.0164 ft short of the box (1820322, 1832504 and 2066902 as built, which a 0.02 ft slack would close at 0.5% and 0.7% off Revit's area on the two scored, because Revit's export does not take that column off); or collinear overlaps leave 14 ends unjoined (room 3095831, permit). 12 rooms on each file kept their box before RE-316 resolved the rest from the faces up to the next solid's tag (RE-316 §1, §4).
 - **Family instances written as spaces (44 on the office)** are 42 "Turning Free Space" discs and two "VOLUME" families that Revit's export draws from the family's geometry (a mapped representation); rvt-rs draws their record box, a square where the family is a circle (24.22 ft² against 19.01 ft² on the 1500 mm turning spaces listed). No issue covers these yet; #1262 and PR #1279 are about the terrain office's parking bays, a different set, though its rule (a family instance written as a space is left out where its family draws no model form) may change this one too.
 - **The office's other 30 spaces are its Areas**: Revit's export gives them a body, rvt-rs writes them without one (RE-191).
 - **One room at building permit** is read from its stored solid and is 66% off in area (172.77 against 103.90 ft²); its cause is not found (RE-313 §3).
@@ -87,7 +86,7 @@ What the misses are:
 - Room outlines of Revit 2026 and 2027 beyond the rectangles: on the held-out house none is within 0.01 ft of Revit's (#1260).
 - A room's `Height` and `NetVolume` as scored by `tools/re/qtos_vs_ifc.py`, not by this scorer.
 - Revit's phase filter: Revit leaves out a room by its phase parameter, which is not measured to be its created phase (docs/status.md).
-- Rooms whose stored solid closes only once read as a boundary (RE-316) on any release but Revit 2024: the evidence is one building in two states. The six `rac_advanced` rooms with round columns close in every release of the Autodesk sample, with no Revit export to score them against, and 49 of the 50 `rme` rooms (stepped floors and ceilings) keep their box.
+- Rooms whose stored solid closes only once read as a boundary (RE-316) on any release but Revit 2024: the evidence is one building in two states. The six `rac_advanced` rooms with round columns (read as arcs, they would close in every release of the Autodesk sample, but whether Revit takes a column off a room's area is not measured) and 49 of the 50 `rme` rooms (stepped floors and ceilings) keep their box.
 
 ## Check it yourself
 

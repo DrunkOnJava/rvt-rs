@@ -4,8 +4,8 @@
 **Issues:** #1260 (rooms first); follows RE-101 and RE-102 (a room's outline from its stored solid's faces), RE-313 (every `IfcSpace` scored against Revit's export) and RE-314
 **Artefacts:** the BIM4LCA office as built and at building permit (Revit 2024) with Revit 24.0.5's IFC4 exports; Autodesk's `rac_advanced`, `rac_basic`, `rme_basic` and `rme_advanced` sample projects (no Revit export of them is in CI); Core Interior and RE1 Architecture with Revit's exports; the R2025 models and the held-out models (counts only), all as Measure fetches them
 **Probes:** `probes/examples/probe_re316_room_solid_breaks.rs`, `probe_re316_room_native_faces.rs`, `probe_re316_solid_vertices.rs` and `probe_re316_room_closure.rs`
-**Runs:** Measure [41670081379](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41670081379) and [41673400892](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41673400892) (what breaks), [41673755000](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41673755000) (the native record), [41676245766](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41676245766) (the topology before the first face), [41686457484](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41686457484) (the rule, with the space scorer); the final change against `main`, unfiltered, in §3
-**Result:** positive on the office, narrowed. Of the 13 rooms of the office as built whose solids did not close, 12 now take an outline. The scorer pairs 11 of those with Revit's: 9 have Revit's area to 0.1% and Revit's outline to 0.01 ft, and 2 are 0.5% and 0.7% off. At building permit 10 of the 12 take an outline, all 10 with Revit's area to 0.1% and Revit's outline to 0.01 ft. The record box was off Revit's area by up to 329% on these rooms. Room 1671995 (both files) and 3095831 (permit) keep their box, and so do 49 of the 50 `rme` rooms, each for a measured reason (§4).
+**Runs:** Measure [41670081379](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41670081379) and [41673400892](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41673400892) (what breaks), [41673755000](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41673755000) (the native record), [41676245766](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41676245766) (the topology before the first face), [41684789474](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41684789474) and [41686457484](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41686457484) (the rule with and without a 0.02 ft slack and with arcs, §4); the change as it lands, unfiltered, in §3
+**Result:** positive on the office, narrowed to what Revit's export agrees with. Of the 13 rooms of the office as built whose stored solids did not close, 9 now take an outline, and all 9 have Revit's area to 0.1% and Revit's outline to 0.01 ft (their record boxes were off by 3% to 67%). At building permit 10 of the 12 do, all 10 to 0.1% and 0.01 ft. The other rooms keep their box, each for a measured reason (§4): office rooms 1671995 (329% over Revit's area as built), 1820322, 1832504 and 2066902 as built, 1671995 and 3095831 at permit, the six `rac_advanced` rooms with round columns, and 49 of the 50 `rme` rooms.
 
 ## 1. Why the solids did not close
 
@@ -27,9 +27,9 @@ Two readings were measured and are negative:
 
 ## 2. The rule
 
-Where the faces RE-101 walks close on the room's record box, nothing changes. Where they do not, `partition_room_boundaries` now reads every face up to the next solid's tag (`solid_faces_to_next_solid`; none if no tag follows within 4 MiB) and rules the solid out if any vertical face reaches outside the record box, which holds the whole solid (113 of room 1671995's 327 faces do). Each wall face's plan edge is directed so the room is on its left, which the face's own frame already does: on all 221 and 222 rooms of the office RE-101 keeps, on Core Interior's 116, RE1's 11 and the 26 to 85 each of the Autodesk samples keep, the directed edges join head to tail. A round column's cylinder is read as an arc, sampled to 0.0005 ft, run clockwise, and joined to the walls only where its ends meet theirs.
+Where the faces RE-101 walks close on the room's record box, nothing changes. Where they do not, `partition_room_boundaries` now reads every face up to the next solid's tag (`solid_faces_to_next_solid`; none if no tag follows within 4 MiB), and gives up on the solid if any vertical face reaches outside the record box, which holds the whole solid (113 of room 1671995's 327 faces do), or if it holds a cylinder. Each wall face's plan edge is directed so the room is on its left, which the face's own frame already does: on all 221 and 222 rooms of the office RE-101 keeps, Core Interior's 116, RE1's 11 and the 14 to 85 each of the Autodesk samples keep, the directed edges join head to tail.
 
-`region_boundary` cuts every segment where another crosses or touches it, reads the winding number to either side of each piece, keeps the pieces with the room on one side only, and gives up unless every point is left by one piece and entered by one. A column that overlaps a wall takes its footprint off the room where they overlap and adds nothing outside; a step of up to 0.0025 ft (Revit's short-curve tolerance is 1/32 inch) joins two ends; and the outline may fall up to 0.02 ft short of the record box where a column's back stands behind the wall's face (0.0164 ft on three office rooms), but never beyond it.
+`region_boundary` cuts every segment where another crosses or touches it, reads the winding number to either side of each piece, keeps the pieces with the room on one side only, and gives up unless every point is left by one piece and entered by one. A column that overlaps a wall takes its footprint off the room where they overlap and adds nothing outside it. A step of up to 0.0025 ft joins two ends (Revit's short-curve tolerance is 1/32 inch, 0.0026 ft). The outline must span the record box to 0.001 ft, as RE-101's does.
 
 An outline resolved this way carries no prism marker: no room's volume is measured against Revit's for them.
 
@@ -37,7 +37,7 @@ An outline resolved this way carries no prism marker: no room's volume is measur
 
 ### The office, against Revit's own IFC4 export
 
-Room by room, the record box's area, Revit's area, and the outline's area (ft²), as built:
+Room by room, as built: the record box's area, Revit's area, and the outline's area (ft²).
 
 | Room | Box | Revit | Outline | Cause |
 |---|---:|---:|---:|---|
@@ -49,47 +49,43 @@ Room by room, the record box's area, Revit's area, and the outline's area (ft²)
 | 1700966 | 4774.18 | 3259.86 | 3259.85 | step |
 | 1736690 | 2846.73 | 2049.24 | 2049.25 | step |
 | 1736726 | 367.14 | 293.43 | 293.43 | record between faces |
-| 1820322 | 1882.11 | none (not paired) | 1865.97 | column overlaps wall |
-| 1832504 | 465.18 | 440.31 | 437.31 | column overlaps wall |
-| 2066902 | 1542.77 | 638.23 | 635.23 | column overlaps wall |
 | 2297732 | 135.82 | 131.76 | 131.76 | step |
-| 1671995 | 5228.48 | 1218.33 | box | the span runs into other elements |
 
-The two rooms 0.5% and 0.7% off are the ones where the stored solid has a column that overlaps the wall by 0.0164 ft and Revit's export does not take it off: the outline is the solid's, with the 3.0 ft² notch, and the boundary distance to Revit's is the notch's depth, 1.329 ft. On seven rooms at building permit Revit takes the same kind of column off (1.722 ft² each), as the outline does. Room 1820322 is one of the two rooms whose top surface Revit's export gives no area, so it is not scored.
+At building permit the 10 rooms 1436086, 1480292, 1736676, 1736690, 1736720, 1743273, 1743279, 1743309, 1743715 and 2302311 take outlines, all with Revit's area to 0.1% (1736720: 4783.05 box, 3265.29 Revit, 3265.29 outline).
 
-At building permit the 10 rooms 1436086, 1480292, 1736676, 1736690, 1736720, 1743273, 1743279, 1743309, 1743715 and 2302311 take outlines and all 10 have Revit's area to 0.1% (the largest, 1736720, 3265.29 against Revit's 3265.29). Rooms 1671995 (box 5228.48, Revit 1145.89) and 3095831 (box 6642.03, Revit 1864.74) keep their box.
+`space_profiles_vs_ifc`, `main` against this change:
 
-`space_profiles_vs_ifc` (run 41686457484, `main` with this change):
+| | Area within 0.1% | Room, stored solid | Room, record box |
+|---|---:|---|---:|
+| Office as built | 221 → 230 | 220 → 229, all within 0.1% | 12 → 3 |
+| Office at permit | 222 → 232 | 222 → 232 (231 within 0.1%) | 12 → 2 |
+| Core Interior | 116 | 116 | 0 |
+| RE1 Architecture | 11 | 11 | 0 |
 
-| | Area within 0.1% | within 1% | Room, stored solid | Room, record box |
-|---|---:|---:|---|---:|
-| Office as built | 221 → 230 | 221 → 232 | 220 → 231 (229 within 0.1%) | 12 → 1 |
-| Office at permit | 222 → 232 | 222 → 232 | 222 → 232 (231 within 0.1%) | 12 → 2 |
-| Core Interior | 116 | 116 | 116 | 0 |
-| RE1 Architecture | 11 | 11 | 11 | 0 |
-
-The one stored-solid room at permit that is off (2T7gRjEFvBgRaNLZHAfExM, 66% in area) is the one RE-313 left unexplained and is unchanged.
+The one stored-solid room at permit that is off (2T7gRjEFvBgRaNLZHAfExM, 66% in area) is the one RE-313 left unexplained, and it is unchanged. PENDING: its ElementId.
 
 ### The Autodesk samples (no Revit export)
 
-`probe_re316_room_closure` on the 2019 and 2023 saves (the other releases' counts are in the run summary):
+`probe_re316_room_closure` on the 2019 and 2023 saves:
 
 | Project | Rooms | Closed by RE-101 | Closed now | Box |
 |---|---:|---:|---:|---:|
 | `rac_basic` | 14 | 14 | 14 | 0 |
-| `rac_advanced` | 91 | 85 | 91 | 0 |
+| `rac_advanced` | 91 | 85 | 85 | 6 |
 | `rme_basic`, `rme_advanced` | 76 | 26 | 27 | 49 |
 
-The six `rac_advanced` rooms close because of their cylinders. Their arcs end at the ends of the planar necks, which is a check no guess of the radius would pass, but no Revit export of the sample says their area. 43 of the 85 rooms RE-101 keeps in `rac_advanced` have round columns it ignores: the outline with the columns taken off is 0.2% to 1.2% smaller (room 177304: 3531.7 ft² against 3521.8). They are left as they were.
+With their arcs the six `rac_advanced` rooms would close (the probe's `with arcs` column), and 43 of the 85 rooms RE-101 keeps in the same file have round columns it ignores, its outline 0.2% to 1.2% larger than the one with the columns taken off (room 177304: 3531.7 ft² against 3521.8). One of those two readings is wrong and no Revit export of the sample says which, so both are left as they are.
 
 ### Everything else
 
-PENDING: Measure unfiltered against `main` (run 41688293656).
+PENDING: Measure unfiltered against `main`.
 
 ## 4. What keeps its box
 
 - **Office room 1671995, both files**: the span to the next solid's tag holds 327 faces, 113 of which reach outside the room's box. Without that rule the same code gave an outline of 5154 ft² against Revit's 1218 (1146 at permit), spanning the box: a wrong outline. The room's solid is not bounded by its record.
+- **Office rooms 1820322, 1832504 and 2066902, as built**: a column overlaps the wall by 0.0164 ft and its back stands behind the wall's face, so the resolved outline falls 0.0164 ft short of the record box on one side. Allowing that (a 0.02 ft slack, run 41686457484) closes all three, and the two that Revit's export scores (1832504, 2066902) came out 0.7% and 0.5% off Revit's area (437.31 against 440.31, 635.23 against 638.23) with the boundary 1.329 ft from Revit's: the stored solid takes the column off and Revit's export does not take that column off, while it takes off the 1.722 ft² columns of seven rooms at permit. Room 1820322 is one of the two rooms whose top surface Revit's export gives no area, so it cannot be scored. Every room that closes on the box without a slack has Revit's area to 0.1%; with it, two do not, so it was dropped, and the boxes of the two (465.18 and 1542.77 ft² against Revit's 440.31 and 638.23) stay.
 - **Office room 3095831 (permit)**: 14 ends at y = 35.269 ft, in pairs 0.656 and 1.312 ft apart down a 100 ft wall, are not joined; the columns along it share the wall's line.
+- **The six `rac_advanced` rooms** (177330, 214970, 215140, 215177, 216415, 217813): round columns, §3.
 - **49 of the 50 `rme` rooms**: stepped floors and ceilings. The faces that reach the ceiling instead of the floor close for 33 of the 50, and 24 of those are the box itself, but 9 differ from it (8 by 1% to 11%, and room 575874 at 22%: 5105 ft² against a box of 23323), no Revit export of these rooms exists, and a bulkhead that hangs from the ceiling would be taken for a wall. They stay boxes.
 - **The 44 family instances written as spaces** are #1262's.
 
@@ -98,7 +94,7 @@ PENDING: Measure unfiltered against `main` (run 41688293656).
 - That a resolved outline equals Revit's outline on a release other than 2024: the evidence is one building, in two states. No room of another release is scored.
 - That a cylinder's arc is Revit's on any room: `rac_advanced` has no export.
 - Any volume of a resolved room (no prism marker is written).
-- That 12 of 13 and 10 of 12 will hold on another building: the rules were found on these 25 rooms, and the held-out counts in §3 are the only test on others.
+- That the 9 and 10 rooms will hold on another building: the rules were found on these 25 rooms, and the held-out counts in §3 are the only test on others.
 
 ## 6. Reproduce
 
