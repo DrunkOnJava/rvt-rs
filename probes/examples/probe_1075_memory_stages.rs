@@ -1,7 +1,7 @@
 //! #1075: where `rvt-ifc`'s memory goes, stage by stage.
 //!
 //! FACT under test: the export's peak resident memory (10.3 GB on the
-//! reporter's 202 MB model) is held by one stage. Candidates: the inflated
+//! reporter's 438 MB model) is held by one stage. Candidates: the inflated
 //! partitions `RevitFile` keeps for the handle's lifetime, the element walk
 //! and export, the export's diagnostics, the saved-graphics pass, and the
 //! STEP text built whole in memory before it is written.

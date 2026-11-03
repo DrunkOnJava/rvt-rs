@@ -70,19 +70,20 @@ pub fn write_step_with_options(model: &IfcModel, options: &StepOptions) -> Strin
 /// [`write_step_with_options`], writing the text to `out` as it is built
 /// instead of returning it, so a large model's text is never held whole in
 /// memory (#1075). The bytes are the same. Returns how many were written.
+/// Pass `&mut writer` to keep the writer.
 ///
 /// # Errors
 ///
 /// The first error `out` returns. What was written before it stays written.
-pub fn write_step_to(
+pub fn write_step_to<W: std::io::Write>(
     model: &IfcModel,
     options: &StepOptions,
-    out: &mut dyn std::io::Write,
-) -> std::io::Result<usize> {
+    mut out: W,
+) -> std::io::Result<u64> {
     let now = options.timestamp.unwrap_or_else(unix_seconds);
     let mut w = StepWriter::new(now);
     w.sink = Some(Sink {
-        writer: out,
+        writer: &mut out,
         written: 0,
         error: None,
     });
@@ -397,7 +398,7 @@ struct StepWriter<'a> {
 /// error.
 struct Sink<'a> {
     writer: &'a mut dyn std::io::Write,
-    written: usize,
+    written: u64,
     error: Option<std::io::Error>,
 }
 
@@ -527,7 +528,7 @@ impl StepWriter<'_> {
         if let Some(sink) = &mut self.sink {
             if sink.error.is_none() {
                 match sink.writer.write_all(self.out.as_bytes()) {
-                    Ok(()) => sink.written += self.out.len(),
+                    Ok(()) => sink.written += self.out.len() as u64,
                     Err(error) => sink.error = Some(error),
                 }
             }
@@ -4117,7 +4118,7 @@ impl StepWriter<'_> {
         out
     }
 
-    fn finish_to_sink(mut self) -> std::io::Result<usize> {
+    fn finish_to_sink(mut self) -> std::io::Result<u64> {
         self.out.push_str("END-ISO-10303-21;\n");
         self.spill();
         match self.sink {

@@ -333,16 +333,29 @@ fn run(args: Args) -> anyhow::Result<()> {
     // it is built, after the file handle and the partitions it holds inflated
     // are released (#1075).
     let mut observed_step = None;
+    drop(rf);
     let written = if args.observation.is_some() {
         let step = write_step_with_options(&model, &options);
         std::fs::write(&out_path, step.as_bytes())?;
-        let written = step.len();
+        let written = step.len() as u64;
         observed_step = Some(step);
         written
     } else {
-        drop(rf);
-        let mut file = std::fs::File::create(&out_path)?;
-        write_step_to(&model, &options, &mut file)?
+        // Written beside the output and renamed when whole, so a failed or
+        // killed export never leaves a truncated IFC under the output's name.
+        let mut partial = out_path.clone().into_os_string();
+        partial.push(".partial");
+        let partial = PathBuf::from(partial);
+        let streamed = std::fs::File::create(&partial)
+            .and_then(|file| write_step_to(&model, &options, file))
+            .and_then(|written| std::fs::rename(&partial, &out_path).map(|()| written));
+        match streamed {
+            Ok(written) => written,
+            Err(error) => {
+                let _ = std::fs::remove_file(&partial);
+                return Err(error.into());
+            }
+        }
     };
     eprintln!("rvt-ifc: wrote {written} bytes to {}", out_path.display());
     for line in export_summary(&diagnostics, args.diagnostics.is_some()) {
