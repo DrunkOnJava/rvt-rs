@@ -38,8 +38,8 @@
 //! its area scheme on its Level enclose ([`crate::partition_area_boundaries`]),
 //! and the point is two `f64`s at [`AREA_POINT_OFFSET`] in the payload of the
 //! Area's data object (RE-153). On the BIM4LCA office all 30 Areas, as built
-//! and at building permit, take Revit's outline: the same region to 0.001
-//! square feet, 28 with Revit's vertices and the rest with the same outline
+//! and at building permit, equal Revit's in area (within 0.1%) and in outline
+//! (within 0.01 ft), and 29 of the 30 in the mesh's vertices
 //! (`reports/element-framing/RE-317-area-boundaries.md`).
 //!
 //! # Honesty
@@ -51,7 +51,9 @@
 //!   none, as before.
 //! - The base offset of the Area is read as zero and its height as the
 //!   distance to the next storey, which is what the office measures; the
-//!   Area's own "up to level" is not read.
+//!   Area's own "up to level" is not read. A Level is skipped as the next
+//!   storey only where its Building Story setting is read as off, and all ten
+//!   of the office's Levels are storeys, so that case is not measured.
 //! - Revit 2024 only, the one release measured; elsewhere nothing is read
 //!   (fail closed).
 

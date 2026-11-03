@@ -73,6 +73,7 @@ The prototype that fixed the rule (a Python version of §3 over the probe's line
 - Revit releases other than 2024: no Area of another release is measured against an export, and nothing is read (fail closed).
 - Boundary lines that are not along an axis (a slanted line, an arc): none on the office. A group that has one is not read, so its Areas keep no body, as before.
 - An Area's base offset and its own "up to level": the office has none non-zero, and the file's fields for them are not read.
+- A Level that is not a building story between an Area's Level and the next storey: Revit takes the height to the next building story, and rvt-rs skips a Level only where its Building Story setting is read as off. All ten of the office's Levels are storeys, so the skip is not measured.
 - An Area on the top storey, which Revit draws with a height of one unit: nothing on the office, and the Area is left without a body.
 - Area polylines and the other Area kinds (`OST_AreaPolylines`, -2000830).
 - Revit's phase filter, which skips a spatial element in an invalid phase (RE-184).
