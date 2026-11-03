@@ -108,10 +108,12 @@ as Revit's exporter does with "Export base quantities" off (RE-242).
 It is not a converter for arbitrary models: most parameters, family
 geometry (doors and windows are drawn from the mesh Revit saved for their
 display by default, and any other family instance with the experimental
-`--saved-meshes` option, RE-78), roofs over a T or U footprint and roofs by extrusion outside Revit 2025, the top of
+`--saved-meshes` option, RE-78), hip roofs over a T or U footprint, roofs sloped by several slope arrows of the configuration of puzzbobb's U, where Revit slopes the two long outer walls along the arms only (RE-307; no other roof of the configuration is measured), and roofs by extrusion outside Revit 2025, the top of
 walls Revit steps over a floor that covers them in part (29 of the BIM4LCA office's as built and 26 at permit, #1067), the boundaries of
 rooms whose stored solid does not close and opening profiles are not
 decoded, and rvt-rs does not edit Revit model data.
+
+**Rooms.** Each `IfcSpace` says in `RvtElementRecordGeometry.SpaceOutlineSource` whether its outline was read from the room's stored solid (`stored_solid`), is the record's bounding box (`record_box`), was drawn from a saved mesh or a family's body, or has no body (an Area), and the diagnostics count the boxes (`exported.bounding_box_spaces`). Measure scores every space's plan area and outline against Revit's export, and CI gates Core Interior (116 of 116 rooms) and RE1 Architecture (11 of 11). The rooms of Revit 2026 and 2027 are boxes until their stored solids are read (#1260, PR #1288). [docs/rooms.md](rooms.md) says what to trust per release, and RE-313 has the runs.
 
 ## Finding history
 
@@ -1074,7 +1076,8 @@ prints it from any installed build.
   Revit 2008 to 2014 file an unsupported version in the viewer (#1247,
   #1266). With `--saved-meshes` it draws more bodies, not all of them
   Revit's (RE1 Plumbing's new pipe fittings are 1.44 to 1.47 of Revit's
-  volume). Its door-type change measures on no file here. Not every case
+  volume; RE-311 found that figure the scorer's, taken about the file's
+  origin, and the tees 1.14 about their own centre). Its door-type change measures on no file here. Not every case
   #1247 reported is fixed; `[0.12.2]` in [`CHANGELOG.md`](../CHANGELOG.md)
   says which are not.
 - **v0.12.1** (2026-11-01) makes exports of Revit 2015 to
