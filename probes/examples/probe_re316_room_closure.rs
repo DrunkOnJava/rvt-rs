@@ -22,8 +22,9 @@ use std::collections::BTreeMap;
 use rvt::RevitFile;
 use rvt::research::element_record_plan_profiles::{PlanProfile, plan_profile_from_lines};
 use rvt::research::partition_room_boundaries::{
-    BOX_TOLERANCE_FEET, OutlineAnchor, ROOM_VERTEX_TOLERANCE_FEET, room_outline_at, solid_faces,
-    solid_headers, span_outline_at,
+    BOX_TOLERANCE_FEET, FaceKind, OutlineAnchor, ROOM_STEP_TOLERANCE_FEET,
+    ROOM_VERTEX_TOLERANCE_FEET, region_boundary, room_outline_at, solid_faces,
+    solid_faces_to_next_solid, solid_headers, span_outline_at,
 };
 use rvt::walker::InstanceField;
 
@@ -52,14 +53,18 @@ fn area(profile: &PlanProfile) -> f64 {
 }
 
 fn snap(lines: &mut [[f64; 4]]) {
+    snap_within(lines, ROOM_VERTEX_TOLERANCE_FEET);
+}
+
+fn snap_within(lines: &mut [[f64; 4]], tolerance: f64) {
     let mut held: Vec<(f64, f64)> = Vec::new();
     for line in lines.iter_mut() {
         for end in [0, 2] {
             let point = (line[end], line[end + 1]);
-            let near = held.iter().copied().find(|q| {
-                (q.0 - point.0).abs() <= ROOM_VERTEX_TOLERANCE_FEET
-                    && (q.1 - point.1).abs() <= ROOM_VERTEX_TOLERANCE_FEET
-            });
+            let near = held
+                .iter()
+                .copied()
+                .find(|q| (q.0 - point.0).abs() <= tolerance && (q.1 - point.1).abs() <= tolerance);
             match near {
                 Some(q) => (line[end], line[end + 1]) = q,
                 None => held.push(point),
@@ -234,6 +239,43 @@ fn main() -> anyhow::Result<()> {
             if ceiling.as_ref().is_some_and(|p| in_cache(&cache, area(p))) {
                 cached_ceiling.0 += 1;
             }
+        }
+        if walked.is_none() && now.is_none() {
+            let faces = solid_faces_to_next_solid(buf, header);
+            let tolerance = BOX_TOLERANCE_FEET;
+            let strays = faces
+                .iter()
+                .filter(|f| match f.kind() {
+                    FaceKind::Vertical { low, high } => {
+                        low < bbox[2] - tolerance
+                            || high > bbox[5] + tolerance
+                            || f.plan_edge().is_some_and(|(e, _)| {
+                                e[0].min(e[2]) < bbox[0] - tolerance
+                                    || e[0].max(e[2]) > bbox[3] + tolerance
+                                    || e[1].min(e[3]) < bbox[1] - tolerance
+                                    || e[1].max(e[3]) > bbox[4] + tolerance
+                            })
+                    }
+                    _ => false,
+                })
+                .count();
+            let mut floor_lines: Vec<[f64; 4]> = faces
+                .iter()
+                .filter_map(|f| f.plan_edge())
+                .filter(|(_, bottom)| (bottom - bbox[2]).abs() <= BOX_TOLERANCE_FEET)
+                .map(|(edge, _)| edge)
+                .collect();
+            snap_within(&mut floor_lines, ROOM_STEP_TOLERANCE_FEET);
+            let why = match region_boundary(&floor_lines) {
+                Ok(pieces) => format!("boundary of {} pieces, no profile on the box", pieces.len()),
+                Err(failure) => format!("{failure:?}"),
+            };
+            println!(
+                "room {id}: span faces {} (stray {strays}), floor edges {}; {}",
+                faces.len(),
+                floor_lines.len(),
+                why.chars().take(600).collect::<String>()
+            );
         }
         println!(
             "room {id} {stream} box {box_area:.3} ({}) walked {} now {} ceiling {} [{class}]",

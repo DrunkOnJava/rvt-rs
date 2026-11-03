@@ -99,6 +99,12 @@ pub const PRISM_TOLERANCE_FEET: f64 = 1e-3;
 /// 355008.
 pub const ROOM_VERTEX_TOLERANCE_FEET: f64 = 1e-4;
 
+/// How far apart two wall faces' ends may lie and still meet where the room's
+/// faces are resolved to a boundary (RE-316). Walls on lines 0.0007 to 0.0015
+/// ft apart leave a step the room's faces do not cross on six rooms of the
+/// BIM4LCA office; Revit's own short-curve tolerance is 1/32 inch, 0.0026 ft.
+pub const ROOM_STEP_TOLERANCE_FEET: f64 = 0.0025;
+
 /// The most plan segments [`region_boundary`] resolves.
 pub const BOUNDARY_SEGMENTS_MAX: usize = 4096;
 
@@ -345,10 +351,11 @@ fn outline_from_faces(
             lines.push(edge);
         }
     }
-    snap_ends(&mut lines);
     let profile = if resolve {
-        plan_profile_from_lines(&region_boundary(&lines)?)?
+        snap_ends_within(&mut lines, ROOM_STEP_TOLERANCE_FEET);
+        plan_profile_from_lines(&region_boundary(&lines).ok()?)?
     } else {
+        snap_ends(&mut lines);
         plan_profile_from_lines(&lines)?
     };
     profile_on_box(profile, bbox)
@@ -559,6 +566,19 @@ fn intern_point(points: &mut Vec<(f64, f64)>, p: (f64, f64)) -> usize {
     }
 }
 
+/// Why [`region_boundary`] gave no boundary.
+#[derive(Debug, Clone, PartialEq)]
+pub enum BoundaryFailure {
+    /// There are fewer than three segments, more than
+    /// [`BOUNDARY_SEGMENTS_MAX`], or one has an end that is not finite.
+    Segments(usize),
+    /// Fewer than three pieces bound the region.
+    NoRegion,
+    /// The points where the pieces that bound the region do not run one in
+    /// and one out.
+    Unlinked(Vec<(f64, f64)>),
+}
+
 /// The boundary of the region that the oriented plan `segments` wind around
 /// at least once, as undirected segments that close into loops (RE-316). A
 /// segment's room is on its left, so a wall of the room runs counter-clockwise
@@ -569,13 +589,12 @@ fn intern_point(points: &mut Vec<(f64, f64)>, p: (f64, f64)) -> usize {
 /// only, and `None` is returned unless the kept pieces leave every point with
 /// one piece in and one out.
 #[allow(clippy::needless_range_loop)]
-pub fn region_boundary(segments: &[[f64; 4]]) -> Option<Vec<[f64; 4]>> {
+pub fn region_boundary(segments: &[[f64; 4]]) -> Result<Vec<[f64; 4]>, BoundaryFailure> {
     let count = segments.len();
-    if !(3..=BOUNDARY_SEGMENTS_MAX).contains(&count) {
-        return None;
-    }
-    if segments.iter().flatten().any(|v| !v.is_finite()) {
-        return None;
+    if !(3..=BOUNDARY_SEGMENTS_MAX).contains(&count)
+        || segments.iter().flatten().any(|v| !v.is_finite())
+    {
+        return Err(BoundaryFailure::Segments(count));
     }
     let mut cuts: Vec<Vec<f64>> = vec![Vec::new(); count];
     for first in 0..count {
@@ -642,7 +661,7 @@ pub fn region_boundary(segments: &[[f64; 4]]) -> Option<Vec<[f64; 4]>> {
     kept.sort_unstable();
     kept.dedup();
     if kept.len() < 3 {
-        return None;
+        return Err(BoundaryFailure::NoRegion);
     }
     let mut leaving = vec![0usize; points.len()];
     let mut entering = vec![0usize; points.len()];
@@ -650,31 +669,38 @@ pub fn region_boundary(segments: &[[f64; 4]]) -> Option<Vec<[f64; 4]>> {
         leaving[from] += 1;
         entering[to] += 1;
     }
-    if leaving
+    let unlinked: Vec<(f64, f64)> = leaving
         .iter()
         .zip(&entering)
-        .any(|(out, into)| out != into || *out > 1)
-    {
-        return None;
+        .zip(&points)
+        .filter(|((out, into), _)| out != into || **out > 1)
+        .map(|(_, point)| *point)
+        .collect();
+    if !unlinked.is_empty() {
+        return Err(BoundaryFailure::Unlinked(unlinked));
     }
-    Some(
-        kept.iter()
-            .map(|&(from, to)| [points[from].0, points[from].1, points[to].0, points[to].1])
-            .collect(),
-    )
+    Ok(kept
+        .iter()
+        .map(|&(from, to)| [points[from].0, points[from].1, points[to].0, points[to].1])
+        .collect())
 }
 
 /// Move every end within [`ROOM_VERTEX_TOLERANCE_FEET`] of an earlier one
 /// onto it.
 fn snap_ends(lines: &mut [[f64; 4]]) {
+    snap_ends_within(lines, ROOM_VERTEX_TOLERANCE_FEET);
+}
+
+/// Move every end within `tolerance` of an earlier one onto it.
+fn snap_ends_within(lines: &mut [[f64; 4]], tolerance: f64) {
     let mut held: Vec<(f64, f64)> = Vec::new();
     for line in lines.iter_mut() {
         for end in [0, 2] {
             let point = (line[end], line[end + 1]);
-            let near = held.iter().copied().find(|q| {
-                (q.0 - point.0).abs() <= ROOM_VERTEX_TOLERANCE_FEET
-                    && (q.1 - point.1).abs() <= ROOM_VERTEX_TOLERANCE_FEET
-            });
+            let near = held
+                .iter()
+                .copied()
+                .find(|q| (q.0 - point.0).abs() <= tolerance && (q.1 - point.1).abs() <= tolerance);
             match near {
                 Some(q) => (line[end], line[end + 1]) = q,
                 None => held.push(point),
