@@ -345,11 +345,11 @@ AI changes all four:
 
 ### 6.4 Regulatory & legal context
 
-- **Autodesk v. ODA (2006)** — trademark suit. Settled. Autodesk lost the ability to use trademark to stop RVT reimplementations.
-- **ODA BimRv SDK** — commercial, ~$500–5k/yr member pricing. Not available to non-members. Gated by NDA.
-- **No cryptographic protection on RVT files themselves** — confirmed in this recon. Data is structured; not obfuscated.
-- **GPL-3 / Apache-2 clean-room implementation has no legal risk** — DMCA doesn't apply (no DRM circumvention), copyright doesn't apply (interoperability exception under 17 USC 1201(f)).
-- **Autodesk Forge ToS** does restrict "deriving the RVT format" — but those ToS only bind Forge users, not independent researchers.
+- **Autodesk and the Open Design Alliance** — Autodesk's 2006 suit, over the TrustedDWG watermark the ODA's libraries wrote into DWG files, and the DWG trademark proceedings that followed concerned DWG, not RVT. The two announced a settlement of the trademark disputes on 2010-04-09 ([Autodesk's announcement](https://investors.autodesk.com/news-releases/news-release-details/autodesk-and-open-design-alliance-reach-agreement-autodesk-dwg)).
+- **ODA BimRv SDK** — a commercial SDK licensed to ODA members under their agreements. rvt-rs uses none of it (`CLEANROOM.md`).
+- **No encryption in the files read for this work** — their streams are structured data that rvt-rs inflates and reads without any key (§3.3: up to 17:1 on inflation, which encrypted data does not give). That covers the files in this repository's corpora, not every RVT file; [`compatibility.md`](compatibility.md) lists encrypted or password-protected files as unsupported.
+- **The project's clean-room approach is intended to reduce, not eliminate, legal risk.** In the United States, 17 U.S.C. § 1201(f) contains a limited interoperability provision subject to statutory conditions. This is not legal advice; the implications depend on the circumstances.
+- **Autodesk Platform Services (formerly Forge)** — rvt-rs does not use it or its terms.
 
 ## 7. Status & next steps
 
@@ -2243,6 +2243,26 @@ Revit's export writes a floor's `Qto_SlabBaseQuantities.NetVolume` as the volume
 ## Addendum — RE-249 a floor's GrossArea (2026-10-26)
 
 Revit's export writes a floor's `Qto_SlabBaseQuantities.GrossArea` as the area of the profile its slab extrudes, its sketch outline less its holes: equal to rvt-rs's profile on all 40 of the BIM4LCA office's slabs drawn from their record box, where the slab's other quantities follow its body less often (a sloped slab's record box is deeper than its layers). Stair landings' slabs get none. rvt-rs writes it on each floor drawn as one extrusion: 31 equal on the office, none different. Report: `reports/element-framing/RE-249-slab-gross-area.md`.
+
+## Addendum — RE-304 a cylinder face trimmed by any loop (2026-11-03)
+
+A saved cylinder face whose trim loop does not run round its UV box (a door's curved faces, cut by its leaf and frame) is meshed in strips across its angle: the cylinder is straight along its axis, so only U needs the chord bound. 155 more BIM4LCA office doors are then drawn from their saved meshes, 151 exact to 0.001 ft against Revit's export and all within 0.01 ft. Report: `reports/element-framing/RE-304-cylinder-trims.md`.
+
+## Addendum — RE-303 a saved flip control (2026-11-03)
+
+The saved graphics class `GBiFlipControl` holds no geometry: an origin, a base vector and a length, with no pointer, a flip control drawn in a view. Left out of the walk, it lets 14 BIM4LCA office bodies be drawn from their saved meshes, and none of them is Revit's: all are railings whose saved mesh is a part of Revit's body (about 40% of its volume) or more than it. So it stays a decode failure, which keeps their boxes; what a railing's saved mesh lacks is the open question. Report: `reports/element-framing/RE-303-flip-controls-railings.md`.
+
+## Addendum — RE-300 a light source's saved graphics (2026-11-02)
+
+The saved graphics class `GImposter` is a light source: a transform and a rendering `Asset` of scalar properties, with no surface, always in a `GFilter` of its own beside the `Geometry` (and often a `GPolyMesh` of normal binding 2) that draws the light. Revit's export draws none of that filter. Left out, it no longer keeps a fixture's box: 43 more office bodies and 2 on RE1 Electrical drawn from saved meshes, all exact to 0.001 ft, and 417 more Snowdon Towers electrical bodies. Report: `reports/element-framing/RE-300-light-source-filters.md`.
+
+## Addendum — RE-301 a saved cylinder with a left-handed basis (2026-11-02)
+
+A saved `CylSurf` whose `m_xVec × m_yVec` is `−m_zVec` is the same cylinder; only its parametric normal ∂P/∂u × ∂P/∂v points inward. Read as a plane is (the normal is the parametric one, turned by the orientation), such faces no longer keep their whole element's box: 100 more saved-mesh bodies on the BIM4LCA office, 66 exact to 0.001 ft against Revit's export, and 172 more on Snowdon Towers' architectural sample. Report: `reports/element-framing/RE-301-left-handed-cylinders.md`.
+
+## Addendum — RE-299 a door or window that only cuts its host (2026-11-02)
+
+RE-84 writes a door or window as its opening alone where the scan of its type's value block finds no geometry-material map, and the scan rejects a map whose values are all unset or name a material whose name it did not read. The type's native `m_geomTag2MaterialId` is empty on every door and window Revit exports as its opening alone (RE1's CasedOpening, Snowdon Towers' 9 Door-Opening and 38 Schematic Opening Cut, none with saved graphics), while the byte scan's all-unset map also fires on CasedOpening and Door-Opening. A type whose native map holds entries is no longer read as drawing nothing; no corpus export changes, and #1247's 73 doors are the case it is for. Report: `reports/element-framing/RE-299-native-map-void-only-doors.md`.
 
 ## Addendum — RE-298 a flat roof's slab quantities, and a level floor's Depth (2026-10-30)
 

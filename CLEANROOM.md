@@ -1,9 +1,10 @@
 # Clean-room policy
 
 rvt-rs is a clean-room implementation of a reader for the Autodesk
-Revit on-disk format. Every byte-level finding in the repo is derived
-from **public** sources. This document states the policy in
-enforceable terms so contributors and auditors can verify.
+Revit on-disk format. Every byte-level finding in the repo must be
+derived from **public** sources and state the sources it rests on. This
+document states the policy in enforceable terms so contributors and
+auditors can verify.
 
 ## Accepted sources
 
@@ -119,10 +120,13 @@ forbidden source, the reviewer:
 - Trust with the Autodesk / ODA / buildingSMART ecosystem. A
   project that scrupulously respects IP boundaries is more
   credible and less likely to invite litigation threats.
-- Downstream users can ship rvt-rs in commercial products
-  (Apache-2 license + clean-room provenance = no viral-license
-  risk + no IP-contamination risk). Reading revit-ifc for what the
-  export writes, and never copying its code, keeps it that way.
+- Downstream users can ship rvt-rs in commercial products. The
+  Apache-2.0 license and recorded clean-room provenance are meant to
+  keep viral-license and IP-contamination risk low; no process can
+  rule such risk out, which is why the legal posture below asks users
+  with specific constraints to take their own advice. Reading
+  revit-ifc for what the export writes, and never copying its code,
+  is part of that discipline.
 - Contributors who want to work on the project without signing an
   NDA get a clear path.
 
