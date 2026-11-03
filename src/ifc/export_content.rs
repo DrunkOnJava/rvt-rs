@@ -4174,7 +4174,7 @@ pub const RECORD_BBOX_BODY_SOURCE: &str = "partition_element_record_bbox";
 pub const SPACE_OUTLINE_SOURCE_PROPERTY: &str = "SpaceOutlineSource";
 
 /// [`SPACE_OUTLINE_SOURCE_PROPERTY`] of a room whose outline was read from the
-/// faces of its stored solid ([`crate::partition_room_boundaries`]).
+/// faces of its stored solid.
 pub const SPACE_OUTLINE_STORED_SOLID: &str = "stored_solid";
 
 /// [`SPACE_OUTLINE_SOURCE_PROPERTY`] of a room drawn as its record's bounding
