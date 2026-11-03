@@ -3,7 +3,7 @@
 **Date:** 2026-11-03
 **Issues:** #885 (the roof cases with no oracle); follows RE-199 §5 (one slope arrow) and §8 (several), and RE-97 and RE-50 (a Sketch's curve list and a sketch line's bounded line).
 **Artefacts:** `20_T_U_Roof` in puzzbobb's `R2025_TU_Roof.zip` (#885, Apache-2.0, sha256 `38dad62722d5a6e1cf03405f99f4ece060ec7473e34dbb45de9e72247ca47e6e`, pinned in `research/r2025-models.tsv`): a Revit 2025 project with two footprint roofs, a T (roof 4149) and a U (roof 5941), and Revit 25.0.2's IFC4 Reference View export of it. Measure fetches both with `-f r2025=true` and never stores them.
-**Probe:** `probes/examples/probe_re307_arrow_roofs.rs`, in Measure runs [41642079234](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41642079234), [41642988246](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41642988246) and [41648509847](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41648509847) (`re/885-multi-arrow-roofs`).
+**Probe:** `probes/examples/probe_re307_arrow_roofs.rs`, in the Measure runs of §6.
 **Scorer:** `tools/re/roof_bodies_vs_ifc.py`.
 **Status:** positive for the T, negative for the U. The T's body is Revit's; the U keeps its record box, because the rule that gives Revit's U is measured but not established beyond it.
 
@@ -70,30 +70,30 @@ where S is the south arrow's plane (6975), N the notch's (6937), A1 and A2 the w
 
 ## 5. What rvt-rs does
 
-- `partition_schema_mvp::attach_roof_slopes` reads, for a roof with no defining edge and two or more slope arrows (the sketch's curve list, RE-97), each arrow's boundary line: the one its tail lies on to 1e-4 ft and it is square to, no line holding two. It requires tail heights of 0, a rising slope, and the head inside the outline, and gives the roof the line's ends and the arrow's slope as an edge (`m_roof_slope_edge_*`, `m_roof_slope_angle`), with `m_roof_arrow_planes` set.
-- `export_content::roof_arrow_planes_solid` draws the planes of §2 through `body_geometry::envelope_slab_mesh_split`, which takes the underside's wedges apart from the top's. It requires a plumb cut with no fascia, a single loop without holes, every sloped edge to be an outline edge, and the highest point of the top and the lowest of the underside to reproduce the record box's height and base to 1e-4 ft. Roofs sloped by defining edges, and by one arrow, go through the code they did.
-- `arrow_roof_hip_ambiguous` keeps the U as its box. A sloped edge that the extension of a reflex edge meets inside it, with a sloped neighbour across a convex corner, is the configuration in which the U's walls are sloped along part of their length. The T's south eave is met inside by the stem's walls the same way, but its corners lie against upright ends, and the wedges are exact there. Such a roof keeps its box. The probe prints the extensions and the corners (`probe_re307_arrow_roofs`).
+- `partition_schema_mvp::attach_roof_slopes` reads, for a roof with no defining edge and two or more slope arrows (the sketch's curve list, RE-97), each arrow's boundary line: the one its tail lies on to 1e-4 ft and it is square to, no line holding two. It runs on Revit 2025 only, where the twelve arrows were measured, and requires arrows set by their heights (not by Slope), tail heights of 0, a rising slope, the head inside the outline and the outline a single loop, and gives the roof the line's ends and the arrow's slope as an edge (`m_roof_slope_edge_*`, `m_roof_slope_angle`), with `m_roof_arrow_planes` set.
+- `export_content::roof_arrow_planes_solid` draws the planes of §2 through `body_geometry::envelope_slab_mesh_split`, which takes the underside's wedges apart from the top's. It requires a plumb cut, a fascia depth read as 0, a single loop without holes, every sloped edge to be an outline edge, and the highest point of the top and the lowest of the underside to reproduce the record box's height and base to 1e-4 ft. Roofs sloped by defining edges, and by one arrow, go through the code they did.
+- `arrow_roof_hip_ambiguous` keeps the U as its box. A sloped edge that the extension of a reflex edge meets inside it, with a sloped neighbour across a convex corner, is the configuration of the U, whose two long walls Revit slopes along part of their length. Only the U is measured: whether Revit does so for every such edge is not known, and a roof of the configuration keeps its box on that account. The T's south eave is met inside by the stem's walls the same way, but its corners lie against upright ends, and the wedges are exact there. The probe prints the extensions and the corners (`probe_re307_arrow_roofs`).
 
 ## 6. Measure
 
-Run [41648509847](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41648509847) (`-f base=main -f nordic=true -f r2025=true`, every scorer), head `ae0edf01` against `main` at `1340ca8d`, 32 models (Core Interior, Einhoven, the four RE1 models, both BIM4LCA office models, and puzzbobb's 20 R2025 models):
+Run [41657924215](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41657924215) (`-f base=main -f nordic=true -f r2025=true`, every scorer), head `4d9d0d3b` against `main` at `2e07e27a`, 32 models (Core Interior, Einhoven, the four RE1 models, both BIM4LCA office models, and puzzbobb's 24 R2025 models):
 
 - **Exports changed:** one of 32, `r2025-20_T_U_Roof`. The other 31 are byte-identical (`ifc.sha256`), and every scorer's output for them is unchanged.
 - **In `20_T_U_Roof`:** roof 4149 changes from a swept solid to a faceted brep and is scored as in §3. Roof 5941 is unchanged (37,356.98 ft³ against Revit's 1,845.58: its box). The scorers that moved with it are `roof_bodies_vs_ifc` (above), `schema` (swept solids carrying a Position distinct from their product placement, 18 to 17) and `wall_heights_vs_ifc` (the roof is a brep, rvt-rs's surfaces 56 to 996 triangles).
 - **Roofs against Revit's body**, over the R2025 models' 22 (20 files with one roof, `20_T_U_Roof` with two): vertices within 0.001 ft and volume within 1e-4, 19 on `main` and 20 here; every vertex of Revit's body within 0.001 ft of rvt-rs's surface, 20 and 21. No roof's score got worse. The two that stay short are the roof by extrusion (RE-211: the vertex-to-vertex test is 9.11 ft by design, its surface test passes) and the U.
-- Run 41642988246, on this branch before it was rebased onto `1340ca8d` (head `ab2f4804`, `main` at `66cd707c`), gave the same result for every scorer and the probe, and so did the filtered run 41642079234.
+- Earlier runs of this branch, before the review that limited the multi-arrow path to Revit 2025, arrows set by their heights, one loop and a fascia depth read as 0, gave the same result for every scorer and the probe: 41642988246 (head `ab2f4804`, `main` at `66cd707c`) and 41648509847 (head `ae0edf01`, `main` at `1340ca8d`), and, filtered to the model, 41642079234.
 
 Reproduce:
 
 ```text
-gh workflow run measure.yml --ref main -f ref=<commit> -f base=main -f nordic=true -f r2025=true \
+gh workflow run measure.yml --ref main -f ref=4d9d0d3b31e37a7323d953071f6b9868f5b4962d -f base=main -f nordic=true -f r2025=true \
   -f probe=probe_re307_arrow_roofs -f probe_scorer=-
 ```
 
 ## 7. What this does not cover
 
-- **The U, and any footprint whose long walls continue past an arm.** The guard leaves them as their record boxes. An oracle that would settle the rule: the U with the west arm's arrow moved onto the bar's part of the wall, one with the bar's south arrow off-centre, and an L with arrows, each with Revit's IFC4 export.
-- **Arrows set by angle, or with a tail height other than 0.** 05 and 06 of the R2025 models carry a 22 mm tail height that is not in their body; several arrows with one are not drawn.
+- **The U, and any footprint of its configuration.** The guard leaves a roof with a sloped edge met inside by a reflex edge's extension, beside a sloped neighbour at a convex corner, as its record box. Only the U is measured; that Revit slopes every such edge along part of its length is not known. An oracle that would settle the rule: the U with the west arm's arrow moved onto the bar's part of the wall, one with the bar's south arrow off-centre, and an L with arrows, each with Revit's IFC4 export.
+- **Arrows set by angle, a tail height other than 0, and releases other than 2025.** All twelve measured arrows are set by their heights, with tail height 0, on Revit 2025. 05 and 06 of the R2025 models carry a 22 mm tail height that is not in their body; several arrows with one, or set by Slope, or on Revit 2024, are not drawn.
 - **A two-cut or square rafter cut, a fascia depth, a hole in the footprint.** None is measured with several arrows.
 - **Defining edges and arrows in one roof.** Not measured; such a roof keeps its box.
 - **Hips over the T and U footprints with every edge defining (#884)** are a different input.
