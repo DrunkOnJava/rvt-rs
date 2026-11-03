@@ -95,7 +95,8 @@ file not read" and offers "Retry with large-model limits", which reads the same
 file again with the limits `rvt-ifc --large-model` uses (streams up to 2 GiB).
 A browser tab can use at most 4 GiB of memory, so a very large model can still
 fail to open; `rvt-ifc --large-model` is not held to a tab's 4 GiB (its caps are
-a 2 GiB stream and 8 GiB inflated, on a machine with the memory). The button calls
+a 2 GiB stream and, on a 64-bit machine with the memory, 8 GiB inflated, and a
+file over 2 GiB is rejected whatever the flags). The button calls
 `openRvtBytesWithDiagnosticsModeAndOpenLimits` with `{ largeModel: true }`.
 
 A file whose size says it may need more than a tab's 4 GiB (an open has taken
@@ -103,8 +104,9 @@ at least about ten times the file's size, and the warning can fire on a file
 that fits) is warned about in the loading card before the decode, and still
 tried. When the wasm instance does run out of memory, the viewer says the model
 is too large for the browser, how much memory the tab reached, and what reads a
-larger file (`rvt-ifc` and `rvt-gltf` with `--large-model`; the Python
-`RevitFile` with a larger `max_stream_bytes` and `max_inflate_bytes`), instead of
+larger file (`rvt-ifc` and `rvt-gltf` with `--large-model`, up to a 2 GiB file;
+the Python `RevitFile` with a larger `max_stream_bytes`, `max_inflate_bytes` and,
+over 2 GiB, `max_file_bytes`), instead of
 `RuntimeError: unreachable`; the engine's own message is in the status panel.
 A stop a long way short of the ceiling on a small file says "Ran out of memory"
 and that the file may be damaged, since nothing measured says it needs more. How

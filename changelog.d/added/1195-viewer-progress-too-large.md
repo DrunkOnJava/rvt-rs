@@ -13,8 +13,9 @@
   before the decode and still tried. When the wasm instance runs out of
   memory, the viewer says the model is too large for the browser, how far the
   decode got and where, and that `rvt-ifc` and `rvt-gltf` with `--large-model`
-  (streams up to 2 GiB, inflating up to 8 GiB), or Python with a larger
-  `max_stream_bytes` and `max_inflate_bytes`, can read a larger file, instead
-  of `RuntimeError: unreachable`. A stop a long way short of the ceiling says
+  (streams up to 2 GiB and, on a 64-bit machine, inflating up to 8 GiB, for a
+  file of up to 2 GiB), or Python with a larger `max_stream_bytes` and
+  `max_inflate_bytes`, can read a larger file, instead of
+  `RuntimeError: unreachable`. A stop a long way short of the ceiling says
   "Ran out of memory" and that the file may be damaged, and a panic that is not
   a memory failure keeps its own message (#1195).

@@ -339,9 +339,17 @@ What the viewer does (#1195):
   the page says "Too large for the browser": how far it got, that a tab holds at
   most 4 GiB and an open has taken at least about ten times the file, and what
   reads a larger file as the code takes it: `rvt-ifc` and `rvt-gltf` with
-  `--large-model` (streams up to 2 GiB, inflating up to 8 GiB, on a machine with
-  the memory), and the Python `RevitFile` with a larger `max_stream_bytes` and
-  `max_inflate_bytes`, which has no `--large-model` preset. When the instance
+  `--large-model` (streams up to 2 GiB and, on a 64-bit machine with the memory,
+  inflating up to 8 GiB; they have no flag for `max_file_bytes`, the 2 GiB cap on
+  the whole file, so a larger file is rejected whatever the flags), and the
+  Python `RevitFile` with a larger `max_stream_bytes` and `max_inflate_bytes`,
+  and `max_file_bytes` for a file over 2 GiB; it has no `--large-model` preset.
+  The threshold is half the ceiling because one wasm32 allocation cannot pass
+  2 GiB (`isize::MAX`): an allocation that failed with under 2 GiB already held
+  was not stopped by the 4 GiB ceiling alone, while one that failed with 2 GiB
+  or more held can have been. A browser that gives a tab less than 4 GiB (a
+  phone, say) stops below half of the 4 GiB the page assumes, and gets the
+  hedged wording for a model that is truly too large for it. When the instance
   stopped a long way short of the ceiling on a file whose estimate fits, such as
   a damaged file tripping `capacity overflow` at 60 MiB, a claim that the file
   needs more memory would be one nothing measured, so the page says "Ran out of

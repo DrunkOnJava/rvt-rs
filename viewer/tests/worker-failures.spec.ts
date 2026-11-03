@@ -37,8 +37,12 @@ interface Fault {
   error: string;
 }
 
-/** Fails one export of the worker's wasm instance; returns how many times the patched worker script was served. */
-async function failWasm(page: Page, fault: Fault): Promise<() => number> {
+/**
+ * Fails one export of the worker's wasm instance, in every worker after the
+ * first `healthy` ones, which run as shipped. Returns how many patched worker
+ * scripts have been served.
+ */
+async function failWasm(page: Page, fault: Fault, healthy = 0): Promise<() => number> {
   const prelude = `(() => {
     const fault = ${JSON.stringify(fault)};
     const failing = () => {
@@ -64,8 +68,14 @@ async function failWasm(page: Page, fault: Fault): Promise<() => number> {
       WebAssembly[name] = async (...args) => wrap(await real.apply(WebAssembly, args));
     }
   })();`;
+  let requests = 0;
   let served = 0;
   await page.context().route(/\/assets\/worker-[^/?]+\.js(\?.*)?$/, async (route) => {
+    requests += 1;
+    if (requests <= healthy) {
+      await route.continue();
+      return;
+    }
     const response = await route.fetch();
     served += 1;
     await route.fulfill({ response, body: `${prelude}\n${await response.text()}` });
@@ -163,5 +173,34 @@ test('an allocation that fails after the open call is blamed on the step it was 
   ) as Array<{ stage?: string; step?: string }>;
   expect(events.some((event) => event.stage !== undefined)).toBe(true);
   expect(events.some((event) => event.step === 'Building scene graph')).toBe(true);
+  await expect.poll(() => page.workers().length, 'the worker is ended').toBe(0);
+});
+
+test('a panic after "Retry with large-model limits" says nothing about memory', async ({ page }) => {
+  // The first open runs as shipped, under a stream limit the tier-1 fixture's
+  // BasicFileInfo exceeds, so the retry is offered; the retry's worker is the
+  // one that panics, with a message that is not an allocation's.
+  const panic =
+    'rvt-rs wasm panic: panicked at src/walker.rs:1440:9:\nindex out of bounds: the len is 3 but the index is 7';
+  const served = await failWasm(page, { fn: OPEN, panic, error: 'unreachable' }, 1);
+  await open(page, '?maxStreamBytes=200');
+  await expect(page.locator('#status')).toHaveText(/Loaded/);
+  const retry = page.getByRole('button', { name: 'Retry with large-model limits' });
+  await expect(retry).toBeVisible();
+
+  await retry.click();
+  await expect.poll(served, 'the retry ran in the patched worker').toBeGreaterThan(0);
+
+  await expect(page.locator('#status')).toHaveText(/^Error: rvt-rs wasm panic: .*index out of bounds/s);
+  await expect(page.locator('#status')).not.toHaveAttribute('data-load-failure', /.+/);
+  await expect(page.locator('#scaffold-note')).toBeHidden();
+  // Nothing on the page says the file is large or the tab short of memory: the
+  // panic is not an allocation, and the retry changes nothing about that.
+  for (const where of ['#status', '#status-panel', '#toast-region']) {
+    expect(await page.locator(where).innerText(), where).not.toMatch(
+      /memory|4 GiB|too large|needs more/i,
+    );
+  }
+  await expect(page.locator('#toast-region .toast.bad')).toContainText('index out of bounds');
   await expect.poll(() => page.workers().length, 'the worker is ended').toBe(0);
 });

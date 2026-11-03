@@ -477,15 +477,18 @@ function formatMemory(bytes: number): string {
 
 /**
  * What reads a file the browser cannot, as the command line and the Python
- * package really take it: `--large-model` on rvt-ifc and rvt-gltf reads streams
- * up to 2 GiB and inflates up to 8 GiB (`rvt::cli::open_limits`), and Python's
- * `RevitFile` has no such preset, only `max_stream_bytes` and
- * `max_inflate_bytes` to raise. Neither is unlimited, and both need a machine
- * with the memory.
+ * package really take it (`rvt::cli::open_limits`, `rvt::reader::OpenLimits`,
+ * `rvt-py`): `--large-model` on rvt-ifc and rvt-gltf reads streams up to 2 GiB
+ * and, on a 64-bit machine, inflates up to 8 GiB. Neither has a flag for
+ * `max_file_bytes`, the 2 GiB cap on the whole file, so a larger file is
+ * rejected whatever the flags. Python's `RevitFile` has no preset, only
+ * `max_stream_bytes`, `max_inflate_bytes` and `max_file_bytes` to raise. All of
+ * it needs a machine with the memory.
  */
 const LARGER_FILE_ADVICE =
-  'rvt-ifc and rvt-gltf with --large-model read streams up to 2 GiB and inflate up to 8 GiB, on a machine with the memory, ' +
-  'and the Python package opens a file with a larger max_stream_bytes and max_inflate_bytes.';
+  'rvt-ifc and rvt-gltf with --large-model read streams up to 2 GiB and, on a 64-bit machine with the memory, inflate up to 8 GiB; ' +
+  'they have no flag for the 2 GiB cap on the whole file, so a larger file is rejected whatever the flags. ' +
+  'The Python package opens a file with a larger max_stream_bytes and max_inflate_bytes, and max_file_bytes for one over 2 GiB.';
 
 /** The decoder's stages (`rvt::control::Stage`) as the card names them, and how it counts each. */
 const DECODE_STAGES: Record<string, { label: string; count: (done: number, total: number) => string }> = {
@@ -560,12 +563,15 @@ let loadEvents: LoadEvent[] = [];
 let loadStage: string | null = null;
 /** The last thing said on #status, a live region, so each is said once. */
 let loadAnnounced = '';
+/** Everything `announceLoad` has said on #status this open, in order, kept for the tests. */
+let loadAnnouncements: string[] = [];
 let loadMemoryWarned = false;
 
 /** Says `text` on #status unless it was the last thing said. */
 function announceLoad(text: string): void {
   if (text === loadAnnounced) return;
   loadAnnounced = text;
+  loadAnnouncements.push(text);
   setStatus(text);
 }
 
@@ -617,6 +623,7 @@ function onDecodeStage(stage: string, done: number, total: number | null, memory
 /** What the worker said, kept on #status for tests/load-progress.spec.ts and the measurement. */
 function saveLoadEvents(): void {
   statusEl.dataset.loadProgress = JSON.stringify(loadEvents);
+  statusEl.dataset.loadAnnounced = JSON.stringify(loadAnnouncements);
 }
 
 /**
@@ -642,7 +649,9 @@ function startLoadOverlay(file: File): void {
   loadEvents = [];
   loadStage = null;
   loadAnnounced = '';
+  loadAnnouncements = [];
   delete statusEl.dataset.loadProgress;
+  delete statusEl.dataset.loadAnnounced;
   setLoadFraction(null);
   loadStepEl.textContent = `Opening ${file.name}`;
   loadExpectationText = loadExpectation(file.size);
@@ -1058,6 +1067,9 @@ async function loadBytes(file: File, limits?: OpenLimitsOptions): Promise<void> 
   lastGlb = null;
   lastSchedule = null;
   currentDiagnostics = null;
+  // The last file's worker holds its wasm memory, and a large file's read, which
+  // is next, must not have to fit beside it.
+  stopWorker();
   exportGlbBtn.disabled = true;
   exportIfcBtn.disabled = true;
   exportSvgBtn.disabled = true;
@@ -1188,14 +1200,10 @@ async function loadBytes(file: File, limits?: OpenLimitsOptions): Promise<void> 
         showTooLarge(file, msg.tooLarge);
         return;
       }
-      // The large-model limits stop at the tab's memory, not at a limit the
-      // reader can lift, so say what the failure most likely is.
-      failLoad(
-        file,
-        openLimits?.largeModel
-          ? `${msg.message} A browser tab can use at most 4 GiB of memory, so this file may be too large to open here.`
-          : msg.message,
-      );
+      // A memory stop is `msg.tooLarge` and went above, whatever limits the
+      // open ran under; any other failure, a panic included, says only what it
+      // is, since nothing says it is memory.
+      failLoad(file, msg.message);
       return;
     }
     model = msg.model;

@@ -8,21 +8,25 @@ import { fileURLToPath } from 'node:url';
 // guess from the file size. The worker posts each report from inside the wasm
 // call, so the page sees them while the decode runs. The page keeps every
 // report on #status as `data-load-progress`, with what the card showed once it
-// had applied that report (its step, the bar's value, its hint), so these
-// tests read the card's behaviour from that record rather than sampling the
-// page, which a decode 3 s into its partition stage would make a coin flip:
+// had applied that report (its step, the bar's value, its hint), and every
+// text `announceLoad` told #status (`data-load-announced`), so these tests read
+// the card's behaviour from those records rather than sampling the page, whose
+// counted stages last a second or less each on Deploy viewer's runner:
 //
 //   - on the tier-1 fixture, which opens in milliseconds: the stages, their
 //     counts and the steps after the decode;
 //   - on Core Interior (17 to 24 s on Deploy viewer's runner): the bar is
 //     determinate for the counted stage at the percent of each report, sweeps
 //     for the stretch the decoder reports nothing in, and says "Building the
-//     model" once. A screenshot is taken while the partition stage runs: the
-//     page holds back the worker's messages the moment the bar first reads 25%
-//     or more (the stage's whole run is about a second, and a picture takes
-//     longer), takes it, and lets them through. It is the one thing here that
-//     depends on timing, so it is best effort, and what it shows is written
-//     beside it.
+//     model" once. A screenshot is taken while the partition stage runs. That
+//     stage's eight streams are inflated in about a second (1.1 s to 2.1 s into
+//     the open in the runs so far), and the bar is at 25% or more for the last
+//     0.4 s of it, which a picture takes longer than. So the page holds back
+//     the worker's messages in the frame the card first reads "Reading
+//     partition streams" at 25% or more (not another stage's 25%: the candidate
+//     scan ends at 100%), takes the picture, and lets them through. That is the
+//     one thing here that depends on timing, so it is best effort, and what it
+//     shows is written beside it.
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const tier1 = path.resolve(
@@ -96,22 +100,16 @@ async function canHoldWorkerMessages(page: Page): Promise<void> {
   });
 }
 
-/** Records every text #status takes, so what a live region was told can be counted. */
-async function logStatusText(page: Page): Promise<void> {
-  await page.evaluate(() => {
-    const status = document.getElementById('status')!;
-    const log: string[] = [];
-    (window as unknown as { __statusLog: string[] }).__statusLog = log;
-    new MutationObserver(() => log.push(status.textContent ?? '')).observe(status, {
-      childList: true,
-      characterData: true,
-      subtree: true,
-    });
-  });
-}
-
-async function statusLog(page: Page): Promise<string[]> {
-  return page.evaluate(() => (window as unknown as { __statusLog: string[] }).__statusLog);
+/**
+ * Every text the page told #status, a live region, while the file opened, in
+ * order, as the page recorded them when it said them. A MutationObserver would
+ * not do: it batches the mutations of one task, and a replay of held messages
+ * is one task.
+ */
+async function announced(page: Page): Promise<string[]> {
+  const raw = await page.locator('#status').getAttribute('data-load-announced');
+  expect(raw, 'the page keeps what it announced').not.toBeNull();
+  return JSON.parse(raw!) as string[];
 }
 
 /**
@@ -200,16 +198,15 @@ coreInteriorTest('the loading card fills while Core Interior decodes', async ({ 
   await canHoldWorkerMessages(page);
   await page.goto('/');
   await expect(page.locator('#status')).toHaveText(/Ready/);
-  await logStatusText(page);
   await page.locator('#file-input').setInputFiles(coreInterior);
 
   // The screenshot is the only thing here that depends on timing. Wait, polling
-  // every animation frame, for the bar to be a quarter full or more while the
-  // partition stage runs, and in the same frame stop the card where it is, so
-  // that the picture, which takes longer than the stage's last second, shows
-  // it. Whatever happens, the worker's messages are let through again. A decode
-  // that is past that by the time the page looks, or a screenshot that fails,
-  // only means no picture, which is written down rather than failed on.
+  // every animation frame, for the card to read "Reading partition streams"
+  // with the bar a quarter full or more, and in the same frame stop it where it
+  // is, so that the picture, which takes longer than what is left of the stage,
+  // shows it. Whatever happens, the worker's messages are let through again. A
+  // decode that is past that by the time the page looks, or a screenshot that
+  // fails, only means no picture, which is written down rather than failed on.
   const screenshot: { taken: boolean; cardAtCapture: unknown; note: string } = {
     taken: false,
     cardAtCapture: null,
@@ -219,7 +216,8 @@ coreInteriorTest('the loading card fills while Core Interior decodes', async ({ 
     await page.waitForFunction(
       () => {
         const value = Number(document.getElementById('load-rail')?.getAttribute('aria-valuenow'));
-        if (!(value >= 25)) return false;
+        const step = document.getElementById('load-step')?.textContent;
+        if (step !== 'Reading partition streams' || !(value >= 25)) return false;
         (window as unknown as { __holdMessages: boolean }).__holdMessages = true;
         return true;
       },
@@ -237,7 +235,7 @@ coreInteriorTest('the loading card fills while Core Interior decodes', async ({ 
     });
     screenshot.taken = true;
     screenshot.note =
-      'taken when the bar first read 25% or more, with the worker\'s messages held, so the picture is the card as cardAtCapture says';
+      'taken when the card first read Reading partition streams at 25% or more, with the worker\'s messages held, so the picture is the card as cardAtCapture says';
   } catch (err) {
     screenshot.note = `no screenshot: ${(err as Error).message.split('\n')[0]}`;
   } finally {
@@ -295,13 +293,21 @@ coreInteriorTest('the loading card fills while Core Interior decodes', async ({ 
 
   // The stretch after the last stream is inflated reports nothing until the
   // saved graphics. The card names it, and says so once: #status is a live
-  // region, and it was told "Building the model" a single time.
+  // region, and the page told it "Building the model" a single time, though two
+  // reports left the card there (the last stream, and the end of the walk).
   const building = reports.filter((event) => event.card!.step === 'Building the model');
-  expect(building.length, 'reports that left the card on Building the model').toBeGreaterThan(0);
+  expect(building.length, 'reports that left the card on Building the model').toBeGreaterThanOrEqual(2);
   for (const event of building) expect(event.card!.value).toBeNull();
-  const log = await statusLog(page);
+  const said = await announced(page);
   expect(
-    log.filter((text) => text === 'Building the model'),
-    `status text: ${log.join(' | ')}`,
+    said.filter((text) => text === 'Building the model'),
+    `announced: ${said.join(' | ')}`,
   ).toHaveLength(1);
+  said.forEach((text, i) => {
+    if (i > 0) expect(text, `announced twice in a row: ${text}`).not.toBe(said[i - 1]);
+  });
+  expect(said, 'the stages in the order they ran').toEqual(
+    expect.arrayContaining(['Reading partition streams', 'Building the model']),
+  );
+  expect(said.indexOf('Reading partition streams')).toBeLessThan(said.indexOf('Building the model'));
 });
