@@ -43,7 +43,7 @@ fn is_closed_stdout_pipe(message: &str) -> bool {
 pub const LARGE_MODEL_MAX_STREAM_BYTES: u64 = crate::reader::DEFAULT_MAX_FILE_BYTES;
 
 /// The `--large-model` preset's inflate cap, per gzip member and per stream
-/// in total ([`crate::compression::InflateLimits::max_stream_total_bytes`]):
+/// in total ([`crate::compression::InflateLimits::max_stream_total_bytes_for`]):
 /// 8 GiB, or the address space on a 32-bit target. Client models with a
 /// 1 GiB stored partition inflate past 1 GiB (#1075).
 pub const LARGE_MODEL_MAX_INFLATE_BYTES: usize = if usize::BITS >= 64 {
