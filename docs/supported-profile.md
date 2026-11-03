@@ -135,7 +135,7 @@ override, applied where it names `IfcShadingDevice`, `IfcSlab`, `IfcCovering`,
 and Revit's exporter acts on it (not on a 2024 file's curtain walls, RE-188, or its wall sweeps, RE-192),
 with the values not applied listed in the diagnostics. With `--revit-property-sets`, each element's
 named saved parameters in Revit's own property sets, one per parameter group (RE-210; the set
-names, grouping and values measured on Autodesk's Snowdon Towers HVAC, Site and Architectural). With
+names, grouping and values measured on Autodesk's Snowdon Towers HVAC, Site and Architectural, locally, and on puzzbobb's Revit 2025 models, in CI). With
 `--revit-set-placement`, also the properties Revit's own exporter writes where IFC4's definitions do not:
 a text parameter named `<set>.<property>` for a property the set's IFC4 definition lacks
 (`Pset_SpaceCommon.FloorCovering`), and the `Reference` of a set whose entity's name begins with the
