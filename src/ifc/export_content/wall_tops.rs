@@ -48,8 +48,8 @@
 //! §5). A wall
 //! whose pieces pass [`MAX_RISERS`], whose plan does not break into convex
 //! pieces, or whose several elements share a hole or opening that lies over
-//! it, or with a small piece that lies inside another wall (see [`embedded`]),
-//! is left as it was. The wall's `extrusion` stays the full prism, which
+//! it, or of which only a small stub lies outside the floor, inside another wall
+//! (see [`embedded`]), is left as it was. The wall's `extrusion` stays the full prism, which
 //! the passes that read a wall's plan and its record's box use; the writer,
 //! the glTF and the plan outline draw its `solid_shape`.
 
@@ -85,11 +85,13 @@ const STEP_TOLERANCE_SQUARE_FEET: f64 = COVER_TOLERANCE_SQUARE_FEET;
 /// The most convex pieces a wall's plan outside the elements may come to.
 const MAX_RISERS: usize = 32;
 
-/// The area under which a piece of a plan outside its floor may be a stub
-/// that Revit cuts although the floor does not cover it, square feet: the one
-/// measured, 0.0243 ft2 at the end of a wall inside the plan of the wall it
-/// abuts, is Revit's top cut, and the pieces of 0.005 to 0.021 ft2 and 0.032 to
-/// 0.098 ft wide that lie outside every other wall are kept (RE-320 §4).
+/// The area under which what a floor leaves of a wall's plan, all of it inside
+/// other walls, may be a stub that Revit cuts although the floor does not cover
+/// it, square feet: the one measured, 0.0243 ft2 at the end of a wall, inside
+/// the plan of the wall it abuts, is cut by Revit with the rest of the wall.
+/// The walls whose small pieces inside other walls Revit keeps (2984235,
+/// 2984610, 2992096 and 1478932 on the BIM4LCA office as built) also have
+/// larger parts of their plans outside the floor (RE-320 §4).
 const EMBEDDED_PIECE_SQUARE_FEET: f64 = 0.05;
 
 /// How much height two walls must share to be one beside the other, feet.
@@ -365,24 +367,31 @@ fn reach(cutter: &Cutter, wall: &Wall) -> f64 {
     inside - cut
 }
 
-/// Whether the convex `piece` of a wall's plan outside its floor is a small
-/// piece that lies inside the plans of other walls: the stub of a wall that
-/// butts into another, which Revit cuts at the floor's underside with the
-/// rest of the wall (RE-320 §4). No width or area separates it from the
-/// slivers Revit keeps, and the pieces it keeps that lie inside another wall
-/// are all larger, so a wall with such a piece is left as it was.
-fn embedded(piece: &[Point2], neighbours: &[&Wall]) -> bool {
-    let size = area(piece);
-    if size >= EMBEDDED_PIECE_SQUARE_FEET {
+/// Whether what the floor leaves of a wall's plan, the convex `pieces`, is
+/// small and lies wholly inside the plans of other walls: the stub of a wall
+/// that butts into another, which Revit cuts at the floor's underside with the
+/// rest of the wall (RE-320 §4). No width or area of a piece separates it from
+/// the pieces Revit keeps, some of them inside other walls too; only a plan
+/// with nothing else outside the floor does, so a wall of which that is all is
+/// left as it was.
+fn embedded(pieces: &[Ring], neighbours: &[&Wall]) -> bool {
+    let size: f64 = pieces.iter().map(|piece| area(piece)).sum();
+    if pieces.is_empty() || size >= EMBEDDED_PIECE_SQUARE_FEET {
         return false;
     }
-    let inside: f64 = neighbours
+    let parts: Vec<Ring> = neighbours
         .iter()
         .filter_map(|other| convex_pieces(&other.plan))
         .flatten()
-        .map(|part| area(&clip_convex(piece, &part)))
-        .sum();
-    inside >= 0.99 * size
+        .collect();
+    let mut left: Vec<Ring> = pieces.to_vec();
+    for part in &parts {
+        left = left
+            .iter()
+            .flat_map(|piece| subtract_convex(piece, part))
+            .collect();
+    }
+    left.iter().map(|piece| area(piece)).sum::<f64>() <= 0.01 * size
 }
 
 /// The convex pieces `plan` is made of: itself where it is convex, else its
@@ -482,7 +491,7 @@ fn steps(
             .into_iter()
             .filter(|piece| area(piece) >= STEP_TOLERANCE_SQUARE_FEET)
             .collect();
-        if above.len() > MAX_RISERS || above.iter().any(|piece| embedded(piece, neighbours)) {
+        if above.len() > MAX_RISERS || (out.is_empty() && embedded(&above, neighbours)) {
             return None;
         }
         out.push((*level, above));
