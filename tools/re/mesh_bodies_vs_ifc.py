@@ -182,16 +182,24 @@ def surface_distance(points, triangles):
     `distances` over a set of triangles that holds every one that could be nearest,
     and each of them is measured by the very arithmetic that measures all of them in
     a small job (`EXHAUSTIVE` pairs or fewer, and any input that is not finite), so
-    the result is the same float. A triangle is left out for a point only when a lower
-    bound on its distance exceeds the nearest distance already found for that point
-    plus a slack (1e-6 ft and 1e-9 of the coordinates' extent) that is far above the
-    rounding of these distances and the 1e-9 barycentric tolerance of `inside`. The
-    bounds hold for every triangle but the slivers (the sine of the angle between two
-    edges under SLIVER, whose computed plane is not reliable) and the zero-area ones (which
-    have no plane): the bounds are the distance to a block of eight neighbouring
-    triangles' box, then to a triangle's box, and for a triangle with a plane the
-    distance to its plane and to the side planes of its edges. Slivers are measured
-    against every point.
+    the result is the same float.
+
+    A triangle is left out for a point only when a lower bound on its distance
+    exceeds the nearest distance already found for that point plus a slack. The
+    slack is 1e-6 ft and 4e-9 of the extent, the largest of any coordinate and any
+    triangle edge. It has to cover two things. `inside` takes a point up to 1e-9 of
+    two edges outside the triangle in its plane (or 1e-9 past the third) as inside
+    and measures it by its plane alone, so the distance computed for it falls short
+    of the distance to the triangle, which the bounds are on, by up to 1e-9 times
+    the sum of two edges: under 2e-9 of the extent. And the rounding of these
+    distances, which is many orders of magnitude smaller.
+
+    The bounds hold for every triangle but the slivers (the sine of the angle between
+    two edges under SLIVER, whose computed plane is not reliable) and the zero-area
+    ones (which have no plane, so only their box bounds them): the distance to a
+    block of eight neighbouring triangles' box, then to a triangle's box, and for a
+    triangle with a plane the distance to its plane combined with that to the side
+    planes of its edges. Slivers are measured against every point.
     """
     terms = triangle_terms(triangles)
     n = len(points)
@@ -208,7 +216,7 @@ def surface_distance(points, triangles):
     lo = np.minimum(np.minimum(a, b), c)
     hi = np.maximum(np.maximum(a, b), c)
     extent = max(float(np.abs(triangles).max()), float(np.abs(points).max()), float(np.sqrt(max(d00.max(), d11.max()))))
-    slack = 1e-6 + 1e-9 * extent
+    slack = 1e-6 + 4e-9 * extent
     sides = []
     for start, end in ((a, b), (b, c), (c, a)):
         out = np.cross(end - start, unit)

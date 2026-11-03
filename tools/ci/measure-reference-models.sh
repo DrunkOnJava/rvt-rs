@@ -334,6 +334,7 @@ model_task() { # name rvt ref task
         wanted "$s" || continue
         RVT_MESH_CACHE="$dir/mesh-cache" score "$dir/$s.txt" "$SCORERS/$s.py" "$dir/model.ifc" "$MODELS/$ref"
       done
+      echo "$name: mesh cache $(du -sh "$dir/mesh-cache" 2>/dev/null | cut -f1), removed"
       rm -rf "$dir/mesh-cache"
       ;;
     sets)
