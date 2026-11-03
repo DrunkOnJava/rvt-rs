@@ -170,17 +170,34 @@ fn record_fields(stride: usize) -> Option<(usize, usize, usize)> {
     }
 }
 
+/// Offset in a record of `stride` bytes of the id the table is sorted by,
+/// the one [`declared_ids`] takes as the ElementId: the first id on 28 bytes,
+/// the second on 40.
+fn element_id_at(stride: usize) -> Option<usize> {
+    match stride {
+        28 => Some(0),
+        40 => Some(20),
+        _ => None,
+    }
+}
+
 /// Detect the record layout: the record size (28 or 40 bytes) at which the
 /// stated number of records fits from `0x06` with ids rising over the whole
 /// table. When both fit equally, the one that leaves the shorter tail wins
 /// (a 40-byte table also fits at 28). Falls back to the 12-byte implicit
 /// layout from `0x30` when neither fits.
 ///
-/// The id that rises is the record's second one ([`ElemRecord::id_secondary`],
-/// `+4` on 28 bytes, `+20` on 40), the element's ElementId. The first id
+/// The id that rises is the ElementId (`element_id_at`). On 40 bytes it is
+/// the record's second id ([`ElemRecord::id_secondary`], `+20`): the first
 /// rises with it wherever the two agree, but on Autodesk's Snowdon Towers
 /// samples they differ on 27 (Structural) and 84 (Architectural) records,
-/// and there the first id falls back below its predecessor 2 and 3 times.
+/// and there the first id falls back below its predecessor 2 and 3 times. On
+/// 28 bytes it is the first id (`+0`), the one [`declared_ids`] reads: the two
+/// are equal on every record of the 41 tables of that size puzzbobb read from
+/// Revit 2008 to 2023, but on 8 client files saved by Revit 2024 to 2026 the
+/// second holds an older, lower number on 1% to 37% of records, and a table
+/// tested at `+4` fell back to 12-byte records (#421; found by puzzbobb,
+/// measured by hemanth1986).
 pub fn detect_layout(d: &[u8]) -> ElemTableLayout {
     let fallback = ElemTableLayout {
         start: 0x30,
@@ -196,7 +213,7 @@ pub fn detect_layout(d: &[u8]) -> ElemTableLayout {
         if end > d.len() {
             return None;
         }
-        let (element_id_at, _, _) = record_fields(stride)?;
+        let element_id_at = element_id_at(stride)?;
         let mut previous = None;
         let mut rises = 0;
         for k in 0..count {

@@ -212,7 +212,7 @@ fn refined_plane_edge(
         .resolve(other, &g.objects[other].fields["m_pSurf"])?
         .context("shared edge surface missing")?;
     let kind = g.objects[other_surface].class_name.as_str();
-    if !matches!(kind, "CylSurf" | "SurfRev" | "RuledSurf") {
+    if !matches!(kind, "CylSurf" | "SurfRev" | "RuledSurf" | "ConeSurf") {
         return Ok(original);
     }
     type SurfaceEval = Box<dyn Fn([f64; 2]) -> Result<[f64; 3]>>;
@@ -531,7 +531,7 @@ fn face_indexed(g: &ObjectGraph, index: &PointerIndex<'_>, fi: usize) -> Result<
             CylinderTessellationProfile::default(),
         )?));
     }
-    if matches!(p.class_name.as_str(), "SurfRev" | "RuledSurf") {
+    if matches!(p.class_name.as_str(), "SurfRev" | "RuledSurf" | "ConeSurf") {
         return Ok(Some(crate::native_parametric_mesh::face(g, fi)?));
     }
     ensure!(

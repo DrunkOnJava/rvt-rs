@@ -27,7 +27,9 @@
 
 use super::IfcModel;
 use super::entities::{BrepTriangle, IfcEntity, PropertyValue, SolidShape};
-use super::export_content::RECORD_BBOX_BODY_SOURCE;
+use super::export_content::{
+    RECORD_BBOX_BODY_SOURCE, SPACE_OUTLINE_SAVED_MESH, SPACE_OUTLINE_SOURCE_PROPERTY,
+};
 use std::collections::{BTreeMap, BTreeSet};
 
 /// `BodySource` of a body drawn from the element's saved graphics.
@@ -224,6 +226,8 @@ pub fn attach_scoped_with_control(
         for property in &mut set.properties {
             if property.name == "BodySource" {
                 property.value = PropertyValue::Text(SAVED_MESH_BODY_SOURCE.into());
+            } else if property.name == SPACE_OUTLINE_SOURCE_PROPERTY {
+                property.value = PropertyValue::Text(SPACE_OUTLINE_SAVED_MESH.into());
             }
         }
     }

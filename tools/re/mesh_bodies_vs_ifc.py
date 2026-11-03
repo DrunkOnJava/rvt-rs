@@ -8,8 +8,11 @@ for every element whose `BodySource` in the rvt-rs export is
 meshes both in each file's own site frame, in Revit's internal feet, and
 measures the volume and how far each body's vertices lie from the other's
 surface. Per class, and under it per Revit type: how many have Revit's
-volume within 1% and 0.01%, and every vertex of each body within 0.01 ft
-and 0.001 ft of the other's surface. Then the elements furthest off.
+volume within 1% and 0.01%, every vertex of each body within 0.01 ft
+and 0.001 ft of the other's surface, and "ref on ours": every tested vertex
+of Revit's body within 0.001 ft of rvt-rs's surface, which tells a mesh of
+the same surface from a mesh of another one where Revit's export is the
+coarser (RE-311). Then the elements furthest off.
 
 A class with more than 300 such bodies is scored on an even stride of 300 of
 them by Tag, and at most 400 vertices of each body are tested, so a file
@@ -80,7 +83,14 @@ def meshes(path, tags=None, source=None):
 
 
 def volume(triangles):
-    a, b, c = triangles[:, 0], triangles[:, 1], triangles[:, 2]
+    """The enclosed volume, taken about the body's own centre: a mesh with
+    cracks between its faces (each curved face is meshed on its own) has a
+    signed volume that grows with its distance from the origin, as a closed
+    mesh's does not (RE-311). The centre takes away only the origin's part:
+    a body missing a face still differs by its open boundary's area vector
+    times the centre's distance from it."""
+    centre = triangles.reshape(-1, 3).mean(axis=0)
+    a, b, c = triangles[:, 0] - centre, triangles[:, 1] - centre, triangles[:, 2] - centre
     return abs(np.einsum("ij,ij->i", a, np.cross(b, c)).sum() / 6.0)
 
 
@@ -100,7 +110,8 @@ def shell_volumes(triangles):
         root = find(keys[i])
         for k in keys[i + 1 : i + 3]:
             parent[find(k)] = root
-    a, b, c = triangles[:, 0], triangles[:, 1], triangles[:, 2]
+    centre = triangles.reshape(-1, 3).mean(axis=0)
+    a, b, c = triangles[:, 0] - centre, triangles[:, 1] - centre, triangles[:, 2] - centre
     signed = np.einsum("ij,ij->i", a, np.cross(b, c)) / 6.0
     shells = collections.defaultdict(float)
     for i, v in enumerate(signed):
@@ -190,19 +201,26 @@ def main():
             row["vol 0.01%"] += abs(ratio - 1) <= 1e-4
             row["0.01 ft"] += far <= 0.01
             row["0.001 ft"] += far <= 0.001
+            row["ref on ours"] += to_ours <= 0.001
         ratios[cls].append(ratio)
         scored.append((far, tag, cls, object_type, ratio, to_ours, to_ref))
-    print(f"{'class':<28} {'n':>6} {'vol 1%':>7} {'vol .01%':>8} {'0.01 ft':>8} {'0.001 ft':>8}  median volume ratio")
+    print(
+        f"{'class':<28} {'n':>6} {'vol 1%':>7} {'vol .01%':>8} {'0.01 ft':>8} {'0.001 ft':>8}"
+        f" {'ref on ours':>11}  median volume ratio"
+    )
     for cls in sorted(rows, key=lambda c: -rows[c][""]["n"]):
         row = rows[cls][""]
         print(
             f"{cls:<28} {row['n']:>6} {row['vol 1%']:>7} {row['vol 0.01%']:>8} {row['0.01 ft']:>8} {row['0.001 ft']:>8}"
-            f"  {statistics.median(ratios[cls]):.4f}"
+            f" {row['ref on ours']:>11}  {statistics.median(ratios[cls]):.4f}"
         )
         types = sorted((k for k in rows[cls] if k), key=lambda k: -rows[cls][k]["n"])
         for key in types[:6]:
             t = rows[cls][key]
-            print(f"    {t['n']:>5} {t['vol 1%']:>7} {t['vol 0.01%']:>8} {t['0.01 ft']:>8} {t['0.001 ft']:>8}  {key}")
+            print(
+                f"    {t['n']:>5} {t['vol 1%']:>7} {t['vol 0.01%']:>8} {t['0.01 ft']:>8} {t['0.001 ft']:>8}"
+                f" {t['ref on ours']:>11}  {key}"
+            )
     scored.sort(reverse=True)
     for far, tag, cls, object_type, ratio, to_ours, to_ref in scored[:15]:
         print(
