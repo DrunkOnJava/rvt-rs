@@ -435,9 +435,6 @@ pub enum OutlineAnchor {
 }
 
 fn reaches_anchor(face: &RoomFace, bbox: [f64; 6], anchor: OutlineAnchor) -> Option<[f64; 4]> {
-    if face.cylinder.is_some() {
-        return None;
-    }
     let (edge, bottom) = face.plan_edge()?;
     let reached = match anchor {
         OutlineAnchor::Floor => (bottom - bbox[2]).abs() <= BOX_TOLERANCE_FEET,
@@ -531,8 +528,10 @@ fn outline_from_faces(
     }
     let mut lines = Vec::new();
     for face in faces {
-        if let Some(edge) = reaches_anchor(face, bbox, anchor) {
-            lines.push(edge);
+        if span.is_none() || face.cylinder.is_none() {
+            if let Some(edge) = reaches_anchor(face, bbox, anchor) {
+                lines.push(edge);
+            }
         }
         if span.is_some_and(|read| read.arcs) {
             if let Some((low, high)) = face.vertical_cylinder_heights() {
@@ -557,6 +556,15 @@ fn outline_from_faces(
             profile_on_box(plan_profile_from_lines(&boundary)?, bbox, read.slack)
         }
     }
+}
+
+/// The room's outline from the solid whose header starts at `header`, where
+/// its wall faces (vertical, reaching the floor of `bbox`, a record box
+/// `[min x, min y, min z, max x, max y, max z]`) close into loops whose plan
+/// extent is `bbox`'s within [`BOX_TOLERANCE_FEET`]. A face's origin is its
+/// plane's, not a point on the face, so only the plan edges are checked.
+pub fn room_outline_at(buf: &[u8], header: usize, bbox: [f64; 6]) -> Option<PlanProfile> {
+    outline_from_faces(&solid_faces(buf, header), bbox, OutlineAnchor::Floor, None)
 }
 
 /// The outline the faces up to the solid's end make, resolved to a boundary,
