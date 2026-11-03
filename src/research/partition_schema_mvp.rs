@@ -689,7 +689,7 @@ pub fn recover_partition_schema_mvp(
             })
             .filter_map(|element| element.id)
             .collect();
-        rf.note_unread_type_openings(ids);
+        rf.note_unread_type_doors_windows(ids);
     }
     if !type_materials.is_empty() {
         for elements in [
