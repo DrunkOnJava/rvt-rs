@@ -350,6 +350,29 @@ pub const MAPPINGS: &[Mapping] = &[
         ifc_type: "IFCPIPEFITTING",
         predefined_type: None,
     },
+    // RE-319: conduits and their fittings, as the IFC4 subtypes of the
+    // `IfcFlowSegment` and `IfcFlowFitting` Revit's IFC2X3 export of BIM-Speed
+    // Vitoria `ALD26 Before` writes for all 102 and 74 (revit-ifc's
+    // `IFCCompatibilityType` writes both in IFC2X3 as those supertypes). No
+    // IFC4 export of a conduit is measured, so the `PredefinedType` stays
+    // unset. A gutter keeps Revit's own `IfcFlowSegment`, a concrete IFC4
+    // entity too: revit-ifc names no IFC4 entity for the gutter category
+    // (its category table is Revit's own, not in the source).
+    Mapping {
+        revit_class: "Conduit",
+        ifc_type: "IFCCABLECARRIERSEGMENT",
+        predefined_type: None,
+    },
+    Mapping {
+        revit_class: "ConduitFitting",
+        ifc_type: "IFCCABLECARRIERFITTING",
+        predefined_type: None,
+    },
+    Mapping {
+        revit_class: "Gutter",
+        ifc_type: "IFCFLOWSEGMENT",
+        predefined_type: None,
+    },
     // Massing / abstract.
     Mapping {
         revit_class: "Mass",
