@@ -70,7 +70,7 @@ def meshes(path, tags=None, source=None, model=None):
         if source is not None and body_sources(element) != source:
             continue
         chosen.append((element, shapes_of(element)))
-    shapes = mesh_parts(model, settings, [part for _, parts in chosen for part in parts])
+    shapes = mesh_parts(model, settings, [part for _, parts in chosen for part in parts], path)
     out = {}
     for element, parts in chosen:
         triangles = []

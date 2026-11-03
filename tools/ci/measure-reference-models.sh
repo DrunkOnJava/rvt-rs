@@ -256,7 +256,7 @@ finished() { # dir name started
 # longest ones do not start last (the BIM4LCA office's mesh_bodies_vs_ifc took
 # 477 s of its 1,953 run one after another, run 41589642386).
 model_tasks() { # name rvt ref
-  local name="$1" rvt="$2" ref="$3" s
+  local name="$1" rvt="$2" ref="$3" s meshes=
   echo "1 base"
   # ports_vs_ifc reads the findings the schema step's validation wrote, so it
   # runs after it, in the same task.
@@ -268,8 +268,10 @@ model_tasks() { # name rvt ref
       wanted "$s" || continue
       [ "$s" = ports_vs_ifc ] && wanted schema && continue
       case "$s" in
-        mesh_bodies_vs_ifc) echo "10 ifc:$s" ;;
-        saved_meshes_vs_ifc) echo "8 ifc:$s" ;;
+        # These two mesh the same bodies of the same two files, so they run
+        # one after the other as one task and the second reads what the
+        # first meshed.
+        mesh_bodies_vs_ifc | saved_meshes_vs_ifc) meshes=1 ;;
         layer_sets_vs_ifc | wall_heights_vs_ifc | door_bodies_vs_ifc) echo "2 ifc:$s" ;;
         *) echo "1 ifc:$s" ;;
       esac
@@ -280,6 +282,7 @@ model_tasks() { # name rvt ref
       echo "1 ifc:$s"
     done
   fi
+  [ -n "$meshes" ] && echo "18 meshes"
   [ -f "$MODELS/${rvt%.rvt}.revit-sets.ifc" ] && wanted revit_property_sets_vs_ifc && echo "2 sets"
   return 0
 }
@@ -324,6 +327,13 @@ model_task() { # name rvt ref task
       s=${task#ifc:}
       score "$dir/$s.txt" "$SCORERS/$s.py" "$dir/model.ifc" "$MODELS/$ref"
       ;;
+    meshes)
+      for s in saved_meshes_vs_ifc mesh_bodies_vs_ifc; do
+        wanted "$s" || continue
+        RVT_MESH_CACHE="$dir/mesh-cache" score "$dir/$s.txt" "$SCORERS/$s.py" "$dir/model.ifc" "$MODELS/$ref"
+      done
+      rm -rf "$dir/mesh-cache"
+      ;;
     sets)
       # RE-210: where Revit's export with its own property sets is beside the
       # model (<model>.revit-sets.ifc, the R2025 models), an export with
@@ -348,6 +358,7 @@ model_task() { # name rvt ref task
 model_done() { # name
   local dir ms
   dir=$(model_dir "$1")
+  rm -rf "$dir/mesh-cache"
   rm -f "$dir/model.glb" "$dir/validation.jsonl"
   [ -n "${KEEP_IFC:-}" ] || rm -f "$dir/model.ifc"
   ms=$(awk '{ms += $2} END {print ms + 0}' "$dir/timings.log" 2>/dev/null || echo 0)

@@ -85,7 +85,7 @@ def world_boxes(path, tags=None, transform=None, wanted=None, frame=True):
     # The order the geometry iterator returned them in, one thread, which the
     # tables' ties (equal counts) follow.
     elements.sort(key=lambda e: e.id())
-    shapes = mesh_parts(model, settings, elements)
+    shapes = mesh_parts(model, settings, elements, path)
     for element in elements:
         if element.id() not in shapes:
             continue
