@@ -23,7 +23,9 @@
 # Vitoria's "ALD26 Before" is spent (2026-11-03): held out, it exported no element against Revit's
 # 1,394, while every Autodesk 2018 sample exports its elements, so the cause shows on no sample and,
 # as Griffin's rule allows, this pair is measured in full to find it. "ALD26 Project", the same
-# building after its renovation, stays held out as the check.
+# building after its renovation, stays held out as the check. BIM Whale's "AdvancedProject" is spent
+# too (Griffin, 2026-11-03): held out, it exported none of its 8 rooms, while every Autodesk 2016 to
+# 2023 sample and the other 2021 pairs read theirs.
 #
 # An archive is pinned whole, and each member again after extraction under the name given here (a
 # name under spent/ is a pair measured in full, no longer held out).
@@ -42,5 +44,5 @@ member	bimspeed-gdynia-2021.ifc	gdynia:01 BIM Models/RUCHU OPORU 18.ifc	0420e8ae
 archive	warmond	https://api-depositonce.tu-berlin.de/server/api/core/bitstreams/a61de4fe-b02a-4a2d-b137-cf0b3f368156/content	97562039491e849512f68d7790d592d7f475b2d58ffd1be816dc4f2db0b99088	49144046
 member	bimspeed-warmond-2021.rvt	warmond:01 BIM Models/01 BIM Baseline/BIM-Speed_WarmondDemoSite_HTV2020_1edificio.rvt	171b1a6b7cc6312d63a4a4102656c697195978844af8eaba9e37c4f187cd91c1	15413248
 member	bimspeed-warmond-2021.ifc	warmond:01 BIM Models/01 BIM Baseline/ar.ifc	c53731aeaa0f96c50b38c41dde4ee979a49d3bfeb76f8178123e7cc45081bacd	4099545
-file	bimwhale-advanced-2021.rvt	https://www.dropbox.com/s/iifpj9ax7v4bakm/AdvancedProject_Revit21.rvt?dl=1	eba808f9dc16fa9bb6519dca836bde9820a84a3b9305b76968f236e9e6fff4b2	119123968
-file	bimwhale-advanced-2021.ifc	https://raw.githubusercontent.com/andrewisen/bim-whale-ifc-samples/b6d0d88a16b1/AdvancedProject/IFC/AdvancedProject.ifc	86b068a7ca6947e398c1daaa8bede9d31048c3990adc308429faeb56ee01db94	44337371
+file	spent/bimwhale-advanced-2021.rvt	https://www.dropbox.com/s/iifpj9ax7v4bakm/AdvancedProject_Revit21.rvt?dl=1	eba808f9dc16fa9bb6519dca836bde9820a84a3b9305b76968f236e9e6fff4b2	119123968
+file	spent/bimwhale-advanced-2021.ifc	https://raw.githubusercontent.com/andrewisen/bim-whale-ifc-samples/b6d0d88a16b1/AdvancedProject/IFC/AdvancedProject.ifc	86b068a7ca6947e398c1daaa8bede9d31048c3990adc308429faeb56ee01db94	44337371
