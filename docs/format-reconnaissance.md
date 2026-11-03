@@ -2252,6 +2252,10 @@ A saved `GEllipse` is `centre + xLen·cos t·x + yLen·sin t·y` over `m_endPara
 
 A saved cylinder face whose trim loop does not run round its UV box (a door's curved faces, cut by its leaf and frame) is meshed in strips across its angle: the cylinder is straight along its axis, so only U needs the chord bound. 155 more BIM4LCA office doors are then drawn from their saved meshes, 151 exact to 0.001 ft against Revit's export and all within 0.01 ft. Report: `reports/element-framing/RE-304-cylinder-trims.md`.
 
+## Addendum — RE-305 a cylinder face trimmed by several loops (2026-11-03)
+
+A loop inside another of a cylinder face's loops is a hole. Meshed with them, 30 more BIM4LCA office bodies are drawn from their saved meshes, all `Stay_Wall_Mounted_:VAR-1` and none Revit's body: 1.109 to 1.120 of its volume where the scorer lists them, the extra surface in three of five shells, as on RE-302's toilets, with no shared cause shown. So the change stays off `main`. Report: `reports/element-framing/RE-305-cylinder-holes.md`.
+
 ## Addendum — RE-303 a saved flip control (2026-11-03)
 
 The saved graphics class `GBiFlipControl` holds no geometry: an origin, a base vector and a length, with no pointer, a flip control drawn in a view. Left out of the walk, it lets 14 BIM4LCA office bodies be drawn from their saved meshes, and none of them is Revit's: all are railings whose saved mesh is a part of Revit's body (about 40% of its volume) or more than it. So it stays a decode failure, which keeps their boxes; what a railing's saved mesh lacks is the open question. Report: `reports/element-framing/RE-303-flip-controls-railings.md`.
