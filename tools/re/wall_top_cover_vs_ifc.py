@@ -50,8 +50,11 @@ wall from its start, `-` where the body is not there):
                                           taller, rvt-rs's lower (RE-320; a strip
                                           of the wall beside the centre line that a
                                           floor covers cannot show on the centre
-                                          line); form is how each file draws the
-                                          wall's Body
+                                          line); Revit's body is shifted across the
+                                          wall's thickness so that the two plans'
+                                          faces lie midway (the fit of Revit's frame
+                                          onto rvt-rs's leaves up to 0.02 ft); form
+                                          is how each file draws the wall's Body
   faces tag:<Tag> top <z> rvt-rs <A> Revit <A> taller <A> lower <A> volume rvt-rs <V> Revit <V>
                                           the plan area of the horizontal faces at
                                           rvt-rs's highest point in each body, and,
@@ -61,7 +64,7 @@ wall from its start, `-` where the body is not there):
                                           and where Revit's is and rvt-rs's is not
                                           (lower), in square feet; and each body's
                                           volume, cubic feet
-  piece tag:<Tag> area <A> width <W> inside Revit's plan <A> at Revit's full height <share>
+  piece tag:<Tag> area <A> width <W> at <x> <y> inside Revit's plan <A> at Revit's full height <share>
                                           for a wall rvt-rs steps: each piece of
                                           its plan at its highest point, its area,
                                           its least width, and the share of it
@@ -89,6 +92,7 @@ import ifcopenshell
 import ifcopenshell.geom
 import numpy as np
 import shapely
+import shapely.affinity
 
 import wall_heights_vs_ifc as base
 
@@ -259,6 +263,26 @@ def plan_top(ours_body, revit_body, ours_plan, revit_plan, xs, ys, direction, th
         int((gap > PLAN_TOLERANCE).sum()),
         int((gap < -PLAN_TOLERANCE).sum()),
     )
+
+
+def across_shift(ours_plan, revit_plan, direction):
+    """The shift, across the wall, that puts Revit's plan midway between the
+    same faces as rvt-rs's: the two plans' extents along the normal to the
+    wall's long axis, centred on each other."""
+    normal = np.array([-direction[1], direction[0]])
+
+    def extent(plan):
+        along = np.array(plan.convex_hull.exterior.coords) @ normal
+        return float(along.min() + along.max()) / 2
+
+    return (extent(ours_plan) - extent(revit_plan)) * normal
+
+
+def shifted(triangles, shift):
+    out = triangles.copy()
+    out[:, :, 0] += shift[0]
+    out[:, :, 1] += shift[1]
+    return out
 
 
 def volume(triangles):
@@ -471,7 +495,10 @@ def main():
             f"| hits {int(hits.max()) if len(hits) else 0}"
         )
         on_centre += ours_runs == revit_runs
-        planned = plan_top(ours_body, revit_body, ours_plan, revit_plan, xs, ys, direction, thickness)
+        shift = across_shift(ours_plan, revit_plan, direction)
+        revit_across = shifted(revit_body, shift)
+        revit_plan_across = shapely.affinity.translate(revit_plan, shift[0], shift[1])
+        planned = plan_top(ours_body, revit_across, ours_plan, revit_plan_across, xs, ys, direction, thickness)
         if planned is None:
             print(f"plan tag:{tag} points 0 | form rvt-rs {ours_forms.get(tag, '-')} | Revit {revit_forms.get(tag, '-')}")
         else:
@@ -483,8 +510,8 @@ def main():
                 f"| form rvt-rs {ours_forms.get(tag, '-')} | Revit {revit_forms.get(tag, '-')}"
             )
         top = ours_box[5]
-        ours_full, revit_full = top_faces(ours_body, top), top_faces(revit_body, top)
-        common = ours_plan.intersection(revit_plan)
+        ours_full, revit_full = top_faces(ours_body, top), top_faces(revit_across, top)
+        common = ours_plan.intersection(revit_plan_across)
         taller = ours_full.difference(revit_full).intersection(common).area
         lower = revit_full.difference(ours_full).intersection(common).area
         print(
@@ -498,7 +525,7 @@ def main():
                 inside = piece.intersection(common).area
                 if inside > 1e-6:
                     print(
-                        f"piece tag:{tag} area {piece.area:.4f} width {least_width(piece):.4f} "
+                        f"piece tag:{tag} area {piece.area:.4f} width {least_width(piece):.4f} at {piece.centroid.x:.4f} {piece.centroid.y:.4f} "
                         f"inside Revit's plan {inside:.4f} at Revit's full height {piece.intersection(common).intersection(revit_full).area / inside:.4f}"
                     )
         low, high = ours_box[4], ours_box[5]
