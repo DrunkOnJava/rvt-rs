@@ -278,12 +278,6 @@ fn refined_plane_edge(
     samples.push(point::<2>(&ends[1]["uv"][other_side])?);
     let start = samples[0];
     let end = *samples.last().unwrap();
-    let varying = (0..2).find(|&axis| {
-        (start[axis] - end[axis]).abs() > 1e-7
-            && samples
-                .iter()
-                .all(|uv| (uv[1 - axis] - start[1 - axis]).abs() < 1e-7)
-    });
     let plane_index = index
         .resolve(face, &g.objects[face].fields["m_pSurf"])?
         .context("plane surface missing")?;
@@ -304,7 +298,7 @@ fn refined_plane_edge(
         det.is_finite() && det > 1e-24,
         "singular shared plane basis"
     );
-    let project = |uv: [f64; 2], tolerance: f64| -> Result<[f64; 2]> {
+    let project = |uv: [f64; 2]| -> Result<[f64; 2]> {
         let q = evaluate(uv)?;
         let d = std::array::from_fn(|k| q[k] - origin[k]);
         let dx = dot(d, x);
@@ -314,7 +308,7 @@ fn refined_plane_edge(
             .map(|k| (origin[k] + p[0] * x[k] + p[1] * y[k] - q[k]).powi(2))
             .sum::<f64>();
         ensure!(
-            residual <= tolerance,
+            residual <= 1e-14,
             "shared curved edge leaves adjacent plane"
         );
         Ok(p)
@@ -325,47 +319,23 @@ fn refined_plane_edge(
     );
     for (uv, expected) in samples.iter().zip(&original) {
         ensure!(
-            close(project(*uv, 1e-14)?, *expected),
+            close(project(*uv)?, *expected),
             "shared edge surface samples disagree"
         );
     }
-    let Some(axis) = varying else {
-        // An edge of a loop that is not the curved face's UV box: its mesher
-        // cuts each segment between samples where it crosses the grid's U
-        // values, and V values on a ruled surface or a surface of revolution
-        // (a cylinder's strips are cut across U only), so the plane takes the
-        // same points. A cut lies on the curved face between two samples, so
-        // it may leave the plane by up to the 0.001 ft chord bound (#1247).
-        let cut_axes: &[usize] = if kind == "CylSurf" { &[0] } else { &[0, 1] };
-        let mut points = vec![project(start, 1e-14)?];
-        for pair in samples.windows(2) {
-            let (a, b) = (pair[0], pair[1]);
-            let mut cuts = Vec::new();
-            for &axis in cut_axes {
-                let knots = if axis == 0 { &u_values } else { &v_values };
-                let lo = a[axis].min(b[axis]);
-                let hi = a[axis].max(b[axis]);
-                let first = knots.partition_point(|&k| k <= lo + 1e-12);
-                let last = knots.partition_point(|&k| k < hi - 1e-12);
-                for &k in &knots[first..last.max(first)] {
-                    let t = (k - a[axis]) / (b[axis] - a[axis]);
-                    let mut p = [a[0] + t * (b[0] - a[0]), a[1] + t * (b[1] - a[1])];
-                    p[axis] = k;
-                    cuts.push((t, p));
-                }
-            }
-            ensure!(
-                points.len() + cuts.len() <= 4_000_000,
-                "shared curved edge refinement budget exceeded"
-            );
-            cuts.sort_by(|p, q| p.0.total_cmp(&q.0));
-            cuts.dedup_by(|p, q| (p.0 - q.0).abs() <= 1e-12);
-            for (_, p) in cuts {
-                points.push(project(p, 1e-6)?);
-            }
-            points.push(project(b, 1e-14)?);
-        }
-        return Ok(points);
+    let Some(axis) = varying_axis(&samples) else {
+        // An edge of a loop that is not the curved face's UV box: the curved
+        // face is cut on the edge's true course, and the plane takes the same
+        // points (#1247).
+        let knots = if kind == "CylSurf" {
+            [Some(u_values.as_slice()), None]
+        } else {
+            [Some(u_values.as_slice()), Some(v_values.as_slice())]
+        };
+        return edge_on_plane(&samples, knots, &*evaluate, plane_frame(g, plane_index)?)?
+            .into_iter()
+            .map(project)
+            .collect();
     };
     let knots = if axis == 0 { u_values } else { v_values };
     let lo = start[axis].min(end[axis]);
@@ -384,9 +354,177 @@ fn refined_plane_edge(
         .map(|t| {
             let mut uv = start;
             uv[axis] = t;
-            project(uv, 1e-14)
+            project(uv)
         })
         .collect()
+}
+
+/// The axis along which an edge's UV samples on a face vary, where every
+/// sample keeps the other parameter: `None` where the edge is not
+/// isoparametric.
+fn varying_axis(samples: &[[f64; 2]]) -> Option<usize> {
+    let start = *samples.first()?;
+    let end = *samples.last()?;
+    (0..2).find(|&axis| {
+        (start[axis] - end[axis]).abs() > 1e-7
+            && samples
+                .iter()
+                .all(|uv| (uv[1 - axis] - start[1 - axis]).abs() < 1e-7)
+    })
+}
+
+/// The origin and unit normal of a `Plane` surface.
+pub(crate) fn plane_frame(g: &ObjectGraph, plane: usize) -> Result<([f64; 3], [f64; 3])> {
+    let object = &g.objects[plane];
+    ensure!(
+        object.class_name == "Plane",
+        "edge refinement requires a plane"
+    );
+    let origin = point::<3>(&object.fields["m_origin"])?;
+    let x = point::<3>(&object.fields["m_xVec"])?;
+    let y = point::<3>(&object.fields["m_yVec"])?;
+    let n = [
+        x[1] * y[2] - x[2] * y[1],
+        x[2] * y[0] - x[0] * y[2],
+        x[0] * y[1] - x[1] * y[0],
+    ];
+    let length = n.iter().map(|v| v * v).sum::<f64>().sqrt();
+    ensure!(
+        length.is_finite() && length > 1e-12,
+        "singular shared plane basis"
+    );
+    Ok((origin, n.map(|v| v / length)))
+}
+
+/// A curved face's UV points along an edge it shares with a plane, where the
+/// edge is not isoparametric on it (#1247, RE-302). Revit's samples are
+/// sparse, and the straight UV line between two of them strays from the
+/// plane by up to 0.01 ft, so where the line crosses one of `knots` (U, and
+/// V where given) the crossing is moved along that grid line onto the plane
+/// by Newton's method: onto the true edge, where the surface meets the plane.
+/// The curved face is cut there and the plane takes the same points. A
+/// crossing that does not converge, moves farther than its segment is long,
+/// or leaves a grid line between two points fails the edge.
+pub(crate) fn edge_on_plane(
+    samples: &[[f64; 2]],
+    knots: [Option<&[f64]>; 2],
+    eval: &dyn Fn([f64; 2]) -> Result<[f64; 3]>,
+    (origin, normal): ([f64; 3], [f64; 3]),
+) -> Result<Vec<[f64; 2]>> {
+    let height = |p: [f64; 2]| -> Result<f64> {
+        let q = eval(p)?;
+        Ok((0..3).map(|k| (q[k] - origin[k]) * normal[k]).sum())
+    };
+    let distance =
+        |a: [f64; 3], b: [f64; 3]| (0..3).map(|k| (a[k] - b[k]).powi(2)).sum::<f64>().sqrt();
+    let crossed = |knots: &[f64], a: f64, b: f64| {
+        let first = knots.partition_point(|&k| k <= a.min(b) + 1e-12);
+        let last = knots.partition_point(|&k| k < a.max(b) - 1e-12);
+        first..last.max(first)
+    };
+    let mut points = vec![*samples.first().context("empty shared edge")?];
+    for pair in samples.windows(2) {
+        let (a, b) = (pair[0], pair[1]);
+        let chord = distance(eval(a)?, eval(b)?);
+        let mut cuts = Vec::new();
+        for (axis, knots) in knots.iter().enumerate() {
+            let Some(knots) = knots else {
+                continue;
+            };
+            let free = 1 - axis;
+            for &k in &knots[crossed(knots, a[axis], b[axis])] {
+                let t = (k - a[axis]) / (b[axis] - a[axis]);
+                let at = |s: f64| {
+                    let mut p = [k; 2];
+                    p[free] = s;
+                    p
+                };
+                let guess = a[free] + t * (b[free] - a[free]);
+                let mut s = guess;
+                let mut solved = false;
+                for _ in 0..32 {
+                    let f = height(at(s))?;
+                    if f.abs() <= 1e-10 {
+                        solved = true;
+                        break;
+                    }
+                    let h = 1e-7 * s.abs().max(1.);
+                    let slope = (height(at(s + h))? - height(at(s - h))?) / (2. * h);
+                    ensure!(
+                        slope.is_finite() && slope.abs() > 1e-12,
+                        "true edge crossing has no slope"
+                    );
+                    s -= f / slope;
+                    ensure!(s.is_finite(), "true edge crossing diverges");
+                }
+                ensure!(solved, "true edge crossing does not converge");
+                ensure!(
+                    distance(eval(at(s))?, eval(at(guess))?) <= chord,
+                    "true edge crossing leaves its segment"
+                );
+                cuts.push((t, at(s)));
+            }
+        }
+        ensure!(
+            points.len() + cuts.len() <= 4_000_000,
+            "shared curved edge refinement budget exceeded"
+        );
+        cuts.sort_by(|p, q| p.0.total_cmp(&q.0));
+        cuts.dedup_by(|p, q| (p.0 - q.0).abs() <= 1e-12);
+        points.extend(cuts.into_iter().map(|(_, p)| p));
+        points.push(b);
+    }
+    // The mesher cuts the straight UV line between two points wherever it
+    // crosses a grid line, and such a cut would be off the true edge.
+    for pair in points.windows(2) {
+        for (axis, knots) in knots.iter().enumerate() {
+            if let Some(knots) = knots {
+                ensure!(
+                    crossed(knots, pair[0][axis], pair[1][axis]).is_empty(),
+                    "true edge crosses a grid line between its points"
+                );
+            }
+        }
+    }
+    Ok(points)
+}
+
+/// A curved face's samples along one of its loop's edges, moved onto the
+/// true edge where the face beside it is a plane and the edge is not
+/// isoparametric (`edge_on_plane`).
+pub(crate) fn curved_edge_points(
+    g: &ObjectGraph,
+    edge: usize,
+    side: usize,
+    samples: Vec<[f64; 2]>,
+    knots: [Option<&[f64]>; 2],
+    eval: &dyn Fn([f64; 2]) -> Result<[f64; 3]>,
+) -> Result<Vec<[f64; 2]>> {
+    if samples.len() < 2 || varying_axis(&samples).is_some() {
+        return Ok(samples);
+    }
+    let faces = g.objects[edge].fields["m_pFace"]
+        .as_array()
+        .context("edge face pair")?;
+    ensure!(faces.len() == 2, "edge face pair length");
+    let Some(other) = pointer(g, edge, &faces[1 - side])? else {
+        return Ok(samples);
+    };
+    let Some(surface) = pointer(g, other, &g.objects[other].fields["m_pSurf"])? else {
+        return Ok(samples);
+    };
+    if g.objects[surface].class_name != "Plane" {
+        return Ok(samples);
+    }
+    edge_on_plane(&samples, knots, eval, plane_frame(g, surface)?)
+}
+
+/// How `ring_impl` refines each edge's samples: a plane face's to its curved
+/// neighbours' points, or a curved face's onto the planes beside it.
+enum Refine<'a> {
+    No,
+    Plane,
+    Curved(&'a dyn Fn(usize, usize, Vec<[f64; 2]>) -> Result<Vec<[f64; 2]>>),
 }
 fn inside(p: [f64; 2], r: &[[f64; 2]]) -> bool {
     let mut hit = false;
@@ -407,14 +545,14 @@ fn ring(
     face: usize,
     li: usize,
 ) -> Result<Vec<[f64; 2]>> {
-    ring_impl(g, index, face, li, false)
+    ring_impl(g, index, face, li, Refine::No)
 }
 fn ring_impl(
     g: &ObjectGraph,
     index: &PointerIndex<'_>,
     face: usize,
     li: usize,
-    refine_plane: bool,
+    refine: Refine<'_>,
 ) -> Result<Vec<[f64; 2]>> {
     let l = &g.objects[li];
     ensure!(
@@ -460,9 +598,11 @@ fn ring_impl(
             pts.push(point::<2>(&p["uv"][side])?)
         }
         pts.push(point::<2>(&endpoints[1]["uv"][side])?);
-        if refine_plane {
-            pts = refined_plane_edge(g, index, face, cur, side, pts)?;
-        }
+        pts = match refine {
+            Refine::No => pts,
+            Refine::Plane => refined_plane_edge(g, index, face, cur, side, pts)?,
+            Refine::Curved(refine) => refine(cur, side, pts)?,
+        };
         segments.push(pts);
         cur = index
             .resolve(cur, &e.fields["m_next"][side])?
@@ -591,7 +731,7 @@ fn face_indexed(g: &ObjectGraph, index: &PointerIndex<'_>, fi: usize) -> Result<
     let mut seen = BTreeSet::new();
     loop {
         ensure!(seen.insert(li), "loop-list cycle");
-        loops.push(ring_impl(g, index, fi, li, true)?);
+        loops.push(ring_impl(g, index, fi, li, Refine::Plane)?);
         match index.resolve(li, &g.objects[li].fields["m_nextLoop"])? {
             Some(next) => li = next,
             None => break,
@@ -944,8 +1084,20 @@ pub fn cylinder_face(
         v_range,
     });
     if !rectangular {
+        let surface_point = |p: [f64; 2]| -> Result<[f64; 3]> { Ok(eval(p[0], p[1])) };
+        let refine = |edge: usize, side: usize, samples: Vec<[f64; 2]>| {
+            curved_edge_points(
+                g,
+                edge,
+                side,
+                samples,
+                [Some(u_values.as_slice()), None],
+                &surface_point,
+            )
+        };
+        let outline = ring_impl(g, &index, fi, loop_index, Refine::Curved(&refine))?;
         let (vertices, normals, triangles) = strip_mesh(
-            &trim_uv,
+            &outline,
             &u_values,
             radius,
             orient,

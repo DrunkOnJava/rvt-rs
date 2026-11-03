@@ -103,83 +103,12 @@ fn ruled_surface_component(
     Ok(component)
 }
 
-pub(crate) fn face_grid(g: &ObjectGraph, fi: usize) -> Result<FaceGrid> {
-    use crate::native_parametric_surface::Curve;
-    use crate::native_saved_mesh::pointer;
-    let f = g.objects.get(fi).context("face index")?;
-    ensure!(f.class_name == "Face", "not Face");
-    ensure!(
-        f.fields["m_faceRegions"]
-            .as_array()
-            .is_some_and(Vec::is_empty),
-        "face regions need subdivision"
-    );
-    let si = pointer(g, fi, &f.fields["m_pSurf"])?.context("face surface")?;
-    let surface = ParametricSurface::read(g, si)?;
-    let li = pointer(g, fi, &f.fields["m_pFirstLoop"])?.context("face loop")?;
-    let l = &g.objects[li];
-    ensure!(
-        ["EdgeLoop", "EdgeLoopWithChainEnvelopes"].contains(&l.class_name.as_str()),
-        "unsupported trim loop"
-    );
-    ensure!(l.fields["m_open"] == false, "open trim loop");
-    ensure!(
-        pointer(g, li, &l.fields["m_pFace"])? == Some(fi),
-        "loop owner mismatch"
-    );
-    ensure!(
-        pointer(g, li, &l.fields["m_nextLoop"])?.is_none(),
-        "multiple parametric trim loops unsupported"
-    );
-    let mut cur = pointer(g, li, &l.fields["m_next"])?.context("empty trim")?;
-    let mut seen = std::collections::BTreeSet::new();
-    let mut segments = Vec::new();
-    while cur != li {
-        ensure!(seen.insert(cur), "trim edge cycle");
-        let e = &g.objects[cur];
-        ensure!(e.class_name == "Edge", "nonedge trim member");
-        let faces = e.fields["m_pFace"].as_array().context("edge face pair")?;
-        ensure!(faces.len() == 2, "edge face pair length");
-        let mut side = None;
-        for (i, p) in faces.iter().enumerate() {
-            if pointer(g, cur, p)? == Some(fi) {
-                ensure!(side.is_none(), "ambiguous face side");
-                side = Some(i);
-            }
-        }
-        let side = side.context("edge does not belong to face")?;
-        let ends = e.fields["m_firstAndLastEdgePnts"]
-            .as_array()
-            .context("edge endpoints")?;
-        ensure!(ends.len() == 2, "edge endpoint count");
-        let mut points = vec![uv_point(&ends[0]["uv"][side])?];
-        for p in e.fields["m_interiorEdgePnts"]
-            .as_array()
-            .context("edge interior points")?
-        {
-            points.push(uv_point(&p["uv"][side])?);
-        }
-        points.push(uv_point(&ends[1]["uv"][side])?);
-        segments.push(points);
-        cur = pointer(g, cur, &e.fields["m_next"][side])?.context("null trim next")?;
-    }
-    ensure!(segments.len() >= 2, "too few parametric edges");
-    ensure!(
-        segments.iter().all(|s: &Vec<_>| !s.is_empty()),
-        "empty parametric edge"
-    );
-    let env = surface.bounds();
-    for segment in &mut segments {
-        for p in segment {
-            for k in 0..2 {
-                ensure!(
-                    p[k] >= env[0][k] - 1e-7 && p[k] <= env[1][k] + 1e-7,
-                    "trim outside surface envelope"
-                );
-                p[k] = p[k].clamp(env[0][k], env[1][k]);
-            }
-        }
-    }
+/// Whether a trim's edges close in model coordinates, and its loop in UV, in
+/// order, where it is continuous in UV (no seam).
+fn order_loop(
+    surface: &ParametricSurface,
+    segments: &[Vec<[f64; 2]>],
+) -> Result<(bool, Option<Vec<[f64; 2]>>)> {
     let mut closes = false;
     // The loop in UV, in order, where it is continuous in UV (no seam).
     let mut ordered: Option<Vec<[f64; 2]>> = None;
@@ -237,6 +166,89 @@ pub(crate) fn face_grid(g: &ObjectGraph, fi: usize) -> Result<FaceGrid> {
             break;
         }
     }
+    Ok((closes, ordered))
+}
+
+pub(crate) fn face_grid(g: &ObjectGraph, fi: usize) -> Result<FaceGrid> {
+    use crate::native_parametric_surface::Curve;
+    use crate::native_saved_mesh::pointer;
+    let f = g.objects.get(fi).context("face index")?;
+    ensure!(f.class_name == "Face", "not Face");
+    ensure!(
+        f.fields["m_faceRegions"]
+            .as_array()
+            .is_some_and(Vec::is_empty),
+        "face regions need subdivision"
+    );
+    let si = pointer(g, fi, &f.fields["m_pSurf"])?.context("face surface")?;
+    let surface = ParametricSurface::read(g, si)?;
+    let li = pointer(g, fi, &f.fields["m_pFirstLoop"])?.context("face loop")?;
+    let l = &g.objects[li];
+    ensure!(
+        ["EdgeLoop", "EdgeLoopWithChainEnvelopes"].contains(&l.class_name.as_str()),
+        "unsupported trim loop"
+    );
+    ensure!(l.fields["m_open"] == false, "open trim loop");
+    ensure!(
+        pointer(g, li, &l.fields["m_pFace"])? == Some(fi),
+        "loop owner mismatch"
+    );
+    ensure!(
+        pointer(g, li, &l.fields["m_nextLoop"])?.is_none(),
+        "multiple parametric trim loops unsupported"
+    );
+    let mut cur = pointer(g, li, &l.fields["m_next"])?.context("empty trim")?;
+    let mut seen = std::collections::BTreeSet::new();
+    let mut segments = Vec::new();
+    let mut edges = Vec::new();
+    while cur != li {
+        ensure!(seen.insert(cur), "trim edge cycle");
+        let e = &g.objects[cur];
+        ensure!(e.class_name == "Edge", "nonedge trim member");
+        let faces = e.fields["m_pFace"].as_array().context("edge face pair")?;
+        ensure!(faces.len() == 2, "edge face pair length");
+        let mut side = None;
+        for (i, p) in faces.iter().enumerate() {
+            if pointer(g, cur, p)? == Some(fi) {
+                ensure!(side.is_none(), "ambiguous face side");
+                side = Some(i);
+            }
+        }
+        let side = side.context("edge does not belong to face")?;
+        edges.push((cur, side));
+        let ends = e.fields["m_firstAndLastEdgePnts"]
+            .as_array()
+            .context("edge endpoints")?;
+        ensure!(ends.len() == 2, "edge endpoint count");
+        let mut points = vec![uv_point(&ends[0]["uv"][side])?];
+        for p in e.fields["m_interiorEdgePnts"]
+            .as_array()
+            .context("edge interior points")?
+        {
+            points.push(uv_point(&p["uv"][side])?);
+        }
+        points.push(uv_point(&ends[1]["uv"][side])?);
+        segments.push(points);
+        cur = pointer(g, cur, &e.fields["m_next"][side])?.context("null trim next")?;
+    }
+    ensure!(segments.len() >= 2, "too few parametric edges");
+    ensure!(
+        segments.iter().all(|s: &Vec<_>| !s.is_empty()),
+        "empty parametric edge"
+    );
+    let env = surface.bounds();
+    for segment in &mut segments {
+        for p in segment {
+            for k in 0..2 {
+                ensure!(
+                    p[k] >= env[0][k] - 1e-7 && p[k] <= env[1][k] + 1e-7,
+                    "trim outside surface envelope"
+                );
+                p[k] = p[k].clamp(env[0][k], env[1][k]);
+            }
+        }
+    }
+    let (closes, ordered) = order_loop(&surface, &segments)?;
     ensure!(closes, "disconnected parametric trim in model coordinates");
     let trim = segments.iter().flatten().copied().collect::<Vec<_>>();
     let min = std::array::from_fn(|k| trim.iter().map(|p| p[k]).fold(f64::INFINITY, f64::min));
@@ -440,9 +452,42 @@ pub(crate) fn face_grid(g: &ObjectGraph, fi: usize) -> Result<FaceGrid> {
         a.dedup_by(|a, b| (*a - *b).abs() < 1e-12);
         Ok(a)
     };
+    let u = axis(0, du)?;
+    let v = axis(1, dv)?;
+    // A trimmed face is cut on the true course of each edge it shares with a
+    // plane, its grid kept from the samples (#1247).
+    let ring = match ring {
+        None => None,
+        Some(ring) => {
+            let point = |p: [f64; 2]| surface.evaluate(p[0], p[1]);
+            let refined = segments
+                .iter()
+                .zip(&edges)
+                .map(|(segment, &(edge, side))| {
+                    crate::native_saved_mesh::curved_edge_points(
+                        g,
+                        edge,
+                        side,
+                        segment.clone(),
+                        [Some(u.as_slice()), Some(v.as_slice())],
+                        &point,
+                    )
+                })
+                .collect::<Result<Vec<_>>>()?;
+            if refined == segments {
+                Some(ring)
+            } else {
+                Some(
+                    order_loop(&surface, &refined)?
+                        .1
+                        .context("nonrectangular parametric trim")?,
+                )
+            }
+        }
+    };
     Ok(FaceGrid {
-        u: axis(0, du)?,
-        v: axis(1, dv)?,
+        u,
+        v,
         surface,
         trim,
         bounds: [min, max],
