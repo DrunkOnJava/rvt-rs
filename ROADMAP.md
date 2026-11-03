@@ -155,6 +155,9 @@ the four levels a file can reach are in the
 - **0.12.1, 2026-11-01.** Exports of Revit 2015 to 2023 files faster than in
   0.12.0, each the same as 0.12.0's but for the version its IFC header
   records; still slower than with 0.11.0 (#1237).
+- **0.12.2, 2026-11-03.** More doors drawn from Revit's saved meshes in the
+  default export and more bodies with `--saved-meshes`, from a user's
+  comparison of 0.6.1 and 0.12.0; some cases it found stay open (#1247).
 
 ### 0.13.0: IFC geometry and element data
 
