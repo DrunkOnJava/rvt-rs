@@ -4298,6 +4298,12 @@ pub const CUT_SOLID_SIZE_PROPERTIES: [&str; 3] =
 /// `crate::partition_schema_mvp::INSTANCE_BOX_SIZE_FIELDS`), feet.
 pub const INSTANCE_BOX_SIZE_PROPERTIES: [&str; 2] = ["BoxWidth", "BoxHeight"];
 
+/// Property holding the extent along X of the lines of no category in the
+/// saved graphics of a door's or window's symbol, the edges of its bounding
+/// boxes, where the symbol cuts no loop (RE-318,
+/// `crate::partition_schema_mvp::SYMBOL_WIRE_WIDTH_FIELD`), feet.
+pub const SYMBOL_WIRE_WIDTH_PROPERTY: &str = "SymbolWireWidth";
+
 /// Classes whose body another rule draws, which a family instance's turn
 /// leaves alone: columns (their type's section), beams (their line), and
 /// curtain-wall panels and mullions (their grid).
@@ -6467,6 +6473,15 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
                 value: PropertyValue::PositiveLengthFeet(feet),
             });
         }
+    }
+    // RE-318: one whose symbol cuts no loop, the extent along X of the lines
+    // of no category in its symbol's saved graphics.
+    if let Some(feet) = crate::partition_schema_mvp::symbol_wire_width_from_fields(&decoded.fields)
+    {
+        properties.push(Property {
+            name: SYMBOL_WIRE_WIDTH_PROPERTY.into(),
+            value: PropertyValue::PositiveLengthFeet(feet),
+        });
     }
     // A wall drawn from its centreline reports its type's thickness
     // (RE-54); one whose joins resolved reports the trim it took and, unless
