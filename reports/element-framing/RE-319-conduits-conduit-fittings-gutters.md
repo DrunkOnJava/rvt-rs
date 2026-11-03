@@ -15,7 +15,7 @@ Per category, frames with a decoded id / RE-21 instances / written (3D body, pha
 | file | conduits -2008132 | conduit fittings -2008128 | gutters -2001391 | cable trays -2008130 | cable tray fittings -2008126 |
 |---|---|---|---|---|---|
 | Vitoria `ALD26 Before` (2018, IFC2X3 export) | 102 / 102 / 102 / **102** | 135 / 74 / 74 / **74** | 2 / 2 / 2 / **2** | none | 5 / 0 / 0 / nothing to score |
-| RE1 Electrical, Mechanical, Plumbing (2025); Core Interior (2024); the four BIM4LCA office files (2024); the 29 R2025 models; Einhoven (2023); every `rac` and `rst` sample | none of the five | none | none | none | none |
+| RE1 Electrical, Mechanical, Plumbing (2025); Core Interior (2024); the four BIM4LCA office files (2024); the 24 R2025 models; Einhoven (2023); every `rac` and `rst` sample | none of the five | none | none | none | none |
 | Autodesk `rme_advanced` 2015, 2019, 2024 to 2027 (no export) | 19 / 19 / 19 | 32 to 34 / 14 / 14 | none | 17 / 17 / 17 | 48 to 50 / 14 / 14 |
 | Autodesk `rme_basic` 2015, 2019, 2024 to 2027 (no export) | 20 / 20 / 20 | 32 to 34 / 14 / 14 | none | none | 14 / 0 / 0 |
 | Snowdon Towers Electrical 2024 (no export) | 530 / 530 / 530 | 338 / 322 / 322 | none | none | 24 / 0 / 0 |
@@ -33,14 +33,18 @@ On `ALD26 Before` the census agrees with RE-315 §9: every conduit, conduit fitt
 
 ## 3. The class
 
-Revit's IFC2X3 export of `ALD26 Before` writes conduits and gutters as `IfcFlowSegment` and conduit fittings as `IfcFlowFitting`. rvt-rs writes IFC4. What revit-ifc says (Autodesk's open-source exporter, CLEANROOM source 5: read for what the export writes, cited by file and class, no code taken):
+Revit's IFC2X3 export of `ALD26 Before` writes conduits and gutters as `IfcFlowSegment` and conduit fittings as `IfcFlowFitting`. rvt-rs writes IFC4.
 
-- `Source/Revit.IFC.Common/Utility/IFCCompatibilityType.cs`, the dictionary `SuperTypeCompatibility`, says which IFC4 subtypes Revit writes as their supertype before IFC4: `IfcCableCarrierSegment`, `IfcCableSegment`, `IfcDuctSegment` and `IfcPipeSegment` as `IfcFlowSegment`; `IfcCableCarrierFitting`, `IfcCableFitting`, `IfcDuctFitting`, `IfcJunctionBox` and `IfcPipeFitting` as `IfcFlowFitting`. It is the IFC4-to-IFC2X3 direction, and it picks no subtype for a category.
-- `Source/Revit.IFC.Export/Exporter/FamilyInstanceExporter.cs`, `CanHaveSystemDefinition`, tests the types `IfcCableSegmentType`, `IfcCableCarrierSegmentType`, `IfcCableFittingType` and `IfcCableCarrierFittingType` against `OST_CableTrayFitting` and `OST_ConduitFitting`: a conduit fitting is exported as one of the cable types, which in IFC4 is the cable carrier fitting the compatibility table writes as `IfcFlowFitting`.
+**Revit's own type objects** name the IFC4 entity. The same export types each element by a type object, and `class_sets_vs_ifc` and `category_census_vs_ifc` read it (runs 41730511780 and 41740219735): the 102 conduits by `IfcCableCarrierSegmentType` (`PredefinedType` `NOTDEFINED`), the 74 conduit fittings by `IfcCableCarrierFittingType` (`NOTDEFINED`) and the 2 gutters by `IfcPipeSegmentType` with `PredefinedType` `GUTTER`; its 140 pipes by `IfcPipeSegmentType` (`NOTDEFINED`) and 128 pipe fittings by `IfcPipeFittingType`, which rvt-rs already writes as `IfcPipeSegment` and `IfcPipeFitting`. So the IFC4 entities are `IfcCableCarrierSegment`, `IfcCableCarrierFitting` and `IfcPipeSegment`, each a subtype of the `IfcFlowSegment` or `IfcFlowFitting` Revit writes for the occurrence.
+
+What revit-ifc says (Autodesk's open-source exporter, CLEANROOM source 5: read for what the export writes, cited by file and class, no code taken):
+
+- `Source/Revit.IFC.Common/Utility/IFCCompatibilityType.cs`, the dictionary `SuperTypeCompatibility`, says which IFC4 subtypes Revit writes as their supertype before IFC4: `IfcCableCarrierSegment`, `IfcCableSegment`, `IfcDuctSegment` and `IfcPipeSegment` as `IfcFlowSegment`; `IfcCableCarrierFitting`, `IfcCableFitting`, `IfcDuctFitting`, `IfcJunctionBox` and `IfcPipeFitting` as `IfcFlowFitting`. It is the IFC4-to-IFC2X3 direction, and it picks no subtype for a category; it is why the occurrences are `IfcFlowSegment` and `IfcFlowFitting` in this export.
+- `Source/Revit.IFC.Export/Exporter/FamilyInstanceExporter.cs`, `CanHaveSystemDefinition`, tests the types `IfcCableSegmentType`, `IfcCableCarrierSegmentType`, `IfcCableFittingType` and `IfcCableCarrierFittingType` against `OST_CableTrayFitting` and `OST_ConduitFitting`: a conduit fitting is exported as one of the cable types.
 - `Source/Revit.IFC.Export/Toolkit/IFC4Enums.cs`: `IFCCableCarrierSegmentType` has `CONDUITSEGMENT`, `IFCPipeSegmentType` has `GUTTER`.
-- The category-to-class table that decides the class of each category is Revit's own (`IFCCategoryTemplate`, `ExporterCacheManager.CategoryMappingTemplate`) and is not in revit-ifc's source, so **no source names the IFC4 class of `OST_Conduit`, `OST_ConduitFitting` or `OST_Gutter`**, and no IFC4 export in the development set holds one.
+- The category-to-class table that decides the class of each category is Revit's own (`IFCCategoryTemplate`, `ExporterCacheManager.CategoryMappingTemplate`) and is not in revit-ifc's source, so **revit-ifc names the IFC4 class of none of `OST_Conduit`, `OST_ConduitFitting` and `OST_Gutter`**. The class of the gutter, `IfcPipeSegment`, therefore rests on the type objects of Revit's own export (2 of 2) and on IFC4's `GUTTER`, not on revit-ifc.
 
-What is written, then: conduits as `IfcCableCarrierSegment` and their fittings as `IfcCableCarrierFitting`, the IFC4 subtypes of the `IfcFlowSegment` and `IfcFlowFitting` Revit writes (as pipes are `IfcPipeSegment` and `IfcPipeFitting` for the same two), with the cable carrier types chosen from IFC4's own enumerations and revit-ifc's cable fitting handling; **gutters as `IfcFlowSegment`, Revit's own class**, since revit-ifc gives no IFC4 entity for the category (`IfcPipeSegment` has a `GUTTER` type in IFC4, but no source ties Revit's gutter to it). `PredefinedType` stays unset on all three: no IFC4 export shows Revit's value, and the writer never invents an enumerator it did not decode. `IfcFlowSegment` is concrete in IFC4 and declares no `PredefinedType`, so it is written with its eight attributes (`step_writer::ElementTail::Tag`). No type object is written for the three (`IfcCableCarrierSegmentType` and the others are not in `type_entity_for`): a conduit fitting's type name is read and Revit's `Reference` property is written for it, as for every typed element, and 74 of 74 equal Revit's.
+What is written: conduits as `IfcCableCarrierSegment`, their fittings as `IfcCableCarrierFitting` and gutters as `IfcPipeSegment` (as pipes are `IfcPipeSegment` and `IfcPipeFitting` for the same two IFC2X3 classes). `PredefinedType` stays unset on all three, as a pipe's does: no IFC4 export shows Revit's value on an occurrence, and the writer never invents an enumerator it did not decode. Revit's type objects carry `GUTTER` for the gutters (2 of 2) and `NOTDEFINED` for the conduits and fittings, so writing `.GUTTER.` on a gutter is measured on its type object only; it is left for a decision. No type object is written for the three: a conduit fitting's type name is read and Revit's `Reference` property is written for it, as for every typed element, and 74 of 74 equal Revit's.
 
 ## 4. Bodies
 
@@ -63,7 +67,7 @@ Run 41730511780 (main's side `c28ff053`, head `9ade4f78`, every scorer, no model
 | elements on Revit's storey | 1,073 | **1,251** | |
 | elements on another storey, on none | 21, 16 | 21, 16 | |
 
-By Revit's class: 1,314 of 1,321 written. The same class: beams 1, building element proxies 43, columns 114, doors 68, members 206, plates 67, railings 14, roofs 8, slabs 9, stairs 6, stair flights 6, walls (`IfcWall`) 12, windows 70, and now **2 gutters (`IfcFlowSegment`)** (626). In IFC4's class for Revit's IFC2X3 one: 128 `IfcFlowFitting` as `IfcPipeFitting`, 140 `IfcFlowSegment` as `IfcPipeSegment`, 235 `IfcWallStandardCase` as `IfcWall`, and now **74 `IfcFlowFitting` as `IfcCableCarrierFitting` and 102 `IfcFlowSegment` as `IfcCableCarrierSegment`** (679). Another class: 9 `IfcCurtainWall` as `IfcWall` (unchanged). **Missing, 7** (185 before): 4 `IfcWallStandardCase` (the curtain-panel walls of RE-315 §5) and 3 `IfcElementAssembly` (not instances). `IfcFlowSegment` absent 0 (104), `IfcFlowFitting` absent 0 (74).
+By Revit's class: 1,314 of 1,321 written. The same class: beams 1, building element proxies 43, columns 114, doors 68, members 206, plates 67, railings 14, roofs 8, slabs 9, stairs 6, stair flights 6, walls (`IfcWall`) 12, windows 70 (624). In IFC4's class for Revit's IFC2X3 one: 128 `IfcFlowFitting` as `IfcPipeFitting`, 140 `IfcFlowSegment` as `IfcPipeSegment`, 235 `IfcWallStandardCase` as `IfcWall`, and now **74 `IfcFlowFitting` as `IfcCableCarrierFitting`, 102 `IfcFlowSegment` as `IfcCableCarrierSegment` and 2 `IfcFlowSegment` as `IfcPipeSegment`** (681). Another class: 9 `IfcCurtainWall` as `IfcWall` (unchanged). **Missing, 7** (185 before): 4 `IfcWallStandardCase` (the curtain-panel walls of RE-315 §5) and 3 `IfcElementAssembly` (not instances). `IfcFlowSegment` absent 0 (104), `IfcFlowFitting` absent 0 (74).
 
 The scorers that move (`compare-scorer-diff`, run 41730511780):
 
@@ -72,26 +76,47 @@ The scorers that move (`compare-scorer-diff`, run 41730511780):
 - `box_bodies_vs_ifc`: record-box bodies 880 to 1,058 (+102 conduits, +74 fittings, +2 gutters).
 - `duct_bodies_vs_ifc`: 0 to 104 flow segments written with a body, 102 of 104 within 0.01 ft of Revit's world box.
 - `names_vs_ifc`: 74 conduit fittings equal in name and ObjectType (`M_Codo de tubo - Aluminio:Estándar:<id>`, Revit's own); 102 conduits and 2 gutters differ, as the 140 pipes do (`Conduit-<id>` and `Gutter-<id>` where Revit's is `Tubo con uniones:Tubo:<id>` and `Canalón:Canalón:<id>`: the system family's name is Revit's, in the file's language, and the type name is not read for a system type on Revit 2018).
-- `type_objects_vs_ifc`: 74 more typed in ours, every TypeName equal to Revit's (592 to 666); 104 more untyped (the conduits and gutters).
+- `type_objects_vs_ifc`: Revit's types on the elements written 1,102 to 1,280; none of the 178 has a type object of ours (flow segments untyped 140 to 244, flow fittings 0 to 74); the TypeName carried on the occurrence is Revit's for 666 of 1,280 (592 before, the 74 conduit fittings added).
 - `psets_vs_ifc`: Revit's values on the objects written 4,961 to 5,317; equal 2,383 to 2,457 (the 74 fittings' `Pset_EnvironmentalImpactIndicators.Reference`); **different 0 to 0; values Revit does not write 20 to 20**; missing 2,578 to 2,860, 282 more, of which `Pset_DistributionFlowElementCommon.Reference` on the 178 (a set Revit writes on these three classes and not on the pipes, and that the Reference allow-list of #1120 does not name, so it is left out) and `Pset_EnvironmentalImpactIndicators.Reference` on the 104 conduits and gutters (no type name read).
 - `global_ids_vs_ifc`: none of the elements' GlobalIds is Revit's (#878), as before.
 - `schema.txt`: arity, validation, EXPRESS rules and property sets 0 findings; sets 1,668 to 1,742.
 
 No other scorer moves on this file (`ports_vs_ifc`, `pipe_bodies_vs_ifc`, `qtos_vs_ifc`, `predefined_types_vs_ifc`: unchanged).
 
-## 7. Other files
+## 7. Other files, and the held-out Project
 
-<!-- FILL: run ids and hashes of the unfiltered run -->
+Run 41733219416 (`-f holdout=true -f samples=true -f nordic=true -f r2025=true -f bimcollab=true`, no model filter, every scorer; main's side `782fff64`, head `4e9e3ef1`, the merge of main into the code of this report; the commits after it change documents and the census scorer only): 112 models exported on both sides, **97 byte for byte main's IFC and 15 moved**. The 15 are the models that hold the three categories where the rule selects an instance, and in each the only change is the conduits, conduit fittings and gutters written:
+
+| model | change |
+|---|---|
+| Vitoria `ALD26 Before` (spent) | +102 conduits, +74 conduit fittings, +2 gutters (§6) |
+| `ALD26 Project` (held out) | counts only, below |
+| Autodesk `rme_advanced` 2015, 2019, 2024, 2025, 2026, 2027 | +19 conduits, +14 conduit fittings each (swept solids +33 on 2024) |
+| Autodesk `rme_basic` 2015, 2019, 2024, 2025, 2026, 2027 | +20 conduits, +14 conduit fittings each (+34 on 2024) |
+| Snowdon Towers Electrical 2024 | +530 conduits, +322 conduit fittings (+852 swept solids) |
+
+Those samples have no Revit export: they are counted, not scored; their schema checks have 0 findings (the 2024 `rme` files' validation is skipped over 30 MB, as before). Unchanged, byte for byte: Core Interior, Einhoven, RE1 Architecture, Electrical, Mechanical and Plumbing, the four BIM4LCA files, the 24 R2025 models, BIMcollab's 2015 example, the other 17 held-out pairs (Frigento, Gdynia, Warmond, BIM Whale and the rest, whose `counts.txt` are main's line for line), and 45 samples, among them Snowdon Towers Architectural, Structural, HVAC and Plumbing (the last two hold conduit fittings and cable tray fittings that fail the rule). No other scorer output moves on any model.
+
+**Held out, counts only** (`ALD26 Project`, Revit's 1,520 elements and spaces: 1,447 elements and 73 spaces): main wrote 1,336 (1,263 elements and 73 spaces); the head writes **1,514 (1,441 elements and 73 spaces)**. `IfcFlowSegment` absent 104 to 0 and `IfcFlowFitting` absent 74 to 0, the two classes where any change should show; no element written that Revit's export lacks (the extra column is `IfcSpace` 73 as before, spaces paired by GlobalId); 1,433 of the 1,441 elements in Revit's class or IFC4's (the other 8 are curtain walls written as walls); 1,359 of 1,441 on Revit's storey (1,181 of 1,263), 14 on none and 21 on another, as before; the 6 elements missing are 3 `IfcElementAssembly` and 3 `IfcWallStandardCase`. Properties: Revit's values on the objects written 5,784 to 6,140, equal 2,919 to 2,993, **different 0 to 0, values Revit does not write 18 to 18**. The file was not opened.
 
 ## 8. Reproduce
 
-<!-- FILL -->
+```bash
+# the census, on every development file (the samples run the probe alone)
+gh workflow run measure.yml --ref main -f ref=3a81189c6dde0783004c41d3d2e4daf27930e1e8 -f base=none -f holdout=true -f samples=true -f nordic=true -f r2025=true -f bimcollab=true -f models="spent-* core-interior einhoven re1-* nordic-office-* r2025-* bimcollab-*" -f scorers=none -f probe=probe_re319_category_census -f probe_scorer=category_census_vs_ifc
+# Vitoria Before, every scorer, against main, with the IFC kept
+gh workflow run measure.yml --ref main -f ref=4e9e3ef10e3c47ce6d807761774f4921a199dc4a -f base=main -f holdout=true -f models="spent-*" -f keep_ifc=true
+# the final head: every model, every scorer, every held-out pair (counts only)
+gh workflow run measure.yml --ref main -f ref=4e9e3ef10e3c47ce6d807761774f4921a199dc4a -f base=main -f holdout=true -f samples=true -f nordic=true -f r2025=true -f bimcollab=true
+```
+
+Runs: census 41726416015 (head `eba89c8e`); the categories' names and types in Revit's export 41729789378 and 41740219735; `ALD26 Before` against main 41730511780 (head `9ade4f78`, before the gutters' elevation and the Level parameter) and 41731699676 (head `37838a94`, with the 2024 samples); the final run 41733219416. The census scorer is in `tools/re` at `3a81189c`; the scorer for the final run is the one of the head.
 
 ## 9. What stays missing, and what is not measured
 
 - 4 curtain-panel walls and 3 element assemblies of `ALD26 Before` (RE-315 §9).
 - Cable trays and cable tray fittings (above), on every file.
-- The class of a conduit, conduit fitting or gutter in an IFC4 export of Revit: no such export holds one. The IFC4 classes are the subtypes of Revit's IFC2X3 ones (conduits and fittings) and Revit's own class (gutters).
+- The class and `PredefinedType` of a conduit, conduit fitting or gutter occurrence in an IFC4 export of Revit: no such export holds one. The IFC4 classes follow the type objects of Revit's IFC2X3 export of `ALD26 Before`; the gutters' `GUTTER` is on their type objects only (2 of 2).
 - Conduits' and gutters' names, and their `Reference`: Revit 2018 writes `Tubo con uniones:Tubo:<id>`; the system type's name is not read there.
 - A conduit's or fitting's `Constraints` Level parameter: `rvt-ifc` writes none for the three classes, since no export measures its name (Revit's own for a pipe segment is `Reference Level`, for a fitting `Level`).
 - Ports and connections of conduit fittings: not written (`is_distribution_element` does not name `IfcCableCarrierFitting`), and the 2008 to 2023 path reads no joins at all.
