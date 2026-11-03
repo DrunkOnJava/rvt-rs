@@ -9,7 +9,8 @@
 # Each `file` row is downloaded into TARGET_DIR/holdout/ under its name; each
 # `archive` row (a .tar.gz) is downloaded and checked whole, and each `member`
 # row extracted from it into TARGET_DIR/holdout/ under its own name, so that a
-# model and Revit's export of it share a stem. Every file
+# model and Revit's export of it share a stem. A name under `spent/` goes to
+# TARGET_DIR/spent/ instead: a pair no longer held out, measured in full. Every file
 # is checked against its sha256 and byte count. Exits 1 when a file does not
 # match its pin and 2 when one could not be downloaded (NOT MEASURED).
 set -euo pipefail
@@ -19,7 +20,8 @@ TARGET="${2:?usage: fetch-holdout-archives.sh PINS TARGET_DIR}"
 sha256() { if command -v sha256sum > /dev/null; then sha256sum "$1"; else shasum -a 256 "$1"; fi | cut -d' ' -f1; }
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
-mkdir -p "$TARGET/holdout"
+mkdir -p "$TARGET/holdout" "$TARGET/spent"
+dest() { case "$1" in spent/*) echo "$TARGET/$1" ;; *) echo "$TARGET/holdout/$1" ;; esac; }
 check() { # file name sha bytes
   local got_sha got_bytes
   got_sha=$(sha256 "$1")
@@ -38,8 +40,8 @@ fetch() { # url out
 while IFS=$'\t' read -r kind name source sha bytes; do
   case "$kind" in
     file)
-      fetch "$source" "$TARGET/holdout/$name" || { echo "could not download $name"; exit 2; }
-      check "$TARGET/holdout/$name" "$name" "$sha" "$bytes"
+      fetch "$source" "$(dest "$name")" || { echo "could not download $name"; exit 2; }
+      check "$(dest "$name")" "$name" "$sha" "$bytes"
       ;;
     archive)
       fetch "$source" "$work/$name.tar.gz" || { echo "could not download $name"; exit 2; }
@@ -48,8 +50,8 @@ while IFS=$'\t' read -r kind name source sha bytes; do
     member)
       archive="${source%%:*}" path="${source#*:}"
       tar -xzf "$work/$archive.tar.gz" -C "$work" "$path"
-      mv "$work/$path" "$TARGET/holdout/$name"
-      check "$TARGET/holdout/$name" "$name" "$sha" "$bytes"
+      mv "$work/$path" "$(dest "$name")"
+      check "$(dest "$name")" "$name" "$sha" "$bytes"
       ;;
   esac
 done < <(grep -v '^#' "$PINS")

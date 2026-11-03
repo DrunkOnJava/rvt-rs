@@ -108,6 +108,16 @@ if [ -d "$MODELS/holdout" ]; then
 holdout-$stem|holdout/$stem.rvt|holdout/$stem.ifc"
   done
 fi
+# Pairs fetched with them that are no longer held out (research/holdout-archive-models.tsv
+# names them under spent/), measured and uploaded in full.
+if [ -d "$MODELS/spent" ]; then
+  for model in "$MODELS"/spent/*.rvt; do
+    [ -f "$model" ] || continue
+    stem=$(basename "$model" .rvt)
+    MODELS_LIST="$MODELS_LIST
+spent-$stem|spent/$stem.rvt|spent/$stem.ifc"
+  done
+fi
 # Scorers taking <rvt-rs.ifc> <revit-export.ifc>, and <model.glb> <revit-export.ifc>.
 IFC_SCORERS="class_sets_vs_ifc aggregates_vs_ifc global_ids_vs_ifc names_vs_ifc storeys_vs_ifc
 room_names_vs_ifc type_objects_vs_ifc layer_sets_vs_ifc element_materials_vs_ifc

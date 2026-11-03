@@ -20,11 +20,17 @@
 #   files however you like"): the Revit 2021 project its README links, and the IFC2X3 Coordination
 #   View 2.0 export by exporter 21.1.10.26 in the repository at b6d0d88a.
 #
-# An archive is pinned whole, and each member again after extraction under the name given here.
+# Vitoria's "ALD26 Before" is spent (2026-11-03): held out, it exported no element against Revit's
+# 1,394, while every Autodesk 2018 sample exports its elements, so the cause shows on no sample and,
+# as Griffin's rule allows, this pair is measured in full to find it. "ALD26 Project", the same
+# building after its renovation, stays held out as the check.
+#
+# An archive is pinned whole, and each member again after extraction under the name given here (a
+# name under spent/ is a pair measured in full, no longer held out).
 # kind	name	url, or archive:path	sha256	bytes
 archive	vitoria	https://api-depositonce.tu-berlin.de/server/api/core/bitstreams/7d063d7a-bf97-4fce-8507-3b134f857ed1/content	38180210ba9eed3de4e1a844787b16619d8ed90ac454928b1f6a893c0ac2f8ba	64238147
-member	bimspeed-vitoria-before-2018.rvt	vitoria:01 BIM Models/01 BIM Baseline/ALD26 Before.rvt	d3e5b04631e67265927be98352021ed6290b33ae67d39b1b6727fd76f014ff6f	23699456
-member	bimspeed-vitoria-before-2018.ifc	vitoria:01 BIM Models/01 BIM Baseline/ALD26 Before.ifc	a42c6f3b0c9b7575d4c37c675155ff53c02571ca81357a87023f9da5fbf45181	10873068
+member	spent/bimspeed-vitoria-before-2018.rvt	vitoria:01 BIM Models/01 BIM Baseline/ALD26 Before.rvt	d3e5b04631e67265927be98352021ed6290b33ae67d39b1b6727fd76f014ff6f	23699456
+member	spent/bimspeed-vitoria-before-2018.ifc	vitoria:01 BIM Models/01 BIM Baseline/ALD26 Before.ifc	a42c6f3b0c9b7575d4c37c675155ff53c02571ca81357a87023f9da5fbf45181	10873068
 member	bimspeed-vitoria-project-2018.rvt	vitoria:01 BIM Models/02 BIM Projected/ALD26 Project.rvt	3a03039709075d500a77d9003ba1e874083b457966f3f0522833f68fc9fa331f	24465408
 member	bimspeed-vitoria-project-2018.ifc	vitoria:01 BIM Models/02 BIM Projected/ALD26 Project.ifc	e9eba3aca6eca89ef28d38d9b5cc70335621502feac1a81687ffa115bd84f830	11490734
 archive	frigento	https://api-depositonce.tu-berlin.de/server/api/core/bitstreams/9240c8ec-b402-427c-9d65-db4f2ff532c4/content	00a972ff32ffcca943641c8d257d452480dfcf37b5ebee7476857f702847a53d	26947814
