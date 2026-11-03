@@ -13,21 +13,24 @@ fragments a release moves into this file.
 0.13.0 makes room and space import dependable on more files, reads Revit
 2018 projects that exported nothing before, and shows the browser viewer's
 real progress. Most of it follows reports from inevitable-co-ai (#1260,
-#1261, #1262), hemanth1986 (#1075, #421) and puzzbobb (#421), and it takes
-puzzbobb's speed-up of the native record reads (#1301). Thanks to all three.
+#1261, #1262), hemanth1986 (#1075, #1247, #421) and puzzbobb (#421), and it
+takes puzzbobb's speed-up of the native record reads (#1301). Thanks to all
+three.
 
 Measured against 0.12.2 on every reference model, Autodesk's sample projects
-and the held-out models (Measure run 41733089463 at `main` before #1292,
-#1300 and #1301, and each of those in its own run):
+and the held-out models (Measure run 41733089463 at #1300, before #1302,
+#1292 and #1301, which were each measured in their own run):
 - every `IfcSpace` says where its outline came from
   (`RvtElementRecordGeometry.SpaceOutlineSource`). On the BIM4LCA office 230
   of 234 rooms as built and 232 of 234 at building permit have Revit's area
   to 0.1% (221 and 222 before); the rest are labelled approximate (a column
   Revit's export may not take off, 0.45% to 0.68% under Revit's floor area)
   or keep their box, and say so;
-- rooms on Revit 2026 and 2027 take their outline instead of their box: the
-  257 rooms of Autodesk's four sample projects with rooms have the same
-  verdict and area in their 2026 and 2027 saves as in 2025;
+- rooms on Revit 2026 and 2027 take their outline instead of their box: each
+  of the 257 rooms of Autodesk's four sample projects with rooms gives the
+  same verdict and area in its 2026 and 2027 saves as in 2025, the rooms
+  that keep their box in 2025 included; where an outline sits is not
+  measured on those files;
 - the BIM4LCA terrain office writes Revit's 9 `IfcSpace`, not 98: the 89
   bicycle bays Revit's export leaves out are left out;
 - Revit 2018's `ALD26 Before` writes 1,136 of the 1,321 elements and all 73
@@ -35,21 +38,33 @@ and the held-out models (Measure run 41733089463 at `main` before #1292,
   writes 1,336 elements and spaces against Revit's 1,520, none that Revit's
   export lacks (counts only). Revit 2016 to 2023 exports now leave out
   elements outside the export phase and in non-primary design options, as
-  2024 and later did;
+  2024 and later did; on that one 2018 project the two filters together
+  remove 198 elements Revit's export lacks, and the counts cannot say which
+  removed which;
 - on the BIM4LCA office 186 more columns as built and 250 more at building
-  permit carry Revit's `Length` (279 of 279 and 321 of 327), and the two wall
-  hatches have Revit's width (268 of the 268 doors Revit sizes);
+  permit carry Revit's `Length` (279 of 279 and 321 of 327; the 6 at permit
+  without it are not explained), and the two wall hatches have Revit's width
+  (268 of the 268 doors Revit sizes). Both are one building's measurement;
 - the T-shaped roof of puzzbobb's Revit 2025 `20_T_U_Roof` is Revit's body;
-- Revit 2015 to 2023 exports take 5% to 19% less time, 2024 and 2025 5% to
-  13% (#1301).
+  the U-shaped roof stays its box, and roofs with several slope arrows are
+  drawn on Revit 2025 only.
+
+Faster, measured on one runner in one run against `main` before #1301 (which
+already had #1237's 4% to 5%): #1301 makes Revit 2015 to 2023 exports of
+Autodesk's samples 5% to 19% faster, their 2024 and 2025 samples 5% to 13%,
+and the BIM4LCA office 7% to 9%; RE1 Architecture took 6% longer and RE1
+Electrical 2% less.
 
 What is not measured yet is said in each entry: among others, whether the
 202 MB model behind #1075 now reads whole at the default limits, whether the
-ElementIds of the #421 reporter's files are Revit's, and the door width rule
-on any building but the BIM4LCA office.
+ElementIds of the #421 reporter's files are Revit's, the #1247 large-model
+door fix on the user's own project, and the door width rule on any building
+but the BIM4LCA office.
 
 ### Upgrading from 0.12
 
+- Every export's IFC header names rvt-rs 0.13.0, so an export that is
+  otherwise unchanged still differs from 0.12.2's there.
 - Every `IfcSpace` in a geometry export carries
   `RvtElementRecordGeometry.SpaceOutlineSource` (`stored_solid`,
   `stored_solid_faces`, `stored_solid_approximate`, `record_box`,
@@ -58,19 +73,27 @@ on any building but the BIM4LCA office.
   leaves the area of a boxed or approximate room blank.
 - A family instance exported as `IfcSpace` whose family draws no model form
   for its parameters is no longer written, as Revit's export does not write
-  it (#1262).
+  it (#1262; measured on Revit 2024, applied to 2023 to 2027). The export
+  diagnostics count it as `element_record_family_space_without_body`.
 - Revit 2016 to 2023 exports leave out elements outside the export phase and
   in non-primary design options. Revit 2008 to 2023 projects whose element
-  frames carry no ElementId of their own export many more elements.
+  frames carry no ElementId of their own export many more elements (measured
+  on one 2018 project).
 - `rvt-ifc` writes the IFC to `<output>.partial` and renames it when whole,
-  so a failed export leaves no file under the output's name.
+  so a failed export leaves no truncated file under the output's name (with
+  `--observation` it writes the file directly).
 - At the default limits a partition may inflate to 16 times its stored size,
   1 GiB to 4 GiB on a 64-bit build, so `--large-model` is needed less often.
+- A door or window sized from its symbol's box edges carries
+  `RvtElementRecordGeometry.SymbolWireWidth`.
+- `rvt::ifc::step_writer::write_step_to` streams the STEP text to any
+  writer.
 - The wasm binding `openRvtBytesWithDiagnosticsModeAndOpenLimits` takes an
   optional fourth argument, a progress callback.
 - The export diagnostics add `exported.bounding_box_spaces`,
   `exported.resolved_outline_spaces`, `exported.approximate_outline_spaces`
-  and a warning that counts doors and windows whose type record was not read.
+  and a warning that counts doors and windows whose type record was not
+  read.
 
 ### Added
 
@@ -136,7 +159,8 @@ on any building but the BIM4LCA office.
 - **`rvt-ifc` writes the IFC as it builds it.** The STEP text was built
   whole in memory and then written. It is now handed to the file every MiB,
   after the file handle and the partitions it keeps inflated are released.
-  The bytes are the same. The text goes to a file beside the output, renamed
+  The bytes are the same as before this change, but for the version the
+  header records. The text goes to a file beside the output, renamed
   when whole, so a failed export leaves no truncated file under its name. On
   the BIM4LCA office the text is 68 MB and the handle 362 MiB of inflated
   partitions; the saved-graphics pass, which runs before, still sets the
@@ -159,8 +183,8 @@ on any building but the BIM4LCA office.
 
 - **Exports read walls' native records once instead of twice, and skip
   per-record hashes no export uses.** Measured on GitHub's runners against
-  0.12.x on every reference model and Autodesk's samples, with byte-identical
-  output: Revit 2015 to 2023 exports take 4% to 5% less time, 2024 3%, 2025
+  0.12.x on every reference model and Autodesk's samples, with output
+  byte-identical but for the version its header records: Revit 2015 to 2023 exports take 4% to 5% less time, 2024 3%, 2025
   3%, 2026 and 2027 1% to 2%, the reference and BIM4LCA models 4%. Peak
   memory is unchanged within 1 MiB except on Autodesk's 2015 rme basic
   sample, 361 to 386 MiB, which is not explained (#1237).
@@ -222,13 +246,15 @@ on any building but the BIM4LCA office.
 - **Native record reads are faster: the graph decoder borrows the schema's
   classes instead of copying them for every object, and a values read takes
   only the types its elements name.** On one GitHub runner against `main`
-  (Measure 41736361020), Revit 2015 to 2023 exports take 5% to 19% less time
-  (Autodesk's `rac_advanced` and `rme` samples 15% to 19%), 2024 and 2025
-  exports 5% to 13%, and the BIM4LCA office 7% to 9%; RE1 Architecture, a
-  one-second export, took 6% longer in that run. Peak memory is within 5% of
-  before on every file, the largest rises Autodesk's 2015 `rme_basic` sample
-  (361 to 379 MiB) and RE1 Electrical (175 to 183 MiB). The IFC and the
-  diagnostics are the same (#1237, #1301; thanks to puzzbobb).
+  before it (Measure 41736361020), Revit 2015 to 2023 exports of Autodesk's
+  samples take 5% to 19% less time (`rac_advanced` and `rme` 15% to 19%),
+  their 2024 and 2025 samples 5% to 13%, and the BIM4LCA office 7% to 9%;
+  RE1 Architecture, a one-second export, took 6% longer in that run and RE1
+  Electrical 2% less. Peak memory is within 5% of before on every file, the
+  largest rises Autodesk's 2015 `rme_basic` sample (361 to 379 MiB in that
+  run) and RE1 Electrical (175 to 183 MiB). The IFC and the diagnostics are
+  the same as the commit before this change (Measure 41740244025) (#1237,
+  #1301; thanks to puzzbobb).
 
 ### Fixed
 
@@ -299,7 +325,8 @@ on any building but the BIM4LCA office.
   car bays; `rvt` wrote 89 of the bicycle bays as `IfcSpace` too. The terrain
   office's `IfcSpace` are now the 9 of Revit's export (9 of 98 before), and
   the six reference models, the other office files, the R2025 and the
-  held-out models export byte for byte as before. Only instances written as
+  held-out models export byte for byte as the commit before this change
+  did. Only instances written as
   `IfcSpace` are tested, other categories are not, and the export
   diagnostics count what is left out (#1262).
 
@@ -333,7 +360,8 @@ on any building but the BIM4LCA office.
   move on the as-built file (1756089, 1765267 and, by 7 micrometres, 1722215);
   the only other model with such a door, RE1 Architecture's curtain-wall
   door 445975, keeps its width, and 31 of 34 measured models and all 18
-  held-out models write the same IFC. One building's families: what the
+  held-out models write the same IFC as the commit before this change. One
+  building's families: what the
   boxes are, and why their extent is Revit's width, is inferred from Revit's
   widths, not documented (`reports/element-framing/RE-318-symbol-wire-width.md`).
 
