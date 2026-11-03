@@ -36,12 +36,17 @@ import ifcopenshell.geom
 import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from opening_boxes_vs_ifc import site_frame  # noqa: E402
+from ifc_common import mesh_parts, site_frame  # noqa: E402
 from roof_bodies_vs_ifc import shapes_of  # noqa: E402
 from saved_meshes_vs_ifc import body_sources  # noqa: E402
 
 SOURCE = "saved_graphics_mesh"
 PAIR_BUDGET = 1_000_000
+# surface_distance measures every pair up to this many, and beyond it prunes.
+EXHAUSTIVE = 200_000
+BLOCK = 8
+SEEDS = 4
+SLIVER = 1e-2
 # Most elements scored per class (an even stride through them by Tag), and
 # most vertices of a body tested against the other's surface, so a file
 # with thousands of mullions is scored in the time Measure allows.
@@ -49,13 +54,14 @@ CLASS_CAP = 300
 VERTEX_CAP = 400
 
 
-def meshes(path, tags=None, source=None):
+def meshes(path, tags=None, source=None, model=None):
     """Tag -> (class, ObjectType, triangles (T, 3, 3) in internal feet)."""
-    model = ifcopenshell.open(path)
+    if model is None:
+        model = ifcopenshell.open(path)
     frame = site_frame(model)
     settings = ifcopenshell.geom.settings()
     settings.set("use-world-coords", True)
-    out = {}
+    chosen = []
     for element in model.by_type("IfcElement"):
         if element.is_a("IfcOpeningElement") or not element.Tag:
             continue
@@ -63,19 +69,20 @@ def meshes(path, tags=None, source=None):
             continue
         if source is not None and body_sources(element) != source:
             continue
-        parts = []
-        for part in shapes_of(element):
-            try:
-                shape = ifcopenshell.geom.create_shape(settings, part)
-            except RuntimeError:
+        chosen.append((element, shapes_of(element)))
+    shapes = mesh_parts(model, settings, [part for _, parts in chosen for part in parts], path)
+    out = {}
+    for element, parts in chosen:
+        triangles = []
+        for part in parts:
+            if part.id() not in shapes:
                 continue
-            verts = np.array(shape.geometry.verts, dtype=float).reshape(-1, 3)
-            faces = np.array(shape.geometry.faces, dtype=int).reshape(-1, 3)
+            verts, faces = shapes[part.id()]
             if len(verts) and len(faces):
-                parts.append(frame(verts)[faces])
-        if not parts:
+                triangles.append(frame(verts)[faces])
+        if not triangles:
             continue
-        triangles = np.concatenate(parts)
+        triangles = np.concatenate(triangles)
         if element.Tag in out:
             triangles = np.concatenate([out[element.Tag][2], triangles])
         out[element.Tag] = (element.is_a(), element.ObjectType or "", triangles)
@@ -119,42 +126,148 @@ def shell_volumes(triangles):
     return sorted(shells.values(), key=lambda v: -abs(v))
 
 
+def dot(x, y):
+    return np.einsum("...k,...k->...", x, y)
+
+
 def segment_distances(p, a, b):
     ab = b - a
-    t = np.einsum("ntk,tk->nt", p - a, ab) / np.maximum(np.einsum("tk,tk->t", ab, ab), 1e-24)
+    t = dot(p - a, ab) / np.maximum(dot(ab, ab), 1e-24)
     q = a + np.clip(t, 0.0, 1.0)[..., None] * ab
     return np.linalg.norm(p - q, axis=-1)
 
 
-def surface_distance(points, triangles):
-    """The largest distance from any of `points` to the nearest triangle."""
+def triangle_terms(triangles):
     a, b, c = triangles[:, 0], triangles[:, 1], triangles[:, 2]
     ab, ac = b - a, c - a
     normal = np.cross(ab, ac)
     length = np.linalg.norm(normal, axis=1)
     unit = normal / np.maximum(length, 1e-24)[:, None]
-    d00 = np.einsum("tk,tk->t", ab, ab)
-    d01 = np.einsum("tk,tk->t", ab, ac)
-    d11 = np.einsum("tk,tk->t", ac, ac)
+    d00, d01, d11 = dot(ab, ab), dot(ab, ac), dot(ac, ac)
     denom = np.where(length > 1e-12, d00 * d11 - d01 * d01, 1.0)
-    worst = 0.0
-    step = max(1, PAIR_BUDGET // len(triangles))
-    for start in range(0, len(points), step):
-        p = points[start : start + step][:, None, :]
-        ap = p - a
-        height = np.einsum("ntk,tk->nt", ap, unit)
-        q = ap - height[..., None] * unit
-        d20 = np.einsum("ntk,tk->nt", q, ab)
-        d21 = np.einsum("ntk,tk->nt", q, ac)
-        v = (d11 * d20 - d01 * d21) / denom
-        w = (d00 * d21 - d01 * d20) / denom
-        inside = (v >= -1e-9) & (w >= -1e-9) & (v + w <= 1 + 1e-9) & (length > 1e-12)
-        plane = np.where(inside, np.abs(height), np.inf)
-        nearest = np.minimum.reduce(
-            [plane, segment_distances(p, a, b), segment_distances(p, b, c), segment_distances(p, c, a)]
-        ).min(axis=1)
-        worst = max(worst, float(nearest.max()))
-    return worst
+    return a, b, c, unit, length, d00, d01, d11, denom
+
+
+def distances(p, terms):
+    """Distance from points `p` (..., 1, 3) to triangles whose terms broadcast with them."""
+    a, b, c, unit, length, d00, d01, d11, denom = terms
+    ab, ac = b - a, c - a
+    ap = p - a
+    height = dot(ap, unit)
+    q = ap - height[..., None] * unit
+    d20 = dot(q, ab)
+    d21 = dot(q, ac)
+    v = (d11 * d20 - d01 * d21) / denom
+    w = (d00 * d21 - d01 * d20) / denom
+    inside = (v >= -1e-9) & (w >= -1e-9) & (v + w <= 1 + 1e-9) & (length > 1e-12)
+    plane = np.where(inside, np.abs(height), np.inf)
+    return np.minimum.reduce([plane, segment_distances(p, a, b), segment_distances(p, b, c), segment_distances(p, c, a)])
+
+
+def morton(centres):
+    """The order of points along a Z-order curve, so triangles near each other are near in the order."""
+    lo, hi = centres.min(axis=0), centres.max(axis=0)
+    cells = ((centres - lo) / np.maximum(hi - lo, 1e-12) * 1023).astype(np.uint64)
+    code = np.zeros(len(centres), dtype=np.uint64)
+    for bit in range(10):
+        for axis in range(3):
+            code |= ((cells[:, axis] >> np.uint64(bit)) & np.uint64(1)) << np.uint64(3 * bit + axis)
+    return np.argsort(code, kind="stable")
+
+
+def surface_distance(points, triangles):
+    """The largest distance from any of `points` to the nearest triangle.
+
+    Exact, not approximate: for each point the nearest distance is the minimum of
+    `distances` over a set of triangles that holds every one that could be nearest,
+    and each of them is measured by the very arithmetic that measures all of them in
+    a small job (`EXHAUSTIVE` pairs or fewer, and any input that is not finite), so
+    the result is the same float.
+
+    A triangle is left out for a point only when a lower bound on its distance
+    exceeds the nearest distance already found for that point plus a slack. The
+    slack is 1e-6 ft and 4e-9 of the extent, the largest of any coordinate and any
+    triangle edge. It has to cover two things. `inside` takes a point up to 1e-9 of
+    two edges outside the triangle in its plane (or 1e-9 past the third) as inside
+    and measures it by its plane alone, so the distance computed for it falls short
+    of the distance to the triangle, which the bounds are on, by up to 1e-9 times
+    the sum of two edges: under 2e-9 of the extent. And the rounding of these
+    distances, which is many orders of magnitude smaller.
+
+    The bounds hold for every triangle but the slivers (the sine of the angle between
+    two edges under SLIVER, whose computed plane is not reliable) and the zero-area
+    ones (which have no plane, so only their box bounds them): the distance to a
+    block of eight neighbouring triangles' box, then to a triangle's box, and for a
+    triangle with a plane the distance to its plane combined with that to the side
+    planes of its edges. Slivers are measured against every point.
+    """
+    terms = triangle_terms(triangles)
+    n = len(points)
+    if n * len(triangles) <= EXHAUSTIVE or not (np.isfinite(points).all() and np.isfinite(triangles).all()):
+        worst = 0.0
+        step = max(1, PAIR_BUDGET // len(triangles))
+        for start in range(0, n, step):
+            nearest = distances(points[start : start + step][:, None, :], terms).min(axis=1)
+            worst = max(worst, float(nearest.max()))
+        return worst
+    a, b, c, unit, length, d00, d01, d11, denom = terms
+    sliver = (length > 1e-12) & (length < SLIVER * np.sqrt(d00 * d11))
+    flat = (length > 1e-12) & ~sliver
+    lo = np.minimum(np.minimum(a, b), c)
+    hi = np.maximum(np.maximum(a, b), c)
+    extent = max(float(np.abs(triangles).max()), float(np.abs(points).max()), float(np.sqrt(max(d00.max(), d11.max()))))
+    slack = 1e-6 + 4e-9 * extent
+    sides = []
+    for start, end in ((a, b), (b, c), (c, a)):
+        out = np.cross(end - start, unit)
+        sides.append((start, out / np.maximum(np.linalg.norm(out, axis=1), 1e-24)[:, None]))
+    order = morton((lo + hi) / 2)
+    order = np.concatenate([order, np.full(-len(order) % BLOCK, order[-1])])
+    blocks = order.reshape(-1, BLOCK)
+    block_lo, block_hi = lo[blocks].min(axis=1), hi[blocks].max(axis=1)
+    seeds = min(SEEDS, len(blocks))
+    nearest = np.empty(n)
+    step = max(1, PAIR_BUDGET // len(blocks))
+    for start in range(0, n, step):
+        p = points[start : start + step]
+        gap = np.maximum(np.maximum(block_lo[None] - p[:, None], p[:, None] - block_hi[None]), 0.0)
+        bound = np.sqrt(dot(gap, gap))
+        rows = np.arange(len(p))
+        seed = np.argpartition(bound, seeds - 1, axis=1)[:, :seeds] if seeds < len(blocks) else np.tile(np.arange(seeds), (len(p), 1))
+        best = np.full(len(p), np.inf)
+        for column in range(seeds):
+            best = np.minimum(best, distances(p[:, None, :], tuple(x[blocks[seed[:, column]]] for x in terms)).min(axis=1))
+            bound[rows, seed[:, column]] = np.inf
+        pair_rows, pair_blocks = np.nonzero(bound <= (best + slack)[:, None])
+        done = 0
+        while done < len(pair_rows):
+            stop = int(np.searchsorted(pair_rows, pair_rows[min(len(pair_rows) - 1, done + PAIR_BUDGET // BLOCK)], side="right"))
+            row = np.repeat(pair_rows[done:stop], BLOCK)
+            tri = blocks[pair_blocks[done:stop]].reshape(-1)
+            done = stop
+            q = p[row]
+            gap = np.maximum(np.maximum(lo[tri] - q, q - hi[tri]), 0.0)
+            floor = np.sqrt(dot(gap, gap))
+            height = dot(q - a[tri], unit[tri])
+            outside = np.zeros(len(tri))
+            for corner, side in sides:
+                outside = np.maximum(outside, dot(q - corner[tri], side[tri]))
+            floor = np.where(flat[tri], np.maximum(floor, np.sqrt(height * height + outside * outside)), floor)
+            first = np.flatnonzero(np.r_[True, row[1:] != row[:-1]])
+            lowest = np.minimum.reduceat(floor, first)
+            group = np.repeat(np.arange(len(first)), np.diff(np.r_[first, len(row)]))
+            pick = np.flatnonzero(floor == lowest[group])
+            pick = pick[np.unique(group[pick], return_index=True)[1]]
+            best[row[pick]] = np.minimum(best[row[pick]], distances(q[pick][:, None, :], tuple(x[tri[pick]][:, None] for x in terms))[:, 0])
+            keep = floor <= best[row] + slack
+            row, tri = row[keep], tri[keep]
+            np.minimum.at(best, row, distances(p[row][:, None, :], tuple(x[tri][:, None] for x in terms))[:, 0])
+        nearest[start : start + step] = best
+    slivers = np.flatnonzero(sliver)
+    for start in range(0, len(slivers), BLOCK):
+        part = slivers[start : start + BLOCK]
+        nearest = np.minimum(nearest, distances(points[:, None, :], tuple(x[part] for x in terms)).min(axis=1))
+    return float(nearest.max())
 
 
 def sample(triangles):
@@ -179,8 +292,8 @@ def main():
         chosen.update(tags[::step])
         if step > 1:
             print(f"{cls}: {len(tags)} bodies, every {step}th scored")
+    ours = meshes(sys.argv[1], tags=chosen, source=SOURCE, model=model)
     del model
-    ours = meshes(sys.argv[1], tags=chosen, source=SOURCE)
     ref = meshes(sys.argv[2], tags=set(ours))
     print(f"{SOURCE} bodies scored: {len(ours)}; in Revit's export {len(ref)}")
     rows = collections.defaultdict(lambda: collections.defaultdict(collections.Counter))
