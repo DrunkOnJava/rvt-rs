@@ -12,7 +12,11 @@ adds what an importer needs to know about rooms:
   space to one;
 - the spaces in only one file, those of Revit's that rvt-rs writes without a
   body (its Areas), and those whose top surface has no area;
-- area within 0.1% and within 1%, the outline within 0.01 ft, and both;
+- area within 0.1% and within 1%, the outline within 0.01 ft (the distance
+  between the meshes' upward-face vertices and the other's outline, as
+  `plan_profiles_vs_ifc.py` measures it), the boundary within 0.01 ft (outline
+  to outline, which a ceiling step inside Revit's room does not move), and
+  both area and outline;
 - the same counts split by what the space is (a room, a family instance
   written as a space) and where rvt-rs's outline came from (its stored solid,
   or the record box);
@@ -41,6 +45,7 @@ import sys
 
 import ifcopenshell
 import ifcopenshell.util.element
+import shapely
 
 import plan_profiles_vs_ifc as plan
 
@@ -80,6 +85,27 @@ def shape(surface):
     """Pieces and holes of a top surface."""
     parts = list(surface.geoms) if hasattr(surface, "geoms") else [surface]
     return len(parts), sum(len(part.interiors) for part in parts)
+
+
+def boundary_spread(p, q):
+    """The largest distance from a point of either top surface's outline to
+    the other's outline. `plan.outline_spread` measures from every vertex of
+    the mesh's upward faces instead, so a ceiling step inside a room, which
+    Revit meshes as an upward face of its own, counts as far from the outline."""
+    if p.is_empty or q.is_empty:
+        return float("inf")
+
+    def points(surface):
+        boundary = surface.boundary
+        lines = list(boundary.geoms) if hasattr(boundary, "geoms") else [boundary]
+        return shapely.points([c for line in lines for c in line.coords])
+
+    return float(
+        max(
+            shapely.distance(q.boundary, points(p)).max(),
+            shapely.distance(p.boundary, points(q)).max(),
+        )
+    )
 
 
 def count_spaces(path):
@@ -153,6 +179,7 @@ def main(argv):
                 "o_area": o_area,
                 "vertices": plan.spread(o_points, points),
                 "outline": plan.outline_spread(o_points, surface, points, o_surface),
+                "boundary": boundary_spread(o_surface, surface),
                 "source": held.get(key, ("not stated", "space"))[0],
                 "kind": held.get(key, ("not stated", "space"))[1],
                 "shapes": (shape(o_surface), shape(surface)),
@@ -171,6 +198,7 @@ def main(argv):
     n_area_1 = sum(area_ok(r, 1e-2) for r in rows)
     n_outline = sum(outline_ok(r) for r in rows)
     n_vertices = sum(r["vertices"] <= 0.01 for r in rows)
+    n_boundary = sum(r["boundary"] <= 0.01 for r in rows)
     n_both = sum(area_ok(r, 1e-3) and outline_ok(r) for r in rows)
     print(f"space profiles: matched by {match}")
     print(
@@ -194,19 +222,22 @@ def main(argv):
     )
     print(f"space profiles: outline within 0.01 ft {n_outline}, off {in_both - n_outline}")
     print(f"space profiles: vertices within 0.01 ft {n_vertices}, off {in_both - n_vertices}")
+    print(f"space profiles: boundary within 0.01 ft {n_boundary}, off {in_both - n_boundary}")
     print(f"space profiles: area within 0.1% and outline within 0.01 ft {n_both}")
-    split = collections.defaultdict(lambda: [0, 0, 0, 0])
+    split = collections.defaultdict(lambda: [0, 0, 0, 0, 0])
     for r in rows:
         counts = split[f"{r['kind']} {r['source'].split(':')[0]}"]
         counts[0] += 1
         counts[1] += area_ok(r, 1e-3)
         counts[2] += outline_ok(r)
         counts[3] += area_ok(r, 1e-3) and outline_ok(r)
-    for source, (n, a, o, b) in sorted(split.items()):
+        counts[4] += r["boundary"] <= 0.01
+    for source, (n, a, o, b, e) in sorted(split.items()):
         label = source.replace("_", " ")
         print(
             f"space profiles: rvt-rs {label}: {n},"
-            f" area within 0.1% {a}, outline within 0.01 ft {o}, both {b}"
+            f" area within 0.1% {a}, outline within 0.01 ft {o}, both {b},"
+            f" boundary within 0.01 ft {e}"
         )
 
     off = [r for r in rows if not (area_ok(r, 1e-3) and outline_ok(r))]
@@ -216,6 +247,7 @@ def main(argv):
         print(
             f"  {r['key']}: area {r['o_area']:.2f} vs {r['area']:.2f} ft2 ({r['rel']:.2%}),"
             f" vertices {r['vertices']:.3f} ft, outline {r['outline']:.3f} ft,"
+            f" boundary {r['boundary']:.3f} ft,"
             f" {r['kind']}, rvt-rs outline from {r['source']},"
             f" pieces and holes {r['shapes'][0][0]} and {r['shapes'][0][1]} in rvt-rs,"
             f" {r['shapes'][1][0]} and {r['shapes'][1][1]} in Revit,"
