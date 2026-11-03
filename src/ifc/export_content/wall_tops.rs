@@ -86,16 +86,17 @@ const STEP_TOLERANCE_SQUARE_FEET: f64 = COVER_TOLERANCE_SQUARE_FEET;
 const MAX_RISERS: usize = 32;
 
 /// The widest piece of a wall's plan outside its floor that Revit is measured
-/// to leave at the wall's top: the three 0.032 to 0.033 ft pieces past a
-/// floor's edge on the BIM4LCA office as built (RE-320 §4), feet.
+/// to leave at the wall's top among the slivers: the three 0.032 to 0.033 ft
+/// pieces past a floor's edge on the BIM4LCA office as built (RE-320 §4), feet.
 const KEPT_SLIVER_FEET: f64 = 0.04;
 
-/// The narrowest wider piece measured to stay at the wall's top, feet: 0.387 on
-/// the same file. Revit cuts the one piece in between, a 0.085 ft stub past a
-/// floor's edge inside an abutting wall, and nothing separates it from the
-/// pieces Revit keeps, so a wall with a piece between the two is left as it
-/// was (RE-320 §4).
-const KEPT_PIECE_FEET: f64 = 0.38;
+/// The narrowest wider piece measured to stay at the wall's top, feet: 0.098 on
+/// the same file (an appendage of a layered wall's plan). Revit cuts the one
+/// piece in between, a 0.085 ft stub past a floor's edge inside an abutting
+/// wall, and nothing separates it from the pieces Revit keeps (pieces inside
+/// another wall's plan are kept too), so a wall with a piece between the two
+/// widths is left as it was (RE-320 §4).
+const KEPT_PIECE_FEET: f64 = 0.09;
 
 /// The area under which a piece of a plan is no piece, square feet: rounding
 /// where a triangle's edge lies along another edge.
