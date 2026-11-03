@@ -405,7 +405,7 @@ pub(crate) fn plane_frame(g: &ObjectGraph, plane: usize) -> Result<([f64; 3], [f
 /// The curved face is cut there and the plane takes the same points. A
 /// crossing that does not converge or moves farther than its segment is long
 /// fails the edge, as does a line between two points that still crosses a
-/// grid line after eight passes.
+/// grid line once both axes are cut.
 pub(crate) fn edge_on_plane(
     samples: &[[f64; 2]],
     knots: [Option<&[f64]>; 2],
@@ -423,55 +423,54 @@ pub(crate) fn edge_on_plane(
         let last = knots.partition_point(|&k| k < a.max(b) - 1e-12);
         first..last.max(first)
     };
-    // A crossing moved along its grid line can carry the straight line to its
-    // neighbours across a grid line of the other axis, so the pass repeats
-    // until no line between two points crosses one.
+    // One axis at a time: U crossings first, ordered along U, then V crossings
+    // within each U cell, ordered along V. Where the true edge runs one way in
+    // U and in V between two samples, that is its own order; crossings of both
+    // axes ordered along the straight line between samples are not, where the
+    // edge strays from it by more than the grid's spacing.
     let mut points = samples.to_vec();
     ensure!(!points.is_empty(), "empty shared edge");
-    for _ in 0..8 {
+    for (axis, knots) in knots.iter().enumerate() {
+        let Some(knots) = knots else {
+            continue;
+        };
+        let free = 1 - axis;
         let mut next = vec![points[0]];
-        let mut added = 0;
         for pair in points.windows(2) {
             let (a, b) = (pair[0], pair[1]);
             let chord = distance(eval(a)?, eval(b)?);
             let mut cuts = Vec::new();
-            for (axis, knots) in knots.iter().enumerate() {
-                let Some(knots) = knots else {
-                    continue;
+            for &k in &knots[crossed(knots, a[axis], b[axis])] {
+                let t = (k - a[axis]) / (b[axis] - a[axis]);
+                let at = |s: f64| {
+                    let mut p = [k; 2];
+                    p[free] = s;
+                    p
                 };
-                let free = 1 - axis;
-                for &k in &knots[crossed(knots, a[axis], b[axis])] {
-                    let t = (k - a[axis]) / (b[axis] - a[axis]);
-                    let at = |s: f64| {
-                        let mut p = [k; 2];
-                        p[free] = s;
-                        p
-                    };
-                    let guess = a[free] + t * (b[free] - a[free]);
-                    let mut s = guess;
-                    let mut solved = false;
-                    for _ in 0..32 {
-                        let f = height(at(s))?;
-                        if f.abs() <= 1e-10 {
-                            solved = true;
-                            break;
-                        }
-                        let h = 1e-7 * s.abs().max(1.);
-                        let slope = (height(at(s + h))? - height(at(s - h))?) / (2. * h);
-                        ensure!(
-                            slope.is_finite() && slope.abs() > 1e-12,
-                            "true edge crossing has no slope"
-                        );
-                        s -= f / slope;
-                        ensure!(s.is_finite(), "true edge crossing diverges");
+                let guess = a[free] + t * (b[free] - a[free]);
+                let mut s = guess;
+                let mut solved = false;
+                for _ in 0..32 {
+                    let f = height(at(s))?;
+                    if f.abs() <= 1e-10 {
+                        solved = true;
+                        break;
                     }
-                    ensure!(solved, "true edge crossing does not converge");
+                    let h = 1e-7 * s.abs().max(1.);
+                    let slope = (height(at(s + h))? - height(at(s - h))?) / (2. * h);
                     ensure!(
-                        distance(eval(at(s))?, eval(at(guess))?) <= chord,
-                        "true edge crossing leaves its segment"
+                        slope.is_finite() && slope.abs() > 1e-12,
+                        "true edge crossing has no slope"
                     );
-                    cuts.push((t, at(s)));
+                    s -= f / slope;
+                    ensure!(s.is_finite(), "true edge crossing diverges");
                 }
+                ensure!(solved, "true edge crossing does not converge");
+                ensure!(
+                    distance(eval(at(s))?, eval(at(guess))?) <= chord,
+                    "true edge crossing leaves its segment"
+                );
+                cuts.push((t, at(s)));
             }
             ensure!(
                 next.len() + cuts.len() <= 4_000_000,
@@ -479,16 +478,24 @@ pub(crate) fn edge_on_plane(
             );
             cuts.sort_by(|p, q| p.0.total_cmp(&q.0));
             cuts.dedup_by(|p, q| (p.0 - q.0).abs() <= 1e-12);
-            added += cuts.len();
             next.extend(cuts.into_iter().map(|(_, p)| p));
             next.push(b);
         }
         points = next;
-        if added == 0 {
-            return Ok(points);
+    }
+    // The mesher cuts the straight UV line between two points wherever it
+    // crosses a grid line, and such a cut would be off the true edge.
+    for pair in points.windows(2) {
+        for (axis, knots) in knots.iter().enumerate() {
+            if let Some(knots) = knots {
+                ensure!(
+                    crossed(knots, pair[0][axis], pair[1][axis]).is_empty(),
+                    "true edge crosses a grid line between its points"
+                );
+            }
         }
     }
-    bail!("true edge crosses a grid line between its points")
+    Ok(points)
 }
 
 /// A curved face's samples along one of its loop's edges, moved onto the
@@ -527,6 +534,24 @@ enum Refine<'a> {
     No,
     Plane,
     Curved(&'a dyn Fn(usize, usize, Vec<[f64; 2]>) -> Result<Vec<[f64; 2]>>),
+}
+/// Whether any two edges of a loop no more than eight apart cross: what a
+/// refined edge whose points are out of order makes (#1247).
+fn crosses_itself_locally(ring: &[[f64; 2]]) -> bool {
+    let n = ring.len();
+    (0..n).any(|i| {
+        let (a, b) = (ring[i], ring[(i + 1) % n]);
+        (2..=8.min(n.saturating_sub(2))).any(|step| {
+            let j = (i + step) % n;
+            if (j + 1) % n == i {
+                return false;
+            }
+            let (c, d) = (ring[j], ring[(j + 1) % n]);
+            let (d1, d2) = (cross(a, b, c), cross(a, b, d));
+            let (d3, d4) = (cross(c, d, a), cross(c, d, b));
+            d1 * d2 < -1e-24 && d3 * d4 < -1e-24
+        })
+    })
 }
 fn inside(p: [f64; 2], r: &[[f64; 2]]) -> bool {
     let mut hit = false;
@@ -733,7 +758,12 @@ fn face_indexed(g: &ObjectGraph, index: &PointerIndex<'_>, fi: usize) -> Result<
     let mut seen = BTreeSet::new();
     loop {
         ensure!(seen.insert(li), "loop-list cycle");
-        loops.push(ring_impl(g, index, fi, li, Refine::Plane)?);
+        let ring = ring_impl(g, index, fi, li, Refine::Plane)?;
+        ensure!(
+            !crosses_itself_locally(&ring),
+            "plane loop crosses itself after edge refinement"
+        );
+        loops.push(ring);
         match index.resolve(li, &g.objects[li].fields["m_nextLoop"])? {
             Some(next) => li = next,
             None => break,
