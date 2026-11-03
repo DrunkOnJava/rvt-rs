@@ -76,7 +76,7 @@ def unfilled(path):
         out[(opening.Tag, host.Tag)] = {
             "guid": opening.GlobalId,
             "name": opening.Name,
-            "predefined": opening.PredefinedType,
+            "predefined": getattr(opening, "PredefinedType", None),
             "box": box,
             "host": host.is_a(),
             "cutter": cutters.get(opening.Tag, "none"),

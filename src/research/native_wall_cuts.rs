@@ -1,5 +1,5 @@
-//! The elements a wall's native record names as cutting it, and the boxes
-//! of those that cut an opening (RE-321, #1165).
+//! The elements a wall's native record names as cutting it, and the
+//! rectangle of a rectangular wall opening (RE-321, #1165).
 //!
 //! A wall's `SWall` record lists the geometry steps Revit applies to its
 //! body. Four of them name the element that cuts it in `m_instId`: a family
@@ -13,10 +13,7 @@
 //! GlobalId hashes the opening number).
 
 use crate::native_json::{element_id, finite_triple};
-use crate::{
-    RevitFile, native_document, native_saved_mesh::face, native_saved_mesh::pointer,
-    partition_element_records as per,
-};
+use crate::{RevitFile, native_document};
 use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -82,144 +79,51 @@ pub fn wall_cut_steps(
     Ok(out)
 }
 
-/// The model bounding box of each of `ids` as its partition element record
-/// gives it, `[min_x, min_y, min_z, max_x, max_y, max_z]` in feet: the
-/// first record found for each. An id with no decodable record is left out.
-pub fn frame_boxes(rf: &mut RevitFile, ids: &BTreeSet<u64>) -> BTreeMap<u64, [f64; 6]> {
-    let mut out = BTreeMap::new();
-    if ids.is_empty() {
-        return out;
-    }
-    let revit = rf.layout_release().unwrap_or(0);
-    let Some(marker) = per::file_bbox_marker(rf, revit) else {
-        return out;
-    };
-    for stream in rf.partition_stream_names() {
-        let Ok(inflated) = rf.inflated_partition(&stream) else {
-            continue;
-        };
-        let buf = inflated.bytes();
-        for span in per::partition_record_chain(buf, &marker) {
-            if !ids.contains(&span.element_id) || out.contains_key(&span.element_id) {
-                continue;
-            }
-            if let Some(frame) =
-                per::decode_frame_as(&stream, buf, span.start, span.element_id as u32, &marker)
-            {
-                out.insert(span.element_id, frame.bbox_feet);
-            }
-        }
-    }
-    out
-}
-
-/// A 3 by 3 matrix as its rows.
-fn rows(value: &Value) -> Option<[[f64; 3]; 3]> {
-    let [a, b, c] = value.as_array()?.as_slice() else {
-        return None;
-    };
-    Some([finite_triple(a)?, finite_triple(b)?, finite_triple(c)?])
-}
-
-/// The vertices of the bounded faces of the solid a `FamilySymbol` graph's
-/// `m_complexCutGeoms` names (RE-225).
-fn complex_cut_vertices(graph: &crate::native_parameters::ObjectGraph) -> Option<Vec<[f64; 3]>> {
-    let root = graph.objects.first()?;
-    let mut vertices = Vec::new();
-    for solid in root.fields.get("m_complexCutGeoms")?.as_array()? {
-        let index = pointer(graph, 0, solid).ok()??;
-        let geometry = graph.objects.get(index)?;
-        if geometry.class_name != "Geometry" {
-            return None;
-        }
-        for item in geometry.fields.get("m_pFaces")?.as_array()? {
-            let face_index = pointer(graph, index, item).ok()??;
-            if let Some(mesh) = face(graph, face_index).ok()? {
-                vertices.extend(mesh.vertices);
-            }
-        }
-    }
-    (!vertices.is_empty()).then_some(vertices)
-}
-
-/// For each of `instances` (family instances' ElementIds), the box, in
-/// model coordinates and feet (`[min_x, min_y, min_z, max_x, max_y,
-/// max_z]`), of the solid the symbol that draws it cuts (its
-/// `InstanceInfo.m_symbolId`, the solid `m_complexCutGeoms` names, RE-225)
-/// placed by the instance's own transform (`InstanceInfo.m_Trf`, the
-/// rotation `m_3x3` applied to the symbol's coordinates, then `m_or`
-/// added). On the BIM4LCA office's fire hose cabinets this is Revit's
-/// opening to 0.002 ft (RE-321). An instance with no such solid is left
-/// out.
-pub fn instance_cut_boxes(
+/// For each of `ids` (rectangular wall openings' ElementIds), the box of the
+/// two corners its `RectOpeningData.m_aPoint` saves, `[min_x, min_y, min_z,
+/// max_x, max_y, max_z]` in feet: the opening's rectangle in the plane of
+/// its wall, along the wall and up (RE-321). It is Revit's opening along the
+/// wall and up on all 30 of the BIM4LCA office as built and 24 at building
+/// permit, where the element record's bounding box, which is padded to
+/// 8 ft high, is not. An opening with no such object is left out.
+pub fn rect_opening_boxes(
     rf: &mut RevitFile,
-    instances: &BTreeSet<u64>,
+    ids: &BTreeSet<u64>,
 ) -> anyhow::Result<BTreeMap<u64, [f64; 6]>> {
-    if instances.is_empty() {
+    if ids.is_empty() {
         return Ok(BTreeMap::new());
     }
-    let mut placed: BTreeMap<u64, (u64, [[f64; 3]; 3], [f64; 3])> = BTreeMap::new();
+    let mut out = BTreeMap::new();
     let options = native_document::Options {
-        selected_ids: instances.clone(),
+        selected_ids: ids.clone(),
         ..native_document::Options::default()
     };
     native_document::extract_graphs(rf, &options, |record| {
         let Some(graph) = record.graph.as_ref() else {
             return Ok(());
         };
-        let Some(info) = graph
+        let corners = graph
             .objects
             .iter()
-            .find(|object| object.class_name == "InstanceInfo")
-        else {
-            return Ok(());
-        };
-        let symbol = info.fields.get("m_symbolId").and_then(element_id);
-        let matrix = info.fields.pointer("/m_Trf/m_3x3").and_then(rows);
-        let origin = info.fields.pointer("/m_Trf/m_or").and_then(finite_triple);
-        if let (Some(symbol), Some(matrix), Some(origin)) = (symbol, matrix, origin) {
-            placed.insert(record.identity.element_id, (symbol, matrix, origin));
-        }
-        Ok(())
-    })?;
-    if placed.is_empty() {
-        return Ok(BTreeMap::new());
-    }
-    let mut solids: BTreeMap<u64, Vec<[f64; 3]>> = BTreeMap::new();
-    let options = native_document::Options {
-        selected_ids: placed.values().map(|(symbol, _, _)| *symbol).collect(),
-        ..native_document::Options::default()
-    };
-    native_document::extract_graphs(rf, &options, |record| {
-        if record.class_name.as_deref() != Some("FamilySymbol") {
-            return Ok(());
-        }
-        if let Some(vertices) = record.graph.as_ref().and_then(complex_cut_vertices) {
-            solids.insert(record.identity.element_id, vertices);
-        }
-        Ok(())
-    })?;
-    Ok(placed
-        .into_iter()
-        .filter_map(|(instance, (symbol, matrix, origin))| {
-            let vertices = solids.get(&symbol)?;
-            let mut low = [f64::INFINITY; 3];
-            let mut high = [f64::NEG_INFINITY; 3];
-            for vertex in vertices {
-                for (axis, row) in matrix.iter().enumerate() {
-                    let at =
-                        origin[axis] + row[0] * vertex[0] + row[1] * vertex[1] + row[2] * vertex[2];
-                    low[axis] = low[axis].min(at);
-                    high[axis] = high[axis].max(at);
-                }
+            .find(|object| object.class_name == "RectOpeningData")
+            .and_then(|object| object.fields.get("m_aPoint"))
+            .and_then(Value::as_array);
+        if let Some([a, b]) = corners.map(Vec::as_slice) {
+            if let (Some(a), Some(b)) = (finite_triple(a), finite_triple(b)) {
+                out.insert(
+                    record.identity.element_id,
+                    [
+                        a[0].min(b[0]),
+                        a[1].min(b[1]),
+                        a[2].min(b[2]),
+                        a[0].max(b[0]),
+                        a[1].max(b[1]),
+                        a[2].max(b[2]),
+                    ],
+                );
             }
-            low.iter()
-                .chain(high.iter())
-                .all(|v| v.is_finite())
-                .then_some((
-                    instance,
-                    [low[0], low[1], low[2], high[0], high[1], high[2]],
-                ))
-        })
-        .collect())
+        }
+        Ok(())
+    })?;
+    Ok(out)
 }

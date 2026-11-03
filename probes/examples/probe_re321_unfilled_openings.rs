@@ -345,6 +345,7 @@ fn probe(path: &str) -> Result<()> {
     };
     let mut symbols: BTreeSet<u64> = BTreeSet::new();
     let mut instances: BTreeSet<u64> = BTreeSet::new();
+    let mut rects: BTreeSet<u64> = BTreeSet::new();
     extract_graphs(&mut rf, &options, |record: Record| {
         let (Some(class), Some(graph)) = (record.class_name.as_deref(), record.graph.as_ref())
         else {
@@ -382,6 +383,20 @@ fn probe(path: &str) -> Result<()> {
         } else {
             true
         };
+        for &(object, fields) in &objects {
+            if object == "WallRectOpeningGStep" {
+                if let Some(cutter) = fields
+                    .pointer("/m_instId/m_id/m_id64")
+                    .and_then(Value::as_u64)
+                {
+                    println!(
+                        "rectstep {id} {cutter} {}",
+                        fields.get("m_bCutSomething").unwrap_or(&Value::Null)
+                    );
+                    rects.insert(cutter);
+                }
+            }
+        }
         dump(id, class, &objects, all);
         Ok(())
     })?;
@@ -390,6 +405,32 @@ fn probe(path: &str) -> Result<()> {
             println!("loop {instance} {:?} {:?}", cut.min, cut.max);
         }
     }
+    let options = Options {
+        selected_ids: rects,
+        ..Options::default()
+    };
+    extract_graphs(&mut rf, &options, |record: Record| {
+        let Some(graph) = record.graph.as_ref() else {
+            return Ok(());
+        };
+        let class = record.class_name.as_deref().unwrap_or("-");
+        let id = record.identity.element_id;
+        println!("rectcut {id} {class}");
+        for object in &graph.objects {
+            if matches!(
+                object.class_name.as_str(),
+                "RectOpeningData" | "SWallRectOpening" | "ArcWallRectOpening" | "VWallRectOpening"
+            ) || object.class_name.ends_with("RectOpening")
+            {
+                println!(
+                    "rectcut {id} obj {} {}",
+                    object.class_name,
+                    trimmed(&object.fields)
+                );
+            }
+        }
+        Ok(())
+    })?;
     let options = Options {
         selected_ids: symbols,
         ..Options::default()

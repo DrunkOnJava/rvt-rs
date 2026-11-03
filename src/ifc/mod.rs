@@ -1347,8 +1347,8 @@ fn export_rvt_doc_reporting(
     // #824: the openings a face-hosted door's or window's symbol cuts in the
     // element whose face hosts it.
     attach_hosted_cut_openings(rf, &mut entities);
-    // RE-321: the openings a curtain wall, a cabinet and a rectangular wall
-    // opening cut in a wall, which nothing fills.
+    // RE-321: the openings rectangular wall openings cut in a wall, which
+    // nothing fills.
     if policy.include_geometry {
         wall_cut_openings::attach_wall_cut_openings(rf, &mut entities);
     }
@@ -4743,15 +4743,13 @@ fn pset_property_value_count(model: &IfcModel) -> usize {
             _ => false,
         })
         .count();
-    // RE-321: a wall's cut opening holds its cutter's type name twice, in
+    // RE-321: a wall's cut opening holds the wall's type name twice, in
     // `Pset_OpeningElementCommon` and `Pset_EnvironmentalImpactIndicators`.
     let wall_cuts = 2 * model
         .entities
         .iter()
         .filter(|entity| match entity {
-            entities::IfcEntity::WallCutOpening { reference_from, .. } => {
-                references.contains_key(reference_from)
-            }
+            entities::IfcEntity::WallCutOpening { host, .. } => references.contains_key(host),
             _ => false,
         })
         .count();
