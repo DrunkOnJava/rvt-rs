@@ -28,8 +28,9 @@ zero-upload browser viewer. Revit 2023 projects get a narrower version of the
 same, and Revit 2015 to 2022, 2026 and 2027 projects are experimental. Every
 recovery claim is measured against the oracle its report names: Revit's own
 IFC export of the same model wherever one is measured, and for 2015 to 2018,
-2019 to 2022 and 2027, which have no measured same-release export (except one
-2015 project, RE-198), the same
+2019 to 2022 and 2027, which have no measured same-release export (except two
+projects, BIMcollab's 2015 example, RE-198, and Vitoria's 2018 `ALD26 Before`,
+RE-315), the same
 sample projects saved by Revit
 2019, 2023 and 2026 (but 2015's `rst_basic`, another model than its 2019 copy).
 What is not decoded

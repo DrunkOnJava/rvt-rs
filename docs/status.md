@@ -79,9 +79,9 @@ measured on one project against Revit's own export (RE-124). On projects
 saved by Revit 2015 to 2022 and by Revit 2027, experimentally since 0.6.0, it
 exports their elements, measured against the same sample projects saved by
 Revit 2019 (for 2015 to 2018, RE-181), 2023 (for 2019 to 2022, RE-180) and
-2026 (for 2027, RE-179) rather than against a Revit export of them, except one
-2015 project, BIMcollab's structural example, against Revit 2015's own export
-(RE-198); 2015's
+2026 (for 2027, RE-179) rather than against a Revit export of them, except two
+projects against Revit's own export of their release: BIMcollab's 2015
+structural example (RE-198) and Vitoria's 2018 `ALD26 Before` (RE-315); 2015's
 `rst_basic` is another model than its 2019 copy, so it is not measured. On
 projects saved by Revit 2011 to 2014, experimentally and outside the 1.0
 range (2015 to 2027), it exports their elements too, measured on a local copy

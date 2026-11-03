@@ -125,7 +125,10 @@ reads the primary from the set's name entry and does the same. These are
 omitted by design too, and do not count toward `unexported_element_records`.
 A set whose primary cannot be read keeps all its options. On Snowdon Towers
 the count is 27 (9 floors, 9 slab edges, 8 walls, one generic model), none of
-which Revit's export holds (RE-40).
+which Revit's export holds (RE-40). On Revit 2016 to 2023 the item is
+reported too (RE-315): Autodesk's `rst_basic_sample_project` of each of those
+releases counts one `Mass`, which Revit does not export, so its `Mass` leaves
+the production class counts and the exported IFC does not change.
 
 `element_record_not_in_export_phase` counts placed instances of a recovered
 category that do not exist in the export phase: created after it, or
@@ -135,7 +138,10 @@ and they do not count toward `unexported_element_records`. Rooms are never
 counted or left out, because Revit's exporter skips a room by its own phase
 parameter, which is not measured to be its created phase. On Snowdon Towers
 Architectural (2024) the count is 6 (Floor), the slabs of #328, which are
-created and demolished in the Legends phase (RE-184). A read of the phases
+created and demolished in the Legends phase (RE-184). On Revit 2016 to 2023
+the same filter applies (RE-315); no Autodesk sample has an element outside
+its last phase, and the held-out Vitoria Project's counts are the only
+evidence that it is right on a 32-bit file. A read of the phases
 that fails on a Revit 2015 to 2027 file is reported in `warnings` ("The
 project's phases could not be read"), and the export then writes every
 element.
