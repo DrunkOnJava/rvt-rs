@@ -44,6 +44,14 @@ def category_name(element):
     return str(value) if value else "-"
 
 
+def type_entity(element):
+    """The entity and PredefinedType of an element's type object in the export, or "-"."""
+    type_object = ifcopenshell.util.element.get_type(element)
+    if type_object is None:
+        return "-"
+    return f"{type_object.is_a()}/{getattr(type_object, 'PredefinedType', None) or '-'}"
+
+
 def main(argv):
     listing = "--list" in argv
     argv = [arg for arg in argv if arg != "--list"]
@@ -82,6 +90,8 @@ def main(argv):
             category_name(elements[i]) for i in rule_ids if i in tags
         )
         shown += "".join(f" | category {name!r} {n}" for name, n in sorted(names.items()))
+        kinds = collections.Counter(type_entity(elements[i]) for i in rule_ids if i in tags)
+        shown += "".join(f" | type object {kind} {n}" for kind, n in sorted(kinds.items()))
         print(
             f"{category} | {name} | {len(any_ids)} | {len(rule_ids)} ({len(rule_ids & set(tags))}) | "
             f"{len(wrote)} ({len(wrote & set(tags))}, {len(wrote - set(tags))}) | {shown}"
