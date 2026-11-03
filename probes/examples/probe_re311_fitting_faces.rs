@@ -25,7 +25,8 @@
 //!   edge <id> <fields of the first two trim edges of a face that failed>
 //!   object <owner> <class> parents=[..] <fields>   (ConeSurf and spline classes)
 //!   tri <id> L<n> <label> x y z x y z x y z        (named elements and
-//!     every element with a face that failed, document feet, 6 decimals)
+//!     every element with a face on a surface the mesher does not read, or
+//!     that failed, document feet, 6 decimals)
 //!   census <what> <count>
 //!
 //! ```text
@@ -238,6 +239,7 @@ fn element(
     let mut prim_lines: Vec<String> = Vec::new();
     let mut face_lines: Vec<String> = Vec::new();
     let mut failed: Vec<String> = Vec::new();
+    let mut unusual = false;
     let mut surfaces: Vec<String> = Vec::new();
     for s in &selection.selected {
         let sg = match s.source_owner_id {
@@ -296,6 +298,9 @@ fn element(
                             tris.len(),
                             area(&tris)
                         ));
+                        if !READ_SURFACES.contains(&surf.as_str()) {
+                            unusual = true;
+                        }
                         if !READ_SURFACES.contains(&surf.as_str()) || named {
                             if let Some(si) = surf_index {
                                 surfaces.push(clip(describe(sg, si, 2), 2400));
@@ -476,7 +481,7 @@ fn element(
             signed_volume(&p.tris, centre)
         );
     }
-    let report_surfaces = named || !failed.is_empty();
+    let report_surfaces = named || unusual || !failed.is_empty();
     if report_surfaces {
         let mut seen = BTreeSet::new();
         for text in &surfaces {
@@ -489,7 +494,7 @@ fn element(
             }
         }
     }
-    if (named || !failed.is_empty()) && total <= TRIANGLE_CAP {
+    if (named || unusual || !failed.is_empty()) && total <= TRIANGLE_CAP {
         for p in &pieces {
             for t in &p.tris {
                 println!(
