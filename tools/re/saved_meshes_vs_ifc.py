@@ -26,11 +26,16 @@ Usage:
 import argparse
 import collections
 import math
-import multiprocessing
+import os
 import statistics
+import sys
 
 import ifcopenshell
 import ifcopenshell.geom
+import numpy as np
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from ifc_common import mesh_parts  # noqa: E402
 
 FT = 0.3048
 
@@ -45,8 +50,9 @@ def body_sources(element):
     return None
 
 
-def world_boxes(path, tags=None, transform=None):
-    """Tag -> (class, box in feet, BodySource) for elements with a body."""
+def world_boxes(path, tags=None, transform=None, wanted=None):
+    """Tag -> (class, box in feet, BodySource) for elements with a body; with
+    `wanted`, only for those whose BodySource is one of them."""
     model = ifcopenshell.open(path)
     settings = ifcopenshell.geom.settings()
     settings.set("use-world-coords", True)
@@ -59,22 +65,18 @@ def world_boxes(path, tags=None, transform=None):
         and (tags is None or e.Tag in tags)
     ]
     sources = {e.Tag: body_sources(e) for e in elements}
+    if wanted is not None:
+        elements = [e for e in elements if sources[e.Tag] in wanted]
+    shapes = mesh_parts(model, settings, elements)
     out = {}
-    it = ifcopenshell.geom.iterator(settings, model, multiprocessing.cpu_count(), include=elements)
-    if not it.initialize():
-        return out
-    while True:
-        shape = it.get()
-        verts = shape.geometry.verts
-        points = [(verts[i] / FT, verts[i + 1] / FT, verts[i + 2] / FT) for i in range(0, len(verts), 3)]
-        if points:
-            if transform:
-                points = [transform(p) for p in points]
-            box = [min(p[k] for p in points) for k in range(3)] + [max(p[k] for p in points) for k in range(3)]
-            element = model.by_id(shape.id)
-            out[element.Tag] = (element.is_a(), box, sources.get(element.Tag))
-        if not it.next():
-            break
+    for element in elements:
+        if element.id() not in shapes or not len(shapes[element.id()][0]):
+            continue
+        points = shapes[element.id()][0] / FT
+        if transform:
+            points = np.array(transform(points.T)).T
+        box = [float(v) for v in points.min(axis=0)] + [float(v) for v in points.max(axis=0)]
+        out[element.Tag] = (element.is_a(), box, sources.get(element.Tag))
     return out
 
 
@@ -95,7 +97,7 @@ def main():
         x, y, z = p
         return (x * c - y * s + tx, x * s + y * c + ty, z + tz)
 
-    ours = {t: v for t, v in world_boxes(args.ours, transform=to_shared).items() if v[2] in wanted}
+    ours = world_boxes(args.ours, transform=to_shared, wanted=wanted)
     ref = world_boxes(args.reference, tags=set(ours))
     pairs = [(ours[t][1], ref[t][1]) for t in ours if t in ref]
     if args.offset_ft:
