@@ -110,10 +110,10 @@ geometry (doors and windows are drawn from the mesh Revit saved for their
 display by default, and any other family instance with the experimental
 `--saved-meshes` option, RE-78), hip roofs over a T or U footprint, roofs sloped by several slope arrows of the configuration of puzzbobb's U, where Revit slopes the two long outer walls along the arms only (RE-307; no other roof of the configuration is measured), and roofs by extrusion outside Revit 2025, the top of
 walls Revit steps over a floor that covers them in part (29 of the BIM4LCA office's as built and 26 at permit, #1067), the boundaries of
-rooms whose stored solid does not close and opening profiles are not
-decoded, and rvt-rs does not edit Revit model data.
+the rooms whose stored solid still does not close (RE-316 §4) and opening
+profiles are not decoded, and rvt-rs does not edit Revit model data.
 
-**Rooms.** Each `IfcSpace` says in `RvtElementRecordGeometry.SpaceOutlineSource` whether its outline was read from the room's stored solid (`stored_solid`), is the record's bounding box (`record_box`), was drawn from a saved mesh or a family's body, or has no body (an Area), and the diagnostics count the boxes (`exported.bounding_box_spaces`). Measure scores every space's plan area and outline against Revit's export, and CI gates Core Interior (116 of 116 rooms) and RE1 Architecture (11 of 11). The rooms of Revit 2026 and 2027 are boxes until their stored solids are read (#1260, PR #1288). [docs/rooms.md](rooms.md) says what to trust per release, and RE-313 has the runs.
+**Rooms.** Each `IfcSpace` says in `RvtElementRecordGeometry.SpaceOutlineSource` whether its outline was read from the room's stored solid (`stored_solid`), is the record's bounding box (`record_box`), was drawn from a saved mesh or a family's body, or has no body (an Area), and the diagnostics count the boxes (`exported.bounding_box_spaces`). Measure scores every space's plan area and outline against Revit's export, and CI gates Core Interior (116 of 116 rooms) and RE1 Architecture (11 of 11). A room whose stored solid the first reader did not close takes the outline of the faces up to the solid's end, resolved to a boundary: 12 of the BIM4LCA office's 13 such rooms as built and 10 of 12 at building permit, with Revit's area to 0.1% on 19 of the 21 Revit's export pairs and 0.5% and 0.7% on the other two (RE-316); the 6 `rac_advanced` rooms with round columns close with no Revit export to score them against, and 49 of the 50 `rme` rooms keep their box. [docs/rooms.md](rooms.md) says what to trust per release, and RE-313 has the runs.
 
 ## Finding history
 
