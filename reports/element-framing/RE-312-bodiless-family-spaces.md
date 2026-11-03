@@ -4,7 +4,7 @@
 **Issues:** #1262 (91 "Parking Space" family instances written as `IfcSpace` on the BIM4LCA terrain office, where Revit's export has 9 `IfcSpace`); builds on RE-45, RE-190 and RE-204
 **Artefacts:** the BIM4LCA terrain office at building permit, in concrete and in timber (Revit 2024, Revit 24.0.5's IFC4 exports, CC BY-SA 4.0, VTT; `research/bim4lca-measure.tsv`, read by byte range for a Measure run with `-f nordic=true`, never stored), the two office files of the earlier runs, the reference models and the R2025 models
 **Probe and scorer:** `probes/examples/probe_re312_parking_spaces.rs`, `tools/re/parking_spaces_vs_ifc.py`
-**Runs:** Measure [41652870443](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41652870443) (the probe at eef185da, terrain pair), [41655209746](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41655209746) (the probe at b9bc0dbc, all four office files), and [41656473590](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41656473590) (the fix at 6eae7dd2, base `main`, `nordic`, `r2025`, `holdout`)
+**Runs:** Measure [41652870443](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41652870443) (the probe at eef185da, terrain pair), [41655209746](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41655209746) (the probe at b9bc0dbc, all four office files), [41656473590](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41656473590) (the fix at 6eae7dd2, base `main`, `nordic`, `r2025`, `holdout`), and [41672855211](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41672855211) (the reviewed fix at 1afd857d, merged with `main` cef24f52, the same inputs and `timing`)
 **Result:** positive. See section 5 for what changed.
 
 ## 1. The question
@@ -75,6 +75,8 @@ With the rule (run 41656473590, head 6eae7dd2 against `main`, `nordic`, `r2025`,
 | property values of Revit's that rvt-rs writes equal / different / missing | 82 / 0 / 29 | 82 / 0 / 29 |
 | type objects | 16 | 15 |
 
+- The same inputs on the reviewed head (run 41672855211, which keeps an instance whose bound form's parameter was not read, treats a partial family document as incomplete, and counts what it leaves out): 51 of 53 exports are byte-identical to `main`'s (the 53 now include four more held-out models and two spent ones that `main` brought in), and the two terrain files change as above, to the same hashes as in run 41656473590. Their export diagnostics give `element_record_family_space_without_body` as 89, all of class `Parking`.
+- Timing, base and head on one runner (`-f timing=true`, three rounds): the terrain files 1824 and 1816 ms at base, 1829 and 1830 ms at head; the office files, whose 78 `IfcSpace`-valued instances run the rule, 29,478 ms and 27,953 ms at base, 29,661 ms and 27,950 ms at head; peak memory unchanged. The rule costs within the noise of the run.
 - No element Revit exports is dropped: every `class_sets_vs_ifc` row that was `same` is still `same`.
 - `main` wrote 91 of the 94 instances (the reporter's count, 2 car bays and 89 bicycle bays); the rule removes the 89 and leaves the 2 car bays. The other 3 bicycle bays were already left out, for a reason not examined here.
 - Schema validation: one finding (`IfcRelAssociatesMaterial.AllowedElements`) on each side, unchanged.
@@ -82,7 +84,7 @@ With the rule (run 41656473590, head 6eae7dd2 against `main`, `nordic`, `r2025`,
 ## 6. What is not shown
 
 - **How much evidence there is.** Two families on one building: "Parking Space" (the rule changes its output) and "Turning Free Space" (42 per office file, drawn, written; it changes nothing). The void-only family of the office's 34 is a third case, but those instances were never written by `main`. Every file in the measurement is a Revit 2024 file. The rule is exact on all of them, which is a small basis for applying it elsewhere.
-- **Cost.** For an affected file the rule adds up to three passes over the native records (the instances, then their types and the parameters they set, then the parameters the types set) and two walks over the partitions to find the family documents (`family_solids`). It is untimed here; a file with no `IfcSpace`-valued family instance pays nothing.
+- **Cost.** For an affected file the rule adds up to three passes over the native records (the instances, then their types and the parameters they set, then the parameters the types set) and two walks over the partitions to find the family documents (`family_solids`). Section 5 gives the timing on one runner: within noise on the terrain files and on the 28 s office files. A file with no `IfcSpace`-valued family instance pays nothing.
 
 - **Why the bicycle bays carry 0.** Their "Stripe Y/N" is 0 in their data. Whether the model's authors hid the stripe on purpose is not something the file says.
 - **That "no drawn form" is Revit's whole test.** Revit's body also needs geometry that survives its tessellation and the export view's visibility (`ElementFilteringUtil.IsElementVisible`: hidden elements, categories and filters of the export view). Two instances of one family can differ in either. The rule covers what the file decides: forms, voids, and the parameter values that show them. An element Revit's export view hides is not decided.
