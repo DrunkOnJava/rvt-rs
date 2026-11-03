@@ -1,10 +1,10 @@
 # RE-210 — Revit's own property sets, one per parameter group
 
-**Date:** 2026-10-22, measured against Revit's own sets 2026-10-23
+**Date:** 2026-10-22, measured against Revit's own sets 2026-10-23, and on the R2025 models in CI 2026-10-29 and 2026-11-03
 **Issues:** #35 (M4-07, the second slice); builds on RE-207 (an element's saved parameters, named by the file's definitions).
 **Artefacts:** the BIM4LCA office, as built and at building permit, and the housing on terrain, each with Revit 2024's own IFC export (VTT, CC BY-SA 4.0); puzzbobb's R2025 models (`R2025_Models.zip`, Apache-2.0, #356); Core Interior and the RE1 models (CI's project corpus); revit-ifc's `Release_23.x.x` to `Release_27.x.x` and `master` branches (LGPL, CLEANROOM.md source 5, read and cited, no code copied); web-ifc's public test file `ISSUE_159_kleine_Wohnung_R22.ifc` (a German Revit 2022 export with Revit's own property sets); Autodesk's Snowdon Towers Sample HVAC, Site and Architectural, 2025 edition (sha256 `a1756cfd…31bfe`, `43140cd8…c1ff8`, `8ac90a85…0d334`), each with Revit 2025's IFC4X3 export with "Export Revit property sets" ticked (`3505ed9e…af6d8`, `4f34da2e…7a5f`, `18df1f11…df466`). The Snowdon files are Autodesk's; they are measured locally and never committed, as in `reports/validation/held-out-snowdon-mep-2026-09-27.md`.
 **Probe and scorer:** `examples/probe_re210_revit_property_sets.rs`; `tools/re/revit_property_sets_vs_ifc.py` scores an export made with the option against Revit's export with "Export Revit property sets".
-**Status:** partial. On Snowdon HVAC and Site, every one of the 28,906 and 718 properties rvt-rs writes in Revit's own sets (counted per element, a type object's once for each of its elements) is in the set of the same name, on the element or type object of the same Tag, with Revit's value (§5). On Snowdon Architectural, 58,346 of 58,733 are. Of the other 387, 369 are in sets Revit names with `(Type)` on 13 type objects it does export, an artefact of the order its exporter works in, and 18 are the type category of curtain panels, which rvt-rs wrote before this change. Revit writes 79,907, 948 and 118,432 more, almost all built-in parameters, which rvt-rs does not name (#255).
+**Status:** partial. On Snowdon HVAC and Site, every one of the 28,906 and 718 properties rvt-rs writes in Revit's own sets (counted per element, a type object's once for each of its elements) is in the set of the same name, on the element or type object of the same Tag, with Revit's value (§5). On Snowdon Architectural, 58,346 of 58,733 are. Of the other 387, 369 are in sets Revit names with `(Type)` on 13 type objects it does export, an artefact of the order its exporter works in, and 18 are the type category of curtain panels, which rvt-rs wrote before this change. Revit writes 79,907, 948 and 118,432 more, almost all built-in parameters, which rvt-rs does not name (#255). On puzzbobb's Revit 2025 models, whose exports with Revit's property sets Measure scores in CI on every run that sets `r2025`, 2,502 of the 2,646 properties rvt-rs writes in Revit's own sets are Revit's, over 19 models; 126 differ, all by Revit writing a window type's sill height and its nested families' sizes at 1/304.8² of their value, and 18 are in no set Revit writes there (§9).
 
 ## 1. Before
 
@@ -141,7 +141,7 @@ The 498 are the Yes/No `FireExit` of 266 doors and 232 windows. rvt-rs writes it
 
 ## 6. Not measured yet
 
-The Snowdon models have no element of a type lacking a type object that rvt-rs exports, and no enumeration that rvt-rs writes. The RE1 MEP models' currents have no Revit export with these sets. R2025 models 01 and 12 to 17 now have one (§9).
+The Snowdon models have no element of a type lacking a type object that rvt-rs exports, and no enumeration that rvt-rs writes. The RE1 MEP models' currents have no Revit export with these sets. 19 of the 24 R2025 models now have one (§9).
 
 ## 7. Not written
 
@@ -161,7 +161,7 @@ Reading the parameters decodes each element's native record, as for `rvt-element
 | Core Interior | 6.785 ± 0.027 | 7.809 ± 0.015 | 1.15 |
 | BIM4LCA office, as built | 24.262 ± 0.027 | 34.036 ± 0.206 | 1.40 |
 
-## 9. Measured on Revit 2025's export with its own sets (2026-10-29)
+## 9. Measured on Revit 2025's export with its own sets (2026-10-29, again 2026-11-03)
 
 puzzbobb attached to #885 (2026-10-27, Apache-2.0) `R2025_Models_wRVTSets.zip`: IFC4 exports of the R2025 models by Revit 25.0.2 with "Export Revit property sets" ticked. Measure reads each one whose `.rvt` is in `R2025_Models.zip`, 19 of the 21, as `<model>.revit-sets.ifc` (`research/r2025-models.tsv`), and scores `rvt-ifc --revit-property-sets` against it (`tools/ci/measure-reference-models.sh`, Measure [40978087421](https://github.com/DrunkOnJava/rvt-rs/actions/runs/40978087421), listed in [40978621247](https://github.com/DrunkOnJava/rvt-rs/actions/runs/40978621247)):
 
@@ -178,3 +178,45 @@ puzzbobb attached to #885 (2026-10-27, Apache-2.0) `R2025_Models_wRVTSets.zip`: 
 - **The 4,403** are almost all built-in parameters (§7, #255): an element's `Constraints` (1,646), `Dimensions` (614), `Phasing` (228) and `Structural` (216), and its type's `Construction` (561) and `Analytical Properties` (296).
 
 Every other value rvt-rs writes is Revit's, among them all 1,176 in the elements' `Other` sets.
+
+### Per model, and what is paired (2026-11-03)
+
+Measure [41636859789](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41636859789) scored `main` at 42e07b8f again, model by model, with the scorer's own `--list` rows. Every count equals the 2026-10-29 run's: nothing since then has moved a property rvt-rs writes in Revit's own sets on these models. No property is in another set than Revit's (`other set` is 0 on every model). The scorer pairs each element with Revit's of the same Tag, so the counts are of properties, per element, a type object's once for each of its elements.
+
+| model | rvt-rs writes | equal | different | not written by Revit | Revit's, not written by rvt-rs |
+|---|---:|---:|---:|---:|---:|
+| 01_Walls | 40 | 40 | 0 | 0 | 125 |
+| 02_1Slope_Rafter2PlumbCut | 48 | 48 | 0 | 0 | 144 |
+| 03_2Slope_Rafter2SquareCut | 48 | 48 | 0 | 0 | 144 |
+| 04_Gable | 48 | 48 | 0 | 0 | 144 |
+| 04_Gable_Swapped_Slopes | 48 | 48 | 0 | 0 | 143 |
+| 05_1Slope_ArrowDefined | 48 | 48 | 0 | 0 | 143 |
+| 06_1Slope_ArrowDefined_SetToSlope | 48 | 48 | 0 | 0 | 144 |
+| 07_1Slope_ArrowDefined_2Cut50mmFascia | 48 | 48 | 0 | 0 | 144 |
+| 08_LShapedHipRoof | 64 | 64 | 0 | 0 | 193 |
+| 09_LShapedHipRoof_1Edge300Offset | 64 | 64 | 0 | 0 | 193 |
+| 10_LShapedHipRoof_1Edge300Offset_Hole | 64 | 64 | 0 | 0 | 193 |
+| 11_RoofByExtrusion | 64 | 64 | 0 | 0 | 193 |
+| 12_Rooms_Door_Windows | 289 | 268 | 21 | 0 | 303 |
+| 13_Rooms_Stairs | 337 | 310 | 21 | 6 | 403 |
+| 14_Rooms_Stairs_endwithriserOFF | 337 | 310 | 21 | 6 | 403 |
+| 15_Rooms_Stairs_NoRisers | 337 | 310 | 21 | 6 | 403 |
+| 16_Rooms_Stairs_Monolithic | 321 | 300 | 21 | 0 | 381 |
+| 17_Rooms_Stairs_Spiral | 321 | 300 | 21 | 0 | 382 |
+| 18_WallJoins | 72 | 72 | 0 | 0 | 225 |
+| **19 models** | **2,646** | **2,502** | **126** | **18** | **4,403** |
+
+All 126 different are the ones the scorer counts as Revit's value being rvt-rs's divided by 304.8 squared (21 on each of models 12 to 17). The 18 not written by Revit are the stringer type's `Category` and `Family Name` in its `Other` set (12) and its `Type Name` in its `Identity Data` (6), 6 on each of models 13 to 15, one pair for each of the two stringers.
+
+**Paired.** The archive holds 21 exports, and 19 are scored, each against the `.rvt` of the same name in `R2025_Models.zip`. The export of 07 is also that model's reference export, since `R2025_Models.zip` holds none (`research/r2025-models.tsv`).
+
+- **Exports with no `.rvt` in either archive, not scored:** `01_Walls_Phases_Demo` and `19_1Slope_ArrowDefined_SetToSlope_HeadHalfway`. Asked for on #885.
+- **`.rvt` files with no export made with Revit's property sets, not scored:** `00_Blank`, `02_1Slope`, `02_1Slope_Rafter2SquareCut`, `02_1Slope_Rafter2SquareCut_Overhang` and `20_T_U_Roof` (the T and U roofs in `R2025_TU_Roof.zip`). That is 5 of the 24 `.rvt` files.
+
+Reproduce (`main` supplies the scorer; the commit is the code measured):
+
+```bash
+gh workflow run measure.yml --ref main -f ref=42e07b8ff34d33df9183c06a4014af19dc78356b -f base=none -f r2025=true -f models="r2025-*" -f scorers=revit_property_sets_vs_ifc
+```
+
+Each model's `revit_property_sets_vs_ifc.txt` in the `measure-head` artifact has the table by set and level, the totals line and, after `--list`, one `row` per property that is not equal.
