@@ -309,7 +309,10 @@ pub(crate) fn face_grid(g: &ObjectGraph, fi: usize) -> Result<FaceGrid> {
         ParametricSurface::RuledSurf { .. } => {
             // A shared normalized grid across ruled patches preserves their
             // common straight generator edges even when profile lengths differ.
+            // Straight profiles take one count for both directions; curved
+            // ones (RE-302) take U from their bend and V from their twist.
             let mut n = 1.0_f64;
+            let mut n_v = 1.0_f64;
             let component = ruled_surface_component(g, fi)?;
             for i in component.into_iter().filter(|i| {
                 g.objects
@@ -346,31 +349,47 @@ pub(crate) fn face_grid(g: &ObjectGraph, fi: usize) -> Result<FaceGrid> {
                     let da = std::array::from_fn(|k| a[k] * (ra[1] - ra[0]));
                     let db = std::array::from_fn(|k| b[k] * (rb[1] - rb[0]));
                     let mixed = length(std::array::from_fn(|k| da[k] - db[k]));
-                    n = n
-                        .max((mixed / CHORD).sqrt().ceil())
+                    let lines = (mixed / CHORD)
+                        .sqrt()
+                        .ceil()
                         .max(length(da).ceil())
                         .max(length(db).ceil());
+                    n = n.max(lines);
+                    n_v = n_v.max(lines);
                     continue;
                 }
-                // RE-302: a curved profile (an arc or an ellipse) gets as many
-                // steps as keep each chord within CHORD of it, at its largest
-                // radius, and the bound on the twist between the two profiles
-                // that straight ones get.
+                // A curved profile (an arc or an ellipse) gets as many U steps
+                // as keep each chord within CHORD of it at its largest radius.
+                // The generators are straight, so V needs steps only for the
+                // twist between the two profiles: the largest difference of
+                // their tangents over the patch, sampled.
                 let turns = |c: &Curve| {
                     c.bend_radius().map_or(0., |radius| {
                         let [a, b] = c.range();
                         ((b - a).abs() / angular(radius)).ceil()
                     })
                 };
-                let mixed = profile1.span_length() + profile2.span_length();
-                n = n
-                    .max((mixed / CHORD).sqrt().ceil())
+                let n_u = turns(&profile1)
+                    .max(turns(&profile2))
                     .max(profile1.span_length().ceil())
                     .max(profile2.span_length().ceil())
-                    .max(turns(&profile1))
-                    .max(turns(&profile2));
+                    .max(1.);
+                let [a1, b1] = profile1.range();
+                let [a2, b2] = profile2.range();
+                let twist = (0..=64)
+                    .map(|k| {
+                        let s = f64::from(k) / 64.;
+                        let d1 = profile1.derivative(a1 + s * (b1 - a1));
+                        let d2 = profile2.derivative(a2 + s * (b2 - a2));
+                        length(std::array::from_fn(|i| {
+                            d1[i] * (b1 - a1) - d2[i] * (b2 - a2)
+                        }))
+                    })
+                    .fold(0., f64::max);
+                n = n.max(n_u);
+                n_v = n_v.max((twist / (CHORD * n_u)).ceil());
             }
-            (1. / n, 1. / n)
+            (1. / n, 1. / n_v)
         }
     };
     let axis = |k: usize, step: f64| -> Result<Vec<f64>> {

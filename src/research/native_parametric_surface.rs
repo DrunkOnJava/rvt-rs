@@ -239,7 +239,7 @@ impl Curve {
             ),
         }
     }
-    fn derivative(&self, t: f64) -> Point {
+    pub(crate) fn derivative(&self, t: f64) -> Point {
         match self {
             Self::Line { direction, .. } => *direction,
             Self::Arc { x, y, radius, .. } => {
