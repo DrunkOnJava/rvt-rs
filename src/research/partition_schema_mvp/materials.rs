@@ -44,16 +44,18 @@ pub(super) fn attach_type_materials(
 /// empty list only where its native record was read: one the read did not
 /// reach, or every type where the read or the material names failed, loses
 /// it, so its doors and windows are not written as openings alone on no
-/// evidence (#1247). Left as scanned on other releases.
+/// evidence (#1247). Left as scanned on other releases. Returns the
+/// partly unset types, and the types that lost their empty list for want of
+/// a read.
 pub(super) fn refine_type_materials(
     rf: &mut RevitFile,
     revit_version: u32,
     type_materials: &mut BTreeMap<u32, Vec<String>>,
     out: &PartitionSchemaMvp,
-) -> BTreeSet<u32> {
+) -> (BTreeSet<u32>, BTreeSet<u32>) {
     let mut partly_unset = BTreeSet::new();
     if type_materials.is_empty() {
-        return partly_unset;
+        return (partly_unset, BTreeSet::new());
     }
     let types: BTreeSet<u64> = out
         .columns
@@ -73,27 +75,34 @@ pub(super) fn refine_type_materials(
     let native = crate::native_document::Options::default()
         .releases
         .contains(&revit_version);
-    let unproven = |type_materials: &mut BTreeMap<u32, Vec<String>>| {
-        if native {
-            type_materials.retain(|_, list| !list.is_empty());
+    let unproven = |type_materials: &mut BTreeMap<u32, Vec<String>>| -> BTreeSet<u32> {
+        if !native {
+            return BTreeSet::new();
         }
+        let empty = type_materials
+            .iter()
+            .filter(|(_, list)| list.is_empty())
+            .map(|(id, _)| *id)
+            .collect();
+        type_materials.retain(|_, list| !list.is_empty());
+        empty
     };
     let Ok(records) = crate::elem_table::parse_records(rf) else {
-        unproven(type_materials);
-        return partly_unset;
+        let unread = unproven(type_materials);
+        return (partly_unset, unread);
     };
     let declared = crate::elem_table::declared_ids(&records);
     let Ok(names) = crate::partition_materials::scan_material_names(rf, revit_version, &declared)
     else {
-        unproven(type_materials);
-        return partly_unset;
+        let unread = unproven(type_materials);
+        return (partly_unset, unread);
     };
     let materials: BTreeSet<u32> = names.keys().copied().collect();
     let Ok((found, mapped, read)) =
         crate::native_type_materials::geometry_maps(rf, &types, &materials)
     else {
-        unproven(type_materials);
-        return partly_unset;
+        let unread = unproven(type_materials);
+        return (partly_unset, unread);
     };
     // A family whose geometry with no material is all hidden or void has
     // no `<Unnamed>` in Revit's export (RE-204), and a material only its
@@ -121,8 +130,19 @@ pub(super) fn refine_type_materials(
                     != Some(false)
         })
     };
+    let mut unread = BTreeSet::new();
     type_materials.retain(|type_id, list| {
-        !list.is_empty() || (!draws(*type_id) && (!native || read.contains(&u64::from(*type_id))))
+        if !list.is_empty() {
+            return true;
+        }
+        if draws(*type_id) {
+            return false;
+        }
+        if native && !read.contains(&u64::from(*type_id)) {
+            unread.insert(*type_id);
+            return false;
+        }
+        true
     });
     for (type_id, found) in found {
         let Ok(type_id) = u32::try_from(type_id) else {
@@ -160,7 +180,7 @@ pub(super) fn refine_type_materials(
             *scanned = resolved;
         }
     }
-    partly_unset
+    (partly_unset, unread)
 }
 
 /// Give each instance of a type in `partly_unset`, which maps some geometry

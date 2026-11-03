@@ -672,7 +672,25 @@ pub fn recover_partition_schema_mvp(
         crate::partition_type_materials::type_material_names(rf, revit_version);
     // The map read by name, where the scan also takes a nested component's
     // materials (RE-203).
-    let partly_unset = refine_type_materials(rf, revit_version, &mut type_materials, &out);
+    let (partly_unset, unread_types) =
+        refine_type_materials(rf, revit_version, &mut type_materials, &out);
+    // #1247: these doors and windows are written as such, though nothing read
+    // tells whether their type draws geometry; the diagnostics count them.
+    if !unread_types.is_empty() {
+        let ids: Vec<u32> = out
+            .doors
+            .iter()
+            .chain(&out.windows)
+            .filter(|element| {
+                element.fields.iter().any(|(name, value)| {
+                    matches!(value, InstanceField::ElementId { id, .. }
+                        if name == TYPE_ID_FIELD && unread_types.contains(id))
+                })
+            })
+            .filter_map(|element| element.id)
+            .collect();
+        rf.note_unread_type_doors_windows(ids);
+    }
     if !type_materials.is_empty() {
         for elements in [
             &mut out.walls,

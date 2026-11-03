@@ -3734,6 +3734,17 @@ pub fn build_export_diagnostics_with_limits(
             "The project's phases could not be read ({error}); elements that do not exist in the export phase are written (#328, RE-184)."
         ));
     }
+    // #1247: a door or window whose type's record was not read is written as
+    // a door or window, not as its opening alone, which it may be.
+    let unread_type_doors_windows = rf.unread_type_doors_windows().len();
+    if unread_type_doors_windows > 0 && mode != ExportDiagnosticsMode::Placeholder {
+        warnings.push(format!(
+            "{unread_type_doors_windows} door(s) and window(s) are written as doors and windows \
+             though nothing read tells whether their type draws geometry: its parameter block \
+             holds no geometry map, and its native record was not read. One that is a cased \
+             opening in Revit is its opening alone in Revit's export (#1247)."
+        ));
+    }
     if !empty_panels.types_with_material.is_empty() {
         warnings.push(format!(
             "{} empty curtain panel type(s) carry a material, which an empty panel should not: {:?}",

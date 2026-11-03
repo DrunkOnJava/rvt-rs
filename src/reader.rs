@@ -216,6 +216,9 @@ pub struct RevitFile {
     category_style_materials: Option<Arc<BTreeMap<i64, BTreeSet<u32>>>>,
     /// Streams a resource limit kept from being read whole (#1075).
     unread_streams: Vec<UnreadStream>,
+    /// Doors and windows written as such though their type's record was not
+    /// read (#1247).
+    unread_type_doors_windows: BTreeSet<u32>,
 }
 
 /// The limits it was opened with and how many streams it has inflated so
@@ -435,6 +438,7 @@ impl RevitFile {
             material_appearances: std::collections::HashMap::new(),
             category_style_materials: None,
             unread_streams: Vec::new(),
+            unread_type_doors_windows: BTreeSet::new(),
         })
     }
 
@@ -444,6 +448,18 @@ impl RevitFile {
     /// anything produced from this handle is missing what they hold.
     pub fn unread_streams(&self) -> &[UnreadStream] {
         &self.unread_streams
+    }
+
+    /// The doors and windows this handle's export wrote as doors and
+    /// windows though their type's record was not read (#1247), by
+    /// ElementId: whether each draws geometry, or is its opening alone in
+    /// Revit's export as a cased opening is, is not known.
+    pub(crate) fn unread_type_doors_windows(&self) -> &BTreeSet<u32> {
+        &self.unread_type_doors_windows
+    }
+
+    pub(crate) fn note_unread_type_doors_windows(&mut self, ids: impl IntoIterator<Item = u32>) {
+        self.unread_type_doors_windows.extend(ids);
     }
 
     fn note_unread(&mut self, unread: UnreadStream) {

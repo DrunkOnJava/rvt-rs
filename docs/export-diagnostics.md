@@ -140,6 +140,16 @@ that fails on a Revit 2015 to 2027 file is reported in `warnings` ("The
 project's phases could not be read"), and the export then writes every
 element.
 
+On Revit 2024 to 2027, a door or window is written as its opening alone,
+with no door or window, only where its type's native record was read with
+an empty geometry map (RE-84, RE-299). Where the type's parameter block
+holds no map and its native record was not read (a large file over its
+limits, #1247), the element is written as a door or window drawn as its
+record box, and `warnings` gives their number ("door(s) and window(s) are
+written as doors and windows though nothing read tells whether their type
+draws geometry"). One that is a cased opening in Revit is its opening alone
+in Revit's export.
+
 `element_record_empty_curtain_panel` counts placed curtain panels of the
 "Empty System Panel" family, the panel type that fills a grid cell with
 nothing. Revit's own IFC export leaves every one of them out, and so does
