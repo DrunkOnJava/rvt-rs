@@ -77,6 +77,8 @@ re1-mechanical|RE1-Mechanical.rvt|RE1-Mechanical.ifc
 re1-plumbing|RE1-Plumbing.rvt|RE1-Plumbing.ifc
 nordic-office-as-built|ARK_NordicLCA_Office_Concrete_As-Built.rvt|ARK_NordicLCA_Office_Concrete_As-Built_Revit.ifc
 nordic-office-permit|ARK_NordicLCA_Office_Concrete_BuildingPermit.rvt|ARK_NordicLCA_Office_Concrete_BuildingPermit_Revit.ifc
+nordic-office-terrain-concrete|ARK_NordicLCA_Office_Terrain_Concrete_BuildingPermit.rvt|ARK_NordicLCA_Office_Terrain_Concrete_BuildingPermit_Revit.ifc
+nordic-office-terrain-timber|ARK_NordicLCA_Office_Terrain_Timber_BuildingPermit.rvt|ARK_NordicLCA_Office_Terrain_Timber_BuildingPermit_Revit.ifc
 "
 # puzzbobb's Revit 2025 models (research/r2025-models.tsv), in MODELS_DIR/r2025
 # only with `-f r2025=true`, each scored against Revit's export beside it.

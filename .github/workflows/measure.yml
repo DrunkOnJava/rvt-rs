@@ -22,9 +22,9 @@
 # it. The corpus is scored against nothing and never stored. Autodesk's sample
 # projects (2015 to 2027, pinned in research/autodesk-sample-projects.tsv) are
 # fetched the same way when `samples` is set, and the two versions of the
-# BIM4LCA office with Revit's exports of them (research/bim4lca-measure.tsv,
-# CC BY-SA 4.0) when `nordic` is set; those two are scored like the reference
-# models (#763).
+# BIM4LCA office, and its terrain variants in concrete and timber, with Revit's
+# exports of them (research/bim4lca-measure.tsv, CC BY-SA 4.0) when `nordic` is
+# set; those are scored like the reference models (#763, #1262).
 #
 #   gh workflow run measure.yml -f ref=my-branch -f base=main -f nordic=true
 #
@@ -122,7 +122,7 @@ on:
         required: false
         default: false
       nordic:
-        description: Also score the BIM4LCA office as built and at building permit against Revit's exports of them (research/bim4lca-measure.tsv, CC BY-SA 4.0, read by byte range for the run and never stored)
+        description: Also score the BIM4LCA office as built and at building permit, and its two terrain variants, against Revit's exports of them (research/bim4lca-measure.tsv, CC BY-SA 4.0, read by byte range for the run and never stored)
         type: boolean
         required: false
         default: false
