@@ -110,17 +110,17 @@ pub const ROOM_SOLID_WINDOW: usize = 0x1_0000;
 /// feet.
 pub const BOX_TOLERANCE_FEET: f64 = 1e-3;
 
-/// How many bytes past a room's solid header the next solid's tag is looked
-/// for (RE-316, interim).
-pub const ROOM_SOLID_SPAN_MAX: usize = 4 << 20;
+/// The most bytes from one face's tag to the next face's within one solid
+/// when its list of objects bounds the span (RE-316).
+pub const SPAN_FACE_GAP: usize = 0x400;
 
-/// The most faces a solid's span may hold before it is not resolved (RE-316):
-/// the largest solid measured has 115.
-pub const RESOLVE_FACES_MAX: usize = 512;
+/// The most faces a solid may have to be read at all (RE-316): the largest
+/// solid measured lists 136 objects. A solid with more is left to its box, so
+/// the work of snapping and resolving its edges is bounded.
+pub const SOLID_FACES_MAX: usize = 512;
 
-/// The most faces the walk reads from one solid; a solid with more is not
-/// read at all.
-pub const SOLID_FACES_MAX: usize = 4096;
+/// The most faces a solid's span may hold before it is not resolved (RE-316).
+pub const RESOLVE_FACES_MAX: usize = SOLID_FACES_MAX;
 
 /// How far a vertical face's span may fall short of a room's box, and a
 /// horizontal face lie from its floor or ceiling, and still be it, feet
@@ -322,32 +322,28 @@ fn solid_start(buf: &[u8], header: usize) -> Option<usize> {
         .then_some(after_id + 8)
 }
 
-/// The faces of the solid whose header starts at `header`: the first face
-/// within [`ROOM_SOLID_WINDOW`], and each face after it within
-/// [`FACE_GAP`] of the one before.
-pub fn solid_faces(buf: &[u8], header: usize) -> Vec<RoomFace> {
-    let Some(start) = solid_start(buf, header) else {
-        return Vec::new();
-    };
-    let end = buf.len().min(start + ROOM_SOLID_WINDOW);
-    let Some(window) = buf.get(start..end) else {
-        return Vec::new();
-    };
-    let Some(first) = memchr::memmem::find_iter(window, &FACE_TAG)
+/// The first face of the solid that starts at `start`, within
+/// [`ROOM_SOLID_WINDOW`].
+fn first_face_at(buf: &[u8], start: usize) -> Option<usize> {
+    let end = buf.len().min(start.checked_add(ROOM_SOLID_WINDOW)?);
+    let window = buf.get(start..end)?;
+    memchr::memmem::find_iter(window, &FACE_TAG)
         .map(|offset| start + offset)
         .find(|&at| face_at(buf, at).is_some())
-    else {
-        return Vec::new();
-    };
+}
+
+/// The faces from the one at `first`, each the first face within `max_gap`
+/// bytes of its tag after the one before, up to `limit` of them.
+fn follow_faces(buf: &[u8], first: usize, max_gap: usize, limit: usize) -> Vec<RoomFace> {
     let mut faces = Vec::new();
     let mut at = first;
     while let Some(face) = face_at(buf, at) {
         faces.push(face);
-        if faces.len() > SOLID_FACES_MAX {
-            return Vec::new();
+        if faces.len() >= limit {
+            break;
         }
         let from = at + FACE_TAG.len();
-        let Some(window) = buf.get(from..buf.len().min(at + FACE_GAP)) else {
+        let Some(window) = buf.get(from..buf.len().min(at + max_gap)) else {
             break;
         };
         let Some(next) = memchr::memmem::find_iter(window, &FACE_TAG)
@@ -359,6 +355,44 @@ pub fn solid_faces(buf: &[u8], header: usize) -> Vec<RoomFace> {
         at = next;
     }
     faces
+}
+
+/// The faces of the solid whose header starts at `header`: the first face
+/// within [`ROOM_SOLID_WINDOW`], and each face after it within
+/// [`FACE_GAP`] of the one before. None if there are more than
+/// [`SOLID_FACES_MAX`].
+pub fn solid_faces(buf: &[u8], header: usize) -> Vec<RoomFace> {
+    let Some(start) = solid_start(buf, header) else {
+        return Vec::new();
+    };
+    let Some(first) = first_face_at(buf, start) else {
+        return Vec::new();
+    };
+    let faces = follow_faces(buf, first, FACE_GAP, SOLID_FACES_MAX + 1);
+    if faces.len() > SOLID_FACES_MAX {
+        return Vec::new();
+    }
+    faces
+}
+
+/// The bytes that open the list of a solid's objects, after its two boxes.
+const SOLID_LIST_TAG: [u8; 4] = [0x04, 0xc0, 0x08, 0x00];
+
+/// How far past its start a solid's list of objects is looked for.
+const SOLID_LIST_WINDOW: usize = 0x200;
+
+/// The number of objects the solid that starts at `start` lists (RE-316): the
+/// list is `04 c0 08 00 · u32 count · u32 4 · count × (u16 class · u32
+/// token)` and counts every face, including those whose record
+/// [`face_at`] does not read (a solid's floor and ceiling, usually). None
+/// unless the list is there with a count from 1 to [`RESOLVE_FACES_MAX`].
+pub fn solid_object_count(buf: &[u8], start: usize) -> Option<usize> {
+    let end = buf.len().min(start.checked_add(SOLID_LIST_WINDOW)?);
+    let window = buf.get(start..end)?;
+    let at = start + memchr::memmem::find(window, &SOLID_LIST_TAG)?;
+    let count = le_bytes::u32_at(buf, at + 4)? as usize;
+    let lead = le_bytes::u32_at(buf, at + 8)?;
+    (lead == 4 && (1..=RESOLVE_FACES_MAX).contains(&count)).then_some(count)
 }
 
 impl RoomFace {
@@ -715,25 +749,24 @@ pub fn solid_headers_by_id(buf: &[u8]) -> BTreeMap<u64, Vec<usize>> {
     out
 }
 
-/// Every face of the solid whose header starts at `header`, from its first
-/// face to the tag of the next solid in `buf`, whatever the gap between faces
-/// (RE-316). Empty where no tag follows within [`ROOM_SOLID_SPAN_MAX`] bytes:
-/// without it the solid's end is not known, and the faces past it are another
-/// element's.
+/// The faces of the solid whose header starts at `header` that the walk
+/// stops short of (RE-316): from its first face, each next face within
+/// [`SPAN_FACE_GAP`] bytes of the one before, and no more than the solid's
+/// list of objects counts ([`solid_object_count`]). A record longer than
+/// [`FACE_GAP`] can sit between a solid's own faces (592 to 732 bytes on the
+/// BIM4LCA office and Autodesk's samples). On the 47 solids measured whose list
+/// counts exactly the faces the walk reads, the next face after the walk, which
+/// is another element's, is 6826 bytes or more on. Empty without the list or a
+/// first face.
 pub fn solid_span(buf: &[u8], header: usize) -> Vec<RoomFace> {
     let Some(start) = solid_start(buf, header) else {
         return Vec::new();
     };
-    let window_end = buf.len().min(start.saturating_add(ROOM_SOLID_SPAN_MAX));
-    let Some(window) = buf.get(start..window_end) else {
+    let (Some(count), Some(first)) = (solid_object_count(buf, start), first_face_at(buf, start))
+    else {
         return Vec::new();
     };
-    let Some(end) = memchr::memmem::find(window, &ROOM_SOLID_TAG) else {
-        return Vec::new();
-    };
-    memchr::memmem::find_iter(&window[..end], &FACE_TAG)
-        .filter_map(|offset| face_at(buf, start + offset))
-        .collect()
+    follow_faces(buf, first, SPAN_FACE_GAP, count)
 }
 
 /// Where each of two segments is cut by the other, as parameters from 0 at
