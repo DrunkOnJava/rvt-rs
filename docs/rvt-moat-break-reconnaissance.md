@@ -347,7 +347,7 @@ AI changes all four:
 
 - **Autodesk and the Open Design Alliance** — Autodesk's 2006 suit, over the TrustedDWG watermark the ODA's libraries wrote into DWG files, and the DWG trademark proceedings that followed concerned DWG, not RVT. The two announced a settlement of the trademark disputes on 2010-04-09 ([Autodesk's announcement](https://investors.autodesk.com/news-releases/news-release-details/autodesk-and-open-design-alliance-reach-agreement-autodesk-dwg)).
 - **ODA BimRv SDK** — a commercial SDK licensed to ODA members under their agreements. rvt-rs uses none of it (`CLEANROOM.md`).
-- **No cryptographic protection on RVT files themselves** — confirmed in this recon. Data is structured; not obfuscated.
+- **No encryption in the files read for this work** — their streams are structured data that rvt-rs inflates and reads without any key (§3.3: up to 17:1 on inflation, which encrypted data does not give). That covers the files in this repository's corpora, not every RVT file; [`compatibility.md`](compatibility.md) lists encrypted or password-protected files as unsupported.
 - **The project's clean-room approach is intended to reduce, not eliminate, legal risk.** In the United States, 17 U.S.C. § 1201(f) contains a limited interoperability provision subject to statutory conditions. This is not legal advice; the implications depend on the circumstances.
 - **Autodesk Platform Services (formerly Forge)** — rvt-rs does not use it or its terms.
 
