@@ -40,7 +40,7 @@ Measure 41541977595, this change against `main`, both with `--saved-meshes`:
 | rst basic (2024 sample) | 63 → 67 | 0 → 0 |
 | Core Interior, RE1 Electrical, Mechanical, Plumbing | unchanged | unchanged |
 
-Snowdon Towers electrical keeps 907; its count of partial meshes rises from 513 to 556, because 43 fixtures whose only surfaces were left-handed cylinders had no mesh at all before and now have one that their `GImposter` leaves partial.
+The samples have no Revit export, so their counts are not scored. Snowdon Towers electrical keeps 907; its count of partial meshes rises from 513 to 556, because 43 fixtures whose only surfaces were left-handed cylinders had no mesh at all before and now have one that their `GImposter` leaves partial.
 
 Against Revit's own export (`mesh_bodies_vs_ifc`, the bodies scored):
 

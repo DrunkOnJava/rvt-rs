@@ -784,9 +784,6 @@ pub fn cylinder_face(
         "degenerate cylinder trim"
     );
     let tol = 1e-7;
-    ensure!(trim_uv.len() >= 4, "nonrectangular cylinder trim");
-    let mut covered = [0.; 4];
-    let mut perimeter = 0.;
     for (a, b) in trim_uv
         .iter()
         .zip(trim_uv.iter().cycle().skip(1))
@@ -803,40 +800,51 @@ pub fn cylinder_face(
                 && b[1] <= v_range[1] + tol,
             "cylinder trim outside envelope"
         );
-        let du = b[0] - a[0];
-        let dv = b[1] - a[1];
-        let length = du.hypot(dv);
-        ensure!(length > tol, "repeated cylinder trim vertex");
         ensure!(
-            du.abs() < tol || dv.abs() < tol,
-            "nonrectangular cylinder trim"
+            (b[0] - a[0]).hypot(b[1] - a[1]) > tol,
+            "repeated cylinder trim vertex"
         );
-        let side = if dv.abs() < tol && (a[1] - trim_min[1]).abs() < tol {
-            0
-        } else if du.abs() < tol && (a[0] - trim_max[0]).abs() < tol {
-            1
-        } else if dv.abs() < tol && (a[1] - trim_max[1]).abs() < tol {
-            2
-        } else if du.abs() < tol && (a[0] - trim_min[0]).abs() < tol {
-            3
-        } else {
-            bail!("nonrectangular cylinder trim")
-        };
-        covered[side] += length;
-        perimeter += length;
     }
-    let expected_perimeter = 2. * ((trim_max[0] - trim_min[0]) + (trim_max[1] - trim_min[1]));
-    ensure!(
-        (perimeter - expected_perimeter).abs() <= tol * expected_perimeter.max(1.),
-        "incomplete or self-intersecting cylinder trim"
-    );
-    ensure!(
-        (covered[0] - (trim_max[0] - trim_min[0])).abs() <= tol
+    // A loop that runs round its UV box, side by side, is meshed as a grid;
+    // any other is cut into strips across U (#1247).
+    let rectangular = trim_uv.len() >= 4 && {
+        let mut covered = [0.; 4];
+        let mut perimeter = 0.;
+        let mut on_sides = true;
+        for (a, b) in trim_uv
+            .iter()
+            .zip(trim_uv.iter().cycle().skip(1))
+            .take(trim_uv.len())
+        {
+            let du = b[0] - a[0];
+            let dv = b[1] - a[1];
+            let length = du.hypot(dv);
+            let side = if dv.abs() < tol && (a[1] - trim_min[1]).abs() < tol {
+                Some(0)
+            } else if du.abs() < tol && (a[0] - trim_max[0]).abs() < tol {
+                Some(1)
+            } else if dv.abs() < tol && (a[1] - trim_max[1]).abs() < tol {
+                Some(2)
+            } else if du.abs() < tol && (a[0] - trim_min[0]).abs() < tol {
+                Some(3)
+            } else {
+                None
+            };
+            let Some(side) = side else {
+                on_sides = false;
+                break;
+            };
+            covered[side] += length;
+            perimeter += length;
+        }
+        let expected_perimeter = 2. * ((trim_max[0] - trim_min[0]) + (trim_max[1] - trim_min[1]));
+        on_sides
+            && (perimeter - expected_perimeter).abs() <= tol * expected_perimeter.max(1.)
+            && (covered[0] - (trim_max[0] - trim_min[0])).abs() <= tol
             && (covered[1] - (trim_max[1] - trim_min[1])).abs() <= tol
             && (covered[2] - (trim_max[0] - trim_min[0])).abs() <= tol
-            && (covered[3] - (trim_max[1] - trim_min[1])).abs() <= tol,
-        "incomplete cylinder trim perimeter"
-    );
+            && (covered[3] - (trim_max[1] - trim_min[1])).abs() <= tol
+    };
     // Keep a full-turn trim from collapsing to coincident seam vertices when a
     // deliberately coarse profile is supplied. This is a geometric validity
     // bound, independent of the analytic chord-error policy.
@@ -894,6 +902,38 @@ pub fn cylinder_face(
             center[2] + radius * (c * x_vec[2] + s * y_vec[2]) + v * z_vec[2],
         ]
     };
+    let analytic_surface = Some(AnalyticCylinder {
+        center,
+        radius,
+        x_vec,
+        y_vec,
+        z_vec,
+        orient_flag: orient,
+        u_range,
+        v_range,
+    });
+    if !rectangular {
+        let (vertices, normals, triangles) = strip_mesh(
+            &trim_uv,
+            &u_values,
+            radius,
+            orient,
+            handed,
+            eval,
+            [x_vec, y_vec],
+        )?;
+        return Ok(FaceMesh {
+            face_index: fi,
+            face_tag: face.fields["m_GInfo"]["m_tag"].as_i64().unwrap_or(-1),
+            render_style_id: crate::native_metadata::identifier(&face.fields["m_renderStyleId"])?,
+            vertices,
+            triangles,
+            normal: normals[0],
+            normals,
+            analytic_surface,
+            trim_uv,
+        });
+    }
     let mut vertices = Vec::new();
     let mut normals = Vec::new();
     for &v in v_values.iter().take(nv + 1) {
@@ -932,18 +972,106 @@ pub fn cylinder_face(
         triangles,
         normal: normals[0],
         normals,
-        analytic_surface: Some(AnalyticCylinder {
-            center,
-            radius,
-            x_vec,
-            y_vec,
-            z_vec,
-            orient_flag: orient,
-            u_range,
-            v_range,
-        }),
+        analytic_surface,
         trim_uv,
     })
+}
+
+/// Vertices, normals and triangles of a cylinder face.
+type CylinderStrips = (Vec<[f64; 3]>, Vec<[f64; 3]>, Vec<[u32; 3]>);
+
+/// A cylinder face whose trim loop is not its UV box: the loop is clipped to
+/// strips across U no wider than the grid's angular step, each strip earcut in
+/// arc-length coordinates, so every edge stays within the chord bound while V,
+/// along which the cylinder is straight, needs no division. The strips must
+/// cover the loop's own area, or the loop is taken as self-intersecting.
+fn strip_mesh(
+    trim_uv: &[[f64; 2]],
+    u_values: &[f64],
+    radius: f64,
+    orient: bool,
+    handed: f64,
+    eval: impl Fn(f64, f64) -> [f64; 3],
+    [x_vec, y_vec]: [[f64; 3]; 2],
+) -> Result<CylinderStrips> {
+    // Each strip clips the whole loop: bound the work a hostile file can ask.
+    ensure!(
+        u_values.len().saturating_mul(trim_uv.len()) <= 20_000_000,
+        "cylinder trim strip budget exceeded"
+    );
+    let sign = if orient { handed } else { -handed };
+    let mut vertices = Vec::new();
+    let mut normals = Vec::new();
+    let mut triangles = Vec::new();
+    let mut covered = 0.;
+    for w in u_values.windows(2) {
+        let piece = clip_u(&clip_u(trim_uv, w[0], true), w[1], false);
+        if piece.len() < 3 {
+            continue;
+        }
+        let pts: Vec<[f64; 2]> = piece.iter().map(|p| [p[0] * radius, p[1]]).collect();
+        let mut ts = Vec::<u32>::new();
+        earcut::Earcut::new().earcut(pts.iter().copied(), &[], &mut ts);
+        let base = u32::try_from(vertices.len()).context("cylinder vertex count overflow")?;
+        for p in &piece {
+            vertices.push(eval(p[0], p[1]));
+            let (s, c) = p[0].sin_cos();
+            normals.push([
+                sign * (c * x_vec[0] + s * y_vec[0]),
+                sign * (c * x_vec[1] + s * y_vec[1]),
+                sign * (c * x_vec[2] + s * y_vec[2]),
+            ]);
+        }
+        for t in ts.chunks_exact(3) {
+            ensure!(
+                t.iter().all(|&i| (i as usize) < pts.len()),
+                "triangle bounds"
+            );
+            let a = cross(pts[t[0] as usize], pts[t[1] as usize], pts[t[2] as usize]);
+            if a.abs() <= 1e-12 {
+                continue;
+            }
+            covered += a.abs() / 2.;
+            let t = if (a > 0.) == orient {
+                [t[0], t[1], t[2]]
+            } else {
+                [t[0], t[2], t[1]]
+            };
+            triangles.push([base + t[0], base + t[1], base + t[2]]);
+        }
+        ensure!(
+            triangles.len() <= 4_000_000,
+            "cylinder triangle count overflow"
+        );
+    }
+    let scaled: Vec<[f64; 2]> = trim_uv.iter().map(|p| [p[0] * radius, p[1]]).collect();
+    let expected = area(&scaled).abs();
+    ensure!(
+        !triangles.is_empty() && (covered - expected).abs() <= 1e-6 * expected.max(1e-6),
+        "self-intersecting cylinder trim"
+    );
+    Ok((vertices, normals, triangles))
+}
+
+/// The part of `ring` on one side of `u = at`: `u >= at` where `lower`, else
+/// `u <= at` (Sutherland–Hodgman against one line).
+fn clip_u(ring: &[[f64; 2]], at: f64, lower: bool) -> Vec<[f64; 2]> {
+    let keep = |p: [f64; 2]| if lower { p[0] >= at } else { p[0] <= at };
+    let mut out = Vec::new();
+    for (&a, &b) in ring
+        .iter()
+        .zip(ring.iter().cycle().skip(1))
+        .take(ring.len())
+    {
+        if keep(a) {
+            out.push(a);
+        }
+        if keep(a) != keep(b) {
+            let t = (at - a[0]) / (b[0] - a[0]);
+            out.push([at, a[1] + t * (b[1] - a[1])]);
+        }
+    }
+    out
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Primitive {
