@@ -68,9 +68,13 @@ Revit 2008 to 2021 and 2023 (no reference model with Revit's room export on a ru
 ## Reproduce
 
 ```bash
-gh workflow run measure.yml --ref feat/rooms-space-outlines-measured -f ref=a98bd316b39335a4c74ad3f16004b1ff2f721e1d -f base=none \
+# once landed, from main (the scorer is on main then); before, --ref <the branch>
+gh workflow run measure.yml --ref main -f ref=a98bd316b39335a4c74ad3f16004b1ff2f721e1d -f base=none \
   -f nordic=true -f r2025=true -f holdout=true -f scorers="space_profiles_vs_ifc tagged_spaces_vs_ifc room_names_vs_ifc"
-gh workflow run measure.yml --ref feat/rooms-space-outlines-measured -f ref=2f155a031eb8d7757e6421efd6988022a5aa0d33 -f base=none \
-  -f nordic=true -f models="nordic-office-* core-interior re1-architecture" -f probe=probe_re101_room_solids -f probe_scorer=- -f scorers=space_profiles_vs_ifc
+gh workflow run measure.yml --ref main -f ref=2f155a031eb8d7757e6421efd6988022a5aa0d33 -f base=none \
+  -f nordic=true -f r2025=true -f holdout=true -f scorers="space_profiles_vs_ifc tagged_spaces_vs_ifc room_names_vs_ifc"
+gh workflow run measure.yml --ref main -f ref=2746264d28a1dc9064745ea07fb177873f0a90c8 -f base=none \
+  -f nordic=true -f models="nordic-office-* core-interior re1-architecture" \
+  -f probe=probe_re101_room_solids -f probe_scorer=- -f scorers=space_profiles_vs_ifc
 python3 tools/re/space_profiles_vs_ifc.py model.ifc revit-export.ifc --list 10
 ```

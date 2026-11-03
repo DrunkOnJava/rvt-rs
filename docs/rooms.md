@@ -40,7 +40,7 @@ The export also counts the rooms drawn as their box, so an importer can check a 
 | 2023 | stored solid | 9 of 9 rooms of one project, local only (RE-102) |
 | 2024 | stored solid; Areas as spaces without a body | Core Interior, the BIM4LCA office, held-out models (below) |
 | 2025 | stored solid | RE1 Architecture, six purpose-made R2025 models, held-out models (below) |
-| 2026, 2027 | `record_box` until the stored solid is read for these releases (#1260) | 8 held-out rooms, all rectangles, so the box is exact |
+| 2026, 2027 | `record_box` until the stored solid is read for these releases (#1260) | 16 held-out rooms, all rectangles, so the box is exact |
 
 `ROOM_SOLID_SUPPORTED_REVIT_VERSIONS` in `src/research/partition_room_boundaries.rs` is the list of releases whose room solids are read.
 
