@@ -249,7 +249,7 @@ fn classify_failure_mode(
         return failure_mode(
             "unsupported_revit_version",
             "Unsupported Revit version",
-            "This file opened, but its Revit version is outside the 2015 to 2027 releases rvt-rs reads.",
+            "This file opened, but its Revit version is outside the 2008 to 2027 releases rvt-rs reads.",
             "warning",
         );
     }
