@@ -48,7 +48,8 @@
 //! §5). A wall
 //! whose pieces pass [`MAX_RISERS`], whose plan does not break into convex
 //! pieces, or whose several elements share a hole or opening that lies over
-//! it, is left as it was. The wall's `extrusion` stays the full prism, which
+//! it, or with a piece between [`KEPT_SLIVER_FEET`] and [`KEPT_PIECE_FEET`]
+//! wide, is left as it was. The wall's `extrusion` stays the full prism, which
 //! the passes that read a wall's plan and its record's box use; the writer,
 //! the glTF and the plan outline draw its `solid_shape`.
 
@@ -83,6 +84,18 @@ const STEP_TOLERANCE_SQUARE_FEET: f64 = COVER_TOLERANCE_SQUARE_FEET;
 
 /// The most convex pieces a wall's plan outside the elements may come to.
 const MAX_RISERS: usize = 32;
+
+/// The widest piece of a wall's plan outside its floor that Revit is measured
+/// to leave at the wall's top: the three 0.032 to 0.033 ft pieces past a
+/// floor's edge on the BIM4LCA office as built (RE-320 §4), feet.
+const KEPT_SLIVER_FEET: f64 = 0.04;
+
+/// The narrowest wider piece measured to stay at the wall's top, feet: 0.387 on
+/// the same file. Revit cuts the one piece in between, a 0.085 ft stub past a
+/// floor's edge inside an abutting wall, and nothing separates it from the
+/// pieces Revit keeps, so a wall with a piece between the two is left as it
+/// was (RE-320 §4).
+const KEPT_PIECE_FEET: f64 = 0.38;
 
 /// The area under which a piece of a plan is no piece, square feet: rounding
 /// where a triangle's edge lies along another edge.
@@ -354,6 +367,21 @@ fn reach(cutter: &Cutter, wall: &Wall) -> f64 {
     inside - cut
 }
 
+/// The least width of the convex counter-clockwise `ring`: the smallest, over
+/// its edges, of the greatest distance of a corner from the edge's line, feet.
+fn least_width(ring: &[Point2]) -> f64 {
+    let n = ring.len();
+    (0..n)
+        .map(|i| {
+            let (a, b) = (ring[i], ring[(i + 1) % n]);
+            let length = ((b.0 - a.0).powi(2) + (b.1 - a.1).powi(2)).sqrt();
+            ring.iter()
+                .map(|&p| side_of(a, b, p).abs() / length)
+                .fold(0.0, f64::max)
+        })
+        .fold(f64::INFINITY, f64::min)
+}
+
 /// The convex pieces `plan` is made of: itself where it is convex, else its
 /// ear-clipped triangles with every two that make a convex piece together
 /// joined. `None` where the triangulation is not the plan's area.
@@ -447,7 +475,12 @@ fn steps(wall: &Wall, levels: &[(f64, Vec<&Cutter>)]) -> Option<Vec<(f64, Vec<Ri
             .into_iter()
             .filter(|piece| area(piece) >= STEP_TOLERANCE_SQUARE_FEET)
             .collect();
-        if above.len() > MAX_RISERS {
+        if above.len() > MAX_RISERS
+            || above.iter().any(|piece| {
+                let width = least_width(piece);
+                width > KEPT_SLIVER_FEET && width < KEPT_PIECE_FEET
+            })
+        {
             return None;
         }
         out.push((*level, above));
