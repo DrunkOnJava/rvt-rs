@@ -1,5 +1,11 @@
 //! RE-316: the topology a room's solid stores before its first face.
 //!
+//! MEASURED NEGATIVE (Measure run 41676245766, RE-316 section 1): no run of
+//! three `f64` in a room's solid before its first face is a point of the
+//! room's box other than the two boxes; what lies there is the list of the
+//! solid's objects (`u16 class · u32 token`), whose count bounds the solid
+//! (`probe_re316_solid_extent`).
+//!
 //! FACT under test: between a room's solid header (RE-101) and its first face
 //! the solid stores its vertices as three consecutive `f64`, a model-space
 //! point inside the room's record box, and the points at the box's floor give

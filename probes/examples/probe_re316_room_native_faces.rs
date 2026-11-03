@@ -1,6 +1,11 @@
 //! RE-316: the B-rep a room's native record holds, and the plan edges at its
 //! floor.
 //!
+//! MEASURED NEGATIVE (Measure run 41673755000, RE-316 section 1): the native
+//! record of a room that is left to its box holds two `Face` objects, the
+//! floor and ceiling planes, with no trim loop, and no `Edge` or `EdgeLoop`
+//! object, so it cannot give the outline the partition's faces do not.
+//!
 //! FACT under test: a room whose partition faces do not close into an outline
 //! on its record box (RE-101) holds, in its native record, the same solid as
 //! `Face`, `EdgeLoop` and `Edge` objects, and the edges that lie in the floor's
