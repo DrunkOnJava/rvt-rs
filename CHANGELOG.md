@@ -30,6 +30,9 @@ The office as built's IFC grows from 58.6 to 67.8 MB, its saved-mesh
 triangles from 66,872 to 257,108. With `--saved-meshes`, light fixtures and
 more bodies are drawn too (below).
 
+The viewer no longer calls a Revit 2008 to 2014 file an unsupported version
+(below).
+
 ### Upgrading from 0.12.1
 
 - A door or window whose saved mesh now decodes whole is drawn from it
@@ -96,6 +99,14 @@ more bodies are drawn too (below).
   opening alone (RE1's CasedOpening, Snowdon Towers' 47), and those keep
   their openings; no export of the reference models, the BIM4LCA office,
   the R2025 models or Autodesk's samples changes (#1247, RE-299).
+
+- **The viewer no longer calls a Revit 2008 to 2014 file an unsupported
+  version.** Its file status warned "Unsupported Revit version" for any file
+  before Revit 2015, though rvt-rs reads 2008 to 2014 element records
+  experimentally since RE-259 and RE-260 (#1076, #1077); it now warns only
+  outside 2008 to 2027, as `rvt-inspect` decides. `rvt-inspect`'s
+  `unsupported_revit_version` message, and the docs that quote it, name the
+  same 2008 to 2027 range.
 
 ## [0.12.1] — 2026-11-01
 
