@@ -499,7 +499,9 @@ pub(crate) fn edge_on_plane(
 }
 
 /// The root of `f` on `[lo, hi]` nearest `near`: the sign change nearest it
-/// among 32 equal steps, bisected; `None` where `f` keeps one sign.
+/// among 32 equal steps, bisected; `None` where `f` keeps one sign. A step
+/// where `f` cannot be evaluated (a surface's coordinates off its envelope)
+/// bounds no sign change.
 fn nearest_root(
     f: &dyn Fn(f64) -> Result<f64>,
     lo: f64,
@@ -510,21 +512,23 @@ fn nearest_root(
     let xs: Vec<f64> = (0..=STEPS)
         .map(|i| lo + (hi - lo) * i as f64 / STEPS as f64)
         .collect();
-    let fs = xs.iter().map(|&x| f(x)).collect::<Result<Vec<_>>>()?;
-    let mut best: Option<(f64, usize)> = None;
+    let fs: Vec<Option<f64>> = xs.iter().map(|&x| f(x).ok()).collect();
+    let mut best: Option<(f64, usize, f64, f64)> = None;
     for i in 0..STEPS {
-        if fs[i] == 0. || fs[i] * fs[i + 1] < 0. || (i + 1 == STEPS && fs[STEPS] == 0.) {
+        let (Some(fa), Some(fb)) = (fs[i], fs[i + 1]) else {
+            continue;
+        };
+        if fa == 0. || fa * fb < 0. || (i + 1 == STEPS && fb == 0.) {
             let distance = (0.5 * (xs[i] + xs[i + 1]) - near).abs();
-            if best.is_none_or(|(d, _)| distance < d) {
-                best = Some((distance, i));
+            if best.is_none_or(|(d, ..)| distance < d) {
+                best = Some((distance, i, fa, fb));
             }
         }
     }
-    let Some((_, i)) = best else {
+    let Some((_, i, mut fa, fb)) = best else {
         return Ok(None);
     };
     let (mut a, mut b) = (xs[i], xs[i + 1]);
-    let (mut fa, fb) = (fs[i], fs[i + 1]);
     if fa == 0. {
         return Ok(Some(a));
     }
