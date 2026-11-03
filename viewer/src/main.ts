@@ -2688,7 +2688,7 @@ function classifyFailureMode(diagnostics: ExportDiagnostics): FailureModeStatus 
         : `${streams} still over the large-model limits, so the model is incomplete; rvt-ifc --large-model on a desktop inflates up to 8 GiB`,
     };
   }
-  // The releases rvt-rs reads, 2008 to 2022 and 2027 experimentally, as rvt-inspect has it.
+  // The releases rvt-rs reads, 2008 to 2022, 2026 and 2027 experimentally, as rvt-inspect has it.
   if (typeof revitVersion === 'number' && (revitVersion < 2008 || revitVersion > 2027)) {
     return {
       kind: 'warn',
