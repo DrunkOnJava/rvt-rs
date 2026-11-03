@@ -606,6 +606,9 @@ pub fn recover_partition_schema_mvp(
             &mut out.products,
         ],
     );
+    // --- Family instances written as spaces that have no 3D body are left
+    // out, as Revit leaves them out (RE-312, #1262) ---
+    without_bodiless_family_spaces(rf, &mut out.products);
     // --- Empty curtain panels are left out, as Revit leaves them out (#309) ---
     out.products
         .retain(|product| !is_empty_curtain_panel(product));

@@ -36,12 +36,12 @@ The export also counts the spaces drawn as their record's box (rooms and family 
 
 | Release | Outline | Measured against Revit's export |
 |---|---|---|
-| 2008 to 2021 | read from the stored solid where the reader finds one | not measured: no reference model with Revit's room export. A Revit 2018 project exports no element at all, and 2018 and 2021 projects decode with no rooms, until PR #1286 lands (#1261) |
+| 2008 to 2021 | read from the stored solid where the reader finds one | held-out models (below): two 2021 projects; a Revit 2018 project exports no element at all until PR #1286 lands (#1261) |
 | 2022 | stored solid | 8 held-out rooms |
 | 2023 | stored solid | 9 of 9 rooms of one project, local only (RE-102) |
 | 2024 | stored solid; Areas as spaces without a body | Core Interior, the BIM4LCA office, held-out models (below) |
 | 2025 | stored solid | RE1 Architecture, six purpose-made R2025 models, held-out models (below) |
-| 2026, 2027 | `record_box` until PR #1288 (RE-314, #1260) reads their stored solids | 16 held-out rooms, all rectangles, so the box is exact; PR #1288 changes this row |
+| 2026, 2027 | stored solid, as on 2025 (RE-314, #1260) | 16 held-out rooms, all rectangles, and a held-out house (below) |
 
 `ROOM_SOLID_SUPPORTED_REVIT_VERSIONS` in `src/research/partition_room_boundaries.rs` is the list of releases whose room solids are read.
 
@@ -63,10 +63,14 @@ Measure runs the scorer on every reference model (`-f scorers=space_profiles_vs_
 | BIM4LCA office at building permit (2024) | 278 of Revit's 308 | 232 | 232 | 225 | 232 rooms, stored solid: 231, 231; 2 rooms, record box: 0, 0; 44 family instances, record box: 1, 1 |
 | R2025 purpose-made models with rooms (2025), 6 models | 12 | 12 | 12 | 12 | 12 rooms, stored solid: 12, 12 |
 | Held-out models (2022, 2024, 2025), 6 models | 24 | 24 | 24 | 24 | 24 rooms, stored solid: 24, 24 |
-| Held-out models (2026, 2027), 4 models | 16 | 16 | 16 | 16 | 16 rooms, record box: 16, 16 (all rectangles) |
-| One held-out house | 12 of 13 | 7 | 0 | 0 | 12 rooms, record box: 7, 0 |
+| Held-out models (2026, 2027), 4 models | 16 | 16 | 16 | 16 | 16 rooms, stored solid: 16, 16 (all rectangles) |
+| One held-out house (2026) | 12 of 13 | 10 | 0 | 0 | 12 rooms, stored solid: 10, 0 |
+| Held-out Gdynia (2021, Revit's IFC2X3 export) | 18 of 19 | 18 | 0 | 0 | 18 rooms, stored solid: 18, 0 |
+| Held-out Warmond (2021, export passed through another tool) | 179 | 174 | 174 | 174 | 171 rooms, stored solid: 171, 171; 8 rooms, record box: 3, 3 |
 
-A model with no rooms in Revit's export (the other R2025 models, RE1 Electrical, Mechanical and Plumbing) scores 0 of 0.
+A model with no rooms in Revit's export (the other R2025 models, RE1 Electrical, Mechanical and Plumbing) scores 0 of 0. Two held-out models write none of Revit's spaces: Vitoria's 2018 project (73), which exports no element until PR #1286 (#1261), and BIM Whale's 2021 project (8), whose spaces are Areas, which rvt-rs reads on Revit 2024 only.
+
+Held-out figures are Measure run 41680717786 (`main` at 21cb2efd), counts only. On the 2026 house and on Gdynia, every room's area is right where it is scored, but none of their outlines is within 0.01 ft of Revit's; the files are held out, so why is not examined.
 
 What the misses are:
 
@@ -78,9 +82,9 @@ What the misses are:
 
 ## What is not measured
 
-- Revit 2008 to 2021 and 2023 on any model Measure can run: no reference model with a Revit room export exists for them in the corpus (and Revit 2018 and 2021 projects decode with no rooms until PR #1286, #1261).
+- Revit 2008 to 2020 and 2023 on any model Measure can run, beyond the held-out counts above: no reference model with a Revit room export exists for them in the corpus.
 - Revit Spaces (MEP): no measurement singles one out.
-- Rooms of Revit 2026 and 2027 beyond the rectangles above (#1260, PR #1288).
+- Room outlines of Revit 2026 and 2027 beyond the rectangles: on the held-out house none is within 0.01 ft of Revit's (#1260).
 - A room's `Height` and `NetVolume` as scored by `tools/re/qtos_vs_ifc.py`, not by this scorer.
 - Revit's phase filter: Revit leaves out a room by its phase parameter, which is not measured to be its created phase (docs/status.md).
 - Rooms whose stored solid closes only once read as a boundary (RE-316) on any release but Revit 2024: the evidence is one building in two states. The six `rac_advanced` rooms with round columns close in every release of the Autodesk sample, with no Revit export to score them against, and 49 of the 50 `rme` rooms (stepped floors and ceilings) keep their box.
