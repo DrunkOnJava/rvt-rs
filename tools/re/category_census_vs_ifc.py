@@ -23,6 +23,7 @@ import collections
 import sys
 
 import ifcopenshell
+import ifcopenshell.util.element
 
 
 def parse(path):
@@ -37,6 +38,12 @@ def parse(path):
     return found
 
 
+def category_name(element):
+    """The category an export gives an element (`Other.Category`), or "-"."""
+    value = ifcopenshell.util.element.get_psets(element).get("Other", {}).get("Category")
+    return str(value) if value else "-"
+
+
 def main(argv):
     listing = "--list" in argv
     argv = [arg for arg in argv if arg != "--list"]
@@ -45,6 +52,7 @@ def main(argv):
         return 2
     found = parse(argv[1])
     tags = {}
+    elements = {}
     # The file stays bound while its instances are in use: IfcOpenShell 0.9
     # frees a file its instances outlive (#773).
     model = ifcopenshell.open(argv[2])
@@ -54,6 +62,7 @@ def main(argv):
         tag = getattr(element, "Tag", None)
         if tag and tag.isdigit():
             tags[int(tag)] = element.is_a()
+            elements[int(tag)] = element
     print(f"export schema {model.schema}; elements with a numeric Tag: {len(tags)}")
     written = set()
     for _, (_, ids) in found["category"].items():
@@ -62,13 +71,17 @@ def main(argv):
         f"written instances {len(written)}; in the export {len(written & set(tags))}, "
         f"not in it {len(written - set(tags))}, export elements not written {len(set(tags) - written)}"
     )
-    print("category | name | any | rule (in export) | written (in export, not in export) | export classes of the written")
+    print("category | name | any | rule (in export) | written (in export, not in export) | export classes of the written, categories of the instances")
     for category in sorted(found["any"], reverse=True):
         name, any_ids = found["any"][category]
         _, rule_ids = found["rule"].get(category, (name, set()))
         _, wrote = found["category"].get(category, (name, set()))
         classes = collections.Counter(tags[i] for i in wrote if i in tags)
         shown = ", ".join(f"{cls} {n}" for cls, n in sorted(classes.items()))
+        names = collections.Counter(
+            category_name(elements[i]) for i in rule_ids if i in tags
+        )
+        shown += "".join(f" | category {name!r} {n}" for name, n in sorted(names.items()))
         print(
             f"{category} | {name} | {len(any_ids)} | {len(rule_ids)} ({len(rule_ids & set(tags))}) | "
             f"{len(wrote)} ({len(wrote & set(tags))}, {len(wrote - set(tags))}) | {shown}"
