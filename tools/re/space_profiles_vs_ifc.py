@@ -31,7 +31,7 @@ Usage:
 
     python3 tools/re/space_profiles_vs_ifc.py <rvt-rs.ifc> <revit-export.ifc>
         [--match globalid|centroid] [--list N]
-        [--min-in-both N] [--min-area N] [--min-outline N]
+        [--min-in-both N] [--min-area N] [--min-outline N] [--min-boundary N]
 
 `--match` is chosen from the files unless given: centroid when under half of
 rvt-rs's spaces carry a GlobalId of Revit's. The `--min-*` flags make the run
@@ -138,6 +138,7 @@ def main(argv):
         ("--min-in-both", "both"),
         ("--min-area", "area"),
         ("--min-outline", "outline"),
+        ("--min-boundary", "boundary"),
     ):
         if flag in args:
             i = args.index(flag)
@@ -255,7 +256,12 @@ def main(argv):
         )
     shortfalls = [
         f"{what} {got} below {minimums[key]}"
-        for key, what, got in (("both", "in both", in_both), ("area", "area", n_area), ("outline", "outline", n_outline))
+        for key, what, got in (
+            ("both", "in both", in_both),
+            ("area", "area", n_area),
+            ("outline", "outline", n_outline),
+            ("boundary", "boundary", n_boundary),
+        )
         if key in minimums and got < minimums[key]
     ]
     for line in shortfalls:

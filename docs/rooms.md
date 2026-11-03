@@ -18,7 +18,7 @@ Read `RvtElementRecordGeometry.SpaceOutlineSource` on the `IfcSpace`:
 
 | Value | The body is | Its plan area is |
 |---|---|---|
-| `stored_solid` | the outline of the room's stored solid, extruded to the room's height | Revit's room area: within 0.1% of Revit's export on every `stored_solid` room scored below except one (RE-313 §3) |
+| `stored_solid` | the outline of the room's stored solid, extruded to the room's height | Revit's room area: within 0.1% of Revit's export on 604 of the 605 `stored_solid` rooms scored below, the office counted at both stages (RE-313 §3) |
 | `record_box` | the record's bounding box (turned with a family instance that is turned) | the box's area, not the space's. It equals the space's only when the space is a rectangle |
 | `saved_mesh` | the mesh Revit saved for the room (`rvt-ifc --saved-meshes`) | the mesh's; not scored |
 | `none` | no body (an Area) | not available |
@@ -46,22 +46,27 @@ The export also counts the rooms drawn as their box, so an importer can check a 
 
 ## What is measured, and where
 
-`tools/re/space_profiles_vs_ifc.py` meshes both exports, moves them into Revit's internal feet and compares the plan union of each space's upward faces: the area, and the largest distance from either outline to the other (RE-313 §1). Measure runs it on every reference model (`-f scorers=space_profiles_vs_ifc`); the IfcOpenShell job of CI runs it on the first two rows and fails below their counts.
+`tools/re/space_profiles_vs_ifc.py` meshes both exports, moves them into Revit's internal feet and compares the plan union of each space's upward faces: the area, and the outline, as the largest distance from a point of either outline to the other's (the boundary; RE-313 §1 also gives the distance from the mesh's vertices, which a ceiling step inside Revit's room moves). Measure runs it on every reference model (`-f scorers=space_profiles_vs_ifc`); the IfcOpenShell job of CI runs it on the first two rows and fails below their counts.
 
 | Model (release) | Spaces in both | Area within 0.1% | Outline within 0.01 ft | Outline source |
 |---|---:|---:|---:|---|
-| Core Interior (2024) | 116 | 116 | 116 | 116 stored solid |
-| RE1 Architecture (2025) | 11 | 11 | 11 | 11 stored solid |
-| BIM4LCA office as built (2024) | 276 of Revit's 308 | 221 | 211 | 220 stored solid (220 area, 211 outline), 56 record box (1 area, 0 outline) |
-| BIM4LCA office at building permit (2024) | 278 of Revit's 308 | 222 | 216 | 222 stored solid (221 area, 216 outline), 56 record box (1 area, 0 outline) |
-| R2025 purpose-made models with rooms (2025), 6 models | 12 | 12 | 12 | 12 stored solid |
-| Held-out models (2022, 2024, 2025), 6 models | 24 | 24 | 24 | 24 stored solid |
-| Held-out models (2026, 2027), 4 models | 16 | 16 | 16 | 16 record box, all rectangles |
-| One held-out house | 12 of 13 | 7 | 0 | 12 record box |
+| Core Interior (2024) | 116 | 116 | 116 | 116 rooms, stored solid |
+| RE1 Architecture (2025) | 11 | 11 | 11 | 11 rooms, stored solid |
+| BIM4LCA office as built (2024) | 276 of Revit's 308 | 221 | 221 | 220 rooms, stored solid: 220 and 220; 12 rooms, record box: 0 and 0; 44 family instances, record box: 1 and 1 |
+| BIM4LCA office at building permit (2024) | 278 of Revit's 308 | 222 | 222 | 222 rooms, stored solid: 221 and 221; 12 rooms, record box: 0 and 0; 44 family instances, record box: 1 and 1 |
+| R2025 purpose-made models with rooms (2025), 6 models | 12 | 12 | 12 | 12 rooms, stored solid |
+| Held-out models (2022, 2024, 2025), 6 models | 24 | 24 | 24 | 24 rooms, stored solid |
+| Held-out models (2026, 2027), 4 models | 16 | 16 | 16 | 16 rooms, record box, all rectangles |
+| One held-out house | 12 of 13 | 7 | 0 | 12 rooms, record box |
 
 A model with no rooms in Revit's export (the other R2025 models, RE1 Electrical, Mechanical and Plumbing) scores 0 of 0.
 
-The BIM4LCA office's other 30 spaces are its Areas: Revit's export gives them a body, rvt-rs writes them without one (RE-191).
+What the misses are:
+
+- **Rooms whose stored solid does not close on the record's box (12 on each office file)** keep the box, and its area is wrong on all 12.
+- **Family instances written as spaces (44 on the office)** are 42 "Turning Free Space" discs and two "VOLUME" families that Revit's export draws from the family's geometry (a mapped representation); rvt-rs draws their record box, a square where the family is a circle (24.22 ft² against 19.01 ft² on the 1500 mm turning spaces listed). #1262 is about these.
+- **The office's other 30 spaces are its Areas**: Revit's export gives them a body, rvt-rs writes them without one (RE-191).
+- **One room at building permit** is read from its stored solid and is 66% off in area (172.77 against 103.90 ft²); its cause is not found (RE-313 §3).
 
 ## What is not measured
 
@@ -69,7 +74,7 @@ The BIM4LCA office's other 30 spaces are its Areas: Revit's export gives them a 
 - Rooms of Revit 2026 and 2027 beyond the rectangles above (#1260).
 - A room's `Height` and `NetVolume` as scored by `tools/re/qtos_vs_ifc.py`, not by this scorer.
 - Revit's phase filter: Revit leaves out a room by its phase parameter, which is not measured to be its created phase (docs/status.md).
-- Rooms whose stored solid does not close or is not read keep their box; the table above counts them, and RE-313 §4 says what the BIM4LCA office's 56 have in common.
+- Why 12 of the BIM4LCA office's 234 rooms keep their box on each file: the RE-101 probe says their solids do not close on the record's box; what is different about those solids is not found.
 
 ## Check it yourself
 
