@@ -335,8 +335,8 @@ For the end-to-end `.rvt` → `.ifc` path, on the MIT-licensed
 ```
 
 Revit 2024 and 2025 projects export typed elements read from their
-partition element records; the README's "What rvt-rs reads from real
-projects" measures them against Revit's own export. The summary also
+partition element records; the "What rvt-rs reads from real
+projects" section of [evidence.md](evidence.md#what-rvt-rs-reads-from-real-projects) measures them against Revit's own export. The summary also
 counts what the export leaves out on purpose, as Revit's does: 2D-only
 families and elements in non-primary design options. A family file
 (`.rfa`) or a project from an earlier release writes the spatial tree
@@ -390,8 +390,8 @@ Honest boundary of what rvt-rs can demonstrate today:
 - **Every project, exactly** — Revit 2023, 2024 and 2025 projects export
   typed elements measured against Revit's own exports: on 2024 and 2025
   with geometry measured per category, on 2023 as their boxes, cut back
-  at wall joins and column faces (the README's "What rvt-rs reads from
-  real projects"). 2015 to 2022, 2026 and
+  at wall joins and column faces (the "What rvt-rs reads from
+  real projects" section of [evidence.md](evidence.md#what-rvt-rs-reads-from-real-projects)). 2015 to 2022, 2026 and
   2027 export experimentally. Where an
   element's bytes are not decoded, its body is its record's bounding box,
   and the export diagnostics say so.

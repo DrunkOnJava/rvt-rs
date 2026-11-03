@@ -92,7 +92,7 @@ consistency within each file (RE-260). Those files are closed source and
 measured locally only. Every
 other recovery claim is measured against the oracle its report names, Revit's
 own IFC export of the same file wherever one exists; the measured tables are in the
-[README](../README.md#what-rvt-rs-reads-from-real-projects) and the four
+[evidence page](evidence.md#what-rvt-rs-reads-from-real-projects) and the four
 levels a file can reach (opened, elements identified, geometry, properties)
 are in the [supported profile](supported-profile.md). On Revit 2023 to 2027
 files, and experimentally on 2015 to 2022 ones (RE-281), `rvt-elements` and Python also list each element's saved parameters,

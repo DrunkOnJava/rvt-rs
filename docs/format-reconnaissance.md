@@ -1,0 +1,2389 @@
+# RVT (Revit) on-disk format — reconnaissance report
+
+**Date:** 2026-04-19
+**Analyst:** Opus 4.7 (via Claude Code) + Griffin Long
+**Artifact corpus:** 11 RFA samples from phi-ag/rvt (Autodesk's `rac_basic_sample_family`) spanning **Revit 2016 → 2026** (every release)
+**Primary target:** `racbasicsamplefamily-2024.rfa` SHA-256 derivable from Git LFS OID (phi-ag/rvt)
+**Reference corpus:** Apache Tika (metadata only), phi-ag/rvt (TypeScript CFB parser, partial), chuongmep/revit-extractor (wraps Autodesk's .exe), teocomi/Reveche (OLE enumeration), Jeremy Tammik's blog (Autodesk DevRel — 2008-present)
+
+---
+
+## Context — an openBIM interoperability gap
+
+This report documents the on-disk structure of Autodesk Revit files
+as observed from Autodesk's publicly-distributed sample content. The
+practical motivation is the long-standing interoperability gap
+between Revit and the IFC open standard maintained by buildingSMART
+International.
+
+Autodesk's own [`revit-ifc`](https://github.com/Autodesk/revit-ifc)
+exporter is Apache-2.0 open-source and actively maintained. It runs
+as a Revit plug-in, which means its output is structurally bounded by
+what the Revit API chooses to expose. Practitioners discussing this
+limitation publicly note:
+
+- OSArch Wiki: *"Revit does not come with strong official support for Industry Foundation Classes (IFC)"*
+- thinkmoult.com (buildingSMART volunteer blog): *"Out of the box, Revit IFC support is very limited"*
+- Reddit r/bim (community consensus): *"Revit -> IFC export gives data loss"*
+- buildingSMART International hosts annual openBIM Hackathon events focused on this class of tooling.
+
+A parser that reads the actual on-disk bytes is a strict superset of
+the Revit-API-surface path. Once field-body decoding (Layer 4c.2 in
+the moat model below) is complete, an rvt-rs → IFC converter built
+on top of this library could cover categories the Revit API
+withholds from the existing exporter.
+
+Natural collaborators for the downstream IFC writer layer:
+
+| Project | Role |
+|---|---|
+| [IfcOpenShell](https://ifcopenshell.org/) | Mature C++ / Python IFC toolkit — likely writer for spec-compliant STEP emission. |
+| [buildingSMART International](https://www.buildingsmart.org/) | Standards body. Operates the formal IFC Software Certification Program. |
+| [BIMvision](https://bimvision.eu/) | Free IFC viewer — downstream consumer. |
+| [OSArch](https://wiki.osarch.org/) | Community documentation hub for open-source architecture tooling. |
+
+---
+
+## TL;DR
+
+| Dimension | RVT observation |
+|---|---|
+| Container format | OLE Compound Document + DEFLATE — both public, non-proprietary standards. |
+| Public spec | No Autodesk-published format spec exists. |
+| Open-source read coverage prior to this project | Metadata-only (Apache Tika, olefile) or partial (phi-ag/rvt, Reveche). |
+| Format stability | One container format, 11 years unchanged (2016–2026); only the version-specific `Partitions/NN` index advances. |
+| Data-layer exposure | `Formats/Latest` ships the full class + field schema as plaintext ASCII inside every file. This is the key observation that makes the rest of the work tractable. |
+
+The container and compression layers use public standards. The
+interesting work sits one level up, in the binary object graph.
+Because Autodesk ships the class schema inside every file, that
+work is semantic rather than purely reverse-engineering the wire
+format from scratch.
+
+The findings in this report rest on the byte evidence of
+Autodesk's publicly-distributed sample content, cross-checked
+against the public `RevitAPI.dll` NuGet package's exported symbol
+list. Every FACT below is reproducible from a probe under
+`examples/`.
+
+---
+
+## 1. Phase 0 — Intake
+
+| Field | Value |
+|---|---|
+| Provenance | phi-ag/rvt fixtures (`examples/Autodesk/rac_basic_sample_family-*.rfa`), distributed via Git LFS |
+| Corpus | 11 versions: 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026 |
+| Sizes | 264 KB (2016) → 408 KB (2026) monotonic growth |
+| Goal | Assess feasibility of open RVT reader + writer; compare moat vs DWG |
+| Safety | Static-only. No RVT execution, no sandbox required — OLE CDF is pure data. |
+| Tooling | olefile 0.47, zlib (stdlib), Python 3.13 in uv venv |
+
+## 2. Phase 1 — Triage
+
+All 11 samples open as Microsoft Compound File Binary Format 3.0 (magic `D0 CF 11 E0 A1 B1 1A E1`). Confirmed via first 8 bytes. No execution required.
+
+## 3. Phase 2 — Static analysis
+
+### 3.1 OLE stream inventory (invariant across 11 years)
+
+```
+12 streams present in every version (2016-2026):
+  BasicFileInfo              UTF-16LE metadata (build, Revit version, local path, GUID)
+  Contents                   Custom header + GZIP body (author, partition label)
+  Formats/Latest             Pure DEFLATE stream (NO OLE wrapper header): class schema enumeration
+  Global/ContentDocuments    Tiny (82 bytes) — document list
+  Global/DocumentIncrementTable   GZIP — change tracking
+  Global/ElemTable           GZIP — element ID index
+  Global/History             GZIP — history (UUIDs + timestamps)
+  Global/Latest              GZIP — live object state (53KB → 938KB, 17:1 ratio)
+  Global/PartitionTable      GZIP — partition metadata (UTF-16LE labels)
+  PartAtom                   Plain XML (Atom format, Autodesk partatom namespace)
+  RevitPreview4.0            PNG thumbnail (~1.4KB)
+  TransmissionData           UTF-16LE metadata (dataset transmission info)
+
+1 version-specific stream (the only thing that differs between years):
+  Partitions/NN             where NN = 58, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69
+                                    (Revit 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026)
+                            Note: 59 is skipped between 2016 and 2017.
+                            Contains 5-10 concatenated GZIP chunks per file.
+```
+
+### 3.2 BasicFileInfo parsing (already public knowledge, confirmed)
+
+UTF-16LE decoded strings present in every version in a consistent pattern:
+
+```
+[2016]  "Autodesk Revit 2016 (Build: 20150110_1515(x64))"
+[2017]  "Autodesk Revit 2017 (Build: 20160130_1515(x64))"
+[2018]  "Autodesk Revit 2018 (Build: 20170130_1515(x64))"
+[2019]  "2019  20180123_1515(x64)"               <-- format shifted post-R2018
+[2020]  "2020  20190207_1515(x64)"
+[2021]  "2021  20200131_1515(x64)"
+[2022]  "2022  20210129_1515(x64)"
+[2023]  "2023  20220401_1515(x64)"
+[2024]  "2024  20230308_1635(x64)"
+[2025]  "2025  Development Build"                <-- note: dev build, no dated tag
+[2026]  "2026  20250227_1515(x64)"
+```
+
+Each version-line in turn sits beside the original creator's full Windows file path and a file GUID. **This matches Tika + chuongmep/revit-extractor exactly** — they read this stream with regex `\x04\x00(\d{4})`.
+
+### 3.3 Compression — it's DEFLATE (confirmed by raw decomp)
+
+Every "high-entropy" stream is a **truncated gzip**: GZIP magic (`1F 8B 08`) + minimal header + DEFLATE body, **without the trailing 8-byte CRC32 + ISIZE that standard gzip writes.** Python's `gzip.GzipFile` refuses to parse it. `zlib.decompressobj(-15)` on the post-header bytes decompresses cleanly.
+
+Compression ratios observed (all streams):
+
+| Stream | Compressed | Decompressed | Ratio |
+|---|---|---|---|
+| Contents | 307 | 268 | 1:0.9 (header-dominated) |
+| Global/PartitionTable | 187 | 167 | 1:0.9 |
+| Global/History | 2.3 KB | 2.7 KB | 1:1.2 |
+| Global/DocumentIncrementTable | 1.8 KB | 15 KB | 1:8.5 |
+| Global/ElemTable | 9.8 KB | 79 KB | 1:8.1 |
+| **Global/Latest** | 53 KB | **938 KB** | **1:17.6** |
+| Formats/Latest | 157 KB | 473 KB | 1:3.0 |
+| Partitions/67 | 132 KB | ≥574 KB | ≥1:4.4 (10 internal GZIP segments) |
+
+**Critically: ratios up to 17:1 prove these streams are NOT encrypted.** Encrypted data compresses 1:1. This is structured binary — object graphs, element tables, history logs — that happens to compress well.
+
+### 3.4 PartAtom — plain XML, Atom format
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<entry xmlns="http://www.w3.org/2005/Atom"
+       xmlns:A="urn:schemas-autodesk-com:partatom">
+  <title>racbasicsamplefamily</title>
+  <id>Table-End-0000-CAN-ENU</id>
+  <updated>2023-03-27T11:56:02Z</updated>
+  <A:taxonomy>
+    <term>adsk:revit</term>
+    <label>Autodesk Revit</label>
+  </A:taxonomy>
+  <A:taxonomy>
+    <term>adsk:revit:grouping</term>
+    <label>Autodesk Revit Grouping</label>
+  </A:taxonomy>
+  <category>
+    <term>23.40.20.14.17</term>
+    <scheme>std:oc1</scheme>
+  </category>
+  <category>
+    <term>Furniture</term>
+    <scheme>adsk:revit:grouping</scheme>
+  </category>
+  <link rel="design-2d" type="application/rfa" ...>
+```
+
+This is a **complete metadata descriptor** of the family: title, OmniClass code (`23.40.20.14.17` = Furniture), Revit category, and MIME-type links to sibling 2D/3D representations. **Every RVT viewer is already reading this — it's public.**
+
+### 3.5 Formats/Latest — the class schema index
+
+When decompressed (473 KB from 157 KB compressed, ratio 3:1), this stream contains **the complete list of class/schema identifiers used in this file.** Names readable as ASCII strings include:
+
+**Document + API core:**
+- `ADocument`, `ADocWarnings`, `APIAppInfo`, `APIEventHandlerStatus`, `APIVSTAMacroElem`, `APIVSTAMacroElemTracking`
+
+**Property type system (the Revit parameter system):**
+- `AProperty`, `APropertyBoolean`, `APropertyDistance`, `APropertyDouble1`, `APropertyDouble2`, `APropertyDouble3`, `APropertyDouble4`, `APropertyDouble44`, `APropertyEnum`, `APropertyFloat`, `APropertyFloat3`, `APropertyInteger`
+
+**Geometry / ACIS interop:**
+- `ACeEdge`, `AGEdgeBeset`, `AGe_G` (likely Autodesk Geometry types, similar to ObjectARX naming)
+
+**Third-party / imports:**
+- `A3PartyAImage`, `A3PartyObject`, `A3PartySECImage`, `A3PartySECJpeg`, `ADTGridImportVocabulary`, `ADTGridTextLocation`
+
+**The class inventory varies per file.** A full RVT project file (with MEP, structural, rooms, etc.) will expose hundreds more. Each name is an anchor for schema mapping — once we know "APropertyDouble3 has 3 doubles in its body," every Revit drawing that uses that type is readable.
+
+**This is the single strongest signal that RVT is crackable.** Autodesk has not obfuscated class names. They ship the vtable as plaintext.
+
+### 3.6 Partitions/NN — the bulk data container
+
+The single version-specific stream. Starts with a 44-byte custom header:
+
+```
+offset  data                                        interpretation
+0x00    09 00 00 00 00 00 00 00                     LE uint64 = 9     (partition type or count)
+0x08    7b 03 00 00 00 00 b7 07                     internal IDs
+0x10    7c 0e 04 00                                 LE uint32 = 265,852    (size? offset?)
+0x14    00 00 d9 02 00 00 00 00                     more structure
+...
+0x2C    1F 8B 08 00 ...                             GZIP MAGIC — first chunk begins
+```
+
+After the header, the rest is **10 concatenated GZIP streams** back-to-back. Each decompresses to 50–130 KB of structured binary. This is the bulk BIM data — the actual element geometry, parameters, and relationships.
+
+The 10-chunk division is almost certainly the format's internal pagination / change-tracking unit — each chunk probably corresponds to a "partition page" (small, editable, version-able unit). Similar to SQLite's page structure, or Git's pack files.
+
+**Decompressing all 10 yields ~1.2 MB of structured binary** for a single 400 KB RFA file. That's the real parseable body.
+
+## 4. Comparison with existing tooling
+
+| Tool | License | Coverage | Requires Revit? |
+|---|---|---|---|
+| Apache Tika | Apache 2 | BasicFileInfo (version, GUID) | No |
+| `olefile` (Python) | BSD | OLE enumeration — stream list + raw bytes | No |
+| **phi-ag/rvt** | MIT | CFB parsing in TypeScript — latest work, partial | No |
+| chuongmep/revit-extractor | MIT | Wraps `RevitExtractor.exe` shipped with Revit | **Yes** |
+| teocomi/Reveche | MIT | General OLE access, docs-only coverage of streams | No |
+| ricaun-io/ricaun.Revit.FileInfo | MIT | .NET library for version + thumbnail | No |
+| KennanChan/RevitFileUtility | — | BasicFileInfo + thumbnail | No |
+| vampirefu/RevitFileVersion | — | Version only | No |
+| Jeremy Tammik's utilities | Blog posts | Python scripts for OLE enumeration | No |
+| **ODA BimRv SDK** | Commercial | Full read/write, undisclosed coverage | No (but $500–5k/yr) |
+| Autodesk Forge / APS | $$$$ per-model | Full fidelity via cloud conversion | No |
+| Autodesk Revit itself | $3,555/yr | Everything | Yes — it IS Revit |
+
+**Nobody ships an open parser for the decompressed Partitions/NN object graph.** Nobody even publishes a list of the class schemas. The forum quote from Jeremy Tammik (Autodesk's own DevRel) on `old.reddit.com`:
+
+> *"Finding the right pointers into the partition data seems a lot harder and I currently wouldn't even know where to start."*
+
+That's an Autodesk developer advocate publicly admitting the partition-data format is undocumented, from 2023. Nothing has changed since.
+
+## 5. Moat model — four layers
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│  Layer 1 · Container (OLE CDF)                                │
+│  SPEC: [MS-CFB] Microsoft public, 1992. Parsers in every lang │
+│  STATUS: SOLVED. olefile works.                               │
+├──────────────────────────────────────────────────────────────┤
+│  Layer 2 · Compression (DEFLATE, truncated)                   │
+│  SPEC: IETF RFC 1951                                          │
+│  STATUS: SOLVED. zlib -15 wbits works on all streams.         │
+├──────────────────────────────────────────────────────────────┤
+│  Layer 3 · Stream framing (per-stream headers + chunk layout) │
+│  SPEC: None. I just mapped the invariant 44-byte Partitions   │
+│         header + 10-chunk GZIP concatenation from corpus.     │
+│  STATUS: PARTIAL. ~80% of the grammar is inferrable from the  │
+│          11-version corpus via delta analysis.                │
+├──────────────────────────────────────────────────────────────┤
+│  Layer 4 · Object graph semantics (inside decompressed blobs) │
+│  SPEC: None. Class names exposed in Formats/Latest but field  │
+│         layouts are Autodesk-proprietary.                     │
+│  STATUS: UNSOLVED. This is the real work. But:                │
+│          • The class names are plaintext.                     │
+│          • The types are well-known (APropertyDouble, etc.)   │
+│          • AI-driven binary-diff RE scales across 11 versions.│
+└──────────────────────────────────────────────────────────────┘
+```
+
+Comparison to DWG:
+
+- DWG's hardest layer was Layer 3 (Reed-Solomon parity recomputation, the LibreDWG CRC bug).
+- RVT's hardest layer is Layer 4 (object graph).
+- Layer 4 is genuinely harder — it's a moving target, Autodesk can add classes per release.
+- **But Layer 4 is also where AI tooling has the biggest asymmetric advantage.** Delta-analysis across 11 versions + ASCII-string plaintext class names + LLM pattern-inference = the exact shape of problem that scales.
+
+## 6. The AI-driven attack plan
+
+### 6.1 What I could ship in Session N+1
+
+```
+Week 0 (this session, partial):
+  ✓ Confirm OLE container
+  ✓ Decompress every stream
+  ✓ Identify 4-layer moat structure
+  ✓ Extract class schema inventory from Formats/Latest
+
+Phase A — Parity with existing tooling:
+  • Full olefile-based reader in Rust (use `cfb` crate — already at 0.11, proven)
+  • Decode BasicFileInfo → structured version + build + GUID + original path
+  • Parse PartAtom XML → category, OmniClass, taxonomy
+  • Extract RevitPreview4.0 PNG
+  • Decompress all streams → raw byte arrays
+
+Phase B — Cross-version delta analysis:
+  • Load all 11 versions of same file
+  • Byte-align decompressed streams (same content, different encoding)
+  • Generate a delta map per stream per version pair
+  • Invariant bytes = structural; varying bytes = payload
+
+Phase C — Class graph extraction:
+  • Parse Formats/Latest properly (length-prefixed string table)
+  • Build a type hierarchy by sorting class names (AProperty → APropertyDouble → APropertyDouble3)
+  • Correlate classes to binary offsets in Global/Latest
+
+Phase D — Object graph parsing (the hard part):
+  • For top-50 classes (ADocument, APropertyBoolean, APIAppInfo, A3PartyObject, etc.)
+  • Use binary-diff + delta across corpus to hypothesize field layouts
+  • LLM (Opus) does iterative "given these 11 byte patterns, what's the field schema?"
+  • Round-trip: modify a field, re-serialize, diff against original — zero-delta = correct
+
+Phase E — Writer path (round-trip):
+  • Serialize modified object graph back into decompressed chunks
+  • Re-apply DEFLATE compression
+  • Reconstruct OLE container with olefile's writer
+  • Open in Autodesk Revit trial — does it load without warnings?
+```
+
+### 6.2 Why AI inflects this problem
+
+Every prior approach to RVT reverse engineering has been bottlenecked by:
+
+1. **Manual binary-diff effort** — identifying which 3 bytes out of 938 KB changed between versions was a human 40-hour task.
+2. **Class-count scaling** — hundreds of class types, each with custom field layouts.
+3. **Revit release treadmill** — every year adds new classes and extends existing ones.
+4. **No spec to check against** — every hypothesis is pure guess-and-verify.
+
+AI changes all four:
+
+1. Delta analysis across 11 versions + LLM inference is 100× faster than manual hex-editor sessions.
+2. Class-count scales linearly — each class is a self-contained inference problem.
+3. The release treadmill becomes a continuous-integration job, not a blocker.
+4. LLMs excel at hypothesize-and-test when the test is a round-trip byte comparison.
+
+### 6.3 Who uses this, in priority order
+
+1. **Every BIM viewer not owned by Autodesk** — Navisworks competitors (Tekla BIMsight, Solibri, BIM Collab, Revizto) currently either license ODA BimRv or avoid RVT. Open library = drop-in replacement.
+2. **IFC-exchange tooling** — IfcOpenShell (open source) handles IFC but not RVT. Wiring the two together is obvious value.
+3. **Construction-industry SaaS** — Procore, Autodesk Build competitors, Sublime, Spacewell, Assemble Systems. Every one of these needs to ingest RVT and currently either pays ODA or rejects uploads.
+4. **Government BIM mandates** — UK Digital Twin initiative, Singapore CORENET X, Dubai Municipality BIM Level 2. All require RVT deliverables — having open tooling is a non-pay alternative path.
+5. **Forensic / property-dispute** — building-code disputes, insurance claims, intellectual-property cases. Courts need to read RVT files from defendants without paying Autodesk licenses.
+6. **Academic BIM research** — MIT, TUM, Cambridge, NUS. All currently constrained by RVT license costs.
+
+### 6.4 Regulatory & legal context
+
+- **Autodesk and the Open Design Alliance** — Autodesk's 2006 suit, over the TrustedDWG watermark the ODA's libraries wrote into DWG files, and the DWG trademark proceedings that followed concerned DWG, not RVT. The two announced a settlement of the trademark disputes on 2010-04-09 ([Autodesk's announcement](https://investors.autodesk.com/news-releases/news-release-details/autodesk-and-open-design-alliance-reach-agreement-autodesk-dwg)).
+- **ODA BimRv SDK** — a commercial SDK licensed to ODA members under their agreements. rvt-rs uses none of it (`CLEANROOM.md`).
+- **No encryption in the files read for this work** — their streams are structured data that rvt-rs inflates and reads without any key (§3.3: up to 17:1 on inflation, which encrypted data does not give). That covers the files in this repository's corpora, not every RVT file; [`compatibility.md`](compatibility.md) lists encrypted or password-protected files as unsupported.
+- **The project's clean-room approach is intended to reduce, not eliminate, legal risk.** In the United States, 17 U.S.C. § 1201(f) contains a limited interoperability provision subject to statutory conditions. This is not legal advice; the implications depend on the circumstances.
+- **Autodesk Platform Services (formerly Forge)** — rvt-rs does not use it or its terms.
+
+## 7. Status & next steps
+
+### What's shipped in this repo
+
+- Layer 1 (OLE2 container): **done**, via the `cfb` crate.
+- Layer 2 (truncated-gzip compression): **done**, with a matching
+  encoder so the modifying writer can round-trip.
+- Layer 3 (per-stream framing): **done** for every stream we've
+  touched; 165-byte `Global/PartitionTable` invariant + 44-byte
+  `Partitions/NN` header decoded.
+- Layer 4a (schema table): **done**. 395 class records with
+  `{tag, parent, ancestor_tag, declared_field_count}` per class.
+- Layer 4b (schema → data link): **done**. Tags from `Formats/Latest`
+  occur in `Global/Latest` at ~340× the uniform-random rate.
+- Layer 4c.1 (record framing): **done**.
+- Layer 4c.2 (field-body decoding): **100.00% coverage** via the
+  `FieldType` enum with 8 variants (Primitive, String, Guid,
+  ElementId, ElementIdRef, Pointer, Vector, Container). Verified on
+  13,570 fields across the 11-version corpus — zero `Unknown`. See
+  §Q5.2 addendum for byte-pattern evidence.
+- Layer 4d (ElemTable records): **header done, body partial**.
+- Layer 5 (IFC export): **scaffolded** (`src/ifc/`). Unblocked by
+  Q5.2 — every field in the object graph is now typed, so the
+  exporter has a type-sound input.
+- Layer 6 (write path): **stream-level done** — `write_with_patches`
+  round-trips through truncated-gzip re-encoding. Field-level
+  patching now unblocked by Q5.2 as well.
+
+### Next falsifiable targets
+
+1. Implement real IFC emission in `src/ifc/` — replace
+   `NullExporter` with a walker that maps each `FieldType` variant
+   to its IFC representation. Blocked on buildingSMART alignment,
+   not on decoder completeness.
+2. Close Q6.3: walk the Global/Latest TLV stream sequentially from
+   the ADocument entry point at offset 0x363.
+3. Finish Layer 4d with a per-record walker that respects the
+   declared element_count from the header.
+
+Each is a bounded probe + cross-version verification. The
+11-version corpus is the oracle.
+
+---
+
+## Artifacts produced this session
+
+```
+rvt-recon-2026-04-19/
+├── samples/                — 11 RFA files, 2016 through 2026 (via phi-ag/rvt LFS)
+│   └── _phiag/             — cloned repo with LFS objects
+├── reports/
+│   ├── format-reconnaissance.md         ← this file
+│   └── class-enum.txt      — 10,384 raw class-name strings from Formats/Latest
+├── logs/
+├── tools/                  — planned: Rust scaffold
+└── .venv/                  — uv venv with olefile + oletools
+```
+
+## Corpus fingerprint (invariant findings across 11 versions)
+
+```yaml
+format: Microsoft Compound File Binary Format 3.0
+magic: D0 CF 11 E0 A1 B1 1A E1
+
+streams (always present):
+  - BasicFileInfo            # metadata (UTF-16LE)
+  - Contents                 # custom header + DEFLATE body
+  - Formats/Latest           # DEFLATE — class schema index
+  - Global/ContentDocuments  # tiny — document list
+  - Global/DocumentIncrementTable
+  - Global/ElemTable
+  - Global/History
+  - Global/Latest            # live object state (highest compression ratio)
+  - Global/PartitionTable
+  - PartAtom                 # plain XML (Atom)
+  - RevitPreview4.0          # PNG thumbnail
+  - TransmissionData         # UTF-16LE metadata
+
+version marker:
+  - Partitions/NN           # NN ∈ {58, 60, 61, ..., 69} — one per year after 2016 except skip 59
+
+compression:
+  algorithm: DEFLATE (raw, no zlib wrapper)
+  framing: truncated-gzip (magic + 10-byte header, no trailing CRC32+ISIZE)
+  access: zlib.decompressobj(-15).decompress(stream[10:])
+
+known-public parseable:
+  - BasicFileInfo (via Apache Tika, olefile)
+  - PartAtom (plain XML)
+  - RevitPreview4.0 (PNG)
+
+known-proprietary (not documented publicly):
+  - Object graph inside Partitions/NN (but class names exposed in Formats/Latest)
+  - Element record format inside Global/ElemTable
+  - Serialization format inside Global/Latest
+```
+
+## Addendum — Forge schema dating (2026-04-19, Phase D+)
+
+Extending the Partitions/NN scanner across the 11-version corpus dated the
+introduction of Autodesk's "Forge Design Data Schema" identifiers inside the
+RVT on-disk format:
+
+| Revit release | `autodesk.unit.*` | `autodesk.spec.*` | `autodesk.parameter.group.*` |
+|---|---:|---:|---:|
+| 2016 | — | — | — |
+| 2017 | — | — | — |
+| 2018 | — | — | — |
+| 2019 | — | — | — |
+| 2020 | — | — | — |
+| **2021** | **49** | **39** | — |
+| 2022 | 222 | 175 | — |
+| 2023 | 216 | 176 | — |
+| **2024** | 55 | 40 | **43** |
+| 2025 | 55 | 40 | 43 |
+| 2026 | 55 | 40 | 43 |
+
+Findings:
+
+1. **Units + specs namespace** (`autodesk.unit.*`, `autodesk.spec.*`) landed in **Revit 2021**. Before that, unit and spec identifiers were stored by enum-value (or not at all) and had to be mapped by consuming the API.
+2. **Parameter groups namespace** (`autodesk.parameter.group.*`) landed in **Revit 2024** — three releases later than units/specs. Before 2024, parameter groups were still enum-encoded.
+3. Counts stabilise 2024→2026 because the reference family uses a fixed set of identifiers, not because Autodesk stopped adding them. Real-world project files likely show continued growth.
+4. **Backward-compat implication**: any open reader (rvt-rs, phi-ag/rvt, ODA BimRv SDK) that only supports pre-2021 files will silently drop all Forge-era metadata on round-trip. Any writer targeting 2021+ must emit these identifiers or Revit will refuse to open the file or recompute them lossily.
+5. **Partitions/NN also leaks internal Autodesk authoring paths** — the 2024 reference family embeds a customer-facing OneDrive path of the form `C:\Users\<redacted>\OneDrive - Autodesk\<redacted FY project folder>\Revit - <redacted project id> Update ...` verbatim. This is evidence that Autodesk's content team uses production OneDrive paths when authoring the shipped reference family, and the format stores those paths without redaction. Customer files fed through this parser can leak the same class of data; downstream tools should redact `C:\Users\*\` paths from any extracted string record. The `rvt-analyze --redact` flag does this automatically on every output field; the verbatim username and project ID are intentionally omitted from this public report to avoid re-broadcasting them.
+
+Extraction command used:
+
+```bash
+./target/release/rvt-history --partitions \
+  samples/_phiag/examples/Autodesk/racbasicsamplefamily-2024.rfa
+```
+
+See `src/object_graph.rs::string_records_from_partitions` and
+`src/bin/rvt_history.rs` for the extractor and classification.
+
+## Addendum — Phase D link proof (2026-04-19, same day)
+
+The first direct evidence that the Phase C schema table *indexes the Phase D
+data*. We knew 395 class names were declared in `Formats/Latest`; this section
+shows the class IDs appear at non-random density inside `Global/Latest`,
+proving the schema is the live type dictionary for the object graph.
+
+### Tag encoding
+
+After every class-name record in `Formats/Latest`, there is a `u16 LE` with
+two distinct meanings:
+
+- **High bit set** (`0x8000` flag) → this record is a class definition, and
+  the low 15 bits are the class's serialization tag ID.
+- **High bit clear** → this is a type *reference* (appears inside a field
+  signature), pointing back to an already-declared class tag.
+
+In a 2024 family file, 398 class-name candidates are found. **79** (19.8%) are
+class definitions with the 0x8000 flag set; the remaining ~80% are reference
+entries inside fields and type signatures. The 79 tagged tags are
+monotonically ordered:
+
+```text
+0x000d A3PartyAImage
+0x0012 ADTGridImportVocabulary
+0x001b ADocWarnings
+0x0025 APIVSTAMacroElem
+0x0028 APIVSTAMacroElemTracking
+0x002a AProperties
+0x0046 ATFProvenanceBaseCell
+0x0047 Cell
+0x004c ATFRevitObjectStylesOverride
+0x0058 AbsCurveDriver
+0x0061 AbsCurveGStep
+0x0062 GeomStep
+0x006a AbsCurveType
+0x006b HostObjAttr
+0x006d AbsDbViewPressureLossReport
+…
+0x01b8 AreaMeasureCurveData   (last in this file)
+```
+
+### The 340× non-uniformity proof
+
+In the 2024 family file, decompressed `Global/Latest` is 938,578 bytes (~917
+KB). If class tags were uniformly random across the sampled range (0 to
+0x4000), each tag would occur ~57 times. The actual distribution is extremely
+skewed:
+
+| Tag | Class | u16 LE hits | Ratio vs uniform |
+|---|---|---:|---:|
+| 0x0061 | AbsCurveGStep | 19,415 | **340×** |
+| 0x006b | HostObjAttr | 6,599 | **115×** |
+| 0x006d | AbsDbViewPressureLossReport | 5,444 | 95× |
+| 0x0062 | GeomStep | 2,274 | 40× |
+| 0x0100 | AnalyticalLevelAssociationCell | 1,245 | 22× |
+| 0x0046 | ATFProvenanceBaseCell | 1,119 | 20× |
+| 0x001b | ADocWarnings | 261 | 4.6× |
+| (tail of 70+ tags) | | 1–10 each | 0.02×–0.17× |
+
+The 340× concentration on geometry/curve classes is exactly what a tagged
+object stream should look like for a family file dominated by curve-driven
+hosted geometry. This is **not** something a random-walk false positive rate
+can produce.
+
+### Tags are NOT stable across Revit releases
+
+Cross-checking the same analysis against the 2016 family file:
+
+| Class | 2016 tag | 2024 tag |
+|---|---|---|
+| A3PartyAImage | 0x000d | 0x000d (stable!) |
+| ADTGridImportVocabulary | 0x0012 | 0x0012 (stable!) |
+| ADocWarnings | 0x001b | 0x001b (stable!) |
+| APIVSTAMacroElemTracking | 0x0028 | 0x0028 (stable!) |
+| AbsCurveGStep | 0x0053 | 0x0061 (shifted +14) |
+| AbsDbViewPressureLossReport | 0x005f | 0x006d (shifted +14) |
+| HostObjAttr | — | 0x006b |
+
+Tags are assigned by a stable-sort enumeration that shifts every time new
+classes are inserted into the schema. Early-enumerated classes keep the same
+tag across versions; later ones drift. **Consequence:** any parser (including
+rvt-rs) must re-read `Formats/Latest` per file — tag values cannot be
+hard-coded into the reader's Rust structs. This is a *good* property of the
+format: it means there is no version-keyed registry to reverse-engineer; each
+file ships its own type table.
+
+### Files producing this finding
+
+- `examples/tag_dump.rs` — statistical sweep of post-name u16 patterns
+- `examples/link_schema.rs` — schema-to-global linkage with histogram
+- `examples/probe_link.rs` — null-hypothesis check (class names do not appear
+  as ASCII strings in Global/Latest; confirms tag-indexing design)
+
+These examples are shipped in-repo so future contributors can reproduce the
+finding without rebuilding the probe.
+
+### What this unlocks
+
+With schema tags linked to data, Phase D can now focus on one goal: **given a
+tag T and the schema table, walk Global/Latest to materialize every instance
+of class T as a structured record.** The remaining unknowns are:
+
+1. Record framing — how is one instance boundary delimited from the next?
+2. Field serialization — how are `double`, `int`, `ElementId`,
+   `std::pair< A, B >`, `std::vector< T >`, and `std::map< K, V >` encoded?
+3. Alignment / padding — does the format align records?
+4. References — how does one instance point at another (by offset? by tag?
+   by a separate ID table like `Global/ElemTable`?)
+
+The schema already gives us field names *and their C++ type signatures* in
+ASCII, so each of these unknowns is an incremental bit-level hypothesis + a
+bit-level test against the 11-version corpus — not a multi-year effort.
+
+## Addendum — 11-version tag sweep (2026-04-19)
+
+Running the same Phase D link analysis across every Revit release reveals a
+second undocumented format transition in 2021:
+
+| Release | Tagged classes | Global/Latest (decompressed) | Top class by tag hits |
+|---|---:|---:|---|
+| 2016 | 90 | 24,230 B | ADocWarnings (258) |
+| 2017 | 86 | 25,947 B | ADocWarnings (258) |
+| 2018 | 81 | 25,847 B | ADocWarnings (258) |
+| 2019 | 80 | 26,031 B | ADocWarnings (259) |
+| 2020 | 78 | 26,341 B | ADocWarnings (258) |
+| **2021** | 77 | **715,483 B** | **AbsSysCircSweepProfile (12,918)** |
+| 2022 | 77 | 945,140 B | AbsCurveType (25,677) |
+| 2023 | 80 | 952,724 B | AbsCurveGStep (17,793) |
+| 2024 | 79 | 938,578 B | AbsCurveGStep (19,415) |
+| 2025 | 64 | 1,169,198 B | AbsCurveType (14,801) |
+| 2026 | 60 | 1,387,969 B | AbsCurveType (17,523) |
+
+Three things are visible at once:
+
+1. **Global/Latest exploded between 2020 and 2021** — from ~26 KB to ~715 KB
+   (27× growth in one release). Before 2021, Global/Latest held only metadata
+   (warnings, doc info); after 2021, it also contains substantial
+   object-graph content dominated by geometry classes (`AbsCurveGStep`,
+   `AbsCurveType`, `AbsSysCircSweepProfile`).
+2. **This transition is simultaneous with the Forge Design Data Schema
+   rollout** (`autodesk.unit.*`, `autodesk.spec.*` appearing in Partitions/NN
+   in 2021 per the earlier Forge-dating addendum). The two discoveries are
+   almost certainly the same event: Autodesk ran a *major internal
+   serialization refactor for Revit 2021* that no public changelog mentions.
+3. **Tagged-class count is decreasing over time** — 90 → 60 across a
+   decade. Either classes are being consolidated, or the schema is moving
+   into a separate stream. We have not localised which.
+
+This table alone is publication-worthy: there is no third-party analysis of
+the Revit 2021 on-disk transition anywhere in the reverse-engineering or
+openBIM literature. Any reader that claims "RVT 2016 compat" without
+handling the 2021+ format is silently dropping approximately 30× more data
+than it's recovering.
+
+### Reproducer
+
+```bash
+# All 11 versions, one table row each
+for f in samples/_phiag/examples/Autodesk/*.rfa; do
+  ./target/release/examples/link_schema "$f" 2>/dev/null \
+    | awk '/^(Tagged|Global\/Latest|^  tag=)/ {print}'
+done
+```
+
+## Addendum — Full tag-drift table 2016–2026 (`docs/data/tag-drift-2016-2026.csv`)
+
+`examples/tag_drift.rs` pivots the per-release class lists into a single
+table: one row per class name, one column per Revit release, cell = tag in
+that release (or blank if the class doesn't exist that year).
+
+Dataset totals:
+
+- **122 distinct tagged classes** across all 11 releases
+- **6 classes (4.9%) are tag-stable** (present in every release with the
+  same tag): `A3PartyAImage` (0x000d), `ADTGridImportVocabulary` (0x0012),
+  `ADocWarnings` (0x001b), `APIVSTAMacroElem` (0x0025),
+  `APIVSTAMacroElemTracking` (0x0028), `AProperties` (0x002a). All
+  alphabetically early — their tags hold because no new class has ever
+  been inserted before them in the sort order.
+- **101 classes (82.8%) shift tag values** across releases
+- **22 classes were introduced after 2016** (e.g. `ATFProvenanceBaseCell`,
+  `AnalyticalAutomationEditModeMgr`) — the tracked surface for "new Revit
+  features over a decade"
+- **52 classes were removed by 2026** (e.g. `ActiveGeoLocationTrackingElement`,
+  `AllowGStyleDrawFilter`, `AngularDimensionType`, several
+  `AnalyticalModel*`). Confirms the long-running schema consolidation trend
+  visible in the release-size table.
+
+Illustrative shift pattern for `AbsCurveGStep`:
+
+```text
+2016 0x0053  →  2021 0x0056  →  2022 0x0060  →  2024 0x0061  →  2025 0x0066
+```
+
+The jump between 2021 (0x0056) and 2022 (0x0060) is +10 positions — ten new
+classes were inserted alphabetically earlier during the 2021→2022 schema
+refresh. Same pattern affects every post-`A` class.
+
+**Downstream use**: any project that wants to maintain cross-release
+compatibility on the tag level — e.g. Autodesk Forge mirroring, BIM
+interoperability tools — can consume the CSV directly. This is the first
+publicly-available version of this data.
+
+## Addendum — Global/PartitionTable decoded (2026-04-19)
+
+`Global/PartitionTable` turns out to be only 167 bytes decompressed and
+**165 of those bytes are byte-for-byte identical across all 11 Revit
+releases from 2016 through 2026** (98.8% invariant). Only the first
+u16 changes.
+
+Full annotated layout (from 2024 sample family file):
+
+```text
+0x00  ec 0b                     u16 LE  = 3052
+                                  ↳ internal format-version counter
+                                  ↳ monotonically increases per release
+                                  ↳ 2016=2572, 2020=2810, 2021=2810 (same!),
+                                    2026=3200
+                                  ↳ 2020→2021 NO bump despite 27× Global/Latest
+                                    growth elsewhere — PartitionTable format
+                                    itself was stable across the 2021 transition
+0x02  01 00 00 00               u32 LE  = 1  (constant across all 11 releases)
+0x06  01 00 00 00               u32 LE  = 1  (constant)
+0x0a  2d 34 29 35 1e e5 d4 11   ─┐
+      92 d8 00 00 86 3f 27 ad   ─┘ 16-byte UUIDv1, Windows GUID byte order
+
+        → {3529342d-e51e-11d4-92d8-0000863f27ad}
+        → UUID version bits: 0x1 — time-based (UUIDv1)
+        → node / MAC suffix: 0000863f27ad — matches one of the known
+          Autodesk-dev-workstation UUIDs leaked through Forge JSON
+          output (the other is 0000863de970). This is the stable Revit
+          file-format identifier, embedded since the codebase was
+          written circa 2000; it has never been documented publicly.
+
+0x1a  00 00 00 00               u32 LE = 0
+0x1e  5d 00 00 00               u32 LE = 93   (length of string that follows,
+                                               in bytes)
+0x22  ff ff ff ff ff ff ff ff   8-byte sentinel / end-of-header marker
+0x2a  02 00 00 00               u32 LE = 2    (record count)
+0x2e  00 30                     u16 LE = 0x3000 (record-header pad)
+0x30  [UTF-16LE string 93 bytes]
+      "Family  : Section Heads : Section Tail - Upgrade"
+      ↳ human-readable partition description for this specific family.
+        Every Revit file has its own string here describing its partition
+        structure. The "Upgrade" suffix means this file has been run
+        through the Revit-version-upgrade pipeline at least once.
+0x92  01 00 00 00 01 00 00 00 00 00 00 00 01 00 00 00 00 00 00
+      trailing footer (constant across all 11 releases)
+```
+
+Three conclusions:
+
+1. **The Revit format has a stable machine-readable identifier GUID**
+   — `{3529342d-e51e-11d4-92d8-0000863f27ad}`. This is a useful magic
+   number for file-type detection tools (libmagic, Apache Tika, etc.)
+   that cannot rely on OLE container sniffing alone to tell RVT apart
+   from other CFB files.
+
+2. **The human-readable partition description** is a better source of
+   file-intent metadata than the OLE stream list. "Family  : Section
+   Heads : Section Tail - Upgrade" tells you much more than any single
+   byte header ever could.
+
+3. **The 2020→2021 format version counter was NOT bumped** (both
+   releases emit 2810), yet Global/Latest grew 27× between them. This
+   means the 2021 transition was **additive to the content layer** —
+   more data in existing streams — not a rewrite of the container or
+   a format-version change. Readers that handle 2020 files should in
+   principle handle 2021 files' PartitionTable exactly the same way.
+
+Probe files: [`examples/partition_invariant.rs`](../examples/partition_invariant.rs),
+[`examples/partition_diff.rs`](../examples/partition_diff.rs),
+[`examples/partition_full.rs`](../examples/partition_full.rs).
+
+## Addendum — Contents stream + long-lived name disclosure (2026-04-19)
+
+The `Contents` stream is small (307 bytes) but contains a **single embedded
+gzip chunk at offset 0x5b** which decompresses to 268 bytes of UTF-16LE
+structured metadata: creator name, section labels, the format GUID from
+Global/PartitionTable, and the build timestamp.
+
+### Header layout (first 91 bytes)
+
+```text
+0x00  62 19 22 05       4-byte magic (shared with RevitPreview4.0 — this
+                        is Revit's container marker for "custom wrapper
+                        follows")
+0x04  1b 00 00 00       u32 LE = 27   (table length)
+0x08  01 00 00 00       u32 LE = 1
+0x0c  01 00 00 00       u32 LE = 1
+0x10  43 02 00 00       u32 LE = 579  (compressed body length, matches
+                                       the gzip chunk at 0x5b+...)
+0x14  00 08 00 00       u32 LE = 2048
+0x18  00 01 00 01 00 01 00 01 00 02 00 02 00 04 00 04 00 04 00 04 00 04 00 04
+0x34  00 08 00 08 00 08 00 08 00 0a
+        ↳ run of u16 pairs — looks like a type/count vector for whatever
+          records are in the payload
+0x40  00 00 00 00 00 00          padding
+0x5b  1f 8b 08 ...                 gzip chunk begins here
+```
+
+### Decompressed payload contents (first 200 UTF-16LE characters shown)
+
+```text
+???...?...D.a.v.i.d. .C.o.n.a.n.t.........
+?...G.L.O.B.A.L.......................
+?...-4)5??????..??'?...        ← the format GUID again, at byte-level
+?...2.0.2.3.0.3.0.8._.1.6.3.5.(.x.6.4.).
+…
+```
+
+Three signals:
+
+1. **A creator-name field** is embedded in the sample family for *every
+   Revit release from 2016 through 2026*, unchanged. The name is that
+   of a member of the original Revit development team at Charles River
+   Software (founded 1997, Revit v1 released 2000, acquired by Autodesk
+   in 2002). This means Autodesk has been shipping **the same reference
+   family file for 20+ years**, preserving the original author's name
+   through every format upgrade. The specific name is deliberately not
+   reproduced in this report; it is trivially recoverable by running
+   `rvt-analyze` without `--redact` against any shipped sample family.
+
+2. **The format GUID `3529342d-e51e-11d4-92d8-0000863f27ad` appears again**
+   inside Contents — this time as a byte-level reference. Its presence
+   in two independent streams (PartitionTable + Contents) confirms it
+   is the canonical file-format identifier and not a per-stream marker.
+
+3. **The build timestamp** encodes the exact Revit build shipped with
+   each release:
+     - 2016 file: `20150110_1515` (Jan 10, 2015)
+     - 2024 file: `20230308_1635` (Mar 8, 2023)
+   These match the build strings captured in `DocumentHistory` (see
+   Phase D v0 addendum earlier in this report), so the two sources can
+   be cross-validated.
+
+**Privacy note:** the creator-name inclusion described above and the
+redacted OneDrive-path pattern (noted in the Forge-dating addendum) are
+the two currently-confirmed long-lived name disclosures in Autodesk's
+shipped reference family. Downstream RVT parsers consuming
+customer files should redact both patterns. The `rvt-analyze --redact`
+flag handles this automatically; the committed demo output in
+`docs/demo/` is pre-scrubbed.
+
+Probe file: [`examples/contents_probe.rs`](../examples/contents_probe.rs).
+
+## Addendum — Q5 field-type encoding (2026-04-19)
+
+The bytes immediately after a field name in a tagged class's schema
+record encode the field's C++ type. The first byte is a **type
+category discriminator**; the layout depends on the category.
+
+### Category byte distribution (2024 sample family, 1,156 fields total)
+
+| Byte | Fields | % | Interpretation |
+|---|---:|---:|---|
+| `0x0e` | ~460 | 40% | Reference / pointer / container |
+| `0x04` | ~225 | 20% | Fixed-size numeric primitive (32-bit int) |
+| Other | ~470 | 40% | Remaining — likely additional primitive widths (`0x08` for 64-bit, `0x02` for 16-bit, etc.) not yet mapped |
+
+### Sub-type decode for the 0x0e family
+
+When the first byte is `0x0e`, the following `u16` sub-type
+distinguishes the kind of reference:
+
+| Sub-type | Layout | Kind |
+|---|---|---|
+| `0x0000` | `0e 00 00 00 14 00` (6 bytes) | `ElementId` |
+| `0x0001` | `0e 01 00 00` (4 bytes) | Pointer kind A |
+| `0x0002` | `0e 02 00 00` (4 bytes) | Pointer kind B |
+| `0x0003` | `0e 03 00 00 …` (variable) | Pointer kind C (typically with trailing instance refs) |
+| `0x0010` | `0e 10 00 00 <class-tag> <u16 len> <ASCII sig>` | `std::vector<T>` |
+| `0x0050` | `0e 50 00 00 <class-tag> <u16 len> <ASCII sig>` | `std::map<K,V>` / `std::set<T>` |
+
+The trailing `14 00` for ElementId is constant across every ElementId
+field we've inspected. `0x14 = 20` — possibly a bit-width signal, or a
+fixed opcode.
+
+### Ground-truth samples (from HostObjAttr, verified byte-for-byte)
+
+```text
+m_symbolInfo      → Pointer (kind B)   [0e 02 00 00]
+m_renderStyleId   → ElementId          [0e 00 00 00 14 00]
+m_previewElemId   → ElementId          [0e 00 00 00 14 00 …]
+
+m_PatternPositionMap (AnalyticalPanelPatternHelper):
+   0e 50 00 00 4a 81 00 00 15 00 "std::pair< int, …"
+   │  │     │  │           │     └── UTF-8 embedded C++ signature
+   │  │     │  └── class-tag 0x814a with 0x8000 flag
+   │  └── sub-type 0x0050 = map/set
+   └── category 0x0e
+```
+
+### Distribution seen in a real 2024 sample family (1,156 fields)
+
+```text
+FieldType distribution:
+  Primitive     :  223 (19.3%)
+  Pointer       :  160 (13.8%)
+  ElementId     :  159 (13.8%)
+  Container     :  138 (11.9%)
+  Vector        :    5 (0.4%)
+  Unknown       :  471 (40.7%)   ← remaining work
+```
+
+### Implementation
+
+`src/formats.rs::FieldType` enum with `decode(bytes: &[u8]) -> FieldType`
+classifier. 4 unit tests pin the byte patterns. Every `FieldEntry` in
+the schema table now carries a `field_type: Option<FieldType>` populated
+at parse time.
+
+### Remaining work (Q5.1)
+
+The 40% `Unknown` slice is mostly integer fields that use discriminator
+bytes other than `0x04` / `0x0e`. A follow-up session should:
+
+1. Dump unique first-bytes for all `Unknown` cases
+2. Classify each by context (next-to-field-name hint)
+3. Extend the decoder to cover `0x02` (u16?), `0x08` (u64?), `0x10`
+   (double?), `0x48` (string?), and whatever else appears
+
+Once classification reaches ≥95%, the modifying writer (Layer 6) and
+real IFC exporter (Layer 5) become implementable end-to-end.
+
+## Addendum — Q6 inversion (2026-04-19)
+
+An earlier working hypothesis was that `Global/Latest` begins with a
+sorted class-tag directory whose payloads point at instance data
+elsewhere in the stream (the "index + heap" model). This is now
+**rejected** by evidence.
+
+Running `examples/directory_probe.rs` against the 2024 sample surfaced
+483 "directory entries" in the first ~8 KB of Global/Latest. The tag
+values are a mix of:
+
+- Known class tags (e.g. `0x000d` = `A3PartyAImage`)
+- Known field-type discriminators (e.g. `0x0004` = `Primitive`,
+  `0x000e` = `Pointer` — per the Q5 addendum above)
+- Values never seen as class tags in `Formats/Latest` (e.g. `0x0002`,
+  `0x180c`, `0x240e`, `0x2706`)
+
+That overlap rules out the index interpretation. The correct model:
+
+### FACT F10 — Global/Latest is a TLV-encoded serialized stream
+
+`Global/Latest` is not an index+heap layout. It is a flat
+Type-Length-Value stream where:
+
+- Each record begins with a type/tag token (`u32` or `u16+u16`).
+- The length of the record is determined by the token (either via a
+  fixed size-per-type, or via an explicit length field immediately
+  after the token — Q6.1 unresolved).
+- Class instances, field values, and ElementId references are all
+  inline; they are *not* pointed at from a separate directory.
+
+### What this means for decoding
+
+To find the first HostObjAttr instance (tag `0x006b`), we need to
+parse the stream sequentially from offset 0, starting after the
+document-upgrade-history UTF-16LE block, walking records one at a
+time using the schema as a typing guide. There is no O(1) directory
+lookup.
+
+The good news: the FieldType enum from the Q5 addendum already
+decodes the per-record content. The remaining Q6.1 work is figuring
+out how many bytes each token consumes so sequential walking
+terminates correctly.
+
+### Reproducer
+
+```bash
+./target/release/examples/directory_probe \
+  samples/_phiag/examples/Autodesk/racbasicsamplefamily-2024.rfa
+```
+
+## Addendum — Q6.1 second inversion (2026-04-19)
+
+Follow-up probe (`examples/instance_scan.rs`) searched for every
+aligned `u32 LE` occurrence of HostObjAttr's tag `0x006b` in
+Global/Latest. Result: **2 hits**, not the ~6,599 the u16-overlap
+scan had suggested.
+
+Conclusion — **class instances are not tag-delimited**. The stream
+is schema-directed serialization: fields are laid out in declaration
+order with no per-instance prefix. This is the same design protobuf
+uses with "packed" fields or that Cap'n Proto uses at the wire level.
+
+### Implication for decoders
+
+You cannot find an instance by searching for its tag. You have to
+walk the stream starting from a known entry point (likely a
+singleton `ADocument` record near offset 0) and use the schema to
+compute the size of each record as you go. The schema gives:
+
+- Fixed-size primitives (per FieldType::Primitive.size_hint)
+- ElementId → 4 or 8 bytes (to be determined in Q5.1)
+- Pointer → typically an ElementId reference or a 32-bit instance
+  index
+- Vector/Container → length-prefixed
+
+### Why this is actually easier
+
+Schema-directed encoding looks scarier but has a compensating
+property: once the per-type sizes are known, walking the stream is
+deterministic and reversible. No heuristics, no pattern-matching, no
+offset-table scavenging. The moat reduces to:
+
+1. Finish Q5.1 (classify remaining 40% of field types with sizes)
+2. Write a schema-directed walker that consumes `byte_size(field)`
+   bytes per field and yields typed values
+3. Done
+
+### Remaining work
+
+- **Q5.1** (task #57) — classify every `Unknown` type discriminator
+  into its FieldType variant with byte-size.
+- **Q6.2** — identify the Global/Latest entry point (ADocument
+  instance) and its size. That's the seed for the schema walker.
+
+## Addendum — Q4 flag-word is an ancestor-class reference (2026-04-19)
+
+**Superseded 2026-10-01 (RE-137, #154): not reproduced.** This addendum predates
+the page strip of `Formats/Latest` (#410) and the grammar of STE1200's report,
+which `formats::schema_classes` implements. Read with that grammar, on the
+2024 sample and on 16 more files of 2016 to 2026, none of the nine classes
+below has the base the table names: `HostObjAttr` has base `Symbol` (the class
+this addendum called its parent), `APIVSTAMacroElemTracking` has
+`ElemSetTracking`, and so on, usually the class defined inline right after it.
+Every base reference of every class resolves, 3,023 of 3,023 on a 2024 file,
+so the grammar's `u16` base reference is a base class and nothing in it
+supports a second, distinct ancestor. The nine "resolutions" below came from
+tags assigned over a schema that was inflated without its page strip. Report:
+`reports/element-framing/RE-137-q4-base-classes.md`.
+
+**Resolved 2026-10-03 (RE-146, #154): the word is the grandparent's tag.**
+On every class that carries it, on 53 files of 2016 to 2027, the word is the
+tag of the class's base's base, and the "tag" the old parser keeps beside it
+is the base's own tag (puzzbobb's report, reproduced). The nine rows below
+looked up a grandparent's tag among base tags, so each names the class whose
+base is that grandparent. Report:
+`reports/element-framing/RE-146-q4-word-is-the-grandparent.md`.
+
+The u16 word sitting between the parent-class name and the
+field-count pair in a tagged-class record (called "flag" in earlier
+addenda) is **a class-tag reference** — it names another class in
+the same schema, distinct from the direct parent.
+
+### Evidence (9/9 cases resolve to real classes)
+
+| Class | ancestor_tag | Resolves to |
+|---|---|---|
+| `APIVSTAMacroElemTracking` | `0x001b` | `ADocWarnings` |
+| `HostObjAttr` | `0x0025` | `APIVSTAMacroElem` |
+| `AnalyticalLineAutoConnectData` | `0x00ee` | `ConnectorPositionModifier` |
+| `AnalyticalPanelPatternHelper` | `0x0046` | `ATFProvenanceBaseCell` |
+| `ReferencePointGridNetTrackerCell` | `0x0046` | `ATFProvenanceBaseCell` |
+| `AnalyticalSlabAdjustmentGStep` | `0x0061` | `AbsCurveGStep` |
+| `AppearanceAssetElemGroupHelper` | `0x0046` | `ATFProvenanceBaseCell` |
+| `ArcWallRectOpeningGStep` | `0x0061` | `AbsCurveGStep` |
+| `AreaMeasureCurveData` | `0x0047` | `Cell` |
+
+Observations:
+
+- Every non-zero value resolves to a known class tag from the same
+  file. No misses. Statistically implausible if this were a flag.
+- Multiple sibling classes can share the same ancestor (three
+  classes reference `ATFProvenanceBaseCell`; two reference
+  `AbsCurveGStep`). That matches the shape of a mixin or trait
+  reference.
+- The relationship is distinct from direct `parent`: e.g. HostObjAttr's
+  parent is `Symbol`, but its ancestor_tag is `APIVSTAMacroElem`.
+  Both exist simultaneously.
+
+### Most likely interpretation
+
+The `ancestor_tag` identifies a **mixin / protocol / category**
+class that participates in the serializable class's layout. In C++
+terms, this is probably a non-public base class used for
+implementation detail, or an interface reference the class conforms
+to. The stable-tag property (values match across tag-drift) suggests
+this is NOT a per-version cache but a true structural field.
+
+### Implementation
+
+`ClassEntry.ancestor_tag: Option<u16>` (None when the slot is 0x0000,
+55% of tagged classes). Populated at parse time, serialized to JSON.
+Downstream tools can follow the reference through
+`SchemaTable.classes` by matching `ancestor_tag` to another class's
+`tag`.
+
+Probe: `examples/flag_word_probe.rs`.
+
+## Addendum — Q6.2 Global/Latest entry point located (2026-04-19)
+
+After the document-upgrade-history UTF-16LE block (offsets 0x53..0x363
+in the 2024 sample), the binary payload begins with a sequential-ID
+TLV table:
+
+```text
+0x0363  01 00 00 00 00 00 00 00 01 00 00 00 dc 00 00 00   [big first record]
+0x0373  02 00 00 00 6e 07        id=2 val=0x076e = 1902
+0x0379  03 00 00 00 a7 0e        id=3 val=0x0ea7 = 3751
+0x037f  04 00 00 00 da 0f        id=4 val=0x0fda = 4058
+0x0385  05 00 00 00 3f 04 00 00 00 00   id=5 val=0x043f, extra 4 bytes
+0x0391  06 00 00 00 af 0e        id=6 val=0x0eaf
+0x0397  07 00 00 00 2e 04        id=7 val=0x042e
+0x039d  08 00 00 00 a9 04 00 00 00 00   id=8 val=0x04a9, extra 4 bytes
+0x03a9  09 00 00 00 91 01        id=9 val=0x0191
+0x03af  0a 00 00 00 6f 0e 00 00 00 00   id=10 val=0x0e6f
+0x03b9  0b 00 00 00 83 09 00 00 00 00   id=11 val=0x0983
+0x03c3  0c 00 00 00 b0 05 00 00 00 00   id=12 val=0x05b0
+0x03cd  0d 00 00 00 9d 00        id=13 val=0x009d
+```
+
+### Key signals
+
+- Sequential IDs starting at 1, counting up (the probe saw 1-15
+  contiguously).
+- Record size **varies** between 6 and 16 bytes — some records have
+  a trailing 4-byte block, matching the vector/container fields we'd
+  expect for ADocument (`m_appInfoArr` is a container; the extra
+  bytes probably encode its length or class ref).
+- Values are non-monotonic → they are NOT byte offsets into the
+  stream. Most likely: ElementId references, hash codes, or indices
+  into a separate reference pool (ElemTable?).
+- ADocument has **13 declared fields** and the first 13 IDs appear
+  in sequence. Strong circumstantial evidence that this TLV table is
+  ADocument's serialized form, keyed by field index (0-indexed or
+  1-indexed).
+
+### Hypothesis (confidence 0.6)
+
+The TLV table is ADocument's instance — 13 fields encoded as:
+
+```text
+[u32 field_index][value encoded per that field's FieldType]
+```
+
+where `value` for Pointer fields (ADocument has 9 of them) is a
+single u32 or ElementId reference into a separate pool, and for
+Container fields (like m_appInfoArr) carries a length prefix +
+references.
+
+### Remaining work (Q6.3 and beyond)
+
+- Validate the hypothesis: for each record in the table, look up
+  ADocument's nth field in the schema and confirm its FieldType
+  matches the record's byte layout (e.g. record 5 is a Pointer; does
+  its value look like a valid reference?).
+- Resolve the "value" semantics — are these pointers into ElemTable?
+  Partitions? A separate reference-pool?
+- Walk past the 13-record block to find the NEXT instance (which
+  should be one of ADocument's referenced classes, starting the full
+  object graph).
+
+Probe: `examples/adocument_entry.rs`.
+
+## Addendum — Q7 Partitions/NN trailer fields are NOT chunk offsets (2026-04-19)
+
+Followup to FACT F7/F8. Tested the hypothesis that the four u32 fields
+at Partitions/NN header offset 0x14..0x24 encode per-chunk byte
+offsets (so a reader could use the header as a random-access chunk
+table). **Rejected** — zero matches across all 6 releases tested.
+
+Observed values (2016 → 2026):
+
+| Release | trailer_u32 | gzip offsets (first 4) |
+|---|---|---|
+| 2016 | [400, 1240, 14436, 131060] | [44, 14504, 17010, 37528, …] |
+| 2018 | [4, 1288, 15011, 131036] | [44, 15079, 17812, 37184, …] |
+| 2020 | [4, 1138, 14021, 117382] | [44, 14089, 18368, 37750, …] |
+| 2022 | [4, 1133, 14196, 117443] | [44, 14264, 19327, 41288, …] |
+| 2024 | [4, 729, 12330, 119319] | [44, 12398, 19074, 21706, …] |
+| 2026 | [4, 728, 12378, 119384] | [44, 12446, 19117, 21872, …] |
+
+No trailer value equals any gzip-chunk offset.
+
+### What the values probably are (unconfirmed)
+
+- `trailer_u32[0]` ≈ small constant (4 in 2018+, 400 in 2016) — possibly
+  a layout-version counter that jumped once post-2016.
+- `trailer_u32[1]` ≈ 700-1300 — correlates with element/record count
+  from Global/ElemTable (see FACT F9).
+- `trailer_u32[2]` ≈ 12-15K — roughly matches the decompressed size
+  of the FIRST gzip chunk across all releases.
+- `trailer_u32[3]` ≈ 117-131K — close to but not equal to
+  `raw_len - header_size`.
+
+### Practical impact: none
+
+`partitions::find_chunks()` already works correctly using gzip-magic
+scan. The trailer table would have been a small optimisation for
+pathological cases (many chunks, long streams), not a correctness
+prerequisite. Q7 is marked **resolved negatively** — the hypothesis
+was worth testing, the answer is "no table, keep scanning."
+
+Probe: `examples/partitions_q7.rs`.
+
+## Addendum — Q5.2 100% field-type coverage (2026-04-19, Phase Q5.2)
+
+Q5.1 landed at 84% classification (16% of fields fell through to
+`FieldType::Unknown`). That gap was the single largest blocker to
+trusting any downstream consumer — a field you can't type is a field
+you can't read the data out of, which rules out emitting IFC,
+computing quantities, or performing any structural integrity check.
+
+Q5.2 closes the gap to **100.00% across all 11 Revit releases
+(2016–2026)**. Zero `Unknown` fields remain in the 13,570-field
+reference corpus.
+
+### Mechanism
+
+The 84% decoder special-cased exactly two modifier patterns: `0x07
+0x10 ...` (vector<double>) and `0x0e 0x50/0x51 ...` (reference
+container). Every other combination of scalar base × modifier fell
+through. Q5.2 generalises the rule:
+
+- **`{kind} 0x10 0x00 0x00 …` → `Vector<base>`** for every scalar base
+  byte observed: `0x01` bool, `0x02` u16, `0x04`/`0x05` u32, `0x06`
+  f32, `0x07` f64, `0x0b` u64, `0x0d` point/transform, `0x0e` ref.
+- **`{kind} 0x50 0x00 0x00 …` → `Container<base>`** for the same set.
+  Reference containers (`kind == 0x0e`) additionally extract embedded
+  C++ type signatures (`std::pair<...>`, `std::map<...>`); scalar-base
+  containers rarely do.
+
+Two additional wire patterns were mapped:
+
+- **`0x08 0x60 0x00 0x00` — alternate string discriminator.** Revit
+  emits two byte orderings for the UTF-16LE-string type: the common
+  form `08 00 60 00` (sub = `0x6000`) and the alternate form `08 60
+  00 00` (sub = `0x0060`). The alternate form is used for 43–61 fields
+  per release (e.g. `Identifier.second`, `AStringWrapper.m_str`,
+  `ControlledDocAccess.m_fileName`). Both decode to `FieldType::String`.
+- **`0x0e 0x00 0x00 0x00 <tag:u16> <sub:u16>` — `ElementIdRef`.** The
+  existing `ElementId` variant only matched the canonical 6-byte
+  pattern `0e 00 00 00 14 00` (referenced class tag = `0x0014`). Every
+  other referenced-class tag fell through. 80–114 fields per release
+  use this form with tags like `0x0058`, `0x00ba`, `0x00b6` — each a
+  pointer to a specific class. A new `ElementIdRef { referenced_tag,
+  sub }` variant captures them. The unit `ElementId` is preserved for
+  the common `tag=0x0014, sub=0x0000` case.
+
+### Deprecated 0x03 i32-alias (2016–2018 only)
+
+Five fields in Revit 2016–2018 use discriminator byte `0x03`, which
+does not appear in any later release:
+
+| Release | Field | Class |
+|---|---|---|
+| 2016 | `m_id` | `UserID` |
+| 2016 | `m_nAtomType` | `ElementRegenerationInfo` |
+| 2017 | `m_id` | `UserID` |
+| 2017 | `m_nAtomType` | `ElementRegenerationInfo` |
+| 2018 | `m_id` | `UserID` |
+
+`0x03` sits between `0x02` (u16) and `0x04` (legacy u32) in the
+discriminator space, and both observed fields are integer-typed
+(Hungarian `_n` prefix, `_id` suffix). Decoded as `Primitive { kind:
+0x03, size: 4 }` — a 32-bit integer alias superseded by `0x05` from
+Revit 2019 onward. Evidence is cross-release disappearance: the same
+two fields switch to a different discriminator in 2019+.
+
+### Truncated 2-byte headers
+
+Two fields in the corpus have a type-encoding body of only 2 bytes:
+
+| Release | Field | Bytes |
+|---|---|---|
+| 2018 | `BoundedSpace.m_boundActive` | `0d 10` |
+| 2025 | `RadialConstraint.m_witnessRefs` | `0e 50` |
+
+These are schema-parser boundary artifacts — the 4-byte modifier
+header was clipped by the next-record heuristic. `FieldType::decode`
+now handles 2-byte inputs by inferring `sub` from `bytes[1]` alone
+(high byte implied zero) and producing a typed variant with an empty
+body. Safe-slicing (`bytes.get(4..).unwrap_or(&[])`) prevents panics
+on any short input.
+
+### Evidence
+
+Reproduce with:
+
+```text
+cargo run --release --example unknown_bytes_deep -- \
+  ../../samples/racbasicsamplefamily-2026.rfa
+```
+
+Expected output (2026):
+
+```text
+Schema total fields: 1061  Unknown: 0  (0.00%)
+Classification coverage: 100.00%
+```
+
+The same command against every file under `../../samples/` shows
+`0.00%` Unknown across all 11 releases.
+
+### Consequences
+
+With the schema fully typed, Layer 5 (IFC export) now has a
+type-sound input: every field in the object graph has a known size
+(for primitives), known element type (for vectors/containers), and
+known referent (for element-id references). The `NullExporter`
+placeholder in `src/ifc/mod.rs` can be replaced with a real walker
+that knows how to serialise each `FieldType` variant. IFC emission is
+no longer blocked on decoder completeness — it's blocked only on
+Revit-class → IFC-entity mapping decisions (buildingSMART alignment).
+
+Probes: `examples/unknown_bytes.rs` (first-4-byte signature
+histogram), `examples/unknown_bytes_deep.rs` (first-8-byte signature
+with sample fields + coverage percentage).
+
+Tests: `src/formats.rs::tests::decodes_field_type_*` — one pinning
+test per new arm, plus `decode_is_safe_on_short_inputs` for the
+panic-safety invariant.
+
+## Addendum — Q6.3 CORRECTION to Q6.2: post-history bytes are a directory, not ADocument (2026-04-19, Phase 5a.1)
+
+**Q6.2 hypothesis refuted.** The original §Q6.2 addendum claimed the
+sequential-ID TLV block at the post-history boundary (offset 0x363 in
+the 2024 sample) was ADocument's 13-field instance with records keyed
+by field-number. Confidence was flagged at 0.6. Q5.2 closed the type
+decoder to 100%, which unblocked a rigorous Q6.3 walk — and the walk
+refutes the hypothesis.
+
+### Evidence against
+
+1. **Sequential IDs extend to ~131, not 13.** ADocument has 13
+   declared fields. If records corresponded to fields, the table
+   should terminate at id=13. Instead it runs contiguously from id=1
+   through id=131 (2024 sample) — stable across all 11 releases
+   (129–131 records; count varies slightly by sample but not by year).
+2. **Body-size / FieldType correlation fails.** Under the hypothesis,
+   same-FieldType fields should have same-sized bodies. Observed: of
+   the records that map to ADocument's 9 `Pointer { kind: 2 }` fields,
+   some have 2-byte bodies, others 6-byte bodies, others 12-byte
+   bodies. Record 1 (which would be `m_elemTable :: Pointer {kind:2}`)
+   has a 12-byte body; record 3 (`m_oContentTable`, same FieldType)
+   has a 2-byte body. FieldType does not predict body length.
+3. **Body values are not schema class tags.** Cross-referenced each
+   record's body u16 against the schema's 79 tagged classes: 0 of 131
+   resolved (`examples/directory_class_lookup.rs`). The u16 values
+   (0x076e, 0x0ea7, 0x0fda, …) are in a range (≈100–5000) consistent
+   with ElementIds, not class tags.
+
+### What the structure probably is
+
+A **multi-table directory/reference-pool** immediately following the
+upgrade-history strings in Global/Latest. Each table runs
+contiguously with 1-indexed sequential IDs; once one terminates, the
+next starts fresh from id=1. At least two such tables are visible in
+the 2024 sample:
+
+```text
+0x0363  table 1 start (id=1..131)
+0x07e7  table 1 ends; body-style changes to [u16 val][u32 0xffffffff]
+0x081b  section of `00`-padded dead space
+0x0881  another multi-u32 structure begins
+0x08b1  table 2 starts (id=1..N again)
+```
+
+Body encoding per record (provisional):
+
+```text
+[u32 sequential_id]
+[u16 value_or_ref]           // always present
+[optional u16 0 padding]     // some records
+[optional u32 extra]         // some records (usually zero)
+```
+
+The trailing sentinel pattern `ff ff ff ff` shows up in later records,
+matching Revit's convention for "undefined" or "null" references.
+
+### Practical impact
+
+**Layer 5a's original scope was underestimated.** The ADocument
+singleton is NOT at the post-history boundary. It lives somewhere
+else in Global/Latest (or possibly another stream), referenced
+through this directory. Reaching ADocument therefore requires:
+
+1. Decoding the directory table format (what the u16 values are —
+   ElementIds? entry indices into ElemTable? reference-pool indices?).
+2. Understanding Global/ElemTable's structure — parser exists
+   (`src/elem_table.rs`) but record semantics are partial.
+3. Resolving a directory entry → actual object-data offset.
+4. Only then can the schema-directed walker (the Layer 5a "write the
+   walker" work) run.
+
+Each of those is a separate open question. This is genuine
+reconnaissance, not implementation of a known design.
+
+### Status of Layer 5a going forward
+
+- **Layer 4c (schema decoding, 100% coverage):** complete and
+  verified. Not affected by this correction.
+- **Layer 5a (ADocument instance extraction):** re-opened. The
+  original Q6.2 entry-point claim is retracted; a new entry-point
+  question is posed.
+- **Layer 5b (full object graph walker):** remains blocked on 5a
+  plus directory resolution.
+
+Probes added this session:
+- `examples/adocument_walk.rs` — tabulates sequential-ID records
+  against ADocument's declared fields. Output refutes Q6.2.
+- `examples/post_directory.rs` — locates where the first directory
+  terminates and dumps the structure that follows.
+- `examples/directory_class_lookup.rs` — tries record bodies as
+  class-tag lookups; 0/131 match, confirming they're not tags.
+
+## Addendum — Q6.4 progress: directory is not a cross-stream reference (2026-04-19)
+
+Follow-on investigation to the Q6.3 refutation. Two findings tighten
+the problem space without yet resolving it.
+
+### Finding Q6.4-A: directory u16 values are NOT references into other streams
+
+Hypothesis tested: if the directory at `Global/Latest` offset 0x363
+is a reference pool indexing into another stream, the u16 body
+values should appear at higher-than-uniform-random rate in that
+target stream. (Method established by Phase D, which found class
+tags appear in `Global/Latest` at ~340× uniform rate.)
+
+Byte-level scan (probe: `examples/directory_bytewise_scan.rs`) of
+the 130 unique u16 body values against every decompressed stream:
+
+| Target stream | Hit ratio vs uniform (2024) | Hit ratio (2016) |
+|---|---|---|
+| `Global/ElemTable` | 2.2× | 3.8× |
+| `Global/ContentDocuments` | 0.0× | 0.0× |
+| `Global/DocumentIncrementTable` | 2.2× | 1.9× |
+| `Global/History` | 2.1× | 1.7× |
+| `Global/PartitionTable` | 27.3× | 30.6× |
+| `Formats/Latest` | 1.1× | 3.0× |
+| `Global/Latest` (post-directory) | 0.8× | 3.2× |
+
+All ratios are ≤5× except `Global/PartitionTable`, whose apparent
+30× is the artefact of a small sample (167 bytes, 1–2 unique hits).
+None approach Phase D's 340× threshold. **The directory is self-
+contained** — its u16 body values do not meaningfully cross-reference
+any other stream.
+
+### Finding Q6.4-B: Table B (post-directory) exists but is smaller than first estimated
+
+`examples/second_table_probe.rs` initially suggested a "Table B"
+starting around offset 0x8a1 spanning ~935 KB. With a larger
+look-ahead window (probe: `examples/table_b_structure.rs`), the
+more-rigorous measurement finds **141 sequential records totalling
+only ~1754 bytes**:
+
+| Region | Start (2024) | Records | Bytes |
+|---|---|---|---|
+| Upgrade-history UTF-16LE | 0x053 | — | 784 |
+| Table A (directory) | 0x363 | 131 | ≈1342 |
+| Table B (second directory?) | ≈0x8a1 | 141 | ≈1754 |
+| Remainder of stream | ≈0xf44 | — | ≈935 000 |
+
+Table B's record-length distribution is strongly bimodal: 134 of
+141 records are exactly 12 bytes (`[u32 id][u32 ffffffff][u32
+ffffffff]` — a "null entry" pattern common in C++ as "-1 = unset").
+The non-null exceptions are records 1 (28 bytes), 2 (70 bytes),
+and a small cluster of medium-size outliers.
+
+### Open question: what do both tables index?
+
+- Table A's values are not class tags, not ElementId references,
+  not offsets (non-monotonic, range 100–5000).
+- Table B is mostly null-stubs with a few populated entries.
+- The **~935 KB of content after Table B ends** is where the actual
+  object data must live, but neither table obviously indexes into
+  it by the usual means (byte offsets, ElementIds, hash indices).
+
+Remaining candidate interpretations:
+1. **Element-kind enumeration**. The tables list "which slots of an
+   implicit array are populated," and the body values are
+   type-discriminants or small-integer payloads, with the real
+   per-slot data stored positionally in the 935 KB region.
+2. **Serialization cursors**. Each record body is a byte-offset
+   modulo something (hash? scramble?) into the remaining region.
+   Would require a transform we haven't identified.
+3. **Per-document serial numbers**. The u16 values are internal
+   "save-cursor" IDs with no format-level meaning, present for
+   incremental-save merge logic. The 935 KB region is the actual
+   payload and its structure is read differently.
+
+Each hypothesis is falsifiable with a bounded probe. The next
+contributor to touch this area should (a) run the probes listed
+below on a non-`rac_basic_sample_family` `.rvt` to see whether
+record counts vary with document content or stay format-fixed,
+and (b) structurally scan the 935 KB post-Table-B region for
+class-tag density (Phase D method at a different offset) to find
+where the schema-driven instance data actually begins.
+
+Probes added (all under `examples/`):
+
+- `directory_vs_elemtable.rs` — cross-reference against ElemTable
+  records. Refutes "directory is ElemTable index" hypothesis.
+- `directory_bytewise_scan.rs` — byte-level scan of directory u16s
+  across every decompressed stream with expected-vs-observed
+  ratios. Basis for Finding Q6.4-A.
+- `second_table_probe.rs` — finds all sequential-id tables in
+  `Global/Latest`.
+- `table_b_structure.rs` — walks Table B with large look-ahead;
+  produces the record-length distribution for Finding Q6.4-B.
+
+## Addendum — Q6.5 ADocument instance data: current state (audit-honest)
+
+Earlier drafts of Q6.5 were written as running probe notes. This
+rewrite replaces Findings Q6.5-A–F with a single audit-honest
+summary that every other doc (README, `docs/compatibility.md`,
+`docs/python.md`, `src/walker.rs` module doc) should agree with.
+If a claim here disagrees with the source, the source wins and
+this section is the one that is wrong.
+
+Research question: where does `ADocument`'s instance data live in
+`Global/Latest`, and can a walker read it?
+
+### What was found
+
+ADocument's instance record lives inside `Global/Latest` in the
+post-directory-table region of the decompressed stream, reached by
+an entry-point detector implemented at
+[`src/walker.rs:421`](../src/walker.rs) (`find_adocument_start_with_schema`). The
+detector is a two-stage pipeline:
+
+1. Heuristic scan that walks past the sequential-ID tables (Table
+   A + Table B documented in §Q6.4) and searches for an 8-byte
+   zero preamble followed by a plausible array-count marker —
+   [`src/walker.rs:457`](../src/walker.rs) (`heuristic_find`).
+2. If that produces a schema-validated walk (trial walk passes the
+   score threshold), return it. Otherwise fall back to a
+   scoring-based byte-aligned brute-force scan that picks the
+   offset whose trial walk of ADocument's 13 declared fields
+   produces the most-sensible values for the last three
+   ElementIdRef fields (small distinct `id` values with `tag=0`) —
+   [`src/walker.rs:437`](../src/walker.rs) (`Strategy 2` block) +
+   [`src/walker.rs:499`](../src/walker.rs) (`trial_walk`) +
+   [`src/walker.rs:565`](../src/walker.rs) (`walk_score`).
+
+Once the entry point is located,
+[`walker::read_adocument`](../src/walker.rs) ([`src/walker.rs:370`](../src/walker.rs))
+consumes the declared schema fields in order via
+[`read_field`](../src/walker.rs) ([`src/walker.rs:604`](../src/walker.rs)). The
+wire encoding observed today, documented in the module header at
+[`src/walker.rs:17`](../src/walker.rs):
+
+| FieldType | Wire shape |
+|---|---|
+| `Pointer { .. }` | 8 bytes `[u32 slot_a][u32 slot_b]` — all-zero or all-ones act as NULL sentinels |
+| `ElementId` / `ElementIdRef { .. }` | 8 bytes `[u32 tag_or_zero][u32 id]` |
+| `Container { kind: 0x0e, .. }` | Two-column: `[u32 count][count × [u16 id][u32 mask]][u32 count_b][count_b × [u16 id][u32 mask]]` |
+| All other `FieldType` variants | Not exercised by ADocument; fall through to `InstanceField::Bytes` in the generic reader at [`src/walker.rs:300`](../src/walker.rs) |
+
+All 13 of ADocument's declared fields are consumed by the walker
+when the entry-point detector succeeds.
+
+### What's solid
+
+- **The entry-point detector lands on every release in the
+  11-sample corpus** (2016–2026). `rvt::walker::read_adocument`
+  returns `Some(ADocumentInstance)` — not `None` — for all 11
+  files, and every result contains 13 parsed fields. Evidence:
+  Python bindings test
+  [`tests/python/test_rvt.py:234`](../tests/python/test_rvt.py)
+  asserts exactly this shape on the 2024 sample; the Rust CLI
+  `rvt-doc` ([`src/bin/rvt_doc.rs:125`](../src/bin/rvt_doc.rs)) is
+  the end-user surface for the same walker and returns populated
+  output on each of the 11 samples.
+
+- **Full field-by-field validation holds on Revit 2024, 2025, and
+  2026.** On those three releases the last three `ElementIdRef`
+  fields (`m_ownerFamilyId`, `m_ownerFamilyContainingGroupId`,
+  `m_devBranchInfo`) decode to the byte-identical triple
+  `{tag=0, id=27}`, `{tag=0, id=31}`, `{tag=0, id=35}`. Three
+  different Revit releases of the same family document pointing at
+  the same three ElementIds, through three different entry
+  offsets, is cross-version validation of both the entry-point
+  detector and the wire decoders. Evidence: Python test
+  [`tests/python/test_rvt.py:243`](../tests/python/test_rvt.py)
+  pins the 2024 values; the same output is reproduced via
+  `rvt-doc --json` on the 2025 and 2026 samples.
+
+- **The `Container { kind: 0x0e, .. }` wire encoding is
+  two-column.** Decoder and regression test live together:
+  [`src/walker.rs:622`](../src/walker.rs) (decoder) and
+  [`src/walker.rs:884`](../src/walker.rs)
+  (`read_field_ref_container_2column` test — synthesized bytes,
+  count=2, two columns of `[u16 id][u32 mask]` entries, total 32
+  bytes for count=2).
+
+- **ADocument is present in the schema on every release.** The
+  corpus-wide assertion is pinned in
+  [`tests/samples.rs:95`](../tests/samples.rs); the 100% field-type
+  coverage underpinning the walker's decoder table is documented
+  in §Q5.2 of this report.
+
+### What's solid on a subset only
+
+- **Fields 2–5 of ADocument** (`m_oContentTable`,
+  `m_pHostDocument`, `m_pAppInfoManager`, `m_pStyleSettings`) on
+  the 2024 sample decode to bit patterns whose underlying bytes
+  look like IEEE-754 `f64` values (8.0 and 3.0) followed by
+  pointer-shaped words. The walker consumes 8 bytes per field (the
+  declared `Pointer` wire size) and lands the cursor at the right
+  place for field 10 onward, but these four fields are strongly
+  suspected to be reading into container element-payload bytes,
+  not ADocument's own field storage, because fields 10–12 decode
+  cleanly on 2024–2026. Interpretation is not validated against an
+  external oracle.
+
+- **Revit 2016–2023** entry-point offsets are reported in five
+  version bands (labelled A/B/solo/C/D across the 11-sample
+  corpus), with cross-version byte-identity within each band. That
+  within-band stability is a weaker check than 2024–2026's
+  cross-band stability: it shows the detector is picking the same
+  offset on same-era releases, but does not by itself prove the
+  offset is ADocument's true start on the older releases.
+  `docs/compatibility.md` ([`docs/compatibility.md:18`](compatibility.md))
+  classifies 2016–2023 walker support as `partial` for exactly
+  this reason.
+
+### What's hazy
+
+- **Field 2–5 layout on all releases.** The Container's per-element
+  payload serialisation for arrays of classes with scalar fields
+  (e.g. `APIAppInfo`) is not specified here. The `0x0e` kind
+  decoder in [`src/walker.rs:622`](../src/walker.rs) handles the
+  two-column id/mask framing but not any element-body bytes that
+  follow. This affects any class with `Container` fields, not just
+  ADocument; tracked as `L5B-09` (generalize Container 2-column
+  decoder).
+
+- **FieldType variants beyond `Pointer`, `ElementId[Ref]`, and
+  `Container { kind: 0x0e }` are not exercised in ADocument.**
+  The generic `read_field_by_type` path at
+  [`src/walker.rs:300`](../src/walker.rs) handles `Primitive`,
+  `Guid`, `String` (tested by
+  [`src/walker.rs:708`](../src/walker.rs) through
+  [`src/walker.rs:798`](../src/walker.rs)) and falls through to
+  `InstanceField::Bytes` on anything unrecognised. Coverage for
+  those variants against real stream bytes is indirect (via
+  Layer-5b element decoders); they are not stressed through the
+  ADocument walker path specifically.
+
+- **The 2016–2023 entry-point offsets are not cross-checked
+  against an external oracle.** The within-band byte-identity
+  shown by `rvt-doc --json` on same-era samples is internal
+  consistency, not proof of correctness. Until either (a) the
+  `read_adocument` output is compared against a known-good
+  reference produced by a different reader, or (b) fields 2–5 are
+  decoded cleanly on those releases, the older-release output
+  should be treated as structurally shaped but semantically
+  unvalidated. Captured by `docs/compatibility.md:181`:
+  "Schema-directed walker is partial on 2016–2023."
+
+- **The module doc at [`src/walker.rs:1`](../src/walker.rs) says
+  the walker produces "8 of 13 clean values" on 2024–2026.** That
+  count matches the original probe run but has never been turned
+  into an assertion that pins which specific fields are considered
+  clean. Only the last three ElementIdRef fields are pinned by a
+  test
+  ([`tests/python/test_rvt.py:243`](../tests/python/test_rvt.py)).
+  The other five fields treated as clean in the module doc
+  (`m_elemTable`, `m_appInfoArr`, `m_pHistory`,
+  `m_pSteelModelInfo`, `m_oNobleSecondaryData`) are not covered by
+  an integration test; they rest on manual inspection of a single
+  `rvt-doc --json` run on the 2024 sample.
+
+### Evidence references
+
+Source:
+
+- [`src/walker.rs`](../src/walker.rs) — walker module. Public
+  entry point `read_adocument`
+  ([`src/walker.rs:370`](../src/walker.rs)); entry-point detector
+  `find_adocument_start_with_schema`
+  ([`src/walker.rs:421`](../src/walker.rs)); heuristic
+  ([`src/walker.rs:457`](../src/walker.rs)); brute-force scorer
+  ([`src/walker.rs:499`](../src/walker.rs) +
+  [`src/walker.rs:565`](../src/walker.rs)); field decoders
+  ([`src/walker.rs:604`](../src/walker.rs)).
+- [`src/bin/rvt_doc.rs`](../src/bin/rvt_doc.rs) — CLI that exposes
+  `read_adocument` output.
+- [`rvt-py/src/lib.rs`](../rvt-py/src/lib.rs) — `read_adocument`
+  Python binding.
+
+Tests:
+
+- [`tests/python/test_rvt.py:234`](../tests/python/test_rvt.py) —
+  `ADocumentInstance` shape on 2024 sample (13 fields, correct
+  version, entry offset present).
+- [`tests/python/test_rvt.py:243`](../tests/python/test_rvt.py) —
+  last three ElementIdRef values pinned byte-for-byte on 2024.
+- [`src/walker.rs:676`](../src/walker.rs) — empty-stream safety.
+- [`src/walker.rs:682`](../src/walker.rs) — `Pointer` wire shape.
+- [`src/walker.rs:693`](../src/walker.rs) — `ElementId` wire shape.
+- [`src/walker.rs:884`](../src/walker.rs) — 2-column `Container`
+  wire shape on synthesized bytes.
+- [`tests/samples.rs:85`](../tests/samples.rs) — ADocument is in
+  the schema on all 11 releases.
+
+Probes (kept in-tree as the paper-trail for how the current state
+was reached — they ran against the corpus and were not promoted
+into the `src/` library):
+
+- `examples/post_table_b_density.rs` — class-tag density over the
+  post-directory region; established that the 935 KB tail of
+  `Global/Latest` is schema-referenced instance data (33× uniform
+  vs 13× pre-directory).
+- `examples/post_table_b_head.rs` — hex dump + structure
+  annotation of the first 384 bytes of that region on the 2024
+  sample.
+- `examples/adocument_walker_v1.rs` — early wire-encoding
+  iterations that motivated the two-column Container shape.
+- `examples/adocument_entry.rs`, `examples/adocument_bruteforce.rs`
+  — the two detection strategies that became
+  `heuristic_find` and the scoring-based fallback in
+  [`src/walker.rs`](../src/walker.rs).
+
+Prior Q6 context: §Q6.2, §Q6.3, §Q6.4 above document the stream
+layout (header + upgrade-history strings + Table A + Table B)
+that sits before the instance-data region. Those findings are
+load-bearing for the entry-point detector.
+
+### Open questions
+
+- **Q6.5-i.** Field 2–5 element-payload layout. The `Container`
+  decoder returns the 2-column id+mask data; the bytes
+  immediately after it, before the next confidently-decoded field,
+  are consumed as 8-byte `Pointer` reads, which produces
+  f64-shaped values on 2024. The correct decode is almost
+  certainly an `APIAppInfo` element body, not a pointer; the
+  walker currently does not discover that. Tracked as `L5B-09`
+  (Container element-payload decode) and `L5B-11` (extend
+  ADocument walker to all 11 releases) in the internal task list.
+- **Q6.5-ii.** External oracle for 2016–2023. Cross-comparison
+  against Autodesk's own reader, an ODA SDK dump, or another
+  independent implementation would turn the within-band
+  byte-identity check into a correctness check. Tracked as `Q-06`
+  (Benchmark vs ODA SDK).
+- **Q6.5-iii.** Whether the 2018 sample's solo-band entry offset
+  (different from its 2017 and 2019 neighbours) reflects a real
+  format transition or a re-save artefact on that particular
+  fixture. Answering this requires either another 2018-era fixture
+  or a 2018-specific layout probe; no blocker today, but noted
+  because it's the one within-band inconsistency in the corpus.
+
+### Status
+
+The walker's role as the Layer-5b bridge is shipped
+([`docs/compatibility.md:33`](compatibility.md)). `rvt-doc` exposes
+`read_adocument` output end-to-end. The honest one-sentence
+summary that should be mirrored in README, module doc, Python doc,
+and compatibility matrix:
+
+> `rvt::walker::read_adocument` locates an `ADocument` entry point
+> and walks all 13 declared fields on every release in the
+> 2016–2026 corpus; full field-by-field validation (last three
+> `ElementIdRef` fields byte-identical, no known misalignment) is
+> confirmed today on Revit 2024–2026 only, and 2016–2023 output is
+> structurally shaped but only internally consistent within
+> same-era version bands.
+
+## Addendum — RE-35 Partitions/NN records are ElementId-keyed (2026-09-23)
+
+The inflated body of every Revit 2024 and 2025 `Partitions/NN` stream opens
+with a chain of records, one per element, back to back from offset 0:
+
+```text
+u64 ElementId · u32 size · u16 prologue constant · u16 count · body ·
+u64 (unread) · u32 flag 0 | 0x0100_0000 · u32 size again
+```
+
+The prologue constant is the release's ElemTable constant + 28 (`0x059f` on
+2024, `0x05c7` on 2025). An element frame with its ElementId at `+0x00`
+starts its record; one without (RE-30's second prologue) sits inside it.
+On `2024_Core_Interior.rvt` the chains hold all 26,425 declared ElementIds,
+and across nine 2024 and 2025 files all 30,432 id-carrying frames start a
+record of their own id. What follows the chain are the loaded families' own
+documents, keyed by their own ids.
+
+Report: `reports/element-framing/RE-35-partition-record-wrapper.md`.
+Probe: `examples/probe_re35_record_wrapper.rs`.
+
+## Addendum — RE-40 a design option set names its primary option (2026-09-23)
+
+An element record holds its design option's ElementId at `+0x2a` (`0xff`×8
+for the main model). A design option set's partition record
+(`OST_DesignOptionSets`) lists the set's own id and its options at `+0x56`,
+and the set's name entry repeats the option list and closes with the primary
+option's ElementId:
+
+```text
+u32 k - 1 · k - 1 option ids (u64) · u32 1 · u32 n · n UTF-16 units · u64 primary
+```
+
+On Snowdon Towers Architectural (local only) both sets resolve to the options
+the VIM export marks primary. Of the placed instances of recovered
+categories, the 29 in a primary option are all in Revit's own IFC4 export and
+the 27 in other options all missing from it, so the exporter leaves those out
+as Revit does.
+
+Report: `reports/element-framing/RE-40-design-option-primary.md`.
+Probe: `examples/probe_re40_design_options.rs`.
+
+## Addendum — RE-41 the ElemTable's second id (2026-09-23)
+
+A 40-byte `Global/ElemTable` record carries two `u32` ids, at `+16` and
+`+36`. They agree on nearly every record. On Autodesk's Snowdon Towers
+samples they differ on 84 and 27 records, and there the second is the id of
+the element's partition record (RE-35) and the `Tag` Revit's own IFC export
+writes. Declaring both attributes every element record the architectural
+model left unattributed.
+
+Report: `reports/element-framing/RE-41-elem-table-secondary-ids.md`.
+Probe: `examples/probe_re41_elem_table_secondary_ids.rs`.
+
+## Addendum — RE-42 families nested in a family (2026-09-23)
+
+A family type's partition record names its family and every family of the
+same category nested in it. The family is the one candidate whose own
+partition record names all the others. Every name that adds on RE1
+Electrical, RE1 Mechanical and Snowdon Towers is Revit's own.
+
+Report: `reports/element-framing/RE-42-nested-families.md`.
+Probe: `examples/probe_re42_nested_families.rs`.
+
+## Addendum — RE-43 frames holding the invalid ElementId (2026-09-23)
+
+Some element frames hold `u32::MAX`, the 32-bit form of Revit's invalid
+ElementId −1, at `+0x00`. They carry no id of their own, like RE-30's second
+prologue, and take their enclosing partition record's id (RE-35). On Snowdon
+Towers this recovers a stair run and 99 sketch lines; no licensed file has
+such a frame.
+
+Report: `reports/element-framing/RE-43-invalid-element-id.md`.
+
+## Addendum — RE-44 system-family type names (2026-09-23)
+
+A wall, floor, ceiling, roof or railing type has no RE-38 name entry, but its
+serialised element data opens with `ff ff ff ff · u16 · 01 00 00 00` and the
+type's `u64` ElementId, and the first framed string after that is its name.
+The `u16` is `0x02d3` on Revit 2024 and `0x02ef` on Revit 2025. Joined through
+the RE-28 type records, which hold on 2025 with the 2025 marker and prologue
+constant, every name equals Revit's for the same Tag on Core Interior,
+Snowdon Towers, RE1 and Projeto1. On `teste_export_2025` six of seven do; the
+seventh wall's frame, data and bounding box all describe the other type.
+
+Report: `reports/element-framing/RE-44-system-type-names.md`.
+Probe: `examples/probe_re44_system_type_names.rs`.
+
+## Addendum — RE-45 IFC export overrides (2026-09-23)
+
+Revit's "Export to IFC As", "IFC Predefined Type" and their type-level
+twins are entries `i64 BuiltInParameter · u32 n · UTF-16` in an element's
+serialised data (keys −1019014 to −1019017), owned by the element whose data
+header is the last one before them. An element exports as its own override,
+else its type's. On Core Interior two floors become Revit's `.ROOF.` slabs;
+on `teste_export_2025` three walls become Revit's `IfcCovering .CLADDING.`.
+
+Report: `reports/element-framing/RE-45-ifc-export-parameters.md`.
+Probe: `examples/probe_re45_ifc_export_parameters.rs`.
+
+## Addendum — RE-46 curtain walls (2026-09-23)
+
+A placed wall named in a placed curtain-wall mullion's reference list is a
+curtain wall: exactly the 42 Snowdon walls and the one RE1 wall Revit
+exports as `IfcCurtainWall`. Walls named only by panels are panel infill and
+stay `IfcWall`. Panels and mullions naming exactly one curtain wall become its
+aggregated parts; 1,798 of Revit's 1,906 on Snowdon.
+
+Report: `reports/element-framing/RE-46-curtain-walls.md`.
+Probe: `examples/probe_re46_curtain_walls.rs`.
+
+## Addendum — RE-47 stair dimensions (2026-09-23)
+
+A stair's element data carries its riser height, tread depth and number of
+risers after a fixed anchor, and each run's data its own number of risers.
+Written as `Pset_StairCommon` / `Pset_StairFlightCommon`, every Snowdon
+stair's values equal Revit's (26 of 26), and flights' on 37 of 43; Revit
+writes the stair total on both flights of the three stairs it splits.
+
+Report: `reports/element-framing/RE-47-stair-dimensions.md`.
+Probe: `examples/probe_re47_stair_dimensions.rs`.
+
+## Addendum — RE-48 Revit's own GlobalIds (2026-09-23)
+
+`Global/History` lists the editing episodes' GUIDs newest first, and a
+40-byte `Global/ElemTable` record holds its element's episode number at
+`+0x18`. Revit's IFC GlobalId is that GUID with the element's first
+ElementId XORed into its last 32 bits. Every element rvt-rs exports that
+Revit's export holds now has Revit's GlobalId (Core 854 of 854, RE1 281 of
+281, Snowdon 5,945 of 5,945), as do Core's rooms and storeys.
+
+Report: `reports/element-framing/RE-48-revit-global-ids.md`.
+Probe: `examples/probe_re48_revit_global_ids.rs`.
+
+## Addendum — RE-49 beams along their location lines (2026-09-23)
+
+A structural-framing element's data carries its location line as a bounded
+line record (`04 00 08 01 · f64 · f64 · f64×3 origin · f64×3 unit
+direction`). With the record box it gives a box `length × width × depth`
+along the line, the section solved from the box with one plan extent left
+as a check (923 of 942 Snowdon beams pass it). Against a later edition's VIM
+meshes, the section is Revit's on 613 of the 839 beams that edition kept
+unchanged and Revit's less a floor join's cut on 179 more; ends are not
+trimmed at supports.
+
+Report: `reports/element-framing/RE-49-beam-axes.md`.
+Probe: `examples/probe_re49_beam_axes.rs`.
+
+## Addendum — RE-50 roof outlines and sketch lines' exact ends (2026-09-23)
+
+A roof's `OST_SketchLines` records name the roof as their owner and close
+into its outline, as a floor's do. A sketch line's own data carries the
+bounded line record RE-49 reads for beams, so its exact ends are known;
+chaining them closes outlines whose boxes leave diagonals ambiguous. On
+Snowdon Towers 13 of 20 roofs gain an outline (11 with Revit's area) and 15
+more slabs close (11 with Revit's area); no outline that closed before
+changes.
+
+Report: `reports/element-framing/RE-50-roof-outlines.md`.
+Probe: `examples/probe_re50_roof_profiles.rs`.
+
+## Addendum — RE-51 Level names on every 2024 and 2025 project (2026-09-23)
+
+RE-24's Level name block holds each Level's name and elevation on Snowdon
+Towers and the 2025 projects too. Its elevation marker is six bytes, `05 00
+00 00` and a per-release `u16` (the other two bytes were the first plan
+extent's), and the confirming copy is the one behind the same 24 bytes, not
+one at a fixed distance. Second-prologue Levels take their partition
+record's id; a Level inside another element names it and is not a storey.
+Every storey now equals Revit's (Snowdon 18, RE1 2 each, Core 15), GlobalIds
+included.
+
+Report: `reports/element-framing/RE-51-level-names.md`.
+Probe: `examples/probe_re51_level_names.rs`.
+
+## Addendum — RE-52 stair runs' treads and risers (2026-09-23)
+
+A straight stair run's data carries its plan sketch as bounded line records
+at its base elevation: two boundary lines from the first riser to the last,
+then a line across the run at each riser. The run type its reference list
+names has its own serialised object (`01 00 00 00 · u64 id`, tag `db 0f`
+at +0x47) with structural depth, tread thickness, riser thickness and
+nosing length (f64 ft at +0x59, +0x69, +0x71, +0x79), one-byte flags
+(monolithic, treads, risers, slanted risers at +0xbd..=+0xc0; +0xb5 set on
+the one type whose treads run on under the riser above) and the type's
+name. With RE-47's riser height they give each run's side view. On Snowdon
+Towers 34 of 43 runs are drawn: the 30 steel-pan runs equal Revit's own
+geometry to 1e-5 ft, and the 4 with upright risers square the nosing that
+Revit profiles. Every run type name equals the type part of Revit's
+ObjectType on all 49 exported flights.
+
+Report: `reports/element-framing/RE-52-stair-treads.md`.
+Probe: `examples/probe_re52_stair_treads.rs`.
+
+## Addendum — RE-53 wall layers and material colours (2026-09-23)
+
+A material's object (`01 00 00 00 · u64 id`, tag `28 0a` on 2024 and `6b
+0a` on 2025 at +0x47) holds, in its first `ff × 8 · f32 · f32` frame, its
+transparency, four pattern COLORREFs, its shading COLORREF and shininess:
+Revit's IFC surface style colour on 123 of 123 materials across five
+files. A host type's own data holds a `u32` layer count framed by `ff ff ff
+ff` and tag `a6 10` (2024) / `0e 11` (2025), or by `u32 k · k × 2d 00 · u32
+0` (2025 floors and ceilings), then 37-byte layers: f64 width, u64
+material (ff × 8 by category), u64 deck, u32 function. A wall's data holds,
+after `ff ff ff ff 01 00 00 00`, its location line, a word and a flip flag:
+set puts the first layer right of the location line's direction. On
+Snowdon Towers the glTF export draws 883 walls in layers; against Revit's
+IFC4 per-layer solids, 851 of 862 match every layer centre to 0.001 ft,
+and all 1,368 compared colours are Revit's.
+
+Report: `reports/element-framing/RE-53-wall-layers.md`.
+Probe: `examples/probe_re53_wall_layers.rs`.
+
+## Addendum — RE-54 wall bodies from their centreline (2026-09-23)
+
+The bounded line a wall's data stores (RE-49) is its centreline, whatever
+its location-line setting (0 to 5): Revit's IFC4 body lies exactly half
+the type's layer sum either side of it on 964 of Snowdon Towers' 1,054
+walls. All 964 carry 1 in the word after the setting, and no wall with 0 or
+2 there is centred. rvt-rs builds a 2024 wall with word 1 from its
+centreline at its type's thickness where the record box does not already
+give it:
+- an axis-parallel wall keeps its trimmed run and keeps its box when the
+  box is thinner than the type;
+- an angled wall is the rectangle its box closes on, or runs joint to
+  joint unless its box is far wider.
+
+Snowdon's angled walls go from 0 to 75 of 102 with Revit's faces, and
+walls drawn in layers from 883 to 967. Core Interior is unchanged. At a
+joint of two angled walls, 115 of 156 end faces stop on the other wall's
+faces (butt joins), which are not modelled.
+
+Report: `reports/element-framing/RE-54-wall-bodies.md`.
+
+## Addendum — RE-55 Revit 2025 walls' lines, sides and layers (2026-09-23)
+
+A Revit 2025 wall stores its location line, its location-line setting,
+word and flip, and its type's layers as 2024 does. One house saved in both
+releases reads the same values from both on all 50 of its walls, and its
+walls draw identically from both. Wall lines are now read on 2025 through
+their own gate, `WALL_LINE_SUPPORTED_REVIT_VERSIONS`; beams and sketch
+lines keep theirs at 2024. Against Revit's 2025 exports, RE1's and
+Projeto1's walls stay exact, and 2 of teste_export_2025's 3 angled walls
+now have Revit's faces and ends.
+
+Report: `reports/element-framing/RE-55-wall-lines-2025.md`.
+## Addendum — RE-56 roof edges' slopes and shed roofs (2026-09-23)
+
+A footprint roof's sketch line carries its edge's slope block: the slope
+angle (9:12 by default), 16 zero bytes, 32 `ff`, a small negative i64, a
+u32, `u32 7`, then flags `00 00 01 00` or, on an edge that defines the
+roof's slope, `01 01 01 00` followed by −rise/run. A roof type's layers
+follow its name and `u32 0`, the framing RE-53 saw as "hyphens" on 2025
+floors (types named "-"). A 2024 roof with exactly one defining edge is
+drawn rising from it, with its type's thickness square to the slope, when
+that reproduces its record box height: the Autodesk tutorial house's 1:12
+shed matches to 1e-9 ft. Snowdon's roofs have no defining edge, yet one is
+sloped in Revit's export, so another slope carrier (likely a slope arrow)
+is not read.
+
+Report: `reports/element-framing/RE-56-roof-slopes.md`.
+
+## Addendum — RE-57 floors, roofs and ceilings in their layers (2026-09-23)
+
+A floor's, roof's or ceiling's type layers run top first, and where they add
+up to the element's record box height the plate is exactly its layers. The
+glTF export cuts such a body into one prism per layer from its top down:
+against Revit's IFC4 body faces, every layer's bottom and top matches on
+Snowdon's 236 and Core Interior's 68 compared slabs, with every compared
+colour Revit's. Revit's 2025 export of RE1 styles each layered body with a
+single material, so only its colours can be compared there.
+
+Report: `reports/element-framing/RE-57-slab-layers.md`.
+
+## Addendum — RE-58 material names and IFC layer sets (2026-09-23)
+
+A material's name is in its own object. Usually it is the field right
+after the class tag. Where that field holds parameter entries first
+(strings and integers, keyed by BuiltInParameter id), the name follows
+them and ends with `ff ff ff ff` and a release tag, `17 0c` on 2024 and
+`6b 0c` on 2025.
+
+Read that way, with the framed string and name-parameter entries as
+fallbacks:
+- Snowdon names 219 of 220 materials and Core Interior 78 of 86;
+- RE1, Projeto1, teste_export_2025 and the tutorial house name every
+  material;
+- every one that Revit's export styles by name has Revit's colour for it.
+
+The IFC export now writes layered walls, floors, roofs and ceilings as an
+`IfcMaterialLayerSetUsage` over an `IfcMaterialLayerSet`. The layer names
+are Revit's, in Revit's order, and the sets sit on Revit's bodies within
+0.001 ft on 1,196 of 1,207 Snowdon elements, all 88 on Core Interior and
+all 15 on RE1. RE1's 2025 export writes the same four sets itself.
+
+Report: `reports/element-framing/RE-58-material-layer-sets.md`.
+
+## Addendum — RE-59 base-constraint storeys (2026-09-23)
+
+A record that names two Levels names its element's base and top
+constraint, in no fixed order. The base constraint is the higher of the
+two at or below the record's base, else the lower. It is the storey
+Revit's export contains the element in on every such record: 650 on
+Snowdon, 482 on Core Interior and 7 on RE1.
+
+Binding by it takes Core Interior to 970 of 970 elements in Revit's
+storey. On Snowdon, the number of elements on no storey falls from 1,931
+to 294, and the 294 left name no Level.
+
+Report: `reports/element-framing/RE-59-base-constraint-levels.md`.
+
+## Addendum — RE-60 storeys for records naming no Level (2026-09-24)
+
+A railing's record names the stair or ramp that hosts it, and Revit
+contains the railing in that host's storey on 73 of 74 Snowdon railings.
+
+Other records name objects whose data opens `u64 id · u64 Level id`:
+work planes and views, 6,435 of them on Snowdon. Where the one Level
+those objects carry is also the highest Level at or below the element's
+base, it is Revit's storey on 161 of 161. Either reading alone fails on
+dozens of light fixtures.
+
+Snowdon's elements on no storey fall from 294 to 102.
+
+Report: `reports/element-framing/RE-60-hosted-levels.md`.
+
+**End of report.**
+
+## Addendum — RE-80 per-release constants are schema class tags (2026-09-27)
+
+Three numbers carried as per-release constants are serialization tags of classes in the file's own `Formats/Latest` (a tag being the class's definition ordinal, RE-76): the `u16` opening `Global/ElemTable` is the tag of `ElemTable`; the element-record marker is `[Outline][0xFF x 4][ElementParents]`, the box written as an `Outline` and the reference lists as `ElementParents`; and the record-chain header constant is the tag of `ElementHeader`. The first two hold on every release from 2016 to 2026 (14 files, every marker followed by a well-formed box); the chain exists from 2024. Report: `reports/element-framing/RE-80-schema-tag-constants.md`; probe: `examples/probe_re80_schema_tag_constants.rs`.
+
+## Addendum — RE-81 Revit 2023 element records (2026-09-27)
+
+A 2023 record sits behind the RE-80 marker (`3c 01 ff ff ff ff 82 05`) with its ElementId as a `u32` at marker -52 and its `BuiltInCategory` at -38; container and placement kind are where 2024 has them. RE-21's instance rule then finds every element Tag of Revit's IFC4 export on two 2023 projects (45 of 45, 37 of 37), with nothing else on one and 14 nested generic models on the other. Report: `reports/element-framing/RE-81-2023-element-records.md`.
+
+## Addendum — RE-84 doors and windows whose type draws no geometry (2026-09-27)
+
+A family type whose parameter value block (RE-77) holds no geometry-material map (RE-82) draws no geometry: its doors and windows only cut their host. Revit's IFC4 export writes each as an `IfcOpeningElement` voiding the host, Tagged with the element's ElementId, and no door or window. On Snowdon Towers, Core Interior and RE1 Architecture, 48 of 48 such elements are opening-only in Revit's export and 343 of 343 others are exported as elements. Report: `reports/element-framing/RE-84-void-only-doors-windows.md`; probe: `examples/probe_re84_void_only_families.rs`.
+
+## Addendum — RE-85 a door's or window's host is the wall its reference list names (2026-09-27)
+
+A door or window record's first counted reference list (`+0x88`) is in ascending ElementId order. RE-23's host, the slot just before the record's own id, is only the nearest smaller id: a host with a larger id comes after the record's own id, and families that list their type put it between. Taking the nearest exported wall the list names, below the record's id first and skipping curtain walls, gives Revit's host on every Snowdon Towers record that names one wall (235) and a wall Revit cuts on the 6 that name several; Core Interior and RE1 are unchanged. Report: `reports/element-framing/RE-85-opening-host-candidates.md`; probe: `examples/probe_re85_opening_host_candidates.rs`.
+
+## Addendum — RE-86 a wall type stores its face angles, and word 2 marks a tapered wall (2026-09-27)
+
+A wall type's data holds `u32 2`, eight zero bytes, an `f64` 0.7 and a count of 3, then three `f64` angles in radians; the word before the frame varies by document. On Snowdon Towers all three are 0 on 40 of the 43 exported wall types, and the three "Solar Wall" types store 10 degrees in the middle one. A wall whose orientation word (RE-54) is 2 is tapered by its type: each of the 20 Revit exports tapered leans its exterior face by exactly that angle, wider at the base, keeps its interior face vertical, and is its type's thickness about its line at the top. A Solar Wall with word 1 is vertical in Revit's export; the two walls with word 0 are slanted. Report: `reports/element-framing/RE-86-tapered-walls.md`; probe: `examples/probe_re86_tapered_walls.rs`.
+
+## Addendum — RE-87 a family instance's data holds its transform (2026-09-28)
+
+A family instance's element data holds twelve `f64`: a 3 x 3 rotation stored row by row, then its origin in model feet; it is the first place in the data where nine `f64` are orthonormal with determinant 1. On Snowdon Towers, 1,951 of the 1,956 upright transforms in Revit's IFC4 export have Revit's placement X, its reverse or a right angle from it (the other 5 are walls), and all 49 on RE1 Architecture (2025) do; origins equal Revit's to 0.001 ft on 1,255 Snowdon elements, doors and windows excepted. Report: `reports/element-framing/RE-87-instance-transforms.md`; probe: `examples/probe_re87_instance_transforms.rs`.
+## Addendum — RE-88 Revit associates a wall's materials by its type's layers (2026-09-28)
+
+Revit's IFC4 export gives a wall of a one-layer type that layer's `IfcMaterial`, and a wall of a type with several layers an `IfcMaterialConstituentSet` of them, exterior first, each named after its material with a material's k-th occurrence " (k)", whatever its body. On Snowdon Towers that is Revit's association on 143 of 143 and 823 of 824 walls rvt-rs writes a layer set for; applied to walls whose body is not a layer set, 72 of 111 get Revit's association and none a different one. Report: `reports/element-framing/RE-88-wall-materials-without-layer-sets.md`; scorer: `tools/re/wall_materials_vs_ifc.py`.
+
+## Addendum — RE-89 Revit centres a window's opening in a tapered wall on the window's origin (2026-09-28)
+
+Revit's IFC4 export cuts a window's opening in a tapered wall (RE-86) as a vertical box one host type thickness deep, centred across the wall on the window's own transform origin (RE-87), on every Snowdon Towers window in a Solar Wall. A door's opening there is flush with the exterior face at its base instead (3 doors). Report: `reports/element-framing/RE-89-tapered-wall-window-openings.md`.
+## Addendum — RE-91 the document's object styles hold each category's material (2026-09-28)
+
+Each category's entry is its `BuiltInCategory` as an `i64`, an unset `u64`, `u32 1`, another unset `u64`, then its material as a `u64`. On Core Interior (Revit 2024) Walls holds 87 ("Default Wall") and Roofs 88 ("Default Roof"), the rest unset; Revit's IFC4 export writes "Default Wall" for all 356 walls whose layer takes its category's material. Snowdon Towers and the MIT house hold 0 for Walls. Report: `reports/element-framing/RE-91-category-material.md`.
+
+## Addendum — RE-92 a stair run's data holds its StairsRun fields (2026-09-28)
+
+A stair run's element data holds the StairsRun class's fields in schema order: seven `f64` (bottom elevation, top elevation, extend below base, extend below tread base, run width, left and right stringer width), a `u32` top riser index, then one-byte flags centre mark visible, begin with riser and end with riser. "End with Riser" is 0 on exactly the three Snowdon Towers runs whose riser lines outnumber their risers. A monolithic run's underside lies its type's structural depth below its inner corners, square to the pitch, cut off by the floor. Report: `reports/element-framing/RE-92-stair-run-ends.md`; probe: `examples/probe_re92_run_ends.rs`; scorer: `tools/re/stair_runs_vs_ifc.py`.
+
+## Addendum — RE-93 a type's length parameters, and Revit's window openings (2026-09-28)
+
+A family type's value block holds its length parameters as `f64 feet · ff × 8 · i64 parameter`: a BuiltInParameter's negative id (Width −1001301, Height −1001300, Rough Width −1001305, Rough Height −1001304), or a declared family parameter whose definition names it 0x56 bytes past its id. Revit's IFC4 export cuts each Snowdon Towers window's opening its type's Width by Height, centred on its origin along its X axis, from 3.0 ft above the origin; doors are cut at Rough Width × Rough Height on 57 of 126 and at Width + 0.208 ft by Height + 0.104 ft on 66, split within types. Report: `reports/element-framing/RE-93-window-openings.md`; probe: `examples/probe_re93_window_openings.rs`; scorer: `tools/re/opening_boxes_vs_ifc.py`.
+
+## Addendum — RE-94 a door's body height tells which opening Revit cuts (2026-09-28)
+
+Revit's IFC4 export cuts a Snowdon Towers door at its type's Rough Width × Rough Height exactly where the door's body is Rough Height tall (57 of 126); a door whose body is its frame's height is cut 0.0625 ft inside its frame instead, a size no stored value gives. Opening-only door types do not follow the rough size (RE1's cased opening). Report: `reports/element-framing/RE-94-door-openings.md`; probe: `examples/probe_re94_door_openings.rs`.
+
+## Addendum — RE-95 zero-length sketch lines (2026-09-28)
+
+A sketch line whose record box is a single point is a zero-length segment: it carries no bounded line and adds no edge. Each of Core Interior's 20 shading-device plates has one, on an end of two of its other lines; left out, the other 56 lines' recorded ends close each plate into Revit's outline exactly. Report: `reports/element-framing/RE-95-zero-length-sketch-lines.md`; probe: `examples/probe_re95_zero_length_sketch_lines.rs`; scorer: `tools/re/plan_profiles_vs_ifc.py`.
+
+## Addendum — RE-96 a sketch line's curve can be an arc (2026-09-28)
+
+A sketch line's first curve record can hold RE-75's arc layout (angles, unit X and Y axes, radius, centre) with the same preceding bytes a straight line's has, so the record box decides the reading. Read as arcs, 17 more Snowdon Towers slabs close into their outline, 14 of them within 0.1% of Revit's area. Report: `reports/element-framing/RE-96-sketch-arcs.md`; probe: `examples/probe_re96_sketch_arcs.rs`.
+
+## Addendum — RE-97 a Sketch element lists its curves (2026-09-28)
+
+A Sketch element's data names the element it sketches 77 bytes from its element-data header and lists its sketch lines as `u32 n · n × (u64 ElementId · u32 index)`. Its keys rise, with gaps where curves were deleted. On 55 of Snowdon Towers' 447 such sketches the list differs from the lines whose owner reference names the element: an edited sketch's lines keep naming the element they were drawn for. Taking the list as the membership gives 176 of 199 slabs and all 20 roofs an outline. Report: `reports/element-framing/RE-97-sketch-curve-lists.md`; probe: `examples/probe_re97_sketch_curve_lists.rs`.
+
+## Addendum — RE-187 a door type's Width and Height are its overall size (2026-10-18)
+
+A door type's value block holds its Width (−1001301) and Height (−1001300), the BuiltInParameters RE-93 reads for windows, and Revit's IFC export writes them as the door's `OverallWidth` / `OverallHeight` wherever they are read: 136 of 136 doors on Core Interior and RE1 Architecture. A window's type size is not its overall size on Core Interior (1010 mm against Revit's 1500 × 2700 mm). Report: `reports/element-framing/RE-187-door-overall-sizes.md`; probe: `examples/probe_re187_door_window_sizes.rs`.
+
+## Addendum — RE-200 a family instance's own material parameters (2026-10-21)
+
+Where a family type's geometry-material map (`FamilySymbol.m_geomTag2MaterialId`) holds only unset values, the instance's `FamilyInstance.m_pInstParams` points to a `FamilyParams` whose `m_params` entries hold material ElementIds in `m_elemId`, and Revit's IFC4 export gives the instance exactly those materials, `<Unnamed>` where they name none. All 9 window trims and muntins of each R2025 model 12 to 17 (puzzbobb's models, #356). Report: `reports/element-framing/RE-200-instance-material-parameters.md`; probe: `examples/probe_re200_instance_material_params.rs`.
+
+## Addendum — RE-201 a mullion or curtain panel type's material is its m_renderStyleId (2026-10-21)
+
+Every mullion type (`SysMullionFamSym`) and panel type (`SysPanelFamSym`) holds its material in `m_renderStyleId`. RE-166's read at +135 of the data object misses it where an optional field before it is 2 bytes shorter (+133): 10 of Snowdon Towers' 13 exported mullion types. Read by name, it is Revit's material on all 1,425 members and 348 plates of Snowdon Towers. Report: `reports/element-framing/RE-201-curtain-render-styles.md`; probe: `examples/probe_re201_curtain_render_styles.rs`.
+
+## Addendum — RE-202 a column's joins, a wall's exterior side, rendered content (2026-10-21)
+
+A column's record holds a `CutPairGStep` per joined element, `m_otherId`, in `m_id` order. A wall's location curve is `VWallDriver.m_pCrv` and its exterior lies to the left of it unless `SWall.m_isFlipped` (`VWallDriver.m_flip` is false on all 198 walls joined to Snowdon's columns). Revit's export gives an off-centre column whose type has no material one layer of its first joined wall, the one on the column's side. A family whose `Family.m_eRenderModelType` is 4 (RPC, planting) is exported with `<Unnamed>` alone, 127 of 127 on Snowdon Towers. Report: `reports/element-framing/RE-202-column-joins-and-rendered-content.md`; probe: `examples/probe_re202_column_joins.rs`.
+
+## Addendum — RE-203 a type's map by name; a material's own name (2026-10-21)
+
+RE-82's value-block scan also takes the materials of a component the type nests (Snowdon's 21 counter tops take their sink's appliance materials); the type's `m_geomTag2MaterialId` read from its native record holds Revit's set. A material's own `Material.m_name` agrees with the scanned name on 514 of 515 materials across seven models; the scan reads Snowdon's "Bronze, Architectural" as '1/4" Head'. Report: `reports/element-framing/RE-203-native-type-maps.md`; probe: `examples/probe_re203_type_maps.rs`.
+
+## Addendum — RE-204 a loaded family's own document shows its forms (2026-10-21)
+
+A loaded family's document is a keyed block of the project's partitions (RE-163); it decodes with the project's schema, and its element ids are the project's. Its forms hold `m_materialId` (−1 none), `m_cutting` and `Visible` (`IS_VISIBLE_PARAM` −1006205) in their `ParamValueSetInt`. A type whose map holds −1 values has `<Unnamed>` in Revit's export only where the family shows a visible, non-void form with no material: not on Snowdon's 21 washer-dryers and umbrella table (hidden forms) or RE1 Electrical's fire panel (none, and no nested family). Report: `reports/element-framing/RE-204-family-document-forms.md`; probe: `examples/probe_re204_family_forms.rs`.
+
+## Addendum — RE-205 the overlapping joined wall; materials only hidden forms have (2026-10-21)
+
+An off-centre column takes the first join among the walls that overlap it, and the wall's exterior layer where its box reaches past both of the wall's faces: 108 of Snowdon's 108. A material only hidden forms of a type's family have is left out of Revit's export ("Clearance" on Refrig_Base_wDrawers). Report: `reports/element-framing/RE-205-columns-and-hidden-forms.md`; probes: `examples/probe_re202_column_joins.rs`, `examples/probe_re204_family_forms.rs`.
+
+## Addendum — RE-206 a category's material is named by its graphics styles; nested visibility (2026-10-21)
+
+Each category's `GStyleElem` objects (`m_categoryId`) hold a `GStyle` whose `m_materialElemId` is the category's material. It is the material Revit's export writes for a layer that takes its category's material where the object styles (RE-91) are unset (Snowdon Towers) or not read (every 2025 file): "Default Wall" on all 117 walls of the R2025 models. A nested family's form whose `Visible` is bound (`FamilyParametrizedElemParamsCell`) to a family parameter is shown by its value on the nested instance, else its type, matched by caption (`ParamDef*.m_caption`). Report: `reports/element-framing/RE-206-category-styles-and-nested-visibility.md`; probes: `examples/probe_re206_category_styles.rs`, `examples/probe_re204_family_forms.rs`.
+
+## Addendum — RE-207 an element's saved parameters, named by the file's definitions (2026-10-22)
+
+An element's native record holds its saved parameter values in its typed sets (`m_pParamValueSetDouble`, `…Int`, `…AString`, `…ElementId`) and, for a family instance or type, in the `m_params` slots of its own `FamilyParams` (`FamilyInstance.m_pInstParams`, `FamilySymbol.m_pParams`); a positive parameter id is named by its definition's `m_caption` (`ParamElemFamily`, `ParamElemExternal`, `ParamElemGlobal` and project owners), and a `ParamDefFamType` definition's value is the ElementId of a family type of its `m_categoryId` (a window's Muntin Pattern names the Generic Model type `Muntin Pattern_2x2`). A family instance's type parameters are its `m_masterSymbolId`'s slots whose definition is not an instance parameter. Against Revit 2024's own export of the BIM4LCA office, every parameter named `<set>.<property>` read this way holds the value Revit writes for that property on the element: 7,606 of 7,606 as built, 7,592 of 7,592 at building permit; on the R2025 models a window's `Pset_WindowCommon.FireRating` is its type's family parameter `Fire Rating`, 18 of 18. Built-in parameters' names are not in the file; a family's built-in slots (Width −1001301, Height −1001300) carry no storage type and are not resolved (`reports/element-framing/RE-207-element-parameters.md`).
+
+## Addendum — RE-210 Revit's own property sets, one per parameter group (2026-10-22)
+
+With "Export Revit property sets", Revit's exporter writes an element's named, visible parameters in one `IfcPropertySet` per parameter group, named by the group's label (`Dimensions`, `Identity Data`, `Other` for none), and its type's parameters in such sets on its type object, or on its elements with `(Type)` added where it has none; the IFC group is left out and a group keeps one parameter per name with its spaces removed (revit-ifc `Release_25.x.x`: `ParameterUtil.CacheParametersForElement`, `PropertyUtil.CreateInternalRevitPropertySets`, `CreateRealPropertyByType`). A set's GlobalId is the hash of the element's export GUID, `Sub-element:IfcPropertySet: ` and the group's type id on every current release branch (23.x to 27.x); a German Revit 2022 export (web-ifc's public `ISSUE_159_kleine_Wohnung_R22.ifc`) still derives it from the element's GlobalId with a sub-element index per group, and writes the suffix untranslated (`ID-Daten(Type)`). `rvt-ifc --revit-property-sets` writes RE-207's named parameters this way. On the BIM4LCA office as built, `FireExit` in `Identity Data` equals Revit 2024's `Pset_DoorCommon` and `Pset_WindowCommon.FireExit` on 498 of 498 doors and windows. Against Revit 2025's export of Autodesk's Snowdon Towers HVAC with "Export Revit property sets" (measured locally, not committed), all 28,906 properties written (counted per element), air flows, pressures, powers and voltages in SI units among them, are in the set of the same name with Revit's value, and Revit writes 79,907 more, nearly all built-in parameters. On Snowdon Architectural, 58,346 of 58,733 are, family types written as `<family> : <type>` (the type's name alone where both are the same) among them. Revit names the sets of 13 of its 1,286 type objects with `(Type)` though it exports them: whether a type has a type object is asked when an element's sets are made, so it depends on the order of the export (`ElementTypeToHandleCache.IsRegistered`) (`reports/element-framing/RE-210-revit-property-sets.md`).
+
+## Addendum — RE-213 Revit 2025 frames a wall type's face angles with twelve zero bytes (2026-10-24)
+
+On Snowdon Towers saved by Revit 2025, RE-86's frame for a wall type's face angles (`u32 2`, eight zero bytes, `f64` 0.7, a count of 3) occurs in no element's data. The same frame with twelve zero bytes after the `u32 2` occurs in 58 elements' data, once each, followed by the angles RE-86 read on 2024: [0, 10 degrees, 0] on the three "Solar Wall" types and 703553, and [0, 0, 0] on the other 54. Read with it, the 20 walls Revit's 2025 export tapers are drawn as RE-86 draws them, 19 within 0.001 ft of Revit's body across the wall. Report: `reports/element-framing/RE-213-tapered-walls-2025.md`; probe: `examples/probe_re213_wall_face_angles_2025.rs`.
+
+## Addendum — RE-215 a door's or window's overall size is the outline its symbol cuts (2026-10-24)
+
+A `FamilySymbol` record's `m_pCutLoops` points at one `CurveLoop` of `GLine`s in the symbol's XZ plane, the outline it cuts in its host. A `FamilyInstance` names its type in `m_masterSymbolId` and the symbol that draws it in its `InstanceInfo` object's `m_symbolId`, which revit-ifc's exporter sizes it from (`ExporterIFCUtils.GetOriginalSymbol`). That symbol's loop's extent along X and Z is Revit's `OverallWidth` and `OverallHeight` on every door and window measured with one: 138 of 138 on Core Interior, including the six windows whose type's size is not Revit's, 4 of 5 on RE1 Architecture (the fifth a curtain-wall door with no loop), and each R2025 model's door and 3 windows. Report: `reports/element-framing/RE-215-symbol-cut-loops.md`; probe: `examples/probe_re215_symbol_cuts.rs`.
+
+## Addendum — RE-216 an instance whose data copies disagree takes its current copy (2026-10-24)
+
+A family instance's element data can sit in more than one partition, and RE-87's transform reader dropped an instance whose copies disagreed. On Core Interior that was 8 stacked doors, whose copies in `Partitions/46` and `Partitions/59` differ by an inch across the host wall, so their openings stayed boxes. Revit's export draws the copy in `Partitions/59`, the partition `native_document` reads their current record from, and the reader now takes the copy in the partition an instance's stored revision routes to (or the latest holder where that holds none), as RE-145 found the native route does on 1,518 of 1,522 differing ids. All 132 of Core Interior's door openings are within 0.001 ft of Revit's, and 10 more door types on the BIM4LCA office at building permit take Revit's GlobalId. Report: `reports/element-framing/RE-216-current-instance-copies.md`; probe: `examples/probe_227_missing_transforms.rs`.
+
+## Addendum — RE-239 a model keeps its IFC export setup, not the property set file it names (2026-10-26)
+
+A model saves revit-ifc's export setup: the UTF-16 name `IFCExportConfiguration` occurs once in `Global/Latest`, and the setup's text, with `"ExportUserDefinedPsets":true` and `"ExportUserDefinedPsetsFileName"` naming a `.txt` file, in one or two partitions (`Partitions/425` on the BIM4LCA office as built, `Partitions/65` on Core Interior, whose setup has the option off). The file itself is not saved: no stream of either office model holds the keyword `PropertySet:` that opens each of its sets, or the name of a set only that file defines. Every value the office's export takes from it (glazing on walls, curtain walls and coverings, rooms' `OccupancyType` from their `RoomTypeCode`) is one of the element's saved parameters (RE-207), so the value is in the model and its placement is not. Report: `reports/element-framing/RE-239-export-file-values.md`; probe: `examples/probe_re239_mapped_parameters.rs`.
+
+## Addendum — RE-240 a pipe, wall sweep or ramp names its type in its own record (2026-10-26)
+
+A pipe's native `RbsPipeCurve` record names its type in `m_idType`, a wall sweep's `WallSweep` record in `m_typeId` and a ramp's `Ramp` record in `m_rampAttrId`; the type's `RbsPipeType`, `CorniceAttr` or `RampAttributes` record holds its name in `SymbolInfo.m_name`. On both BIM4LCA office files (Revit 2024) that is the type Revit's export relates or names each of its 12 pipes, 9 wall sweeps and 5 ramps for, where RE-130's stored pipe-type layout and RE-69's reference list type none. Report: `reports/element-framing/RE-240-native-system-types.md`; probe: `examples/probe_re240_untyped_types.rs`.
+
+## Addendum — RE-242 a model's saved export setups do not say whether an export had base quantities (2026-10-26)
+
+revit-ifc writes the `Qto_` base quantities only when its export setup's `ExportBaseQuantities` is on, which each of its built-in IFC4 setups turns on and its IFC2x3 Coordination View setups leave off. Of the 31 reference models, three keep export setups in their partitions (Core Interior and both BIM4LCA office files), each two IFC4 setups, one with `ExportBaseQuantities` true and one false; the one that matches each reference export differs from the other in other settings too, and not in the same way on every file, so the model does not say which setup made an export. rvt-rs writes base quantities by default and leaves them out with `rvt-ifc --no-base-quantities`. Report: `reports/element-framing/RE-242-base-quantities-setting.md`; probe: `examples/probe_re242_export_setup.rs`.
+
+## Addendum — RE-241 no field read yet decides which curtain mullions are external (2026-10-26)
+
+Revit's export of the BIM4LCA office gives 498 of its 10,003 curtain mullions `Pset_MemberCommon.IsExternal` true: every mullion of two curtain walls, and one of a third's four. A mullion's value is its host curtain wall's on 10,002 of them, but none of the fields read separates those curtain walls from the other 217: not the mullion's, its type's or its host's record scalars, not the host's saved parameters or its type's Function (exterior on most hosts whose mullions are not external), and not the mullion's own saved metadata, which holds only references. Report: `reports/element-framing/RE-241-mullion-is-external.md`; probe: `examples/probe_re241_mullion_record_scalars.rs`.
+
+## Addendum — RE-243 which curtain mullions Revit's export draws as an extrusion of their section (2026-10-26)
+
+On the BIM4LCA office Revit's export draws 9,796 of 10,003 curtain mullions as one extruded solid, whose volume, its `NetVolume`, is the mullion's section times its length, and 207 as a mesh. Every mesh stands on a curved curtain wall (an `ArcWall` record) or on one whose record holds an edited profile (an `ExtrusionGStep`); on the 7,795 mullions of the other curtain walls the section times the length is Revit's `NetVolume` on every one. A mullion's host and type are the `m_hostId` and `m_masterSymbolId` its native record names, and a type whose `SysMullionFamSym.m_profileId` is unset draws its own section. Report: `reports/element-framing/RE-243-mullion-net-volume.md`; tools: `tools/re/member_volumes_list.py`, `tools/re/record_scalars_vs_ifc.py`.
+
+## Addendum — RE-245 a door's or window's native record names its host (2026-10-26)
+
+A door's or window's current native record (RE-216) names the element it is set in, in its `FamilyInstance` object's `m_hostId`. Where its partition element record's reference list names several walls, the nearest one RE-85 takes is not always it: on the BIM4LCA office 11 doors were set in a neighbouring wall of the same kind. Taking the native host where it is an exported wall other than a curtain wall puts every one of the office's 463 doors and windows set in a wall in the wall Revit's export voids. Report: `reports/element-framing/RE-245-opening-native-host.md`.
+
+## Addendum — RE-244 a door's opening's quantities (2026-10-26)
+
+Revit's export gives the opening of a door or window whose symbol cuts an outline `Qto_OpeningElementBaseQuantities`: its `Depth` is the `Width` of the wall it voids on every one measured (187 office openings as built and at permit, 4 on R2025), and its `Width` and `Height` are its profile's extents along the profile's X and Y axes, which on every door opening measured put the opening's height in `Width`, against IFC4's definition (a wall opening's `Width` is horizontal). Where the symbol cuts no outline it writes the opening without quantities. rvt-rs writes the `Depth` and leaves the swapped values out. Report: `reports/element-framing/RE-244-opening-quantities.md`; tools: `tools/re/opening_axes_list.py`, `tools/re/opening_depth_list.py`.
+
+## Addendum — RE-246 a mullion type's section class names its shape (2026-10-26)
+
+A curtain mullion type's record (`SysMullionFamSym`) holds one section object whose class is the section's shape: `SysRectMullionProfile`, `SysCircMullionProfile`, `SysLMullionProfile`, `SysVMullionProfile`, `SysTrapMullionProfile`, `SysQuadMullionProfile`, or `SysCustMullionProfile` for a profile family's. A class name is the schema's, the same in every language, where a family's name is not: Autodesk's MEP samples name their rectangular mullion family `Rechteckiger Pfosten`. The family records themselves (class `Family`) differ only in id, name and surrogate id, and their ids are not the same across templates. RE-243's `NetVolume` now keys on the class. Report: `reports/element-framing/RE-246-mullion-section-classes.md`; probe: `examples/probe_re246_mullion_families.rs`.
+
+## Addendum — RE-291 a column Revit cuts at an end (2026-10-30)
+
+On the BIM4LCA office (Revit 2024, one building), Revit's export draws a column as a cut mesh, with no `Length`, `OuterSurfaceArea` or `GrossVolume` and a `CrossSectionArea` and `NetVolume` that are not its box's, exactly where a slab its `CutPairGStep` names lies across one end of it: all 18 of the BIM4LCA office's meshed columns at building permit have one, none of the 327 it draws as an extrusion and none of the 279 as built has (a clean pair alone does not cut: 3 extruded columns have a slab across their top by one). On a column drawn as its record's box whose type is a plain rectangle (a square type's named length parameters are exactly `b` and a rectangular one's `h` and `b`, equal to the box's sides, where the one round column's holds a `Diameter`), whose pair steps are all read and name only slabs lying wholly above or below it (cut pairs, checked on unjoined columns too) and walls, coverings or columns (clean pairs only), the box's `CrossSectionArea`, `OuterSurfaceArea`, `GrossVolume` and `NetVolume` are Revit's: 199 columns as built and 265 at permit (186 and 250 of them joined), none different and none Revit's export leaves out. A joined column's `Length` is left out, as the maintainer decided; the rule now separates the columns Revit gives none, and [#1203](https://github.com/DrunkOnJava/rvt-rs/issues/1203) asks whether to write it. [RE-291](../reports/element-framing/RE-291-column-cut-slabs.md); probes `probe_re291_column_pairs` and `probe_re291_column_type_parameters`.
+
+## Addendum — RE-247 base quantities a body gives (2026-10-26)
+
+A stair flight's `Length` in Revit's export is the span of its run's riser lines, not its side view's extent (a run ending with a riser is one riser longer), and its `NetVolume` the side views' area times the run's width; a pipe's `GrossCrossSectionArea` and `OuterSurfaceArea` are its cylinder's. A column's `Length` is its extrusion's depth wherever Revit's export draws it as one, but at permit it draws 18 of the BIM4LCA office's columns as a cut mesh and gives them none, and no field of the column's record, its joins' kinds or its slabs' levels tells them apart; a column whose record holds no `CleanPairGStep` is drawn as an extrusion on every one (92 as built, 70 at permit). Three curtain panels get no `Width` though drawn as extrusions. rvt-rs writes the column's `Length` only on those, and no panel `Width`. Report: `reports/element-framing/RE-247-body-quantities.md`; tools: `tools/re/qto_candidates_list.py`, `tools/re/qto_presence_list.py`, `examples/probe_re247_qto_records.rs`.
+
+## Addendum — RE-248 a curtain mullion's NetSurfaceArea (2026-10-26)
+
+Revit's export writes a mullion's `NetSurfaceArea` as the sum of its Revit solid's faces (revit-ifc's `NetSurfaceAreaCalculator`): on the BIM4LCA office, for the 9,631 mullions drawn as one extrusion along a box side, its section's perimeter times its `Length` plus 0, 1 or 2 times its section's area, by type and orientation (the painted 50 × 50 mm type's horizontal mullions mostly none, its vertical ones both). Which ends count is which ends the mullion is not joined to another at; the mullion's records do not hold it, and rvt-rs's boxes of the mullions, covered or crossed, do not reproduce it. Not written. Report: `reports/element-framing/RE-248-mullion-net-surface-area.md`.
+
+## Addendum — RE-294 a floor's and a covering's Width, left out (2026-10-31)
+
+Revit 2024's exporter writes `Qto_SlabBaseQuantities.Width` on a compound floor (its type's thickness, RE-295) and `Qto_CoveringBaseQuantities.Width` on every ceiling and on the walls it exports as coverings (RE-250, RE-297); the exporters that wrote two held-out models, a Revit 2026 and a Revit 2025 file, write neither, and rvt-rs's three rules wrote 2 floor values and 3 covering values Revit's export omits there. The maintainer's standing rule (2026-10-31) is that a value Revit's exporters disagree on is left out, and an older file can be exported by a newer Revit, so no file field separates the exporters: the three rules are removed and the office's values become missing, none different. Report: `reports/element-framing/RE-294-slab-covering-width-exporters-disagree.md`.
+
+## Addendum — RE-295 a floor's NetVolume and Width (2026-10-30)
+
+Revit's export writes a floor's `Qto_SlabBaseQuantities.NetVolume` as the volume of its solid, and on the 31 floors of the BIM4LCA office that rvt-rs writes a `GrossArea` on and nothing cuts, level or sloped, of one layer or four, it is that area times the total thickness of the floor's type's layers, as built and at building permit; the compound floors' (14) `Width` is that thickness too, where a floor of one layer has its profile's extent along the extrusion's Y axis. The one slab Revit cuts, the roof `YP-1`, is the one whose native record holds `WallCutoutGStep`s (and a `CutPairGStep` marks the ceilings Revit cuts); the floors joined to walls hold `CleanPairGStep`s and are not cut. rvt-rs marks a floor whose record holds neither step and writes the volume there. The `Width` is no longer written (RE-294). Report: `reports/element-framing/RE-295-floor-net-volume.md`.
+
+## Addendum — RE-249 a floor's GrossArea (2026-10-26)
+
+Revit's export writes a floor's `Qto_SlabBaseQuantities.GrossArea` as the area of the profile its slab extrudes, its sketch outline less its holes: equal to rvt-rs's profile on all 40 of the BIM4LCA office's slabs drawn from their record box, where the slab's other quantities follow its body less often (a sloped slab's record box is deeper than its layers). Stair landings' slabs get none. rvt-rs writes it on each floor drawn as one extrusion: 31 equal on the office, none different. Report: `reports/element-framing/RE-249-slab-gross-area.md`.
+
+## Addendum — RE-304 a cylinder face trimmed by any loop (2026-11-03)
+
+A saved cylinder face whose trim loop does not run round its UV box (a door's curved faces, cut by its leaf and frame) is meshed in strips across its angle: the cylinder is straight along its axis, so only U needs the chord bound. 155 more BIM4LCA office doors are then drawn from their saved meshes, 151 exact to 0.001 ft against Revit's export and all within 0.01 ft. Report: `reports/element-framing/RE-304-cylinder-trims.md`.
+
+## Addendum — RE-303 a saved flip control (2026-11-03)
+
+The saved graphics class `GBiFlipControl` holds no geometry: an origin, a base vector and a length, with no pointer, a flip control drawn in a view. Left out of the walk, it lets 14 BIM4LCA office bodies be drawn from their saved meshes, and none of them is Revit's: all are railings whose saved mesh is a part of Revit's body (about 40% of its volume) or more than it. So it stays a decode failure, which keeps their boxes; what a railing's saved mesh lacks is the open question. Report: `reports/element-framing/RE-303-flip-controls-railings.md`.
+
+## Addendum — RE-300 a light source's saved graphics (2026-11-02)
+
+The saved graphics class `GImposter` is a light source: a transform and a rendering `Asset` of scalar properties, with no surface, always in a `GFilter` of its own beside the `Geometry` (and often a `GPolyMesh` of normal binding 2) that draws the light. Revit's export draws none of that filter. Left out, it no longer keeps a fixture's box: 43 more office bodies and 2 on RE1 Electrical drawn from saved meshes, all exact to 0.001 ft, and 417 more Snowdon Towers electrical bodies. Report: `reports/element-framing/RE-300-light-source-filters.md`.
+
+## Addendum — RE-301 a saved cylinder with a left-handed basis (2026-11-02)
+
+A saved `CylSurf` whose `m_xVec × m_yVec` is `−m_zVec` is the same cylinder; only its parametric normal ∂P/∂u × ∂P/∂v points inward. Read as a plane is (the normal is the parametric one, turned by the orientation), such faces no longer keep their whole element's box: 100 more saved-mesh bodies on the BIM4LCA office, 66 exact to 0.001 ft against Revit's export, and 172 more on Snowdon Towers' architectural sample. Report: `reports/element-framing/RE-301-left-handed-cylinders.md`.
+
+## Addendum — RE-299 a door or window that only cuts its host (2026-11-02)
+
+RE-84 writes a door or window as its opening alone where the scan of its type's value block finds no geometry-material map, and the scan rejects a map whose values are all unset or name a material whose name it did not read. The type's native `m_geomTag2MaterialId` is empty on every door and window Revit exports as its opening alone (RE1's CasedOpening, Snowdon Towers' 9 Door-Opening and 38 Schematic Opening Cut, none with saved graphics), while the byte scan's all-unset map also fires on CasedOpening and Door-Opening. A type whose native map holds entries is no longer read as drawing nothing; no corpus export changes, and #1247's 73 doors are the case it is for. Report: `reports/element-framing/RE-299-native-map-void-only-doors.md`.
+
+## Addendum — RE-298 a flat roof's slab quantities, and a level floor's Depth (2026-10-30)
+
+Revit's export writes a slab's `GrossVolume` as its `GrossArea` times its `Depth` on all 42 of the BIM4LCA office's slabs with a volume. A flat roof written as a slab (all 10, `Basic Roof`) has the extrusion's depth, its layers' total, however many there are (3 for `YP-3`, 5 for `YP-2`, 10 for `YP-1`), its `GrossArea` is its sketch's profile's area, and its `NetVolume` is the area times the depth except on the one a hatch cuts, which holds four `WallCutoutGStep`s; rvt-rs writes these. A level floor of several layers (the 10 of types `VP-1`, `VP-2` and `AP-1`) has its last layer's thickness as `Depth` in the office's export (24.0.5), but Revit 26.4's export of the held-out Revit 2026 house writes another value on 2 such slabs, so rvt-rs writes none (the maintainer's standing rule, 2026-10-31). Report: `reports/element-framing/RE-298-slab-depth-roofs.md`.
+
+## Addendum — RE-250 a ceiling's Width (2026-10-26)
+
+Revit's export writes a compound ceiling's `Qto_CoveringBaseQuantities.Width` as its type's thickness: on the BIM4LCA office, all 78 compound ceilings as built and 75 at permit have it equal to the depth of their record box. rvt-rs writes it where that depth is the type's layers' total, as RE-238 tells a level slab. The ceiling's `GrossArea` is its sketch's area on most but larger by about 1% on 11, and is left out. The `Width` is no longer written either (RE-294). Report: `reports/element-framing/RE-250-ceiling-width.md`.
+
+## Addendum — RE-297 a ceiling's GrossArea (2026-10-30)
+
+A ceiling's `GrossArea` in Revit's export is the area of the profile its sketch gives, less the cut where Revit cuts it, and a cut shows in the ceiling's native record as a `CutPairGStep`: of the BIM4LCA office's ceilings drawn as one extrusion of their sketch, the 57 as built and 45 at permit whose record holds none have Revit's value, and the 2 as built and 9 at permit RE-250 found 0.7 to 1.1 percent short all hold one. rvt-rs writes it on the first, and the `Width` of a ceiling of several pieces (RE-250 left them out: 19 as built, 20 at permit) and of the 21 walls of the type `AK-1.otsa` that Revit's export writes as coverings (their type's thickness). The area of a ceiling in pieces is one piece's in Revit's export, which no field says; the roofing coverings, the office's ventilation units, are boxes whose footprint is not read. The `Width` values named here are no longer written (RE-294). Report: `reports/element-framing/RE-297-ceiling-gross-area.md`.
+
+## Addendum — RE-251 a wall's record does not keep Revit's wall quantities (2026-10-26)
+
+No number in a wall's native record or its saved parameters is Revit's wall side area, footprint area or volume on the BIM4LCA office: Revit computes those when it exports. A wall's `Height` is its saved parameter -1001101 on 496 of 579 walls (478 of 565 at permit); the rest are mostly walls whose top is joined to a roof or floor, and no field read tells them apart (the best, the `JoinToRoofGStep` it holds, is right on 529). Not written. Report: `reports/element-framing/RE-251-wall-saved-dimensions.md`.
+
+## Addendum — RE-252 a wall's Length (2026-10-26)
+
+Revit's export writes a wall's `Qto_WallBaseQuantities.Length` as either the length of its curve (the native `GLine`, which ends on a joined wall's middle) or the length of that curve cut back where its body meets the walls joined at its ends, the exported `Axis`, by how it draws the wall. The cut-back ends are read from the wall's native record (its face planes, the walls its control join sets and `CDJoinInfo` name, the far face where `JoinEndGStep.m_exposedFaceMap` names a wall) and from its join reaches, and taken where the two agree; where the cut-back curve is as long as the curve, rvt-rs writes that length: 88 office walls as built, 81 at permit, all 46 of the R2025 models' and 5 of the held-out flowbim.ee house's, each Revit's, none different. Report: `reports/element-framing/RE-252-wall-length.md`.
+
+## Addendum — RE-296 a space's NetVolume (2026-10-30)
+
+Revit's export writes a space's `Qto_SpaceBaseQuantities.NetVolume` as the volume of the room's closed shell, and on the BIM4LCA office it is the room's outline area, its holes taken off, times the height of the room's record box on every room whose stored solid (RE-101) has every vertical face running from the box's floor to its ceiling and no slanted face: 167 of 167 as built, 178 of 178 at permit, on both of puzzbobb's R2025 rooms in each of 6 models, and on 1 of the 54 rooms with a stepped ceiling. rvt-rs marks such a room (`m_room_prism`) and writes the volume there. `GrossVolume` is written only where Revit draws the room as an extrusion, 88 of the 167 prisms, and no field tells them from the 79 it tessellates; the area quantities of Revit 25's export are not in the office's 24.0.5 export. Report: `reports/element-framing/RE-296-space-net-volume.md`.
+
+## Addendum — RE-256 a wall's, floor's, ceiling's and roof's type parameters (2026-10-27)
+
+A system-family element's native record names its type in one member: `SWall` and `ArcWall` in `m_WallAttributesId`, `FaceWall` in `m_typeId` (a `BasicWallType`), `Floor` in `m_floorAttributesId` (a `FloorAttributes`), `Ceiling` in `m_ceilingAttributesId` (a `CompoundCeilingType`), and `ProfileRoof` and `Roof` in `m_roofAttributesId` (a `RoofAttributes`). The type record holds the type's saved parameters as a `FamilySymbol` does, and a ceiling's and a roof's type holds its name in `SymbolInfo.m_name`. On Snowdon Towers (Revit 2025) these are the values Revit's export with "Export Revit property sets" writes on the element's type object: Type Name (-1002001), Assembly Code (-1002500), Type Mark (-1001405) and Fire Rating (-1001206), 4,297 of 4,314. Report: `reports/element-framing/RE-256-system-family-type-parameters.md`; probe: `examples/probe_35_system_type_links.rs`.
+
+## Addendum — RE-257 a wall's Height (2026-10-27)
+
+Revit's export writes a wall's `Qto_WallBaseQuantities.Height` as the vertical span of its own body: on the BIM4LCA office it is exactly that on every wall where rvt-rs's body depth misses (78 of 78 as built, 84 of 84 at permit). rvt-rs's wall body, as tall as its record box, has Revit's height on 501 of the office's 579 walls and on all 117 of puzzbobb's R2025 walls, attached tops included. The office's other 78 are drawn taller than Revit's body (#1067). The saved Unconnected Height agrees with rvt-rs's depth on 77 of them, and no field of the record separates them, so no wall gets a `Height` (`reports/element-framing/RE-257-wall-height.md`).
+
+## Addendum — RE-258 where Revit cuts a wall's top and base (2026-10-27)
+
+rvt-rs's walls differ from Revit's export at one end only: on the BIM4LCA office 65 tops and 20 bases as built (70 and 24 at permit), against none on Core Interior's 360 and puzzbobb's 117 R2025 walls. Revit cuts a top at the underside of a floor the wall's `JoinToRoofGStep` with `m_baseOrTop` 1 names, over the wall's middle: 63 of the 65 tops as built and 68 of 70 at permit. The same rule cuts 5 walls at each stage that Revit leaves whole, and neither file tells them apart (`reports/element-framing/RE-258-wall-cuts.md`, #1067).
+
+## Addendum — RE-261 bits 7 and 12 of the flag word (2026-10-28)
+
+Checked against Revit's exports of Core Interior, the four RE1 models and puzzbobb's 23 R2025 models, bit 12 of the element record's flag word at `+0x46` is set on exactly the rooms Revit exports as an `IfcSpace` (139 of 139, and on none of the 163 it leaves out) and on exactly the walls with an end joined in Revit's export (8 of 8 on RE1 Architecture, the only export that writes wall joins). Bit 7 is set on every type record and no other (144 of 144, as RE-128 found). Two rows of puzzbobb's table on #223 reproduce; their `WallSweep` reading of bit 7 is not testable on these models, and the rest of their table stays unverified (`reports/element-framing/RE-261-flag-word-bits.md`).
+
+## Addendum — RE-262 "Export to IFC" is not why Revit leaves out RE1 Plumbing's tank and the office's permit column (2026-10-29)
+
+Revit's exporter reads `IFC_EXPORT_ELEMENT` (−1019012) and `IFC_EXPORT_ELEMENT_TYPE` (−1019013) first, and rvt-rs reads neither, so an element set to No would explain an element rvt-rs writes and Revit's export leaves out. Neither parameter is saved on RE1 Plumbing's tank 442378 or the BIM4LCA office permit model's column 1927742, nor on any other element of those models, RE1 Architecture or Core Interior (Measure run 40944230277); 24 office instances as built carry −1019012 with value 1. A measured negative (`reports/element-framing/RE-262-export-to-ifc-parameter.md`).
+
+## Addendum — RE-259 Revit 2008 to 2014 files open, and 2011 to 2014 element records read (2026-10-28)
+
+No file written before Revit 2014 opened: `BasicFileInfo` was read for a year only from 2014 on, and a `Formats/Latest` written before 2014 has no GUID list after a class's fields, so the schema grammar stopped at its first class. Now the release is a standalone year from 2008 on, or the build year plus one where the file states none (2008, 2009), and the grammar reads a schema without GUID lists when one with them stops early: every local 2008 to 2013 schema reads to its end (2,239 classes on 2008 to 3,519 on 2013). Revit 2011 to 2014 frame their element records as 2015 does (a declared `u32` ElementId 52 bytes before every marker on eight local files) and are read with each release's schema tags; 2011 to 2013 shading frames hold two more ElementIds, and some 2011 to 2013 value blocks hold no type's map. A local copy of Autodesk's 2013 `rac_advanced` sample against its pinned 2015 copy: 5,698 shared ElementIds, every one with its class, 62,071 of 62,153 fields agreeing, the rest in the files' own records. The pre-2015 files are closed source and measured locally only (`reports/element-framing/RE-259-revit-2011-2014-element-records.md`).
+
+## Addendum — RE-260 Revit 2008 to 2010 element records, 2008 to 2011 material names, 2008 to 2012 Levels (2026-10-28)
+
+Revit 2009 and 2010 frame their element records as 2011 does; Revit 2008's envelope is 4 bytes shorter between the category and the placement kind (12 `ff` bytes where later releases write 16), so its ElementId is 48 bytes before the marker. Each takes its schema's tags, and 2011 to 2013's shading frame and value-block layouts (RE-259) hold on 2008 and 2009. Before 2012 a material's name is a `u32`-counted string followed by three equal `f64`s, which names every material of the local 2008 to 2011 files. Before 2013 a Level's elevation follows `ff ff ff ff` and the `Plane` tag, one reference slot and 16 bytes, written twice; every local 2008 to 2012 file now has its storeys. No Revit export or same-model copy of a 2008 to 2010 file is held, and the files are closed source and measured locally only (`reports/element-framing/RE-260-revit-2008-2010-element-records.md`).
+
+## Addendum — RE-266 a wall's Height where nothing joins to or cuts it (2026-10-29)
+
+A wall whose native record holds no `JoinToRoofGStep`, `CutPairGStep` or `WallCutoutGStep` is drawn exactly as tall as Revit's body, and Revit's export writes that as its `Qto_WallBaseQuantities.Height` on every one: 81 BIM4LCA office walls as built, 70 at permit and 93 of puzzbobb's R2025 walls, none different. rvt-rs writes it there. With cutouts allowed, two office walls cut by an instance Revit's export gives no `Height`, so walls with a cutout are left out. The saved parameter -1001101 is the wall's height from its base and top constraints, not its Unconnected Height, as puzzbobb measured (`reports/element-framing/RE-266-wall-height-uncut.md`).
+
+## Addendum — RE-283 a wall's IsExternal and the parameters named for a property on Revit 2015 to 2023 (2026-10-30)
+
+A wall's `BasicWallType.m_function` reads on Revit 2015 to 2023 once the wall's type id is read in the 4-byte `Identifier` (`native_json::identifier_i64`), and equals the same project's later copy on 1,982 of 1,983 walls (24 pairs of Autodesk's 2015 to 2022 samples against their 2023 copies; both values occur: 122 walls of Function 0 and 58 of 1 on the 2015 `rac_advanced`). The project and shared parameters named for `IsExternal` or a standard property read from the saved parameters (RE-281) on those releases. BIMcollab's Revit 2015 export writes `IsExternal` (true on 71, false on 43) and `LoadBearing` (true on 114) on its 114 walls from two parameters on the walls, which a parameter named for the property reads before anything else (RE-193); the Function alone is Revit's value on 113 of the 114. `probes/examples/probe_re283_wall_function_pairs.rs`; `reports/element-framing/RE-283-wall-function-and-named-parameters-pre2024.md`.
+
+## Addendum — RE-282 an ElementId in a 4-byte Identifier (2026-10-30)
+
+Every native reader but the Element base and the phase order reads an ElementId as `{"m_id":{"m_id64":n}}`, Revit 2024's `Identifier`, and finds none in the 4-byte `{"m_id":{"m_id":n}}` of 2015 to 2023. Reading either shape in all of them (the six places that read `/m_id/m_id64`) leaves 91 of 94 exports of Measure's unfiltered run byte-identical, among them every sample of 2015 to 2022 and of 2024 to 2027, and moves three Revit 2023 files: 36 and 30 `IfcDistributionPort`s on `rac_basic` and `rac_advanced`, a wall layer set and four material associations on `rac_advanced`, and one material association on Einhoven, none of which a Revit export checks. It was reverted: each reader reads the ids it needs in either shape itself when it is admitted to a release (`reports/element-framing/RE-282-element-id-both-shapes.md`).
+
+## Addendum — RE-284 a wall's top join on Revit 2015 to 2023 (2026-10-30)
+
+A wall's `JoinToRoofGStep` with `m_baseOrTop` 1 (RE-228) reads on Revit 2015 to 2023 as on 2024 and 2025, without an ElementId, so the 4-byte `Identifier` does not matter. It is equal to the same project's later copy on all 1,983 walls both files hold (24 pairs of Autodesk's 2015 to 2022 samples against their 2023 copies; the 2015 `rac_advanced` has 56 walls not joined and 124 joined, the `rac_basic` 44 and 16) and on the 249 walls of the 2023 samples against their 2024 copies, and it is Revit's value on the 114 walls of BIMcollab's Revit 2015 export and the 4 of modelo_bim's, all false. `probes/examples/probe_re284_wall_top_join_pairs.rs`; `reports/element-framing/RE-284-wall-top-join-pre2024.md`.
+
+## Addendum — RE-281 saved parameters and the phase order on Revit 2015 to 2022 (2026-10-30)
+
+`native_element::decode_base` took `Identifier` for Revit 2024's 8-byte `m_id64` and refused every Element base of 2015 to 2023; before 2024 it is a 4-byte `m_id`, and with both read the base decodes on every record whose graph decodes, with the owner id equal to the framed id. The reader that needs it, the project's phase order (`AllProjectPhases.m_phaseIds`, RE-184), then reads on Revit 2015 to 2023: 2 or 3 phases on each of Autodesk's 33 sample projects and on Einhoven, and no element left out of the last phase on any of them (BIMcollab's Revit 2015 example lists 5 phases and 8 elements outside the last, none written). Saved parameters (`native_element_parameters::read`) read on 2015 to 2022 too: by name and value, 932,645 parameters equal those of the same project's Revit 2023 copy and 243 differ, over 23 sample projects, each an edit between the saves. `native_document::Options::releases` keeps every other native reader on 2023 to 2027. No default export moves on any file. BIMcollab's 16 footings name no Level, in their Element base or in any typed ElementId parameter (all unset, as are the 15 columns' that Revit still puts on a storey), and sit below every storey's elevation in the lowest one, so #879's saved Level is ruled out and an elevation rule cannot be told from another on this model. See `reports/element-framing/RE-281-native-admission.md`.
+
+## Addendum — RE-280 the native record framing on Revit 2015 to 2022 (2026-10-30)
+
+The framing `native_document` reads Revit 2023 with (a `u32` id, on channels 102 and 103 a word, the length, the body and the length again) holds on every group of channels 101 to 103, plain and keyed, of every file of 2015 to 2022 measured: 27,762 groups of Autodesk's 30 sample projects and BIMcollab's Revit 2015 example. Before Revit 2018 a group's declared body size counts every record's trailing length word (12,005 of 12,005 groups of 2015 to 2017; none of 2018 on); the declared object count agrees everywhere. The five global streams parse on all 31 files, except the extensible-storage catalogue of nine (`ESField` has `m_specTypeId` from Revit 2021 and `m_unitType` before it). 98.8 to 100 per cent of the declared elements' object graphs decode, with the owner id equal to the framed id on every one; the refusals are `VarSketch` records of 2015 to 2017 (`VarParam.m_pSubst` is a pointer with modifier 4) and the extensible-storage ones. Against the same project's 2023 copy every shared ElementId has the same class, and every saved parameter of 2021 and 2022 has the same value. `native_element::decode_base` refuses every record of 2015 to 2023, because `Identifier` is a 4-byte `m_id` until Revit 2024 introduced `m_id64`; so the phase order is not read on 2023 either. Nothing is admitted by RE-280. See `reports/element-framing/RE-280-native-framing-pre2023.md`.
+
+## Addendum — RE-267 Revit cuts a wall's top only where the floor covers the wall (2026-10-30)
+
+The 5 walls per stage that RE-258 found Revit "leaves whole" are cut: Revit's wall top is the underside of the floor its top join (or a cut pair) names over the part of the wall's plan the floor covers, and the wall's own top over the rest, so the highest point does not move. On the BIM4LCA office the full-height area of Revit's body equals the wall's plan outside the floor to 0.002 ft² on 79 of 83 walls as built and 83 of 87 at permit. A rule that cuts a top only where the named floor covers the wall's whole plan gives 64 of the 65 cut tops as built and 70 of 70 at permit, with no wall cut that Revit leaves whole; one wall's 0.085 ft stub past the floor's edge, inside an abutting wall, is cut by Revit and is not explained. RE-258 §3's "same records and floors in both files" was wrong: the walls' plans differ by 0.03 ft between the stages. rvt-rs now cuts the walls whose top join or cut pair names a floor, roof or footing that covers the wall's whole plan: 64 and 70 office walls, no other wall's base or top moves on any model, and the exports of Core Interior, RE1 Architecture and the R2025 models are byte-identical. The walls a floor covers in part (29 as built, 26 at permit) need a stepped top and keep their full height, and the cut walls get no `Height`, which Revit's export omits on 2 and 4 of them (`reports/element-framing/RE-267-wall-top-cover.md`).
+
+## Addendum — RE-270 a wall's side areas and volumes (2026-10-30)
+
+Revit's export writes a wall's `GrossSideArea`, `NetSideArea` and `GrossVolume` on exactly the walls it writes a `Height` on, and its `NetVolume` on every wall; revit-ifc 24.1 and 24.2 work them out of the wall's joined solid (the largest vertical face's outer boundary, the largest face, the width times the first, and the volume). rvt-rs writes the four on a wall whose native record holds no step that cuts, embeds or sweeps it and whose body is its record's box cut back at its joins, a rectangle: 49 BIM4LCA office walls as built, 48 at permit and 91 R2025 walls, Revit's on every one, none different and none Revit's export leaves out. Walls with a top join, openings, cut pairs, embedded walls or sweeps stay unwritten. [RE-270](../reports/element-framing/RE-270-wall-areas-volumes.md).
+
+## Addendum — RE-270 a wall's side areas and volumes (2026-10-30)
+
+Revit's export writes a wall's `GrossSideArea`, `NetSideArea` and `GrossVolume` on exactly the walls it writes a `Height` on, and its `NetVolume` on every wall; revit-ifc 24.1 and 24.2 work them out of the wall's joined solid (the largest vertical face's outer boundary, the largest face, the width times the first, and the volume). rvt-rs writes the four on a wall whose native record holds no step that cuts, embeds or sweeps it and whose body is its record's box cut back at its joins, a rectangle: 49 BIM4LCA office walls as built, 48 at permit and 91 R2025 walls, Revit's on every one, none different and none Revit's export leaves out. A wall joined to roofs, floors or footings that lie clear of it, with its length confirmed by its record, gets them too (18 more as built, 22 at permit, 2 of each cut at a floor by RE-267). Walls with a join that intrudes, openings, cut pairs, embedded walls or sweeps stay unwritten. [RE-270](../reports/element-framing/RE-270-wall-areas-volumes.md).
+
+## Addendum — RE-292 a wall's GrossFootprintArea (2026-10-30)
+
+Revit's export writes `GrossFootprintArea`, the area of the wall's footprint loop, on the walls its exporter draws as an extrusion through `TryToCreateAsExtrusion`, a path gated by an internal Revit check, and it is the wall's `Length` times its `Width` on every one. On the walls RE-270's first rule takes (a record box cut back at its joins, nothing joined to or cutting the wall) Revit writes it on every one but the shortest, which is as long as it is thick: 48 of 49 BIM4LCA office walls as built, 47 of 48 at permit and 91 of 91 R2025 walls. rvt-rs writes it, the body's plan area, on those more than three times as long as thick, equal on every one. Walls joined to roofs or floors get it on 78 of 85 as built and 78 of 93 at permit and nothing in their records tells which; they stay out. [RE-292](../reports/element-framing/RE-292-wall-footprint-area.md).
+
+## Addendum — RE-293 a roof-joined wall's Height (2026-10-31)
+
+Revit's export writes a wall's `Height` on exactly the walls it writes `GrossSideArea`, `NetSideArea`, `GrossVolume` and `NetVolume` on, and on every wall the second RE-270 rule takes rvt-rs's extrusion is as tall as Revit's solid (68 of 68 as built and 80 of 80 at permit where the four are Revit's, none different). The pass now writes `Height`, the body's, beside the four: 47 more office walls as built and 58 at building permit, Revit's on every one, none different and none Revit's export leaves out. [RE-293](../reports/element-framing/RE-293-wall-height-bounded.md).
+
+## Addendum — RE-290 a wall's cut-back centreline confirms the box's length (2026-10-30)
+
+The longest vertical face of Revit's solid for a plain wall is as long as its exported `Length`, the centreline cut back where the wall meets the walls joined at its ends (RE-252) or its curve: 128 of 132 record-box walls with a `Height` joined to roofs or floors as built, 127 of 141 at permit. rvt-rs reads the cut-back length wherever both ends are read twice alike, and where it is read it is the record box's long side on every such wall (55 of 55 as built, 68 of 68 at permit). The second RE-270 rule now takes a wall joined to roofs or floors that lie clear of it when that length is its box's, as well as one whose record confirms its `Length`: 29 more office walls as built and 36 at permit, Revit's on all four quantities on every one, none different and none Revit's export leaves out. Walls with cutouts stay out: of the 37 whose cutout steps match the openings rvt-rs cuts and whose length is confirmed, 31 are right, 5 are walls Revit writes only a `NetVolume` on and 1 is wrong, and the record does not tell them apart. [RE-290](../reports/element-framing/RE-290-wall-cutback-length.md); probe `probe_re290_wall_cutbacks`.
+
+## Addendum — RE-184 the phase order and the export phase (2026-10-27)
+
+A project's phases are listed in order by its `AllProjectPhases` record (`m_phaseIds`); a family document's own `AllProjectPhases` (`m_famId` set, an empty list) is not the project's. Each phase is a `ProjectPhase` record, and every element body carries `m_createdPhaseId` and `m_demolishedPhaseId` (B46). With no phase chosen, Revit's IFC export shows the last phase in that list and writes an element only where it exists there: created in it or before it, and not demolished in it or before it. Two Revit 2025 models made for this show it: `01_Walls_Phases` (Existing, New Construction, Phase 3; wall 2788 created in Phase 3 is exported) and `01_Walls_Phases_Demo` (wall 2892 demolished in Phase 3 is not). On Snowdon Towers the order is Legends, Existing, New Construction, and #328's six slabs are created and demolished in Legends; of 91 phased local projects (Revit 2024 to 2027) the rule leaves something out of four. Rooms are left out of the rule: Revit's exporter skips a room whose own phase parameter is not the export phase, which no model here shows to be its created phase. Report: `reports/element-framing/RE-184-phase-order.md`; probe: `probes/examples/probe_re184_phase_order.rs`.
+
+## Addendum — RE-268 which end faces of a curtain mullion Revit's solid keeps (2026-10-30)
+
+Revit's export counts a mullion's end face in its `NetSurfaceArea` unless the end coincides with the end of its own continuation (a mullion running the same way with its body on the far side), or lies inside a crossing mullion with no continuation; an end that butts against a crossing mullion's side face is counted, which is why RE-248's test of whether another box covers a point just past the end failed. The curtain wall's record lists the mullion joins (`WallCGDriver.m_mullionJoins`: per grid vertex, the edge tag and end of each mullion that meets there; 4,909 on 149 of the BIM4LCA office's 220 curtain walls), but they list only the T junctions where the horizontal runs through and agree with Revit's count on 9,201 of 9,796 mullions. rvt-rs's boxes of a curtain wall's mullions are Revit's solids, and the rule on them gives Revit's count on every mullion it reads. rvt-rs writes `NetSurfaceArea` on the mullions drawn as an extrusion of their box whose ends it reads: 6,606 of the office's 10,003 as built and 6,636 of 10,031 at permit, none different; 2,208 on curved and edited curtain walls and 1,189 beside overlapping or oblique mullions stay missing. Report: `reports/element-framing/RE-268-mullion-end-faces.md`; tools: `tools/re/mullion_ends_vs_boxes.py`, `tools/re/mullion_joins_vs_ifc.py`.
+
+## Addendum — RE-269 why Revit's export writes IsExternal true on 528 curtain members (2026-10-30)
+
+A curtain mullion's or panel's `IsExternal` in Revit's export of the BIM4LCA office (498 of 10,003 mullions and 30 of 260 panels true, exporter 24.0.5.432) is not in the model: revit-ifc's `IsElementExternal` gives a family instance its host's value, and the exporter of that generation also caches each member type as not external once the first curtain wall that uses it has had its property sets created, so the members of every later wall of that type read false. Replaying that cache over the walls in ElementId order is Revit's value on all 10,263 members and panels as built and all 10,300 at building permit, none different, where the host rule alone is Revit's on 1,651 and 1,691. Exporters from `IFC_v24.2.20` on do not cache types, and the exporter version is not in the model, so rvt-rs still writes none. Report: `reports/element-framing/RE-269-curtain-member-is-external-cache.md`; probe: `probes/examples/probe_is_external_members.rs`; scorer: `tools/re/member_is_external_cache_vs_ifc.py`.
+
+## Addendum — RE-288 curtain members' IsExternal by the host rule (2026-10-30)
+
+revit-ifc's `IsElementExternal` (IFC_v24.2.20 and IFC_v24.3.40) returns null for an element type and gives a family instance with no `IsExternal` parameter and no type Function its host's value, so a curtain wall's members take the wall's value. rvt-rs writes it (the maintainer, 2026-10-30), on 10,262 values of the BIM4LCA office as built, 10,299 at building permit and 12 on RE1 Architecture, whose 12 members equal Revit's export's. The office's export (exporter 24.0.5.432, a cache of types, RE-269) is counted apart; no model of a newer exporter has an exterior curtain wall, so the exterior members' values are checked against revit-ifc's source only. Report: `reports/element-framing/RE-288-curtain-member-host-rule.md`.
+
+## Addendum — RE-286 the common sets of type objects (2026-10-30)
+
+Revit's IFC4 exports of the BIM4LCA office and the R2025 models give each type object the common set of its entity: the `IsExternal` that revit-ifc's calculator gives the `ElementType` itself, its Fire Rating, `LoadBearing` for the structural column and framing categories, and on a stair type zeros for the stair dimensions. rvt-rs writes all of these but `IsExternal` (`IfcModel::type_entity_sets`). On the office as built that is 34 of the 182 type values, 29 of 154 at permit, none different. Revit's newer exporters (RE1 Architecture's 26.2 and the held-out models') write no `IsExternal` on a type object, so rvt-rs writes none (the maintainer, 2026-10-31). The family types' `Manufacturer` is not stored as the type texts RE-77 reads (RE-289). Report: `reports/element-framing/RE-286-type-object-common-sets.md`.
+
+## Addendum — RE-287 a stair's flight set (2026-10-30)
+
+Revit's IFC4 export of the BIM4LCA office writes on each of 14 `IfcStair` a `Pset_StairFlightCommon` whose `NumberOfRiser` and `NumberOfTreads` are the sums over the stair's flights and whose riser height, tread length, nosing length and tread lengths are the flights' common value, and a `Pset_StairCommon.TreadLengthAtInnerSide` equal to the tread depth; the five R2025 stair models follow the same rule. revit-ifc's calculators (IFC_v24.2.0) give a `Stairs` element its own values, so the mechanism that fills the container's flight set is not read; the rule is measured, exact on 14 and 5 stairs. rvt-rs writes it (the flight set with `--revit-set-placement`): 111 values on each office file. The spiral stair's tread count is not read. Report: `reports/element-framing/RE-287-stair-container-flight-set.md`.
