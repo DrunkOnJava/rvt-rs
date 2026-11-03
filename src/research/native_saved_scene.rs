@@ -42,6 +42,17 @@ fn saved_element_status(meshes: &GraphicsMeshes) -> &'static str {
 pub fn extract(file: &mut RevitFile, options: &Options) -> Result<SavedScene> {
     extract_at_detail(file, options, 3)
 }
+/// [`extract`], also decoding the branches whose visibility flags hide them;
+/// each primitive one lies on the way to is marked hidden (RE-318).
+pub fn extract_including_hidden(file: &mut RevitFile, options: &Options) -> Result<SavedScene> {
+    extract_impl(file, options, 3, &WalkerControl::default(), true, false)
+}
+/// [`extract_including_hidden`], also decoding the children of a filter whose
+/// conditions reject the context or are not read; each primitive one lies on
+/// the way to is marked filtered (RE-318).
+pub fn extract_including_filtered(file: &mut RevitFile, options: &Options) -> Result<SavedScene> {
+    extract_impl(file, options, 3, &WalkerControl::default(), true, true)
+}
 pub fn extract_at_detail(
     file: &mut RevitFile,
     options: &Options,
@@ -57,6 +68,16 @@ pub fn extract_at_detail_with_control(
     options: &Options,
     detail_level: i64,
     control: &WalkerControl,
+) -> Result<SavedScene> {
+    extract_impl(file, options, detail_level, control, false, false)
+}
+fn extract_impl(
+    file: &mut RevitFile,
+    options: &Options,
+    detail_level: i64,
+    control: &WalkerControl,
+    include_hidden: bool,
+    include_filtered: bool,
 ) -> Result<SavedScene> {
     ensure!(
         (1..=3).contains(&detail_level),
@@ -125,6 +146,16 @@ pub fn extract_at_detail_with_control(
     let mesh = |id: u64| -> Result<SavedElement> {
         let r = &records[&id];
         let mut meshes = match &r.graph {
+            Some(g) if include_filtered => native_saved_mesh::graphics_including_filtered(
+                g,
+                &|id| records.get(&id).and_then(|r| r.graph.as_ref()),
+                detail_level,
+            ),
+            Some(g) if include_hidden => native_saved_mesh::graphics_including_hidden(
+                g,
+                &|id| records.get(&id).and_then(|r| r.graph.as_ref()),
+                detail_level,
+            ),
             Some(g) => native_saved_mesh::graphics_with_resolver_at_detail(
                 g,
                 &|id| records.get(&id).and_then(|r| r.graph.as_ref()),
