@@ -53,6 +53,40 @@ fn area(profile: &PlanProfile) -> f64 {
             .sum::<f64>()
 }
 
+/// How many pairs of `lines` cross at a point that is an end of neither, and
+/// how many overlap along a line for more than 1e-5 ft.
+fn crossing_pairs(lines: &[[f64; 4]]) -> (usize, usize) {
+    let (mut crossings, mut overlaps) = (0, 0);
+    for (index, a) in lines.iter().enumerate() {
+        for b in &lines[index + 1..] {
+            let (ax, ay) = (a[2] - a[0], a[3] - a[1]);
+            let (bx, by) = (b[2] - b[0], b[3] - b[1]);
+            let (alen, blen) = (ax.hypot(ay), bx.hypot(by));
+            if alen < 1e-6 || blen < 1e-6 {
+                continue;
+            }
+            let (dx, dy) = (b[0] - a[0], b[1] - a[1]);
+            let cross = ax * by - ay * bx;
+            if cross.abs() > 1e-9 * alen * blen {
+                let t = (dx * by - dy * bx) / cross;
+                let u = (dx * ay - dy * ax) / cross;
+                let (te, ue) = (1e-6 / alen, 1e-6 / blen);
+                if t > te && t < 1.0 - te && u > ue && u < 1.0 - ue {
+                    crossings += 1;
+                }
+            } else if ((dx * ay - dy * ax) / alen).abs() <= 1e-5 {
+                let along = |x: f64, y: f64| ((x - a[0]) * ax + (y - a[1]) * ay) / alen;
+                let (s0, s1) = (along(b[0], b[1]), along(b[2], b[3]));
+                let (lo, hi) = (s0.min(s1).max(0.0), s0.max(s1).min(alen));
+                if hi - lo > 1e-5 {
+                    overlaps += 1;
+                }
+            }
+        }
+    }
+    (crossings, overlaps)
+}
+
 fn snap(lines: &mut [[f64; 4]]) {
     snap_within(lines, ROOM_VERTEX_TOLERANCE_FEET);
 }
@@ -223,6 +257,28 @@ fn main() -> anyhow::Result<()> {
             (None, None) => "still box",
         };
         *tally.entry(class).or_default() += 1;
+        if resolved.is_some() {
+            let mut edges: Vec<[f64; 4]> = solid_span(buf, header)
+                .iter()
+                .filter_map(|f| f.plan_edge())
+                .filter(|(_, bottom)| (bottom - bbox[2]).abs() <= BOX_TOLERANCE_FEET)
+                .map(|(edge, _)| edge)
+                .collect();
+            snap_within(&mut edges, ROOM_STEP_TOLERANCE_FEET);
+            let (crossings, overlaps) = crossing_pairs(&edges);
+            let shape = match plan_profile_from_lines(&edges) {
+                Some(p) => format!(
+                    "loops close, {} holes, {} further pieces",
+                    p.inner_xy.len(),
+                    p.pieces.len()
+                ),
+                None => "loops do not close as the walk reads them".to_string(),
+            };
+            println!(
+                "room {id}: {class}; {} edges, {shape}, {crossings} crossing pairs, {overlaps} overlapping pairs",
+                edges.len()
+            );
+        }
         let cache = cached_areas(buf);
         if let Some(profile) = walk_all
             .as_ref()
