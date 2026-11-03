@@ -1059,16 +1059,19 @@ prints it from any installed build.
 
 ## Roadmap Position
 
-- **v0.12.2** (2026-11-03) is the latest release: crates.io and docs.rs,
-  the `rvt` wheels on PyPI, GitHub Release archives for Linux, macOS and
-  Windows, and the container image, each checked from its published
-  artifacts ([`install.md`](install.md)). In the default export it draws
-  more doors from the meshes Revit saved for them (the BIM4LCA office 269,
-  against 48 with 0.12.1, 265 exact to 0.001 ft against Revit's export),
-  draws more bodies with `--saved-meshes`, and no longer calls a Revit 2008
-  to 2014 file an unsupported version in the viewer (#1247, #1266). Not
-  every case #1247 reported is fixed; `[0.12.2]` in
-  [`CHANGELOG.md`](../CHANGELOG.md) says which are not.
+- **v0.12.2** (2026-11-03) is the latest release: crates.io, the `rvt`
+  wheels on PyPI, GitHub Release archives for Linux, macOS and Windows, and
+  the container image, each checked from its published artifacts
+  ([`install.md`](install.md)); docs.rs had queued its build when they were
+  checked. In the default export it draws more doors from the meshes Revit
+  saved for them (the BIM4LCA office as built 269, against 48 with 0.12.1,
+  265 exact to 0.001 ft against Revit's export), and it no longer calls a
+  Revit 2008 to 2014 file an unsupported version in the viewer (#1247,
+  #1266). With `--saved-meshes` it draws more bodies, not all of them
+  Revit's (RE1 Plumbing's new pipe fittings are 1.44 to 1.47 of Revit's
+  volume). Its door-type change measures on no file here. Not every case
+  #1247 reported is fixed; `[0.12.2]` in [`CHANGELOG.md`](../CHANGELOG.md)
+  says which are not.
 - **v0.12.1** (2026-11-01) makes exports of Revit 2015 to
   2023 files faster than 0.12.0 made them (2015 to 2022 projects take 0.84
   to 0.97 of the time, 2023's 0.89 to 0.96), each the same as 0.12.0's but
