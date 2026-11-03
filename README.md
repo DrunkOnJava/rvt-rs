@@ -73,7 +73,7 @@ print(f.version)                 # the Revit release year, or None
 counts = f.element_counts()      # {"total": int, "by_class": {class name: count}}
 elements = f.decoded_elements()  # dicts with id, class_name, byte_range, fields, parameters, typed
 with open("model.ifc", "w") as out:
-    out.write(f.write_ifc())     # IFC4 STEP as a str, every element that decodes
+    out.write(f.write_ifc())     # IFC4 STEP as a str, in rvt-ifc's default mode
 ```
 
 The [Python guide](docs/python.md) documents the rest, with a [Jupyter notebook](docs/rvt-python-quickstart.ipynb).
@@ -82,7 +82,7 @@ The [Python guide](docs/python.md) documents the rest, with a [Jupyter notebook]
 
 Drop a `.rvt`, `.rfa`, `.rte` or `.rft` at <https://drunkonjava.github.io/rvt-rs/>: the file is read and converted inside the tab and is not uploaded. The viewer is the core library compiled to WebAssembly, with the 12 JS-callable wasm-bindgen bindings of the `rvt-wasm` crate ([`docs/viewer-api.md`](docs/viewer-api.md#the-javascript-bindings)); it parses in a worker, draws with Three.js and exports glTF 2.0 binary, IFC4 STEP and plan-view SVG. It is built from `main`, not from a release, and its demo gallery opens two MIT-licensed real projects, hash-verified when staged.
 
-Every deploy checks the viewer's privacy posture three ways. `viewer/scripts/audit-wasm-imports.mjs` reads each import of the compiled `.wasm` and its shim in the JavaScript glue, and fails if any reaches `fetch`, `XMLHttpRequest`, `WebSocket`, `EventSource` or `sendBeacon`. A Playwright test opens a real project in the built viewer and fails on any request to another origin, or on any request at all after the file is open. The page's Content-Security-Policy also limits its connections to its own origin. Together these cover the WebAssembly module's imports, the page's connection policy and the flow the test drives; they are checks, not a proof about every possible code path. [`docs/viewer-privacy-posture.md`](docs/viewer-privacy-posture.md) states the invariant and what each check covers.
+Every deploy checks the viewer's privacy posture in two ways. `viewer/scripts/audit-wasm-imports.mjs` reads each import of the compiled `.wasm` and its shim in the JavaScript glue, and fails if any reaches `fetch`, `XMLHttpRequest`, `WebSocket`, `EventSource` or `sendBeacon`. A Playwright test opens a real project in the built viewer and fails on any request to another origin, or on any request at all after the file is open. The page's Content-Security-Policy also limits its connections to its own origin. Together these cover the WebAssembly module's imports, the page's connection policy and the flow the test drives; they are checks, not a proof about every possible code path. [`docs/viewer-privacy-posture.md`](docs/viewer-privacy-posture.md) states the invariant and what each check covers.
 
 ## What does not work yet
 
@@ -90,8 +90,8 @@ The full list, with each gap's status and evidence, is in [`docs/evidence.md`](d
 
 - Files from before Revit 2008 are not read, and 2008 to 2014 files are experimental, measured on local files only and outside the 1.0 range.
 - Revit 2015 to 2022 and 2027 projects are experimental: measured against the same models saved by a neighbouring release, not against Revit's own export (one 2015 project aside). Revit 2026 is experimental too, measured on one project.
-- Where the bytes are not decoded a body is the element's bounding box: roofs by extrusion outside Revit 2025, hip roofs over a T or U footprint, monolithic spiral stair flights and straight riserless ones with a nosing, edited wall profiles, ducts and pipe fittings.
-- `rvt-elements` and Python list each element's saved parameters, but built-in parameters have no name, a wall's or floor's type parameters are not joined to it, and only `rvt-ifc --revit-property-sets` writes the rest into IFC.
+- On Revit 2008 to 2023, 2026 and 2027 projects an element's body is its bounding box, cut back at its joins where they are read. On 2024 and 2025 it is the box only where the bytes are not decoded: roofs by extrusion outside Revit 2025, hip roofs over a T or U footprint, monolithic spiral stair flights and straight riserless ones with a nosing, edited wall profiles, ducts and pipe fittings. From 2023, doors and windows are drawn from Revit's saved meshes where those decode whole; furniture and other loadable families stay boxes unless `--saved-meshes` is given.
+- `rvt-elements` and Python list each element's saved parameters on Revit 2023 to 2027 files, experimentally on 2015 to 2022 ones and not on 2008 to 2014, but built-in parameters have no name, a wall's or floor's type parameters are not joined to it, and only `rvt-ifc --revit-property-sets` writes the rest into IFC.
 - Family files give metadata, previews and types but no family geometry, and template files (`.rte`, `.rft`) are not measured, because no template is in any corpus.
 - Rooms are not checked against the phase, so a room created in an earlier phase than the last is written, which Revit's export may leave out.
 - Semantic editing of a Revit file is not implemented: the write path patches named streams byte for byte, and field-level writes wait on ADR-002.

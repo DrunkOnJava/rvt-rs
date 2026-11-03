@@ -4,8 +4,8 @@
 //! instance data out of a Revit file (not just schema or metadata).
 //! Coverage is currently limited: reliable on Revit 2024–2026; older
 //! releases return "ADocument record not locatable" until the
-//! entry-point detector is extended (see `docs/rvt-moat-break-
-//! reconnaissance.md` §Q6.5).
+//! entry-point detector is extended (see `docs/format-reconnaissance.md`
+//! §Q6.5).
 
 use clap::Parser;
 use rvt::walker::{
@@ -189,7 +189,7 @@ fn run(args: Args) -> anyhow::Result<()> {
             notes.push(
                 "ADocument record not locatable in this release's stream \
                  layout. This is expected for Revit 2016–2023 today \
-                 (see §Q6.5 of docs/rvt-moat-break-reconnaissance.md \
+                 (see §Q6.5 of docs/format-reconnaissance.md \
                  for current status)."
                     .into(),
             );

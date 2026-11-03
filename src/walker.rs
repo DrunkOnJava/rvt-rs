@@ -12,7 +12,7 @@
 //! and the entry-point detector.
 //!
 //! Fields 2–5 and the 2016–2023 stream layout still need work. See
-//! `docs/rvt-moat-break-reconnaissance.md` §Q6.5 for the full decode
+//! `docs/format-reconnaissance.md` §Q6.5 for the full decode
 //! state + open questions.
 //!
 //! Wire encoding (observed as of v0.1.2):
