@@ -64,7 +64,7 @@ Of the as-built office's 105 door and window symbols, 104 hold such lines (8 to 
 
 `native_symbol_cuts::symbol_wire_widths` reads, in one native pass over channel 103, the extent along X of those lines for each symbol it is given. `attach_cut_loop_sizes` gives it to a door or window whose symbol cuts no loop and which RE-218 already sizes from its record box (`SymbolWireWidth`, `SYMBOL_WIRE_WIDTH_FIELD`), and the STEP writer takes `OverallWidth` from it ahead of the record box's width. The height, the cut loop (RE-215), the opening (RE-93, RE-94) and the type's size (RE-187) are as before.
 
-**Fail closed.** A symbol with no such line, or whose extent is not finite and positive, or whose graphics hold a `GInstance` or `GComponentRef` (lines that would sit in another frame), or that is read twice with different extents, gets no `SymbolWireWidth`, and its door or window keeps the width RE-218 gave it (the record box's, else the type's); today's code is unchanged there. The reader walks the graph's object list once, with no recursion; the native record path bounds the number of objects (`Options::max_graph_objects`) and values, and no value from the file is used unchecked or unwrapped.
+**Fail closed.** A symbol with no such line, or whose extent is not finite and positive, or whose graphics hold a `GInstance` or `GComponentRef` (lines that would sit in another frame), or that is read twice with different extents, or whose edges reach more than 0.001 ft past the instance's record box along its width, gets no `SymbolWireWidth`, and its door or window keeps the width RE-218 gave it (the record box's, else the type's); today's code is unchanged there. The reader walks the graph's object list once, with no recursion; the native record path bounds the number of objects (`Options::max_graph_objects`) and values, and no value from the file is used unchecked or unwrapped.
 
 ## 6. Measured
 
@@ -94,7 +94,7 @@ The door still `$` is 1746275, which Revit writes 0 by 0 and whose symbol has no
 - Releases other than 2024 and 2025 (`CUT_LOOP_REVIT_VERSIONS`).
 - The meaning of the boxes and of their view-direction filters, which is inferred from Revit's widths and not documented.
 - Exposure outside the office. The 31 measured models that write the same IFC, and the 18 held-out models, have no door or window the rule reaches but RE1's 445975, so they show it changes nothing there, not that it is right there. The `GInstance` and `GComponentRef` exclusion never fires on the office, so it is untested.
-- Edges wider than the record box. No measured symbol's edges reach past its instance's record box along the width; where they would by more than 0.001 ft, the record box's width is kept (`SYMBOL_WIRE_BOX_SLACK_FEET`, added after review, 2026-11-03), so a stray set of lines of no category cannot widen a door past its box.
+- Edges wider than the record box. No measured symbol's edges reach past its instance's record box along the width; where they would by more than 0.001 ft, the record box's width is kept (`SYMBOL_WIRE_BOX_SLACK_FEET`, added after review, 2026-11-03), so a stray set of lines of no category cannot widen a door past its box. With the bound, both office files, Core Interior and the four RE1 models write the same IFC as without it (Measure [41735990813](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41735990813), commit 2793cd19 against `main`).
 
 ## 8. Reproduce
 

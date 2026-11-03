@@ -14,8 +14,8 @@
   and a symbol with no such line, a degenerate extent, an instance or
   component reference in its graphics, two readings that disagree, or edges
   reaching past the record box, keeps the width it had. Against `main`
-  (Measure 41725344128) the office's
-  `IfcDoor` widths equal Revit's on 268 of 269, from 266, and three widths
+  (Measure 41725344128) the office's `IfcDoor` widths equal Revit's on 268
+  of 269, from 266, and three widths
   move on the as-built file (1756089, 1765267 and, by 7 micrometres, 1722215);
   the only other model with such a door, RE1 Architecture's curtain-wall
   door 445975, keeps its width, and 31 of 34 measured models and all 18
