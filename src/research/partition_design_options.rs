@@ -265,6 +265,9 @@ pub fn option_set_members_32(
     Some(options)
 }
 
+/// A reader of the `(name, primary)` entries a set has in a buffer.
+type SetEntries = fn(&[u8], &[u32]) -> Vec<(String, u32)>;
+
 /// The design option sets of a whole file and their primary options.
 /// Empty where the release's record shape is not proven.
 /// `RevitFile::design_options` memoises it.
@@ -273,7 +276,7 @@ pub fn compute_design_options(rf: &mut RevitFile) -> Result<DesignOptions> {
     let mut out = DesignOptions::default();
     let streams = rf.partition_stream_names();
     let mut members: BTreeMap<u32, Vec<u32>> = BTreeMap::new();
-    let entries_of: fn(&[u8], &[u32]) -> Vec<(String, u32)>;
+    let entries_of: SetEntries;
     if crate::partition_element_records_2023::is_32bit_release(version) {
         entries_of = find_set_entries_32;
         let Some((_, header_tag)) = crate::partition_element_records_2023::record_marker(rf) else {
