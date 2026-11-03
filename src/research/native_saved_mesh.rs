@@ -278,19 +278,12 @@ fn refined_plane_edge(
     samples.push(point::<2>(&ends[1]["uv"][other_side])?);
     let start = samples[0];
     let end = *samples.last().unwrap();
-    let axis = if (start[1] - end[1]).abs() < 1e-7 && (start[0] - end[0]).abs() > 1e-7 {
-        0
-    } else if (start[0] - end[0]).abs() < 1e-7 && (start[1] - end[1]).abs() > 1e-7 {
-        1
-    } else {
-        bail!("shared curved edge is not an isoparametric interval")
-    };
-    ensure!(
-        samples
-            .iter()
-            .all(|uv| (uv[1 - axis] - start[1 - axis]).abs() < 1e-7),
-        "shared curved edge changes its fixed parameter"
-    );
+    let varying = (0..2).find(|&axis| {
+        (start[axis] - end[axis]).abs() > 1e-7
+            && samples
+                .iter()
+                .all(|uv| (uv[1 - axis] - start[1 - axis]).abs() < 1e-7)
+    });
     let plane_index = index
         .resolve(face, &g.objects[face].fields["m_pSurf"])?
         .context("plane surface missing")?;
@@ -311,7 +304,7 @@ fn refined_plane_edge(
         det.is_finite() && det > 1e-24,
         "singular shared plane basis"
     );
-    let project = |uv: [f64; 2]| -> Result<[f64; 2]> {
+    let project = |uv: [f64; 2], tolerance: f64| -> Result<[f64; 2]> {
         let q = evaluate(uv)?;
         let d = std::array::from_fn(|k| q[k] - origin[k]);
         let dx = dot(d, x);
@@ -321,7 +314,7 @@ fn refined_plane_edge(
             .map(|k| (origin[k] + p[0] * x[k] + p[1] * y[k] - q[k]).powi(2))
             .sum::<f64>();
         ensure!(
-            residual <= 1e-14,
+            residual <= tolerance,
             "shared curved edge leaves adjacent plane"
         );
         Ok(p)
@@ -332,10 +325,48 @@ fn refined_plane_edge(
     );
     for (uv, expected) in samples.iter().zip(&original) {
         ensure!(
-            close(project(*uv)?, *expected),
+            close(project(*uv, 1e-14)?, *expected),
             "shared edge surface samples disagree"
         );
     }
+    let Some(axis) = varying else {
+        // An edge of a loop that is not the curved face's UV box: its mesher
+        // cuts each segment between samples where it crosses the grid's U
+        // values, and V values on a ruled surface or a surface of revolution
+        // (a cylinder's strips are cut across U only), so the plane takes the
+        // same points. A cut lies on the curved face between two samples, so
+        // it may leave the plane by up to the 0.001 ft chord bound (#1247).
+        let cut_axes: &[usize] = if kind == "CylSurf" { &[0] } else { &[0, 1] };
+        let mut points = vec![project(start, 1e-14)?];
+        for pair in samples.windows(2) {
+            let (a, b) = (pair[0], pair[1]);
+            let mut cuts = Vec::new();
+            for &axis in cut_axes {
+                let knots = if axis == 0 { &u_values } else { &v_values };
+                let lo = a[axis].min(b[axis]);
+                let hi = a[axis].max(b[axis]);
+                let first = knots.partition_point(|&k| k <= lo + 1e-12);
+                let last = knots.partition_point(|&k| k < hi - 1e-12);
+                for &k in &knots[first..last.max(first)] {
+                    let t = (k - a[axis]) / (b[axis] - a[axis]);
+                    let mut p = [a[0] + t * (b[0] - a[0]), a[1] + t * (b[1] - a[1])];
+                    p[axis] = k;
+                    cuts.push((t, p));
+                }
+            }
+            ensure!(
+                points.len() + cuts.len() <= 4_000_000,
+                "shared curved edge refinement budget exceeded"
+            );
+            cuts.sort_by(|p, q| p.0.total_cmp(&q.0));
+            cuts.dedup_by(|p, q| (p.0 - q.0).abs() <= 1e-12);
+            for (_, p) in cuts {
+                points.push(project(p, 1e-6)?);
+            }
+            points.push(project(b, 1e-14)?);
+        }
+        return Ok(points);
+    };
     let knots = if axis == 0 { u_values } else { v_values };
     let lo = start[axis].min(end[axis]);
     let hi = start[axis].max(end[axis]);
@@ -353,7 +384,7 @@ fn refined_plane_edge(
         .map(|t| {
             let mut uv = start;
             uv[axis] = t;
-            project(uv)
+            project(uv, 1e-14)
         })
         .collect()
 }
