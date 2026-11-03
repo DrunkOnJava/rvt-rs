@@ -455,6 +455,13 @@ pub fn cut_loop_size_from_fields(fields: &[(String, InstanceField)]) -> Option<[
     Some([width?, height?])
 }
 
+/// How far the box edges in a symbol's saved graphics may reach past the
+/// instance's record box along its width before the record box's width is
+/// kept (RE-318). On the BIM4LCA office no symbol's edges reach past it (the
+/// widest equals the box), so edges that do are lines the rule was not
+/// measured on.
+const SYMBOL_WIRE_BOX_SLACK_FEET: f64 = 1e-3;
+
 /// Give each door and window the extents of the outline the symbol that
 /// draws it cuts in its host
 /// ([`crate::native_symbol_cuts::instance_cut_loops`]), which Revit's export
@@ -692,6 +699,7 @@ pub(super) fn attach_cut_loop_sizes(
         if let Some(value) = drawn_by
             .get(&u64::from(id))
             .and_then(|symbol| symbol_widths.get(symbol))
+            .filter(|value| **value <= width + SYMBOL_WIRE_BOX_SLACK_FEET)
         {
             element.fields.push((
                 SYMBOL_WIRE_WIDTH_FIELD.into(),
