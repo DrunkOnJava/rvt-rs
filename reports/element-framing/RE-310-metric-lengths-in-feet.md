@@ -2,56 +2,57 @@
 
 **Date:** 2026-11-03
 **Issues:** #155 (Discussion #112's warning that Revit computes feet as `mm / 25.4 / 12`, one unit in the last place from `mm / 304.8`); builds on RE-77 and RE-93
-**Artefacts:** the reference models Measure fetches and pins (Core Interior, the BIM4LCA office, puzzbobb's R2025 models, the four RE1 models, Autodesk's sample projects 2016 to 2027); none is committed.
+**Artefacts:** the reference models Measure fetches and pins (Core Interior, the BIM4LCA office, puzzbobb's R2025 models, the four RE1 models, Autodesk's sample projects); none is committed.
 **Probe:** `probes/examples/probe_re310_metric_feet_ulp.rs`
-**Runs:** Measure [41641337164](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41641337164) (the probe at 6bfb4667, metric lengths only; the figures below), after [41639952446](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41639952446) (12ec5cd4, by parameter) and [41636931034](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41636931034) (2c67e876, every entry on 66 files)
-**Result:** the warning holds, the rule does not. Both conversions are stored, in every file with enough metric lengths, and within one parameter of one file: neither is the way Revit stores a metric length. An exact-bit search for a millimetre value has to try both, and from 13% to 40% of the metric lengths whose candidates differ, by file, match neither.
+**Runs:** Measure [41641337164](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41641337164) (the probe at 6bfb4667, metric lengths only; every figure below), after [41639952446](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41639952446) (12ec5cd4) and [41636931034](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41636931034) (2c67e876), which counted imperial values too
+**Result:** the warning holds and the rule does not. No one conversion reproduces every stored metric length of a file. Where the conversions give different bits, `mm * (1 / 304.8)` reproduces the most values, or ties for it, on 12 of the 13 files below, but every file with more than 300 such values also holds values only `mm / 25.4 / 12` or only `mm / 304.8` reproduces, and on the files with at least 100 such values 9% to 34% match none of the four. An exact-bit search for a millimetre value has to try several conversions and cannot take a miss as absence.
 
 ## 1. The question
 
-A length in a type's value block is `f64 feet · ff×8 · i64 parameter` (RE-93). A metric model's lengths are typed in millimetres, so the stored double is some conversion of a whole or tenth millimetre. For most values every conversion rounds to the same double; for some, `mm / 304.8` and `mm / 25.4 / 12` differ by one unit in the last place, and a search for the bits of one misses the other.
+A length in a type's value block is `f64 feet · ff×8 · i64 parameter` (RE-93). A length typed in millimetres is stored as some conversion of a whole or tenth millimetre. For most values every conversion rounds to the same double; for some, `mm / 304.8` and `mm / 25.4 / 12` differ by one unit in the last place, and a search for the bits of one misses the other.
 
 ## 2. The probe
 
-`probe_re310_metric_feet_ulp` reads every `f64 · ff×8 · i64` entry after a declared element's value block (`partition_length_entries`, RE-93), once per owner, parameter and value. It keeps a value whose millimetres (value × 304.8) are whole or tenth to within 1e-6 mm, and leaves out a value that is a whole number of 1/256 inches: an imperial value, which `mm / 304.8` reproduces trivially (304.8 mm is 1 ft exactly). For each kept value it computes four candidates, `div` (`mm / 304.8`), `chain` (`mm / 25.4 / 12`), `mul` (`mm * (1 / 304.8)`) and `inch` (`mm * (1 / 25.4) / 12`), and where they do not all give the same bits counts which of them the stored bits equal. It counts by what the entry's i64 is: a negative BuiltInParameter id, a declared ElementId (a family or shared parameter), or anything else; and per parameter, the values matching `div` and not `chain` and the reverse.
+`probe_re310_metric_feet_ulp` reads every `f64 · ff×8 · i64` entry after a declared element's value block (`partition_length_entries`, RE-93), once per owner, i64 and value. It keeps a value whose millimetres (value × 304.8) are whole or tenth to within 1e-6 mm, and leaves out a value that is a whole number of 1/256 inches: an imperial value, which `mm / 304.8` reproduces trivially (304.8 mm is 1 ft exactly). For each kept value it computes four candidates, `div` (`mm / 304.8`), `chain` (`mm / 25.4 / 12`), `mul` (`mm * (1 / 304.8)`) and `inch` (`mm * (1 / 25.4) / 12`), and where they do not all give the same bits counts which of them the stored bits equal. It counts these by what the entry's i64 is: a negative BuiltInParameter id, a declared ElementId (a family or shared parameter), or anything else (`kind other`, no parameter); and per parameter, the values matching `div` and not `chain` and the reverse.
 
-The first run counted imperial values as well and was dominated by them (1.0 ft is 304.8 mm). It is kept only as the census that Revit 2016 to 2023 files have no such entry: all 28 such files Measure fetches report 0, as does Einhoven.
+The block mark the reader finds is the 2024 to 2027 one (`u64` owner, 56 × `ff`); RE-113's 2023 block (`u32` owner, 28 × `ff`) is not read, so no release before 2024 is measured here.
 
 ## 3. Measured
 
-Metric lengths where the four candidates do not give the same bits, by which candidates the stored bits equal ("both" is `div` and `chain` equal to each other but not to `mul` or `inch`):
+Values of a parameter (BuiltInParameter or declared) whose four candidates do not all give the same bits; a column counts the values the candidate reproduces, "alone" those it is the only one to:
 
-| file | metric lengths | candidates agree | differ | `div` only | `chain` only | both | `mul` or `inch` only | none |
-|---|---:|---:|---:|---:|---:|---:|---:|---:|
-| Core Interior (2024) | 307 | 142 | 165 | 77 | 27 | 0 | 6 | 55 |
-| BIM4LCA office, as built (2024) | 6,765 | 3,656 | 3,109 | 1,418 | 939 | 17 | 41 | 694 |
-| R2025 00_Blank (2025) | 18 | 8 | 10 | 2 | 2 | 0 | 0 | 6 |
-| R2025 12_Rooms_Door_Windows (2025) | 31 | 18 | 13 | 3 | 2 | 0 | 0 | 8 |
-| RE1 Architecture (2025) | 210 | 98 | 112 | 28 | 35 | 0 | 4 | 45 |
-| RE1 Electrical (2025) | 85 | 57 | 28 | 4 | 14 | 0 | 1 | 9 |
-| RE1 Mechanical (2025) | 473 | 276 | 197 | 19 | 157 | 0 | 0 | 21 |
-| RE1 Plumbing (2025) | 296 | 175 | 121 | 101 | 10 | 0 | 0 | 10 |
-| rac advanced (2024 sample) | 2,307 | 1,262 | 1,045 | 518 | 285 | 6 | 41 | 195 |
-| rme advanced (2024 sample) | 16,347 | 10,398 | 5,949 | 1,305 | 3,680 | 34 | 167 | 763 |
-| rst basic (2024 sample) | 1,163 | 706 | 457 | 182 | 116 | 3 | 4 | 152 |
-| Snowdon Towers architectural (2024 sample) | 87 | 44 | 43 | 17 | 0 | 0 | 0 | 26 |
-| rme advanced (2027 sample) | 16,032 | 10,132 | 5,900 | 1,307 | 3,633 | 34 | 167 | 759 |
+| file | differ | `mul` | `div` | `chain` | `inch` | `mul` alone | `div` alone | `chain` alone | none |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| Core Interior (2024) | 104 | 90 | 60 | 26 | 66 | 6 | 1 | 0 | 12 |
+| BIM4LCA office, as built (2024) | 2,484 | 1,799 | 1,269 | 842 | 1,572 | 32 | 40 | 241 | 346 |
+| R2025 12_Rooms_Door_Windows (2025) | 8 | 2 | 0 | 2 | 2 | 0 | 0 | 0 | 6 |
+| RE1 Architecture (2025) | 57 | 43 | 12 | 28 | 40 | 4 | 0 | 0 | 13 |
+| RE1 Electrical (2025) | 12 | 12 | 0 | 12 | 12 | 0 | 0 | 0 | 0 |
+| RE1 Mechanical (2025) | 193 | 172 | 17 | 155 | 168 | 0 | 0 | 0 | 21 |
+| RE1 Plumbing (2025) | 113 | 101 | 94 | 9 | 95 | 0 | 0 | 2 | 10 |
+| rac advanced (2024 sample) | 871 | 544 | 417 | 242 | 398 | 35 | 116 | 3 | 177 |
+| rme advanced (2024 sample) | 4,819 | 4,115 | 1,072 | 3,090 | 3,881 | 66 | 51 | 16 | 610 |
+| rst basic (2024 sample) | 369 | 233 | 151 | 92 | 196 | 0 | 3 | 0 | 127 |
+| Snowdon Towers architectural (2024 sample) | 17 | 2 | 10 | 0 | 10 | 0 | 0 | 0 | 7 |
+| Snowdon Towers electrical (2024 sample) | 8 | 8 | 8 | 0 | 6 | 0 | 0 | 0 | 0 |
+| rme advanced (2027 sample) | 4,768 | 4,068 | 1,072 | 3,043 | 3,834 | 66 | 51 | 16 | 606 |
 
-- **Both forms in one file.** Every file with more than a few dozen metric lengths holds both. The share varies by file: the BIM4LCA office and RE1 Plumbing mostly `div`, RE1 Mechanical and Autodesk's MEP samples mostly `chain`.
-- **Both forms in one parameter.** On the office as built, built-in Height (−1001300) is `div` on 31 values and `chain` on 117, Width (−1001301) 15 and 50, Rough Width (−1001305) 76 and 12. Family parameter 343423 is `chain` on all 102 of its values that differ and 343424 is `div` on 86 and `chain` on 33. On rme advanced, family parameters such as 358415 (69) and built-in −1001320 (60) are `chain` only.
-- **Neither.** 694 of the office's 3,109 and 763 of rme advanced's 5,949 match no candidate. In the probe's sample lines such a value is most often one unit in the last place below `div`, others tens of units from it, and some about 3×10⁸ units, which is still within the 1e-6 mm the probe rounds to: those are not a conversion of the millimetre value they round to at all. A value computed from others (a formula, a derived length) would do this, but nothing here shows which.
-- **Totals.** On the office as built, the probe kept 6,765 metric lengths out of 646,371 entries (633,461 imperial-exact); on Core Interior 307 of 376,328.
+- **The most common match** is `mul`: of the values some candidate reproduces, 84% on the BIM4LCA office, 98% on rme advanced and RE1 Plumbing, all 172 on RE1 Mechanical. Snowdon Towers architectural is the exception, 10 `div` and 2 `mul`.
+- **No one candidate covers a file.** On the office, 241 values only `chain` reproduces and 40 only `div`; on rac advanced, 116 only `div`; on rme advanced, 66, 51 and 16 only `mul`, `div` and `chain`.
+- **One parameter, several forms.** Across the types that hold it, the office's built-in Height (−1001300) matches `div` and not `chain` on 31 values and the reverse on 117, Width (−1001301) 15 and 50, Rough Width (−1001305) 76 and 12. These pool the parameter's values over every type that holds it, so they say the form is not fixed by the parameter, not that it varies within one type.
+- **Neither.** 346 of the office's 2,484 such values, 610 of rme advanced's 4,819, 127 of rst basic's 369. The probe's sample lines (the first 25 per file, every kind) show such a value most often one unit in the last place from `div`, others 3 to 999 units, and one recurring value about 3×10⁸ units from it, which rounds to 6 mm within the probe's 1e-6 mm: not a conversion of 6 mm at all. A value computed from others (a formula, a derived length) would do this, but nothing here shows which.
+- **Counts.** On the office as built, 646,371 entries, 633,461 imperial-exact, 6,765 metric, 3,109 differing, of which 2,484 are parameters' values (460 built-in, 2,024 declared) and 625 `kind other`.
 
 ## 4. What it changes
 
-No reader in rvt-rs searches for a length by its bits converted from millimetres; the RE-93 readers read the stored double. A probe or reader that does has to try at least `div` and `chain`, and must not treat a miss as absence: 13% to 40% of these values match neither.
+No reader in rvt-rs searches for a length by its bits converted from millimetres; the RE-93 readers read the stored double. A probe or reader that does has to try `mul`, `div` and `chain` at least, and must not treat a miss as absence.
 
 ## 5. Not claimed
 
-- What decides the form: the unit the value was typed in, a formula, the family document's units, a load into the project. The per-parameter split says it is not the parameter.
-- That the 1/256-inch filter separates metric from imperial input exactly: a millimetre value that is also a whole number of 1/256 inches (127 mm, 5 in) is left out.
+- What decides the form: the unit a value was typed in, a formula, the family document's units, a load into the project.
+- That every kept value was typed in millimetres. The selection is numeric: Autodesk's samples are mostly imperial projects whose metric-looking values may come from metric families, and a millimetre value that is also a whole number of 1/256 inches (127 mm, 5 in) is left out.
+- Anything before Revit 2024 (§2).
 - Discussion #112's other claims (two record shapes, extrusion and revolution BuiltInParameters, shared-parameter names through PartAtom GUIDs): RE-77 and RE-93 read two entry shapes, the text `i64 · u32 n · UTF-16` and the length `f64 · ff×8 · i64`; the rest is not measured here.
-- That every `f64 · ff×8 · i64` entry is a parameter: entries whose i64 is neither a BuiltInParameter nor a declared ElementId are counted in the totals (on the office as built, 625 of the 3,109 that differ; 460 are built-in parameters and 2,024 declared ones) and apart in the probe's `kind other` lines.
 
 ## 6. Reproduce
 
@@ -61,4 +62,4 @@ gh workflow run measure.yml --ref main -f ref=6bfb4667 -f base=none -f nordic=tr
   -f models="core-interior re1-* nordic-office-as-built r2025-00_Blank r2025-12_Rooms_Door_Windows sample-2024-* sample-2027-*"
 ```
 
-Each model's `probe.txt` in the `measure-head` artifact has the `census`, `disagree`, `kind`, `param` and `sample` lines.
+Each model's `probe.txt` in the `measure-head` artifact has the `census`, `disagree`, `kind`, `param` and `sample` lines; the table sums the `kind builtin` and `kind declared` lines.

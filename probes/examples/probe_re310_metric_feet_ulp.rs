@@ -29,9 +29,9 @@
 //!                                 `div` and not `chain`, and the reverse; the 20 with
 //!                                 most `chain_only`, then the 20 with most `div_only`
 //!
-//! A file whose `disagree` lines name only `chain`, or only `div`, settles
-//! which conversion that release used for the values it holds; one with
-//! both names neither.
+//! A candidate that every differing value of a file equals would be that
+//! file's conversion. Read the `kind builtin` and `kind declared` lines for
+//! parameters: `kind other` entries' i64 is no parameter id.
 //!
 //! ```text
 //! cargo run --profile ci -p rvt-probes --example probe_re310_metric_feet_ulp -- MODEL.rvt
