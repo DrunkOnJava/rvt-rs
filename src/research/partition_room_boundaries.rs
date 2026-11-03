@@ -48,10 +48,14 @@ use std::collections::BTreeMap;
 /// on a room outline read here.
 pub const ROOM_OUTLINE_SOURCE: &str = "partition_room_solid_faces";
 
-/// Releases this layout is measured on.
+/// Releases this layout is measured on. On Revit 2026 and 2027 it is the
+/// 2025 layout: every room of Autodesk's `rac_basic`, `rac_advanced`,
+/// `rme_basic` and `rme_advanced` sample projects (257) gives the same
+/// verdict and area in their 2026 and 2027 saves as in 2025, and the same
+/// rooms keep their box (RE-314, #1260).
 pub const ROOM_SOLID_SUPPORTED_REVIT_VERSIONS: &[u32] = &[
     2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023,
-    2024, 2025,
+    2024, 2025, 2026, 2027,
 ];
 
 /// The bytes after a room's ElementId that open its solid.

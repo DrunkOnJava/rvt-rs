@@ -923,6 +923,14 @@ fn export_summary(diagnostics: &ExportDiagnostics, has_sidecar: bool) -> Vec<Str
                 exported.bounding_box_bodies
             ));
         }
+        // RE-313: say how many spaces are a box, as their area is the box's.
+        if exported.bounding_box_spaces > 0 {
+            lines.push(format!(
+                "  {} of {} spaces are their record's box: the area of their body is the box's, not the space's (SpaceOutlineSource record_box)",
+                exported.bounding_box_spaces,
+                exported.by_ifc_type.get("IFCSPACE").copied().unwrap_or(0)
+            ));
+        }
     }
     let left_out: Vec<String> = diagnostics
         .skipped
@@ -932,6 +940,9 @@ fn export_summary(diagnostics: &ExportDiagnostics, has_sidecar: bool) -> Vec<Str
                 "element_record_without_volume" => "without a 3D body",
                 "element_record_in_non_primary_design_option" => "in non-primary design options",
                 "element_record_empty_curtain_panel" => "empty curtain panels",
+                "element_record_family_space_without_body" => {
+                    "family instances written as spaces whose family draws no model form"
+                }
                 _ => return None,
             };
             Some(format!("{} {what}", item.count))

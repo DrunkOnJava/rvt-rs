@@ -161,6 +161,8 @@ panel types name "Glass" and "Default". An empty-family type that carries a
 material is reported in `warnings`. The material alone isn't used, because a
 panel set to "By Category" may store no material either (#309).
 
+`element_record_family_space_without_body` counts the family instances written as `IfcSpace` through their "Export to IFC As" that are left out because their family draws no model form for their parameter values (every model form is a void, or hidden by its `Visible` or by the parameter it is bound to). Revit's own IFC export writes a family instance that is not a door or a window only when it has a 3D body, and leaves these out: the 89 bicycle bays of the BIM4LCA terrain office, whose "Stripe Y/N" is 0 (RE-312). An instance whose family document is not found, holds no form, nests a family instance, or has a form bound to a parameter whose value was not read is written. When the check cannot run (a Revit release outside 2023 to 2027, or a read that fails), `warnings` gives how many instances were not checked and why, and all of them are written.
+
 `unsupported_features` carries exactly one geometry-coverage code:
 `real_file_element_geometry` when **no** exported building element has a
 recovered body, and `partial_element_geometry` when some do and some do not
@@ -194,6 +196,7 @@ Important nested fields:
 | `exported.storey_elevations_feet` | array | Recovered storey elevations in feet, aligned with `storey_names`. |
 | `exported.storey_bound_elements` | integer | Building elements contained in a specific storey. The rest are contained in the `IfcBuilding`, never in a named storey. |
 | `exported.layered_element_count` | integer | Elements whose compound layers and layer colours were read (RE-53). The glTF export draws each in its layers where they add up to its body's thickness; the rest are drawn whole. |
+| `exported.bounding_box_spaces` | integer | Exported `IfcSpace`s whose body is their record's bounding box (`RvtElementRecordGeometry.SpaceOutlineSource` is `record_box`): a room whose outline was not read from its stored solid, or a family instance written as a space and drawn as its box. The body's plan area is the box's, not the space's (RE-313, [rooms](rooms.md)). Each is also in `exported.bounding_box_bodies`, except a family instance turned or tilted off the model's axes. |
 | `confidence.level` | string | `scaffold`, `typed_no_geometry`, `geometry`, `diagnostic_partial`, or `proxy_only`. |
 | `confidence.score` | number | Heuristic 0..1 readiness score for UI sorting and dashboards. Its element terms (elements, typed elements, geometry) are scaled by the exported share when `unexported_element_records` is non-zero. |
 | `confidence.unexported_element_records` | integer | Element records of a recovered category (walls, doors, windows, columns, floors, rooms and the RE-33 product categories) the partition scan found but could not export because no ElementId is attributable (RE-30). Non-zero means the model is incomplete. Zero is not a completeness claim. |

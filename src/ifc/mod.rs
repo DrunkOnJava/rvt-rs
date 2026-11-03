@@ -669,6 +669,15 @@ pub struct ExportedModelDiagnostics {
     /// (#409).
     #[serde(default)]
     pub bounding_box_bodies: usize,
+    /// Of the exported `IfcSpace`s, those drawn as their record's bounding
+    /// box (`SpaceOutlineSource` is `record_box`): a room whose outline was
+    /// not read from its stored solid, or a family instance written as a space
+    /// and drawn as its box. Their plan area is the box's, not the space's
+    /// (RE-313). Each is also in `bounding_box_bodies`, except a family
+    /// instance turned or tilted off the model's axes, whose `BodySource`
+    /// names the turned box.
+    #[serde(default)]
+    pub bounding_box_spaces: usize,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -3745,6 +3754,25 @@ pub fn build_export_diagnostics_with_limits(
              opening in Revit is its opening alone in Revit's export (#1247)."
         ));
     }
+    // RE-312: a family instance written as a space whose family draws no
+    // model form has no 3D body, and is left out as Revit's own export leaves
+    // it out. A check that could not run keeps every instance.
+    let bodiless_spaces: usize = rf.bodiless_family_spaces().values().sum();
+    if bodiless_spaces > 0 {
+        skipped.push(SkippedExportItem {
+            reason: "element_record_family_space_without_body".into(),
+            count: bodiless_spaces,
+            classes: rf.bodiless_family_spaces().clone(),
+            sample_names: Vec::new(),
+        });
+    }
+    if let Some((checked, error)) = rf.bodiless_family_space_error() {
+        warnings.push(format!(
+            "{checked} family instance(s) written as spaces could not be checked for a 3D body \
+             ({error}); they are written, though Revit's export leaves out one whose family draws \
+             no model form (RE-312)."
+        ));
+    }
     if !empty_panels.types_with_material.is_empty() {
         warnings.push(format!(
             "{} empty curtain panel type(s) carry a material, which an empty panel should not: {:?}",
@@ -4140,6 +4168,7 @@ fn exported_model_diagnostics(model: &IfcModel) -> ExportedModelDiagnostics {
     let mut building_elements_carried_by_parts = 0usize;
     let mut body_sources = std::collections::BTreeMap::<String, usize>::new();
     let mut bounding_box_bodies = 0usize;
+    let mut bounding_box_spaces = 0usize;
     for (index, entity) in model.entities.iter().enumerate() {
         if let entities::IfcEntity::BuildingElement {
             ifc_type,
@@ -4160,10 +4189,15 @@ fn exported_model_diagnostics(model: &IfcModel) -> ExportedModelDiagnostics {
             }
             let properties = property_set.iter().flat_map(|set| &set.properties);
             let mut source = None;
+            let mut space_outline = None;
             let mut profile_resolved = false;
             for property in properties {
                 match (property.name.as_str(), &property.value) {
                     ("BodySource", entities::PropertyValue::Text(text)) => source = Some(text),
+                    (
+                        export_content::SPACE_OUTLINE_SOURCE_PROPERTY,
+                        entities::PropertyValue::Text(text),
+                    ) => space_outline = Some(text),
                     ("ProfileResolved", entities::PropertyValue::Boolean(true)) => {
                         profile_resolved = true
                     }
@@ -4175,6 +4209,12 @@ fn exported_model_diagnostics(model: &IfcModel) -> ExportedModelDiagnostics {
                 if source == export_content::RECORD_BBOX_BODY_SOURCE && !profile_resolved {
                     bounding_box_bodies += 1;
                 }
+            }
+            if ifc_type == "IFCSPACE"
+                && space_outline
+                    .is_some_and(|text| text == export_content::SPACE_OUTLINE_RECORD_BOX)
+            {
+                bounding_box_spaces += 1;
             }
             building_elements += 1;
             *by_ifc_type.entry(ifc_type.clone()).or_insert(0) += 1;
@@ -4224,6 +4264,7 @@ fn exported_model_diagnostics(model: &IfcModel) -> ExportedModelDiagnostics {
         layered_element_count: model.element_layers.len(),
         body_sources,
         bounding_box_bodies,
+        bounding_box_spaces,
     }
 }
 
