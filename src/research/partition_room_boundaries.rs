@@ -35,11 +35,15 @@
 //! than [`FACE_GAP`] (626 bytes in office room 1422302), and a face's box is
 //! the box of its plane, not its outline: where a column stands in the room
 //! and overlaps a wall, the wall's face runs across the column's footprint.
-//! When the faces the walk reads do not close, the faces up to the next
-//! solid's tag are read instead ([`solid_span`]), each plan
-//! edge directed so the room is on its left, and the room's outline is the
-//! boundary of the region those edges wind around ([`region_boundary`],
-//! RE-316). A face whose record is 44 bytes longer than a plane's is a
+//! Only where the walk closes none of a room's solids is the solid read again
+//! (RE-316): its faces are followed with a gap of up to [`SPAN_FACE_GAP`]
+//! bytes, and no more than its list of objects counts ([`solid_span`],
+//! [`solid_object_count`]), so the faces of the element that follows it are
+//! not read. Each plan edge is directed so the room is on its left, and the
+//! room's outline is the boundary of the region those edges wind around
+//! ([`region_boundary`]). A room read this way says so in its profile source
+//! ([`ROOM_OUTLINE_SOURCE_FACES`], [`ROOM_OUTLINE_SOURCE_APPROXIMATE`]), never
+//! as the walk's. A face whose record is 44 bytes longer than a plane's is a
 //! cylinder's (a round column): its axis, a unit vector at right angles to
 //! the face's u and v, at +158, and its radius at +182 ([`RoomCylinder`]). Its
 //! arc closes the loops of the six `rac_advanced` rooms RE-101 left open, but
