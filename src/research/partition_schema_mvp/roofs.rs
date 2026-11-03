@@ -607,6 +607,10 @@ pub fn roof_slopes_from_fields(fields: &[(String, InstanceField)]) -> Vec<RoofSl
 /// thickness (RE-56, [`crate::partition_roof_slopes`]). A roof with no
 /// defining edge is flat and gets nothing; one with two or more (a hip or
 /// a gable) gets nothing either, as its surfaces are not built.
+///
+/// A roof with no defining edge and several slope arrows (RE-307) gets, for
+/// each arrow, the boundary line its tail lies on and its slope, with
+/// [`ROOF_ARROW_PLANES_FIELD`] set.
 pub(super) fn attach_roof_slopes(
     rf: &mut RevitFile,
     revit_version: u32,
@@ -681,6 +685,7 @@ pub(super) fn attach_roof_slopes(
     // none, with one slope arrow, rises along the arrow (RE-199).
     let mut defining: BTreeMap<u32, Vec<(u32, f64, f64)>> = Default::default();
     let mut sloped_by_arrow: BTreeMap<u32, (u32, prs::ArrowHeights)> = Default::default();
+    let mut sloped_by_arrows: BTreeMap<u32, ArrowRoofLines> = Default::default();
     for (&roof, lines) in &edges {
         let (blocked, rest): (Vec<u32>, Vec<u32>) =
             lines.iter().partition(|line| slopes.contains_key(line));
@@ -688,6 +693,18 @@ pub(super) fn attach_roof_slopes(
             let flat = blocked.iter().all(|line| !slopes[line].defines_slope);
             if let (true, Some(heights)) = (flat, arrows.get(arrow)) {
                 sloped_by_arrow.insert(roof, (*arrow, *heights));
+            }
+            continue;
+        }
+        // RE-307: several slope arrows and no defining edge.
+        if rest.len() >= 2 {
+            let flat = blocked.iter().all(|line| !slopes[line].defines_slope);
+            let found: Option<Vec<(u32, prs::ArrowHeights)>> = rest
+                .iter()
+                .map(|line| arrows.get(line).map(|heights| (*line, *heights)))
+                .collect();
+            if let (true, false, Some(found)) = (flat, blocked.is_empty(), found) {
+                sloped_by_arrows.insert(roof, (blocked, found));
             }
             continue;
         }
@@ -704,7 +721,7 @@ pub(super) fn attach_roof_slopes(
             defining.insert(roof, sloped);
         }
     }
-    if defining.is_empty() && sloped_by_arrow.is_empty() {
+    if defining.is_empty() && sloped_by_arrow.is_empty() && sloped_by_arrows.is_empty() {
         return;
     }
     let defining_lines: BTreeSet<u32> = defining
@@ -712,13 +729,21 @@ pub(super) fn attach_roof_slopes(
         .flatten()
         .map(|(line, _, _)| *line)
         .chain(sloped_by_arrow.values().map(|(line, _)| *line))
+        .chain(sloped_by_arrows.values().flat_map(|(boundary, found)| {
+            boundary
+                .iter()
+                .copied()
+                .chain(found.iter().map(|(line, _)| *line))
+        }))
         .collect();
     let types: BTreeSet<u32> = products
         .iter()
         .filter(|element| {
-            element
-                .id
-                .is_some_and(|id| defining.contains_key(&id) || sloped_by_arrow.contains_key(&id))
+            element.id.is_some_and(|id| {
+                defining.contains_key(&id)
+                    || sloped_by_arrow.contains_key(&id)
+                    || sloped_by_arrows.contains_key(&id)
+            })
         })
         .filter_map(type_of)
         .collect();
@@ -735,6 +760,7 @@ pub(super) fn attach_roof_slopes(
     let sloped_roofs: BTreeSet<u32> = defining
         .keys()
         .chain(sloped_by_arrow.keys())
+        .chain(sloped_by_arrows.keys())
         .copied()
         .collect();
     let fascia = prs::scan_fascia_depths(rf, revit_version, &sloped_roofs).unwrap_or_default();
@@ -763,36 +789,50 @@ pub(super) fn attach_roof_slopes(
         };
         // An arrow is a shed whose edge runs through the arrow's tail square
         // to it, rising from the tail's height to the head's along it.
-        let edges: Option<Vec<RoofEdgeSlope>> =
-            if let Some((line_id, heights)) = sloped_by_arrow.get(&id) {
-                lines.get(line_id).and_then(|line| {
-                    let (tail, head) = (line.start(), line.end());
-                    let run = (head[0] - tail[0]).hypot(head[1] - tail[1]);
-                    let slope = heights.rise_over_run(run);
-                    (run > 1e-9 && slope > 0.0 && slope.is_finite()).then(|| {
-                        let (ux, uy) = ((head[0] - tail[0]) / run, (head[1] - tail[1]) / run);
-                        let across = [tail[0] - uy, tail[1] + ux, tail[2]];
-                        vec![(tail, across, slope.atan(), 0.0)]
+        let edges: Option<Vec<RoofEdgeSlope>> = if let Some((line_id, heights)) =
+            sloped_by_arrow.get(&id)
+        {
+            lines.get(line_id).and_then(|line| {
+                let (tail, head) = (line.start(), line.end());
+                let run = (head[0] - tail[0]).hypot(head[1] - tail[1]);
+                let slope = heights.rise_over_run(run);
+                (run > 1e-9 && slope > 0.0 && slope.is_finite()).then(|| {
+                    let (ux, uy) = ((head[0] - tail[0]) / run, (head[1] - tail[1]) / run);
+                    let across = [tail[0] - uy, tail[1] + ux, tail[2]];
+                    vec![(tail, across, slope.atan(), 0.0)]
+                })
+            })
+        } else if let Some((boundary, found)) = sloped_by_arrows.get(&id) {
+            crate::element_record_plan_profiles::plan_profile_from_fields(&roof.fields)
+                .and_then(|profile| arrow_roof_edges(boundary, found, &lines, &profile.outer_xy))
+        } else {
+            defining.get(&id).and_then(|sloped| {
+                sloped
+                    .iter()
+                    .map(|(line_id, angle, offset)| {
+                        lines
+                            .get(line_id)
+                            .map(|line| (line.start(), line.end(), *angle, *offset))
                     })
-                })
-            } else {
-                defining.get(&id).and_then(|sloped| {
-                    sloped
-                        .iter()
-                        .map(|(line_id, angle, offset)| {
-                            lines
-                                .get(line_id)
-                                .map(|line| (line.start(), line.end(), *angle, *offset))
-                        })
-                        .collect()
-                })
-            };
+                    .collect()
+            })
+        };
         let Some(edges) = edges else {
             continue;
         };
         let thickness: f64 = type_layers.iter().map(|layer| layer.width_feet).sum();
         if !(thickness.is_finite() && thickness > 0.0) {
             continue;
+        }
+        if sloped_by_arrows.contains_key(&id) {
+            roof.fields.push((
+                ROOF_ARROW_PLANES_FIELD.into(),
+                InstanceField::Integer {
+                    value: 1,
+                    signed: false,
+                    size: 8,
+                },
+            ));
         }
         for (index, (start, end, angle, offset)) in edges.into_iter().enumerate() {
             for (name, value) in roof_slope_edge_fields(index)
@@ -860,3 +900,92 @@ pub fn roof_fascia_depth_from_fields(fields: &[(String, InstanceField)]) -> Opti
 /// A roof edge's start and end, its slope angle, and how far its plane is
 /// raised at the edge (RE-199).
 pub(super) type RoofEdgeSlope = ([f64; 3], [f64; 3], f64, f64);
+
+/// A footprint roof's boundary lines and its slope arrows with their
+/// heights, by ElementId (RE-307).
+type ArrowRoofLines = (
+    Vec<u32>,
+    Vec<(u32, crate::partition_roof_slopes::ArrowHeights)>,
+);
+
+/// How far a slope arrow's tail may lie from the boundary line it is on,
+/// feet (RE-307).
+const ARROW_TAIL_FEET: f64 = 1e-4;
+
+/// How square to its boundary line a slope arrow must run, as the cosine of
+/// the angle between them (RE-307).
+const ARROW_SQUARE_TOLERANCE: f64 = 1e-6;
+
+/// Whether `point` lies inside `ring` (even-odd rule).
+fn outline_contains((px, py): (f64, f64), ring: &[(f64, f64)]) -> bool {
+    let mut inside = false;
+    for i in 0..ring.len() {
+        let ((ax, ay), (bx, by)) = (ring[i], ring[(i + 1) % ring.len()]);
+        if (ay > py) != (by > py) && px < ax + (py - ay) * (bx - ax) / (by - ay) {
+            inside = !inside;
+        }
+    }
+    inside
+}
+
+/// The edge each of a footprint roof's slope arrows defines (RE-307): the
+/// boundary line its tail lies on, square to it, with the arrow's slope over
+/// its run as the angle, so each arrow's plane rises from that line as a
+/// defining edge's does. `None` unless every arrow starts at height 0 on
+/// exactly one boundary line, square to it, runs into the outline with a
+/// rising slope, and no boundary line carries two.
+fn arrow_roof_edges(
+    boundary: &[u32],
+    arrows: &[(u32, crate::partition_roof_slopes::ArrowHeights)],
+    lines: &BTreeMap<u32, crate::partition_beam_axes::BoundedLine>,
+    outline: &[(f64, f64)],
+) -> Option<Vec<RoofEdgeSlope>> {
+    let mut taken: BTreeSet<u32> = BTreeSet::new();
+    let mut edges = Vec::with_capacity(arrows.len());
+    for (arrow, heights) in arrows {
+        let line = lines.get(arrow)?;
+        let (tail, head) = (line.start(), line.end());
+        let run = (head[0] - tail[0]).hypot(head[1] - tail[1]);
+        let slope = heights.rise_over_run(run);
+        if !(run > 1e-9
+            && slope > 0.0
+            && slope.is_finite()
+            && heights.tail_feet.abs() < 1e-9
+            && (head[2] - tail[2]).abs() < 1e-6
+            && outline_contains((head[0], head[1]), outline))
+        {
+            return None;
+        }
+        let (ux, uy) = ((head[0] - tail[0]) / run, (head[1] - tail[1]) / run);
+        let mut on_line = boundary.iter().filter_map(|id| {
+            let edge = lines.get(id)?;
+            let (a, b) = (edge.start(), edge.end());
+            let length = (b[0] - a[0]).hypot(b[1] - a[1]);
+            if length < 1e-9 {
+                return None;
+            }
+            let (ex, ey) = ((b[0] - a[0]) / length, (b[1] - a[1]) / length);
+            let along = (tail[0] - a[0]) * ex + (tail[1] - a[1]) * ey;
+            let off = (tail[0] - a[0]) * -ey + (tail[1] - a[1]) * ex;
+            (off.abs() <= ARROW_TAIL_FEET
+                && along >= -ARROW_TAIL_FEET
+                && along <= length + ARROW_TAIL_FEET
+                && (ux * ex + uy * ey).abs() <= ARROW_SQUARE_TOLERANCE)
+                .then_some((*id, a, b))
+        });
+        let (id, a, b) = on_line.next()?;
+        if on_line.next().is_some() || !taken.insert(id) {
+            return None;
+        }
+        edges.push((a, b, slope.atan(), 0.0));
+    }
+    Some(edges)
+}
+
+/// Whether a roof's fields record that its planes are its slope arrows'
+/// (RE-307): [`ROOF_ARROW_PLANES_FIELD`].
+pub fn roof_arrow_planes_from_fields(fields: &[(String, InstanceField)]) -> bool {
+    fields.iter().any(|(name, value)| {
+        name == ROOF_ARROW_PLANES_FIELD && matches!(value, InstanceField::Integer { value: 1, .. })
+    })
+}
