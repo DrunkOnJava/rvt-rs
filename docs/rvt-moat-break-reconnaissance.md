@@ -2244,6 +2244,10 @@ Revit's export writes a floor's `Qto_SlabBaseQuantities.NetVolume` as the volume
 
 Revit's export writes a floor's `Qto_SlabBaseQuantities.GrossArea` as the area of the profile its slab extrudes, its sketch outline less its holes: equal to rvt-rs's profile on all 40 of the BIM4LCA office's slabs drawn from their record box, where the slab's other quantities follow its body less often (a sloped slab's record box is deeper than its layers). Stair landings' slabs get none. rvt-rs writes it on each floor drawn as one extrusion: 31 equal on the office, none different. Report: `reports/element-framing/RE-249-slab-gross-area.md`.
 
+## Addendum — RE-303 a saved flip control (2026-11-03)
+
+The saved graphics class `GBiFlipControl` holds no geometry: an origin, a base vector and a length, with no pointer, a flip control drawn in a view. Left out of the walk, it lets 14 BIM4LCA office bodies be drawn from their saved meshes, and none of them is Revit's: all are railings whose saved mesh is a part of Revit's body (about 40% of its volume) or more than it. So it stays a decode failure, which keeps their boxes; what a railing's saved mesh lacks is the open question. Report: `reports/element-framing/RE-303-flip-controls-railings.md`.
+
 ## Addendum — RE-300 a light source's saved graphics (2026-11-02)
 
 The saved graphics class `GImposter` is a light source: a transform and a rendering `Asset` of scalar properties, with no surface, always in a `GFilter` of its own beside the `Geometry` (and often a `GPolyMesh` of normal binding 2) that draws the light. Revit's export draws none of that filter. Left out, it no longer keeps a fixture's box: 43 more office bodies and 2 on RE1 Electrical drawn from saved meshes, all exact to 0.001 ft, and 417 more Snowdon Towers electrical bodies. Report: `reports/element-framing/RE-300-light-source-filters.md`.
