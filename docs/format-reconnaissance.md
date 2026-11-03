@@ -2244,6 +2244,10 @@ Revit's export writes a floor's `Qto_SlabBaseQuantities.NetVolume` as the volume
 
 Revit's export writes a floor's `Qto_SlabBaseQuantities.GrossArea` as the area of the profile its slab extrudes, its sketch outline less its holes: equal to rvt-rs's profile on all 40 of the BIM4LCA office's slabs drawn from their record box, where the slab's other quantities follow its body less often (a sloped slab's record box is deeper than its layers). Stair landings' slabs get none. rvt-rs writes it on each floor drawn as one extrusion: 31 equal on the office, none different. Report: `reports/element-framing/RE-249-slab-gross-area.md`.
 
+## Addendum — RE-302 ellipse profiles and trimmed parametric faces (2026-11-03)
+
+A saved `GEllipse` is `centre + xLen·cos t·x + yLen·sin t·y` over `m_endParams`, and profiles ruled surfaces and surfaces of revolution (188 on the BIM4LCA office, 932 on Snowdon Towers architectural). Read, with curved ruled surfaces stepped by their bend and twist and parametric faces trimmed by any loop, these let the office's 43 toilets be drawn from their saved meshes once the edge each trimmed face shares with a plane is traced onto the plane between Revit's sparse samples. None of the 43 is Revit's body (1.027 to 1.047 of its volume, the extra surface in two of four shells, not a second branch of the trace), and the office's triangles grow 3.7 times, so nothing lands. Report: `reports/element-framing/RE-302-ellipse-profiles-and-trimmed-parametric-faces.md`.
+
 ## Addendum — RE-304 a cylinder face trimmed by any loop (2026-11-03)
 
 A saved cylinder face whose trim loop does not run round its UV box (a door's curved faces, cut by its leaf and frame) is meshed in strips across its angle: the cylinder is straight along its axis, so only U needs the chord bound. 155 more BIM4LCA office doors are then drawn from their saved meshes, 151 exact to 0.001 ft against Revit's export and all within 0.01 ft. Report: `reports/element-framing/RE-304-cylinder-trims.md`.
