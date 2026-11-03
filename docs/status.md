@@ -110,10 +110,10 @@ geometry (doors and windows are drawn from the mesh Revit saved for their
 display by default, and any other family instance with the experimental
 `--saved-meshes` option, RE-78), hip roofs over a T or U footprint, roofs sloped by several slope arrows of the configuration of puzzbobb's U, where Revit slopes the two long outer walls along the arms only (RE-307; no other roof of the configuration is measured), and roofs by extrusion outside Revit 2025, the top of
 walls Revit steps over a floor that covers them in part (29 of the BIM4LCA office's as built and 26 at permit, #1067), the boundaries of
-rooms whose stored solid does not close and opening profiles are not
-decoded, and rvt-rs does not edit Revit model data.
+the rooms whose stored solid still does not close (RE-316 §4) and opening
+profiles are not decoded, and rvt-rs does not edit Revit model data.
 
-**Rooms.** Each `IfcSpace` says in `RvtElementRecordGeometry.SpaceOutlineSource` whether its outline was read from the room's stored solid (`stored_solid`), is the record's bounding box (`record_box`), was drawn from a saved mesh or a family's body, or has no body (an Area), and the diagnostics count the boxes (`exported.bounding_box_spaces`). Measure scores every space's plan area and outline against Revit's export, and CI gates Core Interior (116 of 116 rooms) and RE1 Architecture (11 of 11). The rooms of Revit 2026 and 2027 are boxes until their stored solids are read (#1260, PR #1288). [docs/rooms.md](rooms.md) says what to trust per release, and RE-313 has the runs.
+**Rooms.** Each `IfcSpace` says in `RvtElementRecordGeometry.SpaceOutlineSource` whether its outline was read from the room's stored solid (`stored_solid`), is the record's bounding box (`record_box`), was drawn from a saved mesh or a family's body, or has no body (an Area), and the diagnostics count the boxes (`exported.bounding_box_spaces`). Measure scores every space's plan area and outline against Revit's export, and CI gates Core Interior (116 of 116 rooms) and RE1 Architecture (11 of 11). A room whose stored solid the exact walk did not close is read again from the faces its solid lists, up to the solid's own end, and says so: `stored_solid_faces` where the faces' edges close as the walk reads them (9 of the BIM4LCA office's 13 such rooms as built, all at Revit's area to 0.1%) or `stored_solid_approximate` where a column overlaps a wall, an end of one wall edge lies on another, or the outline falls up to 0.02 ft short of the box (4 as built and 11 of the 12 at building permit: 10 of the 15 at Revit's floor area to 0.1%, the 5 others, four rooms, 0.45% to 0.68% under it); the diagnostics count them (`exported.resolved_outline_spaces`, `exported.approximate_outline_spaces`). The scorer's upward-face area reads one of them (1671995) as 323% over and RE-313's 66% room as 66% off; by Revit's floor both are within 0.5% and 0.1%. The 6 `rac_advanced` rooms with round columns, 49 of the 50 `rme` rooms, Snowdon Towers' 7 and office room 3095831 at permit keep their box (RE-316). [docs/rooms.md](rooms.md) says what to trust per release, and RE-313 has the runs.
 
 ## Finding history
 
@@ -804,7 +804,18 @@ does RE1 Architecture's curtain-wall door. Its addendum sizes one whose
 record names no wall along its own Y axis, as revit-ifc measures the
 height of a family no wall hosts: 266 of the office's 269 doors are then
 Revit's, and two are 0.1137 ft wider than Revit's
-(`reports/element-framing/RE-218-box-sizes.md`, #810).
+(`reports/element-framing/RE-218-box-sizes.md`, #810). **RE-318
+(2026-11-03)** takes the width of such a door or window from the lines of no
+category in its symbol's saved graphics, the edges of the boxes that bound
+its forms, hidden forms included, ahead of the record box's: the two wide
+doors are wall hatches whose 90 degree type hides the 180 degree leaf Revit's
+width includes, and the office's doors and windows then all have Revit's
+`OverallWidth` (268 of 268 doors Revit sizes, 269 of 269 windows as built; 268
+and 265 at building permit). It fires only where the record box sized the
+door or window before: of the other measured models only RE1 Architecture's
+curtain-wall door, whose width is unchanged. One building's families, and
+what the boxes are is inferred from Revit's widths
+(`reports/element-framing/RE-318-symbol-wire-width.md`).
 
 **RE-216 (2026-10-24)** gives a family instance whose element data sits in
 two partitions, with transforms that disagree, the copy its current record is
