@@ -350,8 +350,9 @@ at the default limits and, when a stream is not read, shows "Part of the file
 not read" in the File status panel with a "Retry with large-model limits"
 button, which reopens the same file with `--large-model`'s limits (streams up
 to 2 GiB). A browser tab can use at most 4 GiB of memory, so a very large
-model can still fail to open there; `rvt-ifc --large-model` has no such
-ceiling.
+model can still fail to open there; `rvt-ifc --large-model` is not held to a
+tab's 4 GiB (its caps are a 2 GiB stream and, on a 64-bit machine, 8 GiB
+inflated, and a file over 2 GiB is rejected whatever the flags).
 
 Two exports of the same file are the same bytes except for the export time,
 which the IFC header and owner history record. Set `SOURCE_DATE_EPOCH` (Unix

@@ -16,6 +16,12 @@ import { fileURLToPath } from 'node:url';
 //   wasmMemoryBytes  the wasm linear memory after the whole parse; it only
 //                    grows, so it is the peak against the 4 GiB a tab holds
 //   savedMeshBodies  doors and windows drawn from saved meshes
+//   estimatedPeakBytes  what the viewer's pre-check expects the open to take
+//                    (ten times the file, #1195) and its ratio to the peak
+//   timeline         where the open's time went, from the decoder's own
+//                    reports: seconds from each stage's first report to the
+//                    next one's, so time the decoder reports nothing in is
+//                    counted to the stage before it
 //
 // The result goes to measurements/saved-meshes.json and, as a table, to the
 // log and the job summary; Deploy viewer uploads the JSON. It runs on its own
@@ -63,6 +69,12 @@ interface Diagnostics {
   };
 }
 
+/** One stretch of an open: a decoder stage or a worker step, and the milliseconds until the next. */
+interface Span {
+  label: string;
+  ms: number;
+}
+
 interface Measurement {
   model: string;
   release: number;
@@ -73,6 +85,8 @@ interface Measurement {
   openMs: number;
   workerMs: number;
   wasmMemoryBytes: number;
+  estimatedPeakBytes: number;
+  timeline: Span[];
   mainHeapBytes: number | null;
   buildingElements: number;
   doors: number;
@@ -95,6 +109,28 @@ async function waitLoaded(page: Page, model: Model): Promise<void> {
   await expect(page.locator('#load-overlay')).toBeHidden();
 }
 
+interface LoadEvent {
+  t: number;
+  stage?: string;
+  step?: string;
+}
+
+/** The open's time by what the page was told was happening, in order. */
+function timelineOf(events: LoadEvent[], loadMs: number): Span[] {
+  const spans: Span[] = [];
+  let label = 'Before the first report';
+  let from = 0;
+  for (const event of events) {
+    const next = event.stage ?? event.step ?? '';
+    if (next === label) continue;
+    spans.push({ label, ms: event.t - from });
+    label = next;
+    from = event.t;
+  }
+  spans.push({ label, ms: Math.max(0, loadMs - from) });
+  return spans.filter((span) => span.ms > 0);
+}
+
 /** Reads what the viewer shows about the model now open. */
 async function read(
   page: Page,
@@ -109,8 +145,13 @@ async function read(
     openMs: number;
     workerMs: number;
     wasmMemoryBytes: number;
+    estimatedPeakBytes: number;
   } | null;
   expect(stats, 'the viewer reports what an open cost').not.toBeNull();
+  const events = JSON.parse(
+    (await page.locator('#status').getAttribute('data-load-progress')) ?? '[]',
+  ) as LoadEvent[];
+  expect(events.length, 'the viewer keeps what the worker reported').toBeGreaterThan(0);
   const diagnostics = JSON.parse(
     (await page.locator('#diagnostics-json').textContent()) ?? 'null',
   ) as Diagnostics;
@@ -129,6 +170,8 @@ async function read(
     openMs: stats!.openMs,
     workerMs: stats!.workerMs,
     wasmMemoryBytes: stats!.wasmMemoryBytes,
+    estimatedPeakBytes: stats!.estimatedPeakBytes,
+    timeline: timelineOf(events, stats!.loadMs),
     mainHeapBytes,
     buildingElements: exported.building_elements,
     doors: exported.by_ifc_type.IFCDOOR ?? 0,
@@ -185,6 +228,8 @@ function tableRows(report: Report): string[][] {
       seconds(m.loadMs),
       seconds(m.openMs),
       mib(m.wasmMemoryBytes),
+      mib(m.estimatedPeakBytes),
+      (m.estimatedPeakBytes / m.wasmMemoryBytes).toFixed(2),
       mib(m.mainHeapBytes),
       `${m.savedMeshBodies} of ${m.doors + m.windows}`,
       String(m.boundingBoxBodies),
@@ -198,6 +243,8 @@ function tableRows(report: Report): string[][] {
       'Load s',
       'Open s',
       'Wasm MiB',
+      'Estimate MiB',
+      'Estimate / wasm',
       'Page heap MiB',
       'Doors and windows from meshes',
       'Box bodies',
@@ -218,17 +265,34 @@ function markdownTable(rows: string[][]): string {
   return [line(rows[0]), line(rows[0].map(() => '---')), ...rows.slice(1).map(line)].join('\n');
 }
 
+/** Where each open's time went, one row per model, saved meshes on. */
+function timelineRows(report: Report): string[][] {
+  const order = new Map(models.map((m, i) => [m.file, i]));
+  return [
+    ['Model', 'Where the open went (seconds, in order)'],
+    ...report.measurements
+      .filter((m) => m.savedMeshes)
+      .sort((a, b) => (order.get(a.model) ?? 0) - (order.get(b.model) ?? 0))
+      .map((m) => [
+        m.model,
+        m.timeline.map((span) => `${span.label} ${seconds(span.ms)}`).join(' > '),
+      ]),
+  ];
+}
+
 test.afterAll(() => {
   const report = loadReport();
   if (!report) return;
   const rows = tableRows(report);
+  const timeline = timelineRows(report);
   console.log(
     `\nSaved meshes on and off, one open each (${report.browser}, ${report.cpus} CPUs, ${mib(report.memoryBytes)} MiB)\n${plainTable(rows)}\n`,
   );
+  console.log(`Where the open went, saved meshes on\n${timeline.map((r) => r.join('  ')).join('\n')}\n`);
   if (process.env.GITHUB_STEP_SUMMARY) {
     fs.appendFileSync(
       process.env.GITHUB_STEP_SUMMARY,
-      `### Saved meshes on and off, one open each\n\n${report.browser}, ${report.cpus} CPUs, ${mib(report.memoryBytes)} MiB\n\n${markdownTable(rows)}\n`,
+      `### Saved meshes on and off, one open each\n\n${report.browser}, ${report.cpus} CPUs, ${mib(report.memoryBytes)} MiB\n\n${markdownTable(rows)}\n\n### Where the open went, saved meshes on\n\n${markdownTable(timeline)}\n`,
     );
   }
 });
