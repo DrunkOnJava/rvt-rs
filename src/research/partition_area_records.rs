@@ -599,10 +599,10 @@ fn draw_area(
     record: &AreaRecord,
     located: &Located,
     lines: &BoundaryLines,
-    declared_lines: &BTreeSet<u32>,
+    known_lines: &BTreeSet<u32>,
     surroundings: &Surroundings<'_>,
 ) -> Result<AreaBody, &'static str> {
-    let named_lines = named_ids(&record.bytes, declared_lines, AREA_LINE_ID_FLOOR);
+    let named_lines = named_ids(&record.bytes, known_lines, AREA_LINE_ID_FLOOR);
     let named_in_group = named_lines.iter().all(|line| {
         !lines.conflicted.contains(line)
             && lines
@@ -672,6 +672,16 @@ fn area_bodies(
             locate(record, point, &lines, surroundings, &mut arrangements),
         );
     }
+    // Each Area's region is located; the groups' arrangements are not needed
+    // again, so they go before the regions are compared.
+    drop(arrangements);
+    // The lines an Area's record may name: those the chain declares, and those
+    // the scan returned without a chain record of their own.
+    let known_lines: BTreeSet<u32> = declared_lines
+        .iter()
+        .copied()
+        .chain(lines.by_id.keys().copied())
+        .collect();
     let mut sharing: BTreeMap<RegionKey, Vec<u32>> = BTreeMap::new();
     for (&id, place) in &located {
         let Ok(place) = place else {
@@ -695,7 +705,7 @@ fn area_bodies(
         .collect();
     for (&id, record) in placed {
         let result = match located.get(&id) {
-            Some(Ok(place)) => draw_area(record, place, &lines, declared_lines, surroundings),
+            Some(Ok(place)) => draw_area(record, place, &lines, &known_lines, surroundings),
             Some(Err(reason)) => Err(*reason),
             None => Err(REFUSED_NO_POINT),
         };
