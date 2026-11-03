@@ -426,27 +426,7 @@ pub fn wall_top_joins(
     rf: &mut RevitFile,
     walls: &BTreeSet<u64>,
 ) -> anyhow::Result<BTreeMap<u64, bool>> {
-    let mut top_joined: BTreeMap<u64, bool> = BTreeMap::new();
-    if walls.is_empty() {
-        return Ok(top_joined);
-    }
-    let options = Options {
-        selected_ids: walls.clone(),
-        releases: crate::native_document::NATIVE_RELEASES,
-        ..Options::default()
-    };
-    extract_graphs(rf, &options, |record| {
-        let (Some(class), Some(graph)) = (record.class_name.as_deref(), record.graph.as_ref())
-        else {
-            return Ok(());
-        };
-        let id = record.identity.element_id;
-        if matches!(class, "SWall" | "ArcWall") && walls.contains(&id) {
-            top_joined.insert(id, is_top_joined(graph));
-        }
-        Ok(())
-    })?;
-    Ok(top_joined)
+    WallReads::default().top_joins(rf, walls)
 }
 
 /// [`native_walls`], and for every one of `walls` whose `SWall` or `ArcWall`

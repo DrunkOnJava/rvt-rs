@@ -72,25 +72,5 @@ pub fn wall_type_functions(
     rf: &mut RevitFile,
     walls: &BTreeSet<u64>,
 ) -> anyhow::Result<BTreeMap<u64, i64>> {
-    let mut wall_type: BTreeMap<u64, u64> = BTreeMap::new();
-    let options = native_document::Options {
-        selected_ids: walls.clone(),
-        releases: native_document::NATIVE_RELEASES,
-        ..native_document::Options::default()
-    };
-    native_document::extract_graphs(rf, &options, |record| {
-        let Some(graph) = record.graph.as_ref() else {
-            return Ok(());
-        };
-        if let Some(type_id) = wall_type_id(graph) {
-            wall_type.insert(record.identity.element_id, type_id);
-        }
-        Ok(())
-    })?;
-    let types: BTreeSet<u64> = wall_type.values().copied().collect();
-    let function = functions_of_types(rf, &types)?;
-    Ok(wall_type
-        .into_iter()
-        .filter_map(|(wall, type_id)| Some((wall, *function.get(&type_id)?)))
-        .collect())
+    crate::native_walls::WallReads::default().type_functions(rf, walls)
 }
