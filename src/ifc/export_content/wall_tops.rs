@@ -48,8 +48,8 @@
 //! §5). A wall
 //! whose pieces pass [`MAX_RISERS`], whose plan does not break into convex
 //! pieces, or whose several elements share a hole or opening that lies over
-//! it, or with a piece between [`KEPT_SLIVER_FEET`] and [`KEPT_PIECE_FEET`]
-//! wide, is left as it was. The wall's `extrusion` stays the full prism, which
+//! it, or with a small piece that lies inside another wall (see [`embedded`]),
+//! is left as it was. The wall's `extrusion` stays the full prism, which
 //! the passes that read a wall's plan and its record's box use; the writer,
 //! the glTF and the plan outline draw its `solid_shape`.
 
@@ -85,18 +85,15 @@ const STEP_TOLERANCE_SQUARE_FEET: f64 = COVER_TOLERANCE_SQUARE_FEET;
 /// The most convex pieces a wall's plan outside the elements may come to.
 const MAX_RISERS: usize = 32;
 
-/// The widest piece of a wall's plan outside its floor that Revit is measured
-/// to leave at the wall's top among the slivers: the three 0.032 to 0.033 ft
-/// pieces past a floor's edge on the BIM4LCA office as built (RE-320 §4), feet.
-const KEPT_SLIVER_FEET: f64 = 0.04;
+/// The area under which a piece of a plan outside its floor may be a stub
+/// that Revit cuts although the floor does not cover it, square feet: the one
+/// measured, 0.0243 ft2 at the end of a wall inside the plan of the wall it
+/// abuts, is Revit's top cut, and the pieces of 0.005 to 0.021 ft2 and 0.032 to
+/// 0.098 ft wide that lie outside every other wall are kept (RE-320 §4).
+const EMBEDDED_PIECE_SQUARE_FEET: f64 = 0.05;
 
-/// The narrowest wider piece measured to stay at the wall's top, feet: 0.098 on
-/// the same file (an appendage of a layered wall's plan). Revit cuts the one
-/// piece in between, a 0.085 ft stub past a floor's edge inside an abutting
-/// wall, and nothing separates it from the pieces Revit keeps (pieces inside
-/// another wall's plan are kept too), so a wall with a piece between the two
-/// widths is left as it was (RE-320 §4).
-const KEPT_PIECE_FEET: f64 = 0.09;
+/// How much height two walls must share to be one beside the other, feet.
+const SHARED_HEIGHT_FEET: f64 = 0.5;
 
 /// The area under which a piece of a plan is no piece, square feet: rounding
 /// where a triangle's edge lies along another edge.
@@ -368,19 +365,24 @@ fn reach(cutter: &Cutter, wall: &Wall) -> f64 {
     inside - cut
 }
 
-/// The least width of the convex counter-clockwise `ring`: the smallest, over
-/// its edges, of the greatest distance of a corner from the edge's line, feet.
-fn least_width(ring: &[Point2]) -> f64 {
-    let n = ring.len();
-    (0..n)
-        .map(|i| {
-            let (a, b) = (ring[i], ring[(i + 1) % n]);
-            let length = ((b.0 - a.0).powi(2) + (b.1 - a.1).powi(2)).sqrt();
-            ring.iter()
-                .map(|&p| side_of(a, b, p).abs() / length)
-                .fold(0.0, f64::max)
-        })
-        .fold(f64::INFINITY, f64::min)
+/// Whether the convex `piece` of a wall's plan outside its floor is a small
+/// piece that lies inside the plans of other walls: the stub of a wall that
+/// butts into another, which Revit cuts at the floor's underside with the
+/// rest of the wall (RE-320 §4). No width or area separates it from the
+/// slivers Revit keeps, and the pieces it keeps that lie inside another wall
+/// are all larger, so a wall with such a piece is left as it was.
+fn embedded(piece: &[Point2], neighbours: &[&Wall]) -> bool {
+    let size = area(piece);
+    if size >= EMBEDDED_PIECE_SQUARE_FEET {
+        return false;
+    }
+    let inside: f64 = neighbours
+        .iter()
+        .filter_map(|other| convex_pieces(&other.plan))
+        .flatten()
+        .map(|part| area(&clip_convex(piece, &part)))
+        .sum();
+    inside >= 0.99 * size
 }
 
 /// The convex pieces `plan` is made of: itself where it is convex, else its
@@ -424,7 +426,11 @@ type Levels<'a> = Vec<(f64, Vec<&'a Cutter>)>;
 /// than [`MAX_RISERS`] pieces, where the plan does not break into convex
 /// pieces, or where several elements share a hole or opening the wall
 /// crosses.
-fn steps(wall: &Wall, levels: &[(f64, Vec<&Cutter>)]) -> Option<Vec<(f64, Vec<Ring>)>> {
+fn steps(
+    wall: &Wall,
+    levels: &[(f64, Vec<&Cutter>)],
+    neighbours: &[&Wall],
+) -> Option<Vec<(f64, Vec<Ring>)>> {
     let alone = levels.len() == 1 && levels[0].1.len() == 1;
     let base = convex_pieces(&wall.plan)?;
     let mut pieces = base.clone();
@@ -476,12 +482,7 @@ fn steps(wall: &Wall, levels: &[(f64, Vec<&Cutter>)]) -> Option<Vec<(f64, Vec<Ri
             .into_iter()
             .filter(|piece| area(piece) >= STEP_TOLERANCE_SQUARE_FEET)
             .collect();
-        if above.len() > MAX_RISERS
-            || above.iter().any(|piece| {
-                let width = least_width(piece);
-                width > KEPT_SLIVER_FEET && width < KEPT_PIECE_FEET
-            })
-        {
+        if above.len() > MAX_RISERS || above.iter().any(|piece| embedded(piece, neighbours)) {
             return None;
         }
         out.push((*level, above));
@@ -662,6 +663,11 @@ fn decide(entities: &[IfcEntity], pending: &[Pending]) -> Vec<(usize, Cut)> {
             _ => {}
         }
     }
+    let walls: Vec<(usize, Wall)> = entities
+        .iter()
+        .enumerate()
+        .filter_map(|(index, entity)| build_wall(entity).map(|wall| (index, wall)))
+        .collect();
     let mut cutters: HashMap<u32, Option<Cutter>> = HashMap::new();
     let mut cuts = Vec::new();
     for Pending {
@@ -732,7 +738,19 @@ fn decide(entities: &[IfcEntity], pending: &[Pending]) -> Vec<(usize, Cut)> {
                 ids.push(vec![id]);
             }
         }
-        let Some(found) = steps(&wall, &levels) else {
+        let neighbours: Vec<&Wall> = walls
+            .iter()
+            .filter(|(other_index, other)| {
+                other_index != index
+                    && wall.top.min(other.top) - wall.base.max(other.base) > SHARED_HEIGHT_FEET
+                    && other.bounds[0] <= wall.bounds[2]
+                    && other.bounds[2] >= wall.bounds[0]
+                    && other.bounds[1] <= wall.bounds[3]
+                    && other.bounds[3] >= wall.bounds[1]
+            })
+            .map(|(_, other)| other)
+            .collect();
+        let Some(found) = steps(&wall, &levels, &neighbours) else {
             continue;
         };
         let lowest_id = ids.first().and_then(|named| named.first()).copied();
