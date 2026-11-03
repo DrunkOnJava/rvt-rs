@@ -71,7 +71,8 @@ wall from its start, `-` where the body is not there):
                                           inside Revit's plan where Revit's body is
                                           at that height too, and the share of it
                                           that lies inside the plan of another wall
-                                          of rvt-rs's
+                                          of rvt-rs's that shares more than 0.5 ft of
+                                          its height
   summary ...                             walls equal on the centre line, and
                                           over the whole plan, and the points
 
@@ -462,6 +463,7 @@ def main():
     wall_tags = list(both)
     wall_plans = [footprint(ours_walls[t]) for t in wall_tags]
     wall_index = shapely.STRtree([p if p is not None else shapely.Polygon() for p in wall_plans])
+    wall_heights = [(float(ours_walls[t][:, :, 2].min()), float(ours_walls[t][:, :, 2].max())) for t in wall_tags]
     on_centre = on_plan = walls_planned = 0
     plan_points = [0, 0, 0, 0]
     tallers = lowers = 0.0
@@ -525,11 +527,18 @@ def main():
         )
         tallers += taller
         lowers += lower
+        low, high = ours_box[4], ours_box[5]
         if ours_full.area < ours_plan.area - 1e-3:
             for piece in pieces_of(ours_full):
                 inside = piece.intersection(common).area
                 if inside > 1e-6:
-                    others = [wall_plans[i] for i in wall_index.query(piece) if wall_tags[i] != tag and wall_plans[i] is not None]
+                    others = [
+                        wall_plans[i]
+                        for i in wall_index.query(piece)
+                        if wall_tags[i] != tag
+                        and wall_plans[i] is not None
+                        and min(high, wall_heights[i][1]) - max(low, wall_heights[i][0]) > 0.5
+                    ]
                     beside = piece.intersection(shapely.union_all(others)).area / piece.area if others else 0.0
                     print(
                         f"piece tag:{tag} area {piece.area:.4f} width {least_width(piece):.4f} at {piece.centroid.x:.4f} {piece.centroid.y:.4f} "
