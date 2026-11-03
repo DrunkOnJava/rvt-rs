@@ -6,7 +6,8 @@
 //! so the room is on its left, wind around a region whose boundary is the room's
 //! outline (`partition_room_boundaries::region_boundary`).
 //!
-//! For each room whose own partition holds a solid, one line: the room, the
+//! For each room whose own partition holds a solid and is not left exactly as
+//! RE-101 reads it, one line: the room, the
 //! outline RE-101 gave (area, or none), the outline now given, the outline of
 //! the walls that reach the ceiling instead, the box's area, and for each area
 //! whether Revit's cache of computed room areas in the same partition holds it
@@ -23,8 +24,8 @@ use rvt::RevitFile;
 use rvt::research::element_record_plan_profiles::{PlanProfile, plan_profile_from_lines};
 use rvt::research::partition_room_boundaries::{
     BOX_TOLERANCE_FEET, FaceKind, OutlineAnchor, ROOM_STEP_TOLERANCE_FEET,
-    ROOM_VERTEX_TOLERANCE_FEET, region_boundary, room_outline_at, solid_faces,
-    solid_faces_to_next_solid, solid_headers, span_outline_at,
+    ROOM_VERTEX_TOLERANCE_FEET, ResolvedKind, SpanRead, outline_of_solids, region_boundary,
+    resolved_outline_of_solids, solid_faces, solid_headers, solid_span, span_outline_at,
 };
 use rvt::walker::InstanceField;
 
@@ -119,7 +120,8 @@ fn main() -> anyhow::Result<()> {
     let mut tally: BTreeMap<&str, usize> = BTreeMap::new();
     let (mut oriented_ok, mut oriented_total) = (0, 0);
     let mut cached_new = (0, 0);
-    let mut cached_ceiling = (0, 0);
+    let mut cached_slack = (0, 0);
+    let mut kept_cache = (0, 0);
     for room in &rooms {
         let Some(id) = room.id else { continue };
         let float = |wanted: &str| {
@@ -190,41 +192,64 @@ fn main() -> anyhow::Result<()> {
                 oriented_ok += 1;
             }
         }
-        let now = room_outline_at(buf, header, bbox);
-        let ceiling = span_outline_at(buf, header, bbox, OutlineAnchor::Ceiling, false);
-        let with_arcs = span_outline_at(buf, header, bbox, OutlineAnchor::Floor, true);
-        let class = match (&walked, &now) {
-            (Some(_), Some(_)) => {
-                if walked == now {
-                    "kept, unchanged"
-                } else {
-                    "kept, CHANGED"
-                }
-            }
-            (None, Some(_)) => "newly closed",
-            (Some(_), None) => "LOST",
+        let walk_all = outline_of_solids(buf, &headers, bbox);
+        let resolved = if walk_all.is_none() {
+            resolved_outline_of_solids(buf, &headers, bbox)
+        } else {
+            None
+        };
+        let now = walk_all
+            .clone()
+            .or_else(|| resolved.as_ref().map(|(profile, _)| profile.clone()));
+        let exact = SpanRead {
+            arcs: false,
+            slack: 0.0,
+        };
+        let ceiling = span_outline_at(buf, header, bbox, OutlineAnchor::Ceiling, exact);
+        let with_arcs = span_outline_at(
+            buf,
+            header,
+            bbox,
+            OutlineAnchor::Floor,
+            SpanRead {
+                arcs: true,
+                slack: 0.0,
+            },
+        );
+        let class = match (&walk_all, &resolved) {
+            (Some(_), _) => "kept",
+            (None, Some((_, ResolvedKind::Faces))) => "faces",
+            (None, Some((_, ResolvedKind::Approximate))) => "approximate",
             (None, None) => "still box",
         };
         *tally.entry(class).or_default() += 1;
-        if walked.is_some() && now.is_some() && walked == now {
+        let cache = cached_areas(buf);
+        if let Some(profile) = walk_all
+            .as_ref()
+            .filter(|p| (area(p) - dx * dy).abs() > 1e-3 * dx * dy || p.outer_xy.len() > 4)
+        {
+            kept_cache.1 += 1;
+            if in_cache(&cache, area(profile)) {
+                kept_cache.0 += 1;
+            }
+        }
+        if walked.is_some() && walk_all.is_some() {
             continue;
         }
-        let cache = cached_areas(buf);
         let box_area = dx * dy;
-        if walked.is_none() && now.is_some() {
-            cached_new.1 += 1;
-            if now.as_ref().is_some_and(|p| in_cache(&cache, area(p))) {
-                cached_new.0 += 1;
+        if let Some((profile, kind)) = resolved.as_ref() {
+            let slot = if *kind == ResolvedKind::Faces {
+                &mut cached_new
+            } else {
+                &mut cached_slack
+            };
+            slot.1 += 1;
+            if in_cache(&cache, area(profile)) {
+                slot.0 += 1;
             }
         }
-        if walked.is_none() && now.is_none() && ceiling.is_some() {
-            cached_ceiling.1 += 1;
-            if ceiling.as_ref().is_some_and(|p| in_cache(&cache, area(p))) {
-                cached_ceiling.0 += 1;
-            }
-        }
-        if walked.is_none() && now.is_none() {
-            let faces = solid_faces_to_next_solid(buf, header);
+        if walk_all.is_none() && resolved.is_none() {
+            let faces = solid_span(buf, header);
             let tolerance = BOX_TOLERANCE_FEET;
             let strays = faces
                 .iter()
@@ -242,6 +267,7 @@ fn main() -> anyhow::Result<()> {
                     _ => false,
                 })
                 .count();
+            let cylinders = faces.iter().filter(|f| f.cylinder.is_some()).count();
             let mut floor_lines: Vec<[f64; 4]> = faces
                 .iter()
                 .filter_map(|f| f.plan_edge())
@@ -267,7 +293,7 @@ fn main() -> anyhow::Result<()> {
                 Err(failure) => format!("{failure:?}"),
             };
             println!(
-                "room {id}: span faces {} (stray {strays}), floor edges {}; {}",
+                "room {id}: span faces {} (stray {strays}, cylinders {cylinders}), floor edges {}; {}",
                 faces.len(),
                 floor_lines.len(),
                 why.chars().take(600).collect::<String>()
@@ -291,8 +317,8 @@ fn main() -> anyhow::Result<()> {
         "plan edges directed head to tail on {oriented_ok} of the {oriented_total} rooms RE-101 kept"
     );
     println!(
-        "newly closed rooms whose area Revit's cache holds: {} of {}; ceiling-anchored outlines of rooms still boxes whose area it holds: {} of {}",
-        cached_new.0, cached_new.1, cached_ceiling.0, cached_ceiling.1
+        "Revit's cached room areas (u64 · ff x8 · u32 0 · i32 · f64, RE-101 section 4) hold the outline's area on {} of {} non-rectangular rooms RE-101 kept (the baseline), on {} of {} exact span outlines and on {} of {} approximate ones",
+        kept_cache.0, kept_cache.1, cached_new.0, cached_new.1, cached_slack.0, cached_slack.1
     );
     Ok(())
 }

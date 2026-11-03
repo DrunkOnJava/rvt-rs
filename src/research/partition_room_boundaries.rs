@@ -36,7 +36,7 @@
 //! the box of its plane, not its outline: where a column stands in the room
 //! and overlaps a wall, the wall's face runs across the column's footprint.
 //! When the faces the walk reads do not close, the faces up to the next
-//! solid's tag are read instead ([`solid_faces_to_next_solid`]), each plan
+//! solid's tag are read instead ([`solid_span`]), each plan
 //! edge directed so the room is on its left, and the room's outline is the
 //! boundary of the region those edges wind around ([`region_boundary`],
 //! RE-316). A face whose record is 44 bytes longer than a plane's is a
@@ -60,8 +60,29 @@ use crate::{Result, RevitFile};
 use std::collections::BTreeMap;
 
 /// Value of [`crate::element_record_plan_profiles::PLAN_PROFILE_SOURCE_FIELD`]
-/// on a room outline read here.
+/// on a room outline read here from the faces the walk reads, closing as they
+/// are (RE-101).
 pub const ROOM_OUTLINE_SOURCE: &str = "partition_room_solid_faces";
+
+/// Value of the same field on a room outline resolved from the faces up to
+/// the solid's end, spanning the record box (RE-316). Not the walk's: a face
+/// of another element inside the box could still be read into it, so an
+/// importer tells the two apart.
+pub const ROOM_OUTLINE_SOURCE_FACES: &str = "partition_room_solid_faces_resolved";
+
+/// Value of the same field on a room outline resolved the same way that
+/// falls up to [`ROOM_SLIVER_FEET`] short of the record box on a side
+/// (RE-316): approximate, 0.5% and 0.7% under Revit's area on the two office
+/// rooms scored.
+pub const ROOM_OUTLINE_SOURCE_APPROXIMATE: &str = "partition_room_solid_faces_approximate";
+
+/// Whether `source` is a value of the profile source field that a room's
+/// outline from its stored solid carries.
+pub fn is_room_outline_source(source: &str) -> bool {
+    source == ROOM_OUTLINE_SOURCE
+        || source == ROOM_OUTLINE_SOURCE_FACES
+        || source == ROOM_OUTLINE_SOURCE_APPROXIMATE
+}
 
 /// Releases this layout is measured on. On Revit 2026 and 2027 it is the
 /// 2025 layout: every room of Autodesk's `rac_basic`, `rac_advanced`,
@@ -90,8 +111,16 @@ pub const ROOM_SOLID_WINDOW: usize = 0x1_0000;
 pub const BOX_TOLERANCE_FEET: f64 = 1e-3;
 
 /// How many bytes past a room's solid header the next solid's tag is looked
-/// for (RE-316): the largest solid measured, 115 faces, ends 84 KB in.
+/// for (RE-316, interim).
 pub const ROOM_SOLID_SPAN_MAX: usize = 4 << 20;
+
+/// The most faces a solid's span may hold before it is not resolved (RE-316):
+/// the largest solid measured has 115.
+pub const RESOLVE_FACES_MAX: usize = 512;
+
+/// The most faces the walk reads from one solid; a solid with more is not
+/// read at all.
+pub const SOLID_FACES_MAX: usize = 4096;
 
 /// How far a vertical face's span may fall short of a room's box, and a
 /// horizontal face lie from its floor or ceiling, and still be it, feet
@@ -114,8 +143,19 @@ pub const ROOM_STEP_TOLERANCE_FEET: f64 = 0.0025;
 /// [`crate::element_record_plan_profiles::SKETCH_ARC_TOLERANCE_FEET`]).
 const ARC_CHORD_TOLERANCE_FEET: f64 = 0.0005;
 
+/// How far a resolved outline may fall short of the room's record box on a
+/// side and still be a room's outline, labelled approximate, feet (RE-316):
+/// the back of a column that overlaps a wall stands 0.0164 ft behind the
+/// wall's face on three rooms of the BIM4LCA office, and the box holds it.
+pub const ROOM_SLIVER_FEET: f64 = 0.02;
+
 /// The most plan segments [`region_boundary`] resolves.
-pub const BOUNDARY_SEGMENTS_MAX: usize = 4096;
+pub const BOUNDARY_SEGMENTS_MAX: usize = RESOLVE_FACES_MAX;
+
+/// The most pieces the segments of [`region_boundary`] may be cut into: a
+/// room's own faces cross a few times, and a crafted grid of them crosses
+/// quadratically.
+pub const BOUNDARY_PIECES_MAX: usize = 4096;
 
 /// How far apart two points of a resolved boundary may lie and be one,
 /// feet.
@@ -303,6 +343,9 @@ pub fn solid_faces(buf: &[u8], header: usize) -> Vec<RoomFace> {
     let mut at = first;
     while let Some(face) = face_at(buf, at) {
         faces.push(face);
+        if faces.len() > SOLID_FACES_MAX {
+            return Vec::new();
+        }
         let from = at + FACE_TAG.len();
         let Some(window) = buf.get(from..buf.len().min(at + FACE_GAP)) else {
             break;
@@ -436,40 +479,62 @@ fn strays_from_box(face: &RoomFace, bbox: [f64; 6]) -> bool {
     face.plan_edge().is_some_and(|(edge, _)| outside(edge))
 }
 
-fn profile_on_box(profile: PlanProfile, bbox: [f64; 6]) -> Option<PlanProfile> {
+/// `profile` where its plan extent equals `bbox`'s on each side within
+/// [`BOX_TOLERANCE_FEET`], or, where `slack` is set, falls short of it by no
+/// more than `slack` on any side.
+fn profile_on_box(profile: PlanProfile, bbox: [f64; 6], slack: f64) -> Option<PlanProfile> {
     let extent = profile.plan_extent_feet()?;
+    let inward = [1.0, 1.0, -1.0, -1.0];
     let wanted = [bbox[0], bbox[1], bbox[3], bbox[4]];
     extent
         .iter()
         .zip(wanted)
-        .all(|(got, want)| (got - want).abs() <= BOX_TOLERANCE_FEET)
+        .zip(inward)
+        .all(|((got, want), sign)| {
+            let short = (got - want) * sign;
+            short >= -BOX_TOLERANCE_FEET && short <= slack + BOX_TOLERANCE_FEET
+        })
         .then_some(profile)
 }
 
+/// How the faces of a span are read into an outline (RE-316).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct SpanRead {
+    /// Read the arcs of round columns too. Off, a solid with a cylinder is
+    /// not resolved.
+    pub arcs: bool,
+    /// How far the outline may fall short of the record box on a side.
+    pub slack: f64,
+}
+
 /// The outline the wall faces among `faces` make, kept where it spans
-/// `bbox`. With `resolve` off, the faces' plan edges must close into loops as
-/// they are (RE-101). With it on, the outline is the boundary of the region
+/// `bbox`. With `span` unset, the faces' plan edges must close into loops as
+/// they are (RE-101). With it set, the outline is the boundary of the region
 /// they wind around ([`region_boundary`]), and a vertical face that reaches
 /// outside the box rules the solid out.
 fn outline_from_faces(
     faces: &[RoomFace],
     bbox: [f64; 6],
     anchor: OutlineAnchor,
-    resolve: bool,
-    arcs: bool,
+    span: Option<SpanRead>,
 ) -> Option<PlanProfile> {
-    if resolve && faces.iter().any(|face| strays_from_box(face, bbox)) {
+    if faces.len() > RESOLVE_FACES_MAX && span.is_some() {
         return None;
     }
-    if resolve && !arcs && faces.iter().any(|face| face.cylinder.is_some()) {
-        return None;
+    if let Some(read) = span {
+        if faces.iter().any(|face| strays_from_box(face, bbox)) {
+            return None;
+        }
+        if !read.arcs && faces.iter().any(|face| face.cylinder.is_some()) {
+            return None;
+        }
     }
     let mut lines = Vec::new();
     for face in faces {
         if let Some(edge) = reaches_anchor(face, bbox, anchor) {
             lines.push(edge);
         }
-        if resolve && arcs {
+        if span.is_some_and(|read| read.arcs) {
             if let Some((low, high)) = face.vertical_cylinder_heights() {
                 let reached = match anchor {
                     OutlineAnchor::Floor => (low - bbox[2]).abs() <= BOX_TOLERANCE_FEET,
@@ -481,64 +546,85 @@ fn outline_from_faces(
             }
         }
     }
-    let profile = if resolve {
-        snap_ends_within(&mut lines, ROOM_STEP_TOLERANCE_FEET);
-        plan_profile_from_lines(&region_boundary(&lines).ok()?)?
-    } else {
-        snap_ends(&mut lines);
-        plan_profile_from_lines(&lines)?
-    };
-    profile_on_box(profile, bbox)
-}
-
-/// The room's outline from the solid whose header starts at `header` and the
-/// faces it was made from. Its wall faces (vertical, reaching the floor of
-/// `bbox`, a record box `[min x, min y, min z, max x, max y, max z]`) close
-/// into loops whose plan extent is `bbox`'s within [`BOX_TOLERANCE_FEET`];
-/// where the faces the walk reads do not close, the faces up to the next
-/// solid's tag are resolved to a boundary instead (RE-316). A face's origin is
-/// its plane's, not a point on the face, so only the plan edges are checked.
-fn outline_with_faces(
-    buf: &[u8],
-    header: usize,
-    bbox: [f64; 6],
-) -> Option<(PlanProfile, Vec<RoomFace>, bool)> {
-    let walked = solid_faces(buf, header);
-    if let Some(profile) = outline_from_faces(&walked, bbox, OutlineAnchor::Floor, false, false) {
-        return Some((profile, walked, false));
+    match span {
+        None => {
+            snap_ends(&mut lines);
+            profile_on_box(plan_profile_from_lines(&lines)?, bbox, 0.0)
+        }
+        Some(read) => {
+            snap_ends_within(&mut lines, ROOM_STEP_TOLERANCE_FEET);
+            let boundary = region_boundary(&lines).ok()?;
+            profile_on_box(plan_profile_from_lines(&boundary)?, bbox, read.slack)
+        }
     }
-    let span = solid_faces_to_next_solid(buf, header);
-    let profile = outline_from_faces(&span, bbox, OutlineAnchor::Floor, true, false)?;
-    Some((profile, span, true))
 }
 
-/// The room's outline from the solid whose header starts at `header`: its
-/// wall faces' plan edges as they stand where the walk's faces close (RE-101),
-/// and resolved to a boundary where the faces up to the next solid's tag do
-/// (RE-316). Kept only where it spans `bbox`.
-pub fn room_outline_at(buf: &[u8], header: usize, bbox: [f64; 6]) -> Option<PlanProfile> {
-    outline_with_faces(buf, header, bbox).map(|(profile, _, _)| profile)
-}
-
-/// The outline the faces up to the next solid's tag make, resolved to a
-/// boundary, for walls that reach `anchor`, with the arcs of round columns
-/// where `arcs` is set (RE-316). A probe's reading: [`room_outline_at`] uses
-/// only [`OutlineAnchor::Floor`] and leaves a solid with a cylinder unresolved,
-/// since whether Revit takes a column off a room's area is unmeasured.
+/// The outline the faces up to the solid's end make, resolved to a boundary,
+/// for walls that reach `anchor`, read as `read` says (RE-316). A probe's
+/// reading: [`resolved_outline_of_solids`] uses only [`OutlineAnchor::Floor`].
 pub fn span_outline_at(
     buf: &[u8],
     header: usize,
     bbox: [f64; 6],
     anchor: OutlineAnchor,
-    arcs: bool,
+    read: SpanRead,
 ) -> Option<PlanProfile> {
-    outline_from_faces(
-        &solid_faces_to_next_solid(buf, header),
-        bbox,
-        anchor,
-        true,
-        arcs,
-    )
+    outline_from_faces(&solid_span(buf, header), bbox, anchor, Some(read))
+}
+
+/// How a resolved outline was read, and so what to trust of its area
+/// (RE-316).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ResolvedKind {
+    /// The faces up to the solid's end wind around a region whose boundary
+    /// spans the record box to [`BOX_TOLERANCE_FEET`] on every side.
+    Faces,
+    /// The same, spanning the box to [`ROOM_SLIVER_FEET`] short of it on a
+    /// side: a column that overlaps a wall and whose back stands behind the
+    /// wall's face leaves the outline that far short. Revit's export does not
+    /// always take such a column off the room's area, so this is
+    /// approximate: 0.5% and 0.7% under Revit's area on the two office rooms
+    /// scored.
+    Approximate,
+}
+
+/// The outline of a room whose solids at `headers` none gives an outline the
+/// walk reads ([`outline_of_solids`] is `None`), from the faces up to each
+/// solid's end resolved to a boundary (RE-316): exactly, else with
+/// [`ROOM_SLIVER_FEET`] of slack. Where more than one solid gives one, every
+/// one must give the same.
+pub fn resolved_outline_of_solids(
+    buf: &[u8],
+    headers: &[usize],
+    bbox: [f64; 6],
+) -> Option<(PlanProfile, ResolvedKind)> {
+    let mut found: Option<(PlanProfile, ResolvedKind)> = None;
+    for &at in headers {
+        let faces = solid_span(buf, at);
+        let exact = SpanRead {
+            arcs: false,
+            slack: 0.0,
+        };
+        let slack = SpanRead {
+            arcs: false,
+            slack: ROOM_SLIVER_FEET,
+        };
+        let Some(this) = outline_from_faces(&faces, bbox, OutlineAnchor::Floor, Some(exact))
+            .map(|profile| (profile, ResolvedKind::Faces))
+            .or_else(|| {
+                outline_from_faces(&faces, bbox, OutlineAnchor::Floor, Some(slack))
+                    .map(|profile| (profile, ResolvedKind::Approximate))
+            })
+        else {
+            continue;
+        };
+        match &found {
+            None => found = Some(this),
+            Some(held) if *held == this => {}
+            Some(_) => return None,
+        }
+    }
+    found
 }
 
 /// Whether `faces`, the faces of a room's solid, make a prism of the room's
@@ -572,16 +658,14 @@ pub fn faces_form_prism(faces: &[RoomFace], bbox: [f64; 6]) -> bool {
 
 /// Whether the room's solids whose headers are at `headers` that give an
 /// outline against `bbox` ([`outline_of_solids`]) are all prisms of it
-/// ([`faces_form_prism`]), and at least one gives an outline. An outline
-/// resolved from the faces up to the next solid's tag (RE-316) is never a
-/// prism here: no room's volume is measured against Revit's for them yet.
+/// ([`faces_form_prism`]), and at least one gives an outline.
 pub fn prism_of_solids(buf: &[u8], headers: &[usize], bbox: [f64; 6]) -> bool {
     let mut found = false;
     for &at in headers {
-        let Some((_, faces, resolved)) = outline_with_faces(buf, at, bbox) else {
+        if room_outline_at(buf, at, bbox).is_none() {
             continue;
-        };
-        if resolved || !faces_form_prism(&faces, bbox) {
+        }
+        if !faces_form_prism(&solid_faces(buf, at), bbox) {
             return false;
         }
         found = true;
@@ -628,7 +712,7 @@ pub fn solid_headers_by_id(buf: &[u8]) -> BTreeMap<u64, Vec<usize>> {
 /// (RE-316). Empty where no tag follows within [`ROOM_SOLID_SPAN_MAX`] bytes:
 /// without it the solid's end is not known, and the faces past it are another
 /// element's.
-pub fn solid_faces_to_next_solid(buf: &[u8], header: usize) -> Vec<RoomFace> {
+pub fn solid_span(buf: &[u8], header: usize) -> Vec<RoomFace> {
     let Some(start) = solid_start(buf, header) else {
         return Vec::new();
     };
@@ -713,6 +797,9 @@ pub enum BoundaryFailure {
     /// There are fewer than three segments, more than
     /// [`BOUNDARY_SEGMENTS_MAX`], or one has an end that is not finite.
     Segments(usize),
+    /// The segments cross so often that they would be cut into more than
+    /// [`BOUNDARY_PIECES_MAX`] pieces.
+    Pieces,
     /// Fewer than three pieces bound the region.
     NoRegion,
     /// The points where the pieces that bound the region do not run one in
@@ -738,9 +825,14 @@ pub fn region_boundary(segments: &[[f64; 4]]) -> Result<Vec<[f64; 4]>, BoundaryF
         return Err(BoundaryFailure::Segments(count));
     }
     let mut cuts: Vec<Vec<f64>> = vec![Vec::new(); count];
+    let mut cut_total = 0usize;
     for first in 0..count {
         for second in first + 1..count {
             let (on_first, on_second) = cut_parameters(segments[first], segments[second]);
+            cut_total += on_first.len() + on_second.len();
+            if cut_total + count > BOUNDARY_PIECES_MAX {
+                return Err(BoundaryFailure::Pieces);
+            }
             cuts[first].extend(on_first);
             cuts[second].extend(on_second);
         }

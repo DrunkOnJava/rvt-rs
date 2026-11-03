@@ -678,6 +678,20 @@ pub struct ExportedModelDiagnostics {
     /// names the turned box.
     #[serde(default)]
     pub bounding_box_spaces: usize,
+    /// Of the exported `IfcSpace`s, the rooms whose outline was resolved from
+    /// the faces of their stored solid up to the solid's end
+    /// (`SpaceOutlineSource` is `stored_solid_faces`, RE-316): equal to
+    /// Revit's area on every such room measured, but read by a rule that
+    /// cannot tell a face of another element inside the room's box from the
+    /// room's own.
+    #[serde(default)]
+    pub resolved_outline_spaces: usize,
+    /// Of the exported `IfcSpace`s, the rooms whose resolved outline falls up
+    /// to 0.02 ft short of their record box on a side
+    /// (`SpaceOutlineSource` is `stored_solid_approximate`, RE-316): their
+    /// area is approximate, 0.5% and 0.7% under Revit's on the two measured.
+    #[serde(default)]
+    pub approximate_outline_spaces: usize,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -4169,6 +4183,8 @@ fn exported_model_diagnostics(model: &IfcModel) -> ExportedModelDiagnostics {
     let mut body_sources = std::collections::BTreeMap::<String, usize>::new();
     let mut bounding_box_bodies = 0usize;
     let mut bounding_box_spaces = 0usize;
+    let mut resolved_outline_spaces = 0usize;
+    let mut approximate_outline_spaces = 0usize;
     for (index, entity) in model.entities.iter().enumerate() {
         if let entities::IfcEntity::BuildingElement {
             ifc_type,
@@ -4215,6 +4231,17 @@ fn exported_model_diagnostics(model: &IfcModel) -> ExportedModelDiagnostics {
                     .is_some_and(|text| text == export_content::SPACE_OUTLINE_RECORD_BOX)
             {
                 bounding_box_spaces += 1;
+            }
+            if ifc_type == "IFCSPACE" {
+                match space_outline.map(String::as_str) {
+                    Some(export_content::SPACE_OUTLINE_STORED_SOLID_FACES) => {
+                        resolved_outline_spaces += 1;
+                    }
+                    Some(export_content::SPACE_OUTLINE_STORED_SOLID_APPROXIMATE) => {
+                        approximate_outline_spaces += 1;
+                    }
+                    _ => {}
+                }
             }
             building_elements += 1;
             *by_ifc_type.entry(ifc_type.clone()).or_insert(0) += 1;
@@ -4265,6 +4292,8 @@ fn exported_model_diagnostics(model: &IfcModel) -> ExportedModelDiagnostics {
         body_sources,
         bounding_box_bodies,
         bounding_box_spaces,
+        resolved_outline_spaces,
+        approximate_outline_spaces,
     }
 }
 

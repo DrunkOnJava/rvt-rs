@@ -4174,8 +4174,25 @@ pub const RECORD_BBOX_BODY_SOURCE: &str = "partition_element_record_bbox";
 pub const SPACE_OUTLINE_SOURCE_PROPERTY: &str = "SpaceOutlineSource";
 
 /// [`SPACE_OUTLINE_SOURCE_PROPERTY`] of a room whose outline was read from the
-/// faces of its stored solid.
+/// faces of its stored solid, which close into loops as they are (RE-101).
 pub const SPACE_OUTLINE_STORED_SOLID: &str = "stored_solid";
+
+/// [`SPACE_OUTLINE_SOURCE_PROPERTY`] of a room whose outline was resolved from
+/// the faces of its stored solid up to the solid's end, the boundary of the
+/// region its wall faces wind around, spanning the record box (RE-316). Equal
+/// to Revit's area to 0.1% on every room of the BIM4LCA office and the
+/// held-out project it was measured on; a face of another element inside the
+/// box would not be told from the room's own, which is why it is not
+/// `stored_solid`.
+pub const SPACE_OUTLINE_STORED_SOLID_FACES: &str = "stored_solid_faces";
+
+/// [`SPACE_OUTLINE_SOURCE_PROPERTY`] of a room whose outline was resolved as
+/// [`SPACE_OUTLINE_STORED_SOLID_FACES`] but falls up to 0.02 ft short of its
+/// record box on a side, a column's back behind the wall's face (RE-316). The
+/// area is approximate: 0.5% and 0.7% under Revit's on the two such rooms of
+/// the BIM4LCA office that Revit's export pairs, which does not take that
+/// column off the room.
+pub const SPACE_OUTLINE_STORED_SOLID_APPROXIMATE: &str = "stored_solid_approximate";
 
 /// [`SPACE_OUTLINE_SOURCE_PROPERTY`] of a space drawn as its record's bounding
 /// box (a room whose outline was not read, a Revit Space or a family instance
@@ -6581,24 +6598,39 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
             ),
         });
     }
-    // RE-313: whether the room's outline is its stored solid's or its box.
+    // RE-313, RE-316: whether the room's outline is its stored solid's (as the
+    // walk reads it, or resolved from the faces up to the solid's end, exactly
+    // or approximately) or its box.
     if class == "Room" {
-        let from_solid = profile.is_some()
-            && decoded.fields.iter().any(|(name, value)| {
-                name == crate::element_record_plan_profiles::PLAN_PROFILE_SOURCE_FIELD
-                    && matches!(value, InstanceField::String(source)
-                        if source == crate::partition_room_boundaries::ROOM_OUTLINE_SOURCE)
-            });
+        let source = profile
+            .is_some()
+            .then(|| {
+                decoded.fields.iter().find_map(|(name, value)| match value {
+                    InstanceField::String(source)
+                        if name
+                            == crate::element_record_plan_profiles::PLAN_PROFILE_SOURCE_FIELD =>
+                    {
+                        Some(source.as_str())
+                    }
+                    _ => None,
+                })
+            })
+            .flatten();
+        let marker = match source {
+            Some(crate::partition_room_boundaries::ROOM_OUTLINE_SOURCE) => {
+                SPACE_OUTLINE_STORED_SOLID
+            }
+            Some(crate::partition_room_boundaries::ROOM_OUTLINE_SOURCE_FACES) => {
+                SPACE_OUTLINE_STORED_SOLID_FACES
+            }
+            Some(crate::partition_room_boundaries::ROOM_OUTLINE_SOURCE_APPROXIMATE) => {
+                SPACE_OUTLINE_STORED_SOLID_APPROXIMATE
+            }
+            _ => SPACE_OUTLINE_RECORD_BOX,
+        };
         properties.push(Property {
             name: SPACE_OUTLINE_SOURCE_PROPERTY.into(),
-            value: PropertyValue::Text(
-                if from_solid {
-                    SPACE_OUTLINE_STORED_SOLID
-                } else {
-                    SPACE_OUTLINE_RECORD_BOX
-                }
-                .into(),
-            ),
+            value: PropertyValue::Text(marker.into()),
         });
     }
     if let Some(number) = room_number {
