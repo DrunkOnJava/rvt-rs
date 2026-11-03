@@ -153,6 +153,7 @@ pub fn recover_partition_schema_mvp(
     limits: WalkerLimits,
 ) -> Result<PartitionSchemaMvp> {
     let mut out = PartitionSchemaMvp::default();
+    let mut wall_reads = crate::native_walls::WallReads::default();
 
     // --- Levels + Materials from partition strings / ArcWall elev ---
     let strings = rf.partition_string_records().unwrap_or_default();
@@ -218,7 +219,7 @@ pub fn recover_partition_schema_mvp(
         );
         // --- Walls', floors' and roofs' layers, for their material layer
         // sets (RE-114) ---
-        attach_wall_layers(rf, revit_version, &mut out.walls);
+        attach_wall_layers(rf, revit_version, &mut out.walls, &mut wall_reads);
         attach_slab_layers(
             rf,
             revit_version,
@@ -258,7 +259,8 @@ pub fn recover_partition_schema_mvp(
         // the parameters named for IsExternal or a standard property from the
         // saved parameters (RE-193, RE-194), and the IsExternal Revit's
         // exporter calculates from them (RE-283) ---
-        attach_wall_type_functions(rf, revit_version, out.walls.iter_mut());
+        read_wall_records(rf, revit_version, &out.walls, &mut wall_reads);
+        attach_wall_type_functions(rf, revit_version, out.walls.iter_mut(), &mut wall_reads);
         attach_native_named_parameters(
             rf,
             revit_version,
@@ -283,7 +285,7 @@ pub fn recover_partition_schema_mvp(
         );
         // --- Whether a wall's top is joined to a roof or floor, from its
         // native record (RE-228, RE-284) ---
-        attach_wall_top_joins(rf, revit_version, &mut out.walls);
+        attach_wall_top_joins(rf, revit_version, &mut out.walls, &mut wall_reads);
 
         // --- A structural beam's or column's LoadBearing is its category's
         // (RE-285), unless a parameter named for it says otherwise ---
@@ -563,7 +565,7 @@ pub fn recover_partition_schema_mvp(
     // --- Curtain mullions drawn as an extrusion of their section (RE-243) ---
     attach_mullion_plain_hosts(rf, &mut out.products);
     // --- Walls' layers and exterior side (RE-53) ---
-    attach_wall_layers(rf, revit_version, &mut out.walls);
+    attach_wall_layers(rf, revit_version, &mut out.walls, &mut wall_reads);
     // --- The openings a wall's edited elevation profile cuts (B55) ---
     attach_wall_profile_openings(rf, revit_version, &mut out.walls);
     // --- A shed roof's slope (RE-56) ---
@@ -832,6 +834,7 @@ pub fn recover_partition_schema_mvp(
                 .iter_mut()
                 .filter(|product| product.class == CURTAIN_PANEL_WALL_CLASS),
         ),
+        &mut wall_reads,
     );
     // --- IsExternal: the parameters named for it, and Revit's calculation (RE-193) ---
     attach_is_external(
