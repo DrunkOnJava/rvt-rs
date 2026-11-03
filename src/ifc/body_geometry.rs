@@ -749,7 +749,7 @@ pub fn envelope_slab_mesh(
 /// (RE-307): where each plane's top lies a different height above its
 /// underside, the lines where the tops meet and the lines where the
 /// undersides meet differ, and so do the wedges each surface is cut into.
-pub fn envelope_slab_mesh_split(
+pub(super) fn envelope_slab_mesh_split(
     outer: &[Point2],
     holes: &[Ring],
     tops: &[PlanPlane],

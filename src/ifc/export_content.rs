@@ -4884,16 +4884,17 @@ const ROOF_ARROW_EDGE_FEET: f64 = 1e-4;
 /// Whether a footprint roof's sloped edges meet in a way Revit is measured
 /// not to resolve as their planes' wedges do (RE-307).
 ///
-/// A sloped edge that the extension of a reflex edge meets inside it is
-/// sloped by Revit over only part of its length where the tail of its arrow
-/// lies: on `20_T_U_Roof`'s U, the long outer walls (5962, 5956) are sloped
-/// along the arms alone, and the bar they continue past stays upright
-/// between its other planes, with no hip where the wall meets the bar's
-/// eave. The wedges slope the whole edge, so a roof holding such an edge
-/// with a sloped neighbour at a convex corner (the hip the wedges would draw)
-/// is left to its record box. The T's long eave (4166) is met inside by the
-/// stem's walls the same way, but its corners lie against upright gable ends,
-/// so the wedges are exact there.
+/// On `20_T_U_Roof`'s U, the two long outer walls (5962, 5956) are each met
+/// inside by the extension of a reflex edge, and Revit slopes them along the
+/// arms alone: the bar they continue past stays upright between its other
+/// planes, with no hip where the wall meets the bar's eave. The wedges slope
+/// the whole edge, so a roof holding a sloped edge so met, with a sloped
+/// neighbour at a convex corner (the hip the wedges would draw), is left to
+/// its record box. Only the U is measured: whether Revit slopes every edge of
+/// this configuration along part of its length is not known, and the guard
+/// boxes the class on that account. The T's long eave (4166) is met inside by
+/// the stem's walls the same way, but its corners lie against upright gable
+/// ends, and the wedges are exact there.
 ///
 /// `sloped` holds the outline edges (`ring[k]` to `ring[k + 1]`) the roof's
 /// arrows slope.
@@ -6064,12 +6065,16 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
                 .map(|ring| ring.iter().map(|(px, py)| (px - x, py - y)).collect())
                 .collect();
             use crate::partition_roof_slopes::RafterCut;
-            // RE-307: several slope arrows. Measured on a plumb cut only.
+            // RE-307: several slope arrows. Measured on one loop, a plumb cut
+            // and a fascia depth read as 0 only.
             if crate::partition_schema_mvp::roof_arrow_planes_from_fields(&decoded.fields) {
                 let plumb =
                     crate::partition_schema_mvp::roof_rafter_cut_from_fields(&decoded.fields)
                         == Some(RafterCut::Plumb);
-                return if plumb && fascia == 0.0 {
+                let no_fascia =
+                    crate::partition_schema_mvp::roof_fascia_depth_from_fields(&decoded.fields)
+                        == Some(0.0);
+                return if plumb && no_fascia && profile.pieces.is_empty() {
                     roof_arrow_planes_solid(&slopes, [x, y], &outer, &inner, height)
                 } else {
                     None

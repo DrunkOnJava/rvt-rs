@@ -696,8 +696,9 @@ pub(super) fn attach_roof_slopes(
             }
             continue;
         }
-        // RE-307: several slope arrows and no defining edge.
-        if rest.len() >= 2 {
+        // RE-307: several slope arrows and no defining edge, measured on
+        // Revit 2025 only.
+        if rest.len() >= 2 && revit_version == 2025 {
             let flat = blocked.iter().all(|line| !slopes[line].defines_slope);
             let found: Option<Vec<(u32, prs::ArrowHeights)>> = rest
                 .iter()
@@ -804,6 +805,7 @@ pub(super) fn attach_roof_slopes(
             })
         } else if let Some((boundary, found)) = sloped_by_arrows.get(&id) {
             crate::element_record_plan_profiles::plan_profile_from_fields(&roof.fields)
+                .filter(|profile| profile.pieces.is_empty())
                 .and_then(|profile| arrow_roof_edges(boundary, found, &lines, &profile.outer_xy))
         } else {
             defining.get(&id).and_then(|sloped| {
@@ -933,7 +935,8 @@ fn outline_contains((px, py): (f64, f64), ring: &[(f64, f64)]) -> bool {
 /// its run as the angle, so each arrow's plane rises from that line as a
 /// defining edge's does. `None` unless every arrow starts at height 0 on
 /// exactly one boundary line, square to it, runs into the outline with a
-/// rising slope, and no boundary line carries two.
+/// rising slope set by its two heights, no boundary line carries two, and
+/// the outline is a single loop.
 fn arrow_roof_edges(
     boundary: &[u32],
     arrows: &[(u32, crate::partition_roof_slopes::ArrowHeights)],
@@ -948,6 +951,7 @@ fn arrow_roof_edges(
         let run = (head[0] - tail[0]).hypot(head[1] - tail[1]);
         let slope = heights.rise_over_run(run);
         if !(run > 1e-9
+            && !heights.by_angle
             && slope > 0.0
             && slope.is_finite()
             && heights.tail_feet.abs() < 1e-9
