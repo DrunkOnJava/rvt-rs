@@ -113,7 +113,7 @@ walls Revit steps over a floor that covers them in part (29 of the BIM4LCA offic
 rooms whose stored solid does not close and opening profiles are not
 decoded, and rvt-rs does not edit Revit model data.
 
-**Rooms.** Each `IfcSpace` says in `RvtElementRecordGeometry.SpaceOutlineSource` whether its outline was read from the room's stored solid (`stored_solid`), is the record's bounding box (`record_box`), was drawn from a saved mesh or a family's body, or has no body (an Area), and the diagnostics count the boxes (`exported.bounding_box_spaces`). Measure scores every space's plan area and outline against Revit's export, and CI gates Core Interior (116 of 116 rooms) and RE1 Architecture (11 of 11). The rooms of Revit 2026 and 2027 are boxes until their stored solids are read (#1260, PR #1288). [docs/rooms.md](rooms.md) says what to trust per release, and RE-313 has the runs.
+**Rooms.** Each `IfcSpace` says in `RvtElementRecordGeometry.SpaceOutlineSource` whether its outline was read from the room's stored solid (`stored_solid`), is the record's bounding box (`record_box`), was drawn from a saved mesh or a family's body, is an Area's region among its boundary lines (`area_boundary`, RE-317), or has no body (an Area whose boundary is not proven), and the diagnostics count the boxes (`exported.bounding_box_spaces`). Measure scores every space's plan area and outline against Revit's export, and CI gates Core Interior (116 of 116 rooms) and RE1 Architecture (11 of 11). The rooms of Revit 2026 and 2027 are boxes until their stored solids are read (#1260, PR #1288). [docs/rooms.md](rooms.md) says what to trust per release, and RE-313 has the runs.
 
 ## Finding history
 
@@ -357,7 +357,8 @@ export, and the storey it maps to is the one that export aggregates the
 room into, 116 of 116. On the BIM4LCA office, the 30 Areas carry no record
 box. They are read from their partition chain records and aggregated into
 their Levels' storeys as Revit's export aggregates them, 30 of 30 on each
-file (RE-191). The other 853 bindings stay **NOT MEASURED**
+file (RE-191), and drawn as the region their area boundary lines enclose
+(RE-317). The other 853 bindings stay **NOT MEASURED**
 against Revit's own `IfcRelContainedInSpatialStructure`.
 The #213 column-derived path (`STOREY_ELEVATION_SOURCE_TYPES` =
 `IFCCOLUMN`) survives as the fallback for files with no recoverable Level

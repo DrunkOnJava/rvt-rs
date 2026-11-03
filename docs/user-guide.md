@@ -218,9 +218,10 @@ ElementId, IFC type, level and its elevation, material, placement, body
 size, the host wall of each door and window, and where the body came from
 (`body_source`, `profile_resolved`). A value rvt-rs did not decode is an
 empty cell, never a guess. The room schedule gives a room's plan area
-where its outline was read from the solid Revit stores for it (RE-101); a
-room that keeps its bounding box has an empty area, since the area of a box
-is not the area of a room.
+where its outline was read from the solid Revit stores for it (RE-101), and
+an Area's where its boundary lines gave it a region (RE-317); a room that
+keeps its bounding box has an empty area, since the area of a box is not the
+area of a room.
 
 The columns, in order. Lengths are in feet; with `--metric` they are in
 metres and `_ft` in a column's name becomes `_m`. A later release may add

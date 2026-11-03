@@ -4,8 +4,8 @@
 **Issues:** #763 (Areas as spaces); follows RE-191 (the Area records), RE-313 (every `IfcSpace` scored against Revit's) and RE-101 (a room's outline from its stored solid)
 **Artefacts:** the BIM4LCA office, concrete structure, as built and at building permit (Revit 2024), with Revit's own IFC export of each (`research/bim4lca-measure.tsv`, CC BY-SA 4.0, read by byte range for a Measure run and never stored); the six reference models and puzzbobb's R2025 models (no Area in any); the held-out models, by counts only
 **Probe and scorers:** `probes/examples/probe_re317_area_boundaries.rs` with `tools/re/area_boundaries_vs_ifc.py`; the exported bodies by `tools/re/space_profiles_vs_ifc.py` (RE-313)
-**Runs:** the probe, [41705217941](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41705217941); the change against `main`, see §5
-**Status:** positive on both office files. See §5 for the count of Areas drawn as Revit's export draws them.
+**Runs:** the probe, [41705217941](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41705217941); the change against `main` at 8664b94a, unfiltered, with the nordic, R2025 and held-out models, [41708150034](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41708150034)
+**Status:** positive on both office files. All 30 Areas of each are drawn, and each equals Revit's in area (within 0.1%) and in outline (within 0.01 ft); no other export moved.
 
 ## 1. Before
 
@@ -45,7 +45,27 @@ The exporter writes the region as the profile of an extrusion at the Level's ele
 
 ## 5. Results
 
-TODO: measured by the change, §5 of this report is filled from the Measure runs.
+Measure, unfiltered, the branch at febba58f against `main` at 8664b94a (run 41708150034; `-f base=main -f nordic=true -f r2025=true -f holdout=true`). `space_profiles_vs_ifc` on the two office files:
+
+| | as built before | as built after | permit before | permit after |
+|---|---:|---:|---:|---:|
+| `IfcSpace` with a body (rvt-rs / Revit) | 278 / 308 | 308 / 308 | 278 / 308 | 308 / 308 |
+| in both | 276 | 306 | 278 | 308 |
+| only in Revit, rvt-rs writes it without a body | 30 | 0 | 30 | 0 |
+| area within 0.1% | 221 | 251 | 222 | 252 |
+| outline within 0.01 ft | 211 | 241 | 216 | 246 |
+| boundary within 0.01 ft | 221 | 251 | 222 | 252 |
+| area, outline and boundary within tolerance, the Areas | none drawn | 30 of 30 | none drawn | 30 of 30 |
+
+The `rvt-rs area area boundary` line reads "30, area within 0.1% 30, outline within 0.01 ft 30, both 30, boundary within 0.01 ft 30" on each file. The off counts (55 and 56 in area, 65 and 62 in outline) are the rooms and family instances they were, and the lines for rooms read from their stored solid, rooms that keep their box and family instances are the ones `main` prints.
+
+- **No other export moved.** Of the 53 models the run exports, the hash of the IFC differs on the two office files only; Core Interior, RE1, the R2025 models, the terrain variants and every held-out model are byte-identical. The compare job's scorer diff is 54 lines: the space lines of the two office files, and in `schema.txt` the count of swept solids that carry a Position distinct from their product placement, 12747 to 12777 and 12790 to 12820, the 30 new bodies. The property set, quantity, plan profile, class set, room name and storey, tagged space and WHERE-rule results print the same, so the Areas add no property value Revit does not write and no storey moved.
+- **Diagnostics.** `exported.body_sources.partition_area_boundary_lines` is 30, `building_elements_with_geometry` rises by 30 (12757 to 12787 as built, 12803 to 12833 at permit), and the 30 Areas' `unsupported_geometry_curve` and `unsupported_geometry_missing_dimensions` skipped items are gone (the geometry element fraction goes from 0.9797 to 0.9820).
+- **Held-out files, by counts.** Every held-out `space profiles:` count line is the same on both sides. BIM Whale 2021, whose 8 spaces are Areas of a 'Rentable' scheme, still has none of them written (0 of 8), since 2021 is not read for Areas.
+- **Gates.** The `IfcOpenShell validates exports` job (Core Interior 116 of 116, RE1 Architecture 11 of 11), `Corpus health`, clippy, the MSRV build, the i686 job, the docs build and `PII guard` pass on this branch.
+- **Not drawn by the rule.** None on the office. Every Area of both files has its point in one region and its lines on that region's boundary.
+
+The prototype that fixed the rule (a Python version of §3 over the probe's lines and Revit's profile points) drew 30 of 30 with a zero symmetric difference before any Rust was written; the exporter's 30 of 30 above is the independent check. Vertex to vertex (`vertices`, the mesh's upward-face vertices), 29 of the 30 Areas agree on each file (86 to 115 and 84 to 113); the one that does not has Revit's area and outline, and why its vertices differ is not examined.
 
 ## 6. Not measured
 
