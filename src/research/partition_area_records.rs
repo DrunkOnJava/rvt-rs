@@ -1056,6 +1056,9 @@ pub fn areas_from_partition_chain_records(
                 && record.in_primary_option(&options, options_read)
         })
         .collect();
+    if placed.is_empty() {
+        return Vec::new();
+    }
     let ids: BTreeSet<u32> = placed.keys().copied().collect();
     let entries =
         crate::partition_room_parameters::scan_room_parameter_entries(rf, revit_version, &ids);

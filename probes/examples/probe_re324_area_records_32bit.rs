@@ -1014,6 +1014,19 @@ fn compare(older_rf: &mut RevitFile, older: &Census, newer_rf: &mut RevitFile, n
                 a.number
             ));
         }
+        let segments = row_b.and_then(|row| row.fields.get("m_plan_profile_segments"));
+        if let Some(segments) = segments {
+            println!("pair-segments\t{id}\t{segments}");
+        }
+        if let (Some(x), Some(y)) = (row_a, row_b) {
+            let (outer_a, outer_b) = (
+                x.fields.get("m_plan_profile_outer"),
+                y.fields.get("m_plan_profile_outer"),
+            );
+            if outer_a != outer_b {
+                println!("pair-outline\t{id}\tolder {outer_a:?}\tnewer {outer_b:?}");
+            }
+        }
         println!(
             "pair-body\t{id}\tinputs equal {inputs_equal}\tgroup lines {}/{}\tchanged {changed:?}\tnamed changed {named_changed:?}\tpoint35 {:?}\t2024 point {newer_point:?}\tfields equal {fields_equal}\tdiffering {differing_fields:?}\tverdicts {verdict_a:?}/{verdict_b:?}",
             group_a.len(),
