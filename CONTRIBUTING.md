@@ -377,9 +377,12 @@ When you discover something new about the file format:
 
    The summary's `rvt-ifc` wall times come from the base and head jobs, which
    run on different runners; runner speed alone moves them by up to about
-   1.7x. For a speed claim, add `-f timing=true`: one runner then builds both
-   refs and exports each model (and each sample, with `-f samples=true`) with
-   both in turn, and reports the medians and their ratio.
+   1.7x. For a speed claim, add `-f timing=true`: both refs are built once,
+   and each model (and each sample, with `-f samples=true`) is exported with
+   both in turn on one runner, in shards of about equal time that run side by
+   side, and the table reports the medians and their ratio. Compare the ratios
+   between rows, not the times: runner CPUs differ by up to about a quarter,
+   and the summary names each shard's.
 
 This keeps every claim independently verifiable, which is the
 whole point of open reverse-engineering work.
