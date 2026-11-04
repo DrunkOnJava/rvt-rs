@@ -630,12 +630,7 @@ pub fn tessellate_trimmed(
             && ring.iter().flatten().all(|x| x.is_finite()),
         "invalid trimmed parametric face"
     );
-    let surface_orient = match surface {
-        ParametricSurface::SurfRev { orient, .. } | ParametricSurface::RuledSurf { orient, .. } => {
-            *orient
-        }
-    };
-    let winding = surface_orient == orient;
+    let winding = surface.orientation() == orient;
     let expected = double_area(ring).abs() / 2.;
     ensure!(expected > 1e-15, "degenerate parametric trim");
     let mut covered = 0.;
