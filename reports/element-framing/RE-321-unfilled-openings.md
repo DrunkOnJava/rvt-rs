@@ -12,7 +12,7 @@
 | `ARK_NordicLCA_Office_Concrete_BuildingPermit_Revit.ifc` | `bc3bd3366a3c413ce74840300a590f59102b740118ef37898e906253b6b7c08d` |
 
 **Probe and scorer:** `probes/examples/probe_re321_unfilled_openings.rs`, `tools/re/unfilled_openings_vs_ifc.py`
-**Runs:** Measure [41734524720](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41734524720) (the census probe), [41736585444](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41736585444) (rectangular openings, symbols and cutters), [41738481767](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41738481767) (all three kinds written, a7931166) and [41742295094](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41742295094) (rectangular openings alone, ff53b6cd)
+**Runs:** Measure [41734524720](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41734524720) (the census probe), [41736585444](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41736585444) (rectangular openings, symbols and cutters), [41738481767](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41738481767) (all three kinds written, a7931166) [41742295094](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41742295094) (rectangular openings alone, ff53b6cd), and, for the writer as it lands, [41748430211](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41748430211) (every model, the Autodesk samples and the held-out models, 35425a96 against `main` at 0e0582e1) and [41754617363](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41754617363) (the 2024 samples with their IFC kept, 35425a96)
 **Result:** positive for the rectangular wall openings, which are written: 30 of 30 as built and 24 of 24 at permit, with Revit's box, GlobalId, name, type, `Reference` (twice) and `Depth`, and none that Revit's export lacks as built (at permit one, counted apart, §4). Negative for the other kinds: fire hose cabinets and curtain-wall cuts are exact on most openings but each also writes openings Revit's export does not (or a wrong box), and nothing read tells those apart, so they are measured and left out (§4, §5).
 
 ## 1. What Revit writes
@@ -69,11 +69,25 @@ The other kinds write an opening Revit's export does not, or a wrong one, and wh
 - **The cabinets.** The step is `m_bCutSomething` 1 on all 40, and the cabinet's root and symbol, the step's fields, the wall's body (which holds the recess as a notch in all 40, the omitted one's too, 8 vertices inside the cabinet's box), the cabinet's box (no two share one) and its reach into the wall (50 mm on all) show no difference between the 39 and the 1 (2 at permit).
 - **The curtain walls.** Both the 16 boxes and the 3 extras are walls whose ends or whose neighbours cut the opening. A rule that takes only a curtain wall at least half a foot inside its wall's ends is exact on 28 of 29 as built; the 29th (3030507 in 2991697) is cut back 0.328 ft in the middle of a long wall, where an adjoining wall ends, and the extras 1815871 and 1892067 lie 0.66 ft and more inside theirs. The three extras' `WallEmbedWallGStep` holds more edge history (78 and 81 entries) than the steps of the openings Revit writes that were compared, but that is a count of the step, not a rule that was shown to hold.
 
+**Measured as it lands** (41748430211, `-f base=main -f nordic=true -f r2025=true -f samples=true -f holdout=true`):
+
+| | office as built | office at permit |
+|---|---:|---:|
+| rectangular openings written, Revit's | 30 of 30 | 24 of 24 |
+| box within 0.01 ft; GlobalId, name, type, both `Reference`s equal | 30, 30 | 24, 24 |
+| property values equal, before / after | 44,163 / 44,223 of 45,525 / 45,585 | 44,339 / 44,387 of 45,704 / 45,752 |
+| quantities equal, before / after | 29,448 / 29,538 of 39,388 / 39,478 | 29,762 / 29,834 of 39,679 / 39,751 |
+| values and quantities missing or different | unchanged (1,361 and 1; 9,939 and 1) | unchanged (1,364 and 1; 9,916 and 1) |
+| values Revit's export does not write | 10, unchanged | 14 to 16: the two `Reference`s of the counted-apart opening |
+| openings Revit's export lacks (scorer's extras) | 17, unchanged: 9 floor-void and 8 `none in IfcWall` | 16, unchanged, and 1 counted apart |
+
+The 8 `none in IfcWall` extras on both files predate this change: the same 8 are in `main`'s export in the same run, as are the 9 and 8 floor-void extras and the two terrain files' 2 each. Core Interior (63 of 63), RE1 Architecture, the R2025 models, Einhoven and the held-out models' counts are byte for byte `main`'s; so are the scorer outputs of every sample but the exports' attribute counts in the Autodesk samples, where the same rule writes openings: Rac Basic +2 and Rac Advanced +1 in each of 2024 to 2027 and Snowdon Towers Architectural +9. The samples have no Revit export in reach but Snowdon Towers', Revit's own IFC4 export of its architectural file (local only, `_corpus_candidates/snowdon/`): 9 of the 9 openings rvt-rs writes there are in it, by Tag and host (Measure 41754617363, the kept IFC compared with that export by Tag and host, the scorer's keys), and the other samples are NOT MEASURED.
+
 ## 5. What is left
 
 - **A door in a second wall** (39 as built, 43 at permit; 37 extrusions, 2 meshes). On the doors printed, the opening is the door's cut loop (RE-215) in the door's frame, across the loop's plane by the thickness of the door's own wall (0.328 ft, 100 mm) on some and by 10 ft, 5 ft either side of the loop's plane, on others; nothing read decides which, and 2 are meshes.
 - **A door in itself** (4, 2) and **a wall in itself** (2): the openings of RE-225's symbols cut solid in the door and of the wall's own profile; no step names them.
-- **A floor's sketch voids** (9 of 36 as built are not written; they are on main's census) are RE-151's. The 8 `none in IfcWall` openings the scorer lists as written that Revit's export lacks on both office files predate this change: they are RE-84's doors and windows written as openings alone, and are in main's export.
+- **A floor's sketch voids** (9 of 36 as built are not written; they are on main's census) are RE-151's. The 8 `none in IfcWall` openings the scorer lists as written that Revit's export lacks on both office files predate this change: they are in main's export.
 
 ## 6. Reproduce
 
