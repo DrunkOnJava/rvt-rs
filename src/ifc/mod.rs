@@ -93,6 +93,7 @@ pub mod sheet;
 pub mod standard_property_sets;
 pub mod step_writer;
 mod storey_properties;
+mod wall_cut_openings;
 
 pub use export_content::{
     ELEMENT_RECORD_PROPERTY_SET, ExportContentPolicy, is_misleading_proxy_class,
@@ -204,6 +205,11 @@ pub struct IfcModel {
     /// its `EntranceLevel` parameter.
     #[serde(default)]
     pub storey_properties: std::collections::BTreeMap<usize, entities::StoreyProperties>,
+    /// Each door's and window's `OverallWidth` and `OverallHeight`, by index
+    /// into `entities` (RE-93, RE-94, RE-187, RE-215, #810, RE-318). An
+    /// element with no entry gets `$` for both.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub filler_sizes: std::collections::BTreeMap<usize, entities::FillerSize>,
 }
 
 /// A layered element's layers across its thickness (RE-53).
@@ -925,6 +931,7 @@ impl Exporter for PlaceholderExporter {
             opening_cuts: Default::default(),
             body_pieces: Default::default(),
             storey_properties: Default::default(),
+            filler_sizes: Default::default(),
         })
     }
 }
@@ -1248,6 +1255,7 @@ fn export_rvt_doc_reporting(
         _,
         body_pieces,
         type_entity_sets,
+        record_handoffs,
     ) = append_production_walker_elements(
         rf,
         &mut entities,
@@ -1368,6 +1376,11 @@ fn export_rvt_doc_reporting(
     // #824: the openings a face-hosted door's or window's symbol cuts in the
     // element whose face hosts it.
     attach_hosted_cut_openings(rf, &mut entities);
+    // RE-321: the openings rectangular wall openings cut in a wall, which
+    // nothing fills.
+    if policy.include_geometry {
+        wall_cut_openings::attach_wall_cut_openings(rf, &mut entities);
+    }
 
     if !policy.include_geometry {
         export_content::strip_building_element_geometry(&mut entities);
@@ -1396,7 +1409,8 @@ fn export_rvt_doc_reporting(
     material_constituent_sets.extend(layer_constituent_sets);
     let material_profile_sets =
         material_profile_sets_from_sections(&mut entities, &mut material_constituent_sets);
-    let opening_cuts = opening_cuts_through_hosts(&entities);
+    let opening_cuts = opening_cuts_through_hosts(&entities, &record_handoffs);
+    let filler_sizes = filler_sizes_from_handoffs(&record_handoffs);
 
     Ok(IfcModel {
         project_name,
@@ -1420,6 +1434,7 @@ fn export_rvt_doc_reporting(
         opening_cuts,
         body_pieces,
         storey_properties,
+        filler_sizes,
     })
 }
 
@@ -1433,6 +1448,7 @@ fn export_rvt_doc_reporting(
 /// the body-shaped opening.
 fn opening_cuts_through_hosts(
     entities: &[entities::IfcEntity],
+    record_handoffs: &std::collections::BTreeMap<usize, Vec<entities::Property>>,
 ) -> std::collections::BTreeMap<usize, entities::OpeningCut> {
     const MAX_THICKNESS_FEET: f64 = 3.0;
     let mut cuts = std::collections::BTreeMap::new();
@@ -1453,9 +1469,13 @@ fn opening_cuts_through_hosts(
         if body.profile_override.is_some() {
             continue;
         }
+        let handoffs = record_handoffs
+            .get(&index)
+            .map(Vec::as_slice)
+            .unwrap_or_default();
         let window_cut =
-            |base: Option<entities::OpeningCut>| filler_type_cut(entity, base).or(base);
-        if let Some(cut) = tapered_host_window_cut(entity, &entities[*host]) {
+            |base: Option<entities::OpeningCut>| filler_type_cut(entity, handoffs, base).or(base);
+        if let Some(cut) = tapered_host_window_cut(entity, handoffs, &entities[*host]) {
             if let Some(cut) = window_cut(Some(cut)) {
                 cuts.insert(index, cut);
             }
@@ -1498,7 +1518,7 @@ fn opening_cuts_through_hosts(
         // extent, down from the body's top (the BIM4LCA office's windows).
         // A door's keeps its box: on the office its solid gives none of
         // Revit's openings.
-        let solid = cut_solid_size(entity).filter(|_| ifc_type.eq_ignore_ascii_case("IfcWindow"));
+        let solid = cut_solid_size(handoffs).filter(|_| ifc_type.eq_ignore_ascii_case("IfcWindow"));
         let solid_z = solid.map(|[_, _, height]| [body.height_feet - height, height]);
         let cut = if y_width <= MAX_THICKNESS_FEET && y_width < x_width / 2.0 && y_width > 0.0 {
             Some(entities::OpeningCut {
@@ -1532,13 +1552,54 @@ fn opening_cuts_through_hosts(
 /// The extents along X, Y and Z of the solid a door's or window's symbol
 /// cuts where it cuts no loop (RE-225,
 /// [`export_content::CUT_SOLID_SIZE_PROPERTIES`]), feet.
-fn cut_solid_size(entity: &entities::IfcEntity) -> Option<[f64; 3]> {
+fn cut_solid_size(handoffs: &[entities::Property]) -> Option<[f64; 3]> {
     let [width, depth, height] = export_content::CUT_SOLID_SIZE_PROPERTIES;
     Some([
-        positive_length_property(entity, width)?,
-        positive_length_property(entity, depth)?,
-        positive_length_property(entity, height)?,
+        handoff_positive_length(handoffs, width)?,
+        handoff_positive_length(handoffs, depth)?,
+        handoff_positive_length(handoffs, height)?,
     ])
+}
+
+/// Each door's and window's `OverallWidth` and `OverallHeight` from its
+/// hand-offs, by entity index, and whether its symbol cuts an outline.
+///
+/// RE-93, RE-94: they are its opening's, which Revit's export writes there.
+/// RE-187: a door with no opening read takes its type's Width and Height,
+/// which Revit's export writes there too. RE-215: before either, the extents
+/// of the outline the symbol that draws it cuts, which Revit's exporter sizes
+/// it from. #810: where the symbol cuts no loop and no opening is read, the
+/// record box along its own X axis and its height, ahead of the type's size,
+/// which on the BIM4LCA office is 10 mm short of Revit's. RE-318: where the
+/// symbol's saved graphics hold lines of no category, their extent along X is
+/// the width, ahead of the record box's.
+fn filler_sizes_from_handoffs(
+    record_handoffs: &std::collections::BTreeMap<usize, Vec<entities::Property>>,
+) -> std::collections::BTreeMap<usize, entities::FillerSize> {
+    let [.., width_key, height_key] = export_content::FILLER_OPENING_PROPERTIES;
+    let [type_width, type_height] = export_content::DOOR_TYPE_SIZE_PROPERTIES;
+    let [cut_width, cut_height] = export_content::CUT_LOOP_SIZE_PROPERTIES;
+    let [box_width, box_height] = export_content::INSTANCE_BOX_SIZE_PROPERTIES;
+    record_handoffs
+        .iter()
+        .filter_map(|(&index, handoffs)| {
+            let length = |key: &str| handoff_positive_length(handoffs, key);
+            let symbol_width = length(export_content::SYMBOL_WIRE_WIDTH_PROPERTY);
+            let (height_feet, width_feet) = length(cut_height)
+                .zip(length(cut_width))
+                .or_else(|| length(height_key).zip(length(width_key)))
+                .or_else(|| length(box_height).zip(symbol_width.or_else(|| length(box_width))))
+                .or_else(|| length(type_height).zip(length(type_width)))?;
+            Some((
+                index,
+                entities::FillerSize {
+                    width_feet,
+                    height_feet,
+                    cut_loop: length(cut_width).is_some(),
+                },
+            ))
+        })
+        .collect()
 }
 
 /// A length property of an element's own property set, feet.
@@ -1566,6 +1627,7 @@ fn length_property(entity: &entities::IfcEntity, wanted: &str) -> Option<f64> {
 /// its origin read, and the host is tapered with its thickness read.
 fn tapered_host_window_cut(
     filler: &entities::IfcEntity,
+    handoffs: &[entities::Property],
     host: &entities::IfcEntity,
 ) -> Option<entities::OpeningCut> {
     let entities::IfcEntity::BuildingElement {
@@ -1598,7 +1660,7 @@ fn tapered_host_window_cut(
     }
     let thickness = length_property(host, "Thickness").filter(|t| t.is_finite() && *t > 0.0)?;
     let [ox, oy] =
-        export_content::INSTANCE_ORIGIN_PROPERTIES.map(|name| length_property(filler, name));
+        export_content::INSTANCE_ORIGIN_PROPERTIES.map(|name| handoff_length(handoffs, name));
     let origin = [ox?, oy?];
     // The window must run along its host's line, either way.
     if (rotation - host_rotation).sin().abs() > 1e-6 {
@@ -1619,21 +1681,30 @@ fn tapered_host_window_cut(
     })
 }
 
-/// A real property of an element's own property set.
-fn real_property(entity: &entities::IfcEntity, wanted: &str) -> Option<f64> {
-    let entities::IfcEntity::BuildingElement {
-        property_set: Some(set),
-        ..
-    } = entity
-    else {
-        return None;
-    };
-    set.properties
-        .iter()
-        .find_map(|property| match &property.value {
-            entities::PropertyValue::Real(value) if property.name == wanted => Some(*value),
-            _ => None,
-        })
+/// A length among an element's hand-offs, feet.
+fn handoff_length(handoffs: &[entities::Property], wanted: &str) -> Option<f64> {
+    handoffs.iter().find_map(|property| match &property.value {
+        entities::PropertyValue::LengthFeet(value) if property.name == wanted => Some(*value),
+        _ => None,
+    })
+}
+
+/// A real among an element's hand-offs.
+fn handoff_real(handoffs: &[entities::Property], wanted: &str) -> Option<f64> {
+    handoffs.iter().find_map(|property| match &property.value {
+        entities::PropertyValue::Real(value) if property.name == wanted => Some(*value),
+        _ => None,
+    })
+}
+
+/// A positive length among an element's hand-offs, feet.
+fn handoff_positive_length(handoffs: &[entities::Property], wanted: &str) -> Option<f64> {
+    handoffs.iter().find_map(|property| match &property.value {
+        entities::PropertyValue::PositiveLengthFeet(value) if property.name == wanted => {
+            Some(*value)
+        }
+        _ => None,
+    })
 }
 
 /// How far a window's record box may reach past the opening its type gives
@@ -1653,6 +1724,7 @@ pub const WINDOW_TRIM_MAX_FEET: f64 = 0.5;
 /// bottom.
 fn filler_type_cut(
     filler: &entities::IfcEntity,
+    handoffs: &[entities::Property],
     base: Option<entities::OpeningCut>,
 ) -> Option<entities::OpeningCut> {
     let entities::IfcEntity::BuildingElement {
@@ -1669,11 +1741,11 @@ fn filler_type_cut(
         return None;
     }
     let [cx, cy, ax, ay, base_z, width, height] = export_content::FILLER_OPENING_PROPERTIES;
-    let centre = [length_property(filler, cx)?, length_property(filler, cy)?];
-    let [ax, ay] = [real_property(filler, ax)?, real_property(filler, ay)?];
-    let base_z = length_property(filler, base_z)?;
-    let width = positive_length_property(filler, width)?;
-    let height = positive_length_property(filler, height)?;
+    let centre = [handoff_length(handoffs, cx)?, handoff_length(handoffs, cy)?];
+    let [ax, ay] = [handoff_real(handoffs, ax)?, handoff_real(handoffs, ay)?];
+    let base_z = handoff_length(handoffs, base_z)?;
+    let width = handoff_positive_length(handoffs, width)?;
+    let height = handoff_positive_length(handoffs, height)?;
     let angle = rotation_radians.unwrap_or(0.0);
     let local_x = [angle.cos(), angle.sin()];
     let local_y = [-angle.sin(), angle.cos()];
@@ -1723,25 +1795,6 @@ fn filler_type_cut(
     } else {
         None
     }
-}
-
-/// A positive length property of an element's own property set, feet.
-fn positive_length_property(entity: &entities::IfcEntity, wanted: &str) -> Option<f64> {
-    let entities::IfcEntity::BuildingElement {
-        property_set: Some(set),
-        ..
-    } = entity
-    else {
-        return None;
-    };
-    set.properties
-        .iter()
-        .find_map(|property| match &property.value {
-            entities::PropertyValue::PositiveLengthFeet(value) if property.name == wanted => {
-                Some(*value)
-            }
-            _ => None,
-        })
 }
 
 /// RE-82: one constituent set per distinct set of type materials, for each
@@ -3381,6 +3434,7 @@ type WalkerElementData = (
     Vec<usize>,
     std::collections::BTreeMap<usize, Vec<usize>>,
     std::collections::BTreeMap<u32, std::collections::BTreeMap<String, Vec<entities::PropertySet>>>,
+    std::collections::BTreeMap<usize, Vec<entities::Property>>,
 );
 
 fn append_production_walker_elements(
@@ -3423,6 +3477,7 @@ fn append_production_walker_elements(
             append.computed_inverts,
             append.body_pieces,
             append.type_entity_sets,
+            append.record_handoffs,
         ));
     }
     Ok(Default::default())
@@ -4780,6 +4835,16 @@ fn pset_property_value_count(model: &IfcModel) -> usize {
             _ => false,
         })
         .count();
+    // RE-321: a wall's cut opening holds the wall's type name twice, in
+    // `Pset_OpeningElementCommon` and `Pset_EnvironmentalImpactIndicators`.
+    let wall_cuts = 2 * model
+        .entities
+        .iter()
+        .filter(|entity| match entity {
+            entities::IfcEntity::WallCutOpening { host, .. } => references.contains_key(host),
+            _ => false,
+        })
+        .count();
     let storeys: usize = (0..model.building_storeys.len())
         .flat_map(|index| {
             entities::PropertySet::storey_sets_for(model.storey_properties.get(&index))
@@ -4793,7 +4858,12 @@ fn pset_property_value_count(model: &IfcModel) -> usize {
             model.building_storeys.len(),
         )) - usize::from(!step_writer::every_storey_holds_an_element(model))
     };
-    elements + storeys + building + openings + step_writer::type_object_pset_values(model)
+    elements
+        + storeys
+        + building
+        + openings
+        + wall_cuts
+        + step_writer::type_object_pset_values(model)
 }
 
 fn export_confidence_summary(
