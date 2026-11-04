@@ -21,7 +21,7 @@ openings cut, draw a wall a floor covers in part as stepped, end walls at a
 corner in the order their record joins them, draw a level beam whose record
 box is longer than its line as that box along the line, and export conduits,
 conduit fittings and gutters. A large export holds less memory at its peak,
-and every measured export is faster than 0.13.0's. Much of it follows
+and every one of the 68 exports timed is faster than 0.13.0's. Much of it follows
 reports from hemanth1986 (#1075, #1247) and inevitable-co-ai (#1261).
 Thanks to both.
 
@@ -150,9 +150,9 @@ A level beam drawn along its line takes the box's length, not the beam's.
   branches. The export diagnostics gain `exported.area_body_refusals` and a
   skipped item's optional `phase`.
 - `rvt-ifc --phase`, `RevitFile::set_export_phase` and
-  `ExportOptions::with_phase` fail, listing the file's phases, for a phase the
-  file does not have, for a family, and for Revit 2015 and earlier, whose
-  phases the export does not apply.
+  `ExportOptions::with_phase` fail for a phase the file does not have (the
+  error lists the file's phases), for a family, and for Revit 2015 and
+  earlier, whose phases the export does not apply.
 - New public items: `ifc::FillerSize` (the type of `IfcModel::filler_sizes`),
   `ifc::step_writer::element_global_ids` and `ifc::schedule_csv::room_rows`.
 - `rvt-rs-mcp` is a crate of its own and needs Rust 1.88 to build; `rvt`
@@ -163,7 +163,8 @@ A level beam drawn along its line takes the box's length, not the beam's.
 - **The export phase in Python and the viewer, as `rvt-ifc --phase` has it
   (#1339, RE-326).** An export leaves out a room whose own phase is not the
   export phase, and the elements that do not exist in it; the export phase is
-  the project's last unless told otherwise, and only `rvt-ifc` could tell it.
+  the project's last unless told otherwise, and of the tools only `rvt-ifc`
+  could tell it.
   Now `RevitFile.write_ifc`, `schedule_csv`, `export_diagnostics` and
   `export_diagnostics_json`, and `rvt_to_ifc` and `rvt_to_ifc_diagnostics`,
   take `phase: str | int | None = None`: a phase's name, matched exactly first,
