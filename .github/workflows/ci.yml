@@ -18,8 +18,17 @@ on:
       - ".gitignore"
       - ".github/ISSUE_TEMPLATE/**"
       - "CITATION.cff"
-  pull_request:
-    branches: [main]
+  # Pull requests run this through ci-pr.yml: in full once ready, as
+  # `full / <job>` (the required check is `full / CI passed`), and only the
+  # fast jobs while a draft, as `fast / <job>`. A draft's head therefore
+  # never carries a check named `full / CI passed`, green, skipped or red
+  # (#1237).
+  workflow_call:
+    inputs:
+      fast:
+        description: Run only fmt, clippy, cargo doc, the PII guard, the env lint, Corpus health and the Ubuntu builds with their real-file checks.
+        type: boolean
+        default: false
 
 # Supersede a pull request's in-flight run when a new push arrives, so
 # back-to-back pushes do not burn runner-minutes on stale matrices. A run
@@ -120,21 +129,11 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
+      # The fast set (a draft) builds on Ubuntu only, stable and MSRV; the
+      # full set on every OS. The MSRV entry's "1.87" is `rust-version` in
+      # Cargo.toml; both lists name it.
       matrix:
-        include:
-          - os: ubuntu-24.04
-            rust: stable
-            with_corpus: true
-          - os: windows-latest
-            rust: stable
-            with_corpus: true
-          - os: macos-latest
-            rust: stable
-            with_corpus: false
-          - os: ubuntu-24.04
-            rust: "1.87"  # MSRV, `rust-version` in Cargo.toml
-            label: msrv
-            with_corpus: false
+        include: ${{ fromJSON(inputs.fast == true && '[{"os":"ubuntu-24.04","rust":"stable","with_corpus":true},{"os":"ubuntu-24.04","rust":"1.87","label":"msrv","with_corpus":false}]' || '[{"os":"ubuntu-24.04","rust":"stable","with_corpus":true},{"os":"windows-latest","rust":"stable","with_corpus":true},{"os":"macos-latest","rust":"stable","with_corpus":false},{"os":"ubuntu-24.04","rust":"1.87","label":"msrv","with_corpus":false}]') }}
     steps:
       # Windows' git default `core.autocrlf=true` mangles binary files
       # that aren't explicitly marked `binary` in `.gitattributes`.
@@ -289,6 +288,7 @@ jobs:
   # wrap panics there instead of passing.
   i686-overflow:
     name: 32-bit overflow checks (i686)
+    if: inputs.fast != true
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     env:
@@ -450,6 +450,7 @@ jobs:
     # from silently regressing while semantic editing remains out of
     # scope.
     name: Writer patch corpus
+    if: inputs.fast != true
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -521,6 +522,7 @@ jobs:
     # exports are small (24 instances each); the real projects carry most of
     # what this job validates.
     name: IfcOpenShell validates exports
+    if: inputs.fast != true
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -842,7 +844,7 @@ jobs:
   # 2025-11-22, so its nightly is pinned near its release.
   semver:
     name: semver checks
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' && inputs.fast != true
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -895,6 +897,7 @@ jobs:
   # high-value, low-noise version we can enforce on every push.
   bench-build:
     name: cargo bench --no-run
+    if: inputs.fast != true
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -931,6 +934,7 @@ jobs:
   # properly on docs.rs before the release cut.
   docs-rs-preview:
     name: docs.rs build preview
+    if: inputs.fast != true
     runs-on: ubuntu-24.04
     env:
       # Same flags docs.rs passes, plus -D warnings so this job fails
@@ -969,6 +973,7 @@ jobs:
   # after merge, twice (#236 -> #259, #934 -> #965).
   fuzz-check:
     name: fuzz targets build
+    if: inputs.fast != true
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -989,6 +994,7 @@ jobs:
 
   python-wheel:
     name: Python wheel / ${{ matrix.os }}
+    if: inputs.fast != true
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -1109,6 +1115,7 @@ jobs:
   # project grows.
   deny:
     name: cargo deny
+    if: inputs.fast != true
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -1138,6 +1145,7 @@ jobs:
   # fresh advisories the moment they land.
   audit:
     name: cargo audit
+    if: inputs.fast != true
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -1160,6 +1168,7 @@ jobs:
 
   viewer-dependencies:
     name: viewer dependency audit
+    if: inputs.fast != true
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -1339,7 +1348,8 @@ jobs:
           print(".cursor/environment.json validates against the Cursor environment schema")
           PY
 
-  # The one check the main-protection ruleset requires (C1). It passes only
+  # The one check the main-protection ruleset requires (C1), as `full / CI
+  # passed` when ci-pr.yml calls this for a ready pull request. It passes only
   # when every job above passed or was skipped, so a pull request cannot
   # merge while Corpus health, the writer corpus or IfcOpenShell is still
   # running or has failed, and renaming a job never touches the ruleset.

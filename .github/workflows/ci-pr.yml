@@ -1,0 +1,36 @@
+name: CI (pull request)
+
+# A pull request runs ci.yml through here: in full once it is ready, and only
+# the fast jobs (fmt, clippy, cargo doc, the PII guard, the env lint, Corpus
+# health and the Ubuntu stable and MSRV builds with their real-file checks)
+# while it is a draft. Called jobs are named after the calling job, so a ready
+# head carries `full / CI passed`, the one required check, and a draft head
+# only `fast / ...` checks: GitHub counts a skipped required check as a
+# success, so the draft run must not produce one of that name at all. In the
+# four hours before this (#1237), runs on drafts were 56% of pull-request CI's
+# runner-minutes, with the account at its 40 concurrent jobs.
+on:
+  pull_request:
+    branches: [main]
+    # `ready_for_review` is not in the default set: without it, marking a
+    # draft ready would run nothing on its head.
+    types: [opened, synchronize, reopened, ready_for_review, converted_to_draft]
+
+# A newer push or a change of draft state supersedes the in-flight run.
+concurrency:
+  group: ci-pr-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  full:
+    if: github.event.pull_request.draft != true
+    uses: $/.github/workflows/ci.yml
+  fast:
+    if: github.event.pull_request.draft == true
+    uses: $/.github/workflows/ci.yml
+    with:
+      fast: true

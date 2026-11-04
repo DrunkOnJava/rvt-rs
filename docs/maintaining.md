@@ -54,10 +54,13 @@ when a release ships.
   or the ruleset is edited deliberately and the edit committed.
   Merges are **squash only**, commits must be **signed**, history is linear, and
   the branch must be up to date with `main`. The one required check is
-  `CI passed`, CI's summary job, which passes only when every CI job (macOS
+  `full / CI passed`, CI's summary job as a ready pull request runs it
+  (`ci-pr.yml` calls `ci.yml`), which passes only when every CI job (macOS
   and Windows, corpus tier 2, the writer corpus, IfcOpenShell validation,
   wheels and the audits included) passed or was skipped, so auto-merge waits
-  for all of them. Measure and the release and deploy workflows are not part
+  for all of them. A draft runs only the fast jobs, as `fast / ...`, and
+  never a check of the required name; marking it ready runs the full set
+  (#1237). A push to `main` runs `ci.yml` directly, as `CI passed`. Measure and the release and deploy workflows are not part
   of it.
 - The squash commit's title is the pull request's title plus its number and its
   body is the pull request's description, so the description is permanent
@@ -200,7 +203,7 @@ not a full SHA is built each time, the probe examples always are, and
 
 `rust-version` in `Cargo.toml` is the oldest stable Rust the crate builds on, and
 the MSRV job in CI checks every target (`cargo check --all-targets`) on exactly that release. It is one of the jobs
-`CI passed` requires, named `build + real files / ubuntu-24.04 / msrv` so that
+`full / CI passed` requires, named `full / build + real files / ubuntu-24.04 / msrv` on a pull request so that
 the name does not change when the release does. The MSRV is never lower than the
 floor the 2024 edition sets (1.85), and it moves up when a dependency worth
 taking needs a newer compiler: quick-xml 0.42 needs 1.86 and earcut 0.4.10 and

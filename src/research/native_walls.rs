@@ -66,6 +66,10 @@ pub struct NativeWall {
     /// record's order and this wall included, each with the end it joins
     /// by. Empty where no join lists that end; `None` where several do.
     pub joins: [Option<Vec<(u64, u32)>>; 2],
+    /// The `m_wallJoinType` of the join at the curve's start and at its end:
+    /// 0 a butt join, 1 a mitre (RE-322). `None` where no join lists that end
+    /// or several do.
+    pub join_types: [Option<i64>; 2],
     /// How thick the layers outside its type's core are on its exterior and
     /// its interior side, feet; `None` where its type is not a basic wall
     /// type with a compound structure.
@@ -182,28 +186,42 @@ fn named_by_steps<'a>(
     Some((joined, paired))
 }
 
+/// The members of one control join, as (member, end it joins by) pairs.
+fn join_members(control: &Value) -> Vec<(u64, u32)> {
+    control
+        .pointer("/m_JoinInfo/m_info")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(|member| {
+            let id = element_id(member.get("m_elemId")?)?;
+            let joined = u32::try_from(member.get("m_joinedEnd")?.as_u64()?).ok()?;
+            Some((id, joined))
+        })
+        .collect()
+}
+
+/// The control joins listing `wall`'s `end`.
+fn end_controls(wall: u64, controls: &[Value], end: u32) -> Vec<&Value> {
+    controls
+        .iter()
+        .filter(|control| join_members(control).contains(&(wall, end)))
+        .collect()
+}
+
 /// The join listing `wall`'s `end`, as (member, end it joins by) pairs.
 fn end_join(wall: u64, controls: &[Value], end: u32) -> Option<Vec<(u64, u32)>> {
-    let mut found = Vec::new();
-    for control in controls {
-        let members: Vec<(u64, u32)> = control
-            .pointer("/m_JoinInfo/m_info")
-            .and_then(Value::as_array)
-            .into_iter()
-            .flatten()
-            .filter_map(|member| {
-                let id = element_id(member.get("m_elemId")?)?;
-                let joined = u32::try_from(member.get("m_joinedEnd")?.as_u64()?).ok()?;
-                Some((id, joined))
-            })
-            .collect();
-        if members.contains(&(wall, end)) {
-            found.push(members);
-        }
+    match end_controls(wall, controls, end).as_slice() {
+        [] => Some(Vec::new()),
+        [control] => Some(join_members(control)),
+        _ => None,
     }
-    match found.len() {
-        0 => Some(Vec::new()),
-        1 => found.pop(),
+}
+
+/// The `m_wallJoinType` of the one join listing `wall`'s `end` (RE-322).
+fn end_join_type(wall: u64, controls: &[Value], end: u32) -> Option<i64> {
+    match end_controls(wall, controls, end).as_slice() {
+        [control] => control.pointer("/m_JoinInfo/m_wallJoinType")?.as_i64(),
         _ => None,
     }
 }
@@ -667,6 +685,7 @@ pub fn native_walls_and_top_joins_into(
                 flipped: root.and_then(|fields| fields.get("m_isFlipped")?.as_bool()),
                 cross_section: root.and_then(|fields| fields.get("m_wallCrossSection")?.as_i64()),
                 joins: [0, 1].map(|end| end_join(id, &controls, end)),
+                join_types: [0, 1].map(|end| end_join_type(id, &controls, end)),
                 shells: None,
                 faces: face_offsets(&planes, start, direction),
                 exposed,
