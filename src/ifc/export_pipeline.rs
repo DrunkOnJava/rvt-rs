@@ -505,7 +505,7 @@ pub fn run_export_with_limits_and_control(
     }
 
     if options.family_extrusions && options.kind != ExportKind::Placeholder {
-        match super::family_extrusions::attach(rf, &mut model) {
+        match super::family_extrusions::attach_with_control(rf, &mut model, control) {
             Ok(report) => {
                 recount_exported(&mut diagnostics, &model);
                 notes.push(ExportNote::FamilyExtrusions {

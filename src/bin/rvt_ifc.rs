@@ -96,7 +96,8 @@ struct Args {
     /// its saved mesh, where they reproduce the mesh; every other instance,
     /// and every one with an arc in a profile, keeps it (#156). Off by
     /// default. Implies `--saved-meshes`. Each instance is checked against its
-    /// own mesh. Revit 2023 to 2027 files. Slower on large files.
+    /// own mesh. Revit 2024 to 2027 files (measured on 2024 and 2025). Slower
+    /// on large files.
     #[arg(long, conflicts_with_all = ["placeholder", "no_saved_meshes"])]
     family_extrusions: bool,
     /// Also write Revit's own property sets, as Revit's exporter does with

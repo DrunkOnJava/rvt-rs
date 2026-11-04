@@ -64,11 +64,22 @@ const MAX_LOOPS: usize = 256;
 /// every open end with every unused curve.
 const MAX_CURVES: usize = 4_096;
 const MAX_POLYGON_VERTICES: usize = 20_000;
+/// The most curves of a sketch and of its stored loops that are compared with
+/// one another, which takes time in their product.
+const MAX_COMPARED_CURVES: usize = 256;
+/// The largest angle an arc may start or end at, radians: the angles stored
+/// are within a few turns.
+const MAX_ARC_ANGLE: f64 = 1e6;
 /// The angle an arc is drawn as a chord of when a polygon is needed.
 const ARC_STEP: f64 = PI / 32.0;
 
 type V2 = [f64; 2];
 type V3 = [f64; 3];
+
+/// How many chords an arc from `start` to `end` is drawn as.
+fn arc_steps(start: f64, end: f64) -> usize {
+    (((end - start).abs() / ARC_STEP).ceil() as usize).clamp(1, 4096)
+}
 
 /// What a family file's records are read with.
 pub struct Document {
@@ -319,12 +330,20 @@ impl Curve {
         curve
     }
 
+    /// How many points [`Curve::polyline`] gives.
+    fn polyline_len(&self) -> usize {
+        match self {
+            Curve::Line { .. } => 1,
+            Curve::Arc { start, end, .. } => arc_steps(*start, *end),
+        }
+    }
+
     /// Points along the curve from its start, the end left out.
     fn polyline(&self, out: &mut Vec<V2>) {
         match self {
             Curve::Line { from, .. } => out.push(*from),
             Curve::Arc { start, end, .. } => {
-                let steps = (((end - start).abs() / ARC_STEP).ceil() as usize).clamp(1, 4096);
+                let steps = arc_steps(*start, *end);
                 for k in 0..steps {
                     out.push(self.point_at(k as f64 / steps as f64));
                 }
@@ -377,7 +396,7 @@ impl Curve {
                 let peak = b.atan2(a);
                 let first = ((lo - peak) / PI).ceil() as i64;
                 let last = ((hi - peak) / PI).floor() as i64;
-                for k in first..=last.min(first + 4) {
+                for k in first..=last.min(first.saturating_add(4)) {
                     let value = at(peak + k as f64 * PI);
                     low = low.min(value);
                     high = high.max(value);
@@ -553,6 +572,14 @@ fn read_curve(object: &GraphObject) -> Result<Curve3, String> {
             } else {
                 (range[0], range[1])
             };
+            let reasonable = start.is_finite()
+                && end.is_finite()
+                && start.abs() <= MAX_ARC_ANGLE
+                && end.abs() <= MAX_ARC_ANGLE
+                && (end - start).abs() <= TAU + 1e-9;
+            if !reasonable {
+                return Err("arc angle range".into());
+            }
             let unit = |v: V3| (dot3(v, v) - 1.0).abs() < TOLERANCE;
             if !unit(x_axis) || !unit(y_axis) || dot3(x_axis, y_axis).abs() > TOLERANCE {
                 return Err("arc axes not orthonormal".into());
@@ -587,6 +614,10 @@ impl Loop {
         Loop {
             curves: self.curves.iter().rev().map(Curve::reversed).collect(),
         }
+    }
+
+    fn polygon_len(&self) -> usize {
+        self.curves.iter().map(Curve::polyline_len).sum()
     }
 
     fn polygon(&self) -> Vec<V2> {
@@ -725,10 +756,10 @@ pub fn profile(loops: Vec<Loop>) -> Result<Profile, String> {
     if loops.len() > MAX_LOOPS {
         return Err("too many loops".into());
     }
-    let polygons: Vec<Vec<V2>> = loops.iter().map(Loop::polygon).collect();
-    if polygons.iter().map(Vec::len).sum::<usize>() > MAX_POLYGON_VERTICES {
+    if loops.iter().map(Loop::polygon_len).sum::<usize>() > MAX_POLYGON_VERTICES {
         return Err("too many curve pieces".into());
     }
+    let polygons: Vec<Vec<V2>> = loops.iter().map(Loop::polygon).collect();
     let areas: Vec<f64> = loops.iter().map(|l| l.signed_area().abs()).collect();
     if areas.iter().any(|a| *a < 1e-9) {
         return Err("loop with no area".into());
@@ -1233,7 +1264,7 @@ impl FormDocument {
                     .and_then(|object| object.fields.get("m_groupId"))
                     .and_then(identifier)
                     .and_then(|n| u64::try_from(n).ok());
-                if let Some(sketch) = sketch {
+                if let Some(sketch) = sketch.filter(|_| !self.graphs.contains_key(&id)) {
                     self.sketch_curves.entry(sketch).or_default().push(id);
                 }
             }
@@ -1322,6 +1353,9 @@ impl FormDocument {
             .get(&sketch_id)
             .ok_or("no curve record names the sketch")?
             .clone();
+        if curve_ids.len() > MAX_CURVES {
+            return Err("too many curves".into());
+        }
         let mut curves = Vec::new();
         let mut planes: BTreeSet<i64> = BTreeSet::new();
         for curve_id in &curve_ids {
@@ -1346,7 +1380,11 @@ impl FormDocument {
         }
         let stored_loops_agree = stored_curves(graph, helper_index)
             .ok()
-            .filter(|stored| !stored.is_empty())
+            .filter(|stored| {
+                !stored.is_empty()
+                    && stored.len() <= MAX_COMPARED_CURVES
+                    && curves.len() <= MAX_COMPARED_CURVES
+            })
             .map(|stored| same_curves(&stored, &curves));
 
         let plane = self
@@ -1555,6 +1593,20 @@ pub fn mesh_agreement(
         .iter()
         .map(|s| 2.0 / 3.0 * s.profile.arc_length() * SAGITTA * (s.high - s.low))
         .sum();
+    let per_vertex: usize = solids
+        .iter()
+        .map(|s| {
+            s.profile
+                .loops
+                .iter()
+                .map(|l| l.curves.len())
+                .sum::<usize>()
+                + s.profile.polygons.iter().map(Vec::len).sum::<usize>()
+        })
+        .sum();
+    if vertices.len().saturating_mul(per_vertex.max(1)) > MESH_PAIR_BUDGET {
+        return None;
+    }
     let vertex_max = vertices
         .iter()
         .map(|v| {

@@ -6,10 +6,11 @@
 //! Revit saved for display ([`super::saved_meshes`]), [`attach`] rebuilds the
 //! family's extrusions and draws the instance from them instead, as
 //! `IfcExtrudedAreaSolid`s over `IfcIndexedPolyCurve` profiles of straight
-//! segments. An instance with an arc in a profile keeps its mesh: Revit's
-//! export tessellates an arc from a start the file does not give, and where
-//! that is out of phase with a consumer's tessellation of ours, Revit's
-//! vertices lie up to 0.0014 ft from the extrusions' (RE-327 section 9).
+//! segments. An instance with an arc in a profile keeps its mesh: in the one
+//! case measured, Revit's vertices lay 0.0014 ft from the extrusions' arcs as
+//! IfcOpenShell tessellates them, which the volumes suggest is a difference
+//! in where Revit's tessellation of an arc starts (an inference from the
+//! volumes, not a measurement; RE-327 section 9).
 //!
 //! An instance keeps its saved mesh unless the extrusions reproduce it. The
 //! family's document holds the family as saved, and a placed instance is
@@ -17,26 +18,34 @@
 //! no verdict shared between instances of a family: every vertex of its mesh
 //! must lie on the extrusions' surfaces, samples of their surfaces must lie
 //! on its mesh, and the volumes must agree within the chord loss of the
-//! mesh's arcs and 0.01%. A family with a void, a hidden form it cannot read, a form
-//! that is not an extrusion or a profile the reader does not draw (an
-//! ellipse, a sketch whose curves do not close) draws nothing, and neither
-//! does an instance whose mesh the extrusions do not reproduce: the instance
-//! keeps the body it has.
+//! mesh's arcs and 0.01%.
+//!
+//! Only a family's `ExtrusionElem`, `CurveElem` and `SketchPlane` records are
+//! read. A family with a void (an extrusion that cuts), or an extrusion the
+//! reader does not rebuild (an ellipse, a sketch whose curves do not close, a
+//! plane or a field it does not read), or no extrusion left once the ones
+//! whose `Visible` parameter is 0 are set aside, draws nothing. Any other
+//! form the family holds (a sweep, a blend, a revolution), and an extrusion
+//! whose `Visible` parameter is not read (taken as visible), are not seen:
+//! it is the check of an instance against its own mesh that refuses an
+//! instance such a form or such an extrusion makes differ.
 //!
 //! The extrusions are placed by the instance's transform (RE-87, in the
 //! family's coordinates to the model's), then into the element's frame as
 //! [`super::saved_meshes::attach`] puts the mesh there: the mesh's vertices
 //! are the model's less the element's location, turned by minus its rotation
-//! about the vertical axis, so the two are in one frame whatever the
-//! transform. An instance without a transform that reads, or with one that is
-//! not a rotation or a reflection, keeps its mesh; a tilted or turned
-//! instance whose transform is read is placed by it and checked like any
-//! other.
+//! about the vertical axis, so the two are in one frame for any rotation of
+//! the instance. An instance without a transform that reads keeps its mesh:
+//! the transform is read on Revit 2024 to 2027 only (the element-data header
+//! is measured for those), and only as a rotation, so a reflected instance's
+//! is never read. A tilted or turned instance whose transform is read is
+//! placed by it and checked like any other.
 
 use super::IfcModel;
 use super::entities::{
     CurveSegment, IfcEntity, IndexedCurve, ProfileDef, PropertyValue, SolidShape,
 };
+use super::export_content::{SPACE_OUTLINE_FAMILY_BODY, SPACE_OUTLINE_SOURCE_PROPERTY};
 use super::saved_meshes::SAVED_MESH_BODY_SOURCE;
 use crate::native_form_geometry::{
     Curve, ExtrusionSolid, FormDocument, Frame, Loop, mesh_agreement,
@@ -50,16 +59,16 @@ use std::f64::consts::PI;
 pub const FAMILY_EXTRUSION_BODY_SOURCE: &str = "family_extrusions";
 
 /// How far a vertex of an instance's mesh may lie from the extrusions' surface
-/// for the extrusions to replace it, feet. Every vertex of the 6,014
-/// extrusions of Autodesk's sample projects that have a complete mesh lies
-/// within 1e-6 ft of the rebuilt surface; the margin is the single-precision
-/// rounding of a mesh far from the origin. A looser 5e-4 ft replaced a
-/// Revit instance whose own export lies 1.4e-3 ft from the extrusions (run
-/// 41805333248), so it is no longer allowed.
+/// for the extrusions to replace it, feet. In the 6,014 printed forms (of
+/// 6,172) of Autodesk's sample projects that match their own complete mesh,
+/// every mesh vertex lies under 5e-7 ft from the rebuilt surface; the margin
+/// is the single-precision rounding of a mesh far from the origin. The
+/// tolerances were first 5e-4 ft, 1.5e-3 ft and 1% of the volume, and
+/// narrowing them to these changed no replaced body (RE-327 section 9).
 const VERTEX_TOLERANCE: f64 = 1e-4;
 /// How far a sampled point of the extrusions' surface may lie from the mesh,
 /// feet: the 0.001 ft chords the mesh draws arcs with (the largest of the
-/// 6,014 forms is 0.000998 ft), and a tenth more.
+/// 6,014 printed forms is 0.000998 ft), and a tenth more.
 const SURFACE_TOLERANCE: f64 = 1.1e-3;
 
 /// What [`attach`] did. Every instance drawn from a saved mesh is counted
@@ -80,8 +89,9 @@ pub struct FamilyExtrusionReport {
     pub replaced: usize,
     /// Candidates whose family was not found or not rebuilt.
     pub not_rebuilt: usize,
-    /// Candidates of a rebuilt family with no instance transform that reads,
-    /// or one that is not a rotation or a reflection.
+    /// Candidates of a rebuilt family with no instance transform that reads:
+    /// every candidate of a file before Revit 2024, and one whose transform
+    /// is not a rotation (a reflection is never read).
     pub unplaced: usize,
     /// Candidates whose mesh is too large to compare or indexes outside its
     /// vertices.
@@ -93,10 +103,10 @@ pub struct FamilyExtrusionReport {
     pub vertices_differ: usize,
     pub surface_differs: usize,
     /// Candidates the extrusions reproduce, left with their mesh because a
-    /// profile has an arc: Revit's export tessellates its arcs from a start
-    /// the file does not give, and where the two tessellations are out of
-    /// phase Revit's vertices lie up to 0.0014 ft from the extrusions'
-    /// (RE-327 section 9).
+    /// profile has an arc: in the one case measured, Revit's vertices lay
+    /// 0.0014 ft from the extrusions' arcs, which the volumes suggest is a
+    /// difference in where Revit starts its tessellation of an arc (an
+    /// inference, RE-327 section 9).
     pub arcs: usize,
     /// Candidates the extrusions reproduce whose profile cannot be written.
     pub unwritable: usize,
@@ -317,6 +327,16 @@ pub fn attach(
     rf: &mut crate::RevitFile,
     model: &mut IfcModel,
 ) -> anyhow::Result<FamilyExtrusionReport> {
+    attach_with_control(rf, model, &crate::control::WalkerControl::default())
+}
+
+/// Same as [`attach`], checking `control` between its reads and for each
+/// instance; a cancelled `control` ends it with [`crate::Error::Cancelled`].
+pub fn attach_with_control(
+    rf: &mut crate::RevitFile,
+    model: &mut IfcModel,
+    control: &crate::control::WalkerControl,
+) -> anyhow::Result<FamilyExtrusionReport> {
     let mut report = FamilyExtrusionReport::default();
     let mut by_id: BTreeMap<u64, usize> = BTreeMap::new();
     let mut ambiguous: BTreeSet<u64> = BTreeSet::new();
@@ -354,10 +374,13 @@ pub fn attach(
     }
 
     let instances: BTreeSet<u64> = by_id.keys().copied().collect();
+    control.check()?;
     let symbol_of = root_ids(rf, &instances, "FamilyInstance", "m_masterSymbolId")?;
     let symbols: BTreeSet<u64> = symbol_of.values().copied().collect();
+    control.check()?;
     let family_of_symbol = root_ids(rf, &symbols, "FamilySymbol", "m_familyId")?;
     let families: BTreeSet<u64> = family_of_symbol.values().copied().collect();
+    control.check()?;
     let classes: BTreeSet<String> = ["ExtrusionElem", "CurveElem", "SketchPlane"]
         .iter()
         .map(|class| class.to_string())
@@ -372,6 +395,7 @@ pub fn attach(
     report.families = records.len();
     let mut parts: BTreeMap<u64, Vec<ExtrusionSolid>> = BTreeMap::new();
     for (family, items) in records {
+        control.check()?;
         let mut document = FormDocument::default();
         for (id, graph) in items {
             document.insert(id, graph);
@@ -393,9 +417,11 @@ pub fn attach(
         })
         .filter_map(|(id, _)| u32::try_from(*id).ok())
         .collect();
+    control.check()?;
     let transforms = scan_instance_transforms(rf, release, &wanted)?;
 
     for (id, index) in &by_id {
+        control.check()?;
         let Some(solids) = symbol_of
             .get(id)
             .and_then(|symbol| family_of_symbol.get(symbol))
@@ -475,6 +501,8 @@ pub fn attach(
         for property in &mut set.properties {
             if property.name == "BodySource" {
                 property.value = PropertyValue::Text(FAMILY_EXTRUSION_BODY_SOURCE.into());
+            } else if property.name == SPACE_OUTLINE_SOURCE_PROPERTY {
+                property.value = PropertyValue::Text(SPACE_OUTLINE_FAMILY_BODY.into());
             }
         }
         report.replaced += 1;
