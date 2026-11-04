@@ -92,6 +92,50 @@ pub fn write_step_to<W: std::io::Write>(
     w.finish_to_sink()
 }
 
+/// The GlobalId [`write_step`] gives each building element, by index into
+/// `model.entities`; `None` for an entity that is not a building element.
+///
+/// Fixed from what the element is rather than where it lands in the file
+/// (#400): Revit's own where the file yields it; otherwise one derived
+/// from the document's identity, the element's ElementId (its `Tag`) and which
+/// of the entities sharing that Tag it is, since a slab's further pieces
+/// (#331) or a curtain wall's parts share their element's. An element with no
+/// Tag falls back to its entity type and name. A caller that lists a model's
+/// elements reads their GlobalIds here, so that they are the ones the written
+/// IFC carries.
+pub fn element_global_ids(model: &IfcModel) -> Vec<Option<String>> {
+    let document = model.global_ids.document.as_deref().unwrap_or("");
+    let mut element_gids: Vec<Option<String>> = vec![None; model.entities.len()];
+    let mut element_counts: HashMap<(&str, &str, &str), usize> = HashMap::new();
+    for (entity_idx, entity) in model.entities.iter().enumerate() {
+        let super::entities::IfcEntity::BuildingElement {
+            ifc_type,
+            name,
+            type_guid,
+            ..
+        } = entity
+        else {
+            continue;
+        };
+        let key = match type_guid.as_deref() {
+            Some(tag) => ("element", tag, ""),
+            None => ("untagged-element", ifc_type.as_str(), name.as_str()),
+        };
+        let occurrence = element_counts.entry(key).or_default();
+        let element_gid = model
+            .global_ids
+            .elements
+            .get(&entity_idx)
+            .cloned()
+            .unwrap_or_else(|| {
+                stable_guid(document, &[key.0, key.1, key.2, &occurrence.to_string()])
+            });
+        *occurrence += 1;
+        element_gids[entity_idx] = Some(element_gid);
+    }
+    element_gids
+}
+
 /// Attribute layout of the tail an IFC4 building-element instance
 /// carries after `IfcProduct`'s seven common attributes
 /// (`GlobalId`, `OwnerHistory`, `Name`, `Description`, `ObjectType`,
@@ -2296,40 +2340,10 @@ impl StepWriter<'_> {
             )
         };
         let aggregate_parts = aggregate_parts_of_elements(model);
-        // #400: each building element's GlobalId, fixed from what the
-        // element is rather than where it lands in the file. Revit's own
-        // where the file yields it (RE-48); otherwise the element's
-        // ElementId (its `Tag`) and which of the entities sharing that Tag
-        // it is — a slab's further pieces (#331) or a curtain wall's parts
-        // share their element's. An element with no Tag falls back to its
-        // entity type and name. Everything the element owns (its opening,
-        // property sets, material association) derives from this one.
-        let mut element_gids: Vec<Option<String>> = vec![None; model.entities.len()];
-        let mut element_counts: HashMap<(&str, &str, &str), usize> = HashMap::new();
-        for (entity_idx, entity) in model.entities.iter().enumerate() {
-            let super::entities::IfcEntity::BuildingElement {
-                ifc_type,
-                name,
-                type_guid,
-                ..
-            } = entity
-            else {
-                continue;
-            };
-            let key = match type_guid.as_deref() {
-                Some(tag) => ("element", tag, ""),
-                None => ("untagged-element", ifc_type.as_str(), name.as_str()),
-            };
-            let occurrence = element_counts.entry(key).or_default();
-            let element_gid = model
-                .global_ids
-                .elements
-                .get(&entity_idx)
-                .cloned()
-                .unwrap_or_else(|| gid(&[key.0, key.1, key.2, &occurrence.to_string()]));
-            *occurrence += 1;
-            element_gids[entity_idx] = Some(element_gid);
-        }
+        // #400: each building element's GlobalId, see `element_global_ids`.
+        // Everything the element owns (its opening, property sets, material
+        // association) derives from this one.
+        let element_gids = element_global_ids(model);
         // #823: the further pieces of an element of separate loops that are
         // written as items of its body: where the element and the piece are
         // both plain extrusions, or neither has geometry. Any other piece is

@@ -220,6 +220,39 @@ pub fn strip_revit_page_checksums(data: &[u8]) -> Vec<u8> {
     out
 }
 
+/// [`strip_revit_page_checksums`] on bytes the caller owns: the payloads are
+/// moved down over the trailers in the same buffer, so a stream the caller has
+/// just read is not held twice while it is stripped (#1075).
+pub(crate) fn strip_revit_page_checksums_in_place(mut data: Vec<u8>) -> Vec<u8> {
+    let full_pages = data.len() / REVIT_STORED_PAGE_BYTES;
+    if full_pages == 0 {
+        return data;
+    }
+    let remainder_start = full_pages * REVIT_STORED_PAGE_BYTES;
+    let remainder = data.len() - remainder_start;
+    for page in 1..full_pages {
+        let from = page * REVIT_STORED_PAGE_BYTES;
+        data.copy_within(
+            from..from + REVIT_PAGE_PAYLOAD_BYTES,
+            page * REVIT_PAGE_PAYLOAD_BYTES,
+        );
+    }
+    let stripped = full_pages * REVIT_PAGE_PAYLOAD_BYTES;
+    data.copy_within(remainder_start.., stripped);
+    data.truncate(stripped + remainder);
+    data
+}
+
+/// [`prepare_stream_for_inflate`] on stored bytes the caller owns, which are
+/// stripped in place rather than copied (#1075).
+pub(crate) fn prepare_stream_owned(stream_name: &str, stored: Vec<u8>) -> Vec<u8> {
+    if is_checksum_paged_stream(stream_name) {
+        strip_revit_page_checksums_in_place(stored)
+    } else {
+        stored
+    }
+}
+
 /// Return checksum-clean bytes ready for inflate when `stream_name` is gated.
 ///
 /// Does **not** mutate writer identity copies: [`crate::reader::RevitFile::read_stream`]
@@ -317,19 +350,66 @@ impl InflatedStream {
         limits: InflateLimits,
     ) -> (Self, InflateShortfall) {
         let prepared = prepare_stream_for_inflate(stream_name, stored);
-        let (chunks, shortfall) = inflate_all_members_with_limits(
-            prepared.as_ref(),
-            limits,
-            limits.max_stream_total_bytes_for(stored.len()),
-        );
-        let total: usize = chunks.iter().map(|(_, _, chunk)| chunk.len()).sum();
-        let mut concat = Vec::with_capacity(total);
-        let mut chunk_ends = Vec::with_capacity(chunks.len());
-        let mut members = Vec::with_capacity(chunks.len());
-        for (offset, consumed, chunk) in &chunks {
-            concat.extend_from_slice(chunk);
-            chunk_ends.push(concat.len());
-            members.push((*offset, *consumed));
+        Self::from_prepared_with_limits(prepared.as_ref(), stored.len(), limits)
+    }
+
+    /// [`Self::from_stored_with_limits`] for a stream already prepared
+    /// ([`prepare_stream_for_inflate`]), `stored_len` being its stored size,
+    /// which sets the cap on the members together.
+    ///
+    /// Each member is inflated onto the end of the one buffer that holds them
+    /// all, rather than into a buffer of its own that is joined to the others
+    /// afterwards: that held the whole stream twice at once (#1075). A
+    /// WebAssembly build, whose linear memory is committed as it grows and
+    /// never returned, joins them as before into a buffer of the exact size.
+    pub(crate) fn from_prepared_with_limits(
+        prepared: &[u8],
+        stored_len: usize,
+        limits: InflateLimits,
+    ) -> (Self, InflateShortfall) {
+        let aggregate = limits.max_stream_total_bytes_for(stored_len);
+        let mut concat: Vec<u8> = Vec::new();
+        let mut chunk_ends = Vec::new();
+        let mut members = Vec::new();
+        let mut shortfall = InflateShortfall::default();
+        if cfg!(target_arch = "wasm32") {
+            let (chunks, left_out) = inflate_all_members_with_limits(prepared, limits, aggregate);
+            shortfall = left_out;
+            let total: usize = chunks.iter().map(|(_, _, chunk)| chunk.len()).sum();
+            concat = Vec::with_capacity(total);
+            chunk_ends.reserve(chunks.len());
+            members.reserve(chunks.len());
+            for (offset, consumed, chunk) in &chunks {
+                concat.extend_from_slice(chunk);
+                chunk_ends.push(concat.len());
+                members.push((*offset, *consumed));
+            }
+        } else {
+            let mut total = 0usize;
+            for offset in find_gzip_offsets(prepared) {
+                let start = concat.len();
+                match inflate_member_into(prepared, offset, limits, &mut concat) {
+                    Ok(consumed) => {
+                        let len = concat.len() - start;
+                        if total.saturating_add(len) > aggregate {
+                            concat.truncate(start);
+                            shortfall.stopped_at_total = true;
+                            break;
+                        }
+                        total += len;
+                        chunk_ends.push(concat.len());
+                        members.push((offset, consumed));
+                    }
+                    Err(Error::DecompressLimitExceeded(_)) => {
+                        concat.truncate(start);
+                        shortfall.members_over_limit += 1;
+                    }
+                    Err(_) => concat.truncate(start),
+                }
+            }
+            concat.shrink_to_fit();
+            chunk_ends.shrink_to_fit();
+            members.shrink_to_fit();
         }
         let crcs = (0..members.len())
             .map(|_| std::sync::OnceLock::new())
@@ -356,13 +436,28 @@ impl InflatedStream {
 
     /// The index of the member whose gzip header starts at `offset`, and its
     /// inflated bytes.
-    fn member_index(&self, offset: usize) -> Option<(usize, &[u8])> {
+    pub(crate) fn member_index(&self, offset: usize) -> Option<(usize, &[u8])> {
         let i = self
             .members
             .binary_search_by_key(&offset, |&(start, _)| start)
             .ok()?;
         let start = i.checked_sub(1).map_or(0, |prev| self.chunk_ends[prev]);
         Some((i, &self.concat[start..self.chunk_ends[i]]))
+    }
+
+    /// The bytes member `index` takes in the prepared stream: its gzip header
+    /// and its DEFLATE stream.
+    pub(crate) fn member_consumed(&self, index: usize) -> Option<usize> {
+        self.members.get(index).map(|&(_, consumed)| consumed)
+    }
+
+    /// The inflated bytes of members `first` to `last` together, which are
+    /// stored one after the other.
+    pub(crate) fn members_span(&self, first: usize, last: usize) -> Option<&[u8]> {
+        let start = first
+            .checked_sub(1)
+            .map_or(Some(0), |prev| self.chunk_ends.get(prev).copied())?;
+        self.concat.get(start..*self.chunk_ends.get(last)?)
     }
 
     /// The CRC-32 of the member [`Self::member_at`] gives for `offset`,
@@ -673,6 +768,32 @@ pub fn inflate_member_at_with_limits(
         .min(INITIAL_INFLATE_CAPACITY_BYTES)
         .min(limits.max_output_bytes);
     let mut out = Vec::with_capacity(cap);
+    let consumed = inflate_member_into(data, offset, limits, &mut out)?;
+    // Results are retained per member by the chunk collectors; trim the
+    // amortised-growth slack so retained buffers cost what they hold.
+    out.shrink_to_fit();
+    Ok((out, consumed))
+}
+
+/// Inflate the member at `offset` onto the end of `out`, under the same
+/// per-member cap as [`inflate_member_at_with_limits`], which counts only what
+/// this call appends. Returns the bytes of `data` the member's header and
+/// DEFLATE stream take. On an error `out` may hold part of the member.
+fn inflate_member_into(
+    data: &[u8],
+    offset: usize,
+    limits: InflateLimits,
+    out: &mut Vec<u8>,
+) -> Result<usize> {
+    let header_len =
+        gzip_header_len(data, offset).ok_or_else(|| Error::Decompress("no gzip header".into()))?;
+    let body_start = offset
+        .checked_add(header_len)
+        .ok_or_else(|| Error::Decompress("gzip header offset overflow".into()))?;
+    let body = data
+        .get(body_start..)
+        .ok_or_else(|| Error::Decompress("gzip header extends past input".into()))?;
+    let base = out.len();
     // Chunked read loop so we can enforce the cap deterministically.
     let mut decoder = DeflateDecoder::new(body);
     let mut buf = [0u8; 8192];
@@ -683,7 +804,7 @@ pub fn inflate_member_at_with_limits(
         if n == 0 {
             break;
         }
-        let next_len = out.len().checked_add(n).ok_or_else(|| {
+        let next_len = (out.len() - base).checked_add(n).ok_or_else(|| {
             Error::DecompressLimitExceeded("DEFLATE output length overflow".into())
         })?;
         if next_len > limits.max_output_bytes {
@@ -694,10 +815,7 @@ pub fn inflate_member_at_with_limits(
         }
         out.extend_from_slice(&buf[..n]);
     }
-    // Results are retained per member by the chunk collectors; trim the
-    // amortised-growth slack so retained buffers cost what they hold.
-    out.shrink_to_fit();
-    Ok((out, header_len + decoder.total_in() as usize))
+    Ok(header_len + decoder.total_in() as usize)
 }
 
 /// Inflate the DEFLATE stream that follows a gzip header starting at `offset`.
