@@ -523,7 +523,22 @@ def main(argv):
     p.add_argument("--max-mb", type=int, default=256)
     p.add_argument("--report")
     args = parser.parse_args(argv)
-    return {"lookup": lookup, "store": store, "finish": finish}[args.command_name](args)
+    if args.command_name == "finish":
+        return finish(args)
+    # Whatever goes wrong with the cache, the step runs as it always did: a
+    # lookup that fails says "not cached" (2), never "miss" (1), and a store
+    # that fails keeps nothing.
+    failed = 2 if args.command_name == "lookup" else 0
+    try:
+        if args.command_name == "lookup":
+            os.remove(keyfile(args))
+    except OSError:
+        pass
+    try:
+        return {"lookup": lookup, "store": store}[args.command_name](args)
+    except Exception as error:
+        log(f"not cached {os.path.basename(os.path.abspath(args.dir))} {args.step}: {args.command_name} failed, {type(error).__name__}: {error}")
+        return failed
 
 
 if __name__ == "__main__":
