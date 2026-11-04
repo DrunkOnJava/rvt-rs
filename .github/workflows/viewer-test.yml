@@ -63,6 +63,8 @@ jobs:
     name: ${{ matrix.name }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
+    env:
+      RE1_COMMIT: 9e8b37175a0fba1397f7011aeee917fe52de7623
     strategy:
       fail-fast: false
       matrix:
@@ -110,12 +112,24 @@ jobs:
       # W9: the viewer journey (viewer/tests/journey.spec.ts) also runs on the
       # four RE1 models (Drshelden/IFC-ECS, MIT), pinned by commit and hash
       # as ci.yml fetches them.
+      # The four files, cached on the commit they are pinned at: the download
+      # from raw.githubusercontent.com took 1 to 6 s, and 47 and 101 s in two
+      # legs of other runs. A file restored is checked against its hash all the
+      # same.
+      - name: Cache the RE1 models
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: _project_corpus/Revit/RE1-*.rvt
+          key: re1-${{ env.RE1_COMMIT }}
       - name: Fetch the RE1 models (Drshelden/IFC-ECS, MIT)
         run: |
           set -euo pipefail
-          base=https://raw.githubusercontent.com/Drshelden/IFC-ECS/9e8b37175a0fba1397f7011aeee917fe52de7623/data/RE1
+          base="https://raw.githubusercontent.com/Drshelden/IFC-ECS/${RE1_COMMIT}/data/RE1"
           dir="${GITHUB_WORKSPACE}/_project_corpus/Revit"
           while read -r name sum; do
+            if [ -f "${dir}/${name}" ] && echo "${sum}  ${dir}/${name}" | sha256sum -c - >/dev/null 2>&1; then
+              continue
+            fi
             curl -sSfL --retry 5 --retry-all-errors -o "${dir}/${name}" "${base}/${name}"
             echo "${sum}  ${dir}/${name}" | sha256sum -c -
           done <<'LIST'
@@ -139,7 +153,7 @@ jobs:
       # `target-native` is gen-fixture's, below.
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0  # v2.9.3
         with:
-          save-if: ${{ github.ref == 'refs/heads/main' || github.event_name == 'pull_request' }}
+          save-if: ${{ github.ref == 'refs/heads/main' }}
           shared-key: ${{ inputs.release_wasm && 'viewer-wasm' || 'viewer-wasm-fast' }}
           cache-directories: target-native
 
