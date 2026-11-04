@@ -2,8 +2,8 @@
 
 **Date:** 2026-11-03
 **Issues:** #1247, #255; follows RE-224, RE-300, RE-301 and RE-304
-**Runs:** Measure [41585460305](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41585460305) (the readers at f4d82ed7 against `main` at 30756e97, `--saved-meshes`, `mesh_bodies_vs_ifc` and `schema`), the census [41585448251](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41585448251) at f4d82ed7, and the probe runs named below; for the second attempt (§6) Measure [41765801884](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41765801884), [41765805196](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41765805196) and [41766414367](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41766414367) on the office, and the face probes [41766357243](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41766357243) and [41767705968](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41767705968)
-**Result:** negative, in two attempts. The readers work: they draw every element the office kept as a box for these gaps, and the 43 they free there are not Revit's body by the scorer's bars. The first attempt (f4d82ed7) drew them at 1.027 to 1.047 of Revit's volume and 3.7 times the office's triangles. The second (§6) clips each trimmed loop to the grid cells it covers and shares the pieces' corners: the office is 2.1 times `main`'s triangles instead of 3.7 (14,471 a toilet against Revit's 1,668), IfcOpenShell validates it again, and every toilet is 1.006 of Revit's volume. Only the second attempt was measured face by face: it draws no extra surface (0.5% more area than Revit's), the first attempt's excess volume is gone, and the cause is not measured (RE-311's cracks between pieces that did not share corners are the likely one). What is left is in part Revit's: 0.022 ft is its coarse faceting of the bowl's surfaces of revolution, and 66 of its 808 vertices on the first toilet (and 66 of 805 on the third, which is rotated) lie more than 0.001 ft off our surface, 59 of them 0.0027 to 0.0050 ft off at junctions between two of our faces and 7 of them 0.0010 to 0.0012 ft off; which side of a junction is off is open. The toilets still fail the 0.01 ft bar (0 of 43) and the "ref on ours" bar (0 of 43), so nothing lands but this report and its probes; the readers stay on `re/1247-per-cell-clip` (reader code at b5d5546f, branch tip d5d26fb4, also archived at `refs/archive/2026-11-03/re302-per-cell-clip`).
+**Runs:** Measure [41585460305](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41585460305) (the readers at f4d82ed7 against `main` at 30756e97, `--saved-meshes`, `mesh_bodies_vs_ifc` and `schema`), the census [41585448251](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41585448251) at f4d82ed7, and the probe runs named below; for the second attempt (§6) Measure [41765801884](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41765801884), [41765805196](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41765805196) and [41766414367](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41766414367) on the office, and the face probes [41766357243](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41766357243) and [41767705968](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41767705968); for §7, Measure [41849309128](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41849309128), [41849313875](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41849313875) and [41852625343](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41852625343)
+**Result:** negative, in two attempts. The readers work: they draw every element the office kept as a box for these gaps, and the 43 they free there are not Revit's body by the scorer's bars. The first attempt (f4d82ed7) drew them at 1.027 to 1.047 of Revit's volume and 3.7 times the office's triangles. The second (§6) clips each trimmed loop to the grid cells it covers and shares the pieces' corners: the office is 2.1 times `main`'s triangles instead of 3.7 (14,471 a toilet against Revit's 1,668), IfcOpenShell validates it again, and every toilet is 1.006 of Revit's volume. Only the second attempt was measured face by face: it draws no extra surface (0.5% more area than Revit's), the first attempt's excess volume is gone, and the cause is not measured (RE-311's cracks between pieces that did not share corners are the likely one). What is left is in part Revit's: 0.022 ft is its coarse faceting of the bowl's surfaces of revolution, and 66 of its 808 vertices on the first toilet (and 66 of 805 on the third, which is rotated) lie more than 0.001 ft off our surface, 59 of them 0.0027 to 0.0050 ft off at junctions between two of our faces and 7 of them 0.0010 to 0.0012 ft off; which side of a junction is off is open. The toilets still fail the 0.01 ft bar (0 of 43) and the "ref on ours" bar (0 of 43), so nothing lands but this report and its probes; the readers stay on `re/1247-per-cell-clip` (reader code at b5d5546f, branch tip d5d26fb4, also archived at `refs/archive/2026-11-03/re302-per-cell-clip`). §7 (2026-11-04) measures the second attempt merged with `main` at ac7884e0 on every model the lane covers: the office is unchanged from §6 to the triangle, RE1 Architecture frees one more body and 8 of the 10 2024 samples change, and the default export, which the readers should not touch, moves on one held-out model, so the readers still do not land.
 
 ## 1. The gap
 
@@ -116,3 +116,78 @@ Branch `re/1247-per-cell-clip` (reader code at b5d5546f, tip d5d26fb4, over `mai
 The second attempt draws no extra surface (0.5% more area than Revit's, and every triangle of ours more than 0.01 ft from Revit's mesh is on a surface of revolution), and the first attempt's excess volume is gone. Why is not measured: the first attempt's area was not, and RE-311's cracks are the likely cause (above). What remains cannot be closed by the readers if the 0.01 ft bar is Revit's polyhedron: a mesh within 0.01 ft of the bowl's chords is not within 0.001 ft of its surface. The 66 vertices are open. A junction vertex 0.0027 to 0.0050 ft from both faces is Revit's triangulation off the true edge, as RE-311 found at tees and closet bends (0.006 to 0.020 ft), or our boundary off the true edge: between two curved faces our edge is the straight UV line between Revit's saved samples, which strays from the true edge by up to 0.01 ft where `probe_re302_plane_edges` measured it against a plane, and only edges beside a plane are traced. Face 5's 7 sit at a cylinder-plane junction whose edge the readers do trace onto the plane, and they are 0.0046 to 0.0050 ft from it, which points to Revit's side there; the revolution-to-revolution junctions (57 with 61, 58 with 59) are untraced and this run cannot tell the two apart.
 
 **What a next attempt needs.** (1) To settle the 66, compare them with the true edge: solve `A(uA) = B(uB)` along the junction of two curved faces (or compare with Revit's saved edge samples, which are on it), and trace curved-to-curved edges as plane edges are. (2) The 0.01 ft bar is unreachable for this bowl by any mesh of its true surface; whether the toilets are kept on "ref on ours" as RE1's elbows were (#1280) is for the maintainers to decide, not a measurement. (3) Measure the second attempt on Core Interior, RE1, the Revit 2025 models and the 2024 samples before any landing; this report does not.
+
+## 7. Per-cell clipping, on main
+
+Branch `research/1247-trim-cell-clipping` (draft PR #1361): the second attempt's readers (§6; reader code b5d5546f, tip d5d26fb4) with a signed merge of `main` at ac7884e0, which has since landed #1338 (a plane face split into regions drawn whole), #1337, #1342 and #1352 in the same area. Two files conflicted, the toilet-faces probe and scorer that §6's own PR added; `main`'s versions were kept. The reader files merged without a conflict. The branch adds only failure-first tests of two pure helpers of the clip (`clip_axis`, the Sutherland–Hodgman step against one grid line, and `triangulate_piece`, a cell's fan or earcut: a loop wholly on the kept side or wholly off it, an edge or a vertex on the line, a concave U cut across its notch, an L cut over a grid with each piece's extent and the pieces' areas checked, empty and single-point input, both fan windings) and a guard so `triangulate_piece` returns no triangles for a piece of fewer than three points, which `tessellate_trimmed` never gave it. The tests run in CI's `cargo test --profile ci --lib`; the pull request's fast jobs, among them the stable Linux job that runs it, passed at 88688aa0, which adds only a type alias for clippy's `type_complexity`; Measure ran at 20da463a, before that alias.
+
+**What clipping changes on the office** (run 41849309128, `--saved-meshes`, 20da463a against `main` ac7884e0; the `rvt-ifc.log` of each side):
+
+| file | | bodies drawn from saved graphics | triangles | kept their box | IFC |
+|---|---|---:|---:|---:|---:|
+| as built | `main` | 11,078 of 11,246 | 568,885 | 124 | 82,170,411 bytes |
+| | head | 11,121 of 11,246 | 1,191,138 | 84 | 104,600,924 bytes |
+| | f4d82ed7 (§3) | | 2,097,501 | | 181.8 MB |
+| permit | `main` | 11,193 of 11,363 | 573,323 | 124 | 82,161,464 bytes |
+| | head | 11,236 of 11,363 | 1,195,576 | 84 | 104,591,977 bytes |
+| | f4d82ed7 (§3) | | 2,102,269 | | 181.7 MB |
+
+The head's figures are §6's b5d5546f row to the triangle (1,191,138 and 1,195,576), so merging `main` changed nothing on the office. Against `main` the office has 2.09 times the triangles and 1.27 times the IFC; against f4d82ed7, 0.57 times each. The 43 toilets are all of the added triangles, 43 × 14,471 = 622,253, and about 522,000 bytes of IFC each; Revit's has 1,668 triangles for one. The IFC is back under the 120 MB below which the schema step validates it (it skipped the office at f4d82ed7's 181.8 MB): `validate` finds 0 and `rules` the same 4 as `main`'s on both files. The terrain variants in concrete and timber are unchanged (23,028 and 23,004 triangles, the same bytes and hashes). The schema step's count of swept solids with their own Position falls by 43 on each file (2,441 → 2,398 as built, 2,408 → 2,365 at permit): the toilets were swept boxes.
+
+**What the scorer says** (`mesh_bodies_vs_ifc`, the same run, head against `main`; columns as the scorer prints them):
+
+| scored body | class | n | within 1% | within .01% | 0.01 ft | 0.001 ft | ref on ours | class median ratio |
+|---|---|---:|---:|---:|---:|---:|---:|---:|
+| office as built, `main` | IfcSanitaryTerminal | 47 | 47 | 34 | 34 | 34 | 34 | 1.0000 |
+| office as built, head | IfcSanitaryTerminal | 90 | 90 | 34 | 34 | 34 | 34 | 1.0017 |
+| of those, `WC-istuin:WC-1` | | 43 | 43 | 0 | 0 | 0 | 0 | |
+| RE1 Architecture, `main` | IfcFlowTerminal | 6 | 5 | 3 | 3 | 2 | 3 | 1.0012 |
+| RE1 Architecture, head | IfcFlowTerminal | 7 | 5 | 3 | 3 | 2 | 4 | 1.0024 |
+
+The office's saved-mesh bodies scored go from 1,650 to 1,693 as built and from 1,738 to 1,781 at permit. All 90 sanitary terminals are within 1% of Revit's volume, and the 15 new ones the scorer lists are at 1.0060; none of the 43 meets the 0.01 ft, 0.001 ft or "ref on ours" column, so those stay at the 34 `main` already had. Revit's vertices lie 0.0046 to 0.0050 ft from our surface and ours 0.0215 to 0.0222 ft from Revit's on the 15 the scorer lists, as in §6. The 43 are the same toilets as §3 and §6.
+
+RE1 Architecture frees one body, the hand-held shower head (`IfcFlowTerminal`, 369643): 53 → 54 scored, its saved-graphics bodies 17,798 → 23,220 triangles, boxes 4 → 3, IFC 1,154,054 → 1,390,229 bytes. It meets "ref on ours" (Revit's vertices 0.00073 ft from our surface), and does not meet 1% (volume 1.1046 of Revit's) or 0.01 ft (ours to Revit's, 0.01007 ft). Of the eight largest of the 16 shells the scorer lists, ours are 0.0163, 0.0063, 0.0060 and 0.0055 cubic ft against Revit's 0.0162, 0.0057, 0.0045 and 0.0039, so it is over in the middle shells; the shower head's faces were not probed, so the cause is not measured. The scorer's per-type list shows six types and the washing machine, which it listed before, drops off that list; the class's seven bodies are counted in the row above.
+
+**Every other model of that run is unchanged:** Core Interior, RE1 electrical, mechanical and plumbing, and the two terrain variants have the same IFC hash on both sides, and their scorer and schema outputs are the same. In all, 19 pairs: 8 identical, 11 differ (the two office files, RE1 Architecture and 8 of the 10 2024 samples).
+
+**Autodesk's 2024 samples** (no Revit export, counted, not scored; `rvt-ifc.log`, `main` → head; the schema step skips validation on these over 30 MB on both sides):
+
+| sample | bodies drawn | triangles | kept their box | IFC |
+|---|---:|---:|---:|---:|
+| rac advanced | 4,971 → 4,989 of 5,112 | 574,941 → 709,706 | 33 → 32 | 43.1 → 48.3 MB |
+| rac basic | 310 → 321 of 345 | 598,032 → 650,917 | 30 → 22 | 24.4 → 26.5 MB |
+| rme advanced, rme basic | unchanged | unchanged | unchanged | unchanged |
+| rst basic | 67 → 76 of 76 | 74,004 → 77,630 | 0 → 0 | 4.4 → 4.6 MB |
+| Snowdon Towers architectural | 2,379 → 2,580 of 3,292 | 1,749,388 → 3,045,564 | 284 → 197 | 98.0 → 142.8 MB |
+| Snowdon Towers electrical | 2,127 → 2,265 of 2,296 | 1,671,074 → 3,375,482 | 139 → 1 | 69.3 → 126.5 MB |
+| Snowdon Towers HVAC | 2,073 → 2,075 of 2,517 | 2,349,012 → 2,349,340 | 0 → 0 | 88.04 → 88.05 MB |
+| Snowdon Towers plumbing | 2,957 → 2,991 of 3,099 | 2,392,655 → 2,501,634 | 121 → 108 | 114.0 → 118.1 MB |
+| Snowdon Towers structural | 62 → 78 of 234 | 26,086 → 37,158 | 0 → 0 | 6.8 → 7.2 MB |
+
+None of these meshes is scored; the one class the office scores that the readers draw is not Revit's body by the bars, so no count here is claimed as right. Snowdon Towers architectural goes from 1.7 to 3.0 million triangles and electrical from 1.7 to 3.4 million, and the largest IFC is 142.8 MB.
+
+**The default export** (run 41849313875, 20da463a against `main` ac7884e0, no `--saved-meshes`; the office pair, Core Interior, RE1, the Revit 2025 models, the 2024 samples and every other release's samples, the held-out models and the family corpus; `scorers=none`): 111 pairs with an IFC hash (13 more entries have none), 110 identical byte for byte, 1 different, the held-out AA single-dwelling house. So the readers reach what `rvt-ifc` writes without `--saved-meshes` on that file; the default export draws door and window saved meshes, which is the way they can, and the AA run below names the classes that moved. No other model in the 111 moves, among them the office pair, Core Interior, RE1, the Revit 2025 models and every release's samples. The held-out file's names, ids and coordinates are not recorded here.
+
+**The AA house, scored** (run 41852625343 at 88688aa0, default export, `mesh_bodies_vs_ifc`, counts only): pending. This line is replaced by the classes that moved and whether the moved bodies meet "ref on ours", 1% and 0.01 ft when the run finishes.
+
+**Not changed by §7, and what is open**
+
+- **The readers do not land.** The 43 toilets are 0 of 43 on 0.01 ft and "ref on ours" (§6 and the run above), and the default export moves on a held-out model, which a reader behind `--saved-meshes` should not do.
+- **The extra volume and surface are open.** §6 measured the toilets face by face and found 0.5% more area than Revit's, and the first attempt's excess volume gone; why is not measured. The shower head is a second body with volume over Revit's (1.1046), in the larger shells, drawn by the same readers and not probed.
+- **The 66 vertices of §6** (Revit's vertices more than 0.001 ft off our surface, at junctions between two of our faces) are unresolved; no trace of curved-to-curved edges was made in this pass.
+- **Not measured:** the readers on the Revit 2025 models with `--saved-meshes` (the default export of all 23 is unchanged), on the 2015 to 2023 and 2025 to 2027 samples with `--saved-meshes`, and on the held-out models with it. The 2024 samples are counted only.
+
+**Reproduce**
+
+```bash
+# §7: the readers, scored against main, on the office, RE1, Core Interior and the 2024 samples
+gh workflow run measure.yml --ref main -f ref=20da463a -f base=ac7884e0 -f ifc_flags=--saved-meshes \
+  -f nordic=true -f samples=true -f sample_years="2024 2024" \
+  -f models="core-interior re1-* nordic-office-* sample-2024-*" -f scorers="mesh_bodies_vs_ifc schema"
+# the default export against main, every model
+gh workflow run measure.yml --ref main -f ref=20da463a -f base=ac7884e0 \
+  -f nordic=true -f r2025=true -f samples=true -f holdout=true -f families=true -f scorers=none
+# the held-out house's mesh bodies, counts only
+gh workflow run measure.yml --ref main -f ref=88688aa0 -f base=ac7884e0 -f holdout=true \
+  -f models="holdout-AA-SingleDwellingHouse-RVT-CIADD" -f scorers=mesh_bodies_vs_ifc
+```
