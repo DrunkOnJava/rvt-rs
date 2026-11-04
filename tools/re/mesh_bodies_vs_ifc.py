@@ -27,9 +27,13 @@ Usage:
 """
 
 import collections
+import cProfile
+import io
 import os
+import pstats
 import statistics
 import sys
+import time
 
 import ifcopenshell
 import ifcopenshell.geom
@@ -39,6 +43,14 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from ifc_common import mesh_parts, site_frame  # noqa: E402
 from roof_bodies_vs_ifc import shapes_of  # noqa: E402
 from saved_meshes_vs_ifc import body_sources  # noqa: E402
+
+T0 = time.time()
+STATS = collections.defaultdict(float)
+
+
+def log(msg):
+    print(f"PROFILE {time.time() - T0:8.1f}s {msg}", file=sys.stderr, flush=True)
+
 
 SOURCE = "saved_graphics_mesh"
 PAIR_BUDGET = 1_000_000
@@ -56,8 +68,10 @@ VERTEX_CAP = 400
 
 def meshes(path, tags=None, source=None, model=None):
     """Tag -> (class, ObjectType, triangles (T, 3, 3) in internal feet)."""
+    t = time.time()
     if model is None:
         model = ifcopenshell.open(path)
+    log(f"meshes({os.path.basename(path)}): open {time.time() - t:.1f}s")
     frame = site_frame(model)
     settings = ifcopenshell.geom.settings()
     settings.set("use-world-coords", True)
@@ -70,7 +84,12 @@ def meshes(path, tags=None, source=None, model=None):
         if source is not None and body_sources(element) != source:
             continue
         chosen.append((element, shapes_of(element)))
-    shapes = mesh_parts(model, settings, [part for _, parts in chosen for part in parts], path)
+    log(f"meshes({os.path.basename(path)}): chosen {len(chosen)} elements")
+    t = time.time()
+    allparts = [part for _, parts in chosen for part in parts]
+    shapes = mesh_parts(model, settings, allparts, path)
+    log(f"meshes({os.path.basename(path)}): mesh_parts {len(allparts)} parts -> {len(shapes)} in {time.time() - t:.1f}s")
+    t = time.time()
     out = {}
     for element, parts in chosen:
         triangles = []
@@ -86,6 +105,7 @@ def meshes(path, tags=None, source=None, model=None):
         if element.Tag in out:
             triangles = np.concatenate([out[element.Tag][2], triangles])
         out[element.Tag] = (element.is_a(), element.ObjectType or "", triangles)
+    log(f"meshes({os.path.basename(path)}): assemble {time.time() - t:.1f}s, {sum(len(v[2]) for v in out.values())} triangles")
     return out
 
 
@@ -270,6 +290,24 @@ def surface_distance(points, triangles):
     return float(nearest.max())
 
 
+_surface_distance = surface_distance
+
+
+def surface_distance(points, triangles):
+    t = time.time()
+    r = _surface_distance(points, triangles)
+    dt = time.time() - t
+    exh = len(points) * len(triangles) <= EXHAUSTIVE
+    STATS["sd_exh" if exh else "sd_pruned"] += dt
+    STATS["sd_exh_n" if exh else "sd_pruned_n"] += 1
+    STATS["pairs"] += len(points) * len(triangles)
+    SLOW.append((dt, len(points), len(triangles)))
+    return r
+
+
+SLOW = []
+
+
 def sample(triangles):
     points = np.unique(triangles.reshape(-1, 3), axis=0)
     step = max(1, -(-len(points) // VERTEX_CAP))
@@ -277,10 +315,28 @@ def sample(triangles):
 
 
 def main():
+    pr = cProfile.Profile()
+    pr.enable()
+    try:
+        return main_()
+    finally:
+        pr.disable()
+        out = io.StringIO()
+        pstats.Stats(pr, stream=out).sort_stats("cumulative").print_stats(28)
+        print("PROFILE cProfile\n" + out.getvalue(), file=sys.stderr, flush=True)
+        log(f"stats {dict(STATS)}")
+        SLOW.sort(reverse=True)
+        log(f"slowest surface_distance (s, points, triangles): {[(round(a,2), b, c) for a, b, c in SLOW[:12]]}")
+        log(f"total {time.time() - T0:.1f}s")
+
+
+def main_():
     if len(sys.argv) != 3:
         print(__doc__)
         return 2
+    t = time.time()
     model = ifcopenshell.open(sys.argv[1])
+    log(f"main: open ours {time.time() - t:.1f}s")
     by_class = collections.defaultdict(list)
     for element in model.by_type("IfcElement"):
         if element.Tag and not element.is_a("IfcOpeningElement") and body_sources(element) == SOURCE:
@@ -295,6 +351,8 @@ def main():
     ours = meshes(sys.argv[1], tags=chosen, source=SOURCE, model=model)
     del model
     ref = meshes(sys.argv[2], tags=set(ours))
+    log("main: both meshed, scoring")
+    t_loop = time.time()
     print(f"{SOURCE} bodies scored: {len(ours)}; in Revit's export {len(ref)}")
     rows = collections.defaultdict(lambda: collections.defaultdict(collections.Counter))
     ratios = collections.defaultdict(list)
@@ -302,10 +360,15 @@ def main():
     for tag in sorted(set(ours) & set(ref), key=lambda t: (len(t), t)):
         _, _, our_triangles = ours[tag]
         cls, object_type, ref_triangles = ref[tag]
+        t = time.time()
         ref_volume, our_volume = volume(ref_triangles), volume(our_triangles)
+        STATS["volume"] += time.time() - t
         ratio = our_volume / ref_volume if ref_volume > 0 else float("inf")
-        to_ours = surface_distance(sample(ref_triangles), our_triangles)
-        to_ref = surface_distance(sample(our_triangles), ref_triangles)
+        t = time.time()
+        sa, sb = sample(ref_triangles), sample(our_triangles)
+        STATS["sample"] += time.time() - t
+        to_ours = surface_distance(sa, our_triangles)
+        to_ref = surface_distance(sb, ref_triangles)
         far = max(to_ours, to_ref)
         for key in ("", object_type) if object_type else ("",):
             row = rows[cls][key]
@@ -317,6 +380,7 @@ def main():
             row["ref on ours"] += to_ours <= 0.001
         ratios[cls].append(ratio)
         scored.append((far, tag, cls, object_type, ratio, to_ours, to_ref))
+    log(f"scoring loop {time.time() - t_loop:.1f}s")
     print(
         f"{'class':<28} {'n':>6} {'vol 1%':>7} {'vol .01%':>8} {'0.01 ft':>8} {'0.001 ft':>8}"
         f" {'ref on ours':>11}  median volume ratio"
