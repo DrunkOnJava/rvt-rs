@@ -20,9 +20,19 @@
 - `saved_meshes_vs_ifc` (a box scorer) meshes an even stride of at most 300 paired elements of each class again and prints, per class, the boxes within 0.001 ft in the default tessellation and in the fine one, and the fine buckets.
 - The held-out scrub (`tools/ci/scrub-holdout-results.sh`) keeps the `fine` rows of the first and last: numbers beside an IFC class name, as it keeps their other rows.
 
-**The values.** IfcOpenShell 0.9.0.post1 takes `mesher-linear-deflection` (metres, default 0.001) and `mesher-angular-deflection` (radians, default 0.5) in `ifcopenshell.geom.settings()`; `circle-segments` (720 and 1,024 tried) left the chord counts of a circle profile at 27 and 28, so it is not used. A linear deflection of 1e-5 ft (3.048e-6 m) and an angular one of 0.03 rad cut a whole circle into 419 to 1,396 chords, depending on the radius, where the default cuts it into 26 to 80 (section 3.1). The angular deflection decides the small circles and the linear one the large: at a linear deflection of 1e-5 m the forms of a circle of 1 to 2 ft in radius were up to 1.7e-5 ft apart, and at 3.048e-6 m they are up to 6e-6 ft. The cost is the mesher's: OpenCASCADE took 0.9 s to mesh one circle body at 0.01 rad and 0.08 s at 0.03 rad (linear 1e-5 m); with the linear deflection of 3.048e-6 m the choice of angular deflection between 0.02 and 0.04 rad costs 0.23 to 0.32 s per circle body.
+**The values.** IfcOpenShell 0.9.0.post1 takes `mesher-linear-deflection` (metres, default 0.001) and `mesher-angular-deflection` (radians, default 0.5) in `ifcopenshell.geom.settings()`; `circle-segments` (720 and 1,024 tried) left the chord counts of a circle profile at 27 and 28, so it is not used. A linear deflection of 1e-5 ft (3.048e-6 m) and an angular one of 0.03 rad cut a whole circle into 419 to 1,396 chords, depending on the radius, where the default cuts it into 26 to 80 (section 3.1). The two deflections bound the miss together: the angular one sets the step of a small circle and the linear one the sagitta of a large one, and with the linear deflection at 1e-5 m the forms of a circle of 1 to 2 ft in radius were up to 1.7e-5 ft apart where at 3.048e-6 m (1e-5 ft) they are up to 6e-6 ft. The cost is the mesher's, and it grows steeply as the angular deflection falls: 0.71 s to mesh one circle body at 0.01 rad and 0.07 s at 0.03 rad (linear 1e-5 m), 0.20 to 0.23 s at 0.02 to 0.04 rad with the linear deflection of 3.048e-6 m. `python3 tools/re/arc_tessellation_study.py --deflections` measures them: the mean time to mesh one circle body, and over radii of 0.229, 0.2625, 0.5, 1 and 2 ft the worst miss between rvt-rs's two half arcs and Revit's circle written as the three forms at four starts (feet, either direction; one machine under load, so the times compare with each other):
 
-DEFLECTION_TABLE
+| linear deflection, m | angular deflection, rad | mean seconds per circle body | worst miss between the forms, ft |
+|---:|---:|---:|---:|
+| 1e-5 | 0.01 | 0.708 | 0.000007 |
+| 1e-5 | 0.02 | 0.127 | 0.000013 |
+| 1e-5 | 0.03 | 0.073 | 0.000017 |
+| 1e-5 | 0.05 | 0.051 | 0.000017 |
+| 3.048e-6 (1e-5 ft) | 0.02 | 0.233 | 0.000006 |
+| **3.048e-6 (1e-5 ft)** | **0.03** | **0.205** | **0.000006** |
+| 3.048e-6 (1e-5 ft) | 0.04 | 0.204 | 0.000006 |
+
+With the linear deflection at 1e-5 ft the worst miss is 6e-6 ft from 0.02 to 0.04 rad and the cost does not move, so 0.03 rad is the middle of a flat stretch. With it at 1e-5 m the miss grows as the angular deflection loosens (7e-6 ft at 0.01 rad, 1.7e-5 ft at 0.03 and 0.05), and a tighter angular deflection only costs more.
 
 **Cost in the files.** Revit's export of RE1 Architecture (72 elements): 1.2 s to mesh in the default tessellation and 6.6 s in the fine one, 17,106 triangles against 50,890; four elements (the dispenser among them) grow 14 to 16 times and the other 68 do not change. Revit's export of the office's concrete terrain variant (132 elements): 11.8 s against 18.5 s, 167,827 triangles against 239,427; 19 elements grow. The scorers mesh at most 300 bodies of each class (`CLASS_CAP`), so the extra work is bounded the way the default work is.
 
@@ -93,7 +103,7 @@ OPTIONS
 
 ## 6. Not done, and not measured
 
-- **Analytic distances** for planes, cylinders and circles (the issue's "where cheaper and exact") are not used. The fine tessellation alone reaches the 1e-5 ft the two forms of a circle need (section 3.2) at 0.2 to 0.3 s per circle body, bounded by the scorers' 300 bodies per class, so an exact surface model of each body would have added code without changing a figure. It would matter only for a body whose true surface is far larger than 2 ft in radius, where the linear deflection (1e-5 ft) is the limit, not the angular one.
+- **Analytic distances** for planes, cylinders and circles (the issue's "where cheaper and exact") are not used. The fine tessellation alone reaches the 1e-5 ft the two forms of a circle need (section 3.2) at 0.2 to 0.3 s per circle body, bounded by the scorers' 300 bodies per class, so an exact surface model of each body would have added code without changing a figure. Circles over 2 ft in radius were not measured.
 - **IfcOpenShell other than 0.9.0.post1**, which is what CI pins and what the values of section 2 were found on; another consumer's tessellation of an arc.
 - **Bodies the scorers do not reach**: more than 300 of a class (every Nth is scored, as in the default mode), and a body IfcOpenShell cannot mesh at either deflection.
 - **A tolerance for the fine tessellation** other than the three columns of "ref on ours" (0.001, 0.0015 and 0.002 ft): the bar is Griffin's.
