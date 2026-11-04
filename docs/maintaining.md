@@ -110,9 +110,13 @@ writes the cached output and a `<step> cached` line to the model's
   the two that size the mesh cache), which is `PSETS_MISSING` for
   `psets_vs_ifc` and `qtos_vs_ifc`; the files a scorer reads that its
   arguments do not name (`qtos_vs_ifc`'s `diagnostics.json`,
-  `unfilled_openings_vs_ifc`'s sibling Revit exports); the Python, platform
-  and installed version of every package `tools/ci/requirements-ifc.txt`
-  pins; and `RVT_IFC_FLAGS`.
+  `unfilled_openings_vs_ifc`'s sibling Revit exports); the Python, the
+  platform, the sha256 of `tools/ci/requirements-ifc.txt`, the installed
+  version of every package it pins, the versions IfcOpenShell and numpy
+  report, and `RVT_IFC_FLAGS`. Each entry therefore hashes the rvt-rs IFC,
+  Revit's reference IFC (or the glTF), the command-line arguments, the scorer
+  and its transitive `tools/re` and `tools/ci` imports, the environment
+  variables they read and the library versions.
 - **What is never cached.** A step whose closure lists or walks a directory,
   takes a directory from an argument, opens a file by a literal path, runs a
   program, draws a number or a date, reads the IFC's export time or reads an
@@ -123,13 +127,25 @@ writes the cached output and a `<step> cached` line to the model's
   with status 0 and printed nothing that shows a failure a rerun could mend.
   The held-out models and BIMcollab's (`holdout-*`, `bimcollab-*`), of which
   only counts leave the runner (`tools/ci/scrub-holdout-results.sh`), are never
-  looked up or stored, so no per-element result of theirs is in the cache.
+  looked up or stored, because the Actions cache of a public repository can be
+  restored by a workflow that a fork's pull request changes: nothing the scrub
+  removes may be in it. Each entry names its model, and the end of every run
+  removes any entry that names one of those models or none and prints the
+  entries by model prefix, so the saved cache is shown to hold none. That gives
+  up caching a share of the work, not a small one: in the unfiltered run
+  41748430211 the 18 held-out models took 32.8 of the 119 task-minutes of
+  model steps (28%); they run only with `-f holdout=true`.
 - **Where it lives.** Every run restores the newest `measure-scores-v1-main-*`
   cache before the measured code builds. It is saved only where rust-cache is
   saved: the workflow dispatched from `main` and the side measuring `main`'s
   own code (`inputs.ref` empty, or `base` `main`), because the build scripts of
   any other ref run on the runner and must not write what a later `main` run
-  reads. A pull request run, and a run of any other ref, only reads. A run
+  reads. A pull request run, and a run of any other ref, only reads. The scorers
+  in the key make a poisoned entry reachable only by a run whose scorers, files
+  and libraries hash alike, but not by construction: a build script of the
+  measured ref could rewrite the installed IfcOpenShell, which the key names
+  only by version, and the cache then holds what that run produced. That is why
+  only main's own code saves it. A run
   dispatched with `-f score_cache=<name>` reads and saves a cache of its own,
   `measure-scores-v1-x-<name>-*`, from any ref (GitHub scopes a branch's
   caches to that branch, and `main`'s runs never read the name); this is how a

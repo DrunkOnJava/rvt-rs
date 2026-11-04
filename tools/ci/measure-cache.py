@@ -29,20 +29,26 @@ The key is a sha256 over:
   - the value of every environment variable the closure reads, except the two
     that only size the mesh cache (RVT_MESH_CACHE, RVT_MESH_WORKERS);
   - the files a scorer reads that its arguments do not name (EXTRA_INPUTS);
-  - the Python and platform, the version of every package
-    tools/ci/requirements-ifc.txt pins as installed, and RVT_IFC_FLAGS.
+  - the Python and platform, the sha256 of tools/ci/requirements-ifc.txt, the
+    installed version of every package it pins, the versions IfcOpenShell and
+    numpy report, and RVT_IFC_FLAGS.
 
 A step is not cached when its closure does something the key cannot see: lists
 or walks a directory, takes a directory name from an argument, reads a file
 it names itself, runs a program, draws a random number or a date, reads the
 IFC's export time, or reads an environment variable by a computed name. The
-models that Measure keeps only counts of (held out, BIMcollab's) are never
-cached. Only status 0 is kept: a scorer that crashed, ran out of time or of
+models that Measure keeps only counts of (`holdout-*`, `bimcollab-*`, the
+directories tools/ci/scrub-holdout-results.sh reduces) are never looked up or
+stored, because the Actions cache of a public repository can be restored by a
+workflow a fork's pull request changes, so what the scrub removes must not be in
+it; each entry names its model, and `finish` removes any that names one of
+those or none. Only status 0 is kept: a scorer that crashed, ran out of time or of
 memory is run again.
 """
 
 import argparse
 import ast
+import collections
 import fnmatch
 import hashlib
 import importlib.metadata
@@ -96,6 +102,12 @@ ALLOWED_IN = {"ifc_common": {"fs-listing"}, "gen_standard_property_sets": {"proc
 
 class Uncacheable(Exception):
     pass
+
+
+def is_held_out(model):
+    """The models tools/ci/scrub-holdout-results.sh reduces to counts before
+    anything leaves the runner (its `holdout-*` and `bimcollab-*` directories)."""
+    return any(fnmatch.fnmatch(model, pattern) for pattern in HELD_OUT)
 
 
 def work_dir():
@@ -301,22 +313,41 @@ EXTRA_INPUTS = {
 
 
 def fingerprint():
-    packages = []
-    with open(REQUIREMENTS, encoding="utf-8") as handle:
-        for line in handle:
+    """The interpreter and the libraries the scorers run on, worked out once a
+    run: Python, the platform, requirements-ifc.txt and the installed version of
+    every package it pins, and the versions IfcOpenShell and numpy report."""
+    remembered = os.path.join(work_dir(), "fingerprint.json")
+    if os.path.exists(remembered):
+        with open(remembered, encoding="utf-8") as handle:
+            found = json.load(handle)
+    else:
+        packages = []
+        with open(REQUIREMENTS, "rb") as handle:
+            requirements = handle.read()
+        for line in requirements.decode("utf-8").splitlines():
             match = re.match(r"^([A-Za-z0-9_.\-]+)==", line)
             if match:
                 try:
                     packages.append((match.group(1), importlib.metadata.version(match.group(1))))
                 except importlib.metadata.PackageNotFoundError:
                     packages.append((match.group(1), None))
-    return {
-        "format": FORMAT,
-        "python": sys.version,
-        "platform": [platform.system(), platform.machine(), *platform.libc_ver()],
-        "packages": packages,
-        "ifc_flags": os.environ.get("RVT_IFC_FLAGS", ""),
-    }
+        reported = {}
+        for name in ("ifcopenshell", "numpy"):
+            try:
+                module = __import__(name)
+                reported[name] = str(getattr(module, "version", None) or getattr(module, "__version__", None))
+            except Exception as error:
+                reported[name] = f"unavailable: {type(error).__name__}"
+        found = {
+            "format": FORMAT,
+            "python": sys.version,
+            "platform": [platform.system(), platform.machine(), *platform.libc_ver()],
+            "requirements": sha(requirements),
+            "packages": packages,
+            "reported": reported,
+        }
+        atomic_write(remembered, json.dumps(found, sort_keys=True).encode("utf-8"))
+    return {**found, "ifc_flags": os.environ.get("RVT_IFC_FLAGS", "")}
 
 
 def make_key(args, script, script_args):
@@ -372,7 +403,7 @@ def lookup(args):
     label = f"{os.path.basename(os.path.abspath(args.dir))} {args.step}"
     if not root:
         return 2
-    if any(fnmatch.fnmatch(os.path.basename(os.path.abspath(args.dir)), pattern) for pattern in HELD_OUT):
+    if is_held_out(os.path.basename(os.path.abspath(args.dir))):
         log(f"not cached {label}: held out, only its counts leave the runner")
         return 2
     script, *script_args = args.command
@@ -403,7 +434,7 @@ def lookup(args):
 def store(args):
     root = cache_dir()
     label = f"{os.path.basename(os.path.abspath(args.dir))} {args.step}"
-    if not root or not os.path.exists(keyfile(args)):
+    if not root or is_held_out(os.path.basename(os.path.abspath(args.dir))) or not os.path.exists(keyfile(args)):
         return 0
     with open(keyfile(args), encoding="ascii") as handle:
         key = handle.read()
@@ -429,6 +460,8 @@ def store(args):
     for path in args.extra:
         if os.path.isfile(path):
             shutil.copyfile(path, os.path.join(scratch, "extra-" + os.path.basename(path)))
+    with open(os.path.join(scratch, "meta.json"), "w", encoding="utf-8") as meta:
+        json.dump({"model": os.path.basename(os.path.abspath(args.dir)), "step": args.step}, meta)
     os.makedirs(os.path.dirname(entry), exist_ok=True)
     try:
         os.rename(scratch, entry)
@@ -465,15 +498,33 @@ def finish(args):
     pruned = 0
     total = 0
     kept_entries = 0
+    held = 0
+    unknown = 0
+    by_model = collections.Counter()
     if root:
         now = time.time()
         survivors = []
         for path in list(entries(root)):
-            if now - os.stat(path).st_mtime > args.days * 86400:
+            model = None
+            try:
+                with open(os.path.join(path, "meta.json"), encoding="utf-8") as meta:
+                    model = json.load(meta)["model"]
+            except (OSError, ValueError, KeyError):
+                pass
+            # An entry that does not name its model, or names a held-out one,
+            # is removed: nothing of those models is kept.
+            if model is None:
+                shutil.rmtree(path)
+                unknown += 1
+            elif is_held_out(model):
+                shutil.rmtree(path)
+                held += 1
+            elif now - os.stat(path).st_mtime > args.days * 86400:
                 shutil.rmtree(path)
                 pruned += 1
             else:
                 survivors.append((os.stat(path).st_mtime, path, size_of(path)))
+                by_model[model.split("-")[0]] += 1
         survivors.sort()
         total = sum(size for _, _, size in survivors)
         while survivors and total > args.max_mb * 1024 * 1024:
@@ -488,11 +539,13 @@ def finish(args):
                 os.rmdir(path)
             elif shard.startswith(".new-"):
                 shutil.rmtree(path, ignore_errors=True)
-    changed = count["kept"] > 0 or pruned > 0 or stale > 0
+    changed = count["kept"] > 0 or pruned > 0 or stale > 0 or held > 0 or unknown > 0
     summary = (
         f"score cache: {count['hit']} hits, {count['miss']} misses ({count['kept']} kept), "
         f"{count['not cached']} not cached; {kept_entries} entries, {total / 1048576:.1f} MiB; "
-        f"{pruned} pruned, {stale} refreshed; changed={str(changed).lower()}"
+        f"{pruned} pruned, {stale} refreshed; changed={str(changed).lower()}\n"
+        f"score cache entries by model prefix: {', '.join(f'{name} {n}' for name, n in sorted(by_model.items())) or 'none'}; "
+        f"held out ({', '.join(HELD_OUT)}): {held} found and removed; without a model name: {unknown} removed"
     )
     print(summary)
     if args.report:
