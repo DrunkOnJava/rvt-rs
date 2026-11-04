@@ -108,7 +108,10 @@ or roots), so it works with a client that offers none of them.
   already running when the cancellation arrives is not killed mid-step: the
   walk checks between steps.
 - stdout carries only JSON-RPC. Logs go to stderr (`--log-level`). The server
-  exits when the client closes stdin.
+  exits with status 0 when the client closes stdin, whenever that happens: after
+  a session, after a lone `server/discover` probe (answered before any session
+  exists) or `initialize`, or before anything was sent. A first message that is
+  not a request is a failed start and exits 1.
 
 ## Handles
 
@@ -255,6 +258,7 @@ element's GlobalId up in the IFC the export wrote, checks that bad arguments are
 tool errors, the unsupported version error (-32022), progress notifications,
 that cancelling an export stops it with nothing written or left over (on
 Einhoven the cancellation always lands during the decode), that stdout carries
-nothing but JSON, and that the server exits when stdin closes. Another test holds
+nothing but JSON, and that the server exits cleanly when stdin closes (after a
+session, after only `server/discover` or `initialize`, and at once). Another test holds
 `mcp-tools.json` to what the server reports for `tools/list`. CI runs it in the
 test matrix and again in Corpus health, where Einhoven runs in both lifecycles.

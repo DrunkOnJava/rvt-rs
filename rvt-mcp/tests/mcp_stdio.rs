@@ -15,7 +15,7 @@
 use std::ffi::OsStr;
 use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
-use std::process::{Child, ChildStdin, Command, Stdio};
+use std::process::{Child, ChildStdin, Command, ExitStatus, Stdio};
 use std::sync::mpsc::{Receiver, channel};
 use std::time::{Duration, Instant};
 
@@ -663,6 +663,28 @@ impl Raw {
             .unwrap_or_else(|problem| panic!("{problem}"))
     }
 
+    /// Closes stdin and waits for the server to exit.
+    fn wait(&mut self) -> ExitStatus {
+        drop(self.stdin.take());
+        let started = Instant::now();
+        loop {
+            match self.child.try_wait().expect("wait") {
+                Some(status) => return status,
+                None if started.elapsed() > Duration::from_secs(15) => {
+                    let _ = self.child.kill();
+                    panic!("the server did not exit after stdin closed");
+                }
+                None => std::thread::sleep(Duration::from_millis(20)),
+            }
+        }
+    }
+
+    /// Closes stdin and requires a clean exit.
+    fn finish(&mut self) {
+        let status = self.wait();
+        assert!(status.success(), "exit status {status}");
+    }
+
     /// The messages up to and including the response to `id`.
     fn until_response(&self, id: i64) -> Vec<Value> {
         let mut seen = Vec::new();
@@ -780,21 +802,69 @@ fn wire_discipline_on_raw_stdio() {
     }
 
     // Closing stdin ends the server.
+    server.finish();
+}
+
+/// A client that only asks what the server supports, then closes stdin, gets
+/// the answer on stdout and a clean exit: `server/discover` starts no session,
+/// so the server is still waiting for one when stdin closes, and that is the
+/// shutdown signal MCP's stdio transport defines, not a failed start. (The
+/// release smoke test is such a client, and failed on the exit status.)
+#[test]
+fn discover_alone_then_eof_is_a_clean_exit() {
+    let mut server = Raw::start(&[]);
+    server.send(&json!({
+        "jsonrpc": "2.0", "id": 1, "method": "server/discover",
+        "params": { "_meta": modern_meta() }
+    }));
     drop(server.stdin.take());
-    let started = Instant::now();
-    loop {
-        match server.child.try_wait().expect("wait") {
-            Some(status) => {
-                assert!(status.success(), "exit status {status}");
-                break;
-            }
-            None if started.elapsed() > Duration::from_secs(15) => {
-                let _ = server.child.kill();
-                panic!("the server did not exit after stdin closed");
-            }
-            None => std::thread::sleep(Duration::from_millis(20)),
+    let reply = server.recv();
+    assert_eq!(reply["id"], 1, "{reply}");
+    let versions = reply["result"]["supportedVersions"]
+        .as_array()
+        .expect("supportedVersions");
+    assert!(versions.contains(&json!("2026-07-28")), "{reply}");
+    server.finish();
+}
+
+/// The same for a legacy client that sends `initialize` and nothing else.
+#[test]
+fn initialize_alone_then_eof_is_a_clean_exit() {
+    let mut server = Raw::start(&[]);
+    server.send(&json!({
+        "jsonrpc": "2.0", "id": 1, "method": "initialize",
+        "params": {
+            "protocolVersion": "2025-11-25",
+            "capabilities": {},
+            "clientInfo": { "name": "rvt-rs-mcp-e2e", "version": "0" }
         }
-    }
+    }));
+    drop(server.stdin.take());
+    let reply = server.recv();
+    assert_eq!(reply["id"], 1, "{reply}");
+    assert!(reply["result"]["protocolVersion"].is_string(), "{reply}");
+    assert!(reply["result"]["serverInfo"]["name"].is_string(), "{reply}");
+    server.finish();
+}
+
+/// And for a client that connects and says nothing.
+#[test]
+fn closing_stdin_at_once_is_a_clean_exit() {
+    let mut server = Raw::start(&[]);
+    server.finish();
+}
+
+/// A first message that is not a request is a real failure to start and keeps
+/// its failing status: only a closed connection is treated as leaving.
+#[test]
+fn a_notification_as_the_first_message_is_a_failed_start() {
+    let mut server = Raw::start(&[]);
+    server.send(&json!({
+        "jsonrpc": "2.0", "method": "notifications/initialized"
+    }));
+    drop(server.stdin.take());
+    let status = server.wait();
+    assert!(!status.success(), "exit status {status}");
 }
 
 #[test]

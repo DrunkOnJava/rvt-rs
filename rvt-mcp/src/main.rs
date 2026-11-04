@@ -22,12 +22,14 @@ mod server;
 mod store;
 mod views;
 
+use std::io::Write;
 use std::path::PathBuf;
 use std::process::ExitCode;
 use std::sync::Arc;
 
 use clap::{Parser, ValueEnum};
 use rmcp::ServiceExt;
+use rmcp::service::ServerInitializeError;
 use rvt::walker::WalkerLimits;
 
 use crate::config::Config;
@@ -176,6 +178,9 @@ fn main() -> ExitCode {
     // A decode still running on the blocking pool must not keep the process
     // alive once the client has gone.
     runtime.shutdown_background();
+    // Every reply is a newline-terminated line, which std's stdout writes
+    // through; flushing anyway keeps that from depending on it.
+    let _ = std::io::stdout().flush();
     match outcome {
         Ok(()) => ExitCode::SUCCESS,
         Err(message) => {
@@ -185,16 +190,27 @@ fn main() -> ExitCode {
     }
 }
 
-/// Serve MCP on stdio until the client closes it.
+/// Serve MCP on stdio until the client closes it. Closing stdin at any point,
+/// before a session or during one, is a clean exit.
 async fn serve(config: Config) -> Result<(), String> {
     tracing::info!("rvt-rs-mcp {} serving on stdio", env!("CARGO_PKG_VERSION"));
     let server = RvtServer::new(Arc::new(Store::new(config)));
     // stdin and stdout as one transport: rmcp's `stdio()` is this pair, but
     // lives behind the `transport-io` feature, which turns on tokio's `net`.
-    let running = server
+    let running = match server
         .serve((tokio::io::stdin(), tokio::io::stdout()))
         .await
-        .map_err(|error| format!("cannot start the MCP server: {error}"))?;
+    {
+        Ok(running) => running,
+        // `server/discover` and unsupported-version replies are answered before
+        // a session exists, so a client that only probes (the release smoke
+        // test) and closes stdin is leaving, not failing to start.
+        Err(ServerInitializeError::ConnectionClosed(stage)) => {
+            tracing::info!("stdin closed before a session began ({stage})");
+            return Ok(());
+        }
+        Err(error) => return Err(format!("cannot start the MCP server: {error}")),
+    };
     running
         .waiting()
         .await
