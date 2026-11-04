@@ -197,7 +197,7 @@ pub(super) fn attach_native_named_parameters<'a>(
     elements: impl IntoIterator<Item = &'a mut DecodedElement>,
 ) {
     use crate::ifc::standard_property_sets::{self as sps, StandardPropertyKind as Kind};
-    use crate::native_element_parameters::{ParameterLevel, read_defined_values};
+    use crate::native_element_parameters::{ParameterLevel, read_property_values};
     if !NATIVE_NAMED_PARAMETER_REVIT_VERSIONS.contains(&revit_version) {
         return;
     }
@@ -209,7 +209,7 @@ pub(super) fn attach_native_named_parameters<'a>(
     if ids.is_empty() {
         return;
     }
-    let Ok(saved) = read_defined_values(rf, &ids, Some(names_a_property)) else {
+    let Ok(saved) = read_property_values(rf, &ids, names_a_property, takes_type_value) else {
         return;
     };
     let is_external_suffix = format!(".{IS_EXTERNAL_PARAMETER_NAME}");
@@ -272,6 +272,13 @@ pub(super) fn attach_native_named_parameters<'a>(
             }
         }
     }
+}
+
+/// Whether a parameter named `name` is one whose type's value
+/// [`attach_native_named_parameters`] takes: only the plain `IsExternal` is
+/// read at the type level.
+fn takes_type_value(name: &str) -> bool {
+    name == IS_EXTERNAL_PARAMETER_NAME
 }
 
 /// Whether a parameter named `name` is one [`attach_native_named_parameters`]
