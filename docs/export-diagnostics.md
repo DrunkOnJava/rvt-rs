@@ -123,6 +123,7 @@ drawn from that reader.
 | `family_type_hollow_section` | `type_hollow_section` | `agreeing` | `parts`: the entries of the column type's parameters `b`, `Ht`, `t` and `kr` (`f64`, `ff` x 8, `i64` parameter id), in the type's value block; the first copy of each, every copy holding the same value. A parameter whose value block holds two different values, or whose copies in two partitions differ, is skipped (the type then has no section): that is not counted as a disagreement among copies. The element's `selected_frame` names the frame whose box the section is held to. |
 | `family_type_i_section` | `type_i_section` | `agreeing` | `parts`: the six entries of the type's I section (width, height, web and flange thickness, the centroid both ways), as for the hollow section. `instance_transform` (as below) gives the plan angle of the column's X axis. On Core Interior, the BIM4LCA office and the RE1 models no element has this body (Measure run 41887789579), so this reader is untested on real files. |
 | `partition_pipe_axis` | `pipe_connectors` | `agreeing` | `parts`: the two connector entries (`u64` element, `u32` index, `u32` 1, the point) whose points are the pipe's ends, in the partition of its record. An entry is found by where its point falls, never by whose it is (RE-131): at a connected end it is keyed by the element connected there, so a part's `element_id` may be a neighbour of the pipe (a fitting), not the pipe. The radius is the record box's, held in the element's `selected_frame`. Where the pipe's body came from two partitions they agree. |
+| `family_extrusions` | `family_forms` | `frame` | Only with `--element-provenance` and `--family-extrusions` both on. `parts`: the records of the family's own embedded document that the instance's extrusions were rebuilt from: each visible extrusion (`ExtrusionElem`), its sketch plane (`SketchPlane`) and the curves of its sketch (`CurveElem`), at the place the document's group puts the record in its partition (the record's id, then its length and body). The ids are the family document's, not the model's, so a part's `element_id` can equal another element's. The document is read once, as it is embedded: its other copies, if the file holds any, are not compared. The instance's own `selected_frame` and `instance_transform` are listed beside it: the transform places the extrusions, and the frame is the location and rotation they are drawn at. The saved mesh the extrusions are checked against is not a source of the body. |
 | `partition_wall_centreline`, `partition_wall_centreline_layer_joins`, `partition_wall_tapered_section`, `partition_beam_axis`, `partition_beam_box_along_axis` | `bounded_line` | `agreeing` | The element-data header of the lowest-numbered partition's copy of its location line. Every copy holds the same line; a wall or beam whose copies differ is drawn as its box instead. |
 | `partition_wall_arc` | `bounded_arc` | `agreeing` | As `bounded_line`, for a curved wall's arc. |
 | `partition_family_instance_turned_box`, `partition_family_instance_oriented_box` | `instance_transform` | `agreeing` or `current` | The element-data header of the copy: the lowest-numbered partition's where the copies agree, the current partition's where they differ (RE-216). |
@@ -139,7 +140,7 @@ drawn from that reader.
 | `partition_landing_slab` | `native_landing_type` | `native` | `parts`: the header of the landing type's current native record, which gives the thickness (monolithic types only). |
 
 No reader notes its copy yet for `partition_area_boundary_lines`,
-`partition_roof_slope`, `partition_roof_extrusion` and `family_extrusions`, nor
+`partition_roof_slope` and `partition_roof_extrusion`, nor
 for the other values a body reads (a wall's layers, a beam's I section, the
 parameters of a rectangular column's section). An element of those bodies has
 no value source; an element whose box is the body but whose profile is read
@@ -171,7 +172,10 @@ parameters (an I section's six; a hollow section's four, whose captions the
 `ParamElemFamily` elements name `b`, `Ht`, `t` and `kr`); a pipe's connector
 entry is the keyed element's `u64`, an index of at most 255, the `u32` 1 and a
 point, and the two parts' points make a cylinder (`pipe_body`) with the pipe's
-record box; a run type or a native type record starts with its id; and a
+record box; a form record of a family's document is the record's id, a length, a
+body of that length that opens with the tag of an extrusion, a curve or a sketch
+plane, and the length again; a run type or a native type record starts with its
+id; and a
 Sketch's curve list is a header followed by the sketched element's id. A frame of a 32-bit release with no id at its first
 bytes is counted as not read. It does not say the
 copy taken is the right one: `agreeing` copies are equal, and `current` is

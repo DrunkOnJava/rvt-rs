@@ -46,6 +46,11 @@
 //!   and no other `selected_frame`, that `differs_from_frame` says whether the
 //!   value is held in another partition than the frame, and that
 //!   `value_source_counts` equals the count made here;
+//! - on the models whose family instances are drawn from their families' own
+//!   extrusions, exported with `--family-extrusions` as well, reads each form
+//!   record a body was rebuilt from by what it is: the record's id, then a
+//!   body of the same length at both ends that opens with the tag of an
+//!   extrusion, a curve or a sketch plane;
 //! - requires each model's `MIN_READERS` to have sources, so a table with no
 //!   sources cannot pass.
 //!
@@ -223,7 +228,13 @@ const COVERAGE: &[(&str, Coverage)] = &[
     ),
     ("partition_roof_slope", NotYet),
     ("partition_roof_extrusion", NotYet),
-    ("family_extrusions", NotYet),
+    (
+        "family_extrusions",
+        Recorded {
+            readers: &["family_forms"],
+            rules: &["frame"],
+        },
+    ),
 ];
 
 /// The readers that source what a box alone does not (a profile, a section, a
@@ -235,6 +246,26 @@ const PROFILE_FRAME_READERS: &[&str] = &[
     "type_hollow_section",
     "type_i_section",
     "pipe_connectors",
+    "family_forms",
+];
+
+/// The models whose family instances are drawn from their families' own
+/// extrusions (#1372), and the readers each must have sources from when
+/// exported with `--family-extrusions` as well as the table: the form records
+/// the body was rebuilt from, and the transform it was placed with.
+const FAMILY_MIN_READERS: &[(&str, &[&str])] = &[
+    (
+        "nordic-office-as-built",
+        &["selected_frame", "family_forms", "instance_transform"],
+    ),
+    (
+        "RE1-Architecture",
+        &["selected_frame", "family_forms", "instance_transform"],
+    ),
+    (
+        "RE1-Electrical",
+        &["selected_frame", "family_forms", "instance_transform"],
+    ),
 ];
 
 /// The readers each model's table must have at least one value source from.
@@ -418,6 +449,11 @@ fn frame_record(
         .or_else(|| decode_frame_as(stream, inflated.bytes(), offset, id, &marker))
 }
 
+fn u16_at(buf: &[u8], at: usize) -> Option<u16> {
+    buf.get(at..at.checked_add(2)?)
+        .map(|b| u16::from_le_bytes(b.try_into().expect("2 bytes")))
+}
+
 fn u32_at(buf: &[u8], at: usize) -> Option<u32> {
     buf.get(at..at.checked_add(4)?)
         .map(|b| u32::from_le_bytes(b.try_into().expect("4 bytes")))
@@ -478,10 +514,26 @@ struct BodyStats {
 }
 
 fn check_model(name: &str, path: &Path) {
+    check_model_with(name, path, false)
+}
+
+/// Check a model exported with the table, and with `--family-extrusions` as
+/// well where `family_extrusions` is set: its report is then
+/// `<model>+family-extrusions`, and its readers are pinned by
+/// `FAMILY_MIN_READERS`.
+fn check_model_with(base: &str, path: &Path, family_extrusions: bool) {
+    let label = if family_extrusions {
+        format!("{base}+family-extrusions")
+    } else {
+        base.to_string()
+    };
+    let name = label.as_str();
     let mut rf = RevitFile::open(path).expect("open the model");
     let run = run_export(
         &mut rf,
-        &ExportOptions::default().with_element_provenance(true),
+        &ExportOptions::default()
+            .with_element_provenance(true)
+            .with_family_extrusions(family_extrusions),
     )
     .expect("export the model with the table");
     let table = run
@@ -493,6 +545,7 @@ fn check_model(name: &str, path: &Path) {
     let version = rf.layout_release().expect("layout release");
     let layout = element_data_layout(version);
     let marker = file_bbox_marker(&mut rf, version);
+    let classes = rf.schema_classes().ok();
     let declared: BTreeSet<u32> =
         elem_table::declared_ids(&elem_table::parse_records(&mut rf).expect("ElemTable"));
     let mut chains: BTreeMap<String, Vec<PartitionRecordSpan>> = BTreeMap::new();
@@ -814,6 +867,41 @@ fn check_model(name: &str, path: &Path) {
                                 _ => Part::Failed,
                             }
                         }
+                        // A record of a family's own document, as the native
+                        // framing lays it out: the record's id, a length (after
+                        // four bytes more on the channels that carry them), a
+                        // body that opens with its class tag and the same
+                        // length again. It is an extrusion, a curve of its
+                        // sketch or its sketch plane.
+                        "family_forms" => {
+                            let first = if width == 8 {
+                                u64_at(bytes, part.offset)
+                            } else {
+                                u32_at(bytes, part.offset).map(u64::from)
+                            };
+                            let body = [width + 4, width + 8].into_iter().find_map(|header| {
+                                let length =
+                                    usize::try_from(u32_at(bytes, part.offset + header - 4)?)
+                                        .ok()?;
+                                let start = part.offset + header;
+                                let echo = u32_at(bytes, start.checked_add(length)?)?;
+                                (usize::try_from(echo).ok()? == length).then_some(start)
+                            });
+                            let kind = body
+                                .and_then(|start| u16_at(bytes, start))
+                                .and_then(|tag| classes.as_ref()?.by_tag(tag))
+                                .map(|class| class.name.as_str());
+                            if first == Some(wanted)
+                                && matches!(
+                                    kind,
+                                    Some("ExtrusionElem" | "CurveElem" | "SketchPlane")
+                                )
+                            {
+                                Part::Confirmed
+                            } else {
+                                Part::Failed
+                            }
+                        }
                         // A run type's id object: its id is the u64 there.
                         "stair_run_type" => {
                             if u64_at(bytes, part.offset) == Some(wanted) {
@@ -1083,8 +1171,13 @@ fn check_model(name: &str, path: &Path) {
     if counts.len() != table.value_source_counts.len() {
         problems.push("value_source_counts lacks a reader that has sources".to_string());
     }
-    for (model, readers) in MIN_READERS {
-        if *model != name {
+    let pins = if family_extrusions {
+        FAMILY_MIN_READERS
+    } else {
+        MIN_READERS
+    };
+    for (model, readers) in pins {
+        if *model != base {
             continue;
         }
         for reader in *readers {
@@ -1230,4 +1323,18 @@ fn nordic_office_value_sources_name_the_copy_the_reader_took() {
         office_model(),
         &["nordic-office-as-built"],
     );
+}
+
+#[test]
+fn family_extrusion_value_sources_name_the_forms_the_body_was_rebuilt_from() {
+    let mut models = project_models();
+    models.retain(|(name, _)| FAMILY_MIN_READERS.iter().any(|(model, _)| model == name));
+    models.extend(office_model());
+    if models.is_empty() {
+        eprintln!("skipping: no model to read");
+        return;
+    }
+    for (name, path) in &models {
+        check_model_with(name, path, true);
+    }
 }

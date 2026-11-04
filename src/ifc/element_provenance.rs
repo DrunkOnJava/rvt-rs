@@ -876,6 +876,7 @@ const PROFILE_FRAME_READERS: &[&str] = &[
     "type_hollow_section",
     "type_i_section",
     "pipe_connectors",
+    "family_forms",
 ];
 
 /// The readers whose value a body with this `BodySource` is drawn from (#1360):
@@ -898,6 +899,9 @@ fn body_readers(body: &str) -> &'static [&'static str] {
         ec::WALL_ARC_BODY_SOURCE => &["bounded_arc"],
         ec::INSTANCE_TURNED_BODY_SOURCE | ec::INSTANCE_ORIENTED_BODY_SOURCE => {
             &["instance_transform"]
+        }
+        super::family_extrusions::FAMILY_EXTRUSION_BODY_SOURCE => {
+            &[SELECTED_FRAME_READER, "instance_transform", "family_forms"]
         }
         super::saved_meshes::SAVED_MESH_BODY_SOURCE => &["saved_graphics"],
         ec::SPIRAL_RUN_BODY_SOURCE => &["native_run"],

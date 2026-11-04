@@ -575,16 +575,37 @@ pub fn family_records_in(
     releases: &std::ops::RangeInclusive<u32>,
     ids: Option<&BTreeSet<u64>>,
 ) -> anyhow::Result<BTreeMap<u64, Vec<(u64, ObjectGraph)>>> {
-    let mut out: BTreeMap<u64, Vec<(u64, ObjectGraph)>> = BTreeMap::new();
+    Ok(family_records_at(rf, families, classes, releases, ids, false)?.0)
+}
+
+/// The records of a family's document by the family's ElementId.
+pub type FamilyRecords = BTreeMap<u64, Vec<(u64, ObjectGraph)>>;
+
+/// Where each record of a family's document starts, by the family's ElementId
+/// and the record's: the partition and the offset in it inflated (#1368).
+pub type RecordPlaces = BTreeMap<(u64, u64), (String, usize)>;
+
+/// [`family_records_in`], also giving, when `want_places` asks, where each
+/// record starts (#1368). Nothing is kept for the places when it does not.
+pub fn family_records_at(
+    rf: &mut RevitFile,
+    families: &BTreeSet<u64>,
+    classes: &BTreeSet<String>,
+    releases: &std::ops::RangeInclusive<u32>,
+    ids: Option<&BTreeSet<u64>>,
+    want_places: bool,
+) -> anyhow::Result<(FamilyRecords, RecordPlaces)> {
+    let mut out: FamilyRecords = BTreeMap::new();
+    let mut places = RecordPlaces::new();
     let Some(loaded) = load(rf, families, releases)? else {
-        return Ok(out);
+        return Ok((out, places));
     };
     let tags: BTreeSet<u16> = classes
         .iter()
         .filter_map(|name| loaded.registry.named(name).map(|class| class.tag))
         .collect();
     if !classes.is_empty() && tags.is_empty() {
-        return Ok(out);
+        return Ok((out, places));
     }
     let budget = native_document::group_budget(rf, native_document::DEFAULT_MAX_GROUP_BYTES);
     for name in &loaded.streams {
@@ -611,7 +632,7 @@ pub fn family_records_in(
                 else {
                     return Ok(());
                 };
-                for (id, _, start, end) in records {
+                for (id, pos, start, end) in records {
                     let body = &bytes[start..end];
                     let Some(class) = le_bytes::u16_at(body, 0) else {
                         continue;
@@ -623,6 +644,16 @@ pub fn family_records_in(
                         continue;
                     }
                     if let Ok(graph) = native_parameters::decode_graph(body, &loaded.registry) {
+                        if want_places {
+                            let at = source
+                                .inflated_offset
+                                .and_then(|base| base.checked_add(pos));
+                            if let Some(at) = at {
+                                places
+                                    .entry((*family, id))
+                                    .or_insert_with(|| (name.clone(), at));
+                            }
+                        }
                         out.entry(*family).or_default().push((id, graph));
                     }
                 }
@@ -630,7 +661,7 @@ pub fn family_records_in(
             },
         )?;
     }
-    Ok(out)
+    Ok((out, places))
 }
 
 /// Each selected record's graph, by ElementId.
