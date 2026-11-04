@@ -109,7 +109,7 @@ pub struct ElementProvenance {
     /// The stream the record is in: `Partitions/NN` or `Global/Latest`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub stream: Option<String>,
-    /// Where the record or frame starts in that stream inflated: the frame the exporter selected (on Revit 2024 and later the greatest vertical extent, then the greater stream and offset; on 2008 to 2023 the newest). A body reader may take another copy, so it can name another partition than `native_record.stream`, and neither is guaranteed to be the copy a body came from.
+    /// Where the record or frame starts in that stream inflated: the frame the exporter selected (on Revit 2024 and later the greatest vertical extent, then the higher-numbered partition and later offset; on 2008 to 2023 the newest). A body reader may take another copy, so it can name another partition than `native_record.stream`, and neither is guaranteed to be the copy a body came from.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub offset: Option<usize>,
     /// Where the ElementId is stored: the partition record header it is the first bytes of.

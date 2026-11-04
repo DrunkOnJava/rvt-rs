@@ -235,7 +235,7 @@ here yet. The fields are never written into the IFC.
 When an element has several partition element record frames, `offset` is the
 one the exporter selected. On Revit 2024 and later
 (`select_instance_records`) that is the frame with the greatest vertical extent
-and, on a tie, the greater `(stream, offset)`, the stream name compared as text;
+and, on a tie, the higher-numbered partition and then the later offset;
 on Revit 2008 to 2023 (`select_newest_instance_records`, RE-107) it is the
 newest, the highest-numbered partition and then the latest offset, with no extent
 test. A body reader may take another copy (the sketch-line readers take the
