@@ -523,7 +523,7 @@
   },
   {
     "name": "get_element",
-    "description": "One element, by Revit ElementId or IFC GlobalId (the Revit Mark parameter is not decoded, so it cannot be looked up). Returns its property sets and quantities as the IFC export writes them (quantities in the IFC's SI units), its trust markers (the ...Source, ...Resolved and ...Refusal properties of its record, such as BodySource), its provenance, and the file's: Revit release and build, schema class count and ElemTable record layout. Not read: family geometry, the Revit Mark parameter, and any body but the record's bounding box where provenance.body_source says so; see the summary's not_read and docs/status.md in the rvt-rs repository.",
+    "description": "One element, by Revit ElementId or IFC GlobalId (the Revit Mark parameter is not decoded, so it cannot be looked up). Returns its property sets and quantities as the IFC export writes them (quantities in the IFC's SI units), its trust markers (the ...Source, ...Resolved and ...Refusal properties of its record, such as BodySource), its provenance (the carrier its record was read from, and its stream and byte offset), and the file's: Revit release and build, schema class count, partition count and ElemTable record layout. Not read: family geometry, the Revit Mark parameter, and any body but the record's bounding box where provenance.body_source says so; see the summary's not_read and docs/status.md in the rvt-rs repository.",
     "inputSchema": {
       "$defs": {
         "IdArg": {
@@ -618,6 +618,13 @@
                 "null"
               ]
             },
+            "carrier": {
+              "description": "The kind of record the element was read from, such as `partition_element_record_first_prologue`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
             "category": {
               "description": "The IFC entity the export writes, such as `IFCWALL`.",
               "type": [
@@ -632,8 +639,31 @@
                 "null"
               ]
             },
+            "class_name": {
+              "description": "The class that tag resolves to in the file's own schema.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "class_tag": {
+              "description": "The class tag the record names.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
             "element_id": {
               "description": "The Revit ElementId, which the IFC export writes as the `Tag`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "enclosing_record_id": {
+              "description": "For a frame inside another partition record, the ElementId of that record.",
               "type": [
                 "string",
                 "null"
@@ -646,6 +676,26 @@
                 "null"
               ]
             },
+            "native_record": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/NativeRecordOut"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The element's native record, where the export's native passes indexed one."
+            },
+            "offset": {
+              "description": "Where the record or frame starts in that stream inflated: the frame the exporter selected (on Revit 2024 and later the greatest vertical extent, then the greater stream and offset; on 2008 to 2023 the newest). A body reader may take another copy, so it can name another partition than `native_record.stream`, and neither is guaranteed to be the copy a body came from.",
+              "format": "uint",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
             "profile_source": {
               "description": "Where the plan profile of the body came from.",
               "type": [
@@ -653,8 +703,31 @@
                 "null"
               ]
             },
+            "provenance_omitted": {
+              "description": "True when the record fields are absent because the provenance table lists at most 250,000 elements and this one is past them (`file.omitted_entries`).",
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            "record_offset": {
+              "description": "Where the ElementId is stored: the partition record header it is the first bytes of.",
+              "format": "uint",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
             "space_outline_source": {
               "description": "For a room or space, where its outline came from: `record_box`\n(the area of its box, not of the room), `stored_solid`,\n`stored_solid_faces`, `stored_solid_approximate`, `saved_mesh`,\n`family_body`, and for an Area `area_boundary` or `none`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "stream": {
+              "description": "The stream the record is in: `Partitions/NN` or `Global/Latest`.",
               "type": [
                 "string",
                 "null"
@@ -698,6 +771,33 @@
                 }
               ],
               "description": "The record layout of `Global/ElemTable`."
+            },
+            "layout_release": {
+              "description": "The release whose record layout the file takes, which can be older than the saving release.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "omitted_entries": {
+              "description": "How many elements the provenance table left out past its cap of 250,000 listed; their record fields are absent and `provenance_omitted` says so.",
+              "format": "uint",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "partition_count": {
+              "description": "How many `Partitions/NN` streams the file has.",
+              "format": "uint",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
             },
             "revit_build": {
               "description": "That release's build tag (from `BasicFileInfo`).",
@@ -747,6 +847,49 @@
             "index",
             "name",
             "elevation_feet"
+          ],
+          "type": "object"
+        },
+        "NativeRecordOut": {
+          "description": "The native record the native readers hold for an element.",
+          "properties": {
+            "class_name": {
+              "description": "The class the record names in the file's schema.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "copies": {
+              "description": "In how many partitions the element has a native record.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "copy": {
+              "description": "Which copy this is: `only`, `current` (the current one of several, RE-216) or `unresolved`.",
+              "type": "string"
+            },
+            "offset": {
+              "description": "Where the record's header starts in that partition inflated.",
+              "format": "uint",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "stream": {
+              "description": "The partition of that copy, such as `Partitions/46`. It can differ from `provenance.stream`, and neither is guaranteed to be the copy a body came from.",
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "copies",
+            "copy"
           ],
           "type": "object"
         },
@@ -1130,6 +1273,33 @@
               ],
               "description": "The record layout of `Global/ElemTable`."
             },
+            "layout_release": {
+              "description": "The release whose record layout the file takes, which can be older than the saving release.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "omitted_entries": {
+              "description": "How many elements the provenance table left out past its cap of 250,000 listed; their record fields are absent and `provenance_omitted` says so.",
+              "format": "uint",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "partition_count": {
+              "description": "How many `Partitions/NN` streams the file has.",
+              "format": "uint",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
             "revit_build": {
               "description": "That release's build tag (from `BasicFileInfo`).",
               "type": [
@@ -1329,7 +1499,7 @@
   },
   {
     "name": "list_elements",
-    "description": "List the building elements of a model, optionally by category (IFC entity such as IFCWALL), class (Revit class such as Wall) and level (storey name), paged by limit (100 by default, at most 1000) and offset. Each row has the Revit ElementId, name, level and a provenance object: element_id, global_id, category, class, body_source, profile_source, space_outline_source and area_body_refusal, each present only where the model has it. Not read: family geometry, the Revit Mark parameter, and any body but the record's bounding box where provenance.body_source says so; see the summary's not_read and docs/status.md in the rvt-rs repository.",
+    "description": "List the building elements of a model, optionally by category (IFC entity such as IFCWALL), class (Revit class such as Wall) and level (storey name), paged by limit (100 by default, at most 1000) and offset. Each row has the Revit ElementId, name, level and a provenance object: element_id, global_id, category, class, body_source, profile_source, space_outline_source and area_body_refusal, and where the element's record sits: carrier, stream, offset, record_offset, enclosing_record_id, class_tag, class_name and native_record, each present only where the model has it. Not read: family geometry, the Revit Mark parameter, and any body but the record's bounding box where provenance.body_source says so; see the summary's not_read and docs/status.md in the rvt-rs repository.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
@@ -1408,6 +1578,13 @@
                 "null"
               ]
             },
+            "carrier": {
+              "description": "The kind of record the element was read from, such as `partition_element_record_first_prologue`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
             "category": {
               "description": "The IFC entity the export writes, such as `IFCWALL`.",
               "type": [
@@ -1422,8 +1599,31 @@
                 "null"
               ]
             },
+            "class_name": {
+              "description": "The class that tag resolves to in the file's own schema.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "class_tag": {
+              "description": "The class tag the record names.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
             "element_id": {
               "description": "The Revit ElementId, which the IFC export writes as the `Tag`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "enclosing_record_id": {
+              "description": "For a frame inside another partition record, the ElementId of that record.",
               "type": [
                 "string",
                 "null"
@@ -1436,6 +1636,26 @@
                 "null"
               ]
             },
+            "native_record": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/NativeRecordOut"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The element's native record, where the export's native passes indexed one."
+            },
+            "offset": {
+              "description": "Where the record or frame starts in that stream inflated: the frame the exporter selected (on Revit 2024 and later the greatest vertical extent, then the greater stream and offset; on 2008 to 2023 the newest). A body reader may take another copy, so it can name another partition than `native_record.stream`, and neither is guaranteed to be the copy a body came from.",
+              "format": "uint",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
             "profile_source": {
               "description": "Where the plan profile of the body came from.",
               "type": [
@@ -1443,8 +1663,31 @@
                 "null"
               ]
             },
+            "provenance_omitted": {
+              "description": "True when the record fields are absent because the provenance table lists at most 250,000 elements and this one is past them (`file.omitted_entries`).",
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            "record_offset": {
+              "description": "Where the ElementId is stored: the partition record header it is the first bytes of.",
+              "format": "uint",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
             "space_outline_source": {
               "description": "For a room or space, where its outline came from: `record_box`\n(the area of its box, not of the room), `stored_solid`,\n`stored_solid_faces`, `stored_solid_approximate`, `saved_mesh`,\n`family_body`, and for an Area `area_boundary` or `none`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "stream": {
+              "description": "The stream the record is in: `Partitions/NN` or `Global/Latest`.",
               "type": [
                 "string",
                 "null"
@@ -1487,6 +1730,49 @@
           "required": [
             "name",
             "provenance"
+          ],
+          "type": "object"
+        },
+        "NativeRecordOut": {
+          "description": "The native record the native readers hold for an element.",
+          "properties": {
+            "class_name": {
+              "description": "The class the record names in the file's schema.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "copies": {
+              "description": "In how many partitions the element has a native record.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "copy": {
+              "description": "Which copy this is: `only`, `current` (the current one of several, RE-216) or `unresolved`.",
+              "type": "string"
+            },
+            "offset": {
+              "description": "Where the record's header starts in that partition inflated.",
+              "format": "uint",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "stream": {
+              "description": "The partition of that copy, such as `Partitions/46`. It can differ from `provenance.stream`, and neither is guaranteed to be the copy a body came from.",
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "copies",
+            "copy"
           ],
           "type": "object"
         }
@@ -1670,6 +1956,13 @@
                 "null"
               ]
             },
+            "carrier": {
+              "description": "The kind of record the element was read from, such as `partition_element_record_first_prologue`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
             "category": {
               "description": "The IFC entity the export writes, such as `IFCWALL`.",
               "type": [
@@ -1684,8 +1977,31 @@
                 "null"
               ]
             },
+            "class_name": {
+              "description": "The class that tag resolves to in the file's own schema.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "class_tag": {
+              "description": "The class tag the record names.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
             "element_id": {
               "description": "The Revit ElementId, which the IFC export writes as the `Tag`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "enclosing_record_id": {
+              "description": "For a frame inside another partition record, the ElementId of that record.",
               "type": [
                 "string",
                 "null"
@@ -1698,10 +2014,46 @@
                 "null"
               ]
             },
+            "native_record": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/NativeRecordOut"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The element's native record, where the export's native passes indexed one."
+            },
+            "offset": {
+              "description": "Where the record or frame starts in that stream inflated: the frame the exporter selected (on Revit 2024 and later the greatest vertical extent, then the greater stream and offset; on 2008 to 2023 the newest). A body reader may take another copy, so it can name another partition than `native_record.stream`, and neither is guaranteed to be the copy a body came from.",
+              "format": "uint",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
             "profile_source": {
               "description": "Where the plan profile of the body came from.",
               "type": [
                 "string",
+                "null"
+              ]
+            },
+            "provenance_omitted": {
+              "description": "True when the record fields are absent because the provenance table lists at most 250,000 elements and this one is past them (`file.omitted_entries`).",
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            "record_offset": {
+              "description": "Where the ElementId is stored: the partition record header it is the first bytes of.",
+              "format": "uint",
+              "minimum": 0,
+              "type": [
+                "integer",
                 "null"
               ]
             },
@@ -1711,8 +2063,58 @@
                 "string",
                 "null"
               ]
+            },
+            "stream": {
+              "description": "The stream the record is in: `Partitions/NN` or `Global/Latest`.",
+              "type": [
+                "string",
+                "null"
+              ]
             }
           },
+          "type": "object"
+        },
+        "NativeRecordOut": {
+          "description": "The native record the native readers hold for an element.",
+          "properties": {
+            "class_name": {
+              "description": "The class the record names in the file's schema.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "copies": {
+              "description": "In how many partitions the element has a native record.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "copy": {
+              "description": "Which copy this is: `only`, `current` (the current one of several, RE-216) or `unresolved`.",
+              "type": "string"
+            },
+            "offset": {
+              "description": "Where the record's header starts in that partition inflated.",
+              "format": "uint",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "stream": {
+              "description": "The partition of that copy, such as `Partitions/46`. It can differ from `provenance.stream`, and neither is guaranteed to be the copy a body came from.",
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "copies",
+            "copy"
+          ],
           "type": "object"
         },
         "RoomOut": {
@@ -1985,6 +2387,33 @@
                 }
               ],
               "description": "The record layout of `Global/ElemTable`."
+            },
+            "layout_release": {
+              "description": "The release whose record layout the file takes, which can be older than the saving release.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "omitted_entries": {
+              "description": "How many elements the provenance table left out past its cap of 250,000 listed; their record fields are absent and `provenance_omitted` says so.",
+              "format": "uint",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "partition_count": {
+              "description": "How many `Partitions/NN` streams the file has.",
+              "format": "uint",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
             },
             "revit_build": {
               "description": "That release's build tag (from `BasicFileInfo`).",

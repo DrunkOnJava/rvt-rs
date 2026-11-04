@@ -16,6 +16,7 @@ use std::time::UNIX_EPOCH;
 use rvt::RevitFile;
 use rvt::control::WalkerControl;
 use rvt::elem_table::RecordFraming;
+use rvt::ifc::element_provenance::ElementProvenanceTable;
 use rvt::ifc::step_writer::element_global_ids;
 use rvt::ifc::{
     ExportDiagnostics, ExportNote, ExportOptions, ExportRun, IfcModel,
@@ -158,10 +159,20 @@ pub struct Computed {
     /// The GlobalId the IFC export writes for each entity, by index.
     pub global_ids: Vec<Option<String>>,
     pub file: FileProvenance,
+    /// Where each decoded element was read from (#1325). The decode asks for
+    /// it and it is taken out of `diagnostics`, so the diagnostics the tools
+    /// return and the exports' summaries stay what `rvt-ifc --diagnostics`
+    /// writes without `--element-provenance`: the table is 4.5 MB of compact
+    /// JSON on the BIM4LCA office.
+    pub element_provenance: Option<ElementProvenanceTable>,
 }
 
 impl Computed {
-    fn new(run: ExportRun, file: FileProvenance) -> Self {
+    fn new(mut run: ExportRun, mut file: FileProvenance) -> Self {
+        let element_provenance = run.diagnostics.decoded.element_provenance.take();
+        file.omitted_entries = element_provenance
+            .as_ref()
+            .map(|table| table.omitted_entries);
         let global_ids = element_global_ids(&run.model);
         let notes = note_texts(&run.notes);
         Self {
@@ -171,6 +182,7 @@ impl Computed {
             notes,
             global_ids,
             file,
+            element_provenance,
         }
     }
 }
@@ -200,6 +212,9 @@ fn file_provenance(rf: &mut RevitFile) -> FileProvenance {
         revit_build,
         schema_class_count,
         elem_table,
+        partition_count: Some(rf.partition_stream_names().len()),
+        layout_release: rf.layout_release().ok(),
+        omitted_entries: None,
     }
 }
 
@@ -256,7 +271,9 @@ impl Entry {
             return Ok(Arc::clone(done));
         }
         let mut file = lock(&self.file);
-        let options = ExportOptions::default().with_phase(self.phase_spec());
+        let options = ExportOptions::default()
+            .with_phase(self.phase_spec())
+            .with_element_provenance(true);
         let run = run_decode(&mut file, config, &options, control)?;
         let provenance = file_provenance(&mut file);
         drop(file);
