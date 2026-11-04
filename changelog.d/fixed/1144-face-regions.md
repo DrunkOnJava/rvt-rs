@@ -14,9 +14,13 @@
   run 41790592582: volume ratio 1.0000, Revit's vertices within 1.8e-6 ft
   of the mesh and the mesh's of Revit's), the census no longer lists
   regions as a cause in any file, and no other line of those six files'
-  scores moves. No door or window of the BIM4LCA office, Core Interior or
-  RE1 is kept as a box for regions (census, run 41786625424), so none
-  changes there. Not measured: a face with regions on any other surface, or
-  with holes, which stay refused, and files other than these six; whether
-  regions explain #1247's boxed doors and windows is for its reporter's
-  census to say.
+  scores moves. No door or window of the BIM4LCA office, Core Interior or RE1 is kept as a
+  box for regions (census, run 41786625424), so none changes there. The
+  whole Measure (run 41791824472) moves 15 of 111 exports and no other: the
+  six models above; 42 windows of Autodesk's Snowdon Towers architectural
+  sample, from box to mesh (172 of 172 door and window bodies drawn, 130
+  before; no Revit export, so not scored); and eight held-out models, 88
+  windows in all, every one exact against Revit's export (counts only,
+  run 41793911979). Not measured: a face with regions on any other surface,
+  or with holes, which stay refused; whether regions explain #1247's boxed
+  doors and windows is for its reporter's census to say.
