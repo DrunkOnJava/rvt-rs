@@ -23,9 +23,43 @@ and gutters. A large export holds less memory at its peak, and Revit 2015 to
 2023 exports are faster than 0.13.0's. Much of it follows reports from
 hemanth1986 (#1075, #1247) and inevitable-co-ai (#1261). Thanks to both.
 
-Measured against 0.13.0 on every reference model, Autodesk's sample projects
-and the held-out models: the figures are in each entry below, and this
-release's own run is being read.
+Measured against 0.13.0 on every reference model, Autodesk's sample projects,
+the held-out models and the family files (Measure run 41803457521, `main` at
+48930287 against v0.13.0):
+- every one of the 67 files timed exports faster, each timed against 0.13.0
+  on one runner: Autodesk's Revit 2015 to 2023 samples in 0.53 to 0.74 of
+  0.13.0's time, their 2024 to 2027 samples in 0.74 to 0.92, and the
+  reference models and the BIM4LCA offices in 0.75 to 0.91. None peaks
+  higher in memory (0.54 to 0.99 of 0.13.0's peak; the office as built 1,690
+  to 913 MiB);
+- on the BIM4LCA office as built 30 more unfilled openings are written (24 at
+  building permit), each within 0.01 ft of Revit's box with its GlobalId,
+  name, sets and depth equal; all 30 Areas have a body equal to Revit's in
+  area and outline in both files, where none had one; 510 of 607 walls have
+  both ends within 0.001 ft of Revit's (482) and 430 of 589 at permit (422).
+  No value moves from equal to different. The values Revit's export does not
+  write are unchanged as built and go from 14 to 16 at permit, both on the
+  one opening Revit's export writes only as built, which the census counts
+  apart;
+- on the held-out Revit 2018 Vitoria project 1,514 elements and spaces pair
+  with Revit's (1,336), conduits, conduit fittings and gutters among them,
+  1,359 on Revit's storey (1,181), and the values Revit does not write stay
+  at 18; on eight held-out Revit 2024 to 2027 models 88 windows go from their
+  box to their saved mesh, every one exact against Revit's export (counts
+  only). Six Revit 2025 models draw 18 windows from their mesh, each exact,
+  and the two mitred walls of `18_WallJoins` now end where Revit's do (9 of 9
+  walls, from 7);
+- Autodesk's `rac_basic_sample_project` saves from 2016 on leave out the 14
+  rooms of its Working Drawings phase, as Revit's export does by default;
+  `rvt-ifc --phase "Working Drawings"` writes them.
+
+Every export's header names 0.14.0, so every `ifc.sha256` moves; the figures
+above are the scorers'. Not measured by this run: the stepped wall tops,
+which no default scorer reads (the entry's figures are from its own runs),
+#1075's 438 MB project, and the room phase rule against a Revit export made
+with the default setup. The held-out BIM Whale project's Areas stay
+undelivered (#1261), and a level beam drawn along its line takes the box's
+length, not the beam's.
 
 ### Upgrading from 0.13
 
