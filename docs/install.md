@@ -90,6 +90,23 @@ rvt-ifc --help
 The library API is documented at <https://docs.rs/rvt>; `cargo add rvt` adds
 it to a project.
 
+## MCP Server
+
+`rvt-rs-mcp` is a local, read-only [Model Context Protocol](https://modelcontextprotocol.io)
+server over stdio, so an agent can ask about a Revit file with no Revit
+install and no network. It is a crate of its own and needs Rust 1.88 or later
+to build (the other tools need 1.87). It is not in v0.13.0: from the next
+release the prebuilt archives and the container image carry it, and
+`cargo install rvt-rs-mcp --locked` installs it once the crate's first version
+is on crates.io; until then, build it from a checkout of `main`:
+
+```bash
+cargo install --path rvt-mcp --locked
+rvt-rs-mcp --version
+```
+
+[`mcp.md`](mcp.md) has the client configuration and the tools.
+
 ## Prebuilt Binaries (GitHub Releases)
 
 Every tagged release from v0.2.0 on attaches ready-to-run archives of
@@ -245,6 +262,9 @@ post-publish smoke is:
 # Only after crates.io publish succeeds:
 cargo install rvt --version X.Y.Z --locked
 rvt-inspect --version
+# Once the crate is on crates.io (RELEASE.md, step 8):
+cargo install rvt-rs-mcp --version X.Y.Z --locked
+rvt-rs-mcp --version
 
 python -m venv /tmp/rvt-release-smoke
 . /tmp/rvt-release-smoke/bin/activate

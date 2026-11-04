@@ -61,8 +61,9 @@ GlobalId, `IsExternal` (RE-193), curtain mullions' `Span` (RE-226) and, where th
 and landings' type (RE-92) and the parameters named for a standard property
 set's property (RE-194), and a body that is exact where the element's
 data is decoded and its bounding box where it is not. It writes that as IFC4,
-glTF, plan SVG and CSV, from the CLIs, Python and the zero-upload browser
-viewer. On Revit 2023 projects it reads each element's ElementId, category
+glTF, plan SVG and CSV, from the CLIs, Python, the zero-upload browser
+viewer, and a local, read-only MCP server (`rvt-rs-mcp`, [`docs/mcp.md`](mcp.md))
+that answers an agent's questions from the model the IFC export writes. On Revit 2023 projects it reads each element's ElementId, category
 and bounding box (RE-81), walls cut back at their joins (RE-120), beams at their columns
 (RE-122), door and
 window hosts (RE-85), room outlines
