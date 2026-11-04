@@ -21,25 +21,24 @@ as IFC4 or glTF, with no Revit install and no network.
   unread streams, skipped items, diagnostics. A field the model does not have is
   absent from an answer, never guessed.
 
-It is new. It is not in v0.13.0; it ships from the next release (see
-[Install](#install)).
+It is new in v0.14.0 (see [Install](#install)).
 
 ## Install
 
-From a checkout of `main` (needs Rust 1.88 or later, one above the other
-tools, because the MCP SDK `rmcp` 3.x declares 1.88):
+From crates.io (needs Rust 1.88 or later, one above the other tools,
+because the MCP SDK `rmcp` 3.x declares 1.88):
 
 ```bash
-cargo install --path rvt-mcp --locked
+cargo install rvt-rs-mcp --locked
 rvt-rs-mcp --version
 ```
 
-From the next release, the prebuilt archives on
+From a checkout of `main`, `cargo install --path rvt-mcp --locked`. The
+prebuilt archives on
 [GitHub Releases](https://github.com/DrunkOnJava/rvt-rs/releases)
 (`rvt-rs-mcp` sits beside the CLIs) and the container image
-`ghcr.io/drunkonjava/rvt-rs` carry it, and `cargo install rvt-rs-mcp --locked`
-installs it once the crate's first version is on crates.io (RELEASE.md,
-step 8). In the image the model's folder is mounted at `/data`:
+`ghcr.io/drunkonjava/rvt-rs` carry it from v0.14.0. In the image the model's
+folder is mounted at `/data`:
 
 ```bash
 docker run --rm -i -v "$PWD:/data" ghcr.io/drunkonjava/rvt-rs rvt-rs-mcp
