@@ -10,10 +10,10 @@
 //! (`decoded.element_provenance`) when the export is asked for it
 //! (`rvt-ifc --element-provenance`, `ExportOptions::with_element_provenance`,
 //! the MCP server's decode, Python's `element_provenance=True`): it is large,
-//! 6,131,584 bytes of compact JSON with the value sources of #1360 and #1368
-//! against 38,640 bytes of diagnostics without it (about 159 times) on the
+//! 6,202,130 bytes of compact JSON with the value sources of #1360 and #1368
+//! against 38,640 bytes of diagnostics without it (about 161 times) on the
 //! BIM4LCA office as built, and the CLI's pretty-printed sidecar grows from
-//! 52,677 to 10,927,629 bytes (Measure run 41882133812), so it is off by
+//! 52,677 to 11,098,081 bytes (Measure run 41890994176), so it is off by
 //! default. It is never written into the IFC.
 //!
 //! An offset indexes the stream as `RevitFile::inflated_partition` returns it,
@@ -197,9 +197,10 @@ pub enum CopyRule {
     /// A native record by member name, the current copy of it
     /// (`native_document`).
     Native,
-    /// The last frame of the record in file order, as the reader's scan kept
-    /// it, where the record's frames were not compared or do not agree (a
-    /// type symbol's box).
+    /// One frame or partition of the record, as the reader's scan kept it,
+    /// without the record's other copies being compared: the last frame of a
+    /// type symbol whose frames do not agree, and the solids of a room, read
+    /// in the room's own partition only.
     Frame,
 }
 
@@ -871,7 +872,14 @@ const SKETCH_LINE_READERS: &[&str] = &["sketch_lines", "sketch_line_data"];
 /// take its place as `selected_frame_box` (#1368): the sketch lines' frames,
 /// or the type symbol's frame. The Sketch's curve list or the lines' data
 /// alone do not.
-const PROFILE_FRAME_READERS: &[&str] = &["sketch_lines", "type_section"];
+const PROFILE_FRAME_READERS: &[&str] = &[
+    "sketch_lines",
+    "type_section",
+    "room_solid_faces",
+    "type_hollow_section",
+    "type_i_section",
+    "pipe_connectors",
+];
 
 /// The readers whose value a body with this `BodySource` is drawn from (#1360):
 /// a value source is listed for an element only when its reader is one of
@@ -904,6 +912,13 @@ fn body_readers(body: &str) -> &'static [&'static str] {
             "native_run",
             "native_run_type",
         ],
+        ec::COLUMN_HOLLOW_SECTION_BODY_SOURCE => &[SELECTED_FRAME_READER, "type_hollow_section"],
+        ec::COLUMN_I_SECTION_BODY_SOURCE => &[
+            SELECTED_FRAME_READER,
+            "instance_transform",
+            "type_i_section",
+        ],
+        ec::PIPE_AXIS_BODY_SOURCE => &[SELECTED_FRAME_READER, "pipe_connectors"],
         ec::LANDING_TREAD_BODY_SOURCE => &["native_landing"],
         ec::LANDING_SLAB_BODY_SOURCE => &["landing_lines", "native_landing", "native_landing_type"],
         _ => &[],
@@ -919,6 +934,9 @@ fn profile_readers(profile: Option<&str>) -> &'static [&'static str] {
             &["sketch_lines", "sketch_list", "sketch_line_data"]
         }
         Some(crate::partition_schema_mvp::TYPE_PROFILE_SOURCE) => &["type_section"],
+        Some(source) if crate::partition_room_boundaries::is_room_outline_source(source) => {
+            &["room_solid_faces"]
+        }
         _ => &[],
     }
 }

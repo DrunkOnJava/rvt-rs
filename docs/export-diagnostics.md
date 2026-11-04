@@ -52,7 +52,7 @@ so it is off unless asked for (#1325):
 rvt-ifc model.rvt -o model.ifc --diagnostics model.diagnostics.json --element-provenance
 ```
 
-adds `decoded.element_provenance` to the sidecar. On the BIM4LCA office as built the table, with its value sources (#1360, #1368), is 6,131,584 bytes of compact JSON (what the library and Python write) against 38,640 bytes of diagnostics without it, about 159 times; the CLI's pretty-printed sidecar grows from 52,677 to 10,927,629 bytes (207 times) and Core Interior's from 27,588 to 1,511,498 (Measure run 41882133812). The `parts` of #1368 added 2.4% to the office's table (5,987,841 bytes before, measured on main in the same run) and 63% to Core Interior's (440,909 to 718,828), where the sketch-line profiles are listed line by line. RE1 Architecture's grew from 13,956 to 85,470 before the value sources and has not been measured since. Without the flag the sidecar has no such field and is the bytes it
+adds `decoded.element_provenance` to the sidecar. On the BIM4LCA office as built the table, with its value sources (#1360, #1368), is 6,202,130 bytes of compact JSON (what the library and Python write) against 38,640 bytes of diagnostics without it, about 161 times; the CLI's pretty-printed sidecar grows from 52,677 to 11,098,081 bytes (211 times) and Core Interior's from 27,588 to 1,549,080 (Measure run 41890994176). The value sources of #1368 added 3.6% to the office's table (5,987,841 bytes at #1360, 6,202,130 now) and 66% to Core Interior's (440,909 to 733,326), where the sketch-line profiles are listed line by line. RE1 Architecture's grew from 13,956 to 85,470 before the value sources and has not been measured since. Without the flag the sidecar has no such field and is the bytes it
 was before the flag existed. `ExportOptions::with_element_provenance(true)`
 and Python's `export_diagnostics(element_provenance=True)` (and
 `rvt_to_ifc_diagnostics(..., element_provenance=True)`) do the same, and the MCP
@@ -103,8 +103,9 @@ number of sketch lines it is made of; a source of one record (a type symbol, a
 run type) counts the partitions that held that record. Its `rule` is how that
 record's copy was chosen: `agreeing` (every copy gives the same value),
 `current` (the copies disagreed and the current partition's was taken) or
-`frame` (the last of the record's frames, which were not compared or do not
-agree).
+`frame` (one frame or partition of the record, without its other copies being
+compared: the last frame of a type symbol whose frames differ, a room's solids
+read in the room's own partition).
 A reader notes its choice where it makes it, only while the export builds this
 table, and the entry is listed only where the element's final `BodySource` is
 drawn from that reader.
@@ -112,11 +113,15 @@ drawn from that reader.
 | `BodySource` | Reader | Rule | What `offset` is |
 |---|---|---|---|
 | `partition_element_record_bbox`, `partition_element_record_join_trimmed`, `partition_element_record_join_cut`, `partition_element_record_column_cut` | `selected_frame` | `selected` | The frame itself (a trim or cut also reads the joined elements' frames, which are not named). |
-| The same bodies where the profile is read from a record no reader notes yet: a `profile_source` that is not the `body_source` | `selected_frame_box` | `selected` | The frame, for the box and the placement only. The profile's copy has no source yet: today that is every room (its outline is read from its solid's faces, `partition_room_solid_faces`, 116 elements on Core Interior and 234 on the office). |
+| The same bodies where the profile is read from a record no reader notes yet: a `profile_source` that is not the `body_source` | `selected_frame_box` | `selected` | The frame, for the box and the placement only. The profile's copy has no source yet. |
 | The same bodies where the profile is solved from sketch lines (`profile_source` `partition_element_record_sketch_lines`: floors, slabs and ceilings, and roofs whose body is the record's box; a roof drawn from its slope or extrusion has no source yet) | `sketch_lines` | `agreeing` or `current` | `parts`: the frame of each sketch line the solve was given, the first of its frames by frame order (`agreeing`), or the current partition's where its frames disagree (`current`, RE-216). The element's `selected_frame` names the frame for the box. |
 | The same | `sketch_list` | `agreeing` or `current` | The element-data header of the Sketch's curve list that names the lines (RE-97), the lowest-numbered partition's or the current one. Where the element has one. |
 | The same, where the outline is read from the lines' own ends rather than their boxes | `sketch_line_data` | `agreeing` or `current` | `parts`: the element-data header of each line's copy (as `bounded_line`). |
 | The same bodies where the section is the type symbol's box (`profile_source` `family_type_symbol_envelope`: columns) | `type_section` | `agreeing` or `frame` | `parts`: the type symbol's frame, the last of its frames the column scan kept; `agreeing` (with `partitions`) where every frame of the symbol gives the same box, `frame` where they do not. |
+| The same bodies where the profile is a room's outline read from its stored solid (`profile_source` `partition_room_solid_faces`, `partition_room_solid_faces_resolved` or `partition_room_solid_faces_approximate`, RE-101, RE-316) | `room_solid_faces` | `frame` | `parts`: the header of each stored solid of the room that gave the outline (the ElementId, then the solid's tag), in the room's own partition; where more than one solid gave one, every one gave the same. Only that partition is read: the room's solids in other partitions are not compared, so the rule is not `agreeing`. |
+| `family_type_hollow_section` | `type_hollow_section` | `agreeing` | `parts`: the entries of the column type's parameters `b`, `Ht`, `t` and `kr` (`f64`, `ff` x 8, `i64` parameter id), in the type's value block; the first copy of each, every copy holding the same value. A parameter whose value block holds two different values, or whose copies in two partitions differ, is skipped (the type then has no section): that is not counted as a disagreement among copies. The element's `selected_frame` names the frame whose box the section is held to. |
+| `family_type_i_section` | `type_i_section` | `agreeing` | `parts`: the six entries of the type's I section (width, height, web and flange thickness, the centroid both ways), as for the hollow section. `instance_transform` (as below) gives the plan angle of the column's X axis. On Core Interior, the BIM4LCA office and the RE1 models no element has this body (Measure run 41887789579), so this reader is untested on real files. |
+| `partition_pipe_axis` | `pipe_connectors` | `agreeing` | `parts`: the two connector entries (`u64` element, `u32` index, `u32` 1, the point) whose points are the pipe's ends, in the partition of its record. An entry is found by where its point falls, never by whose it is (RE-131): at a connected end it is keyed by the element connected there, so a part's `element_id` may be a neighbour of the pipe (a fitting), not the pipe. The radius is the record box's, held in the element's `selected_frame`. Where the pipe's body came from two partitions they agree. |
 | `partition_wall_centreline`, `partition_wall_centreline_layer_joins`, `partition_wall_tapered_section`, `partition_beam_axis`, `partition_beam_box_along_axis` | `bounded_line` | `agreeing` | The element-data header of the lowest-numbered partition's copy of its location line. Every copy holds the same line; a wall or beam whose copies differ is drawn as its box instead. |
 | `partition_wall_arc` | `bounded_arc` | `agreeing` | As `bounded_line`, for a curved wall's arc. |
 | `partition_family_instance_turned_box`, `partition_family_instance_oriented_box` | `instance_transform` | `agreeing` or `current` | The element-data header of the copy: the lowest-numbered partition's where the copies agree, the current partition's where they differ (RE-216). |
@@ -133,19 +138,17 @@ drawn from that reader.
 | `partition_landing_slab` | `native_landing_type` | `native` | `parts`: the header of the landing type's current native record, which gives the thickness (monolithic types only). |
 
 No reader notes its copy yet for `partition_area_boundary_lines`,
-`family_type_hollow_section`, `family_type_i_section`, `partition_pipe_axis`,
 `partition_roof_slope`, `partition_roof_extrusion` and `family_extrusions`, nor
-for the other values a body reads (a wall's layers, a roof's slopes, the
-parameters of a type's section). An element of those bodies has no value
-source; an element whose box is the body but whose profile is read from a
-record no reader notes yet (a room's outline, read from its solid's faces)
-has `selected_frame_box` and nothing for the profile. Neither is a claim that
-it read the frame. `value_source_counts`
+for the other values a body reads (a wall's layers, a beam's I section, the
+parameters of a rectangular column's section). An element of those bodies has
+no value source; an element whose box is the body but whose profile is read
+from a record no reader notes yet has `selected_frame_box` and nothing for the
+profile. Neither is a claim that it read the frame. `value_source_counts`
 counts, by reader, the elements with a source, those whose value is held in
 another partition than their frame, and those whose copy was chosen as the
 current partition's (`current`), so a run on any model shows whether it
 exercises that rule. On Core Interior and the BIM4LCA office as built no source
-has the rule `current` (Measure run 41882133812: no `current` count). That does
+has the rule `current` (Measure run 41890994176: no `current` count). That does
 not say every copy set agreed: a set that disagreed and could not be resolved is
 dropped by its reader and leaves no source and no count.
 
@@ -157,9 +160,18 @@ for a native record it finds the ElementId at the offset; for each record in
 `parts` it reads what that record is: a sketch line's or a type symbol's frame
 has the element's id at its first bytes, or, on a second-prologue frame, the id
 of the record that encloses it (found from the bytes); a sketch line's data is
-an element-data header and then the line's own id; a run type or a native type
-record starts with its id; and a Sketch's curve list is a header followed by
-the sketched element's id. A frame of a 32-bit release with no id at its first
+an element-data header and then the line's own id; a room's solid is the room's
+id and the solid's tag, and read again (`room_outline_at`, or
+`resolved_outline_of_solids` for a resolved outline) it gives an outline with
+the vertex count the room holds; a type's parameter entry is `f64`, `ff` x 8 and
+an `i64`, in the value block whose owner (declared, as the reader's blocks
+are) is the type, and a section's parts are distinct entries of the expected
+parameters (an I section's six; a hollow section's four, whose captions the
+`ParamElemFamily` elements name `b`, `Ht`, `t` and `kr`); a pipe's connector
+entry is the keyed element's `u64`, an index of at most 255, the `u32` 1 and a
+point, and the two parts' points make a cylinder (`pipe_body`) with the pipe's
+record box; a run type or a native type record starts with its id; and a
+Sketch's curve list is a header followed by the sketched element's id. A frame of a 32-bit release with no id at its first
 bytes is counted as not read. It does not say the
 copy taken is the right one: `agreeing` copies are equal, and `current` is
 `current_partitions`, which it does not measure.
@@ -243,7 +255,7 @@ What an entry's `offset` is, and what has been measured:
 
 Why a switch of its own, not `--element-provenance`: the log is bounded (at most
 5,000 entries a reason, whatever the model) where the provenance table lists
-every element (about 159 times the rest of the diagnostics in compact JSON on the
+every element (about 161 times the rest of the diagnostics in compact JSON on the
 BIM4LCA office as built), and it needs no table in the sidecar. Where an entry's
 evidence is an element the walk decoded, its stream and offset are read from a
 table built for the purpose and dropped. Someone asking why an element was left
@@ -417,7 +429,7 @@ Important nested fields:
 | `decoded.wall_curve_lengths_feet` | object | The length of each exported wall's native curve in feet, by ElementId (RE-252): one of the two lengths Revit's export may write as the wall's `Qto_WallBaseQuantities.Length`. `tools/re/qtos_vs_ifc.py` reads it to count apart a wall whose two lengths differ. It is not written in the IFC file, and is absent when no wall has one. |
 | `decoded.walls_type_confirmed` | array | The ElementIds of the exported walls whose native `SWall` record names the type the export gives them (RE-253). Where Revit's export gives such a wall another type, `tools/re/qtos_vs_ifc.py` counts its differing `Width` apart. Not written in the IFC file; absent when there is none. |
 | `export_decisions` | object | Present only with `rvt-ifc --export-decisions` (see Export decisions above). Each fail-closed decision behind `skipped` and the `exported` body and outline counts, one entry per element, with a stage, a reason code and where the evidence was read; bounded at 5,000 entries a reason with the rest counted in `dropped`. The `skipped` counts are made from the same decisions. Not written in the IFC file. |
-| `decoded.element_provenance` | object | Present only with `rvt-ifc --element-provenance` (see CLI above for the size: about 159 times the rest of the diagnostics in compact JSON on the BIM4LCA office). Where each decoded element was read from, by ElementId (#1325): `elements` maps an ElementId to its `carrier` (`partition_element_record_first_prologue`, `partition_element_record_second_prologue`, `global_latest_schema_walk`, `partition_arc_wall`, `partition_area_record`, `partition_derived` or `other`), its `stream` (`Partitions/46`, `Global/Latest`), its `offset` in that stream inflated, the `record_offset` where its ElementId is stored (a partition record header; for a second-prologue frame the enclosing record's, whose id is `enclosing_record_id`, RE-35), its `class_tag` and the `class_name` that resolves to in the file's own schema, its `builtin_category`, and its `native` record (`copies`, which `copy` is named, `stream`, `offset`). An offset indexes the stream as `RevitFile::inflated_partition` returns it, which `rvt-dump` writes as `Partitions_NN.decomp` (#291); for the schema walk it indexes `Global/Latest` inflated as the walk inflates it. `by_carrier` counts every element with an ElementId by carrier, with how many have their offset given (`located`) and how many do not (`unlocated`), whatever the cap of 250,000 listed entries (`omitted_entries` counts the highest ElementIds left out); `unkeyed_elements` counts decoded elements with no ElementId, which have no entry; `native` counts the native records of every element with an ElementId the same way; `layout_release`, `partition_count` and `record_id_bytes` (8 from Revit 2024, 4 before) describe the file. When an element has several partition element record frames, `offset` is the one the exporter selected: on Revit 2024 and later (`select_instance_records`) the frame with the greatest vertical extent and, on a tie, the higher-numbered partition and then the later offset; on Revit 2008 to 2023 (`select_newest_instance_records`, RE-107) the newest, with no extent test. A native record in several partitions names the current copy (RE-145, RE-216). A body reader may take another copy (the sketch-line readers take the current one), so `offset` and `native.stream` can name different partitions: the copy a reader took is in `value_sources`. The schema-walk carrier is unmeasured: no model of the offsets test has such an element. Not written in the IFC file; absent for a placeholder export and unless asked for. Each element also lists its `value_sources` (#1360), the copy each reader took a value of its body from, and the table its `value_source_counts`. |
+| `decoded.element_provenance` | object | Present only with `rvt-ifc --element-provenance` (see CLI above for the size: about 161 times the rest of the diagnostics in compact JSON on the BIM4LCA office). Where each decoded element was read from, by ElementId (#1325): `elements` maps an ElementId to its `carrier` (`partition_element_record_first_prologue`, `partition_element_record_second_prologue`, `global_latest_schema_walk`, `partition_arc_wall`, `partition_area_record`, `partition_derived` or `other`), its `stream` (`Partitions/46`, `Global/Latest`), its `offset` in that stream inflated, the `record_offset` where its ElementId is stored (a partition record header; for a second-prologue frame the enclosing record's, whose id is `enclosing_record_id`, RE-35), its `class_tag` and the `class_name` that resolves to in the file's own schema, its `builtin_category`, and its `native` record (`copies`, which `copy` is named, `stream`, `offset`). An offset indexes the stream as `RevitFile::inflated_partition` returns it, which `rvt-dump` writes as `Partitions_NN.decomp` (#291); for the schema walk it indexes `Global/Latest` inflated as the walk inflates it. `by_carrier` counts every element with an ElementId by carrier, with how many have their offset given (`located`) and how many do not (`unlocated`), whatever the cap of 250,000 listed entries (`omitted_entries` counts the highest ElementIds left out); `unkeyed_elements` counts decoded elements with no ElementId, which have no entry; `native` counts the native records of every element with an ElementId the same way; `layout_release`, `partition_count` and `record_id_bytes` (8 from Revit 2024, 4 before) describe the file. When an element has several partition element record frames, `offset` is the one the exporter selected: on Revit 2024 and later (`select_instance_records`) the frame with the greatest vertical extent and, on a tie, the higher-numbered partition and then the later offset; on Revit 2008 to 2023 (`select_newest_instance_records`, RE-107) the newest, with no extent test. A native record in several partitions names the current copy (RE-145, RE-216). A body reader may take another copy (the sketch-line readers take the current one), so `offset` and `native.stream` can name different partitions: the copy a reader took is in `value_sources`. The schema-walk carrier is unmeasured: no model of the offsets test has such an element. Not written in the IFC file; absent for a placeholder export and unless asked for. Each element also lists its `value_sources` (#1360), the copy each reader took a value of its body from, and the table its `value_source_counts`. |
 | `exported.by_ifc_type` | object | Count of exported building elements grouped by STEP entity type. |
 | `exported.building_elements_with_geometry` | integer | Exported elements with enough placement/body data for geometry. |
 | `exported.building_elements_carried_by_parts` | integer | Exported elements with no body of their own because their aggregated parts carry it, as in Revit's export: stairs (RE-39) and curtain walls (RE-46). Not counted in `building_elements_with_geometry`. |
