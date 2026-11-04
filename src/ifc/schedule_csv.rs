@@ -303,7 +303,9 @@ pub fn rooms_csv(model: &IfcModel, options: &CsvOptions) -> String {
             number(storey.map(|s| unit.convert(s.elevation_feet))),
             number(
                 (property("ProfileSource")
-                    == crate::partition_room_boundaries::ROOM_OUTLINE_SOURCE)
+                    == crate::partition_room_boundaries::ROOM_OUTLINE_SOURCE
+                    || property("ProfileSource")
+                        == crate::partition_room_boundaries::ROOM_OUTLINE_SOURCE_FACES)
                     .then(|| extrusion.as_ref().and_then(outline_area_square_feet))
                     .flatten()
                     .map(|area| unit.convert_area(area)),

@@ -328,7 +328,7 @@ struct Cursor<'a> {
     spans: Vec<FieldSpan>,
     limits: GraphLimits,
 }
-impl Cursor<'_> {
+impl<'a> Cursor<'a> {
     fn take(&mut self, n: usize) -> Result<&[u8]> {
         let end = self
             .pos
@@ -485,6 +485,10 @@ impl Cursor<'_> {
             depth < self.limits.max_depth,
             "native class recursion budget exceeded"
         );
+        // The lineage borrows the registry's classes: cloning them, every
+        // field name with them, for each object decoded was most of a
+        // graph's allocations (#1237).
+        let registry: &'a Registry = self.registry;
         let mut lineage = Vec::new();
         let mut current = tag;
         loop {
@@ -492,11 +496,9 @@ impl Cursor<'_> {
                 depth + lineage.len() < self.limits.max_depth,
                 "native class recursion budget exceeded"
             );
-            let c = self
-                .registry
+            let c = registry
                 .class(current)
-                .ok_or_else(|| anyhow::anyhow!("unknown inline native class {current}"))?
-                .clone();
+                .ok_or_else(|| anyhow::anyhow!("unknown inline native class {current}"))?;
             current = c.parent_reference.tag;
             lineage.push(c);
             if current < 12 {

@@ -284,6 +284,16 @@
           "type": "integer",
           "minimum": 0,
           "description": "Exported IfcSpaces drawn as their record's bounding box (SpaceOutlineSource record_box): a room whose outline was not read from its stored solid, or a family instance written as a space and drawn as its box. Their body's plan area is the box's, not the space's (RE-313). Each is also in bounding_box_bodies, except a family instance turned or tilted off the model's axes."
+        },
+        "resolved_outline_spaces": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Exported IfcSpaces that are rooms whose outline was read from the faces their stored solid lists, up to the solid's own end, where the walk of RE-101 did not close them (SpaceOutlineSource stored_solid_faces, RE-316): equal to Revit's area on every such room measured, bounded by the solid's list of objects and a gap, so a closed loop of another element's faces inside the room's box would be read as the room's."
+        },
+        "approximate_outline_spaces": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Exported IfcSpaces that are rooms whose resolved outline is the boundary of a region, a column overlapping a wall having been taken off it or an end of one wall edge lying on another, or falls up to 0.02 ft short of their record box on a side (SpaceOutlineSource stored_solid_approximate, RE-316): their area is approximate, up to 0.68% under Revit's floor area where Revit's export does not take the column off."
         }
       }
     },

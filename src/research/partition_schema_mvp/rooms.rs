@@ -104,7 +104,9 @@ pub(super) fn attach_room_parameter_entries(
 /// Give each room the outline of its stored solid (RE-101,
 /// [`crate::partition_room_boundaries`]), read from the partition of the
 /// room's own record and kept only where it spans the record's box. A room
-/// whose solid does not close keeps its box.
+/// whose solid does not close is resolved from the faces up to the solid's
+/// end where that spans the box (RE-316), and says so in its profile source;
+/// otherwise it keeps its box.
 pub(super) fn attach_room_outlines(
     rf: &mut RevitFile,
     revit_version: u32,
@@ -158,16 +160,33 @@ pub(super) fn attach_room_outlines(
         let Some(headers) = headers.get(&u64::from(id)) else {
             continue;
         };
-        if let Some(profile) = prb::outline_of_solids(inflated.bytes(), headers, bbox) {
+        // RE-316: only a room none of whose solids the walk closes is resolved
+        // from the faces up to the solid's end, so a room RE-101 reads is read
+        // exactly as it was.
+        let walked = prb::outline_of_solids(inflated.bytes(), headers, bbox);
+        let outline = match walked {
+            Some(profile) => Some((profile, prb::ROOM_OUTLINE_SOURCE, true)),
+            None => prb::resolved_outline_of_solids(inflated.bytes(), headers, bbox).map(
+                |(profile, kind)| {
+                    let source = match kind {
+                        prb::ResolvedKind::Faces => prb::ROOM_OUTLINE_SOURCE_FACES,
+                        prb::ResolvedKind::Approximate => prb::ROOM_OUTLINE_SOURCE_APPROXIMATE,
+                    };
+                    (profile, source, false)
+                },
+            ),
+        };
+        if let Some((profile, source, walk)) = outline {
             let mut fields = profile.fields();
             for (name, value) in fields.iter_mut() {
                 if name == crate::element_record_plan_profiles::PLAN_PROFILE_SOURCE_FIELD {
-                    *value = InstanceField::String(prb::ROOM_OUTLINE_SOURCE.into());
+                    *value = InstanceField::String(source.into());
                 }
             }
             room.fields.extend(fields);
             // RE-296: a room whose solid is a prism of that outline.
-            if ROOM_PRISM_REVIT_VERSIONS.contains(&revit_version)
+            if walk
+                && ROOM_PRISM_REVIT_VERSIONS.contains(&revit_version)
                 && prb::prism_of_solids(inflated.bytes(), headers, bbox)
             {
                 room.fields
