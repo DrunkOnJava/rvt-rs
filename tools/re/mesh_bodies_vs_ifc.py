@@ -27,10 +27,10 @@ Usage:
 """
 
 import collections
-import cProfile
-import io
+import concurrent.futures
+import concurrent.futures.process
+import multiprocessing
 import os
-import pstats
 import statistics
 import sys
 import time
@@ -44,14 +44,6 @@ from ifc_common import mesh_parts, site_frame  # noqa: E402
 from roof_bodies_vs_ifc import shapes_of  # noqa: E402
 from saved_meshes_vs_ifc import body_sources  # noqa: E402
 
-T0 = time.time()
-STATS = collections.defaultdict(float)
-
-
-def log(msg):
-    print(f"PROFILE {time.time() - T0:8.1f}s {msg}", file=sys.stderr, flush=True)
-
-
 SOURCE = "saved_graphics_mesh"
 PAIR_BUDGET = 1_000_000
 # surface_distance measures every pair up to this many, and beyond it prunes.
@@ -64,14 +56,15 @@ SLIVER = 1e-2
 # with thousands of mullions is scored in the time Measure allows.
 CLASS_CAP = 300
 VERTEX_CAP = 400
+# Fewer bodies than this are scored in this process: a forked worker has a
+# cost of its own that a handful do not repay.
+POOL_FROM = 16
 
 
 def meshes(path, tags=None, source=None, model=None):
     """Tag -> (class, ObjectType, triangles (T, 3, 3) in internal feet)."""
-    t = time.time()
     if model is None:
         model = ifcopenshell.open(path)
-    log(f"meshes({os.path.basename(path)}): open {time.time() - t:.1f}s")
     frame = site_frame(model)
     settings = ifcopenshell.geom.settings()
     settings.set("use-world-coords", True)
@@ -84,12 +77,7 @@ def meshes(path, tags=None, source=None, model=None):
         if source is not None and body_sources(element) != source:
             continue
         chosen.append((element, shapes_of(element)))
-    log(f"meshes({os.path.basename(path)}): chosen {len(chosen)} elements")
-    t = time.time()
-    allparts = [part for _, parts in chosen for part in parts]
-    shapes = mesh_parts(model, settings, allparts, path)
-    log(f"meshes({os.path.basename(path)}): mesh_parts {len(allparts)} parts -> {len(shapes)} in {time.time() - t:.1f}s")
-    t = time.time()
+    shapes = mesh_parts(model, settings, [part for _, parts in chosen for part in parts], path)
     out = {}
     for element, parts in chosen:
         triangles = []
@@ -105,7 +93,6 @@ def meshes(path, tags=None, source=None, model=None):
         if element.Tag in out:
             triangles = np.concatenate([out[element.Tag][2], triangles])
         out[element.Tag] = (element.is_a(), element.ObjectType or "", triangles)
-    log(f"meshes({os.path.basename(path)}): assemble {time.time() - t:.1f}s, {sum(len(v[2]) for v in out.values())} triangles")
     return out
 
 
@@ -284,28 +271,11 @@ def surface_distance(points, triangles):
             np.minimum.at(best, row, distances(p[row][:, None, :], tuple(x[tri][:, None] for x in terms))[:, 0])
         nearest[start : start + step] = best
     slivers = np.flatnonzero(sliver)
-    for start in range(0, len(slivers), BLOCK):
-        part = slivers[start : start + BLOCK]
+    step = max(1, PAIR_BUDGET // n)
+    for start in range(0, len(slivers), step):
+        part = slivers[start : start + step]
         nearest = np.minimum(nearest, distances(points[:, None, :], tuple(x[part] for x in terms)).min(axis=1))
     return float(nearest.max())
-
-
-_surface_distance = surface_distance
-
-
-def surface_distance(points, triangles):
-    t = time.time()
-    r = _surface_distance(points, triangles)
-    dt = time.time() - t
-    exh = len(points) * len(triangles) <= EXHAUSTIVE
-    STATS["sd_exh" if exh else "sd_pruned"] += dt
-    STATS["sd_exh_n" if exh else "sd_pruned_n"] += 1
-    STATS["pairs"] += len(points) * len(triangles)
-    SLOW.append((dt, len(points), len(triangles)))
-    return r
-
-
-SLOW = []
 
 
 def sample(triangles):
@@ -314,29 +284,129 @@ def sample(triangles):
     return points[::step]
 
 
+SCORING = {}
+
+
+def score_pair(tag):
+    """(volume ratio, Revit's vertices to rvt-rs's surface, rvt-rs's to Revit's) for one body."""
+    our_triangles, ref_triangles = SCORING["ours"][tag][2], SCORING["ref"][tag][2]
+    ref_volume, our_volume = volume(ref_triangles), volume(our_triangles)
+    ratio = our_volume / ref_volume if ref_volume > 0 else float("inf")
+    to_ours = surface_distance(sample(ref_triangles), our_triangles)
+    to_ref = surface_distance(sample(our_triangles), ref_triangles)
+    return ratio, to_ours, to_ref
+
+
+def score_all(ours, ref, tags):
+    """`score_pair` of each of `tags`, in their order, spread over the CPUs:
+    each body is scored alone, by the same arithmetic wherever it runs, so
+    what is printed does not depend on the number of workers."""
+    SCORING.update(ours=ours, ref=ref)
+    cpus = len(os.sched_getaffinity(0)) if hasattr(os, "sched_getaffinity") else os.cpu_count() or 1
+    workers = min(int(os.environ.get("RVT_MESH_WORKERS") or cpus), len(tags))
+    results = None
+    if workers > 1 and len(tags) >= POOL_FROM:
+        # The heaviest first, so the last body does not run alone. A forked
+        # worker flushes the buffered output it inherits when it ends.
+        order = sorted(range(len(tags)), key=lambda i: -(len(ours[tags[i]][2]) + len(ref[tags[i]][2])))
+        sys.stdout.flush()
+        sys.stderr.flush()
+        try:
+            with concurrent.futures.ProcessPoolExecutor(workers, mp_context=multiprocessing.get_context("fork")) as pool:
+                done = list(pool.map(score_pair, [tags[i] for i in order], chunksize=1))
+            results = [None] * len(tags)
+            for i, result in zip(order, done):
+                results[i] = result
+        except concurrent.futures.process.BrokenProcessPool:
+            print("mesh_bodies_vs_ifc: a worker died, so the bodies are scored one after another", file=sys.stderr)
+            results = None
+    if results is None:
+        results = [score_pair(tag) for tag in tags]
+    SCORING.clear()
+    return results
+
+
+def log(msg):
+    print(f"PROFILE {msg}", file=sys.stderr, flush=True)
+
+
+def experiment(ours, ref, tags):
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("old", os.path.join(os.path.dirname(os.path.abspath(__file__)), "_mesh_bodies_main_tmp.py"))
+    old = importlib.util.module_from_spec(spec)
+    sys.modules["old"] = old
+    spec.loader.exec_module(old)
+    buckets = collections.defaultdict(float)
+    counts = collections.Counter()
+    ctx = {}
+    real_distances = old.distances
+
+    def timed_distances(p, terms):
+        t = time.time()
+        r = real_distances(p, terms)
+        key = (ctx["mode"], terms[0].ndim)
+        buckets[key] += time.time() - t
+        counts[key] += 1
+        return r
+
+    old.distances = timed_distances
+    real_sd = old.surface_distance
+    sliver_total = [0]
+
+    def sd(points, triangles):
+        ctx["mode"] = "pruned" if len(points) * len(triangles) > old.EXHAUSTIVE else "exh"
+        return real_sd(points, triangles)
+
+    SCORING.update(ours=ours, ref=ref)
+    t = time.time()
+    res_old = []
+    for tag in tags:
+        a, b = ours[tag][2], ref[tag][2]
+        rv, ov = old.volume(b), old.volume(a)
+        res_old.append((ov / rv if rv > 0 else float("inf"), sd(old.sample(b), a), sd(old.sample(a), b)))
+    t_old = time.time() - t
+    log(f"experiment: old serial {t_old:.1f}s; distances time by (mode, terms ndim): {dict((str(k), round(v, 2)) for k, v in buckets.items())}; calls {dict((str(k), v) for k, v in counts.items())}")
+    t = time.time()
+    res_new = [score_pair(tag) for tag in tags]
+    t_new = time.time() - t
+    log(f"experiment: new serial {t_new:.1f}s, identical to old: {res_new == res_old}, mismatches {sum(a != b for a, b in zip(res_new, res_old))}")
+    import concurrent.futures as cf
+
+    cpus = os.cpu_count()
+    t = time.time()
+    with cf.ThreadPoolExecutor(cpus) as pool:
+        res_thread = list(pool.map(score_pair, tags))
+    log(f"experiment: new threads x{cpus} {time.time() - t:.1f}s, identical: {res_thread == res_old}")
+    t = time.time()
+    res_proc = score_all(ours, ref, tags)
+    log(f"experiment: new processes x{cpus} {time.time() - t:.1f}s, identical: {res_proc == res_old}")
+    sample_old = sample_new = 0.0
+    same = 0
+    for tag in tags:
+        for tri in (ours[tag][2], ref[tag][2]):
+            t = time.time()
+            x = sample(tri)
+            sample_old += time.time() - t
+            t = time.time()
+            pts = tri.reshape(-1, 3)
+            order = np.lexsort((pts[:, 2], pts[:, 1], pts[:, 0]))
+            srt = pts[order]
+            keep = np.r_[True, (srt[1:] != srt[:-1]).any(axis=1)]
+            uniq = srt[keep]
+            step = max(1, -(-len(uniq) // VERTEX_CAP))
+            y = uniq[::step]
+            sample_new += time.time() - t
+            same += x.tobytes() == y.tobytes()
+    log(f"experiment: sample np.unique {sample_old:.1f}s, lexsort {sample_new:.1f}s, byte-identical {same} of {2 * len(tags)}")
+    SCORING.clear()
+
+
 def main():
-    pr = cProfile.Profile()
-    pr.enable()
-    try:
-        return main_()
-    finally:
-        pr.disable()
-        out = io.StringIO()
-        pstats.Stats(pr, stream=out).sort_stats("cumulative").print_stats(28)
-        print("PROFILE cProfile\n" + out.getvalue(), file=sys.stderr, flush=True)
-        log(f"stats {dict(STATS)}")
-        SLOW.sort(reverse=True)
-        log(f"slowest surface_distance (s, points, triangles): {[(round(a,2), b, c) for a, b, c in SLOW[:12]]}")
-        log(f"total {time.time() - T0:.1f}s")
-
-
-def main_():
     if len(sys.argv) != 3:
         print(__doc__)
         return 2
-    t = time.time()
     model = ifcopenshell.open(sys.argv[1])
-    log(f"main: open ours {time.time() - t:.1f}s")
     by_class = collections.defaultdict(list)
     for element in model.by_type("IfcElement"):
         if element.Tag and not element.is_a("IfcOpeningElement") and body_sources(element) == SOURCE:
@@ -351,24 +421,14 @@ def main_():
     ours = meshes(sys.argv[1], tags=chosen, source=SOURCE, model=model)
     del model
     ref = meshes(sys.argv[2], tags=set(ours))
-    log("main: both meshed, scoring")
-    t_loop = time.time()
     print(f"{SOURCE} bodies scored: {len(ours)}; in Revit's export {len(ref)}")
     rows = collections.defaultdict(lambda: collections.defaultdict(collections.Counter))
     ratios = collections.defaultdict(list)
     scored = []
-    for tag in sorted(set(ours) & set(ref), key=lambda t: (len(t), t)):
-        _, _, our_triangles = ours[tag]
-        cls, object_type, ref_triangles = ref[tag]
-        t = time.time()
-        ref_volume, our_volume = volume(ref_triangles), volume(our_triangles)
-        STATS["volume"] += time.time() - t
-        ratio = our_volume / ref_volume if ref_volume > 0 else float("inf")
-        t = time.time()
-        sa, sb = sample(ref_triangles), sample(our_triangles)
-        STATS["sample"] += time.time() - t
-        to_ours = surface_distance(sa, our_triangles)
-        to_ref = surface_distance(sb, ref_triangles)
+    tags = sorted(set(ours) & set(ref), key=lambda t: (len(t), t))
+    experiment(ours, ref, tags)
+    for tag, (ratio, to_ours, to_ref) in zip(tags, score_all(ours, ref, tags)):
+        cls, object_type, _ = ref[tag]
         far = max(to_ours, to_ref)
         for key in ("", object_type) if object_type else ("",):
             row = rows[cls][key]
@@ -380,7 +440,6 @@ def main_():
             row["ref on ours"] += to_ours <= 0.001
         ratios[cls].append(ratio)
         scored.append((far, tag, cls, object_type, ratio, to_ours, to_ref))
-    log(f"scoring loop {time.time() - t_loop:.1f}s")
     print(
         f"{'class':<28} {'n':>6} {'vol 1%':>7} {'vol .01%':>8} {'0.01 ft':>8} {'0.001 ft':>8}"
         f" {'ref on ours':>11}  median volume ratio"
