@@ -667,9 +667,16 @@ fn wall_line(from: (f64, f64), to: (f64, f64), wall: &[f64; 6]) -> Option<WallLi
     .into_iter()
     .filter(|(lo, hi)| hi - lo > NODE_TOLERANCE_FEET)
     .collect();
+    // The line's own edge, not the wall's centre: the lines that end on it end
+    // at the line's coordinate, to the record's last digit.
+    let fixed = if on_centre(across_lo) {
+        across_lo
+    } else {
+        across_hi
+    };
     Some(WallLine {
         horizontal,
-        fixed: centre,
+        fixed,
         low: along_lo,
         high: along_hi,
         proven,
