@@ -229,13 +229,14 @@ cscore() { # name args...: `score`, from the cache when the scorer and its input
 }
 
 # A schema step's output on stdout, the cache's when the script and the file
-# are unchanged, else the step's own under its time limit. A file the step also
-# writes is named by CACHE_EXTRA and kept with the output.
+# are unchanged, else the step's own under its time limit. The files the step
+# also writes are named by CACHE_EXTRA, and kept with the output.
 cached() { # dir step limit script args...
-  local dir="$1" step="$2" limit="$3" script="$4" tmp status found=2; shift 4
+  local dir="$1" step="$2" limit="$3" script="$4" tmp status found=2 extra=() path; shift 4
   tmp="${RUNNER_TEMP:-/tmp}/cached-$$-$(basename "$dir")-$step"
+  for path in ${CACHE_EXTRA:-}; do extra+=(--extra "$path"); done
   if [ -n "${MEASURE_CACHE_DIR:-}" ]; then
-    python "$CACHE_TOOL" lookup --step "$step" --dir "$dir" --dest "$tmp" ${CACHE_EXTRA:+--extra "$CACHE_EXTRA"} -- "$script" "$@"
+    python "$CACHE_TOOL" lookup --step "$step" --dir "$dir" --dest "$tmp" ${extra[@]+"${extra[@]}"} -- "$script" "$@"
     found=$?
     if [ "$found" = 0 ]; then
       cat "$tmp"
@@ -246,7 +247,7 @@ cached() { # dir step limit script args...
   timed "$dir" "$step" timeout "$limit" python "$script" "$@" > "$tmp" 2>&1
   status=$?
   cat "$tmp"
-  [ "$found" = 1 ] && python "$CACHE_TOOL" store --step "$step" --dir "$dir" --dest "$tmp" --status "$status" ${CACHE_EXTRA:+--extra "$CACHE_EXTRA"}
+  [ "$found" = 1 ] && python "$CACHE_TOOL" store --step "$step" --dir "$dir" --dest "$tmp" --status "$status" ${extra[@]+"${extra[@]}"}
   rm -f "$tmp"
   return "$status"
 }
@@ -267,10 +268,14 @@ schema() { # dir max_bytes
     cached "$1" schema-arity 600 "$(dirname "$0")/ifc_schema_arity.py" "$1/model.ifc" \
       | grep -v '^IFC schema conformance passed\|^  instances checked' || true
     if [ "$(stat -c %s "$1/model.ifc")" -le "$2" ]; then
+      # The validation and the EXPRESS rules read one parse of the file; the
+      # rules' summary comes back in a file, to follow the validation's.
       echo "validate:"
-      CACHE_EXTRA="$1/validation.jsonl" cached "$1" schema-validate "$STEP_TIMEOUT" "$(dirname "$0")/ifc_validate_summary.py" "$1/model.ifc" "$1/validation.jsonl"
+      CACHE_EXTRA="$1/validation.jsonl $1/schema-rules.part" cached "$1" schema-validate-rules $(( 2 * STEP_TIMEOUT )) \
+        "$(dirname "$0")/ifc_validate_summary.py" --both "$1/model.ifc" "$1/validation.jsonl" "$1/schema-rules.part"
       echo "rules:"
-      cached "$1" schema-rules "$STEP_TIMEOUT" "$(dirname "$0")/ifc_validate_summary.py" --rules "$1/model.ifc"
+      cat "$1/schema-rules.part" 2> /dev/null || true
+      rm -f "$1/schema-rules.part"
     else
       echo "validate: skipped, over $(( $2 / 1048576 )) MB"
     fi
