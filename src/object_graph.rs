@@ -300,17 +300,65 @@ pub(crate) fn extract_partition_string_records(rf: &mut RevitFile) -> Result<Vec
         .partition_stream_name()
         .ok_or_else(|| crate::Error::StreamNotFound("no Partitions/NN stream".into()))?;
     let inflated = rf.inflated_partition(&partition_name)?;
-    // Concatenate all gzip chunks with an FF-sentinel separator so the
-    // extractor sees clear boundaries between them (in case record scans
-    // cross chunks accidentally).
-    let sep = [0xFFu8; 16];
-    let mut joined =
-        Vec::with_capacity(inflated.bytes().len() + sep.len() * inflated.chunk_count());
+    // The extractor reads all gzip chunks joined by an FF-sentinel separator,
+    // so it sees clear boundaries between them (in case record scans cross
+    // chunks accidentally). A record's header and body are never FF, so the
+    // separator rejects every offset whose header or body reaches it, but for
+    // one that begins in the separator itself and reads its header's last
+    // bytes from the next chunk. Unless one is accepted, the records are those
+    // of a scan of each chunk alone, moved to where they lie in the joined
+    // bytes, and the partition is not copied to be read (#1075).
+    if !inflated.chunks().skip(1).any(record_begins_in_separator) {
+        let mut records = Vec::new();
+        let mut base = 0usize;
+        for (i, chunk) in inflated.chunks().enumerate() {
+            if i > 0 {
+                base += STRING_CHUNK_SEPARATOR.len();
+            }
+            records.extend(extract_string_records(chunk).into_iter().map(|mut record| {
+                record.offset += base;
+                record
+            }));
+            base += chunk.len();
+        }
+        return Ok(records);
+    }
+    let mut joined = Vec::with_capacity(
+        inflated.bytes().len() + STRING_CHUNK_SEPARATOR.len() * inflated.chunk_count(),
+    );
     for (i, c) in inflated.chunks().enumerate() {
         if i > 0 {
-            joined.extend_from_slice(&sep);
+            joined.extend_from_slice(&STRING_CHUNK_SEPARATOR);
         }
         joined.extend_from_slice(c);
     }
     Ok(extract_string_records(&joined))
+}
+
+/// What the string scan puts between a partition's chunks.
+const STRING_CHUNK_SEPARATOR: [u8; 16] = [0xFF; 16];
+
+/// Whether the scan accepts a record that begins in the separator before
+/// `chunk`, with the last bytes of its header and its body in the chunk. Its
+/// count's first byte is the separator's last, so only the last five offsets
+/// of the separator can. `chunk`'s first bytes are all that is read: a record
+/// holds at most 400 characters.
+fn record_begins_in_separator(chunk: &[u8]) -> bool {
+    let mut seam = STRING_CHUNK_SEPARATOR.to_vec();
+    seam.extend_from_slice(&chunk[..chunk.len().min(8 + 2 * 400)]);
+    (STRING_CHUNK_SEPARATOR.len() - 5..STRING_CHUNK_SEPARATOR.len()).any(|at| {
+        let Some(head) = seam.get(at..at + 10) else {
+            return false;
+        };
+        let count = u32::from_le_bytes([head[4], head[5], head[6], head[7]]) as usize;
+        head[5] <= 1
+            && head[6] == 0
+            && head[7] == 0
+            && head[8] != 0
+            && head[9] == 0
+            && (1..=400).contains(&count)
+            && seam
+                .get(at + 8..at + 8 + 2 * count)
+                .is_some_and(is_printable_ascii_utf16le)
+    })
 }
