@@ -301,7 +301,7 @@ async fn drive(client: &Client, modern: bool, model: &Path, out: &Path, real_pro
     .await;
     assert!(error_text(&missing).contains("list_elements"));
 
-    if let Some(first) = rows.first() {
+    if let Some(first) = rows.iter().find(|row| row["id"].is_string()) {
         element_checks(client, &model_id, first, out).await;
     }
 

@@ -17,7 +17,7 @@ use rmcp::model::{
 };
 use rmcp::service::RequestContext;
 use rmcp::{ErrorData, Json, RoleServer, ServerHandler, tool, tool_handler, tool_router};
-use rvt::control::{CancelToken, ProgressEvent, WalkerControl};
+use rvt::control::{CancelToken, ProgressEvent, Stage, WalkerControl};
 
 use crate::args::{ExportGltfArgs, ExportIfcArgs, GetElementArgs, ListElementsArgs, ModelArgs};
 use crate::config::Failure;
@@ -95,7 +95,7 @@ where
     let mut events_open = token.is_some();
     let mut cancel_sent = false;
     let mut sent = 0.0_f64;
-    let mut last_stage = None;
+    let mut last_stage: Option<Stage> = None;
     let mut last_sent: Option<Instant> = None;
     let joined = loop {
         tokio::select! {

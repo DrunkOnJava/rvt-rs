@@ -7,6 +7,10 @@
 //! The server exits when its client closes stdin.
 
 #![deny(clippy::print_stdout, clippy::print_stderr)]
+// A failed tool call is an `Ok` protocol response whose `CallToolResult` has
+// `isError` set, which rmcp's tool signatures take as the `Err` side; it is
+// built once per failed call and never travels far.
+#![allow(clippy::result_large_err)]
 
 mod args;
 mod config;
