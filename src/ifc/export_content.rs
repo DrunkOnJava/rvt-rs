@@ -286,6 +286,8 @@ struct AreaDrawn {
     /// Whether its outline needed a line carried on past its record or a
     /// connector (RE-330).
     joined: bool,
+    /// Whether its region is the loop of Revit's plan topology (RE-333).
+    topology: bool,
 }
 
 /// The body an Area's decoded fields hold: the profile its boundary lines
@@ -321,6 +323,10 @@ fn area_body_from_decoded(decoded: &DecodedElement) -> Option<AreaDrawn> {
         field == crate::partition_area_records::AREA_JOINED_FIELD
             && matches!(value, InstanceField::Bool(true))
     });
+    let topology = decoded.fields.iter().any(|(field, value)| {
+        field == crate::partition_area_records::AREA_TOPOLOGY_FIELD
+            && matches!(value, InstanceField::Bool(true))
+    });
     let bounds = profile.plan_bounds_feet()?;
     let centre = ((bounds[0] + bounds[2]) / 2.0, (bounds[1] + bounds[3]) / 2.0);
     let relative = |ring: &[(f64, f64)]| -> Vec<(f64, f64)> {
@@ -345,6 +351,7 @@ fn area_body_from_decoded(decoded: &DecodedElement) -> Option<AreaDrawn> {
         },
         profile,
         joined,
+        topology,
     })
 }
 
@@ -464,6 +471,7 @@ fn area_property_set(decoded: &DecodedElement, drawn: Option<&AreaDrawn>) -> Pro
         name: SPACE_OUTLINE_SOURCE_PROPERTY.into(),
         value: PropertyValue::Text(
             match drawn {
+                Some(drawn) if drawn.topology => SPACE_OUTLINE_AREA_PLAN_TOPOLOGY,
                 Some(drawn) if drawn.joined => SPACE_OUTLINE_AREA_BOUNDARY_JOINED,
                 Some(_) => SPACE_OUTLINE_AREA_BOUNDARY,
                 None => SPACE_OUTLINE_NONE,
@@ -4042,7 +4050,8 @@ pub(super) fn contain_in_spaces(entities: &mut Vec<entities::IfcEntity>) {
                 p.name == SPACE_OUTLINE_SOURCE_PROPERTY
                     && matches!(&p.value, PropertyValue::Text(source)
                         if source == SPACE_OUTLINE_AREA_BOUNDARY
-                            || source == SPACE_OUTLINE_AREA_BOUNDARY_JOINED)
+                            || source == SPACE_OUTLINE_AREA_BOUNDARY_JOINED
+                            || source == SPACE_OUTLINE_AREA_PLAN_TOPOLOGY)
             })
         })
     };
@@ -4420,6 +4429,14 @@ pub const SPACE_OUTLINE_AREA_BOUNDARY: &str = "area_boundary";
 /// 2021's exporter whose string ends "IU alternativa 21.0.0.383" (publisher not
 /// established), showing the project's 2015 to 2020 state.
 pub const SPACE_OUTLINE_AREA_BOUNDARY_JOINED: &str = "area_boundary_joined";
+
+/// [`SPACE_OUTLINE_SOURCE_PROPERTY`] of an Area drawn as the loop of Revit's
+/// own plan topology: its area boundary lines moved by their area rule's
+/// offsets and arcs drawn, checked against the area Revit saves for the loop
+/// and against the Area's point (RE-333). Where the plan topology is read it
+/// comes before the lines' arrangement, so on a file it reads every Area says
+/// this.
+pub const SPACE_OUTLINE_AREA_PLAN_TOPOLOGY: &str = "area_plan_topology";
 
 /// `BodyHeightSource` of an Area's body: from its Level up to the Level above
 /// it, when both are building stories (RE-317).

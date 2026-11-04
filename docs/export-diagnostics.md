@@ -264,7 +264,7 @@ minor release; incompatible changes must increment this number.
 | `exported` | object | IFC model entity counts, geometry count, materials, units, storeys. |
 | `skipped` | array | Suppressed items, grouped by reason and class. |
 | `unsupported_features` | array | Known exporter gaps that affected this output. |
-| `warnings` | array | User-facing caveats for this specific export. |
+| `warnings` | array | User-facing caveats for this specific export. On a Revit 2024 or later file that holds an Area or an area boundary line, one says how many declared chain records have an entry block that does not read (it does not fit the record, or an entry's second word is not -1): the Area reader does not see them, an Area among them with it (RE-333). It is absent from a file with neither. |
 | `confidence` | object | Coarse export-readiness level and booleans for metadata/elements/geometry. |
 | `source_coverage` | object (optional) | Measured coverage from export/decode counts. `status` is `measured` when at least one fraction has a trustworthy denominator; otherwise `unset` with null fractions. Never invents ratios. |
 | `formats_latest_integrity` | object (optional) | `Formats/Latest` page-boundary integrity under the narrow gate of #151 (the page strip stays **disabled**). Multipage streams report `integrity_status: uncertain` and `diagnostic_code: RVT_FORMATS_MULTIPAGE_UNVERIFIED` without claiming completeness. `schema_scan_truncated` / `schema_scanned_bytes` report whether schema parsing stopped at the 65536-byte scan limit — a "we stopped looking" signal, not a claim about the unscanned tail. |
