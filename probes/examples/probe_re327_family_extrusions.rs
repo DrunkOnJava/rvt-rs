@@ -567,10 +567,21 @@ fn judge(
         }
         let mut built: Vec<(&str, ExtrusionSolid)> = Vec::new();
         let mut refusals: Vec<(&str, String)> = Vec::new();
+        match extrusion.default_solid() {
+            Ok(solid) => built.push(("default", solid)),
+            Err(reason) => refusals.push(("default", reason)),
+        }
         for (name, convention) in variants {
             match extrusion.solid(convention) {
                 Ok(solid) => built.push((name, solid)),
                 Err(reason) => refusals.push((name, reason)),
+            }
+        }
+        if !built.is_empty() {
+            if let Some((_, reason)) = refusals.iter().find(|(name, _)| *name == "default") {
+                println!("unbuilt {label} {id} void {} {reason}", extrusion.cutting);
+                bump(tally, format!("unbuilt: {reason}"));
+                continue;
             }
         }
         for (name, reason) in &refusals {
@@ -725,8 +736,10 @@ fn judge(
                 .map_or("-", |(class, _)| class.as_str()),
             flag(extrusion.plane_ref.as_ref().and_then(|(_, m)| *m)),
         );
-        let default_ok = verdict_of("columns").unwrap_or(false);
-        if matching.is_empty() {
+        let default_ok =
+            verdict_of("default").unwrap_or_else(|| verdict_of("columns").unwrap_or(false));
+        let matched = verdict_of("default").unwrap_or(!matching.is_empty());
+        if !matched {
             bump(tally, format!("DIFFER, {key}"));
             if extrusion.cutting {
                 bump(tally, format!("DIFFER void, {key}"));
@@ -752,7 +765,7 @@ fn judge(
         if !default_ok && !matching.is_empty() {
             bump(tally, "matches under another convention only");
         }
-        if *lines < FORM_LINES || matching.is_empty() {
+        if *lines < FORM_LINES || !matched {
             println!(
                 "{head} mesh {} primitives {} complete {} volume {:.6} best {} {} matching {}",
                 mesh.triangles.len(),
@@ -761,10 +774,10 @@ fn judge(
                 mesh.volume,
                 best.0,
                 best.1.text(),
-                if matching.is_empty() {
-                    "DIFFER".to_string()
-                } else {
+                if matched {
                     matching.join("+")
+                } else {
+                    "DIFFER".to_string()
                 }
             );
         }

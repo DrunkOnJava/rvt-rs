@@ -1058,12 +1058,12 @@ the sketch's `CurveElem` lines and arcs (in the family's coordinates), chained
 into loops, placed in the `SketchPlane`'s frame and swept between the
 extrusion's two `Double` parameters. Against the mesh Revit saved for each
 form, the 24 extrusions of the family corpus (12 releases) match within
-0.001 ft and so do 6,093 of the 6,172 extrusions of Autodesk's 58 sample
-projects (Revit 2015 to 2027) whose saved mesh decodes whole; the other 79,
-a down-facing plane that is not flipped and whose extrusion sets no
-`m_alwaysRefPlaneNorm`, have the solid on the wrong side of the plane and are
-refused. Ellipses (137), four open sketches (66), sweeps, revolutions,
-blends and voids are not drawn. The 2014 family of Discussion #112 is outside
+0.001 ft and so do all 6,172 extrusions of Autodesk's 58 sample projects
+(Revit 2015 to 2027) whose saved mesh decodes whole: 6,093 with the sketch
+plane's normal as its matrix gives it, and 79, a down-facing plane that is
+not flipped and whose extrusion reads `m_alwaysRefPlaneNorm` false, with the
+normal reversed (a rule found on those 79). Ellipses (137 forms), two open
+sketches (26), sweeps, revolutions, blends and voids' cuts are not drawn. The 2014 family of Discussion #112 is outside
 the native releases, so its 85 of 86 is not reproduced. `rvt-ifc
 --family-extrusions` (opt-in; the default export is unchanged) draws an
 instance from its family's extrusions where they reproduce its saved mesh;

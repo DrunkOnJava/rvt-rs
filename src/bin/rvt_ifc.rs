@@ -93,8 +93,9 @@ struct Args {
     /// Draw a family instance from its family's own extrusions (the sketch
     /// curves they were drawn from, swept between their offsets, with true
     /// arcs) instead of its saved mesh, where they reproduce the mesh; every
-    /// other instance keeps it (#156). Implies `--saved-meshes`. Revit 2023
-    /// to 2027 files. Slower on large files.
+    /// other instance keeps it (#156). Off by default. Implies
+    /// `--saved-meshes`. Each instance is checked against its own mesh. Revit
+    /// 2023 to 2027 files. Slower on large files.
     #[arg(long, conflicts_with_all = ["placeholder", "no_saved_meshes"])]
     family_extrusions: bool,
     /// Also write Revit's own property sets, as Revit's exporter does with
@@ -269,12 +270,18 @@ fn run(args: Args) -> anyhow::Result<()> {
             Ok(report) => {
                 rvt::ifc::recount_exported(&mut diagnostics, &model);
                 eprintln!(
-                    "rvt-ifc: {} of {} saved-mesh bodies drawn from their family's extrusions ({} families found, {} rebuilt; {} instances of a rebuilt family kept their mesh, which the extrusions did not reproduce)",
+                    "rvt-ifc: {} of {} saved-mesh bodies drawn from their family's extrusions ({} families found, {} rebuilt; {} had no rebuilt family, {} no instance transform, {} a mesh too large to compare; the extrusions did not reproduce the mesh of {} by volume, {} by vertices and {} by surface; {} left alone for sharing a Tag)",
                     report.replaced,
                     report.candidates,
                     report.families,
                     report.families_rebuilt,
-                    report.kept
+                    report.not_rebuilt,
+                    report.unplaced,
+                    report.unchecked,
+                    report.volume_differs,
+                    report.vertices_differ,
+                    report.surface_differs,
+                    report.ambiguous
                 );
             }
             Err(e) => eprintln!("rvt-ifc: family extrusions not read, bodies unchanged: {e:#}"),

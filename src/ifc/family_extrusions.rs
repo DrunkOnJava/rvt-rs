@@ -10,26 +10,35 @@
 //!
 //! An instance keeps its saved mesh unless the extrusions reproduce it. The
 //! family's document holds the family as saved, and a placed instance is
-//! drawn at its type's values, so each instance is checked on its own: every
-//! vertex of its mesh must lie on the extrusions' surfaces, samples of their
-//! surfaces must lie on its mesh, and the volumes must agree within 1% and
-//! the chord loss of the mesh's arcs. A family with a void, a hidden form it
-//! cannot read, a form that is not an extrusion or a profile the reader does
-//! not draw (an ellipse, a sketch whose curves do not close) draws nothing,
-//! and neither does an instance whose mesh the extrusions do not reproduce:
-//! the instance keeps the body it has.
+//! drawn at its type's values, so each instance is checked on its own, with
+//! no verdict shared between instances of a family: every vertex of its mesh
+//! must lie on the extrusions' surfaces, samples of their surfaces must lie
+//! on its mesh, and the volumes must agree within 1% and the chord loss of
+//! the mesh's arcs. A family with a void, a hidden form it cannot read, a form
+//! that is not an extrusion or a profile the reader does not draw (an
+//! ellipse, a sketch whose curves do not close) draws nothing, and neither
+//! does an instance whose mesh the extrusions do not reproduce: the instance
+//! keeps the body it has.
 //!
-//! The extrusions are placed as the family document gives them, which is the
-//! instance's own frame when its transform is a rotation about the vertical
-//! axis and a translation; an instance placed any other way fails the check
-//! and keeps its mesh.
+//! The extrusions are placed by the instance's transform (RE-87, in the
+//! family's coordinates to the model's), then into the element's frame as
+//! [`super::saved_meshes::attach`] puts the mesh there: the mesh's vertices
+//! are the model's less the element's location, turned by minus its rotation
+//! about the vertical axis, so the two are in one frame whatever the
+//! transform. An instance without a transform that reads, or with one that is
+//! not a rotation or a reflection, keeps its mesh; a tilted or turned
+//! instance whose transform is read is placed by it and checked like any
+//! other.
 
 use super::IfcModel;
 use super::entities::{
     CurveSegment, IfcEntity, IndexedCurve, ProfileDef, PropertyValue, SolidShape,
 };
 use super::saved_meshes::SAVED_MESH_BODY_SOURCE;
-use crate::native_form_geometry::{Curve, ExtrusionSolid, FormDocument, Loop, mesh_agreement};
+use crate::native_form_geometry::{
+    Curve, ExtrusionSolid, FormDocument, Frame, Loop, mesh_agreement,
+};
+use crate::partition_instance_transforms::{InstanceTransform, scan_instance_transforms};
 use crate::{native_document, native_family_forms};
 use std::collections::{BTreeMap, BTreeSet};
 use std::f64::consts::PI;
@@ -38,28 +47,46 @@ use std::f64::consts::PI;
 pub const FAMILY_EXTRUSION_BODY_SOURCE: &str = "family_extrusions";
 
 /// How far a vertex of an instance's mesh may lie from the extrusions' surface
-/// for the extrusions to replace it, feet. Every vertex of the 6,093 matching
-/// extrusions of Autodesk's sample projects lies within 1e-6 ft.
+/// for the extrusions to replace it, feet. Every vertex of the 6,172
+/// extrusions of Autodesk's sample projects that have a complete mesh lies
+/// within 1e-6 ft of the rebuilt surface.
 const VERTEX_TOLERANCE: f64 = 5e-4;
 /// How far a sampled point of the extrusions' surface may lie from the mesh,
 /// feet: the 0.001 ft chords the mesh draws arcs with, and half again.
 const SURFACE_TOLERANCE: f64 = 1.5e-3;
 
-/// What [`attach`] did.
+/// What [`attach`] did. Every instance drawn from a saved mesh is counted
+/// once: `candidates = replaced + not_rebuilt + unplaced + unchecked +
+/// volume_differs + vertices_differ + surface_differs + unwritable`.
 #[derive(Debug, Default, Clone, PartialEq, Eq, serde::Serialize)]
 #[non_exhaustive]
 pub struct FamilyExtrusionReport {
-    /// Instances drawn from a saved mesh.
+    /// Instances drawn from a saved mesh and alone in their Tag.
     pub candidates: usize,
-    /// The families of those instances whose document was found.
+    /// Instances left alone because another entity carries their Tag.
+    pub ambiguous: usize,
+    /// The families of the candidates whose document was found.
     pub families: usize,
     /// Of those, families all of whose extrusions rebuilt, with no void.
     pub families_rebuilt: usize,
     /// Candidates now drawn from their family's extrusions.
     pub replaced: usize,
-    /// Candidates of a rebuilt family whose mesh the extrusions did not
-    /// reproduce, which keep it.
-    pub kept: usize,
+    /// Candidates whose family was not found or not rebuilt.
+    pub not_rebuilt: usize,
+    /// Candidates of a rebuilt family with no instance transform that reads,
+    /// or one that is not a rotation or a reflection.
+    pub unplaced: usize,
+    /// Candidates whose mesh is too large to compare or indexes outside its
+    /// vertices.
+    pub unchecked: usize,
+    /// Candidates whose mesh the extrusions do not reproduce, by the first
+    /// thing that differs: the volume, a vertex, a sampled point of the
+    /// extrusions' surface.
+    pub volume_differs: usize,
+    pub vertices_differ: usize,
+    pub surface_differs: usize,
+    /// Candidates the extrusions reproduce whose profile cannot be written.
+    pub unwritable: usize,
 }
 
 fn cross(a: [f64; 3], b: [f64; 3]) -> [f64; 3] {
@@ -121,6 +148,44 @@ fn family_parts(document: &FormDocument) -> Option<Vec<ExtrusionSolid>> {
         parts.push(extrusion.default_solid().ok()?);
     }
     (!parts.is_empty()).then_some(parts)
+}
+
+/// `solid`, a solid in a family's coordinates, in the frame of an element
+/// whose instance transform is `transform` and which
+/// [`super::saved_meshes::attach`] places at `location`, turned about the
+/// vertical axis by `rotation`. `None` where the frame is no longer
+/// orthonormal.
+fn to_element_frame(
+    solid: &ExtrusionSolid,
+    transform: &InstanceTransform,
+    location: [f64; 3],
+    rotation: f64,
+) -> Option<ExtrusionSolid> {
+    let (sin, cos) = (-rotation).sin_cos();
+    let turn = |v: [f64; 3]| [v[0] * cos - v[1] * sin, v[0] * sin + v[1] * cos, v[2]];
+    let carry = |v: [f64; 3]| {
+        [0usize, 1, 2].map(|i| (0..3).map(|j| transform.axes[j][i] * v[j]).sum::<f64>())
+    };
+    let moved = carry(solid.frame.origin);
+    let world = [
+        transform.origin[0] + moved[0] - location[0],
+        transform.origin[1] + moved[1] - location[1],
+        transform.origin[2] + moved[2] - location[2],
+    ];
+    let axes = solid.frame.axes.map(|axis| turn(carry(axis)));
+    let unit = axes.iter().all(|a| (dot(*a, *a) - 1.0).abs() < 1e-6);
+    let square = dot(axes[0], axes[1]).abs() < 1e-6
+        && dot(axes[0], axes[2]).abs() < 1e-6
+        && dot(axes[1], axes[2]).abs() < 1e-6;
+    (unit && square).then(|| ExtrusionSolid {
+        profile: solid.profile.clone(),
+        frame: Frame {
+            origin: turn(world),
+            axes,
+        },
+        low: solid.low,
+        high: solid.high,
+    })
 }
 
 /// One closed `IfcIndexedPolyCurve` over a loop of a profile, in the plane
@@ -209,7 +274,7 @@ fn placed_extrusions(solid: &ExtrusionSolid) -> Option<Vec<SolidShape>> {
         let outer = indexed_curve(outline, true, handed)?;
         let mut voids = Vec::new();
         for (j, hole) in profile.loops.iter().enumerate() {
-            if profile.depths[j] % 2 == 1 && parents[j] == Some(i) {
+            if profile.depths[j] & 1 == 1 && parents[j] == Some(i) {
                 voids.push(indexed_curve(hole, false, handed)?);
             }
         }
@@ -262,7 +327,6 @@ pub fn attach(
         if !from_mesh {
             continue;
         }
-        report.candidates += 1;
         if by_id.insert(id, index).is_some() {
             ambiguous.insert(id);
         }
@@ -270,6 +334,8 @@ pub fn attach(
     for id in &ambiguous {
         by_id.remove(id);
     }
+    report.candidates = by_id.len();
+    report.ambiguous = ambiguous.len();
     if by_id.is_empty() {
         return Ok(report);
     }
@@ -303,15 +369,31 @@ pub fn attach(
     }
     report.families_rebuilt = parts.len();
 
+    let release = rf.basic_file_info()?.version;
+    let wanted: BTreeSet<u32> = by_id
+        .iter()
+        .filter(|(id, _)| {
+            symbol_of
+                .get(id)
+                .and_then(|symbol| family_of_symbol.get(symbol))
+                .is_some_and(|family| parts.contains_key(family))
+        })
+        .filter_map(|(id, _)| u32::try_from(*id).ok())
+        .collect();
+    let transforms = scan_instance_transforms(rf, release, &wanted)?;
+
     for (id, index) in &by_id {
         let Some(solids) = symbol_of
             .get(id)
             .and_then(|symbol| family_of_symbol.get(symbol))
             .and_then(|family| parts.get(family))
         else {
+            report.not_rebuilt += 1;
             continue;
         };
         let IfcEntity::BuildingElement {
+            location_feet: Some(location),
+            rotation_radians,
             solid_shape:
                 Some(SolidShape::TriangulatedFaceSet {
                     vertices_feet,
@@ -320,17 +402,43 @@ pub fn attach(
             ..
         } = &model.entities[*index]
         else {
+            report.unplaced += 1;
+            continue;
+        };
+        let rotation = rotation_radians.unwrap_or(0.0);
+        let local: Option<Vec<ExtrusionSolid>> = u32::try_from(*id)
+            .ok()
+            .and_then(|key| transforms.get(&key))
+            .and_then(|transform| {
+                solids
+                    .iter()
+                    .map(|solid| to_element_frame(solid, transform, *location, rotation))
+                    .collect()
+            });
+        let Some(local) = local else {
+            report.unplaced += 1;
             continue;
         };
         let corners: Vec<[u32; 3]> = triangles.iter().map(|t| [t.0, t.1, t.2]).collect();
-        let reproduced = mesh_agreement(solids, vertices_feet, &corners).is_some_and(|a| {
-            a.volume_agrees()
-                && a.vertex_max <= VERTEX_TOLERANCE
-                && a.surface_max <= SURFACE_TOLERANCE
-        });
-        let placed: Option<Vec<Vec<SolidShape>>> = solids.iter().map(placed_extrusions).collect();
-        let (true, Some(placed)) = (reproduced, placed) else {
-            report.kept += 1;
+        let Some(agreement) = mesh_agreement(&local, vertices_feet, &corners) else {
+            report.unchecked += 1;
+            continue;
+        };
+        if !agreement.volume_agrees() {
+            report.volume_differs += 1;
+            continue;
+        }
+        if agreement.vertex_max > VERTEX_TOLERANCE {
+            report.vertices_differ += 1;
+            continue;
+        }
+        if agreement.surface_max > SURFACE_TOLERANCE {
+            report.surface_differs += 1;
+            continue;
+        }
+        let placed: Option<Vec<Vec<SolidShape>>> = local.iter().map(placed_extrusions).collect();
+        let Some(placed) = placed else {
+            report.unwritable += 1;
             continue;
         };
         let IfcEntity::BuildingElement {

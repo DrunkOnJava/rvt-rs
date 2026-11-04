@@ -57,6 +57,9 @@ const MESH_PAIR_BUDGET: usize = 2_000_000;
 /// The sagitta of the chords Revit's saved meshes tessellate arcs with, feet.
 const SAGITTA: f64 = 0.001;
 const MAX_LOOPS: usize = 256;
+/// The most curves a sketch may have to be chained: the chaining compares
+/// every open end with every unused curve.
+const MAX_CURVES: usize = 4_096;
 const MAX_POLYGON_VERTICES: usize = 20_000;
 /// The angle an arc is drawn as a chord of when a polygon is needed.
 const ARC_STEP: f64 = PI / 32.0;
@@ -577,6 +580,9 @@ impl Loop {
 /// close, or where more than one curve could continue it (a branching
 /// sketch is not a profile).
 pub fn assemble_loops(curves: &[Curve]) -> Result<Vec<Loop>, String> {
+    if curves.len() > MAX_CURVES {
+        return Err("too many curves".into());
+    }
     let mut used = vec![false; curves.len()];
     let mut loops = Vec::new();
     for (first, seed) in curves.iter().enumerate() {
@@ -989,51 +995,35 @@ impl Convention {
     };
 }
 
-/// What the reader does with a down-facing sketch plane that is not flipped
-/// and whose extrusion does not set `m_alwaysRefPlaneNorm`
-/// ([`Extrusion::down_facing_unreferenced`]): every one of the 79 forms of
-/// the sample projects that read the normal as the matrix's third column put
-/// the solid on the other side of the plane from the saved mesh.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum DownFacing {
-    /// Refuse the form.
-    Refuse,
-    /// Put the solid on the other side of the plane.
-    Reverse,
-}
-
-/// The reader's reading of [`DownFacing`] forms.
-pub const DOWN_FACING: DownFacing = DownFacing::Refuse;
-
 impl Extrusion {
-    /// Whether the sketch plane's matrix has its third column pointing down
-    /// (-z), the plane is not flipped and the extrusion does not set
-    /// `m_alwaysRefPlaneNorm`: the signature of the 79 forms (of 6,172 with a
-    /// complete saved mesh) whose solids the matrix's normal puts on the
-    /// wrong side of the plane. Down-facing planes that are flipped, or
-    /// whose extrusion sets `m_alwaysRefPlaneNorm`, match as read.
+    /// Whether the sketch plane's matrix has its third column pointing
+    /// exactly down (-z, within 0.001), the plane is not flipped and the
+    /// extrusion's `m_alwaysRefPlaneNorm` reads false: the 79 forms (of the
+    /// 6,172 with a complete saved mesh in Autodesk's sample projects) whose
+    /// solids the matrix's normal puts on the wrong side of the plane, and
+    /// no other form. [`Extrusion::default_solid`] reverses their normal. A
+    /// plane tilted off -z is not tested here: it is read as the matrix
+    /// gives it, and an export checks the solid against the saved mesh.
     pub fn down_facing_unreferenced(&self) -> bool {
         self.matrix[2][2] < -0.999
             && !self.plane_flipped
             && self.always_ref_plane_norm == Some(false)
     }
 
-    /// The solid between the two offsets, read as [`Convention::COLUMNS`] and
-    /// [`DOWN_FACING`] say. Errs as [`Extrusion::solid`] does, and for a
-    /// down-facing plane when [`DOWN_FACING`] refuses it.
+    /// The solid between the two offsets, read as [`Convention::COLUMNS`]
+    /// with the normal reversed where [`Extrusion::down_facing_unreferenced`].
+    /// Errs as [`Extrusion::solid`] does, and for a down-facing plane that is
+    /// not flipped whose `m_alwaysRefPlaneNorm` is not read: the rule is
+    /// measured on the field's values, not on its absence.
     pub fn default_solid(&self) -> Result<ExtrusionSolid, String> {
-        if self.down_facing_unreferenced() {
-            return match DOWN_FACING {
-                DownFacing::Refuse => {
-                    Err("down-facing sketch plane with no reference normal".into())
-                }
-                DownFacing::Reverse => self.solid(Convention {
-                    reverse_normal: true,
-                    ..Convention::COLUMNS
-                }),
-            };
+        if self.matrix[2][2] < -0.999 && !self.plane_flipped && self.always_ref_plane_norm.is_none()
+        {
+            return Err("down-facing sketch plane whose m_alwaysRefPlaneNorm is not read".into());
         }
-        self.solid(Convention::COLUMNS)
+        self.solid(Convention {
+            reverse_normal: self.down_facing_unreferenced(),
+            ..Convention::COLUMNS
+        })
     }
 
     /// The solid between the two offsets, the sketch's curves placed in the
@@ -1387,7 +1377,7 @@ impl FormDocument {
             .first()
             .and_then(|object| object.fields.get("m_flipZ"))
             .and_then(Value::as_bool)
-            .unwrap_or(false);
+            .ok_or("sketch plane flip not read")?;
         Ok(Extrusion {
             id,
             cutting,

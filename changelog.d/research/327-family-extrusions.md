@@ -6,12 +6,14 @@
   reversing the normal) and swept between the extrusion's two `Double`
   parameters (-1001800 and -1001801), they reproduce the mesh Revit saved
   for the form: the 24 extrusions of the family corpus (2 on each of 12
-  releases, 2016 to 2027) within 0.001 ft, and 6,093 of the 6,172
-  extrusions of Autodesk's 58 sample projects (Revit 2015 to 2027) whose
-  saved mesh decodes whole, by volume (1%), bounding box, vertices and
-  surface (0.01 ft). The other 79 share one signature (a down-facing plane,
-  not flipped, whose extrusion sets no `m_alwaysRefPlaneNorm`), the solid
-  on the wrong side of the plane, and the reader refuses them.
+  releases, 2016 to 2027) within 0.001 ft, and all 6,172 extrusions of
+  Autodesk's 58 sample projects (Revit 2015 to 2027) whose saved mesh decodes
+  whole, by volume (1%), bounding box, vertices and surface (0.01 ft). 6,093
+  match with the plane's normal as its matrix gives it; the other 79 share
+  one signature (a down-facing plane, not flipped, whose extrusion reads
+  `m_alwaysRefPlaneNorm` false) and match with the normal reversed, which
+  the reader does for that signature only and refuses where the field is not
+  read; the rule was found on these 79 and is not held out.
   `native_document` refuses every family file, so the new
   `native_form_geometry` reads a family file's own groups; `VarSketch` is
   refused on 2015 to 2017 (`VarParam::m_pSubst`, RE-323) and the rebuild
