@@ -62,8 +62,10 @@ the held-out models and the family files (Measure run 41803457521, `main` at
 
 The run compares `main`, whose export header still named 0.13.0: 46 of the
 111 exports are byte for byte 0.13.0's and 65 moved, and the figures above
-are the scorers' on those. This release's own exports name 0.14.0, so every
-one differs from 0.13.0's there.
+are the scorers' on those. A run of this release's own head, with #1339's
+phase fix, against v0.13.0 (Measure run 41810374671) gives the same scores
+line for line; there all 111 exports differ from 0.13.0's, since their
+header names 0.14.0.
 
 Not measured by this run, and said in each entry:
 - the stepped wall tops, which no default scorer reads (the entry's figures
