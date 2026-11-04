@@ -18,7 +18,9 @@ Revit writes, how many rvt-rs writes, and of those in both how many agree on
 the box (within 0.01 ft), the GlobalId, the Name, the PredefinedType, the
 `Reference` of `Pset_OpeningElementCommon` and
 `Pset_EnvironmentalImpactIndicators`, and the `Depth` quantity; then the
-openings rvt-rs writes that Revit's export does not, by kind.
+openings rvt-rs writes that Revit's export does not, by kind, apart from those
+that a sibling file's export (another Revit export in the same directory with
+the same first four name words) holds, which are counted on their own line.
 
 Usage:
 
@@ -43,7 +45,22 @@ from ifc_common import site_frame  # noqa: E402
 BOX_TOLERANCE_FEET = 0.01
 
 
-def unfilled(path):
+def siblings(path):
+    """The other Revit exports in path's directory whose names agree with its in
+    the first four words (`ARK_NordicLCA_Office_Concrete_`): the same building
+    saved in another state, as the BIM4LCA office as built and at permit."""
+    directory, name = os.path.split(os.path.abspath(path))
+    head = name.split("_")[:4]
+    if len(head) < 4 or not os.path.isdir(directory):
+        return []
+    return sorted(
+        os.path.join(directory, other)
+        for other in os.listdir(directory)
+        if other != name and other.endswith(".ifc") and other.split("_")[:4] == head
+    )
+
+
+def unfilled(path, boxes=True):
     """(Tag, host Tag) -> the opening's facts, for every opening nothing fills."""
     f = ifcopenshell.open(path)
     frame = site_frame(f)
@@ -62,6 +79,8 @@ def unfilled(path):
             continue
         box = None
         try:
+            if not boxes:
+                raise ValueError("no box wanted")
             shape = ifcopenshell.geom.create_shape(settings, opening)
             verts = np.array(shape.geometry.verts, dtype=float).reshape(-1, 3)
             if len(verts):
@@ -134,16 +153,30 @@ def main(argv):
         print(f"{kind}:")
         for label, count in row.items():
             print(f"  {label}: {count}")
+    # An opening rvt-rs writes that Revit's export of this file does not, but
+    # its export of a sibling file (the same building in another state) does,
+    # is counted apart: the two files' records for it can be the same where
+    # the exports are not (RE-321 section 4, the maintainer's decision of
+    # 2026-11-03, as RE-253 for a held-out wall).
+    sibling_keys = {}
+    for other in siblings(args[1]):
+        for key in unfilled(other, boxes=False):
+            sibling_keys.setdefault(key, os.path.basename(other))
+    missing = {key: mine for key, mine in ours.items() if key not in revit}
+    apart = {key: mine for key, mine in missing.items() if key in sibling_keys}
     extra = collections.Counter(
-        f"{mine['cutter']} in {mine['host']}" for key, mine in ours.items() if key not in revit
+        f"{mine['cutter']} in {mine['host']}" for key, mine in missing.items() if key not in apart
     )
     print(f"written that Revit's export does not: {sum(extra.values())}")
     for kind, count in sorted(extra.items()):
         print(f"  {kind}: {count}")
+    print(f"written that Revit's export does not but its export of a sibling file does, counted apart: {len(apart)}")
+    for key, mine in sorted(apart.items()):
+        print(f"  {mine['cutter']} in {mine['host']}, Tag {key[0]} in {key[1]}: {sibling_keys[key]}")
     for diff, key, kind in sorted(worst, reverse=True)[:60]:
         print(f"  box differs by {diff:.3f} ft: {kind}, Tag {key[0]} in {key[1]}")
-    for key, mine in sorted(ours.items()):
-        if key not in revit:
+    for key, mine in sorted(missing.items()):
+        if key not in apart:
             print(f"  extra: {mine['cutter']} in {mine['host']}, Tag {key[0]} in {key[1]}")
     return 0
 
