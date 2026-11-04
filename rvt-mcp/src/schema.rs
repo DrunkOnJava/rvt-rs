@@ -98,7 +98,7 @@ pub struct ElementProvenance {
     /// (the area of its box, not of the room), `stored_solid`,
     /// `stored_solid_faces`, `stored_solid_approximate`, `saved_mesh`,
     /// `family_body`, and for an Area `area_boundary`,
-    /// `area_boundary_joined` or `none`.
+    /// `area_boundary_joined`, `area_boundary_wall_line` or `none`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub space_outline_source: Option<String>,
     /// For an Area with no body, why it has none.
@@ -405,7 +405,8 @@ pub struct RoomOut {
     pub level_elevation_feet: Option<f64>,
     /// The plan area of the room's outline, where the outline is one read
     /// exactly (`space_outline_source` is `stored_solid`, `stored_solid_faces`
-    /// or, for an Area, `area_boundary` or `area_boundary_joined`). Absent for
+    /// or, for an Area, `area_boundary`, `area_boundary_joined` or
+    /// `area_boundary_wall_line`). Absent for
     /// `record_box`, where the area of a box is not the area of a room, and for
     /// `stored_solid_approximate`.
     #[serde(skip_serializing_if = "Option::is_none")]

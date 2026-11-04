@@ -286,6 +286,9 @@ struct AreaDrawn {
     /// Whether its outline needed a line carried on past its record or a
     /// connector (RE-330).
     joined: bool,
+    /// Whether its outline runs along the centre path of a line picked from a
+    /// wall, where no wall face can move the line (RE-332).
+    wall_line: bool,
 }
 
 /// The body an Area's decoded fields hold: the profile its boundary lines
@@ -321,6 +324,10 @@ fn area_body_from_decoded(decoded: &DecodedElement) -> Option<AreaDrawn> {
         field == crate::partition_area_records::AREA_JOINED_FIELD
             && matches!(value, InstanceField::Bool(true))
     });
+    let wall_line = decoded.fields.iter().any(|(field, value)| {
+        field == crate::partition_area_records::AREA_WALL_LINE_FIELD
+            && matches!(value, InstanceField::Bool(true))
+    });
     let bounds = profile.plan_bounds_feet()?;
     let centre = ((bounds[0] + bounds[2]) / 2.0, (bounds[1] + bounds[3]) / 2.0);
     let relative = |ring: &[(f64, f64)]| -> Vec<(f64, f64)> {
@@ -345,6 +352,7 @@ fn area_body_from_decoded(decoded: &DecodedElement) -> Option<AreaDrawn> {
         },
         profile,
         joined,
+        wall_line,
     })
 }
 
@@ -464,6 +472,7 @@ fn area_property_set(decoded: &DecodedElement, drawn: Option<&AreaDrawn>) -> Pro
         name: SPACE_OUTLINE_SOURCE_PROPERTY.into(),
         value: PropertyValue::Text(
             match drawn {
+                Some(drawn) if drawn.wall_line => SPACE_OUTLINE_AREA_BOUNDARY_WALL_LINE,
                 Some(drawn) if drawn.joined => SPACE_OUTLINE_AREA_BOUNDARY_JOINED,
                 Some(_) => SPACE_OUTLINE_AREA_BOUNDARY,
                 None => SPACE_OUTLINE_NONE,
@@ -4042,7 +4051,8 @@ pub(super) fn contain_in_spaces(entities: &mut Vec<entities::IfcEntity>) {
                 p.name == SPACE_OUTLINE_SOURCE_PROPERTY
                     && matches!(&p.value, PropertyValue::Text(source)
                         if source == SPACE_OUTLINE_AREA_BOUNDARY
-                            || source == SPACE_OUTLINE_AREA_BOUNDARY_JOINED)
+                            || source == SPACE_OUTLINE_AREA_BOUNDARY_JOINED
+                            || source == SPACE_OUTLINE_AREA_BOUNDARY_WALL_LINE)
             })
         })
     };
@@ -4420,6 +4430,17 @@ pub const SPACE_OUTLINE_AREA_BOUNDARY: &str = "area_boundary";
 /// 2021's exporter whose string ends "IU alternativa 21.0.0.383" (publisher not
 /// established), showing the project's 2015 to 2020 state.
 pub const SPACE_OUTLINE_AREA_BOUNDARY_JOINED: &str = "area_boundary_joined";
+
+/// [`SPACE_OUTLINE_SOURCE_PROPERTY`] of an Area drawn as
+/// [`SPACE_OUTLINE_AREA_BOUNDARY`] is, whose outline runs along the centre
+/// path of a boundary line picked from a wall, on a stretch more than a wall
+/// thickness beyond the wall's ends, where no wall face can move the line
+/// (RE-332). Revit draws such a line on the wall's face for one stretch and on
+/// its centre line for another, and its record keeps only the union. The only
+/// external check of those Areas is the IFC2X3 export of Autodesk's
+/// `rac_advanced` project that [`SPACE_OUTLINE_AREA_BOUNDARY_JOINED`] names:
+/// one project, and the rule was read off that export.
+pub const SPACE_OUTLINE_AREA_BOUNDARY_WALL_LINE: &str = "area_boundary_wall_line";
 
 /// `BodyHeightSource` of an Area's body: from its Level up to the Level above
 /// it, when both are building stories (RE-317).

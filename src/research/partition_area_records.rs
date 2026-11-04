@@ -74,8 +74,15 @@
 //! - The base offset of the Area is read as zero, which is what the office
 //!   measures.
 //! - An Area whose lines do not close, even with their joins, is not read: its
-//!   point lies in no region. No Revit export of an Area bounded by a wall is
-//!   measured.
+//!   point lies in no region. Revit's export draws the lines picked from a wall
+//!   on the wall's centre line (interior walls) or on its outer face (exterior
+//!   walls), and the record box says which; one that it draws on the face for
+//!   one stretch and on the centre line for another has a box from the centre
+//!   line to a face, half the wall's thickness across (RE-332). It is read as
+//!   its centre line, and an Area whose outline runs along it is drawn only on
+//!   stretches more than a wall thickness beyond the host wall's ends, where no
+//!   wall face can move it, and says `wall_line_position_not_proven` otherwise.
+//!   Its only external check is the IFC2X3 export of RE-330, one project.
 //! - Revit 2024 and 2015 to 2023 (RE-324) are read; elsewhere nothing is read
 //!   (fail closed).
 //!
@@ -109,12 +116,12 @@
 use crate::RevitFile;
 use crate::element_record_plan_profiles::{PLAN_PROFILE_SOURCE_FIELD, PlanProfile};
 use crate::le_bytes;
-use crate::partition_area_boundaries::{AreaFace, Arrangement, BoundaryLine};
+use crate::partition_area_boundaries::{AreaFace, Arrangement, BoundaryLine, NODE_TOLERANCE_FEET};
 use crate::partition_design_options::DesignOptions;
 use crate::partition_element_records::{
-    CATEGORY_OFFSET, CLASS_TAG_OFFSET, CONTAINER_NONE, CONTAINER_OFFSET, PLACEMENT_KIND_INSTANCE,
-    PLACEMENT_KIND_OFFSET, PartitionElementRecord, file_bbox_marker, frame_design_option,
-    partition_record_chain, scan_category_records_multi,
+    CATEGORY_OFFSET, CLASS_TAG_OFFSET, CONTAINER_NONE, CONTAINER_OFFSET, OST_WALLS,
+    PLACEMENT_KIND_INSTANCE, PLACEMENT_KIND_OFFSET, PartitionElementRecord, file_bbox_marker,
+    frame_design_option, partition_record_chain, scan_category_records_multi,
 };
 use crate::partition_element_records_2023 as per32;
 use crate::partition_level_records::PartitionLevel;
@@ -188,8 +195,24 @@ pub const AREA_BODY_HEIGHT_FIELD: &str = "m_area_body_height";
 /// carried on past the extent its record gives, or along a connector (RE-330).
 pub const AREA_JOINED_FIELD: &str = "m_area_body_joined";
 
+/// The field of an Area, true where its outline runs along the centre path of a
+/// line picked from a wall, on a stretch where no wall face can move the line
+/// (RE-332).
+pub const AREA_WALL_LINE_FIELD: &str = "m_area_body_wall_line";
+
 /// How far a boundary line's height may lie from its Level's, feet.
 pub const AREA_LEVEL_TOLERANCE_FEET: f64 = 1e-3;
+
+/// How near the edges of a line's record box must lie to its host wall's centre
+/// line, and to half the wall's thickness off it, for the line to be one that
+/// Revit moved off the centre line for part of its length, feet (RE-332).
+pub const WALL_LINE_TOLERANCE_FEET: f64 = 0.006;
+
+/// The thinnest and the widest record box across a line that is read as a
+/// wall-hosted line, feet: half of a wall's thickness (RE-332).
+pub const WALL_LINE_MIN_ACROSS_FEET: f64 = 0.05;
+/// See [`WALL_LINE_MIN_ACROSS_FEET`].
+pub const WALL_LINE_MAX_ACROSS_FEET: f64 = 1.0;
 
 /// How near the box of a line that cannot be read must come to the box of an
 /// Area's region for the Area to be refused, feet (RE-330).
@@ -235,6 +258,10 @@ pub const REFUSED_OFF_REGION: &str = "named_lines_not_on_region";
 /// Another placed Area of the same scheme and Level has the same region,
 /// whether or not that Area is drawn.
 pub const REFUSED_REDUNDANT: &str = "two_areas_one_region";
+/// The Area's outline runs along a line picked from a wall on a stretch where
+/// Revit may have drawn the line on the wall's face or on its centre line, and
+/// nothing proves which (RE-332).
+pub const REFUSED_WALL_LINE: &str = "wall_line_position_not_proven";
 
 /// How the chain records of a file are walked (RE-324).
 #[derive(Debug, Clone, Copy)]
@@ -527,14 +554,184 @@ struct BoundaryLines {
     /// office or of Autodesk's 2024 samples has a design option), so the group
     /// is not read.
     option_groups: BTreeSet<(u32, u32)>,
+    /// The lines picked from a wall whose record box spans from the wall's
+    /// centre line to one of its faces, by ElementId (RE-332).
+    wall_lines: BTreeMap<u32, WallLine>,
 }
 
-/// What an Area's body is: its region, the base and the height.
+/// A line picked from one wall whose record box spans from the wall's centre
+/// line to one of its faces (RE-332).
+///
+/// Revit draws such a line on the wall's face for one stretch and on its centre
+/// line for another, and its record keeps the union of the two. The line's
+/// stored curve is the centre line, over the extent of the box along the wall.
+/// Only the centre line is read, and only the stretches of it more than a wall
+/// thickness beyond the wall's ends are taken as drawn there: where the host
+/// wall has no face to move the line to.
+#[derive(Debug, Clone, PartialEq)]
+struct WallLine {
+    horizontal: bool,
+    /// The wall's centre line across the line, feet.
+    fixed: f64,
+    /// The extent of the line along the wall, feet.
+    low: f64,
+    high: f64,
+    /// The stretches of that extent more than the wall's thickness beyond the
+    /// wall's ends, feet.
+    proven: Vec<(f64, f64)>,
+}
+
+impl WallLine {
+    /// The line read as the centre path: its two ends in plan.
+    fn ends(&self) -> ((f64, f64), (f64, f64)) {
+        if self.horizontal {
+            ((self.low, self.fixed), (self.high, self.fixed))
+        } else {
+            ((self.fixed, self.low), (self.fixed, self.high))
+        }
+    }
+
+    /// What the edge `a` to `b` of an outline takes from this line: `None` where
+    /// it does not run along its centre path, `Some(true)` where it does and the
+    /// stretch it shares with the line is one where no wall face can move the
+    /// line, `Some(false)` where it does and that stretch is not.
+    fn edge_use(&self, a: (f64, f64), b: (f64, f64)) -> Option<bool> {
+        let (across_a, across_b, along_a, along_b) = if self.horizontal {
+            (a.1, b.1, a.0, b.0)
+        } else {
+            (a.0, b.0, a.1, b.1)
+        };
+        if (across_a - self.fixed).abs() > NODE_TOLERANCE_FEET
+            || (across_b - self.fixed).abs() > NODE_TOLERANCE_FEET
+        {
+            return None;
+        }
+        let low = along_a.min(along_b).max(self.low);
+        let high = along_a.max(along_b).min(self.high);
+        if high - low <= NODE_TOLERANCE_FEET {
+            return None;
+        }
+        Some(self.proven.iter().any(|&(from, to)| {
+            low >= from - NODE_TOLERANCE_FEET && high <= to + NODE_TOLERANCE_FEET
+        }))
+    }
+}
+
+/// The line `from` to `to` (its record box's corners) read as a line picked
+/// from `wall` (the wall's record box): its box is half the wall's thickness
+/// across, from the wall's centre line to one of its faces, along the wall's
+/// own axis (RE-332). `None` for every other line.
+fn wall_line(from: (f64, f64), to: (f64, f64), wall: &[f64; 6]) -> Option<WallLine> {
+    let (dx, dy) = ((to.0 - from.0).abs(), (to.1 - from.1).abs());
+    let horizontal = dx > dy;
+    let (across, along_lo, along_hi, across_lo, across_hi) = if horizontal {
+        (
+            dy,
+            from.0.min(to.0),
+            from.0.max(to.0),
+            from.1.min(to.1),
+            from.1.max(to.1),
+        )
+    } else {
+        (
+            dx,
+            from.1.min(to.1),
+            from.1.max(to.1),
+            from.0.min(to.0),
+            from.0.max(to.0),
+        )
+    };
+    if !(WALL_LINE_MIN_ACROSS_FEET..=WALL_LINE_MAX_ACROSS_FEET).contains(&across) {
+        return None;
+    }
+    let (wall_dx, wall_dy) = (wall[3] - wall[0], wall[4] - wall[1]);
+    if (wall_dx > wall_dy) != horizontal {
+        return None;
+    }
+    let thickness = wall_dx.min(wall_dy);
+    let (centre, wall_lo, wall_hi) = if horizontal {
+        ((wall[1] + wall[4]) / 2.0, wall[0], wall[3])
+    } else {
+        ((wall[0] + wall[3]) / 2.0, wall[1], wall[4])
+    };
+    let on_centre = |edge: f64| (edge - centre).abs() <= WALL_LINE_TOLERANCE_FEET;
+    if (across - thickness / 2.0).abs() > WALL_LINE_TOLERANCE_FEET
+        || !(on_centre(across_lo) || on_centre(across_hi))
+    {
+        return None;
+    }
+    let proven: Vec<(f64, f64)> = [
+        (along_lo, along_hi.min(wall_lo - thickness)),
+        (along_lo.max(wall_hi + thickness), along_hi),
+    ]
+    .into_iter()
+    .filter(|(lo, hi)| hi - lo > NODE_TOLERANCE_FEET)
+    .collect();
+    Some(WallLine {
+        horizontal,
+        fixed: centre,
+        low: along_lo,
+        high: along_hi,
+        proven,
+    })
+}
+
+/// Whether a line's record box is as wide across as half a wall's thickness
+/// could be, in both directions: a candidate for [`wall_line`].
+fn wide_box(line: &LineRecord) -> bool {
+    let across = (line.to.0 - line.from.0)
+        .abs()
+        .min((line.to.1 - line.from.1).abs());
+    (WALL_LINE_MIN_ACROSS_FEET..=WALL_LINE_MAX_ACROSS_FEET).contains(&across)
+}
+
+/// The record boxes of the walls of a file, by ElementId; a wall whose copies
+/// disagree, or whose box is not a number, is left out (RE-332).
+fn wall_boxes(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    declared: &BTreeSet<u32>,
+) -> BTreeMap<u32, [f64; 6]> {
+    let records: Vec<PartitionElementRecord> = if per32::is_32bit_release(revit_version) {
+        per32::scan_records(rf, revit_version)
+            .into_iter()
+            .filter(|record| record.builtin_category == OST_WALLS)
+            .collect()
+    } else {
+        scan_category_records_multi(rf, revit_version, &[OST_WALLS], declared).unwrap_or_default()
+    };
+    let mut boxes: BTreeMap<u32, [f64; 6]> = BTreeMap::new();
+    let mut left_out: BTreeSet<u32> = BTreeSet::new();
+    for record in records {
+        if !record.bbox_feet.iter().all(|v| v.is_finite()) {
+            left_out.insert(record.element_id);
+            continue;
+        }
+        match boxes.get(&record.element_id) {
+            Some(held) if *held != record.bbox_feet => {
+                left_out.insert(record.element_id);
+            }
+            Some(_) => {}
+            None => {
+                boxes.insert(record.element_id, record.bbox_feet);
+            }
+        }
+    }
+    for id in left_out {
+        boxes.remove(&id);
+    }
+    boxes
+}
+
+/// What the body of an Area is: its region, the base and the height.
 struct AreaBody {
     face: AreaFace,
     base_feet: f64,
     height_feet: f64,
     joined: bool,
+    /// Whether its outline runs along the centre path of a wall-hosted line
+    /// (RE-332).
+    wall_line: bool,
 }
 
 /// What is known of the file around its Areas.
@@ -654,6 +851,26 @@ fn boundary_lines(
                 out.stray_heights.push(held.height);
                 out.stray_heights.push(line.height);
                 out.conflicted.insert(record.element_id);
+            }
+        }
+    }
+    // A line whose box is as wide as half a wall's thickness may be picked from
+    // a wall (RE-332): the walls are read only when one is.
+    let wide: Vec<u32> = out
+        .by_id
+        .iter()
+        .filter(|(id, line)| wide_box(line) && !out.conflicted.contains(*id))
+        .map(|(id, _)| *id)
+        .collect();
+    if !wide.is_empty() {
+        let walls = wall_boxes(rf, revit_version, surroundings.declared);
+        for id in wide {
+            let line = &out.by_id[&id];
+            let mut hosts = line.names.iter().filter_map(|name| walls.get(name));
+            if let (Some(wall), None) = (hosts.next(), hosts.next()) {
+                if let Some(read) = wall_line(line.from, line.to, wall) {
+                    out.wall_lines.insert(id, read);
+                }
             }
         }
     }
@@ -857,9 +1074,47 @@ struct GroupArrangement {
     /// holds only its box), and of each line that names one, which may be joined
     /// to it.
     blocked: Vec<[f64; 4]>,
+    /// The lines of the group read as the centre path of a line picked from a
+    /// wall (RE-332).
+    wall_lines: Vec<WallLine>,
+}
+
+/// What an Area's outline takes from the wall-hosted lines of its group
+/// (RE-332).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum WallUse {
+    /// It runs along none of them.
+    Untouched,
+    /// It runs along some, only on stretches where no wall face can move the
+    /// line.
+    Proven,
+    /// It runs along some on a stretch where the line may be on a wall face.
+    Unproven,
 }
 
 impl GroupArrangement {
+    /// What `face`'s outline, a hole's too, takes from the wall-hosted lines.
+    fn wall_use(&self, face: &AreaFace) -> WallUse {
+        let mut used = false;
+        for ring in std::iter::once(&face.outer).chain(face.holes.iter()) {
+            for (index, &a) in ring.iter().enumerate() {
+                let b = ring[(index + 1) % ring.len()];
+                for wall in &self.wall_lines {
+                    match wall.edge_use(a, b) {
+                        None => {}
+                        Some(true) => used = true,
+                        Some(false) => return WallUse::Unproven,
+                    }
+                }
+            }
+        }
+        if used {
+            WallUse::Proven
+        } else {
+            WallUse::Untouched
+        }
+    }
+
     /// Whether a line left out of the arrangement may lie in, or bound, `face`:
     /// its box is within [`UNREAD_MARGIN_FEET`] of the box of the face's outline.
     /// A line outside that box cannot change the region.
@@ -906,6 +1161,7 @@ fn group_arrangement(
     let mut joined: BTreeMap<u32, BTreeSet<u32>> = BTreeMap::new();
     let mut unread: BTreeSet<u32> = BTreeSet::new();
     let mut blocked = Vec::new();
+    let mut wall_lines = Vec::new();
     for id in ids {
         let line = lines.by_id.get(id)?;
         if lines.conflicted.contains(id)
@@ -921,6 +1177,11 @@ fn group_arrangement(
         if Arrangement::reads(&boundary) {
             joined.insert(*id, line.names.clone());
             readable.push(boundary);
+        } else if let Some(wall) = lines.wall_lines.get(id) {
+            let (from, to) = wall.ends();
+            joined.insert(*id, line.names.clone());
+            readable.push(BoundaryLine { id: *id, from, to });
+            wall_lines.push(wall.clone());
         } else {
             unread.insert(*id);
             blocked.push(segment_box(line.from, line.to));
@@ -941,6 +1202,7 @@ fn group_arrangement(
     Some(GroupArrangement {
         arrangement,
         blocked,
+        wall_lines,
     })
 }
 
@@ -963,6 +1225,10 @@ struct Located {
     /// The region, or why there is none: the lines cannot be read, or the point
     /// is in no single region of them.
     face: Result<AreaFace, &'static str>,
+    /// Whether the region's outline runs along the centre path of a
+    /// wall-hosted line, all on stretches where no wall face can move it
+    /// (RE-332).
+    wall_line: bool,
 }
 
 /// The elevation of the Level `level`, feet.
@@ -993,18 +1259,26 @@ fn locate(
     };
     let key = (level, scheme);
     let base_feet = level_elevation(surroundings.levels, level).ok_or(REFUSED_HEIGHT)?;
-    let face = match arrangements
+    let (face, wall_line) = match arrangements
         .entry(key)
         .or_insert_with(|| group_arrangement(lines, key, base_feet))
     {
         Some(group) => match group.arrangement.face_at(point) {
-            None => Err(REFUSED_REGION),
-            Some(face) if group.blocks(&face) => Err(REFUSED_GROUP),
-            Some(face) => Ok(face),
+            None => (Err(REFUSED_REGION), false),
+            Some(face) if group.blocks(&face) => (Err(REFUSED_GROUP), false),
+            Some(face) => match group.wall_use(&face) {
+                WallUse::Unproven => (Err(REFUSED_WALL_LINE), false),
+                WallUse::Proven => (Ok(face), true),
+                WallUse::Untouched => (Ok(face), false),
+            },
         },
-        None => Err(REFUSED_GROUP),
+        None => (Err(REFUSED_GROUP), false),
     };
-    Ok(Located { key, face })
+    Ok(Located {
+        key,
+        face,
+        wall_line,
+    })
 }
 
 /// The body of one Area: its region, where the lines its record names are all
@@ -1039,6 +1313,7 @@ fn draw_area(
         base_feet,
         height_feet,
         joined: face.joined,
+        wall_line: located.wall_line,
     })
 }
 
@@ -1302,6 +1577,9 @@ pub fn areas_from_partition_chain_records(
                 ));
                 if body.joined {
                     fields.push((AREA_JOINED_FIELD.into(), InstanceField::Bool(true)));
+                }
+                if body.wall_line {
+                    fields.push((AREA_WALL_LINE_FIELD.into(), InstanceField::Bool(true)));
                 }
             }
             DecodedElement {
