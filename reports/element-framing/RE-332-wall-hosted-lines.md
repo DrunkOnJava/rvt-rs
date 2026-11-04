@@ -9,7 +9,7 @@
 ## 0. What the check rests on
 
 - The only external check is the IFC2X3 export of RE-330 section 0: a build of Revit 2021's exporter whose string ends "IU alternativa 21.0.0.383" (publisher not established), the project's 2015 to 2020 state. It is not one of Revit's IFC4 exports, it is counted apart, and it is **never used to remove a value or to settle a disagreement between exporters**. No workflow fetches it (its terms are not known, RE-330 section 1): the scoring here was run by hand from the pin above.
-- **The rule of section 6 was read off that export.** Areas 2 and 5 equal its outlines because the rule was chosen so that they would: the agreement is in-sample, and says nothing of a model it was not read off. Griffin decided on 2026-11-04 that Areas checked only against an IFC2X3 export of this kind ship labelled, with a marker of their own (`area_boundary_wall_line`); the docs, the changelog and the PR say the same. Re-check them against the first Revit IFC4 export of these Areas.
+- **The rule of section 6 was read off that export.** Areas 2 and 5 equal its outlines because the rule was chosen so that they would: the agreement is in-sample, and says nothing of a model it was not read off. Griffin decided on 2026-11-04, answering the question through AskUserQuestion, **"Ship labelled"**: the rule lands default-on, with its own outline-source value (`area_boundary_wall_line`); this report, the changelog, the docs and the PR state that it is in-sample and that the BIM Whale check is vacuous (that project draws no Area body); and it lands only if an unfiltered holdout run moves nothing outside `rac_advanced` (section 7). Re-check these Areas against the first Revit IFC4 export of them.
 - The walls in this report are read from the bytes: the probe prints each host wall's record box (section 2), and rvt-rs's own export of the 2020 save draws all 11 host walls compared to the same bounds as the export's footprints, to 0.001 ft.
 - The held-out BIM Whale project is a regression check, by counts. Nothing here was developed on it.
 
@@ -24,7 +24,7 @@ Every edge of every Area's outline in the export lies on an area boundary line o
 | 3 | 1 | 26 lines, among them 177363, 177377, 178310 | 177363 and 177377 as for Areas 1 and 4, and the slanted line 178310 (RE-330 section 5) | many |
 | 4 | 1 | 177363, 177366, 177367, 177772, 177963 | its north edge runs along line 177363, as Area 1's south edge along 177377; and 177772 stops 0.101 ft short of 177963 (as Area 6) | 144837, 148769, 149877 |
 | 5 | 1 | 177377, 177513, 177586, 177634 | along 177377, on the stretch 74 to 85 ft beyond the host wall's east end: **drawn** | 169770 |
-| 6 | 1 | 177353, 177367, 177772, 177963 | 177772 stops 0.101 ft short of 177963 and names nothing there (RE-330 section 3), so its region is Area 4's, which runs along 177363: expected `two_areas_one_region` (section 7) | 139855, 149877 |
+| 6 | 1 | 177353, 177367, 177772, 177963 | 177772 stops 0.101 ft short of 177963 and names nothing there (RE-330 section 3), so its region is Area 4's, which runs along 177363: `two_areas_one_region` (section 7) | 139855, 149877 |
 | 7, 8 | 1 | 177368, 177369, 178053, 178096, 178178, 178258, 178310, 178440, 178525 | the slanted line 178310 (RE-330 section 5) | 178310 names none; the others name 150980, 153616 and more |
 | 10 | 2 | 178788 | an arc (RE-330 section 5) | 178788 names none |
 
@@ -115,7 +115,7 @@ The walls' record boxes come in the same pass over the file's records as the lin
 
 ## 7. Results
 
-Measure, `--ref main`, filtered, all green. These runs are of `8ed50748` (the probe alone of `3a3ceeeb`). The reader was then changed (section 6: a stub carried on is checked, the refusal order, the hosts and the walls' scan); **the filtered run on the final head, whose id is in the pull request, re-checks the counts below and the refusal reasons, which are expected to move as the last paragraph of this section says.**
+Measure, `--ref main`, all green. The first runs below are of `8ed50748` (the probe alone of `3a3ceeeb`). The reader was then changed (section 6: a stub carried on is checked, the refusal order, the hosts and the walls' scan), and the runs of `6ec876f2` at the end of this section re-check the counts and move the refusal reasons as predicted.
 
 **The probe** (run 41862228192, the 10 `rac_advanced` saves): on every save but 2021's it reads 127 lines and 180 walls, with the counts of section 2 and the two compound lines with their stretches beyond one wall thickness (`177377`: line x -32.143371 to 80.278543, wall x -32.312334 to -4.521160, **-3.527065 to 80.278543**; `177363`: line x -32.312334 to -4.874670, wall x -32.312334 to -4.748358, none). The 2021 save has the same counts and 44 walls whose copies disagree.
 
@@ -125,7 +125,7 @@ Measure, `--ref main`, filtered, all green. These runs are of `8ed50748` (the pr
 
 | Save | Areas written | with `area_boundary` / `_joined` / `_wall_line` | Areas not written, by reason |
 |---|---:|---|---|
-| 2015, 2016, 2017, 2018, 2019, 2020 | 18 | 6 / 10 / 2 | 7, at `8ed50748`: `point_in_no_single_region` 4 (Areas 3, 7, 8, 10), `wall_line_position_not_proven` 3 (Areas 1, 4, 6) |
+| 2015, 2016, 2017, 2018, 2019, 2020 | 18 | 6 / 10 / 2 | 7, at `8ed50748`: `point_in_no_single_region` 4 (Areas 3, 7, 8, 10), `wall_line_position_not_proven` 3 (Areas 1, 4, 6); at `6ec876f2`: see the end of this section |
 | 2021 | 0 | none | 25: `boundary_lines_not_readable` 22, `named_lines_not_in_scheme_and_level` 3 (as RE-330) |
 | 2022, 2023 | 18 | 6 / 10 / 2 | the same 7 |
 | 2024 | 18 with a body, of 25 written | 6 / 10 / 2 | 7 written without a body (`exported.area_body_refusals`): the same reasons |
@@ -144,16 +144,24 @@ The 2022 and 2023 saves have no export of their own; their Areas are drawn from 
 
 **The held-out BIM Whale project** (run 41864945459, `holdout-bimwhale*`, counts only): its IFC is **byte for byte main's** (the same sha256), and the scorer diff is empty. `IfcSpace` written 0, Revit's 8, **extra 0**, global ids equal 0 of 0, spaces matched 0. That is the bar (zero extra Areas), met vacuously, as in RE-324 and RE-330: the project draws no Area body, so none of its Areas goes through the wall rule. Whether it holds a line the rule would read is not measured.
 
-**The office** (`nordic-office-as-built`, `nordic-office-permit`): the first run, 41864941448, ran without `-f nordic=true` and measured nothing; the repeat, 41868440397, is queued. The office's 689 lines are all axis lines, so the walls are not read there and its IFC is expected byte for byte as before; the unfiltered run is the check.
+**The office** (`nordic-office-as-built`, `nordic-office-permit`): the first run, 41864941448, ran without `-f nordic=true` and measured nothing; the repeat, run 41868440397 (`-f nordic=true`, `space_profiles_vs_ifc`, on `8ed50748`), shows the IFC of both files **byte for byte main's** and an empty scorer diff, so the office's 30 Areas are unchanged. Its 689 lines are all axis lines, so no wall is read there; the unfiltered runs above include it.
 
-**Expected at the final head, not yet measured.** The 18 Areas and their markers do not move (Areas 2 and 5 meet every condition, and no outline of the 16 others runs along a compound line). What moves is the reason of Areas 1, 4 and 6, because the wall refusal now comes after the others. The Python port of the arrangement (`tools/re/area_joins_vs_ifc.py`'s rule, run on the 2024 save's probe output) puts Areas 4 and 6 in one region of 2638.383 ft2 whose outline holds the lines each of them names (177363, 177963; 177353, 177367), so neither fails the check of the lines it names. Both then share a region, which is the existing `two_areas_one_region`: that is Area 6's true cause (the 0.101 ft join is open), and Area 4's as well as its unproven stretch. Area 1 alone stays `wall_line_position_not_proven`. The expected per-save list is therefore `point_in_no_single_region` 4 (Areas 3, 7, 8, 10), `two_areas_one_region` 2 (Areas 4, 6) and `wall_line_position_not_proven` 1 (Area 1). The run on the final head confirms or corrects this.
+**The unfiltered run** (run 41869173374, `-f base=main -f nordic=true -f r2025=true -f samples=true -f holdout=true`, every scorer, on `77c0716a`; the reader has changed since, section 6): **9 exports moved, exactly the nine `rac_advanced` saves of 2015 to 2020 and 2022 to 2024. 102 are byte for byte main's, including all 19 held-out models.** The scorer diff touches only those 9: +2 swept solids with a Position of their own and +2 property sets (942 to 944 objects) on each. This meets Griffin's condition for landing (above). The final unfiltered run, on `6ec876f2`, is run 41875835920; its result is in the pull request.
+
+**The filtered run on the final head** (run 41871958093, `-f base=main -f samples=true -f sample_years="2015 2024"`, the probe and the IFC kept, on `6ec876f2`), against what section 6's changes were predicted to do:
+
+- The IFC of **9 saves moves and 34 do not**, the same 9 as before; the 2021 save, every `rst_basic` save and every other sample are byte for byte main's. The scorer diff is `schema.txt` of the 9 only: `sets` 2106 to 2108 (2102 to 2104 on 2023) and swept solids +2.
+- **Markers unchanged**: on every save but 2021's, 6 `area_boundary`, 10 `area_boundary_joined` and 2 `area_boundary_wall_line`; `IfcSpace` 109 (91 rooms and 18 Areas), and 116 on the 2024 save (25 Areas, 7 of them `none`).
+- **The reasons moved as predicted**: of the 7 not written, `point_in_no_single_region` 4 (Areas 3, 7, 8, 10), **`two_areas_one_region` 2 (Areas 4 and 6)** and **`wall_line_position_not_proven` 1 (Area 1)**, on 2015 to 2020, 2022 and 2023 in `skipped`, and on 2024 in `exported.area_body_refusals`. The 2021 save is unchanged (25: `boundary_lines_not_readable` 22, `named_lines_not_in_scheme_and_level` 3).
+- The 2020 save against the export, re-scored on the kept IFC: `IfcSpace` in rvt-rs 109, in Revit 116, **only in rvt-rs 0, only in Revit 7**; `area_boundary` 6 of 6, `area_boundary_joined` 10 of 10 and `area_boundary_wall_line` 2 of 2 within 0.1% in area and 0.01 ft in outline, and their lowest and highest vertex within 0.01 ft. Written 18, Revit's 25, extra 0, missing 7.
+- The probe, at its tolerance of 0.001, counts the same on every save: 43 `centre`, 22 `face`, 2 `compound`, 44 `other`, 16 `nohost`; the stretches beyond one thickness are the same.
 
 Runs 41863421756, 41863426128, 41864308314 and 41864311445 are of `c79a89e7`, which read a wall-hosted line at its host wall's centre rather than at its own edge; they are superseded.
 
 ## 8. What it leaves out
 
 - Areas 1, 3 and 4: sections 4 and 5. Area 3 also needs the slanted line 178310 (it says `point_in_no_single_region`); Area 4 the 0.101 ft join of Area 6. Area 1 says `wall_line_position_not_proven`.
-- Area 6 has no compound line on its outline, but its region is not closed at the 0.101 ft join (RE-330 section 3), so it is Area 4's region: it, and Area 4, are expected to say `two_areas_one_region` (section 7).
+- Area 6 has no compound line on its outline, but its region is not closed at the 0.101 ft join (RE-330 section 3), so it is Area 4's region: it, and Area 4, say `two_areas_one_region` (section 7).
 - Areas 7, 8 and 10: unchanged from RE-330 section 5 (the slanted line, the arc). They have no compound line.
 - The 2021 save, unchanged (two copies of 16 lines, RE-324 section 7).
 
