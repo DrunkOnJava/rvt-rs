@@ -96,10 +96,9 @@ struct Args {
     /// Draw a family instance from its family's own extrusions (the sketch
     /// lines they were drawn from, swept between their offsets) instead of
     /// its saved mesh, where they reproduce the mesh; every other instance
-    /// keeps it (#156). An arc in a profile is written as the arc, but an
-    /// instance with an arc over 0.12 ft in radius keeps its mesh, since
-    /// Revit's two exporters write a circle in two forms that IfcOpenShell cuts
-    /// differently (#1346, #1355). Off by default. Implies `--saved-meshes`.
+    /// keeps it (#156). An arc in a profile is written as the arc, whatever
+    /// its radius, in the form Revit 24.0.5's IFC4 export gives it (#1366).
+    /// Off by default. Implies `--saved-meshes`.
     /// Each instance is checked against its own mesh. Revit 2024 to 2027 files
     /// (measured on 2024 and 2025). Slower on large files.
     #[arg(long, conflicts_with_all = ["placeholder", "no_saved_meshes"])]

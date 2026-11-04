@@ -50,9 +50,12 @@ import mesh_bodies_vs_ifc  # noqa: E402
 from true_curves import body_items  # noqa: E402
 
 FEET = 0.3048
-# src/ifc/family_extrusions.rs WHOLE_CIRCLE_MAX_RADIUS. The radius is read back
-# from 3 points rounded to a micrometre, so an arc within a fraction of a percent
-# of 0.12 ft can land in the other row, which changes no score.
+# The 0.12 ft that the rule of #1352 drew its line at (`ARC_MAX_RADIUS` in
+# src/ifc/family_extrusions.rs until #1366 removed it). The census still splits
+# the arcs there, to show whether the bodies that rule kept as meshes score
+# differently from the small ones. The radius is read back from 3 points rounded
+# to a micrometre, so an arc within a fraction of a percent of 0.12 ft can land in
+# the other row, which changes no score.
 SMALL_ARC_RADIUS = 0.12
 
 
