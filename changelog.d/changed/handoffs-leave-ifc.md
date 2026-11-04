@@ -14,8 +14,10 @@
   measured facts stay. Upgrading: nothing user-facing changes value,
   `OverallWidth`, `OverallHeight` and every opening are what they were, and
   only those 19 properties and their `IFCPROPERTYSINGLEVALUE` lines are gone
-  from a door's or window's set. An importer that read one of them reads
-  `OverallWidth` and `OverallHeight` instead. The `*_PROPERTIES` constants of
+  from a door's or window's set. An importer that read a door's or window's
+  size from one of them reads `OverallWidth` and `OverallHeight` instead; an
+  opening's centre, axis and base elevation are in its `IfcOpeningElement`'s
+  placement and extrusion. The `*_PROPERTIES` constants of
   `rvt::ifc::export_content` stay, as the names of the hand-offs.
   `rvt::ifc::IfcModel` gains a public field, `filler_sizes` (each door's and
   window's size, serialised when it is not empty), which breaks a caller that
