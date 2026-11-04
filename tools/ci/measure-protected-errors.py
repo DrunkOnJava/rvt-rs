@@ -12,7 +12,8 @@ ERROR_TYPES = {
     "IndexError", "KeyError", "ModuleNotFoundError", "OSError", "RuntimeError",
     "TypeError", "ValueError", "ZeroDivisionError",
 }
-OWN_FRAME = re.compile(r'File "[^\n"]*/tools/re/(ports_vs_ifc|slab_layers_vs_ifc|wall_layers_vs_ifc|ifc_common)\.py", line (\d+)')
+OWN_FRAME = re.compile(r'File "(?:[^\n"]*/)?(ports_vs_ifc|slab_layers_vs_ifc|wall_layers_vs_ifc|ifc_common)\.py", line (\d+)')
+MESSAGE_WORDS = re.compile(r"\b(schema|entity|attribute|type|unknown|missing|invalid|parse|parser|unsupported|unable|open|file|relation|instance|value|not|found)\b")
 
 
 def count_errors(root):
@@ -30,13 +31,16 @@ def count_errors(root):
             exits = re.findall(r"(?m)^exit (\d+)\s*$", content)
             if not exits or exits[-1] == "0":
                 continue
-            names = re.findall(r"(?m)^([A-Za-z_][A-Za-z0-9_]*)(?::|$)", content)
-            error = next((name for name in reversed(names) if name in ERROR_TYPES), "other")
+            lines = re.findall(r"(?m)^([A-Za-z_][A-Za-z0-9_]*)(?::([^\n]*))?$", content)
+            error, message = next(((name, message) for name, message in reversed(lines)
+                                   if name in ERROR_TYPES), ("other", ""))
+            words = tuple(sorted(set(MESSAGE_WORDS.findall(message.lower()))))
             frames = OWN_FRAME.findall(content)
             frame = f"{frames[-1][0]}.py:{frames[-1][1]}" if frames else "unavailable"
-            counts[(category, scorer, exits[-1], error, frame)] += 1
-    return [dict(category=c, scorer=s, exit=code, error_type=error, own_frame=frame, count=count)
-            for (c, s, code, error, frame), count in sorted(counts.items())]
+            counts[(category, scorer, exits[-1], error, frame, words)] += 1
+    return [dict(category=c, scorer=s, exit=code, error_type=error, own_frame=frame,
+                 message_words=list(words), count=count)
+            for (c, s, code, error, frame, words), count in sorted(counts.items())]
 
 
 if __name__ == "__main__":
