@@ -7,22 +7,24 @@
 //! family's extrusions and draws the instance from them instead, as
 //! `IfcExtrudedAreaSolid`s over `IfcIndexedPolyCurve` profiles.
 //!
-//! An arc in a profile is written as the arc, in the form Revit 24.0.5's IFC4
-//! export gives it (`IfcIndexedPolyCurve` arcs). A circle is two half arcs
-//! from the sketch's start, which IfcOpenShell cuts into the chords that export
-//! of the same circle is cut into (78 of 78 waste terminals of the BIM4LCA
-//! office, 1.9e-6 ft). Revit 26.2's IFC2X3 export of RE1 writes a whole circle
-//! as an `IfcCircleProfileDef` instead, and at radii over about 0.14 ft
-//! IfcOpenShell's default tessellation of the two forms differs by one chord
-//! (27 against 28 for the toilet-paper dispenser of RE1 Architecture, element
-//! 360331, 0.2292 ft in radius), so that no vertex of one lies on the other
-//! and Revit's lay 0.001439 ft from rvt-rs's surface: no one form meets both
-//! exporters under that tessellation. Which exporter will read a file is not in
-//! the `.rvt`, so an instance with a loop that is one whole circle over 0.12 ft
-//! in radius keeps its mesh in every release; a circle of 0.12 ft or less meets
-//! both (IfcOpenShell cuts it within 0.00088 ft of itself), and any other arc is
-//! written as the arc (RE-327 section 11, #1346; the scorers' tessellation is
-//! #1355).
+//! An arc in a profile of 0.12 ft in radius or less is written as the arc
+//! (`IfcIndexedPolyCurve` arcs, the form Revit 24.0.5's IFC4 export gives it;
+//! an arc too flat to survive the writer's micrometre rounding is a line). An
+//! instance with an arc over 0.12 ft in radius keeps its mesh, in every
+//! release, since Revit's two exporters write a circle in two forms: as arcs in
+//! Revit 24.0.5's IFC4 export (the BIM4LCA office) and as an
+//! `IfcCircleProfileDef` in Revit 26.2's IFC2X3 export (RE1). IfcOpenShell's
+//! default tessellation of the two forms of a circle has the same chords up to
+//! 0.164 ft and at 0.3281 ft and one chord more or fewer at 0.2292, 0.4921,
+//! 0.9843 and 1.9685 ft (27 against 28 for the toilet-paper dispenser of RE1
+//! Architecture, element 360331, 0.2292 ft in radius, whose vertices lay
+//! 0.001439 ft from rvt-rs's surface); over 0.137 ft the chord's own deviation
+//! passes the 0.001 ft bar, so a difference in the chord count or in where the
+//! circle starts misses it, and a partial arc is as exposed as a whole circle.
+//! No one form meets both exporters under that tessellation, and which one will
+//! read a file is not in the `.rvt`. An arc of 0.12 ft or less is within
+//! 0.00088 ft of itself in either form (RE-327 section 11, #1346; the scorers'
+//! tessellation is #1355).
 //!
 //! An instance keeps its saved mesh unless the extrusions reproduce it. The
 //! family's document holds the family as saved, and a placed instance is
@@ -65,7 +67,7 @@ use crate::native_form_geometry::{
 use crate::partition_instance_transforms::{InstanceTransform, scan_instance_transforms};
 use crate::{native_document, native_family_forms};
 use std::collections::{BTreeMap, BTreeSet};
-use std::f64::consts::{PI, TAU};
+use std::f64::consts::PI;
 
 /// `BodySource` of a body drawn from the family's own extrusions.
 pub const FAMILY_EXTRUSION_BODY_SOURCE: &str = "family_extrusions";
@@ -82,13 +84,18 @@ const VERTEX_TOLERANCE: f64 = 1e-4;
 /// feet: the 0.001 ft chords the mesh draws arcs with (the largest of the
 /// 6,014 printed forms is 0.000998 ft), and a tenth more.
 const SURFACE_TOLERANCE: f64 = 1.1e-3;
-/// The largest radius, feet, of a whole circle that is drawn. IfcOpenShell 0.9
-/// cuts a circle into chords of at most 0.2417 rad, which for a radius of 0.12
-/// ft is a chord 0.00088 ft off the circle whether it is drawn as a circle or as
-/// two half arcs (the bar is 0.001 ft); over 0.137 ft the two forms can differ
-/// by a chord, and a vertex of Revit's can lie up to 0.0016 ft from the other
-/// form's surface (RE-327 section 11).
-const WHOLE_CIRCLE_MAX_RADIUS: f64 = 0.12;
+/// The largest radius, feet, of an arc that is drawn. IfcOpenShell 0.9 cuts an
+/// arc into chords of at most 0.2417 rad, which for a radius of 0.12 ft is a
+/// chord 0.00088 ft off the arc whatever form the arc is in (the bar is 0.001
+/// ft); over 0.137 ft the chord passes the bar, and a vertex of Revit's can lie
+/// up to 0.0016 ft from the other form's surface (RE-327 section 11).
+const ARC_MAX_RADIUS: f64 = 0.12;
+/// How far an arc's midpoint may lie from its chord, feet, for the arc to be
+/// written as a line: the writer rounds coordinates to a micrometre (3.3e-6
+/// ft), and a midpoint that close to the chord can round onto it, which leaves
+/// IfcOpenShell three collinear points for an arc. Five micrometres is
+/// 1.6e-5 ft.
+const FLAT_ARC_SAGITTA: f64 = 1.6e-5;
 
 /// What [`attach`] did. Every instance drawn from a saved mesh is counted
 /// once: `candidates = replaced + not_rebuilt + unplaced + unchecked +
@@ -124,9 +131,9 @@ pub struct FamilyExtrusionReport {
     pub vertices_differ: usize,
     pub surface_differs: usize,
     /// Candidates the extrusions reproduce, left with their mesh for an arc
-    /// the rule does not draw: a whole circle over 0.12 ft in radius, which
-    /// Revit 24.0.5's IFC4 export writes as arcs and Revit 26.2's IFC2X3 export
-    /// as an `IfcCircleProfileDef` (RE-327 section 11).
+    /// over 0.12 ft in radius, whose circle Revit 24.0.5's IFC4 export writes
+    /// as arcs and Revit 26.2's IFC2X3 export as an `IfcCircleProfileDef`
+    /// (RE-327 section 11).
     pub arcs: usize,
     /// Candidates the extrusions reproduce whose profile cannot be written: a
     /// solid of no depth.
@@ -234,18 +241,15 @@ fn to_element_frame(
     })
 }
 
-/// The radius of a loop that is one whole circle: a single arc that turns the
-/// full way round.
-fn whole_circle_radius(source: &Loop) -> Option<f64> {
-    let [curve] = source.curves.as_slice() else {
-        return None;
-    };
-    match curve {
-        Curve::Arc {
-            radius, start, end, ..
-        } if (end - start).abs() >= TAU - 1e-9 => Some(*radius),
-        _ => None,
-    }
+/// Whether a loop has an arc the rule does not draw: one over `ARC_MAX_RADIUS`
+/// in radius, or whose radius does not read.
+fn has_arc_beyond_the_rule(source: &Loop) -> bool {
+    source.curves.iter().any(|curve| {
+        matches!(
+            curve,
+            Curve::Arc { radius, .. } if !radius.is_finite() || *radius > ARC_MAX_RADIUS
+        )
+    })
 }
 
 /// One closed `IfcIndexedPolyCurve` over a loop of a profile, in the plane
@@ -280,23 +284,32 @@ fn indexed_curve(source: &Loop, counter_clockwise: bool, handed: f64) -> Option<
                 segments.push(CurveSegment::Line([current, end]));
                 current = end;
             }
-            Curve::Arc { start, end, .. } => {
-                if (end - start).abs() > PI + 1e-9 {
-                    points.push(mirrored(curve.point_at(0.25)));
-                    let quarter = points.len() - 1;
-                    points.push(mirrored(curve.point_at(0.5)));
-                    let middle = points.len() - 1;
-                    points.push(mirrored(curve.point_at(0.75)));
-                    let three_quarters = points.len() - 1;
-                    let last = push_end(&mut points);
-                    segments.push(CurveSegment::Arc([current, quarter, middle]));
-                    segments.push(CurveSegment::Arc([middle, three_quarters, last]));
-                    current = last;
+            Curve::Arc {
+                radius, start, end, ..
+            } => {
+                let pieces = if (end - start).abs() > PI + 1e-9 {
+                    2
                 } else {
-                    points.push(mirrored(curve.point_at(0.5)));
+                    1
+                };
+                let flat = radius * (1.0 - ((end - start).abs() / pieces as f64 / 2.0).cos())
+                    < FLAT_ARC_SAGITTA;
+                for k in 0..pieces {
+                    if !flat {
+                        points.push(mirrored(curve.point_at((k as f64 + 0.5) / pieces as f64)));
+                    }
                     let middle = points.len() - 1;
-                    let last = push_end(&mut points);
-                    segments.push(CurveSegment::Arc([current, middle, last]));
+                    let last = if closes && k + 1 == pieces {
+                        0
+                    } else {
+                        points.push(mirrored(curve.point_at((k + 1) as f64 / pieces as f64)));
+                        points.len() - 1
+                    };
+                    segments.push(if flat {
+                        CurveSegment::Line([current, last])
+                    } else {
+                        CurveSegment::Arc([current, middle, last])
+                    });
                     current = last;
                 }
             }
@@ -517,12 +530,11 @@ pub fn attach_with_control(
             .flat_map(|solid| solid.profile.loops.iter())
             .flat_map(|profile_loop| profile_loop.curves.iter())
             .any(|curve| matches!(curve, Curve::Arc { .. }));
-        let big_circle = local
+        let big_arc = local
             .iter()
             .flat_map(|solid| solid.profile.loops.iter())
-            .filter_map(whole_circle_radius)
-            .any(|radius| radius > WHOLE_CIRCLE_MAX_RADIUS);
-        if big_circle {
+            .any(has_arc_beyond_the_rule);
+        if big_arc {
             report.arcs += 1;
             continue;
         }
