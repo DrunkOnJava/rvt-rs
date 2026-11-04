@@ -100,13 +100,17 @@ The walls are read only when a line's box could be one of these, so the BIM4LCA 
 
 ## 7. Results
 
-Measure, `--ref main`, filtered; the code is `c79a89e7` (the probe alone is `3a3ceeeb`). **Pending: the results of these runs are not in this report yet.**
+Measure, `--ref main`, filtered; the reader is `8ed50748` (the probe alone is `3a3ceeeb`). **Pending: the results of these runs are not in this report yet.**
 
 - The probe on the samples 2015 to 2024 (`probe_re332_wall_hosted_lines`), run 41862228192: the host walls' record boxes, the lines by kind, and the compound lines' stretches beyond one wall thickness.
-- The reader against `main` on the samples 2015 to 2024 (`-f base=main`, 43 pairs), run 41863421756: which IFC files move. Expected: the nine `rac_advanced` saves of 2015 to 2020 and 2022 to 2024 and no other.
-- The reader with every IFC kept, run 41863426128, the 2020 save scored against the export with `tools/re/space_profiles_vs_ifc.py ... --match globalid`: Areas written, Revit's, extra, missing; area within 0.1% and outline within 0.01 ft of the 18; the marker of each.
-- The office (`nordic-office-as-built`, `nordic-office-permit`, `space_profiles_vs_ifc`) against `main`, run 41864308314: expected byte for byte as before.
-- The held-out BIM Whale project (`holdout-bimwhale*`, counts only) against `main`, run 41864311445: expected 0 extra.
+- The reader against `main` on the samples 2015 to 2024 (`-f base=main`, 43 pairs), run 41864933862: which IFC files move. Expected: the nine `rac_advanced` saves of 2015 to 2020 and 2022 to 2024 and no other.
+- The reader with every IFC kept, run 41864937912; the 2020 save scored against the export with `tools/re/space_profiles_vs_ifc.py ... --match globalid`: Areas written, Revit's, extra, missing; area within 0.1% and outline within 0.01 ft of the 18; the marker of each.
+- The office (`nordic-office-as-built`, `nordic-office-permit`, `space_profiles_vs_ifc`) against `main`, run 41864941448: expected byte for byte as before.
+- The held-out BIM Whale project (`holdout-bimwhale*`, counts only) against `main`, run 41864945459: expected 0 extra.
+
+Runs 41863421756, 41863426128, 41864308314 and 41864311445 are of `c79a89e7`, which read a wall-hosted line at its host wall's centre rather than at its own edge; they are superseded by the four above.
+
+The Python version of the rule (`tools/re/area_joins_vs_ifc.py`'s arrangement, with 177377 and 177363 read as their centre lines and the stretch rule applied to each region, run on the 2024 save's probe output) decides: Areas 2 and 5 draw on proven stretches only; Areas 1, 4 and 6 (which shares 4's region) run along an unproven stretch; Areas 3, 7, 8 and 10 have no region. That is a prediction for the Rust, not a measurement of it.
 
 ## 8. What it leaves out
 
