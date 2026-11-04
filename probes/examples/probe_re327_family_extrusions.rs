@@ -1,27 +1,31 @@
-//! RE-327 (#156, Discussion #112), discovery run: where does a family's own
-//! document keep its extrusions, their sketches, their sketch planes and
-//! their start and end offsets, and does the file hold a saved display
-//! mesh of each form to measure a rebuilt solid against?
+//! RE-327 (#156, Discussion #112), discovery run 2: where does a family's
+//! own document keep its extrusions, their sketches, their sketch planes and
+//! their start and end offsets, and does the file hold a saved display mesh
+//! of each form to measure a rebuilt solid against?
 //!
 //! FACT under test: Discussion #112 reports a chain from sketch curve
 //! records to closed loops to extrusion parameters to solids, 85 of 86
-//! extrusions of one 2014 family (STE1200's team). The native object-graph
-//! reader (`native_document`, schema-directed, Revit 2015 to 2027) names the
-//! fields of `ExtrusionElem`, its sketch, its sketch plane and its curves, so
-//! the chain can be read by member name rather than by offset.
+//! extrusions of one 2014 family (STE1200's team). `native_document` refuses
+//! every family file ("invalid increment episode range", run 41776509790),
+//! so the records are read by `native_form_geometry` from the family file's
+//! own plain groups, decoded by the file's schema, and related by the
+//! ElemTable owner and by the ElementId fields the schema names
+//! (`SketchBase::m_userId`, `Sketch::m_sketchPlaneId`,
+//! `CurveElem::m_sketchPlaneId`).
 //!
 //! This prints, for one family file:
 //!   file <path> release <layout release>
-//!   native: <error>                                     where the framing refuses the release
-//!   shape <class> <tag, parent, fields>                 the schema of the classes the chain uses
-//!   census <class> records <n> refused <m>              every class of the file's records
-//!   refusal <class> <n> <diagnostic>                    why records did not decode
-//!   ext <id> owner <id/class> cutting <b> material <id> kids <class:n,..> params <class:id=value;..>
-//!   tree <depth> <id> <class> owner <id>                the ownership subtree of the first forms
-//!   rec / obj <id> <index> <class> <fields as JSON>     the graphs of those forms, their children
-//!                                                       and the records they reference
-//!   saved <id> <class> ...                              the form's channel-103 saved graphics:
-//!                                                       primitives, triangles, bounding box, volume
+//!   native: <error>                                 where the framing refuses the release
+//!   shape <class> <tag, parent, fields>             the schema of the classes the chain uses
+//!   walked <channel> groups .. keyed .. unframed .. records ..
+//!   census <channel> <class> records <n> refused <m>
+//!   refusal <class> <n> <diagnostic>                why graphs did not decode
+//!   copies <n> ids in several partitions
+//!   ext <id> <class> owner <id/class> cutting <b> material <id> kids <class:n,..> params <..>
+//!   tree <depth> <id> <class> owner <id>            the ownership subtree of the first forms
+//!   rec / obj <id> <index> <class> <fields as JSON> the graphs of those forms, their children
+//!                                                   and the records they reference
+//!   saved <id> <class> ...                          the form's channel-103 saved graphics
 //!
 //! Usage:
 //!   cargo run --profile ci -p rvt-probes --example probe_re327_family_extrusions -- FAMILY.rfa
@@ -30,10 +34,11 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use anyhow::Result;
 use rvt::RevitFile;
-use rvt::research::native_document::{self, Options};
-use rvt::research::native_parameters::ObjectGraph;
+use rvt::elem_table;
+use rvt::research::native_form_geometry;
+use rvt::research::native_parameters::{self, GraphLimits, ObjectGraph};
 use rvt::research::native_saved_mesh::{self, Primitive};
-use rvt::research::schema_registry::{self, Class, Field, Registry};
+use rvt::research::schema_registry::{Class, Field, Registry};
 use serde_json::Value;
 
 const FORMS: [&str; 5] = [
@@ -43,7 +48,7 @@ const FORMS: [&str; 5] = [
     "BlendElem",
     "SweptBlendElem",
 ];
-const CORE: [&str; 8] = [
+const CORE: [&str; 9] = [
     "ExtrusionElem",
     "RevolutionElem",
     "SweepElem",
@@ -52,6 +57,7 @@ const CORE: [&str; 8] = [
     "SketchPlane",
     "CurveElem",
     "ParamValueSetDouble",
+    "ParamValueDouble",
 ];
 const KEYWORDS: [&str; 7] = [
     "Sketch",
@@ -62,15 +68,21 @@ const KEYWORDS: [&str; 7] = [
     "Line",
     "Arc",
 ];
-const KEEP_LIMIT: usize = 40_000;
 const FULL_DUMPS: usize = 2;
-const OBJECTS_PER_RECORD: usize = 14;
-const JSON_CAP: usize = 1400;
+const EXTRA_DUMPS: usize = 4;
+const OBJECTS_PER_RECORD: usize = 16;
+const JSON_CAP: usize = 1600;
 const TREE_LINES: usize = 90;
+const LIMITS: GraphLimits = GraphLimits {
+    max_values: 2_000_000,
+    max_objects: 2_000_000,
+    max_depth: 128,
+};
 
 struct Kept {
     class: String,
-    owner: i64,
+    stream: String,
+    owner: Option<u64>,
     graph: Option<ObjectGraph>,
 }
 
@@ -165,20 +177,34 @@ fn lineage<'a>(registry: &'a Registry, name: &str) -> Vec<&'a Class> {
     out
 }
 
+fn print_shape(registry: &Registry, printed: &mut BTreeSet<String>, name: &str) {
+    for class in lineage(registry, name) {
+        if printed.insert(class.name.clone()) {
+            println!("shape {} {}", class.name, describe_class(registry, class));
+        }
+    }
+}
+
 fn param_sets(graph: &ObjectGraph) -> String {
     let mut parts: Vec<String> = Vec::new();
     for object in &graph.objects {
         if !object.class_name.starts_with("ParamValueSet") {
             continue;
         }
-        let Some(entries) = object.fields.get("m_paramSet").and_then(Value::as_array) else {
+        let entries = object.fields.get("m_paramSet").and_then(Value::as_array);
+        let Some(entries) = entries.filter(|e| !e.is_empty()) else {
+            parts.push(format!(
+                "{}:raw={}",
+                object.class_name,
+                cap(object.fields.to_string(), 200)
+            ));
             continue;
         };
         for entry in entries {
             let id = entry.get("m_paramId").and_then(ident);
             let value = entry
                 .get("m_value")
-                .map_or_else(|| "?".to_string(), Value::to_string);
+                .map_or_else(|| cap(entry.to_string(), 120), Value::to_string);
             parts.push(format!(
                 "{}:{}={}",
                 object.class_name.trim_start_matches("ParamValueSet"),
@@ -194,7 +220,9 @@ fn dump(label: &str, id: u64, kept: &Kept) {
     let objects = kept.graph.as_ref().map_or(0, |g| g.objects.len());
     println!(
         "rec {label} {id} {} owner {} objects {objects}",
-        kept.class, kept.owner
+        kept.class,
+        kept.owner
+            .map_or_else(|| "-".to_string(), |o| o.to_string())
     );
     let Some(graph) = kept.graph.as_ref() else {
         return;
@@ -210,7 +238,7 @@ fn dump(label: &str, id: u64, kept: &Kept) {
 
 fn print_tree(
     kept: &BTreeMap<u64, Kept>,
-    children: &BTreeMap<i64, Vec<u64>>,
+    children: &BTreeMap<u64, Vec<u64>>,
     id: u64,
     depth: usize,
     budget: &mut usize,
@@ -222,11 +250,14 @@ fn print_tree(
     let Some(record) = kept.get(&id) else {
         return;
     };
-    println!("tree {depth} {id} {} owner {}", record.class, record.owner);
-    let Ok(key) = i64::try_from(id) else {
-        return;
-    };
-    if let Some(kids) = children.get(&key) {
+    println!(
+        "tree {depth} {id} {} owner {}",
+        record.class,
+        record
+            .owner
+            .map_or_else(|| "-".to_string(), |o| o.to_string())
+    );
+    if let Some(kids) = children.get(&id) {
         for kid in kids {
             print_tree(kept, children, *kid, depth + 1, budget);
         }
@@ -277,65 +308,85 @@ fn main() -> Result<()> {
     let mut rf = RevitFile::open(&path)?;
     let release = rf.layout_release()?;
     println!("file {path} release {release}");
-    let stream = native_document::read_single(&mut rf, "Formats/Latest")?;
-    let registry = schema_registry::parse(&stream)?;
+    let document = match native_form_geometry::open(&mut rf) {
+        Ok(document) => document,
+        Err(error) => {
+            println!("native: {error:#}");
+            return Ok(());
+        }
+    };
+    let registry = &document.registry;
 
     let mut printed: BTreeSet<String> = BTreeSet::new();
     for name in CORE {
-        for class in lineage(&registry, name) {
-            if printed.insert(class.name.clone()) {
-                println!("shape {} {}", class.name, describe_class(&registry, class));
-            }
-        }
+        print_shape(registry, &mut printed, name);
         if registry.named(name).is_none() {
             println!("shape {name} absent");
         }
     }
 
-    let options = Options {
-        releases: native_document::NATIVE_RELEASES,
-        max_graph_values: 2_000_000,
-        max_graph_objects: 2_000_000,
-        ..Options::default()
-    };
-    let mut kept: BTreeMap<u64, Kept> = BTreeMap::new();
-    let mut census: BTreeMap<String, (usize, usize)> = BTreeMap::new();
-    let mut refusals: BTreeMap<(String, String), usize> = BTreeMap::new();
-    let result = native_document::extract_graphs(&mut rf, &options, |record| {
-        let class = record.class_name.clone().unwrap_or_else(|| "-".to_string());
-        let entry = census.entry(class.clone()).or_default();
-        entry.0 += 1;
-        if record.graph.is_none() {
-            entry.1 += 1;
-            let diagnostic = record.diagnostic.clone().unwrap_or_default();
-            let digits: String = diagnostic
-                .chars()
-                .map(|c| if c.is_ascii_digit() { '#' } else { c })
-                .collect();
-            *refusals
-                .entry((class.clone(), cap(digits, 160)))
-                .or_default() += 1;
-        }
-        if kept.len() < KEEP_LIMIT {
-            kept.insert(
-                record.identity.element_id,
-                Kept {
-                    class,
-                    owner: record.identity.owning_element_id,
-                    graph: record.graph,
-                },
+    let mut owner_of: BTreeMap<u64, u64> = BTreeMap::new();
+    match elem_table::parse_records(&mut rf) {
+        Ok(records) => {
+            for record in &records {
+                if let Some(owner) = record.owner_id {
+                    owner_of.insert(u64::from(record.id_secondary), u64::from(owner));
+                }
+            }
+            println!(
+                "elemtable records {} with-owner {}",
+                records.len(),
+                owner_of.len()
             );
         }
+        Err(error) => println!("elemtable: {error:#}"),
+    }
+
+    let mut kept: BTreeMap<u64, Kept> = BTreeMap::new();
+    let mut census: BTreeMap<(u64, String), (usize, usize)> = BTreeMap::new();
+    let mut refusals: BTreeMap<(String, String), usize> = BTreeMap::new();
+    let mut copies: BTreeMap<u64, usize> = BTreeMap::new();
+    let walked = native_form_geometry::walk(&mut rf, &document, &[101, 102, 103], |entry| {
+        let class = entry.class.unwrap_or("-").to_string();
+        let counts = census.entry((entry.channel, class.clone())).or_default();
+        counts.0 += 1;
+        if entry.channel != 102 {
+            return Ok(());
+        }
+        *copies.entry(entry.id).or_default() += 1;
+        let graph = match native_parameters::decode_graph_with_limits(entry.body, registry, &LIMITS)
+        {
+            Ok(graph) => Some(graph),
+            Err(error) => {
+                counts.1 += 1;
+                let digits: String = format!("{error:#}")
+                    .chars()
+                    .map(|c| if c.is_ascii_digit() { '#' } else { c })
+                    .collect();
+                *refusals
+                    .entry((class.clone(), cap(digits, 160)))
+                    .or_default() += 1;
+                None
+            }
+        };
+        kept.insert(
+            entry.id,
+            Kept {
+                class,
+                stream: entry.stream.to_string(),
+                owner: owner_of.get(&entry.id).copied(),
+                graph,
+            },
+        );
         Ok(())
     });
-    match &result {
-        Ok(summary) => println!(
-            "summary release {} indexed {} emitted {} complete {} unsupported {} kept {}",
-            summary.revit_version,
-            summary.indexed_elements,
-            summary.emitted_records,
-            summary.complete_graph_records,
-            summary.unsupported_graph_records,
+    match walked {
+        Ok(walked) => println!(
+            "walked groups {} keyed {} unframed {} records {} kept {}",
+            walked.groups,
+            walked.keyed_groups,
+            walked.unframed_groups,
+            walked.records,
             kept.len()
         ),
         Err(error) => {
@@ -343,24 +394,26 @@ fn main() -> Result<()> {
             return Ok(());
         }
     }
-    for (class, (records, refused)) in &census {
-        println!("census {class} records {records} refused {refused}");
+    for ((channel, class), (records, refused)) in &census {
+        println!("census {channel} {class} records {records} refused {refused}");
     }
     for ((class, diagnostic), count) in &refusals {
         println!("refusal {class} {count} {diagnostic}");
     }
+    println!("copies {}", copies.values().filter(|n| **n > 1).count());
     for class in &registry.classes {
-        if census.contains_key(&class.name)
+        if census.keys().any(|(_, c)| *c == class.name)
             && KEYWORDS.iter().any(|k| class.name.contains(k))
-            && printed.insert(class.name.clone())
         {
-            println!("shape {} {}", class.name, describe_class(&registry, class));
+            print_shape(registry, &mut printed, &class.name);
         }
     }
 
-    let mut children: BTreeMap<i64, Vec<u64>> = BTreeMap::new();
+    let mut children: BTreeMap<u64, Vec<u64>> = BTreeMap::new();
     for (id, record) in &kept {
-        children.entry(record.owner).or_default().push(*id);
+        if let Some(owner) = record.owner {
+            children.entry(owner).or_default().push(*id);
+        }
     }
     let forms: Vec<u64> = kept
         .iter()
@@ -369,24 +422,25 @@ fn main() -> Result<()> {
         .collect();
     for id in &forms {
         let record = &kept[id];
-        let owner_class = u64::try_from(record.owner)
-            .ok()
+        let owner_class = record
+            .owner
             .and_then(|o| kept.get(&o))
             .map_or("-", |k| k.class.as_str());
         let mut kids: BTreeMap<&str, usize> = BTreeMap::new();
-        if let Ok(key) = i64::try_from(*id) {
-            for kid in children.get(&key).into_iter().flatten() {
-                if let Some(k) = kept.get(kid) {
-                    *kids.entry(k.class.as_str()).or_default() += 1;
-                }
+        for kid in children.get(id).into_iter().flatten() {
+            if let Some(k) = kept.get(kid) {
+                *kids.entry(k.class.as_str()).or_default() += 1;
             }
         }
         let kids_text: Vec<String> = kids.iter().map(|(c, n)| format!("{c}:{n}")).collect();
         let root = record.graph.as_ref().and_then(|g| g.objects.first());
         println!(
-            "ext {id} {} owner {}/{owner_class} cutting {} material {} kids {} params {}",
+            "ext {id} {} stream {} owner {}/{owner_class} cutting {} material {} kids {} params {}",
             record.class,
-            record.owner,
+            record.stream,
+            record
+                .owner
+                .map_or_else(|| "-".to_string(), |o| o.to_string()),
             root.and_then(|o| o.fields.get("m_cutting"))
                 .map_or_else(|| "?".to_string(), Value::to_string),
             root.and_then(|o| o.fields.get("m_materialId"))
@@ -402,14 +456,10 @@ fn main() -> Result<()> {
         let mut budget = TREE_LINES;
         print_tree(&kept, &children, *id, 0, &mut budget);
         let mut wanted: BTreeSet<u64> = BTreeSet::from([*id]);
-        if let Ok(key) = i64::try_from(*id) {
-            wanted.extend(children.get(&key).into_iter().flatten().copied());
-        }
+        wanted.extend(children.get(id).into_iter().flatten().copied());
         let mut second: BTreeSet<u64> = BTreeSet::new();
         for member in &wanted {
-            if let Ok(key) = i64::try_from(*member) {
-                second.extend(children.get(&key).into_iter().flatten().copied());
-            }
+            second.extend(children.get(member).into_iter().flatten().copied());
         }
         wanted.extend(second.into_iter().take(12));
         let mut referenced: BTreeSet<u64> = BTreeSet::new();
@@ -439,32 +489,62 @@ fn main() -> Result<()> {
             }
         }
     }
+    for wanted in ["SketchPlane", "CurveElem", "VarSketch"] {
+        let mut shown = 0usize;
+        for (id, record) in &kept {
+            if shown >= EXTRA_DUMPS {
+                break;
+            }
+            if record.class == wanted && dumped.insert(*id) {
+                dump("extra", *id, record);
+                shown += 1;
+            }
+        }
+    }
+    let mut seen_classes: BTreeSet<String> = BTreeSet::new();
+    for id in &dumped {
+        if let Some(graph) = kept.get(id).and_then(|k| k.graph.as_ref()) {
+            for object in graph.objects.iter().take(OBJECTS_PER_RECORD) {
+                seen_classes.insert(object.class_name.clone());
+            }
+        }
+    }
+    for class in seen_classes.iter().take(80) {
+        print_shape(registry, &mut printed, class);
+    }
 
     if forms.is_empty() {
         println!("saved none: no form record");
         return Ok(());
     }
-    let saved_options = Options {
-        selected_ids: forms.iter().copied().collect(),
-        channels: BTreeSet::from([103]),
-        releases: native_document::NATIVE_RELEASES,
-        max_graph_values: 20_000_000,
-        max_graph_objects: 20_000_000,
-        ..Options::default()
-    };
+    let wanted_forms: BTreeSet<u64> = forms.iter().copied().collect();
     let mut with_graphics = 0usize;
-    let saved = native_document::extract_graphs(&mut rf, &saved_options, |record| {
-        let id = record.identity.element_id;
-        let class = record.class_name.clone().unwrap_or_else(|| "-".to_string());
-        let Some(graph) = record.graph.as_ref() else {
-            println!(
-                "saved {id} {class} refused {}",
-                cap(record.diagnostic.clone().unwrap_or_default(), 160)
-            );
+    let saved = native_form_geometry::walk(&mut rf, &document, &[103], |entry| {
+        if !wanted_forms.contains(&entry.id) {
             return Ok(());
+        }
+        let class = entry.class.unwrap_or("-");
+        let graph = match native_parameters::decode_graph_with_limits(
+            entry.body,
+            registry,
+            &GraphLimits {
+                max_values: 20_000_000,
+                max_objects: 20_000_000,
+                max_depth: 128,
+            },
+        ) {
+            Ok(graph) => graph,
+            Err(error) => {
+                println!(
+                    "saved {} {class} refused {}",
+                    entry.id,
+                    cap(format!("{error:#}"), 160)
+                );
+                return Ok(());
+            }
         };
         with_graphics += 1;
-        let meshes = native_saved_mesh::graphics(graph);
+        let meshes = native_saved_mesh::graphics(&graph);
         let triangles: usize = meshes.primitives.iter().map(|p| p.triangles.len()).sum();
         let vertices: usize = meshes.primitives.iter().map(|p| p.vertices.len()).sum();
         let mut classes: BTreeMap<&str, usize> = BTreeMap::new();
@@ -479,7 +559,8 @@ fn main() -> Result<()> {
         let bounds = mesh_box(&meshes.primitives)
             .map_or_else(|| "-".to_string(), |(lo, hi)| format!("{lo:?}..{hi:?}"));
         println!(
-            "saved {id} {class} objects {} primitives {} triangles {triangles} vertices {vertices} unbounded {} diagnostics {} volume {:.6} box {bounds} classes {}",
+            "saved {} {class} objects {} primitives {} triangles {triangles} vertices {vertices} unbounded {} diagnostics {} volume {:.6} box {bounds} classes {}",
+            entry.id,
             graph.objects.len(),
             meshes.primitives.len(),
             meshes.unbounded_faces,
@@ -488,15 +569,20 @@ fn main() -> Result<()> {
             top.join(","),
         );
         for message in meshes.diagnostics.iter().take(2) {
-            println!("saved-diagnostic {id} {}", cap(message.clone(), 200));
+            println!(
+                "saved-diagnostic {} {}",
+                entry.id,
+                cap(message.clone(), 200)
+            );
         }
         Ok(())
     });
     match saved {
-        Ok(summary) => println!(
-            "saved-summary forms {} with-graphics {with_graphics} without-record {}",
+        Ok(walked) => println!(
+            "saved-summary forms {} with-graphics {with_graphics} groups {} unframed {}",
             forms.len(),
-            summary.selected_ids_without_records.len()
+            walked.groups,
+            walked.unframed_groups
         ),
         Err(error) => println!("saved-error {error:#}"),
     }
