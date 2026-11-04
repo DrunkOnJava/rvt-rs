@@ -46,7 +46,7 @@ python -c "import rvt; print(rvt.__version__)"
 
 Each wheel is one `abi3` build for CPython 3.8 and later.
 
-| Platform | 0.2.0 | 0.3.0 to 0.13.0 |
+| Platform | 0.2.0 | 0.3.0 to 0.14.0 |
 |---|---|---|
 | Linux x86_64 | glibc 2.35 or later (`manylinux_2_35`) | glibc 2.17 or later (`manylinux2014`) |
 | Linux aarch64 (Graviton, Raspberry Pi 4/5, Docker on Apple Silicon) | none | glibc 2.17 or later |
@@ -95,15 +95,15 @@ it to a project.
 `rvt-rs-mcp` is a local, read-only [Model Context Protocol](https://modelcontextprotocol.io)
 server over stdio, so an agent can ask about a Revit file with no Revit
 install and no network. It is a crate of its own and needs Rust 1.88 or later
-to build (the other tools need 1.87). It is not in v0.13.0: from the next
-release the prebuilt archives and the container image carry it, and
-`cargo install rvt-rs-mcp --locked` installs it once the crate's first version
-is on crates.io; until then, build it from a checkout of `main`:
+to build (the other tools need 1.87). From v0.14.0 the prebuilt archives and
+the container image carry it beside the CLIs, and crates.io has it:
 
 ```bash
-cargo install --path rvt-mcp --locked
+cargo install rvt-rs-mcp --locked
 rvt-rs-mcp --version
 ```
+
+From a checkout of `main`, `cargo install --path rvt-mcp --locked`.
 
 [`mcp.md`](mcp.md) has the client configuration and the tools.
 
@@ -113,8 +113,8 @@ Every tagged release from v0.2.0 on attaches ready-to-run archives of
 all the CLIs (`rvt-info`, `rvt-inspect`, `rvt-ifc`, …) to its page under
 <https://github.com/DrunkOnJava/rvt-rs/releases>. No Rust toolchain is
 needed. In the archive names `<tag>` is the release tag with its `v`
-(`rvt-rs-v0.13.0-x86_64-unknown-linux-musl.tar.gz`); the wheel and the
-container image name the version without it (`0.13.0`). The release page also
+(`rvt-rs-v0.14.0-x86_64-unknown-linux-musl.tar.gz`); the wheel and the
+container image name the version without it (`0.14.0`). The release page also
 carries the Python wheels, the sdist and the archives' attestation bundle
 (`rvt-rs-<tag>.intoto.jsonl`).
 
@@ -169,7 +169,7 @@ archives are attached to that run as artifacts.
 Every tagged release from v0.2.0 on also publishes a container image
 holding the same static Linux binaries, for `linux/amd64` and `linux/arm64`:
 `ghcr.io/drunkonjava/rvt-rs:<version>` (the tag without its `v`, as
-`0.13.0`) and, for a final release, `ghcr.io/drunkonjava/rvt-rs:latest`. It is a distroless image of about the
+`0.14.0`) and, for a final release, `ghcr.io/drunkonjava/rvt-rs:latest`. It is a distroless image of about the
 binaries' size, with no shell and no package manager. The working directory
 is `/data`, so mount the folder holding the model there:
 
