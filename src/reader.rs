@@ -545,13 +545,19 @@ impl RevitFile {
             return Ok(Arc::clone(cached));
         }
         let raw = self.read_stream(name)?;
+        let stored_len = raw.len();
         let limits = self.limits.inflate_limits;
-        let (inflated, shortfall) =
-            compression::InflatedStream::from_stored_with_limits(name, &raw, limits);
+        // The stored bytes are stripped where they are and dropped once the
+        // members are inflated, so the stream is held once beside its
+        // inflated form, not twice (#1075).
+        let (inflated, shortfall) = {
+            let prepared = compression::prepare_stream_owned(name, raw);
+            compression::InflatedStream::from_prepared_with_limits(&prepared, stored_len, limits)
+        };
         if shortfall.members_over_limit > 0 {
             self.note_unread(UnreadStream {
                 name: name.to_string(),
-                stored_bytes: raw.len() as u64,
+                stored_bytes: stored_len as u64,
                 kind: UnreadKind::MemberTooLarge,
                 limit: limits.max_output_bytes as u64,
             });
@@ -559,9 +565,9 @@ impl RevitFile {
         if shortfall.stopped_at_total {
             self.note_unread(UnreadStream {
                 name: name.to_string(),
-                stored_bytes: raw.len() as u64,
+                stored_bytes: stored_len as u64,
                 kind: UnreadKind::InflatedTotalTooLarge,
-                limit: limits.max_stream_total_bytes_for(raw.len()) as u64,
+                limit: limits.max_stream_total_bytes_for(stored_len) as u64,
             });
         }
         let inflated = Arc::new(inflated);
@@ -623,6 +629,17 @@ impl RevitFile {
         self.data_objects
             .insert(name.to_string(), Arc::clone(&objects));
         Ok(objects)
+    }
+
+    /// Stored stream `name` as the inflate and the native readers take it, its
+    /// checksum pages stripped where the stream has them
+    /// ([`compression::prepare_stream_for_inflate`]): one buffer, stripped in
+    /// place, not the stored bytes and a stripped copy of them (#1075).
+    pub(crate) fn read_prepared_stream(&mut self, name: &str) -> Result<Vec<u8>> {
+        Ok(compression::prepare_stream_owned(
+            name,
+            self.read_stream(name)?,
+        ))
     }
 
     /// Every offset of `header` in partition `name`'s inflated bytes, in
