@@ -13,8 +13,9 @@ Install and local build paths are documented in
 - **Nothing leaves the browser tab.** The dropped `.rvt` / `.rfa` /
   `.rte` / `.rft` bytes are parsed in-process. There are no `fetch`,
   `XMLHttpRequest`, `WebSocket`, `EventSource`, or `sendBeacon`
-  imports in the compiled WebAssembly — the CI job
-  `.github/workflows/deploy-viewer.yml` fails the build if any show
+  imports in the compiled WebAssembly — the CI jobs
+  `.github/workflows/viewer-test.yml` and
+  `.github/workflows/deploy-viewer.yml` fail the build if any show
   up.
 - **No telemetry.** The page CSP blocks `connect-src` to everything
   except `self`, which is only needed for the static WASM bundle,
@@ -141,8 +142,8 @@ Reading the saved graphics is a second pass over the file, so it costs time
 and memory. `tests/saved-meshes-measure.spec.ts` opens each reference model
 with the option on and off in a fresh browser context and writes the load time,
 the wasm memory after the load and the number of bodies drawn from saved meshes
-to `measurements/saved-meshes.json`; Deploy viewer runs it and uploads the
-file. Run it with `RVT_VIEWER_MEASURE=1 pnpm exec playwright test`; the
+to `measurements/saved-meshes.json`; `viewer-test.yml` (part of `CI passed`) runs
+it in a job of its own and uploads the file. Run it with `RVT_VIEWER_MEASURE=1 pnpm exec playwright test`; the
 reference models are read from `_project_corpus/Revit`.
 
 ## Architecture

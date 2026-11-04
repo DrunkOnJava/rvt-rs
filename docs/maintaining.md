@@ -57,11 +57,16 @@ when a release ships.
   `full / CI passed`, CI's summary job as a ready pull request runs it
   (`ci-pr.yml` calls `ci.yml`), which passes only when every CI job (macOS
   and Windows, corpus tier 2, the writer corpus, IfcOpenShell validation,
-  wheels and the audits included) passed or was skipped, so auto-merge waits
-  for all of them. A draft runs only the fast jobs, as `fast / ...`, and
-  never a check of the required name; marking it ready runs the full set
-  (#1237). A push to `main` runs `ci.yml` directly, as `CI passed`. Measure and the release and deploy workflows are not part
-  of it.
+  wheels, the audits and the viewer's browser tests included) passed or was
+  skipped, so auto-merge waits for all of them. A draft runs only the fast
+  jobs, as `fast / ...`, and never a check of the required name; marking it
+  ready runs the full set (#1237). A push to `main` runs `ci.yml` directly, as
+  `CI passed`. Measure and the release and deploy workflows are not part of
+  it. The viewer's browser tests are: `ci.yml` calls `viewer-test.yml` as its
+  `viewer` job in the full set (#1374), and a change that touches only
+  documentation skips it. Deploy viewer builds and publishes the site, and
+  its deploy job waits for `CI passed` on the pushed commit. To check a
+  draft's viewer, dispatch `viewer-test.yml` on its branch.
 - The squash commit's title is the pull request's title plus its number and its
   body is the pull request's description, so the description is permanent
   history: fix it before merging.

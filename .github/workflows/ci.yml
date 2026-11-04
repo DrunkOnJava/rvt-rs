@@ -1455,6 +1455,67 @@ jobs:
           path: ${{ steps.pnpm-store.outputs.dir }}
           key: ${{ steps.pnpm-cache.outputs.cache-primary-key }}
 
+  # The viewer's browser tests are part of `CI passed` (#1374). They used to
+  # run in Deploy viewer's pull-request run, which `CI passed` did not wait
+  # for: #1370 merged before that run had finished, and Deploy viewer went red
+  # on main. They run in the full set only (a ready pull request, or a push to
+  # main); a draft's fast set leaves them out, and viewer-test.yml can be
+  # dispatched on a draft's branch. A pull request that changes nothing but
+  # documentation skips them, as Deploy viewer's deploy step skips waiting for
+  # CI on such a commit; a skipped job passes `CI passed`.
+  viewer-paths:
+    name: viewer tests needed
+    if: inputs.fast != true
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      run: ${{ steps.paths.outputs.run }}
+    steps:
+      - name: Does the change touch more than documentation
+        id: paths
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          EVENT: ${{ github.event_name }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          if [ "${EVENT}" != pull_request ]; then
+            echo "not a pull request; the viewer tests run"
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # Every page of the pull request's files. An answer that does not
+          # come, or an empty one, runs the tests: a skip needs the list.
+          if ! files=$(gh api --paginate "repos/${GH_REPO}/pulls/${PR}/files" --jq '.[].filename') || [ -z "${files}" ]; then
+            echo "::warning::could not list the files of pull request ${PR}; the viewer tests run"
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # The files Deploy viewer's deploy step counts as documentation, but
+          # for the two JSON files under docs/ that the viewer is built from:
+          # the demo catalogue and, through src/capability.rs, the support
+          # matrix.
+          rest=$(grep -vE '(\.md$|^docs/|^LICENSE|^\.gitignore$|^\.github/ISSUE_TEMPLATE/|^CITATION\.cff$)' <<<"$files" || true)
+          built_from=$(grep -E '^docs/(viewer-demos|support-matrix)\.json$' <<<"$files" || true)
+          if [ -n "${rest}" ] || [ -n "${built_from}" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "only documentation changed; the viewer tests are skipped"
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  viewer:
+    name: viewer tests
+    needs: viewer-paths
+    if: inputs.fast != true && needs.viewer-paths.outputs.run == 'true'
+    uses: ./.github/workflows/viewer-test.yml
+    permissions:
+      contents: read
+
   pii-guard:
     name: PII guard
     runs-on: ubuntu-24.04
@@ -1605,6 +1666,8 @@ jobs:
       - deny
       - audit
       - viewer-dependencies
+      - viewer-paths
+      - viewer
       - pii-guard
       - env-config
       - semver
