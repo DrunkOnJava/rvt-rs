@@ -602,7 +602,7 @@ impl<'a> Cursor<'a> {
         );
         self.items += 1;
         match f.modifier {
-            1..=3 if f.base == 14 => self.pointer(f.modifier == 3),
+            1..=4 if f.base == 14 => self.pointer(f.modifier == 3),
             0x60 if f.base == 8 => {
                 let n = self.u32()? as usize;
                 ensure!(n <= 1_000_000, "native string unit budget exceeded");
