@@ -216,10 +216,24 @@ pub fn beam_axis_from_fields(fields: &[(String, InstanceField)]) -> Option<([f64
     Some((point(BEAM_AXIS_START_FIELDS)?, point(BEAM_AXIS_END_FIELDS)?))
 }
 
+/// Whether a beam's Cross-Section Rotation ([`BEAM_ROTATION_FIELD`], RE-276)
+/// was read and is exactly 0. A beam whose rotation is unread is not
+/// unrotated.
+pub fn beam_unrotated(fields: &[(String, InstanceField)]) -> bool {
+    fields.iter().any(|(name, value)| {
+        name == BEAM_ROTATION_FIELD
+            && matches!(value, InstanceField::Float { value, .. } if *value == 0.0)
+    })
+}
+
 /// Give each structural-framing element the location line its data carries,
 /// when the line and the element's record box make a beam solid
-/// ([`crate::partition_beam_axes::beam_body`], RE-49). A line that leaves the
-/// box, or a box no solid along the line reproduces, is not attached.
+/// ([`crate::partition_beam_axes::beam_body`], RE-49), or, for an unrotated
+/// beam ([`beam_unrotated`], so after [`attach_beam_rotations`]), a level
+/// beam whose box is longer than its line
+/// ([`crate::partition_beam_axes::beam_body_in_box`], RE-328). A line that
+/// leaves the box, or a box no solid along the line reproduces, is not
+/// attached.
 pub(super) fn attach_beam_axes(
     rf: &mut RevitFile,
     revit_version: u32,
@@ -248,9 +262,11 @@ pub(super) fn attach_beam_axes(
             continue;
         };
         let (start, end) = (line.start(), line.end());
-        let resolves = element_record_bbox(element)
-            .and_then(|bbox| pba::beam_body(bbox, start, end))
-            .is_some();
+        let unrotated = beam_unrotated(&element.fields);
+        let resolves = element_record_bbox(element).is_some_and(|bbox| {
+            pba::beam_body(bbox, start, end).is_some()
+                || (unrotated && pba::beam_body_in_box(bbox, start, end).is_some())
+        });
         if !resolves {
             continue;
         }

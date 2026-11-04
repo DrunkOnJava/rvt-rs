@@ -10,23 +10,24 @@
 //! `saved_meshes::attach` keeps their box).
 //!
 //! For each beam the partition reader recovers with one agreeing line that
-//! `beam_check` declines (a `target`), and for the first 400 that run along
-//! their line (a `control`, RE-49's own bodies), it takes the mesh's extent
+//! `beam_check` declines (a `target`), and for the first 400 whose line it
+//! accepts (a `control`, RE-49's own bodies), it takes the mesh's extent
 //! along the line, across it level and across it in the line's vertical plane,
 //! and compares:
 //! - `box_vs_mesh`: the record box against the mesh's axis-aligned box:
 //!   `equal`, `mesh_inside` (the box holds the mesh) or `mesh_outside`;
 //! - each candidate body: `free` (`box_along`, the record box's extents solved
-//!   for a box along the line, length free) and `fit` (`beam_section_fit`, the
-//!   line's length and the closure check, without the ends test). The section
-//!   across the line is `equal` to the mesh's (0.01 ft), the mesh is
-//!   `mesh_inside` it, or it `differs` (the mesh leaves it); the ends along
-//!   the line are `equal`, `mesh_inside` (Revit trimmed the beam) or
-//!   `mesh_past` (the mesh runs past an end).
+//!   for a box along the line, length free), `fit` (`beam_section_fit`, the
+//!   line's length and the closure check, without the ends test) and `rule`
+//!   (`beam_body_in_box`, the body RE-328 draws, for a beam whose Cross-Section
+//!   Rotation is 0). The section across the line is `equal` to the mesh's
+//!   (0.01 ft), the mesh is `mesh_inside` it, or it `differs` (the mesh leaves
+//!   it); the ends along the line are `equal`, `mesh_inside` (Revit trimmed
+//!   the beam) or `mesh_past` (the mesh runs past an end).
 //!
-//! A candidate is never wrong where its section is `equal` or `mesh_inside`
-//! and its ends are not `mesh_past` on every beam it draws. Counts only: no
-//! element id, name or coordinate is printed.
+//! A candidate is never wrong where its section is `equal` and its ends are
+//! not `mesh_past` on every beam it draws. Counts only: no element id, name
+//! or coordinate is printed.
 //!
 //! ```text
 //! cargo run --profile ci -p rvt-probes --example probe_re328_beam_meshes -- model.rvt
@@ -41,11 +42,11 @@ use rvt::research::native_graphics_traversal::{
 };
 use rvt::research::native_saved_scene::extract_at_detail;
 use rvt::research::partition_beam_axes::{
-    BeamReject, BoundedLine, MIN_PLAN_SHARE, beam_check, beam_section_fit, box_along, line_copies,
-    supports_revit_version,
+    BeamBody, BeamReject, BoundedLine, MIN_PLAN_SHARE, beam_body_in_box, beam_check,
+    beam_section_fit, box_along, line_copies, supports_revit_version,
 };
 use rvt::research::partition_schema_mvp::{
-    beam_axis_from_fields, element_record_bbox, recover_partition_schema_mvp,
+    beam_unrotated, element_record_bbox, recover_partition_schema_mvp,
 };
 use rvt::walker::{DecodedElement, WalkerLimits};
 
@@ -56,13 +57,13 @@ struct Target {
     id: u32,
     bbox: [f64; 6],
     line: BoundedLine,
+    unrotated: bool,
 }
 
-struct Drawn {
+struct Control {
     id: u32,
     bbox: [f64; 6],
-    start: [f64; 3],
-    end: [f64; 3],
+    body: BeamBody,
 }
 
 struct Mesh {
@@ -222,52 +223,40 @@ fn main() -> anyhow::Result<()> {
         .iter()
         .filter(|element| element.class == "StructuralFraming" && element.id.is_some())
         .collect();
-    let mut drawn: Vec<Drawn> = Vec::new();
-    let mut unattached: BTreeSet<u32> = BTreeSet::new();
-    for beam in &beams {
-        let Some(id) = beam.id else { continue };
-        match (
-            beam_axis_from_fields(&beam.fields),
-            element_record_bbox(beam),
-        ) {
-            (Some((start, end)), Some(bbox)) => drawn.push(Drawn {
-                id,
-                bbox,
-                start,
-                end,
-            }),
-            (None, Some(_)) => {
-                unattached.insert(id);
-            }
-            _ => {}
-        }
-    }
-    drawn.sort_by_key(|beam| beam.id);
-    drawn.truncate(CONTROL_CAP);
-    let copies = line_copies(&mut rf, version, &unattached)?;
+    let ids: BTreeSet<u32> = beams.iter().filter_map(|beam| beam.id).collect();
+    let copies = line_copies(&mut rf, version, &ids)?;
     let mut targets: Vec<Target> = Vec::new();
+    let mut controls: Vec<Control> = Vec::new();
     for beam in &beams {
         let Some(id) = beam.id else { continue };
         let (Some(found), Some(bbox)) = (copies.get(&id), element_record_bbox(beam)) else {
             continue;
         };
-        if let Some((_, first)) = found.lines.first() {
-            if found.lines.iter().all(|(_, line)| line == first) {
-                targets.push(Target {
-                    id,
-                    bbox,
-                    line: *first,
-                });
-            }
+        let Some((_, first)) = found.lines.first() else {
+            continue;
+        };
+        if found.lines.iter().any(|(_, line)| line != first) {
+            continue;
+        }
+        match beam_check(bbox, first.start(), first.end()) {
+            Ok(body) => controls.push(Control { id, bbox, body }),
+            Err(_) => targets.push(Target {
+                id,
+                bbox,
+                line: *first,
+                unrotated: beam_unrotated(&beam.fields),
+            }),
         }
     }
+    controls.sort_by_key(|control| control.id);
+    controls.truncate(CONTROL_CAP);
     println!("beams {}", beams.len());
     println!("targets {}", targets.len());
-    println!("controls {}", drawn.len());
+    println!("controls {}", controls.len());
     let selected: BTreeSet<u64> = targets
         .iter()
         .map(|t| u64::from(t.id))
-        .chain(drawn.iter().map(|d| u64::from(d.id)))
+        .chain(controls.iter().map(|c| u64::from(c.id)))
         .collect();
     let mut meshes: BTreeMap<u64, Mesh> = BTreeMap::new();
     if !selected.is_empty() {
@@ -297,13 +286,17 @@ fn main() -> anyhow::Result<()> {
     let mut counts: BTreeMap<String, usize> = BTreeMap::new();
     for target in &targets {
         let (start, end) = (target.line.start(), target.line.end());
-        let verdict = beam_check(target.bbox, start, end);
-        let why = match &verdict {
+        let why = match beam_check(target.bbox, start, end) {
             Ok(_) => "accepted",
-            Err(reject) => reject_name(reject),
+            Err(reject) => reject_name(&reject),
         };
         let d = target.line.direction;
-        let key = format!("target {why} {}", orientation(d));
+        let rotation = if target.unrotated {
+            "rotation_zero"
+        } else {
+            "rotation_other"
+        };
+        let key = format!("target {why} {} {rotation}", orientation(d));
         bump(&mut counts, key.clone());
         let mesh = match meshes.get(&u64::from(target.id)) {
             None => {
@@ -325,11 +318,11 @@ fn main() -> anyhow::Result<()> {
             ),
         );
         let Some((u, w)) = frame(d) else { continue };
-        let found = extents(&mesh.points, d, u, w);
+        let seen = extents(&mesh.points, d, u, w);
         let centre = centre_of(target.bbox);
         match box_along(target.bbox, d) {
             Some(dims) => {
-                let (section, ends) = score(centre, d, u, w, dims, &found);
+                let (section, ends) = score(centre, d, u, w, dims, &seen);
                 bump(
                     &mut counts,
                     format!("{key} free section {section} ends {ends}"),
@@ -339,22 +332,29 @@ fn main() -> anyhow::Result<()> {
         }
         if let Ok(body) = beam_section_fit(target.bbox, start, end) {
             let dims = [body.length_feet, body.width_feet, body.depth_feet];
-            let (section, ends) = score(centre, d, u, w, dims, &found);
+            let (section, ends) = score(centre, d, u, w, dims, &seen);
             bump(
                 &mut counts,
                 format!("{key} fit section {section} ends {ends}"),
             );
         }
+        if target.unrotated {
+            if let Some(body) = beam_body_in_box(target.bbox, start, end) {
+                let dims = [body.length_feet, body.width_feet, body.depth_feet];
+                let (section, ends) = score(body.centre, d, u, w, dims, &seen);
+                bump(
+                    &mut counts,
+                    format!("{key} rule section {section} ends {ends}"),
+                );
+            }
+        }
     }
-    for beam in &drawn {
-        let Ok(body) = beam_check(beam.bbox, beam.start, beam.end) else {
-            bump(&mut counts, "MISMATCH control declined");
-            continue;
-        };
+    for control in &controls {
+        let body = control.body;
         let d = body.direction;
         let key = format!("control {}", orientation(d));
         bump(&mut counts, key.clone());
-        let mesh = match meshes.get(&u64::from(beam.id)) {
+        let mesh = match meshes.get(&u64::from(control.id)) {
             None => {
                 bump(&mut counts, format!("{key} mesh none"));
                 continue;
@@ -368,12 +368,15 @@ fn main() -> anyhow::Result<()> {
         bump(&mut counts, format!("{key} mesh whole"));
         bump(
             &mut counts,
-            format!("{key} box_vs_mesh {}", box_vs_mesh(beam.bbox, &mesh.points)),
+            format!(
+                "{key} box_vs_mesh {}",
+                box_vs_mesh(control.bbox, &mesh.points)
+            ),
         );
         let Some((u, w)) = frame(d) else { continue };
-        let found = extents(&mesh.points, d, u, w);
+        let seen = extents(&mesh.points, d, u, w);
         let dims = [body.length_feet, body.width_feet, body.depth_feet];
-        let (section, ends) = score(body.centre, d, u, w, dims, &found);
+        let (section, ends) = score(body.centre, d, u, w, dims, &seen);
         bump(
             &mut counts,
             format!("{key} body section {section} ends {ends}"),

@@ -27,8 +27,11 @@
 //! extent, and the other plan extent is a check the solve must pass. It
 //! passes, to [`CLOSURE_TOLERANCE_FEET`], on 923 of the 940 (802 level beams
 //! on a model axis, 111 level beams rotated in plan, 10 sloped). The 17 that
-//! fail keep their box: 15 are oblique beams whose end cuts are not square to
-//! the line, and 2 have a box longer than their line.
+//! fail have a record box longer than their line (RE-328 measured all 17
+//! against their saved meshes: the box along the line is Revit's section
+//! across it; RE-49 took 15 of them, rotated in plan, for beams with oblique
+//! end cuts). [`beam_body_in_box`] draws such a level beam whose Cross-Section
+//! Rotation is 0 as the record box's own length; the rest keep their box.
 //!
 //! Measured against the meshes of the same beams in a VIM export of a later
 //! edition of the sample (`reports/element-framing/RE-49-beam-axes.md`,
@@ -988,4 +991,72 @@ pub fn box_along(bbox: [f64; 6], direction: [f64; 3]) -> Option<[f64; 3]> {
         .iter()
         .all(|v| v.is_finite() && *v > 0.0)
         .then_some(solved)
+}
+
+fn dot3(a: [f64; 3], b: [f64; 3]) -> f64 {
+    a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
+}
+
+/// The least `|cos 2θ|` of the plan angle θ of a level line that
+/// [`beam_body_in_box`] solves: the free-length solve ([`box_along`]) divides
+/// by it, and it is 0 at 45 degrees. The rotated beams measured lie 24.5
+/// degrees off a model axis (0.656); a line within 30 degrees of an axis
+/// passes.
+pub const MIN_PLAN_CONDITION: f64 = 0.5;
+
+/// The body of a level beam whose line lies inside its record box but is
+/// shorter than the box, where [`beam_check`] declines it for a section that
+/// does not close (RE-328): the box along the line whose extents are the
+/// record box's, its length the box's own ([`box_along`]). On Autodesk's 2024
+/// samples all 34 beams declined for that reason on a level line are
+/// longer in the box than in the line, by at most a foot, and on the 25 whose
+/// saved mesh decodes whole the section across the line is the mesh's to
+/// 0.01 ft and the ends are the mesh's or Revit's trim of it (RE-328). Only
+/// the caller knows the Cross-Section Rotation (`BEAM_ROTATION_FIELD` in
+/// `partition_schema_mvp`), which must be exactly 0: a rolled section's
+/// extents across the line are wider than the section, and the 16 sloped,
+/// rolled beams measured are smaller than the box along their line. `None`
+/// for any other line the check declines, for a line that is sloped, for a
+/// plan angle within 15 degrees of 45 ([`MIN_PLAN_CONDITION`]), for a box no
+/// longer than the line, and for a line that does not lie inside the body.
+pub fn beam_body_in_box(bbox: [f64; 6], start: [f64; 3], end: [f64; 3]) -> Option<BeamBody> {
+    if !matches!(
+        beam_check(bbox, start, end),
+        Err(BeamReject::OpenClosure { .. })
+    ) {
+        return None;
+    }
+    let delta = [end[0] - start[0], end[1] - start[1], end[2] - start[2]];
+    let length = dot3(delta, delta).sqrt();
+    let d = [delta[0] / length, delta[1] / length, delta[2] / length];
+    if d[2].abs() > HORIZONTAL_EPS || (d[0] * d[0] - d[1] * d[1]).abs() < MIN_PLAN_CONDITION {
+        return None;
+    }
+    let [box_length, width, depth] = box_along(bbox, d)?;
+    if box_length <= length {
+        return None;
+    }
+    let centre = [
+        (bbox[0] + bbox[3]) / 2.0,
+        (bbox[1] + bbox[4]) / 2.0,
+        (bbox[2] + bbox[5]) / 2.0,
+    ];
+    let across = [-d[1], d[0], 0.0];
+    let holds = |point: [f64; 3]| {
+        let rel = [
+            point[0] - centre[0],
+            point[1] - centre[1],
+            point[2] - centre[2],
+        ];
+        dot3(rel, d).abs() <= box_length / 2.0 + CLOSURE_TOLERANCE_FEET
+            && dot3(rel, across).abs() <= width / 2.0 + CLOSURE_TOLERANCE_FEET
+            && rel[2].abs() <= depth / 2.0 + CLOSURE_TOLERANCE_FEET
+    };
+    (holds(start) && holds(end)).then_some(BeamBody {
+        centre,
+        direction: d,
+        length_feet: box_length,
+        width_feet: width,
+        depth_feet: depth,
+    })
 }

@@ -28,7 +28,8 @@
 use super::IfcModel;
 use super::entities::{BrepTriangle, IfcEntity, PropertyValue, SolidShape};
 use super::export_content::{
-    RECORD_BBOX_BODY_SOURCE, SPACE_OUTLINE_SAVED_MESH, SPACE_OUTLINE_SOURCE_PROPERTY,
+    BEAM_BOX_BODY_SOURCE, RECORD_BBOX_BODY_SOURCE, SPACE_OUTLINE_SAVED_MESH,
+    SPACE_OUTLINE_SOURCE_PROPERTY,
 };
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -141,7 +142,13 @@ pub fn attach_scoped_with_control(
         let profile_resolved = set.properties.iter().any(|p| {
             p.name == "ProfileResolved" && matches!(p.value, PropertyValue::Boolean(true))
         });
-        if text("BodySource") != Some(RECORD_BBOX_BODY_SOURCE) || profile_resolved {
+        // A beam RE-328 draws as its box along its line is a stand-in for
+        // its saved mesh, as the record box is.
+        if !matches!(
+            text("BodySource"),
+            Some(RECORD_BBOX_BODY_SOURCE | BEAM_BOX_BODY_SOURCE)
+        ) || profile_resolved
+        {
             continue;
         }
         let Ok(id) = tag.parse::<u64>() else {
