@@ -1,0 +1,69 @@
+# RE-334: Rooms take off the round columns their stored solid holds
+
+**Date:** 2026-11-04
+**Issues:** #1354 (rac_advanced's rooms against the public IFC2X3 export); follows RE-316 (section 4 left this open), RE-330 (the export)
+**Artefacts:** Autodesk's `rac_advanced_sample_project`, saves of 2015 to 2020 (`research/autodesk-sample-projects.tsv`); the IFC2X3 export of the same project from the three.js repository at commit `7c1f47731608de51a2240ce31655634665cb51ce`, 42,831,859 bytes, sha256 `9440a72eb2d27e3ba9edeafdcdfb71945e6baec56d5b09211bcde743de7fe0a5` (`research/rac-advanced-export.tsv`); for the other exporters, the BIM4LCA office (Revit 2024), Core Interior, RE1 and the 23 R2025 models with Revit's exports
+**Tool:** `tools/re/space_profiles_vs_ifc.py` (unchanged); Measure's new `racadv` input
+**Status:** positive on one project, with one external check. On `rac_advanced`'s six saves of 2015 to 2020, all 91 rooms are within 0.1% in area and 0.01 ft in outline of the public IFC2X3 export (before, 42 of the 85 rooms drawn from their stored solid were, and 6 rooms kept their record box), and every one of the 48 spaces with round columns has as many voids as the export's. That export is the only Revit export of a room with a round column there is: none of the 33 other models measured has one, so no Revit IFC4 export confirms or contradicts it (section 4). In-sample for the decision to take the columns off, since that was read from this export (section 0); not for the arcs, which RE-316 read from the file before the export was found.
+
+## 0. What the check rests on
+
+- The check is **the IFC2X3 export of RE-330 section 1**: Revit 2021's exporter, string ending "IU alternativa 21.0.0.383", publisher not established, showing the 2015 to 2020 state of the project. It is counted apart as IFC2X3, as RE-330 counts it. It is used here as a geometry oracle for rooms and **removes nothing**: no value that main writes is dropped by it. What the export decided is a reading of the file (a cylinder face of the room's stored solid is an edge of its outline, so a column is a void), not a value to leave out.
+- **No Revit IFC4 export of a room with a round column exists** in the corpus (section 4). Where Revit's exporters disagree about a value the standing rule leaves it out; here there is no second exporter to disagree.
+- **In-sample.** That the columns are taken off was decided by reading this export. The arcs the reader uses (RE-316 section 1: the axis at +158, the radius at +182, the uv box an angle and a distance) were read from the files in RE-316, before the export was found, and the reader draws them with the tolerance RE-316 chose (0.0005 ft). A Revit export of another project with round columns in its rooms, or of another release, is what would test the decision.
+- The Measure pair (`-f racadv=true`, models `racadv-2015` to `racadv-2020`) fetches the sample and the export for the run, pinned by sha256 and byte count, and never stores them or puts anything derived from the export in the Actions cache. Their per-room scorer output is uploaded in full, as the Autodesk samples' is (the main session, 2026-11-04). The export carries no licence of its own and Autodesk's terms for the sample it exports were not checked.
+
+## 1. Why 43 rooms were 0.17% to 1.24% over
+
+The kept IFC of the 2020 save at 35a9d322 (#1351's run 41832628804) and the pinned export, read as plain STEP outside IfcOpenShell: each space's extrusion profile placed through the solid's position and the space's object placement, then areas and voids compared by GlobalId. It reproduces the scorer's count: 58 of 107 spaces within 0.1% in area, 42 of them rooms and 16 Areas.
+
+- 48 of the export's 116 spaces are an `IfcArbitraryProfileDefWithVoids`. Each void is a 34-vertex circle of radius 0.4917 ft (RE-316 read 0.4921 ft off the cylinder faces). All 48 are among the 107 spaces rvt-rs writes.
+- rvt-rs drew those rooms without voids. For the 43 rooms the walk read, with the circles of radius 0.4921 ft (0.7608 ft² each) taken off, the number taken from Revit's profile, rvt-rs's area is within 0.007% of Revit's on every one (largest: room 125, -0.007%; the others 0.001% to 0.003%). Before it, 0.169% (room 123) to 1.235% (room 125) over.
+- The count of voids per room is the count of columns: room 102 has 13, rooms 216 and 318 11 and 13, room 321 8, room 121 8.
+- The six rooms that kept their record box (108, 204, 209, 223, 229, 306) have columns against their walls: Revit's profiles for them have 59 to 283 vertices in all (the arcs as chords) and 0 to 7 voids, and a box is 0.34% (room 204) to 13.2% (room 223) over them.
+- Not the cause: the phase (all 91 rooms pair by GlobalId), the export's form (it writes 48 spaces as `IfcRectangleProfileDef`, which is the same geometry as a four-vertex polygon, and the 43 rooms are already `partition_room_solid_faces`), or slack.
+
+## 2. The rule
+
+`wall_edges` in `partition_room_boundaries.rs` takes, for a vertical cylinder face that reaches the floor (its lowest end within 0.001 ft of the box's floor, its axis vertical, its u and v horizontal), the chords of its arc within 0.0005 ft as plan edges, run clockwise around the axis, as RE-316 did for its probes. It did so only for a span that asked (`SpanRead::arcs`); now the walk of RE-101 reads them too (`span` unset), and `resolved_outline_of_solids` asks. A cylinder whose arc cannot be read (a sweep outside 0 to 2 pi) rules the room out, and a room with more than 4,096 plan segments (`PLAN_SEGMENTS_MAX`; a column of 0.49 ft is 70 chords, and the most in one room measured is 13 columns) is left to its box, so the quadratic work of joining and nesting the segments is bounded however many cylinders a solid claims.
+
+Nothing else changes: planar faces, the box test, the label (`SpaceOutlineSource` stays `stored_solid` for a room the walk reads, and the profile source `partition_room_solid_faces`).
+
+## 3. Results
+
+All Measure, dispatched from the branch's workflow (`--ref fix/1354-rac-advanced-rooms`), `space_profiles_vs_ifc`, filtered.
+
+- **`rac_advanced` 2015 to 2019 on `main` at fdff7018**, run 41899250576: 107 spaces in both, area within 0.1% 58, within 1% 104; outline, boundary 58; vertices 47; lowest and highest vertex 107. Rooms: stored solid 85, area 42; record box 6, area 0. Areas: 6 `area_boundary` and 10 `area_boundary_joined`, all within 0.1% and 0.01 ft. The five saves give identical counts.
+- **The reader at 95817487**, run 41899789207 (2015 to 2019): area within 0.1% **107**, within 1% 107; outline, boundary and height 107; **vertices 47**, unchanged. Rooms: **stored solid 91, area, outline, boundary and height 91 of 91**, none on its record box. The five saves give identical counts.
+- **All six saves, the reader at f4f3da51 (its code is 95817487's) against `main`**, run 41900428551: the 2020 save, which the first runs lacked (its file is named `racadvancedsampleproject.rvt`), gives the same counts on both sides as the other five: `main` 58 of 107, the reader 107 of 107, and the six saves' scorer outputs equal to one another on each side.
+- **Outside the scorer**, the kept IFC of the 2019 and the 2020 saves against the export, read as STEP: 107 spaces paired, the same number of voids in every one (48 spaces with voids on each side), the largest area difference 0.0058% (room 125), the next 0.0048%. The reader draws a circle as 70 chords and Revit's export as 34, which is why **vertices stay at 47 of 107**: the vertex-to-vertex metric needs the same tessellation, and rvt-rs does not copy Revit's. The outline and boundary metrics, which measure to the other file's outline, are 107 of 107.
+
+## 4. Revit's other exporters
+
+Run 41899794330 (`nordic-office-*`, `core-interior`, `re1-*` and the 23 R2025 models, 33 models, the reader against `main`): **every export is byte for byte as before** (the `ifc.sha256` of all 33 equal on both sides) and every `space_profiles_vs_ifc` output is equal. So none of those 33 has a room with a vertical cylinder that reaches the floor, and none can disagree with the voids: the BIM4LCA office and Core Interior have Revit IFC4 exports, RE1 an IFC2X3 one. **The voids are confirmed by one exporter: the IFC2X3 export of `rac_advanced` above.** If a Revit IFC4 export of a room with a round column disagrees, the standing rule says to leave the voids out, and this report is where that would be recorded.
+
+## 5. Not measured
+
+- Samples, all 43 pairs against `main` (run 41899827774): which exports move. Not yet read on this head.
+- The held-out models and BIMcollab's (run 41900672250, counts only): not yet read on this head.
+- The 2021 to 2027 saves of `rac_advanced`: the export shows the 2015 to 2020 state (RE-330 section 1). Whether their rooms close the same way is the samples run.
+- A Revit IFC4 export of a room with a round column, and Revit's own quantities for these rooms (the export carries none), so whether Revit's room schedule area takes a column off is unmeasured. The schedule area and a prism room's `NetVolume` follow the outline and change on these rooms.
+- That a column against a wall is a notch of Revit's outline on any project but this one: the six rooms are the evidence.
+- Rooms with a cylinder whose axis is not vertical, or that does not reach the floor: ignored as before.
+- Revit's tessellation of a circle: not copied (section 3).
+
+## 6. Reproduce
+
+```bash
+# the export, by pin; never stored
+curl -fsSL -o rac_advanced_sample_project.ifc \
+  https://raw.githubusercontent.com/mrdoob/three.js/7c1f47731608de51a2240ce31655634665cb51ce/examples/models/ifc/rac_advanced_sample_project.ifc
+sha256sum rac_advanced_sample_project.ifc   # 9440a72eb2d27e3ba9edeafdcdfb71945e6baec56d5b09211bcde743de7fe0a5
+# the six saves against it, the reader against main, IFC kept
+gh workflow run measure.yml --ref fix/1354-rac-advanced-rooms -f ref=f4f3da511eef1543739dad88c6d7fec2eea7070d -f base=main \
+  -f racadv=true -f models="racadv-*" -f scorers=space_profiles_vs_ifc -f keep_ifc=true
+python3 tools/re/space_profiles_vs_ifc.py model.ifc rac_advanced_sample_project.ifc --match globalid --list 10
+# the other exporters
+gh workflow run measure.yml --ref fix/1354-rac-advanced-rooms -f ref=9581748713da809d7c152eed7ea5e5fb92bde431 -f base=main -f nordic=true -f r2025=true \
+  -f models="nordic-office-* core-interior re1-* r2025-*" -f scorers=space_profiles_vs_ifc
+```

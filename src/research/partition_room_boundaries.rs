@@ -52,10 +52,16 @@
 //! source, never
 //! as the walk's. A face whose record is 44 bytes longer than a plane's is a
 //! cylinder's (a round column): its axis, a unit vector at right angles to
-//! the face's u and v, at +158, and its radius at +182 ([`RoomCylinder`]). Its
-//! arc closes the loops of the six `rac_advanced` rooms RE-101 left open, but
-//! whether Revit takes a column off a room's area is unmeasured (it does not
-//! on four office rooms), so a solid with one is left unresolved.
+//! the face's u and v, at +158, and its radius at +182 ([`RoomCylinder`]). A
+//! vertical one that reaches the floor is an edge of the outline like a wall
+//! face, as chords of its arc, in the walk and in the span: a column the room
+//! surrounds is a void of the outline and one against a wall a notch (#1354,
+//! RE-334). Before that the walk ignored the cylinder, so a room kept its
+//! columns' area, and the loops of six `rac_advanced` rooms stayed open. The
+//! only Revit export of a room with a round column is an IFC2X3 export of that
+//! project, which draws each column as a void; the exports of the BIM4LCA
+//! office, Core Interior, RE1 and the R2025 models are byte for byte as before,
+//! so none of them has one, and no IFC4 export of such a room exists.
 //!
 //! Core Interior keeps a room's record and solid in more than one partition,
 //! and the copies can disagree: room 20832's outline spans 10.5 ft in one and
