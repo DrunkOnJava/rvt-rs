@@ -409,6 +409,31 @@ fn element_provenance_section_validates_against_the_diagnostics_schema() {
                 model.display()
             );
         }
+        // #1326: the same for the log of per-element decisions.
+        assert!(
+            without.get("export_decisions").is_none(),
+            "{}: the diagnostics list decisions unasked",
+            model.display()
+        );
+        let with = ifc_diagnostics(model, &format!("log{index}"), &["--export-decisions"]);
+        validate(&schema, &with).expect("export decisions schema validation");
+        let log = &with["export_decisions"];
+        assert!(log.is_object(), "{}: no log", model.display());
+        assert!(log["reasons"].is_object() && log["entries"].is_array());
+        if *has_elements {
+            assert!(
+                log["entries"]
+                    .as_array()
+                    .is_some_and(|entries| !entries.is_empty()),
+                "{}: no decision listed",
+                model.display()
+            );
+        }
+        assert!(
+            with["decoded"].get("element_provenance").is_none(),
+            "{}: the table comes with the log",
+            model.display()
+        );
     }
 }
 

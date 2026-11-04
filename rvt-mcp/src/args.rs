@@ -82,6 +82,22 @@ pub struct GetElementArgs {
     pub phase: Option<String>,
 }
 
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct ExplainElementArgs {
+    /// The `model_id` that `open_model` returned, or the path of the file.
+    #[serde(alias = "model_id", alias = "path")]
+    pub model: String,
+    /// The element's Revit ElementId (`1234`), whether or not the export holds
+    /// it, or the 22-character IFC GlobalId of an exported one.
+    #[serde(alias = "id")]
+    pub element: IdArg,
+    /// The project phase to read, by its name (exactly) or its ElementId,
+    /// instead of the project's last (`rvt-ifc --phase`). It applies to a file
+    /// path: a `model_id` names the phase its model was opened at. An unknown
+    /// phase is an error that lists the file's phases.
+    pub phase: Option<String>,
+}
+
 /// The quality the export must reach, as `rvt-ifc --mode`.
 #[derive(Debug, Default, Clone, Copy, Deserialize, JsonSchema)]
 #[serde(rename_all = "kebab-case")]

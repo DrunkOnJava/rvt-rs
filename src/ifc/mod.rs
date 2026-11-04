@@ -87,6 +87,7 @@ pub mod compare;
 pub mod element_provenance;
 pub mod entities;
 pub mod export_content;
+pub mod export_decisions;
 mod export_pipeline;
 pub mod family_extrusions;
 pub mod from_decoded;
@@ -338,6 +339,12 @@ pub enum ExportDiagnosticsMode {
 pub struct ExportResult {
     pub model: IfcModel,
     pub diagnostics: ExportDiagnostics,
+    /// Every fail-closed decision behind [`ExportDiagnostics::skipped`], one
+    /// per element, none dropped (#1326). Not serialised:
+    /// [`run_export_with_limits_and_control`] makes the bounded
+    /// [`export_decisions::ExportDecisionLog`] of them when asked for.
+    #[serde(skip)]
+    pub decisions: Vec<export_decisions::ExportDecision>,
 }
 
 /// JSON-serialisable export diagnostics sidecar.
@@ -367,6 +374,14 @@ pub struct ExportDiagnostics {
     /// `None` when the stream is absent from the container.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub formats_latest_integrity: Option<crate::compression::FormatsLatestIntegrity>,
+    /// Each fail-closed decision behind [`Self::skipped`] and the `exported`
+    /// body and outline counts, one entry per element, bounded per reason
+    /// (#1326). Present only when asked for (`rvt-ifc --export-decisions`,
+    /// [`ExportOptions::with_export_decisions`]); without the option the field
+    /// is absent and the diagnostics are the bytes they were. Not written in
+    /// the IFC file; see [`export_decisions`].
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub export_decisions: Option<export_decisions::ExportDecisionLog>,
 }
 
 /// Where the warning about "Export to IFC As" values the export does not
@@ -380,7 +395,10 @@ impl ExportDiagnostics {
     /// [`crate::redact::ANONYMIZED`], the levels' and the material sample's
     /// names `Level 1`, `Material 1` and so on in their order, and each
     /// skipped element's sample name, which can name its family and type,
-    /// `element-<ElementId>`, and the phase a left-out room sits in. The warning listing "Export to IFC As" values
+    /// `element-<ElementId>`, and the phase a left-out room sits in, here and
+    /// in the log of decisions ([`export_decisions::ExportDecisionLog::anonymize`]:
+    /// the phase named in the detail of a left-out room's entry, and any other
+    /// detail that is not a code rvt-rs writes). The warning listing "Export to IFC As" values
     /// the export does not apply keeps their count and drops the values,
     /// which the project writes; no other warning carries project text
     /// (counts, releases, type ElementIds, unit identifiers), so none is
@@ -415,6 +433,9 @@ impl ExportDiagnostics {
                     format!("element-{id}")
                 };
             }
+        }
+        if let Some(log) = self.export_decisions.as_mut() {
+            log.anonymize();
         }
         for warning in &mut self.warnings {
             if let Some(at) = warning.find(UNAPPLIED_EXPORT_VALUES) {
@@ -974,8 +995,17 @@ impl Exporter for PlaceholderExporter {
 impl PlaceholderExporter {
     pub fn export_with_diagnostics(&self, rf: &mut crate::RevitFile) -> Result<ExportResult> {
         let model = self.export(rf)?;
-        let diagnostics = build_export_diagnostics(rf, &model, ExportDiagnosticsMode::Placeholder);
-        Ok(ExportResult { model, diagnostics })
+        let (diagnostics, decisions) = build_export_diagnostics_and_decisions(
+            rf,
+            &model,
+            ExportDiagnosticsMode::Placeholder,
+            crate::walker::WalkerLimits::default(),
+        );
+        Ok(ExportResult {
+            model,
+            diagnostics,
+            decisions,
+        })
     }
 }
 
@@ -1101,13 +1131,17 @@ impl RvtDocExporter {
         control: &crate::control::WalkerControl,
     ) -> Result<ExportResult> {
         let model = self.export_with_mode_limits_and_control(rf, quality_mode, limits, control)?;
-        let diagnostics = build_export_diagnostics_with_limits(
+        let (diagnostics, decisions) = build_export_diagnostics_and_decisions(
             rf,
             &model,
             ExportDiagnosticsMode::Default,
             limits,
         );
-        Ok(ExportResult { model, diagnostics })
+        Ok(ExportResult {
+            model,
+            diagnostics,
+            decisions,
+        })
     }
 }
 
@@ -1154,13 +1188,17 @@ impl DiagnosticRvtDocExporter {
         limits: crate::walker::WalkerLimits,
     ) -> Result<ExportResult> {
         let model = self.export_with_limits(rf, limits)?;
-        let diagnostics = build_export_diagnostics_with_limits(
+        let (diagnostics, decisions) = build_export_diagnostics_and_decisions(
             rf,
             &model,
             ExportDiagnosticsMode::DiagnosticProxies,
             limits,
         );
-        Ok(ExportResult { model, diagnostics })
+        Ok(ExportResult {
+            model,
+            diagnostics,
+            decisions,
+        })
     }
 }
 
@@ -3759,6 +3797,18 @@ pub fn build_export_diagnostics_with_limits(
     mode: ExportDiagnosticsMode,
     walker_limits: crate::walker::WalkerLimits,
 ) -> ExportDiagnostics {
+    build_export_diagnostics_and_decisions(rf, model, mode, walker_limits).0
+}
+
+/// [`build_export_diagnostics_with_limits`], also giving every decision the
+/// `skipped` section is counted from (#1326), none dropped.
+pub(crate) fn build_export_diagnostics_and_decisions(
+    rf: &mut crate::RevitFile,
+    model: &IfcModel,
+    mode: ExportDiagnosticsMode,
+    walker_limits: crate::walker::WalkerLimits,
+) -> (ExportDiagnostics, Vec<export_decisions::ExportDecision>) {
+    use export_decisions::{DecisionStage, ExportDecision};
     let bfi = rf.basic_file_info().ok();
     let layout = rf.layout_release().ok();
     let part = rf.part_atom().ok();
@@ -3768,7 +3818,7 @@ pub fn build_export_diagnostics_with_limits(
     let diagnostic_proxy_elements = count_diagnostic_proxy_elements(model);
     let arcwall_records = count_arcwall_records(model);
     let candidate_class_counts = diagnostic_candidate_class_counts(&diagnostic_candidates);
-    let walker_stats = production_walker_stats(rf, walker_limits);
+    let mut walker_stats = production_walker_stats(rf, walker_limits);
     let production_class_counts = walker_stats.class_counts.clone();
     // Match Python `decoded_elements()` / `element_counts()["total"]`:
     // count every production `iter_elements` hit (Levels/Materials
@@ -3776,15 +3826,21 @@ pub fn build_export_diagnostics_with_limits(
     let production_walker_elements: usize = production_class_counts.values().copied().sum();
 
     let mut skipped = Vec::new();
-    if walker_stats.elements_below_min_confidence > 0 {
-        skipped.push(SkippedExportItem {
-            phase: None,
-            reason: "below_min_element_confidence".into(),
-            count: walker_stats.elements_below_min_confidence,
-            classes: std::collections::BTreeMap::new(),
-            sample_names: Vec::new(),
-        });
+    let mut decisions: Vec<ExportDecision> = Vec::new();
+    let below_min = left_out_decisions(
+        "below_min_element_confidence",
+        None,
+        std::mem::take(&mut walker_stats.below_min_confidence),
+    );
+    if let Some(item) = counted_item(
+        "below_min_element_confidence",
+        None,
+        &below_min,
+        ClassesBy::Nothing,
+    ) {
+        skipped.push(item);
     }
+    decisions.extend(below_min);
     if mode == ExportDiagnosticsMode::Default && !diagnostic_candidates.candidates.is_empty() {
         skipped.push(SkippedExportItem {
             phase: None,
@@ -3798,9 +3854,21 @@ pub fn build_export_diagnostics_with_limits(
                 .map(diagnostic_candidate_display_name)
                 .collect(),
         });
+        decisions.extend(diagnostic_candidates.candidates.iter().map(|candidate| {
+            let mut decision = ExportDecision::new(
+                DecisionStage::ElementSkipped,
+                "low_confidence_schema_scan_candidate",
+            );
+            decision.element_id = candidate.decoded.id;
+            decision.class = Some(candidate.decoded.class.clone());
+            decision.stream = Some(crate::streams::GLOBAL_LATEST.to_string());
+            decision.offset = Some(candidate.decoded.byte_range.start);
+            decision
+        }));
     }
-    let geometry_gaps = geometry_gap_skipped_items(model);
+    let (geometry_gaps, gap_decisions) = geometry_gap_skipped_items(model);
     skipped.extend(geometry_gaps.iter().cloned());
+    decisions.extend(gap_decisions);
     // RE-30: element frames of a recovered category that carry no
     // attributable ElementId are rejected by the fail-closed decode, so a
     // file made mostly of them exports a fraction of its model while
@@ -3810,16 +3878,15 @@ pub fn build_export_diagnostics_with_limits(
             crate::partition_element_records::scan_unattributed_frames(rf, version).ok()
         })
         .unwrap_or_default();
-    let unattributed_total: usize = unattributed_frames.values().sum();
-    if unattributed_total > 0 {
-        skipped.push(SkippedExportItem {
-            phase: None,
-            reason: "element_record_without_element_id".into(),
-            count: unattributed_total,
-            classes: unattributed_frames,
-            sample_names: Vec::new(),
-        });
-    }
+    let unattributed_total = unattributed_frames.len();
+    record_left_out(
+        &mut skipped,
+        &mut decisions,
+        "element_record_without_element_id",
+        None,
+        unattributed_frames,
+        ClassesBy::Class,
+    );
     // #309: placed instances with no 3D body are left out by design, as
     // Revit's own export leaves them out. They are not missing, so they
     // do not count toward `unexported_element_records`.
@@ -3828,16 +3895,14 @@ pub fn build_export_diagnostics_with_limits(
             crate::partition_element_records::scan_volumeless_instances(rf, version).ok()
         })
         .unwrap_or_default();
-    let volumeless_total: usize = volumeless.values().sum();
-    if volumeless_total > 0 {
-        skipped.push(SkippedExportItem {
-            phase: None,
-            reason: "element_record_without_volume".into(),
-            count: volumeless_total,
-            classes: volumeless,
-            sample_names: Vec::new(),
-        });
-    }
+    record_left_out(
+        &mut skipped,
+        &mut decisions,
+        "element_record_without_volume",
+        None,
+        volumeless,
+        ClassesBy::Class,
+    );
     // #319: elements in a non-primary design option are left out as
     // Revit's own export leaves them out. They are not missing either.
     let non_primary = layout
@@ -3845,16 +3910,14 @@ pub fn build_export_diagnostics_with_limits(
             crate::partition_design_options::scan_non_primary_option_instances(rf, version).ok()
         })
         .unwrap_or_default();
-    let non_primary_total: usize = non_primary.values().sum();
-    if non_primary_total > 0 {
-        skipped.push(SkippedExportItem {
-            phase: None,
-            reason: "element_record_in_non_primary_design_option".into(),
-            count: non_primary_total,
-            classes: non_primary,
-            sample_names: Vec::new(),
-        });
-    }
+    record_left_out(
+        &mut skipped,
+        &mut decisions,
+        "element_record_in_non_primary_design_option",
+        None,
+        non_primary,
+        ClassesBy::Class,
+    );
     // #328: elements that do not exist in the export phase (the project's
     // last, or the one `--phase` names) are left out as Revit's own export
     // leaves them out (RE-184). A room is left out by its own phase, and
@@ -3862,26 +3925,32 @@ pub fn build_export_diagnostics_with_limits(
     let phase_excluded = layout
         .and_then(|version| crate::native_phases::scan_phase_excluded_instances(rf, version).ok())
         .unwrap_or_default();
-    let phase_excluded_total: usize = phase_excluded.by_class.values().sum();
-    if phase_excluded_total > 0 {
-        skipped.push(SkippedExportItem {
-            phase: None,
-            reason: "element_record_not_in_export_phase".into(),
-            count: phase_excluded_total,
-            classes: phase_excluded.by_class,
-            sample_names: Vec::new(),
-        });
-    }
-    if !phase_excluded.rooms_by_phase.is_empty() {
+    record_left_out(
+        &mut skipped,
+        &mut decisions,
+        "element_record_not_in_export_phase",
+        None,
+        phase_excluded.elements,
+        ClassesBy::Class,
+    );
+    if !phase_excluded.rooms.is_empty() {
         let phases = rf.memoised_phase_filter();
-        for (phase, count) in &phase_excluded.rooms_by_phase {
-            skipped.push(SkippedExportItem {
-                phase: Some(phases.phase_label(*phase)),
-                reason: "room_not_in_export_phase".into(),
-                count: *count,
-                classes: std::collections::BTreeMap::from([("Room".to_string(), *count)]),
-                sample_names: Vec::new(),
-            });
+        let mut rooms_by_phase: std::collections::BTreeMap<
+            i64,
+            Vec<crate::partition_element_records::LeftOutElement>,
+        > = std::collections::BTreeMap::new();
+        for (phase, room) in &phase_excluded.rooms {
+            rooms_by_phase.entry(*phase).or_default().push(room.clone());
+        }
+        for (phase, rooms) in rooms_by_phase {
+            record_left_out(
+                &mut skipped,
+                &mut decisions,
+                "room_not_in_export_phase",
+                Some(phases.phase_label(phase)),
+                rooms,
+                ClassesBy::Class,
+            );
         }
     }
     // #309: empty curtain panels are left out as Revit's own export leaves
@@ -3892,33 +3961,28 @@ pub fn build_export_diagnostics_with_limits(
             crate::partition_schema_mvp::scan_empty_curtain_panels(rf, version).ok()
         })
         .unwrap_or_default();
-    if empty_panels.count > 0 {
-        skipped.push(SkippedExportItem {
-            phase: None,
-            reason: "element_record_empty_curtain_panel".into(),
-            count: empty_panels.count,
-            classes: std::collections::BTreeMap::from([(
-                "CurtainWallPanel".to_string(),
-                empty_panels.count,
-            )]),
-            sample_names: Vec::new(),
-        });
-    }
+    record_left_out(
+        &mut skipped,
+        &mut decisions,
+        "element_record_empty_curtain_panel",
+        None,
+        empty_panels.panels,
+        ClassesBy::Class,
+    );
     // RE-324: on Revit 2015 to 2023 an Area is written only where its region
     // and body are proven. The others are not written, and not claimed to be
     // left out by Revit's export: its exporter drops an Area with no
     // enclosed boundary and rvt-rs does not read whether one encloses an area.
-    let unwritten_areas = rf.unwritten_areas().clone();
-    let unwritten_area_total: usize = unwritten_areas.values().sum();
-    if unwritten_area_total > 0 {
-        skipped.push(SkippedExportItem {
-            phase: None,
-            reason: "area_without_proven_body".into(),
-            count: unwritten_area_total,
-            classes: unwritten_areas,
-            sample_names: Vec::new(),
-        });
-    }
+    let unwritten_areas: Vec<crate::partition_element_records::LeftOutElement> =
+        rf.unwritten_areas().values().flatten().cloned().collect();
+    record_left_out(
+        &mut skipped,
+        &mut decisions,
+        "area_without_proven_body",
+        None,
+        unwritten_areas,
+        ClassesBy::Detail,
+    );
 
     let recovered_units = recover_project_units(rf);
     let mut warnings = diagnostic_candidates.warnings;
@@ -3944,16 +4008,20 @@ pub fn build_export_diagnostics_with_limits(
     // RE-312: a family instance written as a space whose family draws no
     // model form has no 3D body, and is left out as Revit's own export leaves
     // it out. A check that could not run keeps every instance.
-    let bodiless_spaces: usize = rf.bodiless_family_spaces().values().sum();
-    if bodiless_spaces > 0 {
-        skipped.push(SkippedExportItem {
-            phase: None,
-            reason: "element_record_family_space_without_body".into(),
-            count: bodiless_spaces,
-            classes: rf.bodiless_family_spaces().clone(),
-            sample_names: Vec::new(),
-        });
-    }
+    let bodiless_spaces: Vec<crate::partition_element_records::LeftOutElement> = rf
+        .bodiless_family_spaces()
+        .values()
+        .flatten()
+        .cloned()
+        .collect();
+    record_left_out(
+        &mut skipped,
+        &mut decisions,
+        "element_record_family_space_without_body",
+        None,
+        bodiless_spaces,
+        ClassesBy::Class,
+    );
     if let Some((checked, error)) = rf.bodiless_family_space_error() {
         warnings.push(format!(
             "{checked} family instance(s) written as spaces could not be checked for a 3D body \
@@ -4266,9 +4334,94 @@ pub fn build_export_diagnostics_with_limits(
         warnings,
         confidence,
         formats_latest_integrity,
+        export_decisions: None,
     };
     record_unread_streams(&mut diagnostics, rf.unread_streams());
-    diagnostics
+    (diagnostics, decisions)
+}
+
+/// How a skipped item's `classes` are keyed.
+#[derive(Clone, Copy)]
+enum ClassesBy {
+    /// By the decisions' class.
+    Class,
+    /// By the decisions' detail.
+    Detail,
+    /// Not at all.
+    Nothing,
+}
+
+/// The element-skipped decisions of `reason` for `elements`, with `phase`'s
+/// name as the detail of those that have none (#1326).
+fn left_out_decisions(
+    reason: &str,
+    phase: Option<&str>,
+    elements: Vec<crate::partition_element_records::LeftOutElement>,
+) -> Vec<export_decisions::ExportDecision> {
+    elements
+        .into_iter()
+        .map(|element| {
+            let mut decision = export_decisions::ExportDecision::new(
+                export_decisions::DecisionStage::ElementSkipped,
+                reason,
+            );
+            decision.element_id = element.element_id;
+            decision.class = Some(element.class);
+            decision.stream = element.stream;
+            decision.offset = element.offset;
+            decision.detail = element.detail.or_else(|| phase.map(str::to_string));
+            decision
+        })
+        .collect()
+}
+
+/// The `skipped` item of `decisions`, all of one `reason` (and `phase`), or
+/// `None` for none: the count is how many there are, the classes are counted
+/// from them as `by` says.
+fn counted_item(
+    reason: &str,
+    phase: Option<String>,
+    decisions: &[export_decisions::ExportDecision],
+    by: ClassesBy,
+) -> Option<SkippedExportItem> {
+    if decisions.is_empty() {
+        return None;
+    }
+    let mut classes = std::collections::BTreeMap::new();
+    for decision in decisions {
+        let key = match by {
+            ClassesBy::Class => decision.class.as_ref(),
+            ClassesBy::Detail => decision.detail.as_ref(),
+            ClassesBy::Nothing => None,
+        };
+        if let Some(key) = key {
+            *classes.entry(key.clone()).or_insert(0) += 1;
+        }
+    }
+    Some(SkippedExportItem {
+        phase,
+        reason: reason.into(),
+        count: decisions.len(),
+        classes,
+        sample_names: Vec::new(),
+    })
+}
+
+/// Make the decisions of `reason` for `elements` and the `skipped` item they
+/// are counted in, in that order, when there are any.
+fn record_left_out(
+    skipped: &mut Vec<SkippedExportItem>,
+    decisions: &mut Vec<export_decisions::ExportDecision>,
+    reason: &str,
+    phase: Option<String>,
+    elements: Vec<crate::partition_element_records::LeftOutElement>,
+    by: ClassesBy,
+) {
+    let made = left_out_decisions(reason, phase.as_deref(), elements);
+    if let Some(item) = counted_item(reason, phase, &made, by) {
+        skipped.push(item);
+    }
+    decisions.extend(made);
 }
 
 /// The skipped-item reason for streams a resource limit kept from being read
@@ -4502,48 +4655,93 @@ fn exported_model_diagnostics(model: &IfcModel) -> ExportedModelDiagnostics {
 #[derive(Debug)]
 struct GeometryGapBucket {
     reason: &'static str,
+    stage: export_decisions::DecisionStage,
     count: usize,
     classes: std::collections::BTreeMap<String, usize>,
     sample_names: Vec<String>,
+    /// One decision per element added (#1326).
+    decisions: Vec<export_decisions::ExportDecision>,
 }
 
 impl GeometryGapBucket {
-    fn new(reason: &'static str) -> Self {
+    fn new(reason: &'static str, stage: export_decisions::DecisionStage) -> Self {
         Self {
             reason,
+            stage,
             count: 0,
             classes: std::collections::BTreeMap::new(),
             sample_names: Vec::new(),
+            decisions: Vec::new(),
         }
     }
 
-    fn add(&mut self, ifc_type: &str, name: &str) {
+    fn add(&mut self, ifc_type: &str, name: &str, element_id: Option<u32>) {
         self.count += 1;
         *self.classes.entry(ifc_type.to_string()).or_insert(0) += 1;
         if self.sample_names.len() < 12 {
             self.sample_names.push(name.to_string());
         }
+        let mut decision = export_decisions::ExportDecision::new(self.stage, self.reason);
+        decision.element_id = element_id;
+        decision.class = Some(ifc_type.to_string());
+        self.decisions.push(decision);
     }
 
-    fn into_item(self) -> Option<SkippedExportItem> {
-        (self.count > 0).then(|| SkippedExportItem {
+    fn into_parts(
+        self,
+    ) -> (
+        Option<SkippedExportItem>,
+        Vec<export_decisions::ExportDecision>,
+    ) {
+        let item = (self.count > 0).then(|| SkippedExportItem {
             phase: None,
             reason: self.reason.into(),
             count: self.count,
             classes: self.classes,
             sample_names: self.sample_names,
-        })
+        });
+        (item, self.decisions)
     }
 }
 
-fn geometry_gap_skipped_items(model: &IfcModel) -> Vec<SkippedExportItem> {
-    let mut unsupported_curve = GeometryGapBucket::new("unsupported_geometry_curve");
-    let mut unsupported_profile = GeometryGapBucket::new("unsupported_geometry_profile");
-    let mut unresolved_host = GeometryGapBucket::new("unsupported_geometry_unresolved_host");
-    let mut missing_level = GeometryGapBucket::new("unsupported_geometry_missing_level");
-    let mut missing_dimensions = GeometryGapBucket::new("unsupported_geometry_missing_dimensions");
-    let mut floor_boundary_only = GeometryGapBucket::new("floor_boundary_annotation_only");
-    let mut opening_index_only = GeometryGapBucket::new("opening_index_without_host_geometry");
+/// The element's Revit ElementId, which the export writes as its `Tag`.
+fn element_tag(type_guid: &Option<String>) -> Option<u32> {
+    type_guid.as_deref().and_then(|tag| tag.parse().ok())
+}
+
+/// The geometry gaps of `model` as `skipped` items, and the decision behind
+/// each element counted in them (#1326).
+fn geometry_gap_skipped_items(
+    model: &IfcModel,
+) -> (
+    Vec<SkippedExportItem>,
+    Vec<export_decisions::ExportDecision>,
+) {
+    use export_decisions::DecisionStage;
+    let mut unsupported_curve =
+        GeometryGapBucket::new("unsupported_geometry_curve", DecisionStage::BodyNotDrawn);
+    let mut unsupported_profile =
+        GeometryGapBucket::new("unsupported_geometry_profile", DecisionStage::BodyNotDrawn);
+    let mut unresolved_host = GeometryGapBucket::new(
+        "unsupported_geometry_unresolved_host",
+        DecisionStage::OpeningNotCut,
+    );
+    let mut missing_level = GeometryGapBucket::new(
+        "unsupported_geometry_missing_level",
+        DecisionStage::StoreyNotBound,
+    );
+    let mut missing_dimensions = GeometryGapBucket::new(
+        "unsupported_geometry_missing_dimensions",
+        DecisionStage::BodyNotDrawn,
+    );
+    let mut floor_boundary_only = GeometryGapBucket::new(
+        "floor_boundary_annotation_only",
+        DecisionStage::OutlineNotRead,
+    );
+    let mut opening_index_only = GeometryGapBucket::new(
+        "opening_index_without_host_geometry",
+        DecisionStage::OpeningNotCut,
+    );
 
     for entity in &model.entities {
         let entities::IfcEntity::BuildingElement {
@@ -4556,11 +4754,13 @@ fn geometry_gap_skipped_items(model: &IfcModel) -> Vec<SkippedExportItem> {
             solid_shape,
             representation_map_index,
             property_set,
+            type_guid,
             ..
         } = entity
         else {
             continue;
         };
+        let id = element_tag(type_guid);
 
         let has_body_shape =
             extrusion.is_some() || solid_shape.is_some() || representation_map_index.is_some();
@@ -4574,32 +4774,34 @@ fn geometry_gap_skipped_items(model: &IfcModel) -> Vec<SkippedExportItem> {
         // Honest partial recovers: do not dump them into the hard
         // "unsupported_geometry_*" buckets used for walls missing curves.
         if floor_annotation && !has_body_shape {
-            floor_boundary_only.add(ifc_type, name);
+            floor_boundary_only.add(ifc_type, name, id);
             continue;
         }
         if opening_annotation {
-            opening_index_only.add(ifc_type, name);
+            opening_index_only.add(ifc_type, name, id);
             continue;
         }
 
         if storey_index.is_none() {
-            missing_level.add(ifc_type, name);
+            missing_level.add(ifc_type, name, id);
         }
         if location_feet.is_none() {
-            unsupported_curve.add(ifc_type, name);
+            unsupported_curve.add(ifc_type, name, id);
         }
         if !has_body_shape {
-            missing_dimensions.add(ifc_type, name);
+            missing_dimensions.add(ifc_type, name, id);
         }
         if location_feet.is_some() && !has_body_shape {
-            unsupported_profile.add(ifc_type, name);
+            unsupported_profile.add(ifc_type, name, id);
         }
         if hosted_geometry_type(ifc_type) && host_element_index.is_none() {
-            unresolved_host.add(ifc_type, name);
+            unresolved_host.add(ifc_type, name, id);
         }
     }
 
-    [
+    let mut items = Vec::new();
+    let mut decisions = Vec::new();
+    for bucket in [
         unsupported_curve,
         unsupported_profile,
         unresolved_host,
@@ -4607,10 +4809,94 @@ fn geometry_gap_skipped_items(model: &IfcModel) -> Vec<SkippedExportItem> {
         missing_dimensions,
         floor_boundary_only,
         opening_index_only,
-    ]
-    .into_iter()
-    .filter_map(GeometryGapBucket::into_item)
-    .collect()
+    ] {
+        let (item, made) = bucket.into_parts();
+        items.extend(item);
+        decisions.extend(made);
+    }
+    (items, decisions)
+}
+
+/// The decisions behind `exported.bounding_box_bodies`,
+/// `exported.bounding_box_spaces` and `exported.area_body_refusals` (#1326),
+/// read from `model` as [`exported_model_diagnostics`] counts them: a body
+/// that is only its record's box, a room or space whose outline is its
+/// record's box, and an Area with no body, each with its ElementId.
+pub(crate) fn model_decisions(model: &IfcModel) -> Vec<export_decisions::ExportDecision> {
+    use export_decisions::{DecisionStage, ExportDecision};
+    let mut decisions = Vec::new();
+    for entity in &model.entities {
+        let entities::IfcEntity::BuildingElement {
+            ifc_type,
+            type_guid,
+            property_set,
+            ..
+        } = entity
+        else {
+            continue;
+        };
+        if ifc_type == "IFCOPENINGELEMENT" {
+            continue;
+        }
+        let id = element_tag(type_guid);
+        let mut source = None;
+        let mut space_outline = None;
+        let mut refusals: Vec<&String> = Vec::new();
+        let mut profile_resolved = false;
+        for property in property_set.iter().flat_map(|set| &set.properties) {
+            match (property.name.as_str(), &property.value) {
+                (
+                    export_content::AREA_BODY_REFUSAL_PROPERTY,
+                    entities::PropertyValue::Text(text),
+                ) => refusals.push(text),
+                ("BodySource", entities::PropertyValue::Text(text)) => source = Some(text),
+                (
+                    export_content::SPACE_OUTLINE_SOURCE_PROPERTY,
+                    entities::PropertyValue::Text(text),
+                ) => space_outline = Some(text),
+                ("ProfileResolved", entities::PropertyValue::Boolean(true)) => {
+                    profile_resolved = true
+                }
+                _ => {}
+            }
+        }
+        let mut push = |stage, reason: &str, detail: Option<&String>| {
+            let mut decision = ExportDecision::new(stage, reason);
+            decision.element_id = id;
+            decision.class = Some(ifc_type.clone());
+            decision.detail = detail.cloned();
+            decisions.push(decision);
+        };
+        for text in refusals {
+            push(
+                DecisionStage::OutlineNotRead,
+                "area_body_refused",
+                Some(text),
+            );
+        }
+        if let Some(source) = source {
+            if (source == export_content::RECORD_BBOX_BODY_SOURCE
+                || source == export_content::BEAM_BOX_BODY_SOURCE)
+                && !profile_resolved
+            {
+                push(
+                    DecisionStage::BodyLeftAsBox,
+                    "body_is_record_box",
+                    Some(source),
+                );
+            }
+        }
+        if ifc_type == "IFCSPACE"
+            && space_outline.is_some_and(|text| text == export_content::SPACE_OUTLINE_RECORD_BOX)
+        {
+            push(
+                DecisionStage::OutlineNotRead,
+                "space_outline_is_record_box",
+                None,
+            );
+        }
+    }
+    decisions
 }
 
 fn hosted_geometry_type(ifc_type: &str) -> bool {
@@ -4782,6 +5068,9 @@ struct ProductionWalkerStats {
     class_counts: std::collections::BTreeMap<String, usize>,
     mean_element_confidence: Option<f32>,
     elements_below_min_confidence: usize,
+    /// The elements counted in `elements_below_min_confidence`, each with its
+    /// record's place where it has one (#1326).
+    below_min_confidence: Vec<crate::partition_element_records::LeftOutElement>,
     /// Exported elements whose "Export to IFC As" value the export does not
     /// apply, by `"<value> on <class>"` (#792).
     unapplied_export_values: std::collections::BTreeMap<String, usize>,
@@ -4813,6 +5102,16 @@ fn production_walker_stats(
         n += 1;
         if !el.meets_confidence(min_c) {
             stats.elements_below_min_confidence += 1;
+            let (stream, offset) = element_provenance::placement(el);
+            stats
+                .below_min_confidence
+                .push(crate::partition_element_records::LeftOutElement {
+                    element_id: el.id,
+                    class: el.class.clone(),
+                    stream,
+                    offset,
+                    detail: None,
+                });
         } else {
             if let Some(value) = export_content::unapplied_export_value(el) {
                 *stats

@@ -308,30 +308,32 @@ pub fn compute_phase_filter(rf: &mut RevitFile) -> anyhow::Result<PhaseFilter> {
     })
 }
 
-/// What the phase rules leave out of an export, counted for the diagnostics.
+/// What the phase rules leave out of an export, for the diagnostics.
 #[derive(Debug, Clone, Default)]
 pub struct PhaseExcluded {
     /// Placed instances of the recovered categories that do not exist in the
-    /// export phase, one per ElementId, by class name (RE-184). Rooms are
-    /// counted in [`Self::rooms_by_phase`].
-    pub by_class: BTreeMap<String, usize>,
-    /// Placed rooms whose own phase is not the export phase, by that phase's
-    /// ElementId (RE-326).
-    pub rooms_by_phase: BTreeMap<i64, usize>,
+    /// export phase, one per ElementId, in ElementId order (RE-184), each
+    /// with its class and the frame it was read from. Rooms are in
+    /// [`Self::rooms`].
+    pub elements: Vec<crate::partition_element_records::LeftOutElement>,
+    /// Placed rooms whose own phase is not the export phase, in ElementId
+    /// order, each with that phase's ElementId (RE-326).
+    pub rooms: Vec<(i64, crate::partition_element_records::LeftOutElement)>,
 }
 
 /// Placed instances of the recovered categories
 /// ([`crate::partition_element_records::RECOVERED_CATEGORIES`]) that are not
-/// in the export phase, one per ElementId, keyed by class name, and the
-/// rooms whose own phase is not, by that phase. The export leaves them out,
-/// as Revit's does; this counts them so the diagnostics can say so. An
-/// element also in a non-primary design option is counted there instead.
+/// in the export phase, one per ElementId, and the rooms whose own phase is
+/// not, each with the frame it was read from. The export leaves them out, as
+/// Revit's does; the diagnostics count them so they can say so. An element
+/// also in a non-primary design option is counted there instead.
 pub fn scan_phase_excluded_instances(
     rf: &mut RevitFile,
     revit_version: u32,
 ) -> crate::Result<PhaseExcluded> {
     use crate::partition_element_records::{
-        RECOVERED_CATEGORIES, scan_category_records_multi, supports_revit_version,
+        LeftOutElement, RECOVERED_CATEGORIES, recovered_class, scan_category_records_multi,
+        supports_revit_version,
     };
     let mut counted = PhaseExcluded::default();
     let filtered_32bit =
@@ -354,27 +356,31 @@ pub fn scan_phase_excluded_instances(
         let categories: Vec<i64> = RECOVERED_CATEGORIES.iter().map(|(c, _)| *c).collect();
         scan_category_records_multi(rf, revit_version, &categories, &declared)?
     };
-    let mut excluded: BTreeMap<u32, i64> = BTreeMap::new();
-    let mut rooms: BTreeMap<u32, i64> = BTreeMap::new();
+    let mut excluded: BTreeMap<u32, &PartitionElementRecord> = BTreeMap::new();
+    let mut rooms: BTreeMap<u32, (i64, &PartitionElementRecord)> = BTreeMap::new();
     for record in records
         .iter()
         .filter(|r| r.is_exported_instance() && !options.excludes(r) && phases.excludes(r))
     {
         if record.builtin_category == OST_ROOMS {
             if let Some(phase) = phases.room_outside_export_phase(u64::from(record.element_id)) {
-                rooms.insert(record.element_id, phase);
+                rooms.insert(record.element_id, (phase, record));
             }
         } else {
-            excluded.insert(record.element_id, record.builtin_category);
+            excluded.insert(record.element_id, record);
         }
     }
-    for category in excluded.into_values() {
-        if let Some((_, class)) = RECOVERED_CATEGORIES.iter().find(|(c, _)| *c == category) {
-            *counted.by_class.entry((*class).to_string()).or_insert(0) += 1;
+    for record in excluded.into_values() {
+        if let Some(class) = recovered_class(record.builtin_category) {
+            counted
+                .elements
+                .push(LeftOutElement::from_record(record, class));
         }
     }
-    for phase in rooms.into_values() {
-        *counted.rooms_by_phase.entry(phase).or_insert(0) += 1;
+    for (phase, record) in rooms.into_values() {
+        counted
+            .rooms
+            .push((phase, LeftOutElement::from_record(record, "Room")));
     }
     Ok(counted)
 }

@@ -352,6 +352,7 @@ class RevitFile:
         saved_meshes: bool = True,
         phase: str | int | None = None,
         element_provenance: bool = False,
+        export_decisions: bool = False,
     ) -> str:
         """Produce the JSON diagnostics sidecar for the default IFC
         export. The schema matches ``rvt-ifc --diagnostics`` and
@@ -361,6 +362,10 @@ class RevitFile:
         each decoded element was read from (``decoded.element_provenance``,
         as ``rvt-ifc --element-provenance``): far larger than the rest of
         the diagnostics, so it is off unless asked for.
+        ``export_decisions=True`` also lists each fail-closed decision per
+        element (``export_decisions``, as ``rvt-ifc --export-decisions``):
+        why an element was left out, a body is only its record's box, an
+        opening was not cut or an outline was not read, bounded per reason.
         """
 
     def export_diagnostics(
@@ -368,11 +373,12 @@ class RevitFile:
         saved_meshes: bool = True,
         phase: str | int | None = None,
         element_provenance: bool = False,
+        export_decisions: bool = False,
     ) -> dict[str, Any]:
         """Produce the default IFC export diagnostics as a Python
         dict. Equivalent to
         ``json.loads(export_diagnostics_json(saved_meshes, phase,
-        element_provenance))``.
+        element_provenance, export_decisions))``.
         """
 
     def elem_table_header(self) -> dict[str, int]:
@@ -431,9 +437,10 @@ def rvt_to_ifc_diagnostics(
     saved_meshes: bool = True,
     phase: str | int | None = None,
     element_provenance: bool = False,
+    export_decisions: bool = False,
 ) -> str:
     """One-shot: open ``path``, run ``RvtDocExporter``, return the
     JSON diagnostics sidecar of the export ``rvt_to_ifc`` writes with the
-    same ``saved_meshes`` and ``phase``. ``element_provenance`` is
-    ``RevitFile.export_diagnostics_json``'s.
+    same ``saved_meshes`` and ``phase``. ``element_provenance`` and
+    ``export_decisions`` are ``RevitFile.export_diagnostics_json``'s.
     """
