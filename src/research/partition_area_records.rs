@@ -1,4 +1,4 @@
-//! Revit 2015 to 2024 Areas from their partition chain records (#763, #1194).
+//! Revit 2015 to 2027 Areas from their partition chain records (#763, #1194).
 //!
 //! An Area's chain record (RE-35) carries `OST_Areas` (-2003200) at
 //! `+0x12` and no bounding-box marker at `+0x50`, so the element-record
@@ -83,11 +83,12 @@
 //!   measured. An Area on the top storey has none.
 //! - The base offset of the Area is read as zero, which is what the office
 //!   measures.
-//! - An Area whose lines do not close, even with their joins, is not read: its
-//!   point lies in no region. No Revit export of an Area bounded by a wall is
-//!   measured.
-//! - Revit 2024 and 2015 to 2023 (RE-324) are read; elsewhere nothing is read
-//!   (fail closed).
+//! - An Area whose lines meet only once moved by their area rule's offsets
+//!   has its point in no region of the lines' boxes; its region is Revit's
+//!   plan topology's where that is read (RE-330), and none otherwise.
+//! - Revit 2015 to 2027 are read (RE-324, RE-330); Revit 2025 to 2027 are
+//!   measured against the same project's 2024 save, not against a Revit
+//!   export. Earlier releases are not read (fail closed).
 //!
 //! # Revit 2015 to 2023 (RE-324)
 //!
@@ -135,10 +136,14 @@ use crate::partition_room_parameters::{
 use crate::walker::{DecodedElement, ElementProvenance, InstanceField};
 use std::collections::{BTreeMap, BTreeSet};
 
-/// Releases where the Area record is measured: Revit 2015 to 2023 (RE-324) and
-/// 2024 (RE-191).
-pub const AREA_SUPPORTED_REVIT_VERSIONS: &[u32] =
-    &[2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024];
+/// Releases where the Area record is measured: Revit 2015 to 2023 (RE-324),
+/// 2024 (RE-191), and 2025 to 2027, whose records are 2024's after the
+/// entries some carry before their body (RE-330): Autodesk's `rac_advanced`
+/// gets the Areas of its 2024 save, and Snowdon Towers Architectural (2025)
+/// the 101 of Revit's own export.
+pub const AREA_SUPPORTED_REVIT_VERSIONS: &[u32] = &[
+    2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026, 2027,
+];
 
 /// Bytes from the start of a Revit 2015 to 2023 Area record to its
 /// `BuiltInCategory` (RE-324): the record's `u32` ElementId, `u32` size, the
@@ -269,6 +274,41 @@ struct ChainSpan {
     start: usize,
     end: usize,
     id: u32,
+    /// The bytes of the record's entry block (Revit 2027, RE-330), which the
+    /// body follows; 0 where it has none.
+    entries: usize,
+}
+
+/// Where a 2024 and later chain record says how many entries come before
+/// its body: a `u16` after the class tag at `+0x0c` (RE-330).
+const CHAIN_ENTRY_COUNT_OFFSET: usize = 0x0e;
+
+/// Where the entries of a chain record start, and where its body starts when
+/// it has none: the record's `BuiltInCategory` ([`CATEGORY_OFFSET`]).
+const CHAIN_ENTRIES_FROM: usize = CATEGORY_OFFSET;
+
+/// One entry before a Revit 2027 record's body: an `i64` (a
+/// BuiltInParameter, negative), an `i64` that is -1, a `u16` and a `u32`.
+const CHAIN_ENTRY_LEN: usize = 22;
+
+/// The bytes of the entries before the body of the chain record at
+/// `start..end`, or `None` where they do not fit or an entry's second word
+/// is not -1. No 2024 file read here has any; files saved by Revit 2025 to
+/// 2027 may (RE1 Architecture and Snowdon Towers on 2025, `rac_advanced` on
+/// 2027), and the body after them is the one a record without them has
+/// (RE-330).
+fn chain_entries(buf: &[u8], start: usize, end: usize) -> Option<usize> {
+    let count = usize::from(le_bytes::u16_at(buf, start + CHAIN_ENTRY_COUNT_OFFSET)?);
+    let entries = count.checked_mul(CHAIN_ENTRY_LEN)?;
+    if start + CHAIN_ENTRIES_FROM + entries + 8 > end {
+        return None;
+    }
+    (0..count)
+        .all(|k| {
+            le_bytes::u64_at(buf, start + CHAIN_ENTRIES_FROM + k * CHAIN_ENTRY_LEN + 8)
+                == Some(u64::MAX)
+        })
+        .then_some(entries)
 }
 
 impl Layout {
@@ -294,10 +334,12 @@ impl Layout {
                 .into_iter()
                 .filter_map(|span| {
                     let id = u32::try_from(span.element_id).ok()?;
+                    let entries = chain_entries(buf, span.start, span.end)?;
                     declared.contains(&id).then_some(ChainSpan {
                         start: span.start,
                         end: span.end,
                         id,
+                        entries,
                     })
                 })
                 .collect(),
@@ -307,6 +349,7 @@ impl Layout {
                     start: span.start,
                     end: span.end,
                     id: span.element_id,
+                    entries: 0,
                 })
                 .collect(),
         }
@@ -397,7 +440,8 @@ fn area_records(rf: &mut RevitFile, layout: Layout, declared: &BTreeSet<u32>) ->
         for span in layout.chain(buf, declared) {
             let id = span.id;
             let category =
-                le_bytes::u64_at(buf, span.start + layout.category_offset()).map(|c| c as i64);
+                le_bytes::u64_at(buf, span.start + span.entries + layout.category_offset())
+                    .map(|c| c as i64);
             if category == Some(OST_AREA_SCHEMES) {
                 schemes.insert(id);
                 continue;
@@ -409,7 +453,10 @@ fn area_records(rf: &mut RevitFile, layout: Layout, declared: &BTreeSet<u32>) ->
             if category != Some(OST_AREAS) {
                 continue;
             }
-            let bytes = buf[span.start..span.end].to_vec();
+            // The record as Revit 2024 to 2026 write it: a 2027 record's
+            // entries are left out, so its fields are where theirs are.
+            let body = span.start + CHAIN_ENTRIES_FROM;
+            let bytes = [&buf[span.start..body], &buf[body + span.entries..span.end]].concat();
             let lists = match layout {
                 Layout::Wide(_) => Vec::new(),
                 Layout::Narrow(_) => counted_lists(&bytes, NARROW_LISTS_FROM, declared),
@@ -1019,7 +1066,11 @@ fn locate(
     surroundings: &Surroundings<'_>,
     arrangements: &mut BTreeMap<GroupKey, Option<GroupArrangement>>,
 ) -> Result<Located, &'static str> {
-    let point = point.ok_or(REFUSED_NO_POINT)?;
+    // An Area whose point is not read can still have the plan topology's
+    // region, which is checked against the point the topology's Area saves.
+    if point.is_none() && topology.is_none() {
+        return Err(REFUSED_NO_POINT);
+    }
     let (Some(level), Some(scheme)) = (
         record.named_one(surroundings.level_ids),
         record.named_one(surroundings.scheme_ids),
@@ -1028,20 +1079,19 @@ fn locate(
     };
     let key = (level, scheme);
     let base_feet = level_elevation(surroundings.levels, level).ok_or(REFUSED_HEIGHT)?;
-    let face = match arrangements
-        .entry(key)
-        .or_insert_with(|| group_arrangement(lines, key, base_feet))
-    {
-        Some(group) => match group.arrangement.face_at(point) {
-            None => Err(REFUSED_REGION),
-            Some(face) if group.blocks(&face) => Err(REFUSED_GROUP),
-            Some(face) => Ok(face),
+    let face = match point {
+        None => Err(REFUSED_NO_POINT),
+        Some(point) => match arrangements
+            .entry(key)
+            .or_insert_with(|| group_arrangement(lines, key, base_feet))
+        {
+            Some(arrangement) => arrangement.face_at(point).ok_or(REFUSED_REGION),
+            None => Err(REFUSED_GROUP),
         },
-        None => Err(REFUSED_GROUP),
     };
-    // Where the lines' arrangement finds no region, Revit's plan topology
-    // may (RE-330): lines that meet only once moved by their offsets, or an
-    // arc or a slanted line in the group.
+    // Where the lines' arrangement finds no region, or the point is not read,
+    // Revit's plan topology may give one (RE-330): lines that meet only once
+    // moved by their offsets, or an arc or a slanted line in the group.
     let face = face.or_else(|reason| {
         topology
             .map(|region| AreaFace {
@@ -1258,7 +1308,7 @@ fn area_bodies(
     out
 }
 
-/// Every placed Area of a Revit 2015 to 2024 file, as a `DecodedElement` of
+/// Every placed Area of a Revit 2015 to 2027 file, as a `DecodedElement` of
 /// class `Area` with its number, name and Level where they are read, and its
 /// boundary, base and height where they are proven (RE-317, RE-324). On 2015
 /// to 2023 only the Areas whose body is proven; the others are counted by
