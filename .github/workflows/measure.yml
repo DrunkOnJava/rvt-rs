@@ -286,24 +286,29 @@ jobs:
           print("matrix=" + json.dumps({"include": include}))
           print("base=" + ("true" if base else "false"))
           # The timing jobs' files, in shards of about equal time. A unit's
-          # seconds are base plus head, three rounds, from the medians of
-          # Measure run 41255129905 (the reference models, the four office
-          # files, Autodesk's samples); code that changes all of them moves
-          # them alike, so the split stays about even. A sample unit is a
-          # range of years, cut to the `sample_years` input.
-          units = [("reference models", 75, dict(reference=True))]
+          # seconds are its files' medians, base plus head, times the three
+          # rounds, summed from the table of Measure run 41797994751 (the
+          # reference models, the four office files, Autodesk's samples). The
+          # four shards of that run ran on four CPUs (two Intel Xeons, an
+          # Intel Xeon Platinum and an AMD EPYC), and no runner's rows skew
+          # clearly (its units took 0.98 to 1.21 of their time on the one
+          # runner of run 41793618569), so the weights are not normalised.
+          # Code that changes every file moves them alike, so the split stays
+          # about even. A sample unit is a range of years, cut to the
+          # `sample_years` input.
+          units = [("reference models", 71, dict(reference=True))]
           if flag("NORDIC"):
-              units.append(("offices", 720, dict(offices=True)))
+              units.append(("offices", 329, dict(offices=True)))
           if flag("SAMPLES"):
               years = e["YEARS"].split()
               low = int(years[0]) if years else 0
               high = int(years[1]) if len(years) > 1 else 9999
               for label, first, last, seconds in (
-                  ("samples to 2023", 0, 2023, 450),
-                  ("samples 2024", 2024, 2024, 640),
-                  ("samples 2025", 2025, 2025, 320),
-                  ("samples 2026", 2026, 2026, 230),
-                  ("samples 2027 on", 2027, 9999, 230),
+                  ("samples to 2023", 0, 2023, 461),
+                  ("samples 2024", 2024, 2024, 559),
+                  ("samples 2025", 2025, 2025, 286),
+                  ("samples 2026", 2026, 2026, 216),
+                  ("samples 2027 on", 2027, 9999, 207),
               ):
                   if max(first, low) <= min(last, high):
                       ranges = f"{max(first, low)} {min(last, high)}"
