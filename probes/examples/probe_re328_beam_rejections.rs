@@ -197,7 +197,7 @@ fn main() -> anyhow::Result<()> {
             continue;
         }
         let rotation = match float_field(beam, BEAM_ROTATION_FIELD) {
-            Some(r) if r == 0.0 => "zero",
+            Some(0.0) => "zero",
             Some(_) => "nonzero",
             None => "unread",
         };
