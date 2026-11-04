@@ -94,11 +94,11 @@ struct Args {
     /// Draw a family instance from its family's own extrusions (the sketch
     /// lines they were drawn from, swept between their offsets) instead of
     /// its saved mesh, where they reproduce the mesh; every other instance
-    /// keeps it (#156). An arc in a profile is written as the arc, or as
-    /// short arcs where its radius is over 0.12 ft (#1346). Off by default.
-    /// Implies `--saved-meshes`. Each instance is checked against its own
-    /// mesh. Revit 2024 to 2027 files (measured on 2024 and 2025). Slower on
-    /// large files.
+    /// keeps it (#156). An arc in a profile is written as the arc; in a Revit
+    /// 2025 or later file an instance with a whole circle over 0.12 ft in
+    /// radius keeps its mesh (#1346). Off by default. Implies
+    /// `--saved-meshes`. Each instance is checked against its own mesh. Revit
+    /// 2024 to 2027 files (measured on 2024 and 2025). Slower on large files.
     #[arg(long, conflicts_with_all = ["placeholder", "no_saved_meshes"])]
     family_extrusions: bool,
     /// Also write Revit's own property sets, as Revit's exporter does with

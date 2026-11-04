@@ -14,8 +14,10 @@ segments) and meshes them with the scorers' own settings and arithmetic
 2. by radius, the worst "Revit's vertices to rvt-rs's surface" and "rvt-rs's
    vertices to Revit's" over Revit's circle written as an `IfcCircleProfileDef`
    at four reference directions and as half and quarter arcs at the same four
-   starts, for rvt-rs's half arcs and for the rule `family_extrusions.rs`
-   writes (arcs up to 0.12 ft, short arcs over it);
+   starts, for rvt-rs's half arcs and for short arcs over 0.12 ft (arcs whose
+   chords lie within 0.00025 ft of the circle, which the first head of #1346
+   wrote and `family_extrusions.rs` does not: they hold "ref on ours" and give
+   up the coincidence that IFC4 exports of Revit 2024 have with half arcs);
 3. with a Revit export that holds RE1 Architecture's toilet-paper dispenser
    (element 360331), that element redrawn the ways rvt-rs could draw it and
    scored against Revit's own body.
@@ -104,7 +106,7 @@ def arcs_of_circle(radius, start, pieces):
 
 
 def short_arc_pieces(radius_feet):
-    """The rule of family_extrusions.rs for a whole circle: two arcs up to 0.12 ft, else short arcs."""
+    """Arcs for a whole circle: two up to 0.12 ft, else short arcs."""
     if radius_feet <= TRUE_ARC_MAX_RADIUS:
         return 2
     return math.ceil(2 * math.pi / (2 * math.acos(1 - SHORT_ARC_SAGITTA / radius_feet)))
@@ -200,8 +202,8 @@ def chord_counts(scratch):
 def worst_cases(scratch):
     print()
     print("Worst case over Revit's circle as IfcCircleProfileDef, half arcs and quarter arcs, each at four starts")
-    print("(0, 90, 7.3 and 180 degrees), against rvt-rs's half arcs and against the rule (arcs up to 0.12 ft, else short arcs):")
-    print("  radius ft | half arcs: Revit's vertices to ours, ours to Revit's, volume ratio | rule: same, arcs written")
+    print("(0, 90, 7.3 and 180 degrees), against rvt-rs's half arcs and against short arcs over 0.12 ft:")
+    print("  radius ft | half arcs: Revit's vertices to ours, ours to Revit's, volume ratio | short arcs over 0.12 ft: same, arcs written")
     for feet in (0.02, 0.05, 0.08, 0.10, 0.12, 0.125, 0.14, 0.20, 0.30, 0.50, 1.00, 2.00):
         r = feet * FEET
         oracles = []
@@ -276,7 +278,7 @@ def dispenser(revit_path, scratch):
     print("  drawing | volume ratio | Revit's vertices to rvt-rs's surface | rvt-rs's to Revit's  (feet)")
     for name, circles, turn in (
         ("two half arcs per circle (the first run)", "arcs", 0.0),
-        ("the rule: arcs up to 0.12 ft, short arcs over", "rule", 0.0),
+        ("arcs up to 0.12 ft, short arcs over", "rule", 0.0),
         ("IfcCircleProfileDef, reference direction as Revit's", "circle", 0.0),
         ("IfcCircleProfileDef, turned 90 degrees", "circle", math.pi / 2),
         ("IfcCircleProfileDef, turned 180 degrees", "circle", math.pi),

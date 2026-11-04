@@ -1130,11 +1130,13 @@ Revit's vertices within 0.001 ft of their surface and one did not: Revit's
 export draws that circle (0.2292 ft) as an `IfcCircleProfileDef`, which
 IfcOpenShell cuts into 27 chords, and two half arcs of it come out as 28, so
 no vertex coincides (a count mismatch, reproduced and measured in
-`reports/element-framing/RE-327-family-extrusions.md` §11). An arc over 0.12
-ft in radius is therefore written as short arcs whose chords lie within
-0.00025 ft of it, which bounds Revit's vertices from the surface whatever
-Revit's tessellation; a smaller one is written as the arc, which IfcOpenShell
-cuts within 0.00088 ft of itself. The flag reads Revit 2024 to 2027
+`reports/element-framing/RE-327-family-extrusions.md` §11). That export is
+Revit 26.2's IFC2X3 one; the office's IFC4 export of Revit 2024 writes a
+circle as half arcs, which ours coincide with (78 of 78 waste terminals at
+1.9e-6 ft). No one drawing of a circle meets both at a radius where the
+counts differ, so an arc is written as the arc, and in a Revit 2025 or later
+file an instance with a whole circle over 0.12 ft in radius keeps its mesh.
+The flag reads Revit 2024 to 2027
 (measured on 2024 and 2025); an earlier file has no instance transform that
 reads, so nothing is replaced (`reports/element-framing/RE-327-family-extrusions.md`
 §9).

@@ -7,20 +7,22 @@
 //! family's extrusions and draws the instance from them instead, as
 //! `IfcExtrudedAreaSolid`s over `IfcIndexedPolyCurve` profiles.
 //!
-//! An arc in a profile is written as the arc, or as short arcs. In the one
-//! case where drawing arcs failed the saved-mesh bar (RE1 Architecture's
-//! toilet-paper dispenser, element 360331), Revit's export draws a circle of
-//! 0.2292 ft radius as an `IfcCircleProfileDef`, which IfcOpenShell
-//! tessellates into 27 chords, and the two half arcs rvt-rs wrote came out as
-//! 28: no vertex coincides, and Revit's vertices lay 0.001439 ft from the
-//! 28-gon's chords, the sagitta of a 28-gon of that radius (RE-327 section
-//! 11). IfcOpenShell cuts an arc into steps of at most 0.2417 rad and of at
-//! most about 0.0016 ft of sagitta, so an arc of radius up to 0.12 ft is
-//! within 0.00088 ft of itself whatever Revit wrote, and is written as the
-//! arc. A larger arc is written as arcs short enough that the chord of each
-//! lies within 2.5e-4 ft of the arc, so Revit's vertices, which lie on the
-//! true arc, are within that of the surface wherever Revit's tessellation
-//! starts and however many chords it has.
+//! An arc in a profile is written as the arc, in the form Revit's own IFC4
+//! export gives it (`IfcIndexedPolyCurve` arcs). A circle is two half arcs
+//! from the sketch's start, which IfcOpenShell cuts into the chords Revit's
+//! IFC4 export of the same circle is cut into (78 of 78 waste terminals of the
+//! BIM4LCA office, 1.9e-6 ft). RE1's exports (Revit 2025 files, exported by
+//! Revit 26.2 as IFC2X3) write a whole circle differently: as an
+//! `IfcCircleProfileDef`, which IfcOpenShell cuts into one chord fewer than
+//! the two half arcs of a circle at some radii (27 against 28 for the
+//! toilet-paper dispenser of RE1 Architecture, element 360331, 0.2292 ft in
+//! radius), so that no vertex of one lies on the other and Revit's lay
+//! 0.001439 ft from rvt-rs's surface. No drawing of a circle meets both forms
+//! at those radii, and a circle of 0.12 ft or less meets both (IfcOpenShell
+//! cuts it within 0.00088 ft of itself). In a Revit 2025 or later file an
+//! instance with a loop that is one whole circle over 0.12 ft in radius
+//! therefore keeps its mesh, until the form Revit 2025's IFC4 export gives a
+//! circle is measured (RE-327 section 11).
 //!
 //! An instance keeps its saved mesh unless the extrusions reproduce it. The
 //! family's document holds the family as saved, and a placed instance is
@@ -63,7 +65,7 @@ use crate::native_form_geometry::{
 use crate::partition_instance_transforms::{InstanceTransform, scan_instance_transforms};
 use crate::{native_document, native_family_forms};
 use std::collections::{BTreeMap, BTreeSet};
-use std::f64::consts::PI;
+use std::f64::consts::{PI, TAU};
 
 /// `BodySource` of a body drawn from the family's own extrusions.
 pub const FAMILY_EXTRUSION_BODY_SOURCE: &str = "family_extrusions";
@@ -80,25 +82,23 @@ const VERTEX_TOLERANCE: f64 = 1e-4;
 /// feet: the 0.001 ft chords the mesh draws arcs with (the largest of the
 /// 6,014 printed forms is 0.000998 ft), and a tenth more.
 const SURFACE_TOLERANCE: f64 = 1.1e-3;
-/// The largest radius, feet, at which an arc is written as the arc itself.
-/// IfcOpenShell 0.9 cuts an arc into steps of at most 0.2417 rad, which for a
-/// radius of 0.12 ft is a chord 0.00088 ft off the arc (the bar is 0.001 ft)
-/// and for one over 0.137 ft is more than the bar; at larger radii it only
-/// shrinks the steps to hold the sagitta near 0.0016 ft. A larger arc could
-/// then miss a vertex of Revit's by more than the bar (RE-327 section 11).
-const TRUE_ARC_MAX_RADIUS: f64 = 0.12;
-/// How far the chord of each arc written for a larger one lies from the arc,
-/// feet at most.
-const SUB_ARC_SAGITTA: f64 = 2.5e-4;
-/// Most arcs one arc of a profile is written as, and most arcs all the
-/// profiles of one instance are written as, so a hostile radius cannot make
-/// an instance's profile unbounded: past either the instance keeps its mesh.
-const MAX_ARC_PIECES: usize = 2048;
-const MAX_PROFILE_PIECES: usize = 16384;
+/// The largest radius, feet, of a whole circle that is drawn from a Revit 2025
+/// or later file. IfcOpenShell 0.9 cuts a circle into chords of at most 0.2417
+/// rad, which for a radius of 0.12 ft is a chord 0.00088 ft off the circle
+/// whether it is drawn as a circle or as two half arcs (the bar is 0.001 ft);
+/// over 0.137 ft the two forms can differ by a chord, and a vertex of Revit's
+/// can lie up to 0.0016 ft from the other form's surface (RE-327 section 11).
+const WHOLE_CIRCLE_MAX_RADIUS: f64 = 0.12;
+/// The first Revit release whose IFC export is known to write a whole circle
+/// as an `IfcCircleProfileDef`: RE1's exports, of Revit 2025 files (IFC2X3,
+/// Revit 26.2). The 2024 IFC4 exports of Core Interior and the BIM4LCA office
+/// hold no `IfcCircleProfileDef` at all and write a circle as arcs.
+const CIRCLE_PROFILE_FROM: u32 = 2025;
 
 /// What [`attach`] did. Every instance drawn from a saved mesh is counted
 /// once: `candidates = replaced + not_rebuilt + unplaced + unchecked +
-/// volume_differs + vertices_differ + surface_differs + unwritable`.
+/// volume_differs + vertices_differ + surface_differs + circles_kept +
+/// unwritable`.
 #[derive(Debug, Default, Clone, PartialEq, Eq, serde::Serialize)]
 #[non_exhaustive]
 pub struct FamilyExtrusionReport {
@@ -128,16 +128,15 @@ pub struct FamilyExtrusionReport {
     pub volume_differs: usize,
     pub vertices_differ: usize,
     pub surface_differs: usize,
-    /// Candidates the extrusions reproduce whose profile cannot be written:
-    /// a loop that would need more arcs than the bound allows, or a solid of
-    /// no depth.
+    /// Candidates the extrusions reproduce, left with their mesh because a
+    /// loop is one whole circle over 0.12 ft in radius in a Revit 2025 or later
+    /// file, where Revit's export writes it as an `IfcCircleProfileDef`.
+    pub circles_kept: usize,
+    /// Candidates the extrusions reproduce whose profile cannot be written: a
+    /// solid of no depth.
     pub unwritable: usize,
     /// Of `replaced`, instances with an arc in a profile.
     pub with_arcs: usize,
-    /// Of `with_arcs`, instances with an arc whose radius is over 0.12 ft,
-    /// written as short arcs (chords within 2.5e-4 ft of the arc) instead of
-    /// the arc itself.
-    pub arcs_split: usize,
 }
 
 fn cross(a: [f64; 3], b: [f64; 3]) -> [f64; 3] {
@@ -239,41 +238,24 @@ fn to_element_frame(
     })
 }
 
-/// Whether an arc of `radius` feet is written as short arcs instead of itself.
-fn is_large_arc(radius: f64) -> bool {
-    radius.is_finite() && radius > TRUE_ARC_MAX_RADIUS
-}
-
-/// How many arcs one arc of a profile, of `radius` feet over `span` radians,
-/// is written as: one, or two for a span over a half turn, up to
-/// [`TRUE_ARC_MAX_RADIUS`]; above it enough that the chord of each lies within
-/// [`SUB_ARC_SAGITTA`] of the arc. `None` where that is more than
-/// [`MAX_ARC_PIECES`] or the span does not read.
-fn arc_pieces(radius: f64, span: f64) -> Option<usize> {
-    let span = span.abs();
-    if !is_large_arc(radius) {
-        return Some(if span > PI + 1e-9 { 2 } else { 1 });
+/// The radius of a loop that is one whole circle: a single arc that turns the
+/// full way round.
+fn whole_circle_radius(source: &Loop) -> Option<f64> {
+    match source.curves.as_slice() {
+        [
+            Curve::Arc {
+                radius, start, end, ..
+            },
+        ] if (end - start).abs() >= TAU - 1e-9 => Some(*radius),
+        _ => None,
     }
-    let step = 2.0 * (1.0 - SUB_ARC_SAGITTA / radius).acos();
-    let pieces = (span / step).ceil();
-    if !pieces.is_finite() || pieces > MAX_ARC_PIECES as f64 {
-        return None;
-    }
-    Some((pieces as usize).max(1))
 }
 
 /// One closed `IfcIndexedPolyCurve` over a loop of a profile, in the plane
 /// frame IFC builds from the placement's axis and reference direction
 /// (`handed` is -1 where the solid's frame is left-handed, which mirrors the
-/// profile's y). Counter-clockwise for an outline, clockwise for a hole. Its
-/// arcs are written as [`arc_pieces`] says, each taking `budget` down by the
-/// pieces it is written as; `None` where the budget runs out.
-fn indexed_curve(
-    source: &Loop,
-    counter_clockwise: bool,
-    handed: f64,
-    budget: &mut usize,
-) -> Option<IndexedCurve> {
+/// profile's y). Counter-clockwise for an outline, clockwise for a hole.
+fn indexed_curve(source: &Loop, counter_clockwise: bool, handed: f64) -> Option<IndexedCurve> {
     let oriented = if (source.signed_area() * handed > 0.0) == counter_clockwise {
         source.clone()
     } else {
@@ -287,31 +269,36 @@ fn indexed_curve(
     let count = oriented.curves.len();
     for (n, curve) in oriented.curves.iter().enumerate() {
         let closes = n + 1 == count;
+        let push_end = |points: &mut Vec<(f64, f64)>| -> usize {
+            if closes {
+                0
+            } else {
+                points.push(mirrored(curve.end_point()));
+                points.len() - 1
+            }
+        };
         match curve {
             Curve::Line { .. } => {
-                let end = if closes {
-                    0
-                } else {
-                    points.push(mirrored(curve.end_point()));
-                    points.len() - 1
-                };
+                let end = push_end(&mut points);
                 segments.push(CurveSegment::Line([current, end]));
                 current = end;
             }
-            Curve::Arc {
-                radius, start, end, ..
-            } => {
-                let pieces = arc_pieces(*radius, end - start)?;
-                *budget = budget.checked_sub(pieces)?;
-                for k in 0..pieces {
-                    points.push(mirrored(curve.point_at((k as f64 + 0.5) / pieces as f64)));
+            Curve::Arc { start, end, .. } => {
+                if (end - start).abs() > PI + 1e-9 {
+                    points.push(mirrored(curve.point_at(0.25)));
+                    let quarter = points.len() - 1;
+                    points.push(mirrored(curve.point_at(0.5)));
                     let middle = points.len() - 1;
-                    let last = if closes && k + 1 == pieces {
-                        0
-                    } else {
-                        points.push(mirrored(curve.point_at((k + 1) as f64 / pieces as f64)));
-                        points.len() - 1
-                    };
+                    points.push(mirrored(curve.point_at(0.75)));
+                    let three_quarters = points.len() - 1;
+                    let last = push_end(&mut points);
+                    segments.push(CurveSegment::Arc([current, quarter, middle]));
+                    segments.push(CurveSegment::Arc([middle, three_quarters, last]));
+                    current = last;
+                } else {
+                    points.push(mirrored(curve.point_at(0.5)));
+                    let middle = points.len() - 1;
+                    let last = push_end(&mut points);
                     segments.push(CurveSegment::Arc([current, middle, last]));
                     current = last;
                 }
@@ -322,9 +309,8 @@ fn indexed_curve(
 }
 
 /// A solid as `IfcExtrudedAreaSolid`s, one for each outline of its profile
-/// with the holes inside it, placed by the solid's frame. Its arcs take
-/// `budget` down as [`indexed_curve`] says.
-fn placed_extrusions(solid: &ExtrusionSolid, budget: &mut usize) -> Option<Vec<SolidShape>> {
+/// with the holes inside it, placed by the solid's frame.
+fn placed_extrusions(solid: &ExtrusionSolid) -> Option<Vec<SolidShape>> {
     let [x, y, z] = solid.frame.axes;
     let handed = if dot(cross(x, y), z) >= 0.0 {
         1.0
@@ -348,11 +334,11 @@ fn placed_extrusions(solid: &ExtrusionSolid, budget: &mut usize) -> Option<Vec<S
         if profile.depths[i] & 1 == 1 {
             continue;
         }
-        let outer = indexed_curve(outline, true, handed, budget)?;
+        let outer = indexed_curve(outline, true, handed)?;
         let mut voids = Vec::new();
         for (j, hole) in profile.loops.iter().enumerate() {
             if profile.depths[j] & 1 == 1 && parents[j] == Some(i) {
-                voids.push(indexed_curve(hole, false, handed, budget)?);
+                voids.push(indexed_curve(hole, false, handed)?);
             }
         }
         let profile_def = if voids.is_empty() {
@@ -529,23 +515,21 @@ pub fn attach_with_control(
             report.surface_differs += 1;
             continue;
         }
-        let mut with_arcs = false;
-        let mut arcs_split = false;
-        for curve in local
+        let with_arcs = local
             .iter()
             .flat_map(|solid| solid.profile.loops.iter())
             .flat_map(|profile_loop| profile_loop.curves.iter())
-        {
-            if let Curve::Arc { radius, .. } = curve {
-                with_arcs = true;
-                arcs_split |= is_large_arc(*radius);
-            }
-        }
-        let mut budget = MAX_PROFILE_PIECES;
-        let placed: Option<Vec<Vec<SolidShape>>> = local
+            .any(|curve| matches!(curve, Curve::Arc { .. }));
+        let big_circle = local
             .iter()
-            .map(|solid| placed_extrusions(solid, &mut budget))
-            .collect();
+            .flat_map(|solid| solid.profile.loops.iter())
+            .filter_map(whole_circle_radius)
+            .any(|radius| radius > WHOLE_CIRCLE_MAX_RADIUS);
+        if big_circle && release >= CIRCLE_PROFILE_FROM {
+            report.circles_kept += 1;
+            continue;
+        }
+        let placed: Option<Vec<Vec<SolidShape>>> = local.iter().map(placed_extrusions).collect();
         let Some(placed) = placed else {
             report.unwritable += 1;
             continue;
@@ -568,74 +552,6 @@ pub fn attach_with_control(
         }
         report.replaced += 1;
         report.with_arcs += usize::from(with_arcs);
-        report.arcs_split += usize::from(arcs_split);
     }
     Ok(report)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::{MAX_ARC_PIECES, SUB_ARC_SAGITTA, TRUE_ARC_MAX_RADIUS, arc_pieces};
-    use std::f64::consts::{PI, TAU};
-
-    fn sagitta(radius: f64, span: f64, pieces: usize) -> f64 {
-        radius * (1.0 - (span / pieces as f64 / 2.0).cos())
-    }
-
-    // A hostile radius must not make a profile of millions of arcs.
-    #[test]
-    fn a_radius_that_needs_more_than_the_bound_is_refused() {
-        assert_eq!(arc_pieces(400.0, TAU), None);
-        assert_eq!(arc_pieces(1.0e9, 0.5), None);
-        assert!(arc_pieces(100.0, TAU).is_some_and(|n| n <= MAX_ARC_PIECES));
-    }
-
-    #[test]
-    fn a_span_that_does_not_read_is_refused_for_a_large_arc() {
-        assert_eq!(arc_pieces(1.0, f64::NAN), None);
-        assert_eq!(arc_pieces(1.0, f64::INFINITY), None);
-    }
-
-    #[test]
-    fn a_radius_that_does_not_read_is_written_as_a_small_arc() {
-        assert_eq!(arc_pieces(f64::NAN, PI / 2.0), Some(1));
-        assert_eq!(arc_pieces(f64::INFINITY, TAU), Some(2));
-        assert_eq!(arc_pieces(-1.0, TAU), Some(2));
-    }
-
-    // The limit itself is a small arc: only a radius over it is split.
-    #[test]
-    fn an_arc_at_the_radius_limit_is_not_split() {
-        assert_eq!(arc_pieces(TRUE_ARC_MAX_RADIUS, PI / 2.0), Some(1));
-        assert_eq!(arc_pieces(TRUE_ARC_MAX_RADIUS, PI), Some(1));
-        assert_eq!(arc_pieces(TRUE_ARC_MAX_RADIUS, TAU), Some(2));
-        assert!(arc_pieces(TRUE_ARC_MAX_RADIUS * 1.0001, PI / 2.0).is_some_and(|n| n > 1));
-    }
-
-    #[test]
-    fn a_backwards_or_empty_span_counts_as_its_length() {
-        assert_eq!(arc_pieces(1.0, -TAU), arc_pieces(1.0, TAU));
-        assert_eq!(arc_pieces(1.0, 0.0), Some(1));
-        assert_eq!(arc_pieces(0.05, 0.0), Some(1));
-    }
-
-    // Each piece of a large arc holds the bound, and one piece fewer would not.
-    #[test]
-    fn the_pieces_of_a_large_arc_hold_the_bound_and_no_fewer_do() {
-        for radius in [0.13, 0.2292, 1.0, 12.5] {
-            for span in [0.01, 1.0, PI, TAU] {
-                let pieces = arc_pieces(radius, span).unwrap();
-                assert!(
-                    sagitta(radius, span, pieces) <= SUB_ARC_SAGITTA * (1.0 + 1e-9),
-                    "radius {radius}, span {span}: {pieces} pieces"
-                );
-                if pieces > 1 {
-                    assert!(
-                        sagitta(radius, span, pieces - 1) > SUB_ARC_SAGITTA,
-                        "radius {radius}, span {span}: {pieces} pieces is not the least"
-                    );
-                }
-            }
-        }
-    }
 }
