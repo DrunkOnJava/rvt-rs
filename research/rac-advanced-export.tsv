@@ -1,0 +1,16 @@
+# An IFC2X3 export of Autodesk's rac_advanced_sample_project, in the three.js repository (MIT) at
+# the one commit that touches it: examples/models/ifc/rac_advanced_sample_project.ifc, added by
+# three.js pull request 20598 on 2021-03-30. An IFC2X3 Coordination View 2.0 export by Revit 2021
+# (Spanish edition), file created 2021-01-22, exporter string "21.0.0.383 - Exporter 21.0.0.383 -
+# IU alternativa 21.0.0.383", whose publisher is not established (RE-330 section 1). It shows the
+# 2015 to 2020 state of the project: the 2015 to 2020 saves of the sample (research/autodesk-sample-projects.tsv)
+# are scored against it by `-f racadv=true` (models racadv-2015 to racadv-2020), and it is counted
+# apart as an IFC2X3 export everywhere: it can confirm a reader and never removes a value or decides
+# a disagreement between Revit's exporters (standing rule, 2026-10-31).
+# The file carries no licence of its own, the pull request says nothing of one, and Autodesk's terms
+# for the sample it exports were not checked, so it is fetched for a run by
+# tools/ci/fetch-rac-advanced-pair.sh from raw.githubusercontent.com, pinned by sha256 and byte
+# count, and never committed, stored or put in the Actions cache (the score cache skips racadv-*,
+# tools/ci/measure-cache.py). Measured 2026-11-04.
+# kind	name	url	sha256	bytes
+export	rac_advanced_sample_project.ifc	https://raw.githubusercontent.com/mrdoob/three.js/7c1f47731608de51a2240ce31655634665cb51ce/examples/models/ifc/rac_advanced_sample_project.ifc	9440a72eb2d27e3ba9edeafdcdfb71945e6baec56d5b09211bcde743de7fe0a5	42831859

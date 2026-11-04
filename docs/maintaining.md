@@ -140,7 +140,9 @@ writes the cached output and a `<step> cached` line to the model's
   The held-out models, BIMcollab's and the pairs that were held out
   (`holdout-*`, `bimcollab-*`, `spent-*`: BIM Whale's AdvancedProject was spent
   and held out again on 2026-11-03), of which only counts leave the runner
-  (`tools/ci/scrub-holdout-results.sh`), are never looked up or stored, because
+  (`tools/ci/scrub-holdout-results.sh`), and `racadv-*` (Autodesk's rac_advanced
+  sample against an IFC2X3 export with no licence, #1354, whose results are
+  uploaded in full), are never looked up or stored, because
   the Actions cache of a public repository can be restored by a workflow that a
   fork's pull request changes: nothing the scrub removes may be in it, and a
   pair's results do not become safe by being spent. Each entry names its model,
