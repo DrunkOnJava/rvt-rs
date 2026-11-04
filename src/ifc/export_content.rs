@@ -555,10 +555,9 @@ pub fn append_typed_production_elements(
     let mut pending_tops: Vec<wall_tops::Pending> = Vec::new();
     // #1384: each wall's entity index and the elements its base join names,
     // for the cut at the top of the floor or footing it stands on, and the
-    // top of each floor whose shape is edited: its plane, or `None` where the
-    // edits are not read.
+    // top of each floor, roof and ceiling: flat, a plane, or not known.
     let mut pending_bases: Vec<wall_tops::PendingBase> = Vec::new();
-    let mut slab_shapes: HashMap<u32, Option<super::body_geometry::PlanPlane>> = HashMap::new();
+    let mut slab_shapes: HashMap<u32, wall_tops::SlabTop> = HashMap::new();
     let mut level_bind = crate::level_bind::LevelStoreyBind::new();
     // RE-286: what each type object's common set holds, by type and type
     // entity; `None` once two of its elements disagree.
@@ -1237,9 +1236,10 @@ pub fn append_typed_production_elements(
                 });
             }
         }
-        // An edited floor, roof or ceiling is never flat to the wall pass: a
-        // floor whose corners lie in one plane has it, any other edited one
-        // (a roof or ceiling always) has none.
+        // The wall pass knows the top of every floor, roof and ceiling: flat
+        // where its record was read and holds no edit, the plane of a floor's
+        // edited corners, and otherwise not known (a record that was not read,
+        // an edit that is not read, any edit of a roof or a ceiling).
         if policy.include_geometry && matches!(decoded.class.as_str(), "Floor" | "Roof" | "Ceiling")
         {
             if let Some(id) = decoded.id {
@@ -1248,11 +1248,15 @@ pub fn append_typed_production_elements(
                 let unread =
                     crate::partition_schema_mvp::slab_shape_unread_from_fields(&decoded.fields)
                         .is_some();
-                if let Some(plane) = plane.filter(|_| decoded.class == "Floor") {
-                    slab_shapes.insert(id, Some(plane));
-                } else if plane.is_some() || unread {
-                    slab_shapes.insert(id, None);
-                }
+                let read =
+                    crate::partition_schema_mvp::slab_shape_read_from_fields(&decoded.fields);
+                let top = match plane {
+                    _ if !read || unread => wall_tops::SlabTop::NotRead,
+                    Some(plane) if decoded.class == "Floor" => wall_tops::SlabTop::Plane(plane),
+                    Some(_) => wall_tops::SlabTop::NotRead,
+                    None => wall_tops::SlabTop::Flat,
+                };
+                slab_shapes.insert(id, top);
             }
         }
         // RE-291: a column whose type is a plain rectangle, with the elements its pairs name.

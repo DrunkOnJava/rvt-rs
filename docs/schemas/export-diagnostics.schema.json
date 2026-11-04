@@ -519,7 +519,7 @@
             "type": "integer",
             "minimum": 0
           },
-          "description": "Of the exported floors, roofs and ceilings whose corner vertices are shape-edited and that keep their record's box, why, by reason (RvtElementRecordGeometry.SlabShapeRefusal, RE-336): interior_edge_vertices_or_creases, corners_not_in_one_plane, first_three_corners_collinear, fewer_than_three_corner_vertices, shape_edit_dormant_or_unmarked, shape_edit_steps_disagree, shape_edit_fields_not_read, corner_vertex_not_finite, record_copies_disagree, roof_or_ceiling_edit_not_drawn, plan_outline_not_read, plan_outline_in_pieces, corners_not_the_outline_vertices, plane_does_not_reproduce_record_box. Empty when no such element is kept as its box."
+          "description": "Of the exported floors, roofs and ceilings whose corner vertices are shape-edited and that keep their record's box, why, by reason (RvtElementRecordGeometry.SlabShapeRefusal, RE-336): interior_edge_vertices_or_creases, corners_not_in_one_plane, first_three_corners_collinear, fewer_than_three_corner_vertices, shape_edit_dormant_or_unmarked, shape_edit_steps_disagree, shape_edit_fields_not_read, corner_vertex_not_finite, record_copies_disagree, record_copy_not_read, roof_or_ceiling_edit_not_drawn, plan_outline_not_read, plan_outline_in_pieces, corners_not_the_outline_vertices, plane_does_not_reproduce_record_box. Empty when no such element is kept as its box."
         },
         "wall_base_refusals": {
           "type": "object",
