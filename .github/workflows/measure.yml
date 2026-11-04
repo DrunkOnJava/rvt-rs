@@ -658,8 +658,10 @@ jobs:
             2) echo "::warning::rac_advanced and its IFC2X3 export NOT MEASURED: a file could not be downloaded" ;;
             *) echo "::error::a rac_advanced file or its export no longer matches its pin (research/rac-advanced-export.tsv, research/autodesk-sample-projects.tsv)"; exit 1 ;;
           esac
-      # A held-out model's host being unreachable is NOT MEASURED; a file
-      # that no longer matches its pin fails the run.
+      # A held-out model's host still unreachable after the fetchers' resumed
+      # retries (tools/ci/fetch-resume.sh) fails the run with NOT MEASURED, as a
+      # file that no longer matches its pin does: a run asked for the held-out
+      # check that checked nothing must not read as a pass (#1392).
       - name: Fetch the held-out models
         if: matrix.holdout
         shell: bash
@@ -674,7 +676,7 @@ jobs:
           set -e
           case "$status" in
             0) ;;
-            2) echo "::warning::held-out models NOT MEASURED: a file could not be downloaded" ;;
+            2) echo "::error::held-out models NOT MEASURED: a file could not be downloaded after every retry"; exit 1 ;;
             *) echo "::error::a held-out model no longer matches its pin in research/holdout-models.tsv or research/holdout-archive-models.tsv"; exit 1 ;;
           esac
       - name: Fetch the family corpus
@@ -745,6 +747,19 @@ jobs:
       # The held-out models, BIMcollab's and the racadv-* models (scored against
       # an export that carries no licence) leave the runner as counts only
       # (RE-252, #1354).
+      # A shard asked for the held-out check that produced no held-out result
+      # (every model filtered out by `models`, or nothing scored) fails, so an
+      # empty check never reads as a pass (#1392).
+      - name: The held-out check measured something
+        if: matrix.holdout
+        shell: bash
+        run: |
+          measured=$(find results -maxdepth 1 -type d \( -name 'holdout-*' -o -name 'spent-*' \) | wc -l | tr -d ' ')
+          echo "held-out and spent models measured: ${measured}"
+          if [ "${measured}" = 0 ]; then
+            echo "::error::holdout=true but no held-out model was measured: the models input excluded them (use models=\"holdout-* spent-*\" or leave it empty), or none could be scored"
+            exit 1
+          fi
       - name: Keep only the unlicensed models' counts
         shell: bash
         run: tools/ci/scrub-holdout-results.sh results
