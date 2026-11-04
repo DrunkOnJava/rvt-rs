@@ -92,7 +92,10 @@ build `--lib --bins --tests` rather than `--all-targets`, and only the Linux
 Python wheel builds, with the full platform matrix reserved for pushes to
 `main` (pull request
 [#260](https://github.com/DrunkOnJava/rvt-rs/pull/260), merged
-2026-09-19).
+2026-09-19). A draft pull request runs less still: fmt, clippy, cargo doc, the PII
+guard, the env lint, Corpus health and the Ubuntu builds with their
+real-file checks, as `fast / ...`. Marking it ready runs the full set, whose
+`full / CI passed` is the check a merge needs (#1237).
 
 **Unit tests are banned.** Do not add them. Changes are verified end to
 end: against real Revit files and Revit's own exports, through the built
