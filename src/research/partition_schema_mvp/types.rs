@@ -95,13 +95,24 @@ pub(super) fn without_bodiless_family_spaces(
     if bodiless.is_empty() {
         return;
     }
-    let mut classes: BTreeMap<String, usize> = BTreeMap::new();
+    let mut classes: BTreeMap<String, Vec<crate::partition_element_records::LeftOutElement>> =
+        BTreeMap::new();
     products.retain(|element| {
         let left_out = element
             .id
             .is_some_and(|id| bodiless.contains(&u64::from(id)));
         if left_out {
-            *classes.entry(element.class.clone()).or_default() += 1;
+            let framed =
+                element.provenance.record_kind.as_deref() == Some("partition_element_record");
+            classes.entry(element.class.clone()).or_default().push(
+                crate::partition_element_records::LeftOutElement {
+                    element_id: element.id,
+                    class: element.class.clone(),
+                    stream: element.provenance.source_stream.clone().filter(|_| framed),
+                    offset: element.provenance.source_offset.filter(|_| framed),
+                    detail: None,
+                },
+            );
         }
         !left_out
     });

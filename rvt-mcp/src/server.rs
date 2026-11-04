@@ -1,4 +1,4 @@
-//! The MCP server: nine tools over the models in [`Store`].
+//! The MCP server: ten tools over the models in [`Store`].
 //!
 //! Decoding and exporting run on tokio's blocking pool, so the server keeps
 //! answering the protocol while a large model decodes. A request that carries
@@ -21,12 +21,14 @@ use serde::de::DeserializeOwned;
 use serde_json::Value;
 
 use crate::args::{
-    ExportGltfArgs, ExportIfcArgs, GetElementArgs, ListElementsArgs, ModelArgs, phase_of,
+    ExplainElementArgs, ExportGltfArgs, ExportIfcArgs, GetElementArgs, ListElementsArgs, ModelArgs,
+    phase_of,
 };
 use crate::config::Failure;
 use crate::exports::{self, Exported};
 use crate::schema::{
-    DiagnosticsOut, ElementDetail, ExportOut, LevelsOut, ListElementsOut, RoomsOut, SummaryOut,
+    DiagnosticsOut, ElementDetail, ExplainElementOut, ExportOut, LevelsOut, ListElementsOut,
+    RoomsOut, SummaryOut,
 };
 use crate::store::{Computed, Entry, Store};
 use crate::views::{self, ElementFilter};
@@ -315,6 +317,37 @@ impl RvtServer {
         let out = run_job(&context, move |control| {
             let (entry, computed) = decode(&store, &args.model, phase_of(&args.phase), control)?;
             views::get_element(&entry, &computed, &args.id.text()).map_err(Failure::Message)
+        })
+        .await?;
+        Ok(Json(out))
+    }
+
+    #[tool(
+        name = "explain_element",
+        input_schema = rmcp::handler::server::common::schema_for_input::<ExplainElementArgs>()
+            .expect("the input schema is an object"),
+        description = concat!(
+            "Why an element is in the export as it is, or is not in it: its provenance, its trust markers (the ...Source, ...Resolved and ...Refusal properties of its record) and every fail-closed decision recorded for it, each with a stage (element_skipped, body_not_drawn, body_left_as_box, opening_not_cut, outline_not_read, storey_not_bound), a reason code (the reason of the skipped item in get_diagnostics, or body_is_record_box, space_outline_is_record_box, area_body_refused), the stream and byte offset its record was read from where known, and a detail. Takes a Revit ElementId whether or not the export holds the element (a left-out element has decisions and no provenance), or the GlobalId of an exported one. The log keeps at most 5000 decisions a reason; capped_reasons names the reasons that dropped some, whose decisions about this element may be missing. A frame with no ElementId has no entry. ",
+            short_not_read!()
+        ),
+        annotations(
+            read_only_hint = true,
+            destructive_hint = false,
+            idempotent_hint = true,
+            open_world_hint = false
+        )
+    )]
+    async fn explain_element(
+        &self,
+        arguments: JsonObject,
+        context: RequestContext<RoleServer>,
+    ) -> Result<Json<ExplainElementOut>, CallToolResult> {
+        let args = parse::<ExplainElementArgs>("explain_element", arguments)?;
+        let store = Arc::clone(&self.store);
+        let out = run_job(&context, move |control| {
+            let (entry, computed) = decode(&store, &args.model, phase_of(&args.phase), control)?;
+            views::explain_element(&entry, &computed, &args.element.text())
+                .map_err(Failure::Message)
         })
         .await?;
         Ok(Json(out))

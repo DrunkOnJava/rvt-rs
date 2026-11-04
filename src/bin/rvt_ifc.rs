@@ -47,6 +47,7 @@ impl From<CliExportQualityMode> for ExportQualityMode {
         rvt-ifc model.rvt -o out.ifc --diagnostics out.diagnostics.json\n  \
         rvt-ifc model.rvt --diagnostics out.diagnostics.json --anonymize   to post publicly\n  \
         rvt-ifc model.rvt --diagnostics out.diagnostics.json --element-provenance   list where each element was read from\n  \
+        rvt-ifc model.rvt --diagnostics out.diagnostics.json --export-decisions   list why each element was left out\n  \
         rvt-ifc model.rvt --mode geometry\n  \
         rvt-ifc model.rvt --phase \"Working Drawings\"   export that phase, not the last\n\n\
         SOURCE_DATE_EPOCH (Unix seconds) sets the time the IFC header and owner\n\
@@ -145,6 +146,15 @@ struct Args {
     /// as built). Never written into the IFC.
     #[arg(long, requires = "diagnostics", conflicts_with = "placeholder")]
     element_provenance: bool,
+    /// Also list, in the diagnostics sidecar, each fail-closed decision per
+    /// element (#1326): why an element was left out, a body is only its
+    /// record's box, an opening was not cut or an outline was not read, as
+    /// its ElementId, a stage and a reason code, with the stream and byte
+    /// offset its record was read from where known. The `skipped` counts are
+    /// made from the same decisions. Bounded at 5,000 entries a reason, with
+    /// the rest counted as dropped. Off by default. Never written into the IFC.
+    #[arg(long, requires = "diagnostics", conflicts_with = "placeholder")]
+    export_decisions: bool,
     /// Witness mode: write an OctetProof observation of this input.
     ///
     /// The observation (docs/octetproof-spec.md §6.2) records the
@@ -369,6 +379,7 @@ fn export_options(args: &Args) -> ExportOptions {
         .with_no_base_quantities(args.no_base_quantities)
         .with_phase(args.phase.clone())
         .with_element_provenance(args.element_provenance)
+        .with_export_decisions(args.export_decisions)
 }
 
 fn walker_limits_from_args(args: &Args) -> WalkerLimits {

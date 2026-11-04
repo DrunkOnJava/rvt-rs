@@ -152,6 +152,7 @@ that says to call `open_model` again. The tool descriptions say the same.
 | `get_summary` | The same summary for a `model_id` or a path. |
 | `list_elements` | Building elements, filtered by `category` (IFC entity: `IFCWALL`, `IfcWall` and `wall` are the same), `class` (Revit class: `Wall`, `Room`) and `level` (storey name), paged by `limit` (100 by default, at most 1000) and `offset`. Each row has the ElementId, name, level, `predefined_type` and its provenance. |
 | `get_element` | One element by Revit ElementId or IFC GlobalId: its property sets and quantities as the IFC export writes them (quantities in the IFC's SI units, each property with its IfcValue type), its trust markers, its provenance, the file's, its type object's sets and any other entity with the same ElementId. |
+| `explain_element` | Why one element is in the export as it is, or is not in it (#1326). `element` is a Revit ElementId, whether or not the export holds the element, or the GlobalId of an exported one. Returns the element's provenance and trust markers where it is exported, and every fail-closed decision recorded for it: a `stage` (`element_skipped`, `body_not_drawn`, `body_left_as_box`, `opening_not_cut`, `outline_not_read`, `storey_not_bound`), a `reason` (the `reason` of the `skipped` item in `get_diagnostics`, or `body_is_record_box`, `space_outline_is_record_box`, `area_body_refused`), the `stream` and byte `offset` its record was read from where known, and a `detail`. |
 | `list_rooms` | Rooms and spaces: ElementId, number, name, level, area and provenance. The area is present only where the outline was read exactly. |
 | `list_levels` | Storeys with elevation (feet and metres) and element count. |
 | `get_diagnostics` | The export diagnostics, as `rvt-ifc --diagnostics` writes them ([`export-diagnostics.schema.json`](schemas/export-diagnostics.schema.json)): what was decoded, exported, skipped, approximated and left unread, and why. |
@@ -258,10 +259,25 @@ The table lists at most 250,000 elements. An element past that has no record
 fields and says `provenance_omitted: true`; the file's `omitted_entries` counts
 them.
 
+### Decisions
+
+`explain_element` answers from the log of per-element decisions (#1326) that the
+server asks the export for when it opens a model, as it asks for the provenance
+table. The log is bounded: at most 5,000 entries a reason, in ElementId order,
+and `capped_reasons` names the reasons that dropped some, whose decisions about
+the element may be missing. The `skipped` counts `get_diagnostics` returns are
+made from the same decisions, and, like the table, the log is not part of
+`get_diagnostics`. A left-out element has decisions and no provenance
+(`exported: false`); a frame with no ElementId has no entry. The values Revit's
+exporters disagree about are left out by a rule for a whole class and have no
+per-element decision to return. The log holds at most 5,000 entries a reason
+whatever the model; its size in JSON is printed per model by
+`tests/export_decisions_counts.rs` (Corpus health's `export-decisions`
+artifact), and no figure for it, or for the time it adds to a decode, is stated
+here yet.
+
 ### Not provided yet
 
-- The per-element export decisions behind an `explain_element` tool (#1326).
-  The provenance object leaves room for them; they are not faked.
 - A Measure scorer for the server's answers (#1327).
 - Lookup by the Revit Mark parameter: nothing in rvt-rs decodes it.
 - The Tasks extension (`io.modelcontextprotocol/tasks`). A long export is one

@@ -13,7 +13,8 @@ claude mcp add rvt -- rvt-rs-mcp
 ```
 
 Tools: `open_model`, `get_summary`, `list_elements`, `get_element`,
-`list_rooms`, `list_levels`, `get_diagnostics`, `export_ifc`, `export_gltf`.
+`explain_element`, `list_rooms`, `list_levels`, `get_diagnostics`, `export_ifc`,
+`export_gltf`.
 Every answer comes from the model the IFC exporter builds, so a tool answer and
 the IFC export cannot disagree, and each element carries where its answer comes
 from. The server reports what it did not read, the way the `rvt` CLIs do.

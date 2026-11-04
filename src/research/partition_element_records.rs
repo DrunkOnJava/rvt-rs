@@ -1515,6 +1515,21 @@ pub fn count_unattributed_frames_excluding(
     assigned: &BTreeMap<usize, u32>,
 ) -> BTreeMap<i64, usize> {
     let mut counts = BTreeMap::new();
+    for (_, category) in unattributed_frames_excluding(buf, categories, marker, assigned) {
+        *counts.entry(category).or_insert(0) += 1;
+    }
+    counts
+}
+
+/// The frames [`count_unattributed_frames_excluding`] counts, each as its
+/// offset in `buf` and its `BuiltInCategory`, in file order (#1326).
+pub fn unattributed_frames_excluding(
+    buf: &[u8],
+    categories: &[i64],
+    marker: &[u8; 8],
+    assigned: &BTreeMap<usize, u32>,
+) -> Vec<(usize, i64)> {
+    let mut frames = Vec::new();
     let chain = partition_record_chain(buf, marker);
     for hit in memchr::memmem::find_iter(buf, marker) {
         let Some(offset) = hit.checked_sub(BBOX_MARKER_OFFSET) else {
@@ -1536,22 +1551,63 @@ pub fn count_unattributed_frames_excluding(
         // A frame with no volume is a 2D symbol Revit's export leaves out
         // (#309), so it is not a missing element either.
         if is_instance_frame(buf, offset) && frame_has_volume(buf, offset) {
-            *counts.entry(category).or_insert(0) += 1;
+            frames.push((offset, category));
         }
     }
-    counts
+    frames
+}
+
+/// An element an export leaves out, or a frame that carries no ElementId, and
+/// where its record was read (#1326). The diagnostics' `skipped` counts are
+/// made from these.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LeftOutElement {
+    /// Its ElementId; `None` for a frame that carries none.
+    pub element_id: Option<u32>,
+    /// Its class, as the diagnostics count it.
+    pub class: String,
+    /// The stream its record was read from, where known.
+    pub stream: Option<String>,
+    /// The offset of the record in that stream inflated, where known.
+    pub offset: Option<usize>,
+    /// What else tells the reason apart, such as the reason an Area's body is
+    /// not proven.
+    pub detail: Option<String>,
+}
+
+impl LeftOutElement {
+    /// The element a partition element record frames, of `class`.
+    pub fn from_record(record: &PartitionElementRecord, class: &str) -> Self {
+        Self {
+            element_id: Some(record.element_id),
+            class: class.to_string(),
+            stream: Some(record.stream.clone()),
+            offset: Some(record.offset),
+            detail: None,
+        }
+    }
+}
+
+/// The class a `BuiltInCategory` of the [`RECOVERED_CATEGORIES`] is counted
+/// under.
+pub fn recovered_class(category: i64) -> Option<&'static str> {
+    RECOVERED_CATEGORIES
+        .iter()
+        .find(|(candidate, _)| *candidate == category)
+        .map(|(_, class)| *class)
 }
 
 /// [`count_unattributed_frames`] over every `Partitions/*` stream for the
-/// [`RECOVERED_CATEGORIES`], keyed by class name. Empty on releases where
-/// the record shape is not proven.
+/// [`RECOVERED_CATEGORIES`]: each frame with its class and where it sits
+/// (#1326); the diagnostics count them by class. Empty on releases where the
+/// record shape is not proven.
 pub fn scan_unattributed_frames(
     rf: &mut RevitFile,
     revit_version: u32,
-) -> Result<BTreeMap<String, usize>> {
-    let mut by_class = BTreeMap::new();
+) -> Result<Vec<LeftOutElement>> {
+    let mut frames = Vec::new();
     let Some(marker) = file_bbox_marker(rf, revit_version) else {
-        return Ok(by_class);
+        return Ok(frames);
     };
     let categories: Vec<i64> = RECOVERED_CATEGORIES.iter().map(|(c, _)| *c).collect();
     let assigned_all = rf.memoised_second_prologue_ids();
@@ -1562,32 +1618,39 @@ pub fn scan_unattributed_frames(
         };
         // A frame RE-35 gave an id to is exported, not missing.
         let assigned = assigned_all.get(&stream).unwrap_or(&none);
-        for (category, count) in
-            count_unattributed_frames_excluding(inflated.bytes(), &categories, &marker, assigned)
+        for (offset, category) in
+            unattributed_frames_excluding(inflated.bytes(), &categories, &marker, assigned)
         {
-            if let Some((_, class)) = RECOVERED_CATEGORIES.iter().find(|(c, _)| *c == category) {
-                *by_class.entry((*class).to_string()).or_insert(0) += count;
+            if let Some(class) = recovered_class(category) {
+                frames.push(LeftOutElement {
+                    element_id: None,
+                    class: class.to_string(),
+                    stream: Some(stream.clone()),
+                    offset: Some(offset),
+                    detail: None,
+                });
             }
         }
     }
-    Ok(by_class)
+    Ok(frames)
 }
 
 /// Placed instances of the [`RECOVERED_CATEGORIES`] whose bounding box has
-/// no volume ([`PartitionElementRecord::has_volume`]), one per ElementId,
-/// keyed by class name. The export leaves them out, as Revit's does
-/// (#309); this counts them so the diagnostics can say so.
+/// no volume ([`PartitionElementRecord::has_volume`]), one per ElementId, in
+/// ElementId order, each with its class and the frame it was read from. The
+/// export leaves them out, as Revit's does (#309); the diagnostics count them
+/// by class so they can say so.
 pub fn scan_volumeless_instances(
     rf: &mut RevitFile,
     revit_version: u32,
-) -> Result<BTreeMap<String, usize>> {
-    let mut by_class = BTreeMap::new();
+) -> Result<Vec<LeftOutElement>> {
+    let mut left_out = Vec::new();
     if !supports_revit_version(revit_version) {
-        return Ok(by_class);
+        return Ok(left_out);
     }
     let declared: BTreeSet<u32> = match crate::elem_table::parse_records(rf) {
         Ok(records) => crate::elem_table::declared_ids(&records),
-        Err(_) => return Ok(by_class),
+        Err(_) => return Ok(left_out),
     };
     let categories: Vec<i64> = RECOVERED_CATEGORIES.iter().map(|(c, _)| *c).collect();
     let records = scan_category_records_multi(rf, revit_version, &categories, &declared)?;
@@ -1600,7 +1663,7 @@ pub fn scan_volumeless_instances(
     // An element framed more than once counts once, and only when no frame
     // of it has volume.
     let mut with_volume: BTreeSet<u32> = BTreeSet::new();
-    let mut without: BTreeMap<u32, i64> = BTreeMap::new();
+    let mut without: BTreeMap<u32, &PartitionElementRecord> = BTreeMap::new();
     for record in records
         .iter()
         .filter(|r| r.is_exported_instance() && !options.excludes(r) && !phases.excludes(r))
@@ -1608,18 +1671,18 @@ pub fn scan_volumeless_instances(
         if record.has_volume() {
             with_volume.insert(record.element_id);
         } else {
-            without.insert(record.element_id, record.builtin_category);
+            without.insert(record.element_id, record);
         }
     }
-    for (id, category) in without {
+    for (id, record) in without {
         if with_volume.contains(&id) {
             continue;
         }
-        if let Some((_, class)) = RECOVERED_CATEGORIES.iter().find(|(c, _)| *c == category) {
-            *by_class.entry((*class).to_string()).or_insert(0) += 1;
+        if let Some(class) = recovered_class(record.builtin_category) {
+            left_out.push(LeftOutElement::from_record(record, class));
         }
     }
-    Ok(by_class)
+    Ok(left_out)
 }
 
 /// Scan every `Partitions/*` stream for records in `builtin_category`.

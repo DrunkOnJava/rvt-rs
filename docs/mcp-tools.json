@@ -1,5 +1,454 @@
 [
   {
+    "name": "explain_element",
+    "description": "Why an element is in the export as it is, or is not in it: its provenance, its trust markers (the ...Source, ...Resolved and ...Refusal properties of its record) and every fail-closed decision recorded for it, each with a stage (element_skipped, body_not_drawn, body_left_as_box, opening_not_cut, outline_not_read, storey_not_bound), a reason code (the reason of the skipped item in get_diagnostics, or body_is_record_box, space_outline_is_record_box, area_body_refused), the stream and byte offset its record was read from where known, and a detail. Takes a Revit ElementId whether or not the export holds the element (a left-out element has decisions and no provenance), or the GlobalId of an exported one. The log keeps at most 5000 decisions a reason; capped_reasons names the reasons that dropped some, whose decisions about this element may be missing. A frame with no ElementId has no entry. Not read: family geometry, the Revit Mark parameter, and any body but the record's bounding box where provenance.body_source says so; see the summary's not_read and docs/status.md in the rvt-rs repository.",
+    "inputSchema": {
+      "$defs": {
+        "IdArg": {
+          "anyOf": [
+            {
+              "format": "int64",
+              "type": "integer"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "description": "An ElementId or a GlobalId."
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "element": {
+          "$ref": "#/$defs/IdArg",
+          "description": "The element's Revit ElementId (`1234`), whether or not the export holds\nit, or the 22-character IFC GlobalId of an exported one."
+        },
+        "model": {
+          "description": "The `model_id` that `open_model` returned, or the path of the file.",
+          "type": "string"
+        },
+        "phase": {
+          "description": "The project phase to read, by its name (exactly) or its ElementId,\ninstead of the project's last (`rvt-ifc --phase`). It applies to a file\npath: a `model_id` names the phase its model was opened at. An unknown\nphase is an error that lists the file's phases.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "model",
+        "element"
+      ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "$defs": {
+        "DecisionOut": {
+          "description": "One fail-closed decision about an element (#1326).",
+          "properties": {
+            "class": {
+              "description": "The class the diagnostics count it under: a Revit class, or an IFC entity such as `IFCDOOR`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "detail": {
+              "description": "What tells the reason apart: a phase's name, why an Area has no body, the `BodySource` of a box body.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "offset": {
+              "description": "The byte offset of the record in that stream inflated, where known.",
+              "format": "uint",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "reason": {
+              "description": "The reason code: the `reason` of the `skipped` item in `get_diagnostics`, or `body_is_record_box`, `space_outline_is_record_box` or `area_body_refused`.",
+              "type": "string"
+            },
+            "stage": {
+              "description": "The step that made it: `element_skipped`, `body_not_drawn`, `body_left_as_box`, `opening_not_cut`, `outline_not_read` or `storey_not_bound`.",
+              "type": "string"
+            },
+            "stream": {
+              "description": "The stream its record was read from, where known.",
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "stage",
+            "reason"
+          ],
+          "type": "object"
+        },
+        "ElemTableProvenance": {
+          "description": "How the file's `Global/ElemTable` stream frames its records.",
+          "properties": {
+            "framing": {
+              "description": "`explicit` for the 28- and 40-byte layouts, `implicit` for the\n12-byte fallback no corpus file uses.",
+              "type": "string"
+            },
+            "owner_field_bytes": {
+              "description": "Width of the owner field, on the explicit layouts.",
+              "format": "uint",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "owner_field_offset": {
+              "description": "Offset of the owner field within a record.",
+              "format": "uint",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "record_stride": {
+              "description": "Bytes per record (28 or 40 on every file in the corpus).",
+              "format": "uint",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "record_stride",
+            "owner_field_offset",
+            "framing"
+          ],
+          "type": "object"
+        },
+        "ElementProvenance": {
+          "description": "Where one element's answer comes from. Every element in an answer carries\none. Fields the model does not have are absent.",
+          "properties": {
+            "area_body_refusal": {
+              "description": "For an Area with no body, why it has none.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "body_source": {
+              "description": "How the element's body was derived, such as\n`partition_element_record_bbox` (only its record's box) or\n`partition_wall_centreline`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "carrier": {
+              "description": "The kind of record the element was read from, such as `partition_element_record_first_prologue`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "category": {
+              "description": "The IFC entity the export writes, such as `IFCWALL`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "class": {
+              "description": "The Revit class the element's record names, such as `Wall`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "class_name": {
+              "description": "The class that tag resolves to in the file's own schema.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "class_tag": {
+              "description": "The class tag the record names.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "element_id": {
+              "description": "The Revit ElementId, which the IFC export writes as the `Tag`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "enclosing_record_id": {
+              "description": "For a frame inside another partition record, the ElementId of that record.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "global_id": {
+              "description": "The IFC GlobalId the export writes: Revit's own where the file yields\nit, otherwise one derived from the document's identity and the\nElementId.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "native_record": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/NativeRecordOut"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The element's native record, where the export's native passes indexed one."
+            },
+            "offset": {
+              "description": "Where the record or frame starts in that stream inflated: the frame the exporter selected (on Revit 2024 and later the greatest vertical extent, then the greater stream and offset; on 2008 to 2023 the newest). A body reader may take another copy, so it can name another partition than `native_record.stream`, and neither is guaranteed to be the copy a body came from.",
+              "format": "uint",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "profile_source": {
+              "description": "Where the plan profile of the body came from.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "provenance_omitted": {
+              "description": "True when the record fields are absent because the provenance table lists at most 250,000 elements and this one is past them (`file.omitted_entries`).",
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            "record_offset": {
+              "description": "Where the ElementId is stored: the partition record header it is the first bytes of.",
+              "format": "uint",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "space_outline_source": {
+              "description": "For a room or space, where its outline came from: `record_box`\n(the area of its box, not of the room), `stored_solid`,\n`stored_solid_faces`, `stored_solid_approximate`, `saved_mesh`,\n`family_body`, and for an Area `area_boundary` or `none`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "stream": {
+              "description": "The stream the record is in: `Partitions/NN` or `Global/Latest`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "type": "object"
+        },
+        "FileProvenance": {
+          "description": "What the file itself says about where its elements come from.",
+          "properties": {
+            "elem_table": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ElemTableProvenance"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The record layout of `Global/ElemTable`."
+            },
+            "layout_release": {
+              "description": "The release whose record layout the file takes, which can be older than the saving release.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "omitted_entries": {
+              "description": "How many elements the provenance table left out past its cap of 250,000 listed; their record fields are absent and `provenance_omitted` says so.",
+              "format": "uint",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "partition_count": {
+              "description": "How many `Partitions/NN` streams the file has.",
+              "format": "uint",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "revit_build": {
+              "description": "That release's build tag (from `BasicFileInfo`).",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "revit_release": {
+              "description": "The Revit release that saved the file (from `BasicFileInfo`).",
+              "format": "uint32",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "schema_class_count": {
+              "description": "How many classes the file's embedded schema (`Formats/Latest`) lists.",
+              "format": "uint",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            }
+          },
+          "type": "object"
+        },
+        "NativeRecordOut": {
+          "description": "The native record the native readers hold for an element.",
+          "properties": {
+            "class_name": {
+              "description": "The class the record names in the file's schema.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "copies": {
+              "description": "In how many partitions the element has a native record.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "copy": {
+              "description": "Which copy this is: `only`, `current` (the current one of several, RE-216) or `unresolved`.",
+              "type": "string"
+            },
+            "offset": {
+              "description": "Where the record's header starts in that partition inflated.",
+              "format": "uint",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "stream": {
+              "description": "The partition of that copy, such as `Partitions/46`. It can differ from `provenance.stream`, and neither is guaranteed to be the copy a body came from.",
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "copies",
+            "copy"
+          ],
+          "type": "object"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "capped_reasons": {
+          "description": "The reasons whose log was full: a decision of one of these about this element may be missing.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "decisions": {
+          "description": "Every decision recorded for the element, by reason.",
+          "items": {
+            "$ref": "#/$defs/DecisionOut"
+          },
+          "type": "array"
+        },
+        "exported": {
+          "description": "Whether the export holds the element. A left-out element has decisions and no provenance.",
+          "type": "boolean"
+        },
+        "file": {
+          "$ref": "#/$defs/FileProvenance",
+          "description": "The file the element comes from."
+        },
+        "id": {
+          "description": "The Revit ElementId asked about.",
+          "type": "string"
+        },
+        "model_id": {
+          "type": "string"
+        },
+        "name": {
+          "description": "The element's name in the export, where it is exported.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "provenance": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ElementProvenance"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Where the element's record was read from, where the export holds it."
+        },
+        "trust_markers": {
+          "additionalProperties": true,
+          "description": "Every `...Source`, `...Resolved` and `...Refusal` property of the element's record. Absent where the export has no record for it.",
+          "type": "object"
+        }
+      },
+      "required": [
+        "model_id",
+        "id",
+        "exported",
+        "trust_markers",
+        "decisions",
+        "capped_reasons",
+        "file"
+      ],
+      "type": "object"
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
     "name": "export_gltf",
     "description": "Write the model as a binary glTF 2.0 file to out_path, which must end in .glb, must not be the model, and must not exist unless overwrite is true. The file is the one rvt-gltf writes. If a resource limit kept part of the file unread, nothing is written unless allow_partial is true. Returns a summary (entity counts, unread streams, size and sha256) and a resource_link to the file; the glb is never returned inline. Sends progress notifications when the request carries a progress token, and cancelling it stops the export with nothing written. Writes only the file it is asked for. Not read: family geometry, the Revit Mark parameter, and any body but the record's bounding box where provenance.body_source says so; see the summary's not_read and docs/status.md in the rvt-rs repository.",
     "inputSchema": {

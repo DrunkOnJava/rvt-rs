@@ -408,6 +408,9 @@ adds where each decoded element was read from: its stream, its byte offset in
 the inflated stream (the bytes `rvt-dump` writes as `Partitions_NN.decomp`) and
 its class. It is off by default, since the list is much larger than the rest of
 the sidecar ([Export diagnostics](export-diagnostics.md#cli)).
+`--export-decisions` adds why each element was left out, a body is only its
+record's box, an opening was not cut or an outline was not read, one entry per
+element and bounded per reason ([Export decisions](export-diagnostics.md#export-decisions)).
 
 ## Understand Warnings
 

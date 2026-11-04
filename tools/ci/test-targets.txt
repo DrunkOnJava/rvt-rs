@@ -62,6 +62,7 @@ real      element_names
 real      element_parameters
 real      element_provenance_offsets
 real      element_records_2025
+real      export_decisions_counts
 real      family_instance_ports
 real      fitting_nominal_diameter
 real      ifc_export_overrides

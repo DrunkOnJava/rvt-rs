@@ -669,6 +669,109 @@
           "description": "Bytes schema parsing would scan: min(inflated_bytes, 65536), or null when inflate failed."
         }
       }
+    },
+    "export_decisions": {
+      "type": "object",
+      "description": "Each fail-closed decision behind skipped and the exported body and outline counts, one entry per element (#1326): why an element was left out, a body is only its record's box, an opening was not cut, an outline was not read. Present only when asked for (rvt-ifc --export-decisions); without it the diagnostics are the bytes they were. Bounded: at most cap_per_reason entries a reason, the rest counted as dropped. Not written in the IFC file. The skipped items are counted from the same decisions: for every reason of skipped (the stream_not_read_resource_limit item apart, which counts streams) reasons[reason].total is the sum of the items' counts; body_is_record_box, space_outline_is_record_box and area_body_refused total exported.bounding_box_bodies, bounding_box_spaces and area_body_refusals.",
+      "required": ["cap_per_reason", "dropped", "reasons", "entries"],
+      "properties": {
+        "cap_per_reason": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "The most entries kept of one reason."
+        },
+        "dropped": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Decisions left out by the cap, over all reasons."
+        },
+        "reasons": {
+          "type": "object",
+          "description": "Each reason with decisions, by reason code.",
+          "additionalProperties": {
+            "type": "object",
+            "required": ["stage", "total", "recorded", "dropped"],
+            "properties": {
+              "stage": {
+                "type": "string",
+                "enum": [
+                  "element_skipped",
+                  "body_not_drawn",
+                  "body_left_as_box",
+                  "opening_not_cut",
+                  "outline_not_read",
+                  "storey_not_bound",
+                  "value_left_out_exporters_disagree"
+                ],
+                "description": "The stage of every decision of the reason."
+              },
+              "total": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "Every decision of the reason, kept or not."
+              },
+              "recorded": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "How many are in entries."
+              },
+              "dropped": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "total less recorded."
+              }
+            }
+          }
+        },
+        "entries": {
+          "type": "array",
+          "description": "The kept decisions, by reason and then ElementId, stream and offset.",
+          "items": {
+            "type": "object",
+            "required": ["stage", "reason"],
+            "properties": {
+              "stage": {
+                "type": "string",
+                "enum": [
+                  "element_skipped",
+                  "body_not_drawn",
+                  "body_left_as_box",
+                  "opening_not_cut",
+                  "outline_not_read",
+                  "storey_not_bound",
+                  "value_left_out_exporters_disagree"
+                ]
+              },
+              "reason": {
+                "type": "string",
+                "description": "The reason of the skipped item the decision is counted in, or body_is_record_box, space_outline_is_record_box or area_body_refused."
+              },
+              "element_id": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "The Revit ElementId. Absent for a frame that carries none (element_record_without_element_id)."
+              },
+              "class": {
+                "type": "string",
+                "description": "The class the aggregate counts it under: a Revit class for the element-record reasons, an IFC entity such as IFCDOOR for the geometry gaps and the exported counts."
+              },
+              "stream": {
+                "type": "string",
+                "description": "The stream the evidence was read from, where known."
+              },
+              "offset": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "The byte offset of the record in that stream inflated (the bytes rvt-dump writes as Partitions_NN.decomp), where known."
+              },
+              "detail": {
+                "type": "string",
+                "description": "What tells the reason apart: the phase's name for room_not_in_export_phase, why an Area's body is not proven for area_without_proven_body and area_body_refused, the BodySource for body_is_record_box."
+              }
+            }
+          }
+        }
+      }
     }
   }
 }

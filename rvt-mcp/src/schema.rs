@@ -343,6 +343,52 @@ pub struct ElementDetail {
     pub other_entities: Vec<EntityRefOut>,
 }
 
+/// One fail-closed decision about an element (#1326).
+#[derive(Debug, Serialize, JsonSchema)]
+pub struct DecisionOut {
+    /// The step that made it: `element_skipped`, `body_not_drawn`, `body_left_as_box`, `opening_not_cut`, `outline_not_read` or `storey_not_bound`.
+    pub stage: String,
+    /// The reason code: the `reason` of the `skipped` item in `get_diagnostics`, or `body_is_record_box`, `space_outline_is_record_box` or `area_body_refused`.
+    pub reason: String,
+    /// The class the diagnostics count it under: a Revit class, or an IFC entity such as `IFCDOOR`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub class: Option<String>,
+    /// The stream its record was read from, where known.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stream: Option<String>,
+    /// The byte offset of the record in that stream inflated, where known.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub offset: Option<usize>,
+    /// What tells the reason apart: a phase's name, why an Area has no body, the `BodySource` of a box body.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub detail: Option<String>,
+}
+
+// What `explain_element` returns: the element, in the export or not, with
+// every decision recorded for it.
+#[derive(Debug, Serialize, JsonSchema)]
+pub struct ExplainElementOut {
+    pub model_id: String,
+    /// The Revit ElementId asked about.
+    pub id: String,
+    /// Whether the export holds the element. A left-out element has decisions and no provenance.
+    pub exported: bool,
+    /// The element's name in the export, where it is exported.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    /// Where the element's record was read from, where the export holds it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub provenance: Option<ElementProvenance>,
+    /// Every `...Source`, `...Resolved` and `...Refusal` property of the element's record. Absent where the export has no record for it.
+    pub trust_markers: BTreeMap<String, Value>,
+    /// Every decision recorded for the element, by reason.
+    pub decisions: Vec<DecisionOut>,
+    /// The reasons whose log was full: a decision of one of these about this element may be missing.
+    pub capped_reasons: Vec<String>,
+    /// The file the element comes from.
+    pub file: FileProvenance,
+}
+
 /// One room.
 #[derive(Debug, Serialize, JsonSchema)]
 pub struct RoomOut {

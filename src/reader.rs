@@ -182,7 +182,7 @@ pub struct RevitFile {
     chosen_export_phase: Option<i64>,
     /// The Areas of a Revit 2015 to 2023 file the reader left unwritten, by
     /// why (RE-324), set when the Areas are read.
-    unwritten_areas: BTreeMap<String, usize>,
+    unwritten_areas: BTreeMap<String, Vec<crate::partition_element_records::LeftOutElement>>,
     /// Memoised production walk: the elements
     /// [`crate::walker::iter_elements_with_control`] yields for a minimum
     /// score and walker limits. An export walks once to write and again for
@@ -246,7 +246,7 @@ pub struct RevitFile {
     unread_type_doors_windows: BTreeSet<u32>,
     /// Family instances written as spaces that were left out because their
     /// family draws no model form (RE-312, #1262), by class.
-    bodiless_family_spaces: BTreeMap<String, usize>,
+    bodiless_family_spaces: BTreeMap<String, Vec<crate::partition_element_records::LeftOutElement>>,
     /// How many family instances written as spaces were not checked for a 3D
     /// body, and why, where the check could not run (RE-312).
     bodiless_family_space_error: Option<(usize, String)>,
@@ -499,12 +499,18 @@ impl RevitFile {
     }
 
     /// The family instances written as spaces that this handle's export left
-    /// out because their family draws no model form (RE-312), by class.
-    pub(crate) fn bodiless_family_spaces(&self) -> &BTreeMap<String, usize> {
+    /// out because their family draws no model form (RE-312), by class, each
+    /// with the frame it was read from (#1326).
+    pub(crate) fn bodiless_family_spaces(
+        &self,
+    ) -> &BTreeMap<String, Vec<crate::partition_element_records::LeftOutElement>> {
         &self.bodiless_family_spaces
     }
 
-    pub(crate) fn note_bodiless_family_spaces(&mut self, classes: BTreeMap<String, usize>) {
+    pub(crate) fn note_bodiless_family_spaces(
+        &mut self,
+        classes: BTreeMap<String, Vec<crate::partition_element_records::LeftOutElement>>,
+    ) {
         self.bodiless_family_spaces = classes;
     }
 
@@ -1041,15 +1047,20 @@ impl RevitFile {
     }
 
     /// Record the Areas of a Revit 2015 to 2023 file that were left unwritten,
-    /// by reason (RE-324).
-    pub(crate) fn set_unwritten_areas(&mut self, by_reason: BTreeMap<String, usize>) {
+    /// by reason (RE-324), each with the record it was read from (#1326).
+    pub(crate) fn set_unwritten_areas(
+        &mut self,
+        by_reason: BTreeMap<String, Vec<crate::partition_element_records::LeftOutElement>>,
+    ) {
         self.unwritten_areas = by_reason;
     }
 
     /// The Areas of a Revit 2015 to 2023 file left unwritten because their
     /// region and body are not proven, by the reason their body has none
     /// (RE-324). Empty until the Areas are read.
-    pub(crate) fn unwritten_areas(&self) -> &BTreeMap<String, usize> {
+    pub(crate) fn unwritten_areas(
+        &self,
+    ) -> &BTreeMap<String, Vec<crate::partition_element_records::LeftOutElement>> {
         &self.unwritten_areas
     }
 

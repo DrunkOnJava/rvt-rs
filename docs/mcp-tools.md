@@ -12,6 +12,7 @@ failed call has `isError` set and a text message.
 
 | Tool | Summary |
 |---|---|
+| [`explain_element`](#explain_element) | Why an element is in the export as it is, or is not in it: its provenance, its trust markers (the ...Source, ...Resolved and ...Refusal properties of its record) and every fail-closed decision recorded for it, each with a stage (element_skipped, body_not_drawn, body_left_as_box, opening_not_cut, outline_not_read, storey_not_bound), a reason code (the reason of the skipped item in get_diagnostics, or body_is_record_box, space_outline_is_record_box, area_body_refused), the stream and byte offset its record was read from where known, and a detail. |
 | [`export_gltf`](#export_gltf) | Write the model as a binary glTF 2.0 file to out_path, which must end in .glb, must not be the model, and must not exist unless overwrite is true. |
 | [`export_ifc`](#export_ifc) | Write the model as IFC4 to out_path, which must end in .ifc, must not be the model, and must not exist unless overwrite is true. |
 | [`get_diagnostics`](#get_diagnostics) | The export diagnostics of a model, as rvt-ifc --diagnostics writes them (docs/schemas/export-diagnostics.schema.json in the rvt-rs repository): what was decoded and exported, what was skipped, approximated or left out with the reason for each, unsupported features, warnings, the confidence level, and the streams a resource limit kept unread. |
@@ -21,6 +22,34 @@ failed call has `isError` set and a text message.
 | [`list_levels`](#list_levels) | List the levels (building storeys) of a model with their elevation in feet and metres and how many building elements the export puts on each. |
 | [`list_rooms`](#list_rooms) | List the rooms and spaces of a model: ElementId, number, name, level, area and provenance, whose space_outline_source says where the outline came from. |
 | [`open_model`](#open_model) | Open a Revit file (.rvt, .rfa, .rte or .rft) and decode it once, with the same decode rvt-ifc runs. |
+
+## explain_element
+
+Why an element is in the export as it is, or is not in it: its provenance, its trust markers (the ...Source, ...Resolved and ...Refusal properties of its record) and every fail-closed decision recorded for it, each with a stage (element_skipped, body_not_drawn, body_left_as_box, opening_not_cut, outline_not_read, storey_not_bound), a reason code (the reason of the skipped item in get_diagnostics, or body_is_record_box, space_outline_is_record_box, area_body_refused), the stream and byte offset its record was read from where known, and a detail. Takes a Revit ElementId whether or not the export holds the element (a left-out element has decisions and no provenance), or the GlobalId of an exported one. The log keeps at most 5000 decisions a reason; capped_reasons names the reasons that dropped some, whose decisions about this element may be missing. A frame with no ElementId has no entry. Not read: family geometry, the Revit Mark parameter, and any body but the record's bounding box where provenance.body_source says so; see the summary's not_read and docs/status.md in the rvt-rs repository.
+
+Hints: read-only: yes, may overwrite: no, idempotent: yes, open world: no.
+
+### Input
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `element` | [IdArg](#idarg) | yes | The element's Revit ElementId (`1234`), whether or not the export holds it, or the 22-character IFC GlobalId of an exported one. |
+| `model` | string | yes | The `model_id` that `open_model` returned, or the path of the file. |
+| `phase` | string \| null | no | The project phase to read, by its name (exactly) or its ElementId, instead of the project's last (`rvt-ifc --phase`). It applies to a file path: a `model_id` names the phase its model was opened at. An unknown phase is an error that lists the file's phases. |
+
+### Output
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `capped_reasons` | array of string | yes | The reasons whose log was full: a decision of one of these about this element may be missing. |
+| `decisions` | array of [DecisionOut](#decisionout) | yes | Every decision recorded for the element, by reason. |
+| `exported` | boolean | yes | Whether the export holds the element. A left-out element has decisions and no provenance. |
+| `file` | [FileProvenance](#fileprovenance) | yes | The file the element comes from. |
+| `id` | string | yes | The Revit ElementId asked about. |
+| `model_id` | string | yes |  |
+| `name` | string \| null | no | The element's name in the export, where it is exported. |
+| `provenance` | [ElementProvenance](#elementprovenance) \| null | no | Where the element's record was read from, where the export holds it. |
+| `trust_markers` | object | yes | Every `...Source`, `...Resolved` and `...Refusal` property of the element's record. Absent where the export has no record for it. |
 
 ## export_gltf
 
@@ -270,6 +299,19 @@ Hints: read-only: yes, may overwrite: no, idempotent: yes, open world: no.
 | `size_bytes` | integer | yes |  |
 
 ## Types
+
+### DecisionOut
+
+One fail-closed decision about an element (#1326).
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `class` | string \| null | no | The class the diagnostics count it under: a Revit class, or an IFC entity such as `IFCDOOR`. |
+| `detail` | string \| null | no | What tells the reason apart: a phase's name, why an Area has no body, the `BodySource` of a box body. |
+| `offset` | integer \| null | no | The byte offset of the record in that stream inflated, where known. |
+| `reason` | string | yes | The reason code: the `reason` of the `skipped` item in `get_diagnostics`, or `body_is_record_box`, `space_outline_is_record_box` or `area_body_refused`. |
+| `stage` | string | yes | The step that made it: `element_skipped`, `body_not_drawn`, `body_left_as_box`, `opening_not_cut`, `outline_not_read` or `storey_not_bound`. |
+| `stream` | string \| null | no | The stream its record was read from, where known. |
 
 ### DiagnosticsSummary
 

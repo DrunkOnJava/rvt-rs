@@ -398,45 +398,48 @@ fn note_set(
 
 /// Placed instances of the
 /// [`crate::partition_element_records::RECOVERED_CATEGORIES`] that are in a
-/// non-primary design option, one per ElementId, keyed by class name. The
-/// export leaves them out, as Revit's does; this counts them so the
-/// diagnostics can say so.
+/// non-primary design option, one per ElementId, in ElementId order, each
+/// with its class and the frame it was read from. The export leaves them out,
+/// as Revit's does; the diagnostics count them by class so they can say so.
 pub fn scan_non_primary_option_instances(
     rf: &mut RevitFile,
     revit_version: u32,
-) -> Result<BTreeMap<String, usize>> {
-    use crate::partition_element_records::{RECOVERED_CATEGORIES, scan_category_records_multi};
-    let mut by_class = BTreeMap::new();
+) -> Result<Vec<crate::partition_element_records::LeftOutElement>> {
+    use crate::partition_element_records::{
+        LeftOutElement, RECOVERED_CATEGORIES, recovered_class, scan_category_records_multi,
+    };
+    let mut left_out = Vec::new();
     let filtered_32bit =
         crate::partition_element_records_2023::applies_export_filters(revit_version);
     if !filtered_32bit && !supports_revit_version(revit_version) {
-        return Ok(by_class);
+        return Ok(left_out);
     }
     let options = rf.memoised_design_options();
     if options.sets.is_empty() {
-        return Ok(by_class);
+        return Ok(left_out);
     }
     let records = if filtered_32bit {
         crate::partition_element_records_2023::scan_records(rf, revit_version)
     } else {
         let declared: BTreeSet<u32> = match crate::elem_table::parse_records(rf) {
             Ok(records) => crate::elem_table::declared_ids(&records),
-            Err(_) => return Ok(by_class),
+            Err(_) => return Ok(left_out),
         };
         let categories: Vec<i64> = RECOVERED_CATEGORIES.iter().map(|(c, _)| *c).collect();
         scan_category_records_multi(rf, revit_version, &categories, &declared)?
     };
-    let mut excluded: BTreeMap<u32, i64> = BTreeMap::new();
+    let mut excluded: BTreeMap<u32, &crate::partition_element_records::PartitionElementRecord> =
+        BTreeMap::new();
     for record in records
         .iter()
         .filter(|r| r.is_exported_instance() && options.excludes(r))
     {
-        excluded.insert(record.element_id, record.builtin_category);
+        excluded.insert(record.element_id, record);
     }
-    for category in excluded.into_values() {
-        if let Some((_, class)) = RECOVERED_CATEGORIES.iter().find(|(c, _)| *c == category) {
-            *by_class.entry((*class).to_string()).or_insert(0) += 1;
+    for record in excluded.into_values() {
+        if let Some(class) = recovered_class(record.builtin_category) {
+            left_out.push(LeftOutElement::from_record(record, class));
         }
     }
-    Ok(by_class)
+    Ok(left_out)
 }
