@@ -321,26 +321,6 @@ pub struct PhaseExcluded {
     pub rooms: Vec<(i64, crate::partition_element_records::LeftOutElement)>,
 }
 
-impl PhaseExcluded {
-    /// [`Self::elements`] counted by class name.
-    pub fn by_class(&self) -> BTreeMap<String, usize> {
-        let mut counts = BTreeMap::new();
-        for element in &self.elements {
-            *counts.entry(element.class.clone()).or_insert(0) += 1;
-        }
-        counts
-    }
-
-    /// [`Self::rooms`] counted by the ElementId of their phase.
-    pub fn rooms_by_phase(&self) -> BTreeMap<i64, usize> {
-        let mut counts = BTreeMap::new();
-        for (phase, _) in &self.rooms {
-            *counts.entry(*phase).or_insert(0) += 1;
-        }
-        counts
-    }
-}
-
 /// Placed instances of the recovered categories
 /// ([`crate::partition_element_records::RECOVERED_CATEGORIES`]) that are not
 /// in the export phase, one per ElementId, and the rooms whose own phase is
@@ -352,8 +332,8 @@ pub fn scan_phase_excluded_instances(
     revit_version: u32,
 ) -> crate::Result<PhaseExcluded> {
     use crate::partition_element_records::{
-        LeftOutElement, PartitionElementRecord, RECOVERED_CATEGORIES, recovered_class,
-        scan_category_records_multi, supports_revit_version,
+        LeftOutElement, RECOVERED_CATEGORIES, recovered_class, scan_category_records_multi,
+        supports_revit_version,
     };
     let mut counted = PhaseExcluded::default();
     let filtered_32bit =

@@ -428,8 +428,7 @@ pub fn scan_non_primary_option_instances(
         let categories: Vec<i64> = RECOVERED_CATEGORIES.iter().map(|(c, _)| *c).collect();
         scan_category_records_multi(rf, revit_version, &categories, &declared)?
     };
-    let mut excluded: BTreeMap<u32, &crate::partition_element_records::PartitionElementRecord> =
-        BTreeMap::new();
+    let mut excluded: BTreeMap<u32, &PartitionElementRecord> = BTreeMap::new();
     for record in records
         .iter()
         .filter(|r| r.is_exported_instance() && options.excludes(r))

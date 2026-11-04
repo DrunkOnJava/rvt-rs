@@ -520,10 +520,20 @@ pub fn run_export_with_limits_and_control(
     let mut notes = Vec::new();
 
     // #1325: built from the walk the exporter just made, which the handle
-    // memoised, before the steps below touch the handle again.
-    if options.element_provenance && options.kind != ExportKind::Placeholder {
-        control.check()?;
-        diagnostics.decoded.element_provenance = Some(super::element_provenance::build(rf, limits));
+    // memoised, before the steps below touch the handle again. The log of
+    // decisions (#1326) reads the same table for the place of an element's
+    // record, so where it is asked for without the table in the diagnostics
+    // the table is built here and kept apart, then dropped.
+    let mut log_provenance = None;
+    if options.kind != ExportKind::Placeholder {
+        if options.element_provenance {
+            control.check()?;
+            diagnostics.decoded.element_provenance =
+                Some(super::element_provenance::build(rf, limits));
+        } else if options.export_decisions {
+            control.check()?;
+            log_provenance = Some(super::element_provenance::build(rf, limits));
+        }
     }
 
     let scope = match (options.kind, options.saved_meshes) {
@@ -633,17 +643,12 @@ pub fn run_export_with_limits_and_control(
         control.check()?;
         let mut all = decisions;
         all.extend(super::model_decisions(&model));
-        let log = {
-            let transient;
-            let table = match diagnostics.decoded.element_provenance.as_ref() {
-                Some(table) => table,
-                None => {
-                    transient = super::element_provenance::build(rf, limits);
-                    &transient
-                }
-            };
-            super::export_decisions::ExportDecisionLog::build(all, Some(table))
-        };
+        let table = diagnostics
+            .decoded
+            .element_provenance
+            .as_ref()
+            .or(log_provenance.as_ref());
+        let log = super::export_decisions::ExportDecisionLog::build(all, table);
         diagnostics.export_decisions = Some(log);
     }
 

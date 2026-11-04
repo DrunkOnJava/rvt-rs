@@ -105,6 +105,7 @@ fn phase_argument(phase: Option<&Bound<'_, PyAny>>) -> PyResult<Option<String>> 
 /// `ValueError`, listing the file's phases. `element_provenance` also lists
 /// where each decoded element was read from in the diagnostics (#1325), and
 /// `export_decisions` each fail-closed decision per element (#1326).
+#[allow(clippy::too_many_arguments)]
 fn export_run(
     py: Python<'_>,
     rf: &mut RustRevitFile,

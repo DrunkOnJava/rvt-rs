@@ -3872,6 +3872,7 @@ pub(crate) fn build_export_diagnostics_and_decisions(
             crate::partition_element_records::scan_unattributed_frames(rf, version).ok()
         })
         .unwrap_or_default();
+    let unattributed_total = unattributed_frames.len();
     record_left_out(
         &mut skipped,
         &mut decisions,
@@ -3923,7 +3924,7 @@ pub(crate) fn build_export_diagnostics_and_decisions(
         &mut decisions,
         "element_record_not_in_export_phase",
         None,
-        phase_excluded.elements.clone(),
+        phase_excluded.elements,
         ClassesBy::Class,
     );
     if !phase_excluded.rooms.is_empty() {
@@ -3959,7 +3960,7 @@ pub(crate) fn build_export_diagnostics_and_decisions(
         &mut decisions,
         "element_record_empty_curtain_panel",
         None,
-        empty_panels.panels.clone(),
+        empty_panels.panels,
         ClassesBy::Class,
     );
     // RE-324: on Revit 2015 to 2023 an Area is written only where its region
