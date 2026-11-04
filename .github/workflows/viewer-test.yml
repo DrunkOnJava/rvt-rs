@@ -99,12 +99,26 @@ jobs:
         with:
           tool: wasm-pack@0.14.0
 
-      - name: Build WASM
+      - name: Build WASM, and gen-fixture beside it
+        shell: bash
         # The bindings are their own crate, rvt-wasm (C6). `--out-dir` is
         # relative to that crate, so `../viewer/pkg` writes straight into the
         # viewer; `--out-name rvt` keeps the files `rvt.js` and
         # `rvt_bg.wasm`.
-        run: wasm-pack build rvt-wasm --target web --out-dir ../viewer/pkg --out-name rvt
+        #
+        # gen-fixture generates the synthetic-mvp demo. It is built with the CI
+        # profile (the release profile's full LTO rebuilt the crate: 39 s) in a
+        # target directory of its own, so that it does not wait for the WASM
+        # build's lock on target/, and at the same time: it finishes well
+        # inside the WASM build, which took 150 to 225 s while the two
+        # builds in turn took 200 to 290 s. The stager finds the binary on PATH.
+        run: |
+          set -euo pipefail
+          CARGO_TARGET_DIR="${GITHUB_WORKSPACE}/target-native" cargo build --profile ci --bin gen-fixture &
+          fixture=$!
+          wasm-pack build rvt-wasm --target web --out-dir ../viewer/pkg --out-name rvt
+          wait "${fixture}"
+          echo "${GITHUB_WORKSPACE}/target-native/ci" >> "$GITHUB_PATH"
 
       - name: Setup pnpm
         uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413  # v6.1.0
@@ -131,14 +145,7 @@ jobs:
 
       - name: Stage redistributable demos
         working-directory: viewer
-        run: |
-          # gen-fixture generates the synthetic-mvp demo. Build it with the
-          # CI profile, which the viewer-wasm cache above keeps from the last
-          # run on main; the release profile's full LTO rebuilt the crate
-          # from scratch here (39 s per run). The stager finds the binary on
-          # PATH.
-          cargo build --profile ci --bin gen-fixture
-          PATH="$(pwd)/../target/ci:$PATH" pnpm run stage:demos
+        run: pnpm run stage:demos
 
       - name: Playwright version
         id: playwright
