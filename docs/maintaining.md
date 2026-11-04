@@ -169,6 +169,16 @@ writes the cached output and a `<step> cached` line to the model's
   psets_missing=Pset_WallCommon.Reference` must miss `psets_vs_ifc` on every
   model and hit everything else.
 
+Measure also keeps the three binaries its Build step makes (`rvt-ifc`,
+`rvt-gltf`, `rvt-info`) under `rvt-bin-v1-<full SHA>-<OS>-<arch>-<toolchain
+hash>-ci`, so the shards of a run, and every run that measures `main`'s commit
+as its base, build them once (the build is about 70 seconds of each job). What
+the cache holds is a function of its key, the code of that commit built by that
+toolchain, and only a run of that commit restores it, so a run of any ref may
+save it (a pull request's run does not: its caches are its own). A ref that is
+not a full SHA is built each time, the probe examples always are, and
+`clean_caches.py` keeps the newest sixteen.
+
 ## Dependencies and the MSRV
 
 `rust-version` in `Cargo.toml` is the oldest stable Rust the crate builds on, and

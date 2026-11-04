@@ -384,11 +384,42 @@ jobs:
           path: _score-cache
           key: ${{ steps.score-cache-key.outputs.prefix }}${{ matrix.side }}-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: ${{ steps.score-cache-key.outputs.restore }}
+      # The three binaries every shard and every run of a commit builds alike
+      # (about 70 s of each job) are kept under the commit's full SHA, the
+      # toolchain and the profile: what the cache holds is what that code
+      # builds to, so a run of any ref may save it, and only a run of that
+      # commit restores it. A ref that is not a full SHA is built each time.
+      # The probe examples are always built.
+      - name: Binary cache key
+        id: binaries-key
+        shell: bash
+        env:
+          MEASURED: ${{ matrix.side == 'base' && needs.plan.outputs.base_sha || needs.plan.outputs.head_sha }}
+        run: |
+          if [[ "$MEASURED" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "key=rvt-bin-v1-$MEASURED-$RUNNER_OS-$RUNNER_ARCH-$(rustc -vV | sha256sum | cut -c1-16)-ci" >> "$GITHUB_OUTPUT"
+          else
+            echo "the measured ref is not a full SHA, so its binaries are built each time"
+          fi
+      - name: Restore the binaries
+        id: binaries
+        if: steps.binaries-key.outputs.key != ''
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            measured/target/ci/rvt-ifc
+            measured/target/ci/rvt-gltf
+            measured/target/ci/rvt-info
+          key: ${{ steps.binaries-key.outputs.key }}
       - name: Build
         working-directory: measured
         run: |
           git log -1 --format='%H %s' > ../measured-commit.txt
-          cargo build --profile ci --bin rvt-ifc --bin rvt-gltf --bin rvt-info
+          if [ "$BINARIES_CACHED" = true ]; then
+            echo "rvt-ifc, rvt-gltf and rvt-info restored from the binary cache"
+          else
+            cargo build --profile ci --bin rvt-ifc --bin rvt-gltf --bin rvt-info
+          fi
           # A base older than a probe has no such example; it is skipped there.
           # Probes live in the rvt-probes crate (probes/examples) since it was
           # split out; a ref from before that has them in examples/. Both build
@@ -410,6 +441,19 @@ jobs:
           fi
         env:
           PROBE: ${{ inputs.probe }}
+          BINARIES_CACHED: ${{ steps.binaries.outputs.cache-hit }}
+      # Every shard of a commit misses at once and saves the same key; the one
+      # that reserves it first stores it and the others are told it is taken.
+      # A run from a pull request saves nothing, its cache being its own.
+      - name: Save the binaries
+        if: ${{ success() && github.event_name == 'workflow_dispatch' && steps.binaries-key.outputs.key != '' && steps.binaries.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            measured/target/ci/rvt-ifc
+            measured/target/ci/rvt-gltf
+            measured/target/ci/rvt-info
+          key: ${{ steps.binaries-key.outputs.key }}
       - name: Fetch the reference models
         run: tools/fetch-reference-models.sh models
       # The office models' host being down is NOT MEASURED; a file that no
