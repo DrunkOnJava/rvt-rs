@@ -1271,10 +1271,6 @@ fn extract_records_prof(
                     };
                     {
                         let spent = decode_started.elapsed();
-                        if hit == Some(false) {
-                            acc.nonhit_decode += spent;
-                            acc.nonhit_bytes += body.len() as u64;
-                        }
                         acc.decode += spent;
                         acc.decoded += 1;
                         acc.body_bytes += body.len() as u64;
