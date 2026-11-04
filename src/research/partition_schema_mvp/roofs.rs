@@ -934,7 +934,9 @@ pub(super) fn attach_roof_slopes(
                 &used,
                 &["edge_slope", "arrow_heights"],
             );
-            note_line_source(rf, id, "roof_line_data", &used, ROOF_LINE_READERS);
+            // The geometry the edges were made from is what the slope scan's
+            // line reader read, not an earlier plan-profile note of the line.
+            note_line_source(rf, id, "roof_line_data", &used, &["sketch_line"]);
             rf.attribute_value_source(type_id, "type_layers", id, "roof_type_layers");
         }
         if sloped_by_arrows.contains_key(&id) {
