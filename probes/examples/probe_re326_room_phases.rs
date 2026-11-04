@@ -1,5 +1,5 @@
 //! RE-326 (probe): where a room's phase is stored, and whether it is the
-//! export phase (#1324).
+//! export phase (#1194).
 //!
 //! Revit's exporter leaves out a room whose own phase parameter
 //! (`ROOM_PHASE`) is set and is not the export phase, the last of the
