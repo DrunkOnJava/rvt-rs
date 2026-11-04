@@ -20,9 +20,11 @@ adds what an importer needs to know about rooms:
   outline to the other's, which such a face does not move. `vertices` is the
   vertex-to-vertex distance. The lines print `outline`, `vertices` and
   `boundary` under those names, and `both` is area and `outline`;
-- the same counts split by what the space is (a room, a family instance
-  written as a space) and where rvt-rs's outline came from (its stored solid,
-  or the record box);
+- the lowest and the highest vertex of the two bodies, within 0.01 ft: the
+  base and the top of the space, so its height (`lowest and highest vertex`);
+- the same counts split by what the space is (a room, an Area, a family
+  instance written as a space) and where rvt-rs's outline came from (its
+  stored solid, the record box, or an Area's boundary lines);
 - every pair that is off in area or outline, with the reason rvt-rs's own
   property set gives (`SpaceOutlineSource`, or the older `ProfileSource`
   and `ProfileResolved` of `RvtElementRecordGeometry`).
@@ -55,6 +57,8 @@ import plan_profiles_vs_ifc as plan
 SET = "RvtElementRecordGeometry"
 STORED_SOLID = "stored_solid"
 RECORD_BOX = "record_box"
+AREA_BOUNDARY = "area_boundary"
+NO_BODY = "none"
 ROOM_SOLID_SOURCE = "partition_room_solid_faces"
 
 
@@ -80,6 +84,9 @@ def sources(path):
         # space has neither.
         named = "RoomNumber" in props or "RoomName" in props
         kind = "room" if named else "family instance" if props else "space"
+        # An Area is named as a room is; its marker tells it apart (RE-317).
+        if marker in (AREA_BOUNDARY, NO_BODY):
+            kind = "area"
         out[space.GlobalId] = (source, kind)
     return out
 
@@ -109,6 +116,14 @@ def boundary_spread(p, q):
             shapely.distance(p.boundary, points(q)).max(),
         )
     )
+
+
+def height_gap(ours, revit):
+    """The larger of the distances between the lowest and the highest vertex of
+    the two bodies, feet; infinite where either is unknown."""
+    if ours is None or revit is None:
+        return float("inf")
+    return max(abs(ours[0] - revit[0]), abs(ours[1] - revit[1]))
 
 
 def count_spaces(path):
@@ -157,7 +172,9 @@ def main(argv):
         print(__doc__, file=sys.stderr)
         return 2
     ours_path, revit_path = args
-    ours, revit = plan.tops(ours_path, ["IfcSpace"]), plan.tops(revit_path, ["IfcSpace"])
+    ours_z, revit_z = {}, {}
+    ours = plan.tops(ours_path, ["IfcSpace"], ours_z)
+    revit = plan.tops(revit_path, ["IfcSpace"], revit_z)
     ours_total, revit_total = count_spaces(ours_path), count_spaces(revit_path)
     held = sources(ours_path)
 
@@ -181,6 +198,7 @@ def main(argv):
                 "rel": abs(o_area - area) / area,
                 "area": area,
                 "o_area": o_area,
+                "z": height_gap(ours_z.get(key), revit_z.get(other)),
                 "vertices": plan.spread(o_points, points),
                 "outline": plan.outline_spread(o_points, surface, points, o_surface),
                 "boundary": boundary_spread(o_surface, surface),
@@ -228,6 +246,11 @@ def main(argv):
     print(f"space profiles: vertices within 0.01 ft {n_vertices}, off {in_both - n_vertices}")
     print(f"space profiles: boundary within 0.01 ft {n_boundary}, off {in_both - n_boundary}")
     print(f"space profiles: area within 0.1% and outline within 0.01 ft {n_both}")
+    n_height = sum(r["z"] <= 0.01 for r in rows)
+    print(
+        f"space profiles: lowest and highest vertex within 0.01 ft {n_height},"
+        f" off {in_both - n_height}"
+    )
     split = collections.defaultdict(lambda: [0, 0, 0, 0, 0])
     for r in rows:
         counts = split[f"{r['kind']} {r['source'].split(':')[0]}"]
@@ -243,6 +266,15 @@ def main(argv):
             f" area within 0.1% {a}, outline within 0.01 ft {o}, both {b},"
             f" boundary within 0.01 ft {e}"
         )
+
+    height_split = collections.defaultdict(lambda: [0, 0])
+    for r in rows:
+        counts = height_split[f"{r['kind']} {r['source'].split(':')[0]}"]
+        counts[0] += 1
+        counts[1] += r["z"] <= 0.01
+    for source, (n, h) in sorted(height_split.items()):
+        label = source.replace("_", " ")
+        print(f"space profiles: rvt-rs {label} height: {n}, lowest and highest vertex within 0.01 ft {h}")
 
     off = [r for r in rows if not (area_ok(r, 1e-3) and outline_ok(r))]
     shown = sorted(off, key=lambda r: (-r["rel"], -r["outline"]))

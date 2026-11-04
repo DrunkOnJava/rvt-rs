@@ -678,6 +678,11 @@ pub struct ExportedModelDiagnostics {
     /// names the turned box.
     #[serde(default)]
     pub bounding_box_spaces: usize,
+    /// Of the exported Areas that have no body, why, by reason: the
+    /// `AreaBodyRefusal` property of each (RE-317), such as
+    /// `boundary_lines_not_readable` or `point_in_no_single_region`.
+    #[serde(default)]
+    pub area_body_refusals: std::collections::BTreeMap<String, usize>,
     /// Of the exported `IfcSpace`s, the rooms whose outline was read from the
     /// faces their stored solid lists, up to the solid's own end, where the
     /// walk of RE-101 did not close them (`SpaceOutlineSource` is
@@ -4234,6 +4239,7 @@ fn exported_model_diagnostics(model: &IfcModel) -> ExportedModelDiagnostics {
     let mut body_sources = std::collections::BTreeMap::<String, usize>::new();
     let mut bounding_box_bodies = 0usize;
     let mut bounding_box_spaces = 0usize;
+    let mut area_body_refusals = std::collections::BTreeMap::<String, usize>::new();
     let mut resolved_outline_spaces = 0usize;
     let mut approximate_outline_spaces = 0usize;
     for (index, entity) in model.entities.iter().enumerate() {
@@ -4260,6 +4266,10 @@ fn exported_model_diagnostics(model: &IfcModel) -> ExportedModelDiagnostics {
             let mut profile_resolved = false;
             for property in properties {
                 match (property.name.as_str(), &property.value) {
+                    (
+                        export_content::AREA_BODY_REFUSAL_PROPERTY,
+                        entities::PropertyValue::Text(text),
+                    ) => *area_body_refusals.entry(text.clone()).or_insert(0) += 1,
                     ("BodySource", entities::PropertyValue::Text(text)) => source = Some(text),
                     (
                         export_content::SPACE_OUTLINE_SOURCE_PROPERTY,
@@ -4343,6 +4353,7 @@ fn exported_model_diagnostics(model: &IfcModel) -> ExportedModelDiagnostics {
         body_sources,
         bounding_box_bodies,
         bounding_box_spaces,
+        area_body_refusals,
         resolved_outline_spaces,
         approximate_outline_spaces,
     }
