@@ -132,6 +132,19 @@ for (const journey of journeys) {
     expect(rows.length - 1).toBe(
       diagnostics.exported.building_elements + (byType.IFCOPENINGELEMENT ?? 0),
     );
+    // The IFC the browser writes carries each door's OverallHeight and
+    // OverallWidth, as the CLI's does: the exporter works them out and the
+    // model carries them as IfcModel.filler_sizes, since the download sends
+    // the model back through modelToIfcStep (Core Interior's 132 doors all
+    // have them).
+    if (journey.fixture === '2024-core-interior.json') {
+      const sized =
+        step.match(
+          /=IFCDOOR\('[^']{22}',[^\n]*,-?\d+\.\d{6},-?\d+\.\d{6},(?:\.[A-Z_]+\.|\$),\$,\$\);/g,
+        ) ?? [];
+      expect(sized.length).toBeGreaterThan(0);
+      expect(sized.length).toBe(byType.IFCDOOR);
+    }
     // The status panel says how many bodies are boxes (#409).
     const bodies = Object.values(diagnostics.exported.body_sources ?? {}) as number[];
     const shapes = page.locator('#status-panel .status-row', {

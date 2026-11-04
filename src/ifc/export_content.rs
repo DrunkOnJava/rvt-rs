@@ -80,6 +80,16 @@ pub struct TypedProductionAppend {
     /// as elements of their own (#823), by index in the entities
     /// ([`super::IfcModel::body_pieces`]).
     pub body_pieces: BTreeMap<usize, Vec<usize>>,
+    /// What the element record gives a door or window for a later stage of
+    /// the export to read, by index in the entities: not properties of the
+    /// element, so not written in the file. The openings it cuts
+    /// ([`super::IfcModel::opening_cuts`]) and its `OverallWidth` and
+    /// `OverallHeight` ([`super::IfcModel::filler_sizes`]) are worked out from
+    /// them. The names are [`INSTANCE_ORIGIN_PROPERTIES`],
+    /// [`FILLER_OPENING_PROPERTIES`], [`DOOR_TYPE_SIZE_PROPERTIES`],
+    /// [`CUT_LOOP_SIZE_PROPERTIES`], [`CUT_SOLID_SIZE_PROPERTIES`],
+    /// [`INSTANCE_BOX_SIZE_PROPERTIES`] and [`SYMBOL_WIRE_WIDTH_PROPERTY`].
+    pub record_handoffs: BTreeMap<usize, Vec<Property>>,
 }
 
 /// What a quality mode allows the document exporter to emit.
@@ -813,6 +823,7 @@ pub fn append_typed_production_elements(
         let mut rotation_radians = None;
         let mut extrusion = None;
         let mut property_set = None;
+        let mut record_handoffs: Vec<Property> = Vec::new();
         let mut pending_host_id = None;
         let mut piece_bodies: Vec<Extrusion> = Vec::new();
         let mut void_bodies: Vec<VoidBody> = Vec::new();
@@ -840,6 +851,7 @@ pub fn append_typed_production_elements(
                 body,
                 solid,
                 properties,
+                handoffs,
                 pieces,
                 void_openings,
             }) = element_record_geometry
@@ -860,6 +872,7 @@ pub fn append_typed_production_elements(
                     extrusion = Some(body);
                 }
                 property_set = Some(properties);
+                record_handoffs = handoffs;
             } else {
                 match decoded.class.as_str() {
                     "Wall" | "ArcWall" => {
@@ -937,6 +950,7 @@ pub fn append_typed_production_elements(
             property_set = property_set
                 .filter(|set| set.name == ELEMENT_RECORD_PROPERTY_SET)
                 .map(|set| identity_property_set(set, &decoded));
+            record_handoffs.clear();
             pending_host_id = None;
             piece_bodies.clear();
             void_bodies.clear();
@@ -1185,6 +1199,9 @@ pub fn append_typed_production_elements(
             solid_shape,
             representation_map_index: None,
         });
+        if !record_handoffs.is_empty() {
+            out.record_handoffs.insert(entity_index, record_handoffs);
+        }
         if policy.include_geometry && decoded.class == "Wall" {
             let named = crate::partition_schema_mvp::wall_top_cutters_from_fields(&decoded.fields);
             if !named.is_empty() {
@@ -4290,6 +4307,9 @@ struct RecordGeometry {
     /// stays the record box for consumers that read only extrusions.
     solid: Option<entities::SolidShape>,
     properties: PropertySet,
+    /// The values the record gives for a later stage to read, which are not
+    /// properties of the element ([`TypedProductionAppend::record_handoffs`]).
+    handoffs: Vec<Property>,
     pieces: Vec<Extrusion>,
     /// Each tagged void of a floor's sketch (RE-151): the piece it is in, its
     /// tag, its outline in the body's frame and the floor's thickness.
@@ -4460,14 +4480,15 @@ fn oriented_box_solid(axes: [[f64; 3]; 3], half: [f64; 3], height: f64) -> entit
     }
 }
 
-/// Properties holding a turned family instance's plan origin from its
-/// transform, model feet (RE-87, RE-89).
+/// The name of each hand-off ([`TypedProductionAppend::record_handoffs`]) holding a
+/// turned family instance's plan origin from its transform, model feet (RE-87,
+/// RE-89).
 pub const INSTANCE_ORIGIN_PROPERTIES: [&str; 2] = ["InstanceOriginX", "InstanceOriginY"];
 
-/// Properties holding a window's opening from its type and transform
-/// (RE-93, `crate::partition_schema_mvp::FillerOpening`): the plan point
-/// it is centred on and the direction of its width, model feet and a unit
-/// vector, then its base elevation, width and height, feet.
+/// The name of each hand-off holding a window's opening from its type and
+/// transform (RE-93, `crate::partition_schema_mvp::FillerOpening`): the plan
+/// point it is centred on and the direction of its width, model feet and a
+/// unit vector, then its base elevation, width and height, feet.
 pub const FILLER_OPENING_PROPERTIES: [&str; 7] = [
     "OpeningCentreX",
     "OpeningCentreY",
@@ -4478,29 +4499,29 @@ pub const FILLER_OPENING_PROPERTIES: [&str; 7] = [
     "OpeningHeight",
 ];
 
-/// Properties holding a door's Width and Height from its type (RE-187,
-/// `crate::partition_schema_mvp::DOOR_TYPE_SIZE_FIELDS`), feet.
+/// The name of each hand-off holding a door's Width and Height from its type
+/// (RE-187, `crate::partition_schema_mvp::DOOR_TYPE_SIZE_FIELDS`), feet.
 pub const DOOR_TYPE_SIZE_PROPERTIES: [&str; 2] = ["TypeWidth", "TypeHeight"];
 
-/// Properties holding the extent along X and along Z of the outline a
-/// door's or window's symbol cuts in its host (RE-215,
+/// The name of each hand-off holding the extent along X and along Z of the
+/// outline a door's or window's symbol cuts in its host (RE-215,
 /// `crate::partition_schema_mvp::CUT_LOOP_SIZE_FIELDS`), feet.
 pub const CUT_LOOP_SIZE_PROPERTIES: [&str; 2] = ["CutWidth", "CutHeight"];
 
-/// Properties holding the extents along X, Y and Z of the solid a door's or
-/// window's symbol cuts where it cuts no loop (RE-225,
+/// The name of each hand-off holding the extents along X, Y and Z of the
+/// solid a door's or window's symbol cuts where it cuts no loop (RE-225,
 /// `crate::partition_schema_mvp::CUT_SOLID_SIZE_FIELDS`), feet.
 pub const CUT_SOLID_SIZE_PROPERTIES: [&str; 3] =
     ["CutSolidWidth", "CutSolidDepth", "CutSolidHeight"];
 
-/// Properties holding a door's or window's record box extent along its own
-/// X axis and its height, where its symbol cuts no loop (#810,
+/// The name of each hand-off holding a door's or window's record box extent
+/// along its own X axis and its height, where its symbol cuts no loop (#810,
 /// `crate::partition_schema_mvp::INSTANCE_BOX_SIZE_FIELDS`), feet.
 pub const INSTANCE_BOX_SIZE_PROPERTIES: [&str; 2] = ["BoxWidth", "BoxHeight"];
 
-/// Property holding the extent along X of the lines of no category in the
-/// saved graphics of a door's or window's symbol, the edges of its bounding
-/// boxes, where the symbol cuts no loop (RE-318,
+/// The name of the hand-off holding the extent along X of the lines of no
+/// category in the saved graphics of a door's or window's symbol, the edges of
+/// its bounding boxes, where the symbol cuts no loop (RE-318,
 /// `crate::partition_schema_mvp::SYMBOL_WIRE_WIDTH_FIELD`), feet.
 pub const SYMBOL_WIRE_WIDTH_PROPERTY: &str = "SymbolWireWidth";
 
@@ -6415,6 +6436,7 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
     } else {
         type_section.unwrap_or((width, depth))
     };
+    let mut handoffs: Vec<Property> = Vec::new();
     let mut properties = vec![
         // `BodySource` stays the record box unless a wall resolved its
         // joins: the placement, the plan envelope and the extrusion
@@ -6587,7 +6609,7 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
             crate::partition_schema_mvp::instance_origin_from_fields(&decoded.fields)
         {
             for (name, value) in INSTANCE_ORIGIN_PROPERTIES.iter().zip(origin) {
-                properties.push(Property {
+                handoffs.push(Property {
                     name: (*name).into(),
                     value: PropertyValue::LengthFeet(value),
                 });
@@ -6607,7 +6629,7 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
             PropertyValue::PositiveLengthFeet(opening.height_feet),
         ];
         for (name, value) in FILLER_OPENING_PROPERTIES.iter().zip(values) {
-            properties.push(Property {
+            handoffs.push(Property {
                 name: (*name).into(),
                 value,
             });
@@ -6638,7 +6660,7 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
             .iter()
             .zip([size.width_feet, size.height_feet])
         {
-            properties.push(Property {
+            handoffs.push(Property {
                 name: (*name).into(),
                 value: PropertyValue::PositiveLengthFeet(feet),
             });
@@ -6648,7 +6670,7 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
     // symbol cuts in its host.
     if let Some(size) = crate::partition_schema_mvp::cut_loop_size_from_fields(&decoded.fields) {
         for (name, feet) in CUT_LOOP_SIZE_PROPERTIES.iter().zip(size) {
-            properties.push(Property {
+            handoffs.push(Property {
                 name: (*name).into(),
                 value: PropertyValue::PositiveLengthFeet(feet),
             });
@@ -6657,7 +6679,7 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
     // RE-225: one whose symbol cuts a solid and no loop, the solid's extents.
     if let Some(size) = crate::partition_schema_mvp::cut_solid_size_from_fields(&decoded.fields) {
         for (name, feet) in CUT_SOLID_SIZE_PROPERTIES.iter().zip(size) {
-            properties.push(Property {
+            handoffs.push(Property {
                 name: (*name).into(),
                 value: PropertyValue::PositiveLengthFeet(feet),
             });
@@ -6668,7 +6690,7 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
     if let Some(size) = crate::partition_schema_mvp::instance_box_size_from_fields(&decoded.fields)
     {
         for (name, feet) in INSTANCE_BOX_SIZE_PROPERTIES.iter().zip(size) {
-            properties.push(Property {
+            handoffs.push(Property {
                 name: (*name).into(),
                 value: PropertyValue::PositiveLengthFeet(feet),
             });
@@ -6678,7 +6700,7 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
     // of no category in its symbol's saved graphics.
     if let Some(feet) = crate::partition_schema_mvp::symbol_wire_width_from_fields(&decoded.fields)
     {
-        properties.push(Property {
+        handoffs.push(Property {
             name: SYMBOL_WIRE_WIDTH_PROPERTY.into(),
             value: PropertyValue::PositiveLengthFeet(feet),
         });
@@ -7086,6 +7108,7 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
             name: ELEMENT_RECORD_PROPERTY_SET.into(),
             properties,
         },
+        handoffs,
         pieces: piece_bodies,
         void_openings,
     })

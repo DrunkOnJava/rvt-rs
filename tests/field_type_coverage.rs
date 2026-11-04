@@ -10,6 +10,13 @@
 //! arm regresses, or a corpus file carries a byte pattern we haven't mapped,
 //! this test fails with a concrete per-file breakdown.
 //!
+//! The scan (`formats::parse_schema`) is a heuristic and files a class's
+//! fields after an inline class definition under that inline class, so it
+//! also reads each schema with the exact grammar (`schema_registry`,
+//! RE-323) and holds the fields it names by their own class to
+//! [`RESIDUAL_GRAMMAR`]. Neither list may keep a name that no longer decodes
+//! `Unknown`.
+//!
 //! Corpus source is Autodesk-owned `rac_basic_sample_family` data that
 //! rvt-rs does not redistribute (see `SECURITY.md`). Test therefore
 //! requires the caller to provide the samples via either:
@@ -23,28 +30,35 @@
 mod common;
 
 use common::{ALL_YEARS, sample_for_year, samples_dir};
+use rvt::research::{native_document, schema_registry};
 use rvt::{RevitFile, compression, formats, streams};
+use std::collections::BTreeSet;
 
-/// Fields whose type encodings appear only past the first 64 KB of the
-/// schema and are not classified yet (#410): pointer and container
-/// modifiers `0e 04`, `0e 13`, `0e 53`, `0e 54`, a `0a` base, `04 00 04 00`,
-/// and a record clipped to `0e 00`. Classifying them needs byte evidence
-/// of what they hold, not their names.
+/// Fields the scan (`formats::parse_schema`) leaves `Unknown` in at least
+/// one release, under the class names the scan gives them. RE-323 classified
+/// the others: a pointer array (`0e 13`), a pointer container (`0e 53`,
+/// `0e 54`), a flagged `i32` (`04 00 04 00`), and the class references the
+/// scan's 4,096-byte window clipped to two bytes (`ZoningAppInfo::first`).
+/// What is left:
+/// - `ClassDefinitionRef::m_ref` (`0a 00 00 00`): no sample project or family
+///   holds an instance, so its encoding has no bytes to be read from.
+/// - `VarParam::m_pSubst` and `VarSketchObj::m_dimValue` (`0e 04 00 00`):
+///   31,705 instances of the first in the 2015 to 2017 sample projects, every
+///   one a null pointer, which two different layouts read alike, and none of
+///   the second. The scan files `VarSketchDimObj::m_dimValue` under
+///   `VarSketchObj`.
 const RESIDUAL: &[&str] = &[
     "ClassDefinitionRef::m_ref",
-    "GInfo::m_next",
-    "GInfo::m_pFace",
-    "GInfo::m_prev",
-    "LFormatDefaults::m_defaultImperialFormatOptions",
-    "LFormatDefaults::m_defaultMetricFormatOptions",
-    "LFormatDefaults::m_unit",
-    "VarFunction::m_refCt",
     "VarParam::m_pSubst",
-    "VarSketchObj::m_constrElems",
     "VarSketchObj::m_dimValue",
-    "VarSketchObj::m_params",
-    "VarSketchObj::m_refPts",
-    "ZoningAppInfo::first",
+];
+
+/// The same fields under the class that declares them, as the exact grammar
+/// reads the schema.
+const RESIDUAL_GRAMMAR: &[&str] = &[
+    "ClassDefinitionRef::m_ref",
+    "VarParam::m_pSubst",
+    "VarSketchDimObj::m_dimValue",
 ];
 
 #[test]
@@ -52,6 +66,9 @@ fn field_type_coverage_across_corpus() {
     let mut missing: Vec<u32> = Vec::new();
     let mut per_year: Vec<(u32, usize, usize)> = Vec::new();
     let mut unexpected: Vec<(u32, String)> = Vec::new();
+    let mut unexpected_grammar: Vec<(u32, String)> = Vec::new();
+    let mut seen_scan: BTreeSet<String> = BTreeSet::new();
+    let mut seen_grammar: BTreeSet<String> = BTreeSet::new();
 
     for year in ALL_YEARS {
         let path = sample_for_year(year);
@@ -80,14 +97,36 @@ fn field_type_coverage_across_corpus() {
         for class in &schema.classes {
             for field in &class.fields {
                 let name = format!("{}::{}", class.name, field.name);
-                if matches!(field.field_type, Some(formats::FieldType::Unknown { .. }))
-                    && !RESIDUAL.contains(&name.as_str())
-                {
-                    unexpected.push((year, name));
+                if matches!(field.field_type, Some(formats::FieldType::Unknown { .. })) {
+                    if !RESIDUAL.contains(&name.as_str()) {
+                        unexpected.push((year, name.clone()));
+                    }
+                    seen_scan.insert(name);
                 }
             }
         }
         per_year.push((year, total, unknown));
+
+        let stream = native_document::read_single(&mut rf, streams::FORMATS_LATEST)
+            .unwrap_or_else(|e| panic!("{year}: read the schema stream: {e}"));
+        let registry = schema_registry::parse(&stream)
+            .unwrap_or_else(|e| panic!("{year}: the exact schema grammar stops: {e}"));
+        for class in &registry.classes {
+            for field in &class.fields {
+                let start = field.descriptor_offset;
+                let window = &stream[start..(start + 32).min(stream.len())];
+                if matches!(
+                    formats::FieldType::decode(window),
+                    formats::FieldType::Unknown { .. }
+                ) {
+                    let name = format!("{}::{}", class.name, field.name);
+                    if !RESIDUAL_GRAMMAR.contains(&name.as_str()) {
+                        unexpected_grammar.push((year, name.clone()));
+                    }
+                    seen_grammar.insert(name);
+                }
+            }
+        }
     }
 
     if !missing.is_empty() {
@@ -139,6 +178,20 @@ fn field_type_coverage_across_corpus() {
          `SHOW_UNKNOWN=1 cargo run --profile ci -p rvt-probes --example probe_schema_page_strip -- <file>` \
          to see the byte patterns."
     );
+
+    assert!(
+        unexpected_grammar.is_empty(),
+        "field-type classification regressed — Unknown fields of the exact schema grammar \
+         outside RESIDUAL_GRAMMAR: {unexpected_grammar:?}"
+    );
+    for (list, seen) in [(RESIDUAL, &seen_scan), (RESIDUAL_GRAMMAR, &seen_grammar)] {
+        for name in list {
+            assert!(
+                seen.contains(*name),
+                "{name} is in a residual list but decodes to a type in every release; remove it"
+            );
+        }
+    }
 
     // Sanity gate: a vacuously-passing corpus (zero files scanned or zero
     // fields found) would also report zero unknowns. Require a plausible

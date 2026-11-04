@@ -842,6 +842,18 @@ pub struct OpeningCut {
     pub z_range_feet: Option<[f64; 2]>,
 }
 
+/// A door's or window's `OverallWidth` and `OverallHeight`, feet.
+#[derive(Debug, Clone, Copy, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct FillerSize {
+    pub width_feet: f64,
+    pub height_feet: f64,
+    /// Whether its symbol cuts an outline in its host (RE-215): Revit's export
+    /// draws its opening as an extrusion of it and gives that opening a
+    /// `Depth` (RE-244). A size read any other way leaves this unset.
+    #[serde(default)]
+    pub cut_loop: bool,
+}
+
 /// A family instance's materials (RE-82): IFC4 `IfcMaterialConstituentSet`,
 /// unnamed, with one `IfcMaterialConstituent` per material, named after it
 /// and in the category "Materials", as Revit's export writes them. A wall
