@@ -23,7 +23,7 @@
 
 use rvt::RevitFile;
 use rvt::research::partition_area_records::{
-    AREA_BODY_HEIGHT_FIELD, AREA_BODY_REFUSAL_FIELD, AREA_POINT_OFFSET,
+    AREA_BODY_HEIGHT_FIELD, AREA_BODY_REFUSAL_FIELD, AREA_POINT_OFFSET, NARROW_POINT_OFFSET,
     areas_from_partition_chain_records,
 };
 use rvt::research::partition_design_options::compute_design_options;
@@ -630,8 +630,15 @@ fn dump_data(rf: &mut RevitFile, c: &Census) {
     });
 }
 
+/// What the production reader returns for one Area: a verdict, and every field
+/// but the record's own stream and offset.
+struct ReaderRow {
+    verdict: String,
+    fields: BTreeMap<String, String>,
+}
+
 /// The reader's verdict on each Area it returns.
-fn reader_rows(rf: &mut RevitFile, c: &Census) -> BTreeMap<u32, String> {
+fn reader_rows(rf: &mut RevitFile, c: &Census) -> BTreeMap<u32, ReaderRow> {
     let level_ids: BTreeSet<u32> = c.recovered.iter().map(|level| level.element_id).collect();
     let mut out = BTreeMap::new();
     for element in areas_from_partition_chain_records(rf, c.release, &level_ids, &c.recovered) {
@@ -648,15 +655,56 @@ fn reader_rows(rf: &mut RevitFile, c: &Census) -> BTreeMap<u32, String> {
             .iter()
             .find(|field| field.0 == AREA_BODY_HEIGHT_FIELD)
             .map(|field| format!("{:?}", field.1));
-        out.insert(
-            id,
-            match (refusal, height) {
-                (Some(reason), _) => format!("refused {reason}"),
-                (None, Some(height)) => format!("body {height}"),
-                (None, None) => "no body, no refusal".to_string(),
-            },
-        );
+        let verdict = match (refusal, height) {
+            (Some(reason), _) => format!("refused {reason}"),
+            (None, Some(height)) => format!("body {height}"),
+            (None, None) => "no body, no refusal".to_string(),
+        };
+        let fields = element
+            .fields
+            .iter()
+            .filter(|field| field.0 != "m_source_stream" && field.0 != "m_source_offset")
+            .map(|field| (field.0.clone(), format!("{:?}", field.1)))
+            .collect();
+        out.insert(id, ReaderRow { verdict, fields });
     }
+    out
+}
+
+/// A point read from an older save's element data (RE-324).
+struct Point35 {
+    stream: String,
+    level_word: u32,
+    x: f64,
+    y: f64,
+}
+
+/// The two `f64`s [`NARROW_POINT_OFFSET`] bytes after each `01 00 00 00 · id`
+/// header of the Areas of a 32-bit save, with the `u32` that follows the
+/// header.
+fn points_35(rf: &mut RevitFile, c: &Census) -> BTreeMap<u32, Vec<Point35>> {
+    let mut out: BTreeMap<u32, Vec<Point35>> = BTreeMap::new();
+    each_partition(rf, |stream, buf| {
+        for hit in memchr::memmem::find_iter(buf, &[1u8, 0, 0, 0]) {
+            let Some(id) = u32_at(buf, hit + 4).filter(|id| c.areas.contains_key(id)) else {
+                continue;
+            };
+            let data = hit + 8;
+            let (Some(level_word), Some(x), Some(y)) = (
+                u32_at(buf, data),
+                f64_at(buf, data + NARROW_POINT_OFFSET),
+                f64_at(buf, data + NARROW_POINT_OFFSET + 8),
+            ) else {
+                continue;
+            };
+            out.entry(id).or_default().push(Point35 {
+                stream: stream.to_string(),
+                level_word,
+                x,
+                y,
+            });
+        }
+    });
     out
 }
 
@@ -750,8 +798,8 @@ fn print_census(rf: &mut RevitFile, c: &Census) {
     if !c.wide {
         dump_data(rf, c);
     }
-    for (id, verdict) in reader_rows(rf, c) {
-        println!("reader\t{id}\t{verdict}");
+    for (id, row) in reader_rows(rf, c) {
+        println!("reader\t{id}\t{}", row.verdict);
     }
 }
 
@@ -848,6 +896,30 @@ fn compare(older_rf: &mut RevitFile, older: &Census, newer_rf: &mut RevitFile, n
     };
     let older_reader = reader_rows(older_rf, older);
     let newer_reader = reader_rows(newer_rf, newer);
+    let older_points35 = if older.wide {
+        BTreeMap::new()
+    } else {
+        points_35(older_rf, older)
+    };
+    let (older_lines, newer_lines) = (line_infos(older), line_infos(newer));
+    let single = |set: &BTreeSet<u32>| -> Option<u32> {
+        let mut ids = set.iter();
+        match (ids.next(), ids.next()) {
+            (Some(id), None) => Some(*id),
+            _ => None,
+        }
+    };
+    let group_ids = |lines: &BTreeMap<u32, LineInfo>, level: u32, scheme: u32| -> BTreeSet<u32> {
+        lines
+            .iter()
+            .filter(|(_, line)| line.levels.contains(&level) && line.schemes.contains(&scheme))
+            .map(|(id, _)| *id)
+            .collect()
+    };
+    let mut bodies: BTreeMap<(bool, bool), usize> = BTreeMap::new();
+    let mut changed_lines: BTreeSet<u32> = BTreeSet::new();
+    let mut named_by_area: BTreeSet<u32> = BTreeSet::new();
+    let mut inputs_differ: Vec<String> = Vec::new();
 
     let (mut number_eq, mut name_eq, mut level_eq, mut scheme_eq, mut lines_eq, mut placed_eq) =
         (0, 0, 0, 0, 0, 0);
@@ -879,8 +951,78 @@ fn compare(older_rf: &mut RevitFile, older: &Census, newer_rf: &mut RevitFile, n
                 *header_distances.entry(distance).or_default() += 1;
             }
         }
-        let (verdict_a, verdict_b) = (older_reader.get(id), newer_reader.get(id));
+        let (row_a, row_b) = (older_reader.get(id), newer_reader.get(id));
+        let (verdict_a, verdict_b) = (
+            row_a.map(|row| row.verdict.as_str()),
+            row_b.map(|row| row.verdict.as_str()),
+        );
         reader_eq += usize::from(verdict_a == verdict_b);
+        let key = (single(&ra.levels), single(&ra.schemes));
+        let (group_a, group_b) = match key {
+            (Some(level), Some(scheme)) => (
+                group_ids(&older_lines, level, scheme),
+                group_ids(&newer_lines, level, scheme),
+            ),
+            _ => (BTreeSet::new(), BTreeSet::new()),
+        };
+        let changed: Vec<u32> = group_a
+            .union(&group_b)
+            .filter(
+                |line| match (older_lines.get(*line), newer_lines.get(*line)) {
+                    (Some(x), Some(y)) => !same_box(&x.bbox, &y.bbox),
+                    _ => true,
+                },
+            )
+            .copied()
+            .collect();
+        let named_changed: Vec<u32> = changed
+            .iter()
+            .copied()
+            .filter(|line| ra.lines.contains(line))
+            .collect();
+        changed_lines.extend(changed.iter().copied());
+        named_by_area.extend(ra.lines.iter().copied());
+        let newer_point = points.get(id).copied();
+        let older_point = key.0.and_then(|level| {
+            older_points35
+                .get(id)?
+                .iter()
+                .find(|p| p.stream == a.stream && p.level_word == level)
+                .map(|p| (p.x, p.y))
+        });
+        let point_equal = older_point.is_some() && older_point == newer_point;
+        let inputs_equal = changed.is_empty() && point_equal;
+        let fields_equal = match (row_a, row_b) {
+            (Some(x), Some(y)) => x.fields == y.fields,
+            _ => false,
+        };
+        let differing_fields: Vec<&String> = match (row_a, row_b) {
+            (Some(x), Some(y)) => x
+                .fields
+                .keys()
+                .chain(y.fields.keys())
+                .filter(|name| x.fields.get(*name) != y.fields.get(*name))
+                .collect::<BTreeSet<_>>()
+                .into_iter()
+                .collect(),
+            _ => Vec::new(),
+        };
+        *bodies.entry((inputs_equal, fields_equal)).or_default() += 1;
+        if !inputs_equal {
+            inputs_differ.push(format!(
+                "{id} (number {:?}): changed lines {changed:?}, named and changed {named_changed:?}, point read {older_point:?} against {newer_point:?}",
+                a.number
+            ));
+        }
+        println!(
+            "pair-body\t{id}\tinputs equal {inputs_equal}\tgroup lines {}/{}\tchanged {changed:?}\tnamed changed {named_changed:?}\tpoint35 {:?}\t2024 point {newer_point:?}\tfields equal {fields_equal}\tdiffering {differing_fields:?}\tverdicts {verdict_a:?}/{verdict_b:?}",
+            group_a.len(),
+            group_b.len(),
+            older_points35.get(id).map(|points| points
+                .iter()
+                .map(|p| format!("{}:{}:{:.9},{:.9}", p.stream, p.level_word, p.x, p.y))
+                .collect::<Vec<_>>()),
+        );
         println!(
             "pair-area\t{id}\tnumber {:?}/{:?}\tname {:?}/{:?}\tlevel [{}]/[{}]\tscheme {:?}/{:?}\tlines {}/{} ({how_a}/{how_b}) equal {}\tplaced {placed_a}/{placed_b}\tdesign {design_a:?}/{design_b:?}\tpoint {:?}\tfound {:?}\treader {verdict_a:?}/{verdict_b:?}",
             a.number,
@@ -919,6 +1061,27 @@ fn compare(older_rf: &mut RevitFile, older: &Census, newer_rf: &mut RevitFile, n
         newer.areas.len(),
         wanted.len()
     );
+    let count = |inputs: bool, fields: bool| bodies.get(&(inputs, fields)).copied().unwrap_or(0);
+    println!(
+        "pair bodies: inputs equal (the Area's group lines and point equal the newer save's) {}: reader fields equal {}, differ {}; inputs differ {}: reader fields equal {}, differ {}",
+        count(true, true) + count(true, false),
+        count(true, true),
+        count(true, false),
+        count(false, true) + count(false, false),
+        count(false, true),
+        count(false, false),
+    );
+    println!(
+        "pair edit: {} lines differ in box between the saves {changed_lines:?}; of them {} are named by some Area of the older save {:?}",
+        changed_lines.len(),
+        changed_lines.intersection(&named_by_area).count(),
+        changed_lines
+            .intersection(&named_by_area)
+            .collect::<Vec<_>>(),
+    );
+    for line in &inputs_differ {
+        println!("pair inputs differ: {line}");
+    }
 
     for (id, (name_a, elevation_a, story_a)) in &older.levels {
         match newer.levels.get(id) {
@@ -938,7 +1101,6 @@ fn compare(older_rf: &mut RevitFile, older: &Census, newer_rf: &mut RevitFile, n
         println!("pair-level\t{id}\tonly newer");
     }
 
-    let (older_lines, newer_lines) = (line_infos(older), line_infos(newer));
     let mut box_eq = 0;
     let mut key_eq = 0;
     let mut copies_eq = 0;
