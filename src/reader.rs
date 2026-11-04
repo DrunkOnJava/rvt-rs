@@ -909,12 +909,14 @@ impl RevitFile {
     /// before the first export or element read of this handle. It fails,
     /// naming the phases the file lists, when none matches, and for a file
     /// whose phases are not read or whose release applies no export phase.
+    /// Returns the ElementId of the phase chosen, which `phase` may have named
+    /// by its name or by that id.
     ///
     /// # Errors
     ///
     /// [`Error::InvalidInput`] when the phase is not one of the file's, or
     /// the file's phases cannot be chosen from.
-    pub fn set_export_phase(&mut self, phase: &str) -> Result<()> {
+    pub fn set_export_phase(&mut self, phase: &str) -> Result<i64> {
         if let Ok(release) = self.layout_release() {
             if crate::partition_element_records_2023::is_32bit_release(release)
                 && !crate::partition_element_records_2023::applies_export_filters(release)
@@ -946,7 +948,7 @@ impl RevitFile {
             )));
         };
         self.phase_filter = Some(Arc::new(filter.with_export_phase(id)));
-        Ok(())
+        Ok(id)
     }
 
     /// Record the Areas of a Revit 2015 to 2023 file that were left unwritten,

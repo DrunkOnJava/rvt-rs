@@ -1,4 +1,6 @@
-//! The export every front end runs: [`run_export`].
+//! The export every front end runs: [`run_export`], with its limits
+//! ([`run_export_with_limits`]) and its control
+//! ([`run_export_with_limits_and_control`]).
 //!
 //! `rvt-ifc`, `rvt-gltf`, the Python package, the viewer's WebAssembly
 //! bindings and `rvt-rs-mcp` all build their model from this one function, so the
@@ -17,6 +19,7 @@ use crate::control::WalkerControl;
 use crate::reader::UnreadStream;
 use crate::walker::WalkerLimits;
 use crate::{Result, RevitFile};
+use std::fmt;
 
 /// Which exporter builds the model.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -145,32 +148,145 @@ impl ExportOptions {
     }
 }
 
-/// A step after the exporter, which [`ExportNote`]s name.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[non_exhaustive]
-pub enum ExportStep {
-    /// Bodies drawn from the saved graphics.
-    SavedMeshes,
-    /// Revit's own parameter sets.
-    RevitPropertySets,
-    /// Properties placed where Revit's exporter places them.
-    RevitSetPlacement,
-    /// The base quantities left out.
-    BaseQuantities,
-}
-
-/// One thing a step reports, that `rvt-ifc` prints on stderr.
+/// One thing a step reports, which `rvt-ifc` prints on stderr as
+/// `rvt-ifc: <note>` (the [`Display`](fmt::Display) of the note). The numbers
+/// are those of the step's own report. A `...Skipped` note says the step could
+/// not run, and why: the export went ahead without what the step adds.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
-pub struct ExportNote {
-    /// The step it reports.
-    pub step: ExportStep,
-    /// Why the step did not run, when it did not: the saved graphics, the
-    /// parameters or the placement could not be read, and the export went
-    /// ahead without what they add. `None` when the step ran.
-    pub skipped: Option<String>,
-    /// The sentence `rvt-ifc` prints after `rvt-ifc: `.
-    pub text: String,
+pub enum ExportNote {
+    /// Bodies drawn from the saved graphics of `candidates` boxed elements.
+    #[non_exhaustive]
+    SavedMeshes {
+        /// Which bodies the step looked at.
+        scope: SavedMeshScope,
+        /// Elements whose body was the record's bounding box.
+        candidates: usize,
+        /// Of those, elements now drawn from their saved mesh.
+        replaced: usize,
+        /// Of those, elements keeping their box because part of their saved
+        /// graphics did not decode.
+        partial: usize,
+        /// Triangles written in all.
+        triangles: usize,
+    },
+    /// The saved graphics could not be read; the bodies are unchanged.
+    #[non_exhaustive]
+    SavedMeshesSkipped {
+        /// The reason.
+        error: String,
+    },
+    /// Revit's own parameter sets, written.
+    #[non_exhaustive]
+    RevitPropertySets {
+        /// Elements given at least one property.
+        elements: usize,
+        /// Type objects' types given at least one property.
+        types: usize,
+        /// Elements given their type's sets, their type having no type
+        /// object.
+        untyped_elements: usize,
+        /// Properties written, on elements and types.
+        properties: usize,
+        /// Named parameters left out.
+        left_out: usize,
+    },
+    /// Revit's parameter sets could not be read; none were written.
+    #[non_exhaustive]
+    RevitPropertySetsSkipped {
+        /// The reason.
+        error: String,
+    },
+    /// Properties placed where Revit's exporter places them.
+    #[non_exhaustive]
+    RevitSetPlacement {
+        /// Elements given at least one property.
+        elements: usize,
+        /// Properties written.
+        properties: usize,
+        /// Parameters of a kind not written, left out.
+        left_out: usize,
+    },
+    /// The parameters could not be read; no property was placed.
+    #[non_exhaustive]
+    RevitSetPlacementSkipped {
+        /// The reason.
+        error: String,
+    },
+    /// The base quantities left out.
+    #[non_exhaustive]
+    BaseQuantities {
+        /// How many quantities were left out.
+        left_out: usize,
+    },
+}
+
+impl ExportNote {
+    /// Why the step did not run, for the `...Skipped` notes; `None` for a
+    /// step that ran.
+    pub fn skipped(&self) -> Option<&str> {
+        match self {
+            Self::SavedMeshesSkipped { error }
+            | Self::RevitPropertySetsSkipped { error }
+            | Self::RevitSetPlacementSkipped { error } => Some(error),
+            _ => None,
+        }
+    }
+}
+
+impl fmt::Display for ExportNote {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::SavedMeshes {
+                scope,
+                candidates,
+                replaced,
+                partial,
+                triangles,
+            } => {
+                let what = if *scope == SavedMeshScope::All {
+                    "bounding-box bodies"
+                } else {
+                    "door and window bounding-box bodies"
+                };
+                write!(
+                    f,
+                    "{replaced} of {candidates} {what} drawn from their saved graphics ({triangles} triangles); {partial} kept their box, their saved graphics not decoding whole"
+                )
+            }
+            Self::SavedMeshesSkipped { error } => {
+                write!(f, "saved graphics not read, bodies unchanged: {error}")
+            }
+            Self::RevitPropertySets {
+                elements,
+                types,
+                untyped_elements,
+                properties,
+                left_out,
+            } => write!(
+                f,
+                "Revit property sets on {elements} elements and {types} types, and type sets on {untyped_elements} elements of types with no type object ({properties} properties, {left_out} named parameters left out)"
+            ),
+            Self::RevitPropertySetsSkipped { error } => {
+                write!(f, "Revit property sets not written: {error}")
+            }
+            Self::RevitSetPlacement {
+                elements,
+                properties,
+                left_out,
+            } => write!(
+                f,
+                "{properties} properties on {elements} elements written where Revit's exporter writes them ({left_out} parameters of a kind not written left out)"
+            ),
+            Self::RevitSetPlacementSkipped { error } => write!(
+                f,
+                "properties not placed as Revit's exporter places them: {error}"
+            ),
+            Self::BaseQuantities { left_out } => {
+                write!(f, "{left_out} base quantities left out")
+            }
+        }
+    }
 }
 
 /// The model of an export, its diagnostics and what the run noted.
@@ -189,6 +305,45 @@ pub struct ExportRun {
     pub unread: Vec<UnreadStream>,
     /// What the steps reported, in step order.
     pub notes: Vec<ExportNote>,
+}
+
+/// The model `rvt-ifc` writes the IFC from, built as `rvt-ifc` builds it, under
+/// the default walker limits and with no control. See
+/// [`run_export_with_limits_and_control`] for the steps.
+///
+/// # Errors
+///
+/// As [`run_export_with_limits_and_control`].
+///
+/// # Examples
+///
+/// ```
+/// use rvt::RevitFile;
+/// use rvt::ifc::{ExportOptions, run_export};
+///
+/// let mut rf = RevitFile::open("corpus/tier1/architectural-2024/architectural-2024.rvt")?;
+/// let run = run_export(&mut rf, &ExportOptions::default())?;
+/// println!("{} entities", run.model.entities.len());
+/// for note in &run.notes {
+///     println!("{note}");
+/// }
+/// # Ok::<(), Box<dyn std::error::Error>>(())
+/// ```
+pub fn run_export(rf: &mut RevitFile, options: &ExportOptions) -> Result<ExportRun> {
+    run_export_with_limits(rf, options, WalkerLimits::default())
+}
+
+/// [`run_export`] under the resource limits of `limits`, with no control.
+///
+/// # Errors
+///
+/// As [`run_export_with_limits_and_control`].
+pub fn run_export_with_limits(
+    rf: &mut RevitFile,
+    options: &ExportOptions,
+    limits: WalkerLimits,
+) -> Result<ExportRun> {
+    run_export_with_limits_and_control(rf, options, limits, &WalkerControl::default())
 }
 
 /// The model `rvt-ifc` writes the IFC from, built as `rvt-ifc` builds it:
@@ -218,30 +373,9 @@ pub struct ExportRun {
 ///
 /// The errors of reading the file, as
 /// [`RvtDocExporter::export_with_diagnostics`] lists them; a phase the file
-/// does not have as [`Error::InvalidInput`](crate::Error::InvalidInput).
-///
-/// # Examples
-///
-/// ```
-/// use rvt::RevitFile;
-/// use rvt::control::WalkerControl;
-/// use rvt::ifc::{ExportOptions, run_export};
-/// use rvt::walker::WalkerLimits;
-///
-/// let mut rf = RevitFile::open("corpus/tier1/architectural-2024/architectural-2024.rvt")?;
-/// let run = run_export(
-///     &mut rf,
-///     &ExportOptions::default(),
-///     WalkerLimits::default(),
-///     &WalkerControl::default(),
-/// )?;
-/// println!("{} entities", run.model.entities.len());
-/// for note in &run.notes {
-///     println!("{}", note.text);
-/// }
-/// # Ok::<(), Box<dyn std::error::Error>>(())
-/// ```
-pub fn run_export(
+/// does not have as [`Error::InvalidInput`](crate::Error::InvalidInput);
+/// [`Error::Cancelled`](crate::Error::Cancelled) once `control` is cancelled.
+pub fn run_export_with_limits_and_control(
     rf: &mut RevitFile,
     options: &ExportOptions,
     limits: WalkerLimits,
@@ -276,27 +410,19 @@ pub fn run_export(
             Ok(report) => {
                 recount_exported(&mut diagnostics, &model);
                 if report.candidates > 0 {
-                    let what = if scope == SavedMeshScope::All {
-                        "bounding-box bodies"
-                    } else {
-                        "door and window bounding-box bodies"
-                    };
-                    notes.push(ExportNote {
-                        step: ExportStep::SavedMeshes,
-                        skipped: None,
-                        text: format!(
-                            "{} of {} {what} drawn from their saved graphics ({} triangles); {} kept their box, their saved graphics not decoding whole",
-                            report.replaced, report.candidates, report.triangles, report.partial
-                        ),
+                    notes.push(ExportNote::SavedMeshes {
+                        scope,
+                        candidates: report.candidates,
+                        replaced: report.replaced,
+                        partial: report.partial,
+                        triangles: report.triangles,
                     });
                 }
             }
             Err(error) => {
                 control.check()?;
-                notes.push(ExportNote {
-                    step: ExportStep::SavedMeshes,
-                    skipped: Some(error.to_string()),
-                    text: format!("saved graphics not read, bodies unchanged: {error}"),
+                notes.push(ExportNote::SavedMeshesSkipped {
+                    error: error.to_string(),
                 });
             }
         }
@@ -304,24 +430,17 @@ pub fn run_export(
 
     if options.revit_property_sets {
         match super::revit_property_sets::attach(rf, &mut model) {
-            Ok(report) => notes.push(ExportNote {
-                step: ExportStep::RevitPropertySets,
-                skipped: None,
-                text: format!(
-                    "Revit property sets on {} elements and {} types, and type sets on {} elements of types with no type object ({} properties, {} named parameters left out)",
-                    report.elements,
-                    report.types,
-                    report.untyped_elements,
-                    report.properties,
-                    report.left_out
-                ),
+            Ok(report) => notes.push(ExportNote::RevitPropertySets {
+                elements: report.elements,
+                types: report.types,
+                untyped_elements: report.untyped_elements,
+                properties: report.properties,
+                left_out: report.left_out,
             }),
             Err(error) => {
                 control.check()?;
-                notes.push(ExportNote {
-                    step: ExportStep::RevitPropertySets,
-                    skipped: Some(format!("{error:#}")),
-                    text: format!("Revit property sets not written: {error:#}"),
+                notes.push(ExportNote::RevitPropertySetsSkipped {
+                    error: format!("{error:#}"),
                 });
             }
         }
@@ -331,23 +450,16 @@ pub fn run_export(
         match super::revit_set_placement::attach(rf, &mut model) {
             Ok(report) => {
                 recount_exported(&mut diagnostics, &model);
-                notes.push(ExportNote {
-                    step: ExportStep::RevitSetPlacement,
-                    skipped: None,
-                    text: format!(
-                        "{} properties on {} elements written where Revit's exporter writes them ({} parameters of a kind not written left out)",
-                        report.properties, report.elements, report.left_out
-                    ),
+                notes.push(ExportNote::RevitSetPlacement {
+                    elements: report.elements,
+                    properties: report.properties,
+                    left_out: report.left_out,
                 });
             }
             Err(error) => {
                 control.check()?;
-                notes.push(ExportNote {
-                    step: ExportStep::RevitSetPlacement,
-                    skipped: Some(format!("{error:#}")),
-                    text: format!(
-                        "properties not placed as Revit's exporter places them: {error:#}"
-                    ),
+                notes.push(ExportNote::RevitSetPlacementSkipped {
+                    error: format!("{error:#}"),
                 });
             }
         }
@@ -356,11 +468,7 @@ pub fn run_export(
     if options.no_base_quantities {
         let left_out = leave_out_base_quantities(&mut model);
         recount_exported(&mut diagnostics, &model);
-        notes.push(ExportNote {
-            step: ExportStep::BaseQuantities,
-            skipped: None,
-            text: format!("{left_out} base quantities left out"),
-        });
+        notes.push(ExportNote::BaseQuantities { left_out });
     }
 
     // #1075: the steps above may have read more streams than the export did.

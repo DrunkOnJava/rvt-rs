@@ -15,7 +15,9 @@
 
 use clap::Parser;
 use rvt::RevitFile;
-use rvt::ifc::{ExportOptions, SavedMeshChoice, gltf::model_to_glb, run_export};
+use rvt::ifc::{
+    ExportOptions, SavedMeshChoice, gltf::model_to_glb, run_export_with_limits_and_control,
+};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
@@ -177,7 +179,7 @@ fn run(cli: &Cli) -> Result<(), Failure> {
     } else {
         SavedMeshChoice::Default
     };
-    let run = run_export(
+    let run = run_export_with_limits_and_control(
         &mut rf,
         &ExportOptions::default().with_saved_meshes(saved_meshes),
         walker_limits,
@@ -186,8 +188,8 @@ fn run(cli: &Cli) -> Result<(), Failure> {
     .map_err(|e| format!("export {}: {e}", input.display()))?;
     // The saved graphics only improve bodies: when they cannot be read, the
     // glb is written with the bodies it has, and says so.
-    for note in run.notes.iter().filter(|note| note.skipped.is_some()) {
-        eprintln!("rvt-gltf: {}", note.text);
+    for note in run.notes.iter().filter(|note| note.skipped().is_some()) {
+        eprintln!("rvt-gltf: {note}");
     }
     let model = run.model;
     if !run.unread.is_empty() {

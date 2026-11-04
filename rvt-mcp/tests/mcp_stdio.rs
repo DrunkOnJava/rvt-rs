@@ -667,6 +667,18 @@ async fn a_model_opened_at_a_phase_reads_and_exports_that_phase() {
     );
     let existing_id = existing["model_id"].as_str().expect("model_id").to_string();
     assert_eq!(existing["room_count"], 0);
+    let by_number = answer(
+        &call(
+            &client,
+            "open_model",
+            json!({ "model": path, "phase": "12589" }),
+        )
+        .await,
+    );
+    assert_eq!(
+        by_number["model_id"], existing["model_id"],
+        "a phase named by its name and by its ElementId is one model"
+    );
     let rooms = answer(&call(&client, "list_rooms", json!({ "model": existing_id })).await);
     assert_eq!(rooms_of(&rooms), 0);
     let diagnostics =

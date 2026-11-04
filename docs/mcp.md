@@ -129,11 +129,14 @@ also takes `phase`, a phase's name (exactly) or its ElementId, as
 `rvt-ifc --phase` does. The model is then read at that phase: an element that
 does not exist in it, and a room whose own phase is not it, are left out, and
 `get_diagnostics` counts them. A model opened at a phase is a different model
-from the same file at the last one: it has its own `model_id` (the hash covers
-the phase), and the server keeps both. A `model_id` names the phase it was
-opened at, so passing a different `phase` with one is a tool error; pass the
-path with `phase` instead. A phase the file does not have is a tool error that
-lists the phases it does.
+from the same file with no `phase`: it has its own `model_id` (the hash covers
+the phase's ElementId, so a phase named by its name and by its number is one
+model), and the server keeps both. Naming the project's last phase is a model
+of its own too, since the server does not know a file's last phase until it
+reads it. A `model_id` names the phase it was opened at, so passing a different
+`phase` with one is a tool error; pass the path with `phase` instead. A phase
+the file does not have is a tool error that lists the phases it does; the
+server remembers the answer, so asking again does not read the file again.
 
 The handle lives while the server process runs and while the model is among the
 most recently used ones the server keeps (2 by default, `--max-open-models`):

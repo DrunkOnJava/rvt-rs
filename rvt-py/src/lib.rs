@@ -74,7 +74,7 @@ fn parse_export_quality_mode(mode: &str) -> PyResult<ifc::ExportQualityMode> {
     ifc::ExportQualityMode::parse(mode).map_err(to_py_val)
 }
 
-/// The default IFC export of `rf` (`ifc::run_export`, the build `rvt-ifc`
+/// The default IFC export of `rf` (`ifc::run_export_with_limits`, the build `rvt-ifc`
 /// runs), drawing doors and windows from their saved meshes (Revit 2023 to
 /// 2027) when `saved_meshes`. Saved graphics only improve bodies: when they
 /// cannot be read, the export keeps the bodies it has and a `RuntimeWarning`
@@ -93,17 +93,11 @@ fn export_run(
         } else {
             ifc::SavedMeshChoice::Off
         });
-    let run = ifc::run_export(
-        rf,
-        &options,
-        walker_limits,
-        &rvt::control::WalkerControl::default(),
-    )
-    .map_err(to_py_val)?;
-    for note in run.notes.iter().filter(|note| note.skipped.is_some()) {
+    let run = ifc::run_export_with_limits(rf, &options, walker_limits).map_err(to_py_val)?;
+    for note in run.notes.iter().filter(|note| note.skipped().is_some()) {
         let category = py.import("builtins")?.getattr("RuntimeWarning")?;
         py.import("warnings")?
-            .call_method1("warn", (note.text.as_str(), category))?;
+            .call_method1("warn", (note.to_string(), category))?;
     }
     Ok(run)
 }
@@ -747,7 +741,7 @@ impl PyRevitFile {
     }
 
     /// Produce an IFC4 STEP string for this Revit file via
-    /// `ifc::run_export`. Document-level export — project name,
+    /// `ifc::run_export_with_limits`. Document-level export — project name,
     /// description, units, classifications. Raises `ValueError` if
     /// the file can't be parsed far enough to produce a model, or if
     /// `mode` quality gates are not met.

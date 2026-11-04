@@ -106,7 +106,8 @@ pub use export_content::{
     ELEMENT_RECORD_PROPERTY_SET, ExportContentPolicy, is_misleading_proxy_class,
 };
 pub use export_pipeline::{
-    ExportKind, ExportNote, ExportOptions, ExportRun, ExportStep, SavedMeshChoice, run_export,
+    ExportKind, ExportNote, ExportOptions, ExportRun, SavedMeshChoice, run_export,
+    run_export_with_limits, run_export_with_limits_and_control,
 };
 pub use from_decoded::{BuilderOptions, ElementInput, build_ifc_model};
 pub use step_writer::write_step;

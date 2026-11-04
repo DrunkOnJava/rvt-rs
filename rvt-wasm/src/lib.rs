@@ -26,10 +26,10 @@ use wasm_bindgen::prelude::*;
 use rvt::RevitFile;
 use rvt::control::{ProgressEvent, Stage, WalkerControl};
 use rvt::ifc::{
-    ExportDiagnostics, ExportOptions, ExportQualityMode, ExportRun, ExportStep, IfcModel,
+    ExportDiagnostics, ExportNote, ExportOptions, ExportQualityMode, ExportRun, IfcModel,
     SavedMeshChoice,
     gltf::model_to_glb,
-    record_unread_streams, run_export,
+    record_unread_streams, run_export_with_limits_and_control,
     scene_graph::{
         ElementInfoPanel, SceneNode, Schedule, build_scene_graph, build_schedule,
         distinct_ifc_types, element_info_panel,
@@ -250,7 +250,7 @@ fn export_with_control(
 ) -> Result<JsValue, JsValue> {
     let quality_mode = ExportQualityMode::parse(mode).map_err(err_str)?;
     let mut rf = RevitFile::open_bytes_with_limits(bytes.to_vec(), open_limits).map_err(err_str)?;
-    // The build `rvt-ifc` runs ([`run_export`]), with doors and windows drawn
+    // The build `rvt-ifc` runs ([`run_export_with_limits_and_control`]), with doors and windows drawn
     // from their saved meshes (Revit 2023 to 2027 only) unless `saved_meshes`
     // is false.
     let options = ExportOptions::default()
@@ -260,7 +260,8 @@ fn export_with_control(
         } else {
             SavedMeshChoice::Off
         });
-    let run = run_export(&mut rf, &options, walker_limits, control).map_err(err_str)?;
+    let run = run_export_with_limits_and_control(&mut rf, &options, walker_limits, control)
+        .map_err(err_str)?;
     let ExportRun {
         model,
         mut diagnostics,
@@ -272,9 +273,9 @@ fn export_with_control(
     // keeps its bounding boxes and the diagnostics carry a warning saying so.
     let mut warned = false;
     for note in &notes {
-        if let (ExportStep::SavedMeshes, Some(why)) = (note.step, &note.skipped) {
+        if let ExportNote::SavedMeshesSkipped { error, .. } = note {
             diagnostics.warnings.push(format!(
-                "Saved graphics not read, door and window bodies unchanged: {why}"
+                "Saved graphics not read, door and window bodies unchanged: {error}"
             ));
             warned = true;
         }

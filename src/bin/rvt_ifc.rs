@@ -9,10 +9,9 @@
 use clap::{Parser, ValueEnum};
 use rvt::{
     RevitFile,
-    control::WalkerControl,
     ifc::{
         ExportDiagnostics, ExportKind, ExportOptions, ExportQualityMode, SavedMeshChoice,
-        run_export,
+        run_export_with_limits,
         step_writer::{StepOptions, write_step_to, write_step_with_options},
     },
     walker::WalkerLimits,
@@ -225,16 +224,15 @@ fn run(args: Args) -> anyhow::Result<()> {
         ),
     )?;
     let quality_mode = ExportQualityMode::from(args.mode);
-    let run = run_export(
+    let run = run_export_with_limits(
         &mut rf,
         &export_options(&args),
         walker_limits_from_args(&args),
-        &WalkerControl::default(),
     )?;
     let model = run.model;
     let diagnostics = run.diagnostics;
     for note in &run.notes {
-        eprintln!("rvt-ifc: {}", note.text);
+        eprintln!("rvt-ifc: {note}");
     }
 
     let out_path = args.output.clone().unwrap_or_else(|| {

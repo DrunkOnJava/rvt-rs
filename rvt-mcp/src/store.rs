@@ -1,12 +1,13 @@
 //! The decoded models the server keeps.
 //!
 //! A model is identified by its file's canonical path, size and modification
-//! time, and by the project phase it was opened at, when one was named.
-//! `open_model` decodes it once and returns an opaque `model_id` hashed from
-//! that identity; every tool takes the `model_id` or the path. The server
-//! keeps the most recently used few and drops the others, so an id can be
-//! unknown after an eviction or a restart, and the tools then say so and ask
-//! for `open_model` again.
+//! time, and by the project phase it was opened at, when one was named: by the
+//! phase's ElementId, so a phase named two ways is one model. `open_model`
+//! decodes it once and returns an opaque `model_id` hashed from that identity;
+//! every tool takes the `model_id` or the path. The server keeps the most
+//! recently used few and drops the others, so an id can be unknown after an
+//! eviction or a restart, and the tools then say so and ask for `open_model`
+//! again.
 
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
@@ -16,7 +17,10 @@ use rvt::RevitFile;
 use rvt::control::WalkerControl;
 use rvt::elem_table::RecordFraming;
 use rvt::ifc::step_writer::element_global_ids;
-use rvt::ifc::{ExportDiagnostics, ExportNote, ExportOptions, ExportRun, IfcModel, run_export};
+use rvt::ifc::{
+    ExportDiagnostics, ExportNote, ExportOptions, ExportRun, IfcModel,
+    run_export_with_limits_and_control,
+};
 use rvt::reader::UnreadStream;
 use sha2::{Digest, Sha256};
 
@@ -32,32 +36,31 @@ fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
     mutex.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
-/// How a failed export ends the tool job: a cancelled request is cancelled,
-/// and a phase the file does not have says what the file has.
+/// How a failed export ends the tool job: a cancelled request is cancelled.
 fn export_failure(error: rvt::Error) -> Failure {
     match error {
         rvt::Error::Cancelled => Failure::Cancelled,
-        rvt::Error::InvalidInput(message) => Failure::Message(message),
         other => Failure::Message(format!("the export could not read the file: {other}")),
     }
 }
 
 /// The decode every tool answers from and the exports are written from:
-/// [`run_export`] under the server's walker limits, at the phase `options`
-/// names. A cancelled `control` ends the run with [`Failure::Cancelled`] and
-/// nothing is kept.
+/// [`run_export_with_limits_and_control`] under the server's walker limits, at
+/// the phase `options` names. A cancelled `control` ends the run with
+/// [`Failure::Cancelled`] and nothing is kept.
 pub fn run_decode(
     rf: &mut RevitFile,
     config: &Config,
     options: &ExportOptions,
     control: &WalkerControl,
 ) -> Result<ExportRun, Failure> {
-    run_export(rf, options, config.walker_limits, control).map_err(export_failure)
+    run_export_with_limits_and_control(rf, options, config.walker_limits, control)
+        .map_err(export_failure)
 }
 
 /// What `rvt-ifc` prints about the run's steps, one sentence each.
 pub fn note_texts(notes: &[ExportNote]) -> Vec<String> {
-    notes.iter().map(|note| note.text.clone()).collect()
+    notes.iter().map(ToString::to_string).collect()
 }
 
 /// A file as the server identifies it: where it is and which bytes it holds,
@@ -98,9 +101,9 @@ impl Identity {
         })
     }
 
-    /// The opaque handle: a hash of the identity and the phase it was opened
-    /// at, with no path in it.
-    pub fn model_id(&self, phase: Option<&str>) -> String {
+    /// The opaque handle: a hash of the identity and the ElementId of the
+    /// phase it was opened at, with no path in it.
+    pub fn model_id(&self, phase: Option<i64>) -> String {
         let mut hasher = Sha256::new();
         hasher.update(self.path.to_string_lossy().as_bytes());
         hasher.update([0u8]);
@@ -108,7 +111,7 @@ impl Identity {
         hasher.update(self.modified_nanos.to_le_bytes());
         if let Some(phase) = phase {
             hasher.update([1u8]);
-            hasher.update(phase.as_bytes());
+            hasher.update(phase.to_le_bytes());
         }
         let digest = hasher.finalize();
         format!("rvt-{}", &lower_hex(&digest)[..16])
@@ -200,21 +203,30 @@ fn file_provenance(rf: &mut RevitFile) -> FileProvenance {
     }
 }
 
+/// The project phase a model was opened at.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OpenedPhase {
+    /// The phase as the first request named it, a name or an ElementId.
+    pub spec: String,
+    /// Its ElementId, which the model is keyed by.
+    pub id: i64,
+}
+
 /// An open model: the file's handle, which keeps what the decode inflated,
 /// and the default decode once it has run.
 pub struct Entry {
     pub identity: Identity,
     /// The project phase the handle was opened at (`None`: the project's
     /// last). It is set before anything is read from the handle.
-    pub phase: Option<String>,
+    pub phase: Option<OpenedPhase>,
     pub id: String,
     file: Mutex<RevitFile>,
     default: Mutex<Option<Arc<Computed>>>,
 }
 
 impl Entry {
-    fn new(identity: Identity, phase: Option<String>, file: RevitFile) -> Self {
-        let id = identity.model_id(phase.as_deref());
+    fn new(identity: Identity, phase: Option<OpenedPhase>, file: RevitFile) -> Self {
+        let id = identity.model_id(phase.as_ref().map(|phase| phase.id));
         Self {
             identity,
             phase,
@@ -224,8 +236,13 @@ impl Entry {
         }
     }
 
-    fn is(&self, identity: &Identity, phase: Option<&str>) -> bool {
-        self.identity == *identity && self.phase.as_deref() == phase
+    fn is(&self, identity: &Identity, phase: Option<i64>) -> bool {
+        self.identity == *identity && self.phase.as_ref().map(|phase| phase.id) == phase
+    }
+
+    /// The phase to name in a decode's `ExportOptions`.
+    pub fn phase_spec(&self) -> Option<String> {
+        self.phase.as_ref().map(|phase| phase.spec.clone())
     }
 
     /// The decode `rvt-ifc` runs with no switch, run once and kept.
@@ -239,7 +256,7 @@ impl Entry {
             return Ok(Arc::clone(done));
         }
         let mut file = lock(&self.file);
-        let options = ExportOptions::default().with_phase(self.phase.clone());
+        let options = ExportOptions::default().with_phase(self.phase_spec());
         let run = run_decode(&mut file, config, &options, control)?;
         let provenance = file_provenance(&mut file);
         drop(file);
@@ -255,10 +272,21 @@ impl Entry {
     }
 }
 
+/// How many phase resolutions the store remembers.
+const PHASE_MEMORY: usize = 64;
+
+/// A phase as one request spelled it, in the file of one identity.
+type PhaseKey = (Identity, String);
+
 /// The least recently used decoded models, most recent first.
 pub struct Store {
     config: Config,
     entries: Mutex<Vec<Arc<Entry>>>,
+    /// What a phase named in a request turned out to be in a file: its
+    /// ElementId, or why the file has no such phase. A phase the file lacks
+    /// would otherwise read the whole file again each time it was asked for.
+    /// Newest first.
+    phases: Mutex<Vec<(PhaseKey, Result<i64, String>)>>,
 }
 
 impl Store {
@@ -266,6 +294,7 @@ impl Store {
         Self {
             config,
             entries: Mutex::new(Vec::new()),
+            phases: Mutex::new(Vec::new()),
         }
     }
 
@@ -284,16 +313,23 @@ impl Store {
             return self.by_path(model, phase);
         }
         let entry = self.by_id(model)?;
-        match phase {
-            Some(phase) if entry.phase.as_deref() != Some(phase) => Err(format!(
-                "phase {phase:?} cannot be combined with model_id {model}: an id names the phase its model was opened at ({}). Pass the file path with phase, or call open_model with the path and phase.",
-                entry
-                    .phase
-                    .as_deref()
-                    .map_or("the project's last".to_string(), |at| format!("{at:?}"))
-            )),
-            _ => Ok(entry),
+        let Some(spec) = phase else {
+            return Ok(entry);
+        };
+        let (named, _) = self.resolve_phase(&entry.identity, spec)?;
+        if entry.phase.as_ref().map(|phase| phase.id) == Some(named) {
+            return Ok(entry);
         }
+        Err(format!(
+            "phase {spec:?} cannot be combined with model_id {model}: an id names the phase its model was opened at ({}). Pass the file path with phase, or call open_model with the path and phase.",
+            entry
+                .phase
+                .as_ref()
+                .map_or("the project's last".to_string(), |at| format!(
+                    "{:?}",
+                    at.spec
+                ))
+        ))
     }
 
     fn by_id(&self, id: &str) -> Result<Arc<Entry>, String> {
@@ -313,7 +349,9 @@ impl Store {
             ));
         };
         if !entry.identity.unchanged() {
-            lock(&self.entries).retain(|held| held.id != entry.id);
+            // Every phase of the changed file is as stale as this one.
+            lock(&self.entries).retain(|held| held.identity != entry.identity);
+            lock(&self.phases).retain(|((identity, _), _)| *identity != entry.identity);
             return Err(format!(
                 "the file behind model_id {id} changed or was removed since open_model returned it. Call open_model again with the file path."
             ));
@@ -321,31 +359,90 @@ impl Store {
         Ok(entry)
     }
 
-    fn by_path(&self, path: &str, phase: Option<&str>) -> Result<Arc<Entry>, String> {
+    fn open_file(&self, identity: &Identity) -> Result<RevitFile, String> {
+        RevitFile::open_with_limits(&identity.path, self.config.open_limits)
+            .map_err(|error| error.to_string())
+    }
+
+    /// The ElementId of the phase `spec` names in the file of `identity`, and,
+    /// when this call had to read the file to find out, the handle it read,
+    /// already at that phase. A phase the file lacks is an error that lists the
+    /// file's phases; the answer, either way, is remembered.
+    fn resolve_phase(
+        &self,
+        identity: &Identity,
+        spec: &str,
+    ) -> Result<(i64, Option<RevitFile>), String> {
+        if let Some(known) = self.remembered(identity, spec) {
+            return known.map(|id| (id, None));
+        }
+        let mut file = self.open_file(identity)?;
+        let resolved = file
+            .set_export_phase(spec)
+            .map_err(|error| error.to_string());
+        self.remember(identity, spec, resolved.clone());
+        resolved.map(|id| (id, Some(file)))
+    }
+
+    fn remembered(&self, identity: &Identity, spec: &str) -> Option<Result<i64, String>> {
+        lock(&self.phases)
+            .iter()
+            .find(|((held, named), _)| held == identity && named == spec)
+            .map(|(_, resolved)| resolved.clone())
+    }
+
+    fn remember(&self, identity: &Identity, spec: &str, resolved: Result<i64, String>) {
+        let mut phases = lock(&self.phases);
+        phases.retain(|((held, named), _)| !(held == identity && named == spec));
+        phases.insert(0, ((identity.clone(), spec.to_string()), resolved));
+        phases.truncate(PHASE_MEMORY);
+    }
+
+    fn by_path(&self, path: &str, spec: Option<&str>) -> Result<Arc<Entry>, String> {
         if path.is_empty() {
             return Err("model is empty: pass a model_id from open_model, or the path of a .rvt, .rfa, .rte or .rft file".to_string());
         }
         let identity = Identity::of(Path::new(path))?;
-        if let Some(entry) = self.touch(&identity, phase) {
+        // Before anything is read from a handle: an unknown phase is refused
+        // here, listing the file's phases, and never takes a held slot. Every
+        // decode of the entry also names the phase in its `ExportOptions`.
+        let (phase, mut opened) = match spec {
+            None => (None, None),
+            Some(spec) => {
+                let (id, opened) = self.resolve_phase(&identity, spec)?;
+                let phase = OpenedPhase {
+                    spec: spec.to_string(),
+                    id,
+                };
+                (Some(phase), opened)
+            }
+        };
+        let phase_id = phase.as_ref().map(|phase| phase.id);
+        if let Some(entry) = self.touch(&identity, phase_id) {
             return Ok(entry);
         }
-        let mut file = RevitFile::open_with_limits(&identity.path, self.config.open_limits)
-            .map_err(|error| error.to_string())?;
-        // Every decode of the entry names this phase in its `ExportOptions`.
-        // It is also checked here, before anything is read from the handle, so
-        // an unknown phase is refused listing the file's phases and never
-        // takes one of the held slots.
-        if let Some(phase) = phase {
-            file.set_export_phase(phase)
-                .map_err(|error| error.to_string())?;
-        }
-        let entry = Arc::new(Entry::new(identity, phase.map(str::to_string), file));
+        let file = match opened.take() {
+            Some(file) => file,
+            None => {
+                let mut file = self.open_file(&identity)?;
+                if let Some(phase) = &phase {
+                    file.set_export_phase(&phase.spec)
+                        .map_err(|error| error.to_string())?;
+                }
+                file
+            }
+        };
+        let entry = Arc::new(Entry::new(identity, phase, file));
         let mut entries = lock(&self.entries);
         // Another call may have opened it while this one read the file.
-        if let Some(existing) = entries.iter().find(|held| held.is(&entry.identity, phase)) {
+        if let Some(existing) = entries
+            .iter()
+            .find(|held| held.is(&entry.identity, phase_id))
+        {
             return Ok(Arc::clone(existing));
         }
-        // The same path with another size or time is the file's earlier self.
+        // The same path with another size or time is the file's earlier self,
+        // at every phase.
         entries.retain(|held| {
             held.identity.path != entry.identity.path || held.identity == entry.identity
         });
@@ -354,8 +451,9 @@ impl Store {
         Ok(entry)
     }
 
-    /// The held entry of `identity` at `phase`, made the most recent.
-    fn touch(&self, identity: &Identity, phase: Option<&str>) -> Option<Arc<Entry>> {
+    /// The held entry of `identity` at the phase with ElementId `phase`, made
+    /// the most recent.
+    fn touch(&self, identity: &Identity, phase: Option<i64>) -> Option<Arc<Entry>> {
         let mut entries = lock(&self.entries);
         let position = entries.iter().position(|entry| entry.is(identity, phase))?;
         let entry = entries.remove(position);

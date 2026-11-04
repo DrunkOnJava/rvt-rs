@@ -143,7 +143,7 @@ pub fn ifc(
             notes: &default.notes,
         }
     } else {
-        let options = switches.clone().with_phase(entry.phase.clone());
+        let options = switches.clone().with_phase(entry.phase_spec());
         custom = entry.with_file(|file| run_decode(file, config, &options, control))?;
         custom_notes = note_texts(&custom.notes);
         Source {
