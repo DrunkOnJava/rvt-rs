@@ -128,6 +128,7 @@ pub fn native_run_base_cuts(
     }
     let options = Options {
         selected_ids: runs.clone(),
+        value_source: Some("stair_run_base_cuts"),
         ..Options::default()
     };
     let mut out = BTreeMap::new();

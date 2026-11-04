@@ -197,6 +197,11 @@ pub enum CopyRule {
     /// A native record by member name, the current copy of it
     /// (`native_document`).
     Native,
+    /// The frames of other elements' records (a sketch's lines, a type
+    /// symbol), listed in [`ValueSource::parts`], as the reader's scan kept
+    /// them: for a sketch's lines the first of each line's frames by frame
+    /// order, with the current partition's where its copies disagree.
+    Frame,
 }
 
 impl CopyRule {
@@ -207,8 +212,25 @@ impl CopyRule {
             Self::Agreeing => "agreeing",
             Self::Current => "current",
             Self::Native => "native",
+            Self::Frame => "frame",
         }
     }
+}
+
+/// The most records a [`ValueSource`] lists in [`ValueSource::parts`]. A
+/// profile of more has the rest counted in [`ValueSource::parts_left_out`].
+pub const MAX_SOURCE_PARTS: usize = 64;
+
+/// One record a [`ValueSource`] is made of (#1368).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[non_exhaustive]
+pub struct SourcePart {
+    /// The ElementId of the record's element: a sketch line, a type symbol.
+    pub element_id: u32,
+    /// The partition the record is in, such as `Partitions/46`.
+    pub stream: String,
+    /// Where the record's frame starts in that partition inflated.
+    pub offset: usize,
 }
 
 /// The copy of an element's data a reader took a value from (#1360).
@@ -226,7 +248,8 @@ pub struct ValueSource {
     /// How the copy was chosen.
     pub rule: CopyRule,
     /// In how many partitions the element's data named it, so how many copies
-    /// there were to choose from (two headers in one partition count once).
+    /// there were to choose from (two headers in one partition count once);
+    /// for a source made of [`Self::parts`], how many records it is made of.
     pub copies: u32,
     /// The partition of the copy, such as `Partitions/46`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -242,15 +265,29 @@ pub struct ValueSource {
     /// lowest-numbered partition's, which says nothing about the frame's.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub partitions: Vec<u32>,
+    /// The records the value is made of, where it is made of several or of
+    /// another element's (a profile's sketch lines, a type symbol's frame),
+    /// at most [`MAX_SOURCE_PARTS`]. Such a source has no `stream` or `offset`
+    /// of its own.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub parts: Vec<SourcePart>,
+    /// How many more records than [`MAX_SOURCE_PARTS`] the value is made of.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub parts_left_out: u32,
     /// Whether the value is held in another partition than the element's frame
     /// ([`ElementProvenanceEntry::stream`]): the copy named is in another, and,
-    /// for [`CopyRule::Agreeing`], so is every copy that agrees with it.
+    /// for [`CopyRule::Agreeing`], so is every copy that agrees with it; for a
+    /// source made of records, none of them is in the frame's partition.
     #[serde(default, skip_serializing_if = "is_false")]
     pub differs_from_frame: bool,
 }
 
 fn is_false(value: &bool) -> bool {
     !*value
+}
+
+fn is_zero(value: &u32) -> bool {
+    *value == 0
 }
 
 impl ValueSource {
@@ -268,8 +305,37 @@ impl ValueSource {
             stream,
             offset,
             partitions: Vec::new(),
+            parts: Vec::new(),
+            parts_left_out: 0,
             differs_from_frame: false,
         }
+    }
+
+    /// A source made of the records `parts`, the first [`MAX_SOURCE_PARTS`]
+    /// of them listed and the rest counted.
+    pub(crate) fn from_parts(
+        reader: &str,
+        rule: CopyRule,
+        copies: usize,
+        mut parts: Vec<SourcePart>,
+    ) -> Self {
+        let left_out = parts.len().saturating_sub(MAX_SOURCE_PARTS);
+        parts.truncate(MAX_SOURCE_PARTS);
+        let mut source = Self::new(
+            reader,
+            rule,
+            u32::try_from(copies).unwrap_or(u32::MAX),
+            None,
+            None,
+        );
+        source.parts = parts;
+        source.parts_left_out = u32::try_from(left_out).unwrap_or(u32::MAX);
+        source
+    }
+
+    /// Whether the source says where it is: a copy, or records.
+    pub(crate) fn has_place(&self) -> bool {
+        self.stream.is_some() || !self.parts.is_empty()
     }
 
     /// The partitions that hold an agreeing copy.
@@ -282,6 +348,7 @@ impl ValueSource {
     /// agreeing copy listed in [`Self::partitions`] is.
     pub(crate) fn held_in(&self, stream: &str) -> bool {
         self.stream.as_deref() == Some(stream)
+            || self.parts.iter().any(|part| part.stream == stream)
             || stream
                 .strip_prefix("Partitions/")
                 .and_then(|number| number.parse::<u32>().ok())
@@ -319,6 +386,14 @@ pub struct ValueSourceCount {
     /// Of those, elements whose value source is in another partition than
     /// their frame ([`ValueSource::differs_from_frame`]).
     pub differ_from_frame: usize,
+    /// Of those, elements whose copy was chosen as the current partition's
+    /// ([`CopyRule::Current`]): the copies disagreed.
+    #[serde(default, skip_serializing_if = "is_zero_count")]
+    pub current: usize,
+}
+
+fn is_zero_count(value: &usize) -> bool {
+    *value == 0
 }
 
 /// Where one element came from.
@@ -805,7 +880,27 @@ fn body_readers(body: &str) -> &'static [&'static str] {
         }
         super::saved_meshes::SAVED_MESH_BODY_SOURCE => &["saved_graphics"],
         ec::SPIRAL_RUN_BODY_SOURCE => &["native_run"],
+        ec::STAIR_RUN_BODY_SOURCE => &[
+            "stair_run_lines",
+            "stair_run_ends",
+            "stair_run_type",
+            "stair_run_base_cuts",
+        ],
         ec::LANDING_TREAD_BODY_SOURCE => &["native_landing"],
+        ec::LANDING_SLAB_BODY_SOURCE => &["landing_lines", "native_landing"],
+        _ => &[],
+    }
+}
+
+/// The readers whose value a profile with this `ProfileSource` is drawn from
+/// (#1368): the sketch lines and the Sketch's curve list for a profile solved
+/// from sketch lines, the type symbol's frame for a type's section.
+fn profile_readers(profile: Option<&str>) -> &'static [&'static str] {
+    match profile {
+        Some(crate::element_record_plan_profiles::PLAN_PROFILE_SOURCE) => {
+            &["sketch_lines", "sketch_list", "sketch_line_data"]
+        }
+        Some(crate::partition_schema_mvp::TYPE_PROFILE_SOURCE) => &["type_section"],
         _ => &[],
     }
 }
@@ -813,10 +908,10 @@ fn body_readers(body: &str) -> &'static [&'static str] {
 /// Give each listed element the value sources the readers noted on `rf` while
 /// the export ran with `RevitFile::record_value_sources` on, and the frame
 /// itself as the source of a body read from it, each only where the final
-/// `model`'s `BodySource` for the element is drawn from that reader
-/// ([`body_readers`]); then count them by reader (#1360). Call it once the
-/// model is final: the saved graphics and the family extrusions replace bodies
-/// after the table is built.
+/// `model`'s `BodySource` or `ProfileSource` for the element is drawn from that
+/// reader ([`body_readers`], [`profile_readers`]); then count them by reader
+/// (#1360). Call it once the model is final: the saved graphics and the family
+/// extrusions replace bodies after the table is built.
 pub(crate) fn attach_value_sources(
     table: &mut ElementProvenanceTable,
     rf: &RevitFile,
@@ -851,20 +946,43 @@ pub(crate) fn attach_value_sources(
         let Some(body) = body else {
             continue;
         };
-        let readers = body_readers(body);
+        let body_list = body_readers(body);
+        let profile_list = profile_readers(profile_source);
         let Some(entry) = table.elements.get_mut(&id) else {
             continue;
         };
+        for source in noted.and_then(|noted| noted.get(&id)).into_iter().flatten() {
+            let reader = source.reader.as_str();
+            if !(body_list.contains(&reader) || profile_list.contains(&reader))
+                || entry
+                    .value_sources
+                    .iter()
+                    .any(|held| held.reader == source.reader)
+            {
+                continue;
+            }
+            let mut source = source.clone();
+            source.differs_from_frame = match &entry.stream {
+                Some(frame) if source.has_place() => !source.held_in(frame),
+                _ => false,
+            };
+            entry.value_sources.push(source);
+        }
         // A box whose profile was read from sketch lines or the type's section
-        // takes only its box and placement from the frame.
+        // takes only its box and placement from the frame, unless a reader
+        // noted the profile's records.
         let profile_elsewhere = profile_resolved && profile_source != Some(body);
-        if readers.contains(&SELECTED_FRAME_READER)
+        if body_list.contains(&SELECTED_FRAME_READER)
             && !entry
                 .value_sources
                 .iter()
                 .any(|source| source.rule == CopyRule::Selected)
         {
-            let reader = if profile_elsewhere {
+            let profile_sourced = entry
+                .value_sources
+                .iter()
+                .any(|source| profile_list.contains(&source.reader.as_str()));
+            let reader = if profile_elsewhere && !profile_sourced {
                 SELECTED_FRAME_BOX_READER
             } else {
                 SELECTED_FRAME_READER
@@ -878,22 +996,6 @@ pub(crate) fn attach_value_sources(
             );
             entry.value_sources.push(source);
         }
-        for source in noted.and_then(|noted| noted.get(&id)).into_iter().flatten() {
-            if !readers.contains(&source.reader.as_str())
-                || entry
-                    .value_sources
-                    .iter()
-                    .any(|held| held.reader == source.reader)
-            {
-                continue;
-            }
-            let mut source = source.clone();
-            source.differs_from_frame = match (&entry.stream, &source.stream) {
-                (Some(frame), Some(_)) => !source.held_in(frame),
-                _ => false,
-            };
-            entry.value_sources.push(source);
-        }
     }
     table.value_source_counts.clear();
     for entry in table.elements.values() {
@@ -904,6 +1006,7 @@ pub(crate) fn attach_value_sources(
                 .or_default();
             count.elements += 1;
             count.differ_from_frame += usize::from(source.differs_from_frame);
+            count.current += usize::from(source.rule == CopyRule::Current);
         }
     }
 }

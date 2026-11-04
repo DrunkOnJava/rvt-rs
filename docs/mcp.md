@@ -246,8 +246,12 @@ current native copy. So `offset` and `native_record.stream` can name different
 partitions. `get_element` and `explain_element` list, in `value_sources`, the
 copy each reader took a value of the body from (its reader, the rule that chose
 the copy, its stream and offset, and whether it is in another partition than the
-frame; #1360): the bounded line of a wall or beam, a family instance's
-transform, a saved mesh, a stair run or landing. `list_elements` does not. A
+frame; #1360, #1368): the bounded line of a wall or beam, a family instance's
+transform, a saved mesh, the sketch lines and curve list a floor's or roof's
+profile is solved from, a column's type symbol, a stair run's lines, ends and
+type, a landing's outline lines and native record. A source made of several
+records lists them in `parts`, at most 64, with the rest counted in
+`parts_left_out`. `list_elements` does not. A
 body whose reader does not note its copy yet has none; see
 `docs/export-diagnostics.md` for the readers.
 

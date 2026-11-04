@@ -91,7 +91,12 @@ element's data named it; two headers in one partition count once), `stream` and
 `offset` (where the copy starts), `partitions` (for `agreeing`, the partitions
 that hold a copy) and `differs_from_frame` (the value is held in another
 partition than the frame; for `agreeing`, in none of the partitions that hold a
-copy, so the lowest-numbered partition's being named does not make it differ).
+copy, so the lowest-numbered partition's being named does not make it differ;
+for a source made of `parts`, none of them in the frame's partition). A value
+made of several records, or of another element's, lists them in `parts`
+(`element_id`, `stream`, `offset`), at most 64; `parts_left_out` counts the rest
+(#1368). A source with `parts` has no `stream` or `offset` of its own, and its
+`copies` is the number of records it is made of.
 A reader notes its choice where it makes it, only while the export builds this
 table, and the entry is listed only where the element's final `BodySource` is
 drawn from that reader.
@@ -99,33 +104,43 @@ drawn from that reader.
 | `BodySource` | Reader | Rule | What `offset` is |
 |---|---|---|---|
 | `partition_element_record_bbox`, `partition_element_record_join_trimmed`, `partition_element_record_join_cut`, `partition_element_record_column_cut` | `selected_frame` | `selected` | The frame itself (a trim or cut also reads the joined elements' frames, which are not named). |
-| The same bodies where the profile is read from another record: a `profile_source` that is not the `body_source` (sketch lines for a floor, the type's section for a column) | `selected_frame_box` | `selected` | The frame, for the box and the placement only. The profile's copy has no source yet. |
+| The same bodies where the profile is read from a record no reader notes yet: a `profile_source` that is not the `body_source` | `selected_frame_box` | `selected` | The frame, for the box and the placement only. The profile's copy has no source yet. |
+| The same bodies where the profile is solved from sketch lines (`profile_source` `partition_element_record_sketch_lines`: floors, slabs, roofs) | `sketch_lines` | `agreeing` or `current` | `parts`: the frame of each sketch line the solve was given, the first of its frames by frame order, or the current partition's where its frames disagree (RE-216). The element's `selected_frame` names the frame for the box. |
+| The same | `sketch_list` | `agreeing` or `current` | The element-data header of the Sketch's curve list that names the lines (RE-97), the lowest-numbered partition's or the current one. Where the element has one. |
+| The same, where the outline is read from the lines' own ends rather than their boxes | `sketch_line_data` | `agreeing` or `current` | `parts`: the element-data header of each line's copy (as `bounded_line`). |
+| The same bodies where the section is the type symbol's box (`profile_source` `family_type_symbol_envelope`: columns) | `type_section` | `frame` | `parts`: the type symbol's frame, the last of its frames the column scan kept, with no check that its other frames agree. |
 | `partition_wall_centreline`, `partition_wall_centreline_layer_joins`, `partition_wall_tapered_section`, `partition_beam_axis`, `partition_beam_box_along_axis` | `bounded_line` | `agreeing` | The element-data header of the lowest-numbered partition's copy of its location line. Every copy holds the same line; a wall or beam whose copies differ is drawn as its box instead. |
 | `partition_wall_arc` | `bounded_arc` | `agreeing` | As `bounded_line`, for a curved wall's arc. |
 | `partition_family_instance_turned_box`, `partition_family_instance_oriented_box` | `instance_transform` | `agreeing` or `current` | The element-data header of the copy: the lowest-numbered partition's where the copies agree, the current partition's where they differ (RE-216). |
 | `saved_graphics_mesh` | `saved_graphics` | `native` | The header of the element's current graphics record. |
 | `native_spiral_run_treads` | `native_run` | `native` | The header of the run's current native record. |
 | `native_landing_tread` | `native_landing` | `native` | The header of the landing's current native record. |
+| `partition_stair_run_sketch` | `stair_run_lines`, `stair_run_ends` | `agreeing` | The element-data header of the first copy of the run's data that gave the sketch lines, or the ends; `partitions` lists the copies that did. |
+| `partition_stair_run_sketch` | `stair_run_type` | `agreeing` | `parts`: the run type's id object (where its id is stored), read once for the type and noted for each run of it. |
+| `partition_stair_run_sketch` | `stair_run_base_cuts` | `native` | The header of the run's current native record, which gives where its underside is cut. |
+| `partition_landing_slab` | `landing_lines` | `agreeing` | The element-data header of the first copy of the landing's data that gave its outline lines. |
+| `partition_landing_slab` | `native_landing` | `native` | The header of the landing's current native record, which gives its top and thickness. |
 
 No reader notes its copy yet for `partition_area_boundary_lines`,
-`partition_stair_run_sketch` (which reads partition sketch lines as well as native
-records), `partition_landing_slab` (whose outline comes from the landing lines
-and not from the native record, which gives its top and thickness),
 `family_type_hollow_section`, `family_type_i_section`, `partition_pipe_axis`,
 `partition_roof_slope`, `partition_roof_extrusion` and `family_extrusions`, nor
-for the other values a body reads (a wall's layers, a floor's sketch curves, a
-roof's slopes, a column's section from its type). An element of those bodies has
-no value source; an element whose box is the body but whose profile is read from
-another record has `selected_frame_box` and nothing for the profile. Neither is
-a claim that it read the frame. `value_source_counts` counts, by reader, the
-elements with a source and those whose value is held in another partition than
-their frame.
+for the other values a body reads (a wall's layers, a roof's slopes, the
+parameters of a type's section). An element of those bodies has no value
+source; an element whose box is the body but whose profile is read from a
+record no reader notes yet has `selected_frame_box` and nothing for the
+profile. Neither is a claim that it read the frame. `value_source_counts`
+counts, by reader, the elements with a source, those whose value is held in
+another partition than their frame, and those whose copy was chosen as the
+current partition's (`current`), so a run on any model shows whether it
+exercises that rule.
 
 `tests/value_sources_offsets.rs` reads the bytes at each recorded offset on Core
 Interior, the RE1 models, Einhoven and the BIM4LCA as-built office. For the
 element-data readers it finds the element-data header, then the element's own
 id, then a record that decodes to the value the reader returns when asked again;
-for a native record it finds the ElementId at the offset. It does not say the
+for a native record it finds the ElementId at the offset; for each record in
+`parts` it finds the element's id at the frame (or the no-id marker of a second
+prologue). It does not say the
 copy taken is the right one: `agreeing` copies are equal, and `current` is
 `current_partitions`, which it does not measure.
 

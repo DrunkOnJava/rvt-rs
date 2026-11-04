@@ -426,6 +426,54 @@ pub fn column_instances_from_records(
         .collect()
 }
 
+/// The frame of each type symbol in `records`, as
+/// [`column_instances_from_records`] takes the symbol's box: the last of a
+/// symbol's frames (#1368).
+pub(super) type SymbolFrames = BTreeMap<u32, (String, usize)>;
+
+/// The stream and offset of each type symbol's frame in `records`.
+pub(super) fn type_symbol_frames(
+    records: &[crate::partition_element_records::PartitionElementRecord],
+) -> SymbolFrames {
+    records
+        .iter()
+        .filter(|record| record.is_type_symbol())
+        .map(|record| (record.element_id, (record.stream.clone(), record.offset)))
+        .collect()
+}
+
+/// Note, for each column in `columns` that took its section from its type
+/// symbol ([`attach_type_symbol_profile`]), the symbol's frame as the source
+/// of its profile (#1368).
+pub(super) fn note_type_sections(
+    rf: &mut RevitFile,
+    columns: &[DecodedElement],
+    frames: &SymbolFrames,
+) {
+    use crate::ifc::element_provenance::{CopyRule, SourcePart, ValueSource};
+    for column in columns {
+        let Some(id) = column.id else {
+            continue;
+        };
+        let symbol = column.fields.iter().find_map(|(name, value)| match value {
+            InstanceField::ElementId { id, .. } if name == TYPE_SYMBOL_FIELD => Some(*id),
+            _ => None,
+        });
+        let Some((symbol, (stream, offset))) =
+            symbol.and_then(|symbol| Some((symbol, frames.get(&symbol)?)))
+        else {
+            continue;
+        };
+        let part = SourcePart {
+            element_id: symbol,
+            stream: stream.clone(),
+            offset: *offset,
+        };
+        let source = ValueSource::from_parts("type_section", CopyRule::Frame, 1, vec![part]);
+        rf.note_value_source(id, source);
+    }
+}
+
 /// Give each column whose record box starts at z = 0.0 the bottom its
 /// geometry node holds (RE-173).
 pub(super) fn apply_column_node_bottoms(rf: &mut RevitFile, lists: [&mut Vec<DecodedElement>; 2]) {

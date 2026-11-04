@@ -46,6 +46,7 @@
 //!
 //! Nothing here reads a release other than 2024.
 
+use crate::ifc::element_provenance::{CopyRule, SourcePart, ValueSource};
 use crate::le_bytes;
 use crate::partition_beam_axes::BoundedLine;
 use crate::{Result, RevitFile};
@@ -437,7 +438,15 @@ pub fn scan_run_types(
     if !supports_revit_version(revit_version) || ids.is_empty() {
         return Ok(BTreeMap::new());
     }
+    let recording = rf.recording_value_sources();
+    // The first copy read of each type and the partitions that gave a value
+    // (#1368).
+    let mut first: BTreeMap<u32, (String, usize)> = BTreeMap::new();
+    let mut gave: BTreeMap<u32, BTreeSet<u32>> = BTreeMap::new();
     for stream in rf.partition_stream_names() {
+        let partition = stream
+            .strip_prefix("Partitions/")
+            .and_then(|n| n.parse::<u32>().ok());
         let Ok(inflated) = rf.inflated_partition(&stream) else {
             continue;
         };
@@ -445,10 +454,36 @@ pub fn scan_run_types(
         for (id, id_at) in crate::partition_id_objects::find_id_objects(buf, ids) {
             if let Some(found) = run_type_at(buf, id_at) {
                 merge(&mut out, id, found);
+                if let (true, Some(partition)) = (recording, partition) {
+                    first.entry(id).or_insert_with(|| (stream.clone(), id_at));
+                    gave.entry(id).or_default().insert(partition);
+                }
             }
         }
     }
-    Ok(settled(out))
+    let values = settled(out);
+    if recording {
+        let mut noted = Vec::new();
+        for &id in values.keys() {
+            let Some((stream, id_at)) = first.get(&id) else {
+                continue;
+            };
+            let partitions = gave.get(&id).cloned().unwrap_or_default();
+            let part = SourcePart {
+                element_id: id,
+                stream: stream.clone(),
+                offset: *id_at,
+            };
+            let source =
+                ValueSource::from_parts("stair_run_type", CopyRule::Agreeing, 1, vec![part])
+                    .with_partitions(partitions.into_iter().collect());
+            noted.push((id, source));
+        }
+        for (id, source) in noted {
+            rf.note_value_source(id, source);
+        }
+    }
+    Ok(values)
 }
 
 /// Stair types, landing types and support types are serialised as run
@@ -675,7 +710,7 @@ pub fn scan_run_ends(
     sketches: &BTreeMap<u32, RunSketch>,
 ) -> Result<BTreeMap<u32, RunEnds>> {
     let runs: BTreeSet<u32> = sketches.keys().copied().collect();
-    scan_run_data(rf, revit_version, &runs, |id, data| {
+    scan_run_data(rf, revit_version, &runs, "stair_run_ends", |id, data| {
         let sketch = sketches.get(&id)?;
         run_ends_at(data, sketch.origin[2], sketch.width_feet)
     })
@@ -690,7 +725,7 @@ pub fn scan_run_lines(
     runs: &BTreeSet<u32>,
 ) -> Result<BTreeMap<u32, Vec<BoundedLine>>> {
     use crate::partition_beam_axes::{BOUNDED_LINE_TAG, bounded_line_at};
-    scan_run_data(rf, revit_version, runs, |_, data| {
+    scan_run_data(rf, revit_version, runs, "stair_run_lines", |_, data| {
         let lines: Vec<BoundedLine> = memchr::memmem::find_iter(data, &BOUNDED_LINE_TAG)
             .filter_map(|at| bounded_line_at(data, at))
             .collect();
@@ -713,7 +748,7 @@ pub fn scan_landing_lines(
     landings: &BTreeSet<u32>,
 ) -> Result<BTreeMap<u32, Vec<BoundedLine>>> {
     use crate::partition_beam_axes::{BOUNDED_LINE_TAG, bounded_line_at};
-    scan_run_data(rf, revit_version, landings, |_, data| {
+    scan_run_data(rf, revit_version, landings, "landing_lines", |_, data| {
         let data = &data[..data.len().min(LANDING_DATA_WINDOW)];
         let lines: Vec<BoundedLine> = memchr::memmem::find_iter(data, &BOUNDED_LINE_TAG)
             .filter_map(|at| bounded_line_at(data, at))
@@ -729,6 +764,7 @@ fn scan_run_data<T: PartialEq>(
     rf: &mut RevitFile,
     revit_version: u32,
     runs: &BTreeSet<u32>,
+    reader: &'static str,
     mut read: impl FnMut(u32, &[u8]) -> Option<T>,
 ) -> Result<BTreeMap<u32, T>> {
     use crate::partition_beam_axes::BEAM_DATA_WINDOW;
@@ -736,8 +772,17 @@ fn scan_run_data<T: PartialEq>(
         Some(header) if supports_revit_version(revit_version) => header,
         _ => return Ok(BTreeMap::new()),
     };
+    let recording = rf.recording_value_sources();
+    // While the handle records value sources (#1368): the first copy read of
+    // each run, the partitions that named it, and those that gave a value.
+    let mut first: BTreeMap<u32, (u32, usize)> = BTreeMap::new();
+    let mut named: BTreeMap<u32, BTreeSet<u32>> = BTreeMap::new();
+    let mut gave: BTreeMap<u32, BTreeSet<u32>> = BTreeMap::new();
     let mut out: BTreeMap<u32, Option<T>> = BTreeMap::new();
     for stream in rf.partition_stream_names() {
+        let partition = stream
+            .strip_prefix("Partitions/")
+            .and_then(|n| n.parse::<u32>().ok());
         let Ok(inflated) = rf.inflated_partition(&stream) else {
             continue;
         };
@@ -762,12 +807,37 @@ fn scan_run_data<T: PartialEq>(
             let Some(data) = buf.get(id_at + 8..end) else {
                 continue;
             };
+            if let (true, Some(partition)) = (recording, partition) {
+                named.entry(id).or_default().insert(partition);
+            }
             if let Some(found) = read(id, data) {
                 merge(&mut out, id, found);
+                if let (true, Some(partition)) = (recording, partition) {
+                    first.entry(id).or_insert((partition, hit));
+                    gave.entry(id).or_default().insert(partition);
+                }
             }
         }
     }
-    Ok(settled(out))
+    let values = settled(out);
+    if recording {
+        let mut noted = Vec::new();
+        for &id in values.keys() {
+            let Some(&(partition, hit)) = first.get(&id) else {
+                continue;
+            };
+            let held = named.get(&id).map_or(0, BTreeSet::len);
+            let partitions = gave.get(&id).cloned().unwrap_or_default();
+            let source =
+                ValueSource::in_partition(reader, CopyRule::Agreeing, held, partition, Some(hit))
+                    .with_partitions(partitions.into_iter().collect());
+            noted.push((id, source));
+        }
+        for (id, source) in noted {
+            rf.note_value_source(id, source);
+        }
+    }
+    Ok(values)
 }
 
 /// The side view of a run (RE-52, RE-92): one closed outline in the run's

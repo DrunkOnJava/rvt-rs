@@ -18,6 +18,13 @@
 //!   asked again;
 //! - reads the bytes at the offset of each native record: the ElementId is the
 //!   first bytes there;
+//! - reads the bytes at each record in a source's `parts` (a profile's sketch
+//!   lines, a type symbol, a run type): the element's id, or on Revit 2024 and
+//!   later the no-id marker of a second-prologue frame, is at the offset; and at
+//!   a Sketch's curve list the element-data header, then the sketched
+//!   element's id;
+//! - requires an element whose profile is solved from sketch lines, or is a
+//!   type symbol's box, to have a source from the reader of that profile;
 //! - checks that a `selected` source names the frame the element's entry
 //!   names (that the frame's own bytes hold the element is the #1325 test's,
 //!   `element_provenance_offsets.rs`, and is not read again here), that an
@@ -46,10 +53,12 @@ use crate::element_parameters::nordic_dir;
 use rvt::RevitFile;
 use rvt::ifc::entities::{IfcEntity, PropertyValue};
 use rvt::ifc::{ExportOptions, IfcModel, run_export};
+use rvt::research::element_record_plan_profiles::SKETCH_OWNER_OFFSET;
 use rvt::research::partition_beam_axes::{
     BEAM_DATA_WINDOW, BoundedArc, BoundedLine, first_bounded_arc, first_bounded_line,
     scan_first_bounded_arcs, scan_first_bounded_lines,
 };
+use rvt::research::partition_element_records::carries_no_element_id;
 use rvt::research::partition_instance_transforms::{
     INSTANCE_TRANSFORM_WINDOW, InstanceTransform, instance_transform, scan_instance_transforms,
 };
@@ -142,8 +151,25 @@ const COVERAGE: &[(&str, Coverage)] = &[
             rules: &["native"],
         },
     ),
-    ("partition_stair_run_sketch", NotYet),
-    ("partition_landing_slab", NotYet),
+    (
+        "partition_stair_run_sketch",
+        Recorded {
+            readers: &[
+                "stair_run_lines",
+                "stair_run_ends",
+                "stair_run_type",
+                "stair_run_base_cuts",
+            ],
+            rules: &["agreeing", "native"],
+        },
+    ),
+    (
+        "partition_landing_slab",
+        Recorded {
+            readers: &["landing_lines", "native_landing"],
+            rules: &["agreeing", "native"],
+        },
+    ),
     ("partition_area_boundary_lines", NotYet),
     ("family_type_hollow_section", NotYet),
     ("family_type_i_section", NotYet),
@@ -157,7 +183,13 @@ const COVERAGE: &[(&str, Coverage)] = &[
 const MIN_READERS: &[(&str, &[&str])] = &[
     (
         "2024_Core_Interior",
-        &["selected_frame", "bounded_line", "saved_graphics"],
+        &[
+            "selected_frame",
+            "bounded_line",
+            "saved_graphics",
+            "sketch_lines",
+            "type_section",
+        ],
     ),
     (
         "RE1-Architecture",
@@ -173,6 +205,8 @@ const MIN_READERS: &[(&str, &[&str])] = &[
             "instance_transform",
             "native_run",
             "native_landing",
+            "stair_run_lines",
+            "landing_lines",
         ],
     ),
 ];
@@ -212,7 +246,15 @@ fn office_model() -> Vec<(String, PathBuf)> {
 /// Each element's ElementId and `BodySource`, with whether its profile is read
 /// from another record than its body's (a `ProfileSource` that is not the
 /// `BodySource`, with the profile resolved).
-type Bodies = BTreeMap<(u32, String), bool>;
+type Bodies = BTreeMap<(u32, String), BodyInfo>;
+
+/// What the model says of how an element's profile was read.
+struct BodyInfo {
+    /// The profile is read from another record than the body's.
+    profile_elsewhere: bool,
+    /// The `ProfileSource` property.
+    profile_source: Option<String>,
+}
 
 /// The elements of `model` by ElementId and `BodySource`, and how many entities
 /// they are: entities that share a Tag (the pieces of a floor) are one element.
@@ -245,7 +287,10 @@ fn element_bodies(model: &IfcModel) -> (Bodies, usize) {
         if let Some(body) = body {
             entities += 1;
             let elsewhere = profile_resolved && profile_source.as_ref() != Some(&body);
-            bodies.entry((id, body)).or_insert(elsewhere);
+            bodies.entry((id, body)).or_insert(BodyInfo {
+                profile_elsewhere: elsewhere,
+                profile_source,
+            });
         }
     }
     (bodies, entities)
@@ -303,6 +348,9 @@ struct BodyStats {
     unlisted: usize,
     with_source: usize,
     box_only: usize,
+    profiled: usize,
+    profile_sourced: usize,
+    profile_missing: Vec<u32>,
     missing: Vec<u32>,
     by_reader: BTreeMap<String, usize>,
 }
@@ -332,8 +380,8 @@ fn check_model(name: &str, path: &Path) {
         .map(|(id, _)| *id)
         .collect::<BTreeSet<u32>>()
         .len();
-    for ((id, body), profile_elsewhere) in &listed_bodies {
-        let (id, profile_elsewhere) = (*id, *profile_elsewhere);
+    for ((id, body), info) in &listed_bodies {
+        let (id, profile_elsewhere) = (*id, info.profile_elsewhere);
         let stats = by_body.entry(body.clone()).or_default();
         stats.elements += 1;
         let coverage = COVERAGE.iter().find(|(source, _)| source == body);
@@ -357,7 +405,22 @@ fn check_model(name: &str, path: &Path) {
                         stats.box_only += usize::from(source.reader == "selected_frame_box");
                         *stats.by_reader.entry(source.reader.clone()).or_default() += 1;
                         if source.rule.as_str() == "selected" {
-                            let expected = if profile_elsewhere {
+                            // The profile's own readers, by the profile's source.
+                            let profile_readers: &[&str] = match info.profile_source.as_deref() {
+                                Some("partition_element_record_sketch_lines") => &["sketch_lines"],
+                                Some("family_type_symbol_envelope") => &["type_section"],
+                                _ => &[],
+                            };
+                            let profile_sourced = entry.value_sources.iter().any(|held| {
+                                matches!(
+                                    held.reader.as_str(),
+                                    "sketch_lines"
+                                        | "sketch_list"
+                                        | "sketch_line_data"
+                                        | "type_section"
+                                )
+                            });
+                            let expected = if profile_elsewhere && !profile_sourced {
                                 "selected_frame_box"
                             } else {
                                 "selected_frame"
@@ -372,6 +435,18 @@ fn check_model(name: &str, path: &Path) {
                                         "is not read from"
                                     }
                                 ));
+                            }
+                            if !profile_readers.is_empty() {
+                                stats.profiled += 1;
+                                let sourced = entry
+                                    .value_sources
+                                    .iter()
+                                    .any(|held| profile_readers.contains(&held.reader.as_str()));
+                                if sourced {
+                                    stats.profile_sourced += 1;
+                                } else if stats.profile_missing.len() < 10 {
+                                    stats.profile_missing.push(id);
+                                }
                             }
                         }
                     }
@@ -388,6 +463,14 @@ fn check_model(name: &str, path: &Path) {
         }
     }
     for (body, stats) in &by_body {
+        if stats.profiled > stats.profile_sourced {
+            problems.push(format!(
+                "{body}: {} of {} profiles read from sketch lines or a type's section have no value source for them, such as {:?}",
+                stats.profiled - stats.profile_sourced,
+                stats.profiled,
+                stats.profile_missing
+            ));
+        }
         let recorded = COVERAGE
             .iter()
             .any(|(source, coverage)| source == body && matches!(coverage, Recorded { .. }));
@@ -407,6 +490,9 @@ fn check_model(name: &str, path: &Path) {
     let mut decoded_lines: BTreeMap<u32, Option<BoundedLine>> = BTreeMap::new();
     let mut decoded_arcs: BTreeMap<u32, Option<BoundedArc>> = BTreeMap::new();
     let mut decoded_transforms: BTreeMap<u32, Option<InstanceTransform>> = BTreeMap::new();
+    let mut parts_checked = 0usize;
+    let mut parts_confirmed = 0usize;
+    let mut parts_unverified = 0usize;
     let mut counts: BTreeMap<String, (usize, usize)> = BTreeMap::new();
     let mut by_rule: BTreeMap<String, usize> = BTreeMap::new();
     let width = usize::from(table.record_id_bytes.unwrap_or(8));
@@ -423,13 +509,14 @@ fn check_model(name: &str, path: &Path) {
                 .as_deref()
                 .and_then(|stream| stream.strip_prefix("Partitions/"))
                 .and_then(|number| number.parse::<u32>().ok());
-            let differs = match (&entry.stream, &source.stream) {
-                (Some(frame), Some(copy)) => {
-                    frame != copy
-                        && !frame_partition.is_some_and(|n| source.partitions.contains(&n))
-                }
-                _ => false,
-            };
+            let has_place = source.stream.is_some() || !source.parts.is_empty();
+            let held = source.stream == entry.stream
+                || entry
+                    .stream
+                    .as_ref()
+                    .is_some_and(|frame| source.parts.iter().any(|part| &part.stream == frame))
+                || frame_partition.is_some_and(|n| source.partitions.contains(&n));
+            let differs = entry.stream.is_some() && has_place && !held;
             if differs != source.differs_from_frame {
                 problems.push(format!(
                     "{id}: {} differs_from_frame is {}, the streams say {differs}",
@@ -437,60 +524,105 @@ fn check_model(name: &str, path: &Path) {
                 ));
             }
             checked += 1;
-            let holds = match source.rule.as_str() {
-                "selected" => source.stream == entry.stream && source.offset == entry.offset,
-                "agreeing" | "current" => {
-                    let (Some(stream), Some(offset), Some(layout)) =
-                        (source.stream.as_deref(), source.offset, layout.as_ref())
-                    else {
-                        problems.push(format!("{id}: {} has no place", source.reader));
-                        continue;
-                    };
+            let holds = if !source.parts.is_empty() {
+                let mut all = true;
+                for part in &source.parts {
                     let inflated = rf
-                        .inflated_partition(stream)
-                        .unwrap_or_else(|error| panic!("{name}: {stream}: {error}"));
-                    let from_data = source.reader == "instance_transform";
-                    let window = if from_data {
-                        INSTANCE_TRANSFORM_WINDOW
+                        .inflated_partition(&part.stream)
+                        .unwrap_or_else(|error| panic!("{name}: {}: {error}", part.stream));
+                    let first = if width == 8 {
+                        u64_at(inflated.bytes(), part.offset)
                     } else {
-                        BEAM_DATA_WINDOW
+                        u32_at(inflated.bytes(), part.offset).map(u64::from)
                     };
-                    match element_data_at(inflated.bytes(), layout, offset, id, window, from_data) {
-                        Some(data) => {
-                            match source.reader.as_str() {
-                                "bounded_line" => {
-                                    decoded_lines.insert(id, first_bounded_line(data));
-                                }
-                                "bounded_arc" => {
-                                    decoded_arcs.insert(id, first_bounded_arc(data));
-                                }
-                                "instance_transform" => {
-                                    decoded_transforms.insert(id, instance_transform(data));
-                                }
-                                _ => {}
-                            }
-                            true
-                        }
-                        None => false,
+                    parts_checked += 1;
+                    let holds_part = first == Some(u64::from(part.element_id))
+                        || (width == 8 && first.is_some_and(carries_no_element_id));
+                    if holds_part {
+                        parts_confirmed += 1;
+                    } else if width == 4 {
+                        // A second-prologue frame of a 32-bit release carries
+                        // its id elsewhere; not read here.
+                        parts_unverified += 1;
+                    } else {
+                        all = false;
                     }
                 }
-                "native" => {
-                    let (Some(stream), Some(offset)) = (source.stream.as_deref(), source.offset)
-                    else {
-                        problems.push(format!("{id}: {} has no place", source.reader));
-                        continue;
-                    };
-                    let inflated = rf
-                        .inflated_partition(stream)
-                        .unwrap_or_else(|error| panic!("{name}: {stream}: {error}"));
-                    let first = if width == 8 {
-                        u64_at(inflated.bytes(), offset)
-                    } else {
-                        u32_at(inflated.bytes(), offset).map(u64::from)
-                    };
-                    first == Some(u64::from(id))
+                all
+            } else {
+                match source.rule.as_str() {
+                    "selected" => source.stream == entry.stream && source.offset == entry.offset,
+                    "agreeing" | "current" => {
+                        let (Some(stream), Some(offset), Some(layout)) =
+                            (source.stream.as_deref(), source.offset, layout.as_ref())
+                        else {
+                            problems.push(format!("{id}: {} has no place", source.reader));
+                            continue;
+                        };
+                        let inflated = rf
+                            .inflated_partition(stream)
+                            .unwrap_or_else(|error| panic!("{name}: {stream}: {error}"));
+                        let from_data = source.reader == "instance_transform";
+                        let window = if from_data {
+                            INSTANCE_TRANSFORM_WINDOW
+                        } else {
+                            BEAM_DATA_WINDOW
+                        };
+                        if source.reader == "sketch_list" {
+                            // The Sketch's element-data header; the sketched
+                            // element's id is at a fixed place after it.
+                            let bytes = inflated.bytes();
+                            bytes.get(offset..offset + layout.header.len())
+                                == Some(&layout.header[..])
+                                && u64_at(bytes, offset + SKETCH_OWNER_OFFSET)
+                                    == Some(u64::from(id))
+                        } else {
+                            match element_data_at(
+                                inflated.bytes(),
+                                layout,
+                                offset,
+                                id,
+                                window,
+                                from_data,
+                            ) {
+                                Some(data) => {
+                                    match source.reader.as_str() {
+                                        "bounded_line" => {
+                                            decoded_lines.insert(id, first_bounded_line(data));
+                                        }
+                                        "bounded_arc" => {
+                                            decoded_arcs.insert(id, first_bounded_arc(data));
+                                        }
+                                        "instance_transform" => {
+                                            decoded_transforms.insert(id, instance_transform(data));
+                                        }
+                                        _ => {}
+                                    }
+                                    true
+                                }
+                                None => false,
+                            }
+                        }
+                    }
+                    "native" => {
+                        let (Some(stream), Some(offset)) =
+                            (source.stream.as_deref(), source.offset)
+                        else {
+                            problems.push(format!("{id}: {} has no place", source.reader));
+                            continue;
+                        };
+                        let inflated = rf
+                            .inflated_partition(stream)
+                            .unwrap_or_else(|error| panic!("{name}: {stream}: {error}"));
+                        let first = if width == 8 {
+                            u64_at(inflated.bytes(), offset)
+                        } else {
+                            u32_at(inflated.bytes(), offset).map(u64::from)
+                        };
+                        first == Some(u64::from(id))
+                    }
+                    _ => false,
                 }
-                _ => false,
             };
             if holds {
                 confirmed += 1;
@@ -570,6 +702,9 @@ fn check_model(name: &str, path: &Path) {
             .filter(|entry| !entry.value_sources.is_empty())
             .count()
     );
+    line.push_str(&format!(
+        "  source parts: {parts_confirmed} of {parts_checked} frames re-read and confirmed, {parts_unverified} not read (32-bit second prologue)\n"
+    ));
     for (reader, (elements, differ)) in &counts {
         line.push_str(&format!(
             "  {reader}: {elements} elements, {differ} in another partition than their frame\n"
@@ -585,8 +720,13 @@ fn check_model(name: &str, path: &Path) {
             },
         );
         line.push_str(&format!(
-            "  {body} ({covered}): {} elements, {} with a source ({} box only), {} not in the table\n",
-            stats.elements, stats.with_source, stats.box_only, stats.unlisted
+            "  {body} ({covered}): {} elements, {} with a source ({} box only; {} of {} profiles sourced), {} not in the table\n",
+            stats.elements,
+            stats.with_source,
+            stats.box_only,
+            stats.profile_sourced,
+            stats.profiled,
+            stats.unlisted
         ));
         bodies.insert(
             body.clone(),
@@ -606,6 +746,9 @@ fn check_model(name: &str, path: &Path) {
         "entities_with_a_body_source": entities,
         "elements_with_a_body_source": listed_bodies.len(),
         "distinct_element_ids": distinct_ids,
+        "source_parts_checked": parts_checked,
+        "source_parts_confirmed": parts_confirmed,
+        "source_parts_unverified": parts_unverified,
         "value_sources_checked": checked,
         "value_sources_confirmed": confirmed,
         "by_reader": counts

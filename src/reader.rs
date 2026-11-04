@@ -576,6 +576,22 @@ impl RevitFile {
         }
     }
 
+    /// Note for `owner` the value source that `from` has under `reader`, where
+    /// the record was read once for `from` and `owner` uses it: a type's
+    /// parameters, read for the instances of the type (#1368). Does nothing
+    /// unless [`Self::record_value_sources`] is on and `from` has one.
+    pub(crate) fn attribute_value_source(&mut self, from: u32, reader: &str, owner: u32) {
+        let source = self
+            .value_sources
+            .as_ref()
+            .and_then(|noted| noted.get(&from))
+            .and_then(|sources| sources.iter().find(|held| held.reader == reader))
+            .cloned();
+        if let Some(source) = source {
+            self.note_value_source(owner, source);
+        }
+    }
+
     /// The notes of [`Self::note_value_source`], by ElementId; `None` unless
     /// [`Self::record_value_sources`] is on.
     pub(crate) fn value_sources(
