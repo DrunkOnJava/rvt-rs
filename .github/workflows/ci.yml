@@ -27,10 +27,11 @@ on:
 # A draft pull request runs the jobs that tell its author whether the code
 # builds and reads the corpora: fmt, clippy, cargo doc, the PII guard, the
 # env lint, Corpus health, and the Ubuntu stable and MSRV builds with their
-# real-file checks. Every other job, and `CI passed` itself, waits until it
-# is marked ready, which runs the whole set on its head. `CI passed` is
-# skipped on a draft, never green, so a draft head can never carry the
-# required check from a partial run. In the three hours before this (#1237)
+# real-file checks. Every other job waits until it is marked ready, which
+# runs the whole set on its head. On a draft `CI passed` runs and FAILS:
+# GitHub counts a job skipped by its `if:` as a success for a required
+# check, so a skipped `CI passed` would let a draft's head merge on the
+# partial set the moment it is marked ready, before the full run reports. In the three hours before this (#1237)
 # pull-request CI took 1,277 runner-minutes, about a third of the account's
 # 40 concurrent jobs, most of it on drafts' pushes.
 
@@ -1357,7 +1358,7 @@ jobs:
   # running or has failed, and renaming a job never touches the ruleset.
   ci-ok:
     name: CI passed
-    if: always() && github.event.pull_request.draft != true
+    if: always()
     needs:
       - fmt
       - clippy
@@ -1379,6 +1380,11 @@ jobs:
       - semver
     runs-on: ubuntu-24.04
     steps:
+      - name: A draft has run the fast jobs only
+        if: github.event.pull_request.draft == true
+        run: |
+          echo "::error::a draft runs the fast jobs only; mark it ready to run the full set and CI passed"
+          exit 1
       - name: Every job passed
         env:
           RESULTS: ${{ join(needs.*.result, ' ') }}
