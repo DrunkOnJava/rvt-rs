@@ -769,7 +769,7 @@ fn body_readers(body: &str) -> &'static [&'static str] {
             &["instance_transform"]
         }
         super::saved_meshes::SAVED_MESH_BODY_SOURCE => &["saved_graphics"],
-        ec::STAIR_RUN_BODY_SOURCE | ec::SPIRAL_RUN_BODY_SOURCE => &["native_run"],
+        ec::SPIRAL_RUN_BODY_SOURCE => &["native_run"],
         ec::LANDING_TREAD_BODY_SOURCE | ec::LANDING_SLAB_BODY_SOURCE => &["native_landing"],
         _ => &[],
     }

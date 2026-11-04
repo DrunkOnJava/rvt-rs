@@ -20,8 +20,8 @@
   offset on Core Interior, the RE1 models, Einhoven and the BIM4LCA as-built
   office, and names every `BodySource` on them as covered or not yet. No
   reader notes its copy yet for area boundary lines, hollow and I sections,
-  pipe axes, roof slopes and extrusions, or family extrusions, nor for the
-  partition sketch lines of a stair run; those elements have no value source,
-  which is not a claim that they read the frame. Not measured: that the copy
+  pipe axes, a stair run drawn from its sketch, roof slopes and extrusions, or
+  family extrusions; those elements have no value source, which is not a claim
+  that they read the frame. Not measured: that the copy
   taken is the right one (`agreeing` copies are equal; `current` is
   `current_partitions`).

@@ -99,11 +99,12 @@ where the element's final `BodySource` is drawn from that reader.
 | `partition_wall_arc` | `bounded_arc` | `agreeing` | As `bounded_line`, for a curved wall's arc. |
 | `partition_family_instance_turned_box`, `partition_family_instance_oriented_box` | `instance_transform` | `agreeing` or `current` | The element-data header of the copy: the lowest-numbered partition's where the copies agree, the current partition's where they differ (RE-216). |
 | `saved_graphics_mesh` | `saved_graphics` | `native` | The header of the element's current graphics record. |
-| `native_spiral_run_treads`, `partition_stair_run_sketch` | `native_run` | `native` | The header of the run's current native record. Not the partition sketch lines a stair run also reads, which no reader notes yet. |
+| `native_spiral_run_treads` | `native_run` | `native` | The header of the run's current native record. |
 | `native_landing_tread`, `partition_landing_slab` | `native_landing` | `native` | The header of the landing's current native record. |
 
 No reader notes its copy yet for `partition_area_boundary_lines`,
-`family_type_hollow_section`, `family_type_i_section`, `partition_pipe_axis`,
+`partition_stair_run_sketch` (which reads partition sketch lines as well as native
+records), `family_type_hollow_section`, `family_type_i_section`, `partition_pipe_axis`,
 `partition_roof_slope`, `partition_roof_extrusion` and `family_extrusions`, nor
 for the other values a body reads (a wall's layers, a floor's sketch curves, a
 roof's slopes): an element of those has no value source, which is not a claim
