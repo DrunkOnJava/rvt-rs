@@ -14,8 +14,8 @@ fragments a release moves into this file.
 agent's questions about a Revit file from the model the IFC export is built
 from, and one export function, `rvt::ifc::run_export`, that `rvt-ifc`, the
 Python package, the viewer and the MCP server all build that model with.
-Exports follow the project phase as Revit's do (`rvt-ifc --phase` names
-another), write Revit 2024 Areas with a body and Revit 2015 to 2023 Areas
+Exports follow the project phase as Revit's do (`rvt-ifc --phase`, the
+Python package, the viewer and `rvt-schedule --phase` name another), write Revit 2024 Areas with a body and Revit 2015 to 2023 Areas
 where their boundary proves one, write the openings that rectangular wall
 openings cut, draw a wall a floor covers in part as stepped, end walls at a
 corner in the order their record joins them, draw a level beam whose record
@@ -129,6 +129,13 @@ A level beam drawn along its line takes the box's length, not the beam's.
   `set_export_phase` resolved. A cancelled `WalkerControl` now ends an
   export with `Error::Cancelled` also while the saved graphics are read, and
   `rvt-ifc` prints its step notes after the decode (stderr only).
+- `RevitFile::set_export_phase` may be called at any time: choosing another
+  phase drops the handle's memoised walk, so one handle exported at two
+  phases gives what two handles opened for them give.
+  `RevitFile::clear_export_phase` goes back to the last phase and
+  `RevitFile::project_phases` lists a project's phases (`ProjectPhase`). The
+  Python export functions take `phase`, the wasm open takes `limits.phase` and
+  returns `phases`, and `rvt-schedule` takes `--phase`.
 - `rvt::research` (unstable): `native_element_parameters::read_defined_values`
   is replaced by `read_property_values`.
 - A plane face of a saved mesh split into regions that tile it is drawn
@@ -152,6 +159,37 @@ A level beam drawn along its line takes the box's length, not the beam's.
   still needs 1.87.
 
 ### Added
+
+- **The export phase in Python and the viewer, as `rvt-ifc --phase` has it
+  (#1339, RE-326).** An export leaves out a room whose own phase is not the
+  export phase, and the elements that do not exist in it; the export phase is
+  the project's last unless told otherwise, and only `rvt-ifc` could tell it.
+  Now `RevitFile.write_ifc`, `schedule_csv`, `export_diagnostics` and
+  `export_diagnostics_json`, and `rvt_to_ifc` and `rvt_to_ifc_diagnostics`,
+  take `phase: str | int | None = None`: a phase's name, matched exactly first,
+  or its ElementId. A phase the file lacks raises `ValueError` listing the
+  file's phases; one `RevitFile` can export different phases in turn, and a
+  call without `phase` is the last phase again. In the browser,
+  `limits.phase` of `openRvtBytesWithDiagnosticsModeAndOpenLimits` does the
+  same, its result gains `phases` (`[{ id, name? }]`, in order, the last the
+  default), and the File status panel lists the file's phases with the last
+  as the default and reads the file again with the one chosen. Calls without
+  a phase export the last phase as before. `rvt-schedule --phase <name|id>`
+  schedules another phase, and Python's `schedule_csv(phase=...)` builds the
+  model it builds (the document exporter at the phase set on the handle
+  first). `RevitFile::project_phases` lists a project's phases and
+  `RevitFile::clear_export_phase` goes back to the default; `set_export_phase`
+  may now be called at any time on a handle, since choosing another phase drops
+  the memoised production walk, which holds what the phase leaves out, so a
+  handle exported at one phase and then another gives what a handle opened for
+  that phase gives. The notes a walk makes for the diagnostics (family spaces
+  left out for want of a body, Areas left unwritten, doors and windows written
+  though their type was not read) now follow that walk, so exporting a handle
+  twice at the same phase reports them both times. The stubs
+  (`python/rvt/__init__.pyi`), [docs/python.md](docs/python.md) and
+  [docs/viewer-api.md](docs/viewer-api.md) follow, and RE1 Architecture
+  checks it in Python (`tests/python/test_export_phase.py`) and in the
+  browser (`viewer/tests/export-phase.spec.ts`).
 
 - **The openings a rectangular wall opening cuts in a wall are written.** A
   wall's native record names each element that cuts it, in the order Revit
@@ -372,7 +410,7 @@ A level beam drawn along its line takes the box's length, not the beam's.
   Measure (run 41784044966), 12 move, those saves from Revit 2016 to 2027, and
   the other 99 are byte for byte as before, the held-out models included. Its Revit 2015 save
   keeps them, because both phase rules start at Revit 2016 (#1332). The Python
-  bindings and the viewer export the last phase. Report:
+  bindings, the viewer and `rvt-schedule` name another phase too (#1339). Report:
   `reports/element-framing/RE-326-room-phases.md`.
 
 - **`Formats/Latest`: 11 of the 14 residual field names are classified, and
