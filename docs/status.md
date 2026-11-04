@@ -1106,6 +1106,35 @@ different. A parameter named for it on the element's type is not read. 58 of
 94 exports of the unfiltered run move: every file with structural columns or
 framing (`reports/element-framing/RE-285-structural-load-bearing.md`).
 
+**RE-327 (2026-11-04)** rebuilds a family's extrusions from their own records:
+the sketch's `CurveElem` lines and arcs (in the family's coordinates), chained
+into loops, placed in the `SketchPlane`'s frame and swept between the
+extrusion's two `Double` parameters. Against the mesh Revit saved for each
+form, the 24 extrusions of the family corpus (12 releases) match within
+0.001 ft and so do all 6,172 extrusions of Autodesk's 58 sample projects
+(Revit 2015 to 2027) whose saved mesh decodes whole (by the report's §4
+criterion: volume within 1%, bounding box, vertices and surface samples
+within 0.01 ft): 6,093 with the sketch
+plane's normal as its matrix gives it, and 79, a down-facing plane that is
+not flipped and whose extrusion reads `m_alwaysRefPlaneNorm` false, with the
+normal reversed (a rule found on those 79). Ellipses (137 forms), two open
+sketches (26), sweeps, revolutions, blends and voids' cuts are not drawn. The 2014 family of Discussion #112 is outside
+the native releases, so its 85 of 86 is not reproduced. The 79 are
+reversed by default, a rule found on them and not held out; every instance in
+an export is checked against its own mesh. `rvt-ifc --family-extrusions`
+(opt-in; the default export is unchanged, hash for hash on 29 models) draws an
+instance from its family's extrusions where they reproduce its saved mesh.
+On Core Interior, RE1 and the BIM4LCA office files the first run, which drew
+arcs as arcs, replaced 335 bodies; of the 251 the body scorer matched, 250 had
+Revit's vertices within 0.001 ft of their surface and one did not (the volumes
+suggest a difference in where Revit's tessellation of an arc starts: an
+inference, not a measurement). An instance with an arc in a profile therefore
+keeps its mesh: 64 bodies are replaced, all 64 within 0.001 ft, and every
+scorer row equals the saved-mesh baseline's. The flag reads Revit 2024 to 2027
+(measured on 2024 and 2025); an earlier file has no instance transform that
+reads, so nothing is replaced (`reports/element-framing/RE-327-family-extrusions.md`
+§9).
+
 ## Performance
 
 Opening a large project is no longer a minutes-long wait. Every partition

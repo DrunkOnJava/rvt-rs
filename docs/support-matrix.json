@@ -513,6 +513,15 @@
       "user_impact": "Doors, windows, furniture and fixtures can be exported in their real shape instead of a box."
     },
     {
+      "id": "family-extrusion-bodies",
+      "area": "geometry",
+      "name": "Family-instance bodies from their family's own extrusions, opt-in (RE-327)",
+      "status": "experimental",
+      "evidence": "src/research/native_form_geometry.rs; src/ifc/family_extrusions.rs; rvt-ifc --family-extrusions; probes/examples/probe_re327_family_extrusions.rs; tools/re/family_extrusion_bodies_vs_ifc.py and tools/re/mesh_bodies_vs_ifc.py (Measure); reports/element-framing/RE-327-family-extrusions.md",
+      "notes": "A family file's ExtrusionElem, CurveElem and SketchPlane records are read without the project index; the sketch's lines are chained into loops, placed in the plane's frame and swept between the extrusion's two offsets. Against the mesh Revit saved for each form, 24 of 24 extrusions of the family corpus (12 releases) and 6,172 of 6,172 with a complete mesh in Autodesk's 58 sample projects (Revit 2015 to 2027) match within the report's section 4 criterion (79 of them with the normal reversed by a rule found on those 79 and not held out); 164 forms are not built (137 ellipses, 26 open loops, 1 up-facing flipped plane). The export draws an instance from them, as IfcExtrudedAreaSolid over straight-segment IfcIndexedPolyCurve profiles, where they reproduce its own saved mesh (vertices within 1e-4 ft, surface samples within 1.1e-3 ft, volumes within the arcs' chord loss and 0.01%): on Core Interior, RE1 and the BIM4LCA office files it replaced 64 bodies, all 64 with Revit's vertices within 0.001 ft of their surface, every scorer row equal to the saved-mesh baseline's. An instance with an arc in a profile keeps its mesh: drawing arcs as arcs replaced 335 and 250 of the 251 the body scorer matched held that bar, one did not (the volumes suggest a difference in where Revit's tessellation of an arc starts; an inference, not a measurement; follow-up #1346). Revit 2024 to 2027 only, measured on 2024 and 2025: an earlier file has no instance transform that reads. Opt-in; the default export is unchanged on 29 models, hash for hash. The reported 85 of 86 extrusions of one family is a Revit 2014 file outside the native releases, so it is not reproduced.",
+      "user_impact": "Furniture, fixtures and equipment whose families are plain extrusions can be exported as extrusions instead of a triangle mesh; instances with arcs keep their mesh."
+    },
+    {
       "id": "elem-table-owner",
       "area": "elements",
       "name": "Owner ElementId per Global/ElemTable record",
