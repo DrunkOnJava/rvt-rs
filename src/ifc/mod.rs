@@ -3867,6 +3867,47 @@ pub fn build_export_diagnostics_with_limits(
             "The project's phases could not be read ({error}); elements that do not exist in the export phase are written (#328, RE-184)."
         ));
     }
+    // RE-326: a room whose own phase is read and is not the project's last is
+    // written. Revit's exporter leaves a room out when its phase is not the
+    // export phase, which is the last unless the export setup or the view it
+    // is limited to names another, but Revit's export of Autodesk's
+    // rac_basic_sample_project holds its 14 rooms, which sit in the second of
+    // three phases. So the rule is not applied; the count says which rooms it
+    // would concern.
+    let phases = rf.memoised_phase_filter();
+    let rooms_outside_export_phase = model
+        .entities
+        .iter()
+        .filter_map(|entity| match entity {
+            entities::IfcEntity::BuildingElement {
+                ifc_type,
+                property_set,
+                ..
+            } if ifc_type == "IFCSPACE" => property_set.as_ref(),
+            _ => None,
+        })
+        .filter_map(|set| {
+            set.properties.iter().find_map(|property| {
+                match (property.name.as_str(), &property.value) {
+                    (
+                        export_content::ROOM_ELEMENT_ID_PROPERTY,
+                        entities::PropertyValue::Integer(id),
+                    ) => u64::try_from(*id).ok(),
+                    _ => None,
+                }
+            })
+        })
+        .filter(|id| phases.room_outside_export_phase(*id).is_some())
+        .count();
+    if rooms_outside_export_phase > 0 {
+        warnings.push(format!(
+            "{rooms_outside_export_phase} room(s) are written that sit in a phase other than the \
+             project's last. Revit's exporter leaves a room out when its phase is not the export \
+             phase, which is the last unless the export setup or the view it is limited to names \
+             another, but Revit's export of Autodesk's rac_basic_sample_project holds its 14 rooms, \
+             which sit in the second of three phases, so none is left out here (RE-326)."
+        ));
+    }
     // #1247: a door or window whose type's record was not read is written as
     // a door or window, not as its opening alone, which it may be.
     let unread_type_doors_windows = rf.unread_type_doors_windows().len();

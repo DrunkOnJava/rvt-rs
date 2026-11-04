@@ -7,15 +7,25 @@
 //! shows the last phase, and an element is exported when it exists there:
 //! created in it or before it, and not demolished in it or before it.
 //!
-//! Rooms are not checked. Revit's exporter applies that status rule to
-//! non-spatial elements only (revit-ifc, `ElementFilteringUtil.GetExportFilter`).
-//! It skips a room by a different rule, `ElementFilteringUtil.IsRoomInInvalidPhase`
-//! as `Exporter.ExportSpatialElements` calls it: a room whose own `ROOM_PHASE`
+//! Rooms are not checked, and the exporter is not followed on them. Revit's
+//! exporter applies that status rule to non-spatial elements only (revit-ifc,
+//! `ElementFilteringUtil.GetExportFilter`). It skips a room by a different
+//! rule, `ElementFilteringUtil.IsRoomInInvalidPhase` as
+//! `Exporter.ExportSpatialElements` calls it: a room whose own `ROOM_PHASE`
 //! parameter is set and is not the export phase. An area or an MEP space gets
-//! no phase check at all. No model here measures whether a room's
-//! `ROOM_PHASE` is its `m_createdPhaseId`, so [`PhaseFilter::excludes`] never
-//! excludes a room, and rvt-rs may write a room that Revit's export leaves out
-//! for its phase.
+//! no phase check at all. The export phase is not always the project's last:
+//! `ExportOptionsCache.Create` takes the export setup's active phase or the
+//! `VIEW_PHASE` of the view an export limited to its visible elements filters
+//! by, and only with neither the last phase (RE-326).
+//!
+//! A room's phase is the `m_phaseId` field of its `RoomElem` record, not its
+//! `m_createdPhaseId`, which is unset on every room: [`PhaseFilter::room_phases`]
+//! (RE-326). Every room that Revit's exports hold, on the 20 models with one,
+//! is in the last phase, except Autodesk's `rac_basic_sample_project`, whose
+//! 14 rooms are in the second of three phases and are all in a Revit 2018
+//! export of it. So [`PhaseFilter::excludes`] never excludes a room, and
+//! rvt-rs writes a room in an earlier phase and says so in the export
+//! diagnostics ([`PhaseFilter::room_outside_export_phase`]).
 //!
 //! Measured (RE-184): `01_Walls_Phases` keeps its wall created in the last
 //! of three phases, and `01_Walls_Phases_Demo` leaves out its wall demolished
@@ -24,7 +34,7 @@
 //! Revit's export leaves out.
 // Tracker: B46.
 
-use crate::native_json::identifier_i64;
+use crate::native_json::{agree, identifier_i64};
 use crate::partition_element_records::{OST_ROOMS, PartitionElementRecord};
 use crate::{RevitFile, native_document};
 use std::collections::{BTreeMap, BTreeSet};
@@ -35,9 +45,13 @@ pub struct PhaseFilter {
     /// The project's phase ids, in order.
     pub order: Vec<i64>,
     /// Phased elements that do not exist in the last phase, by ElementId,
-    /// with the reason. It holds rooms too; [`Self::excludes`] never excludes
-    /// one.
+    /// with the reason. [`Self::excludes`] never excludes a room.
     pub excluded: BTreeMap<u64, PhaseExclusion>,
+    /// The phase each `RoomElem` record names in its own `m_phaseId`, by
+    /// ElementId: Revit's `ROOM_PHASE` (RE-326). A record whose phase is
+    /// unset (-1), whose graph was not read, or whose copies disagree is not
+    /// here. An Area has no such field.
+    pub room_phases: BTreeMap<u64, i64>,
     /// Why the phases could not be read, where a read of a release the
     /// native record path reads failed. The filter is empty then, so the
     /// export writes every element, and the export diagnostics say so.
@@ -60,10 +74,24 @@ impl PhaseFilter {
         self.order.last().copied()
     }
 
+    /// The phase of room `id` when it is read and is not the export phase,
+    /// the one Revit's exporter leaves a room out for by default. It is
+    /// reported, never applied: Revit's export of Autodesk's
+    /// `rac_basic_sample_project` holds its 14 rooms, which are in the
+    /// second of three phases (RE-326).
+    pub fn room_outside_export_phase(&self, id: u64) -> Option<i64> {
+        let export = self.export_phase()?;
+        self.room_phases
+            .get(&id)
+            .copied()
+            .filter(|phase| *phase != export)
+    }
+
     /// Whether `record` does not exist in the export phase, which Revit's
     /// export leaves out. A room is never excluded: Revit's exporter checks
-    /// a room's own phase parameter instead of its status, and that
-    /// parameter is not measured to be the room's created phase.
+    /// a room's own phase instead of its status, the export phase is not
+    /// always the last, and a Revit export holds rooms that are not in the
+    /// last phase (RE-326).
     pub fn excludes(&self, record: &PartitionElementRecord) -> bool {
         record.builtin_category != OST_ROOMS
             && self.excluded.contains_key(&u64::from(record.element_id))
@@ -107,12 +135,16 @@ pub fn compute_phase_filter(rf: &mut RevitFile) -> anyhow::Result<PhaseFilter> {
         return Ok(PhaseFilter::default());
     }
     let options = native_document::Options {
-        graph_classes: Some(BTreeSet::from(["AllProjectPhases".to_string()])),
+        graph_classes: Some(BTreeSet::from([
+            "AllProjectPhases".to_string(),
+            "RoomElem".to_string(),
+        ])),
         releases: native_document::NATIVE_RELEASES,
         ..native_document::Options::default()
     };
     let mut order: Option<Vec<i64>> = None;
     let mut phases: Vec<(u64, i64, i64)> = Vec::new();
+    let mut rooms: BTreeMap<u64, Option<i64>> = BTreeMap::new();
     native_document::extract_graphs(rf, &options, |record| {
         if let Some(base) = &record.base {
             if base.created_phase_id != -1 {
@@ -127,6 +159,15 @@ pub fn compute_phase_filter(rf: &mut RevitFile) -> anyhow::Result<PhaseFilter> {
         let Some(root) = record.graph.as_ref().and_then(|g| g.objects.first()) else {
             return Ok(());
         };
+        if root.class_name == "RoomElem" {
+            let id = record.identity.element_id;
+            let phase = |field: &str| root.fields.get(field).and_then(identifier_i64);
+            if let Some(created) = phase("m_createdPhaseId").filter(|p| *p != -1) {
+                phases.push((id, created, phase("m_demolishedPhaseId").unwrap_or(-1)));
+            }
+            agree(&mut rooms, id, phase("m_phaseId").filter(|p| *p != -1));
+            return Ok(());
+        }
         let fields = serde_json::to_value(&root.fields)?;
         if fields.get("m_famId").and_then(identifier_i64) != Some(-1) {
             return Ok(());
@@ -151,9 +192,14 @@ pub fn compute_phase_filter(rf: &mut RevitFile) -> anyhow::Result<PhaseFilter> {
             }
         }
     }
+    let room_phases = rooms
+        .into_iter()
+        .filter_map(|(id, phase)| Some((id, phase?)))
+        .collect();
     Ok(PhaseFilter {
         order,
         excluded,
+        room_phases,
         read_error: None,
     })
 }

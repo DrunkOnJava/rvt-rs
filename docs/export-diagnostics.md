@@ -135,8 +135,10 @@ category that do not exist in the export phase: created after it, or
 demolished in it or before it. With no phase chosen, Revit's own IFC export
 shows the project's last phase and leaves these out; rvt-rs does the same,
 and they do not count toward `unexported_element_records`. Rooms are never
-counted or left out, because Revit's exporter skips a room by its own phase
-parameter, which is not measured to be its created phase. On Snowdon Towers
+counted or left out here, because Revit's exporter skips a room by its own
+phase (`RoomElem.m_phaseId`) against an export phase that is the last only by
+default, and its export of Autodesk's `rac_basic_sample_project` holds all 14
+rooms, which are in the second of three phases (RE-326). On Snowdon Towers
 Architectural (2024) the count is 6 (Floor), the slabs of #328, which are
 created and demolished in the Legends phase (RE-184). On Revit 2016 to 2023
 the same filter applies (RE-315); no Autodesk sample has an element outside
@@ -144,7 +146,10 @@ its last phase, and the held-out Vitoria Project's counts are the only
 evidence that it is right on a 32-bit file. A read of the phases
 that fails on a Revit 2015 to 2027 file is reported in `warnings` ("The
 project's phases could not be read"), and the export then writes every
-element.
+element. When a room it writes has a phase that is read and is not the last,
+`warnings` gives how many ("N room(s) are written that sit in a phase other
+than the project's last"): 14 on every save of `rac_basic_sample_project`, and
+none on any other model here (RE-326). The exported IFC is the same either way.
 
 On Revit 2024 to 2027, a door or window is written as its opening alone,
 with no door or window, only where its type's native record was read with

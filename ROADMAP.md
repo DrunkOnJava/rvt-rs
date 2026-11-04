@@ -35,7 +35,7 @@ sample projects saved by Revit
 2019, 2023 and 2026 (but 2015's `rst_basic`, another model than its 2019 copy).
 What is not decoded
 (most parameters in IFC, family geometry, roofs by extrusion outside
-Revit 2025, openings whose symbol cuts no outline, the phase check of rooms) is listed in [`docs/status.md`](docs/status.md), and
+Revit 2025, openings whose symbol cuts no outline, the phase check of rooms, which no Revit export with the default setup has yet decided, RE-326) is listed in [`docs/status.md`](docs/status.md), and
 the four levels a file can reach are in the
 [supported profile](docs/supported-profile.md).
 

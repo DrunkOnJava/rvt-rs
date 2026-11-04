@@ -129,7 +129,7 @@ differences between rvt-rs and "Revit's export" are settings, not decoding:
   (Snowdon: rotate 26.0156°, translate (1370151.83, 258247.98) ft, z + 780.5 ft).
 - **What is exported.** Revit's exporter leaves out non-primary design
   options, elements not in the exported phase, 2D-only families and some
-  types (#309, #328); rvt-rs follows it where the bytes say which. Rooms are not checked against the phase, which Revit does by a room's own phase parameter (RE-184).
+  types (#309, #328); rvt-rs follows it where the bytes say which. Rooms are not checked against the phase, which Revit does by a room's own phase parameter; the one Revit export measured with a room outside the last phase holds it (RE-326).
 - **Model state.** An export can be newer than the `.rvt` beside it:
   `teste_export_2025.ifc` shows one wall in a later state than its `.rvt`.
 

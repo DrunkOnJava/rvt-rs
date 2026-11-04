@@ -162,9 +162,11 @@ element's (`Pset_SpaceHeaterTypeCommon` on a space); without it every property i
 flight's `WalkingLineOffset`, half the run's width in feet read as millimetres, a curtain mullion's `Qto_MemberBaseQuantities.CrossSectionArea`, which grows with its length and is never its section's area, and a curtain mullion's or panel's `IsExternal` in the office's exports and its mullion type's, which the exporter that made them sets from its own cache of element types, not from the model (RE-235 §5, RE-269; rvt-rs writes the member's by its curtain wall's value, RE-288). Not read: most instance and type parameters (#35, #155). Elements in a
 design-option set's non-primary options are left out, as Revit leaves them out,
 and so are elements that do not exist in the project's last phase (RE-184; the order is read on Revit 2015 to 2027, RE-281),
-except rooms: Revit skips a room by its own phase parameter, which is not
-measured to be its created phase, so a room created in an earlier phase is
-still written.
+except rooms: Revit skips a room whose own phase (`RoomElem.m_phaseId`, not
+its created phase) is not the export phase, which is the last unless the
+export setup or a view names another, but the one Revit export measured with
+a room outside the last phase holds it (RE-326), so a room in an earlier phase
+is still written and the export diagnostics count it.
 
 ## What approximations look like in the output
 
