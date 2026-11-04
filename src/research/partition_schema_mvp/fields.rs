@@ -756,6 +756,11 @@ pub const WALL_UNCUT_FIELD: &str = "m_wall_uncut";
 /// roofs and footings the export may cut its top at.
 pub const WALL_TOP_CUTTERS_FIELD: &str = "m_wall_top_cutters";
 
+/// Field holding, as a vector of ElementIds, those of
+/// [`WALL_TOP_CUTTERS_FIELD`] that only a `CutPairGStep` names and the top
+/// join does not ([`crate::native_walls::WallRecords::pair_only`], RE-320).
+pub const WALL_TOP_PAIR_ONLY_FIELD: &str = "m_wall_top_pair_only";
+
 /// Field set on a wall whose native record holds no step that cuts, embeds or
 /// sweeps its solid ([`crate::native_walls::WallRecords::whole`], RE-270).
 pub const WALL_WHOLE_FIELD: &str = "m_wall_whole";
@@ -1045,6 +1050,8 @@ pub const FRAMING_TOP_LEVEL_SOURCE: &str = "structural_framing_top_level";
 /// light fixture, wall sweep, generic model, hardscape element and stair is
 /// on the Level [`crate::element_record_level_refs::elevation_band_level`]
 /// gives, while plumbing fixtures follow the Level object they name instead.
+/// A gutter is placed the same way (RE-319): both of `ALD26 Before`'s, whose
+/// records name no Level, are on the storey of Revit's export.
 pub const ELEVATION_PLACED_CLASSES: &[&str] = &[
     "SlabEdge",
     "LightingFixture",
@@ -1052,4 +1059,5 @@ pub const ELEVATION_PLACED_CLASSES: &[&str] = &[
     "GenericModel",
     "Hardscape",
     "Stair",
+    "Gutter",
 ];

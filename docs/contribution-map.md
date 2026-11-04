@@ -21,7 +21,7 @@ solved carrier: the reports under `reports/element-framing/` say what each
 negative result ruled out, and [`ROADMAP.md`](../ROADMAP.md) says what each
 milestone is for.
 
-### 0.13.0: IFC geometry and element data
+### 0.14.0: IFC geometry and element data
 
 | Issue | Remainder |
 |---|---|
@@ -33,7 +33,7 @@ milestone is for.
 | [#1165](https://github.com/DrunkOnJava/rvt-rs/issues/1165) | Unfilled openings Revit's export writes and rvt-rs does not: curtain-wall cuts, fire hose cabinets and rectangular wall openings are written since RE-321 (curtain walls only where they end well inside their wall); a door's further cuts in a second wall, a door's cut in itself and a wall's own profile remain |
 | [#1144](https://github.com/DrunkOnJava/rvt-rs/issues/1144) | Saved graphics: cone faces are read (RE-311: 8 more RE1 Plumbing transitions are drawn); spline profile curves were read and measured to gain no body Revit's export holds, because the two RE1 Electrical panels keep their box for the trims below (a contributor's proposal; cylinder faces with non-rectangular trims were taken in RE-304). Read RE-302 and RE-305 first: ellipse profiles, curved ruled surfaces, parametric faces trimmed by any single loop and cylinders with holes were measured and left off `main`, since the bodies they drew are not Revit's |
 | [#1117](https://github.com/DrunkOnJava/rvt-rs/issues/1117) | Viewports and their centres on sheets (a contributor's request) |
-| [#1067](https://github.com/DrunkOnJava/rvt-rs/issues/1067) | BIM4LCA office: walls a floor covers in part, which Revit steps and rvt-rs draws at their full height (29 as built, 26 at permit), and one wall as built that Revit cuts although 0.0243 ft² of its plan lies outside the floor; the walls a floor covers whole are cut since RE-267 (RE-257, RE-267) |
+| [#1067](https://github.com/DrunkOnJava/rvt-rs/issues/1067) | BIM4LCA office: walls a floor covers in part are drawn stepped since RE-320 (49 as built, 46 at permit); left open are the walls whose layers Revit ends at different heights or cuts at a height no join names, the openings that reach a wall's top, and one wall as built whose 0.0243 ft² stub inside an abutting wall Revit cuts (RE-257, RE-267, RE-320) |
 | [#885](https://github.com/DrunkOnJava/rvt-rs/issues/885) | Roof cases with no oracle: 2024 gables and hips, a slope arrow stopping short; of puzzbobb's T and U roofs, each sloped by six slope arrows, the T is drawn as its planes and the U, whose long outer walls Revit slopes along the arms only, as its record box (RE-307) |
 | [#884](https://github.com/DrunkOnJava/rvt-rs/issues/884) | Hip roofs over T and U footprints stay level blocks: straight-skeleton split events (RE-199 follow-up) |
 | [#869](https://github.com/DrunkOnJava/rvt-rs/issues/869) | MEP ports and pipe cylinders outside Revit 2024 and 2025: no 2026 or 2027 MEP model has a Revit export to measure against |

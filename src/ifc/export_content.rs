@@ -267,11 +267,76 @@ fn identity_property_set(mut set: PropertySet, decoded: &DecodedElement) -> Prop
     set
 }
 
+/// An Area's body (RE-317): its placement, the extrusion of its boundary and
+/// the profile that made it.
+struct AreaDrawn {
+    location: [f64; 3],
+    body: Extrusion,
+    profile: crate::element_record_plan_profiles::PlanProfile,
+}
+
+/// The body an Area's decoded fields hold: the profile its boundary lines
+/// made, the elevation of its base and its height.
+fn area_body_from_decoded(decoded: &DecodedElement) -> Option<AreaDrawn> {
+    let from_lines = decoded.fields.iter().any(|(field, value)| {
+        field == crate::element_record_plan_profiles::PLAN_PROFILE_SOURCE_FIELD
+            && matches!(value, InstanceField::String(source)
+                if source == crate::partition_area_records::AREA_BOUNDARY_SOURCE)
+    });
+    if !from_lines {
+        return None;
+    }
+    let profile = crate::element_record_plan_profiles::plan_profile_from_fields(&decoded.fields)?;
+    if !profile.pieces.is_empty() {
+        return None;
+    }
+    let float = |wanted: &str| {
+        decoded
+            .fields
+            .iter()
+            .find_map(|(field, value)| match value {
+                InstanceField::Float { value, .. } if field == wanted => Some(*value),
+                _ => None,
+            })
+    };
+    let base = float(crate::partition_area_records::AREA_BODY_BASE_FIELD)?;
+    let height = float(crate::partition_area_records::AREA_BODY_HEIGHT_FIELD)?;
+    if !(base.is_finite() && height.is_finite() && height > 0.0) {
+        return None;
+    }
+    let bounds = profile.plan_bounds_feet()?;
+    let centre = ((bounds[0] + bounds[2]) / 2.0, (bounds[1] + bounds[3]) / 2.0);
+    let relative = |ring: &[(f64, f64)]| -> Vec<(f64, f64)> {
+        ring.iter()
+            .map(|(px, py)| (px - centre.0, py - centre.1))
+            .collect()
+    };
+    let points = relative(&profile.outer_xy);
+    let voids: Vec<Vec<(f64, f64)>> = profile.inner_xy.iter().map(|ring| relative(ring)).collect();
+    let section = if voids.is_empty() {
+        entities::ProfileDef::ArbitraryClosed { points }
+    } else {
+        entities::ProfileDef::ArbitraryWithVoids { points, voids }
+    };
+    Some(AreaDrawn {
+        location: [centre.0, centre.1, base],
+        body: Extrusion {
+            width_feet: bounds[2] - bounds[0],
+            depth_feet: bounds[3] - bounds[1],
+            height_feet: height,
+            profile_override: Some(section),
+        },
+        profile,
+    })
+}
+
 /// An Area's ElementId, number, name and Level (#763), in the set a room's
 /// are written in, so the writer names its `IfcSpace` as it names a room's
 /// (`Name` the number and `LongName` the name, as Revit's export does) and
 /// `ifc::apply_record_level_reference_storeys` puts it in its Level's storey.
-fn area_property_set(decoded: &DecodedElement) -> PropertySet {
+/// Where its boundary is read (RE-317) the set also says where the body came
+/// from.
+fn area_property_set(decoded: &DecodedElement, drawn: Option<&AreaDrawn>) -> PropertySet {
     let text = |wanted: &str| {
         decoded
             .fields
@@ -325,10 +390,68 @@ fn area_property_set(decoded: &DecodedElement) -> PropertySet {
             ),
         });
     }
-    // RE-313: an Area is written without a body, so without an outline.
+    // RE-313, RE-317: an Area is drawn from its boundary lines where they
+    // give it a region, and written without a body, so without an outline,
+    // where they do not.
+    if let Some(drawn) = drawn {
+        for (name, value) in [
+            (
+                "BodySource",
+                PropertyValue::Text(crate::partition_area_records::AREA_BOUNDARY_SOURCE.into()),
+            ),
+            ("ProfileResolved", PropertyValue::Boolean(true)),
+            (
+                "ProfileSource",
+                PropertyValue::Text(crate::partition_area_records::AREA_BOUNDARY_SOURCE.into()),
+            ),
+            (
+                "ProfileVertexCount",
+                PropertyValue::Integer(drawn.profile.vertex_count() as i64),
+            ),
+            (
+                "ProfileVoidCount",
+                PropertyValue::Integer(drawn.profile.inner_xy.len() as i64),
+            ),
+            (
+                "BodyHeightSource",
+                PropertyValue::Text(AREA_BODY_HEIGHT_SOURCE.into()),
+            ),
+        ] {
+            properties.push(Property {
+                name: name.into(),
+                value,
+            });
+        }
+    }
+    if drawn.is_none() {
+        let refusal = decoded
+            .fields
+            .iter()
+            .find_map(|(field, value)| match value {
+                InstanceField::String(reason)
+                    if field == crate::partition_area_records::AREA_BODY_REFUSAL_FIELD =>
+                {
+                    Some(reason.clone())
+                }
+                _ => None,
+            });
+        if let Some(reason) = refusal {
+            properties.push(Property {
+                name: AREA_BODY_REFUSAL_PROPERTY.into(),
+                value: PropertyValue::Text(reason),
+            });
+        }
+    }
     properties.push(Property {
         name: SPACE_OUTLINE_SOURCE_PROPERTY.into(),
-        value: PropertyValue::Text(SPACE_OUTLINE_NONE.into()),
+        value: PropertyValue::Text(
+            if drawn.is_some() {
+                SPACE_OUTLINE_AREA_BOUNDARY
+            } else {
+                SPACE_OUTLINE_NONE
+            }
+            .into(),
+        ),
     });
     PropertySet {
         name: ELEMENT_RECORD_PROPERTY_SET.into(),
@@ -411,7 +534,7 @@ pub fn append_typed_production_elements(
     let mut opening_hosts: Vec<(usize, u32, u32)> = Vec::new();
     // RE-267: each wall's entity index and the elements its top join and cut
     // pairs name, for the cut at the floor that covers it.
-    let mut pending_tops: Vec<(usize, Vec<u32>)> = Vec::new();
+    let mut pending_tops: Vec<wall_tops::Pending> = Vec::new();
     let mut level_bind = crate::level_bind::LevelStoreyBind::new();
     // RE-286: what each type object's common set holds, by type and type
     // entity; `None` once two of its elements disagree.
@@ -754,9 +877,17 @@ pub fn append_typed_production_elements(
                             property_set = Some(geom);
                         }
                     }
-                    // #763: an Area's record holds no box, so its space has
-                    // no body, but it is named as a room's is.
-                    "Area" => property_set = Some(area_property_set(&decoded)),
+                    // #763: an Area's record holds no box, but it is named as a
+                    // room's is. RE-317: where its boundary lines give it a
+                    // region, that is its body.
+                    "Area" => {
+                        let drawn = area_body_from_decoded(&decoded);
+                        property_set = Some(area_property_set(&decoded, drawn.as_ref()));
+                        if let Some(drawn) = drawn {
+                            location_feet = Some(drawn.location);
+                            extrusion = Some(drawn.body);
+                        }
+                    }
                     _ => {}
                 }
             }
@@ -1057,7 +1188,13 @@ pub fn append_typed_production_elements(
         if policy.include_geometry && decoded.class == "Wall" {
             let named = crate::partition_schema_mvp::wall_top_cutters_from_fields(&decoded.fields);
             if !named.is_empty() {
-                pending_tops.push((entity_index, named));
+                pending_tops.push(wall_tops::Pending {
+                    index: entity_index,
+                    named,
+                    pair_only: crate::partition_schema_mvp::wall_top_pair_only_from_fields(
+                        &decoded.fields,
+                    ),
+                });
             }
         }
         // RE-291: a column whose type is a plain rectangle, with the elements its pairs name.
@@ -1665,6 +1802,17 @@ fn wall_geometry_from_decoded(decoded: &DecodedElement) -> Option<RecoveredWallG
 /// record names (RE-172), under the names Revit's export uses for its class.
 fn level_parameter_property_set(decoded: &DecodedElement, ifc_type: &str) -> Option<PropertySet> {
     use crate::partition_level_parameters as lp;
+    // RE-319: the names Revit gives a conduit's, conduit fitting's or
+    // gutter's Level parameter are not measured: the one export that holds
+    // them, Revit 2018's IFC2X3, writes no Revit parameter-group set on any
+    // element. So none is written.
+    if matches!(
+        ifc_type,
+        "IFCCABLECARRIERSEGMENT" | "IFCCABLECARRIERFITTING"
+    ) || decoded.class == "Gutter"
+    {
+        return None;
+    }
     let text = |wanted: &str| {
         decoded.fields.iter().find_map(|(name, value)| match value {
             InstanceField::String(v) if name == wanted => Some(v.clone()),
@@ -3863,6 +4011,15 @@ pub(super) fn contain_in_spaces(entities: &mut Vec<entities::IfcEntity>) {
             })
         })
     };
+    let is_area = |set: &Option<PropertySet>| {
+        set.as_ref().is_some_and(|set| {
+            set.properties.iter().any(|p| {
+                p.name == SPACE_OUTLINE_SOURCE_PROPERTY
+                    && matches!(&p.value, PropertyValue::Text(source)
+                        if source == SPACE_OUTLINE_AREA_BOUNDARY)
+            })
+        })
+    };
     let mut spaces = Vec::new();
     for (index, entity) in entities.iter().enumerate() {
         let entities::IfcEntity::BuildingElement {
@@ -3878,8 +4035,9 @@ pub(super) fn contain_in_spaces(entities: &mut Vec<entities::IfcEntity>) {
             continue;
         };
         // #763: a family instance written as a space holds nothing; the
-        // furniture around it stays in its room.
-        if ifc_type != "IFCSPACE" || is_family_instance(property_set) {
+        // furniture around it stays in its room. RE-317: nor does an Area,
+        // which Revit's export draws over its rooms.
+        if ifc_type != "IFCSPACE" || is_family_instance(property_set) || is_area(property_set) {
             continue;
         }
         if let Some((outer, voids)) =
@@ -4162,6 +4320,13 @@ pub const LANDING_SLAB_BODY_HEIGHT_SOURCE: &str = "native_landing_top_and_type_t
 /// element covers the whole of the wall's plan (#1067, RE-267).
 pub const WALL_TOP_COVER_BODY_HEIGHT_SOURCE: &str = "wall_top_cut_at_covering_floor";
 
+/// `BodyHeightSource` of a wall whose top is cut at the underside of the
+/// floor, roof or footing its top join or a cut pair names over the part of
+/// the wall's plan the element covers, and left at the wall's own top over
+/// the rest: drawn as one prism of its plan to the underside and the pieces
+/// of the plan outside the element from there to the top (#1067, RE-320).
+pub const WALL_TOP_STEPPED_BODY_HEIGHT_SOURCE: &str = "wall_top_stepped_at_covering_floor";
+
 /// `BodySource` of a body that is the element record's bounding box, where
 /// no carrier refines it (#409).
 pub const RECORD_BBOX_BODY_SOURCE: &str = "partition_element_record_bbox";
@@ -4208,8 +4373,22 @@ pub const SPACE_OUTLINE_RECORD_BOX: &str = "record_box";
 /// for it (`rvt-ifc --saved-meshes`).
 pub const SPACE_OUTLINE_SAVED_MESH: &str = "saved_mesh";
 
-/// [`SPACE_OUTLINE_SOURCE_PROPERTY`] of an Area, which has no body.
+/// [`SPACE_OUTLINE_SOURCE_PROPERTY`] of an Area whose boundary is not read, so
+/// it has no body.
 pub const SPACE_OUTLINE_NONE: &str = "none";
+
+/// [`SPACE_OUTLINE_SOURCE_PROPERTY`] of an Area drawn as the region its
+/// scheme's boundary lines enclose around its point, from its Level to the
+/// Level above, when both are building stories (RE-317).
+pub const SPACE_OUTLINE_AREA_BOUNDARY: &str = "area_boundary";
+
+/// `BodyHeightSource` of an Area's body: from its Level up to the Level above
+/// it, when both are building stories (RE-317).
+pub const AREA_BODY_HEIGHT_SOURCE: &str = "area_level_to_next_storey";
+
+/// Property of an Area's [`ELEMENT_RECORD_PROPERTY_SET`] that says why it has no
+/// body, where its boundary was not proven (RE-317).
+pub const AREA_BODY_REFUSAL_PROPERTY: &str = "AreaBodyRefusal";
 
 /// [`SPACE_OUTLINE_SOURCE_PROPERTY`] of a Revit Space or a family instance
 /// written as an `IfcSpace` whose body is more than its record's box: its

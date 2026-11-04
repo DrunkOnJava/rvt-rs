@@ -225,7 +225,7 @@ pub(crate) use research::{
     native_parametric_mesh, native_parametric_surface, native_phases, native_rendered_content,
     native_saved_mesh, native_saved_scene, native_segments, native_stairs, native_symbol_cuts,
     native_type_materials, native_wall_cuts, native_wall_types, native_walls, partition_arc_walls,
-    partition_area_records, partition_beam_axes, partition_column_nodes,
+    partition_area_boundaries, partition_area_records, partition_beam_axes, partition_column_nodes,
     partition_compound_structure, partition_connector_pairs, partition_curtain_materials,
     partition_curve_fields, partition_design_options, partition_element_records,
     partition_element_records_2023, partition_fitting_sizes, partition_id_objects,

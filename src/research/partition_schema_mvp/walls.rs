@@ -57,6 +57,26 @@ pub fn wall_top_cutters_from_fields(fields: &[(String, InstanceField)]) -> Vec<u
         .unwrap_or_default()
 }
 
+/// The ElementIds [`WALL_TOP_PAIR_ONLY_FIELD`] records: those of a wall's top
+/// cutters that only a cut pair names (RE-320). Empty where it holds none.
+pub fn wall_top_pair_only_from_fields(fields: &[(String, InstanceField)]) -> Vec<u32> {
+    fields
+        .iter()
+        .find_map(|(name, value)| match value {
+            InstanceField::Vector(items) if name == WALL_TOP_PAIR_ONLY_FIELD => Some(
+                items
+                    .iter()
+                    .filter_map(|item| match item {
+                        InstanceField::ElementId { id, .. } => Some(*id),
+                        _ => None,
+                    })
+                    .collect(),
+            ),
+            _ => None,
+        })
+        .unwrap_or_default()
+}
+
 /// The ElementIds [`WALL_BOUNDED_FIELD`] records: the elements a wall's roof
 /// and floor joins name (RE-270). `None` where the field is absent, an empty
 /// list where the wall is joined to none.
@@ -599,6 +619,7 @@ pub(super) fn attach_wall_layers(
         top_joined,
         uncut,
         top_cutters,
+        pair_only,
         whole,
         bounded,
     } = if centreline_bodies {
@@ -631,6 +652,23 @@ pub(super) fn attach_wall_layers(
             if let Some(items) = items {
                 wall.fields
                     .push((WALL_TOP_CUTTERS_FIELD.into(), InstanceField::Vector(items)));
+            }
+        }
+        if let Some(only) = wall.id.and_then(|id| pair_only.get(&u64::from(id))) {
+            let items: Option<Vec<InstanceField>> = only
+                .iter()
+                .map(|&id| {
+                    Some(InstanceField::ElementId {
+                        tag: 0,
+                        id: u32::try_from(id).ok()?,
+                    })
+                })
+                .collect();
+            if let Some(items) = items {
+                wall.fields.push((
+                    WALL_TOP_PAIR_ONLY_FIELD.into(),
+                    InstanceField::Vector(items),
+                ));
             }
         }
         if wall.id.is_some_and(|id| whole.contains(&u64::from(id))) {

@@ -159,16 +159,23 @@ the four levels a file can reach are in the
 - **0.12.2, 2026-11-03.** More doors drawn from Revit's saved meshes in the
   default export and more bodies with `--saved-meshes`, from a user's
   comparison of 0.6.1 and 0.12.0; some cases it found stay open (#1247).
+- **0.13.0, 2026-11-03.** Rooms and spaces: every `IfcSpace` says where its
+  outline came from, Revit 2026 and 2027 rooms take their outline, unclosed
+  room solids are read from their faces, and bodiless family spaces are left
+  out (#1260, #1262); Revit 2018 projects that exported nothing export
+  (#1261); joined columns' `Length`, the office's wall hatch widths, roofs
+  with several slope arrows, the viewer's real progress, and faster native
+  reads (#1203, #810, #885, #1195, #1237).
 
-### 0.13.0: IFC geometry and element data
+### 0.14.0: IFC geometry and element data
 
-The geometry and element-data work that continues after 0.12.0, moved from the
-0.12.0 milestone when 0.12.0 shipped. Each
+The geometry and element-data work that continues after 0.13.0, moved from the
+0.13.0 milestone when 0.13.0 shipped. Each
 slice records a baseline, an improvement and a residual against Revit's own
 exports on the reference pack (#407), approximations stay labelled (#409), and
 a slice ships in the next release that contains it. Geometry open now: wall
-bodies thicker or thinner than their type's layers (#358) and the tops of walls Revit
-steps over a floor that covers them in part (#1067), stair flights
+bodies thicker or thinner than their type's layers (#358) and the tops of walls whose layers Revit
+ends at different heights (#1067), stair flights
 (#357), roofs Revit splits into slab parts (#323), hip roofs over T and U footprints and roof cases
 with no oracle (#884, #885), the openings on releases other than 2024 and 2025
 (#227), room boundaries whose solid does not
