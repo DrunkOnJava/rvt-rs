@@ -669,7 +669,9 @@ fn edges_area(edges: &[Edge]) -> f64 {
 /// A loop of edges as points, each arc in chords of at most
 /// [`ARC_STEP_RADIANS`], without a repeated closing vertex. A point where
 /// two straight edges continue in a straight line, a line cut where another
-/// meets it, is left out, as Revit's profile leaves it out (RE-317 §3).
+/// meets it, is left out. RE-317 §3 keeps that point where a third line
+/// meets it, which this does not (RE-333 section 8: one office Area has two
+/// fewer vertices than Revit's export).
 fn edges_points(edges: &[Edge]) -> Vec<(f64, f64)> {
     let mut out = Vec::new();
     for (k, edge) in edges.iter().enumerate() {
