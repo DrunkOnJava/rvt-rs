@@ -26,6 +26,10 @@
   head draws them, 185 of the 269 bodies the current rule keeps as meshes are
   scored, and all 185 hold in the fine tessellation (184 in the default one,
   the dispenser being the exception); the other 84 are office spaces, not
-  scored by these scorers. No figure and no bar changes here; the options for the bar are
-  in the report, and the choice is the maintainer's. Report:
+  scored by these scorers. No figure and no bar changes here. The maintainer decided the
+  bar (2026-11-04, "Fine where both draw curves"): the fine tessellation
+  decides only where both files write true curves, and saved meshes keep the
+  default bar, so no saved-mesh verdict moves; #1365 implements it in the
+  scorers and #1366 draws the 185 circles over 0.12 ft as true arcs again.
+  Report:
   `reports/element-framing/RE-331-scorer-tessellation.md`.
