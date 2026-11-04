@@ -345,7 +345,8 @@ pub(super) fn without_non_primary_options(
 ) -> Vec<crate::partition_element_records::PartitionElementRecord> {
     let options = rf.memoised_design_options();
     // Elements not in the export phase are left out too, as Revit's export
-    // leaves them out, except rooms (#328, RE-184).
+    // leaves them out, and a room whose own phase is not it (#328, RE-184,
+    // RE-326).
     let phases = rf.memoised_phase_filter();
     records.retain(|record| !options.excludes(record) && !phases.excludes(record));
     records
@@ -397,7 +398,8 @@ pub(super) fn select_instance_records(
     // 80th is exported as two stacked solids whose depths sum to the
     // recorded extent) (#212, RE-22).
     //
-    // Ties go to the **newest** frame — the greatest (stream, offset)
+    // Ties go to the **newest** frame — the greatest partition number, then
+    // offset (`PartitionElementRecord::frame_order`)
     // — because a Revit 2024 project rewrites an edited element into a
     // higher-numbered `Partitions/NN` stream and leaves the earlier
     // copy in place. On `2024_Core_Interior.rvt` 171 of 360 walls and
@@ -433,9 +435,7 @@ pub(super) fn select_instance_records(
                 let candidate = z_extent_key(&record);
                 let held = z_extent_key(existing);
                 candidate > held
-                    || (candidate == held
-                        && (record.stream.as_str(), record.offset)
-                            > (existing.stream.as_str(), existing.offset))
+                    || (candidate == held && record.frame_order() > existing.frame_order())
             }
         };
         if better {

@@ -191,12 +191,21 @@ pub fn recover_partition_schema_mvp(
         attach_room_outlines(rf, revit_version, &mut out.rooms);
         // --- Storeys from the Levels the records name (RE-107), by the
         // same rules as 2024's (RE-59, RE-68) ---
-        let level_elevations: BTreeMap<u32, f64> =
-            crate::partition_level_records::recover_partition_levels(rf, revit_version)
-                .unwrap_or_default()
-                .iter()
-                .map(|level| (level.element_id, level.elevation_feet))
-                .collect();
+        let levels = crate::partition_level_records::recover_partition_levels(rf, revit_version)
+            .unwrap_or_default();
+        let level_elevations: BTreeMap<u32, f64> = levels
+            .iter()
+            .map(|level| (level.element_id, level.elevation_feet))
+            .collect();
+        // --- Areas, which carry no record box (#763), and the bodies their
+        // boundary lines give them (RE-317, RE-324) ---
+        let level_ids = level_element_ids(rf, revit_version).unwrap_or_default();
+        out.areas = crate::partition_area_records::areas_from_partition_chain_records(
+            rf,
+            revit_version,
+            &level_ids,
+            &levels,
+        );
         let mut record_backed = [
             &mut out.walls,
             &mut out.columns,
@@ -407,10 +416,12 @@ pub fn recover_partition_schema_mvp(
     attach_spiral_run_bodies(rf, revit_version, &mut out.products);
     // --- Monolithic landings as their slabs (#824) ---
     attach_landing_slabs(rf, revit_version, &mut out.products);
-    // --- Beams along their location lines (RE-49) ---
-    attach_beam_axes(rf, revit_version, &mut out.products);
-    // --- Beams' Cross-Section Rotation, from their native records (RE-276) ---
+    // --- Beams' Cross-Section Rotation, from their native records (RE-276),
+    // before the axes, which RE-328's level beams longer than their lines
+    // need it for ---
     attach_beam_rotations(rf, &mut out.products);
+    // --- Beams along their location lines (RE-49, RE-328) ---
+    attach_beam_axes(rf, revit_version, &mut out.products);
     // --- Pipes as cylinders along their ends (RE-131) ---
     attach_pipe_axes(rf, revit_version, &mut out.products);
     // --- Which element each end of a duct or pipe is joined to (RE-138) ---

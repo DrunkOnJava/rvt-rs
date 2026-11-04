@@ -32,7 +32,7 @@
 
 use crate::le_bytes;
 use crate::native_parameters::ObjectGraph;
-use crate::{RevitFile, compression, native_document, native_parameters, native_segments};
+use crate::{RevitFile, native_document, native_parameters, native_segments};
 use std::collections::{BTreeMap, BTreeSet};
 
 /// The model geometry classes read: solid forms, free-form (imported or
@@ -160,8 +160,7 @@ fn read_documents(
     let mut documents: BTreeMap<u64, Document> = BTreeMap::new();
     let budget = native_document::group_budget(rf, native_document::DEFAULT_MAX_GROUP_BYTES);
     for name in streams {
-        let stored = rf.read_stream(name)?;
-        let prepared = compression::prepare_stream_for_inflate(name, &stored);
+        let prepared = rf.read_prepared_stream(name)?;
         let inflated = rf.inflated_partition(name).ok();
         native_segments::walk_inflated(
             &prepared,
@@ -302,15 +301,17 @@ struct Loaded {
 
 /// The documents of `families`, by ElementId, with what was read to find
 /// them. `None` where there are no families or none has a document.
-fn load(rf: &mut RevitFile, families: &BTreeSet<u64>) -> anyhow::Result<Option<Loaded>> {
+fn load(
+    rf: &mut RevitFile,
+    families: &BTreeSet<u64>,
+    releases: &std::ops::RangeInclusive<u32>,
+) -> anyhow::Result<Option<Loaded>> {
     if families.is_empty() {
         return Ok(None);
     }
     let version = rf.layout_release()?;
     anyhow::ensure!(
-        native_document::Options::default()
-            .releases
-            .contains(&version),
+        releases.contains(&version),
         "family forms are not measured on Revit {version}"
     );
     let registry =
@@ -328,8 +329,7 @@ fn load(rf: &mut RevitFile, families: &BTreeSet<u64>) -> anyhow::Result<Option<L
     let mut keys: BTreeSet<[u8; 16]> = BTreeSet::new();
     let budget = native_document::group_budget(rf, native_document::DEFAULT_MAX_GROUP_BYTES);
     for name in &streams {
-        let stored = rf.read_stream(name)?;
-        let prepared = compression::prepare_stream_for_inflate(name, &stored);
+        let prepared = rf.read_prepared_stream(name)?;
         let inflated = rf.inflated_partition(name).ok();
         native_segments::walk_inflated(
             &prepared,
@@ -391,7 +391,7 @@ pub fn family_forms(
         keys,
         documents,
         ..
-    }) = load(rf, families)?
+    }) = load(rf, families, &native_document::Options::default().releases)?
     else {
         return Ok(out);
     };
@@ -518,7 +518,7 @@ pub fn family_solids(
     families: &BTreeSet<u64>,
 ) -> anyhow::Result<BTreeMap<u64, FamilySolids>> {
     let mut out = BTreeMap::new();
-    let Some(loaded) = load(rf, families)? else {
+    let Some(loaded) = load(rf, families, &native_document::Options::default().releases)? else {
         return Ok(out);
     };
     for (family, document) in &loaded.documents {
@@ -554,18 +554,41 @@ pub fn family_records(
     families: &BTreeSet<u64>,
     classes: &BTreeSet<String>,
 ) -> anyhow::Result<BTreeMap<u64, Vec<(u64, ObjectGraph)>>> {
+    family_records_in(
+        rf,
+        families,
+        classes,
+        &native_document::Options::default().releases,
+        None,
+    )
+}
+
+/// [`family_records`] on any of `releases` (the caller's reader is measured
+/// on them: [`native_document::NATIVE_RELEASES`] is every release the native
+/// framing holds on, RE-280), and only the records of `ids` where it is
+/// given. A non-empty `classes` none of which the file's schema names reads
+/// no record (RE-327).
+pub fn family_records_in(
+    rf: &mut RevitFile,
+    families: &BTreeSet<u64>,
+    classes: &BTreeSet<String>,
+    releases: &std::ops::RangeInclusive<u32>,
+    ids: Option<&BTreeSet<u64>>,
+) -> anyhow::Result<BTreeMap<u64, Vec<(u64, ObjectGraph)>>> {
     let mut out: BTreeMap<u64, Vec<(u64, ObjectGraph)>> = BTreeMap::new();
-    let Some(loaded) = load(rf, families)? else {
+    let Some(loaded) = load(rf, families, releases)? else {
         return Ok(out);
     };
     let tags: BTreeSet<u16> = classes
         .iter()
         .filter_map(|name| loaded.registry.named(name).map(|class| class.tag))
         .collect();
+    if !classes.is_empty() && tags.is_empty() {
+        return Ok(out);
+    }
     let budget = native_document::group_budget(rf, native_document::DEFAULT_MAX_GROUP_BYTES);
     for name in &loaded.streams {
-        let stored = rf.read_stream(name)?;
-        let prepared = compression::prepare_stream_for_inflate(name, &stored);
+        let prepared = rf.read_prepared_stream(name)?;
         let inflated = rf.inflated_partition(name).ok();
         native_segments::walk_inflated(
             &prepared,
@@ -594,6 +617,9 @@ pub fn family_records(
                         continue;
                     };
                     if !tags.is_empty() && !tags.contains(&class) {
+                        continue;
+                    }
+                    if ids.is_some_and(|wanted| !wanted.contains(&id)) {
                         continue;
                     }
                     if let Ok(graph) = native_parameters::decode_graph(body, &loaded.registry) {

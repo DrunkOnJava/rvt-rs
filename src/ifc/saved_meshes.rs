@@ -28,7 +28,8 @@
 use super::IfcModel;
 use super::entities::{BrepTriangle, IfcEntity, PropertyValue, SolidShape};
 use super::export_content::{
-    RECORD_BBOX_BODY_SOURCE, SPACE_OUTLINE_SAVED_MESH, SPACE_OUTLINE_SOURCE_PROPERTY,
+    BEAM_BOX_BODY_SOURCE, RECORD_BBOX_BODY_SOURCE, SPACE_OUTLINE_SAVED_MESH,
+    SPACE_OUTLINE_SOURCE_PROPERTY,
 };
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -141,7 +142,13 @@ pub fn attach_scoped_with_control(
         let profile_resolved = set.properties.iter().any(|p| {
             p.name == "ProfileResolved" && matches!(p.value, PropertyValue::Boolean(true))
         });
-        if text("BodySource") != Some(RECORD_BBOX_BODY_SOURCE) || profile_resolved {
+        // A beam RE-328 draws as its box along its line is a stand-in for
+        // its saved mesh, as the record box is.
+        if !matches!(
+            text("BodySource"),
+            Some(RECORD_BBOX_BODY_SOURCE | BEAM_BOX_BODY_SOURCE)
+        ) || profile_resolved
+        {
             continue;
         }
         let Ok(id) = tag.parse::<u64>() else {
@@ -159,77 +166,86 @@ pub fn attach_scoped_with_control(
         max_graph_objects: 1_000_000,
         ..Default::default()
     };
-    let scene =
-        crate::native_saved_scene::extract_at_detail_with_control(rf, &options, 3, control)?;
-    for element in &scene.elements {
-        let Some(indices) = by_id.get(&element.identity.element_id) else {
-            continue;
-        };
-        // A Tag carried by several entities (a slab's pieces) is ambiguous:
-        // leave them as they are.
-        let [index] = indices.as_slice() else {
-            continue;
-        };
-        let primitives = &element.meshes.primitives;
-        if primitives.is_empty() {
-            continue;
-        }
-        // RE-224: a mesh some face or branch of which did not decode is only
-        // part of the body (on the BIM4LCA office 357 such meshes, none of
-        // them Revit's body). Only branches left out for their view semantics
-        // leave it whole.
-        let partial = element.meshes.diagnostics.iter().any(|diagnostic| {
-            !diagnostic.ends_with(crate::native_graphics_traversal::NESTED_DETAIL_FILTER_DIAGNOSTIC)
-                && !diagnostic
-                    .ends_with(crate::native_graphics_traversal::VIEW_COMPONENT_DIAGNOSTIC)
-        });
-        if partial {
-            report.partial += 1;
-            continue;
-        }
-        let IfcEntity::BuildingElement {
-            location_feet: Some(origin),
-            rotation_radians,
-            solid_shape,
-            property_set: Some(set),
-            ..
-        } = &mut model.entities[*index]
-        else {
-            continue;
-        };
-        let (sin, cos) = (-rotation_radians.unwrap_or(0.0)).sin_cos();
-        let mut vertices = Vec::new();
-        let mut triangles = Vec::new();
-        for primitive in primitives {
-            let base = vertices.len() as u32;
-            vertices.extend(primitive.vertices.iter().map(|p| {
-                let (dx, dy) = (p[0] - origin[0], p[1] - origin[1]);
-                [dx * cos - dy * sin, dx * sin + dy * cos, p[2] - origin[2]]
-            }));
-            triangles.extend(
-                primitive
-                    .triangles
-                    .iter()
-                    .filter(|t| t.iter().all(|&v| (v as usize) < primitive.vertices.len()))
-                    .map(|t| BrepTriangle(base + t[0], base + t[1], base + t[2])),
-            );
-        }
-        if triangles.is_empty() {
-            continue;
-        }
-        report.replaced += 1;
-        report.triangles += triangles.len();
-        *solid_shape = Some(SolidShape::TriangulatedFaceSet {
-            vertices_feet: vertices,
-            triangles,
-        });
-        for property in &mut set.properties {
-            if property.name == "BodySource" {
-                property.value = PropertyValue::Text(SAVED_MESH_BODY_SOURCE.into());
-            } else if property.name == SPACE_OUTLINE_SOURCE_PROPERTY {
-                property.value = PropertyValue::Text(SPACE_OUTLINE_SAVED_MESH.into());
+    // Each element is taken as it is meshed and its decoded graphs freed with
+    // its batch of shared symbols, rather than all held until the last one is
+    // meshed (#1075).
+    crate::native_saved_scene::extract_in_batches_with_control(
+        rf,
+        &options,
+        3,
+        control,
+        |element| {
+            let Some(indices) = by_id.get(&element.identity.element_id) else {
+                return Ok(());
+            };
+            // A Tag carried by several entities (a slab's pieces) is ambiguous:
+            // leave them as they are.
+            let [index] = indices.as_slice() else {
+                return Ok(());
+            };
+            let primitives = &element.meshes.primitives;
+            if primitives.is_empty() {
+                return Ok(());
             }
-        }
-    }
+            // RE-224: a mesh some face or branch of which did not decode is only
+            // part of the body (on the BIM4LCA office 357 such meshes, none of
+            // them Revit's body). Only branches left out for their view semantics
+            // leave it whole.
+            let partial = element.meshes.diagnostics.iter().any(|diagnostic| {
+                !diagnostic
+                    .ends_with(crate::native_graphics_traversal::NESTED_DETAIL_FILTER_DIAGNOSTIC)
+                    && !diagnostic
+                        .ends_with(crate::native_graphics_traversal::VIEW_COMPONENT_DIAGNOSTIC)
+            });
+            if partial {
+                report.partial += 1;
+                return Ok(());
+            }
+            let IfcEntity::BuildingElement {
+                location_feet: Some(origin),
+                rotation_radians,
+                solid_shape,
+                property_set: Some(set),
+                ..
+            } = &mut model.entities[*index]
+            else {
+                return Ok(());
+            };
+            let (sin, cos) = (-rotation_radians.unwrap_or(0.0)).sin_cos();
+            let mut vertices = Vec::new();
+            let mut triangles = Vec::new();
+            for primitive in primitives {
+                let base = vertices.len() as u32;
+                vertices.extend(primitive.vertices.iter().map(|p| {
+                    let (dx, dy) = (p[0] - origin[0], p[1] - origin[1]);
+                    [dx * cos - dy * sin, dx * sin + dy * cos, p[2] - origin[2]]
+                }));
+                triangles.extend(
+                    primitive
+                        .triangles
+                        .iter()
+                        .filter(|t| t.iter().all(|&v| (v as usize) < primitive.vertices.len()))
+                        .map(|t| BrepTriangle(base + t[0], base + t[1], base + t[2])),
+                );
+            }
+            if triangles.is_empty() {
+                return Ok(());
+            }
+            report.replaced += 1;
+            report.triangles += triangles.len();
+            *solid_shape = Some(SolidShape::TriangulatedFaceSet {
+                vertices_feet: vertices,
+                triangles,
+            });
+            for property in &mut set.properties {
+                if property.name == "BodySource" {
+                    property.value = PropertyValue::Text(SAVED_MESH_BODY_SOURCE.into());
+                } else if property.name == SPACE_OUTLINE_SOURCE_PROPERTY {
+                    property.value = PropertyValue::Text(SPACE_OUTLINE_SAVED_MESH.into());
+                }
+            }
+            Ok(())
+        },
+    )?;
     Ok(report)
 }

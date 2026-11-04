@@ -1,17 +1,26 @@
 //! RE-302: which of a toilet's faces draw surface that Revit's export does
 //! not, and which of Revit's vertices our faces miss (#1247).
 //!
-//! FACT under test: the 43 `WC-istuin:WC-1` toilets of the BIM4LCA office
-//! (development data, not held out) that RE-302's readers draw from their
-//! saved faces are not Revit's body: 1.027 to 1.047 of its volume, our
-//! vertices up to 0.0218 ft from Revit's surface, Revit's up to 0.0050 ft from
-//! ours. The scorer (`mesh_bodies_vs_ifc`) judges a whole body; this prints
-//! each decoded face on its own, so that `toilet_faces_vs_ifc.py` can say, per
-//! face, how far its vertices lie from Revit's mesh of the same toilet and
-//! which of our faces lies nearest each of Revit's vertices. Whether the
-//! excess is our faces drawing what Revit's export does not, or Revit's
-//! export being the coarser polygonisation of the same surfaces, shows in
-//! which faces are off and by how much.
+//! FACT measured (Measure run 41767705968, at d5d26fb4 on
+//! `re/1247-per-cell-clip`, the second attempt's readers, three toilets): the
+//! BIM4LCA office's `WC-istuin:WC-1` toilets (development data, not held out)
+//! are 1.0060 of Revit's volume by `mesh_bodies_vs_ifc` (all 43 within 1%,
+//! run 41766414367 at b5d5546f, whose reader code d5d26fb4 shares), our
+//! vertices 0.0215 to 0.0222 ft from Revit's surface and Revit's 0.0046 to
+//! 0.0050 ft from ours. Face by face, each of the three is
+//! 14,471 triangles in 70 faces and 23.0667 sq ft of ours against Revit's
+//! 1,668 triangles and 22.9621 sq ft. On the first toilet, 1,127 of our
+//! triangles lie more than 0.01 ft from Revit's mesh, all on four surfaces of
+//! revolution, and 66 of Revit's 808 vertices lie more than 0.001 ft off our
+//! surface (66 of 805 on the third, which is rotated).
+//!
+//! The scorer (`mesh_bodies_vs_ifc`) judges a whole body; this prints each
+//! decoded face on its own, so that `toilet_faces_vs_ifc.py` can say, per face,
+//! how far its vertices lie from Revit's mesh of the same toilet and which of
+//! our faces lies nearest each of Revit's vertices. Whether an excess is our
+//! faces drawing what Revit's export does not, or Revit's export being the
+//! coarser polygonisation of the same surfaces, shows in which faces are off
+//! and by how much.
 //!
 //! Output: for each toilet id, one `toilet` line, then per decoded face one
 //! `face` line (its index, owner, geometry object, tag, surface class,
@@ -21,6 +30,10 @@
 //!
 //! The ids are the first toilets the scorer listed (Measure run 41585460305),
 //! or those on the command line after the file.
+//!
+//! Run it at d5d26fb4, on `re/1247-per-cell-clip`, where the readers draw the
+//! toilets (Measure 41767705968): on `main` they are boxes, and only the faces
+//! that decode are printed. Its result is in `RE-302`, section 6.
 //!
 //! ```text
 //! cargo run --profile ci -p rvt-probes --example probe_re302_toilet_faces -- model.rvt [ids...]

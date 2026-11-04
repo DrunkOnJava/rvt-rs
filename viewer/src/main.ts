@@ -49,6 +49,9 @@ const exportSvgBtn = $('export-svg') as HTMLButtonElement;
 const exportQualityEl = $('export-quality');
 const exportModeEl = $('export-mode') as HTMLSelectElement;
 const savedMeshesEl = $('saved-meshes') as HTMLInputElement;
+const exportPhaseEl = $('export-phase') as HTMLSelectElement;
+const exportPhaseFieldEl = $('export-phase-field');
+const exportPhaseHintEl = $('export-phase-hint');
 const demoListEl = $('demo-list');
 const demoAttributionEl = $('demo-attribution');
 const loadOverlayEl = $('load-overlay');
@@ -659,8 +662,9 @@ function startLoadOverlay(file: File): void {
   loadElapsedEl.textContent = '0 s elapsed';
   loadOverlayEl.classList.remove('hidden');
   showMemoryWarning(file);
-  // The option applies to the read in progress; a change reopens the file.
+  // The options apply to the read in progress; a change reopens the file.
   savedMeshesEl.disabled = true;
+  exportPhaseEl.disabled = true;
   setStatusBusy(true);
   if (loadTimer !== null) window.clearInterval(loadTimer);
   loadTimer = window.setInterval(() => {
@@ -681,6 +685,7 @@ function stopLoadOverlay(): void {
   loadOverlayEl.classList.add('hidden');
   loadWarningEl.classList.add('hidden');
   savedMeshesEl.disabled = false;
+  exportPhaseEl.disabled = exportPhaseEl.options.length < 2;
   setStatusBusy(false);
 }
 
@@ -929,7 +934,7 @@ interface ExportDiagnostics {
     bounding_box_bodies?: number;
   };
   unsupported_features?: string[];
-  skipped?: { reason?: string; count?: number; sample_names?: string[] }[];
+  skipped?: { reason?: string; count?: number; sample_names?: string[]; phase?: string }[];
   warnings?: string[];
   formats_latest_integrity?: {
     stream?: string;
@@ -1018,6 +1023,45 @@ function savedMeshesFromQuery(): boolean {
 }
 savedMeshesEl.checked = savedMeshesFromQuery();
 
+/**
+ * One phase of the project (rvt-wasm's `phases`): its ElementId and, where the
+ * file names it, its name.
+ */
+interface ProjectPhase {
+  id: number;
+  name?: string | null;
+}
+
+/**
+ * The phase the open file is shown at: a phase's ElementId as text, or '' for
+ * the project's last, which is the default (`rvt-ifc` without `--phase`).
+ */
+let currentPhase = '';
+
+/**
+ * Lists the file's phases in the select, in the project's order, the last as
+ * the default. A file with no phases (a family, or a release whose phases are
+ * not read) hides the field; a project with one shows it fixed.
+ */
+function renderPhases(phases: ProjectPhase[]): void {
+  exportPhaseEl.replaceChildren();
+  phases.forEach((phase, index) => {
+    const last = index === phases.length - 1;
+    const label = phase.name ? phase.name : `ElementId ${phase.id}`;
+    const option = document.createElement('option');
+    option.value = last ? '' : String(phase.id);
+    option.textContent = last ? `${label} (last, default)` : label;
+    exportPhaseEl.append(option);
+  });
+  if (![...exportPhaseEl.options].some((option) => option.value === currentPhase)) {
+    currentPhase = '';
+  }
+  exportPhaseEl.value = currentPhase;
+  exportPhaseEl.disabled = phases.length < 2;
+  exportPhaseFieldEl.classList.toggle('hidden', phases.length === 0);
+  exportPhaseHintEl.classList.toggle('hidden', phases.length === 0);
+}
+
 /** The file now open, kept so the large-model retry can read it again. */
 let currentFile: File | null = null;
 /** The limits it was opened under; undefined means the defaults. */
@@ -1049,6 +1093,14 @@ async function loadBytes(file: File, limits?: OpenLimitsOptions): Promise<void> 
   const openLimits = limits ?? firstOpenLimits;
   const savedMeshes = savedMeshesEl.checked;
   firstOpenLimits = undefined;
+  // The same file read again (a changed option, the large-model retry) keeps
+  // its phase; another file starts at the project's last.
+  if (file !== currentFile) {
+    currentPhase = '';
+    // The previous file's phases are not this one's choices.
+    renderPhases([]);
+  }
+  const phase = currentPhase === '' ? undefined : Number(currentPhase);
   currentFile = file;
   currentOpenLimits = openLimits;
   delete statusEl.dataset.loadStats;
@@ -1149,6 +1201,7 @@ async function loadBytes(file: File, limits?: OpenLimitsOptions): Promise<void> 
           schedule: Schedule;
           diagnostics: ExportDiagnostics;
           stats: LoadStats;
+          phases?: ProjectPhase[];
         }
       | { type: 'info'; index: number; panel: ElementInfoPanel | null }
       | { type: 'error'; message: string; tooLarge?: TooLarge };
@@ -1213,6 +1266,7 @@ async function loadBytes(file: File, limits?: OpenLimitsOptions): Promise<void> 
     lastSchedule = msg.schedule;
     // Diagnostics are saved and shown as JSON, so their maps become objects.
     currentDiagnostics = plainJson(msg.diagnostics);
+    renderPhases(msg.phases ?? []);
     lastFileStem = file.name.replace(/\.(rvt|rfa|rte|rft)$/i, '');
     renderScene(msg.glb);
     renderTree();
@@ -1248,7 +1302,12 @@ async function loadBytes(file: File, limits?: OpenLimitsOptions): Promise<void> 
     toast(`Loaded ${file.name} · ${msg.types.length} categories · ${elapsed} s`, 'ok');
   });
   w.postMessage(
-    { type: 'parse', bytes, mode: qualityMode, limits: { ...openLimits, savedMeshes } },
+    {
+      type: 'parse',
+      bytes,
+      mode: qualityMode,
+      limits: { ...openLimits, savedMeshes, ...(phase === undefined ? {} : { phase }) },
+    },
     [bytes.buffer],
   );
 }
@@ -3490,6 +3549,13 @@ savedMeshesEl.addEventListener('change', () => {
   if (currentFile) void loadBytes(currentFile, currentOpenLimits);
 });
 
+// The phase decides which elements and rooms the model has, so the file is read
+// again with it, as for the saved meshes.
+exportPhaseEl.addEventListener('change', () => {
+  currentPhase = exportPhaseEl.value;
+  if (currentFile) void loadBytes(currentFile, currentOpenLimits);
+});
+
 exportModeEl.addEventListener('change', () => {
   if (currentDiagnostics) {
     renderExportQuality(currentDiagnostics);
@@ -3551,6 +3617,7 @@ function anonymizedDiagnostics(diagnostics: ExportDiagnostics): ExportDiagnostic
     );
   }
   for (const item of copy.skipped ?? []) {
+    if (item.phase !== undefined) item.phase = redacted;
     item.sample_names = (item.sample_names ?? []).map((name) => {
       const id = /(\d+)$/.exec(name)?.[1];
       return id ? `element-${id}` : redacted;

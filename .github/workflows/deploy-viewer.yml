@@ -24,6 +24,9 @@ on:
       - '.github/workflows/deploy-viewer.yml'
   pull_request:
     branches: [main]
+    # A draft is built once it is marked ready (#1237); to check a draft's
+    # viewer first, dispatch this workflow on its branch.
+    types: [opened, synchronize, reopened, ready_for_review]
     paths:
       - 'src/**'
       - 'rvt-wasm/**'
@@ -51,6 +54,7 @@ concurrency:
 
 jobs:
   build:
+    if: github.event.pull_request.draft != true
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout
@@ -243,15 +247,35 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           SHA: ${{ github.sha }}
+        # Each API call is retried with backoff: a GitHub 5xx (a 502 on
+        # 2026-11-04 failed the v0.14.0 deploy) is not a verdict on the
+        # commit. A call that still fails ends the step, so the deploy
+        # never goes ahead without CI's answer.
         run: |
-          if ! gh api "repos/${GH_REPO}/commits/${SHA}" --jq '.files[].filename' \
-               | grep -qvE '(\.md$|^docs/|^LICENSE|^\.gitignore$|^\.github/ISSUE_TEMPLATE/|^CITATION\.cff$)'; then
+          api() {
+            local try out
+            for try in 1 2 3 4 5 6; do
+              if out=$(gh api "$@"); then printf '%s\n' "$out"; return 0; fi
+              [ "$try" -eq 6 ] && break
+              echo "gh api $1 failed (try ${try}); retrying" >&2
+              sleep $((try * 10))
+            done
+            echo "gh api $1 failed 6 times" >&2
+            return 1
+          }
+          # Every page of the commit's files (the endpoint returns 300 a
+          # page). A commit that lists no file gives one empty line, which
+          # the filter below does not ignore, so it waits for CI: closed.
+          files=$(api --paginate "repos/${GH_REPO}/commits/${SHA}" --jq '.files[].filename') || {
+            echo "::error::could not list the files of ${SHA}"; exit 1; }
+          if ! grep -qvE '(\.md$|^docs/|^LICENSE|^\.gitignore$|^\.github/ISSUE_TEMPLATE/|^CITATION\.cff$)' <<<"$files"; then
             echo "CI's push filter skips this commit; deploying it"
             exit 0
           fi
           for _ in $(seq 1 80); do
-            conclusion=$(gh api "repos/${GH_REPO}/commits/${SHA}/check-runs?check_name=CI%20passed" \
-              --jq '[.check_runs[] | select(.status == "completed") | .conclusion] | first // ""')
+            conclusion=$(api "repos/${GH_REPO}/commits/${SHA}/check-runs?check_name=CI%20passed" \
+              --jq '[.check_runs[] | select(.status == "completed") | .conclusion] | first // ""') || {
+              echo "::error::could not read CI's check run on ${SHA}"; exit 1; }
             case "$conclusion" in
               success) echo "CI passed on ${SHA}"; exit 0 ;;
               "") sleep 60 ;;

@@ -757,6 +757,212 @@ fn tessellation_axis(
     ensure!(values.len() >= 2, "degenerate tessellation axis");
     Ok(values)
 }
+const FACE_REGIONS: &str = "face regions need subdivision";
+/// The most triangle pairs `plane_regions_tile` clips for one face.
+const REGION_WORK: usize = 4_000_000;
+type Triangle = [[f64; 2]; 3];
+fn segment_distance(p: [f64; 2], a: [f64; 2], b: [f64; 2]) -> f64 {
+    let (dx, dy) = (b[0] - a[0], b[1] - a[1]);
+    let length = dx * dx + dy * dy;
+    let t = if length > 0. {
+        (((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / length).clamp(0., 1.)
+    } else {
+        0.
+    };
+    (p[0] - (a[0] + t * dx)).hypot(p[1] - (a[1] + t * dy))
+}
+/// Whether `p` lies inside `outline` or within `tolerance` (UV units) of it.
+fn inside_or_on(p: [f64; 2], outline: &[[f64; 2]], tolerance: f64) -> bool {
+    inside(p, outline)
+        || (0..outline.len())
+            .any(|i| segment_distance(p, outline[i], outline[(i + 1) % outline.len()]) <= tolerance)
+}
+/// `outline` as counter-clockwise triangles whose areas add up to its own, or
+/// an error where they do not (a ring that crosses itself).
+fn triangles_of(outline: &[[f64; 2]]) -> Result<Vec<Triangle>> {
+    let holes: Vec<u32> = Vec::new();
+    let mut indices = Vec::<u32>::new();
+    earcut::Earcut::new().earcut(outline.iter().copied(), &holes, &mut indices);
+    let mut triangles = Vec::new();
+    let mut sum = 0.;
+    for t in indices.chunks_exact(3) {
+        ensure!(
+            t.iter().all(|&k| (k as usize) < outline.len()),
+            FACE_REGIONS
+        );
+        let mut triangle = [
+            outline[t[0] as usize],
+            outline[t[1] as usize],
+            outline[t[2] as usize],
+        ];
+        let twice = cross(triangle[0], triangle[1], triangle[2]);
+        if twice.abs() <= 1e-14 {
+            continue;
+        }
+        if twice < 0. {
+            triangle.swap(1, 2);
+        }
+        sum += twice.abs() / 2.;
+        triangles.push(triangle);
+    }
+    let whole = area(outline).abs();
+    ensure!(
+        !triangles.is_empty() && (sum - whole).abs() <= 1e-7 * whole.max(1e-6),
+        FACE_REGIONS
+    );
+    Ok(triangles)
+}
+/// The area `subject` shares with the counter-clockwise triangle `clip`:
+/// Sutherland–Hodgman against its three sides.
+fn shared_area(subject: &Triangle, clip: &Triangle) -> f64 {
+    let mut polygon: Vec<[f64; 2]> = subject.to_vec();
+    for (i, &a) in clip.iter().enumerate() {
+        let b = clip[(i + 1) % 3];
+        let side = |p: [f64; 2]| (b[0] - a[0]) * (p[1] - a[1]) - (b[1] - a[1]) * (p[0] - a[0]);
+        let input = std::mem::take(&mut polygon);
+        for (j, &p) in input.iter().enumerate() {
+            let q = input[(j + 1) % input.len()];
+            let (sp, sq) = (side(p), side(q));
+            if sp >= 0. {
+                polygon.push(p);
+            }
+            if (sp >= 0.) != (sq >= 0.) {
+                let t = sp / (sp - sq);
+                polygon.push([p[0] + t * (q[0] - p[0]), p[1] + t * (q[1] - p[1])]);
+            }
+        }
+        if polygon.len() < 3 {
+            return 0.;
+        }
+    }
+    area(&polygon).abs()
+}
+/// The area two sets of triangles share, in UV units squared, counting the
+/// triangle pairs clipped in `work`.
+fn shared_area_of(a: &[Triangle], b: &[Triangle], work: &mut usize) -> Result<f64> {
+    *work = work.saturating_add(a.len().saturating_mul(b.len()));
+    ensure!(*work <= REGION_WORK, FACE_REGIONS);
+    Ok(a.iter()
+        .map(|s| b.iter().map(|c| shared_area(s, c)).sum::<f64>())
+        .sum())
+}
+/// Whether `regions`, rings in the parent's UV plane, tile `parent`, a single
+/// ring (RE-329). `tolerance` is a length in UV units and, times the parent's
+/// area, the tolerance on every area compared. Every region vertex lies inside
+/// the parent or within `tolerance` of its outline; every region's area is
+/// inside the parent (the area it shares with the parent's triangles equals
+/// its own, which also refuses an edge that crosses a notch of a non-convex
+/// parent); no two regions share area (so no region is listed twice); and the
+/// regions' areas add up to the parent's. The overlap is measured as an area,
+/// both outlines triangulated and each pair of triangles clipped, not by a
+/// centroid test, because two non-convex tiles can overlap with neither
+/// centroid inside the other, and not by bounding boxes, which say nothing of
+/// a notch. A ring that crosses itself, or more regions or triangle pairs than
+/// the bounds allow, does not tile.
+fn regions_tile(parent: &[[f64; 2]], regions: &[&[[f64; 2]]], tolerance: f64) -> bool {
+    if regions.len() > 256 {
+        return false;
+    }
+    let parent_area = area(parent).abs();
+    let area_tolerance = tolerance * parent_area.max(1e-6);
+    let Ok(parent_triangles) = triangles_of(parent) else {
+        return false;
+    };
+    let mut tiles: Vec<Vec<Triangle>> = Vec::new();
+    let mut covered = 0.;
+    let mut work = 0usize;
+    for outline in regions {
+        if !outline.iter().all(|&p| inside_or_on(p, parent, tolerance)) {
+            return false;
+        }
+        let Ok(tile) = triangles_of(outline) else {
+            return false;
+        };
+        let tile_area = area(outline).abs();
+        let Ok(inside_area) = shared_area_of(&tile, &parent_triangles, &mut work) else {
+            return false;
+        };
+        if (inside_area - tile_area).abs() > area_tolerance {
+            return false;
+        }
+        covered += tile_area;
+        tiles.push(tile);
+    }
+    for (i, a) in tiles.iter().enumerate() {
+        for b in &tiles[i + 1..] {
+            match shared_area_of(a, b, &mut work) {
+                Ok(shared) if shared <= area_tolerance => {}
+                _ => return false,
+            }
+        }
+    }
+    (covered - parent_area).abs() <= area_tolerance
+}
+/// A plane face whose regions are further plane faces on the same plane, each
+/// with one loop and no regions of its own, listed once, that tile its single
+/// outline (`regions_tile`) only has its area split (RE-329): the face is
+/// drawn whole. Anything else keeps the face refused.
+fn plane_regions_tile(
+    g: &ObjectGraph,
+    index: &PointerIndex<'_>,
+    fi: usize,
+    plane: usize,
+    regions: &[Value],
+) -> Result<()> {
+    let basis = |si: usize| -> Result<[[f64; 3]; 3]> {
+        let s = &g.objects[si];
+        Ok([
+            point::<3>(&s.fields["m_origin"])?,
+            point::<3>(&s.fields["m_xVec"])?,
+            point::<3>(&s.fields["m_yVec"])?,
+        ])
+    };
+    let single_ring = |face: usize| -> Result<Vec<[f64; 2]>> {
+        let li = index
+            .resolve(face, &g.objects[face].fields["m_pFirstLoop"])?
+            .context(FACE_REGIONS)?;
+        ensure!(
+            index
+                .resolve(li, &g.objects[li].fields["m_nextLoop"])?
+                .is_none(),
+            FACE_REGIONS
+        );
+        ring(g, index, face, li)
+    };
+    let parent_basis = basis(plane)?;
+    let parent = single_ring(fi)?;
+    ensure!(regions.len() <= 256, FACE_REGIONS);
+    let mut listed = BTreeSet::new();
+    let mut outlines: Vec<Vec<[f64; 2]>> = Vec::new();
+    for value in regions {
+        let ri = index.resolve(fi, value)?.context(FACE_REGIONS)?;
+        ensure!(listed.insert(ri), FACE_REGIONS);
+        let region = &g.objects[ri];
+        ensure!(
+            region.class_name == "Face"
+                && region.fields["m_faceRegions"]
+                    .as_array()
+                    .is_some_and(Vec::is_empty),
+            FACE_REGIONS
+        );
+        let si = index
+            .resolve(ri, &region.fields["m_pSurf"])?
+            .context(FACE_REGIONS)?;
+        ensure!(g.objects[si].class_name == "Plane", FACE_REGIONS);
+        ensure!(
+            basis(si)?
+                .iter()
+                .flatten()
+                .zip(parent_basis.iter().flatten())
+                .all(|(a, b)| (a - b).abs() <= 1e-9),
+            FACE_REGIONS
+        );
+        outlines.push(single_ring(ri)?);
+    }
+    let rings: Vec<&[[f64; 2]]> = outlines.iter().map(Vec::as_slice).collect();
+    ensure!(regions_tile(&parent, &rings, 1e-7), FACE_REGIONS);
+    Ok(())
+}
 /// Returns no mesh for a face with no trimming boundary (an auxiliary surface).
 pub fn face(g: &ObjectGraph, fi: usize) -> Result<Option<FaceMesh>> {
     face_indexed(g, &PointerIndex::new(g), fi)
@@ -767,13 +973,9 @@ fn face_indexed(g: &ObjectGraph, index: &PointerIndex<'_>, fi: usize) -> Result<
     let Some(mut li) = index.resolve(fi, &f.fields["m_pFirstLoop"])? else {
         return Ok(None);
     };
-    ensure!(
-        f.fields["m_faceRegions"]
-            .as_array()
-            .context("face regions")?
-            .is_empty(),
-        "face regions need subdivision"
-    );
+    let regions = f.fields["m_faceRegions"]
+        .as_array()
+        .context("face regions")?;
     let pi = index
         .resolve(fi, &f.fields["m_pSurf"])?
         .context("face surface")?;
@@ -793,6 +995,9 @@ fn face_indexed(g: &ObjectGraph, index: &PointerIndex<'_>, fi: usize) -> Result<
         "unsupported surface {}",
         p.class_name
     );
+    if !regions.is_empty() {
+        plane_regions_tile(g, index, fi, pi, regions)?;
+    }
     let origin = point::<3>(&p.fields["m_origin"])?;
     let x = point::<3>(&p.fields["m_xVec"])?;
     let y = point::<3>(&p.fields["m_yVec"])?;
@@ -1665,4 +1870,118 @@ fn transform(p: &mut Primitive, m: [[f64; 4]; 4]) -> Result<()> {
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::regions_tile;
+
+    const TOLERANCE: f64 = 1e-7;
+
+    fn rect(x0: f64, y0: f64, x1: f64, y1: f64) -> Vec<[f64; 2]> {
+        vec![[x0, y0], [x1, y0], [x1, y1], [x0, y1]]
+    }
+
+    fn l_shape() -> Vec<[f64; 2]> {
+        vec![[0., 0.], [2., 0.], [2., 1.], [1., 1.], [1., 2.], [0., 2.]]
+    }
+
+    fn tile(parent: &[[f64; 2]], regions: &[Vec<[f64; 2]>]) -> bool {
+        let rings: Vec<&[[f64; 2]]> = regions.iter().map(Vec::as_slice).collect();
+        regions_tile(parent, &rings, TOLERANCE)
+    }
+
+    // A region listed twice and the other half missing: the areas add up to the
+    // parent's and both lie inside its bounding box, so only the overlap says no.
+    #[test]
+    fn a_region_listed_twice_with_the_other_half_missing_does_not_tile() {
+        let left = rect(0., 0., 1., 1.);
+        assert!(!tile(&rect(0., 0., 2., 1.), &[left.clone(), left]));
+    }
+
+    // 1.2 + 0.8 is the parent's area of 2, but [1.0, 1.2] is covered twice and
+    // [1.8, 2.0] not at all.
+    #[test]
+    fn overlapping_regions_that_leave_a_gap_of_the_same_area_do_not_tile() {
+        let parent = rect(0., 0., 2., 1.);
+        assert!(!tile(
+            &parent,
+            &[rect(0., 0., 1.2, 1.), rect(1., 0., 1.8, 1.)]
+        ));
+    }
+
+    #[test]
+    fn a_gap_between_the_regions_does_not_tile() {
+        let parent = rect(0., 0., 2., 1.);
+        assert!(!tile(
+            &parent,
+            &[rect(0., 0., 1., 1.), rect(1., 0., 1.8, 1.)]
+        ));
+    }
+
+    // The bottom bar (area 2) and a square in the notch (area 1) add up to the
+    // L's area of 3 and lie in its bounding box, but the square is outside it.
+    #[test]
+    fn a_region_in_the_notch_of_an_l_shaped_parent_does_not_tile() {
+        assert!(!tile(
+            &l_shape(),
+            &[rect(0., 0., 2., 1.), rect(1., 1., 2., 2.)]
+        ));
+    }
+
+    #[test]
+    fn a_region_past_the_parents_boundary_by_more_than_the_tolerance_does_not_tile() {
+        let parent = rect(0., 0., 2., 1.);
+        assert!(!tile(
+            &parent,
+            &[rect(0., 0., 1., 1.), rect(1., 0., 2.001, 1.)]
+        ));
+    }
+
+    // A bow-tie's shoelace area is 0 though its triangles cover 0.5: a ring
+    // that crosses itself must not tile, not even as its own region.
+    #[test]
+    fn a_self_crossing_parent_does_not_tile_even_with_itself_as_its_region() {
+        let bow_tie = [[0., 0.], [1., 1.], [1., 0.], [0., 1.]];
+        assert!(!tile(&bow_tie, &[bow_tie.to_vec()]));
+    }
+
+    #[test]
+    fn a_region_over_the_boundary_within_the_tolerance_tiles() {
+        let parent = rect(0., 0., 2., 1.);
+        assert!(tile(
+            &parent,
+            &[rect(0., 0., 1., 1.), rect(1., 0., 2. + 5e-8, 1.)]
+        ));
+    }
+
+    // The faces of r2025-12's windows: a parent and the two strips either side
+    // of a line at v = 0.14583333333340992, edges 1e-15 apart.
+    #[test]
+    fn the_two_strips_of_a_window_face_tile() {
+        let parent = [
+            [-9.123137028441703e-16, 0.],
+            [1.9166666666666732, 0.],
+            [1.9166666666666732, 0.16666666666666102],
+            [-9.123137028441703e-16, 0.16666666666666102],
+        ];
+        let strips = [
+            rect(0., 0., 1.9166666666666723, 0.14583333333340992),
+            rect(
+                -9.123137028441703e-16,
+                0.14583333333340992,
+                1.9166666666666732,
+                0.16666666666666102,
+            ),
+        ];
+        assert!(tile(&parent, &strips));
+    }
+
+    #[test]
+    fn the_two_arms_of_an_l_shaped_parent_tile_it() {
+        assert!(tile(
+            &l_shape(),
+            &[rect(0., 0., 2., 1.), rect(0., 1., 1., 2.)]
+        ));
+    }
 }

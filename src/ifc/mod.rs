@@ -11,6 +11,12 @@
 //! model as deterministic ISO 10303-21 text, and [`gltf`], [`sheet`] and
 //! [`schedule_csv`] write the same model as GLB, plan SVG and CSV.
 //!
+//! To build the model as `rvt-ifc` builds it (the exporter, the project phase,
+//! the bodies drawn from saved graphics, Revit's property sets, the
+//! base-quantity switch and the record of unread streams), call
+//! [`run_export`] with [`ExportOptions`]: `rvt-ifc`, `rvt-gltf`, the Python
+//! package, the viewer and `rvt-rs-mcp` all do.
+//!
 //! What is read on which release and input, category by category, is in
 //! `docs/supported-profile.md`, and every export's diagnostics name what was
 //! approximated or left out ([`RvtDocExporter::export_with_diagnostics`]).
@@ -78,8 +84,11 @@ pub mod camera;
 pub mod category_map;
 pub mod clipping;
 pub mod compare;
+pub mod element_provenance;
 pub mod entities;
 pub mod export_content;
+mod export_pipeline;
+pub mod family_extrusions;
 pub mod from_decoded;
 pub mod gltf;
 pub mod pbr;
@@ -97,6 +106,10 @@ mod wall_cut_openings;
 
 pub use export_content::{
     ELEMENT_RECORD_PROPERTY_SET, ExportContentPolicy, is_misleading_proxy_class,
+};
+pub use export_pipeline::{
+    ExportKind, ExportNote, ExportOptions, ExportRun, SavedMeshChoice, run_export,
+    run_export_with_limits, run_export_with_limits_and_control,
 };
 pub use from_decoded::{BuilderOptions, ElementInput, build_ifc_model};
 pub use step_writer::write_step;
@@ -367,11 +380,13 @@ impl ExportDiagnostics {
     /// [`crate::redact::ANONYMIZED`], the levels' and the material sample's
     /// names `Level 1`, `Material 1` and so on in their order, and each
     /// skipped element's sample name, which can name its family and type,
-    /// `element-<ElementId>`. The warning listing "Export to IFC As" values
+    /// `element-<ElementId>`, and the phase a left-out room sits in. The warning listing "Export to IFC As" values
     /// the export does not apply keeps their count and drops the values,
     /// which the project writes; no other warning carries project text
     /// (counts, releases, type ElementIds, unit identifiers), so none is
-    /// rewritten. Counts, releases, body sources and ElementIds are kept.
+    /// rewritten. Counts, releases, body sources and ElementIds are kept, and
+    /// so is the element provenance: its stream names, offsets and schema class
+    /// names are the file's structure, not its text.
     pub fn anonymize(&mut self) {
         use crate::redact::{ANONYMIZED, anonymize_file_name};
         if let Some(path) = self.input.original_path.as_mut() {
@@ -389,6 +404,9 @@ impl ExportDiagnostics {
             }
         }
         for item in &mut self.skipped {
+            if item.phase.is_some() {
+                item.phase = Some(ANONYMIZED.to_string());
+            }
             for name in &mut item.sample_names {
                 let id = &name[name.trim_end_matches(|c: char| c.is_ascii_digit()).len()..];
                 *name = if id.is_empty() {
@@ -619,6 +637,18 @@ pub struct DecodedExportDiagnostics {
     /// written in the IFC file.
     #[serde(default, skip_serializing_if = "std::collections::BTreeSet::is_empty")]
     pub walls_type_confirmed: std::collections::BTreeSet<u32>,
+    /// Where each decoded element was read from, by ElementId (#1325): its
+    /// carrier, the stream and byte offset in that stream inflated, where its
+    /// ElementId is stored, its class tag and the class that names in the
+    /// file's schema, and its native record. Present only when asked for
+    /// (`rvt-ifc --element-provenance`,
+    /// [`ExportOptions::with_element_provenance`]): the table is about 116
+    /// times the rest of the diagnostics on the BIM4LCA office, so without the
+    /// option the field is absent and the diagnostics are the bytes they were
+    /// before it existed. Not written in the IFC file; see
+    /// [`element_provenance`].
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub element_provenance: Option<element_provenance::ElementProvenanceTable>,
 }
 
 fn default_min_element_confidence_serde() -> f32 {
@@ -715,6 +745,11 @@ pub struct SkippedExportItem {
     pub count: usize,
     pub classes: std::collections::BTreeMap<String, usize>,
     pub sample_names: Vec<String>,
+    /// The phase the left-out elements sit in, for `room_not_in_export_phase`
+    /// (RE-326): the phase's name, or `ElementId <n>` where the file names
+    /// none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub phase: Option<String>,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -2922,7 +2957,12 @@ fn record_base_elevation_feet(entity: &entities::IfcEntity) -> Option<f64> {
     // the two plan ends of the run, and on the recorded edge no
     // column cut moves the box's `z` at either end — all 256 agree
     // with Revit's own world `z` exactly — so the elevation this
-    // reads is the same byte in every case.
+    // reads is the same byte in every case. So is a beam drawn as its record
+    // box along its line (RE-328): it is still placed at the record box's
+    // plan centre and base, so `location_feet` is that base exactly as for
+    // the record box it replaces. It is listed so that these beams bind by
+    // their base as they did before that body; leaving it out would change
+    // a written value (their storey binding), listing it changes none.
     let from_record = property_set.as_ref().is_some_and(|set| {
         set.properties.iter().any(|property| {
             property.name == "BodySource"
@@ -2930,6 +2970,7 @@ fn record_base_elevation_feet(entity: &entities::IfcEntity) -> Option<f64> {
                     &property.value,
                     entities::PropertyValue::Text(text)
                         if text == RECORD_BBOX_BODY_SOURCE
+                            || text == export_content::BEAM_BOX_BODY_SOURCE
                             || text == crate::element_record_wall_joins::WALL_BODY_JOIN_TRIMMED
                             || text == crate::element_record_column_cuts::COLUMN_BODY_JOIN_CUT
                             || text == crate::element_record_beam_cuts::BEAM_BODY_COLUMN_CUT
@@ -3737,6 +3778,7 @@ pub fn build_export_diagnostics_with_limits(
     let mut skipped = Vec::new();
     if walker_stats.elements_below_min_confidence > 0 {
         skipped.push(SkippedExportItem {
+            phase: None,
             reason: "below_min_element_confidence".into(),
             count: walker_stats.elements_below_min_confidence,
             classes: std::collections::BTreeMap::new(),
@@ -3745,6 +3787,7 @@ pub fn build_export_diagnostics_with_limits(
     }
     if mode == ExportDiagnosticsMode::Default && !diagnostic_candidates.candidates.is_empty() {
         skipped.push(SkippedExportItem {
+            phase: None,
             reason: "low_confidence_schema_scan_candidate".into(),
             count: diagnostic_candidates.candidates.len(),
             classes: candidate_class_counts.clone(),
@@ -3770,6 +3813,7 @@ pub fn build_export_diagnostics_with_limits(
     let unattributed_total: usize = unattributed_frames.values().sum();
     if unattributed_total > 0 {
         skipped.push(SkippedExportItem {
+            phase: None,
             reason: "element_record_without_element_id".into(),
             count: unattributed_total,
             classes: unattributed_frames,
@@ -3787,6 +3831,7 @@ pub fn build_export_diagnostics_with_limits(
     let volumeless_total: usize = volumeless.values().sum();
     if volumeless_total > 0 {
         skipped.push(SkippedExportItem {
+            phase: None,
             reason: "element_record_without_volume".into(),
             count: volumeless_total,
             classes: volumeless,
@@ -3803,6 +3848,7 @@ pub fn build_export_diagnostics_with_limits(
     let non_primary_total: usize = non_primary.values().sum();
     if non_primary_total > 0 {
         skipped.push(SkippedExportItem {
+            phase: None,
             reason: "element_record_in_non_primary_design_option".into(),
             count: non_primary_total,
             classes: non_primary,
@@ -3810,18 +3856,33 @@ pub fn build_export_diagnostics_with_limits(
         });
     }
     // #328: elements that do not exist in the export phase (the project's
-    // last) are left out as Revit's own export leaves them out (RE-184).
+    // last, or the one `--phase` names) are left out as Revit's own export
+    // leaves them out (RE-184). A room is left out by its own phase, and
+    // counted by the phase it sits in (RE-326).
     let phase_excluded = layout
         .and_then(|version| crate::native_phases::scan_phase_excluded_instances(rf, version).ok())
         .unwrap_or_default();
-    let phase_excluded_total: usize = phase_excluded.values().sum();
+    let phase_excluded_total: usize = phase_excluded.by_class.values().sum();
     if phase_excluded_total > 0 {
         skipped.push(SkippedExportItem {
+            phase: None,
             reason: "element_record_not_in_export_phase".into(),
             count: phase_excluded_total,
-            classes: phase_excluded,
+            classes: phase_excluded.by_class,
             sample_names: Vec::new(),
         });
+    }
+    if !phase_excluded.rooms_by_phase.is_empty() {
+        let phases = rf.memoised_phase_filter();
+        for (phase, count) in &phase_excluded.rooms_by_phase {
+            skipped.push(SkippedExportItem {
+                phase: Some(phases.phase_label(*phase)),
+                reason: "room_not_in_export_phase".into(),
+                count: *count,
+                classes: std::collections::BTreeMap::from([("Room".to_string(), *count)]),
+                sample_names: Vec::new(),
+            });
+        }
     }
     // #309: empty curtain panels are left out as Revit's own export leaves
     // them out, recognised by their family's name. A type of theirs with a
@@ -3833,12 +3894,28 @@ pub fn build_export_diagnostics_with_limits(
         .unwrap_or_default();
     if empty_panels.count > 0 {
         skipped.push(SkippedExportItem {
+            phase: None,
             reason: "element_record_empty_curtain_panel".into(),
             count: empty_panels.count,
             classes: std::collections::BTreeMap::from([(
                 "CurtainWallPanel".to_string(),
                 empty_panels.count,
             )]),
+            sample_names: Vec::new(),
+        });
+    }
+    // RE-324: on Revit 2015 to 2023 an Area is written only where its region
+    // and body are proven. The others are not written, and not claimed to be
+    // left out by Revit's export: its exporter drops an Area with no
+    // enclosed boundary and rvt-rs does not read whether one encloses an area.
+    let unwritten_areas = rf.unwritten_areas().clone();
+    let unwritten_area_total: usize = unwritten_areas.values().sum();
+    if unwritten_area_total > 0 {
+        skipped.push(SkippedExportItem {
+            phase: None,
+            reason: "area_without_proven_body".into(),
+            count: unwritten_area_total,
+            classes: unwritten_areas,
             sample_names: Vec::new(),
         });
     }
@@ -3870,6 +3947,7 @@ pub fn build_export_diagnostics_with_limits(
     let bodiless_spaces: usize = rf.bodiless_family_spaces().values().sum();
     if bodiless_spaces > 0 {
         skipped.push(SkippedExportItem {
+            phase: None,
             reason: "element_record_family_space_without_body".into(),
             count: bodiless_spaces,
             classes: rf.bodiless_family_spaces().clone(),
@@ -4171,6 +4249,7 @@ pub fn build_export_diagnostics_with_limits(
             unknown_unit_identifiers: recovered_units.unknown_identifiers,
             wall_curve_lengths_feet: walker_stats.wall_curve_lengths_feet,
             walls_type_confirmed: walker_stats.walls_type_confirmed,
+            element_provenance: None,
         },
         source_coverage: {
             let coverage = SourceCoverageDiagnostics::measure(
@@ -4222,6 +4301,7 @@ pub fn record_unread_streams(
             *streams.entry(stream.name.clone()).or_insert(0) += 1;
         }
         diagnostics.skipped.push(SkippedExportItem {
+            phase: None,
             reason: UNREAD_STREAMS_REASON.into(),
             count: streams.len(),
             classes: streams,
@@ -4338,7 +4418,12 @@ fn exported_model_diagnostics(model: &IfcModel) -> ExportedModelDiagnostics {
             }
             if let Some(source) = source {
                 *body_sources.entry(source.clone()).or_insert(0) += 1;
-                if source == export_content::RECORD_BBOX_BODY_SOURCE && !profile_resolved {
+                // A beam drawn as its record box along its line (RE-328) is
+                // still the record box's extents, only turned to the line.
+                if (source == export_content::RECORD_BBOX_BODY_SOURCE
+                    || source == export_content::BEAM_BOX_BODY_SOURCE)
+                    && !profile_resolved
+                {
                     bounding_box_bodies += 1;
                 }
             }
@@ -4442,6 +4527,7 @@ impl GeometryGapBucket {
 
     fn into_item(self) -> Option<SkippedExportItem> {
         (self.count > 0).then(|| SkippedExportItem {
+            phase: None,
             reason: self.reason.into(),
             count: self.count,
             classes: self.classes,

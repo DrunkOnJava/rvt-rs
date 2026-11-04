@@ -18,17 +18,31 @@ on:
       - ".gitignore"
       - ".github/ISSUE_TEMPLATE/**"
       - "CITATION.cff"
-  pull_request:
-    branches: [main]
+  # Pull requests run this through ci-pr.yml: in full once ready, as
+  # `full / <job>` (the required check is `full / CI passed`), and only the
+  # fast jobs while a draft, as `fast / <job>`. A draft's head therefore
+  # never carries a check named `full / CI passed`, green, skipped or red
+  # (#1237).
+  workflow_call:
+    inputs:
+      fast:
+        description: Run only fmt, clippy, cargo doc, the PII guard, the env lint, Corpus health and the Ubuntu builds with their real-file checks.
+        type: boolean
+        default: false
 
 # Supersede a pull request's in-flight run when a new push arrives, so
 # back-to-back pushes do not burn runner-minutes on stale matrices. A run
 # on main is never cancelled: two merges in a row used to cancel the first
 # one's run, and that commit never got a full result. The group key is per
-# ref, so a pull request and main never cancel each other.
+# ref and per kind (a pull request's fast and full runs, called from
+# ci-pr.yml, share the caller's ref, and a called workflow's group lives in
+# the caller's namespace), so a pull request and main never cancel each
+# other, and neither do a draft's fast run and its full run once ready. Only
+# a new push cancels: marking a draft ready, or converting it back, on the
+# same commit waits for the run in flight (#1237).
 concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  group: ci-${{ github.ref }}-${{ inputs.fast && 'fast' || 'full' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' && github.event.action == 'synchronize' }}
 
 # Least-privilege at the workflow level. No CI job here modifies the
 # repo, opens issues, comments on PRs, or otherwise needs write
@@ -102,6 +116,15 @@ jobs:
       # The pyo3 bindings and the stream-evidence harness are workspace
       # members the lines above do not lint.
       - run: cargo clippy -p rvt-py -p stream-evidence --all-targets --no-deps -- -D warnings
+      # The MCP server (rvt-mcp/, `rvt-rs-mcp`) is a crate of its own with its
+      # own `rust-version`, so the lines above do not reach it. Its end-to-end
+      # test is a target of it and is linted here too.
+      - run: cargo clippy -p rvt-rs-mcp --all-targets --no-deps -- -D warnings
+      # Zero upload: the server is stdio only, so its dependency tree must
+      # carry no HTTP client or server (it is also checked on every run of
+      # the end-to-end test, which asserts the server holds no network socket).
+      - name: The MCP server's dependency tree carries no HTTP client or server
+        run: tools/ci/audit-mcp-network.sh
       # The RE probes are their own crate (probes/), so the `rvt` builds above
       # and in the test matrix no longer compile them; this is where they are
       # checked. `--no-deps`: `rvt` is linted with every feature above.
@@ -120,21 +143,11 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
+      # The fast set (a draft) builds on Ubuntu only, stable and MSRV; the
+      # full set on every OS. The MSRV entry's "1.87" is `rust-version` in
+      # Cargo.toml; both lists name it.
       matrix:
-        include:
-          - os: ubuntu-24.04
-            rust: stable
-            with_corpus: true
-          - os: windows-latest
-            rust: stable
-            with_corpus: true
-          - os: macos-latest
-            rust: stable
-            with_corpus: false
-          - os: ubuntu-24.04
-            rust: "1.87"  # MSRV, `rust-version` in Cargo.toml
-            label: msrv
-            with_corpus: false
+        include: ${{ fromJSON(inputs.fast == true && '[{"os":"ubuntu-24.04","rust":"stable","with_corpus":true},{"os":"ubuntu-24.04","rust":"1.87","label":"msrv","with_corpus":false}]' || '[{"os":"ubuntu-24.04","rust":"stable","with_corpus":true},{"os":"windows-latest","rust":"stable","with_corpus":true},{"os":"macos-latest","rust":"stable","with_corpus":false},{"os":"ubuntu-24.04","rust":"1.87","label":"msrv","with_corpus":false}]') }}
     steps:
       # Windows' git default `core.autocrlf=true` mangles binary files
       # that aren't explicitly marked `binary` in `.gitattributes`.
@@ -229,6 +242,15 @@ jobs:
       - name: Check every target on the MSRV
         if: matrix.label == 'msrv'
         run: cargo check --profile ci --all-targets
+      # The MCP server declares rust-version 1.88 (rmcp's minimum), one above
+      # the workspace's, so it is checked on 1.88 as well; the step above
+      # keeps the root crate on its own MSRV.
+      - name: Check the MCP server on its own minimum Rust (1.88)
+        if: matrix.label == 'msrv'
+        shell: bash
+        run: |
+          rustup toolchain install 1.88 --profile minimal --no-self-update
+          cargo +1.88 check --profile ci -p rvt-rs-mcp --all-targets --locked
       # The API examples docs.rs shows, run against the committed synthetic
       # fixture (corpus/tier1/), so a documented call cannot drift from the
       # code (1.0 criteria S3, #872). Linux only: the examples do not depend
@@ -236,6 +258,14 @@ jobs:
       - name: Run the API documentation's examples
         if: runner.os == 'Linux' && matrix.label != 'msrv'
         run: cargo test --profile ci --doc
+      # The unit tests of pure helpers (CONTRIBUTING.md, "Tests"): functions
+      # with no file, network, process or clock I/O, tested on the ways they
+      # can fail, beside the end-to-end checks and never in place of them. The
+      # self dev-dependency turns on `unstable-research` for them. Linux only,
+      # as the doc tests are.
+      - name: Run the pure helpers' unit tests
+        if: runner.os == 'Linux' && matrix.label != 'msrv'
+        run: cargo test --profile ci --lib
       # Real-file, end-to-end CLI and contract checks only; the manifest
       # names every tests/*.rs target and the script fails on one it does
       # not classify, so a new target cannot run or skip unnoticed (#206).
@@ -254,6 +284,28 @@ jobs:
           RVT_SAMPLES_DIR: ${{ matrix.with_corpus && format('{0}/_corpus/examples/Autodesk', github.workspace) || '' }}
           RVT_REQUIRE_CORPUS: ${{ matrix.with_corpus && '1' || '' }}
         run: tools/ci/verify-real-files.sh --profile ci --no-fail-fast
+      # The MCP server (rvt-mcp/, `rvt-rs-mcp`) is a crate of its own, so the
+      # manifest above does not run its test: this does. The end-to-end test
+      # starts the built server, drives it over real stdio in both MCP
+      # lifecycles on the committed synthetic fixture, and compares its
+      # exports byte for byte with rvt-ifc and rvt-gltf, which the Build step
+      # put beside it (RVT_REQUIRE_CLI_PARITY makes their absence a failure).
+      # Corpus health runs it again on Einhoven.
+      - name: MCP server end to end
+        if: matrix.label != 'msrv'
+        shell: bash
+        env:
+          RVT_REQUIRE_CLI_PARITY: "1"
+        run: cargo test --profile ci -p rvt-rs-mcp --no-fail-fast
+      # When the tool contract differs from the built server's, the server's
+      # tools/list (the new docs/mcp-tools.json) is here to commit.
+      - name: Upload the server's tool contract
+        if: ${{ failure() && matrix.os == 'ubuntu-24.04' && matrix.label != 'msrv' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: mcp-tools
+          path: target/tmp/mcp-tools.json
+          if-no-files-found: ignore
       # The synthetic IFC pair the integration tests write
       # (tests/common, write_synthetic_output): each release pull request
       # refreshes the viewer's download copies in tests/fixtures/ from it.
@@ -289,6 +341,7 @@ jobs:
   # wrap panics there instead of passing.
   i686-overflow:
     name: 32-bit overflow checks (i686)
+    if: inputs.fast != true
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     env:
@@ -443,6 +496,35 @@ jobs:
           RVT_CORPUS_TIER1_DIR: ${{ github.workspace }}/corpus/tier1
           RVT_CORPUS_TIER2_LIMIT: "8"
         run: tools/ci/verify-real-files.sh --profile ci --no-fail-fast
+      # #1325: tests/element_provenance_offsets.rs re-reads every offset the
+      # export reports for an element. A passing nextest test prints nothing,
+      # so its report, per model and carrier (elements with and without an
+      # offset, offsets re-read and confirmed), is printed and kept here.
+      - name: Print the element provenance report
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: cat target/tmp/element-provenance/summary.txt || echo "no element provenance report was written"
+      - name: Upload the element provenance report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: element-provenance
+          path: target/tmp/element-provenance/
+          if-no-files-found: ignore
+          retention-days: 14
+      # The MCP server's end-to-end test on Einhoven: elements, GlobalIds
+      # looked up and found in the exported IFC, the exports against rvt-ifc's.
+      - name: MCP server end to end on Einhoven
+        shell: bash
+        env:
+          RVT_PROJECT_CORPUS_DIR: ${{ github.workspace }}/_project_corpus/Revit
+          RVT_REQUIRE_CLI_PARITY: "1"
+        # The test compares the server's exports with rvt-ifc's and
+        # rvt-gltf's, which it finds beside the server in target/ci: built
+        # here, not left to a step that may not have run.
+        run: |
+          cargo build --profile ci --bin rvt-ifc --bin rvt-gltf
+          cargo test --profile ci -p rvt-rs-mcp --no-fail-fast
 
   writer-patch-corpus:
     # M9-01: stream-level writer coverage for real family + project
@@ -450,6 +532,7 @@ jobs:
     # from silently regressing while semantic editing remains out of
     # scope.
     name: Writer patch corpus
+    if: inputs.fast != true
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -521,6 +604,7 @@ jobs:
     # exports are small (24 instances each); the real projects carry most of
     # what this job validates.
     name: IfcOpenShell validates exports
+    if: inputs.fast != true
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -825,11 +909,13 @@ jobs:
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - run: cargo doc --no-deps --lib
-      # The published crate carries only what Cargo.toml's `include` lists.
-      # Build it as crates.io will, so a file the source embeds and the list
-      # misses fails here rather than at release (publish.yml).
+      # The published crates carry only what each Cargo.toml's `include`
+      # lists. Build them as crates.io will, so a file the source embeds and
+      # the list misses fails here rather than at release (publish.yml).
+      # Packaged together, `rvt-rs-mcp` is verified against the packaged
+      # `rvt` its `=X.Y.Z` names, before either is on crates.io.
       - name: crate package
-        run: cargo package -p rvt --locked
+        run: cargo package -p rvt -p rvt-rs-mcp --locked
 
   # S2 (#873): a pull request that breaks the stable Rust API says so.
   # tools/ci/semver-gate.sh compares the crate's public API (default
@@ -842,7 +928,7 @@ jobs:
   # 2025-11-22, so its nightly is pinned near its release.
   semver:
     name: semver checks
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' && inputs.fast != true
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -895,6 +981,7 @@ jobs:
   # high-value, low-noise version we can enforce on every push.
   bench-build:
     name: cargo bench --no-run
+    if: inputs.fast != true
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -931,6 +1018,7 @@ jobs:
   # properly on docs.rs before the release cut.
   docs-rs-preview:
     name: docs.rs build preview
+    if: inputs.fast != true
     runs-on: ubuntu-24.04
     env:
       # Same flags docs.rs passes, plus -D warnings so this job fails
@@ -969,6 +1057,7 @@ jobs:
   # after merge, twice (#236 -> #259, #934 -> #965).
   fuzz-check:
     name: fuzz targets build
+    if: inputs.fast != true
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -989,6 +1078,7 @@ jobs:
 
   python-wheel:
     name: Python wheel / ${{ matrix.os }}
+    if: inputs.fast != true
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -1078,6 +1168,28 @@ jobs:
           python3 tools/ci/wheel-smoke.py corpus/tier1/architectural-2024/architectural-2024.rvt
           family="_corpus/examples/Autodesk/racbasicsamplefamily-2024.rfa"
           if [ -f "$family" ]; then python3 tools/ci/wheel-smoke.py "$family"; fi
+      # #1339: the export phase through the Python API, on RE1 Architecture
+      # (tests/python/test_export_phase.py), pinned by commit and hash as the
+      # other jobs that fetch it do. The bytes come from the media host, which
+      # serves a Git LFS object's content (and a plain blob's, where the file
+      # is not in LFS), with the raw host as the fallback; either must hash to
+      # the pinned sha256. They are not cached by the Actions cache.
+      - name: Fetch RE1 Architecture (Drshelden/IFC-ECS, MIT)
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          commit=9e8b37175a0fba1397f7011aeee917fe52de7623
+          sum=4a78bdd68e7f4dd7806060db07c222da9a810e20b3f303c17a443294b91c8ce4
+          name=RE1-Architecture.rvt
+          out="${GITHUB_WORKSPACE}/_project_corpus/Revit/${name}"
+          mkdir -p "$(dirname "${out}")"
+          for host in media.githubusercontent.com/media raw.githubusercontent.com; do
+            curl -sSfL --retry 5 --retry-all-errors -o "${out}" "https://${host}/Drshelden/IFC-ECS/${commit}/data/RE1/${name}" || continue
+            if echo "${sum}  ${out}" | sha256sum -c - ; then exit 0; fi
+          done
+          echo "::error::${name} did not hash to ${sum} from either host"
+          exit 1
       - name: Python API integration tests on Revit files
         shell: bash
         run: |
@@ -1085,6 +1197,9 @@ jobs:
           python3 -m pip install --require-hashes -r tools/ci/requirements-test.txt
           if [ -d _corpus/examples/Autodesk ]; then
             export RVT_SAMPLES_DIR="$PWD/_corpus/examples/Autodesk"
+          fi
+          if [ -f _project_corpus/Revit/RE1-Architecture.rvt ]; then
+            export RVT_PROJECT_CORPUS_DIR="$PWD/_project_corpus/Revit"
           fi
           python3 -m pytest tests/python -q -rs
       # S2 (#873): the type stubs are the Python API's listing, and
@@ -1109,6 +1224,7 @@ jobs:
   # project grows.
   deny:
     name: cargo deny
+    if: inputs.fast != true
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -1138,6 +1254,7 @@ jobs:
   # fresh advisories the moment they land.
   audit:
     name: cargo audit
+    if: inputs.fast != true
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -1160,6 +1277,7 @@ jobs:
 
   viewer-dependencies:
     name: viewer dependency audit
+    if: inputs.fast != true
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -1272,6 +1390,12 @@ jobs:
       # lost or misplaced when a release assembles them.
       - name: Changelog fragments are in a section and start an item
         run: python3 tools/release/changelog.py check
+      # docs/mcp-tools.md is rendered from docs/mcp-tools.json, which the MCP
+      # server's end-to-end test holds to what the built server reports for
+      # tools/list (so a change to a tool fails there until both are
+      # regenerated).
+      - name: The MCP tool contract's Markdown is rendered from its JSON
+        run: python3 tools/ci/render-mcp-tools.py --check
       # The crate root tells docs.rs readers that every `RE-NN` is a report
       # under reports/, and that RE and issue numbers are the only tracker
       # ids the docs use; this keeps both true for the Rust and Python API
@@ -1339,7 +1463,8 @@ jobs:
           print(".cursor/environment.json validates against the Cursor environment schema")
           PY
 
-  # The one check the main-protection ruleset requires (C1). It passes only
+  # The one check the main-protection ruleset requires (C1), as `full / CI
+  # passed` when ci-pr.yml calls this for a ready pull request. It passes only
   # when every job above passed or was skipped, so a pull request cannot
   # merge while Corpus health, the writer corpus or IfcOpenShell is still
   # running or has failed, and renaming a job never touches the ruleset.

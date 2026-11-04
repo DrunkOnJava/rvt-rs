@@ -273,17 +273,14 @@ pub(super) fn attach_native_tee_reaches(
     }
 }
 
-/// Give each wall with a centreline the wall it butt-joins at each end and
-/// whether it runs through there, where its and its partner's join lists
-/// decide it, and, between single-layer walls, how far past the end its
-/// body reaches ([`crate::element_record_wall_joins::butt_joins`], RE-70).
-pub(super) fn attach_wall_butt_joins(
-    rf: &mut RevitFile,
-    revit_version: u32,
-    walls: &mut [DecodedElement],
+/// Each wall with a centreline, with its type's layers, its exterior side and
+/// its elevation range, which [`crate::element_record_wall_joins::butt_joins`]
+/// and [`crate::element_record_wall_joins::corner_joins`] read.
+fn wall_lines(
+    walls: &[DecodedElement],
     type_layers: &BTreeMap<u32, Vec<crate::partition_compound_structure::CompoundLayer>>,
     native: &BTreeMap<u64, crate::native_walls::NativeWall>,
-) {
+) -> Vec<crate::element_record_wall_joins::WallLine> {
     use crate::element_record_wall_joins as joins;
     let float = |wall: &DecodedElement, wanted: &str| {
         wall.fields.iter().find_map(|(name, value)| match value {
@@ -291,7 +288,7 @@ pub(super) fn attach_wall_butt_joins(
             _ => None,
         })
     };
-    let lines: Vec<joins::WallLine> = walls
+    walls
         .iter()
         .filter_map(|wall| {
             let axis = wall_axis_from_fields(&wall.fields)?;
@@ -323,7 +320,158 @@ pub(super) fn attach_wall_butt_joins(
                     .and_then(|native| native.shells),
             })
         })
+        .collect()
+}
+
+/// Where three or more walls meet end to end at a butt join, the end of each
+/// wall the record's join order decides
+/// ([`crate::element_record_wall_joins::corner_joins`], RE-322): how far past
+/// its line's end the body reaches, every layer alike, in place of the reach a
+/// join list or a T joint gave that end. It names the wall it stops at or runs
+/// through only where one perpendicular wall alone decides it; at a corner
+/// where several do, or where it meets a wall that continues it flush, there
+/// is no one partner and none is named. Two single-layer walls that meet at a
+/// mitre get the slanted end it makes, along their exterior-side and
+/// interior-side edges, and no partner.
+pub(super) fn attach_wall_corner_reaches(
+    walls: &mut [DecodedElement],
+    type_layers: &BTreeMap<u32, Vec<crate::partition_compound_structure::CompoundLayer>>,
+    native: &BTreeMap<u64, crate::native_walls::NativeWall>,
+) {
+    use crate::element_record_wall_joins as joins;
+    let lines = wall_lines(walls, type_layers, native);
+    if lines.len() < 3 {
+        return;
+    }
+    let near = |a: [f64; 2], b: [f64; 2]| {
+        (a[0] - b[0]).hypot(a[1] - b[1]) <= NATIVE_WALL_LINE_TOLERANCE_FEET
+    };
+    // The record's joins are indexed by the end of its own curve, the
+    // reaches by the end of the wall's axis: which of the two orders each
+    // wall's ends are in. A wall whose curve is not its axis, either way
+    // round, is left out, and so is any corner it is a member of.
+    let reversed: BTreeMap<u32, bool> = lines
+        .iter()
+        .filter_map(|line| {
+            let curve = native.get(&u64::from(line.element_id))?;
+            if near(curve.start, line.start) && near(curve.end, line.end) {
+                Some((line.element_id, false))
+            } else if near(curve.start, line.end) && near(curve.end, line.start) {
+                Some((line.element_id, true))
+            } else {
+                None
+            }
+        })
         .collect();
+    let by_axis_end = |id: u32, end: u32| -> Option<u32> {
+        if end > 1 {
+            return Some(end);
+        }
+        Some(if *reversed.get(&id)? { 1 - end } else { end })
+    };
+    let narrow = |join: &Option<Vec<(u64, u32)>>| -> Option<Vec<(u32, u32)>> {
+        join.as_ref()?
+            .iter()
+            .map(|&(id, end)| {
+                let id = u32::try_from(id).ok()?;
+                Some((id, by_axis_end(id, end)?))
+            })
+            .collect()
+    };
+    let ends: BTreeMap<u32, joins::NativeEnds> = native
+        .iter()
+        .filter_map(|(&id, wall)| {
+            let id = u32::try_from(id).ok()?;
+            let flipped = *reversed.get(&id)?;
+            let (first, second) = if flipped { (1, 0) } else { (0, 1) };
+            Some((
+                id,
+                joins::NativeEnds {
+                    members: [narrow(&wall.joins[first]), narrow(&wall.joins[second])],
+                    join_types: [wall.join_types[first], wall.join_types[second]],
+                    other_cutters: wall
+                        .partners
+                        .iter()
+                        .any(|other| !native.contains_key(other)),
+                },
+            ))
+        })
+        .collect();
+    let found = joins::corner_joins(&lines, &ends);
+    let layer_counts: BTreeMap<u32, usize> = lines
+        .iter()
+        .map(|line| (line.element_id, line.layers.len()))
+        .collect();
+    for wall in walls.iter_mut() {
+        let Some((id, reaches)) = wall.id.and_then(|id| Some((id, found.get(&id)?))) else {
+            continue;
+        };
+        for (slot, cut) in reaches.iter().enumerate() {
+            let Some(cut) = *cut else {
+                continue;
+            };
+            let replaced = [
+                WALL_JOIN_PARTNER_FIELDS[slot],
+                WALL_JOIN_THROUGH_FIELDS[slot],
+                WALL_JOIN_REACH_FIELDS[slot],
+                WALL_JOIN_LAYER_REACH_FIELDS[slot],
+                WALL_JOIN_LAYER_EDGE_REACH_FIELDS[slot],
+            ];
+            wall.fields
+                .retain(|(name, _)| !replaced.contains(&name.as_str()));
+            let float = |value: f64| InstanceField::Float { value, size: 8 };
+            match cut {
+                joins::CornerEnd::Reach {
+                    reach_feet: reach,
+                    partner,
+                } => {
+                    if let Some((partner, through)) = partner {
+                        wall.fields.push((
+                            WALL_JOIN_PARTNER_FIELDS[slot].into(),
+                            InstanceField::ElementId {
+                                tag: 0,
+                                id: partner,
+                            },
+                        ));
+                        wall.fields.push((
+                            WALL_JOIN_THROUGH_FIELDS[slot].into(),
+                            InstanceField::Bool(through),
+                        ));
+                    }
+                    wall.fields
+                        .push((WALL_JOIN_REACH_FIELDS[slot].into(), float(reach)));
+                    let layers = layer_counts.get(&id).copied().unwrap_or(1);
+                    if layers > 1 {
+                        wall.fields.push((
+                            WALL_JOIN_LAYER_REACH_FIELDS[slot].into(),
+                            InstanceField::Vector(vec![float(reach); layers]),
+                        ));
+                    }
+                }
+                joins::CornerEnd::Mitre(edges) => {
+                    wall.fields.push((
+                        WALL_JOIN_LAYER_EDGE_REACH_FIELDS[slot].into(),
+                        InstanceField::Vector(edges.into_iter().map(float).collect()),
+                    ));
+                }
+            }
+        }
+    }
+}
+
+/// Give each wall with a centreline the wall it butt-joins at each end and
+/// whether it runs through there, where its and its partner's join lists
+/// decide it, and, between single-layer walls, how far past the end its
+/// body reaches ([`crate::element_record_wall_joins::butt_joins`], RE-70).
+pub(super) fn attach_wall_butt_joins(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    walls: &mut [DecodedElement],
+    type_layers: &BTreeMap<u32, Vec<crate::partition_compound_structure::CompoundLayer>>,
+    native: &BTreeMap<u64, crate::native_walls::NativeWall>,
+) {
+    use crate::element_record_wall_joins as joins;
+    let lines = wall_lines(walls, type_layers, native);
     if lines.len() < 2 {
         return;
     }

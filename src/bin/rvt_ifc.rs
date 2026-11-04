@@ -10,8 +10,8 @@ use clap::{Parser, ValueEnum};
 use rvt::{
     RevitFile,
     ifc::{
-        DiagnosticRvtDocExporter, ExportDiagnostics, ExportQualityMode, PlaceholderExporter,
-        RvtDocExporter,
+        ExportDiagnostics, ExportKind, ExportOptions, ExportQualityMode, SavedMeshChoice,
+        run_export_with_limits,
         step_writer::{StepOptions, write_step_to, write_step_with_options},
     },
     walker::WalkerLimits,
@@ -46,7 +46,9 @@ impl From<CliExportQualityMode> for ExportQualityMode {
         rvt-ifc model.rvt                     writes model.ifc next to the input\n  \
         rvt-ifc model.rvt -o out.ifc --diagnostics out.diagnostics.json\n  \
         rvt-ifc model.rvt --diagnostics out.diagnostics.json --anonymize   to post publicly\n  \
-        rvt-ifc model.rvt --mode geometry\n\n\
+        rvt-ifc model.rvt --diagnostics out.diagnostics.json --element-provenance   list where each element was read from\n  \
+        rvt-ifc model.rvt --mode geometry\n  \
+        rvt-ifc model.rvt --phase \"Working Drawings\"   export that phase, not the last\n\n\
         SOURCE_DATE_EPOCH (Unix seconds) sets the time the IFC header and owner\n\
         history record, so two exports of the same file are the same bytes.\n\n\
         Exit status 3: a resource limit kept part of the file from being read, so\n\
@@ -90,6 +92,17 @@ struct Args {
     /// mesh Revit saved for them.
     #[arg(long, conflicts_with = "placeholder")]
     no_saved_meshes: bool,
+    /// Draw a family instance from its family's own extrusions (the sketch
+    /// lines they were drawn from, swept between their offsets) instead of
+    /// its saved mesh, where they reproduce the mesh; every other instance
+    /// keeps it (#156). An arc in a profile is written as the arc, but an
+    /// instance with an arc over 0.12 ft in radius keeps its mesh, since
+    /// Revit's two exporters write a circle in two forms that IfcOpenShell cuts
+    /// differently (#1346, #1355). Off by default. Implies `--saved-meshes`.
+    /// Each instance is checked against its own mesh. Revit 2024 to 2027 files
+    /// (measured on 2024 and 2025). Slower on large files.
+    #[arg(long, conflicts_with_all = ["placeholder", "no_saved_meshes"])]
+    family_extrusions: bool,
     /// Also write Revit's own property sets, as Revit's exporter does with
     /// "Export Revit property sets": each element's named parameters in one
     /// set per parameter group, and its type's on its type object (RE-210).
@@ -125,6 +138,15 @@ struct Args {
     /// be posted publicly.
     #[arg(long, requires = "diagnostics")]
     anonymize: bool,
+    /// Also list, in the diagnostics sidecar, where each decoded element was
+    /// read from (#1325): the kind of record, its stream and byte offset in
+    /// the inflated stream (what rvt-dump writes as Partitions_NN.decomp),
+    /// where its ElementId is stored, its class and its native record. Off by
+    /// default: the list is about 140 times the rest of the pretty-printed
+    /// sidecar on a large model (7.4 MB against 53 KB on the BIM4LCA office
+    /// as built). Never written into the IFC.
+    #[arg(long, requires = "diagnostics", conflicts_with = "placeholder")]
+    element_provenance: bool,
     /// Witness mode: write an OctetProof observation of this input.
     ///
     /// The observation (docs/octetproof-spec.md §6.2) records the
@@ -165,6 +187,14 @@ struct Args {
     /// on a 32-bit build).
     #[arg(long, value_name = "BYTES")]
     max_inflate_bytes: Option<usize>,
+    /// Export this phase, by its name (exactly) or its ElementId, instead of
+    /// the project's last. A name is matched first and an ElementId only
+    /// when no phase has that name, so a name made of digits wins. Revit's
+    /// export shows one phase: an element that does not exist in it, and a
+    /// room whose own phase is not it, are left out. An unknown phase is an
+    /// error that lists the file's phases (RE-326).
+    #[arg(long, value_name = "NAME|ID", conflicts_with = "placeholder")]
+    phase: Option<String>,
     /// Raise the stream, inflate and walker-scan limits for large models:
     /// streams up to 2 GiB, 8 GiB inflated. A model whose largest partition
     /// is 1 GiB stored needs several GB of memory.
@@ -215,83 +245,15 @@ fn run(args: Args) -> anyhow::Result<()> {
         ),
     )?;
     let quality_mode = ExportQualityMode::from(args.mode);
-    let walker_limits = walker_limits_from_args(&args);
-
-    let result = if args.placeholder {
-        PlaceholderExporter.export_with_diagnostics(&mut rf)?
-    } else if args.diagnostic_proxies {
-        DiagnosticRvtDocExporter.export_with_diagnostics_and_limits(&mut rf, walker_limits)?
-    } else {
-        RvtDocExporter.export_with_diagnostics_mode_and_limits(
-            &mut rf,
-            quality_mode,
-            walker_limits,
-        )?
-    };
-    let mut model = result.model;
-    let mut diagnostics = result.diagnostics;
-    if let Some(scope) = saved_mesh_scope(&mut rf, &args) {
-        // The saved graphics only improve bodies: when they cannot be read,
-        // the export goes ahead with the bodies it has, and says so.
-        let control = rvt::control::WalkerControl::default();
-        match rvt::ifc::saved_meshes::attach_scoped_with_control(
-            &mut rf, &mut model, scope, &control,
-        ) {
-            Ok(report) => {
-                rvt::ifc::recount_exported(&mut diagnostics, &model);
-                if report.candidates > 0 {
-                    let what = if args.saved_meshes {
-                        "bounding-box bodies"
-                    } else {
-                        "door and window bounding-box bodies"
-                    };
-                    eprintln!(
-                        "rvt-ifc: {} of {} {what} drawn from their saved graphics ({} triangles); {} kept their box, their saved graphics not decoding whole",
-                        report.replaced, report.candidates, report.triangles, report.partial
-                    );
-                }
-            }
-            Err(e) => eprintln!("rvt-ifc: saved graphics not read, bodies unchanged: {e}"),
-        }
-    }
-
-    if args.revit_property_sets {
-        // Like the saved graphics, the parameters only add to the export:
-        // when they cannot be read, it goes ahead without them, and says so.
-        match rvt::ifc::revit_property_sets::attach(&mut rf, &mut model) {
-            Ok(report) => eprintln!(
-                "rvt-ifc: Revit property sets on {} elements and {} types, and type sets on {} elements of types with no type object ({} properties, {} named parameters left out)",
-                report.elements,
-                report.types,
-                report.untyped_elements,
-                report.properties,
-                report.left_out
-            ),
-            Err(e) => eprintln!("rvt-ifc: Revit property sets not written: {e:#}"),
-        }
-    }
-
-    if args.revit_set_placement {
-        // Like Revit's property sets, this only adds to the export: when the
-        // parameters cannot be read, it goes ahead without them, and says so.
-        match rvt::ifc::revit_set_placement::attach(&mut rf, &mut model) {
-            Ok(report) => {
-                rvt::ifc::recount_exported(&mut diagnostics, &model);
-                eprintln!(
-                    "rvt-ifc: {} properties on {} elements written where Revit's exporter writes them ({} parameters of a kind not written left out)",
-                    report.properties, report.elements, report.left_out
-                );
-            }
-            Err(e) => {
-                eprintln!("rvt-ifc: properties not placed as Revit's exporter places them: {e:#}")
-            }
-        }
-    }
-
-    if args.no_base_quantities {
-        let left_out = rvt::ifc::leave_out_base_quantities(&mut model);
-        rvt::ifc::recount_exported(&mut diagnostics, &model);
-        eprintln!("rvt-ifc: {left_out} base quantities left out");
+    let run = run_export_with_limits(
+        &mut rf,
+        &export_options(&args),
+        walker_limits_from_args(&args),
+    )?;
+    let model = run.model;
+    let diagnostics = run.diagnostics;
+    for note in &run.notes {
+        eprintln!("rvt-ifc: {note}");
     }
 
     let out_path = args.output.clone().unwrap_or_else(|| {
@@ -300,14 +262,12 @@ fn run(args: Args) -> anyhow::Result<()> {
         p
     });
 
-    // #1075: the steps above may have read more streams than the export did.
-    rvt::ifc::record_unread_streams(&mut diagnostics, rf.unread_streams());
-    let unread = rf.unread_streams().len();
-    if unread > 0 {
+    if !run.unread.is_empty() {
         eprintln!(
-            "rvt-ifc: {unread} stream(s) not read whole, so the export is missing what they hold:"
+            "rvt-ifc: {} stream(s) not read whole, so the export is missing what they hold:",
+            run.unread.len()
         );
-        for line in rvt::cli::unread_stream_report(rf.unread_streams()) {
+        for line in rvt::cli::unread_stream_report(&run.unread) {
             eprintln!("{line}");
         }
         if !args.allow_partial {
@@ -382,22 +342,35 @@ fn run(args: Args) -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Which bodies to draw from the saved graphics: every boxed one with
-/// `--saved-meshes`, none with `--no-saved-meshes` or `--placeholder`, and
-/// otherwise the default ([`rvt::ifc::saved_meshes::default_scope`]: doors
-/// and windows on Revit 2023 to 2027).
-fn saved_mesh_scope(
-    rf: &mut RevitFile,
-    args: &Args,
-) -> Option<rvt::ifc::saved_meshes::SavedMeshScope> {
-    use rvt::ifc::saved_meshes::SavedMeshScope;
-    if args.placeholder || args.no_saved_meshes {
-        return None;
-    }
-    if args.saved_meshes {
-        return Some(SavedMeshScope::All);
-    }
-    rvt::ifc::saved_meshes::default_scope(rf)
+/// The switches that change the model: the document exporter by default,
+/// `--placeholder` or `--diagnostic-proxies` for the others; the saved-graphics
+/// bodies are every boxed one with `--saved-meshes`, none with
+/// `--no-saved-meshes`, and otherwise doors and windows on Revit 2023 to 2027.
+fn export_options(args: &Args) -> ExportOptions {
+    let kind = if args.placeholder {
+        ExportKind::Placeholder
+    } else if args.diagnostic_proxies {
+        ExportKind::DiagnosticProxies
+    } else {
+        ExportKind::Document
+    };
+    let saved_meshes = if args.no_saved_meshes {
+        SavedMeshChoice::Off
+    } else if args.saved_meshes {
+        SavedMeshChoice::All
+    } else {
+        SavedMeshChoice::Default
+    };
+    ExportOptions::default()
+        .with_kind(kind)
+        .with_mode(args.mode.into())
+        .with_saved_meshes(saved_meshes)
+        .with_family_extrusions(args.family_extrusions)
+        .with_revit_property_sets(args.revit_property_sets)
+        .with_revit_set_placement(args.revit_set_placement)
+        .with_no_base_quantities(args.no_base_quantities)
+        .with_phase(args.phase.clone())
+        .with_element_provenance(args.element_provenance)
 }
 
 fn walker_limits_from_args(args: &Args) -> WalkerLimits {
@@ -954,6 +927,7 @@ fn export_summary(diagnostics: &ExportDiagnostics, has_sidecar: bool) -> Vec<Str
                 "element_record_without_volume" => "without a 3D body",
                 "element_record_in_non_primary_design_option" => "in non-primary design options",
                 "element_record_empty_curtain_panel" => "empty curtain panels",
+                "room_not_in_export_phase" => "rooms in a phase other than the export phase",
                 "element_record_family_space_without_body" => {
                     "family instances written as spaces whose family draws no model form"
                 }

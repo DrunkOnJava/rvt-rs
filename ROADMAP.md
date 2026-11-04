@@ -35,7 +35,7 @@ sample projects saved by Revit
 2019, 2023 and 2026 (but 2015's `rst_basic`, another model than its 2019 copy).
 What is not decoded
 (most parameters in IFC, family geometry, roofs by extrusion outside
-Revit 2025, openings whose symbol cuts no outline, the phase check of rooms) is listed in [`docs/status.md`](docs/status.md), and
+Revit 2025, openings whose symbol cuts no outline, the room phase rule against a Revit export made with the default setup, RE-326) is listed in [`docs/status.md`](docs/status.md), and
 the four levels a file can reach are in the
 [supported profile](docs/supported-profile.md).
 
@@ -166,11 +166,19 @@ the four levels a file can reach are in the
   (#1261); joined columns' `Length`, the office's wall hatch widths, roofs
   with several slope arrows, the viewer's real progress, and faster native
   reads (#1203, #810, #885, #1195, #1237).
+- **0.14.0, 2026-11-04.** `rvt-rs-mcp`, a local, read-only MCP server (#1324),
+  and one export function every surface builds from (#1331); the export phase
+  for rooms, chosen from `rvt-ifc`, Python, the viewer and `rvt-schedule`
+  (#1194, #1339); Revit 2024 Area bodies and proven Revit 2015 to 2023 Areas
+  (#763, #1261); the openings rectangular wall openings cut (#1165); stepped
+  wall tops and wall corner order (#1067, #1194); conduits, conduit fittings
+  and gutters (#1261); every timed export faster than 0.13.0's and a lower
+  memory peak (#1075, #1237).
 
-### 0.14.0: IFC geometry and element data
+### 0.15.0: IFC geometry and element data
 
-The geometry and element-data work that continues after 0.13.0, moved from the
-0.13.0 milestone when 0.13.0 shipped. Each
+The geometry and element-data work that continues after 0.14.0, moved from the
+0.14.0 milestone when 0.14.0 shipped. Each
 slice records a baseline, an improvement and a residual against Revit's own
 exports on the reference pack (#407), approximations stay labelled (#409), and
 a slice ships in the next release that contains it. Geometry open now: wall

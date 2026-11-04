@@ -2,7 +2,7 @@
 # as built and at building permit, and (#1262) the terrain variants at building permit in concrete
 # and timber, each with Revit's own IFC export, from VTT's ARCH.zip under CC BY-SA 4.0
 # (https://cris.vtt.fi/en/publications/bim-files-to-download/).
-# Read by byte range by tools/ci/fetch-bim4lca.py and never stored; same format as
+# Read by byte range by tools/ci/fetch-bim4lca.py and kept in Measure's Actions cache, never committed; same format as
 # research/bim4lca-models.tsv, whose archive row this repeats. Entries measured 2026-10-18.
 # A mirror row names another URL that serves the same archive, tried before the archive's
 # own: the CDN that URL redirects to (2026-10-29), added after the first host timed out on the

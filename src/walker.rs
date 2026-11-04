@@ -47,8 +47,8 @@ pub enum InstanceField {
     /// Reference container, 2-column layout: `col_a` is the primary
     /// id list, `col_b` is typically masks or a parallel id stream.
     RefContainer { col_a: Vec<u16>, col_b: Vec<u16> },
-    /// Fixed-size integer primitive (bool / u16 / u32 / i32 / u64 /
-    /// i64). `signed` is `true` for signed variants; `value` is the
+    /// Fixed-size integer primitive (u8 for kind 0x02, i16 for 0x03,
+    /// u32 / i32 / u64 / i64). `signed` is `true` for signed variants; `value` is the
     /// widened 64-bit representation.
     Integer { value: i64, signed: bool, size: u8 },
     /// 32-bit or 64-bit IEEE 754 floating point.
@@ -239,8 +239,11 @@ pub fn write_field_by_type(value: &InstanceField, ty: &formats::FieldType, out: 
                         out.push(0);
                     }
                 }
-                (0x02, 2, InstanceField::Integer { value, .. }) => {
-                    out.extend_from_slice(&(*value as u16).to_le_bytes());
+                (0x02, 1, InstanceField::Integer { value, .. }) => {
+                    out.push(*value as u8);
+                }
+                (0x03, 2, InstanceField::Integer { value, .. }) => {
+                    out.extend_from_slice(&(*value as i16).to_le_bytes());
                 }
                 (0x04, 4, InstanceField::Integer { value, .. })
                 | (0x05, 4, InstanceField::Integer { value, .. }) => {
@@ -628,12 +631,21 @@ pub fn read_field_by_type(
                     *cursor += n.max(1);
                     InstanceField::Bool(b)
                 }
-                (0x02, 2) => {
-                    let v = u16::from_le_bytes([slice[0], slice[1]]) as i64;
-                    *cursor += 2;
+                (0x02, 1) => {
+                    let v = i64::from(slice[0]);
+                    *cursor += 1;
                     InstanceField::Integer {
                         value: v,
                         signed: false,
+                        size: 1,
+                    }
+                }
+                (0x03, 2) => {
+                    let v = i64::from(i16::from_le_bytes([slice[0], slice[1]]));
+                    *cursor += 2;
+                    InstanceField::Integer {
+                        value: v,
+                        signed: true,
                         size: 2,
                     }
                 }
@@ -757,6 +769,17 @@ pub fn read_field_by_type(
                 return InstanceField::Bytes(slice.to_vec());
             }
             let count = u32::from_le_bytes([slice[0], slice[1], slice[2], slice[3]]) as usize;
+            if *kind == 0x02 {
+                // RE-325: a `char` is one byte, so this is a byte blob (a PNG,
+                // a zip, RTF) of `count` bytes. Kept whole with its count
+                // prefix, so it writes back verbatim, not one item per byte.
+                let needed = count.saturating_add(4);
+                if slice.len() < needed {
+                    return InstanceField::Bytes(slice.to_vec());
+                }
+                *cursor += needed;
+                return InstanceField::Bytes(slice[..needed].to_vec());
+            }
             // Per-element byte size for kinds we decode directly.
             let elem_size: Option<usize> = match *kind {
                 0x01 => Some(1),
@@ -1525,6 +1548,11 @@ pub(crate) fn walk_shared(
     control.check()?;
     control.report(Stage::ElementDecode, candidate_total, Some(candidate_total));
     control.report(Stage::PartitionScan, 0, None);
+
+    // What the partition recovery below notes for the diagnostics follows this
+    // walk, which the handle memoises: a walk that runs again, at another
+    // export phase, starts from none.
+    rf.reset_export_notes();
 
     // Partition ArcWall merge (version-gated). Fail closed: only
     // records that pass the standard envelope decoder are emitted.

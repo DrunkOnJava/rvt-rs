@@ -283,6 +283,9 @@ struct AreaDrawn {
     location: [f64; 3],
     body: Extrusion,
     profile: crate::element_record_plan_profiles::PlanProfile,
+    /// Whether its outline needed a line carried on past its record or a
+    /// connector (RE-330).
+    joined: bool,
 }
 
 /// The body an Area's decoded fields hold: the profile its boundary lines
@@ -314,6 +317,10 @@ fn area_body_from_decoded(decoded: &DecodedElement) -> Option<AreaDrawn> {
     if !(base.is_finite() && height.is_finite() && height > 0.0) {
         return None;
     }
+    let joined = decoded.fields.iter().any(|(field, value)| {
+        field == crate::partition_area_records::AREA_JOINED_FIELD
+            && matches!(value, InstanceField::Bool(true))
+    });
     let bounds = profile.plan_bounds_feet()?;
     let centre = ((bounds[0] + bounds[2]) / 2.0, (bounds[1] + bounds[3]) / 2.0);
     let relative = |ring: &[(f64, f64)]| -> Vec<(f64, f64)> {
@@ -337,6 +344,7 @@ fn area_body_from_decoded(decoded: &DecodedElement) -> Option<AreaDrawn> {
             profile_override: Some(section),
         },
         profile,
+        joined,
     })
 }
 
@@ -455,10 +463,10 @@ fn area_property_set(decoded: &DecodedElement, drawn: Option<&AreaDrawn>) -> Pro
     properties.push(Property {
         name: SPACE_OUTLINE_SOURCE_PROPERTY.into(),
         value: PropertyValue::Text(
-            if drawn.is_some() {
-                SPACE_OUTLINE_AREA_BOUNDARY
-            } else {
-                SPACE_OUTLINE_NONE
+            match drawn {
+                Some(drawn) if drawn.joined => SPACE_OUTLINE_AREA_BOUNDARY_JOINED,
+                Some(_) => SPACE_OUTLINE_AREA_BOUNDARY,
+                None => SPACE_OUTLINE_NONE,
             }
             .into(),
         ),
@@ -4033,7 +4041,8 @@ pub(super) fn contain_in_spaces(entities: &mut Vec<entities::IfcEntity>) {
             set.properties.iter().any(|p| {
                 p.name == SPACE_OUTLINE_SOURCE_PROPERTY
                     && matches!(&p.value, PropertyValue::Text(source)
-                        if source == SPACE_OUTLINE_AREA_BOUNDARY)
+                        if source == SPACE_OUTLINE_AREA_BOUNDARY
+                            || source == SPACE_OUTLINE_AREA_BOUNDARY_JOINED)
             })
         })
     };
@@ -4402,6 +4411,16 @@ pub const SPACE_OUTLINE_NONE: &str = "none";
 /// Level above, when both are building stories (RE-317).
 pub const SPACE_OUTLINE_AREA_BOUNDARY: &str = "area_boundary";
 
+/// [`SPACE_OUTLINE_SOURCE_PROPERTY`] of an Area drawn as
+/// [`SPACE_OUTLINE_AREA_BOUNDARY`] is, whose outline runs along a stretch of a
+/// boundary line carried on past the extent its record gives, or along a
+/// connector between two parallel lines that stop at the same place (RE-330).
+/// The only external check of those Areas is an IFC2X3 export of Autodesk's
+/// `rac_advanced` project from the three.js repository, by a build of Revit
+/// 2021's exporter whose string ends "IU alternativa 21.0.0.383" (publisher not
+/// established), showing the project's 2015 to 2020 state.
+pub const SPACE_OUTLINE_AREA_BOUNDARY_JOINED: &str = "area_boundary_joined";
+
 /// `BodyHeightSource` of an Area's body: from its Level up to the Level above
 /// it, when both are building stories (RE-317).
 pub const AREA_BODY_HEIGHT_SOURCE: &str = "area_level_to_next_storey";
@@ -4559,6 +4578,30 @@ fn turned_box(x_axis: [f64; 2], width: f64, depth: f64) -> Option<(f64, f64, f64
 
 /// `BodySource` of a beam whose body runs along its location line (RE-49).
 pub const BEAM_AXIS_BODY_SOURCE: &str = "partition_beam_axis";
+
+/// `BodySource` of an unrotated level beam whose record box is longer than
+/// its location line: the box along the line (RE-328).
+///
+/// Read it as an envelope, not as the beam's true length:
+/// - its direction and its section come from the location line and the
+///   record box, and the section across the line is Revit's saved mesh's on
+///   25 of 25 beams measured;
+/// - its length is the record box's, not the beam's. The box is longer than
+///   the line by at most a foot, and on 9 of those 25 Revit's own mesh ends
+///   inside the body at one end or both, by more than 0.01 ft and at most
+///   1 ft, so the body can run past the beam at its ends. The record box
+///   does the same on 21 of the 25 (by up to 1 ft), and the body is the
+///   turned box, not the axis-aligned one;
+/// - the beam's property set holds `AxisLength`, the location line's length,
+///   and `BodyLength`, the body's, which is the record box's length along the
+///   line, with `SectionWidth` and `SectionDepth`.
+///
+/// It is not [`BEAM_AXIS_BODY_SOURCE`]: no Revit export measures a beam longer
+/// than its line, so it gets none of the quantities that source's beams get
+/// (`Qto_BeamBaseQuantities.Length`, and from it `Pset_BeamCommon.Span`,
+/// `Slope` and `Roll`), and no I section. A saved mesh that decodes whole
+/// still replaces it under `--saved-meshes`.
+pub const BEAM_BOX_BODY_SOURCE: &str = "partition_beam_box_along_axis";
 
 /// A sloped beam's body: its section swept along its centreline, with the
 /// section's depth kept in the line's vertical plane. `location` is the
@@ -6138,23 +6181,31 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
     };
     // RE-49: a beam whose location line the record box supports runs along
     // that line instead of filling its box.
-    let beam = if class == "StructuralFraming" {
-        crate::partition_schema_mvp::beam_axis_from_fields(&decoded.fields).and_then(
-            |(start, end)| {
-                let bbox = [
-                    x - width / 2.0,
-                    y - depth / 2.0,
-                    z,
-                    x + width / 2.0,
-                    y + depth / 2.0,
-                    z + height,
-                ];
-                crate::partition_beam_axes::beam_body(bbox, start, end)
-            },
-        )
+    let beam_line = if class == "StructuralFraming" {
+        crate::partition_schema_mvp::beam_axis_from_fields(&decoded.fields)
     } else {
         None
     };
+    let beam_box = [
+        x - width / 2.0,
+        y - depth / 2.0,
+        z,
+        x + width / 2.0,
+        y + depth / 2.0,
+        z + height,
+    ];
+    let beam_closed = beam_line
+        .and_then(|(start, end)| crate::partition_beam_axes::beam_body(beam_box, start, end));
+    // RE-328: an unrotated level beam whose record box is longer than its
+    // line is that box along the line.
+    let beam_longer = beam_line
+        .filter(|_| {
+            beam_closed.is_none() && crate::partition_schema_mvp::beam_unrotated(&decoded.fields)
+        })
+        .and_then(|(start, end)| {
+            crate::partition_beam_axes::beam_body_in_box(beam_box, start, end)
+        });
+    let beam = beam_closed.or(beam_longer);
     // RE-131: a pipe is the cylinder its connector entries and its record
     // box make, drawn as one; a pipe they do not make one for keeps its box.
     let pipe = if class == "Pipe" {
@@ -6164,7 +6215,7 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
     };
     // RE-103: a beam whose type is an I section, drawn as it where its body
     // along its line holds the section.
-    let i_beam = beam.and_then(|beam| {
+    let i_beam = beam_closed.and_then(|beam| {
         let section = crate::partition_schema_mvp::beam_i_section_from_fields(&decoded.fields)?;
         let (start, end) = crate::partition_schema_mvp::beam_axis_from_fields(&decoded.fields)?;
         let bbox = [
@@ -6465,6 +6516,7 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
                         (landing_slab && profile.is_some()).then(|| LANDING_SLAB_BODY_SOURCE.into())
                     })
                     .or_else(|| beam_body_source.clone())
+                    .or_else(|| beam_longer.map(|_| BEAM_BOX_BODY_SOURCE.into()))
                     .or_else(|| beam.map(|_| BEAM_AXIS_BODY_SOURCE.into()))
                     .or_else(|| pipe.map(|_| PIPE_AXIS_BODY_SOURCE.into()))
                     .or_else(|| stair_run.as_ref().map(|_| STAIR_RUN_BODY_SOURCE.into()))
@@ -6496,7 +6548,7 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
             value: PropertyValue::Boolean(
                 profile.is_some()
                     || type_section.is_some()
-                    || beam.is_some()
+                    || beam_closed.is_some()
                     || pipe.is_some()
                     || stair_run.is_some()
                     || spiral_run.is_some()
@@ -6877,14 +6929,29 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
     // RE-49: the beam's length along its location line and the section the
     // record box leaves across it.
     if let Some(beam) = beam {
+        // RE-328: a beam longer in its box than on its line has the line's
+        // length as its axis length, and the box's as its body's.
+        let axis_length = match (beam_longer, beam_line) {
+            (Some(_), Some((start, end))) => (0..3)
+                .map(|axis| (end[axis] - start[axis]).powi(2))
+                .sum::<f64>()
+                .sqrt(),
+            _ => beam.length_feet,
+        };
         for (name, value) in [
-            ("AxisLength", beam.length_feet),
+            ("AxisLength", axis_length),
             ("SectionWidth", beam.width_feet),
             ("SectionDepth", beam.depth_feet),
         ] {
             properties.push(Property {
                 name: name.into(),
                 value: PropertyValue::LengthFeet(value),
+            });
+        }
+        if beam_longer.is_some() {
+            properties.push(Property {
+                name: "BodyLength".into(),
+                value: PropertyValue::LengthFeet(beam.length_feet),
             });
         }
     }

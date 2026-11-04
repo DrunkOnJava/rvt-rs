@@ -64,6 +64,14 @@
 # probe-<probe>.txt and probe_score-<probe>.txt:
 #
 #   gh workflow run measure.yml -f ref=my-branch -f base=none -f nordic=true -f models="nordic-office-*" -f scorers=none -f probe="probe_a probe_b" -f probe_scorer="a_vs_ifc -"
+#
+# A scorer or schema step whose every input is as it was in an earlier run is
+# not run again: its output comes from the score cache (tools/ci/measure-cache.py;
+# its key, what is never cached and how it is saved are in docs/maintaining.md).
+# Exports, rvt-info, rvt-gltf, the witness exports, diagnostics and probes always
+# run. `score_cache=off` runs every step, as before.
+#
+#   gh workflow run measure.yml -f ref=my-branch -f base=main -f score_cache=off
 
 name: Measure
 
@@ -118,17 +126,17 @@ on:
         required: false
         default: ""
       timing:
-        description: Also time rvt-ifc at base and head on one runner, in turn, three rounds per file (the base and head jobs run on different runners, whose speed alone moves an export's time by up to about 1.7x)
+        description: Also time rvt-ifc at base and head, in turn, three rounds per file, each file on one runner, in shards of about equal time (the base and head jobs run on different runners, whose speed alone moves an export's time by up to about 1.7x)
         type: boolean
         required: false
         default: false
       nordic:
-        description: Also score the BIM4LCA office as built and at building permit, and its two terrain variants, against Revit's exports of them (research/bim4lca-measure.tsv, CC BY-SA 4.0, read by byte range for the run and never stored)
+        description: Also score the BIM4LCA office as built and at building permit, and its two terrain variants, against Revit's exports of them (research/bim4lca-measure.tsv, CC BY-SA 4.0, read by byte range and kept in the Actions cache, never committed)
         type: boolean
         required: false
         default: false
       r2025:
-        description: Also score puzzbobb's 23 purpose-made Revit 2025 models against Revit's exports of them (research/r2025-models.tsv, Apache-2.0, fetched for the run and never stored)
+        description: Also score puzzbobb's 23 purpose-made Revit 2025 models against Revit's exports of them (research/r2025-models.tsv, Apache-2.0, fetched for a run and kept in the Actions cache, never committed)
         type: boolean
         required: false
         default: false
@@ -150,6 +158,10 @@ on:
         description: Only these steps on the models, tools/re scorers and info, gltf, schema, witness (e.g. "qtos_vs_ifc witness"; a tools/re script in no scorer list runs as an IFC scorer), none for none, empty for all; every model is still exported and hashed
         required: false
         default: ""
+      score_cache:
+        description: 'The score cache (tools/ci/measure-cache.py, docs/maintaining.md): empty for the shared one, off to run every step, or a name for a cache of its own that this run saves to from any ref (the shared one is read as well)'
+        required: false
+        default: ""
   # A change to the measurement itself measures its own PR against main.
   pull_request:
     paths:
@@ -169,10 +181,12 @@ env:
 jobs:
   # The work is CPU-bound (run 41748430211: 164 task-minutes in a 43-minute
   # Measure step on one 4-core runner), so each side runs as shards on runners
-  # of their own: each BIM4LCA office file, Autodesk's samples, and every
-  # other model with the families (four jobs a side; in run 41760244593 each
-  # third of the samples took 3 minutes to score after 2.5 of setup, too
-  # little to keep a runner of its own). A run given
+  # of their own: each BIM4LCA office file, Autodesk's samples in two halves
+  # by release (2008 to 2023 and 2024 on: 477 and 658 MB, 2024 alone 328),
+  # the held-out and spent models, and every other model with the families
+  # (six jobs a side). In run 41761654404, with four a side, the
+  # samples took 11.7 minutes to score and the rest, held-out models
+  # included, 14.7, against 6.1 and 9.0 for the office files. A run given
   # `models`, `sample_years` or `probe_pair_release` keeps one shard, since a
   # pair probe needs both releases' samples on one runner. Compare merges the
   # shards back into the measure-head and measure-base artifacts.
@@ -181,6 +195,7 @@ jobs:
     runs-on: ubuntu-24.04
     outputs:
       matrix: ${{ steps.plan.outputs.matrix }}
+      timing: ${{ steps.plan.outputs.timing }}
       base: ${{ steps.plan.outputs.base }}
       head_sha: ${{ steps.refs.outputs.head }}
       base_sha: ${{ steps.refs.outputs.base }}
@@ -223,6 +238,7 @@ jobs:
           MODELS: ${{ inputs.models }}
           YEARS: ${{ inputs.sample_years }}
           PAIR: ${{ inputs.probe_pair_release }}
+          TIMING: ${{ inputs.timing && 'true' || 'false' }}
           NORDIC: ${{ inputs.nordic && 'true' || 'false' }}
           SAMPLES: ${{ inputs.samples && 'true' || 'false' }}
           R2025: ${{ inputs.r2025 && 'true' || 'false' }}
@@ -255,15 +271,65 @@ jobs:
                   shards += [shard(name, models=model, nordic=True)
                              for name, model in offices.items()]
               if flag("SAMPLES"):
-                  # "-" is a pattern no model's name matches, so this shard
-                  # measures samples only.
-                  shards.append(shard("samples", models="-", samples=True))
+                  # "-" is a pattern no model's name matches, so these shards
+                  # measure samples only.
+                  shards += [shard("samples-" + years.replace(" ", "-"), models="-",
+                                   samples=True, years=years)
+                             for years in ("2008 2023", "2024 2099")]
+              if flag("HOLDOUT"):
+                  # The held-out fetch brings the spent pairs too.
+                  shards.append(shard("held-out", models="holdout-* spent-*", holdout=True))
               skip = " ".join(offices.values()) if flag("NORDIC") else ""
-              shards.append(shard("rest", skip=skip, **rest))
+              shards.append(shard("rest", skip=skip, **dict(rest, holdout=False)))
           sides = ["head", "base"] if base else ["head"]
           include = [dict(side=side, **s) for side in sides for s in shards]
           print("matrix=" + json.dumps({"include": include}))
           print("base=" + ("true" if base else "false"))
+          # The timing jobs' files, in shards of about equal time. A unit's
+          # seconds are its files' medians, base plus head, times the three
+          # rounds, summed from the table of Measure run 41797994751 (the
+          # reference models, the four office files, Autodesk's samples). The
+          # four shards of that run ran on four CPUs (two Intel Xeons, an
+          # Intel Xeon Platinum and an AMD EPYC), and no runner's rows skew
+          # clearly (its units took 0.98 to 1.21 of their time on the one
+          # runner of run 41793618569), so the weights are not normalised.
+          # Code that changes every file moves them alike, so the split stays
+          # about even. A sample unit is a range of years, cut to the
+          # `sample_years` input.
+          units = [("reference models", 71, dict(reference=True))]
+          if flag("NORDIC"):
+              units.append(("offices", 329, dict(offices=True)))
+          if flag("SAMPLES"):
+              years = e["YEARS"].split()
+              low = int(years[0]) if years else 0
+              high = int(years[1]) if len(years) > 1 else 9999
+              for label, first, last, seconds in (
+                  ("samples to 2023", 0, 2023, 461),
+                  ("samples 2024", 2024, 2024, 559),
+                  ("samples 2025", 2025, 2025, 286),
+                  ("samples 2026", 2026, 2026, 216),
+                  ("samples 2027 on", 2027, 9999, 207),
+              ):
+                  if max(first, low) <= min(last, high):
+                      ranges = f"{max(first, low)} {min(last, high)}"
+                      units.append((label, seconds, dict(ranges=ranges)))
+          bins = [dict(seconds=0, units=[]) for _ in range(min(4, len(units)))]
+          for unit in sorted(units, key=lambda unit: -unit[1]):
+              target = min(bins, key=lambda bin: bin["seconds"])
+              target["seconds"] += unit[1]
+              target["units"].append(unit)
+          timing = [
+              dict(shard=str(number),
+                   what=", ".join(unit[0] for unit in bin["units"]),
+                   reference=any(unit[2].get("reference") for unit in bin["units"]),
+                   offices=any(unit[2].get("offices") for unit in bin["units"]),
+                   ranges=";".join(unit[2]["ranges"] for unit in bin["units"] if "ranges" in unit[2]))
+              for number, bin in enumerate(bins, 1)
+          ]
+          if not flag("TIMING") or not base:
+              # The timing jobs are skipped; a matrix still needs a row.
+              timing = [dict(shard="none", what="", reference=False, offices=False, ranges="")]
+          print("timing=" + json.dumps({"include": timing}))
           PY
 
   measure:
@@ -310,11 +376,98 @@ jobs:
           python-version: "3.12"
       - name: Install IfcOpenShell
         run: python -m pip install --require-hashes -r tools/ci/requirements-ifc.txt
+      # The score cache (tools/ci/measure-cache.py, docs/maintaining.md): a
+      # scorer or schema step whose every input is as it was in an earlier run
+      # takes that run's output. Every run restores the newest cache of its
+      # shard, before the measured code builds; it is saved only where the
+      # Rust cache is (the workflow dispatched from main and the code measured
+      # main's, so a branch's build scripts can never write what a later main
+      # run reads), or under a name of its own that `score_cache` gives a run
+      # from any ref, which main's runs never read. Entries are named by what
+      # they were made from, so the sides and the flags share them. Each shard
+      # keeps a cache of its own, named by the shard whatever the shard is
+      # called, and ends its name with a `.` that no shard name holds, so one
+      # shard's prefix is never another's.
+      # The held-out models, BIMcollab's and the pairs once held out (spent-*)
+      # are never cached (RE-252).
+      - name: Score cache key
+        id: score-cache-key
+        shell: bash
+        env:
+          SCORE_CACHE: ${{ inputs.score_cache }}
+          SHARD: ${{ matrix.shard }}
+          SAVE_FROM_MAIN: ${{ github.ref == 'refs/heads/main' && (matrix.side == 'base' && (inputs.base == '' || inputs.base == 'main') || matrix.side != 'base' && inputs.ref == '') }}
+        run: |
+          enabled=true
+          save=false
+          main=measure-scores-v2-main-
+          case "$SCORE_CACHE" in
+            off)
+              enabled=false
+              ;;
+            "")
+              own=$main
+              [ "$SAVE_FROM_MAIN" = true ] && save=true
+              ;;
+            *)
+              if ! [[ "$SCORE_CACHE" =~ ^[A-Za-z0-9._]{1,40}$ ]]; then
+                echo "::error::score_cache is off, or a name of up to 40 letters, digits, dots and underscores"
+                exit 1
+              fi
+              own="measure-scores-v2-x-$SCORE_CACHE-"
+              save=true
+              ;;
+          esac
+          {
+            echo "enabled=$enabled"
+            echo "save=$save"
+            echo "prefix=$own$SHARD."
+            echo "restore<<END"
+            echo "$own$SHARD."
+            [ "$own" != "$main" ] && echo "$main$SHARD."
+            echo "END"
+          } >> "$GITHUB_OUTPUT"
+          if [ "$enabled" = true ]; then
+            echo "MEASURE_CACHE_DIR=$GITHUB_WORKSPACE/_score-cache" >> "$GITHUB_ENV"
+            echo "MEASURE_CACHE_WORK=$RUNNER_TEMP/score-cache-work" >> "$GITHUB_ENV"
+          fi
+          echo "score cache: enabled=$enabled save=$save key prefix $own$SHARD."
+      # The three binaries every shard and every run of a commit builds alike
+      # (about 70 s of each job) are kept under the commit's full SHA, the
+      # toolchain and the profile: what the cache holds is what that code
+      # builds to, so a run of any ref may save it, and only a run of that
+      # commit restores it. A ref that is not a full SHA is built each time.
+      # The probe examples are always built.
+      - name: Binary cache key
+        id: binaries-key
+        shell: bash
+        env:
+          MEASURED: ${{ matrix.side == 'base' && needs.plan.outputs.base_sha || needs.plan.outputs.head_sha }}
+        run: |
+          if [[ "$MEASURED" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "key=rvt-bin-v1-$MEASURED-$RUNNER_OS-$RUNNER_ARCH-$(rustc -vV | sha256sum | cut -c1-16)-ci" >> "$GITHUB_OUTPUT"
+          else
+            echo "the measured ref is not a full SHA, so its binaries are built each time"
+          fi
+      - name: Restore the binaries
+        id: binaries
+        if: steps.binaries-key.outputs.key != ''
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            measured/target/ci/rvt-ifc
+            measured/target/ci/rvt-gltf
+            measured/target/ci/rvt-info
+          key: ${{ steps.binaries-key.outputs.key }}
       - name: Build
         working-directory: measured
         run: |
           git log -1 --format='%H %s' > ../measured-commit.txt
-          cargo build --profile ci --bin rvt-ifc --bin rvt-gltf --bin rvt-info
+          if [ "$BINARIES_CACHED" = true ]; then
+            echo "rvt-ifc, rvt-gltf and rvt-info restored from the binary cache"
+          else
+            cargo build --profile ci --bin rvt-ifc --bin rvt-gltf --bin rvt-info
+          fi
           # A base older than a probe has no such example; it is skipped there.
           # Probes live in the rvt-probes crate (probes/examples) since it was
           # split out; a ref from before that has them in examples/. Both build
@@ -336,38 +489,113 @@ jobs:
           fi
         env:
           PROBE: ${{ inputs.probe }}
+          BINARIES_CACHED: ${{ steps.binaries.outputs.cache-hit }}
+      # Every shard of a commit misses at once and saves the same key; the one
+      # that reserves it first stores it and the others are told it is taken.
+      # A run from a pull request saves nothing, its cache being its own.
+      - name: Save the binaries
+        if: ${{ success() && github.event_name == 'workflow_dispatch' && steps.binaries-key.outputs.key != '' && steps.binaries.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            measured/target/ci/rvt-ifc
+            measured/target/ci/rvt-gltf
+            measured/target/ci/rvt-info
+          key: ${{ steps.binaries-key.outputs.key }}
+      # Restored after the Build step, so that no build script of the measured
+      # ref ever sees a writable score cache.
+      - name: Restore the score cache
+        if: steps.score-cache-key.outputs.enabled == 'true'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: _score-cache
+          key: ${{ steps.score-cache-key.outputs.prefix }}${{ matrix.side }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: ${{ steps.score-cache-key.outputs.restore }}
       - name: Fetch the reference models
         run: tools/fetch-reference-models.sh models
       # The office models' host being down is NOT MEASURED; a file that no
       # longer matches its pin fails the run.
+      # The office files (VTT, CC BY-SA 4.0) and puzzbobb's R2025 models
+      # (Apache-2.0) are restored from the Actions cache, as CI restores its
+      # BIM4LCA models, and saved from main: with the models in shards of
+      # their own, up to six jobs fetched them at once, and in run 41767184413
+      # one shard waited 27 minutes on the office host before giving up
+      # (#1237). A restored office file is checked against its pin like a
+      # fetched one; a restored R2025 model was checked when the run that
+      # saved it fetched its archive, and only a job measuring main's own code
+      # saves. The held-out models carry no licence and are never cached.
+      - name: Restore the BIM4LCA office models
+        id: bim4lca-cache
+        if: matrix.nordic
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: _bim4lca-measure
+          key: bim4lca-measure-${{ hashFiles('research/bim4lca-measure.tsv', 'tools/ci/fetch-bim4lca.py') }}
       - name: Fetch the BIM4LCA office models
+        id: bim4lca
         if: matrix.nordic
         shell: bash
         run: |
           set +e
-          python3 tools/ci/fetch-bim4lca.py research/bim4lca-measure.tsv models
+          python3 tools/ci/fetch-bim4lca.py research/bim4lca-measure.tsv _bim4lca-measure
           status=$?
           set -e
           case "$status" in
-            0) ;;
+            0)
+              # Only the pinned files, by name, so nothing else in the
+              # folder reaches the models.
+              mkdir -p models
+              awk -F'\t' '$1 == "entry" { n = split($2, a, "/"); print a[n] }' research/bim4lca-measure.tsv |
+                while read -r name; do ln -f "_bim4lca-measure/$name" models/; done
+              echo "ok=true" >> "$GITHUB_OUTPUT" ;;
             2) echo "::warning::BIM4LCA office models NOT MEASURED: the host was unreachable" ;;
             *) echo "::error::the BIM4LCA office models no longer match research/bim4lca-measure.tsv"; exit 1 ;;
           esac
+      - name: Save the BIM4LCA office models
+        # Saved only by a job that measured main's own code, as rust-cache's
+        # save-if: a job building another ref ran that ref's build scripts
+        # before the fetch, and they could have written into the folder.
+        if: matrix.nordic && github.ref == 'refs/heads/main' && steps.bim4lca-cache.outputs.cache-hit != 'true' && steps.bim4lca.outputs.ok == 'true' && (matrix.side == 'base' && (inputs.base == '' || inputs.base == 'main') || matrix.side != 'base' && inputs.ref == '')
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: _bim4lca-measure
+          key: ${{ steps.bim4lca-cache.outputs.cache-primary-key }}
       # The archive being unreachable is NOT MEASURED; an archive that no
       # longer matches its pin fails the run.
+      - name: Restore the R2025 models
+        id: r2025-cache
+        if: matrix.r2025
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: _r2025
+          key: r2025-${{ hashFiles('research/r2025-models.tsv', 'tools/ci/fetch-r2025-models.sh') }}
       - name: Fetch the R2025 models
+        id: r2025
         if: matrix.r2025
         shell: bash
+        env:
+          HIT: ${{ steps.r2025-cache.outputs.cache-hit }}
         run: |
-          set +e
-          tools/ci/fetch-r2025-models.sh research/r2025-models.tsv models
-          status=$?
-          set -e
+          if [ "$HIT" != true ]; then
+            set +e
+            tools/ci/fetch-r2025-models.sh research/r2025-models.tsv _r2025
+            status=$?
+            set -e
+          else
+            status=0
+          fi
           case "$status" in
-            0) ;;
+            0) mkdir -p models/r2025 && ln -f _r2025/r2025/* models/r2025/ && echo "ok=true" >> "$GITHUB_OUTPUT" ;;
             2) echo "::warning::R2025 models NOT MEASURED: the archive could not be downloaded" ;;
             *) echo "::error::an R2025 archive no longer matches research/r2025-models.tsv"; exit 1 ;;
           esac
+      - name: Save the R2025 models
+        # Saved only by a job that measured main's own code (see above).
+        if: matrix.r2025 && github.ref == 'refs/heads/main' && steps.r2025-cache.outputs.cache-hit != 'true' && steps.r2025.outputs.ok == 'true' && (matrix.side == 'base' && (inputs.base == '' || inputs.base == 'main') || matrix.side != 'base' && inputs.ref == '')
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: _r2025
+          key: ${{ steps.r2025-cache.outputs.cache-primary-key }}
       # BIMcollab's host being unreachable is NOT MEASURED; a file that no
       # longer matches its pin fails the run.
       - name: Fetch the BIMcollab example model
@@ -447,6 +675,25 @@ jobs:
           # The runner's CPU, so the compare job can say which machines the
           # wall times came from.
           grep -m1 'model name' /proc/cpuinfo | cut -d: -f2- | xargs > "results/runner-$SHARD.txt"
+      # Entries not used for 21 days go, then the oldest past 256 MiB; the cache
+      # is saved only if this run kept an entry, pruned one or refreshed one not
+      # used for three days (tools/maintainer/clean_caches.py deletes the
+      # generations it supersedes).
+      - name: Finish the score cache
+        id: score-cache
+        if: ${{ !cancelled() && steps.score-cache-key.outputs.enabled == 'true' }}
+        shell: bash
+        env:
+          SHARD: ${{ matrix.shard }}
+        run: |
+          mkdir -p results
+          python tools/ci/measure-cache.py finish --report "results/score-cache-$SHARD.log"
+      - name: Save the score cache
+        if: ${{ !cancelled() && github.event_name == 'workflow_dispatch' && steps.score-cache.outputs.changed == 'true' && steps.score-cache-key.outputs.save == 'true' }}
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: _score-cache
+          key: ${{ steps.score-cache-key.outputs.prefix }}${{ matrix.side }}-${{ matrix.side == 'base' && needs.plan.outputs.base_sha || needs.plan.outputs.head_sha }}-${{ github.run_id }}-${{ github.run_attempt }}
       # The held-out models and BIMcollab's carry no licence: only their
       # counts leave the runner (RE-252).
       - name: Keep only the unlicensed models' counts
@@ -522,7 +769,7 @@ jobs:
               echo
               echo "### Times"
               echo
-              echo "These jobs check what the exports hold. They run exports and scorers several at once, on several runners whose speed alone differs by up to about 1.7x, so their times are not benchmarks. Dispatch with \`timing\` to time both refs' exports on one runner (tools/ci/measure-timing.sh)."
+              echo "These jobs check what the exports hold. They run exports and scorers several at once, on several runners whose speed alone differs by up to about 1.7x, so their times are not benchmarks. Dispatch with \`timing\` to time both refs' exports of each file on one runner (tools/ci/measure-timing.sh)."
               echo
               echo "### Scorer differences (base → head)"
               echo
@@ -561,19 +808,21 @@ jobs:
           path: scorer-diff.txt
 
   # B81: the base and head jobs above run on different runners, so their wall
-  # times compare machines as much as code. With `timing`, one runner builds
-  # rvt-ifc at both refs and exports every model (and sample, with `samples`)
-  # with each in turn (tools/ci/measure-timing.sh).
-  timing:
-    name: Timing (one runner)
+  # times compare machines as much as code. With `timing`, rvt-ifc is built at
+  # both refs once (timing-build), and the files, models and samples, are
+  # timed in shards of about equal time (the plan job splits them). A shard
+  # times base and head on its one runner, in turn (tools/ci/measure-timing.sh),
+  # so every ratio is a pair on the same CPU; runner CPUs differ by up to about
+  # a quarter. timing-merge puts the shards' tables into the one table.
+  timing-build:
+    name: Timing build
     if: inputs.timing && inputs.base != 'none'
     runs-on: ubuntu-24.04
     timeout-minutes: 90
+    outputs:
+      head: ${{ steps.commits.outputs.head }}
+      base: ${{ steps.commits.outputs.base }}
     steps:
-      - name: Workflow tools
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
       - name: Head source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -603,17 +852,52 @@ jobs:
           # As in the measure job: only main's own code saves the cache.
           save-if: ${{ github.ref == 'refs/heads/main' && inputs.ref == '' && (inputs.base == '' || inputs.base == 'main') }}
       - name: Build both
+        id: commits
         run: |
-          (cd head && git log -1 --format='%H %s' > ../head-commit.txt && cargo build --profile ci --bin rvt-ifc)
-          (cd base && git log -1 --format='%H %s' > ../base-commit.txt && cargo build --profile ci --bin rvt-ifc)
+          (cd head && cargo build --profile ci --bin rvt-ifc)
+          (cd base && cargo build --profile ci --bin rvt-ifc)
+          echo "head=$(cd head && git log -1 --format='%H %s')" >> "$GITHUB_OUTPUT"
+          echo "base=$(cd base && git log -1 --format='%H %s')" >> "$GITHUB_OUTPUT"
+      # Artifacts do not keep the executable bit; the shards set it again.
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: timing-bin
+          path: |
+            base/target/ci/rvt-ifc
+            head/target/ci/rvt-ifc
+          retention-days: 3
+          if-no-files-found: error
+
+  timing:
+    name: Timing ${{ matrix.shard }} (${{ matrix.what }})
+    needs: [plan, timing-build]
+    if: inputs.timing && inputs.base != 'none'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.plan.outputs.timing) }}
+    steps:
+      - name: Workflow tools
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: timing-bin
+          path: timing-bin
+      - name: Make the binaries executable
+        run: chmod +x timing-bin/base/target/ci/rvt-ifc timing-bin/head/target/ci/rvt-ifc
       - name: Fetch the reference models
+        if: matrix.reference
         run: tools/fetch-reference-models.sh models
       # The office models land beside the reference models, so they are timed
       # with them. The host being down is NOT MEASURED, as for the other jobs.
       - name: Fetch the BIM4LCA office models
-        if: inputs.nordic
+        if: matrix.offices
         shell: bash
         run: |
+          mkdir -p models
           set +e
           python3 tools/ci/fetch-bim4lca.py research/bim4lca-measure.tsv models
           status=$?
@@ -624,30 +908,102 @@ jobs:
             *) echo "::error::the BIM4LCA office models no longer match research/bim4lca-measure.tsv"; exit 1 ;;
           esac
       - name: Fetch Autodesk's sample projects
-        if: inputs.samples
+        if: matrix.ranges != ''
+        shell: bash
         env:
-          SAMPLE_YEARS: ${{ inputs.sample_years }}
+          RANGES: ${{ matrix.ranges }}
         run: |
-          # shellcheck disable=SC2086 # SAMPLE_YEARS is the first and last year.
-          tools/fetch-autodesk-samples.sh _samples $SAMPLE_YEARS
+          # Each range is a first and a last year, a semicolon apart.
+          IFS=';' read -ra ranges <<< "$RANGES"
+          for range in "${ranges[@]}"; do
+            # shellcheck disable=SC2086 # A range is the first and last year.
+            tools/fetch-autodesk-samples.sh _samples $range
+          done
       - name: Time
         env:
           RVT_IFC_FLAGS: ${{ inputs.ifc_flags }}
+          SHARD: ${{ matrix.shard }}
+          WHAT: ${{ matrix.what }}
         run: |
-          tools/ci/measure-timing.sh base/target/ci head/target/ci timing.md models/*.rvt _samples/*.rvt
+          tools/ci/measure-timing.sh timing-bin/base/target/ci timing-bin/head/target/ci timing.md models/*.rvt _samples/*.rvt
+          grep -m1 'model name' /proc/cpuinfo | cut -d: -f2- | xargs > runner.txt
           {
-            echo "## rvt-ifc time on one runner, base → head"
+            echo "### Timing shard $SHARD ($WHAT)"
             echo
-            echo "head: $(cat head-commit.txt)"
-            echo "base: $(cat base-commit.txt)"
-            echo "runner: $(grep -m1 'model name' /proc/cpuinfo | cut -d: -f2- | xargs)"
-            echo
-            echo "Median of three exports each, in turn on the same runner, with each export's peak resident memory."
-            echo
-            cat timing.md
+            echo "runner: $(cat runner.txt)"
           } >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
+          name: measure-timing-shard-${{ matrix.shard }}
+          path: |
+            timing.md
+            runner.txt
+          if-no-files-found: error
+
+  # The shards' rows in one table, the format the single job wrote, ordered as
+  # it did: the models, then the samples by name. A shard that left no table
+  # fails this job after the others are merged.
+  timing-merge:
+    name: Timing
+    needs: [plan, timing-build, timing]
+    if: ${{ !cancelled() && inputs.timing && inputs.base != 'none' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          pattern: measure-timing-shard-*
+          path: shards
+      - name: Merge the shards' tables
+        env:
+          PLAN: ${{ needs.plan.outputs.timing }}
+          HEAD_COMMIT: ${{ needs.timing-build.outputs.head }}
+          BASE_COMMIT: ${{ needs.timing-build.outputs.base }}
+        run: |
+          python3 - <<'PY'
+          import json, os, re
+          e = os.environ
+          header = None
+          rows = []
+          runners = []
+          missing = []
+          for shard in json.loads(e["PLAN"])["include"]:
+              directory = f"shards/measure-timing-shard-{shard['shard']}"
+              try:
+                  lines = open(f"{directory}/timing.md").read().splitlines()
+                  cpu = open(f"{directory}/runner.txt").read().strip()
+              except OSError:
+                  missing.append(shard)
+                  continue
+              runners.append(f"- shard {shard['shard']} ({shard['what']}): {cpu}")
+              header = header or lines[:2]
+              rows += [line for line in lines[2:] if line.startswith("|")]
+          # A model's row first, then a sample's: `2024_Core_Interior` is a model.
+          def order(row):
+              name = row.split("|")[1].strip()
+              return (re.match(r"\d{4}-", name) is not None, name)
+          rows.sort(key=order)
+          if header:
+              open("timing.md", "w").write("\n".join(header + rows) + "\n")
+          open("timing-runners.txt", "w").write("\n".join(runners) + "\n")
+          with open(e["GITHUB_STEP_SUMMARY"], "a") as summary:
+              summary.write("## rvt-ifc time, base → head, each file on one runner\n\n")
+              summary.write(f"head: {e['HEAD_COMMIT']}\nbase: {e['BASE_COMMIT']}\n\n")
+              summary.write("Median of three exports each, in turn on the same runner, with each export's peak resident memory. ")
+              summary.write("The files were timed in shards, each on a runner of its own with base and head together: compare ratios, not times, between rows, since runner CPUs differ by up to about a quarter.\n\n")
+              summary.write("Runners:\n\n" + "\n".join(runners) + "\n\n")
+              for shard in missing:
+                  summary.write(f"No table from shard {shard['shard']} ({shard['what']}).\n\n")
+              if header:
+                  summary.write("\n".join(header + rows) + "\n")
+          for shard in missing:
+              print(f"::error::timing shard {shard['shard']} ({shard['what']}) left no table")
+          raise SystemExit(1 if missing or not header else 0)
+          PY
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
           name: measure-timing
-          path: timing.md
+          path: |
+            timing.md
+            timing-runners.txt
           if-no-files-found: error

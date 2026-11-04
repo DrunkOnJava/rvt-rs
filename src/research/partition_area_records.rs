@@ -1,4 +1,4 @@
-//! Revit 2024 Areas from their partition chain records (#763).
+//! Revit 2015 to 2024 Areas from their partition chain records (#763, #1194).
 //!
 //! An Area's chain record (RE-35) carries `OST_Areas` (-2003200) at
 //! `+0x12` and no bounding-box marker at `+0x50`, so the element-record
@@ -47,13 +47,21 @@
 //!
 //! - An Area has a body only where its point lies in exactly one region of
 //!   its scheme's lines on its Level, the lines it names bound that region,
-//!   every line of the scheme on the Level is a straight line along the plan
-//!   axes and in the primary design option, and every declared area boundary
-//!   line of the file was read and placed on a Level. The lines its record
-//!   names must be declared lines of that scheme on that Level whose copies
-//!   agree. An Area whose region another placed Area of its scheme and Level
-//!   shares has none, whatever stops the other from being drawn. Otherwise it
-//!   has none, as before, and says why in [`AREA_BODY_REFUSAL_FIELD`].
+//!   every line of the scheme on the Level is in the primary design option,
+//!   no line that is not a straight line along the plan axes lies where the
+//!   region does (RE-330), and every declared area boundary line of the file
+//!   was read and placed on a Level. The lines its record names must be
+//!   declared lines of that scheme on that Level whose copies agree. An Area
+//!   whose region another placed Area of its scheme and Level shares has none,
+//!   whatever stops the other from being drawn. Otherwise it has none, as
+//!   before, and says why in [`AREA_BODY_REFUSAL_FIELD`].
+//! - Lines that stop short of the line they join are carried on to it, and
+//!   parallel lines that stop at the same place a wall's thickness apart are
+//!   joined by a connector, where their records name each other and the gap is
+//!   at most 1 ft (RE-330; the premise is inferred from one IFC2X3 export). A
+//!   line that is not a straight line along an axis (its record holds its box
+//!   and no more) is left out of the arrangement, and so is an Area whose
+//!   region its box touches, or a line that names it bounds.
 //! - A line in a non-primary design option makes its group unreadable: no area
 //!   boundary line of the office or of Autodesk's 2024 samples has a design
 //!   option, so how Revit treats one is not measured.
@@ -65,10 +73,38 @@
 //!   measured. An Area on the top storey has none.
 //! - The base offset of the Area is read as zero, which is what the office
 //!   measures.
-//! - An Area bounded partly by walls is not read: its point lies in no region
-//!   of the lines alone.
-//! - Revit 2024 only, the one release measured; elsewhere nothing is read
+//! - An Area whose lines do not close, even with their joins, is not read: its
+//!   point lies in no region. No Revit export of an Area bounded by a wall is
+//!   measured.
+//! - Revit 2024 and 2015 to 2023 (RE-324) are read; elsewhere nothing is read
 //!   (fail closed).
+//!
+//! # Revit 2015 to 2023 (RE-324)
+//!
+//! The 32-bit layout (RE-315) writes the same record with `u32` ElementIds:
+//! the `BuiltInCategory` 14 bytes after the record's ElementId
+//! ([`NARROW_CATEGORY_OFFSET`]), the design option, container and placement
+//! words 12, 16 and 24 bytes after it, and the same two counted lists of
+//! ElementIds, now `u32`. The record's partition walk is
+//! [`crate::partition_element_records_2023::record_spans`]. Each boundary line
+//! is a 32-bit element record, the Area's point is the same two `f64`s
+//! [`NARROW_POINT_OFFSET`] bytes after the `01 00 00 00 · ElementId` header of
+//! its element data, and the number and name are read as for a room. On
+//! Autodesk's `rac_advanced` of 2015 to 2023 (25 Areas) and `rst_basic` of 2016
+//! to 2023 (1) every field equals the same project's 2024 save
+//! (`reports/element-framing/RE-324-areas-2015-2023.md`). Releases 2016 to 2023
+//! leave out an Area in a non-primary design option, as 2024 does; 2015 reads
+//! no option sets, so an Area that names any option is left out there.
+//!
+//! **An Area of Revit 2015 to 2023 is written only where its region and body
+//! are proven.** The first rule, writing every placed Area as 2024 does, wrote
+//! spaces that Revit's export lacks on a held-out project (RE-324). Revit's
+//! exporter makes no space for an Area whose boundary yields no loop (a
+//! redundant or not-enclosed Area, `SpatialElementExporter.CreateIFCSpace` in
+//! revit-ifc, CLEANROOM.md source 5), and the lines of its scheme are all that
+//! is read of an Area's boundary: a proven region is a boundary. The Areas left
+//! out are counted by the reason their body has none in the export diagnostics
+//! (`area_without_proven_body`).
 
 use crate::RevitFile;
 use crate::element_record_plan_profiles::{PLAN_PROFILE_SOURCE_FIELD, PlanProfile};
@@ -77,9 +113,10 @@ use crate::partition_area_boundaries::{AreaFace, Arrangement, BoundaryLine};
 use crate::partition_design_options::DesignOptions;
 use crate::partition_element_records::{
     CATEGORY_OFFSET, CLASS_TAG_OFFSET, CONTAINER_NONE, CONTAINER_OFFSET, PLACEMENT_KIND_INSTANCE,
-    PLACEMENT_KIND_OFFSET, file_bbox_marker, frame_design_option, partition_record_chain,
-    scan_category_records_multi,
+    PLACEMENT_KIND_OFFSET, PartitionElementRecord, file_bbox_marker, frame_design_option,
+    partition_record_chain, scan_category_records_multi,
 };
+use crate::partition_element_records_2023 as per32;
 use crate::partition_level_records::PartitionLevel;
 use crate::partition_room_parameters::{
     DATA_OBJECT_HEADER, LatestCopy, data_objects, partition_number,
@@ -87,8 +124,40 @@ use crate::partition_room_parameters::{
 use crate::walker::{DecodedElement, ElementProvenance, InstanceField};
 use std::collections::{BTreeMap, BTreeSet};
 
-/// Releases where the Area record is measured.
-pub const AREA_SUPPORTED_REVIT_VERSIONS: &[u32] = &[2024];
+/// Releases where the Area record is measured: Revit 2015 to 2023 (RE-324) and
+/// 2024 (RE-191).
+pub const AREA_SUPPORTED_REVIT_VERSIONS: &[u32] =
+    &[2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024];
+
+/// Bytes from the start of a Revit 2015 to 2023 Area record to its
+/// `BuiltInCategory` (RE-324): the record's `u32` ElementId, `u32` size, the
+/// tag of `ElementHeader`, a `u16` count and a `u16`.
+pub const NARROW_CATEGORY_OFFSET: usize = 14;
+
+/// Where a Revit 2015 to 2023 Area record keeps its design option, a `u32`,
+/// `ff ff ff ff` for the main model: 12 bytes after the category (RE-315).
+const NARROW_DESIGN_OPTION_OFFSET: usize = NARROW_CATEGORY_OFFSET + 12;
+
+/// Where it keeps its container reference, a `u32`, `ff ff ff ff` unset: 16
+/// bytes after the category (RE-315).
+const NARROW_CONTAINER_OFFSET: usize = NARROW_CATEGORY_OFFSET + 16;
+
+/// Where it keeps its placement kind, a `u32`: 24 bytes after the category
+/// (RE-315). `0xffffef7f` on every Area measured, 2015 to 2018 included.
+const NARROW_PLACEMENT_OFFSET: usize = NARROW_CATEGORY_OFFSET + 24;
+
+/// Where the counted lists of ElementIds are looked for in a Revit 2015 to 2023
+/// Area record: past the placement word.
+const NARROW_LISTS_FROM: usize = NARROW_CATEGORY_OFFSET + 28;
+
+/// The longest counted list read from a Revit 2015 to 2023 Area record.
+const NARROW_LIST_MAX: usize = 64;
+
+/// Bytes from the end of the `01 00 00 00 · ElementId` header of an Area's
+/// element data on Revit 2015 to 2023 to its point, two `f64`s of plan feet
+/// (RE-324). On Revit 2024 the point is [`AREA_POINT_OFFSET`] bytes into the
+/// payload of the Area's data object.
+pub const NARROW_POINT_OFFSET: usize = 35;
 
 /// Autodesk `BuiltInCategory.OST_Areas`.
 pub const OST_AREAS: i64 = -2_003_200;
@@ -115,8 +184,16 @@ pub const AREA_BODY_BASE_FIELD: &str = "m_area_body_base";
 /// The field of an Area that holds its body's height, feet.
 pub const AREA_BODY_HEIGHT_FIELD: &str = "m_area_body_height";
 
+/// The field of an Area, true where its outline runs along a stretch of a line
+/// carried on past the extent its record gives, or along a connector (RE-330).
+pub const AREA_JOINED_FIELD: &str = "m_area_body_joined";
+
 /// How far a boundary line's height may lie from its Level's, feet.
 pub const AREA_LEVEL_TOLERANCE_FEET: f64 = 1e-3;
+
+/// How near the box of a line that cannot be read must come to the box of an
+/// Area's region for the Area to be refused, feet (RE-330).
+pub const UNREAD_MARGIN_FEET: f64 = 0.01;
 
 /// The least distance to the Level above that gives an Area a body, feet.
 pub const AREA_MIN_HEIGHT_FEET: f64 = 1e-3;
@@ -147,7 +224,9 @@ pub const REFUSED_LINES: &str = "named_lines_not_in_scheme_and_level";
 pub const REFUSED_HEIGHT: &str = "next_storey_not_proven";
 /// The lines of the Area's scheme on its Level cannot be read as an arrangement
 /// of straight lines along the axes, one of them may be missing, or one is in a
-/// non-primary design option.
+/// non-primary design option; or a line that is not a straight line along an
+/// axis (a slanted line, an arc, a point) lies where the Area's region does, or
+/// is joined to a line that bounds it (RE-330).
 pub const REFUSED_GROUP: &str = "boundary_lines_not_readable";
 /// The Area's point lies in no single region of the lines.
 pub const REFUSED_REGION: &str = "point_in_no_single_region";
@@ -157,11 +236,82 @@ pub const REFUSED_OFF_REGION: &str = "named_lines_not_on_region";
 /// whether or not that Area is drawn.
 pub const REFUSED_REDUNDANT: &str = "two_areas_one_region";
 
+/// How the chain records of a file are walked (RE-324).
+#[derive(Debug, Clone, Copy)]
+enum Layout {
+    /// Revit 2024 and later: `u64` ElementIds, the file's bbox marker.
+    Wide([u8; 8]),
+    /// Revit 2023 and earlier: `u32` ElementIds, the tag of `ElementHeader`.
+    Narrow(u16),
+}
+
+/// A declared chain record: where it starts and ends, and its ElementId.
+struct ChainSpan {
+    start: usize,
+    end: usize,
+    id: u32,
+}
+
+impl Layout {
+    fn of(rf: &mut RevitFile, revit_version: u32) -> Option<Self> {
+        if per32::is_32bit_release(revit_version) {
+            per32::record_marker(rf).map(|(_, tag)| Self::Narrow(tag))
+        } else {
+            file_bbox_marker(rf, revit_version).map(Self::Wide)
+        }
+    }
+
+    fn category_offset(self) -> usize {
+        match self {
+            Self::Wide(_) => CATEGORY_OFFSET,
+            Self::Narrow(_) => NARROW_CATEGORY_OFFSET,
+        }
+    }
+
+    /// The declared records of one inflated partition's chain.
+    fn chain(self, buf: &[u8], declared: &BTreeSet<u32>) -> Vec<ChainSpan> {
+        match self {
+            Self::Wide(marker) => partition_record_chain(buf, &marker)
+                .into_iter()
+                .filter_map(|span| {
+                    let id = u32::try_from(span.element_id).ok()?;
+                    declared.contains(&id).then_some(ChainSpan {
+                        start: span.start,
+                        end: span.end,
+                        id,
+                    })
+                })
+                .collect(),
+            Self::Narrow(tag) => per32::record_spans(buf, tag, declared)
+                .into_iter()
+                .map(|span| ChainSpan {
+                    start: span.start,
+                    end: span.end,
+                    id: span.element_id,
+                })
+                .collect(),
+        }
+    }
+
+    /// Whether design option sets are read on `revit_version`: on 2024 and
+    /// later, and on 2016 to 2023 (RE-315), but not on 2015.
+    fn reads_design_options(self, revit_version: u32) -> bool {
+        match self {
+            Self::Wide(_) => true,
+            Self::Narrow(_) => per32::applies_export_filters(revit_version),
+        }
+    }
+}
+
 /// One Area record as its latest partition holds it.
 struct AreaRecord {
     stream: String,
     offset: usize,
     bytes: Vec<u8>,
+    layout: Layout,
+    /// The counted lists of ElementIds a Revit 2015 to 2023 record holds, in
+    /// order; empty on 2024.
+    lists: Vec<Vec<u32>>,
 }
 
 /// Two copies of a record agree when their bytes do, wherever they sit.
@@ -182,9 +332,40 @@ struct ChainCensus {
     line_ids: BTreeSet<u32>,
 }
 
+/// The ascending counted lists of at least two declared ElementIds that a
+/// Revit 2015 to 2023 record holds from `from` on: a `u32` count and as many
+/// `u32` ElementIds (RE-324). Every Area measured holds two, of six and of two.
+fn counted_lists(bytes: &[u8], from: usize, declared: &BTreeSet<u32>) -> Vec<Vec<u32>> {
+    let mut out = Vec::new();
+    let mut at = from;
+    while at + 12 <= bytes.len() {
+        let count = le_bytes::u32_at(bytes, at).unwrap_or(0) as usize;
+        let list = (2..=NARROW_LIST_MAX)
+            .contains(&count)
+            .then(|| bytes.get(at + 4..at + 4 + 4 * count))
+            .flatten()
+            .map(|body| {
+                body.chunks_exact(4)
+                    .map(|c| u32::from_le_bytes([c[0], c[1], c[2], c[3]]))
+                    .collect::<Vec<u32>>()
+            })
+            .filter(|ids| {
+                ids.iter().all(|id| declared.contains(id)) && ids.windows(2).all(|w| w[0] < w[1])
+            });
+        match list {
+            Some(ids) => {
+                at += 4 + 4 * ids.len();
+                out.push(ids);
+            }
+            None => at += 1,
+        }
+    }
+    out
+}
+
 /// The chain records of the Areas, the area schemes and the area boundary
 /// lines of a file.
-fn area_records(rf: &mut RevitFile, marker: &[u8; 8], declared: &BTreeSet<u32>) -> ChainCensus {
+fn area_records(rf: &mut RevitFile, layout: Layout, declared: &BTreeSet<u32>) -> ChainCensus {
     let mut found = LatestCopy::default();
     let mut schemes = BTreeSet::new();
     let mut line_ids = BTreeSet::new();
@@ -194,14 +375,10 @@ fn area_records(rf: &mut RevitFile, marker: &[u8; 8], declared: &BTreeSet<u32>) 
         };
         let partition = partition_number(&stream);
         let buf = inflated.bytes();
-        for span in partition_record_chain(buf, marker) {
-            let Ok(id) = u32::try_from(span.element_id) else {
-                continue;
-            };
-            if !declared.contains(&id) {
-                continue;
-            }
-            let category = le_bytes::u64_at(buf, span.start + CATEGORY_OFFSET).map(|c| c as i64);
+        for span in layout.chain(buf, declared) {
+            let id = span.id;
+            let category =
+                le_bytes::u64_at(buf, span.start + layout.category_offset()).map(|c| c as i64);
             if category == Some(OST_AREA_SCHEMES) {
                 schemes.insert(id);
                 continue;
@@ -213,13 +390,20 @@ fn area_records(rf: &mut RevitFile, marker: &[u8; 8], declared: &BTreeSet<u32>) 
             if category != Some(OST_AREAS) {
                 continue;
             }
+            let bytes = buf[span.start..span.end].to_vec();
+            let lists = match layout {
+                Layout::Wide(_) => Vec::new(),
+                Layout::Narrow(_) => counted_lists(&bytes, NARROW_LISTS_FROM, declared),
+            };
             found.offer(
                 id,
                 partition,
                 AreaRecord {
                     stream: stream.clone(),
                     offset: span.start,
-                    bytes: buf[span.start..span.end].to_vec(),
+                    bytes,
+                    layout,
+                    lists,
                 },
             );
         }
@@ -231,38 +415,95 @@ fn area_records(rf: &mut RevitFile, marker: &[u8; 8], declared: &BTreeSet<u32>) 
     }
 }
 
-/// Every id of `wanted` from `floor` up that `bytes` holds as a `u64` past the
-/// frame's fixed head.
-fn named_ids(bytes: &[u8], wanted: &BTreeSet<u32>, floor: u32) -> BTreeSet<u32> {
-    let mut named = BTreeSet::new();
-    for at in CATEGORY_OFFSET..bytes.len().saturating_sub(7) {
-        if let Some(id) = le_bytes::u64_at(bytes, at)
-            .and_then(|v| u32::try_from(v).ok())
-            .filter(|id| *id >= floor && wanted.contains(id))
-        {
-            named.insert(id);
+impl AreaRecord {
+    /// Whether the container slot is unset.
+    fn container_unset(&self) -> bool {
+        match self.layout {
+            Layout::Wide(_) => {
+                le_bytes::u64_at(&self.bytes, CONTAINER_OFFSET) == Some(CONTAINER_NONE)
+            }
+            Layout::Narrow(_) => {
+                le_bytes::u32_at(&self.bytes, NARROW_CONTAINER_OFFSET) == Some(u32::MAX)
+            }
         }
     }
-    named
-}
 
-/// The one id of `wanted` that `bytes` holds as a `u64` past the frame's
-/// fixed head, or `None` for none or several.
-fn named_one(bytes: &[u8], wanted: &BTreeSet<u32>) -> Option<u32> {
-    let mut ids = named_ids(bytes, wanted, 0).into_iter();
-    match (ids.next(), ids.next()) {
-        (Some(id), None) => Some(id),
-        _ => None,
+    /// Whether the placement word is RE-21's placed-instance kind.
+    fn placed_kind(&self) -> bool {
+        let at = match self.layout {
+            Layout::Wide(_) => PLACEMENT_KIND_OFFSET,
+            Layout::Narrow(_) => NARROW_PLACEMENT_OFFSET,
+        };
+        le_bytes::u32_at(&self.bytes, at) == Some(PLACEMENT_KIND_INSTANCE)
+    }
+
+    /// The design option the Area belongs to, `None` for the main model.
+    fn design_option(&self) -> Option<u32> {
+        match self.layout {
+            Layout::Wide(_) => frame_design_option(&self.bytes, 0),
+            Layout::Narrow(_) => le_bytes::u32_at(&self.bytes, NARROW_DESIGN_OPTION_OFFSET)
+                .filter(|option| *option != u32::MAX),
+        }
+    }
+
+    /// Whether the Area is in the primary design option, or in none. Where no
+    /// option sets are read (Revit 2015), an Area that names an option is not.
+    fn in_primary_option(&self, options: &DesignOptions, options_read: bool) -> bool {
+        match self.design_option() {
+            None => true,
+            Some(option) => options_read && !options.is_non_primary(option),
+        }
+    }
+
+    /// Every id of `wanted` from `floor` up that the record names: as a `u64`
+    /// past the frame's fixed head on 2024, in its counted lists on 2015 to
+    /// 2023.
+    fn named_ids(&self, wanted: &BTreeSet<u32>, floor: u32) -> BTreeSet<u32> {
+        let mut named = BTreeSet::new();
+        match self.layout {
+            Layout::Wide(_) => {
+                for at in CATEGORY_OFFSET..self.bytes.len().saturating_sub(7) {
+                    if let Some(id) = le_bytes::u64_at(&self.bytes, at)
+                        .and_then(|v| u32::try_from(v).ok())
+                        .filter(|id| *id >= floor && wanted.contains(id))
+                    {
+                        named.insert(id);
+                    }
+                }
+            }
+            Layout::Narrow(_) => {
+                for id in self.lists.iter().flatten() {
+                    if *id >= floor && wanted.contains(id) {
+                        named.insert(*id);
+                    }
+                }
+            }
+        }
+        named
+    }
+
+    /// The one id of `wanted` the record names, or `None` for none or several.
+    fn named_one(&self, wanted: &BTreeSet<u32>) -> Option<u32> {
+        let mut ids = self.named_ids(wanted, 0).into_iter();
+        match (ids.next(), ids.next()) {
+            (Some(id), None) => Some(id),
+            _ => None,
+        }
     }
 }
 
 /// One area boundary line as its record holds it.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 struct LineRecord {
     from: (f64, f64),
     to: (f64, f64),
     height: f64,
     key: (u32, u32),
+    /// The ElementIds its reference list names: its Level, its scheme, the
+    /// lines it is joined to (RE-330). Two copies of a line that differ here
+    /// make it a conflicted one, as two that differ in box do: the joins read
+    /// this list.
+    names: BTreeSet<u32>,
 }
 
 /// The area boundary lines of a file, and what could not be read of them.
@@ -293,6 +534,7 @@ struct AreaBody {
     face: AreaFace,
     base_feet: f64,
     height_feet: f64,
+    joined: bool,
 }
 
 /// What is known of the file around its Areas.
@@ -301,6 +543,30 @@ struct Surroundings<'a> {
     level_ids: &'a BTreeSet<u32>,
     scheme_ids: &'a BTreeSet<u32>,
     levels: &'a [PartitionLevel],
+    /// Whether the file's design option sets are read: a line or an Area that
+    /// names an option cannot be placed in the primary one where they are not
+    /// (Revit 2015).
+    options_read: bool,
+}
+
+/// The element records of the area boundary lines of a file: the 32-bit
+/// records on Revit 2015 to 2023 (RE-324), the 2024 records otherwise. `None`
+/// where the scan fails.
+fn scan_line_records(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    declared: &BTreeSet<u32>,
+) -> Option<Vec<PartitionElementRecord>> {
+    if per32::is_32bit_release(revit_version) {
+        Some(
+            per32::scan_records(rf, revit_version)
+                .into_iter()
+                .filter(|record| record.builtin_category == OST_AREA_SCHEME_LINES)
+                .collect(),
+        )
+    } else {
+        scan_category_records_multi(rf, revit_version, &[OST_AREA_SCHEME_LINES], declared).ok()
+    }
 }
 
 /// The one Level and the one area scheme a line's reference list names.
@@ -330,12 +596,7 @@ fn boundary_lines(
     options: &DesignOptions,
 ) -> BoundaryLines {
     let mut out = BoundaryLines::default();
-    let Ok(records) = scan_category_records_multi(
-        rf,
-        revit_version,
-        &[OST_AREA_SCHEME_LINES],
-        surroundings.declared,
-    ) else {
+    let Some(records) = scan_line_records(rf, revit_version, surroundings.declared) else {
         return out;
     };
     for record in records {
@@ -349,7 +610,7 @@ fn boundary_lines(
         );
         if record
             .design_option
-            .is_some_and(|option| options.is_non_primary(option))
+            .is_some_and(|option| !surroundings.options_read || options.is_non_primary(option))
         {
             if let Some(key) = key {
                 out.option_groups.insert(key);
@@ -377,6 +638,11 @@ fn boundary_lines(
             to: (x1, y1),
             height: z0,
             key,
+            names: record
+                .references
+                .iter()
+                .filter_map(|reference| u32::try_from(*reference).ok())
+                .collect(),
         };
         match out.by_id.get(&record.element_id) {
             None => {
@@ -394,10 +660,84 @@ fn boundary_lines(
     out
 }
 
-/// The point of each Area, from the payload of its data object: where the
-/// object's class is the record's and every copy in the record's partition
-/// gives the same point.
+/// The point of each Area (RE-317, RE-324).
 fn area_points(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    placed: &BTreeMap<u32, AreaRecord>,
+    level_ids: &BTreeSet<u32>,
+) -> BTreeMap<u32, (f64, f64)> {
+    if per32::is_32bit_release(revit_version) {
+        area_points_narrow(rf, placed, level_ids)
+    } else {
+        area_points_wide(rf, placed)
+    }
+}
+
+/// The point of each Area on Revit 2015 to 2023, from its element data
+/// (RE-324): the two `f64`s [`NARROW_POINT_OFFSET`] bytes past the
+/// `01 00 00 00 · ElementId` header, where the `u32` that follows the header is
+/// the Area's own Level. Every copy in the record's partition must give the same
+/// point.
+fn area_points_narrow(
+    rf: &mut RevitFile,
+    placed: &BTreeMap<u32, AreaRecord>,
+    level_ids: &BTreeSet<u32>,
+) -> BTreeMap<u32, (f64, f64)> {
+    let mut by_stream: BTreeMap<&str, BTreeSet<u32>> = BTreeMap::new();
+    for (&id, record) in placed {
+        by_stream
+            .entry(record.stream.as_str())
+            .or_default()
+            .insert(id);
+    }
+    let mut found: BTreeMap<u32, Option<(f64, f64)>> = BTreeMap::new();
+    for (stream, ids) in by_stream {
+        let Ok(inflated) = rf.inflated_partition(stream) else {
+            continue;
+        };
+        let buf = inflated.bytes();
+        for hit in memchr::memmem::find_iter(buf, &[1u8, 0, 0, 0]) {
+            let Some(id) = le_bytes::u32_at(buf, hit + 4).filter(|id| ids.contains(id)) else {
+                continue;
+            };
+            let Some(record) = placed.get(&id) else {
+                continue;
+            };
+            let data = hit + 8;
+            let start = data + NARROW_POINT_OFFSET;
+            let (Some(level), Some(x), Some(y)) = (
+                le_bytes::u32_at(buf, data),
+                le_bytes::f64_at(buf, start),
+                le_bytes::f64_at(buf, start + 8),
+            ) else {
+                continue;
+            };
+            if record.named_one(level_ids) != Some(level) || !x.is_finite() || !y.is_finite() {
+                continue;
+            }
+            let point = Some((x, y));
+            match found.get(&id) {
+                Some(held) if *held != point => {
+                    found.insert(id, None);
+                }
+                Some(_) => {}
+                None => {
+                    found.insert(id, point);
+                }
+            }
+        }
+    }
+    found
+        .into_iter()
+        .filter_map(|(id, point)| Some((id, point?)))
+        .collect()
+}
+
+/// The point of each Area on Revit 2024, from the payload of its data object:
+/// where the object's class is the record's and every copy in the record's
+/// partition gives the same point.
+fn area_points_wide(
     rf: &mut RevitFile,
     placed: &BTreeMap<u32, AreaRecord>,
 ) -> BTreeMap<u32, (f64, f64)> {
@@ -498,13 +838,59 @@ fn level_and_storey_height(levels: &[PartitionLevel], level: u32) -> Option<(f64
     ))
 }
 
+/// The box `[min_x, min_y, max_x, max_y]` of the segment from `from` to `to`.
+fn segment_box(from: (f64, f64), to: (f64, f64)) -> [f64; 4] {
+    [
+        from.0.min(to.0),
+        from.1.min(to.1),
+        from.0.max(to.0),
+        from.1.max(to.1),
+    ]
+}
+
+/// The arrangement of the lines of one scheme on one Level that can be read, and
+/// the boxes of those that cannot (RE-330).
+struct GroupArrangement {
+    arrangement: Arrangement,
+    /// The box of each line left out of the arrangement because it is not a
+    /// straight line along an axis (a slanted line, an arc or a point: its record
+    /// holds only its box), and of each line that names one, which may be joined
+    /// to it.
+    blocked: Vec<[f64; 4]>,
+}
+
+impl GroupArrangement {
+    /// Whether a line left out of the arrangement may lie in, or bound, `face`:
+    /// its box is within [`UNREAD_MARGIN_FEET`] of the box of the face's outline.
+    /// A line outside that box cannot change the region.
+    fn blocks(&self, face: &AreaFace) -> bool {
+        let bounds = face.outer.iter().fold(
+            [
+                f64::INFINITY,
+                f64::INFINITY,
+                f64::NEG_INFINITY,
+                f64::NEG_INFINITY,
+            ],
+            |b, p| [b[0].min(p.0), b[1].min(p.1), b[2].max(p.0), b[3].max(p.1)],
+        );
+        self.blocked.iter().any(|line| {
+            line[0] <= bounds[2] + UNREAD_MARGIN_FEET
+                && line[2] >= bounds[0] - UNREAD_MARGIN_FEET
+                && line[1] <= bounds[3] + UNREAD_MARGIN_FEET
+                && line[3] >= bounds[1] - UNREAD_MARGIN_FEET
+        })
+    }
+}
+
 /// The arrangement of the lines of one scheme on one Level, or `None` where a
-/// line cannot be read or may be missing.
+/// line may be missing, its copies disagree, or none can be read. A line that is
+/// not a straight line along an axis is not read, and an Area whose region it
+/// may change is refused ([`GroupArrangement::blocks`], RE-330).
 fn group_arrangement(
     lines: &BoundaryLines,
     key: (u32, u32),
     base_feet: f64,
-) -> Option<Arrangement> {
+) -> Option<GroupArrangement> {
     if lines
         .stray_heights
         .iter()
@@ -516,7 +902,10 @@ fn group_arrangement(
         return None;
     }
     let ids = lines.groups.get(&key)?;
-    let mut group = Vec::with_capacity(ids.len());
+    let mut readable = Vec::with_capacity(ids.len());
+    let mut joined: BTreeMap<u32, BTreeSet<u32>> = BTreeMap::new();
+    let mut unread: BTreeSet<u32> = BTreeSet::new();
+    let mut blocked = Vec::new();
     for id in ids {
         let line = lines.by_id.get(id)?;
         if lines.conflicted.contains(id)
@@ -524,13 +913,35 @@ fn group_arrangement(
         {
             return None;
         }
-        group.push(BoundaryLine {
+        let boundary = BoundaryLine {
             id: *id,
             from: line.from,
             to: line.to,
-        });
+        };
+        if Arrangement::reads(&boundary) {
+            joined.insert(*id, line.names.clone());
+            readable.push(boundary);
+        } else {
+            unread.insert(*id);
+            blocked.push(segment_box(line.from, line.to));
+        }
     }
-    Arrangement::new(&group)
+    if readable.is_empty() {
+        return None;
+    }
+    for boundary in &readable {
+        let names_unread = joined
+            .get(&boundary.id)
+            .is_some_and(|names| names.iter().any(|name| unread.contains(name)));
+        if names_unread {
+            blocked.push(segment_box(boundary.from, boundary.to));
+        }
+    }
+    let arrangement = Arrangement::new(&readable, &joined)?;
+    Some(GroupArrangement {
+        arrangement,
+        blocked,
+    })
 }
 
 /// The Areas of a file that have a body, and why the others have none.
@@ -571,12 +982,12 @@ fn locate(
     point: Option<(f64, f64)>,
     lines: &BoundaryLines,
     surroundings: &Surroundings<'_>,
-    arrangements: &mut BTreeMap<GroupKey, Option<Arrangement>>,
+    arrangements: &mut BTreeMap<GroupKey, Option<GroupArrangement>>,
 ) -> Result<Located, &'static str> {
     let point = point.ok_or(REFUSED_NO_POINT)?;
     let (Some(level), Some(scheme)) = (
-        named_one(&record.bytes, surroundings.level_ids),
-        named_one(&record.bytes, surroundings.scheme_ids),
+        record.named_one(surroundings.level_ids),
+        record.named_one(surroundings.scheme_ids),
     ) else {
         return Err(REFUSED_UNNAMED);
     };
@@ -586,7 +997,11 @@ fn locate(
         .entry(key)
         .or_insert_with(|| group_arrangement(lines, key, base_feet))
     {
-        Some(arrangement) => arrangement.face_at(point).ok_or(REFUSED_REGION),
+        Some(group) => match group.arrangement.face_at(point) {
+            None => Err(REFUSED_REGION),
+            Some(face) if group.blocks(&face) => Err(REFUSED_GROUP),
+            Some(face) => Ok(face),
+        },
         None => Err(REFUSED_GROUP),
     };
     Ok(Located { key, face })
@@ -602,7 +1017,7 @@ fn draw_area(
     known_lines: &BTreeSet<u32>,
     surroundings: &Surroundings<'_>,
 ) -> Result<AreaBody, &'static str> {
-    let named_lines = named_ids(&record.bytes, known_lines, AREA_LINE_ID_FLOOR);
+    let named_lines = record.named_ids(known_lines, AREA_LINE_ID_FLOOR);
     let named_in_group = named_lines.iter().all(|line| {
         !lines.conflicted.contains(line)
             && lines
@@ -623,6 +1038,7 @@ fn draw_area(
         face: face.clone(),
         base_feet,
         height_feet,
+        joined: face.joined,
     })
 }
 
@@ -662,8 +1078,8 @@ fn area_bodies(
         refuse_all(&mut out, REFUSED_NO_LINES);
         return out;
     }
-    let points = area_points(rf, placed);
-    let mut arrangements: BTreeMap<GroupKey, Option<Arrangement>> = BTreeMap::new();
+    let points = area_points(rf, revit_version, placed, surroundings.level_ids);
+    let mut arrangements: BTreeMap<GroupKey, Option<GroupArrangement>> = BTreeMap::new();
     let mut located: BTreeMap<u32, Result<Located, &'static str>> = BTreeMap::new();
     for (&id, record) in placed {
         let point = points.get(&id).copied();
@@ -724,10 +1140,12 @@ fn area_bodies(
     out
 }
 
-/// Every placed Area of a Revit 2024 file, as a `DecodedElement` of class
-/// `Area` with its number, name and Level where they are read, and its
-/// boundary, base and height where they are proven (RE-317). Empty on every
-/// other release.
+/// Every placed Area of a Revit 2015 to 2024 file, as a `DecodedElement` of
+/// class `Area` with its number, name and Level where they are read, and its
+/// boundary, base and height where they are proven (RE-317, RE-324). On 2015
+/// to 2023 only the Areas whose body is proven; the others are counted by
+/// reason on the file (`RevitFile::unwritten_areas`). Empty on every other
+/// release.
 pub fn areas_from_partition_chain_records(
     rf: &mut RevitFile,
     revit_version: u32,
@@ -737,7 +1155,7 @@ pub fn areas_from_partition_chain_records(
     if !AREA_SUPPORTED_REVIT_VERSIONS.contains(&revit_version) {
         return Vec::new();
     }
-    let Some(marker) = file_bbox_marker(rf, revit_version) else {
+    let Some(layout) = Layout::of(rf, revit_version) else {
         return Vec::new();
     };
     let declared = match crate::elem_table::parse_records(rf) {
@@ -745,26 +1163,26 @@ pub fn areas_from_partition_chain_records(
         Err(_) => return Vec::new(),
     };
     let options = rf.memoised_design_options();
-    let census = area_records(rf, &marker, &declared);
-    let placed: BTreeMap<u32, AreaRecord> = census
+    let options_read = layout.reads_design_options(revit_version);
+    let census = area_records(rf, layout, &declared);
+    let mut placed: BTreeMap<u32, AreaRecord> = census
         .areas
         .into_iter()
         .filter(|(_, record)| {
-            le_bytes::u64_at(&record.bytes, CONTAINER_OFFSET) == Some(CONTAINER_NONE)
-                && le_bytes::u32_at(&record.bytes, PLACEMENT_KIND_OFFSET)
-                    == Some(PLACEMENT_KIND_INSTANCE)
-                && !frame_design_option(&record.bytes, 0)
-                    .is_some_and(|option| options.is_non_primary(option))
+            record.container_unset()
+                && record.placed_kind()
+                && record.in_primary_option(&options, options_read)
         })
         .collect();
-    let ids: BTreeSet<u32> = placed.keys().copied().collect();
-    let entries =
-        crate::partition_room_parameters::scan_room_parameter_entries(rf, revit_version, &ids);
+    if placed.is_empty() {
+        return Vec::new();
+    }
     let surroundings = Surroundings {
         declared: &declared,
         level_ids,
         scheme_ids: &census.scheme_ids,
         levels,
+        options_read,
     };
     let mut bodies = area_bodies(
         rf,
@@ -774,10 +1192,30 @@ pub fn areas_from_partition_chain_records(
         &surroundings,
         &options,
     );
+    if matches!(layout, Layout::Narrow(_)) {
+        // On Revit 2015 to 2023 an Area is written only where its region and
+        // body are proven (RE-324): a wider rule wrote spaces Revit's export
+        // lacks on a held-out project. Revit's exporter makes no space for an
+        // Area whose boundary yields no loop, and the Area's lines are all
+        // that is read of its boundary. Every placed Area is drawn or refused
+        // with a reason, so the refusals are the Areas left out.
+        let mut unwritten = BTreeMap::<String, usize>::new();
+        for reason in bodies.refused.values() {
+            *unwritten.entry((*reason).to_string()).or_insert(0) += 1;
+        }
+        placed.retain(|id, _| bodies.drawn.contains_key(id));
+        rf.set_unwritten_areas(unwritten);
+        if placed.is_empty() {
+            return Vec::new();
+        }
+    }
+    let ids: BTreeSet<u32> = placed.keys().copied().collect();
+    let entries =
+        crate::partition_room_parameters::scan_room_parameter_entries(rf, revit_version, &ids);
     placed
         .into_iter()
         .map(|(id, record)| {
-            let level = named_one(&record.bytes, level_ids);
+            let level = record.named_one(level_ids);
             let mut fields = vec![
                 (
                     "m_builtinCategory".into(),
@@ -852,6 +1290,9 @@ pub fn areas_from_partition_chain_records(
                         size: 8,
                     },
                 ));
+                if body.joined {
+                    fields.push((AREA_JOINED_FIELD.into(), InstanceField::Bool(true)));
+                }
             }
             DecodedElement {
                 id: Some(id),

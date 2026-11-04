@@ -211,6 +211,7 @@ rvt-schedule model.rvt                          # model.elements.csv next to the
 rvt-schedule model.rvt --schedule rooms         # model.rooms.csv: number, name, level, area
 rvt-schedule model.rvt --metric --excel         # metres, and a BOM so Excel reads non-ASCII names
 rvt-schedule model.rvt -o -                     # print the CSV instead of writing a file
+rvt-schedule model.rvt --phase "Existing"       # another phase than the project's last (a name or an ElementId)
 ```
 
 The element schedule has one row per decoded building element: Revit
@@ -326,6 +327,25 @@ Export modes:
 If strict mode fails, read the diagnostics JSON. The failure may mean the file is
 valid Revit but outside the current rvt-rs support profile.
 
+### The phase an export shows
+
+Revit's IFC export shows one phase of the project, the last unless the export
+setup names another, and leaves out what does not exist in it: an element
+created after it or demolished in it or before it, and a room whose own phase
+is not it. `rvt-ifc` does the same, and counts what it leaves out in the
+diagnostics (`element_record_not_in_export_phase`, `room_not_in_export_phase`).
+`--phase` names another phase, exactly as the project spells it or by its
+ElementId:
+
+```bash
+rvt-ifc model.rvt -o model.ifc --phase "Working Drawings"
+```
+
+A phase the file does not list is an error that lists the ones it does. A
+room whose phase is unset or unread is written whatever the phase, and so is
+an Area or an MEP space, which Revit's export does not check against a phase
+either. The Python bindings and the viewer export the last phase.
+
 ### Large models
 
 rvt-rs caps what it reads so that a hostile file cannot exhaust memory: 2 GiB
@@ -382,6 +402,12 @@ millimetres compare with rvt-rs's metres. Counts by IFC class, storeys and
 objects only on one side are what a [practitioner
 report](https://github.com/DrunkOnJava/rvt-rs/issues/new?template=practitioner_report.yml)
 needs; no model file is.
+
+To check what the sidecar reports against the file itself, `--element-provenance`
+adds where each decoded element was read from: its stream, its byte offset in
+the inflated stream (the bytes `rvt-dump` writes as `Partitions_NN.decomp`) and
+its class. It is off by default, since the list is much larger than the rest of
+the sidecar ([Export diagnostics](export-diagnostics.md#cli)).
 
 ## Understand Warnings
 

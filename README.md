@@ -13,6 +13,7 @@ It comes as command-line tools, a Rust library, Python bindings and a browser vi
 | See a model without installing anything | Open the [browser viewer](https://drunkonjava.github.io/rvt-rs/) and pick a demo, or drop in a file of your own. |
 | Inspect or export files from the command line | The [installation guide](docs/install.md); prebuilt binaries are on [GitHub Releases](https://github.com/DrunkOnJava/rvt-rs/releases). |
 | Work with files in Python | The [Python guide](docs/python.md) (`pip install rvt`). |
+| Let an agent ask about a file | The [MCP server](docs/mcp.md), `rvt-rs-mcp`: local, read-only, over stdio. |
 | Check what your file will give | [What you can rely on, by input](docs/evidence.md#what-you-can-rely-on-by-input), then the [user guide](docs/user-guide.md). |
 | Use the Rust library | The [examples](examples/README.md) (open a file, list its elements, export it), the [library surface](docs/library.md#library-surface) and the [API documentation](https://docs.rs/rvt). |
 | Tell us how it went on your own models | [Discussion #982](https://github.com/DrunkOnJava/rvt-rs/discussions/982): your diagnostics are enough, never the building. |
@@ -46,14 +47,15 @@ The measured detail behind each row is in [`docs/evidence.md`](docs/evidence.md)
 
 ## Install and quick start
 
-The latest release is [v0.13.0](https://github.com/DrunkOnJava/rvt-rs/releases/tag/v0.13.0) (2026-11-03). Install it with any of:
+The latest release is [v0.14.0](https://github.com/DrunkOnJava/rvt-rs/releases/tag/v0.14.0) (2026-11-04). Install it with any of:
 
 - the prebuilt Linux, macOS and Windows binaries on [GitHub Releases](https://github.com/DrunkOnJava/rvt-rs/releases), or the container image `ghcr.io/drunkonjava/rvt-rs`;
 - `cargo install rvt --locked`;
 - `pip install rvt`, for the Python bindings;
+- `cargo install rvt-rs-mcp --locked`, for the [MCP server](#mcp-server) alone;
 - nothing at all: the [browser viewer](https://drunkonjava.github.io/rvt-rs/) reads a file inside the tab.
 
-[`docs/install.md`](docs/install.md) covers every channel, building from source and the smoke tests. This README describes `main`, which the browser viewer is also built from, so it can be ahead of the latest release: "Upgrading from 0.12" in the [changelog](CHANGELOG.md#upgrading-from-012) says what a user of 0.12 has to change, and each change `main` adds after 0.13.0 is a fragment in [`changelog.d/`](changelog.d/README.md), which the next release moves into `CHANGELOG.md`. To use `main` before the next release, build from source ([`docs/install.md`](docs/install.md#build-from-source)).
+[`docs/install.md`](docs/install.md) covers every channel, building from source and the smoke tests. This README describes `main`, which the browser viewer is also built from, so it can be ahead of the latest release: "Upgrading from 0.13" in the [changelog](CHANGELOG.md#upgrading-from-013) says what a user of 0.13 has to change, and each change `main` adds after 0.14.0 is a fragment in [`changelog.d/`](changelog.d/README.md), which the next release moves into `CHANGELOG.md`. To use `main` before the next release, build from source ([`docs/install.md`](docs/install.md#build-from-source)).
 
 Three commands cover most of what the command line does:
 
@@ -84,16 +86,20 @@ Drop a `.rvt`, `.rfa`, `.rte` or `.rft` at <https://drunkonjava.github.io/rvt-rs
 
 Every deploy checks the viewer's privacy posture in two ways. `viewer/scripts/audit-wasm-imports.mjs` reads each import of the compiled `.wasm` and its shim in the JavaScript glue, and fails if any reaches `fetch`, `XMLHttpRequest`, `WebSocket`, `EventSource` or `sendBeacon`. A Playwright test opens a real project in the built viewer and fails on any request to another origin, or on any request at all after the file is open. The page's Content-Security-Policy also limits its connections to its own origin. Together these cover the WebAssembly module's imports, the page's connection policy and the flow the test drives; they are checks, not a proof about every possible code path. [`docs/viewer-privacy-posture.md`](docs/viewer-privacy-posture.md) states the invariant and what each check covers.
 
+## MCP server
+
+`rvt-rs-mcp` is a local, read-only [Model Context Protocol](https://modelcontextprotocol.io) server over stdio, the `rvt-mcp` workspace member, so an agent can ask about a Revit file with no Revit install and no network. `open_model` decodes a file once, with the decode `rvt-ifc` runs, and every tool (`get_summary`, `list_elements`, `get_element`, `list_rooms`, `list_levels`, `get_diagnostics`) answers from that same model, each element with its provenance, so an answer and the IFC export cannot disagree; `export_ifc` and `export_gltf` write to a path the agent names. It opens no socket and makes no network call, and it reports what it left out the way the CLIs do. It is a crate of its own, so `rvt` gains no async runtime, and it needs Rust 1.88, one above the CLIs. It ships from v0.14.0, in the release archives, the container image and as the `rvt-rs-mcp` crate; [`docs/mcp.md`](docs/mcp.md) has the install, the client configuration, the tools, the handle lifetime and what it does not read.
+
 ## What does not work yet
 
 The full list, with each gap's status and evidence, is in [`docs/evidence.md`](docs/evidence.md#what-does-not-work-yet). In brief:
 
 - Files from before Revit 2008 are not read, and 2008 to 2014 files are experimental, measured on local files only and outside the 1.0 range.
 - Revit 2015 to 2022 and 2027 projects are experimental: measured against the same models saved by a neighbouring release, not against Revit's own export (one 2015 project, RE-198, and one 2018 project, RE-315, aside). Revit 2026 is experimental too, measured on one project.
-- On Revit 2008 to 2023, 2026 and 2027 projects an element's body is its bounding box, cut back at its joins where they are read. On 2024 and 2025 it is the box only where the bytes are not decoded: roofs by extrusion outside Revit 2025, hip roofs over a T or U footprint, monolithic spiral stair flights and straight riserless ones with a nosing, edited wall profiles, ducts and pipe fittings. From 2023, doors and windows are drawn from Revit's saved meshes where those decode whole; furniture and other loadable families stay boxes unless `--saved-meshes` is given.
+- On Revit 2008 to 2023, 2026 and 2027 projects an element's body is its bounding box, cut back at its joins where they are read. On 2024 and 2025 it is the box only where the bytes are not decoded: roofs by extrusion outside Revit 2025, hip roofs over a T or U footprint, monolithic spiral stair flights and straight riserless ones with a nosing, edited wall profiles, ducts and pipe fittings. From 2023, doors and windows are drawn from Revit's saved meshes where those decode whole; furniture and other loadable families stay boxes unless `--saved-meshes` is given, and `--family-extrusions` (opt-in; implies `--saved-meshes`) draws an instance whose family's extrusions reproduce its mesh from them, as extruded profiles; an arc of 0.12 ft in radius or less is written as the arc, and an instance with a larger arc keeps its mesh.
 - `rvt-elements` and Python list each element's saved parameters on Revit 2023 to 2027 files, experimentally on 2015 to 2022 ones and not on 2008 to 2014, but built-in parameters have no name, a wall's or floor's type parameters are not joined to it, and only `rvt-ifc --revit-property-sets` writes the rest into IFC.
 - Family files give metadata, previews and types but no family geometry, and template files (`.rte`, `.rft`) are not measured, because no template is in any corpus.
-- Rooms are not checked against the phase, so a room created in an earlier phase than the last is written, which Revit's export may leave out.
+- A room is left out of the export when its own phase is not the export phase, the project's last unless `rvt-ifc --phase` names another, as Revit's exporter does (RE-326); a room whose phase is unset or unread is written, and so is an Area or an MEP space. This is measured on no Revit export made with the default setup, because none has such a room: the one Revit export of a project with rooms outside its last phase (Autodesk's `rac_basic_sample_project`, 14 rooms) holds them, and rvt-rs writes them with `--phase "Working Drawings"`. The Python bindings and the viewer export the last phase.
 - Semantic editing of a Revit file is not implemented: the write path patches named streams byte for byte, and field-level writes wait on ADR-002.
 
 ## Command-line tools

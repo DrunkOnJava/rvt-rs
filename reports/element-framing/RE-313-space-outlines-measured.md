@@ -32,6 +32,8 @@ Measure on `main` at a98bd316 (the first run), and the final scorer on this bran
 
 The other R2025 models, RE1 Electrical, Mechanical and Plumbing and Einhoven (which has no Revit export) have no spaces. The office pairs 276 and 278 of the 278 spaces rvt-rs writes a body for (two as built have no area in Revit's top surface), and the 30 of Revit's it does not pair are its Areas: Revit's export gives them a body, and rvt-rs writes them without one (RE-191). The 16 held-out rooms of 2026 and 2027 are rectangles, since their outline equals the box's to 0.01 ft.
 
+**Correction, 2026-11-04.** The held-out house's row was scored through a wrong frame: its export is in millimetres with a placed `IfcSite`, and `tools/re/ifc_common.py::site_frame` read the site's origin as metres. Its "In both" (12) and the outline and boundary columns (0 and 0) therefore do not describe the house. With the frame fixed and the reader of the time unchanged in kind, Measure run 41833543727 (the fixed scorers) against 41833547378 (`main`'s) gives, on `main` as it is now, 13 of 13 in both and 13 of 13 within 0.01 ft in area, outline and boundary, counts only. The same fix moves Gdynia (0 to 18 of 18 in boundary, 0 to 16 in outline). The rest of this report's tables are of models in metres or placed at the origin, whose rows the fix does not change (every other model's space counts are identical in that pair of runs).
+
 ## 3. What misses, and why
 
 A miss is a space off by more than 0.1% in area or 0.01 ft in outline.

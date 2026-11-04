@@ -104,8 +104,10 @@ jobs:
         uses: taiki-e/install-action@68a389c788b2cd04016ce8c80ee23b80d2ab3d68 # v2.88.1
         with:
           tool: cargo-auditable@0.7.7
+      # The root crate's CLIs and the MCP server (rvt-mcp/, `rvt-rs-mcp`), which
+      # is a crate of its own: a plain `--bins` builds the root package only.
       - name: Build release binaries
-        run: cargo auditable build --release --locked --bins --target ${{ matrix.target }}
+        run: cargo auditable build --release --locked --bins -p rvt -p rvt-rs-mcp --target ${{ matrix.target }}
       # The dependency list cargo-auditable embeds lives in a `.dep-v0`
       # section, and [profile.release] strips the binaries. Fail the build if
       # a shipped Linux binary has lost the section, so the claim that
@@ -116,7 +118,7 @@ jobs:
         env:
           TARGET: ${{ matrix.target }}
         run: |
-          for bin in rvt-info rvt-ifc rvt-analyze; do
+          for bin in rvt-info rvt-ifc rvt-analyze rvt-rs-mcp; do
             path="target/$TARGET/release/$bin"
             if readelf --section-headers --wide "$path" | grep -q '\.dep-v0'; then
               echo "$path: .dep-v0 present"
@@ -147,11 +149,12 @@ jobs:
           mkdir -p "dist/${name}"
           # Every [[bin]] of the root crate, read from Cargo.toml so a new CLI
           # ships without touching this workflow (awk: jq is not on every
-          # runner image).
+          # runner image), and the MCP server, which is a crate of its own.
           awk '/^\[\[bin\]\]/ { in_bin = 1; next }
                in_bin && /^name *=/ { gsub(/^name *= *"|"$/, ""); print; in_bin = 0 }' \
             Cargo.toml > dist/bins.txt
           test -s dist/bins.txt
+          echo rvt-rs-mcp >> dist/bins.txt
           while read -r bin; do
             cp "target/${target}/release/${bin}${ext}" "dist/${name}/"
           done < dist/bins.txt
@@ -189,6 +192,15 @@ jobs:
           "${dir}/rvt-inspect${ext}" "${scratch}/demo.rvt" --json > "${scratch}/inspect.json"
           "${dir}/rvt-ifc${ext}" "${scratch}/demo.rvt" -o "${scratch}/demo.ifc"
           test -s "${scratch}/demo.ifc"
+          # The MCP server answers server/discover on stdio and exits when its
+          # stdin closes (the pause keeps stdin open until it has answered).
+          "${dir}/rvt-rs-mcp${ext}" --version
+          discover='{"jsonrpc":"2.0","id":1,"method":"server/discover","params":{"_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28","io.modelcontextprotocol/clientCapabilities":{}}}}'
+          reply="$({ printf '%s\n' "${discover}"; sleep 3; } | "${dir}/rvt-rs-mcp${ext}")"
+          case "${reply}" in
+            *'"supportedVersions"'*'2026-07-28'*) ;;
+            *) echo "::error::rvt-rs-mcp did not answer server/discover: ${reply}"; exit 1 ;;
+          esac
           echo "smoke OK: ${BINS} binaries"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -282,6 +294,7 @@ jobs:
         run: |
           set -euo pipefail
           docker run --rm rvt-rs:smoke rvt-info --version
+          docker run --rm rvt-rs:smoke rvt-rs-mcp --version
           docker run --rm rvt-rs:smoke
           work="$(mktemp -d)"
           chmod 0777 "${work}"

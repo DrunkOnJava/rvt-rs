@@ -16,7 +16,7 @@
 //!
 //! - [`partition_arc_walls`]: Shared partition ArcWall iteration (RE-15)
 //! - [`partition_area_boundaries`]: The region an Area occupies among its area boundary lines (RE-317)
-//! - [`partition_area_records`]: Revit 2024 Areas from their partition chain records (#763)
+//! - [`partition_area_records`]: Revit 2015 to 2024 Areas from their partition chain records (#763, #1194)
 //! - [`partition_beam_axes`]: Beam location lines from their serialised element data (RE-49)
 //! - [`partition_column_nodes`]: A column's true z-range from its instance geometry node (RE-173)
 //! - [`partition_compound_structure`]: Host types' layers and which side of a wall is its exterior (RE-53)
@@ -70,6 +70,7 @@
 //! - [`native_es_catalog`]: File-local Extensible Storage catalog from the owned Global/Latest graph
 //! - [`native_extensible_storage`]: File-local Extensible Storage definitions
 //! - [`native_family_forms`]: Whether a loaded family draws visible geometry with no material, from its embedded document (RE-204, #355)
+//! - [`native_form_geometry`]: A family file's own document, read record by record without the project index (RE-327, #156)
 //! - [`native_graphics_traversal`]: Bounded traversal of saved graphics under the default 3D context
 //! - [`native_index`]: Native project identities and creation-episode UniqueIds
 //! - [`native_instance_materials`]: The materials a family instance's own parameters give it (RE-200, #355)
@@ -120,6 +121,7 @@ pub mod native_empty_faces;
 pub mod native_es_catalog;
 pub mod native_extensible_storage;
 pub mod native_family_forms;
+pub mod native_form_geometry;
 pub mod native_graphics_traversal;
 pub mod native_index;
 pub mod native_instance_materials;

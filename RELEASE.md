@@ -23,7 +23,8 @@ the **minor** version, not the major. That is:
 
 The current version lives in `Cargo.toml` under `[package].version`. It
 is repeated in `rvt-py/Cargo.toml` (the wheel's version, and its `=X.Y.Z`
-dependency on `rvt`), `rvt-wasm/Cargo.toml`, the `rvt` dependency of
+dependency on `rvt`), `rvt-mcp/Cargo.toml` (the MCP server's version, and its
+`=X.Y.Z` dependency on `rvt`), `rvt-wasm/Cargo.toml`, the `rvt` dependency of
 `tools/stream_evidence/Cargo.toml`, `viewer/package.json`, `CITATION.cff`, and the workspace crates' entries in
 `Cargo.lock` and `fuzz/Cargo.lock`. All of them must agree at tag time.
 
@@ -52,6 +53,9 @@ Every `vX.Y.Z` release:
   `gh attestation verify <archive> -R DrunkOnJava/rvt-rs` also reads from
   GitHub).
 - Publishes the `rvt` crate to [crates.io](https://crates.io/crates/rvt),
+  then, once the repository variable `PUBLISH_RVT_RS_MCP` is `true` (step 8),
+  the MCP server's crate `rvt-rs-mcp` ([docs/mcp.md](docs/mcp.md)), which
+  depends on that exact version, and
   Python wheels for Linux (glibc and musl), macOS and Windows and an sdist
   to [PyPI](https://pypi.org/project/rvt/), and the container image
   `ghcr.io/drunkonjava/rvt-rs:X.Y.Z`, all from
@@ -152,9 +156,21 @@ project treats a silent skipped step the same as an untested change.
 8. **Confirm the registries' trusted publishers.** crates.io and PyPI
    each need one for repository DrunkOnJava/rvt-rs, workflow
    `publish.yml`, environment `crates-io` or `pypi` (see
-   [`docs/maintaining.md`](docs/maintaining.md#releases)). Without
+   [`docs/maintaining.md`](docs/maintaining.md#releases)). crates.io needs
+   one for each of its two crates, `rvt` and `rvt-rs-mcp`. Without
    crates.io's, the crate's publish fails, and PyPI, the release
-   binaries and the container image, which wait for it, never run.
+   binaries and the container image, which wait for it, never run. A
+   trusted publisher can be added only to a crate that exists, so the first
+   version of `rvt-rs-mcp` is published by hand from the release commit
+   (`cargo publish -p rvt-rs-mcp`, after `rvt` of that version is on
+   crates.io), and its trusted publisher added afterwards. Until then
+   `publish.yml` skips its `rvt-rs-mcp` publish step: a publish that fails
+   after `rvt` is on crates.io would leave the tag half published. Set the
+   repository variable `PUBLISH_RVT_RS_MCP` to `true` (Settings, Secrets and
+   variables, Actions, Variables) once the trusted publisher is in place, and
+   later releases publish both crates. The `rvt-rs-mcp` binary is in the
+   release archives and the container image whether or not the variable is
+   set.
 9. **Tag the merged commit.** `git fetch origin`, check that
     `origin/main` is the release pull request's squash commit, then
     `git tag -s vX.Y.Z -m "rvt-rs X.Y.Z" origin/main`. The `-s` signs
@@ -192,6 +208,9 @@ publish, and viewer deploy finish. Replace `X.Y.Z` with the released version.
 ```bash
 cargo install rvt --version X.Y.Z --locked
 rvt-inspect --version
+# Once PUBLISH_RVT_RS_MCP is true (step 8); until then the archive's binary:
+cargo install rvt-rs-mcp --version X.Y.Z --locked
+rvt-rs-mcp --version
 
 python -m venv /tmp/rvt-release-smoke
 . /tmp/rvt-release-smoke/bin/activate
@@ -300,12 +319,15 @@ where CI and Measure run, only when it is ready to release.
 The following is the actual state of release infrastructure, not the
 aspirational state. Update this section when you wire up more of it.
 
-- **CI on every push to `main` and on every PR** (`.github/workflows/ci.yml`):
+- **CI on every push to `main` and on every PR** (`.github/workflows/ci.yml`,
+  which a pull request runs through `ci-pr.yml`: in full once ready, only the
+  fast jobs while a draft):
   fmt, clippy, the test matrix (Linux, macOS and Windows, stable, and the
   MSRV), rustdoc, `cargo deny`, `cargo audit`, the docs.rs build preview,
   the Python wheel and its integration tests, IfcOpenShell validation and
-  the witness verdicts, the PII guard and the rest. `CI passed`, the one
-  required check, passes only when every one of them did (see
+  the witness verdicts, the PII guard and the rest. `full / CI passed` (a
+  push to `main` names it `CI passed`), the one required check, passes only
+  when every one of them did (see
   [`docs/maintaining.md`](docs/maintaining.md#pull-requests)).
 - **Publish workflow** (`.github/workflows/publish.yml`), on `v*` tags and
   `workflow_dispatch`: the checks and publish order of step 10. Its

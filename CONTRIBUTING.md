@@ -25,9 +25,14 @@ You need stable Rust 1.87 or newer (`rustup` installs it) and git.
    tools/check-local.sh
    ```
 
-   That runs `cargo fmt --check`, `cargo clippy` with `-D warnings`, rustdoc
-   with `-D warnings`, and the integration tests under `tests/` — the same
-   checks a pull request must pass. Green here means your machine is set up.
+   That runs `cargo fmt --check`, `cargo clippy` with `-D warnings`,
+   `cargo check --lib --bins` with warnings and `unnameable_types` denied,
+   rustdoc with `-D warnings`, a build of every target, the doc tests, the
+   real-file, CLI and contract targets of `tests/`
+   (`tools/ci/verify-real-files.sh`) and the user examples: the checks a
+   pull request must pass, before the jobs CI adds (the MSRV build on Rust
+   1.87, the i686 overflow checks, the wheels, the audits). Green here means
+   your machine is set up.
 
 3. Pick something small. Tasks that fit in an afternoon and need no corpus
    files are labelled
@@ -47,15 +52,24 @@ You need stable Rust 1.87 or newer (`rustup` installs it) and git.
    that runs only `cargo fmt --check`, so the cheapest failure never reaches CI.
 
 6. Commit with a [Conventional Commits](#commit-messages) message
-   (`docs(...)`, `fix(...)`, `test(...)`), push to your fork, and open a pull
+   (`docs(...)`, `fix(...)`, `feat(...)`), push to your fork, and open a pull
    request against `main`. The pull-request template asks what changed and
-   what you ran — fill in what applies and write "N/A" for the rest.
+   what you ran — fill in what applies and write "N/A" for the rest. A change
+   a user can see also adds its entry as a fragment under
+   [`changelog.d/`](changelog.d/README.md), never in `CHANGELOG.md` itself
+   (CI runs `python3 tools/release/changelog.py check`). `main` takes only
+   signed commits and squash merges ([`docs/maintaining.md`](docs/maintaining.md)):
+   sign yours, or leave "Allow edits by maintainers" on and the maintainer
+   replaces an unsigned commit on your branch with the same change, keeping
+   you as its author.
 
 7. A maintainer reviews and squash-merges. GitHub holds the checks of a
    first-time contributor's pull request until a maintainer has looked at the
    proposed change and approved the workflow run, so a pull request whose
    checks say they are awaiting approval is waiting on us, not on you. Approval to run
-   checks is separate from approval to merge. Leave "Allow edits by
+   checks is separate from approval to merge. The one check a merge needs is
+   `full / CI passed`, which a pull request carries once it is marked ready;
+   while it is a draft only the `fast / ...` jobs run. Leave "Allow edits by
    maintainers" on and we can push small fix-ups to your branch (a rebase,
    a signed commit, a refreshed fixture) instead of bouncing it back; the
    squash commit keeps you as its author.
@@ -92,22 +106,39 @@ build `--lib --bins --tests` rather than `--all-targets`, and only the Linux
 Python wheel builds, with the full platform matrix reserved for pushes to
 `main` (pull request
 [#260](https://github.com/DrunkOnJava/rvt-rs/pull/260), merged
-2026-09-19).
+2026-09-19). A draft pull request runs less still: fmt, clippy, cargo doc, the PII
+guard, the env lint, Corpus health and the Ubuntu builds with their
+real-file checks, as `fast / ...`. Marking it ready runs the full set, whose
+`full / CI passed` is the check a merge needs (#1237, #1319).
 
-**Unit tests are banned.** Do not add them. Changes are verified end to
-end: against real Revit files and Revit's own exports, through the built
-CLIs, and by the contract checks that keep the published claims honest.
-`tools/ci/test-targets.txt` classes every file under `tests/` as `real`,
-`cli`, `contract` or `unit`, and `tools/ci/verify-real-files.sh` runs all
-but `unit`, in CI on every OS (with the family corpus on Linux and Windows)
-and again against the project corpora in the tier-2 job. The script fails
-on a file the manifest does not class, so a new target cannot slip past.
+**Unit tests are banned, with one exception.** Do not add them. Changes are
+verified end to end: against real Revit files and Revit's own exports,
+through the built CLIs, and by the contract checks that keep the published
+claims honest. `tools/ci/test-targets.txt` classes every file under `tests/`
+as `real`, `cli`, `contract` or `hardening` (inputs that crashed a parser,
+replayed through the public API), and `tools/ci/verify-real-files.sh` runs
+them, in CI on every OS (with the family corpus on Linux and Windows) and
+again against the project corpora in the tier-2 job. The script fails on a
+file the manifest does not class, so a new target cannot slip past.
 Every file under `tests/` is a module of `tests/integration/main.rs`, one
 test binary, so a new file also needs its two lines there (the script fails
 without them), and its tests are named `<file>::<test>`: `cargo test --test
 integration -- proxy_ports::` runs one file.
 Targets that read a corpus must skip cleanly when their environment
 variable is unset: the macOS and MSRV runs have no corpus.
+
+The exception (the maintainer's, 2026-11-04) is a pure helper: a function
+with no file, network, process or clock I/O, such as a string or number
+parser or a small pure transform, may have a few fast unit tests next to it
+in `src/`. Write the ways it can fail first, and test those: edge inputs,
+malformed input, boundaries. Never a tautology, never a test that only
+restates the code, and never a stand-in for end-to-end evidence of a feature.
+Anything that reads a file or decodes a real format is proved on real files,
+whatever its size. The first is `regions_tile` in
+`src/research/native_saved_mesh.rs` (RE-329: whether a plane face's region
+rings tile its outline, a function of 2D rings), with its failure modes
+tested; CI's test job runs these with `cargo test --lib` on Linux, beside
+the doc tests and the `tests/` targets.
 
 ## What's welcome
 
@@ -123,10 +154,9 @@ variable is unset: the macOS and MSRV runs have no corpus.
   are fair game.
 - **End-to-end checks.** A test under `tests/` that runs the real entry
   point (a CLI, the library on a file, the exporter) against a fixture or a
-  corpus file and checks what a user would see. Unit tests are not accepted:
-  CI and `tools/check-local.sh` do not run them, so they would check nothing.
-  For a format fact, the evidence is a probe under `probes/examples/` and its
-  report.
+  corpus file and checks what a user would see. Unit tests are not accepted,
+  apart from the few tests of a pure helper described above. For a format
+  fact, the evidence is a probe under `probes/examples/` and its report.
 
 ## Where help is most wanted
 
@@ -190,7 +220,8 @@ Open an issue (or a draft PR) before starting work on any of:
 - `cargo fmt` before every commit.
 - `tools/check-local.sh` must pass: fmt, clippy, rustdoc, a build of every
   target, and the real-file, CLI and contract checks. The CI in
-  `.github/workflows/` enforces the same. No unit tests.
+  `.github/workflows/` enforces the same. No unit tests, apart from the
+  pure-helper exception above.
 - **No `unsafe` in the library crate.** If you genuinely need it,
   open an issue first to discuss.
 - **No panics in parsing paths.** Malformed input must return an
@@ -201,10 +232,11 @@ Open an issue (or a draft PR) before starting work on any of:
 - **Keep public status honest.** If a change affects user-visible
   capability, update [`docs/status.md`](docs/status.md),
   [`ROADMAP.md`](ROADMAP.md), or [`docs/compatibility.md`](docs/compatibility.md)
-  in the same PR.
+  in the same PR, with its changelog fragment under
+  [`changelog.d/`](changelog.d/README.md).
 - **Every probe under `probes/examples/`** gets a module-level doc
   comment explaining *what FACT it proves* and *how to verify*
-  the result against the 11-version corpus.
+  the result against the 12-release corpus.
 
 ## Fuzzing
 
@@ -256,10 +288,14 @@ We use Conventional Commits:
 - `test(<scope>): ...` for test-only changes
 - `refactor(<scope>): ...` for behavior-preserving internal changes
 - `perf(<scope>): ...` for performance
-- `chore(<scope>): ...` for infra / CI / build
+- `chore(<scope>): ...` for housekeeping
+- `ci(<scope>): ...` for the workflows and CI scripts
+- `build(<scope>): ...` for the build and its dependencies
+- `research(<scope>): ...` for probes and reports that add a format fact
 
-Scopes that appear frequently: `formats`, `object_graph`,
-`elem_table`, `partitions`, `writer`, `ifc`, `readme`, `cli`.
+Scopes in use (the last 400 commits of `main`): `ifc`, `elements`, `measure`,
+`release`, `reader`, `deps`, `saved-graphics`, `viewer`, `tools`, `research`,
+`geometry`, `formats`, `cli`, `rooms`.
 
 A pull request that breaks the stable Rust API (`RELEASE.md`, "What 1.0
 keeps stable") marks its title with `!`, as in `refactor(error)!: ...`, or
@@ -341,9 +377,12 @@ When you discover something new about the file format:
 
    The summary's `rvt-ifc` wall times come from the base and head jobs, which
    run on different runners; runner speed alone moves them by up to about
-   1.7x. For a speed claim, add `-f timing=true`: one runner then builds both
-   refs and exports each model (and each sample, with `-f samples=true`) with
-   both in turn, and reports the medians and their ratio.
+   1.7x. For a speed claim, add `-f timing=true`: both refs are built once,
+   and each model (and each sample, with `-f samples=true`) is exported with
+   both in turn on one runner, in shards of about equal time that run side by
+   side, and the table reports the medians and their ratio. Compare the ratios
+   between rows, not the times: runner CPUs differ by up to about a quarter,
+   and the summary names each shard's.
 
 This keeps every claim independently verifiable, which is the
 whole point of open reverse-engineering work.
@@ -357,7 +396,7 @@ this). Three variables are recognised, in decreasing specificity:
 
 - `RVT_FAMILY_2024` — full path to a single `.rfa` sample
   (family-file probes).
-- `RVT_SAMPLES_DIR` — directory holding the 11-release
+- `RVT_SAMPLES_DIR` — directory holding the 12-release (2016 to 2027)
   [`phi-ag/rvt`](https://github.com/phi-ag/rvt) corpus. Defaults
   to `_corpus/examples/Autodesk` under the crate root, where
   `git clone https://github.com/phi-ag/rvt _corpus` puts it.
@@ -373,11 +412,11 @@ path doesn't exist, so a fresh clone runs all non-corpus-dependent
 suites green without any env setup. To enable the corpus suites:
 
 ```bash
-# Family corpus (LFS-tracked, 11 releases 2016-2026)
+# Family corpus (LFS-tracked, 12 releases 2016-2027)
 git clone https://github.com/phi-ag/rvt /tmp/phiag
 export RVT_SAMPLES_DIR=/tmp/phiag/examples/Autodesk
 
-# Project corpus (LFS-tracked, 2023 and 2024 real .rvt files)
+# Project corpus (LFS-tracked, real .rvt files of Revit 2023, 2024 and 2025)
 git clone https://github.com/magnetar-io/revit-test-datasets /tmp/magnetar
 export RVT_PROJECT_CORPUS_DIR=/tmp/magnetar/Revit
 

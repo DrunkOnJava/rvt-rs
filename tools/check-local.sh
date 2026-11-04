@@ -23,6 +23,8 @@ Required gates (always run):
   cargo build --workspace --all-targets --all-features
   cargo test --profile ci --doc     (the API docs' examples, on corpus/tier1)
   tools/ci/verify-real-files.sh     (real-file, CLI, contract targets only)
+  tools/ci/audit-mcp-network.sh     (the MCP server's tree has no HTTP crate)
+  cargo test -p rvt-rs-mcp          (the MCP server's end-to-end test)
   cargo run --example basics_*      (the user examples, on corpus/tier1)
 
 Optional gates (opt-in; fail clearly when prerequisites are missing):
@@ -115,6 +117,8 @@ run env RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --lib
 run cargo build --workspace --all-targets --all-features
 run cargo test --profile ci --doc
 run tools/ci/verify-real-files.sh
+run tools/ci/audit-mcp-network.sh
+run cargo test --profile ci -p rvt-rs-mcp
 run cargo run --profile ci --example basics_inspect
 run cargo run --profile ci --example basics_elements
 basics_out="$(mktemp -d)"

@@ -4,24 +4,25 @@ This guide covers the supported ways to install or run rvt-rs on a fresh
 machine. Use [user-guide.md](user-guide.md) after installation to decide which
 workflow fits your file.
 
-**Publication status (as of 2026-11-03, release `v0.13.0`):**
+**Publication status (as of 2026-11-04, release `v0.14.0`):**
 
 | Channel | Status |
 |---|---|
-| **PyPI** (`rvt`) | **Published** — `pip install rvt` installs **0.13.0** (wheels for Linux x86_64 and aarch64 with glibc 2.17 or later, musl Linux x86_64 and aarch64, macOS Apple Silicon and Intel, and Windows x86_64, plus the sdist; see [the platform table](#python-package-from-pypi-available)) |
-| **Prebuilt CLI binaries** (GitHub Releases) | **Published** — [v0.13.0](https://github.com/DrunkOnJava/rvt-rs/releases/tag/v0.13.0) carries archives for Linux (x86_64, aarch64), macOS (Apple Silicon, Intel) and Windows (x86_64), plus `SHA256SUMS` and build attestations |
-| **Container image** (`ghcr.io/drunkonjava/rvt-rs`) | **Published** — `ghcr.io/drunkonjava/rvt-rs:0.13.0`, `linux/amd64` + `linux/arm64`; see [Docker](#docker) |
-| **crates.io** (`rvt`) | **Published** — `cargo install rvt --locked` installs **0.13.0** (the CLIs) and `cargo add rvt` adds the library |
+| **PyPI** (`rvt`) | **Published** — `pip install rvt` installs **0.14.0** (wheels for Linux x86_64 and aarch64 with glibc 2.17 or later, musl Linux x86_64 and aarch64, macOS Apple Silicon and Intel, and Windows x86_64, plus the sdist; see [the platform table](#python-package-from-pypi-available)) |
+| **Prebuilt CLI binaries** (GitHub Releases) | **Published** — [v0.14.0](https://github.com/DrunkOnJava/rvt-rs/releases/tag/v0.14.0) carries archives for Linux (x86_64, aarch64), macOS (Apple Silicon, Intel) and Windows (x86_64), with `rvt-rs-mcp` beside the CLIs, plus `SHA256SUMS` and build attestations |
+| **Container image** (`ghcr.io/drunkonjava/rvt-rs`) | **Published** — `ghcr.io/drunkonjava/rvt-rs:0.14.0`, `linux/amd64` + `linux/arm64`, with `rvt-rs-mcp`; see [Docker](#docker) |
+| **crates.io** (`rvt`) | **Published** — `cargo install rvt --locked` installs **0.14.0** (the CLIs) and `cargo add rvt` adds the library |
+| **crates.io** (`rvt-rs-mcp`) | **Published** — `cargo install rvt-rs-mcp --locked` installs **0.14.0**, the MCP server ([MCP Server](#mcp-server)) |
 | **docs.rs** (`rvt`) | <https://docs.rs/rvt> (built by docs.rs after each crates.io publish) |
 
-Each 0.13.0 channel was checked from what was published, on 2026-11-03.
+Each 0.14.0 channel was checked from what was published, on 2026-11-04.
 
-- **crates.io** records the publish workflow's run (41748110458) and the tagged commit (`0e0582e1`) as the source of the version (Trusted Publishing), and its page shows the 0.13.0 README.
-- **docs.rs** has built 0.13.0.
-- **The macOS arm64 archive** matched `SHA256SUMS`, and its build attestation names the release workflow at the tag. It converted Core Interior, Einhoven and RE1 Architecture into the same IFC as Measure's export of the tag (run 41751239771), line for line once the export time (`FILE_NAME`, `IFCOWNERHISTORY`) is set aside, with diagnostics byte-identical to Measure's.
-- **The PyPI wheel**, installed in a clean environment, converted the same three models into the same IFC as Measure's, with the same diagnostics as JSON (which `rvt_to_ifc_diagnostics` returns without indentation). Since 0.12.0 Python draws doors and windows from their saved meshes, as `rvt-ifc` does.
-- **The container image**, whose attestation verifies, ran on `linux/amd64` and `linux/arm64` and converted RE1 Architecture into the same IFC as the archive.
-- **The deployed viewer**, built from `main` at the release commit, reports `rvt-rs 0.13.0`.
+- **crates.io** records the publish workflow's run (41813229123) and the tagged commit (`999fc7b3`) as the source of `rvt` 0.14.0 (Trusted Publishing), and its page shows the 0.14.0 README. `rvt-rs-mcp` 0.14.0 is the crate's first version: it was published by hand from the tag, as a new crate's first version has to be, and its trusted publisher was added after it, so later releases publish both crates from the tag.
+- **docs.rs** had queued its build of 0.14.0 when the channels were checked.
+- **The macOS arm64 archive** matched `SHA256SUMS`, and its build attestation names the release workflow at the tag. It converted Core Interior, Einhoven and RE1 Architecture into the same IFC as Measure's export of the tag (run 41814559456), line for line once the export time (`FILE_NAME`, `IFCOWNERHISTORY`) is set aside, with diagnostics byte-identical to Measure's. Its `rvt-rs-mcp` answers `server/discover`.
+- **The PyPI wheel**, installed in a clean environment, converted the same three models into the same IFC as Measure's, with the same diagnostics as JSON (which `rvt_to_ifc_diagnostics` returns without indentation).
+- **The container image**, whose attestation verifies, ran on `linux/amd64` and `linux/arm64` and converted RE1 Architecture into the same IFC as the archive; its `rvt-rs-mcp` answers `server/discover`.
+- **The deployed viewer**, built from `main` at the release commit, reports `rvt-rs 0.14.0`.
 - **The publish workflow** also installed each wheel and opened a model on all seven wheel platforms, and ran `cargo install` on the tagged source with the CLI sample smoke. `cargo install` from crates.io itself was not run.
 
 ## Browser Viewer
@@ -46,7 +47,7 @@ python -c "import rvt; print(rvt.__version__)"
 
 Each wheel is one `abi3` build for CPython 3.8 and later.
 
-| Platform | 0.2.0 | 0.3.0 to 0.13.0 |
+| Platform | 0.2.0 | 0.3.0 to 0.14.0 |
 |---|---|---|
 | Linux x86_64 | glibc 2.35 or later (`manylinux_2_35`) | glibc 2.17 or later (`manylinux2014`) |
 | Linux aarch64 (Graviton, Raspberry Pi 4/5, Docker on Apple Silicon) | none | glibc 2.17 or later |
@@ -90,20 +91,41 @@ rvt-ifc --help
 The library API is documented at <https://docs.rs/rvt>; `cargo add rvt` adds
 it to a project.
 
+## MCP Server
+
+`rvt-rs-mcp` is a local, read-only [Model Context Protocol](https://modelcontextprotocol.io)
+server over stdio, so an agent can ask about a Revit file with no Revit
+install and no network. It is a crate of its own and needs Rust 1.88 or later
+to build (the other tools need 1.87). From v0.14.0 the prebuilt archives and
+the container image carry it beside the CLIs, and crates.io has it:
+
+```bash
+cargo install rvt-rs-mcp --locked
+rvt-rs-mcp --version
+```
+
+From a checkout of `main`, `cargo install --path rvt-mcp --locked`.
+
+[`mcp.md`](mcp.md) has the client configuration and the tools.
+
 ## Prebuilt Binaries (GitHub Releases)
 
 Every tagged release from v0.2.0 on attaches ready-to-run archives of
 all the CLIs (`rvt-info`, `rvt-inspect`, `rvt-ifc`, …) to its page under
 <https://github.com/DrunkOnJava/rvt-rs/releases>. No Rust toolchain is
-needed.
+needed. In the archive names `<tag>` is the release tag with its `v`
+(`rvt-rs-v0.14.0-x86_64-unknown-linux-musl.tar.gz`); the wheel and the
+container image name the version without it (`0.14.0`). The release page also
+carries the Python wheels, the sdist and the archives' attestation bundle
+(`rvt-rs-<tag>.intoto.jsonl`).
 
 | Platform | Archive |
 |---|---|
-| Linux x86_64 (static, any distribution) | `rvt-rs-<version>-x86_64-unknown-linux-musl.tar.gz` |
-| Linux arm64 (static, any distribution) | `rvt-rs-<version>-aarch64-unknown-linux-musl.tar.gz` |
-| macOS Apple silicon | `rvt-rs-<version>-aarch64-apple-darwin.tar.gz` |
-| macOS Intel | `rvt-rs-<version>-x86_64-apple-darwin.tar.gz` |
-| Windows x86_64 | `rvt-rs-<version>-x86_64-pc-windows-msvc.zip` |
+| Linux x86_64 (static, any distribution) | `rvt-rs-<tag>-x86_64-unknown-linux-musl.tar.gz` |
+| Linux arm64 (static, any distribution) | `rvt-rs-<tag>-aarch64-unknown-linux-musl.tar.gz` |
+| macOS Apple silicon | `rvt-rs-<tag>-aarch64-apple-darwin.tar.gz` |
+| macOS Intel | `rvt-rs-<tag>-x86_64-apple-darwin.tar.gz` |
+| Windows x86_64 | `rvt-rs-<tag>-x86_64-pc-windows-msvc.zip` |
 
 Each archive holds the binaries plus `README.md`, `LICENSE` and `NOTICE`.
 Download `SHA256SUMS` from the same release and check the archive before
@@ -112,15 +134,15 @@ unpacking:
 ```bash
 # Linux / macOS
 shasum -a 256 -c SHA256SUMS --ignore-missing
-tar -xzf rvt-rs-<version>-<target>.tar.gz
-./rvt-rs-<version>-<target>/rvt-info --version
+tar -xzf rvt-rs-<tag>-<target>.tar.gz
+./rvt-rs-<tag>-<target>/rvt-info --version
 ```
 
 ```powershell
 # Windows (PowerShell): compare with the line for your archive in SHA256SUMS
-Get-FileHash .\rvt-rs-<version>-x86_64-pc-windows-msvc.zip -Algorithm SHA256
-Expand-Archive .\rvt-rs-<version>-x86_64-pc-windows-msvc.zip -DestinationPath .
-.\rvt-rs-<version>-x86_64-pc-windows-msvc\rvt-info.exe --version
+Get-FileHash .\rvt-rs-<tag>-x86_64-pc-windows-msvc.zip -Algorithm SHA256
+Expand-Archive .\rvt-rs-<tag>-x86_64-pc-windows-msvc.zip -DestinationPath .
+.\rvt-rs-<tag>-x86_64-pc-windows-msvc\rvt-info.exe --version
 ```
 
 Each archive also carries a GitHub build-provenance attestation, which
@@ -128,12 +150,12 @@ proves it was built by this repository's release workflow from the tagged
 commit. Check it with the GitHub CLI:
 
 ```bash
-gh attestation verify rvt-rs-<version>-<target>.tar.gz -R DrunkOnJava/rvt-rs
+gh attestation verify rvt-rs-<tag>-<target>.tar.gz -R DrunkOnJava/rvt-rs
 ```
 
 The binaries are not code-signed. On macOS, a browser download is
 quarantined by Gatekeeper; clear it for the unpacked folder with
-`xattr -dr com.apple.quarantine rvt-rs-<version>-<target>`. On Windows,
+`xattr -dr com.apple.quarantine rvt-rs-<tag>-<target>`. On Windows,
 SmartScreen may ask for confirmation the first time.
 
 To run the tools from anywhere, move the folder somewhere permanent and add
@@ -147,8 +169,8 @@ archives are attached to that run as artifacts.
 
 Every tagged release from v0.2.0 on also publishes a container image
 holding the same static Linux binaries, for `linux/amd64` and `linux/arm64`:
-`ghcr.io/drunkonjava/rvt-rs:<version>` and, for a final release,
-`ghcr.io/drunkonjava/rvt-rs:latest`. It is a distroless image of about the
+`ghcr.io/drunkonjava/rvt-rs:<version>` (the tag without its `v`, as
+`0.14.0`) and, for a final release, `ghcr.io/drunkonjava/rvt-rs:latest`. It is a distroless image of about the
 binaries' size, with no shell and no package manager. The working directory
 is `/data`, so mount the folder holding the model there:
 
@@ -241,6 +263,9 @@ post-publish smoke is:
 # Only after crates.io publish succeeds:
 cargo install rvt --version X.Y.Z --locked
 rvt-inspect --version
+# Once the crate is on crates.io (RELEASE.md, step 8):
+cargo install rvt-rs-mcp --version X.Y.Z --locked
+rvt-rs-mcp --version
 
 python -m venv /tmp/rvt-release-smoke
 . /tmp/rvt-release-smoke/bin/activate

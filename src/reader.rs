@@ -89,6 +89,18 @@ pub struct UnreadStream {
     pub limit: u64,
 }
 
+/// One phase of a project: its ElementId and, where the file names it, its
+/// name ([`RevitFile::project_phases`]).
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[non_exhaustive]
+pub struct ProjectPhase {
+    /// The phase's ElementId, which [`RevitFile::set_export_phase`] takes as
+    /// well as its name.
+    pub id: i64,
+    /// The phase's name (`ProjectPhase.m_name`), if the file holds one.
+    pub name: Option<String>,
+}
+
 /// Which resource limit stopped a stream ([`UnreadStream`]).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 #[non_exhaustive]
@@ -166,6 +178,11 @@ pub struct RevitFile {
     design_options: Option<Arc<crate::partition_design_options::DesignOptions>>,
     /// Memoised phase order and the elements not in the export phase (#328).
     phase_filter: Option<Arc<crate::native_phases::PhaseFilter>>,
+    /// The ElementId of the phase [`RevitFile::set_export_phase`] chose.
+    chosen_export_phase: Option<i64>,
+    /// The Areas of a Revit 2015 to 2023 file the reader left unwritten, by
+    /// why (RE-324), set when the Areas are read.
+    unwritten_areas: BTreeMap<String, usize>,
     /// Memoised production walk: the elements
     /// [`crate::walker::iter_elements_with_control`] yields for a minimum
     /// score and walker limits. An export walks once to write and again for
@@ -439,6 +456,8 @@ impl RevitFile {
             element_names: None,
             design_options: None,
             phase_filter: None,
+            chosen_export_phase: None,
+            unwritten_areas: BTreeMap::new(),
             walk: None,
             arc_wall_scan: None,
             partition_progress: None,
@@ -487,6 +506,19 @@ impl RevitFile {
 
     pub(crate) fn note_bodiless_family_spaces(&mut self, classes: BTreeMap<String, usize>) {
         self.bodiless_family_spaces = classes;
+    }
+
+    /// Forget what an earlier production walk noted for its diagnostics: the
+    /// Areas left unwritten, the family spaces left out for want of a body,
+    /// the error that stopped that check, and the doors and windows written
+    /// though their type was not read. The partition recovery notes them, and
+    /// only when it finds some, so each walk starts from none: the notes
+    /// follow the memoised walk that produced them.
+    pub(crate) fn reset_export_notes(&mut self) {
+        self.unwritten_areas.clear();
+        self.bodiless_family_spaces.clear();
+        self.bodiless_family_space_error = None;
+        self.unread_type_doors_windows.clear();
     }
 
     /// How many family instances written as spaces were not checked for a 3D
@@ -541,13 +573,19 @@ impl RevitFile {
             return Ok(Arc::clone(cached));
         }
         let raw = self.read_stream(name)?;
+        let stored_len = raw.len();
         let limits = self.limits.inflate_limits;
-        let (inflated, shortfall) =
-            compression::InflatedStream::from_stored_with_limits(name, &raw, limits);
+        // The stored bytes are stripped where they are and dropped once the
+        // members are inflated, so the stream is held once beside its
+        // inflated form, not twice (#1075).
+        let (inflated, shortfall) = {
+            let prepared = compression::prepare_stream_owned(name, raw);
+            compression::InflatedStream::from_prepared_with_limits(&prepared, stored_len, limits)
+        };
         if shortfall.members_over_limit > 0 {
             self.note_unread(UnreadStream {
                 name: name.to_string(),
-                stored_bytes: raw.len() as u64,
+                stored_bytes: stored_len as u64,
                 kind: UnreadKind::MemberTooLarge,
                 limit: limits.max_output_bytes as u64,
             });
@@ -555,9 +593,9 @@ impl RevitFile {
         if shortfall.stopped_at_total {
             self.note_unread(UnreadStream {
                 name: name.to_string(),
-                stored_bytes: raw.len() as u64,
+                stored_bytes: stored_len as u64,
                 kind: UnreadKind::InflatedTotalTooLarge,
-                limit: limits.max_stream_total_bytes_for(raw.len()) as u64,
+                limit: limits.max_stream_total_bytes_for(stored_len) as u64,
             });
         }
         let inflated = Arc::new(inflated);
@@ -619,6 +657,17 @@ impl RevitFile {
         self.data_objects
             .insert(name.to_string(), Arc::clone(&objects));
         Ok(objects)
+    }
+
+    /// Stored stream `name` as the inflate and the native readers take it, its
+    /// checksum pages stripped where the stream has them
+    /// ([`compression::prepare_stream_for_inflate`]): one buffer, stripped in
+    /// place, not the stored bytes and a stripped copy of them (#1075).
+    pub(crate) fn read_prepared_stream(&mut self, name: &str) -> Result<Vec<u8>> {
+        Ok(compression::prepare_stream_owned(
+            name,
+            self.read_stream(name)?,
+        ))
     }
 
     /// Every offset of `header` in partition `name`'s inflated bytes, in
@@ -881,12 +930,145 @@ impl RevitFile {
         computed
     }
 
-    /// Sorted `Partitions/*` stream paths.
+    /// The project's phases in order, the last being the one an export shows
+    /// unless [`Self::set_export_phase`] chooses another. Empty where the
+    /// export applies no phase: a family, a release whose phases are not read
+    /// (Revit 2015 and earlier), or a file whose phases could not be read.
+    /// Reads nothing the export does not.
+    pub fn project_phases(&mut self) -> Vec<ProjectPhase> {
+        if let Ok(release) = self.layout_release() {
+            if crate::partition_element_records_2023::is_32bit_release(release)
+                && !crate::partition_element_records_2023::applies_export_filters(release)
+            {
+                return Vec::new();
+            }
+        }
+        let filter = self.memoised_phase_filter();
+        if filter.read_error.is_some() {
+            return Vec::new();
+        }
+        filter
+            .order
+            .iter()
+            .map(|id| ProjectPhase {
+                id: *id,
+                name: filter.names.get(id).cloned(),
+            })
+            .collect()
+    }
+
+    /// Choose the phase the export shows, by the phase's name (exactly) or
+    /// its ElementId, instead of the project's last (RE-326). Revit's IFC
+    /// export shows one phase and leaves out an element that does not exist
+    /// in it and a room whose own phase is not it; this changes both. It fails,
+    /// naming the phases the file lists, when none matches, and for a file
+    /// whose phases are not read or whose release applies no export phase.
+    /// [`Self::export_phase`] then reports the ElementId of the phase chosen,
+    /// which `phase` may have named by its name or by that id.
+    ///
+    /// It may be called at any time. Choosing a phase other than the one in
+    /// effect drops the memoised production walk, the one read that holds
+    /// what the phase leaves out, so the next export reads again at the new
+    /// phase; choosing the one in effect keeps it. [`Self::clear_export_phase`]
+    /// goes back to the default.
+    ///
+    /// # Errors
+    ///
+    /// [`Error::InvalidInput`] when the phase is not one of the file's, or
+    /// the file's phases cannot be chosen from.
+    pub fn set_export_phase(&mut self, phase: &str) -> Result<()> {
+        if let Ok(release) = self.layout_release() {
+            if crate::partition_element_records_2023::is_32bit_release(release)
+                && !crate::partition_element_records_2023::applies_export_filters(release)
+            {
+                return Err(Error::InvalidInput(format!(
+                    "the export phase is applied to Revit 2016 and later, and this file is \
+                     Revit {release}: it writes every element and room whatever its phase"
+                )));
+            }
+        }
+        let filter = self.memoised_phase_filter();
+        if let Some(error) = &filter.read_error {
+            return Err(Error::InvalidInput(format!(
+                "the project's phases could not be read ({error}), so the export phase \
+                 cannot be chosen"
+            )));
+        }
+        if filter.order.is_empty() {
+            return Err(Error::InvalidInput(
+                "this file lists no project phases (a family, or a release whose phases are \
+                 not read), so no export phase can be chosen"
+                    .into(),
+            ));
+        }
+        let Some(id) = filter.find_phase(phase) else {
+            return Err(Error::InvalidInput(format!(
+                "the file has no phase named or numbered {phase:?}; its phases are {}",
+                filter.phases_listing()
+            )));
+        };
+        if filter.export != Some(id) {
+            self.walk = None;
+        }
+        self.phase_filter = Some(Arc::new(filter.with_export_phase(id)));
+        self.chosen_export_phase = Some(id);
+        Ok(())
+    }
+
+    /// Back to the default export phase, the project's last, as it is before
+    /// [`Self::set_export_phase`] chooses one: [`Self::export_phase`] is `None`
+    /// again. As a choice of another phase does, going back from one drops the
+    /// memoised production walk; on a handle that has chosen none this changes
+    /// nothing.
+    pub fn clear_export_phase(&mut self) {
+        if self.chosen_export_phase.take().is_none() {
+            return;
+        }
+        let filter = self.memoised_phase_filter();
+        if let Some(last) = filter.order.last().copied() {
+            if filter.export != Some(last) {
+                self.walk = None;
+                self.phase_filter = Some(Arc::new(filter.with_export_phase(last)));
+            }
+        }
+    }
+
+    /// The ElementId of the phase [`Self::set_export_phase`] chose, whether it
+    /// was given by name or by that id; `None` while the last phase is in
+    /// effect, as it is until a phase is chosen.
+    pub fn export_phase(&self) -> Option<i64> {
+        self.chosen_export_phase
+    }
+
+    /// Record the Areas of a Revit 2015 to 2023 file that were left unwritten,
+    /// by reason (RE-324).
+    pub(crate) fn set_unwritten_areas(&mut self, by_reason: BTreeMap<String, usize>) {
+        self.unwritten_areas = by_reason;
+    }
+
+    /// The Areas of a Revit 2015 to 2023 file left unwritten because their
+    /// region and body are not proven, by the reason their body has none
+    /// (RE-324). Empty until the Areas are read.
+    pub(crate) fn unwritten_areas(&self) -> &BTreeMap<String, usize> {
+        &self.unwritten_areas
+    }
+
+    /// The `Partitions/*` stream paths in the order Revit numbers them:
+    /// by the number after `Partitions/` (`Partitions/9` before
+    /// `Partitions/46`), then by name. A higher number is a later partition,
+    /// so a reader that keeps the first or the last copy of a record gets the
+    /// oldest or the newest.
     pub fn partition_stream_names(&self) -> Vec<String> {
-        self.stream_names()
+        let mut names: Vec<String> = self
+            .stream_names()
             .into_iter()
             .filter(|name| name.starts_with("Partitions/"))
-            .collect()
+            .collect();
+        names.sort_by(|a, b| {
+            let number = crate::partition_room_parameters::partition_number;
+            (number(a), a).cmp(&(number(b), b))
+        });
+        names
     }
 
     /// String records extracted from the `Partitions/NN` stream, memoised.
@@ -1108,11 +1290,10 @@ impl RevitFile {
         Ok(crate::formats::schema_classes(&decompressed))
     }
 
-    /// Find the version-specific `Partitions/NN` stream name.
+    /// The first `Partitions/NN` stream, in [`Self::partition_stream_names`]'
+    /// order: the lowest-numbered.
     pub fn partition_stream_name(&self) -> Option<String> {
-        self.stream_names()
-            .into_iter()
-            .find(|n| n.starts_with("Partitions/"))
+        self.partition_stream_names().into_iter().next()
     }
 
     /// Produce a one-shot summary of everything we can parse.

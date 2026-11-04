@@ -208,7 +208,11 @@ class RevitFile:
         """
 
     def schedule_csv(
-        self, kind: str = "elements", metric: bool = False, excel: bool = False
+        self,
+        kind: str = "elements",
+        metric: bool = False,
+        excel: bool = False,
+        phase: str | int | None = None,
     ) -> str:
         """Spreadsheet schedule of the decoded model as CSV text.
 
@@ -216,8 +220,8 @@ class RevitFile:
         type, level, material, placement, size, host of a door or window).
         ``kind="rooms"``: every room (number, name, level). ``metric=True``
         writes lengths in metres; ``excel=True`` prefixes a UTF-8 BOM for
-        Excel on Windows. Unknown values are empty cells. Raises
-        ``ValueError`` for another ``kind``.
+        Excel on Windows. Unknown values are empty cells. ``phase`` is
+        ``write_ifc``'s. Raises ``ValueError`` for another ``kind``.
         """
 
     def metadata(self, redact: bool = False) -> FileMetadata:
@@ -308,7 +312,11 @@ class RevitFile:
         """
 
     def write_ifc(
-        self, mode: str = "scaffold", allow_partial: bool = False, saved_meshes: bool = True
+        self,
+        mode: str = "scaffold",
+        allow_partial: bool = False,
+        saved_meshes: bool = True,
+        phase: str | int | None = None,
     ) -> str:
         """Produce an IFC4 STEP string for this file via the
         ``RvtDocExporter``.
@@ -330,18 +338,41 @@ class RevitFile:
         ``rvt-ifc`` draws them; ``saved_meshes=False`` keeps their
         bounding boxes (``rvt-ifc --no-saved-meshes``). A ``RuntimeWarning``
         says when the saved graphics could not be read.
+
+        ``phase`` is a project phase's name (matched exactly first) or its
+        ElementId, as ``rvt-ifc --phase`` takes it, and the export shows that
+        phase: an element that does not exist in it, and a room whose own
+        phase is not it, are left out. ``None``, the default, is the
+        project's last phase. A phase the file does not have raises
+        ``ValueError`` listing the phases it does.
         """
 
-    def export_diagnostics_json(self, saved_meshes: bool = True) -> str:
+    def export_diagnostics_json(
+        self,
+        saved_meshes: bool = True,
+        phase: str | int | None = None,
+        element_provenance: bool = False,
+    ) -> str:
         """Produce the JSON diagnostics sidecar for the default IFC
         export. The schema matches ``rvt-ifc --diagnostics`` and
         ``docs/schemas/export-diagnostics.schema.json``. ``saved_meshes``
-        is ``write_ifc``'s: the diagnostics describe the export it writes.
+        and ``phase`` are ``write_ifc``'s: the diagnostics describe the
+        export it writes. ``element_provenance=True`` also lists where
+        each decoded element was read from (``decoded.element_provenance``,
+        as ``rvt-ifc --element-provenance``): far larger than the rest of
+        the diagnostics, so it is off unless asked for.
         """
 
-    def export_diagnostics(self, saved_meshes: bool = True) -> dict[str, Any]:
+    def export_diagnostics(
+        self,
+        saved_meshes: bool = True,
+        phase: str | int | None = None,
+        element_provenance: bool = False,
+    ) -> dict[str, Any]:
         """Produce the default IFC export diagnostics as a Python
-        dict. Equivalent to ``json.loads(export_diagnostics_json(saved_meshes))``.
+        dict. Equivalent to
+        ``json.loads(export_diagnostics_json(saved_meshes, phase,
+        element_provenance))``.
         """
 
     def elem_table_header(self) -> dict[str, int]:
@@ -382,17 +413,27 @@ def read_metadata(path: str, redact: bool = False) -> FileMetadata:
 
 
 def rvt_to_ifc(
-    path: str, mode: str = "scaffold", allow_partial: bool = False, saved_meshes: bool = True
+    path: str,
+    mode: str = "scaffold",
+    allow_partial: bool = False,
+    saved_meshes: bool = True,
+    phase: str | int | None = None,
 ) -> str:
     """One-shot: open ``path``, run ``RvtDocExporter``, return the
     IFC4 STEP text. Equivalent to
     ``RevitFile(path).write_ifc(mode=mode, allow_partial=allow_partial,
-    saved_meshes=saved_meshes)``.
+    saved_meshes=saved_meshes, phase=phase)``.
     """
 
 
-def rvt_to_ifc_diagnostics(path: str, saved_meshes: bool = True) -> str:
+def rvt_to_ifc_diagnostics(
+    path: str,
+    saved_meshes: bool = True,
+    phase: str | int | None = None,
+    element_provenance: bool = False,
+) -> str:
     """One-shot: open ``path``, run ``RvtDocExporter``, return the
     JSON diagnostics sidecar of the export ``rvt_to_ifc`` writes with the
-    same ``saved_meshes``.
+    same ``saved_meshes`` and ``phase``. ``element_provenance`` is
+    ``RevitFile.export_diagnostics_json``'s.
     """
