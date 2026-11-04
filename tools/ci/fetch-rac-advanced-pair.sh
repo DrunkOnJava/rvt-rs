@@ -8,11 +8,12 @@
 #
 # Reads research/rac-advanced-export.tsv (the export) and the rac_advanced rows
 # of research/autodesk-sample-projects.tsv for 2015 to 2020, and puts them in
-# TARGET_DIR/racadv/ as <year>-rac_advanced_sample_project.rvt and
-# rac_advanced_sample_project.ifc, each checked against its pinned sha256 and
-# byte count. A file that does not match is deleted and the script exits 1; a
-# download that fails exits 2 (NOT MEASURED). Nothing is stored: the files are
-# fetched for the run (the export carries no licence of its own).
+# TARGET_DIR/racadv/ as <year>-<file>.rvt (2020's file is named
+# racadvancedsampleproject.rvt) and rac_advanced_sample_project.ifc, each
+# checked against its pinned sha256 and byte count. A file that does not match
+# is deleted and the script exits 1; a download that fails exits 2 (NOT
+# MEASURED). Nothing is stored: the files are fetched for the run (the export
+# carries no licence of its own).
 set -euo pipefail
 
 TARGET="${1:?usage: fetch-rac-advanced-pair.sh TARGET_DIR}"
@@ -48,7 +49,8 @@ done < <(grep -v '^#' "$EXPORT_PINS")
 
 while IFS=$'\t' read -r year file url sha bytes; do
   case "$year" in ''|\#*) continue ;; esac
-  [ "$file" = rac_advanced_sample_project.rvt ] || continue
+  # The 2020 save drops the underscores from the name, as every sample from 2020 on does.
+  case "$file" in rac_advanced_sample_project.rvt | racadvancedsampleproject.rvt) ;; *) continue ;; esac
   [ "$year" -ge "$FIRST" ] && [ "$year" -le "$LAST" ] || continue
   fetch "$TARGET/racadv/$year-$file" "$url" "$sha" "$bytes"
 done < "$SAMPLE_PINS"
