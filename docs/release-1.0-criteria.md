@@ -64,7 +64,7 @@ RE-223).
 Wall tops: a wall whose top join or cut pair names a floor, roof or footing that covers its whole plan is cut at its underside, which is Revit's top on 64 of the office's 65 cut tops as built and 70 of 70 at permit (RE-267);
 a wall such an element covers in part is drawn stepped (RE-320): 49 walls as built and 46 at permit, and rvt-rs's top is Revit's over the whole plan on 583 of 607 walls as built (544 before) and 571 of 589 at permit (530 before). The one wall as built that Revit cuts although 0.0243 ft² of its plan lies outside the floor, inside an abutting wall, keeps its full height, as do the walls whose layers Revit ends at different heights.
 Per-category results are in the [supported profile](supported-profile.md#geometry-on-revit-2024-and-2025-projects);
-the residuals are the issues under the 0.13.0 milestone, and `tools/re/box_bodies_vs_ifc.py` counts in Measure, per class, the bodies still drawn as their box and how much of it Revit's body fills
+the residuals are the issues under the 0.14.0 milestone, and `tools/re/box_bodies_vs_ifc.py` counts in Measure, per class, the bodies still drawn as their box and how much of it Revit's body fills
 Open: family instances other than doors and windows drawn from their saved meshes by default ([#1191](https://github.com/DrunkOnJava/rvt-rs/issues/1191)),
 and geometry on releases other than 2024 and 2025 ([#1190](https://github.com/DrunkOnJava/rvt-rs/issues/1190)).
 
@@ -157,7 +157,7 @@ and ceilings' `GrossArea` where they are level and their record holds no step th
 spaces' `Height` where the room's record holds its solid's faces (RE-255),
 spaces' `NetVolume` where that solid is a prism of its outline (RE-296, [#1016](https://github.com/DrunkOnJava/rvt-rs/issues/1016); what remains of the spaces, [#1207](https://github.com/DrunkOnJava/rvt-rs/issues/1207)),
 stair railings' `Length` where the path is one line along the stair's runs (RE-254),
-and the `Length` of each column RE-291's rule takes that a clean pair joins, its box's height (186 of 186 as built, [#1203](https://github.com/DrunkOnJava/rvt-rs/issues/1203))), 1 differs (the mullion whose `Span` differs) and 9,939 are missing (Measure run 41656599871; the 527 quantities Revit's export writes on openings rvt-rs does not write, a door's further cuts and the cuts of curtain walls and cabinets, are counted apart, [#1165](https://github.com/DrunkOnJava/rvt-rs/issues/1165)), none written that Revit's export leaves out (the maintainer,
+and the `Length` of each column RE-291's rule takes that a clean pair joins, its box's height (186 of 186 as built, [#1203](https://github.com/DrunkOnJava/rvt-rs/issues/1203))), 1 differs (the mullion whose `Span` differs) and 9,939 are missing (Measure run 41656599871; the 437 quantities Revit's export writes on openings rvt-rs does not write, a door's further cuts and the cuts of curtain walls and cabinets (527 before RE-321 wrote the rectangular openings'), are counted apart, [#1165](https://github.com/DrunkOnJava/rvt-rs/issues/1165)), none written that Revit's export leaves out (the maintainer,
 2026-10-26: a curtain panel's `Width` is left out,
 since Revit's export gives none on 3 panels that nothing tells apart; a joined column's `Length`, left out then for 18 meshed columns, is written since RE-291 tells those apart, the maintainer, 2026-11-03;
 and the maintainer, 2026-10-31, left out too a value on which Revit's exporters disagree: floors', ceilings' and covering walls' `Width`, which Revit 2024's exporter writes and later ones' do not, RE-294), and RE1's 94 IFC2X3 pipe and duct lengths all are written;
@@ -190,9 +190,10 @@ the exterior members' values are checked against revit-ifc's source only, since 
 On the office as built, with `--revit-set-placement` (Measure run 41215480967, `main` at f9f71e68), 289 of the 45,525 property values Revit's export writes on objects rvt-rs writes are missing and 1 differs;
 without it, 1,361 are missing (Measure run 41213779326).
 At building permit, 292 of 45,704, and 1,364 without it.
-rvt-rs writes 10 values Revit's export does not as built and 14 at permit:
+rvt-rs writes 10 values Revit's export does not as built and 16 at permit (the two more are the `Reference` of the one rectangular wall opening the permit export lacks and its sibling, the office as built, holds, RE-321):
 all but one are on elements Revit's export leaves out (openings, and at permit a column, RE-239, [#792](https://github.com/DrunkOnJava/rvt-rs/issues/792)),
 and the one, a sanitary terminal's `Pset_SanitaryTerminalTypeCommon.Reference`, follows from fixture 3095244's class, which Revit's export writes as `IfcFlowTerminal` (#792).
+RE-321 writes the 30 rectangular wall openings Revit's export holds as built and the 24 at permit, whose values the census scores: 60 and 48 property values and 90 and 72 quantities, all equal, none missing or different (Measure run 41748430211, against `main` at 0e0582e1); the openings Revit's export writes with nothing to fill them that rvt-rs does not (cabinets, curtain walls, a door's further cuts) hold 531 property values and 437 quantities as built, counted apart ([#1165](https://github.com/DrunkOnJava/rvt-rs/issues/1165)).
 Before this run, with the option, 455 were missing as built and 452 at permit (Measure run 41129228138, `main` at b09310a6).
 The census counts what the export's own property set file places apart, as out of scope (RE-239): 1,981 values as built and 1,907 at permit, the glazing set on elements that are not doors or windows and the space occupancy set, whose 55 `OccupancyNumber` values, written as `IfcInteger`, were 55 of the 56 that differed;
 on the same exports, before that, 2,381 of 47,506 were missing as built with the option and 3,347 without it (Measure runs 41129221110 and 41129217725).
@@ -201,7 +202,7 @@ Before the curtain members' `IsExternal` was counted apart, 12,672 of 57,773 wer
 The held-out and BIMcollab runs keep quantity counts only, so no property census of them is published.
 Most instance and type parameters are not ([#35](https://github.com/DrunkOnJava/rvt-rs/issues/35),
 [#155](https://github.com/DrunkOnJava/rvt-rs/issues/155),
-the 0.13.0 milestone)
+the 0.14.0 milestone)
 Open: type objects' values ([#1185](https://github.com/DrunkOnJava/rvt-rs/issues/1185)),
 the round column and the meshed columns' values ([#1203](https://github.com/DrunkOnJava/rvt-rs/issues/1203)),
 and the remaining values with no rule yet ([#1193](https://github.com/DrunkOnJava/rvt-rs/issues/1193)).
@@ -226,7 +227,7 @@ and the remaining values with no rule yet ([#1193](https://github.com/DrunkOnJav
 None. The maintainer decided on 2026-10-21 that 1.0 ships with no gaps or
 limitations, so every row of the [supported profile](supported-profile.md)
 has to read as exact before the tag. The work that blocks this is the set of
-issues open under the 0.13.0 (geometry and element data) and 1.0.0
+issues open under the 0.14.0 (geometry and element data) and 1.0.0
 milestones.
 
 Out of scope, and so not counted as limitations: Revit 2014 and earlier,
