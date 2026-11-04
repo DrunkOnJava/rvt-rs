@@ -1,7 +1,7 @@
 [
   {
     "name": "explain_element",
-    "description": "Why an element is in the export as it is, or is not in it: its provenance, its trust markers (the ...Source, ...Resolved and ...Refusal properties of its record) and every fail-closed decision recorded for it, each with a stage (element_skipped, body_not_drawn, body_left_as_box, opening_not_cut, outline_not_read, storey_not_bound), a reason code (the reason of the skipped item in get_diagnostics, or body_is_record_box, space_outline_is_record_box, area_body_refused), the stream and byte offset its record was read from where known, and a detail. Takes a Revit ElementId whether or not the export holds the element (a left-out element has decisions and no provenance), or the GlobalId of an exported one. The log keeps at most 5000 decisions a reason; capped_reasons names the reasons that dropped some, whose decisions about this element may be missing. A frame with no ElementId has no entry. Not read: family geometry, the Revit Mark parameter, and any body but the record's bounding box where provenance.body_source says so; see the summary's not_read and docs/status.md in the rvt-rs repository.",
+    "description": "Why an element is in the export as it is, or is not in it: its provenance (with value_sources, the copy each reader took a value of its body from), its trust markers (the ...Source, ...Resolved and ...Refusal properties of its record) and every fail-closed decision recorded for it, each with a stage (element_skipped, body_not_drawn, body_left_as_box, opening_not_cut, outline_not_read, storey_not_bound), a reason code (the reason of the skipped item in get_diagnostics, or body_is_record_box, space_outline_is_record_box, area_body_refused), the stream and byte offset its record was read from where known, and a detail. Takes a Revit ElementId whether or not the export holds the element (a left-out element has decisions and no provenance), or the GlobalId of an exported one. The log keeps at most 5000 decisions a reason; capped_reasons names the reasons that dropped some, whose decisions about this element may be missing. A frame with no ElementId has no entry. Not read: family geometry, the Revit Mark parameter, and any body but the record's bounding box where provenance.body_source says so; see the summary's not_read and docs/status.md in the rvt-rs repository.",
     "inputSchema": {
       "$defs": {
         "IdArg": {
@@ -214,7 +214,7 @@
               "description": "The element's native record, where the export's native passes indexed one."
             },
             "offset": {
-              "description": "Where the record or frame starts in that stream inflated: the frame the exporter selected (on Revit 2024 and later the greatest vertical extent, then the higher-numbered partition and later offset; on 2008 to 2023 the newest). A body reader may take another copy, so it can name another partition than `native_record.stream`, and neither is guaranteed to be the copy a body came from.",
+              "description": "Where the record or frame starts in that stream inflated: the frame the exporter selected (on Revit 2024 and later the greatest vertical extent, then the higher-numbered partition and later offset; on 2008 to 2023 the newest). A body reader may take another copy; `value_sources` names it.",
               "format": "uint",
               "minimum": 0,
               "type": [
@@ -258,8 +258,18 @@
                 "string",
                 "null"
               ]
+            },
+            "value_sources": {
+              "description": "The copy each reader took a value of the element's body from, where the reader notes it and the body is drawn from that reader (`body_source`): `get_element` and `explain_element` list them, `list_elements` does not. Absent for a body no reader notes yet.",
+              "items": {
+                "$ref": "#/$defs/ValueSourceOut"
+              },
+              "type": "array"
             }
           },
+          "required": [
+            "value_sources"
+          ],
           "type": "object"
         },
         "FileProvenance": {
@@ -361,7 +371,7 @@
               ]
             },
             "stream": {
-              "description": "The partition of that copy, such as `Partitions/46`. It can differ from `provenance.stream`, and neither is guaranteed to be the copy a body came from.",
+              "description": "The partition of that copy, such as `Partitions/46`. It can differ from `provenance.stream`, the frame the exporter selected. The record a reader decoded is in `provenance.value_sources`, where that reader notes its choice.",
               "type": [
                 "string",
                 "null"
@@ -371,6 +381,52 @@
           "required": [
             "copies",
             "copy"
+          ],
+          "type": "object"
+        },
+        "ValueSourceOut": {
+          "description": "The copy of an element's data a reader took a value from.",
+          "properties": {
+            "copies": {
+              "description": "In how many partitions the element had a copy to choose from.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "differs_from_frame": {
+              "description": "True when the copy is in another partition than `provenance.stream`, the frame.",
+              "type": "boolean"
+            },
+            "offset": {
+              "description": "Where the copy starts in that partition inflated: the element-data header whose element id follows it, for the readers of element data; the record's header, for a native record; the frame, for `selected_frame`.",
+              "format": "uint",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "reader": {
+              "description": "What was read: `bounded_line` (a wall's or beam's location line), `bounded_arc`, `instance_transform`, `saved_graphics`, `native_run`, `native_landing`, or `selected_frame` for a body read from the frame itself.",
+              "type": "string"
+            },
+            "rule": {
+              "description": "How the copy was chosen: `selected` (the frame the exporter selected), `agreeing` (every copy holds the same value; the lowest-numbered partition's is named), `current` (the copies disagree; the current partition's) or `native` (a native record by member name, its current copy).",
+              "type": "string"
+            },
+            "stream": {
+              "description": "The partition of the copy, such as `Partitions/46`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "reader",
+            "rule",
+            "copies",
+            "differs_from_frame"
           ],
           "type": "object"
         }
@@ -972,7 +1028,7 @@
   },
   {
     "name": "get_element",
-    "description": "One element, by Revit ElementId or IFC GlobalId (the Revit Mark parameter is not decoded, so it cannot be looked up). Returns its property sets and quantities as the IFC export writes them (quantities in the IFC's SI units), its trust markers (the ...Source, ...Resolved and ...Refusal properties of its record, such as BodySource), its provenance (the carrier its record was read from, and its stream and byte offset), and the file's: Revit release and build, schema class count, partition count and ElemTable record layout. Not read: family geometry, the Revit Mark parameter, and any body but the record's bounding box where provenance.body_source says so; see the summary's not_read and docs/status.md in the rvt-rs repository.",
+    "description": "One element, by Revit ElementId or IFC GlobalId (the Revit Mark parameter is not decoded, so it cannot be looked up). Returns its property sets and quantities as the IFC export writes them (quantities in the IFC's SI units), its trust markers (the ...Source, ...Resolved and ...Refusal properties of its record, such as BodySource), its provenance (the carrier its record was read from, its stream and byte offset, and in value_sources the copy each reader took a value of its body from), and the file's: Revit release and build, schema class count, partition count and ElemTable record layout. Not read: family geometry, the Revit Mark parameter, and any body but the record's bounding box where provenance.body_source says so; see the summary's not_read and docs/status.md in the rvt-rs repository.",
     "inputSchema": {
       "$defs": {
         "IdArg": {
@@ -1137,7 +1193,7 @@
               "description": "The element's native record, where the export's native passes indexed one."
             },
             "offset": {
-              "description": "Where the record or frame starts in that stream inflated: the frame the exporter selected (on Revit 2024 and later the greatest vertical extent, then the higher-numbered partition and later offset; on 2008 to 2023 the newest). A body reader may take another copy, so it can name another partition than `native_record.stream`, and neither is guaranteed to be the copy a body came from.",
+              "description": "Where the record or frame starts in that stream inflated: the frame the exporter selected (on Revit 2024 and later the greatest vertical extent, then the higher-numbered partition and later offset; on 2008 to 2023 the newest). A body reader may take another copy; `value_sources` names it.",
               "format": "uint",
               "minimum": 0,
               "type": [
@@ -1181,8 +1237,18 @@
                 "string",
                 "null"
               ]
+            },
+            "value_sources": {
+              "description": "The copy each reader took a value of the element's body from, where the reader notes it and the body is drawn from that reader (`body_source`): `get_element` and `explain_element` list them, `list_elements` does not. Absent for a body no reader notes yet.",
+              "items": {
+                "$ref": "#/$defs/ValueSourceOut"
+              },
+              "type": "array"
             }
           },
+          "required": [
+            "value_sources"
+          ],
           "type": "object"
         },
         "EntityRefOut": {
@@ -1329,7 +1395,7 @@
               ]
             },
             "stream": {
-              "description": "The partition of that copy, such as `Partitions/46`. It can differ from `provenance.stream`, and neither is guaranteed to be the copy a body came from.",
+              "description": "The partition of that copy, such as `Partitions/46`. It can differ from `provenance.stream`, the frame the exporter selected. The record a reader decoded is in `provenance.value_sources`, where that reader notes its choice.",
               "type": [
                 "string",
                 "null"
@@ -1413,6 +1479,52 @@
           "required": [
             "element_id",
             "property_sets"
+          ],
+          "type": "object"
+        },
+        "ValueSourceOut": {
+          "description": "The copy of an element's data a reader took a value from.",
+          "properties": {
+            "copies": {
+              "description": "In how many partitions the element had a copy to choose from.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "differs_from_frame": {
+              "description": "True when the copy is in another partition than `provenance.stream`, the frame.",
+              "type": "boolean"
+            },
+            "offset": {
+              "description": "Where the copy starts in that partition inflated: the element-data header whose element id follows it, for the readers of element data; the record's header, for a native record; the frame, for `selected_frame`.",
+              "format": "uint",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "reader": {
+              "description": "What was read: `bounded_line` (a wall's or beam's location line), `bounded_arc`, `instance_transform`, `saved_graphics`, `native_run`, `native_landing`, or `selected_frame` for a body read from the frame itself.",
+              "type": "string"
+            },
+            "rule": {
+              "description": "How the copy was chosen: `selected` (the frame the exporter selected), `agreeing` (every copy holds the same value; the lowest-numbered partition's is named), `current` (the copies disagree; the current partition's) or `native` (a native record by member name, its current copy).",
+              "type": "string"
+            },
+            "stream": {
+              "description": "The partition of the copy, such as `Partitions/46`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "reader",
+            "rule",
+            "copies",
+            "differs_from_frame"
           ],
           "type": "object"
         }
@@ -2097,7 +2209,7 @@
               "description": "The element's native record, where the export's native passes indexed one."
             },
             "offset": {
-              "description": "Where the record or frame starts in that stream inflated: the frame the exporter selected (on Revit 2024 and later the greatest vertical extent, then the higher-numbered partition and later offset; on 2008 to 2023 the newest). A body reader may take another copy, so it can name another partition than `native_record.stream`, and neither is guaranteed to be the copy a body came from.",
+              "description": "Where the record or frame starts in that stream inflated: the frame the exporter selected (on Revit 2024 and later the greatest vertical extent, then the higher-numbered partition and later offset; on 2008 to 2023 the newest). A body reader may take another copy; `value_sources` names it.",
               "format": "uint",
               "minimum": 0,
               "type": [
@@ -2141,8 +2253,18 @@
                 "string",
                 "null"
               ]
+            },
+            "value_sources": {
+              "description": "The copy each reader took a value of the element's body from, where the reader notes it and the body is drawn from that reader (`body_source`): `get_element` and `explain_element` list them, `list_elements` does not. Absent for a body no reader notes yet.",
+              "items": {
+                "$ref": "#/$defs/ValueSourceOut"
+              },
+              "type": "array"
             }
           },
+          "required": [
+            "value_sources"
+          ],
           "type": "object"
         },
         "ElementRow": {
@@ -2212,7 +2334,7 @@
               ]
             },
             "stream": {
-              "description": "The partition of that copy, such as `Partitions/46`. It can differ from `provenance.stream`, and neither is guaranteed to be the copy a body came from.",
+              "description": "The partition of that copy, such as `Partitions/46`. It can differ from `provenance.stream`, the frame the exporter selected. The record a reader decoded is in `provenance.value_sources`, where that reader notes its choice.",
               "type": [
                 "string",
                 "null"
@@ -2222,6 +2344,52 @@
           "required": [
             "copies",
             "copy"
+          ],
+          "type": "object"
+        },
+        "ValueSourceOut": {
+          "description": "The copy of an element's data a reader took a value from.",
+          "properties": {
+            "copies": {
+              "description": "In how many partitions the element had a copy to choose from.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "differs_from_frame": {
+              "description": "True when the copy is in another partition than `provenance.stream`, the frame.",
+              "type": "boolean"
+            },
+            "offset": {
+              "description": "Where the copy starts in that partition inflated: the element-data header whose element id follows it, for the readers of element data; the record's header, for a native record; the frame, for `selected_frame`.",
+              "format": "uint",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "reader": {
+              "description": "What was read: `bounded_line` (a wall's or beam's location line), `bounded_arc`, `instance_transform`, `saved_graphics`, `native_run`, `native_landing`, or `selected_frame` for a body read from the frame itself.",
+              "type": "string"
+            },
+            "rule": {
+              "description": "How the copy was chosen: `selected` (the frame the exporter selected), `agreeing` (every copy holds the same value; the lowest-numbered partition's is named), `current` (the copies disagree; the current partition's) or `native` (a native record by member name, its current copy).",
+              "type": "string"
+            },
+            "stream": {
+              "description": "The partition of the copy, such as `Partitions/46`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "reader",
+            "rule",
+            "copies",
+            "differs_from_frame"
           ],
           "type": "object"
         }
@@ -2475,7 +2643,7 @@
               "description": "The element's native record, where the export's native passes indexed one."
             },
             "offset": {
-              "description": "Where the record or frame starts in that stream inflated: the frame the exporter selected (on Revit 2024 and later the greatest vertical extent, then the higher-numbered partition and later offset; on 2008 to 2023 the newest). A body reader may take another copy, so it can name another partition than `native_record.stream`, and neither is guaranteed to be the copy a body came from.",
+              "description": "Where the record or frame starts in that stream inflated: the frame the exporter selected (on Revit 2024 and later the greatest vertical extent, then the higher-numbered partition and later offset; on 2008 to 2023 the newest). A body reader may take another copy; `value_sources` names it.",
               "format": "uint",
               "minimum": 0,
               "type": [
@@ -2519,8 +2687,18 @@
                 "string",
                 "null"
               ]
+            },
+            "value_sources": {
+              "description": "The copy each reader took a value of the element's body from, where the reader notes it and the body is drawn from that reader (`body_source`): `get_element` and `explain_element` list them, `list_elements` does not. Absent for a body no reader notes yet.",
+              "items": {
+                "$ref": "#/$defs/ValueSourceOut"
+              },
+              "type": "array"
             }
           },
+          "required": [
+            "value_sources"
+          ],
           "type": "object"
         },
         "NativeRecordOut": {
@@ -2553,7 +2731,7 @@
               ]
             },
             "stream": {
-              "description": "The partition of that copy, such as `Partitions/46`. It can differ from `provenance.stream`, and neither is guaranteed to be the copy a body came from.",
+              "description": "The partition of that copy, such as `Partitions/46`. It can differ from `provenance.stream`, the frame the exporter selected. The record a reader decoded is in `provenance.value_sources`, where that reader notes its choice.",
               "type": [
                 "string",
                 "null"
@@ -2621,6 +2799,52 @@
           },
           "required": [
             "provenance"
+          ],
+          "type": "object"
+        },
+        "ValueSourceOut": {
+          "description": "The copy of an element's data a reader took a value from.",
+          "properties": {
+            "copies": {
+              "description": "In how many partitions the element had a copy to choose from.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "differs_from_frame": {
+              "description": "True when the copy is in another partition than `provenance.stream`, the frame.",
+              "type": "boolean"
+            },
+            "offset": {
+              "description": "Where the copy starts in that partition inflated: the element-data header whose element id follows it, for the readers of element data; the record's header, for a native record; the frame, for `selected_frame`.",
+              "format": "uint",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "reader": {
+              "description": "What was read: `bounded_line` (a wall's or beam's location line), `bounded_arc`, `instance_transform`, `saved_graphics`, `native_run`, `native_landing`, or `selected_frame` for a body read from the frame itself.",
+              "type": "string"
+            },
+            "rule": {
+              "description": "How the copy was chosen: `selected` (the frame the exporter selected), `agreeing` (every copy holds the same value; the lowest-numbered partition's is named), `current` (the copies disagree; the current partition's) or `native` (a native record by member name, its current copy).",
+              "type": "string"
+            },
+            "stream": {
+              "description": "The partition of the copy, such as `Partitions/46`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "reader",
+            "rule",
+            "copies",
+            "differs_from_frame"
           ],
           "type": "object"
         }
