@@ -442,6 +442,20 @@ pub(crate) fn face_grid(g: &ObjectGraph, fi: usize) -> Result<FaceGrid> {
             (1. / n, 1. / n_v)
         }
     };
+    // A box's grid takes every trim vertex's coordinates, so the faces beside
+    // it meet its cuts. A loop meshed from its own outline (RE-302) is cut at
+    // the grid cells alone, plus the vertices of its isoparametric edges, whose
+    // coordinates the plane beside such an edge takes from the grid.
+    let knotted: Vec<[f64; 2]> = if ring.is_none() {
+        trim.clone()
+    } else {
+        segments
+            .iter()
+            .filter(|s| crate::native_saved_mesh::varying_axis(s).is_some())
+            .flatten()
+            .copied()
+            .collect()
+    };
     let axis = |k: usize, step: f64| -> Result<Vec<f64>> {
         let count = ((max[k] - min[k]) / step).ceil().max(1.);
         ensure!(
@@ -452,9 +466,7 @@ pub(crate) fn face_grid(g: &ObjectGraph, fi: usize) -> Result<FaceGrid> {
         let mut a = (0..=count)
             .map(|i| min[k] + (max[k] - min[k]) * i as f64 / count as f64)
             .collect::<Vec<_>>();
-        if ring.is_none() {
-            a.extend(trim.iter().map(|p| p[k]));
-        }
+        a.extend(knotted.iter().map(|p| p[k]));
         a.sort_by(f64::total_cmp);
         a.dedup_by(|a, b| (*a - *b).abs() < 1e-12);
         Ok(a)

@@ -362,7 +362,7 @@ fn refined_plane_edge(
 /// The axis along which an edge's UV samples on a face vary, where every
 /// sample keeps the other parameter: `None` where the edge is not
 /// isoparametric.
-fn varying_axis(samples: &[[f64; 2]]) -> Option<usize> {
+pub(crate) fn varying_axis(samples: &[[f64; 2]]) -> Option<usize> {
     let start = *samples.first()?;
     let end = *samples.last()?;
     (0..2).find(|&axis| {
