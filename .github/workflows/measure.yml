@@ -302,11 +302,11 @@ jobs:
           persist-credentials: false
           ref: ${{ matrix.side == 'base' && needs.plan.outputs.base_sha || needs.plan.outputs.head_sha }}
           path: measured
-      - name: Install Rust stable
+      - name: Install pinned benchmark Rust
         shell: bash
         run: |
-          rustup toolchain install stable --profile minimal --no-self-update
-          rustup default stable
+          rustup toolchain install 1.99.1 --profile minimal --no-self-update
+          rustup default 1.99.1
           echo CARGO_INCREMENTAL=0 >> "$GITHUB_ENV"
           echo CARGO_TERM_COLOR=always >> "$GITHUB_ENV"
           rustc --version
@@ -324,7 +324,7 @@ jobs:
           save-if: ${{ github.ref == 'refs/heads/main' && (matrix.shard == 'rest' || matrix.shard == 'all') && (matrix.side == 'base' && (inputs.base == '' || inputs.base == 'main') || matrix.side != 'base' && inputs.ref == '') }}
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
-          python-version: "3.12"
+          python-version: "3.12.16"
       - name: Install IfcOpenShell
         run: python -m pip install --require-hashes -r tools/ci/requirements-ifc.txt
       - name: Build
