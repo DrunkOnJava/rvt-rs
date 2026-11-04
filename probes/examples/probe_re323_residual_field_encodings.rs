@@ -81,7 +81,16 @@ struct Shape {
 
 #[derive(Default)]
 struct FieldStats {
+    descriptor: String,
     instances: usize,
+    ok: usize,
+    bad: usize,
+    bad_samples: Vec<String>,
+    zero: usize,
+    resolved: usize,
+    unresolved: usize,
+    targets: BTreeMap<String, usize>,
+    ints: Option<(i64, i64)>,
     records: BTreeSet<u64>,
     kinds: BTreeMap<String, usize>,
     samples: BTreeMap<String, usize>,
@@ -93,6 +102,58 @@ struct Walk<'a> {
     class_instances: BTreeMap<String, usize>,
     fields: BTreeMap<String, FieldStats>,
     record: u64,
+    tokens: BTreeSet<u64>,
+}
+
+fn pointer_items(value: &Value) -> Vec<&Value> {
+    match value {
+        Value::Array(items) => items.iter().collect(),
+        other => vec![other],
+    }
+}
+
+fn token_of(item: &Value) -> Option<u64> {
+    item.get("pointer_token").and_then(Value::as_u64)
+}
+
+fn layout(field: &Field, value: &Value) -> std::result::Result<(), String> {
+    match (field.base, field.modifier) {
+        (0x0a, 0) => match value.get("class_name") {
+            Some(Value::String(_)) => Ok(()),
+            _ => Err("the u16 names no class".into()),
+        },
+        (0x0e, 0x13) | (0x0e, 0x53) | (0x0e, 0x54) => {
+            let Value::Array(items) = value else {
+                return Err("not an array".into());
+            };
+            if field.modifier == 0x13 && Some(items.len() as u32) != field.array_count {
+                return Err(format!(
+                    "{} items for count {:?}",
+                    items.len(),
+                    field.array_count
+                ));
+            }
+            for item in items {
+                let Some(token) = token_of(item) else {
+                    return Err("an item is not a pointer".into());
+                };
+                let tagged = !item.get("class_tag").is_none_or(Value::is_null);
+                let wants_tag = field.modifier == 0x54 && token != 0;
+                if tagged != wants_tag {
+                    return Err(format!("item token {token} class tag present {tagged}"));
+                }
+            }
+            Ok(())
+        }
+        (0x04, 0) => {
+            if value.is_i64() {
+                Ok(())
+            } else {
+                Err("not an integer".into())
+            }
+        }
+        _ => Ok(()),
+    }
 }
 
 fn kind(value: &Value) -> String {
@@ -110,10 +171,54 @@ fn kind(value: &Value) -> String {
 }
 
 impl Walk<'_> {
-    fn note(&mut self, class: &str, field: &str, value: &Value) {
-        let stats = self.fields.entry(format!("{class}::{field}")).or_default();
+    fn note(&mut self, class: &str, field: &Field, value: &Value) {
+        let verdict = layout(field, value);
+        let tokens = &self.tokens;
+        let stats = self
+            .fields
+            .entry(format!("{class}::{}", field.name))
+            .or_default();
+        stats.descriptor = format!(
+            "{:02x}/{:02x}/{:04x}/{}",
+            field.base,
+            field.modifier,
+            field.uninterpreted_flags,
+            field.array_count.map_or("-".into(), |c| c.to_string())
+        );
         stats.instances += 1;
         stats.records.insert(self.record);
+        match verdict {
+            Ok(()) => stats.ok += 1,
+            Err(reason) => {
+                stats.bad += 1;
+                if stats.bad_samples.len() < 3 {
+                    stats.bad_samples.push(reason);
+                }
+            }
+        }
+        if field.base == 0x0e {
+            for item in pointer_items(value) {
+                match token_of(item) {
+                    Some(0) => stats.zero += 1,
+                    Some(token) if tokens.contains(&token) => stats.resolved += 1,
+                    Some(_) => stats.unresolved += 1,
+                    None => {}
+                }
+                if let Some(tag) = item.get("class_tag").and_then(Value::as_u64) {
+                    let name = u16::try_from(tag)
+                        .ok()
+                        .and_then(|tag| self.registry.class(tag))
+                        .map_or("?".to_string(), |c| c.name.clone());
+                    *stats.targets.entry(name).or_default() += 1;
+                }
+            }
+        }
+        if let Some(number) = value.as_i64().filter(|_| field.base == 0x04) {
+            stats.ints = Some(match stats.ints {
+                Some((low, high)) => (low.min(number), high.max(number)),
+                None => (number, number),
+            });
+        }
         *stats.kinds.entry(kind(value)).or_default() += 1;
         if stats.samples.len() < 10 || stats.samples.contains_key(&value.to_string()) {
             let text: String = value.to_string().chars().take(160).collect();
@@ -153,7 +258,7 @@ impl Walk<'_> {
                     .residual
                     .contains(&(class.name.clone(), field.name.clone()))
                 {
-                    self.note(&class.name, &field.name, found);
+                    self.note(&class.name, field, found);
                 }
                 self.field(field, found, depth + 1);
             }
@@ -297,6 +402,29 @@ fn main() -> Result<()> {
                 for field in &class.fields {
                     if let Some(FieldType::Unknown { bytes }) = &field.field_type {
                         println!("old-unknown {}::{} {}", class.name, field.name, hex(bytes));
+                        if bytes.len() < 6 {
+                            println!(
+                                "clipped {}::{} old-bytes {} old-class-offset {}",
+                                class.name,
+                                field.name,
+                                bytes.len(),
+                                class.offset
+                            );
+                            for other in &registry.classes {
+                                for found in other.fields.iter().filter(|f| f.name == field.name) {
+                                    let full = window(&stream, found);
+                                    println!(
+                                        "clipped-match {}::{} descriptor-offset {} minus-old-class-offset {} window {} decodes {:?}",
+                                        other.name,
+                                        found.name,
+                                        found.descriptor_offset,
+                                        found.descriptor_offset as i64 - class.offset as i64,
+                                        hex(&full[..full.len().min(12)]),
+                                        FieldType::decode(&full)
+                                    );
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -310,6 +438,7 @@ fn main() -> Result<()> {
         class_instances: BTreeMap::new(),
         fields: BTreeMap::new(),
         record: 0,
+        tokens: BTreeSet::new(),
     };
     let started = Instant::now();
     let mut seen = 0usize;
@@ -325,6 +454,7 @@ fn main() -> Result<()> {
         }
         if let Some(graph) = &record.graph {
             walk.record = record.identity.element_id;
+            walk.tokens = graph.objects.iter().map(|o| u64::from(o.token)).collect();
             for object in &graph.objects {
                 walk.class(object.class_tag, &object.fields, 0);
             }
@@ -368,10 +498,24 @@ fn main() -> Result<()> {
             .iter()
             .map(|(k, n)| format!("{k}x{n}"))
             .collect();
+        let targets: Vec<_> = stats
+            .targets
+            .iter()
+            .map(|(k, n)| format!("{k}x{n}"))
+            .collect();
         println!(
-            "instance {name} instances {} records {} kinds {} samples {}",
+            "instance {name} desc {} instances {} records {} layout-ok {} layout-bad {} {:?} pointers zero {} resolved {} unresolved {} targets {} ints {:?} kinds {} samples {}",
+            stats.descriptor,
             stats.instances,
             stats.records.len(),
+            stats.ok,
+            stats.bad,
+            stats.bad_samples,
+            stats.zero,
+            stats.resolved,
+            stats.unresolved,
+            targets.join(","),
+            stats.ints,
             kinds.join(";"),
             samples.join(" ; ")
         );
