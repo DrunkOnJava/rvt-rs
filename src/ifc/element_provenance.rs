@@ -197,10 +197,9 @@ pub enum CopyRule {
     /// A native record by member name, the current copy of it
     /// (`native_document`).
     Native,
-    /// The frames of other elements' records (a sketch's lines, a type
-    /// symbol), listed in [`ValueSource::parts`], as the reader's scan kept
-    /// them: for a sketch's lines the first of each line's frames by frame
-    /// order, with the current partition's where its copies disagree.
+    /// The last frame of the record in file order, as the reader's scan kept
+    /// it, where the record's frames were not compared or do not agree (a
+    /// type symbol's box).
     Frame,
 }
 
@@ -249,7 +248,9 @@ pub struct ValueSource {
     pub rule: CopyRule,
     /// In how many partitions the element's data named it, so how many copies
     /// there were to choose from (two headers in one partition count once);
-    /// for a source made of [`Self::parts`], how many records it is made of.
+    /// for a source made of several [`Self::parts`] (a profile's sketch
+    /// lines), how many records it is made of. A source of one part counts the
+    /// partitions that held that record.
     pub copies: u32,
     /// The partition of the copy, such as `Partitions/46`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -277,7 +278,9 @@ pub struct ValueSource {
     /// Whether the value is held in another partition than the element's frame
     /// ([`ElementProvenanceEntry::stream`]): the copy named is in another, and,
     /// for [`CopyRule::Agreeing`], so is every copy that agrees with it; for a
-    /// source made of records, none of them is in the frame's partition.
+    /// source made of records, none of them is in the frame's partition (a
+    /// profile's sketch lines are also held there when the Sketch's curve
+    /// list has a copy there).
     #[serde(default, skip_serializing_if = "is_false")]
     pub differs_from_frame: bool,
 }
@@ -857,6 +860,19 @@ pub const SELECTED_FRAME_READER: &str = "selected_frame";
 /// box only, and the profile has no source yet.
 pub const SELECTED_FRAME_BOX_READER: &str = "selected_frame_box";
 
+/// The reader name of the value source of a Sketch's curve list (#1368).
+const SKETCH_LIST_READER: &str = "sketch_list";
+
+/// The readers of a profile's sketch lines (#1368): the frames of the lines,
+/// and the data of the lines whose outline is read from their own ends.
+const SKETCH_LINE_READERS: &[&str] = &["sketch_lines", "sketch_line_data"];
+
+/// The readers that source a profile's records for a box body, the ones that
+/// take its place as `selected_frame_box` (#1368): the sketch lines' frames,
+/// or the type symbol's frame. The Sketch's curve list or the lines' data
+/// alone do not.
+const PROFILE_FRAME_READERS: &[&str] = &["sketch_lines", "type_section"];
+
 /// The readers whose value a body with this `BodySource` is drawn from (#1360):
 /// a value source is listed for an element only when its reader is one of
 /// them, so a line a reader took for a wall that was drawn as its box is not
@@ -885,9 +901,11 @@ fn body_readers(body: &str) -> &'static [&'static str] {
             "stair_run_ends",
             "stair_run_type",
             "stair_run_base_cuts",
+            "native_run",
+            "native_run_type",
         ],
         ec::LANDING_TREAD_BODY_SOURCE => &["native_landing"],
-        ec::LANDING_SLAB_BODY_SOURCE => &["landing_lines", "native_landing"],
+        ec::LANDING_SLAB_BODY_SOURCE => &["landing_lines", "native_landing", "native_landing_type"],
         _ => &[],
     }
 }
@@ -974,6 +992,24 @@ pub(crate) fn attach_value_sources(
             };
             entry.value_sources.push(source);
         }
+        // A profile's sketch lines are in the partitions of the lines; the
+        // profile is held in the frame's partition too when the Sketch's curve
+        // list, which names those lines, has a copy there.
+        let list_in_frame = entry.stream.as_deref().is_some_and(|frame| {
+            entry
+                .value_sources
+                .iter()
+                .any(|held| held.reader == SKETCH_LIST_READER && held.held_in(frame))
+        });
+        if list_in_frame {
+            for held in entry
+                .value_sources
+                .iter_mut()
+                .filter(|held| SKETCH_LINE_READERS.contains(&held.reader.as_str()))
+            {
+                held.differs_from_frame = false;
+            }
+        }
         // A box whose profile was read from sketch lines or the type's section
         // takes only its box and placement from the frame, unless a reader
         // noted the profile's records.
@@ -987,7 +1023,7 @@ pub(crate) fn attach_value_sources(
             let profile_sourced = entry
                 .value_sources
                 .iter()
-                .any(|source| profile_list.contains(&source.reader.as_str()));
+                .any(|source| PROFILE_FRAME_READERS.contains(&source.reader.as_str()));
             let reader = if profile_elsewhere && !profile_sourced {
                 SELECTED_FRAME_BOX_READER
             } else {

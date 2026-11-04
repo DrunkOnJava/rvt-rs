@@ -1058,19 +1058,23 @@ pub fn scan_sketch_curve_lists(
             Some((owner, pick))
         })
         .collect();
-    for (owner, source) in noted {
-        rf.note_value_source(owner, source);
-    }
     let mut listed: BTreeMap<u32, usize> = BTreeMap::new();
     for curves in lists.values() {
         for id in curves {
             *listed.entry(*id).or_default() += 1;
         }
     }
-    lists
+    let kept: BTreeMap<u32, Vec<u32>> = lists
         .into_iter()
         .filter(|(_, curves)| curves.iter().all(|id| listed[id] == 1))
-        .collect()
+        .collect();
+    // Only a list that was used is a source (#1368).
+    for (owner, source) in noted {
+        if kept.contains_key(&owner) {
+            rf.note_value_source(owner, source);
+        }
+    }
+    kept
 }
 
 /// The Sketch's own ElementId, the sketched element and the curve list in

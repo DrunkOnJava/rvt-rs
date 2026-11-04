@@ -442,6 +442,7 @@ pub fn scan_run_types(
     // The first copy read of each type and the partitions that gave a value
     // (#1368).
     let mut first: BTreeMap<u32, (String, usize)> = BTreeMap::new();
+    let mut named: BTreeMap<u32, BTreeSet<u32>> = BTreeMap::new();
     let mut gave: BTreeMap<u32, BTreeSet<u32>> = BTreeMap::new();
     for stream in rf.partition_stream_names() {
         let partition = stream
@@ -452,6 +453,9 @@ pub fn scan_run_types(
         };
         let buf = inflated.bytes();
         for (id, id_at) in crate::partition_id_objects::find_id_objects(buf, ids) {
+            if let (true, Some(partition)) = (recording, partition) {
+                named.entry(id).or_default().insert(partition);
+            }
             if let Some(found) = run_type_at(buf, id_at) {
                 merge(&mut out, id, found);
                 if let (true, Some(partition)) = (recording, partition) {
@@ -474,8 +478,9 @@ pub fn scan_run_types(
                 stream: stream.clone(),
                 offset: *id_at,
             };
+            let held = named.get(&id).map_or(1, BTreeSet::len);
             let source =
-                ValueSource::from_parts("stair_run_type", CopyRule::Agreeing, 1, vec![part])
+                ValueSource::from_parts("stair_run_type", CopyRule::Agreeing, held, vec![part])
                     .with_partitions(partitions.into_iter().collect());
             noted.push((id, source));
         }

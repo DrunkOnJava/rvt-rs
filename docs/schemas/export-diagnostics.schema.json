@@ -343,17 +343,17 @@
                       "properties": {
                         "reader": {
                           "type": "string",
-                          "description": "What was read: bounded_line (a wall's or beam's location line), bounded_arc, instance_transform, saved_graphics, native_run, native_landing, selected_frame for a body read from the frame, selected_frame_box for a body whose box and placement are read from the frame and whose profile is read from a record no reader notes yet, sketch_lines and sketch_list (the frames of a profile's sketch lines and the Sketch's curve list), sketch_line_data, type_section (the type symbol's frame), stair_run_lines, stair_run_ends, stair_run_type, stair_run_base_cuts or landing_lines."
+                          "description": "What was read: bounded_line (a wall's or beam's location line), bounded_arc, instance_transform, saved_graphics, native_run, native_landing, selected_frame for a body read from the frame, selected_frame_box for a body whose box and placement are read from the frame and whose profile is read from a record no reader notes yet, sketch_lines and sketch_list (the frames of a profile's sketch lines and the Sketch's curve list), sketch_line_data, type_section (the type symbol's frame), stair_run_lines, stair_run_ends, stair_run_type, stair_run_base_cuts, landing_lines, native_run_type or native_landing_type (the run type's and the landing type's records, which give a Revit 2025 run's construction and a landing slab's thickness)."
                         },
                         "rule": {
                           "type": "string",
                           "enum": ["selected", "agreeing", "current", "native", "frame"],
-                          "description": "How the copy was chosen: the selected frame; every copy holds the same value (the lowest-numbered partition's is named); the copies disagree and the current partition's is taken (RE-216); a native record by member name, its current copy; the frames of other elements' records, listed in parts."
+                          "description": "How the copy was chosen: the selected frame; every copy holds the same value (the lowest-numbered partition's is named); the copies disagree and the current partition's is taken (RE-216); a native record by member name, its current copy; the last of a record's frames, as the reader's scan kept it, where the frames were not compared or do not agree. For a source made of parts the rule is how each record's copy was chosen."
                         },
                         "copies": {
                           "type": "integer",
                           "minimum": 0,
-                          "description": "In how many partitions the element's data named it, so how many copies there were to choose from; for a source made of parts, how many records it is made of."
+                          "description": "In how many partitions the element's data named it, so how many copies there were to choose from; for a profile's sketch lines (parts), how many lines it is made of; for a source of one record in parts, in how many partitions that record was held."
                         },
                         "stream": {
                           "type": "string",
@@ -390,7 +390,7 @@
                         },
                         "differs_from_frame": {
                           "type": "boolean",
-                          "description": "Whether the value is held in another partition than the element's frame: the copy named is in another and, for agreeing, so is every copy that agrees with it; for a source made of parts, none of them is in the frame's partition."
+                          "description": "Whether the value is held in another partition than the element's frame: the copy named is in another and, for agreeing, so is every copy that agrees with it; for a source made of parts, none of them is in the frame's partition (a profile's sketch lines are also held there when the Sketch's curve list, sketch_list, has a copy there)."
                         }
                       }
                     }

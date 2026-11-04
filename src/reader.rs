@@ -576,19 +576,55 @@ impl RevitFile {
         }
     }
 
-    /// Note for `owner` the value source that `from` has under `reader`, where
-    /// the record was read once for `from` and `owner` uses it: a type's
-    /// parameters, read for the instances of the type (#1368). Does nothing
-    /// unless [`Self::record_value_sources`] is on and `from` has one.
-    pub(crate) fn attribute_value_source(&mut self, from: u32, reader: &str, owner: u32) {
+    /// Note for `owner`, under `as_reader`, the value source that `from` has
+    /// under `reader`, where the record was read once for `from` and `owner`
+    /// uses it: a type's parameters, read for the instances of the type
+    /// (#1368). The record is `from`'s, so it is listed in `parts` with
+    /// `from`'s id. Does nothing unless [`Self::record_value_sources`] is on
+    /// and `from` has one.
+    pub(crate) fn attribute_value_source(
+        &mut self,
+        from: u32,
+        reader: &str,
+        owner: u32,
+        as_reader: &str,
+    ) {
         let source = self
             .value_sources
             .as_ref()
             .and_then(|noted| noted.get(&from))
             .and_then(|sources| sources.iter().find(|held| held.reader == reader))
             .cloned();
-        if let Some(source) = source {
+        if let Some(mut source) = source {
+            source.reader = as_reader.to_string();
+            // The record is the other element's: name it in `parts`.
+            if let (true, Some(stream), Some(offset)) = (
+                source.parts.is_empty(),
+                source.stream.take(),
+                source.offset.take(),
+            ) {
+                source
+                    .parts
+                    .push(crate::ifc::element_provenance::SourcePart {
+                        element_id: from,
+                        stream,
+                        offset,
+                    });
+            }
             self.note_value_source(owner, source);
+        }
+    }
+
+    /// Take back the note of `reader` for `element_id`, where the value was
+    /// not used after all (a record selected, then found not to give the
+    /// value). Does nothing unless [`Self::record_value_sources`] is on.
+    pub(crate) fn forget_value_source(&mut self, element_id: u32, reader: &str) {
+        if let Some(sources) = self
+            .value_sources
+            .as_mut()
+            .and_then(|noted| noted.get_mut(&element_id))
+        {
+            sources.retain(|held| held.reader != reader);
         }
     }
 

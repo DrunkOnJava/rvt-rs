@@ -164,7 +164,7 @@ pub(super) fn attach_stair_run_bodies(
             continue;
         };
         if let (Some(run_id), Some(type_id)) = (element.id, type_of.get(&index)) {
-            rf.attribute_value_source(*type_id, "stair_run_type", run_id);
+            rf.attribute_value_source(*type_id, "stair_run_type", run_id, "stair_run_type");
         }
         let has_type_name = element
             .fields
