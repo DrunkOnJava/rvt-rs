@@ -38,7 +38,10 @@
 # (RE-313: how many spaces pair, and their area and outline within a tolerance,
 # never a GlobalId), the `space overlaps:` count lines of
 # tools/re/space_overlaps_vs_ifc.py (RE-316: how many rooms of each source have
-# the area of Revit's upward faces, floor or every face, never a GlobalId), and
+# the area of Revit's upward faces, floor or every face, never a GlobalId), the
+# totals and per-class rows of mesh_bodies_vs_ifc.py, box_bodies_vs_ifc.py and
+# saved_meshes_vs_ifc.py (RE-329: numbers beside an IFC class name, never a
+# family, type or element), and
 # ifc.sha256, the hash of rvt-rs's own export; every other file is deleted.
 set -euo pipefail
 
@@ -107,6 +110,23 @@ for dir in "$RESULTS"/holdout-*/ "$RESULTS"/bimcollab-*/; do
     for f in "$dir"space_overlaps_vs_ifc.txt; do
       [ -f "$f" ] || continue
       grep -E "^space overlaps: (upward|downward|every) faces?, [a-z ]+: [0-9]+ paired rooms, area within 0\.1% of Revit's on [0-9]+$" "$f" || true
+    done
+    # The saved-mesh bodies (mesh_bodies_vs_ifc), the record boxes left
+    # (box_bodies_vs_ifc) and the per-class world-box agreement
+    # (saved_meshes_vs_ifc): their totals and class rows, which are numbers
+    # beside an IFC class name. The rows under a class, which name a family and
+    # type, are dropped (RE-329).
+    for f in "$dir"mesh_bodies_vs_ifc.txt; do
+      [ -f "$f" ] || continue
+      grep -E "^(saved_graphics_mesh bodies scored: [0-9]+; in Revit's export [0-9]+|Ifc[A-Za-z0-9]+: [0-9]+ bodies, every [0-9]+th scored|Ifc[A-Za-z0-9]+ +[0-9]+( +[0-9]+){5} +([0-9]+\.[0-9]+|nan|-))$" "$f" | sed 's/^/mesh bodies: /' || true
+    done
+    for f in "$dir"box_bodies_vs_ifc.txt; do
+      [ -f "$f" ] || continue
+      grep -E "^(record-box bodies: [0-9]+; fill = Revit's body volume / its bounding box|Ifc[A-Za-z0-9]+ +[0-9]+( +[0-9]+){6} +([0-9]+\.[0-9]+|nan|-)|total +[0-9]+( +[0-9]+){6})$" "$f" | sed 's/^/box bodies: /' || true
+    done
+    for f in "$dir"saved_meshes_vs_ifc.txt; do
+      [ -f "$f" ] || continue
+      grep -E "^(Ifc[A-Za-z0-9]+|total) +[0-9]+( +[0-9]+){5}$" "$f" | sed 's/^/saved meshes: /' || true
     done
     for f in "$dir"storeys_vs_ifc.txt; do
       [ -f "$f" ] || continue
