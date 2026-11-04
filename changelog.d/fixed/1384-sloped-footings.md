@@ -14,4 +14,12 @@
   or creases, corners not in one plane, an outline in pieces, a wall covered
   in part, by two elements or with the top crossing its base or top. The top
   cut (RE-267) no longer takes a floor drawn along a sloped top for a level
-  one. The measured effect is in `reports/element-framing/RE-336-sloped-footings.md`.
+  one. On the BIM4LCA office the 8 such floors, as built and at permit, have
+  Revit's volume to 0.01%, and 12 of the 14 Basement walls Revit raises as
+  built (12 of 16 at permit) have Revit's lowest point (598 of 607 walls with
+  Revit's base and top, from 586; 577 of 589 at permit, from 565); the other
+  2 (4) are 0.123 ft (0.044 ft) off, from 0.656 ft, because their plans end
+  short of Revit's. No wall's top moved, and no other model's export moves
+  but for nine refusal markers on Autodesk's Snowdon Towers (no redistributable
+  Revit export to score them against). Details:
+  `reports/element-framing/RE-336-sloped-footings.md`.
