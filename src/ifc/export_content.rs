@@ -4561,11 +4561,27 @@ fn turned_box(x_axis: [f64; 2], width: f64, depth: f64) -> Option<(f64, f64, f64
 pub const BEAM_AXIS_BODY_SOURCE: &str = "partition_beam_axis";
 
 /// `BodySource` of an unrotated level beam whose record box is longer than
-/// its location line: the box along the line, the box's own length
-/// (RE-328). It is not [`BEAM_AXIS_BODY_SOURCE`]: no Revit export measures
-/// a beam longer than its line, so it gets none of the quantities that
-/// source's beams get (`Qto_BeamBaseQuantities.Length` and what follows from
-/// it), and a saved mesh that decodes whole still replaces it.
+/// its location line: the box along the line (RE-328).
+///
+/// Read it as an envelope, not as the beam's true length:
+/// - its direction and its section come from the location line and the
+///   record box, and the section across the line is Revit's saved mesh's on
+///   25 of 25 beams measured;
+/// - its length is the record box's, not the beam's. The box is longer than
+///   the line by at most a foot, and on 9 of those 25 Revit's own mesh ends
+///   inside the body at one end or both, by more than 0.01 ft and at most
+///   1 ft, so the body can run past the beam at its ends. The record box
+///   does the same on 21 of the 25 (by up to 1 ft), and the body is the
+///   turned box, not the axis-aligned one;
+/// - the beam's property set holds `AxisLength`, the location line's length,
+///   and `BodyLength`, the body's, which is the record box's length along the
+///   line, with `SectionWidth` and `SectionDepth`.
+///
+/// It is not [`BEAM_AXIS_BODY_SOURCE`]: no Revit export measures a beam longer
+/// than its line, so it gets none of the quantities that source's beams get
+/// (`Qto_BeamBaseQuantities.Length`, and from it `Pset_BeamCommon.Span`,
+/// `Slope` and `Roll`), and no I section. A saved mesh that decodes whole
+/// still replaces it under `--saved-meshes`.
 pub const BEAM_BOX_BODY_SOURCE: &str = "partition_beam_box_along_axis";
 
 /// A sloped beam's body: its section swept along its centreline, with the

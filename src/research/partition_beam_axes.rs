@@ -1007,11 +1007,15 @@ pub const MIN_PLAN_CONDITION: f64 = 0.6427876096865394;
 /// The body of a level beam whose line lies inside its record box but is
 /// shorter than the box, where [`beam_check`] declines it for a section that
 /// does not close (RE-328): the box along the line whose extents are the
-/// record box's, its length the box's own ([`box_along`]). On Autodesk's 2024
-/// samples all 34 beams declined for that reason on a level line are
-/// longer in the box than in the line, by at most a foot, and on the 25 whose
-/// saved mesh decodes whole the section across the line is the mesh's to
-/// 0.01 ft and the ends are the mesh's or Revit's trim of it (RE-328). Only
+/// record box's, its length the box's own ([`box_along`]).
+///
+/// The length is the record box's, not the beam's: the body can run past
+/// Revit's beam at its ends. On Autodesk's 2024 samples all 34 beams
+/// declined for that reason on a level line are longer in the box than in
+/// the line, by at most a foot. On the 25 whose saved mesh decodes whole
+/// the section across the line is the mesh's to 0.01 ft on all 25, the
+/// mesh's ends are the body's on 16, and on 9 the mesh ends inside the body
+/// at one end or both, by more than 0.01 ft and at most 1 ft (RE-328). Only
 /// the caller knows the Cross-Section Rotation (`BEAM_ROTATION_FIELD` in
 /// `partition_schema_mvp`), which must be exactly 0: a rolled section's
 /// extents across the line are wider than the section, and the 16 sloped,

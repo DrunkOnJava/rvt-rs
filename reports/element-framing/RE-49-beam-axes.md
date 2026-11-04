@@ -8,6 +8,7 @@
 - Before, every beam was the axis-aligned box around it. For a beam rotated in plan that box is several times the beam: 8.4 times Revit's own beam envelope at the median, against 1.11 times now.
 - On Snowdon Towers Structural, 923 of the 942 exported beams run along their line. The section is Revit's exactly on 613 of the 839 beams a later edition kept unchanged, and on 179 more it is Revit's less the top a floor join cuts away.
 - A beam whose box no solid along the line reproduces keeps its box.
+- **Update (RE-328, 2026-11-04):** the 15 beams section 2 takes for oblique, skewed-end beams are rectangles along the line whose record box is longer than the line; measured against their saved meshes, their section across the line is the box's. See `RE-328-beam-rejections.md`: an unrotated level beam in that class is now drawn as the box along the line.
 
 **Probe:** `examples/probe_re49_beam_axes.rs` counts the lines and solves in a file. Given a VIM export of the same model, it also scores every solved beam against the mesh the VIM holds for it.
 
