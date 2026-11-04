@@ -89,13 +89,13 @@
 //!
 //! **An Area of Revit 2015 to 2023 is written only where its region and body
 //! are proven.** The first rule, writing every placed Area as 2024 does, wrote
-//! 2 `IfcSpace` that Revit's export lacks on a held-out Revit 2021 project
-//! (which also gave Revit's 8, by counts only). Revit's exporter makes no space
-//! for an Area whose boundary yields no loop (a redundant or not-enclosed Area,
-//! `SpatialElementExporter.CreateIFCSpace` in revit-ifc, CLEANROOM.md source
-//! 5), and the lines of its scheme are all that is read of an Area's boundary:
-//! a proven region is a boundary. The Areas left out are counted by the reason
-//! their body has none in the export diagnostics (`area_without_proven_body`).
+//! spaces that Revit's export lacks on a held-out project (RE-324). Revit's
+//! exporter makes no space for an Area whose boundary yields no loop (a
+//! redundant or not-enclosed Area, `SpatialElementExporter.CreateIFCSpace` in
+//! revit-ifc, CLEANROOM.md source 5), and the lines of its scheme are all that
+//! is read of an Area's boundary: a proven region is a boundary. The Areas left
+//! out are counted by the reason their body has none in the export diagnostics
+//! (`area_without_proven_body`).
 
 use crate::RevitFile;
 use crate::element_record_plan_profiles::{PLAN_PROFILE_SOURCE_FIELD, PlanProfile};
@@ -216,9 +216,6 @@ pub const REFUSED_OFF_REGION: &str = "named_lines_not_on_region";
 /// Another placed Area of the same scheme and Level has the same region,
 /// whether or not that Area is drawn.
 pub const REFUSED_REDUNDANT: &str = "two_areas_one_region";
-/// The Area has neither a body nor a reason (never returned by the readers
-/// above; the count of unwritten Areas names it only as a fallback).
-pub const REFUSED_UNPROVEN: &str = "body_not_proven";
 
 /// How the chain records of a file are walked (RE-324).
 #[derive(Debug, Clone, Copy)]
@@ -1091,19 +1088,16 @@ pub fn areas_from_partition_chain_records(
     );
     if matches!(layout, Layout::Narrow(_)) {
         // On Revit 2015 to 2023 an Area is written only where its region and
-        // body are proven (RE-324): the one measurement of a wider rule, on a
-        // held-out project, wrote 2 spaces Revit's export lacks. Revit's
-        // exporter makes no space for an Area whose boundary yields no loop,
-        // and the Area's lines are all that is read of its boundary.
+        // body are proven (RE-324): a wider rule wrote spaces Revit's export
+        // lacks on a held-out project. Revit's exporter makes no space for an
+        // Area whose boundary yields no loop, and the Area's lines are all
+        // that is read of its boundary. Every placed Area is drawn or refused
+        // with a reason, so the refusals are the Areas left out.
         let mut unwritten = BTreeMap::<String, usize>::new();
-        placed.retain(|id, _| {
-            let drawn = bodies.drawn.contains_key(id);
-            if !drawn {
-                let reason = bodies.refused.get(id).copied().unwrap_or(REFUSED_UNPROVEN);
-                *unwritten.entry(reason.to_string()).or_insert(0) += 1;
-            }
-            drawn
-        });
+        for reason in bodies.refused.values() {
+            *unwritten.entry((*reason).to_string()).or_insert(0) += 1;
+        }
+        placed.retain(|id, _| bodies.drawn.contains_key(id));
         rf.set_unwritten_areas(unwritten);
         if placed.is_empty() {
             return Vec::new();
