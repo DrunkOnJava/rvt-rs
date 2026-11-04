@@ -121,7 +121,7 @@ writes the cached output and a `<step> cached` line to the model's
   takes a directory from an argument, opens a file by a literal path, runs a
   program, draws a number or a date, reads the IFC's export time or reads an
   environment variable by a computed name: the cache tells the reason in
-  `score-cache.log` and runs it. A new scorer that reads anything but the
+  `score-cache-<shard>.log` and runs it. A new scorer that reads anything but the
   files it is given is run every time until `EXTRA_INPUTS` in
   `measure-cache.py` names what it reads. A step is kept only if it finished
   with status 0 and printed nothing that shows a failure a rerun could mend.
@@ -135,28 +135,30 @@ writes the cached output and a `<step> cached` line to the model's
   up caching a share of the work, not a small one: in the unfiltered run
   41748430211 the 18 held-out models took 32.8 of the 119 task-minutes of
   model steps (28%); they run only with `-f holdout=true`.
-- **Where it lives.** Every run restores the newest `measure-scores-v1-main-*`
-  cache before the measured code builds. It is saved only where rust-cache is
-  saved: the workflow dispatched from `main` and the side measuring `main`'s
-  own code (`inputs.ref` empty, or `base` `main`), because the build scripts of
-  any other ref run on the runner and must not write what a later `main` run
-  reads. A pull request run, and a run of any other ref, only reads. The scorers
-  in the key make a poisoned entry reachable only by a run whose scorers, files
-  and libraries hash alike, but not by construction: a build script of the
-  measured ref could rewrite the installed IfcOpenShell, which the key names
-  only by version, and the cache then holds what that run produced. That is why
-  only main's own code saves it. A run
-  dispatched with `-f score_cache=<name>` reads and saves a cache of its own,
-  `measure-scores-v1-x-<name>-*`, from any ref (GitHub scopes a branch's
-  caches to that branch, and `main`'s runs never read the name); this is how a
-  change to the cache itself is proved, and `-f score_cache=off` runs every
-  step as before.
+- **Where it lives.** Each shard (`office-as-built`, `office-permit`,
+  `samples`, `rest`) restores the newest `measure-scores-v1-main-<shard>-*`
+  cache before the measured code builds, and a run given `models` (the shard
+  `all`) restores all of them. It is saved only where rust-cache is saved: the
+  workflow dispatched from `main` and the side measuring `main`'s own code
+  (`inputs.ref` empty, or `base` `main`), because the build scripts of any
+  other ref run on the runner and must not write what a later `main` run
+  reads. A pull request run, and a run of any other ref, only reads. Keying on
+  the scorers makes an entry reachable only by a run whose scorers, files and
+  libraries hash alike, but that is not safe by construction: a build script of
+  the measured ref could rewrite the installed IfcOpenShell, which the key
+  names only by version, and the cache would then hold what that run produced.
+  That is why only `main`'s own code saves it. A run dispatched with `-f
+  score_cache=<name>` reads and saves a cache of its own,
+  `measure-scores-v1-x-<name>-<shard>-*`, from any ref (GitHub scopes a
+  branch's caches to that branch, and the shared cache never reads the name);
+  this is how a change to the cache itself is proved. `-f score_cache=off`
+  runs every step as before.
 - **Bounds.** Entries not used for 21 days are removed, then the oldest past
   256 MiB; a run saves a new cache only if it kept an entry, pruned one or
   refreshed one unused for three days, and
   `tools/maintainer/clean_caches.py` deletes the generations a newer one
   supersedes. An entry is a scorer's text output (kilobytes), so the cache is
-  a few MiB, not GiB. `results/score-cache.log` in the artifact lists every
+  a few MiB, not GiB. `results/score-cache-<shard>.log` in the artifact lists every
   hit, miss, kept and uncached step with the first twelve characters of its key.
 - **Checking it.** The run after a change to an export is the check that the
   key follows the IFC: its changed models miss and the rest hit. To check a

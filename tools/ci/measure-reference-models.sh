@@ -64,9 +64,12 @@
 # When MEASURE_CACHE_DIR names a directory, a scorer or schema step whose every
 # input is as it was in an earlier run takes that run's output
 # (tools/ci/measure-cache.py, docs/maintaining.md); its `<step> cached` line
-# stands for its time in timings.log, and OUT_DIR/score-cache.log (written by the
-# workflow) lists each hit and miss. Exports, rvt-info, rvt-gltf, the witness
-# exports and probes always run.
+# stands for its time in timings.log, and OUT_DIR/score-cache-<shard>.log (written
+# by the workflow) lists each hit and miss. Exports, rvt-info, rvt-gltf, the
+# witness exports and probes always run, and the held-out models and BIMcollab's
+# (holdout-*, bimcollab-*), of which only counts leave the runner, are never
+# looked up or stored: the Actions cache is not private to the workflows that
+# may change it.
 # A scorer that fails is recorded, not fatal: its output is the evidence.
 # These runs check what the exports hold; their times are not benchmarks
 # (the workflow's `timing` job times both refs on one runner,
