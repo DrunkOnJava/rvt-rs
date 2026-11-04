@@ -119,10 +119,12 @@ pub(super) fn attach_room_outlines(
     // Each stream's room solids are found in one pass (B85): a search per
     // room took 1.2 s on Autodesk's 2025 rme_advanced sample.
     let mut solids = std::collections::HashMap::new();
+    let recording = rf.recording_value_sources();
     for room in rooms.iter_mut() {
         let (Some(id), Some(stream)) = (room.id, element_source_stream(room)) else {
             continue;
         };
+        let source_stream = recording.then(|| stream.clone());
         let float = |wanted: &str| {
             room.fields.iter().find_map(|(name, value)| match value {
                 InstanceField::Float { value, .. } if name == wanted => Some(*value),
@@ -163,20 +165,38 @@ pub(super) fn attach_room_outlines(
         // RE-316: only a room none of whose solids the walk closes is resolved
         // from the faces up to the solid's end, so a room RE-101 reads is read
         // exactly as it was.
-        let walked = prb::outline_of_solids(inflated.bytes(), headers, bbox);
+        let walked = prb::outline_of_solids_at(inflated.bytes(), headers, bbox);
         let outline = match walked {
-            Some(profile) => Some((profile, prb::ROOM_OUTLINE_SOURCE, true)),
-            None => prb::resolved_outline_of_solids(inflated.bytes(), headers, bbox).map(
-                |(profile, kind)| {
+            Some((profile, used)) => Some((profile, prb::ROOM_OUTLINE_SOURCE, true, used)),
+            None => prb::resolved_outline_of_solids_at(inflated.bytes(), headers, bbox).map(
+                |(profile, kind, used)| {
                     let source = match kind {
                         prb::ResolvedKind::Faces => prb::ROOM_OUTLINE_SOURCE_FACES,
                         prb::ResolvedKind::Approximate => prb::ROOM_OUTLINE_SOURCE_APPROXIMATE,
                     };
-                    (profile, source, false)
+                    (profile, source, false, used)
                 },
             ),
         };
-        if let Some((profile, source, walk)) = outline {
+        if let Some((profile, source, walk, used)) = outline {
+            // The solids the outline was read from, in the room's own
+            // partition (#1368).
+            if let Some(stream) = source_stream {
+                use crate::ifc::element_provenance::{CopyRule, SourcePart, ValueSource};
+                let parts: Vec<SourcePart> = used
+                    .into_iter()
+                    .map(|offset| SourcePart {
+                        element_id: id,
+                        stream: stream.clone(),
+                        offset,
+                    })
+                    .collect();
+                let copies = parts.len();
+                rf.note_value_source(
+                    id,
+                    ValueSource::from_parts("room_solid_faces", CopyRule::Agreeing, copies, parts),
+                );
+            }
             let mut fields = profile.fields();
             for (name, value) in fields.iter_mut() {
                 if name == crate::element_record_plan_profiles::PLAN_PROFILE_SOURCE_FIELD {

@@ -23,7 +23,12 @@
 //!   its first bytes, or, on a second-prologue frame (no id there), the id of
 //!   the record that encloses the frame, which this test finds from the bytes
 //!   (`partition_record_chain`); a sketch line's data (`sketch_line_data`) is an
-//!   element-data header followed by the line's own id; a run type is an id
+//!   element-data header followed by the line's own id; a room's solid is the
+//!   room's id and the solid's tag; a type's parameter entry is an `f64`, `ff`
+//!   x 8 and an `i64`, in the value block the type owns (the nearest block mark
+//!   before it); a pipe's connector entry is an index of at most 255, the
+//!   `u32` 1 and a point inside the pipe's record box (the frame decoded
+//!   here); a run type is an id
 //!   object with the type's id; and a Sketch's curve list is an element-data
 //!   header followed, at a fixed place, by the sketched element's id. Frames of
 //!   a 32-bit release that carry no id at their first bytes are counted as not
@@ -55,7 +60,6 @@
 //! `RVT_NORDIC_LCA_DIR`; each is skipped when its variable is unset.
 
 use crate::element_parameters::nordic_dir;
-use rvt::RevitFile;
 use rvt::ifc::entities::{IfcEntity, PropertyValue};
 use rvt::ifc::{ExportOptions, IfcModel, run_export};
 use rvt::research::element_record_plan_profiles::SKETCH_OWNER_OFFSET;
@@ -64,13 +68,16 @@ use rvt::research::partition_beam_axes::{
     scan_first_bounded_arcs, scan_first_bounded_lines,
 };
 use rvt::research::partition_element_records::{
-    PartitionRecordSpan, carries_no_element_id, enclosing_record, file_bbox_marker,
-    partition_record_chain,
+    PartitionRecordSpan, carries_no_element_id, decode_at_with_marker, decode_frame_as,
+    enclosing_record, file_bbox_marker, partition_record_chain,
 };
 use rvt::research::partition_instance_transforms::{
     INSTANCE_TRANSFORM_WINDOW, InstanceTransform, instance_transform, scan_instance_transforms,
 };
 use rvt::research::partition_names::{ElementDataLayout, element_data_layout};
+use rvt::research::partition_room_boundaries::{ROOM_SOLID_TAG, is_room_outline_source};
+use rvt::research::partition_type_parameters::VALUE_BLOCK_MARK;
+use rvt::{RevitFile, elem_table};
 use serde_json::json;
 use std::collections::{BTreeMap, BTreeSet};
 use std::io::Write;
@@ -181,9 +188,27 @@ const COVERAGE: &[(&str, Coverage)] = &[
         },
     ),
     ("partition_area_boundary_lines", NotYet),
-    ("family_type_hollow_section", NotYet),
-    ("family_type_i_section", NotYet),
-    ("partition_pipe_axis", NotYet),
+    (
+        "family_type_hollow_section",
+        Recorded {
+            readers: &["type_hollow_section"],
+            rules: &["agreeing"],
+        },
+    ),
+    (
+        "family_type_i_section",
+        Recorded {
+            readers: &["type_i_section"],
+            rules: &["agreeing"],
+        },
+    ),
+    (
+        "partition_pipe_axis",
+        Recorded {
+            readers: &["pipe_connectors"],
+            rules: &["agreeing"],
+        },
+    ),
     ("partition_roof_slope", NotYet),
     ("partition_roof_extrusion", NotYet),
     ("family_extrusions", NotYet),
@@ -199,6 +224,7 @@ const MIN_READERS: &[(&str, &[&str])] = &[
             "saved_graphics",
             "sketch_lines",
             "type_section",
+            "room_solid_faces",
         ],
     ),
     (
@@ -217,6 +243,7 @@ const MIN_READERS: &[(&str, &[&str])] = &[
             "native_landing",
             "stair_run_lines",
             "landing_lines",
+            "room_solid_faces",
         ],
     ),
 ];
@@ -314,6 +341,30 @@ fn element_bodies(model: &IfcModel) -> (Bodies, usize) {
     (bodies, entities)
 }
 
+fn f64_at(buf: &[u8], at: usize) -> Option<f64> {
+    buf.get(at..at.checked_add(8)?)
+        .map(|b| f64::from_le_bytes(b.try_into().expect("8 bytes")))
+}
+
+fn i64_at(buf: &[u8], at: usize) -> Option<i64> {
+    buf.get(at..at.checked_add(8)?)
+        .map(|b| i64::from_le_bytes(b.try_into().expect("8 bytes")))
+}
+
+/// The ElementId of the value block that the entry at `at` is in: the nearest
+/// block mark before it, not preceded by a further `ff`, with the owner's id in
+/// the eight bytes before.
+fn value_block_owner(buf: &[u8], at: usize) -> Option<u32> {
+    let mark = &VALUE_BLOCK_MARK[..];
+    let mut start = at.checked_sub(mark.len())?;
+    loop {
+        if start >= 8 && buf.get(start..start + mark.len())? == mark && buf[start - 1] != 0xff {
+            return u32::try_from(u64_at(buf, start - 8)?).ok();
+        }
+        start = start.checked_sub(1)?;
+    }
+}
+
 fn u32_at(buf: &[u8], at: usize) -> Option<u32> {
     buf.get(at..at.checked_add(4)?)
         .map(|b| u32::from_le_bytes(b.try_into().expect("4 bytes")))
@@ -389,6 +440,8 @@ fn check_model(name: &str, path: &Path) {
     let version = rf.layout_release().expect("layout release");
     let layout = element_data_layout(version);
     let marker = file_bbox_marker(&mut rf, version);
+    let declared: BTreeSet<u32> =
+        elem_table::declared_ids(&elem_table::parse_records(&mut rf).expect("ElemTable"));
     let mut chains: BTreeMap<String, Vec<PartitionRecordSpan>> = BTreeMap::new();
     let mut problems: Vec<String> = Vec::new();
 
@@ -429,10 +482,21 @@ fn check_model(name: &str, path: &Path) {
                             let profile_readers: &[&str] = match info.profile_source.as_deref() {
                                 Some("partition_element_record_sketch_lines") => &["sketch_lines"],
                                 Some("family_type_symbol_envelope") => &["type_section"],
+                                Some(source) if is_room_outline_source(source) => {
+                                    &["room_solid_faces"]
+                                }
                                 _ => &[],
                             };
                             let profile_sourced = entry.value_sources.iter().any(|held| {
-                                matches!(held.reader.as_str(), "sketch_lines" | "type_section")
+                                matches!(
+                                    held.reader.as_str(),
+                                    "sketch_lines"
+                                        | "type_section"
+                                        | "room_solid_faces"
+                                        | "type_hollow_section"
+                                        | "type_i_section"
+                                        | "pipe_connectors"
+                                )
                             });
                             let expected = if profile_elsewhere && !profile_sourced {
                                 "selected_frame_box"
@@ -512,6 +576,28 @@ fn check_model(name: &str, path: &Path) {
     let mut by_rule: BTreeMap<String, usize> = BTreeMap::new();
     let width = usize::from(table.record_id_bytes.unwrap_or(8));
     for (&id, entry) in &table.elements {
+        // A box whose profile a reader sourced is not `selected_frame_box`.
+        let readers: BTreeSet<&str> = entry
+            .value_sources
+            .iter()
+            .map(|source| source.reader.as_str())
+            .collect();
+        if readers.contains("selected_frame_box")
+            && [
+                "sketch_lines",
+                "type_section",
+                "room_solid_faces",
+                "type_hollow_section",
+                "type_i_section",
+                "pipe_connectors",
+            ]
+            .iter()
+            .any(|reader| readers.contains(reader))
+        {
+            problems.push(format!(
+                "{id}: selected_frame_box beside a source for the profile"
+            ));
+        }
         for source in &entry.value_sources {
             let count = counts.entry(source.reader.clone()).or_default();
             count.0 += 1;
@@ -580,6 +666,86 @@ fn check_model(name: &str, path: &Path) {
                             }
                             None => Part::Unverified,
                         },
+                        // A room's solid: its room's id, then the solid's tag
+                        // directly or after `ff ff ff ff`.
+                        "room_solid_faces" => {
+                            let tag_at = part.offset + 8;
+                            let tagged = bytes.get(tag_at..tag_at + 4) == Some(&ROOM_SOLID_TAG[..])
+                                || (bytes.get(tag_at..tag_at + 4) == Some(&[0xff; 4][..])
+                                    && bytes.get(tag_at + 4..tag_at + 8)
+                                        == Some(&ROOM_SOLID_TAG[..]));
+                            if u64_at(bytes, part.offset) == Some(wanted) && tagged {
+                                Part::Confirmed
+                            } else {
+                                Part::Failed
+                            }
+                        }
+                        // A type's parameter entry, `f64 · ff × 8 · i64`, in
+                        // the value block the type owns: the nearest block
+                        // mark before it has the type's id before it.
+                        "type_hollow_section" | "type_i_section" => {
+                            let shaped = bytes.get(part.offset + 8..part.offset + 16)
+                                == Some(&[0xff; 8][..])
+                                && i64_at(bytes, part.offset + 16).is_some()
+                                && f64_at(bytes, part.offset).is_some_and(f64::is_finite);
+                            if shaped
+                                && value_block_owner(bytes, part.offset) == Some(part.element_id)
+                            {
+                                Part::Confirmed
+                            } else {
+                                Part::Failed
+                            }
+                        }
+                        // A pipe's connector entry, `u32 index · u32 1 · f64 × 3`,
+                        // whose point lies in the pipe's record box.
+                        "pipe_connectors" => {
+                            let shaped = u32_at(bytes, part.offset)
+                                .is_some_and(|index| index <= 255)
+                                && u32_at(bytes, part.offset + 4) == Some(1);
+                            let point: Option<Vec<f64>> = (0..3)
+                                .map(|axis| f64_at(bytes, part.offset + 8 + 8 * axis))
+                                .collect();
+                            let frame = entry.stream.as_deref().zip(entry.offset);
+                            let record = match (frame, marker) {
+                                (Some((frame_stream, frame_offset)), Some(marker)) => {
+                                    let frame_bytes = rf.inflated_partition(frame_stream).ok();
+                                    frame_bytes.and_then(|frame_bytes| {
+                                        decode_at_with_marker(
+                                            frame_stream,
+                                            frame_bytes.bytes(),
+                                            frame_offset,
+                                            &declared,
+                                            &marker,
+                                        )
+                                        .or_else(|| {
+                                            decode_frame_as(
+                                                frame_stream,
+                                                frame_bytes.bytes(),
+                                                frame_offset,
+                                                id,
+                                                &marker,
+                                            )
+                                        })
+                                    })
+                                }
+                                _ => None,
+                            };
+                            match (shaped, point, record) {
+                                (true, Some(point), Some(record)) => {
+                                    let inside = (0..3).all(|axis| {
+                                        point[axis] >= record.bbox_feet[axis] - 1e-3
+                                            && point[axis] <= record.bbox_feet[axis + 3] + 1e-3
+                                    });
+                                    if inside {
+                                        Part::Confirmed
+                                    } else {
+                                        Part::Failed
+                                    }
+                                }
+                                (false, _, _) | (_, None, _) => Part::Failed,
+                                (_, _, None) => Part::Unverified,
+                            }
+                        }
                         // A run type's id object: its id is the u64 there.
                         "stair_run_type" => {
                             if u64_at(bytes, part.offset) == Some(wanted) {

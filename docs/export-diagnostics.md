@@ -112,11 +112,15 @@ drawn from that reader.
 | `BodySource` | Reader | Rule | What `offset` is |
 |---|---|---|---|
 | `partition_element_record_bbox`, `partition_element_record_join_trimmed`, `partition_element_record_join_cut`, `partition_element_record_column_cut` | `selected_frame` | `selected` | The frame itself (a trim or cut also reads the joined elements' frames, which are not named). |
-| The same bodies where the profile is read from a record no reader notes yet: a `profile_source` that is not the `body_source` | `selected_frame_box` | `selected` | The frame, for the box and the placement only. The profile's copy has no source yet: today that is every room (its outline is read from its solid's faces, `partition_room_solid_faces`, 116 elements on Core Interior and 234 on the office). |
+| The same bodies where the profile is read from a record no reader notes yet: a `profile_source` that is not the `body_source` | `selected_frame_box` | `selected` | The frame, for the box and the placement only. The profile's copy has no source yet. |
 | The same bodies where the profile is solved from sketch lines (`profile_source` `partition_element_record_sketch_lines`: floors, slabs and ceilings, and roofs whose body is the record's box; a roof drawn from its slope or extrusion has no source yet) | `sketch_lines` | `agreeing` or `current` | `parts`: the frame of each sketch line the solve was given, the first of its frames by frame order (`agreeing`), or the current partition's where its frames disagree (`current`, RE-216). The element's `selected_frame` names the frame for the box. |
 | The same | `sketch_list` | `agreeing` or `current` | The element-data header of the Sketch's curve list that names the lines (RE-97), the lowest-numbered partition's or the current one. Where the element has one. |
 | The same, where the outline is read from the lines' own ends rather than their boxes | `sketch_line_data` | `agreeing` or `current` | `parts`: the element-data header of each line's copy (as `bounded_line`). |
 | The same bodies where the section is the type symbol's box (`profile_source` `family_type_symbol_envelope`: columns) | `type_section` | `agreeing` or `frame` | `parts`: the type symbol's frame, the last of its frames the column scan kept; `agreeing` (with `partitions`) where every frame of the symbol gives the same box, `frame` where they do not. |
+| The same bodies where the profile is a room's outline read from its stored solid (`profile_source` `partition_room_solid_faces`, `partition_room_solid_faces_resolved` or `partition_room_solid_faces_approximate`, RE-101, RE-316) | `room_solid_faces` | `agreeing` | `parts`: the header of each stored solid of the room, in the room's own partition, that gave the outline (the ElementId, then the solid's tag); where more than one solid gave one, every one gave the same. |
+| `family_type_hollow_section` | `type_hollow_section` | `agreeing` | `parts`: the entries of the column type's parameters `b`, `Ht`, `t` and `kr` (`f64`, `ff` x 8, `i64` parameter id), in the type's value block; the first copy of each, every copy holding the same value. The element's `selected_frame` names the frame whose box the section is held to. |
+| `family_type_i_section` | `type_i_section` | `agreeing` | `parts`: the six entries of the type's I section (width, height, web and flange thickness, the centroid both ways), as for the hollow section. `instance_transform` (as below) gives the plan angle of the column's X axis. |
+| `partition_pipe_axis` | `pipe_connectors` | `agreeing` | `parts`: the two connector entries (`u32` index, `u32` 1, the point) that are the pipe's ends, in the partition of its record; the radius is the record box's. Where the pipe's body came from two partitions they agree. |
 | `partition_wall_centreline`, `partition_wall_centreline_layer_joins`, `partition_wall_tapered_section`, `partition_beam_axis`, `partition_beam_box_along_axis` | `bounded_line` | `agreeing` | The element-data header of the lowest-numbered partition's copy of its location line. Every copy holds the same line; a wall or beam whose copies differ is drawn as its box instead. |
 | `partition_wall_arc` | `bounded_arc` | `agreeing` | As `bounded_line`, for a curved wall's arc. |
 | `partition_family_instance_turned_box`, `partition_family_instance_oriented_box` | `instance_transform` | `agreeing` or `current` | The element-data header of the copy: the lowest-numbered partition's where the copies agree, the current partition's where they differ (RE-216). |
@@ -133,14 +137,12 @@ drawn from that reader.
 | `partition_landing_slab` | `native_landing_type` | `native` | `parts`: the header of the landing type's current native record, which gives the thickness (monolithic types only). |
 
 No reader notes its copy yet for `partition_area_boundary_lines`,
-`family_type_hollow_section`, `family_type_i_section`, `partition_pipe_axis`,
 `partition_roof_slope`, `partition_roof_extrusion` and `family_extrusions`, nor
-for the other values a body reads (a wall's layers, a roof's slopes, the
-parameters of a type's section). An element of those bodies has no value
-source; an element whose box is the body but whose profile is read from a
-record no reader notes yet (a room's outline, read from its solid's faces)
-has `selected_frame_box` and nothing for the profile. Neither is a claim that
-it read the frame. `value_source_counts`
+for the other values a body reads (a wall's layers, a beam's I section, the
+parameters of a rectangular column's section). An element of those bodies has
+no value source; an element whose box is the body but whose profile is read
+from a record no reader notes yet has `selected_frame_box` and nothing for the
+profile. Neither is a claim that it read the frame. `value_source_counts`
 counts, by reader, the elements with a source, those whose value is held in
 another partition than their frame, and those whose copy was chosen as the
 current partition's (`current`), so a run on any model shows whether it
@@ -157,8 +159,11 @@ for a native record it finds the ElementId at the offset; for each record in
 `parts` it reads what that record is: a sketch line's or a type symbol's frame
 has the element's id at its first bytes, or, on a second-prologue frame, the id
 of the record that encloses it (found from the bytes); a sketch line's data is
-an element-data header and then the line's own id; a run type or a native type
-record starts with its id; and a Sketch's curve list is a header followed by
+an element-data header and then the line's own id; a room's solid is the room's
+id and the solid's tag; a type's parameter entry is `f64`, `ff` x 8 and an
+`i64`, in the value block whose owner is the type; a pipe's connector entry is a
+`u32` index at most 255, the `u32` 1 and three `f64`, the point lying in the
+pipe's record box; a run type or a native type record starts with its id; and a Sketch's curve list is a header followed by
 the sketched element's id. A frame of a 32-bit release with no id at its first
 bytes is counted as not read. It does not say the
 copy taken is the right one: `agreeing` copies are equal, and `current` is

@@ -42,7 +42,7 @@ pub const TYPE_TEXT_PARAMETERS: &[(i64, &str)] = &[
 const MAX_VALUE_UNITS: usize = 400;
 
 /// The bytes that follow an ElementId to open its value block.
-const VALUE_BLOCK_MARK: [u8; 59] = {
+pub const VALUE_BLOCK_MARK: [u8; 59] = {
     let mut mark = [0xffu8; 59];
     mark[56] = 0;
     mark[57] = 0;
@@ -177,7 +177,27 @@ pub fn scan_partition_lengths(
     declared_ids: &BTreeSet<u32>,
     parameters: &BTreeSet<i64>,
 ) -> BTreeMap<u32, BTreeMap<i64, f64>> {
+    scan_partition_length_places(buf, declared_ids, parameters)
+        .into_iter()
+        .map(|(owner, held)| {
+            let held = held
+                .into_iter()
+                .map(|(parameter, (value, _))| (parameter, value))
+                .collect();
+            (owner, held)
+        })
+        .collect()
+}
+
+/// [`scan_partition_lengths`], also giving where the first copy of each value
+/// is: the offset of its `f64` in `buf` (#1368).
+pub fn scan_partition_length_places(
+    buf: &[u8],
+    declared_ids: &BTreeSet<u32>,
+    parameters: &BTreeSet<i64>,
+) -> BTreeMap<u32, BTreeMap<i64, (f64, usize)>> {
     let blocks = value_blocks(buf, declared_ids);
+    let mut first_at: BTreeMap<(u32, i64), usize> = BTreeMap::new();
     let mut values: BTreeMap<(u32, i64), Option<f64>> = BTreeMap::new();
     for &parameter in parameters {
         for at in memchr::memmem::find_iter(buf, &parameter.to_le_bytes()) {
@@ -194,6 +214,7 @@ pub fn scan_partition_lengths(
             let Some(&(_, Some(owner))) = index.checked_sub(1).and_then(|i| blocks.get(i)) else {
                 continue;
             };
+            first_at.entry((owner, parameter)).or_insert(at - 16);
             values
                 .entry((owner, parameter))
                 .and_modify(|seen| {
@@ -204,10 +225,10 @@ pub fn scan_partition_lengths(
                 .or_insert(Some(value));
         }
     }
-    let mut out: BTreeMap<u32, BTreeMap<i64, f64>> = BTreeMap::new();
+    let mut out: BTreeMap<u32, BTreeMap<i64, (f64, usize)>> = BTreeMap::new();
     for ((owner, parameter), value) in values {
-        if let Some(value) = value {
-            out.entry(owner).or_default().insert(parameter, value);
+        if let (Some(value), Some(&at)) = (value, first_at.get(&(owner, parameter))) {
+            out.entry(owner).or_default().insert(parameter, (value, at));
         }
     }
     out
@@ -395,11 +416,65 @@ pub fn type_i_sections(
     revit_version: u32,
     types: &BTreeSet<u32>,
 ) -> BTreeMap<u32, ISection> {
+    type_i_sections_at(rf, revit_version, types, false).0
+}
+
+/// The parameters an I section is read from (RE-103).
+pub const I_SECTION_PARAMETERS: [i64; 6] = [
+    SECTION_WIDTH_PARAMETER,
+    SECTION_HEIGHT_PARAMETER,
+    SECTION_WEB_THICKNESS_PARAMETER,
+    SECTION_FLANGE_THICKNESS_PARAMETER,
+    SECTION_CENTROID_HORIZONTAL_PARAMETER,
+    SECTION_CENTROID_VERTICAL_PARAMETER,
+];
+
+/// Where the first copy of a type's parameter entry is: its partition and the
+/// offset of its `f64` in that partition inflated (#1368).
+pub type ParameterPlaces<K> = BTreeMap<(u32, K), (String, usize)>;
+
+/// Note, for `element`, the value source `reader` made of the first copies of
+/// `keys`, the parameters of the type `type_id` that `element` took values
+/// from (#1368). Nothing is noted unless every key has a place.
+pub(crate) fn note_parameter_source<K: Ord>(
+    rf: &mut RevitFile,
+    reader: &str,
+    (element, type_id): (u32, u32),
+    keys: impl IntoIterator<Item = K>,
+    places: &ParameterPlaces<K>,
+) {
+    use crate::ifc::element_provenance::{CopyRule, SourcePart, ValueSource};
+    let mut parts = Vec::new();
+    for key in keys {
+        let Some((stream, offset)) = places.get(&(type_id, key)) else {
+            return;
+        };
+        parts.push(SourcePart {
+            element_id: type_id,
+            stream: stream.clone(),
+            offset: *offset,
+        });
+    }
+    let copies = parts.len();
+    rf.note_value_source(
+        element,
+        ValueSource::from_parts(reader, CopyRule::Agreeing, copies, parts),
+    );
+}
+
+/// [`type_i_sections`], also giving, when `want_places` asks, where the first
+/// copy of each parameter an I section is read from is (#1368).
+pub fn type_i_sections_at(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    types: &BTreeSet<u32>,
+    want_places: bool,
+) -> (BTreeMap<u32, ISection>, ParameterPlaces<i64>) {
     if !supports_revit_version(revit_version) || types.is_empty() {
-        return BTreeMap::new();
+        return (BTreeMap::new(), ParameterPlaces::new());
     }
     let Ok(records) = crate::elem_table::parse_records(rf) else {
-        return BTreeMap::new();
+        return (BTreeMap::new(), ParameterPlaces::new());
     };
     let declared = crate::elem_table::declared_ids(&records);
     let parameters = BTreeSet::from([
@@ -410,7 +485,8 @@ pub fn type_i_sections(
         SECTION_CENTROID_HORIZONTAL_PARAMETER,
         SECTION_CENTROID_VERTICAL_PARAMETER,
     ]);
-    type_lengths(rf, &declared, types, &parameters)
+    let (lengths, places) = type_lengths_at(rf, &declared, types, &parameters, want_places);
+    let sections = lengths
         .into_iter()
         .filter_map(|(owner, held)| {
             let value = |parameter: i64| held.get(&parameter).copied();
@@ -437,7 +513,8 @@ pub fn type_i_sections(
                 ))
             .then_some((owner, section))
         })
-        .collect()
+        .collect();
+    (sections, places)
 }
 
 /// Every `f64 · ff×8 · i64` entry in `buf` (a length value and the
@@ -448,8 +525,25 @@ pub fn partition_length_entries(
     buf: &[u8],
     declared_ids: &BTreeSet<u32>,
 ) -> BTreeMap<u32, Vec<(i64, f64)>> {
+    length_entries_at(buf, declared_ids)
+        .into_iter()
+        .map(|(owner, entries)| {
+            let entries = entries
+                .into_iter()
+                .map(|(parameter, value, _)| (parameter, value))
+                .collect();
+            (owner, entries)
+        })
+        .collect()
+}
+
+/// [`partition_length_entries`], with the offset of each entry's `f64`.
+fn length_entries_at(
+    buf: &[u8],
+    declared_ids: &BTreeSet<u32>,
+) -> BTreeMap<u32, Vec<(i64, f64, usize)>> {
     let blocks = value_blocks(buf, declared_ids);
-    let mut out: BTreeMap<u32, Vec<(i64, f64)>> = BTreeMap::new();
+    let mut out: BTreeMap<u32, Vec<(i64, f64, usize)>> = BTreeMap::new();
     for at in memchr::memmem::find_iter(buf, &[0xff; 8]) {
         if at < 8 || buf[at - 1] == 0xff {
             continue;
@@ -462,7 +556,9 @@ pub fn partition_length_entries(
         };
         let index = blocks.partition_point(|(start, _)| *start < at);
         if let Some(&(_, Some(owner))) = index.checked_sub(1).and_then(|i| blocks.get(i)) {
-            out.entry(owner).or_default().push((parameter, value));
+            out.entry(owner)
+                .or_default()
+                .push((parameter, value, at - 8));
         }
     }
     out
@@ -494,23 +590,44 @@ pub fn type_named_lengths(
     revit_version: u32,
     types: &BTreeSet<u32>,
 ) -> BTreeMap<u32, BTreeMap<String, f64>> {
+    type_named_lengths_at(rf, revit_version, types, false).0
+}
+
+/// [`type_named_lengths`], also giving, when `want_places` asks, where the
+/// first copy of each parameter's value is (#1368).
+pub fn type_named_lengths_at(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    types: &BTreeSet<u32>,
+    want_places: bool,
+) -> (
+    BTreeMap<u32, BTreeMap<String, f64>>,
+    ParameterPlaces<String>,
+) {
+    let none = || (BTreeMap::new(), ParameterPlaces::new());
     if !supports_revit_version(revit_version) || types.is_empty() {
-        return BTreeMap::new();
+        return none();
     }
     let Ok(records) = crate::elem_table::parse_records(rf) else {
-        return BTreeMap::new();
+        return none();
     };
     let declared = crate::elem_table::declared_ids(&records);
     let mut values: BTreeMap<(u32, i64), Option<f64>> = BTreeMap::new();
+    let mut first_at: BTreeMap<(u32, i64), (String, usize)> = BTreeMap::new();
     for stream in rf.partition_stream_names() {
         let Ok(inflated) = rf.inflated_partition(&stream) else {
             continue;
         };
-        for (owner, entries) in partition_length_entries(inflated.bytes(), &declared) {
+        for (owner, entries) in length_entries_at(inflated.bytes(), &declared) {
             if !types.contains(&owner) {
                 continue;
             }
-            for (parameter, value) in entries {
+            for (parameter, value, at) in entries {
+                if want_places {
+                    first_at
+                        .entry((owner, parameter))
+                        .or_insert_with(|| (stream.clone(), at));
+                }
                 values
                     .entry((owner, parameter))
                     .and_modify(|seen| {
@@ -550,17 +667,21 @@ pub fn type_named_lengths(
             Ok(())
         });
         if read.is_err() {
-            return BTreeMap::new();
+            return none();
         }
     }
     let mut held: BTreeMap<u32, BTreeMap<String, f64>> = BTreeMap::new();
+    let mut places = ParameterPlaces::new();
     for ((owner, parameter), value) in &values {
         let (Some(value), Some(name)) = (value, names.get(parameter)) else {
             continue;
         };
         held.entry(*owner).or_default().insert(name.clone(), *value);
+        if let Some(place) = first_at.get(&(*owner, *parameter)) {
+            places.insert((*owner, name.clone()), place.clone());
+        }
     }
-    held
+    (held, places)
 }
 
 /// The hollow section of each type in `types` whose family parameters
@@ -631,17 +752,35 @@ fn type_lengths(
     types: &BTreeSet<u32>,
     parameters: &BTreeSet<i64>,
 ) -> BTreeMap<u32, BTreeMap<i64, f64>> {
+    type_lengths_at(rf, declared, types, parameters, false).0
+}
+
+/// [`type_lengths`], also giving, when `want_places` asks, where the first
+/// copy of each value is (#1368).
+fn type_lengths_at(
+    rf: &mut RevitFile,
+    declared: &BTreeSet<u32>,
+    types: &BTreeSet<u32>,
+    parameters: &BTreeSet<i64>,
+    want_places: bool,
+) -> (BTreeMap<u32, BTreeMap<i64, f64>>, ParameterPlaces<i64>) {
     let mut values: BTreeMap<u32, BTreeMap<i64, Option<f64>>> = BTreeMap::new();
+    let mut places = ParameterPlaces::new();
     for stream in rf.partition_stream_names() {
         let Ok(inflated) = rf.inflated_partition(&stream) else {
             continue;
         };
-        for (owner, found) in scan_partition_lengths(inflated.bytes(), declared, parameters) {
+        for (owner, found) in scan_partition_length_places(inflated.bytes(), declared, parameters) {
             if !types.contains(&owner) {
                 continue;
             }
             let held = values.entry(owner).or_default();
-            for (parameter, value) in found {
+            for (parameter, (value, at)) in found {
+                if want_places {
+                    places
+                        .entry((owner, parameter))
+                        .or_insert_with(|| (stream.clone(), at));
+                }
                 held.entry(parameter)
                     .and_modify(|seen| {
                         if *seen != Some(value) {
@@ -652,7 +791,7 @@ fn type_lengths(
             }
         }
     }
-    values
+    let agreed = values
         .into_iter()
         .map(|(owner, held)| {
             let agreed = held
@@ -661,7 +800,8 @@ fn type_lengths(
                 .collect();
             (owner, agreed)
         })
-        .collect()
+        .collect();
+    (agreed, places)
 }
 
 /// Value block starts in `buf`: the mark, not preceded by a further 0xff (a
