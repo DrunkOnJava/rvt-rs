@@ -11,7 +11,7 @@
   built where the roof reader already resolves its sketch. CI's Corpus health
   now fetches puzzbobb's Revit 2025 models so that
   `tests/value_sources_offsets.rs` reads these sources and every other part
-  against the models whose roofs are drawn this way. Area boundary lines and
-  family extrusions are still without a source. Nothing is noted unless the
-  table is asked for, so the default export and its diagnostics are
-  unchanged.
+  against the models whose roofs are drawn this way. Area boundary lines are
+  the one body still without a source (family extrusions have theirs from the
+  entry for them). Nothing is noted unless the table is asked for, so the
+  default export and its diagnostics are unchanged.

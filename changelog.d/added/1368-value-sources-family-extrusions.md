@@ -5,8 +5,12 @@
   (`family_forms`, `parts`: each visible extrusion, its sketch plane and the
   curves of its sketch, at the place the document's group puts them in their
   partition), beside the `instance_transform` that places them and the
-  `selected_frame` they are drawn at. The family document is read once, as it is
-  embedded, and the places are kept only while the table is asked for: with
-  either flag off nothing is built or retained, and the IFC and the default
-  diagnostics are unchanged. Area boundary lines are the one body still without
-  a source.
+  `selected_frame` they are drawn at. A record the file holds in several
+  partitions is named at its copy in the highest partition, the copy the
+  rebuild reads; an instance one of whose records has no place (its group's
+  bytes are not the partition's own) gets no `family_forms` source, and keeps
+  its other sources. The family document is read once, as it is embedded.
+  Where the table is not asked for, no place and no record list is collected
+  or kept (the document is read as before), and the IFC and the default
+  diagnostics are unchanged. Area boundary lines are the one body still
+  without a source.

@@ -316,13 +316,9 @@ fn load(
     );
     let registry =
         crate::schema_registry::parse(&native_document::read_single(rf, "Formats/Latest")?)?;
-    let mut streams: Vec<String> = rf
-        .stream_names()
-        .iter()
-        .filter(|name| name.starts_with("Partitions/"))
-        .cloned()
-        .collect();
-    streams.sort();
+    // In partition-number order, the oldest copy of a record first: a reader
+    // that keeps the last copy of a record gets the newest (#1356).
+    let streams = rf.partition_stream_names();
 
     // Each wanted family's record outside every block, and every block key.
     let mut bodies: Vec<(u64, Vec<u8>)> = Vec::new();
@@ -582,7 +578,10 @@ pub fn family_records_in(
 pub type FamilyRecords = BTreeMap<u64, Vec<(u64, ObjectGraph)>>;
 
 /// Where each record of a family's document starts, by the family's ElementId
-/// and the record's: the partition and the offset in it inflated (#1368).
+/// and the record's: the partition and the offset in it inflated (#1368). Of a
+/// record held in several partitions, the place of the copy in the highest
+/// partition, the copy a `FormDocument` keeps; none where that copy's bytes
+/// are not the partition's own.
 pub type RecordPlaces = BTreeMap<(u64, u64), (String, usize)>;
 
 /// [`family_records_in`], also giving, when `want_places` asks, where each
@@ -645,13 +644,19 @@ pub fn family_records_at(
                     }
                     if let Ok(graph) = native_parameters::decode_graph(body, &loaded.registry) {
                         if want_places {
+                            // The last copy's place, as the last copy's graph
+                            // is the one a `FormDocument` keeps: a copy whose
+                            // bytes are not the partition's own leaves no place.
                             let at = source
                                 .inflated_offset
                                 .and_then(|base| base.checked_add(pos));
-                            if let Some(at) = at {
-                                places
-                                    .entry((*family, id))
-                                    .or_insert_with(|| (name.clone(), at));
+                            match at {
+                                Some(at) => {
+                                    places.insert((*family, id), (name.clone(), at));
+                                }
+                                None => {
+                                    places.remove(&(*family, id));
+                                }
                             }
                         }
                         out.entry(*family).or_default().push((id, graph));

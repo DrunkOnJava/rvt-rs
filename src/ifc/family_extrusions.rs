@@ -171,9 +171,13 @@ fn root_ids(
 /// The solids of a family's visible extrusions, or `None` where it has a
 /// void or an extrusion the reader does not rebuild.
 ///
-/// With the solids, the records of the document they were read from (#1368):
-/// each extrusion, its sketch plane and its sketch's curves.
-fn family_parts(document: &FormDocument) -> Option<(Vec<ExtrusionSolid>, BTreeSet<u64>)> {
+/// With the solids, where `recording` asks, the records of the document they
+/// were read from (#1368): each extrusion, its sketch plane and its sketch's
+/// curves. Not asked, none is collected.
+fn family_parts(
+    document: &FormDocument,
+    recording: bool,
+) -> Option<(Vec<ExtrusionSolid>, BTreeSet<u64>)> {
     let mut parts = Vec::new();
     let mut records = BTreeSet::new();
     for id in document.extrusion_ids() {
@@ -185,9 +189,11 @@ fn family_parts(document: &FormDocument) -> Option<(Vec<ExtrusionSolid>, BTreeSe
             continue;
         }
         parts.push(extrusion.default_solid().ok()?);
-        records.insert(extrusion.id);
-        records.insert(extrusion.plane_id);
-        records.extend(extrusion.curve_ids.iter().copied());
+        if recording {
+            records.insert(extrusion.id);
+            records.insert(extrusion.plane_id);
+            records.extend(extrusion.curve_ids.iter().copied());
+        }
     }
     (!parts.is_empty()).then_some((parts, records))
 }
@@ -491,7 +497,7 @@ pub fn attach_with_control(
         for (id, graph) in items {
             document.insert(id, graph);
         }
-        if let Some((solids, used)) = family_parts(&document) {
+        if let Some((solids, used)) = family_parts(&document, recording) {
             parts.insert(family, solids);
             if recording {
                 forms.insert(family, used);

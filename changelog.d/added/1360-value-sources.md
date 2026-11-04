@@ -22,10 +22,9 @@
   replaces the #1325 caveat that the offset may not be the copy a body came
   from. `tests/value_sources_offsets.rs` reads the bytes at each recorded
   offset on Core Interior, the RE1 models, Einhoven and the BIM4LCA as-built
-  office, and names every `BodySource` on them as covered or not yet. No
-  reader notes its copy yet for area boundary lines, hollow and I sections,
-  pipe axes, a stair run drawn from its sketch, roof slopes and extrusions, or
-  family extrusions; those elements have no value source, which is not a claim
+  office, and names every `BodySource` on them as covered or not yet. The
+  readers that note no copy yet are listed in `docs/export-diagnostics.md`;
+  those elements have no value source, which is not a claim
   that they read the frame. Not measured: that the copy
   taken is the right one (`agreeing` copies are equal; `current` is
   `current_partitions`).

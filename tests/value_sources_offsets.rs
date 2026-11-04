@@ -47,10 +47,13 @@
 //!   value is held in another partition than the frame, and that
 //!   `value_source_counts` equals the count made here;
 //! - on the models whose family instances are drawn from their families' own
-//!   extrusions, exported with `--family-extrusions` as well, reads each form
-//!   record a body was rebuilt from by what it is: the record's id, then a
-//!   body of the same length at both ends that opens with the tag of an
-//!   extrusion, a curve or a sketch plane;
+//!   extrusions, exported with `--family-extrusions` as well, reads the
+//!   family's own document again and requires an instance's parts to be all
+//!   the records its visible extrusions are made of and no others: each
+//!   extrusion, its sketch plane and its sketch's curves, every one read from
+//!   its bytes by its role (the record's id, then a body of the same length at
+//!   both ends that opens with the tag of an `ExtrusionElem`, a `SketchPlane`
+//!   or a `CurveElem` respectively);
 //! - on puzzbobb's Revit 2025 models (`RVT_R2025_DIR`, where the roofs drawn
 //!   from their slopes and from an extrusion are), requires the models
 //!   together to have sources from `R2025_READERS`, and reads a roof's slope
@@ -78,6 +81,8 @@ use rvt::ifc::entities::{IfcEntity, PropertyValue};
 use rvt::ifc::{ExportOptions, IfcModel, run_export};
 use rvt::research::element_record_plan_profiles::SKETCH_OWNER_OFFSET;
 use rvt::research::native_document::{Options, extract_graphs};
+use rvt::research::native_family_forms::family_records_in;
+use rvt::research::native_form_geometry::FormDocument;
 use rvt::research::partition_beam_axes::{
     BEAM_DATA_WINDOW, BoundedArc, BoundedLine, first_bounded_arc, first_bounded_line,
     first_bounded_spline, first_circle, first_sketch_curve, scan_first_bounded_arcs,
@@ -373,6 +378,108 @@ const MIN_READERS: &[(&str, &[&str])] = &[
         ],
     ),
 ];
+
+/// The ElementId an `Identifier` field holds: `m_id.m_id64` from Revit 2024,
+/// `m_id.m_id` before.
+fn identifier_of(value: &serde_json::Value) -> Option<i64> {
+    let identifier = value.get("m_id")?;
+    identifier
+        .get("m_id64")
+        .or_else(|| identifier.get("m_id"))
+        .and_then(serde_json::Value::as_i64)
+}
+
+/// The class `class` records' root ElementId field `field`, by record.
+fn root_ids(
+    rf: &mut RevitFile,
+    ids: &BTreeSet<u64>,
+    class: &str,
+    field: &str,
+) -> BTreeMap<u64, u64> {
+    let mut out = BTreeMap::new();
+    if ids.is_empty() {
+        return out;
+    }
+    let options = Options {
+        selected_ids: ids.clone(),
+        ..Options::default()
+    };
+    extract_graphs(rf, &options, |record| {
+        let target = record
+            .graph
+            .as_ref()
+            .and_then(|graph| graph.objects.first())
+            .filter(|root| root.class_name == class)
+            .and_then(|root| root.fields.get(field))
+            .and_then(identifier_of)
+            .and_then(|n| u64::try_from(n).ok());
+        if let Some(target) = target {
+            out.insert(record.identity.element_id, target);
+        }
+        Ok(())
+    })
+    .expect("read the family instances' records");
+    out
+}
+
+/// Of the family instances `instances`, the records of its family's document
+/// that its body is rebuilt from, with the class each must have: its visible
+/// extrusions (`ExtrusionElem`), their sketch planes (`SketchPlane`) and their
+/// sketches' curves (`CurveElem`). Read from the whole document, not from the
+/// parts a source lists. An instance whose family has a void, or an extrusion
+/// the reader cannot read, is not rebuilt and is left out.
+fn family_form_roles(
+    rf: &mut RevitFile,
+    instances: &BTreeSet<u64>,
+) -> BTreeMap<u64, BTreeMap<u64, &'static str>> {
+    let symbol_of = root_ids(rf, instances, "FamilyInstance", "m_masterSymbolId");
+    let symbols: BTreeSet<u64> = symbol_of.values().copied().collect();
+    let family_of_symbol = root_ids(rf, &symbols, "FamilySymbol", "m_familyId");
+    let families: BTreeSet<u64> = family_of_symbol.values().copied().collect();
+    let classes: BTreeSet<String> = ["ExtrusionElem", "CurveElem", "SketchPlane"]
+        .iter()
+        .map(|class| class.to_string())
+        .collect();
+    let records = family_records_in(rf, &families, &classes, &Options::default().releases, None)
+        .expect("read the families' documents");
+    let mut by_family: BTreeMap<u64, BTreeMap<u64, &'static str>> = BTreeMap::new();
+    for (family, items) in records {
+        let mut document = FormDocument::default();
+        for (id, graph) in items {
+            document.insert(id, graph);
+        }
+        let mut roles: BTreeMap<u64, &'static str> = BTreeMap::new();
+        let mut rebuilt = true;
+        for id in document.extrusion_ids() {
+            let Ok(extrusion) = document.extrusion(id) else {
+                rebuilt = false;
+                break;
+            };
+            if extrusion.cutting {
+                rebuilt = false;
+                break;
+            }
+            if extrusion.visible == Some(0) {
+                continue;
+            }
+            roles.insert(extrusion.id, "ExtrusionElem");
+            roles.insert(extrusion.plane_id, "SketchPlane");
+            for curve in &extrusion.curve_ids {
+                roles.insert(*curve, "CurveElem");
+            }
+        }
+        if rebuilt && !roles.is_empty() {
+            by_family.insert(family, roles);
+        }
+    }
+    instances
+        .iter()
+        .filter_map(|instance| {
+            let family = family_of_symbol.get(symbol_of.get(instance)?)?;
+            Some((*instance, by_family.get(family)?.clone()))
+        })
+        .collect()
+}
 
 fn project_models() -> Vec<(String, PathBuf)> {
     let Some(dir) = std::env::var_os("RVT_PROJECT_CORPUS_DIR") else {
@@ -796,9 +903,24 @@ fn check_model_with(base: &str, path: &Path, family_extrusions: bool) -> BTreeSe
     let mut counts: BTreeMap<String, (usize, usize)> = BTreeMap::new();
     let mut by_rule: BTreeMap<String, usize> = BTreeMap::new();
     let width = usize::from(table.record_id_bytes.unwrap_or(8));
+    // The records each family instance drawn from its family's extrusions must
+    // list, read from the family's whole document.
+    let family_instances: BTreeSet<u64> = table
+        .elements
+        .iter()
+        .filter(|(_, entry)| {
+            entry
+                .value_sources
+                .iter()
+                .any(|source| source.reader == "family_forms")
+        })
+        .map(|(id, _)| u64::from(*id))
+        .collect();
+    let family_roles = family_form_roles(&mut rf, &family_instances);
     for (&id, entry) in &table.elements {
         // A roof by extrusion reads the data of every sketch line whose frame it
-        // listed.
+        // listed: the same lines, by ElementId (all of them where no more than
+        // the listing's cap are held; the count where the lists are cut).
         let framed = entry
             .value_sources
             .iter()
@@ -808,14 +930,53 @@ fn check_model_with(base: &str, path: &Path, family_extrusions: bool) -> BTreeSe
             .iter()
             .find(|source| source.reader == "roof_line_data");
         if let (Some(framed), Some(data)) = (framed, data) {
-            if framed.parts.len() as u32 + framed.parts_left_out
-                != data.parts.len() as u32 + data.parts_left_out
-            {
+            let framed_total = framed.parts.len() as u32 + framed.parts_left_out;
+            let data_total = data.parts.len() as u32 + data.parts_left_out;
+            let mut framed_lines: Vec<u32> =
+                framed.parts.iter().map(|part| part.element_id).collect();
+            let mut data_lines: Vec<u32> = data.parts.iter().map(|part| part.element_id).collect();
+            framed_lines.sort_unstable();
+            data_lines.sort_unstable();
+            let listed_whole = framed.parts_left_out == 0 && data.parts_left_out == 0;
+            if framed_total != data_total || (listed_whole && framed_lines != data_lines) {
                 problems.push(format!(
-                    "{id}: roof_line_data has {} parts for {} sketch lines",
-                    data.parts.len() as u32 + data.parts_left_out,
-                    framed.parts.len() as u32 + framed.parts_left_out
+                    "{id}: roof_line_data has {data_total} parts ({data_lines:?}) for {framed_total} sketch lines ({framed_lines:?})"
                 ));
+            }
+        }
+        // A family instance lists every record its family's visible extrusions
+        // are made of, and no other.
+        if let Some(forms) = entry
+            .value_sources
+            .iter()
+            .find(|source| source.reader == "family_forms")
+        {
+            match family_roles.get(&u64::from(id)) {
+                None => problems.push(format!(
+                    "{id}: family_forms lists parts, but the instance's family has no visible extrusions the reader rebuilds"
+                )),
+                Some(roles) => {
+                    let kept: BTreeSet<u64> = forms
+                        .parts
+                        .iter()
+                        .map(|part| u64::from(part.element_id))
+                        .collect();
+                    let listed = forms.parts.len() + forms.parts_left_out as usize;
+                    let complete = kept.len() == forms.parts.len()
+                        && listed == roles.len()
+                        && if forms.parts_left_out == 0 {
+                            kept.iter().eq(roles.keys())
+                        } else {
+                            kept.iter().all(|record| roles.contains_key(record))
+                        };
+                    if !complete {
+                        problems.push(format!(
+                            "{id}: family_forms lists {listed} records ({kept:?}), the instance's visible extrusions are made of {} ({:?})",
+                            roles.len(),
+                            roles.keys().collect::<Vec<_>>()
+                        ));
+                    }
+                }
             }
         }
         for source in &entry.value_sources {
@@ -1039,8 +1200,9 @@ fn check_model_with(base: &str, path: &Path, family_extrusions: bool) -> BTreeSe
                         // framing lays it out: the record's id, a length (after
                         // four bytes more on the channels that carry them), a
                         // body that opens with its class tag and the same
-                        // length again. It is an extrusion, a curve of its
-                        // sketch or its sketch plane.
+                        // length again. Its class is the one its role in the
+                        // family's visible extrusions asks for: an extrusion,
+                        // its sketch plane or a curve of its sketch.
                         "family_forms" => {
                             let first = if width == 8 {
                                 u64_at(bytes, part.offset)
@@ -1059,12 +1221,11 @@ fn check_model_with(base: &str, path: &Path, family_extrusions: bool) -> BTreeSe
                                 .and_then(|start| u16_at(bytes, start))
                                 .and_then(|tag| classes.as_ref()?.by_tag(tag))
                                 .map(|class| class.name.as_str());
-                            if first == Some(wanted)
-                                && matches!(
-                                    kind,
-                                    Some("ExtrusionElem" | "CurveElem" | "SketchPlane")
-                                )
-                            {
+                            let role = family_roles
+                                .get(&u64::from(id))
+                                .and_then(|roles| roles.get(&wanted))
+                                .copied();
+                            if first == Some(wanted) && role.is_some() && kind == role {
                                 Part::Confirmed
                             } else {
                                 Part::Failed
@@ -1546,8 +1707,24 @@ fn r2025_value_sources_name_the_copy_the_reader_took() {
 #[test]
 fn family_extrusion_value_sources_name_the_forms_the_body_was_rebuilt_from() {
     let mut models = project_models();
+    let office = office_model();
+    // A pinned model that the corpus lacks fails the test where its directory
+    // variable is set, as `check_all` does; unset, that directory is skipped.
+    for (model, _) in FAMILY_MIN_READERS {
+        let (variable, held) = if *model == "nordic-office-as-built" {
+            ("RVT_NORDIC_LCA_DIR", &office)
+        } else {
+            ("RVT_PROJECT_CORPUS_DIR", &models)
+        };
+        if std::env::var_os(variable).is_some() {
+            assert!(
+                held.iter().any(|(name, _)| name == model),
+                "{model} is not in the corpus, and {variable} is set"
+            );
+        }
+    }
     models.retain(|(name, _)| FAMILY_MIN_READERS.iter().any(|(model, _)| model == name));
-    models.extend(office_model());
+    models.extend(office);
     if models.is_empty() {
         eprintln!("skipping: no model to read");
         return;
