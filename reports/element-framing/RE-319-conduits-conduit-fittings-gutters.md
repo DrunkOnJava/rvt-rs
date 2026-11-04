@@ -2,7 +2,7 @@
 
 **Date:** 2026-11-03
 **Issues:** #1261 (a Revit 2018 project exports no element; RE-315 §9 left 178 conduits, conduit fittings and gutters as "the next category census"); follows RE-33 (the category census), RE-21 (the instance rule), RE-79 (nested MEP components), RE-131 (pipe cylinders), RE-315 (the 32-bit second prologue)
-**Artefacts:** BIM-Speed's Vitoria `ALD26 Before.rvt` (Revit 2018, sha256 `d3e5b04631e67265927be98352021ed6290b33ae67d39b1b6727fd76f014ff6f`) and Revit's own IFC2X3 export of it (`a42c6f3b0c9b7575d4c37c675155ff53c02571ca81357a87023f9da5fbf45181`), CC BY 4.0, TU Berlin DepositOnce, doi:10.14279/depositonce-16441, spent for W5 (RE-315) and measured in full with `-f holdout=true`; RE1 Electrical (`9875e765c9f47893808c47b845a8379b8777b92510e3e0284f763cb457c9630b`, IFC `c7002a10c8e10ab2fca64ff61dcf38db04da652924f65ce53c2064827dfa9e16`), Mechanical (`d559720177aa0ec435133f804e7c45d60da2deb9d5585bb3d55f4830139c014b`, IFC `9e56cf7246ce86ef73646dd588a1efb8a4756e5e102b30e28b3b58577a454db0`) and Plumbing (`03689df2aa426031a216e65051b9f19d3265d6fe96884dd47373b17435f9e54c`, IFC `294490b222632509779910345f27a4eeda3645956138a593298c241495f7b8b6`), Revit 2025, MIT, IFC2X3 exports; Core Interior (`c805df445d613b408e37337765572021265e3f5dfdc7d1fa53b22ba1600b8014`); the BIM4LCA office and its terrain variants, puzzbobb's 23 Revit 2025 models and Autodesk's sample projects of 2015 to 2027 (hashes in `research/bim4lca-measure.tsv`, `research/r2025-models.tsv` and `research/autodesk-sample-projects.tsv`); by counts only, the held-out `ALD26 Project`.
+**Artefacts:** BIM-Speed's Vitoria `ALD26 Before.rvt` (Revit 2018, sha256 `d3e5b04631e67265927be98352021ed6290b33ae67d39b1b6727fd76f014ff6f`) and Revit's own IFC2X3 export of it (`a42c6f3b0c9b7575d4c37c675155ff53c02571ca81357a87023f9da5fbf45181`), CC BY 4.0, TU Berlin DepositOnce, doi:10.14279/depositonce-16441, spent for W5 (RE-315) and measured in full with `-f holdout=true`; RE1 Electrical (`9875e765c9f47893808c47b845a8379b8777b92510e3e0284f763cb457c9630b`, IFC `c7002a10c8e10ab2fca64ff61dcf38db04da652924f65ce53c2064827dfa9e16`), Mechanical (`d559720177aa0ec435133f804e7c45d60da2deb9d5585bb3d55f4830139c014b`, IFC `9e56cf7246ce86ef73646dd588a1efb8a4756e5e102b30e28b3b58577a454db0`) and Plumbing (`03689df2aa426031a216e65051b9f19d3265d6fe96884dd47373b17435f9e54c`, IFC `294490b222632509779910345f27a4eeda3645956138a593298c241495f7b8b6`), Revit 2025, MIT, IFC2X3 exports; Core Interior (`c805df445d613b408e37337765572021265e3f5dfdc7d1fa53b22ba1600b8014`); the BIM4LCA office and its terrain variants, puzzbobb's 24 Revit 2025 models and Autodesk's sample projects of 2015 to 2027 (hashes in `research/bim4lca-measure.tsv`, `research/r2025-models.tsv` and `research/autodesk-sample-projects.tsv`); by counts only, the held-out `ALD26 Project`.
 **Probe:** `probes/examples/probe_re319_category_census.rs`, scored by `tools/re/category_census_vs_ifc.py`.
 **Status:** positive on Revit 2018's `ALD26 Before` against Revit's own export, the only file with an export that holds any of these categories; no other release's export is measured for them. Cable trays and cable tray fittings are **not recovered** (not measured: no file with a Revit export holds an instance). The centerline categories are never recovered.
 
@@ -56,7 +56,7 @@ Conduits and their fittings sit on the Level their record's list names, as the o
 
 ## 6. Result on `ALD26 Before`
 
-Run 41730511780 (main's side `c28ff053`, head `9ade4f78`, every scorer, no model but the spent pair) and run 41731699676 (head `37838a94`, with the gutters' elevation), measured again at the final head in the unfiltered run of §8.
+Run 41730511780 (main's side `c28ff053`, head `9ade4f78`, every scorer, no model but the spent pair) and run 41731699676 (head `37838a94`, with the gutters' elevation) measured the code before the gutters became `IfcPipeSegment`; every figure below was measured again at the final head, `46da221f`, in the unfiltered run of §7 (41741114199), and is the same.
 
 | `ALD26 Before` | main | head | Revit's export |
 |---|---:|---:|---:|
@@ -69,9 +69,9 @@ Run 41730511780 (main's side `c28ff053`, head `9ade4f78`, every scorer, no model
 
 By Revit's class: 1,314 of 1,321 written. The same class: beams 1, building element proxies 43, columns 114, doors 68, members 206, plates 67, railings 14, roofs 8, slabs 9, stairs 6, stair flights 6, walls (`IfcWall`) 12, windows 70 (624). In IFC4's class for Revit's IFC2X3 one: 128 `IfcFlowFitting` as `IfcPipeFitting`, 140 `IfcFlowSegment` as `IfcPipeSegment`, 235 `IfcWallStandardCase` as `IfcWall`, and now **74 `IfcFlowFitting` as `IfcCableCarrierFitting`, 102 `IfcFlowSegment` as `IfcCableCarrierSegment` and 2 `IfcFlowSegment` as `IfcPipeSegment`** (681). Another class: 9 `IfcCurtainWall` as `IfcWall` (unchanged). **Missing, 7** (185 before): 4 `IfcWallStandardCase` (the curtain-panel walls of RE-315 §5) and 3 `IfcElementAssembly` (not instances). `IfcFlowSegment` absent 0 (104), `IfcFlowFitting` absent 0 (74).
 
-The scorers that move (`compare-scorer-diff`, run 41730511780):
+The scorers that move (`compare-scorer-diff` of run 41741114199, the same list as run 41730511780's):
 
-- `class_sets_vs_ifc`: the two rows above; `IfcSpace` extras 73 as before (spaces are paired by GlobalId, which are not Revit's, #878). No extra element.
+- `class_sets_vs_ifc`: `IfcFlowFitting` 202: 128 `IfcPipeFitting`, 74 `IfcCableCarrierFitting`, absent 74 to 0; `IfcFlowSegment` 244: 140 `IfcPipeSegment`, 102 `IfcCableCarrierSegment`, 2 `IfcPipeSegment` (the gutters, whose Revit type object is `IfcPipeSegmentType` `GUTTER`), absent 104 to 0; `IfcSpace` extras 73 as before (spaces are paired by GlobalId, which are not Revit's, #878). No extra element.
 - `storeys_vs_ifc`: 1,314 elements, 16 on no storey (the 9 proxies, 6 railings and 1 flight of before); 1,251 on Revit's storey, 26 where Revit contains it in an `IfcSpace`, 21 on another, 9 and 7 on none; the 21 are the same 14 columns, 4 pipe segments and 3 pipe fittings as before, none of them a conduit.
 - `box_bodies_vs_ifc`: record-box bodies 880 to 1,058 (+102 conduits, +74 fittings, +2 gutters).
 - `duct_bodies_vs_ifc`: 0 to 104 flow segments written with a body, 102 of 104 within 0.01 ft of Revit's world box.
@@ -85,7 +85,7 @@ No other scorer moves on this file (`ports_vs_ifc`, `pipe_bodies_vs_ifc`, `qtos_
 
 ## 7. Other files, and the held-out Project
 
-Run 41733219416 (`-f holdout=true -f samples=true -f nordic=true -f r2025=true -f bimcollab=true`, no model filter, every scorer; main's side `782fff64`, head `4e9e3ef1`, the merge of main into the code of this report; the commits after it change documents and the census scorer only): 112 models exported on both sides, **97 byte for byte main's IFC and 15 moved**. The 15 are the models that hold the three categories where the rule selects an instance, and in each the only change is the conduits, conduit fittings and gutters written:
+Run 41741114199 (`-f holdout=true -f samples=true -f nordic=true -f r2025=true -f bimcollab=true`, no model filter, every scorer; main's side `4ad28023`, head `46da221f`, the merge of main into the code of this report; the commits after it change documents only): 112 models exported on both sides, **97 byte for byte main's IFC and 15 moved**. The 15 are the models that hold the three categories where the rule selects an instance, and in each the only change is the conduits, conduit fittings and gutters written:
 
 | model | change |
 |---|---|
@@ -105,12 +105,12 @@ Those samples have no Revit export: they are counted, not scored; their schema c
 # the census, on every development file (the samples run the probe alone)
 gh workflow run measure.yml --ref main -f ref=3a81189c6dde0783004c41d3d2e4daf27930e1e8 -f base=none -f holdout=true -f samples=true -f nordic=true -f r2025=true -f bimcollab=true -f models="spent-* core-interior einhoven re1-* nordic-office-* r2025-* bimcollab-*" -f scorers=none -f probe=probe_re319_category_census -f probe_scorer=category_census_vs_ifc
 # Vitoria Before, every scorer, against main, with the IFC kept
-gh workflow run measure.yml --ref main -f ref=4e9e3ef10e3c47ce6d807761774f4921a199dc4a -f base=main -f holdout=true -f models="spent-*" -f keep_ifc=true
+gh workflow run measure.yml --ref main -f ref=46da221fc89f259d7dd535e06e8f49a7ac0286a3 -f base=main -f holdout=true -f models="spent-*" -f keep_ifc=true
 # the final head: every model, every scorer, every held-out pair (counts only)
-gh workflow run measure.yml --ref main -f ref=4e9e3ef10e3c47ce6d807761774f4921a199dc4a -f base=main -f holdout=true -f samples=true -f nordic=true -f r2025=true -f bimcollab=true
+gh workflow run measure.yml --ref main -f ref=46da221fc89f259d7dd535e06e8f49a7ac0286a3 -f base=main -f holdout=true -f samples=true -f nordic=true -f r2025=true -f bimcollab=true
 ```
 
-Runs: census 41726416015 (head `eba89c8e`); the categories' names and types in Revit's export 41729789378 and 41740219735; `ALD26 Before` against main 41730511780 (head `9ade4f78`, before the gutters' elevation and the Level parameter) and 41731699676 (head `37838a94`, with the 2024 samples); the final run 41733219416. The census scorer is in `tools/re` at `3a81189c`; the scorer for the final run is the one of the head.
+Runs: census 41726416015 (head `eba89c8e`); the categories' names and types in Revit's export 41729789378 and 41740219735; `ALD26 Before` against main 41730511780 (head `9ade4f78`, before the gutters' elevation and the Level parameter) and 41731699676 (head `37838a94`, with the 2024 samples); the final run 41741114199 on `46da221f`. An earlier unfiltered run, 41733219416 on `4e9e3ef1`, wrote the gutters as `IfcFlowSegment` before the type objects of Revit's export (run 41740219735) showed `IfcPipeSegmentType`; it moved the same 15 models and is superseded. The census scorer is in `tools/re` at `3a81189c`; the scorer for the final run is the one of the head.
 
 ## 9. What stays missing, and what is not measured
 
