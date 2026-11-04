@@ -144,8 +144,9 @@ drawn from that reader.
 | `partition_landing_slab` | `native_landing` | `native` | The header of the landing's current native record, which gives its top. |
 | `partition_landing_slab` | `native_landing_type` | `native` | `parts`: the header of the landing type's current native record, which gives the thickness (monolithic types only). |
 
-No reader notes its copy yet for `partition_area_boundary_lines` and
-`family_extrusions`, nor for the other values a body reads (a wall's layers, a beam's I section, the
+No reader notes its copy yet for `partition_area_boundary_lines`,
+`family_extrusions` and `native_slab_shape_edit` (a floor drawn along the plane
+of its shape-edited corners, #1384), nor for the other values a body reads (a wall's layers, a beam's I section, the
 parameters of a rectangular column's section). An element of those bodies has
 no value source; an element whose box is the body but whose profile is read
 from a record no reader notes yet has `selected_frame_box` and nothing for the

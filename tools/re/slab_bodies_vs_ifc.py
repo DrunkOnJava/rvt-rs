@@ -14,8 +14,8 @@ ours", then the elements furthest off. It is that scorer with another source.
 Before that it counts the trust markers the same change writes, by class and
 value: `SlabShapeRefusal` (why a floor whose corners are shape-edited is still
 its record box), `BaseCoverRefusal` (why a wall whose base join names such a
-floor keeps its base) and `BodyHeightSource` (how a wall's top or base was
-cut). A wall's base against Revit's is scored by `wall_heights_vs_ifc.py`.
+floor keeps its base), `BodyBaseSource` (how a wall's base was cut) and
+`BodyHeightSource` (how its top was). A wall's base against Revit's is scored by `wall_heights_vs_ifc.py`.
 
 Needs IfcOpenShell and numpy.
 
@@ -34,7 +34,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import mesh_bodies_vs_ifc  # noqa: E402
 
 SOURCE = "native_slab_shape_edit"
-MARKERS = ("SlabShapeRefusal", "BaseCoverRefusal", "BodyHeightSource")
+MARKERS = ("SlabShapeRefusal", "BaseCoverRefusal", "BodyBaseSource", "BodyHeightSource")
 
 
 def marker_counts(path):

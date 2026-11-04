@@ -67,7 +67,9 @@
 //! floor is drawn as a solid between that plane and its underside (the
 //! `native_slab_shape_edit` body of `export_content`). The wall's body is then
 //! its profile from that top to its own, the `solid_shape`, and the wall
-//! carries a `BodyHeightSource` and `BaseCoverElementId`.
+//! carries a `BodyBaseSource` and `BaseCoverElementId` (a wall the top join
+//! cut as well keeps its `BodyHeightSource`: one property set cannot hold two
+//! of a name).
 //!
 //! A wall of which this is not proven keeps its base. When it names a floor
 //! with shape-edited corners it carries the reason as `BaseCoverRefusal`: the
@@ -78,9 +80,9 @@
 use std::collections::{HashMap, HashSet};
 
 use super::{
-    ELEMENT_RECORD_PROPERTY_SET, WALL_BASE_COVER_BODY_HEIGHT_SOURCE, WALL_BASE_REFUSAL_PROPERTY,
-    WALL_BASE_SLOPED_BODY_HEIGHT_SOURCE, WALL_TOP_COVER_BODY_HEIGHT_SOURCE,
-    WALL_TOP_STEPPED_BODY_HEIGHT_SOURCE,
+    ELEMENT_RECORD_PROPERTY_SET, WALL_BASE_COVER_BODY_BASE_SOURCE, WALL_BASE_REFUSAL_PROPERTY,
+    WALL_BASE_SLOPED_BODY_BASE_SOURCE, WALL_BASE_SOURCE_PROPERTY,
+    WALL_TOP_COVER_BODY_HEIGHT_SOURCE, WALL_TOP_STEPPED_BODY_HEIGHT_SOURCE,
 };
 use crate::ifc::body_geometry::{
     Body, Placement, PlanPlane, Point2, Ring, between_surfaces_mesh, extrusion_rings, plan_outline,
@@ -1138,7 +1140,7 @@ pub(super) fn cut_wall_bases(
                         ref_direction: [1.0, 0.0, 0.0],
                         depth_feet: top - from,
                     },
-                    WALL_BASE_COVER_BODY_HEIGHT_SOURCE,
+                    WALL_BASE_COVER_BODY_BASE_SOURCE,
                     id,
                 )
             }
@@ -1159,7 +1161,7 @@ pub(super) fn cut_wall_bases(
                             .map(|[a, b, c]| BrepTriangle(a, b, c))
                             .collect(),
                     },
-                    WALL_BASE_SLOPED_BODY_HEIGHT_SOURCE,
+                    WALL_BASE_SLOPED_BODY_BASE_SOURCE,
                     id,
                 )
             }
@@ -1170,7 +1172,7 @@ pub(super) fn cut_wall_bases(
             .filter(|set| set.name == ELEMENT_RECORD_PROPERTY_SET)
         {
             set.properties.push(Property {
-                name: "BodyHeightSource".into(),
+                name: WALL_BASE_SOURCE_PROPERTY.into(),
                 value: PropertyValue::Text(source.into()),
             });
             set.properties.push(Property {

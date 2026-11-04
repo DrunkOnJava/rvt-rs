@@ -4390,15 +4390,21 @@ pub const WALL_TOP_COVER_BODY_HEIGHT_SOURCE: &str = "wall_top_cut_at_covering_fl
 /// of the plan outside the element from there to the top (#1067, RE-320).
 pub const WALL_TOP_STEPPED_BODY_HEIGHT_SOURCE: &str = "wall_top_stepped_at_covering_floor";
 
-/// `BodyHeightSource` of a wall whose base is cut at the top of the floor or
+/// Property of a wall's [`ELEMENT_RECORD_PROPERTY_SET`] that says how its base
+/// was cut (#1384, RE-336). It is not `BodyHeightSource`, which says how the
+/// top was cut and which a wall may carry as well: a property set holds one
+/// property of a name.
+pub const WALL_BASE_SOURCE_PROPERTY: &str = "BodyBaseSource";
+
+/// `BodyBaseSource` of a wall whose base is cut at the top of the floor or
 /// footing its base join names, where that element is level and covers the
 /// whole of the wall's plan (#1384, RE-336).
-pub const WALL_BASE_COVER_BODY_HEIGHT_SOURCE: &str = "wall_base_cut_at_covering_floor";
+pub const WALL_BASE_COVER_BODY_BASE_SOURCE: &str = "wall_base_cut_at_covering_floor";
 
-/// `BodyHeightSource` of a wall whose base follows the shape-edited top of the
+/// `BodyBaseSource` of a wall whose base follows the shape-edited top of the
 /// floor or footing its base join names, drawn as a solid between that top and
 /// the wall's own top (#1384, RE-336).
-pub const WALL_BASE_SLOPED_BODY_HEIGHT_SOURCE: &str = "wall_base_sloped_at_covering_floor";
+pub const WALL_BASE_SLOPED_BODY_BASE_SOURCE: &str = "wall_base_sloped_at_covering_floor";
 
 /// Property of a floor's [`ELEMENT_RECORD_PROPERTY_SET`] that says why a floor
 /// whose corner vertices are shape-edited is still drawn as its record box

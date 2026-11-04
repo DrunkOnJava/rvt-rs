@@ -6,7 +6,7 @@
   reproduces the plane's highest point. A wall whose base join
   (`JoinToRoofGStep`, base) names one element that covers the whole of its plan
   is cut at that element's top over the plan, as a solid between that top and
-  the wall's own (`BodyHeightSource` `wall_base_sloped_at_covering_floor`, or
+  the wall's own (`BodyBaseSource` `wall_base_sloped_at_covering_floor`, or
   `wall_base_cut_at_covering_floor` for a level element), with the element in
   `BaseCoverElementId`. Where this is not proven the element keeps its record
   box or the wall its base, and the reason is a trust marker on the element
