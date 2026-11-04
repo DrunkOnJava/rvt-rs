@@ -1,0 +1,139 @@
+# RE-332: Areas whose boundary lines are picked from walls
+
+**Date:** 2026-11-04
+**Issues:** #1261 (the Areas of 2015 to 2023 files that Revit bounds partly by walls); follows RE-317, RE-324 and RE-330
+**Artefacts:** Autodesk's `rac_advanced_sample_project`, saves of 2015 to 2024 (`research/autodesk-sample-projects.tsv`, fetched by Measure's `-f samples=true`); the IFC2X3 export of the same project from the three.js repository (RE-330 section 1: `examples/models/ifc/rac_advanced_sample_project.ifc` at commit `7c1f47731608de51a2240ce31655634665cb51ce`, sha256 `9440a72eb2d27e3ba9edeafdcdfb71945e6baec56d5b09211bcde743de7fe0a5`, fetched by hand, never stored); the BIM4LCA office (Revit 2024); the held-out BIM Whale project, by counts only
+**Probe:** `probes/examples/probe_re332_wall_hosted_lines.rs`
+**Status:** positive and narrow, on one project, with one external check that the rule was read off. Of the nine Areas of `rac_advanced` that RE-330 left out, five have an edge on a line picked from a wall, and **two (Areas 2 and 5) are now drawn** on every save but 2021's, saying `SpaceOutlineSource` `area_boundary_wall_line`. The other three (1, 3, 4) stay out, each for a reason measured below, and the four that have no wall in them (6, 7, 8, 10) stay out for the reasons of RE-330. **No Area is bounded by a wall where no boundary line is.**
+
+## 0. What the check rests on
+
+- The only external check is the IFC2X3 export of RE-330 section 0: a build of Revit 2021's exporter whose string ends "IU alternativa 21.0.0.383" (publisher not established), the project's 2015 to 2020 state. It is not one of Revit's IFC4 exports, it is counted apart, and it is **never used to remove a value or to settle a disagreement between exporters**. No workflow fetches it (its terms are not known, RE-330 section 1): the scoring here was run by hand from the pin above.
+- **The rule of section 6 was read off that export.** Areas 2 and 5 equal its outlines because the rule was chosen so that they would; the agreement is in-sample, and says nothing of a model it was not read off. Griffin decided on 2026-11-04 that Areas checked only against this export ship labelled, with a marker of their own.
+- The walls in this report are read from the bytes: rvt-rs's own export of the 2020 save (run 41840118424) draws all 11 host walls compared, from the walls' records, to the same bounds as the export's footprints, to 0.001 ft (section 2).
+- The held-out BIM Whale project is a regression check, by counts. Nothing here was developed on it.
+
+## 1. The nine Areas that RE-330 left out, and what bounds each
+
+Every edge of every Area's outline in the export lies on an area boundary line or is a join of RE-330 (a carry or a connector). There is no edge that a wall bounds and no line bounds. The walls enter through the lines: a line picked from a wall names that wall in its reference list (section 2).
+
+| Area | Level | Lines on its outline (ElementIds) | What stops it | Walls the lines name |
+|---|---|---|---|---|
+| 1 | 1 | 177354, 177355, 177365, 177377, 177425 | its south edge runs along line 177377, drawn on a wall face for one stretch and on the wall's centre line for another (section 4) | 139856, 148422 (curtain walls), 139857, 169770 |
+| 2 | 1 | 177355, 177377, 177425, 177513, 177586, 177634 | along 177377, on the stretch 44 to 74 ft beyond the host wall's east end: **drawn** | 139857, 169770 |
+| 3 | 1 | 26 lines, among them 177363, 177377, 178310 | 177363 and 177377 as for Areas 1 and 4, and the slanted line 178310 (RE-330 section 5) | many |
+| 4 | 1 | 177363, 177366, 177367, 177772, 177963 | its north edge runs along line 177363, as Area 1's south edge along 177377; and 177772 stops 0.101 ft short of 177963 (as Area 6) | 144837, 148769, 149877 |
+| 5 | 1 | 177377, 177513, 177586, 177634 | along 177377, on the stretch 74 to 85 ft beyond the host wall's east end: **drawn** | 169770 |
+| 6 | 1 | 177353, 177367, 177772, 177963 | 177772 stops 0.101 ft short of 177963 and names nothing there (RE-330 section 3) | 139855, 149877 |
+| 7, 8 | 1 | 177368, 177369, 178053, 178096, 178178, 178258, 178310, 178440, 178525 | the slanted line 178310 (RE-330 section 5) | 178310 names none; the others name 150980, 153616 and more |
+| 10 | 2 | 178788 | an arc (RE-330 section 5) | 178788 names none |
+
+So the walls decide five Areas, through two lines, 177363 and 177377. Areas 6, 7, 8 and 10 have no wall in them.
+
+## 2. Where Revit puts a line picked from a wall
+
+Of the 127 area boundary lines of the 2020 save (`probe_re330_area_line_curves`, run 41832621319): **61 name a basic wall in their reference list, 50 a curtain wall, 16 none, and none names two**. The other ids in the lists are the Level, the area scheme (3325 and 18459), 9490 (every line) and 136350 (the 38 lines of the third Level). Every wall id the lists name is a wall of the export (`IfcWall` or `IfcCurtainWall`, by `Tag`), the basic walls with a matching footprint.
+
+`probe_re332_wall_hosted_lines` compares, for each such line, its record box with its host wall's record box (the walls' record boxes are read in the same pass), and prints the line's two edges across the wall as offsets from the wall's centre line. On the 2020 save, with the walls as rvt-rs reads them (the probe's runs are in section 7):
+
+| Host wall type (thickness) | Lines | Where the line lies |
+|---|---:|---|
+| Exterior - Insulation on Masonry (0.9941 ft) | 18 | on a face, 0.497 ft off the centre line, **the outer face** (the side away from the building) |
+| Exterior - Insulation on Masonry (0.9941 ft) | 2 | **compound**: the box spans the centre line and one face (section 4) |
+| Generic - 225mm Concrete (0.7382 ft) | 4 | on a face, 0.369 ft off, the outer face |
+| Interior - 138mm Partition (0.4544 ft) | 31 | on the centre line |
+| Generic - 200mm (0.6562 ft) | 6 | on the centre line |
+| curtain walls | 50 | 44 on a line 0.041 ft off the wall's axis and 6 on its axis (by the bodies rvt-rs draws for them; the probe's reading of their record boxes is in section 7) |
+
+So the export draws an Area **to the outer face of an exterior wall and to the centre line of an interior wall**. The record box already holds that position, for every line but two, which is why RE-317 and RE-330 draw 16 Areas from the boxes alone. The area scheme's own name and rules are not read. Which of face and centre a wall gets is not separable in this file from its type: the exterior types are the ones on the outside of the building, and the file has no exterior wall in the middle of the plan except the two of section 4.
+
+The rvt-rs bounds of the host walls equal the export's footprints (to 0.001 ft): 169770 (-31.815, 72.770, -4.521, 73.764), 144837 (-31.815, 19.409, -4.748, 20.403), 148769, 139854, 139857, 150980, 154427, 155851, 155993, 157706, 161062.
+
+## 3. The joins of RE-330 are wall dimensions
+
+The edges of the 16 Areas that RE-330 draws, laid over the lines' record boxes, leave 51 uncovered pieces (counted per Area, so a shared edge counts twice). Their lengths are the dimensions of the walls the lines name:
+
+| Length (ft) | Pieces | Equals |
+|---:|---:|---|
+| 0.041 | 23 | a curtain wall's offset from its axis (section 2) |
+| 0.328 | 2 | half of Generic - 200mm (0.6562) |
+| 0.369 | 2 | half of Generic - 225mm Concrete (0.7382) |
+| 0.497 | 13 | half of Exterior - Insulation on Masonry (0.9941) |
+| 0.625 | 7 | 0.9941 less 0.3691, the exterior wall and half the concrete one |
+| 0.666 | 4 | 0.9941 less 0.3281, the exterior wall and half the 200 mm one |
+
+The caps of RE-330 (a carry or a connector of at most 1 ft) therefore bound distances that are wall dimensions. That is an identification of values, not a proof of the mechanism, and the rule of RE-330 is unchanged.
+
+## 4. The two lines drawn on a face and on a centre line
+
+Lines 177377 and 177363 are picked from the exterior walls 169770 and 144837. Their record boxes are 0.497 ft across, half of the wall's thickness, from the wall's centre line to one face (`compound` in the probe). Their stored curves, read by `probe_re330_area_line_curves`, are the centre lines:
+
+| Line | Host wall (record box) | Stored curve | Record box |
+|---|---|---|---|
+| 177377 | 169770 (-31.815, 72.770, -4.521, 73.764) | (80.2785, 73.2670) to (-32.1434, 73.2670) | x -32.1434 to 80.2785, y 72.7700 to 73.2670 |
+| 177363 | 144837 (-31.815, 19.409, -4.748, 20.403) | (-4.8747, 19.9063) to (-32.3123, 19.9063) | x -32.3123 to -4.8747, y 19.9063 to 20.4033 |
+
+In the export, **the Areas that border them follow the face for one stretch and the centre line for another**:
+
+- Area 1 (north of 177377): its south edge runs at y 72.770, the wall's south face, from x -32.184 to -13.405; steps up 0.497 ft at x -13.405; and runs at y 73.267, the centre line, from x -13.405 to 39.969. Area 4 (south of 177363) does the same at y 20.403 and y 19.906, with the step at the same x.
+- The step is at x -13.405, the stored x of line 177364 (picked from the curtain wall 145547, whose box is 0.041 ft west of it, at -13.446). Area 3, on the other side of both lines, turns its corner at x -13.446, the box.
+- So the export's Areas are not a partition: Areas 1 and 3 overlap by 0.0204 ft2, Areas 3 and 4 by 0.0204 ft2 and Areas 3 and 9 by 0.0303 ft2, strips 0.041 ft wide. No other two Areas of the export overlap by more than 0.0001 ft2.
+- West of the step, the south side of 177377 and the north side of 177363 is the courtyard, outside the building; east of it, each wall has an Area on both sides. That is what the export's positions fit (face where the wall's outer side is outside, centre where it is between two Areas) and it is Revit's area rule for exterior walls, but **nothing in the file says it**.
+
+What the bytes hold of the two lines is the centre curve and the union box, and nothing else. A line's element data is a header, the reference lists and one curve record, and its size is that of any other line with the same number of references: the data of 177363 has the shape (8 references, curve at offset 467, 148 bytes after it) of lines 178906 and 178913, and that of 177377 (10, 535, 208) of lines 178912 and 179119, all ordinary lines on a centre line (run 41832621319). There is no second curve, no face curve and no list of stretches. The step is not stored: Revit works it out when it regenerates the line, from the wall's faces and what is on its two sides.
+
+## 5. What cannot be proven
+
+- **The stretch of a compound line within its host wall's span, and within one thickness of its ends.** Both positions occur there in the export (face west of the step, centre east of it), and the step is at a place only the export tells (the stored x of one curtain-wall line). Areas 1, 3 and 4 need it. Reproducing Area 1 would also need the step at the line's stored x while Area 3 needs the box: the export's own Areas disagree by 0.041 ft there, so no single arrangement of the lines gives both exactly.
+- **That the enclosure explains the position.** Taking the line to be on the centre line wherever an Area lies on both sides would prove Areas 2 and 5, but the region on the far side of 177377 (Area 3's) does not close among the lines the reader reads (the Python version of the rule finds Area 3's point in no loop, with the slanted line 178310 and the join of 177772 unread), so the reader cannot tell it from the outside of the building. The argument is therefore not used.
+- Whether any other model has such a line. This file has two, both the same wall type, both in one courtyard.
+
+## 6. The rule
+
+A line is read as **picked from a wall** when its record box is as wide across as half of one named wall's thickness (0.05 to 1 ft), the wall (the one wall its reference list names; its record box) is parallel to the box's long side, the box's width equals half the wall's thickness to 0.006 ft, and one of the box's long edges lies on the wall's centre line to 0.006 ft. The line is then the wall's centre line, from one end of the box to the other. Only the stretches of it more than **one wall thickness beyond the wall's ends** are taken as drawn there. On those, no wall face can move the line, and the line is the straight line Revit drew; in the export the outline of Areas 2 and 5 there lies at y 73.267, which is neither the centre line (73.016) nor a face (72.789, 73.243) of the partition 143858 that runs beneath it from x 26.75 to 80.61.
+
+An Area whose outline runs along the line on any other stretch has no body, and says `wall_line_position_not_proven`. An Area whose outline runs along it only on those stretches is drawn, and says `area_boundary_wall_line` (taking precedence over `area_boundary_joined`). A line that does not meet the conditions is left out of the arrangement with its box, as before (RE-330).
+
+For 177377 the host wall ends at x -4.521, so the stretch from x -3.527 to 80.279 is read; Area 2's edge runs from x 39.969 to 69.780 and Area 5's from 69.780 to 80.279. For 177363 the host wall ends at x -4.748 and the line at -4.875: no stretch is read, and every Area along it is refused.
+
+The walls are read only when a line's box could be one of these, so the BIM4LCA office, whose 689 lines are all axis lines, reads none.
+
+## 7. Results
+
+Measure, `--ref main`, filtered; the code is `c79a89e7` (the probe alone is `3a3ceeeb`). **Pending: the results of these runs are not in this report yet.**
+
+- The probe on the samples 2015 to 2024 (`probe_re332_wall_hosted_lines`), run 41862228192: the host walls' record boxes, the lines by kind, and the compound lines' stretches beyond one wall thickness.
+- The reader against `main` on the samples 2015 to 2024 (`-f base=main`, 43 pairs), run 41863421756: which IFC files move. Expected: the nine `rac_advanced` saves of 2015 to 2020 and 2022 to 2024 and no other.
+- The reader with every IFC kept, run 41863426128, the 2020 save scored against the export with `tools/re/space_profiles_vs_ifc.py ... --match globalid`: Areas written, Revit's, extra, missing; area within 0.1% and outline within 0.01 ft of the 18; the marker of each.
+- The office (`nordic-office-as-built`, `nordic-office-permit`, `space_profiles_vs_ifc`) against `main`, run 41864308314: expected byte for byte as before.
+- The held-out BIM Whale project (`holdout-bimwhale*`, counts only) against `main`, run 41864311445: expected 0 extra.
+
+## 8. What it leaves out
+
+- Areas 1, 3 and 4: sections 4 and 5. Area 3 also needs the slanted line 178310; Area 4 the 0.101 ft join of Area 6.
+- Areas 6, 7, 8 and 10: unchanged from RE-330 section 5 (a join its records do not name, the slanted line, the arc). They have no wall in them.
+- The 2021 save, unchanged (two copies of 16 lines, RE-324 section 7).
+
+## 9. Not measured
+
+- Any Revit IFC4 export of these Areas. None exists.
+- That the rule holds on any model it was not read off. The only compound lines found are 177363 and 177377.
+- The 2022 to 2024 state of the 16 edited lines against any export (Area 2's north edge is one of them).
+- Which face or centre an exterior wall of a type the file does not hold would get, and the area scheme's own rules.
+- The wall-hosted lines on the other 9 saves, beyond the probe's counts.
+
+## 10. Reproduce
+
+```bash
+# the export, by pin; never stored
+curl -fsSL -o rac_advanced_sample_project.ifc \
+  https://raw.githubusercontent.com/mrdoob/three.js/7c1f47731608de51a2240ce31655634665cb51ce/examples/models/ifc/rac_advanced_sample_project.ifc
+sha256sum rac_advanced_sample_project.ifc   # 9440a72eb2d27e3ba9edeafdcdfb71945e6baec56d5b09211bcde743de7fe0a5
+# the probe on the samples
+gh workflow run measure.yml --ref main -f ref=<sha> -f base=none -f samples=true -f sample_years="2015 2024" \
+  -f models="zzz-no-model" -f scorers=none -f probe="probe_re332_wall_hosted_lines"
+# the reader, every save with its IFC kept; then score the 2020 save against the export
+gh workflow run measure.yml --ref main -f ref=<sha> -f base=none -f samples=true -f sample_years="2015 2024" \
+  -f models="zzz-no-model" -f scorers=none -f keep_ifc=true
+python3 tools/re/space_profiles_vs_ifc.py model.ifc rac_advanced_sample_project.ifc --match globalid --list 10
+```
