@@ -15,7 +15,7 @@
 //! and for a door's further cut in a second wall, and none of them can be
 //! told from the cutters it writes no opening for (RE-321 §4).
 
-use super::entities::{IfcEntity, ProfileDef};
+use super::entities::{IfcEntity, ProfileDef, PropertySet, PropertyValue};
 use crate::RevitFile;
 use crate::native_wall_cuts::{self, WallCutKind};
 use std::collections::{BTreeMap, BTreeSet};
@@ -66,6 +66,21 @@ impl Host {
     }
 }
 
+/// Whether a wall's body is RE-320's stepped one: its `extrusion` is still
+/// the whole prism, and an opening voids every piece of the body.
+fn is_stepped(set: Option<&PropertySet>) -> bool {
+    set.is_some_and(|set| {
+        set.properties.iter().any(|property| {
+            property.name == "BodyHeightSource"
+                && matches!(
+                    &property.value,
+                    PropertyValue::Text(source)
+                        if source == super::export_content::WALL_TOP_STEPPED_BODY_HEIGHT_SOURCE
+                )
+        })
+    })
+}
+
 fn host_of(index: usize, entity: &IfcEntity) -> Option<(u64, Host)> {
     let IfcEntity::BuildingElement {
         ifc_type,
@@ -74,13 +89,14 @@ fn host_of(index: usize, entity: &IfcEntity) -> Option<(u64, Host)> {
         location_feet: Some(location),
         rotation_radians,
         extrusion: Some(body),
-        solid_shape: None,
+        solid_shape,
+        property_set,
         ..
     } = entity
     else {
         return None;
     };
-    if ifc_type != "IFCWALL" {
+    if ifc_type != "IFCWALL" || (solid_shape.is_some() && !is_stepped(property_set.as_ref())) {
         return None;
     }
     let id: u64 = tag.parse().ok()?;
@@ -209,8 +225,11 @@ pub(super) fn attach_wall_cut_openings(rf: &mut RevitFile, entities: &mut Vec<If
                 continue;
             };
             let (along, plane, up) = host.ranges(rectangle);
+            // The rectangle lies in the wall's plane, so its corners' spread
+            // across the wall is nil; a wall whose axis was not read fails it.
             let in_the_wall = plane[0] >= host.band[0] - PLANE_TOLERANCE_FEET
-                && plane[1] <= host.band[1] + PLANE_TOLERANCE_FEET;
+                && plane[1] <= host.band[1] + PLANE_TOLERANCE_FEET
+                && plane[1] - plane[0] <= PLANE_TOLERANCE_FEET;
             let extents = [
                 along[1] - along[0],
                 host.band[1] - host.band[0],
