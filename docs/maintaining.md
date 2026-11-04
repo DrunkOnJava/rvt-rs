@@ -245,7 +245,9 @@ crates.io and PyPI accept the publish workflow through trusted publishing, so no
 token is stored, and a tag release fails when crates.io refuses it (C3). Each
 registry needs its trusted publisher configured on its side once (repository
 DrunkOnJava/rvt-rs, workflow `publish.yml`, environments `crates-io` and
-`pypi`). Confirm it before pushing a tag; `.github/workflows/publish.yml` lists
+`pypi`); crates.io needs one for each of its crates, `rvt` and the MCP server's
+`rvt-rs-mcp`, which is added after that crate's first version is published by
+hand. Confirm it before pushing a tag; `.github/workflows/publish.yml` lists
 the settings.
 
 ## Security and automation settings

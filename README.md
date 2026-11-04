@@ -13,6 +13,7 @@ It comes as command-line tools, a Rust library, Python bindings and a browser vi
 | See a model without installing anything | Open the [browser viewer](https://drunkonjava.github.io/rvt-rs/) and pick a demo, or drop in a file of your own. |
 | Inspect or export files from the command line | The [installation guide](docs/install.md); prebuilt binaries are on [GitHub Releases](https://github.com/DrunkOnJava/rvt-rs/releases). |
 | Work with files in Python | The [Python guide](docs/python.md) (`pip install rvt`). |
+| Let an agent ask about a file | The [MCP server](docs/mcp.md), `rvt-rs-mcp`: local, read-only, over stdio. |
 | Check what your file will give | [What you can rely on, by input](docs/evidence.md#what-you-can-rely-on-by-input), then the [user guide](docs/user-guide.md). |
 | Use the Rust library | The [examples](examples/README.md) (open a file, list its elements, export it), the [library surface](docs/library.md#library-surface) and the [API documentation](https://docs.rs/rvt). |
 | Tell us how it went on your own models | [Discussion #982](https://github.com/DrunkOnJava/rvt-rs/discussions/982): your diagnostics are enough, never the building. |
@@ -83,6 +84,10 @@ The [Python guide](docs/python.md) documents the rest, with a [Jupyter notebook]
 Drop a `.rvt`, `.rfa`, `.rte` or `.rft` at <https://drunkonjava.github.io/rvt-rs/>: the file is read and converted inside the tab and is not uploaded. The viewer is the core library compiled to WebAssembly, with the 12 JS-callable wasm-bindgen bindings of the `rvt-wasm` crate ([`docs/viewer-api.md`](docs/viewer-api.md#the-javascript-bindings)); it parses in a worker, draws with Three.js and exports glTF 2.0 binary, IFC4 STEP and plan-view SVG. It is built from `main`, not from a release, and its demo gallery opens two MIT-licensed real projects, hash-verified when staged.
 
 Every deploy checks the viewer's privacy posture in two ways. `viewer/scripts/audit-wasm-imports.mjs` reads each import of the compiled `.wasm` and its shim in the JavaScript glue, and fails if any reaches `fetch`, `XMLHttpRequest`, `WebSocket`, `EventSource` or `sendBeacon`. A Playwright test opens a real project in the built viewer and fails on any request to another origin, or on any request at all after the file is open. The page's Content-Security-Policy also limits its connections to its own origin. Together these cover the WebAssembly module's imports, the page's connection policy and the flow the test drives; they are checks, not a proof about every possible code path. [`docs/viewer-privacy-posture.md`](docs/viewer-privacy-posture.md) states the invariant and what each check covers.
+
+## MCP server
+
+`rvt-rs-mcp` is a local, read-only [Model Context Protocol](https://modelcontextprotocol.io) server over stdio, the `rvt-mcp` workspace member, so an agent can ask about a Revit file with no Revit install and no network. `open_model` decodes a file once, with the decode `rvt-ifc` runs, and every tool (`get_summary`, `list_elements`, `get_element`, `list_rooms`, `list_levels`, `get_diagnostics`) answers from that same model, each element with its provenance, so an answer and the IFC export cannot disagree; `export_ifc` and `export_gltf` write to a path the agent names. It opens no socket and makes no network call, and it reports what it left out the way the CLIs do. It is a crate of its own, so `rvt` gains no async runtime, and it needs Rust 1.88, one above the CLIs. It is not in v0.13.0; [`docs/mcp.md`](docs/mcp.md) has the install, the client configuration, the tools, the handle lifetime and what it does not read.
 
 ## What does not work yet
 

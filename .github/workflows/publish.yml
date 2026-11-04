@@ -40,7 +40,11 @@ name: Publish (crates.io + PyPI + release binaries)
 #
 # One-time crates.io setup (Griffin): on https://crates.io/crates/rvt/settings
 # add a trusted publisher: GitHub, owner DrunkOnJava, repository rvt-rs,
-# workflow publish.yml, environment crates-io.
+# workflow publish.yml, environment crates-io. The MCP server's crate,
+# `rvt-rs-mcp`, needs the same on https://crates.io/crates/rvt-rs-mcp/settings,
+# and crates.io lets a trusted publisher be added only to a crate that
+# exists, so that crate's first version is published by hand (RELEASE.md,
+# step 8).
 #
 # Once both are in place, pushing a signed `v*` tag on main, or on a hotfix
 # branch, publishes the release (RELEASE.md, steps 8 to 11, and its hotfix
@@ -255,6 +259,22 @@ jobs:
           rustc --version
       - name: Install crate from release source
         run: cargo install --path . --locked --root /tmp/rvt-release-install
+      # The MCP server is a crate of its own (rvt-mcp/); `cargo install` of
+      # the source builds it too, and it answers server/discover.
+      - name: Install the MCP server from release source
+        run: cargo install --path rvt-mcp --locked --root /tmp/rvt-release-install
+      - name: MCP server answers server/discover
+        env:
+          RVT_BIN: /tmp/rvt-release-install/bin
+        run: |
+          set -euo pipefail
+          "${RVT_BIN}/rvt-rs-mcp" --version
+          discover='{"jsonrpc":"2.0","id":1,"method":"server/discover","params":{"_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28","io.modelcontextprotocol/clientCapabilities":{}}}}'
+          reply="$({ printf '%s\n' "${discover}"; sleep 3; } | "${RVT_BIN}/rvt-rs-mcp")"
+          case "${reply}" in
+            *'"supportedVersions"'*'2026-07-28'*) ;;
+            *) echo "::error::rvt-rs-mcp did not answer server/discover: ${reply}"; exit 1 ;;
+          esac
       - name: Run CLIs on sample file
         env:
           RVT_SAMPLE: ${{ github.workspace }}/_corpus/examples/Autodesk/racbasicsamplefamily-2024.rfa
@@ -425,12 +445,15 @@ jobs:
         shell: bash
         run: |
           tag_version="${GITHUB_REF#refs/tags/v}"
-          crate_version=$(cargo metadata --no-deps --format-version=1 \
-            | python3 -c "import json,sys; print(json.load(sys.stdin)['packages'][0]['version'])")
-          if [[ "$tag_version" != "$crate_version" ]]; then
-            echo "::error::tag v$tag_version does not match Cargo.toml version $crate_version"
-            exit 1
-          fi
+          # Both published crates: `rvt` and the MCP server `rvt-rs-mcp`.
+          for crate in rvt rvt-rs-mcp; do
+            crate_version=$(cargo metadata --no-deps --format-version=1 \
+              | CRATE="$crate" python3 -c "import json,os,sys; print(next(p['version'] for p in json.load(sys.stdin)['packages'] if p['name'] == os.environ['CRATE']))")
+            if [[ "$tag_version" != "$crate_version" ]]; then
+              echo "::error::tag v$tag_version does not match $crate's Cargo.toml version $crate_version"
+              exit 1
+            fi
+          done
           echo "version match: $tag_version"
       # Trusted Publishing (C3): a token for this run alone, issued to
       # DrunkOnJava/rvt-rs / publish.yml / environment crates-io. A failed
@@ -447,6 +470,16 @@ jobs:
         # and the wasm bindings are `rvt-wasm` (C6); both have
         # `publish = false`.
         run: cargo publish -p rvt
+      # The MCP server (rvt-mcp/, `rvt-rs-mcp`) depends on the `rvt` just
+      # published (`=X.Y.Z`), which `cargo publish` waits to see in the index
+      # before it verifies this package. A new crate's first publish is
+      # manual, and its trusted publisher (DrunkOnJava/rvt-rs, publish.yml,
+      # environment crates-io) is added on crates.io first; until then this
+      # step fails the release (RELEASE.md, step 8).
+      - name: Cargo publish the MCP server
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.crates-io-auth.outputs.token }}
+        run: cargo publish -p rvt-rs-mcp
 
   publish-testpypi:
     name: Publish to TestPyPI

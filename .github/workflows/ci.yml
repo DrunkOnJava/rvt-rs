@@ -111,6 +111,15 @@ jobs:
       # The pyo3 bindings and the stream-evidence harness are workspace
       # members the lines above do not lint.
       - run: cargo clippy -p rvt-py -p stream-evidence --all-targets --no-deps -- -D warnings
+      # The MCP server (rvt-mcp/, `rvt-rs-mcp`) is a crate of its own with its
+      # own `rust-version`, so the lines above do not reach it. Its end-to-end
+      # test is a target of it and is linted here too.
+      - run: cargo clippy -p rvt-rs-mcp --all-targets --no-deps -- -D warnings
+      # Zero upload: the server is stdio only, so its dependency tree must
+      # carry no HTTP client or server (it is also checked on every run of
+      # the end-to-end test, which asserts the process holds no socket).
+      - name: The MCP server's dependency tree carries no HTTP client or server
+        run: tools/ci/audit-mcp-network.sh
       # The RE probes are their own crate (probes/), so the `rvt` builds above
       # and in the test matrix no longer compile them; this is where they are
       # checked. `--no-deps`: `rvt` is linted with every feature above.
@@ -228,6 +237,15 @@ jobs:
       - name: Check every target on the MSRV
         if: matrix.label == 'msrv'
         run: cargo check --profile ci --all-targets
+      # The MCP server declares rust-version 1.88 (rmcp's minimum), one above
+      # the workspace's, so it is checked on 1.88 as well; the step above
+      # keeps the root crate on its own MSRV.
+      - name: Check the MCP server on its own minimum Rust (1.88)
+        if: matrix.label == 'msrv'
+        shell: bash
+        run: |
+          rustup toolchain install 1.88 --profile minimal --no-self-update
+          cargo +1.88 check --profile ci -p rvt-rs-mcp --all-targets --locked
       # The API examples docs.rs shows, run against the committed synthetic
       # fixture (corpus/tier1/), so a documented call cannot drift from the
       # code (1.0 criteria S3, #872). Linux only: the examples do not depend
@@ -253,6 +271,19 @@ jobs:
           RVT_SAMPLES_DIR: ${{ matrix.with_corpus && format('{0}/_corpus/examples/Autodesk', github.workspace) || '' }}
           RVT_REQUIRE_CORPUS: ${{ matrix.with_corpus && '1' || '' }}
         run: tools/ci/verify-real-files.sh --profile ci --no-fail-fast
+      # The MCP server (rvt-mcp/, `rvt-rs-mcp`) is a crate of its own, so the
+      # manifest above does not run its test: this does. The end-to-end test
+      # starts the built server, drives it over real stdio in both MCP
+      # lifecycles on the committed synthetic fixture, and compares its
+      # exports byte for byte with rvt-ifc and rvt-gltf, which the Build step
+      # put beside it (RVT_REQUIRE_CLI_PARITY makes their absence a failure).
+      # Corpus health runs it again on Einhoven.
+      - name: MCP server end to end
+        if: matrix.label != 'msrv'
+        shell: bash
+        env:
+          RVT_REQUIRE_CLI_PARITY: "1"
+        run: cargo test --profile ci -p rvt-rs-mcp --no-fail-fast
       # The synthetic IFC pair the integration tests write
       # (tests/common, write_synthetic_output): each release pull request
       # refreshes the viewer's download copies in tests/fixtures/ from it.
@@ -443,6 +474,14 @@ jobs:
           RVT_CORPUS_TIER1_DIR: ${{ github.workspace }}/corpus/tier1
           RVT_CORPUS_TIER2_LIMIT: "8"
         run: tools/ci/verify-real-files.sh --profile ci --no-fail-fast
+      # The MCP server's end-to-end test on Einhoven: elements, GlobalIds
+      # looked up and found in the exported IFC, the exports against rvt-ifc's.
+      - name: MCP server end to end on Einhoven
+        shell: bash
+        env:
+          RVT_PROJECT_CORPUS_DIR: ${{ github.workspace }}/_project_corpus/Revit
+          RVT_REQUIRE_CLI_PARITY: "1"
+        run: cargo test --profile ci -p rvt-rs-mcp --no-fail-fast
 
   writer-patch-corpus:
     # M9-01: stream-level writer coverage for real family + project

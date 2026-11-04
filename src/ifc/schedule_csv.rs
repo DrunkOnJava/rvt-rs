@@ -21,7 +21,9 @@
 
 use super::IfcModel;
 use super::entities::{Extrusion, IfcEntity, ProfileDef, PropertyValue};
-use super::export_content::{ROOM_NAME_PROPERTY, ROOM_NUMBER_PROPERTY};
+use super::export_content::{
+    ROOM_NAME_PROPERTY, ROOM_NUMBER_PROPERTY, SPACE_OUTLINE_SOURCE_PROPERTY,
+};
 
 const FEET_TO_METRES: f64 = 0.3048;
 
@@ -267,8 +269,59 @@ pub fn elements_csv(model: &IfcModel, options: &CsvOptions) -> String {
 /// stored solid (RE-101) where it was.
 pub fn rooms_csv(model: &IfcModel, options: &CsvOptions) -> String {
     let unit = options.unit;
+    let rows = room_rows(model)
+        .into_iter()
+        .map(|row| {
+            let cells = vec![
+                text(&row.revit_element_id),
+                text(&row.number),
+                text(&row.name),
+                text(&row.level),
+                number(
+                    row.level_elevation_feet
+                        .map(|elevation| unit.convert(elevation)),
+                ),
+                number(row.area_square_feet.map(|area| unit.convert_area(area))),
+                text(&row.body_source),
+            ];
+            let elevation = row.level_elevation_feet.unwrap_or(f64::INFINITY);
+            (elevation, natural_key(&row.number), cells)
+        })
+        .collect();
+    render(room_columns(unit), rows, options)
+}
+
+/// One room of [`room_rows`], in feet and square feet.
+#[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
+pub struct RoomRow {
+    /// The index of the room's `IfcSpace` in [`IfcModel::entities`].
+    pub entity_index: usize,
+    /// The room's Revit ElementId, empty where the export gives it none.
+    pub revit_element_id: String,
+    /// The room number, empty where it is not recovered.
+    pub number: String,
+    /// The room name, empty where it is not recovered.
+    pub name: String,
+    /// The name of the storey the room is on, empty where it has none.
+    pub level: String,
+    /// That storey's elevation.
+    pub level_elevation_feet: Option<f64>,
+    /// The plan area of the outline read from the room's stored solid, where
+    /// it was (RE-101). `None` for a room that keeps its record's bounding
+    /// box: the area of a bounding box is not the area of a room.
+    pub area_square_feet: Option<f64>,
+    /// The room's `BodySource` property, empty where it has none.
+    pub body_source: String,
+    /// The room's `SpaceOutlineSource` property, empty where it has none.
+    pub outline_source: String,
+}
+
+/// The rooms [`rooms_csv`] writes, one per `IfcSpace`, in its order: by storey
+/// elevation, then room number.
+pub fn room_rows(model: &IfcModel) -> Vec<RoomRow> {
     let mut rows = Vec::new();
-    for entity in &model.entities {
+    for (entity_index, entity) in model.entities.iter().enumerate() {
         let IfcEntity::BuildingElement {
             ifc_type,
             type_guid,
@@ -294,30 +347,33 @@ pub fn rooms_csv(model: &IfcModel, options: &CsvOptions) -> String {
             }
         };
         let storey = storey_index.and_then(|i| model.building_storeys.get(i));
-        let number_cell = property(ROOM_NUMBER_PROPERTY);
-        let cells = vec![
-            text(type_guid.as_deref().unwrap_or_default()),
-            text(&number_cell),
-            text(&property(ROOM_NAME_PROPERTY)),
-            text(storey.map(|s| s.name.as_str()).unwrap_or_default()),
-            number(storey.map(|s| unit.convert(s.elevation_feet))),
-            number(
-                (property("ProfileSource")
-                    == crate::partition_room_boundaries::ROOM_OUTLINE_SOURCE
-                    || property("ProfileSource")
-                        == crate::partition_room_boundaries::ROOM_OUTLINE_SOURCE_FACES
-                    || property("ProfileSource")
-                        == crate::partition_area_records::AREA_BOUNDARY_SOURCE)
-                    .then(|| extrusion.as_ref().and_then(outline_area_square_feet))
-                    .flatten()
-                    .map(|area| unit.convert_area(area)),
-            ),
-            text(&property("BodySource")),
-        ];
-        let elevation = storey.map_or(f64::INFINITY, |s| s.elevation_feet);
-        rows.push((elevation, natural_key(&number_cell), cells));
+        let area_square_feet = (property("ProfileSource")
+            == crate::partition_room_boundaries::ROOM_OUTLINE_SOURCE
+            || property("ProfileSource")
+                == crate::partition_room_boundaries::ROOM_OUTLINE_SOURCE_FACES
+            || property("ProfileSource") == crate::partition_area_records::AREA_BOUNDARY_SOURCE)
+            .then(|| extrusion.as_ref().and_then(outline_area_square_feet))
+            .flatten();
+        rows.push(RoomRow {
+            entity_index,
+            revit_element_id: type_guid.clone().unwrap_or_default(),
+            number: property(ROOM_NUMBER_PROPERTY),
+            name: property(ROOM_NAME_PROPERTY),
+            level: storey.map(|s| s.name.clone()).unwrap_or_default(),
+            level_elevation_feet: storey.map(|s| s.elevation_feet),
+            area_square_feet,
+            body_source: property("BodySource"),
+            outline_source: property(SPACE_OUTLINE_SOURCE_PROPERTY),
+        });
     }
-    render(room_columns(unit), rows, options)
+    rows.sort_by(|a, b| {
+        let elevation = |row: &RoomRow| row.level_elevation_feet.unwrap_or(f64::INFINITY);
+        elevation(a)
+            .partial_cmp(&elevation(b))
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then_with(|| natural_key(&a.number).cmp(&natural_key(&b.number)))
+    });
+    rows
 }
 
 /// The plan area of a body's polygon profile, its voids taken out.
