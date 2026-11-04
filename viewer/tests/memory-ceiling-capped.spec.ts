@@ -205,22 +205,30 @@ function sameReport(a: Report, b: Report): boolean {
 // saved graphics were reported; after it they are taken inside the saved
 // meshes, and a cap tuned to the old profile, 310 MiB, then stopped in the
 // meshes: the viewer measurement of Deploy viewer runs 41870855196 at
-// f1f80d9e and 41885589164 at 0ca59127). So the cap is not tuned: the test opens the model once at the real
-// ceiling to measure its profile, and puts the cap between the memory at the
-// first report that leaves the card on "Building the model" and the memory at
-// the first report after those. The allocation that crosses the cap is then
-// in the stretch, whatever the profile, and the capped open must have stopped
-// there: its reports are the measured ones up to the last, which still reads
-// "Building the model".
+// f1f80d9e and 41885589164 at 0ca59127). So the cap is not tuned: the test
+// opens the model once at the real ceiling to measure its profile, and puts
+// the cap between the memory at the first report that leaves the card on
+// "Building the model" and the memory at the first report after those. The
+// allocation that crosses the cap is then in the stretch, whatever the
+// profile, and the capped open must have stopped there: its reports are the
+// measured ones up to the last, which still reads "Building the model". The
+// profile, the cap and the capped open's reports are written to
+// memory-ceiling-cap-core-interior.json in the measurement artifact.
 coreInteriorTest(
   'a stop in the stretch the decoder reports nothing in says it was building the model',
   async ({ baseURL }) => {
     test.setTimeout(600_000);
     const wasmPages = 65_536;
+    const record = (content: Record<string, unknown>): void =>
+      fs.writeFileSync(
+        path.join(outDir, 'memory-ceiling-cap-core-interior.json'),
+        `${JSON.stringify(content, null, 2)}\n`,
+      );
     let profile: Report[] = [];
     await underCap(baseURL, wasmPages, '', coreInterior, async (page) => {
       await expect(page.locator('#status')).toHaveText(/Loaded/, { timeout: 300_000 });
       profile = await decoderReports(page);
+      record({ profile });
     });
     const start = profile.findIndex((report) => report.card.step === BUILDING);
     expect(start, `a report left the card on "${BUILDING}"`).toBeGreaterThanOrEqual(0);
@@ -248,6 +256,7 @@ coreInteriorTest(
       // The open followed its measured profile up to the stop, and the last
       // thing the decoder reported was in the stretch.
       const stopped = await decoderReports(page);
+      record({ before, after, capBytes, profile, stopped });
       expect(stopped.length, 'reports before the stop').toBeGreaterThan(start);
       expect(stopped.length, 'reports before the stop').toBeLessThanOrEqual(end);
       stopped.forEach((report, i) => {
