@@ -263,7 +263,8 @@ pub struct FieldEntry {
 /// | Byte | Semantic | Wire size |
 /// |---|---|---|
 /// | `0x01` | `bool` | 1 (padded) |
-/// | `0x02` | `u16` / `i16` | 2 |
+/// | `0x02` | `char` (one byte; `u8` in the native decoder) | 1 |
+/// | `0x03` | `short` (`i16`) | 2 |
 /// | `0x04` | `u32` / `i32` (legacy) | 4 |
 /// | `0x05` | `u32` / `i32` | 4 |
 /// | `0x06` | `f32` | 4 |
@@ -277,7 +278,8 @@ pub struct FieldEntry {
 pub enum FieldType {
     /// A fixed-size numeric or boolean primitive. `size` is the wire
     /// size in bytes; `kind` is the type category byte (0x01, 0x02,
-    /// 0x04, 0x05, 0x06, 0x07, 0x0b).
+    /// 0x03, 0x04, 0x05, 0x06, 0x07, 0x0b). Kinds 0x02 and 0x03 are the C++
+    /// `char` and `short`, 1 and 2 bytes (RE-325).
     Primitive { kind: u8, size: u8 },
     /// UTF-16LE string, length-prefixed. `0x08` family. Two equivalent
     /// wire encodings exist: `0x08 0x00 0x60 0x00` (sub=0x6000) and
@@ -307,8 +309,9 @@ pub enum FieldType {
     /// `{kind} 0x10 0x00 0x00 ...` — a vector/array. Body (not fully
     /// decoded) contains an element-count hint and, for reference
     /// vectors, a reference to the element class's tag. Handled bases:
-    /// `0x01` bool, `0x02` u16, `0x04` u32-legacy, `0x05` u32, `0x06`
-    /// f32, `0x07` f64, `0x0b` u64, `0x0d` point/transform, `0x0e` ref.
+    /// `0x01` bool, `0x02` char (one byte), `0x04` u32-legacy, `0x05` u32,
+    /// `0x06` f32, `0x07` f64, `0x0b` u64, `0x0d` point/transform, `0x0e`
+    /// ref. A `0x02` vector is a byte blob (RE-325).
     Vector {
         /// The outer type byte — e.g. `0x07` (`vector<double>`), `0x0e`
         /// (`vector<reference>`), `0x0d` (`vector<point>`).
@@ -407,10 +410,10 @@ impl FieldType {
         fn scalar_size(kind: u8) -> Option<u8> {
             match kind {
                 0x01 => Some(1), // bool
-                0x02 => Some(2), // u16
-                0x03 => Some(4), // deprecated i32-alias (seen in 2016–2018 only,
-                // fields `UserID.m_id` and `ElementRegenerationInfo.m_nAtomType`;
-                // superseded by `0x05` from 2019 onward)
+                0x02 => Some(1), // char (RE-325): the `char` of `std::pair< char, K >`
+                // and the element of the byte blobs (`ByteData::m_data`, `*ImagePng`)
+                0x03 => Some(2), // short (RE-325): the `short` of `std::pair< short, K >`,
+                // `UserID::m_id`, `Viewer::m_viewerFlags`; in every release 2014 to 2027
                 0x04 => Some(4), // legacy u32
                 0x05 => Some(4), // u32
                 0x06 => Some(4), // f32

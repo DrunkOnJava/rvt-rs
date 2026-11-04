@@ -94,7 +94,8 @@ fn read_field(ft: &formats::FieldType, bytes: &[u8]) -> (usize, String) {
                 bytes[..s].iter().map(|b| format!("{b:02x} ")).collect();
             let decoded = match (*kind, s) {
                 (0x01, 1) => format!("bool({})", bytes[0] != 0),
-                (0x02, 2) => format!("u16({})", u16::from_le_bytes([bytes[0], bytes[1]])),
+                (0x02, 1) => format!("char({})", bytes[0]),
+                (0x03, 2) => format!("i16({})", i16::from_le_bytes([bytes[0], bytes[1]])),
                 (0x04 | 0x05, 4) => format!(
                     "u32({})",
                     u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]])
