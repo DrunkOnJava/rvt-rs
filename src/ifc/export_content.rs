@@ -1237,17 +1237,20 @@ pub fn append_typed_production_elements(
                 });
             }
         }
-        if policy.include_geometry && decoded.class == "Floor" {
+        // An edited floor, roof or ceiling is never flat to the wall pass: a
+        // floor whose corners lie in one plane has it, any other edited one
+        // (a roof or ceiling always) has none.
+        if policy.include_geometry && matches!(decoded.class.as_str(), "Floor" | "Roof" | "Ceiling")
+        {
             if let Some(id) = decoded.id {
-                if let Some(plane) =
-                    crate::partition_schema_mvp::slab_top_plane_from_fields(&decoded.fields)
-                {
+                let plane =
+                    crate::partition_schema_mvp::slab_top_plane_from_fields(&decoded.fields);
+                let unread =
+                    crate::partition_schema_mvp::slab_shape_unread_from_fields(&decoded.fields)
+                        .is_some();
+                if let Some(plane) = plane.filter(|_| decoded.class == "Floor") {
                     slab_shapes.insert(id, Some(plane));
-                } else if crate::partition_schema_mvp::slab_shape_unread_from_fields(
-                    &decoded.fields,
-                )
-                .is_some()
-                {
+                } else if plane.is_some() || unread {
                     slab_shapes.insert(id, None);
                 }
             }
@@ -5089,6 +5092,34 @@ fn roof_slope_solid(
     })
 }
 
+/// How far a corner vertex of a shape-edited floor may lie from a vertex of
+/// its plan outline, feet (#1384).
+const SLAB_CORNER_OUTLINE_FEET: f64 = 1e-3;
+
+/// Whether the corner vertices a shape-edited floor's plane is made from
+/// ([`crate::partition_schema_mvp::SLAB_SHAPE_CORNERS_FIELD`]) are the vertices
+/// of its plan outline: each corner within [`SLAB_CORNER_OUTLINE_FEET`] of one
+/// vertex and each vertex of one corner. A plane through other points than the
+/// outline's is not the floor's top over the outline (#1384).
+fn corners_are_the_outline(
+    fields: &[(String, InstanceField)],
+    profile: &crate::element_record_plan_profiles::PlanProfile,
+) -> bool {
+    let corners = crate::partition_schema_mvp::slab_shape_corners_from_fields(fields);
+    let near = |a: [f64; 2], b: (f64, f64)| {
+        (a[0] - b.0).abs() <= SLAB_CORNER_OUTLINE_FEET
+            && (a[1] - b.1).abs() <= SLAB_CORNER_OUTLINE_FEET
+    };
+    !corners.is_empty()
+        && corners
+            .iter()
+            .all(|&corner| profile.outer_xy.iter().any(|&vertex| near(corner, vertex)))
+        && profile
+            .outer_xy
+            .iter()
+            .all(|&vertex| corners.iter().any(|&corner| near(corner, vertex)))
+}
+
 /// A floor's body when its corners are shape-edited (#1384, RE-336): its plan
 /// outline, between its top, the plane `z = a·x + b·y + c`, and the same
 /// surface one thickness lower, with upright sides. `[x, y, z]` is the
@@ -6525,7 +6556,9 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
     let floor_slope = if class == "Floor" {
         profile
             .as_ref()
-            .filter(|profile| profile.pieces.is_empty())
+            .filter(|profile| {
+                profile.pieces.is_empty() && corners_are_the_outline(&decoded.fields, profile)
+            })
             .and_then(|profile| {
                 let plane =
                     crate::partition_schema_mvp::slab_top_plane_from_fields(&decoded.fields)?;
@@ -6707,14 +6740,19 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
             value: PropertyValue::Text(source.into()),
         });
     }
-    // #1384: why a floor whose corners are shape-edited is still its box.
-    if class == "Floor" && floor_slope.is_none() {
+    // #1384: why a floor, roof or ceiling whose corners are shape-edited is
+    // still its box. A roof or a ceiling is not drawn along its plane.
+    if matches!(class, "Floor" | "Roof" | "Ceiling") && floor_slope.is_none() {
         let reason = crate::partition_schema_mvp::slab_shape_unread_from_fields(&decoded.fields)
             .or_else(|| {
                 crate::partition_schema_mvp::slab_top_plane_from_fields(&decoded.fields).map(|_| {
                     match profile.as_ref() {
+                        _ if class != "Floor" => "roof_or_ceiling_edit_not_drawn",
                         None => "plan_outline_not_read",
                         Some(profile) if !profile.pieces.is_empty() => "plan_outline_in_pieces",
+                        Some(profile) if !corners_are_the_outline(&decoded.fields, profile) => {
+                            "corners_not_the_outline_vertices"
+                        }
                         Some(_) => "plane_does_not_reproduce_record_box",
                     }
                 })

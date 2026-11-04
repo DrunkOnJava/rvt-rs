@@ -12,11 +12,15 @@
   box or the wall its base, and the reason is a trust marker on the element
   (`SlabShapeRefusal`, `BaseCoverRefusal`): edits of interior or edge vertices
   or creases, corners not in one plane, an outline in pieces, a wall covered
-  in part, by two elements or with the top crossing its base or top. The top
+  in part, by two elements or with the top crossing its base or top. An edited floor, roof or ceiling is never taken for a flat one, and a floor whose edit is
+  found but not read leaves the walls on it as they were. The refusals are counted in
+  `exported.slab_shape_refusals` and `exported.wall_base_refusals` and are
+  decisions of the log (`slab_shape_refused`, `wall_base_cut_refused`). The top
   cut (RE-267) no longer takes a floor drawn along a sloped top for a level
   one. On the BIM4LCA office the 8 such floors, as built and at permit, have
   Revit's volume to 0.01%, and 12 of the 14 Basement walls Revit raises as
-  built (12 of 16 at permit) have Revit's lowest point (598 of 607 walls with
+  built (the 4 on level floors and 8 of the 10 on sloped footings; 12 of 16 at
+  permit) have Revit's lowest point (598 of 607 walls with
   Revit's base and top, from 586; 577 of 589 at permit, from 565); the other
   2 (4) are 0.123 ft (0.044 ft) off, from 0.656 ft, because their plans end
   short of Revit's. No wall's top moved, and no other model's export moves

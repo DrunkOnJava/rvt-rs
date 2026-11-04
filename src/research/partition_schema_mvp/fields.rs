@@ -418,6 +418,12 @@ pub const SLAB_UNCUT_FIELD: &str = "m_slab_uncut";
 /// shape-edits its corner vertices (`SlabShapeEditGStep`, #1384, RE-336).
 pub const SLAB_TOP_PLANE_FIELD: &str = "m_slab_top_plane";
 
+/// Field holding, as a flat vector of floats `[x0, y0, x1, y1, ...]`, the plan
+/// place of each corner vertex of a floor whose shape-edited corners lie in one
+/// plane ([`SLAB_TOP_PLANE_FIELD`], #1384): the places the plane is made from,
+/// which the floor's plan outline must have as its vertices.
+pub const SLAB_SHAPE_CORNERS_FIELD: &str = "m_slab_shape_corners";
+
 /// Field holding, as a code, why a floor whose native record edits its shape
 /// (`SlabShapeEditGStep`) has no [`SLAB_TOP_PLANE_FIELD`]: the edits are not
 /// of its corners alone, or its corners do not lie in one plane (#1384).

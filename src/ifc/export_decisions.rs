@@ -13,7 +13,8 @@
 //! disagree: every item of `skipped` has a reason here whose `total` is its
 //! count, and, for a reason that dropped none, whose entries by class are its
 //! classes. The decisions behind `exported.bounding_box_bodies`,
-//! `exported.bounding_box_spaces` and `exported.area_body_refusals` are here
+//! `exported.bounding_box_spaces`, `exported.area_body_refusals`,
+//! `exported.slab_shape_refusals` and `exported.wall_base_refusals` are here
 //! too (`body_is_record_box`, `space_outline_is_record_box`,
 //! `area_body_refused`).
 //!
@@ -63,10 +64,12 @@ pub const MAX_DECISIONS_PER_REASON: usize = 5_000;
 
 /// The reasons whose `detail` is a code rvt-rs writes, not text from the
 /// project, so [`ExportDecisionLog::anonymize`] keeps it.
-const CODE_DETAIL_REASONS: [&str; 3] = [
+const CODE_DETAIL_REASONS: [&str; 5] = [
     "area_without_proven_body",
     "area_body_refused",
     "body_is_record_box",
+    "slab_shape_refused",
+    "wall_base_cut_refused",
 ];
 
 /// Which fail-closed step made a decision.
@@ -79,7 +82,10 @@ pub enum DecisionStage {
     /// The element is written with no body: its curve, profile or dimensions
     /// were not read.
     BodyNotDrawn,
-    /// The element's body is only its record's bounding box.
+    /// The element's body is only its record's bounding box, or keeps its
+    /// record's extent where a shape or a cut Revit applies is not read: a
+    /// shape-edited floor (`slab_shape_refused`) or the base of a wall
+    /// (`wall_base_cut_refused`, #1384).
     BodyLeftAsBox,
     /// A door or window has no host to cut, or an opening index row has no
     /// host geometry: no opening is cut.
@@ -116,8 +122,9 @@ pub struct ExportDecision {
     /// The step that made it.
     pub stage: DecisionStage,
     /// The reason code: the `reason` of the `skipped` item it is counted in,
-    /// or `body_is_record_box`, `space_outline_is_record_box` or
-    /// `area_body_refused` for the decisions behind the `exported` counts.
+    /// or `body_is_record_box`, `space_outline_is_record_box`,
+    /// `area_body_refused`, `slab_shape_refused` or `wall_base_cut_refused`
+    /// for the decisions behind the `exported` counts.
     pub reason: String,
     /// The element's Revit ElementId. Absent for a frame that carries none
     /// (`element_record_without_element_id`).

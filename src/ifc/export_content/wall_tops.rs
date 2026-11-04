@@ -73,15 +73,17 @@
 //!
 //! A wall of which this is not proven keeps its base. When it names a floor
 //! with shape-edited corners it carries the reason as `BaseCoverRefusal`: the
-//! floor's edits are not read, it is not one plain extrusion, no named element
-//! covers its plan or two do, or the top crosses its base or its top. A named
-//! element of which only part covers the wall is not stepped here.
+//! edits of a floor, roof or ceiling are not read, the wall is not one plain
+//! extrusion, no named element drawn as a body covers its plan or two do, or
+//! the top of the one that does is at or below the wall's base, at or above
+//! its top, or crosses one of them. A named element of which only part covers
+//! the wall is not stepped here.
 
 use std::collections::{HashMap, HashSet};
 
 use super::{
-    ELEMENT_RECORD_PROPERTY_SET, WALL_BASE_COVER_BODY_BASE_SOURCE, WALL_BASE_REFUSAL_PROPERTY,
-    WALL_BASE_SLOPED_BODY_BASE_SOURCE, WALL_BASE_SOURCE_PROPERTY,
+    ELEMENT_RECORD_PROPERTY_SET, FLOOR_SHAPE_BODY_SOURCE, WALL_BASE_COVER_BODY_BASE_SOURCE,
+    WALL_BASE_REFUSAL_PROPERTY, WALL_BASE_SLOPED_BODY_BASE_SOURCE, WALL_BASE_SOURCE_PROPERTY,
     WALL_TOP_COVER_BODY_HEIGHT_SOURCE, WALL_TOP_STEPPED_BODY_HEIGHT_SOURCE,
 };
 use crate::ifc::body_geometry::{
@@ -604,7 +606,10 @@ fn box_triangles(ring: &[Point2], placement: &Placement) -> Vec<Triangle> {
 
 /// The slab, roof or footing made of the entities `pieces` (a floor of
 /// separate loops is several under one Tag), where each is one plain
-/// extrusion whose outline triangulates, and they stand at one height.
+/// extrusion whose outline triangulates, and they stand at one height. With
+/// `shape_edited`, each is instead a floor drawn along the plane of its
+/// shape-edited corners (its `BodySource` is [`FLOOR_SHAPE_BODY_SOURCE`], not
+/// any other solid) and all are as thick as one another (#1384).
 fn build_cutter(
     entities: &[IfcEntity],
     pieces: &[usize],
@@ -615,6 +620,7 @@ fn build_cutter(
     let mut top = f64::NEG_INFINITY;
     let mut outline = Vec::new();
     let mut cutouts = Vec::new();
+    let mut shared_height: Option<f64> = None;
     for &index in pieces {
         let IfcEntity::BuildingElement {
             extrusion: Some(body),
@@ -622,6 +628,7 @@ fn build_cutter(
             representation_map_index: None,
             location_feet: Some(location),
             rotation_radians,
+            property_set,
             ..
         } = entities.get(index)?
         else {
@@ -638,6 +645,21 @@ fn build_cutter(
             || !location.iter().all(|v| v.is_finite())
         {
             return None;
+        }
+        if shape_edited {
+            let drawn_along_plane = property_set.as_ref().is_some_and(|set| {
+                set.properties.iter().any(|property| {
+                    property.name == "BodySource"
+                        && matches!(
+                            &property.value,
+                            PropertyValue::Text(source) if source == FLOOR_SHAPE_BODY_SOURCE
+                        )
+                })
+            });
+            let height = *shared_height.get_or_insert(body.height_feet);
+            if !drawn_along_plane || (height - body.height_feet).abs() > UNDERSIDE_TOLERANCE_FEET {
+                return None;
+            }
         }
         let (least, greatest) = heights.unwrap_or((location[2], location[2]));
         heights = Some((least.min(location[2]), greatest.max(location[2])));
@@ -995,13 +1017,15 @@ fn decide_base(
     let mut eligible: Vec<BaseCut> = Vec::new();
     let mut built = false;
     let mut crossed = false;
+    let mut above = false;
+    let mut below = false;
     for &id in named {
         let Some(found) = gathered.pieces.get(&id) else {
             continue;
         };
         let shape = shapes.get(&id);
         if matches!(shape, Some(None)) {
-            return BaseDecision::Left("floor_shape_not_read");
+            return BaseDecision::Left("slab_shape_not_read");
         }
         let Some(cutter) = cutters
             .entry(id)
@@ -1041,12 +1065,18 @@ fn decide_base(
             && low < wall.top - UNDERSIDE_TOLERANCE_FEET
         {
             crossed = true;
+        } else if high <= wall.base + UNDERSIDE_TOLERANCE_FEET {
+            below = true;
+        } else {
+            above = true;
         }
     }
     match (eligible.pop(), eligible.is_empty()) {
         (Some(cut), true) => BaseDecision::Cut(cut),
         (Some(_), false) => BaseDecision::Left("several_elements_cover_the_wall"),
         (None, _) if crossed => BaseDecision::Left("top_crosses_the_wall_base_or_top"),
+        (None, _) if above => BaseDecision::Left("top_at_or_above_the_wall_top"),
+        (None, _) if below => BaseDecision::Left("top_at_or_below_the_wall_base"),
         (None, _) if built => BaseDecision::Left("no_element_covers_the_wall_plan"),
         (None, _) => BaseDecision::Left("named_element_body_not_read"),
     }
