@@ -52,7 +52,8 @@ so it is off unless asked for (#1325):
 rvt-ifc model.rvt -o model.ifc --diagnostics model.diagnostics.json --element-provenance
 ```
 
-adds `decoded.element_provenance` to the sidecar. On the BIM4LCA office as built the table, with its value sources (#1360, #1368), is 6,202,130 bytes of compact JSON (what the library and Python write) against 38,640 bytes of diagnostics without it, about 161 times; the CLI's pretty-printed sidecar grows from 52,677 to 11,098,081 bytes (211 times) and Core Interior's from 27,588 to 1,549,080 (Measure run 41890994176). The value sources of #1368 added 3.6% to the office's table (5,987,841 bytes at #1360, 6,202,130 now) and 66% to Core Interior's (440,909 to 733,326), where the sketch-line profiles are listed line by line. RE1 Architecture's grew from 13,956 to 85,470 before the value sources and has not been measured since. Without the flag the sidecar has no such field and is the bytes it
+adds `decoded.element_provenance` to the sidecar. It is large: how large is in
+[Provenance table size](#provenance-table-size). Without the flag the sidecar has no such field and is the bytes it
 was before the flag existed. `ExportOptions::with_element_provenance(true)`
 and Python's `export_diagnostics(element_provenance=True)` (and
 `rvt_to_ifc_diagnostics(..., element_provenance=True)`) do the same, and the MCP
@@ -176,6 +177,31 @@ bytes is counted as not read. It does not say the
 copy taken is the right one: `agreeing` copies are equal, and `current` is
 `current_partitions`, which it does not measure.
 
+#### Provenance table size
+
+The only place the table's size is stated. Every other document, doc comment
+and schema description links here and gives no number, so a change to the table
+(a new reader, say) updates this table and its run, and nothing else (a
+changelog fragment of unreleased work may state its own figure). Measured by
+Measure run 41890994176 (the head of #1373), with
+`-f ifc_flags=--element-provenance` against the same models without it.
+"Compact" is the JSON the library and Python write; "pretty" is the CLI's
+sidecar.
+
+| Model | Diagnostics without the table (compact) | Table (compact) | Table over diagnostics | Sidecar without the flag (pretty) | Sidecar with the flag (pretty) | Sidecar over sidecar |
+|---|---|---|---|---|---|---|
+| BIM4LCA office as built | 38,640 | 6,202,130 | 160.5 | 52,677 | 11,098,081 | 210.7 |
+| Core Interior | 20,563 | 733,326 | 35.7 | 27,588 | 1,549,080 | 56.2 |
+| RE1 Mechanical | 11,809 | 43,745 | 3.7 | 13,935 | 91,938 | 6.6 |
+| RE1 Plumbing | 11,568 | 71,361 | 6.2 | 13,583 | 147,585 | 10.9 |
+
+The table has an entry for every element, so it grows with the model, and it is
+off unless asked for. The value sources of #1368 added 3.6% to the office's
+compact table (5,987,841 bytes after #1360) and 66% to Core Interior's
+(440,909 bytes), where the sketch-line profiles are listed line by line.
+RE1 Architecture's sidecar grew from 13,956 to 85,470 bytes before the value
+sources and has not been measured since.
+
 ### Export decisions
 
 The `skipped` section counts what the exporter left out by reason and class,
@@ -255,8 +281,8 @@ What an entry's `offset` is, and what has been measured:
 
 Why a switch of its own, not `--element-provenance`: the log is bounded (at most
 5,000 entries a reason, whatever the model) where the provenance table lists
-every element (about 161 times the rest of the diagnostics in compact JSON on the
-BIM4LCA office as built), and it needs no table in the sidecar. Where an entry's
+every element ([Provenance table size](#provenance-table-size)), and it needs no table in the
+sidecar. Where an entry's
 evidence is an element the walk decoded, its stream and offset are read from a
 table built for the purpose and dropped. Someone asking why an element was left
 out should not have to pay for the table, and someone checking offsets should not
@@ -429,7 +455,7 @@ Important nested fields:
 | `decoded.wall_curve_lengths_feet` | object | The length of each exported wall's native curve in feet, by ElementId (RE-252): one of the two lengths Revit's export may write as the wall's `Qto_WallBaseQuantities.Length`. `tools/re/qtos_vs_ifc.py` reads it to count apart a wall whose two lengths differ. It is not written in the IFC file, and is absent when no wall has one. |
 | `decoded.walls_type_confirmed` | array | The ElementIds of the exported walls whose native `SWall` record names the type the export gives them (RE-253). Where Revit's export gives such a wall another type, `tools/re/qtos_vs_ifc.py` counts its differing `Width` apart. Not written in the IFC file; absent when there is none. |
 | `export_decisions` | object | Present only with `rvt-ifc --export-decisions` (see Export decisions above). Each fail-closed decision behind `skipped` and the `exported` body and outline counts, one entry per element, with a stage, a reason code and where the evidence was read; bounded at 5,000 entries a reason with the rest counted in `dropped`. The `skipped` counts are made from the same decisions. Not written in the IFC file. |
-| `decoded.element_provenance` | object | Present only with `rvt-ifc --element-provenance` (see CLI above for the size: about 161 times the rest of the diagnostics in compact JSON on the BIM4LCA office). Where each decoded element was read from, by ElementId (#1325): `elements` maps an ElementId to its `carrier` (`partition_element_record_first_prologue`, `partition_element_record_second_prologue`, `global_latest_schema_walk`, `partition_arc_wall`, `partition_area_record`, `partition_derived` or `other`), its `stream` (`Partitions/46`, `Global/Latest`), its `offset` in that stream inflated, the `record_offset` where its ElementId is stored (a partition record header; for a second-prologue frame the enclosing record's, whose id is `enclosing_record_id`, RE-35), its `class_tag` and the `class_name` that resolves to in the file's own schema, its `builtin_category`, and its `native` record (`copies`, which `copy` is named, `stream`, `offset`). An offset indexes the stream as `RevitFile::inflated_partition` returns it, which `rvt-dump` writes as `Partitions_NN.decomp` (#291); for the schema walk it indexes `Global/Latest` inflated as the walk inflates it. `by_carrier` counts every element with an ElementId by carrier, with how many have their offset given (`located`) and how many do not (`unlocated`), whatever the cap of 250,000 listed entries (`omitted_entries` counts the highest ElementIds left out); `unkeyed_elements` counts decoded elements with no ElementId, which have no entry; `native` counts the native records of every element with an ElementId the same way; `layout_release`, `partition_count` and `record_id_bytes` (8 from Revit 2024, 4 before) describe the file. When an element has several partition element record frames, `offset` is the one the exporter selected: on Revit 2024 and later (`select_instance_records`) the frame with the greatest vertical extent and, on a tie, the higher-numbered partition and then the later offset; on Revit 2008 to 2023 (`select_newest_instance_records`, RE-107) the newest, with no extent test. A native record in several partitions names the current copy (RE-145, RE-216). A body reader may take another copy (the sketch-line readers take the current one), so `offset` and `native.stream` can name different partitions: the copy a reader took is in `value_sources`. The schema-walk carrier is unmeasured: no model of the offsets test has such an element. Not written in the IFC file; absent for a placeholder export and unless asked for. Each element also lists its `value_sources` (#1360), the copy each reader took a value of its body from, and the table its `value_source_counts`. |
+| `decoded.element_provenance` | object | Present only with `rvt-ifc --element-provenance` (see [Provenance table size](#provenance-table-size)). Where each decoded element was read from, by ElementId (#1325): `elements` maps an ElementId to its `carrier` (`partition_element_record_first_prologue`, `partition_element_record_second_prologue`, `global_latest_schema_walk`, `partition_arc_wall`, `partition_area_record`, `partition_derived` or `other`), its `stream` (`Partitions/46`, `Global/Latest`), its `offset` in that stream inflated, the `record_offset` where its ElementId is stored (a partition record header; for a second-prologue frame the enclosing record's, whose id is `enclosing_record_id`, RE-35), its `class_tag` and the `class_name` that resolves to in the file's own schema, its `builtin_category`, and its `native` record (`copies`, which `copy` is named, `stream`, `offset`). An offset indexes the stream as `RevitFile::inflated_partition` returns it, which `rvt-dump` writes as `Partitions_NN.decomp` (#291); for the schema walk it indexes `Global/Latest` inflated as the walk inflates it. `by_carrier` counts every element with an ElementId by carrier, with how many have their offset given (`located`) and how many do not (`unlocated`), whatever the cap of 250,000 listed entries (`omitted_entries` counts the highest ElementIds left out); `unkeyed_elements` counts decoded elements with no ElementId, which have no entry; `native` counts the native records of every element with an ElementId the same way; `layout_release`, `partition_count` and `record_id_bytes` (8 from Revit 2024, 4 before) describe the file. When an element has several partition element record frames, `offset` is the one the exporter selected: on Revit 2024 and later (`select_instance_records`) the frame with the greatest vertical extent and, on a tie, the higher-numbered partition and then the later offset; on Revit 2008 to 2023 (`select_newest_instance_records`, RE-107) the newest, with no extent test. A native record in several partitions names the current copy (RE-145, RE-216). A body reader may take another copy (the sketch-line readers take the current one), so `offset` and `native.stream` can name different partitions: the copy a reader took is in `value_sources`. The schema-walk carrier is unmeasured: no model of the offsets test has such an element. Not written in the IFC file; absent for a placeholder export and unless asked for. Each element also lists its `value_sources` (#1360), the copy each reader took a value of its body from, and the table its `value_source_counts`. |
 | `exported.by_ifc_type` | object | Count of exported building elements grouped by STEP entity type. |
 | `exported.building_elements_with_geometry` | integer | Exported elements with enough placement/body data for geometry. |
 | `exported.building_elements_carried_by_parts` | integer | Exported elements with no body of their own because their aggregated parts carry it, as in Revit's export: stairs (RE-39) and curtain walls (RE-46). Not counted in `building_elements_with_geometry`. |
