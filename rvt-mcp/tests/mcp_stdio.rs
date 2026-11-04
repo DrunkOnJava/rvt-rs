@@ -598,7 +598,10 @@ async fn a_phase_the_file_lacks_or_one_that_clashes_with_an_id_is_a_tool_error()
     let opened = answer(&call(&client, "open_model", json!({ "model": path })).await);
     let id = opened["model_id"].as_str().expect("model_id").to_string();
 
-    let clash = error_text(
+    // The fixture's phases cannot be read, so the phase an id is given with
+    // cannot be resolved: that is the error. (RE1 Architecture, below, covers
+    // an id given a phase that is another of the file's.)
+    let unresolved = error_text(
         &call(
             &client,
             "get_summary",
@@ -606,10 +609,7 @@ async fn a_phase_the_file_lacks_or_one_that_clashes_with_an_id_is_a_tool_error()
         )
         .await,
     );
-    assert!(
-        clash.contains("cannot be combined with model_id"),
-        "{clash}"
-    );
+    assert!(unresolved.contains("phase"), "{unresolved}");
 
     let unknown = error_text(
         &call(
