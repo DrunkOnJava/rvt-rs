@@ -509,6 +509,12 @@ fn read_curve(object: &GraphObject) -> Result<Curve3, String> {
                 .filter(|r| r.is_finite() && *r > 0.0)
                 .ok_or("arc radius")?;
             let range = pair(fields.get("m_endParams")).ok_or("arc angle range")?;
+            // A circle is stored as an arc whose two angles are equal.
+            let (start, end) = if (range[1] - range[0]).abs() < 1e-9 {
+                (range[0], range[0] + TAU)
+            } else {
+                (range[0], range[1])
+            };
             let unit = |v: V3| (dot3(v, v) - 1.0).abs() < TOLERANCE;
             if !unit(x_axis) || !unit(y_axis) || dot3(x_axis, y_axis).abs() > TOLERANCE {
                 return Err("arc axes not orthonormal".into());
@@ -518,8 +524,8 @@ fn read_curve(object: &GraphObject) -> Result<Curve3, String> {
                 x_axis,
                 y_axis,
                 radius,
-                start: range[0],
-                end: range[1],
+                start,
+                end,
             })
         }
         other => Err(format!("unsupported curve class {other}")),
@@ -737,7 +743,13 @@ pub struct Frame {
     pub axes: [V3; 3],
 }
 
-fn frame_of(matrix: [V3; 3], origin: V3, transposed: bool, flipped: bool) -> Result<Frame, String> {
+fn frame_of(
+    matrix: [V3; 3],
+    origin: V3,
+    transposed: bool,
+    flipped: bool,
+    cross_normal: bool,
+) -> Result<Frame, String> {
     let axis = |j: usize| -> V3 {
         if transposed {
             matrix[j]
@@ -747,6 +759,13 @@ fn frame_of(matrix: [V3; 3], origin: V3, transposed: bool, flipped: bool) -> Res
     };
     let (x, y) = (axis(0), axis(1));
     let mut z = axis(2);
+    if cross_normal {
+        z = [
+            x[1] * y[2] - x[2] * y[1],
+            x[2] * y[0] - x[0] * y[2],
+            x[0] * y[1] - x[1] * y[0],
+        ];
+    }
     if flipped {
         z = [-z[0], -z[1], -z[2]];
     }
@@ -863,6 +882,15 @@ pub struct Extrusion {
     pub plane_flipped: bool,
     pub matrix: [V3; 3],
     pub origin: V3,
+    /// The matrix's determinant: 1 for a rotation, -1 for a mirror.
+    pub determinant: f64,
+    /// The class of the sketch plane's `m_oPlaneRef`, and its `m_mirror`.
+    pub plane_ref: Option<(String, Option<bool>)>,
+    /// The extrusion's `m_alwaysRefPlaneNorm`.
+    pub always_ref_plane_norm: Option<bool>,
+    /// The sketch's `m_flipXY` and `m_flipZ`, where its `VarSketch` record
+    /// decodes.
+    pub sketch_flips: Option<(bool, bool)>,
     /// The value of [`START_PARAMETER`] and of [`END_PARAMETER`].
     pub start: f64,
     pub end: f64,
@@ -875,15 +903,23 @@ impl Extrusion {
     /// The solid between the two offsets, the sketch's curves placed in the
     /// sketch plane's frame and chained into a profile. `transposed` takes
     /// the matrix's rows, not its columns, as the plane's axes; `apply_flip`
-    /// reverses the normal where the sketch plane is flipped. Errs where
+    /// reverses the normal where the sketch plane is flipped; `cross_normal`
+    /// takes the normal as the cross product of the x and y axes, not the
+    /// third axis (they differ when the matrix is a mirror). Errs where
     /// the frame is not orthonormal, a curve is off the plane, or the curves
     /// do not make closed, non-crossing loops.
-    pub fn solid(&self, transposed: bool, apply_flip: bool) -> Result<ExtrusionSolid, String> {
+    pub fn solid(
+        &self,
+        transposed: bool,
+        apply_flip: bool,
+        cross_normal: bool,
+    ) -> Result<ExtrusionSolid, String> {
         let frame = frame_of(
             self.matrix,
             self.origin,
             transposed,
             apply_flip && self.plane_flipped,
+            cross_normal,
         )?;
         let planar = self
             .curves
@@ -1026,7 +1062,7 @@ impl FormDocument {
                     self.sketch_curves.entry(sketch).or_default().push(id);
                 }
             }
-            "ExtrusionElem" | "SketchPlane" => {}
+            "ExtrusionElem" | "SketchPlane" | "VarSketch" => {}
             _ => return,
         }
         self.graphs.insert(id, graph);
@@ -1145,6 +1181,33 @@ impl FormDocument {
             *row = triple(Some(value)).ok_or("transform row")?;
         }
         let origin = triple(trf.fields.get("m_or")).ok_or("transform origin")?;
+        let determinant = matrix[0][0]
+            * (matrix[1][1] * matrix[2][2] - matrix[1][2] * matrix[2][1])
+            - matrix[0][1] * (matrix[1][0] * matrix[2][2] - matrix[1][2] * matrix[2][0])
+            + matrix[0][2] * (matrix[1][0] * matrix[2][1] - matrix[1][1] * matrix[2][0]);
+        let plane_ref = plane.objects.first().and_then(|root| {
+            let pointer = root.fields.get("m_oPlaneRef")?;
+            let target = native_saved_mesh::pointer(plane, 0, pointer).ok()??;
+            let object = plane.objects.get(target)?;
+            Some((
+                object.class_name.clone(),
+                object.fields.get("m_mirror").and_then(Value::as_bool),
+            ))
+        });
+        let always_ref_plane_norm = root
+            .fields
+            .get("m_alwaysRefPlaneNorm")
+            .and_then(Value::as_bool);
+        let sketch_flips = self
+            .graphs
+            .get(&sketch_id)
+            .and_then(|sketch| sketch.objects.first())
+            .and_then(|root| {
+                Some((
+                    root.fields.get("m_flipXY")?.as_bool()?,
+                    root.fields.get("m_flipZ")?.as_bool()?,
+                ))
+            });
         let plane_flipped = plane
             .objects
             .first()
@@ -1161,6 +1224,10 @@ impl FormDocument {
             plane_flipped,
             matrix,
             origin,
+            determinant,
+            plane_ref,
+            always_ref_plane_norm,
+            sketch_flips,
             start,
             end,
             stored_loops_agree,

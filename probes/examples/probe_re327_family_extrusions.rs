@@ -50,7 +50,7 @@ use rvt::research::native_saved_mesh::{self, Primitive};
 
 type V3 = [f64; 3];
 
-const WANTED: [&str; 3] = ["ExtrusionElem", "CurveElem", "SketchPlane"];
+const WANTED: [&str; 4] = ["ExtrusionElem", "CurveElem", "SketchPlane", "VarSketch"];
 const LIMITS: GraphLimits = GraphLimits {
     max_values: 2_000_000,
     max_objects: 2_000_000,
@@ -298,17 +298,15 @@ fn standalone(
     let mut varsketch = (0usize, 0usize);
     let walked = native_form_geometry::walk(rf, &document, &[102], |entry| {
         let class = entry.class.unwrap_or("-");
-        let wanted = WANTED.contains(&class);
-        if !wanted && class != "VarSketch" {
+        if !WANTED.contains(&class) {
             return Ok(());
         }
         match native_parameters::decode_graph_with_limits(entry.body, &document.registry, &LIMITS) {
             Ok(graph) => {
                 if class == "VarSketch" {
                     varsketch.0 += 1;
-                } else {
-                    forms.insert(entry.id, graph);
                 }
+                forms.insert(entry.id, graph);
             }
             Err(error) => {
                 if class == "VarSketch" {
@@ -440,7 +438,7 @@ fn describe_curves(curves: &[Curve3]) -> String {
                 end,
                 ..
             } => format!(
-                "A{} r{:.4} [{:.4},{:.4}]",
+                "A{} r{:.4} [{:.6},{:.6}]",
                 point(*center),
                 radius,
                 start,
@@ -456,7 +454,7 @@ fn judge(
     run: &Run,
     tally: &mut BTreeMap<String, usize>,
     lines: &mut usize,
-    detailed: &mut usize,
+    detailed: &mut BTreeMap<String, usize>,
 ) {
     for id in run.document.extrusion_ids() {
         bump(tally, "forms");
@@ -468,16 +466,20 @@ fn judge(
                 continue;
             }
         };
-        let mut variants: Vec<(&str, bool, bool)> =
-            vec![("columns", false, true), ("rows", true, true)];
+        let mut variants: Vec<(&str, bool, bool, bool)> =
+            vec![("columns", false, true, false), ("rows", true, true, false)];
+        if extrusion.determinant < 0.0 {
+            variants.push(("columns-cross", false, true, true));
+            variants.push(("rows-cross", true, true, true));
+        }
         if extrusion.plane_flipped {
-            variants.push(("columns-unflipped", false, false));
-            variants.push(("rows-unflipped", true, false));
+            variants.push(("columns-unflipped", false, false, false));
+            variants.push(("rows-unflipped", true, false, false));
         }
         let mut built: Vec<(&str, ExtrusionSolid)> = Vec::new();
         let mut refusals: Vec<(&str, String)> = Vec::new();
-        for (name, transposed, flip) in variants {
-            match extrusion.solid(transposed, flip) {
+        for (name, transposed, flip, cross) in variants {
+            match extrusion.solid(transposed, flip, cross) {
                 Ok(solid) => built.push((name, solid)),
                 Err(reason) => refusals.push((name, reason)),
             }
@@ -497,10 +499,11 @@ fn judge(
                 .unwrap_or_default();
             println!("unbuilt {label} {id} void {} {reason}", extrusion.cutting);
             bump(tally, format!("unbuilt: {reason}"));
-            if *detailed < 14 && !reason.contains("sketch plane") {
-                *detailed += 1;
+            let shown = detailed.entry(reason.clone()).or_default();
+            if *shown < 3 {
+                *shown += 1;
                 println!(
-                    "unbuilt-curves {label} {id} count {} {}",
+                    "unbuilt-curves {label} {id} {reason} count {} {}",
                     extrusion.curves.len(),
                     describe_curves(&extrusion.curves)
                 );
@@ -575,6 +578,42 @@ fn judge(
         } else {
             "partial mesh"
         };
+        let flag = |value: Option<bool>| match value {
+            Some(true) => "1",
+            Some(false) => "0",
+            None => "-",
+        };
+        let attributes = format!(
+            "det {} planeflip {} norm {} sketchflips {}{} ref {} mirror {}",
+            if extrusion.determinant < 0.0 {
+                "-1"
+            } else {
+                "+1"
+            },
+            extrusion.plane_flipped,
+            flag(extrusion.always_ref_plane_norm),
+            flag(extrusion.sketch_flips.map(|f| f.0)),
+            flag(extrusion.sketch_flips.map(|f| f.1)),
+            extrusion
+                .plane_ref
+                .as_ref()
+                .map_or("-", |(class, _)| class.as_str()),
+            flag(extrusion.plane_ref.as_ref().and_then(|(_, m)| *m)),
+        );
+        let verdict = if !mesh.complete {
+            "partial mesh"
+        } else if matching.is_empty() {
+            "DIFFER"
+        } else {
+            "MATCH"
+        };
+        bump(tally, format!("attrs {attributes} -> {verdict}"));
+        if matching.is_empty() && mesh.complete {
+            println!(
+                "differ-plane {label} {id} matrix {:?} origin {:?} {attributes} start {:.6} end {:.6}",
+                extrusion.matrix, extrusion.origin, extrusion.start, extrusion.end
+            );
+        }
         if matching.is_empty() {
             bump(tally, format!("DIFFER, {key}"));
             if extrusion.cutting {
@@ -633,7 +672,7 @@ fn main() -> Result<()> {
         }
     };
     let mut lines = 0usize;
-    let mut detailed = 0usize;
+    let mut detailed: BTreeMap<String, usize> = BTreeMap::new();
     for (label, run) in &runs {
         judge(label, run, &mut tally, &mut lines, &mut detailed);
     }
