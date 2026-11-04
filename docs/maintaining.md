@@ -110,8 +110,9 @@ writes the cached output and a `<step> cached` line to the model's
   the two that size the mesh cache), which is `PSETS_MISSING` for
   `psets_vs_ifc` and `qtos_vs_ifc`; the files a scorer reads that its
   arguments do not name (`qtos_vs_ifc`'s `diagnostics.json`,
-  `unfilled_openings_vs_ifc`'s sibling Revit exports); the Python, the
-  platform, the sha256 of `tools/ci/requirements-ifc.txt`, the installed
+  `unfilled_openings_vs_ifc`'s sibling Revit exports); the Python minor
+  version (not the patch: a runner image moves it, 3.12.15 to 3.12.16 in run
+  41769277902, which cost two of six shards every hit), the platform, the sha256 of `tools/ci/requirements-ifc.txt`, the installed
   version of every package it pins, the versions IfcOpenShell and numpy
   report, and `RVT_IFC_FLAGS`. Each entry therefore hashes the rvt-rs IFC,
   Revit's reference IFC (or the glTF), the command-line arguments, the scorer

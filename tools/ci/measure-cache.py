@@ -332,15 +332,19 @@ def fingerprint():
                 except importlib.metadata.PackageNotFoundError:
                     packages.append((match.group(1), None))
         reported = {}
-        for name in ("ifcopenshell", "numpy"):
+        for name, attribute in (("ifcopenshell", "version"), ("numpy", "__version__")):
             try:
-                module = __import__(name)
-                reported[name] = str(getattr(module, "version", None) or getattr(module, "__version__", None))
+                value = getattr(__import__(name), attribute, None)
+                reported[name] = value if isinstance(value, str) else None
             except Exception as error:
                 reported[name] = f"unavailable: {type(error).__name__}"
         found = {
             "format": FORMAT,
-            "python": sys.version,
+            # The minor release, not the patch: the runner image a job lands on
+            # moves the patch (3.12.15 to 3.12.16 in run 41769277902, which cost
+            # two of its six shards every hit), and the libraries that decide
+            # the scorers' output are pinned by hash in requirements-ifc.txt.
+            "python": f"{sys.version_info.major}.{sys.version_info.minor}",
             "platform": [platform.system(), platform.machine(), *platform.libc_ver()],
             "requirements": sha(requirements),
             "packages": packages,
