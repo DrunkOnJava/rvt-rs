@@ -126,7 +126,7 @@ on:
         required: false
         default: ""
       timing:
-        description: Also time rvt-ifc at base and head on one runner, in turn, three rounds per file (the base and head jobs run on different runners, whose speed alone moves an export's time by up to about 1.7x)
+        description: Also time rvt-ifc at base and head, in turn, three rounds per file, each file on one runner, in shards of about equal time (the base and head jobs run on different runners, whose speed alone moves an export's time by up to about 1.7x)
         type: boolean
         required: false
         default: false
@@ -195,6 +195,7 @@ jobs:
     runs-on: ubuntu-24.04
     outputs:
       matrix: ${{ steps.plan.outputs.matrix }}
+      timing: ${{ steps.plan.outputs.timing }}
       base: ${{ steps.plan.outputs.base }}
       head_sha: ${{ steps.refs.outputs.head }}
       base_sha: ${{ steps.refs.outputs.base }}
@@ -237,6 +238,7 @@ jobs:
           MODELS: ${{ inputs.models }}
           YEARS: ${{ inputs.sample_years }}
           PAIR: ${{ inputs.probe_pair_release }}
+          TIMING: ${{ inputs.timing && 'true' || 'false' }}
           NORDIC: ${{ inputs.nordic && 'true' || 'false' }}
           SAMPLES: ${{ inputs.samples && 'true' || 'false' }}
           R2025: ${{ inputs.r2025 && 'true' || 'false' }}
@@ -283,6 +285,51 @@ jobs:
           include = [dict(side=side, **s) for side in sides for s in shards]
           print("matrix=" + json.dumps({"include": include}))
           print("base=" + ("true" if base else "false"))
+          # The timing jobs' files, in shards of about equal time. A unit's
+          # seconds are its files' medians, base plus head, times the three
+          # rounds, summed from the table of Measure run 41797994751 (the
+          # reference models, the four office files, Autodesk's samples). The
+          # four shards of that run ran on four CPUs (two Intel Xeons, an
+          # Intel Xeon Platinum and an AMD EPYC), and no runner's rows skew
+          # clearly (its units took 0.98 to 1.21 of their time on the one
+          # runner of run 41793618569), so the weights are not normalised.
+          # Code that changes every file moves them alike, so the split stays
+          # about even. A sample unit is a range of years, cut to the
+          # `sample_years` input.
+          units = [("reference models", 71, dict(reference=True))]
+          if flag("NORDIC"):
+              units.append(("offices", 329, dict(offices=True)))
+          if flag("SAMPLES"):
+              years = e["YEARS"].split()
+              low = int(years[0]) if years else 0
+              high = int(years[1]) if len(years) > 1 else 9999
+              for label, first, last, seconds in (
+                  ("samples to 2023", 0, 2023, 461),
+                  ("samples 2024", 2024, 2024, 559),
+                  ("samples 2025", 2025, 2025, 286),
+                  ("samples 2026", 2026, 2026, 216),
+                  ("samples 2027 on", 2027, 9999, 207),
+              ):
+                  if max(first, low) <= min(last, high):
+                      ranges = f"{max(first, low)} {min(last, high)}"
+                      units.append((label, seconds, dict(ranges=ranges)))
+          bins = [dict(seconds=0, units=[]) for _ in range(min(4, len(units)))]
+          for unit in sorted(units, key=lambda unit: -unit[1]):
+              target = min(bins, key=lambda bin: bin["seconds"])
+              target["seconds"] += unit[1]
+              target["units"].append(unit)
+          timing = [
+              dict(shard=str(number),
+                   what=", ".join(unit[0] for unit in bin["units"]),
+                   reference=any(unit[2].get("reference") for unit in bin["units"]),
+                   offices=any(unit[2].get("offices") for unit in bin["units"]),
+                   ranges=";".join(unit[2]["ranges"] for unit in bin["units"] if "ranges" in unit[2]))
+              for number, bin in enumerate(bins, 1)
+          ]
+          if not flag("TIMING") or not base:
+              # The timing jobs are skipped; a matrix still needs a row.
+              timing = [dict(shard="none", what="", reference=False, offices=False, ranges="")]
+          print("timing=" + json.dumps({"include": timing}))
           PY
 
   measure:
@@ -722,7 +769,7 @@ jobs:
               echo
               echo "### Times"
               echo
-              echo "These jobs check what the exports hold. They run exports and scorers several at once, on several runners whose speed alone differs by up to about 1.7x, so their times are not benchmarks. Dispatch with \`timing\` to time both refs' exports on one runner (tools/ci/measure-timing.sh)."
+              echo "These jobs check what the exports hold. They run exports and scorers several at once, on several runners whose speed alone differs by up to about 1.7x, so their times are not benchmarks. Dispatch with \`timing\` to time both refs' exports of each file on one runner (tools/ci/measure-timing.sh)."
               echo
               echo "### Scorer differences (base → head)"
               echo
@@ -761,19 +808,21 @@ jobs:
           path: scorer-diff.txt
 
   # B81: the base and head jobs above run on different runners, so their wall
-  # times compare machines as much as code. With `timing`, one runner builds
-  # rvt-ifc at both refs and exports every model (and sample, with `samples`)
-  # with each in turn (tools/ci/measure-timing.sh).
-  timing:
-    name: Timing (one runner)
+  # times compare machines as much as code. With `timing`, rvt-ifc is built at
+  # both refs once (timing-build), and the files, models and samples, are
+  # timed in shards of about equal time (the plan job splits them). A shard
+  # times base and head on its one runner, in turn (tools/ci/measure-timing.sh),
+  # so every ratio is a pair on the same CPU; runner CPUs differ by up to about
+  # a quarter. timing-merge puts the shards' tables into the one table.
+  timing-build:
+    name: Timing build
     if: inputs.timing && inputs.base != 'none'
     runs-on: ubuntu-24.04
     timeout-minutes: 90
+    outputs:
+      head: ${{ steps.commits.outputs.head }}
+      base: ${{ steps.commits.outputs.base }}
     steps:
-      - name: Workflow tools
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
       - name: Head source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -803,17 +852,52 @@ jobs:
           # As in the measure job: only main's own code saves the cache.
           save-if: ${{ github.ref == 'refs/heads/main' && inputs.ref == '' && (inputs.base == '' || inputs.base == 'main') }}
       - name: Build both
+        id: commits
         run: |
-          (cd head && git log -1 --format='%H %s' > ../head-commit.txt && cargo build --profile ci --bin rvt-ifc)
-          (cd base && git log -1 --format='%H %s' > ../base-commit.txt && cargo build --profile ci --bin rvt-ifc)
+          (cd head && cargo build --profile ci --bin rvt-ifc)
+          (cd base && cargo build --profile ci --bin rvt-ifc)
+          echo "head=$(cd head && git log -1 --format='%H %s')" >> "$GITHUB_OUTPUT"
+          echo "base=$(cd base && git log -1 --format='%H %s')" >> "$GITHUB_OUTPUT"
+      # Artifacts do not keep the executable bit; the shards set it again.
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: timing-bin
+          path: |
+            base/target/ci/rvt-ifc
+            head/target/ci/rvt-ifc
+          retention-days: 3
+          if-no-files-found: error
+
+  timing:
+    name: Timing ${{ matrix.shard }} (${{ matrix.what }})
+    needs: [plan, timing-build]
+    if: inputs.timing && inputs.base != 'none'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.plan.outputs.timing) }}
+    steps:
+      - name: Workflow tools
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: timing-bin
+          path: timing-bin
+      - name: Make the binaries executable
+        run: chmod +x timing-bin/base/target/ci/rvt-ifc timing-bin/head/target/ci/rvt-ifc
       - name: Fetch the reference models
+        if: matrix.reference
         run: tools/fetch-reference-models.sh models
       # The office models land beside the reference models, so they are timed
       # with them. The host being down is NOT MEASURED, as for the other jobs.
       - name: Fetch the BIM4LCA office models
-        if: inputs.nordic
+        if: matrix.offices
         shell: bash
         run: |
+          mkdir -p models
           set +e
           python3 tools/ci/fetch-bim4lca.py research/bim4lca-measure.tsv models
           status=$?
@@ -824,30 +908,102 @@ jobs:
             *) echo "::error::the BIM4LCA office models no longer match research/bim4lca-measure.tsv"; exit 1 ;;
           esac
       - name: Fetch Autodesk's sample projects
-        if: inputs.samples
+        if: matrix.ranges != ''
+        shell: bash
         env:
-          SAMPLE_YEARS: ${{ inputs.sample_years }}
+          RANGES: ${{ matrix.ranges }}
         run: |
-          # shellcheck disable=SC2086 # SAMPLE_YEARS is the first and last year.
-          tools/fetch-autodesk-samples.sh _samples $SAMPLE_YEARS
+          # Each range is a first and a last year, a semicolon apart.
+          IFS=';' read -ra ranges <<< "$RANGES"
+          for range in "${ranges[@]}"; do
+            # shellcheck disable=SC2086 # A range is the first and last year.
+            tools/fetch-autodesk-samples.sh _samples $range
+          done
       - name: Time
         env:
           RVT_IFC_FLAGS: ${{ inputs.ifc_flags }}
+          SHARD: ${{ matrix.shard }}
+          WHAT: ${{ matrix.what }}
         run: |
-          tools/ci/measure-timing.sh base/target/ci head/target/ci timing.md models/*.rvt _samples/*.rvt
+          tools/ci/measure-timing.sh timing-bin/base/target/ci timing-bin/head/target/ci timing.md models/*.rvt _samples/*.rvt
+          grep -m1 'model name' /proc/cpuinfo | cut -d: -f2- | xargs > runner.txt
           {
-            echo "## rvt-ifc time on one runner, base → head"
+            echo "### Timing shard $SHARD ($WHAT)"
             echo
-            echo "head: $(cat head-commit.txt)"
-            echo "base: $(cat base-commit.txt)"
-            echo "runner: $(grep -m1 'model name' /proc/cpuinfo | cut -d: -f2- | xargs)"
-            echo
-            echo "Median of three exports each, in turn on the same runner, with each export's peak resident memory."
-            echo
-            cat timing.md
+            echo "runner: $(cat runner.txt)"
           } >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
+          name: measure-timing-shard-${{ matrix.shard }}
+          path: |
+            timing.md
+            runner.txt
+          if-no-files-found: error
+
+  # The shards' rows in one table, the format the single job wrote, ordered as
+  # it did: the models, then the samples by name. A shard that left no table
+  # fails this job after the others are merged.
+  timing-merge:
+    name: Timing
+    needs: [plan, timing-build, timing]
+    if: ${{ !cancelled() && inputs.timing && inputs.base != 'none' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          pattern: measure-timing-shard-*
+          path: shards
+      - name: Merge the shards' tables
+        env:
+          PLAN: ${{ needs.plan.outputs.timing }}
+          HEAD_COMMIT: ${{ needs.timing-build.outputs.head }}
+          BASE_COMMIT: ${{ needs.timing-build.outputs.base }}
+        run: |
+          python3 - <<'PY'
+          import json, os, re
+          e = os.environ
+          header = None
+          rows = []
+          runners = []
+          missing = []
+          for shard in json.loads(e["PLAN"])["include"]:
+              directory = f"shards/measure-timing-shard-{shard['shard']}"
+              try:
+                  lines = open(f"{directory}/timing.md").read().splitlines()
+                  cpu = open(f"{directory}/runner.txt").read().strip()
+              except OSError:
+                  missing.append(shard)
+                  continue
+              runners.append(f"- shard {shard['shard']} ({shard['what']}): {cpu}")
+              header = header or lines[:2]
+              rows += [line for line in lines[2:] if line.startswith("|")]
+          # A model's row first, then a sample's: `2024_Core_Interior` is a model.
+          def order(row):
+              name = row.split("|")[1].strip()
+              return (re.match(r"\d{4}-", name) is not None, name)
+          rows.sort(key=order)
+          if header:
+              open("timing.md", "w").write("\n".join(header + rows) + "\n")
+          open("timing-runners.txt", "w").write("\n".join(runners) + "\n")
+          with open(e["GITHUB_STEP_SUMMARY"], "a") as summary:
+              summary.write("## rvt-ifc time, base → head, each file on one runner\n\n")
+              summary.write(f"head: {e['HEAD_COMMIT']}\nbase: {e['BASE_COMMIT']}\n\n")
+              summary.write("Median of three exports each, in turn on the same runner, with each export's peak resident memory. ")
+              summary.write("The files were timed in shards, each on a runner of its own with base and head together: compare ratios, not times, between rows, since runner CPUs differ by up to about a quarter.\n\n")
+              summary.write("Runners:\n\n" + "\n".join(runners) + "\n\n")
+              for shard in missing:
+                  summary.write(f"No table from shard {shard['shard']} ({shard['what']}).\n\n")
+              if header:
+                  summary.write("\n".join(header + rows) + "\n")
+          for shard in missing:
+              print(f"::error::timing shard {shard['shard']} ({shard['what']}) left no table")
+          raise SystemExit(1 if missing or not header else 0)
+          PY
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
           name: measure-timing
-          path: timing.md
+          path: |
+            timing.md
+            timing-runners.txt
           if-no-files-found: error
