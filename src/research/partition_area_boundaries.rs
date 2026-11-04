@@ -481,6 +481,10 @@ impl Arrangement {
         for (line, cut) in axis.iter().zip(cuts.iter_mut()) {
             cut.push(line.low);
             cut.push(line.high);
+            // The ends the record gives are points of their own, so that an
+            // edge lies wholly on the stored extent or wholly past it.
+            cut.push(line.stored_low.clamp(line.low, line.high));
+            cut.push(line.stored_high.clamp(line.low, line.high));
             cut.sort_by(|p, q| p.partial_cmp(q).unwrap_or(std::cmp::Ordering::Equal));
             let mut previous: Option<(usize, f64)> = None;
             for &along in cut.iter() {
