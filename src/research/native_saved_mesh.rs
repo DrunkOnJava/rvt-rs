@@ -504,10 +504,109 @@ fn tessellation_axis(
     Ok(values)
 }
 const FACE_REGIONS: &str = "face regions need subdivision";
+/// The most triangle pairs `plane_regions_tile` clips for one face.
+const REGION_WORK: usize = 4_000_000;
+type Triangle = [[f64; 2]; 3];
+fn segment_distance(p: [f64; 2], a: [f64; 2], b: [f64; 2]) -> f64 {
+    let (dx, dy) = (b[0] - a[0], b[1] - a[1]);
+    let length = dx * dx + dy * dy;
+    let t = if length > 0. {
+        (((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / length).clamp(0., 1.)
+    } else {
+        0.
+    };
+    (p[0] - (a[0] + t * dx)).hypot(p[1] - (a[1] + t * dy))
+}
+/// Whether `p` lies inside `outline` or within `tolerance` (UV units) of it.
+fn inside_or_on(p: [f64; 2], outline: &[[f64; 2]], tolerance: f64) -> bool {
+    inside(p, outline)
+        || (0..outline.len())
+            .any(|i| segment_distance(p, outline[i], outline[(i + 1) % outline.len()]) <= tolerance)
+}
+/// `outline` as counter-clockwise triangles whose areas add up to its own, or
+/// an error where they do not (a ring that crosses itself).
+fn triangles_of(outline: &[[f64; 2]]) -> Result<Vec<Triangle>> {
+    let holes: Vec<u32> = Vec::new();
+    let mut indices = Vec::<u32>::new();
+    earcut::Earcut::new().earcut(outline.iter().copied(), &holes, &mut indices);
+    let mut triangles = Vec::new();
+    let mut sum = 0.;
+    for t in indices.chunks_exact(3) {
+        ensure!(
+            t.iter().all(|&k| (k as usize) < outline.len()),
+            FACE_REGIONS
+        );
+        let mut triangle = [
+            outline[t[0] as usize],
+            outline[t[1] as usize],
+            outline[t[2] as usize],
+        ];
+        let twice = cross(triangle[0], triangle[1], triangle[2]);
+        if twice.abs() <= 1e-14 {
+            continue;
+        }
+        if twice < 0. {
+            triangle.swap(1, 2);
+        }
+        sum += twice.abs() / 2.;
+        triangles.push(triangle);
+    }
+    let whole = area(outline).abs();
+    ensure!(
+        !triangles.is_empty() && (sum - whole).abs() <= 1e-7 * whole.max(1e-6),
+        FACE_REGIONS
+    );
+    Ok(triangles)
+}
+/// The area `subject` shares with the counter-clockwise triangle `clip`:
+/// Sutherland–Hodgman against its three sides.
+fn shared_area(subject: &Triangle, clip: &Triangle) -> f64 {
+    let mut polygon: Vec<[f64; 2]> = subject.to_vec();
+    for (i, &a) in clip.iter().enumerate() {
+        let b = clip[(i + 1) % 3];
+        let side = |p: [f64; 2]| (b[0] - a[0]) * (p[1] - a[1]) - (b[1] - a[1]) * (p[0] - a[0]);
+        let input = std::mem::take(&mut polygon);
+        for (j, &p) in input.iter().enumerate() {
+            let q = input[(j + 1) % input.len()];
+            let (sp, sq) = (side(p), side(q));
+            if sp >= 0. {
+                polygon.push(p);
+            }
+            if (sp >= 0.) != (sq >= 0.) {
+                let t = sp / (sp - sq);
+                polygon.push([p[0] + t * (q[0] - p[0]), p[1] + t * (q[1] - p[1])]);
+            }
+        }
+        if polygon.len() < 3 {
+            return 0.;
+        }
+    }
+    area(&polygon).abs()
+}
+/// The area two sets of triangles share, in UV units squared, counting the
+/// triangle pairs clipped in `work`.
+fn shared_area_of(a: &[Triangle], b: &[Triangle], work: &mut usize) -> Result<f64> {
+    *work = work.saturating_add(a.len().saturating_mul(b.len()));
+    ensure!(*work <= REGION_WORK, FACE_REGIONS);
+    Ok(a.iter()
+        .map(|s| b.iter().map(|c| shared_area(s, c)).sum::<f64>())
+        .sum())
+}
 /// A plane face whose regions are further plane faces on the same plane, each
-/// inside its outline, with one loop and no regions of their own, and
-/// together covering exactly its area, only has its area split (RE-329): the
-/// face is drawn whole. Anything else keeps the face refused.
+/// with one loop and no regions of its own, that tile its single outline only
+/// has its area split (RE-329): the face is drawn whole. Anything else keeps
+/// the face refused.
+///
+/// Tiling is checked on the areas, in UV units squared, with a tolerance of
+/// 1e-7 of the parent's: every region vertex inside or within 1e-7 UV units of
+/// the parent's outline; every region's area inside the parent (the area it
+/// shares with the parent's triangles equals its own, which also refuses an
+/// edge that crosses a notch of a non-convex parent); no two regions sharing
+/// area; no region listed twice; and the regions' areas adding up to the
+/// parent's. The overlap is measured as an area (both outlines triangulated,
+/// each pair clipped), not by a centroid test, because two non-convex tiles
+/// can overlap with neither centroid inside the other, and the bounding box
+/// of a tile says nothing of a notch.
 fn plane_regions_tile(
     g: &ObjectGraph,
     index: &PointerIndex<'_>,
@@ -538,17 +637,16 @@ fn plane_regions_tile(
     let parent_basis = basis(plane)?;
     let parent = single_ring(fi)?;
     let parent_area = area(&parent).abs();
-    let min: [f64; 2] =
-        std::array::from_fn(|k| parent.iter().map(|p| p[k]).fold(f64::INFINITY, f64::min));
-    let max: [f64; 2] = std::array::from_fn(|k| {
-        parent
-            .iter()
-            .map(|p| p[k])
-            .fold(f64::NEG_INFINITY, f64::max)
-    });
+    let parent_triangles = triangles_of(&parent)?;
+    let tolerance = 1e-7 * parent_area.max(1e-6);
+    ensure!(regions.len() <= 256, FACE_REGIONS);
+    let mut listed = BTreeSet::new();
+    let mut tiles: Vec<Vec<Triangle>> = Vec::new();
     let mut covered = 0.;
+    let mut work = 0usize;
     for value in regions {
         let ri = index.resolve(fi, value)?.context(FACE_REGIONS)?;
+        ensure!(listed.insert(ri), FACE_REGIONS);
         let region = &g.objects[ri];
         ensure!(
             region.class_name == "Face"
@@ -571,17 +669,24 @@ fn plane_regions_tile(
         );
         let outline = single_ring(ri)?;
         ensure!(
-            outline
-                .iter()
-                .all(|p| (0..2).all(|k| p[k] >= min[k] - 1e-7 && p[k] <= max[k] + 1e-7)),
+            outline.iter().all(|&p| inside_or_on(p, &parent, 1e-7)),
             FACE_REGIONS
         );
-        covered += area(&outline).abs();
+        let tile = triangles_of(&outline)?;
+        let tile_area = area(&outline).abs();
+        ensure!(
+            (shared_area_of(&tile, &parent_triangles, &mut work)? - tile_area).abs() <= tolerance,
+            FACE_REGIONS
+        );
+        covered += tile_area;
+        tiles.push(tile);
     }
-    ensure!(
-        (covered - parent_area).abs() <= 1e-7 * parent_area.max(1e-6),
-        FACE_REGIONS
-    );
+    for (i, a) in tiles.iter().enumerate() {
+        for b in &tiles[i + 1..] {
+            ensure!(shared_area_of(a, b, &mut work)? <= tolerance, FACE_REGIONS);
+        }
+    }
+    ensure!((covered - parent_area).abs() <= tolerance, FACE_REGIONS);
     Ok(())
 }
 /// Returns no mesh for a face with no trimming boundary (an auxiliary surface).

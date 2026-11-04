@@ -9,6 +9,13 @@
 //! a face holds, so that a reader can tell whether its regions only split the
 //! face's area (for material or paint) or change it.
 //!
+//! NOT FOR PRIVATE FILES. It prints raw graph fields, the objects they point
+//! to and UV and model coordinates of the faces it shows, so its output
+//! describes the model's geometry. Run it on the public models of a Measure run
+//! (r2025-12, r2025-17); for a file that must stay private use
+//! `probe_re329_saved_graphics_census`, which prints counts and class names
+//! only.
+//!
 //! Output, for every graph of the file: for the first faces with regions their
 //! fields (pointers followed two deep) and first loop, for the first six
 //! owners holding any the count of faces with and without regions, then
