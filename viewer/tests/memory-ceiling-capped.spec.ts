@@ -204,7 +204,8 @@ function sameReport(a: Report, b: Report): boolean {
 // the end of the open. Before #1370 the last 16.3 MiB were taken before the
 // saved graphics were reported; after it they are taken inside the saved
 // meshes, and a cap tuned to the old profile, 310 MiB, then stopped in the
-// meshes). So the cap is not tuned: the test opens the model once at the real
+// meshes: the viewer measurement of Deploy viewer runs 41870855196 at
+// f1f80d9e and 41885589164 at 0ca59127). So the cap is not tuned: the test opens the model once at the real
 // ceiling to measure its profile, and puts the cap between the memory at the
 // first report that leaves the card on "Building the model" and the memory at
 // the first report after those. The allocation that crosses the cap is then
