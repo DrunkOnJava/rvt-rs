@@ -397,8 +397,8 @@ export diagnostics sidecar (same payload as `rvt-ifc --diagnostics`).
 decoded element was read from (its stream, byte offset in the inflated stream,
 class and native record), as `rvt-ifc --element-provenance` does (#1325);
 `rvt_to_ifc_diagnostics()` takes it too. It is off by default: the table is
-5,975,162 bytes of compact JSON against 38,640 bytes of diagnostics without it
-(about 155 times) on the BIM4LCA office as built. An `offset` is the frame the
+6,131,584 bytes of compact JSON against 38,640 bytes of diagnostics without it
+(about 159 times) on the BIM4LCA office as built. An `offset` is the frame the
 exporter selected for the element, so it can name another partition than the
 native record's `stream`; each element's `value_sources` name the copy a reader
 took a value of its body from (#1360)

@@ -426,6 +426,83 @@ pub fn column_instances_from_records(
         .collect()
 }
 
+/// The frame [`column_instances_from_records`] takes a type symbol's box from
+/// (#1368): the last of the symbol's frames, with the partitions that held one
+/// and whether they all gave the same box.
+pub(super) struct SymbolFrame {
+    stream: String,
+    offset: usize,
+    bbox: [f64; 6],
+    partitions: BTreeSet<u32>,
+    agree: bool,
+}
+
+pub(super) type SymbolFrames = BTreeMap<u32, SymbolFrame>;
+
+/// The frame of each type symbol in `records`, the last of its frames.
+pub(super) fn type_symbol_frames(
+    records: &[crate::partition_element_records::PartitionElementRecord],
+) -> SymbolFrames {
+    let mut out = SymbolFrames::new();
+    for record in records.iter().filter(|record| record.is_type_symbol()) {
+        let partition = crate::partition_room_parameters::partition_number(&record.stream);
+        let held = out.entry(record.element_id).or_insert_with(|| SymbolFrame {
+            stream: record.stream.clone(),
+            offset: record.offset,
+            bbox: record.bbox_feet,
+            partitions: Default::default(),
+            agree: true,
+        });
+        held.agree &= held.bbox == record.bbox_feet;
+        held.stream = record.stream.clone();
+        held.offset = record.offset;
+        held.bbox = record.bbox_feet;
+        held.partitions.insert(partition);
+    }
+    out
+}
+
+/// Note, for each column in `columns` that took its section from its type
+/// symbol ([`attach_type_symbol_profile`]), the symbol's frame as the source
+/// of its profile (#1368): `agreeing` where every frame of the symbol gives
+/// the same box, `frame` (the last) where they do not.
+pub(super) fn note_type_sections(
+    rf: &mut RevitFile,
+    columns: &[DecodedElement],
+    frames: &SymbolFrames,
+) {
+    use crate::ifc::element_provenance::{CopyRule, SourcePart, ValueSource};
+    for column in columns {
+        let Some(id) = column.id else {
+            continue;
+        };
+        let symbol = column.fields.iter().find_map(|(name, value)| match value {
+            InstanceField::ElementId { id, .. } if name == TYPE_SYMBOL_FIELD => Some(*id),
+            _ => None,
+        });
+        let Some((symbol, frame)) = symbol.and_then(|symbol| Some((symbol, frames.get(&symbol)?)))
+        else {
+            continue;
+        };
+        let part = SourcePart {
+            element_id: symbol,
+            stream: frame.stream.clone(),
+            offset: frame.offset,
+        };
+        let rule = if frame.agree {
+            CopyRule::Agreeing
+        } else {
+            CopyRule::Frame
+        };
+        let mut source =
+            ValueSource::from_parts("type_section", rule, frame.partitions.len(), vec![part]);
+        if frame.agree {
+            source = source.with_partitions(frame.partitions.iter().copied().collect());
+        }
+        rf.note_value_source(id, source);
+    }
+}
+
 /// Give each column whose record box starts at z = 0.0 the bottom its
 /// geometry node holds (RE-173).
 pub(super) fn apply_column_node_bottoms(rf: &mut RevitFile, lists: [&mut Vec<DecodedElement>; 2]) {

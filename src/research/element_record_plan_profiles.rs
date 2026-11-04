@@ -63,6 +63,7 @@
 //!   that its last slot names the sketched element on the recorded
 //!   edge.
 
+use crate::ifc::element_provenance::{CopyRule, ValueSource};
 use crate::le_bytes;
 use crate::partition_element_records::PartitionElementRecord;
 use crate::walker::InstanceField;
@@ -894,12 +895,28 @@ pub fn sketch_curve_list_copies(
     revit_version: u32,
     sketch_lines: &std::collections::BTreeSet<u32>,
 ) -> BTreeMap<u32, Vec<SketchListCopy>> {
+    sketch_list_copies_at(rf, revit_version, sketch_lines, false).0
+}
+
+/// Where each copy in [`sketch_curve_list_copies`] starts, in the same order:
+/// the offset of its element-data header in the partition inflated (#1368).
+type ListOffsets = BTreeMap<u32, Vec<usize>>;
+
+/// [`sketch_curve_list_copies`], also giving where each copy starts when
+/// `with_offsets` asks, which only the value sources use.
+fn sketch_list_copies_at(
+    rf: &mut crate::RevitFile,
+    revit_version: u32,
+    sketch_lines: &std::collections::BTreeSet<u32>,
+    with_offsets: bool,
+) -> (BTreeMap<u32, Vec<SketchListCopy>>, ListOffsets) {
     let mut found: BTreeMap<u32, Vec<SketchListCopy>> = BTreeMap::new();
+    let mut offsets = ListOffsets::new();
     if !matches!(revit_version, 2024 | 2025) || sketch_lines.is_empty() {
-        return found;
+        return (found, offsets);
     }
     let Some(header) = crate::partition_names::element_data_header(revit_version) else {
-        return found;
+        return (found, offsets);
     };
     for stream in rf.partition_stream_names() {
         let Some(partition) = stream
@@ -932,9 +949,12 @@ pub fn sketch_curve_list_copies(
                 .entry(owner)
                 .or_default()
                 .push((sketch, partition, curves));
+            if with_offsets {
+                offsets.entry(owner).or_default().push(hit);
+            }
         }
     }
-    found
+    (found, offsets)
 }
 
 /// The sketch lines of each sketched element, from its Sketch element's
@@ -957,7 +977,8 @@ pub fn scan_sketch_curve_lists(
     sketch_lines: &std::collections::BTreeSet<u32>,
 ) -> BTreeMap<u32, Vec<u32>> {
     use std::collections::BTreeSet;
-    let found = sketch_curve_list_copies(rf, revit_version, sketch_lines);
+    let recording = rf.recording_value_sources();
+    let (found, offsets) = sketch_list_copies_at(rf, revit_version, sketch_lines, recording);
     let mut holders: BTreeMap<u32, BTreeSet<u32>> = BTreeMap::new();
     for (sketch, partition, _) in found.values().flatten() {
         holders.entry(*sketch).or_default().insert(*partition);
@@ -982,24 +1003,59 @@ pub fn scan_sketch_curve_lists(
     } else {
         crate::native_document::current_partitions(rf, &disagreeing)
     };
+    // The copy taken for each owner, noted under the owner (#1368).
+    let mut noted: Vec<(u32, ValueSource)> = Vec::new();
     let lists: BTreeMap<u32, Vec<u32>> = found
         .into_iter()
         .filter_map(|(owner, copies)| {
+            let offset_of =
+                |index: usize| offsets.get(&owner).and_then(|at| at.get(index)).copied();
+            let holding = |sketch: Option<u32>| {
+                sketch
+                    .and_then(|sketch| holders.get(&sketch))
+                    .map_or(0, BTreeSet::len)
+            };
             if copies.iter().all(|(_, _, curves)| *curves == copies[0].2) {
+                if recording {
+                    let partitions: BTreeSet<u32> =
+                        copies.iter().map(|(_, partition, _)| *partition).collect();
+                    let source = ValueSource::in_partition(
+                        "sketch_list",
+                        CopyRule::Agreeing,
+                        holding(sketch_of(copies.as_slice())),
+                        copies[0].1,
+                        offset_of(0),
+                    )
+                    .with_partitions(partitions.into_iter().collect());
+                    noted.push((owner, source));
+                }
                 return copies
                     .into_iter()
                     .next()
                     .map(|(_, _, curves)| (owner, curves));
             }
-            let partition = *current.get(&sketch_of(copies.as_slice())?)?;
+            let sketch = sketch_of(copies.as_slice());
+            let partition = *current.get(&sketch?)?;
             let mut in_current = copies
                 .into_iter()
-                .filter(|(_, held, _)| *held == partition)
-                .map(|(_, _, curves)| curves);
-            let pick = in_current.next()?;
-            in_current
-                .all(|curves| curves == pick)
-                .then_some((owner, pick))
+                .enumerate()
+                .filter(|(_, (_, held, _))| *held == partition)
+                .map(|(index, (_, _, curves))| (index, curves));
+            let (index, pick) = in_current.next()?;
+            if !in_current.all(|(_, curves)| curves == pick) {
+                return None;
+            }
+            if recording {
+                let source = ValueSource::in_partition(
+                    "sketch_list",
+                    CopyRule::Current,
+                    holding(sketch),
+                    partition,
+                    offset_of(index),
+                );
+                noted.push((owner, source));
+            }
+            Some((owner, pick))
         })
         .collect();
     let mut listed: BTreeMap<u32, usize> = BTreeMap::new();
@@ -1008,10 +1064,17 @@ pub fn scan_sketch_curve_lists(
             *listed.entry(*id).or_default() += 1;
         }
     }
-    lists
+    let kept: BTreeMap<u32, Vec<u32>> = lists
         .into_iter()
         .filter(|(_, curves)| curves.iter().all(|id| listed[id] == 1))
-        .collect()
+        .collect();
+    // Only a list that was used is a source (#1368).
+    for (owner, source) in noted {
+        if kept.contains_key(&owner) {
+            rf.note_value_source(owner, source);
+        }
+    }
+    kept
 }
 
 /// The Sketch's own ElementId, the sketched element and the curve list in

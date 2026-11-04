@@ -19,7 +19,7 @@ use crate::schema::{
     DecisionOut, DiagnosticsOut, DiagnosticsSummary, ElementCounts, ElementDetail,
     ElementProvenance, ElementRow, EntityRefOut, ExplainElementOut, LevelOut, LevelRefOut,
     LevelsOut, ListElementsOut, NativeRecordOut, PropertyOut, PropertySetOut, RoomOut, RoomsOut,
-    SkippedOut, SummaryOut, TypeOut, UnreadOut, ValueSourceOut,
+    SkippedOut, SourcePartOut, SummaryOut, TypeOut, UnreadOut, ValueSourceOut,
 };
 use crate::store::{Computed, Entry};
 
@@ -62,6 +62,16 @@ fn value_source_out(source: &ValueSource) -> ValueSourceOut {
         stream: source.stream.clone(),
         offset: source.offset,
         partitions: source.partitions.clone(),
+        parts: source
+            .parts
+            .iter()
+            .map(|part| SourcePartOut {
+                element_id: part.element_id,
+                stream: part.stream.clone(),
+                offset: part.offset,
+            })
+            .collect(),
+        parts_left_out: source.parts_left_out,
         differs_from_frame: source.differs_from_frame,
     }
 }

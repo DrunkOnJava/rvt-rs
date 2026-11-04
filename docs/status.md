@@ -1122,33 +1122,38 @@ sketches (26), sweeps, revolutions, blends and voids' cuts are not drawn. The 20
 the native releases, so its 85 of 86 is not reproduced. The 79 are
 reversed by default, a rule found on them and not held out; every instance in
 an export is checked against its own mesh. `rvt-ifc --family-extrusions`
-(opt-in; the default export is unchanged, hash for hash on 111 of 111 models) draws an
+(opt-in; the default export is unchanged, hash for hash on 34 of 34 models of Measure run 41884073888, 111 of 111 at the earlier heads) draws an
 instance from its family's extrusions where they reproduce its saved mesh.
-On Core Interior, RE1 and the BIM4LCA office files the first run, which drew
-arcs as arcs, replaced 335 bodies; of the 251 the body scorer matched, 250 had
+On Core Interior, RE1 and the BIM4LCA office files the first run (`aaa38de8`, before
+the flat-arc rule), which drew arcs as arcs, replaced 335 bodies; of the 251 the body scorer matched, 250 had
 Revit's vertices within 0.001 ft of their surface and one did not: Revit 26.2's
 IFC2X3 export draws that circle (0.2292 ft) as an `IfcCircleProfileDef`, which
 IfcOpenShell cuts into 27 chords, and two half arcs of it come out as 28, so
 no vertex coincides (a count mismatch, reproduced and measured in
-`reports/element-framing/RE-327-family-extrusions.md` §11). Revit 24.0.5's
-IFC4 export of the office writes a circle as half arcs. IfcOpenShell's default
-tessellation of the two forms of a circle has the same chords up to 0.164 ft
-and at 0.3281 ft and one chord more or fewer at 0.2292, 0.4921, 0.9843 and
-1.9685 ft; over 0.137 ft a chord's own deviation passes the 0.001 ft bar, so a
-difference in the count or in where the circle starts misses it, for a partial
-arc as for a whole circle. No one form meets both exporters, and nothing in the
-`.rvt` says which will read it. An arc of 0.12 ft in radius or less is written
-as the arc, and an instance with an arc over 0.12 ft in radius keeps its mesh in
-every release, which meets the bar against both. The shipped rule replaces 66
-of the 335 (Core Interior 37, each office file 9, RE1 Architecture 7,
-Electrical 2, Mechanical 1, Plumbing 1) and keeps 269 for an arc (the office
-files 120 each, the terrain files 11 each, RE1 Architecture 1, Electrical 6);
-every combined row of `mesh_bodies_vs_ifc` equals the `--saved-meshes`
-baseline's, and the 2 replaced bodies with an arc, circles of 0.12 ft or less
-in RE1's IFC2X3 export, each hold the bar and coincide with Revit's at 1e-5 ft.
-No partial arc and no arc of the IFC4 dialect is among the 66: the arcs the rule
-draws are thinly measured. True arcs for the larger ones come back if a finer
-tessellation of the scorers changes the bar (#1355, a decision for Griffin). The flag reads Revit 2024 to 2027
+`reports/element-framing/RE-327-family-extrusions.md` §11). That count
+mismatch is the default tessellation's, not a difference of shape: the bar for
+a body both files write as true curves is the fine tessellation (RE-331 §8,
+the maintainer's decision on #1355). Revit 24.0.5's IFC4 export of the office
+writes a circle as half arcs and Revit 26.2's IFC2X3 export as an
+`IfcCircleProfileDef`. Every arc is written as the arc, whatever its radius
+(#1366). Measured at `34750454` (Measure runs 41884078892 and 41884639625,
+RE-331 §9.1): 335 bodies are replaced (Core Interior 37, each office file 129,
+each terrain file 11, RE1 Architecture 8, Electrical 8, Mechanical 1, Plumbing
+1), where the 0.12 ft rule of #1352 replaced 66 and kept 269; 251 of them are
+scored by `mesh_bodies_vs_ifc` (the 42 per office file written as `IfcSpace`
+are scored by `space_profiles_vs_ifc`), and all 251 hold "ref on ours", both
+directions within 0.001 ft and the volume within 0.01%: 187 are decided by the
+fine tessellation, the bar for a body both files write as true curves (the
+arcs: 78 in each office file, 11 in each terrain file, 6 in RE1 Electrical and
+1 in RE1 Architecture, and 2 circles of 0.12 ft or less), and 64 by
+IfcOpenShell's default one; 6 of the 53 exports move against `main`'s (the
+office files, the terrain files, RE1 Architecture and Electrical), each only by
+the bodies the rule kept, none held-out, and no row that passed on `main`
+fails. At `aaa38de8`, before the flat-arc rule, the first arc run had 250 of
+the 251 within the default tessellation's bar, the one that did not being a
+count mismatch between its default tessellation of Revit 26.2's IFC2X3 circle
+profile (27 chords) and of two half arcs of it (28) (run 41805333248, RE-327
+§11). The flag reads Revit 2024 to 2027
 (measured on 2024 and 2025); an earlier file has no instance transform that
 reads, so nothing is replaced (`reports/element-framing/RE-327-family-extrusions.md`
 §9).
@@ -1229,7 +1234,8 @@ prints it from any installed build.
   it does not.
 - **v0.12.2** (2026-11-03): in the default export it draws more doors from the meshes Revit
   saved for them (the BIM4LCA office as built 269, against 48 with 0.12.1,
-  265 exact to 0.001 ft against Revit's export), and it no longer calls a
+  265 exact to 0.001 ft against Revit's export, in IfcOpenShell's default
+  tessellation), and it no longer calls a
   Revit 2008 to 2014 file an unsupported version in the viewer (#1247,
   #1266). With `--saved-meshes` it draws more bodies, not all of them
   Revit's (RE1 Plumbing's new pipe fittings are 1.44 to 1.47 of Revit's

@@ -116,9 +116,151 @@ pub(super) fn sketch_plan_profiles(
     owners: &BTreeMap<u32, [f64; 4]>,
     skip: &BTreeSet<u32>,
 ) -> BTreeMap<u32, crate::element_record_plan_profiles::PlanProfile> {
+    let mut evidence = ProfileEvidence::default();
+    let profiles =
+        solve_sketch_plan_profiles(rf, revit_version, sketch_lines, owners, skip, &mut evidence);
+    if rf.recording_value_sources() {
+        note_profile_sources(rf, &profiles, &evidence);
+    }
+    profiles
+}
+
+/// The first frame of a sketch line, by frame order (#1368).
+struct LineFrame {
+    stream: String,
+    offset: usize,
+}
+
+impl LineFrame {
+    /// [`crate::partition_element_records::PartitionElementRecord::frame_order`].
+    fn order(&self) -> (u32, &str, usize) {
+        (
+            crate::partition_room_parameters::partition_number(&self.stream),
+            self.stream.as_str(),
+            self.offset,
+        )
+    }
+}
+
+/// The frames of each sketched element's lines, by line (#1368).
+type LineFrames = BTreeMap<u32, BTreeMap<u32, LineFrame>>;
+
+/// What [`sketch_plan_profiles`] read, kept for the value sources while the
+/// handle records them (#1368).
+#[derive(Default)]
+struct ProfileEvidence {
+    /// Each sketched element's lines, with the frame the solve took for each.
+    frames: LineFrames,
+    /// The lines whose frames disagreed between partitions, so the current
+    /// partition's was kept.
+    current: BTreeSet<u32>,
+    /// The elements whose outline was read from their lines' own ends.
+    exact: BTreeSet<u32>,
+}
+
+/// Note, under each sketched element with a profile, the records the profile
+/// was solved from (#1368): the frames of its sketch lines (`sketch_lines`),
+/// and for an outline read from the lines' own ends the data of those lines
+/// (`sketch_line_data`). The Sketch's own curve list is noted by
+/// [`crate::element_record_plan_profiles::scan_sketch_curve_lists`].
+fn note_profile_sources(
+    rf: &mut RevitFile,
+    profiles: &BTreeMap<u32, crate::element_record_plan_profiles::PlanProfile>,
+    evidence: &ProfileEvidence,
+) {
+    use crate::ifc::element_provenance::{CopyRule, SourcePart, ValueSource};
+    let mut new_notes: Vec<(u32, ValueSource)> = Vec::new();
+    for (owner, profile) in profiles {
+        let Some(frames) = evidence.frames.get(owner) else {
+            continue;
+        };
+        let mut parts = Vec::new();
+        let mut current = false;
+        for id in &profile.segment_ids {
+            let Some(frame) = frames.get(id) else {
+                continue;
+            };
+            current |= evidence.current.contains(id);
+            parts.push(SourcePart {
+                element_id: *id,
+                stream: frame.stream.clone(),
+                offset: frame.offset,
+            });
+        }
+        if !parts.is_empty() {
+            let rule = if current {
+                CopyRule::Current
+            } else {
+                CopyRule::Agreeing
+            };
+            let copies = parts.len();
+            new_notes.push((
+                *owner,
+                ValueSource::from_parts("sketch_lines", rule, copies, parts),
+            ));
+        }
+        if !evidence.exact.contains(owner) {
+            continue;
+        }
+        let Some(noted) = rf.value_sources() else {
+            continue;
+        };
+        let mut data_parts = Vec::new();
+        let mut data_current = false;
+        for id in &profile.segment_ids {
+            let Some(note) = noted.get(id).and_then(|sources| {
+                sources.iter().find(|source| {
+                    matches!(
+                        source.reader.as_str(),
+                        "sketch_line" | "sketch_curve" | "sketch_circle"
+                    )
+                })
+            }) else {
+                continue;
+            };
+            let (Some(stream), Some(offset)) = (&note.stream, note.offset) else {
+                continue;
+            };
+            data_current |= note.rule == CopyRule::Current;
+            data_parts.push(SourcePart {
+                element_id: *id,
+                stream: stream.clone(),
+                offset,
+            });
+        }
+        if !data_parts.is_empty() {
+            let rule = if data_current {
+                CopyRule::Current
+            } else {
+                CopyRule::Agreeing
+            };
+            let copies = data_parts.len();
+            new_notes.push((
+                *owner,
+                ValueSource::from_parts("sketch_line_data", rule, copies, data_parts),
+            ));
+        }
+    }
+    for (owner, source) in new_notes {
+        rf.note_value_source(owner, source);
+    }
+}
+
+/// The solve behind [`sketch_plan_profiles`], with what it read put in
+/// `evidence` while the handle records value sources.
+fn solve_sketch_plan_profiles(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    sketch_lines: &[crate::partition_element_records::PartitionElementRecord],
+    owners: &BTreeMap<u32, [f64; 4]>,
+    skip: &BTreeSet<u32>,
+    evidence: &mut ProfileEvidence,
+) -> BTreeMap<u32, crate::element_record_plan_profiles::PlanProfile> {
     use crate::element_record_plan_profiles as erpp;
     use std::collections::BTreeMap;
-    let sketch_lines = current_sketch_records(rf, sketch_lines);
+    let recording = rf.recording_value_sources();
+    let (sketch_lines, current_lines) = current_sketch_records(rf, sketch_lines);
+    evidence.current = current_lines;
     let sketch_lines = sketch_lines.as_slice();
     // RE-97: where an element's Sketch lists its curves, that list is the
     // sketch's membership; a line's own owner reference names another
@@ -181,6 +323,24 @@ pub(super) fn sketch_plan_profiles(
         })
     };
     let sketch_lines = remapped.as_slice();
+    if recording {
+        for record in sketch_lines {
+            let Some(owner) = record.owner_reference else {
+                continue;
+            };
+            let frames = evidence.frames.entry(owner).or_default();
+            let frame = LineFrame {
+                stream: record.stream.clone(),
+                offset: record.offset,
+            };
+            match frames.get(&record.element_id) {
+                Some(held) if held.order() <= frame.order() => {}
+                _ => {
+                    frames.insert(record.element_id, frame);
+                }
+            }
+        }
+    }
     let mut profiles = erpp::plan_profiles_from_sketch_line_records(sketch_lines);
     profiles.retain(|owner, profile| !relisted.contains(owner) || spans_box(*owner, profile));
     profiles.retain(|owner, _| owners.contains_key(owner));
@@ -335,6 +495,7 @@ pub(super) fn sketch_plan_profiles(
         if !(has_arc || relisted.contains(&owner)) || spans_box(owner, &profile) {
             erpp::tag_voids(&mut profile, &points);
             profile.segment_ids = segments.keys().copied().collect();
+            evidence.exact.insert(owner);
             profiles.insert(owner, profile);
         }
     }
@@ -348,7 +509,10 @@ pub(super) fn sketch_plan_profiles(
 pub(super) fn current_sketch_records(
     rf: &mut RevitFile,
     records: &[crate::partition_element_records::PartitionElementRecord],
-) -> Vec<crate::partition_element_records::PartitionElementRecord> {
+) -> (
+    Vec<crate::partition_element_records::PartitionElementRecord>,
+    BTreeSet<u32>,
+) {
     let partition = |record: &crate::partition_element_records::PartitionElementRecord| {
         record
             .stream
@@ -372,10 +536,10 @@ pub(super) fn current_sketch_records(
         .filter_map(|(id, _)| Some((*id, holders.get(id)?.clone())))
         .collect();
     if disagreeing.is_empty() {
-        return records.to_vec();
+        return (records.to_vec(), BTreeSet::new());
     }
     let current = crate::native_document::current_partitions(rf, &disagreeing);
-    records
+    let kept = records
         .iter()
         .filter(|record| match disagreeing.get(&record.element_id) {
             None => true,
@@ -384,7 +548,8 @@ pub(super) fn current_sketch_records(
                 .is_some_and(|&p| partition(record) == Some(p)),
         })
         .cloned()
-        .collect()
+        .collect();
+    (kept, disagreeing.into_keys().collect())
 }
 
 /// A sketch read from its lines' exact ends: the chords, whether any is an

@@ -545,6 +545,16 @@ Something the export left out or approximated, with how many.
 | `count` | integer | yes |  |
 | `reason` | string | yes |  |
 
+### SourcePartOut
+
+One record a value source is made of.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `element_id` | integer | yes | The ElementId of the record's element: a sketch line, a type symbol, a run type. |
+| `offset` | integer | yes | Where the record starts in that partition inflated: its frame, or for a run type the place its id is stored. |
+| `stream` | string | yes | The partition the record is in, such as `Partitions/46`. |
+
 ### TypeOut
 
 The type object an element is typed by.
@@ -572,10 +582,12 @@ The copy of an element's data a reader took a value from.
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `copies` | integer | yes | In how many partitions the element's data named it, so how many copies there were to choose from. |
-| `differs_from_frame` | boolean | yes | True when the value is held in another partition than `provenance.stream`, the frame: the copy named is in another and, for `agreeing`, so is every copy that agrees with it. |
+| `copies` | integer | yes | In how many partitions the element's data named it, so how many copies there were to choose from; for a profile's sketch lines (`parts`), how many lines it is made of; for a source of one record in `parts`, in how many partitions that record was held. |
+| `differs_from_frame` | boolean | yes | True when the value is held in another partition than `provenance.stream`, the frame: the copy named is in another and, for `agreeing`, so is every copy that agrees with it; for a source made of `parts`, none of them is in the frame's partition (a profile's sketch lines are also held there when the Sketch's curve list, `sketch_list`, has a copy there). |
 | `offset` | integer \| null | no | Where the copy starts in that partition inflated: the element-data header whose element id follows it, for the readers of element data; the record's header, for a native record; the frame, for `selected_frame`. |
 | `partitions` | array of integer | yes | For the rule `agreeing`, the numbers of the partitions that hold a copy, every one of which holds the same value; the copy named is the lowest-numbered partition's. |
-| `reader` | string | yes | What was read: `bounded_line` (a wall's or beam's location line), `bounded_arc`, `instance_transform`, `saved_graphics`, `native_run`, `native_landing`, `selected_frame` for a body read from the frame itself, or `selected_frame_box` for a body whose box and placement are read from the frame and whose profile is read from another record (see `profile_source`), which no reader notes yet. |
-| `rule` | string | yes | How the copy was chosen: `selected` (the frame the exporter selected), `agreeing` (every copy holds the same value; the lowest-numbered partition's is named), `current` (the copies disagree; the current partition's) or `native` (a native record by member name, its current copy). |
+| `parts` | array of [SourcePartOut](#sourcepartout) | yes | The records the value is made of, where it is made of several or of another element's (a profile's sketch lines, a type symbol's frame), at most 64. Such a source has no `stream` or `offset` of its own. |
+| `parts_left_out` | integer | yes | How many more records than the 64 listed in `parts` the value is made of. |
+| `reader` | string | yes | What was read: `bounded_line` (a wall's or beam's location line), `bounded_arc`, `instance_transform`, `saved_graphics`, `native_run`, `native_landing`, `selected_frame` for a body read from the frame itself (or, with a `sketch_lines` or `type_section` source beside it, for its box and placement only, the profile being that source's), or `selected_frame_box` for a body whose box and placement are read from the frame and whose profile is read from a record no reader notes yet (see `profile_source`). Also `sketch_lines` and `sketch_list` (the frames of a profile's sketch lines and the Sketch's curve list), `sketch_line_data`, `type_section` (the type symbol's frame), `stair_run_lines`, `stair_run_ends`, `stair_run_type`, `stair_run_base_cuts`, `landing_lines`, `native_run_type` and `native_landing_type` (the run type's and the landing type's records, which give a Revit 2025 run's construction and a landing slab's thickness). |
+| `rule` | string | yes | How the copy was chosen: `selected` (the frame the exporter selected), `agreeing` (every copy holds the same value; the lowest-numbered partition's is named), `current` (the copies disagree; the current partition's), `native` (a native record by member name, its current copy) or `frame` (the last of a record's frames, as the reader's scan kept it, where the frames were not compared or do not agree). For a source made of `parts` the rule is how each record's copy was chosen. |
 | `stream` | string \| null | no | The partition of the copy, such as `Partitions/46`. |

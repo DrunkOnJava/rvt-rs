@@ -1,11 +1,13 @@
 # RE-331: The body scorers measure two tessellations, not two shapes
 
 **Date:** 2026-11-04
-**Issues:** #1355; follows #1346 and RE-327 section 11 (a circle in two forms, 27 chords against 28), #1280 (the "ref on ours" bar), RE-311 and RE-329 (the saved-mesh body scorer)
+**Issues:** #1355, #1365 (section 8), #1366 (section 9); follows #1346 and RE-327 section 11 (a circle in two forms, 27 chords against 28), #1280 (the "ref on ours" bar), RE-311 and RE-329 (the saved-mesh body scorer)
 **Artefacts:** the RE-32 oracle pair of RE1 Architecture, `RE1-Architecture.ifc` (Revit's export, sha256 a9b5d366…6200) and `RE1-Architecture.rvt` (sha256 4a78bdd6…8ce4); Core Interior's `2024_Core_Interior_slim.ifc` (sha256 bfdf36ff…ad86d); IfcOpenShell 0.9.0.post1, the version `tools/ci/requirements-ifc.txt` pins
-**Tools:** `tools/re/fine_mesh.py` (the settings), `tools/re/mesh_bodies_vs_ifc.py`, `tools/re/saved_meshes_vs_ifc.py` and `tools/re/family_extrusion_bodies_vs_ifc.py` (the scorers), `tools/re/arc_tessellation_study.py` (the study of sections 2 and 3), Measure's `fine_mesh` input
-**Runs:** Measure 41850758987 (the unfiltered run, default exports), 41850764234 (the flag run) and 41850769925 (`--saved-meshes` alone), all at `e024f03c`; 41854514903 (the arcs the current rule keeps as meshes, drawn by the first arc run's head `aaa38de8`, section 4.3). Section 4 reads them.
-**Result:** positive: the fine mode runs on every model (its longest step took 676 s of the 2,400 s limit) and changes no default row (99 of 99 files equal in each of two comparisons with `main`'s scorers). It finds that a tessellation decides some verdicts, and only for curved saved-mesh bodies: of the 3,816 saved-mesh bodies of the `--saved-meshes` run, 295 are meshed differently; 38 hold "ref on ours" in the default tessellation and miss it in the fine one (the largest is 0.001001 ft, printed to six decimals, against the bar's 0.001); 158 miss the 0.001 ft both-directions column in the default one and hold it in the fine one. None of the 1,368 doors and windows the default export draws from saved meshes, and none of the 66 family-extrusion bodies, changes verdict (2 of the 66, circles of 0.12 ft or less, are meshed differently and hold in both). Drawn as arcs by the first arc run's head, 185 of the 269 bodies the current rule keeps as meshes are scored: all 185 hold in the fine tessellation and 184 in the default one; the 84 other bodies, office spaces, are not scored by this scorer. Section 5 lists the options for the bar and records Griffin's choice, the fine tessellation where both files write true curves (option 3).
+**Tools:** `tools/re/fine_mesh.py` (the settings), `tools/re/mesh_bodies_vs_ifc.py`, `tools/re/saved_meshes_vs_ifc.py` and `tools/re/family_extrusion_bodies_vs_ifc.py` (the scorers), `tools/re/arc_tessellation_study.py` (the study of sections 2 and 3), Measure's `fine_mesh` input; for section 8 `tools/re/true_curves.py` (which bodies both files write as true curves); for section 9 `src/ifc/family_extrusions.rs` (the writer)
+**Runs:** (section 9: 41884073888, 41884078892 and 41884639625; section 8: 41871104420, 41871109552 and 41871114299) Measure 41850758987 (the unfiltered run, default exports), 41850764234 (the flag run) and 41850769925 (`--saved-meshes` alone), all at `e024f03c`; 41854514903 (the arcs the #1352 rule kept as meshes, drawn at `aaa38de8`, the first arc run's head, before the flat-arc rule, section 4.3). Section 4 reads them.
+**Result:** positive: the fine mode runs on every model (its longest step took 676 s of the 2,400 s limit) and changes no default row (99 of 99 files equal in each of two comparisons with `main`'s scorers). It finds that a tessellation decides some verdicts, and only for curved saved-mesh bodies: of the 3,816 saved-mesh bodies of the `--saved-meshes` run, 295 are meshed differently; 38 hold "ref on ours" in the default tessellation and miss it in the fine one (the largest is 0.001001 ft, printed to six decimals, against the bar's 0.001); 158 miss the 0.001 ft both-directions column in the default one and hold it in the fine one. None of the 1,368 doors and windows the default export draws from saved meshes, and none of the 66 family-extrusion bodies, changes verdict (2 of the 66, circles of 0.12 ft or less, are meshed differently and hold in both). Drawn as arcs at `aaa38de8`, before the flat-arc rule, 185 of the 269 bodies the #1352 rule kept as meshes are scored: all 185 hold in the fine tessellation and 184 in the default one; the 84 other bodies, office spaces, are not scored by this scorer. Section 5 lists the options for the bar and records Griffin's choice, the fine tessellation where both files write true curves (option 3). Section 8 puts that bar in the scorers. Section 9 removes the 0.12 ft rule: at `34750454` 335 bodies are replaced on Core Interior, RE1 and the BIM4LCA office files (the rule replaced 66), the body scorer scores 251 and all 251 hold the bar, 187 judged in the fine tessellation and 64 in the default one; 6 of 53 exports move against `main`'s, each only by bodies the rule kept, and no held-out export moves.
+
+**Wording.** In sections 4 to 8, "the #1352 rule" is the rule that kept the saved mesh for an arc over 0.12 ft in radius, as it stood when each section was written; section 9 removes it.
 
 ## 1. The question
 
@@ -101,7 +103,7 @@ The three scorers' output without the variable was compared, byte for byte, with
 - **41850764234**, the flag run: the models of 41843267888 (`core-interior re1-* einhoven nordic-office-* r2025-*`) with `-f ifc_flags="--saved-meshes --family-extrusions"`, the scorers `family_extrusion_bodies_vs_ifc mesh_bodies_vs_ifc saved_meshes_vs_ifc`. The family-extrusion bodies (section 4.2).
 - **41850769925**, the same models with `-f ifc_flags="--saved-meshes"`: every saved-mesh body, the curved ones among them (section 4.4).
 - **41860674204**, `saved_meshes_vs_ifc` alone on those models with `-f ref=e024f03c9cd14837c8ed49d0ab38d1fd414ff02b` and the scorer of `9dee1107`, which removes the default table's offset from the fine boxes too (section 4.4); `exit 0`, the office files' step 573 s and 569 s.
-- **41854514903**, the arcs (section 4.3), dispatched after the three above: `-f ref=aaa38de808f1731acf6f6a6dace59904f873335b`, the head of the first arc run (41805333248), which drew every arc as an arc, with `-f ifc_flags="--saved-meshes --family-extrusions"`, `-f scorers=family_extrusion_bodies_vs_ifc` and `-f fine_mesh=true`, on `core-interior re1-* nordic-office-*`.
+- **41854514903**, the arcs (section 4.3), dispatched after the three above: `-f ref=aaa38de808f1731acf6f6a6dace59904f873335b`, the head of the first arc run (41805333248; before the flat-arc rule of #1352), which drew every arc as an arc, with `-f ifc_flags="--saved-meshes --family-extrusions"`, `-f scorers=family_extrusion_bodies_vs_ifc` and `-f fine_mesh=true`, on `core-interior re1-* nordic-office-*`.
 
 All four finished green and every scorer step in them ended `exit 0`.
 
@@ -165,11 +167,11 @@ In the tables below, "ref on ours" is every tested vertex of Revit's body within
 - Only 2 of the 66 are meshed differently: the circles of 0.12 ft or less drawn as arcs, RE1 Architecture's proxy and Plumbing's flow terminal (Revit's IFC2X3 export writes them as an `IfcCircleProfileDef`). Both are within 3e-6 ft of Revit's in the fine tessellation and within 1e-5 ft in the default one. The other 64 are straight and unaffected.
 - The 269 instances the rule keeps as meshes for an arc over 0.12 ft are not in this run; section 4.3.
 
-### 4.3 The arcs the current rule keeps as meshes (run 41854514903)
+### 4.3 The arcs the #1352 rule keeps as meshes (run 41854514903)
 
-The flag runs cannot show them, because the current rule keeps them as meshes. Run 41854514903 draws them: the code is `aaa38de8`, the head of the first arc run (41805333248), which draws every arc as an arc, with this branch's scorers, `--saved-meshes --family-extrusions`, `family_extrusion_bodies_vs_ifc` only and `fine_mesh=true`, on Core Interior, RE1 and the BIM4LCA files.
+The flag runs cannot show them, because the #1352 rule keeps them as meshes. Run 41854514903 draws them: the code is `aaa38de8`, the head of the first arc run (41805333248; before the flat-arc rule of #1352), which draws every arc as an arc, with this branch's scorers, `--saved-meshes --family-extrusions`, `family_extrusion_bodies_vs_ifc` only and `fine_mesh=true`, on Core Interior, RE1 and the BIM4LCA files.
 
-**The counts, reconciled.** That head replaces 335 bodies (RE-327 section 9), and the current rule replaces 66 of them and keeps 269 as meshes for an arc over 0.12 ft in radius (the office files 120 each, the terrain files 11 each, RE1 Architecture 1, Electrical 6). The body scorer scored **251** of the 335 (Core Interior 37, each office file 87, each terrain file 11, RE1 Architecture 8, Electrical 8, Mechanical 1, Plumbing 1). The other **84** are the 42 family instances per office file that the first run wrote as `IfcSpace` (RE-327 section 9: "87 (+42 spaces)"); `space_profiles_vs_ifc` scores them, and this run did not run it. The run's own census counts the scored bodies with an arc over 0.12 ft in radius: 78 in each office file, 11 in each terrain file, 6 in Electrical and 1 in RE1 Architecture, **185** in all. By count the other 66 of the 251 are the bodies the current rule draws (Core Interior 37, 9 in each office file, 7 in Architecture, 2 in Electrical, 1 in Mechanical, 1 in Plumbing), so 251 = 66 + 185, and the 269 = 185 scored + 84 office spaces not scored. The artefacts print classes and counts, not the element ids, so this is arithmetic on the counts and not a match of ids.
+**The counts, reconciled.** That head replaces 335 bodies (RE-327 section 9), and the #1352 rule replaces 66 of them and keeps 269 as meshes for an arc over 0.12 ft in radius (the office files 120 each, the terrain files 11 each, RE1 Architecture 1, Electrical 6). The body scorer scored **251** of the 335 (Core Interior 37, each office file 87, each terrain file 11, RE1 Architecture 8, Electrical 8, Mechanical 1, Plumbing 1). The other **84** are the 42 family instances per office file that the first run wrote as `IfcSpace` (RE-327 section 9: "87 (+42 spaces)"); `space_profiles_vs_ifc` scores them, and this run did not run it. The run's own census counts the scored bodies with an arc over 0.12 ft in radius: 78 in each office file, 11 in each terrain file, 6 in Electrical and 1 in RE1 Architecture, **185** in all. By count the other 66 of the 251 are the bodies the #1352 rule draws (Core Interior 37, 9 in each office file, 7 in Architecture, 2 in Electrical, 1 in Mechanical, 1 in Plumbing), so 251 = 66 + 185, and the 269 = 185 scored + 84 office spaces not scored. The artefacts print classes and counts, not the element ids, so this is arithmetic on the counts and not a match of ids.
 
 **What the 185 score** (arcs over 0.12 ft, drawn as arcs, against Revit's export; "within 1e-5 ft" is both directions, the two tessellations coinciding):
 
@@ -237,17 +239,17 @@ Neither 2 nor 3 changes what rvt-rs writes today; the follow-up in either case i
 
 ### Decision (Griffin, 2026-11-04)
 
-Griffin chose, by the question tool, **"Fine where both draw curves"**. That is option 3 above, with the rule stated as **where both files write true curves**: the fine tessellation decides pass or fail only for a body that rvt-rs writes as true curves (a family extrusion with arcs or a circle) against a body Revit's export also writes as a true curve (an `IfcCircleProfileDef`, an `IfcIndexedPolyCurve` with arcs, and the like); a saved mesh keeps today's bar in the default tessellation. **No saved-mesh verdict moves**: on the measured models the 38 saved meshes that hold "ref on ours" only in the default tessellation keep passing, and no figure of the 0.14.0 changelog, the docs or the 1.0 criterion W6 changes by this decision. On the measured models the fine verdict covers the 185 arcs over 0.12 ft in radius that the current rule keeps as meshes (all hold in the fine tessellation, section 4.3) and the circles of 0.12 ft or less already drawn (both hold).
+Griffin chose, by the question tool, **"Fine where both draw curves"**. That is option 3 above, with the rule stated as **where both files write true curves**: the fine tessellation decides pass or fail only for a body that rvt-rs writes as true curves (a family extrusion with arcs or a circle) against a body Revit's export also writes as a true curve (an `IfcCircleProfileDef`, an `IfcIndexedPolyCurve` with arcs, and the like); a saved mesh keeps today's bar in the default tessellation. **No saved-mesh verdict moves**: on the measured models the 38 saved meshes that hold "ref on ours" only in the default tessellation keep passing, and no figure of the 0.14.0 changelog, the docs or the 1.0 criterion W6 changes by this decision. On the measured models the fine verdict covers the 185 arcs over 0.12 ft in radius that the #1352 rule keeps as meshes (all hold in the fine tessellation, section 4.3) and the circles of 0.12 ft or less already drawn (both hold).
 
 The follow-ups:
 
 - **#1365** implements that bar in the scorers.
-- **#1366** draws the 185 circles over 0.12 ft as true arcs again, once #1365 lands. The 84 office spaces among the 269 bodies the current rule keeps as meshes are not scored by these scorers (section 4.3).
+- **#1366** draws the 185 circles over 0.12 ft as true arcs again, once #1365 lands. The 84 office spaces among the 269 bodies the #1352 rule keeps as meshes are not scored by these scorers (section 4.3).
 
 ## 6. Not done, and not measured
 
 - **Analytic distances** for planes, cylinders and circles (the issue's "where cheaper and exact") are not used. The fine tessellation alone reaches the 1e-5 ft the two forms of a circle need (section 3.2) at 0.2 to 0.3 s per circle body, bounded by the scorers' 300 bodies per class, so an exact surface model of each body would have added code without changing a figure. Circles over 2 ft in radius were not measured.
-- **The 84 office spaces** (42 `IfcSpace` family instances per office file) among the 269 bodies the current rule keeps as meshes: `space_profiles_vs_ifc` scores them and run 41854514903 did not run it, so 185 of the 269 are measured (section 4.3).
+- **The 84 office spaces** (42 `IfcSpace` family instances per office file) among the 269 bodies the #1352 rule keeps as meshes: `space_profiles_vs_ifc` scores them and run 41854514903 did not run it, so 185 of the 269 are measured (section 4.3).
 - **IfcOpenShell other than 0.9.0.post1**, which is what CI pins and what the values of section 2 were found on; another consumer's tessellation of an arc.
 - **Bodies the scorers do not reach**: more than 300 of a class (every Nth is scored, as in the default mode), and a body IfcOpenShell cannot mesh at either deflection.
 - **A tolerance for the fine tessellation** other than the three columns of "ref on ours" (0.001, 0.0015 and 0.002 ft): the bar is Griffin's.
@@ -276,3 +278,132 @@ gh workflow run measure.yml --ref feat/1355-scorer-fine-mode -f ref=aaa38de808f1
 ```
 
 Once this lands, `--ref main` replaces the branch. The `fine` rows are in each model's `mesh_bodies_vs_ifc.txt`, `saved_meshes_vs_ifc.txt` and `family_extrusion_bodies_vs_ifc.txt`; the held-out models keep their counts only (`tools/ci/scrub-holdout-results.sh`), which section 4.1 sums over the models that hold some.
+
+## 8. The bar in the scorers (#1365)
+
+**The decision** (section 5, Griffin on #1355, 2026-11-04): the fine tessellation decides pass or fail where both files write true curves, and nothing else changes. #1365 puts it in the scorers. Without a switch, `mesh_bodies_vs_ifc`, `family_extrusion_bodies_vs_ifc` and `saved_meshes_vs_ifc` now judge a body in the fine tessellation when both files write it as true curves, and in IfcOpenShell's default one otherwise. A saved mesh is triangles on rvt-rs's side, so it is never in the set and keeps the default bar: no saved-mesh, door or window verdict can move.
+
+### 8.1 Which bodies are true curves
+
+`tools/re/true_curves.py` reads each file's own representation items, the ones the arc census prints for Revit's body: the items of an element's `Body` representations, mapped items followed, of the openings that cut it (`HasOpenings`, which IfcOpenShell subtracts when it meshes the body) and of its aggregated parts. It gives each item one of four kinds:
+
+| kind | items |
+|---|---|
+| curve | an `IfcExtrudedAreaSolid` (an `IfcExtrudedAreaSolidTapered` through its end profile too) over an `IfcCircleProfileDef` (or its hollow form), `IfcEllipseProfileDef` or `IfcRoundedRectangleProfileDef`; over a parameterised profile with a fillet or edge radius above zero (an L, U, T, I, C or Z shape, a hollow rectangle and the like: any attribute named for a radius); or over an arbitrary profile (with voids too) whose outline has an arc: an `IfcIndexedPolyCurve` with an `IfcArcIndex`, an `IfcCompositeCurve` or `IfcTrimmedCurve` on a circle or another conic, an `IfcCircle`, `IfcEllipse` or `IfcBSplineCurve`; a composite or derived profile of one of these; an `IfcRevolvedAreaSolid`, an `IfcSweptDiskSolid`, a swept area solid with such a profile or along such a directrix, an `IfcAdvancedBrep` with a face that is not on a plane, an `IfcSphere`, `IfcRightCircularCylinder` or `IfcRightCircularCone`; a Boolean result with such an operand |
+| straight | an extrusion of a polygon or of a parameterised profile with no radius, an `IfcBlock`, an `IfcRectangularPyramid`, an `IfcBoundingBox`, a half space on a plane, a Boolean result of straight operands |
+| mesh | an `IfcTessellatedItem` (a triangulated or polygonal face set), an `IfcFacetedBrep` (with voids too) or other manifold B-rep that is not advanced, a face-based or shell-based surface model, a Boolean result with such an operand |
+| other | any item class this list does not name, and an outline or a profile of a class it does not name (an `IfcOffsetCurve2D`, an `IfcPcurve`, a profile type it does not know): it fails closed, the body is not one of true curves |
+
+A file writes a body as true curves when it has at least one curve item and no mesh or other item (a straight item neither makes a body a curve nor stops it from being one: the dispenser's two rectangles do not take it out). A body is in the set only if **both** files write it so. A body that cannot be read, or that has an item of a class the list does not know, is not in the set: the default tessellation, the bar before #1365, decides it, so a gap in the list can only leave a body where it was. Reading the openings, the filleted profiles and the tapered end profile, and failing closed on an outline or a profile of a class it does not know, changed no body's membership on the exports at hand: Revit's RE1 files (4, 16, 6 and 70 bodies), Core Interior's slim export (0), the two terrain files (19 each) and the office as built and at permit (228 and 204 bodies), and rvt-rs's exports of the office as built (93) and of RE1 Plumbing (63) and Electrical (0), are the same sets before and after. The scorers score only the bodies whose `BodySource` is the one they take (`saved_graphics_mesh` for `mesh_bodies_vs_ifc` and `saved_meshes_vs_ifc`), which rvt-rs writes as an `IfcTriangulatedFaceSet`, a mesh item; so in a run without `--family-extrusions` no scored body has a curve on rvt-rs's side, and the set is empty whatever the rule. rvt-rs's default export does write bodies with curves (RE1 Plumbing's pipes are 63 by this rule); they carry other body sources and are scored by other scorers (`pipe_bodies_vs_ifc` and the like), which this change does not touch.
+
+On Revit's own exports this finds, among the elements with a body: RE1 Architecture 4 (elements 360331, 370475, 377331 and 379016), Electrical 16, Mechanical 6 and Plumbing 70, the counts RE-327 section 11.1 gives for the circle profiles of those four files (its 5 for Architecture includes the opening element, which the scorers skip); in the office's concrete terrain file 19 (11 `IfcWasteTerminal` among them). None of those files' faceted bodies (16, 2, 6 and 53 in the first four files; 100 in the terrain file) is in it.
+
+### 8.2 What the scorers print
+
+When no body is decided by the fine tessellation the output is what it was before #1365. When some are:
+
+- a line, `decided by the fine tessellation (both files write true curves): N of M bodies` (elements, for the box scorer);
+- the class table of `mesh_bodies_vs_ifc` and of `saved_meshes_vs_ifc` gains a last column, `decided by fine` and `fine`, how many of each class (and under `mesh_bodies_vs_ifc`, of each Revit type) were decided so; the verdict columns count each body in its deciding tessellation;
+- `mesh_bodies_vs_ifc` prints its `fine` rows (section 2) for those bodies, which show each of them in both tessellations: how many hold "ref on ours" and "0.001 ft" in the default tessellation, in the fine one, in both or in neither;
+- its lists of the bodies furthest off end a body's line with `(fine tessellation)` when the fine tessellation decided it;
+- the census of `family_extrusion_bodies_vs_ifc` ends a row `decided by the fine tessellation` when its bodies were, and an `all` row, which mixes the two, ends `N of them decided by the fine tessellation` when any was; its list of the bodies that miss ends a body's line with `(fine tessellation)` when the fine tessellation decided it; the rows of the other bodies are in the default tessellation and are as they were;
+- `RVT_SCORER_FINE_MESH=1` still prints the `fine` rows for every body (section 2); the class table follows the bar either way.
+
+The held-out scrub keeps the new line and the last column as counts beside an IFC class name.
+
+**Cost.** Only the set is meshed finely: rvt-rs's side for the bodies it writes with a curve (a handful: the family extrusions with an arc), Revit's for those among them that Revit writes with a curve too. The default meshes and scores are made for every body as before. So the office's saved-mesh step takes what it took, and the fine pass costs the bodies of the set, not the 300 per class of `RVT_SCORER_FINE_MESH`.
+
+### 8.3 Proved on files at hand
+
+- The saved-mesh pairs: `mesh_bodies_vs_ifc` and `saved_meshes_vs_ifc` print, byte for byte, what the scorers of `main` print on Core Interior's 138 doors and windows and on the saved-mesh doors of RE1 Architecture, Electrical, Mechanical and Plumbing (10 of 10 files).
+- A body both files write as true curves: RE1 Architecture's dispenser drawn as half arcs (section 3.3) against Revit's circle is decided by the fine tessellation, holds "ref on ours" (2.3e-6 ft) and prints `decided by the fine tessellation` on the class table and in the census; the box scorer decides the same element's box in the fine tessellation too.
+- The same arcs against a Revit body that is a mesh (a faceted brep: the pair borrows another element's Tag only to put a mesh on Revit's side, so its distances mean nothing): no body is decided by the fine tessellation, and the output has no fine column, line or rows.
+
+- The classification itself, on hand-made IFC4 entities in memory (a scratch check, not committed): 13 of 13 as intended. A circle extrusion is in the set and a rectangle extrusion is not; a circle with a straight opening is in and with a triangulated opening is not; a rectangle with a circular opening is in; an L shape with a fillet radius is in, with a radius of 0 or none is not; a tapered extrusion from a rectangle to a circle is in and from a rectangle to a rectangle is not; an outline that is an `IfcOffsetCurve2D` is not (it fails closed); a circle with a mesh item beside it is not.
+
+### 8.4 What the filtered runs measured
+
+Three runs, all green, every scorer step `exit 0`, the scorers of the branch (`--ref feat/1365-fine-bar`) unless said:
+
+- **41871104420**: the new scorers on `f1f80d9e` (main when the branch merged it), the models and flags of the #1362 flag run (`core-interior re1-* einhoven nordic-office-* r2025-*`, `--saved-meshes --family-extrusions`, `-f nordic=true -f r2025=true`), the three scorers.
+- **41871109552**: the same with `--ref main`, so that the scorers of `main` score the same exports. (`-f base=main` would not do: both sides are scored by the scorers of the workflow's ref, so it compares exports.)
+- **41871114299**: the new scorers on `aaa38de8`, the first arc run's head, before the flat-arc rule of #1352, which draws every arc as an arc (`core-interior re1-* nordic-office-*`, `--saved-meshes --family-extrusions`, the family scorer only).
+
+**The new scorers against main's, on the same exports** (41871104420 against 41871109552; 33 models with a Revit export, three scorers, 99 files):
+
+- 97 files are the same byte for byte: all 66 files of `mesh_bodies_vs_ifc` and `saved_meshes_vs_ifc`, and 31 of the 33 of `family_extrusion_bodies_vs_ifc`. **No saved-mesh verdict moved**, the doors and windows among them.
+- The two others are RE1 Architecture's and Plumbing's family files, which are where a body is decided by the fine tessellation: 1 of 7 (`Hook, Garment and Towel`, a circle of 0.12 ft or less) and 1 of 1 (`223313-WTRHTR-Tankless Electric:28kW`). Both hold "ref on ours" in both tessellations. Take out the additions (the line that counts them, the last column, the `(fine tessellation)` marks and the `fine` rows) and one line of each file differs from main's: the decided body's distances in the list of bodies furthest off (the hook's 3.279e-06 and 3.033e-06 ft in the default tessellation, 2.826e-06 and 3.477e-06 in the fine one; the water heater's 1.607e-06 and 1.607e-06 against 2.426e-06 and 2.176e-06). Every count and every verdict column is the same.
+- So the family-extrusion rows moved only for curve-to-curve bodies, 2 of the 66 replaced, and only in the distances.
+
+**The arcs** (41871114299, 251 bodies scored; against 41854514903, the #1362 scorers on the same code, whose default rows are the bar before #1365):
+
+- **187 of the 251 are decided by the fine tessellation**: the 185 arcs over 0.12 ft that the #1352 rule keeps as meshes (78 in each office file, 11 in each terrain file, 6 in RE1 Electrical, 1 in RE1 Architecture) and the 2 circles of 0.12 ft or less. The other 64 are decided by the default one; Core Interior's and Mechanical's files are the same byte for byte as the older run's.
+- **All 251 hold "ref on ours" and both directions within 0.001 ft; 0 miss.** The dispenser is the one body whose verdict is not the older run's: it missed both in the default tessellation (0.001439 ft, volume ratio 1.0006) and holds in the fine one (5.6e-06 ft and 5.9e-06 ft, volume ratio 1.0000). RE1 Architecture's `IfcBuildingElementProxy` row goes from 2 to 3 of 3 on "ref on ours", "0.001 ft" and "vol .01%", and its census row `extrusion of circle + extrusion of rectangle; arcs over 0.12 ft` from 0 of 1 to 1 of 1.
+- Elsewhere the files differ from the older run's only in the distances of the decided bodies in the lists of bodies furthest off: the terminals' stay under 2.5e-06 ft, and RE1 Electrical's occupancy sensors' are 3.8e-06 to 7.1e-06 ft where the default tessellation had 0.6e-06 to 2.3e-06.
+
+**Time.** In the flag run the longest step is the office's `saved_meshes_vs_ifc`, 298 s on both office files (main's scorers on the same exports took 249 s; the two runs ran on different runners, and the detection alone takes 0.26 s over the 12,432 elements of an rvt-rs export of the office, timed on its own); `mesh_bodies_vs_ifc` took 26 s against 22 s, and `family_extrusion_bodies_vs_ifc` 13 and 16 s against 13 and 12 s. In the arcs run, with 187 bodies meshed finely, the family step took 45 s on each office file and 44 s on each terrain file, against 45 to 46 s for the #1362 scorers, which meshed every body finely. No step came near its limit (2,400 s).
+
+### 8.5 The unfiltered run
+
+Run 41875852229 (the scorers of `0326e39f`, `--ref feat/1365-fine-bar`, code `3a6ed928`, `-f base=none -f nordic=true -f r2025=true -f samples=true -f holdout=true`, default export flags) against the `measure-base` side of run 41869173374 (main's scorers and main's code, `3a6ed928`, the same flags). Both green; 111 models on each side.
+
+- **No row moved.** Per model, every scorer output and each `ifc.sha256`: 1,669 files compared, 1,669 byte-identical, none different (the held-out models' `counts.txt` among them, which are counts only). The exports are the same (the hashes agree), the scorers differ, and no output changed: no saved-mesh, door or window verdict moved, and no other scorer's row did.
+- **Bodies decided by the fine tessellation: 0 on every model**, held-out included (no output has the line that counts them). The reason is the scorers' source filter, not an empty export. `mesh_bodies_vs_ifc` and `saved_meshes_vs_ifc` score the bodies whose `BodySource` is `saved_graphics_mesh`: 1,239 bodies on the 10 of the 34 models with a Revit export that have any, and 129 on 10 of the 18 held-out models. rvt-rs writes each of them as an `IfcTriangulatedFaceSet` (`src/ifc/saved_meshes.rs`), a mesh item, so none can be in the set. (rvt-rs's default export does write bodies with curves, such as RE1 Plumbing's pipes, but they carry other body sources and are not scored by these scorers.)
+- **The held-out models** have an empty set, so no verdict of theirs came from the detection, old or new: a saved mesh is a mesh item under both, and the openings, the filleted profiles and the unknown outlines that the later commit reads cannot make a mesh item a curve. No re-run was needed.
+- **Time**, the scorers this change touches, on the office files, this run against the baseline's (steps run beside others on their runner, so these are not benchmarks): as built `mesh_bodies_vs_ifc` 16 s against 19 s, `saved_meshes_vs_ifc` 131 s against 159 s, `box_bodies_vs_ifc` 33 s against 36 s, `column_bodies_vs_ifc` 11 s against 14 s; at permit 24 s against 15 s, 195 s against 120 s, 46 s against 32 s and 16 s against 10 s. The permit shard of this run was slower on every step, not on these alone (`schema-validate-rules` 255 s against 137 s), and the as-built shard was faster; the terrain files, Core Interior and RE1 differ by a second or two. The longest scorer step is `saved_meshes_vs_ifc` at permit, 195 s, a tenth of its limit.
+
+## 9. Every arc as an arc (#1366)
+
+**The change.** `src/ifc/family_extrusions.rs` no longer keeps the saved mesh for an arc over 0.12 ft in radius (the rule of #1346 and #1352). Every arc and circle of a rebuilt extrusion is written as `IfcIndexedPolyCurve` arcs in three points, whatever its radius, in the form Revit 24.0.5's IFC4 export gives it: a span over a half turn is two arcs, so a circle is two half arcs, and an arc too flat to survive the writer's micrometre rounding is a line. `FamilyExtrusionReport::arcs`, the count of the instances the rule kept, and the `arcs` field of `ExportNote::FamilyExtrusions` go with the rule; the pull request marks them as a breaking change, though the module has not been in a release. The checks of an instance against its own mesh are as they were (every vertex within 1e-4 ft, surface samples within 1.1e-3 ft, the volume within the arcs' chord loss and 0.01%). The reader gives an arc a finite radius above zero and a finite angle range (`read_curve`), so the rule's guard for a radius that does not read was never reached. The default export does not reach any of this and is unchanged.
+
+**With_arcs.** `FamilyExtrusionReport::with_arcs`, and the same field of the `rvt-ifc` note, counts the replaced instances with an arc written in a profile, an `IfcArcIndex` segment, not those with an arc in the sketch: an arc too flat to survive the writer's rounding comes out as a line and is not counted. RE-327 section 11.8 found no such arc in the corpus, so the counts of the measured models are expected not to change by it (a filtered run at the head of the pull request checks it).
+
+**What was measured before the change.** At `aaa38de8`, the first arc run's head, every arc was drawn as an arc as it is now, but before the flat-arc rule and the reader changes of #1352. Scored with the scorers of #1365 (run 41871114299), 335 bodies were replaced on Core Interior, RE1 and the BIM4LCA office files (Core Interior 37, each office file 129, each terrain file 11, RE1 Architecture 8, Electrical 8, Mechanical 1, Plumbing 1), the body scorer scored 251 of them (the other 84 are office `IfcSpace` instances), and all 251 held "ref on ours" and both directions within 0.001 ft: 187 decided by the fine tessellation, 64 by the default one. Section 9.1 measures this head.
+
+### 9.1 What the runs of this change measured
+
+All at `34750454de70c03783b4d766255e3952ede175ed` (`feat/1366-arcs-again`, with `main` at `e875500d` merged), all green. The commit after it changes only how `with_arcs` is counted (above) and the documentation; it writes the same bodies.
+
+- **41884073888**: the default export, no flag, `-f base=main -f scorers=none`, 34 models. The `ifc.sha256` of **34 of 34** are the same as `main`'s.
+- **41884078892**: `--saved-meshes --family-extrusions`, `-f base=main -f nordic=true -f r2025=true`, the models of the #1362 runs, the scorers `family_extrusion_bodies_vs_ifc mesh_bodies_vs_ifc saved_meshes_vs_ifc space_profiles_vs_ifc`. Both sides are scored by the same scorers, so the difference is the #1352 rule against this head.
+- **41884639625**: the unfiltered run, `-f base=main -f ifc_flags=--family-extrusions -f holdout=true -f nordic=true -f r2025=true`, every scorer, 53 models: the 34 above, the spent pair and the 18 held-out models.
+
+**Which exports moved.** 6 of 53; the other 47 are byte-identical (held-out ones included, below). Each of the 6 is a family-extrusion change and nothing else:
+
+| model | bodies replaced, main to head | added | `saved_graphics_mesh` bodies | swept solids with a Position (`schema.txt`) |
+|---|---:|---:|---:|---:|
+| office as built | 9 to 129 | 120 (78 `IfcWasteTerminal`, 42 spaces) | 11,069 to 10,949 | 2,450 to 2,570 |
+| office at permit | 9 to 129 | 120 (the same) | 11,184 to 11,064 | 2,417 to 2,537 |
+| office terrain, concrete | 0 to 11 | 11 | 19 to 8 | 14 to 25 |
+| office terrain, timber | 0 to 11 | 11 | 18 to 7 | 15 to 26 |
+| RE1 Architecture | 7 to 8 | 1 (the toilet-paper dispenser) | 46 to 45 | 51 to 58 |
+| RE1 Electrical | 2 to 8 | 6 (occupancy sensors) | 45 to 39 | 4 to 10 |
+
+The additions are 269, the bodies the #1352 rule kept as meshes. In each file the count of swept solids rises by the number of extrusions added (120, 120, 11, 11, 7 for the dispenser's seven, 6), `diagnostics.json` differs in no key but `body_sources` (`family_extrusions` up and `saved_graphics_mesh` down by the number added), and of the scorer files only `mesh_bodies_vs_ifc` and `saved_meshes_vs_ifc` (the replaced bodies leave the saved-mesh set), `space_profiles_vs_ifc` (the offices: 42 of the 44 family-instance spaces are now family bodies, vertices within 0.01 ft 117 to 159 as built and 115 to 157 at permit, as at `aaa38de8`) and `schema.txt` (the count above) differ. Of the 1,519 scorer, schema and hash files of the 35 models that are not held out, 1,493 are identical and the 26 that differ are those of these 6 models. The only other differences in the run are the text of the `rvt-ifc` note, which no longer has the field for the instances the rule kept, and the sizes the logs report writing (below).
+
+**The replaced bodies against the bar** (41884078892, with the scorers of #1365). 335 bodies are replaced where the #1352 rule replaced 66; the body scorer scores 251 of them, and the other 84 are the 42 `IfcSpace` family instances in each office file, which `space_profiles_vs_ifc` scores:
+
+| model | replaced | scored | decided by the fine tessellation | hold the bar | the #1352 rule: scored, hold |
+|---|---:|---:|---:|---:|---|
+| Core Interior | 37 | 37 | 0 | 37 | 37, 37 |
+| office as built | 129 | 87 | 78 | 87 | 9, 9 |
+| office at permit | 129 | 87 | 78 | 87 | 9, 9 |
+| office terrain, concrete | 11 | 11 | 11 | 11 | 0 |
+| office terrain, timber | 11 | 11 | 11 | 11 | 0 |
+| RE1 Architecture | 8 | 8 | 2 | 8 | 7, 7 |
+| RE1 Electrical | 8 | 8 | 6 | 8 | 2, 2 |
+| RE1 Mechanical | 1 | 1 | 0 | 1 | 1, 1 |
+| RE1 Plumbing | 1 | 1 | 1 | 1 | 1, 1 |
+| total | 335 | 251 | 187 | 251 | 66, 66 |
+
+All 251 hold "ref on ours", both directions within 0.001 ft, the volume within 1% and within 0.01%, and the bodies with an arc that miss "ref on ours" number 0 in every model (the class tables' columns summed: 251 in each of the six). The 187 are the 185 arcs over 0.12 ft (78 in each office file, 11 in each terrain file, 6 in RE1 Electrical, 1 in RE1 Architecture) and 2 circles of 0.12 ft or less (RE1 Architecture, Plumbing); the 64 are decided by the default tessellation. These counts are the same as at `aaa38de8` (section 9, run 41871114299). The dispenser, which missed in the default tessellation (0.001439 ft), is one of the 185 and holds in the fine one.
+
+**Nothing that passed on `main` fails.** The 66 bodies the #1352 rule replaced are among the 251 and all hold. In the flag run the three other scorers' files are identical between the sides for the 28 models whose export does not move; in the 6 that do, the class rows of `mesh_bodies_vs_ifc` that change are the classes that lost bodies to the extrusions (`IfcWasteTerminal` in the office and terrain files, which leaves the table; `IfcBuildingElementProxy` in RE1 Architecture, 7 to 6, and Electrical, 28 to 22), and no column of a remaining row fell by more than the number of bodies its class lost. The saved-mesh rows of the doors, windows and every other class are the same.
+
+**Held-out models, counts only.** 18 held-out models: the `ifc.sha256` of **18 of 18** and the `counts.txt` of **18 of 18** are the same as `main`'s (2,855 count lines, 217 saved-mesh bodies scored). No held-out export moves with the flag on.
+
+**File size.** The extrusions are smaller than the meshes they replace: the IFC written is 77,933,583 bytes against 82,168,553 as built and 77,924,636 against 82,159,606 at permit, 167,471 against 924,172 (concrete) and 167,740 against 924,441 (timber) for the terrain files, 1,108,927 against 1,141,633 for RE1 Architecture and 319,689 against 365,679 for Electrical.
+
+**Time.** One export each, beside the others, so these compare machine load as much as code: the office files' flagged export took 34.7 s as built and 21.0 s at permit against 36.8 s and 29.4 s on `main`'s side, the terrain files 2.6 s against 1.9 s, RE1 Architecture 3.2 s against 2.3 s and Electrical 3.5 s against 2.7 s.
+
+**Not measured.** The `with_arcs` count with the written-arcs rule (the commit after `34750454`); the unfiltered run does not run `family_extrusion_bodies_vs_ifc`, so the held-out models' family bodies are not scored, only their exports compared; a flat arc, of which the corpus has none.

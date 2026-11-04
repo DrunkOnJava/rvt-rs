@@ -22,14 +22,16 @@
   both); of 3,816 saved-mesh bodies 295 are curved, 38 (the office's
   waste-terminal meshes, the largest 0.001001 ft against the bar's 0.001) hold
   "ref on ours" only in the default tessellation and 158 hold both directions
-  within 0.001 ft only in the fine one. Drawn as arcs, as the first arc run's
-  head draws them, 185 of the 269 bodies the current rule keeps as meshes are
-  scored, and all 185 hold in the fine tessellation (184 in the default one,
+  within 0.001 ft only in the fine one. Drawn as arcs at `aaa38de8`
+  (the first arc run's head, before the flat-arc rule), 185 of the 269 bodies
+  the 0.12 ft rule of #1352 kept as meshes are scored, and all 185 hold in the
+  fine tessellation (184 in the default one,
   the dispenser being the exception); the other 84 are office spaces, not
   scored by these scorers. No figure and no bar changes here. The maintainer decided the
   bar (2026-11-04, "Fine where both draw curves"): the fine tessellation
   decides only where both files write true curves, and saved meshes keep the
   default bar, so no saved-mesh verdict moves; #1365 implements it in the
-  scorers and #1366 draws the 185 circles over 0.12 ft as true arcs again.
+  scorers and #1366 removes that 0.12 ft rule, so the 185 circles over 0.12 ft are
+  drawn as true arcs again.
   Report:
   `reports/element-framing/RE-331-scorer-tessellation.md`.
