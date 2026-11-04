@@ -504,6 +504,21 @@ jobs:
         if: ${{ !cancelled() }}
         shell: bash
         run: cat target/tmp/element-provenance/summary.txt || echo "no element provenance report was written"
+      # #1326: tests/export_decisions_counts.rs checks the per-element
+      # decisions against the diagnostics' counts; its report, per model and
+      # reason (total, recorded, dropped, the aggregate), is printed and kept.
+      - name: Print the export decisions report
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: cat target/tmp/export-decisions/summary.txt || echo "no export decisions report was written"
+      - name: Upload the export decisions report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: export-decisions
+          path: target/tmp/export-decisions/
+          if-no-files-found: ignore
+          retention-days: 14
       - name: Upload the element provenance report
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

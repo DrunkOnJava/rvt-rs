@@ -147,12 +147,16 @@ pub(super) fn is_empty_curtain_panel(element: &DecodedElement) -> bool {
         })
 }
 
-/// The curtain panels left out as empty (#309): how many, and the types of
-/// theirs whose material is set, which would contradict the name.
+/// The curtain panels left out as empty (#309): how many, the frame each was
+/// read from (#1326), and the types of theirs whose material is set, which
+/// would contradict the name.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct EmptyCurtainPanels {
     /// Placed panels of the [`EMPTY_PANEL_FAMILY_NAME`] family.
     pub count: usize,
+    /// The same panels, in ElementId order, each with the frame it was read
+    /// from.
+    pub panels: Vec<crate::partition_element_records::LeftOutElement>,
     /// Their types whose material is set.
     pub types_with_material: BTreeSet<u32>,
 }
@@ -188,7 +192,8 @@ pub fn scan_empty_curtain_panels(
         per::scan_category_records(rf, revit_version, per::OST_CURTAIN_WALL_PANELS, &declared)?;
     let options = rf.memoised_design_options();
     let phases = rf.memoised_phase_filter();
-    let mut panels: BTreeSet<u32> = BTreeSet::new();
+    let mut panels: BTreeMap<u32, &crate::partition_element_records::PartitionElementRecord> =
+        BTreeMap::new();
     let mut types: BTreeSet<u32> = BTreeSet::new();
     for record in records.iter().filter(|r| {
         r.is_exported_instance() && !options.excludes(r) && !phases.excludes(r) && r.has_volume()
@@ -204,11 +209,20 @@ pub fn scan_empty_curtain_panels(
         if crate::partition_names::resolve_family(&names, type_id)
             .is_some_and(|family| empty_families.contains(&family))
         {
-            panels.insert(record.element_id);
+            panels.insert(record.element_id, record);
             types.insert(type_id);
         }
     }
     out.count = panels.len();
+    out.panels = panels
+        .into_values()
+        .map(|record| {
+            crate::partition_element_records::LeftOutElement::from_record(
+                record,
+                "CurtainWallPanel",
+            )
+        })
+        .collect();
     for stream in rf.partition_stream_names() {
         let Ok(inflated) = rf.inflated_partition(&stream) else {
             continue;

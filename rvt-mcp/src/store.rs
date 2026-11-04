@@ -17,6 +17,7 @@ use rvt::RevitFile;
 use rvt::control::WalkerControl;
 use rvt::elem_table::RecordFraming;
 use rvt::ifc::element_provenance::ElementProvenanceTable;
+use rvt::ifc::export_decisions::ExportDecisionLog;
 use rvt::ifc::step_writer::element_global_ids;
 use rvt::ifc::{
     ExportDiagnostics, ExportNote, ExportOptions, ExportRun, IfcModel,
@@ -165,11 +166,16 @@ pub struct Computed {
     /// writes without `--element-provenance`: the table is 4.5 MB of compact
     /// JSON on the BIM4LCA office.
     pub element_provenance: Option<ElementProvenanceTable>,
+    /// Why each element, body, opening or outline was left out (#1326), taken
+    /// out of `diagnostics` as the provenance table is: `explain_element`
+    /// reads it.
+    pub export_decisions: Option<ExportDecisionLog>,
 }
 
 impl Computed {
     fn new(mut run: ExportRun, mut file: FileProvenance) -> Self {
         let element_provenance = run.diagnostics.decoded.element_provenance.take();
+        let export_decisions = run.diagnostics.export_decisions.take();
         file.omitted_entries = element_provenance
             .as_ref()
             .map(|table| table.omitted_entries);
@@ -183,6 +189,7 @@ impl Computed {
             global_ids,
             file,
             element_provenance,
+            export_decisions,
         }
     }
 }
@@ -273,7 +280,8 @@ impl Entry {
         let mut file = lock(&self.file);
         let options = ExportOptions::default()
             .with_phase(self.phase_spec())
-            .with_element_provenance(true);
+            .with_element_provenance(true)
+            .with_export_decisions(true);
         let run = run_decode(&mut file, config, &options, control)?;
         let provenance = file_provenance(&mut file);
         drop(file);
