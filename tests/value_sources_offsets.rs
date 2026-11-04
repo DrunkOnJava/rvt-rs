@@ -46,6 +46,11 @@
 //!   and no other `selected_frame`, that `differs_from_frame` says whether the
 //!   value is held in another partition than the frame, and that
 //!   `value_source_counts` equals the count made here;
+//! - on puzzbobb's Revit 2025 models (`RVT_R2025_DIR`, where the roofs drawn
+//!   from their slopes and from an extrusion are), requires the models
+//!   together to have sources from `R2025_READERS`, and reads a roof's slope
+//!   blocks and sketch lines again: each decodes to a slope, an arrow or a
+//!   curve;
 //! - requires each model's `MIN_READERS` to have sources, so a table with no
 //!   sources cannot pass.
 //!
@@ -70,7 +75,8 @@ use rvt::research::element_record_plan_profiles::SKETCH_OWNER_OFFSET;
 use rvt::research::native_document::{Options, extract_graphs};
 use rvt::research::partition_beam_axes::{
     BEAM_DATA_WINDOW, BoundedArc, BoundedLine, first_bounded_arc, first_bounded_line,
-    scan_first_bounded_arcs, scan_first_bounded_lines,
+    first_bounded_spline, first_circle, first_sketch_curve, scan_first_bounded_arcs,
+    scan_first_bounded_lines,
 };
 use rvt::research::partition_element_records::{
     PartitionElementRecord, PartitionRecordSpan, carries_no_element_id, decode_at_with_marker,
@@ -81,6 +87,7 @@ use rvt::research::partition_instance_transforms::{
 };
 use rvt::research::partition_names::{ElementDataLayout, element_data_layout};
 use rvt::research::partition_pipe_axes::pipe_body;
+use rvt::research::partition_roof_slopes::{EDGE_SLOPE_WINDOW, arrow_heights, edge_slope_in};
 use rvt::research::partition_room_boundaries::{
     ROOM_OUTLINE_SOURCE, ROOM_OUTLINE_SOURCE_APPROXIMATE, ROOM_OUTLINE_SOURCE_FACES,
     ROOM_SOLID_TAG, ResolvedKind, is_room_outline_source, resolved_outline_of_solids,
@@ -221,9 +228,32 @@ const COVERAGE: &[(&str, Coverage)] = &[
             rules: &["agreeing"],
         },
     ),
-    ("partition_roof_slope", NotYet),
-    ("partition_roof_extrusion", NotYet),
+    (
+        "partition_roof_slope",
+        Recorded {
+            readers: &["roof_slope_edges"],
+            rules: &["agreeing"],
+        },
+    ),
+    (
+        "partition_roof_extrusion",
+        Recorded {
+            readers: &["roof_line_data"],
+            rules: &["agreeing", "current"],
+        },
+    ),
     ("family_extrusions", NotYet),
+];
+
+/// The readers that at least one model of the Revit 2025 set
+/// (`RVT_R2025_DIR`, puzzbobb's models) must have sources from: the roofs drawn
+/// from their slopes and from their extrusion, and a straight run.
+const R2025_READERS: &[&str] = &[
+    "sketch_lines",
+    "roof_slope_edges",
+    "roof_line_data",
+    "roof_type_layers",
+    "native_run",
 ];
 
 /// The readers that source what a box alone does not (a profile, a section, a
@@ -278,6 +308,28 @@ const MIN_READERS: &[(&str, &[&str])] = &[
 fn project_models() -> Vec<(String, PathBuf)> {
     let Some(dir) = std::env::var_os("RVT_PROJECT_CORPUS_DIR") else {
         eprintln!("skipping the project corpus: RVT_PROJECT_CORPUS_DIR is not set");
+        return Vec::new();
+    };
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return Vec::new();
+    };
+    let mut models: Vec<(String, PathBuf)> = entries
+        .filter_map(|entry| entry.ok().map(|e| e.path()))
+        .filter(|path| path.extension().is_some_and(|ext| ext == "rvt"))
+        .filter_map(|path| {
+            let name = path.file_stem()?.to_string_lossy().into_owned();
+            Some((name, path))
+        })
+        .collect();
+    models.sort();
+    models
+}
+
+/// puzzbobb's Revit 2025 models (`RVT_R2025_DIR`, #356): the only models of
+/// the gate whose roofs are drawn from their slopes and from an extrusion.
+fn r2025_models() -> Vec<(String, PathBuf)> {
+    let Some(dir) = std::env::var_os("RVT_R2025_DIR") else {
+        eprintln!("skipping the Revit 2025 models: RVT_R2025_DIR is not set");
         return Vec::new();
     };
     let Ok(entries) = std::fs::read_dir(dir) else {
@@ -477,7 +529,7 @@ struct BodyStats {
     by_reader: BTreeMap<String, usize>,
 }
 
-fn check_model(name: &str, path: &Path) {
+fn check_model(name: &str, path: &Path) -> BTreeSet<String> {
     let mut rf = RevitFile::open(path).expect("open the model");
     let run = run_export(
         &mut rf,
@@ -705,17 +757,42 @@ fn check_model(name: &str, path: &Path) {
                     let verdict = match source.reader.as_str() {
                         // The line's element-data header, then the line's own
                         // id: the part's offset is a header, not a frame.
-                        "sketch_line_data" => match layout.as_ref() {
+                        // A roof's slope block or sketch line is read again:
+                        // it decodes to a slope, an arrow or a curve. A roof
+                        // type's layers are an element-data header and the
+                        // type's id.
+                        "sketch_line_data" | "roof_slope_edges" | "roof_line_data"
+                        | "roof_type_layers" => match layout.as_ref() {
                             Some(layout) => {
+                                let window = if source.reader == "roof_slope_edges" {
+                                    EDGE_SLOPE_WINDOW
+                                } else {
+                                    BEAM_DATA_WINDOW
+                                };
                                 let read = element_data_at(
                                     bytes,
                                     layout,
                                     part.offset,
                                     part.element_id,
-                                    BEAM_DATA_WINDOW,
+                                    window,
                                     false,
                                 );
-                                if read.is_some() {
+                                let decodes = match (source.reader.as_str(), read) {
+                                    (_, None) => false,
+                                    ("roof_slope_edges", Some(data)) => {
+                                        edge_slope_in(data, version).is_some()
+                                            || arrow_heights(data).is_some()
+                                    }
+                                    ("roof_line_data", Some(data)) => {
+                                        first_bounded_line(data).is_some()
+                                            || first_bounded_arc(data).is_some()
+                                            || first_bounded_spline(data).is_some()
+                                            || first_circle(data).is_some()
+                                            || first_sketch_curve(data).is_some()
+                                    }
+                                    (_, Some(_)) => true,
+                                };
+                                if decodes {
                                     Part::Confirmed
                                 } else {
                                     Part::Failed
@@ -1188,6 +1265,7 @@ fn check_model(name: &str, path: &Path) {
         .expect("write the summary");
 
     assert!(problems.is_empty(), "{name}: {problems:#?}");
+    counts.keys().cloned().collect()
 }
 
 /// Check each model. With `dir_variable` set, a model of `must_hold` that the
@@ -1230,4 +1308,23 @@ fn nordic_office_value_sources_name_the_copy_the_reader_took() {
         office_model(),
         &["nordic-office-as-built"],
     );
+}
+
+#[test]
+fn r2025_value_sources_name_the_copy_the_reader_took() {
+    let models = r2025_models();
+    if models.is_empty() {
+        eprintln!("skipping: no Revit 2025 model to read");
+        return;
+    }
+    let mut held: BTreeSet<String> = BTreeSet::new();
+    for (name, path) in &models {
+        held.extend(check_model(name, path));
+    }
+    for reader in R2025_READERS {
+        assert!(
+            held.contains(*reader),
+            "no Revit 2025 model has a source from {reader}"
+        );
+    }
 }

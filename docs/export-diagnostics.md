@@ -122,6 +122,12 @@ drawn from that reader.
 | `family_type_hollow_section` | `type_hollow_section` | `agreeing` | `parts`: the entries of the column type's parameters `b`, `Ht`, `t` and `kr` (`f64`, `ff` x 8, `i64` parameter id), in the type's value block; the first copy of each, every copy holding the same value. A parameter whose value block holds two different values, or whose copies in two partitions differ, is skipped (the type then has no section): that is not counted as a disagreement among copies. The element's `selected_frame` names the frame whose box the section is held to. |
 | `family_type_i_section` | `type_i_section` | `agreeing` | `parts`: the six entries of the type's I section (width, height, web and flange thickness, the centroid both ways), as for the hollow section. `instance_transform` (as below) gives the plan angle of the column's X axis. On Core Interior, the BIM4LCA office and the RE1 models no element has this body (Measure run 41887789579), so this reader is untested on real files. |
 | `partition_pipe_axis` | `pipe_connectors` | `agreeing` | `parts`: the two connector entries (`u64` element, `u32` index, `u32` 1, the point) whose points are the pipe's ends, in the partition of its record. An entry is found by where its point falls, never by whose it is (RE-131): at a connected end it is keyed by the element connected there, so a part's `element_id` may be a neighbour of the pipe (a fitting), not the pipe. The radius is the record box's, held in the element's `selected_frame`. Where the pipe's body came from two partitions they agree. |
+| `partition_roof_slope` | `roof_slope_edges` | `agreeing` | `parts`: the element-data header of the slope block of each sketch line the slope was made from (the defining edges, or the slope arrow and the boundary lines it rises from), the first copy, every copy holding the same block (RE-56, RE-199, RE-307). |
+| `partition_roof_slope`, `partition_roof_extrusion` | `roof_line_data` | `agreeing` or `current` | `parts`: the element-data header of the copy of each of those sketch lines (a roof by extrusion: all of its lines) the line or spline was read from, as `sketch_line_data` (RE-211). |
+| `partition_roof_slope` | `roof_fascia_depth` | `agreeing` | The element-data header of the roof's own data that gave its fascia depth, where it was read (RE-199). |
+| `partition_roof_slope` | `roof_rafter_cut` | `native` | The header of the roof's current native record, which gives its rafter cut, where it was read (RE-199). |
+| `partition_roof_slope`, `partition_roof_extrusion` | `roof_type_layers` | `agreeing` | `parts`: the element-data header of the roof type's layers, whose widths sum to the roof's thickness, read once for the type and noted for each roof of it. |
+| `partition_roof_slope`, `partition_roof_extrusion` | `sketch_lines`, `sketch_list` | as above | The roof's outline (a sloped roof) as for a floor; for a roof by extrusion `sketch_lines` lists the first frame of each of its sketch lines, rule `frame` (the other frames are not compared). The element's `selected_frame` names the frame whose box the section is held to. |
 | `partition_wall_centreline`, `partition_wall_centreline_layer_joins`, `partition_wall_tapered_section`, `partition_beam_axis`, `partition_beam_box_along_axis` | `bounded_line` | `agreeing` | The element-data header of the lowest-numbered partition's copy of its location line. Every copy holds the same line; a wall or beam whose copies differ is drawn as its box instead. |
 | `partition_wall_arc` | `bounded_arc` | `agreeing` | As `bounded_line`, for a curved wall's arc. |
 | `partition_family_instance_turned_box`, `partition_family_instance_oriented_box` | `instance_transform` | `agreeing` or `current` | The element-data header of the copy: the lowest-numbered partition's where the copies agree, the current partition's where they differ (RE-216). |
@@ -137,9 +143,8 @@ drawn from that reader.
 | `partition_landing_slab` | `native_landing` | `native` | The header of the landing's current native record, which gives its top. |
 | `partition_landing_slab` | `native_landing_type` | `native` | `parts`: the header of the landing type's current native record, which gives the thickness (monolithic types only). |
 
-No reader notes its copy yet for `partition_area_boundary_lines`,
-`partition_roof_slope`, `partition_roof_extrusion` and `family_extrusions`, nor
-for the other values a body reads (a wall's layers, a beam's I section, the
+No reader notes its copy yet for `partition_area_boundary_lines` and
+`family_extrusions`, nor for the other values a body reads (a wall's layers, a beam's I section, the
 parameters of a rectangular column's section). An element of those bodies has
 no value source; an element whose box is the body but whose profile is read
 from a record no reader notes yet has `selected_frame_box` and nothing for the
@@ -153,8 +158,10 @@ not say every copy set agreed: a set that disagreed and could not be resolved is
 dropped by its reader and leaves no source and no count.
 
 `tests/value_sources_offsets.rs` reads the bytes at each recorded offset on Core
-Interior, the RE1 models, Einhoven and the BIM4LCA as-built office. For the
-element-data readers it finds the element-data header, then the element's own
+Interior, the RE1 models, Einhoven and the BIM4LCA as-built office, and, where
+`RVT_R2025_DIR` names puzzbobb's Revit 2025 models (CI's Corpus health fetches
+them), on those: the only models of the gate whose roofs are drawn from their
+slopes or from an extrusion. For the element-data readers it finds the element-data header, then the element's own
 id, then a record that decodes to the value the reader returns when asked again;
 for a native record it finds the ElementId at the offset; for each record in
 `parts` it reads what that record is: a sketch line's or a type symbol's frame
@@ -167,7 +174,9 @@ the vertex count the room holds; a type's parameter entry is `f64`, `ff` x 8 and
 an `i64`, in the value block whose owner (declared, as the reader's blocks
 are) is the type, and a section's parts are distinct entries of the expected
 parameters (an I section's six; a hollow section's four, whose captions the
-`ParamElemFamily` elements name `b`, `Ht`, `t` and `kr`); a pipe's connector
+`ParamElemFamily` elements name `b`, `Ht`, `t` and `kr`); a roof's slope block
+decodes to a slope or a slope arrow, and its sketch line to a line, an arc or a
+spline; a pipe's connector
 entry is the keyed element's `u64`, an index of at most 255, the `u32` 1 and a
 point, and the two parts' points make a cylinder (`pipe_body`) with the pipe's
 record box; a run type or a native type record starts with its id; and a

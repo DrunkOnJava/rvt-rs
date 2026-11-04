@@ -377,6 +377,52 @@ impl ValueSource {
     }
 }
 
+/// The copies a reader met while it scanned the partitions for the element
+/// data of some ids (#1368): the first copy of each id that gave a value, and
+/// the partitions that named it and that gave one. The reader notes its choice
+/// once the scan has settled which ids it kept.
+#[derive(Default)]
+pub(crate) struct CopyTrail {
+    first: BTreeMap<u32, (u32, usize)>,
+    named: BTreeMap<u32, BTreeSet<u32>>,
+    gave: BTreeMap<u32, BTreeSet<u32>>,
+}
+
+impl CopyTrail {
+    /// The copy of `id` in `partition` was met.
+    pub(crate) fn named(&mut self, id: u32, partition: u32) {
+        self.named.entry(id).or_default().insert(partition);
+    }
+
+    /// The copy of `id` in `partition`, whose element-data header starts at
+    /// `at`, gave a value.
+    pub(crate) fn gave(&mut self, id: u32, partition: u32, at: usize) {
+        self.first.entry(id).or_insert((partition, at));
+        self.gave.entry(id).or_default().insert(partition);
+    }
+
+    /// Note, under each of `kept` that gave a value, the first copy that did,
+    /// as `reader`'s choice among copies that agree.
+    pub(crate) fn note(
+        self,
+        rf: &mut RevitFile,
+        reader: &str,
+        kept: impl IntoIterator<Item = u32>,
+    ) {
+        for id in kept {
+            let Some(&(partition, at)) = self.first.get(&id) else {
+                continue;
+            };
+            let held = self.named.get(&id).map_or(0, BTreeSet::len);
+            let partitions = self.gave.get(&id).cloned().unwrap_or_default();
+            let source =
+                ValueSource::in_partition(reader, CopyRule::Agreeing, held, partition, Some(at))
+                    .with_partitions(partitions.into_iter().collect());
+            rf.note_value_source(id, source);
+        }
+    }
+}
+
 /// The value sources the readers noted on a handle, by ElementId.
 pub type ValueSourceNotes = BTreeMap<u32, Vec<ValueSource>>;
 
@@ -919,6 +965,24 @@ fn body_readers(body: &str) -> &'static [&'static str] {
             "type_i_section",
         ],
         ec::PIPE_AXIS_BODY_SOURCE => &[SELECTED_FRAME_READER, "pipe_connectors"],
+        ec::ROOF_SLOPE_BODY_SOURCE => &[
+            SELECTED_FRAME_READER,
+            "sketch_lines",
+            "sketch_list",
+            "sketch_line_data",
+            "roof_slope_edges",
+            "roof_line_data",
+            "roof_fascia_depth",
+            "roof_rafter_cut",
+            "roof_type_layers",
+        ],
+        ec::ROOF_EXTRUSION_BODY_SOURCE => &[
+            SELECTED_FRAME_READER,
+            "sketch_lines",
+            "sketch_list",
+            "roof_line_data",
+            "roof_type_layers",
+        ],
         ec::LANDING_TREAD_BODY_SOURCE => &["native_landing"],
         ec::LANDING_SLAB_BODY_SOURCE => &["landing_lines", "native_landing", "native_landing_type"],
         _ => &[],
