@@ -139,9 +139,14 @@ pub struct StringRecord {
 /// binary bytes rarely satisfy both the length bound and the printable-text
 /// check simultaneously.
 pub fn extract_string_records(decomp: &[u8]) -> Vec<StringRecord> {
+    extract_string_records_from(decomp, 0)
+}
+
+/// [`extract_string_records`], the scan starting at offset `start`.
+fn extract_string_records_from(decomp: &[u8], start: usize) -> Vec<StringRecord> {
     let mut out = Vec::new();
     let mut candidates = RecordCandidates::default();
-    let mut i = 0usize;
+    let mut i = start;
     while i + 8 < decomp.len() {
         // Every offset the checks below accept has its count's two high
         // bytes and its first code unit's high byte zero. Offsets without
@@ -150,34 +155,49 @@ pub fn extract_string_records(decomp: &[u8]) -> Vec<StringRecord> {
             break;
         };
         i = next;
-        let tag = u32::from_le_bytes([decomp[i], decomp[i + 1], decomp[i + 2], decomp[i + 3]]);
-        let cnt = u32::from_le_bytes([decomp[i + 4], decomp[i + 5], decomp[i + 6], decomp[i + 7]])
-            as usize;
-        if (1..=400).contains(&cnt) && i + 8 + 2 * cnt <= decomp.len() {
-            let body = &decomp[i + 8..i + 8 + 2 * cnt];
-            // Screen on the raw code units before decoding. Every char an
-            // accepted record can hold is ASCII (see `is_printable_ascii_utf16le`),
-            // so acceptance is decidable on the bytes, and a length field
-            // that happened to land in 1..=400 — which binary data does at
-            // a large fraction of offsets — is rejected on its first code
-            // unit instead of after a full decode and heap allocation.
-            if is_printable_ascii_utf16le(body) {
-                let (cow, _, _) = UTF_16LE.decode(body);
-                let text = cow.into_owned();
-                out.push(StringRecord {
-                    offset: i,
-                    tag,
-                    value: text
-                        .trim_end_matches(&['\0', '/', ' ', '\t'] as &[_])
-                        .to_string(),
-                });
-                i += 8 + 2 * cnt;
-                continue;
-            }
+        if let Some((record, end)) = record_at(decomp, i) {
+            out.push(record);
+            i = end;
+            continue;
         }
         i += 1;
     }
     out
+}
+
+/// The record the scan accepts at offset `i` of `decomp`, and where it ends.
+fn record_at(decomp: &[u8], i: usize) -> Option<(StringRecord, usize)> {
+    if i + 8 > decomp.len() {
+        return None;
+    }
+    let tag = u32::from_le_bytes([decomp[i], decomp[i + 1], decomp[i + 2], decomp[i + 3]]);
+    let cnt =
+        u32::from_le_bytes([decomp[i + 4], decomp[i + 5], decomp[i + 6], decomp[i + 7]]) as usize;
+    if !(1..=400).contains(&cnt) || i + 8 + 2 * cnt > decomp.len() {
+        return None;
+    }
+    let body = &decomp[i + 8..i + 8 + 2 * cnt];
+    // Screen on the raw code units before decoding. Every char an
+    // accepted record can hold is ASCII (see `is_printable_ascii_utf16le`),
+    // so acceptance is decidable on the bytes, and a length field
+    // that happened to land in 1..=400 — which binary data does at
+    // a large fraction of offsets — is rejected on its first code
+    // unit instead of after a full decode and heap allocation.
+    if !is_printable_ascii_utf16le(body) {
+        return None;
+    }
+    let (cow, _, _) = UTF_16LE.decode(body);
+    let text = cow.into_owned();
+    Some((
+        StringRecord {
+            offset: i,
+            tag,
+            value: text
+                .trim_end_matches(&['\0', '/', ' ', '\t'] as &[_])
+                .to_string(),
+        },
+        i + 8 + 2 * cnt,
+    ))
 }
 
 /// The offsets where a string record could start. The `u32` count at `+4`
@@ -304,61 +324,48 @@ pub(crate) fn extract_partition_string_records(rf: &mut RevitFile) -> Result<Vec
     // so it sees clear boundaries between them (in case record scans cross
     // chunks accidentally). A record's header and body are never FF, so the
     // separator rejects every offset whose header or body reaches it, but for
-    // one that begins in the separator itself and reads its header's last
-    // bytes from the next chunk. Unless one is accepted, the records are those
-    // of a scan of each chunk alone, moved to where they lie in the joined
-    // bytes, and the partition is not copied to be read (#1075).
-    if !inflated.chunks().skip(1).any(record_begins_in_separator) {
-        let mut records = Vec::new();
-        let mut base = 0usize;
-        for (i, chunk) in inflated.chunks().enumerate() {
-            if i > 0 {
-                base += STRING_CHUNK_SEPARATOR.len();
+    // a record whose header begins in the separator and ends in the chunk
+    // after it (a chunk that opens where a record's tag ended). So each chunk
+    // is scanned where it lies, after the records that begin in the separator
+    // before it, with its records' offsets moved to where they lie in the
+    // joined bytes, and the partition is not copied to be read (#1075).
+    let mut records = Vec::new();
+    let mut chunk_start = 0usize;
+    for (index, chunk) in inflated.chunks().enumerate() {
+        let mut from = 0usize;
+        if index > 0 {
+            chunk_start += STRING_CHUNK_SEPARATOR.len();
+            if let Some((mut record, end)) = record_in_separator(chunk) {
+                record.offset += chunk_start - STRING_CHUNK_SEPARATOR.len();
+                records.push(record);
+                from = end - STRING_CHUNK_SEPARATOR.len();
             }
-            records.extend(extract_string_records(chunk).into_iter().map(|mut record| {
-                record.offset += base;
-                record
-            }));
-            base += chunk.len();
         }
-        return Ok(records);
+        records.extend(
+            extract_string_records_from(chunk, from)
+                .into_iter()
+                .map(|mut record| {
+                    record.offset += chunk_start;
+                    record
+                }),
+        );
+        chunk_start += chunk.len();
     }
-    let mut joined = Vec::with_capacity(
-        inflated.bytes().len() + STRING_CHUNK_SEPARATOR.len() * inflated.chunk_count(),
-    );
-    for (i, c) in inflated.chunks().enumerate() {
-        if i > 0 {
-            joined.extend_from_slice(&STRING_CHUNK_SEPARATOR);
-        }
-        joined.extend_from_slice(c);
-    }
-    Ok(extract_string_records(&joined))
+    Ok(records)
 }
 
 /// What the string scan puts between a partition's chunks.
 const STRING_CHUNK_SEPARATOR: [u8; 16] = [0xFF; 16];
 
-/// Whether the scan accepts a record that begins in the separator before
-/// `chunk`, with the last bytes of its header and its body in the chunk. Its
-/// count's first byte is the separator's last, so only the last five offsets
-/// of the separator can. `chunk`'s first bytes are all that is read: a record
-/// holds at most 400 characters.
-fn record_begins_in_separator(chunk: &[u8]) -> bool {
+/// The first record the scan accepts that begins in the separator before
+/// `chunk` and ends in the chunk, with its offset in the separator followed by
+/// `chunk` and where it ends there. A record's count must have its two high
+/// bytes zero and its text begins after the eight-byte header, so only the
+/// last five offsets of the separator can begin one. Of `chunk` only its first
+/// bytes are read: a record holds at most 400 characters.
+fn record_in_separator(chunk: &[u8]) -> Option<(StringRecord, usize)> {
     let mut seam = STRING_CHUNK_SEPARATOR.to_vec();
     seam.extend_from_slice(&chunk[..chunk.len().min(8 + 2 * 400)]);
-    (STRING_CHUNK_SEPARATOR.len() - 5..STRING_CHUNK_SEPARATOR.len()).any(|at| {
-        let Some(head) = seam.get(at..at + 10) else {
-            return false;
-        };
-        let count = u32::from_le_bytes([head[4], head[5], head[6], head[7]]) as usize;
-        head[5] <= 1
-            && head[6] == 0
-            && head[7] == 0
-            && head[8] != 0
-            && head[9] == 0
-            && (1..=400).contains(&count)
-            && seam
-                .get(at + 8..at + 8 + 2 * count)
-                .is_some_and(is_printable_ascii_utf16le)
-    })
+    (STRING_CHUNK_SEPARATOR.len() - 5..STRING_CHUNK_SEPARATOR.len())
+        .find_map(|at| record_at(&seam, at))
 }

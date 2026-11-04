@@ -312,11 +312,12 @@ fn extract_impl(
     })
 }
 /// The decoded graph objects one batch of [`extract_in_batches_with_control`]
-/// may hold, about 190 MiB on the BIM4LCA office (4.8 KiB an object).
-const BATCH_OBJECT_BUDGET: usize = 40_000;
+/// may hold, about 95 MiB on the BIM4LCA office (4.8 KiB an object), which
+/// reads its 105 symbols in about eight passes.
+const BATCH_OBJECT_BUDGET: usize = 20_000;
 /// The shared symbols of the first batch; the next ones are sized from the
 /// graph objects the one before decoded for each.
-const FIRST_BATCH_SYMBOLS: usize = 16;
+const FIRST_BATCH_SYMBOLS: usize = 8;
 const MIN_BATCH_SYMBOLS: usize = 4;
 const MAX_BATCH_SYMBOLS: usize = 1024;
 /// [`extract_at_detail_with_control`] for a caller that takes each element as
@@ -329,7 +330,7 @@ const MAX_BATCH_SYMBOLS: usize = 1024;
 /// geometry (on the BIM4LCA office 105 symbols hold 99 % of the graph
 /// objects of 538 owners), are decoded a batch at a time, with the owners
 /// that name them meshed against the batch. A batch holds the symbols of
-/// owners next to each other by symbol, as many as hold about 40,000 graph
+/// owners next to each other by symbol, as many as hold about 20,000 graph
 /// objects (`BATCH_OBJECT_BUDGET`) by the size of the batch before. Each
 /// element is the one [`extract_at_detail_with_control`] makes; only the
 /// summaries of the passes are not returned.
