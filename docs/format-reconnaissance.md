@@ -1206,7 +1206,7 @@ container). Every other combination of scalar base × modifier fell
 through. Q5.2 generalises the rule:
 
 - **`{kind} 0x10 0x00 0x00 …` → `Vector<base>`** for every scalar base
-  byte observed: `0x01` bool, `0x02` u16, `0x04`/`0x05` u32, `0x06`
+  byte observed: `0x01` bool, `0x02` char (1 byte; first written u16, RE-325), `0x04`/`0x05` u32, `0x06`
   f32, `0x07` f64, `0x0b` u64, `0x0d` point/transform, `0x0e` ref.
 - **`{kind} 0x50 0x00 0x00 …` → `Container<base>`** for the same set.
   Reference containers (`kind == 0x0e`) additionally extract embedded
@@ -1231,6 +1231,14 @@ Two additional wire patterns were mapped:
   the common `tag=0x0014, sub=0x0000` case.
 
 ### Deprecated 0x03 i32-alias (2016–2018 only)
+
+> **Corrected by RE-325 (2026-11-04).** This section is kept as it was
+> written. `0x03` is not an alias, not 4 bytes and not confined to 2016 to
+> 2018: it is the C++ `short`, 2 bytes, and the schema holds it in every
+> release 2014 to 2027 (24 to 27 scalar fields and three `short[3]` arrays;
+> the scan files 9 of the scalars as `Primitive`). `0x02` is the C++
+> `char`, 1 byte, not a `u16`. See
+> `reports/element-framing/RE-325-scalar-widths.md`.
 
 Five fields in Revit 2016–2018 use discriminator byte `0x03`, which
 does not appear in any later release:
