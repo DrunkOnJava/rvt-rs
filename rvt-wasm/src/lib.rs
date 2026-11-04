@@ -37,7 +37,7 @@ use rvt::ifc::{
     sheet::{SheetOptions, render_plan_svg},
     step_writer::write_step,
 };
-use rvt::reader::OpenLimits;
+use rvt::reader::{OpenLimits, ProjectPhase};
 
 fn err_str<E: std::fmt::Display>(e: E) -> JsValue {
     JsValue::from_str(&e.to_string())
@@ -83,12 +83,13 @@ pub fn open_rvt_bytes_with_diagnostics_mode(bytes: &[u8], mode: &str) -> Result<
         rvt::walker::WalkerLimits::default(),
         true,
         None,
+        None,
     )
 }
 
 /// [`open_rvt_bytes_with_diagnostics_mode`] under the resource limits of
 /// `limits`, a JS object
-/// `{ largeModel?, maxStreamBytes?, maxInflateBytes?, savedMeshes? }` or
+/// `{ largeModel?, maxStreamBytes?, maxInflateBytes?, savedMeshes?, phase? }` or
 /// `null` for the defaults. A field left out keeps its default; the first
 /// three are `rvt-ifc`'s flags of the same names, resolved by
 /// [`rvt::cli::open_limits`] (`largeModel` is `--large-model`, and an
@@ -105,6 +106,13 @@ pub fn open_rvt_bytes_with_diagnostics_mode(bytes: &[u8], mode: &str) -> Result<
 ///   to 2027 files from the meshes Revit saved for them, as `rvt-ifc` does
 ///   without `--no-saved-meshes`; `false` keeps their bounding boxes and
 ///   skips the extra pass over the file's saved graphics.
+/// - `phase` (a phase's name, matched exactly first, or its ElementId as a
+///   number) exports that project phase, as `rvt-ifc --phase` does: an element
+///   that does not exist in it, and a room whose own phase is not it, are left
+///   out. Left out, the export is the project's last phase. A phase the file
+///   lacks throws, with the file's phases in the message. The result's
+///   `phases` lists them (`{ id, name? }`, in order, the last being the
+///   default).
 ///
 /// Byte limits are whole numbers of bytes. A stream a limit keeps from being
 /// read is listed in `diagnostics` (the `stream_not_read_resource_limit`
@@ -129,13 +137,14 @@ pub fn open_rvt_bytes_with_diagnostics_mode_and_open_limits(
     progress: Option<js_sys::Function>,
 ) -> Result<JsValue, JsValue> {
     install_panic_hook();
-    let (open_limits, walker_limits, saved_meshes) = limits_from_js(limits)?;
+    let request = limits_from_js(limits)?;
     export_with_limits(
         bytes,
         mode,
-        open_limits,
-        walker_limits,
-        saved_meshes,
+        request.open_limits,
+        request.walker_limits,
+        request.saved_meshes,
+        request.phase,
         progress,
     )
 }
@@ -218,6 +227,7 @@ fn export_with_limits(
     open_limits: OpenLimits,
     walker_limits: rvt::walker::WalkerLimits,
     saved_meshes: bool,
+    phase: Option<String>,
     progress: Option<js_sys::Function>,
 ) -> Result<JsValue, JsValue> {
     let control = progress_control(progress);
@@ -227,17 +237,21 @@ fn export_with_limits(
         open_limits,
         walker_limits,
         saved_meshes,
+        phase,
         &control,
     );
     clear_progress();
     result
 }
 
-/// What the viewer gets back: [`rvt::ifc::ExportResult`]'s two fields.
+/// What the viewer gets back: [`rvt::ifc::ExportResult`]'s two fields, and the
+/// project's phases in order (the last is the export's unless the request
+/// named another), empty where the export applies no phase.
 #[derive(serde::Serialize)]
 struct ExportJson {
     model: IfcModel,
     diagnostics: ExportDiagnostics,
+    phases: Vec<ProjectPhase>,
 }
 
 fn export_with_control(
@@ -246,6 +260,7 @@ fn export_with_control(
     open_limits: OpenLimits,
     walker_limits: rvt::walker::WalkerLimits,
     saved_meshes: bool,
+    phase: Option<String>,
     control: &WalkerControl,
 ) -> Result<JsValue, JsValue> {
     let quality_mode = ExportQualityMode::parse(mode).map_err(err_str)?;
@@ -259,7 +274,8 @@ fn export_with_control(
             SavedMeshChoice::Default
         } else {
             SavedMeshChoice::Off
-        });
+        })
+        .with_phase(phase);
     let run = run_export_with_limits_and_control(&mut rf, &options, walker_limits, control)
         .map_err(err_str)?;
     let ExportRun {
@@ -284,7 +300,13 @@ fn export_with_control(
         // Recounts the warnings, and puts the unread-stream ones last.
         record_unread_streams(&mut diagnostics, &unread);
     }
-    serde_wasm_bindgen::to_value(&ExportJson { model, diagnostics }).map_err(err_str)
+    let phases = rf.project_phases();
+    serde_wasm_bindgen::to_value(&ExportJson {
+        model,
+        diagnostics,
+        phases,
+    })
+    .map_err(err_str)
 }
 
 #[derive(Default, serde::Deserialize)]
@@ -294,6 +316,37 @@ struct LimitsOptions {
     max_stream_bytes: Option<f64>,
     max_inflate_bytes: Option<f64>,
     saved_meshes: Option<bool>,
+    phase: Option<PhaseOption>,
+}
+
+/// A phase as the page names it: its name, or its ElementId as a number.
+#[derive(serde::Deserialize)]
+#[serde(untagged)]
+enum PhaseOption {
+    Name(String),
+    Id(f64),
+}
+
+impl PhaseOption {
+    /// What `RevitFile::set_export_phase` takes: a name is matched first and an
+    /// ElementId only where no phase has that name.
+    fn into_request(self) -> Result<String, JsValue> {
+        match self {
+            Self::Name(name) => Ok(name),
+            Self::Id(id) if id.is_finite() && id.fract() == 0.0 => Ok(format!("{id:.0}")),
+            Self::Id(id) => Err(JsValue::from_str(&format!(
+                "phase must be a name or a whole-number ElementId, got {id}"
+            ))),
+        }
+    }
+}
+
+/// The resource limits, saved-mesh switch and export phase of one open.
+struct ExportRequest {
+    open_limits: OpenLimits,
+    walker_limits: rvt::walker::WalkerLimits,
+    saved_meshes: bool,
+    phase: Option<String>,
 }
 
 fn whole_bytes(field: &str, value: Option<f64>) -> Result<Option<u64>, JsValue> {
@@ -308,9 +361,7 @@ fn whole_bytes(field: &str, value: Option<f64>) -> Result<Option<u64>, JsValue> 
     }
 }
 
-fn limits_from_js(
-    limits: JsValue,
-) -> Result<(OpenLimits, rvt::walker::WalkerLimits, bool), JsValue> {
+fn limits_from_js(limits: JsValue) -> Result<ExportRequest, JsValue> {
     let options: LimitsOptions = if limits.is_null() || limits.is_undefined() {
         LimitsOptions::default()
     } else {
@@ -328,11 +379,12 @@ fn limits_from_js(
     if large_model {
         walker_limits.max_scan_bytes = rvt::cli::LARGE_MODEL_MAX_INFLATE_BYTES;
     }
-    Ok((
+    Ok(ExportRequest {
         open_limits,
         walker_limits,
-        options.saved_meshes.unwrap_or(true),
-    ))
+        saved_meshes: options.saved_meshes.unwrap_or(true),
+        phase: options.phase.map(PhaseOption::into_request).transpose()?,
+    })
 }
 
 /// Quick summary — reads only the cheap metadata (BasicFileInfo +

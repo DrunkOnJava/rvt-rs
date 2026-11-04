@@ -10,6 +10,7 @@
 //! rvt-schedule model.rvt --schedule rooms      # writes model.rooms.csv
 //! rvt-schedule model.rvt --metric --excel -o schedule.csv
 //! rvt-schedule model.rvt -o -                  # CSV to stdout
+//! rvt-schedule model.rvt --phase "Existing"    # the schedule of another phase
 //! ```
 
 use clap::{Parser, ValueEnum};
@@ -29,7 +30,8 @@ use std::process::ExitCode;
         rvt-schedule model.rvt                     writes model.elements.csv next to the input\n  \
         rvt-schedule model.rvt --schedule rooms    writes model.rooms.csv\n  \
         rvt-schedule model.rvt --metric --excel -o schedule.csv\n  \
-        rvt-schedule model.rvt -o -                CSV to stdout"
+        rvt-schedule model.rvt -o -                CSV to stdout\n  \
+        rvt-schedule model.rvt --phase \"Existing\"  the schedule of that phase, not the last"
 )]
 struct Cli {
     /// Revit file (.rvt / .rfa / .rte / .rft).
@@ -53,6 +55,13 @@ struct Cli {
     /// non-ASCII names correctly.
     #[arg(long)]
     excel: bool,
+
+    /// Schedule this phase, by its name (exactly) or its ElementId, instead of
+    /// the project's last, as `rvt-ifc --phase` does: an element that does
+    /// not exist in it, and a room whose own phase is not it, are left out.
+    /// An unknown phase is an error that lists the file's phases.
+    #[arg(long, value_name = "NAME|ID")]
+    phase: Option<String>,
 }
 
 #[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
@@ -94,6 +103,9 @@ fn main() -> ExitCode {
 fn run(cli: Cli) -> Result<(), String> {
     // Open errors from the library already name the file.
     let mut rf = RevitFile::open(&cli.input).map_err(|e| e.to_string())?;
+    if let Some(phase) = &cli.phase {
+        rf.set_export_phase(phase).map_err(|e| e.to_string())?;
+    }
     let model = RvtDocExporter
         .export(&mut rf)
         .map_err(|e| format!("export {}: {e}", cli.input.display()))?;
