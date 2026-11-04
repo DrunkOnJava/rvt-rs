@@ -51,6 +51,11 @@
 //!   record a body was rebuilt from by what it is: the record's id, then a
 //!   body of the same length at both ends that opens with the tag of an
 //!   extrusion, a curve or a sketch plane;
+//! - on puzzbobb's Revit 2025 models (`RVT_R2025_DIR`, where the roofs drawn
+//!   from their slopes and from an extrusion are), requires the models
+//!   together to have sources from `R2025_READERS`, and reads a roof's slope
+//!   blocks and sketch lines again: each decodes to a slope, an arrow or a
+//!   curve;
 //! - requires each model's `MIN_READERS` to have sources, so a table with no
 //!   sources cannot pass.
 //!
@@ -75,7 +80,11 @@ use rvt::research::element_record_plan_profiles::SKETCH_OWNER_OFFSET;
 use rvt::research::native_document::{Options, extract_graphs};
 use rvt::research::partition_beam_axes::{
     BEAM_DATA_WINDOW, BoundedArc, BoundedLine, first_bounded_arc, first_bounded_line,
-    scan_first_bounded_arcs, scan_first_bounded_lines,
+    first_bounded_spline, first_circle, first_sketch_curve, scan_first_bounded_arcs,
+    scan_first_bounded_lines,
+};
+use rvt::research::partition_compound_structure::{
+    LAYER_WINDOW, find_layers, layer_frame_tag, layer_layout,
 };
 use rvt::research::partition_element_records::{
     PartitionElementRecord, PartitionRecordSpan, carries_no_element_id, decode_at_with_marker,
@@ -86,6 +95,9 @@ use rvt::research::partition_instance_transforms::{
 };
 use rvt::research::partition_names::{ElementDataLayout, element_data_layout};
 use rvt::research::partition_pipe_axes::pipe_body;
+use rvt::research::partition_roof_slopes::{
+    EDGE_SLOPE_WINDOW, arrow_heights, edge_slope_in, fascia_depth, scan_rafter_cuts,
+};
 use rvt::research::partition_room_boundaries::{
     ROOM_OUTLINE_SOURCE, ROOM_OUTLINE_SOURCE_APPROXIMATE, ROOM_OUTLINE_SOURCE_FACES,
     ROOM_SOLID_TAG, ResolvedKind, is_room_outline_source, resolved_outline_of_solids,
@@ -94,6 +106,7 @@ use rvt::research::partition_room_boundaries::{
 use rvt::research::partition_type_parameters::{
     HOLLOW_SECTION_PARAMETER_NAMES, I_SECTION_PARAMETERS, VALUE_BLOCK_MARK,
 };
+use rvt::research::partition_type_records::{OST_MATERIALS, scan_type_records};
 use rvt::{RevitFile, elem_table};
 use serde_json::json;
 use std::collections::{BTreeMap, BTreeSet};
@@ -226,8 +239,20 @@ const COVERAGE: &[(&str, Coverage)] = &[
             rules: &["agreeing"],
         },
     ),
-    ("partition_roof_slope", NotYet),
-    ("partition_roof_extrusion", NotYet),
+    (
+        "partition_roof_slope",
+        Recorded {
+            readers: &["roof_slope_edges"],
+            rules: &["agreeing"],
+        },
+    ),
+    (
+        "partition_roof_extrusion",
+        Recorded {
+            readers: &["roof_line_data"],
+            rules: &["agreeing", "current"],
+        },
+    ),
     (
         "family_extrusions",
         Recorded {
@@ -235,6 +260,19 @@ const COVERAGE: &[(&str, Coverage)] = &[
             rules: &["frame"],
         },
     ),
+];
+
+/// The readers that at least one model of the Revit 2025 set
+/// (`RVT_R2025_DIR`, puzzbobb's models) must have sources from: the roofs drawn
+/// from their slopes and from their extrusion, and a straight run.
+const R2025_READERS: &[&str] = &[
+    "sketch_lines",
+    "roof_slope_edges",
+    "roof_line_data",
+    "roof_type_layers",
+    "roof_fascia_depth",
+    "roof_rafter_cut",
+    "native_run",
 ];
 
 /// The readers that source what a box alone does not (a profile, a section, a
@@ -285,6 +323,36 @@ const MIN_READERS: &[(&str, &[&str])] = &[
         "RE1-Architecture",
         &["selected_frame", "bounded_line", "saved_graphics"],
     ),
+    // puzzbobb's Revit 2025 roofs: a shed by its edge, a shed by its slope
+    // arrow and a roof by extrusion, each drawn from the sources pinned here
+    // (RE-56, RE-199, RE-211).
+    (
+        "02_1Slope",
+        &[
+            "selected_frame",
+            "roof_slope_edges",
+            "roof_line_data",
+            "roof_type_layers",
+        ],
+    ),
+    (
+        "05_1Slope_ArrowDefined",
+        &[
+            "selected_frame",
+            "roof_slope_edges",
+            "roof_line_data",
+            "roof_type_layers",
+        ],
+    ),
+    (
+        "11_RoofByExtrusion",
+        &[
+            "selected_frame",
+            "sketch_lines",
+            "roof_line_data",
+            "roof_type_layers",
+        ],
+    ),
     ("RE1-Mechanical", &["selected_frame", "pipe_connectors"]),
     ("RE1-Plumbing", &["selected_frame", "pipe_connectors"]),
     ("Revit_IFC5_Einhoven", &["selected_frame", "saved_graphics"]),
@@ -309,6 +377,28 @@ const MIN_READERS: &[(&str, &[&str])] = &[
 fn project_models() -> Vec<(String, PathBuf)> {
     let Some(dir) = std::env::var_os("RVT_PROJECT_CORPUS_DIR") else {
         eprintln!("skipping the project corpus: RVT_PROJECT_CORPUS_DIR is not set");
+        return Vec::new();
+    };
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return Vec::new();
+    };
+    let mut models: Vec<(String, PathBuf)> = entries
+        .filter_map(|entry| entry.ok().map(|e| e.path()))
+        .filter(|path| path.extension().is_some_and(|ext| ext == "rvt"))
+        .filter_map(|path| {
+            let name = path.file_stem()?.to_string_lossy().into_owned();
+            Some((name, path))
+        })
+        .collect();
+    models.sort();
+    models
+}
+
+/// puzzbobb's Revit 2025 models (`RVT_R2025_DIR`, #356): the only models of
+/// the gate whose roofs are drawn from their slopes and from an extrusion.
+fn r2025_models() -> Vec<(String, PathBuf)> {
+    let Some(dir) = std::env::var_os("RVT_R2025_DIR") else {
+        eprintln!("skipping the Revit 2025 models: RVT_R2025_DIR is not set");
         return Vec::new();
     };
     let Ok(entries) = std::fs::read_dir(dir) else {
@@ -513,7 +603,7 @@ struct BodyStats {
     by_reader: BTreeMap<String, usize>,
 }
 
-fn check_model(name: &str, path: &Path) {
+fn check_model(name: &str, path: &Path) -> BTreeSet<String> {
     check_model_with(name, path, false)
 }
 
@@ -521,7 +611,7 @@ fn check_model(name: &str, path: &Path) {
 /// well where `family_extrusions` is set: its report is then
 /// `<model>+family-extrusions`, and its readers are pinned by
 /// `FAMILY_MIN_READERS`.
-fn check_model_with(base: &str, path: &Path, family_extrusions: bool) {
+fn check_model_with(base: &str, path: &Path, family_extrusions: bool) -> BTreeSet<String> {
     let label = if family_extrusions {
         format!("{base}+family-extrusions")
     } else {
@@ -682,6 +772,23 @@ fn check_model_with(base: &str, path: &Path, family_extrusions: bool) {
         .map(|((id, _), info)| (*id, (info.profile_source.clone(), info.profile_vertices)))
         .collect();
     let mut hollow_checks: Vec<(u32, Vec<i64>)> = Vec::new();
+    // The roofs whose rafter cut is sourced, read again below; the materials the
+    // layers reader needs to read a type's layers again.
+    let mut rafter_roofs: BTreeSet<u32> = BTreeSet::new();
+    let layer_materials: BTreeSet<u32> = if table.elements.values().any(|entry| {
+        entry
+            .value_sources
+            .iter()
+            .any(|source| source.reader == "roof_type_layers")
+    }) {
+        scan_type_records(&mut rf, version, OST_MATERIALS, &declared)
+            .unwrap_or_default()
+            .iter()
+            .map(|record| record.element_id)
+            .collect()
+    } else {
+        BTreeSet::new()
+    };
     let mut parts_checked = 0usize;
     let mut parts_confirmed = 0usize;
     let mut parts_by_record = 0usize;
@@ -690,6 +797,27 @@ fn check_model_with(base: &str, path: &Path, family_extrusions: bool) {
     let mut by_rule: BTreeMap<String, usize> = BTreeMap::new();
     let width = usize::from(table.record_id_bytes.unwrap_or(8));
     for (&id, entry) in &table.elements {
+        // A roof by extrusion reads the data of every sketch line whose frame it
+        // listed.
+        let framed = entry
+            .value_sources
+            .iter()
+            .find(|source| source.reader == "sketch_lines" && source.rule.as_str() == "frame");
+        let data = entry
+            .value_sources
+            .iter()
+            .find(|source| source.reader == "roof_line_data");
+        if let (Some(framed), Some(data)) = (framed, data) {
+            if framed.parts.len() as u32 + framed.parts_left_out
+                != data.parts.len() as u32 + data.parts_left_out
+            {
+                problems.push(format!(
+                    "{id}: roof_line_data has {} parts for {} sketch lines",
+                    data.parts.len() as u32 + data.parts_left_out,
+                    framed.parts.len() as u32 + framed.parts_left_out
+                ));
+            }
+        }
         for source in &entry.value_sources {
             let count = counts.entry(source.reader.clone()).or_default();
             count.0 += 1;
@@ -758,17 +886,57 @@ fn check_model_with(base: &str, path: &Path, family_extrusions: bool) {
                     let verdict = match source.reader.as_str() {
                         // The line's element-data header, then the line's own
                         // id: the part's offset is a header, not a frame.
-                        "sketch_line_data" => match layout.as_ref() {
+                        // A roof's slope block or sketch line is read again:
+                        // it decodes to a slope, an arrow or a curve. A roof
+                        // type's layers are an element-data header and the
+                        // type's id.
+                        "sketch_line_data" | "roof_slope_edges" | "roof_line_data"
+                        | "roof_type_layers" => match layout.as_ref() {
                             Some(layout) => {
+                                let window = match source.reader.as_str() {
+                                    "roof_slope_edges" => EDGE_SLOPE_WINDOW,
+                                    "roof_type_layers" => LAYER_WINDOW,
+                                    _ => BEAM_DATA_WINDOW,
+                                };
                                 let read = element_data_at(
                                     bytes,
                                     layout,
                                     part.offset,
                                     part.element_id,
-                                    BEAM_DATA_WINDOW,
+                                    window,
                                     false,
                                 );
-                                if read.is_some() {
+                                let decodes = match (source.reader.as_str(), read) {
+                                    (_, None) => false,
+                                    ("roof_slope_edges", Some(data)) => {
+                                        edge_slope_in(data, version).is_some()
+                                            || arrow_heights(data).is_some()
+                                    }
+                                    ("roof_line_data", Some(data)) => {
+                                        first_bounded_line(data).is_some()
+                                            || first_bounded_arc(data).is_some()
+                                            || first_bounded_spline(data).is_some()
+                                            || first_circle(data).is_some()
+                                            || first_sketch_curve(data).is_some()
+                                    }
+                                    // The type's layers are read again by the layers
+                                    // reader, with the reader's window and anchors.
+                                    ("roof_type_layers", Some(data)) => {
+                                        match (layer_frame_tag(version), layer_layout(version)) {
+                                            (Some(tag), Some(layers)) => find_layers(
+                                                data,
+                                                tag,
+                                                layers,
+                                                &layer_materials,
+                                                &declared,
+                                            )
+                                            .is_some(),
+                                            _ => false,
+                                        }
+                                    }
+                                    (_, Some(_)) => true,
+                                };
+                                if decodes {
                                     Part::Confirmed
                                 } else {
                                     Part::Failed
@@ -1017,6 +1185,8 @@ fn check_model_with(base: &str, path: &Path, family_extrusions: bool) {
                         let from_data = source.reader == "instance_transform";
                         let window = if from_data {
                             INSTANCE_TRANSFORM_WINDOW
+                        } else if source.reader == "roof_fascia_depth" {
+                            EDGE_SLOPE_WINDOW
                         } else {
                             BEAM_DATA_WINDOW
                         };
@@ -1038,7 +1208,12 @@ fn check_model_with(base: &str, path: &Path, family_extrusions: bool) {
                                 from_data,
                             ) {
                                 Some(data) => {
+                                    let mut decodes = true;
                                     match source.reader.as_str() {
+                                        // The roof's fascia depth, read again.
+                                        "roof_fascia_depth" => {
+                                            decodes = fascia_depth(data).is_some();
+                                        }
                                         "bounded_line" => {
                                             decoded_lines.insert(id, first_bounded_line(data));
                                         }
@@ -1050,7 +1225,7 @@ fn check_model_with(base: &str, path: &Path, family_extrusions: bool) {
                                         }
                                         _ => {}
                                     }
-                                    true
+                                    decodes
                                 }
                                 None => false,
                             }
@@ -1071,6 +1246,9 @@ fn check_model_with(base: &str, path: &Path, family_extrusions: bool) {
                         } else {
                             u32_at(inflated.bytes(), offset).map(u64::from)
                         };
+                        if source.reader == "roof_rafter_cut" {
+                            rafter_roofs.insert(id);
+                        }
                         first == Some(u64::from(id))
                     }
                     _ => false,
@@ -1085,6 +1263,18 @@ fn check_model_with(base: &str, path: &Path, family_extrusions: bool) {
                     source.rule.as_str(),
                     source.stream,
                     source.offset
+                ));
+            }
+        }
+    }
+
+    // A roof's rafter cut is read again by the reader, from its own record.
+    if !rafter_roofs.is_empty() {
+        let cuts = scan_rafter_cuts(&mut rf, version, &rafter_roofs);
+        for roof in &rafter_roofs {
+            if !cuts.contains_key(roof) {
+                problems.push(format!(
+                    "{roof}: roof_rafter_cut: the reader gives no rafter cut from the roof's record"
                 ));
             }
         }
@@ -1281,6 +1471,7 @@ fn check_model_with(base: &str, path: &Path, family_extrusions: bool) {
         .expect("write the summary");
 
     assert!(problems.is_empty(), "{name}: {problems:#?}");
+    counts.keys().cloned().collect()
 }
 
 /// Check each model. With `dir_variable` set, a model of `must_hold` that the
@@ -1323,6 +1514,33 @@ fn nordic_office_value_sources_name_the_copy_the_reader_took() {
         office_model(),
         &["nordic-office-as-built"],
     );
+}
+
+#[test]
+fn r2025_value_sources_name_the_copy_the_reader_took() {
+    let models = r2025_models();
+    // Skipped only where the variable is unset; set, an empty or missing
+    // directory fails below, as the pinned models are absent from it.
+    if std::env::var_os("RVT_R2025_DIR").is_none() {
+        return;
+    }
+    // The models MIN_READERS pins are in the set, or those pins read nothing.
+    for pinned in ["02_1Slope", "05_1Slope_ArrowDefined", "11_RoofByExtrusion"] {
+        assert!(
+            models.iter().any(|(name, _)| name == pinned),
+            "{pinned} is not among the Revit 2025 models, and RVT_R2025_DIR is set"
+        );
+    }
+    let mut held: BTreeSet<String> = BTreeSet::new();
+    for (name, path) in &models {
+        held.extend(check_model(name, path));
+    }
+    for reader in R2025_READERS {
+        assert!(
+            held.contains(*reader),
+            "no Revit 2025 model has a source from {reader}"
+        );
+    }
 }
 
 #[test]
