@@ -10,7 +10,22 @@ fragments a release moves into this file.
 
 ## [0.14.0] — 2026-11-04
 
-INTRO-PENDING-MEASURE-41803457521
+0.14.0 adds `rvt-rs-mcp`, a local, read-only MCP server that answers an
+agent's questions about a Revit file from the model the IFC export is built
+from, and one export function, `rvt::ifc::run_export`, that `rvt-ifc`, the
+Python package, the viewer and the MCP server all build that model with.
+Exports follow the project phase as Revit's do (`rvt-ifc --phase` names
+another), write Revit 2024 Areas with a body and Revit 2015 to 2023 Areas
+where their boundary proves one, write the openings rectangular wall openings
+cut, draw a wall a floor covers in part as stepped and end walls at a corner
+in the order their record joins them, and export conduits, conduit fittings
+and gutters. A large export holds less memory at its peak, and Revit 2015 to
+2023 exports are faster than 0.13.0's. Much of it follows reports from
+hemanth1986 (#1075, #1247) and inevitable-co-ai (#1261). Thanks to both.
+
+Measured against 0.13.0 on every reference model, Autodesk's sample projects
+and the held-out models: the figures are in each entry below, and this
+release's own run is being read.
 
 ### Upgrading from 0.13
 
