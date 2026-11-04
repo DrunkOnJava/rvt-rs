@@ -116,7 +116,9 @@
 use crate::RevitFile;
 use crate::element_record_plan_profiles::{PLAN_PROFILE_SOURCE_FIELD, PlanProfile};
 use crate::le_bytes;
-use crate::partition_area_boundaries::{AreaFace, Arrangement, BoundaryLine, NODE_TOLERANCE_FEET};
+use crate::partition_area_boundaries::{
+    AreaFace, Arrangement, BoundaryLine, MAX_CARRY_FEET, NODE_TOLERANCE_FEET,
+};
 use crate::partition_design_options::DesignOptions;
 use crate::partition_element_records::{
     CATEGORY_OFFSET, CLASS_TAG_OFFSET, CONTAINER_NONE, CONTAINER_OFFSET, OST_WALLS,
@@ -204,12 +206,15 @@ pub const AREA_WALL_LINE_FIELD: &str = "m_area_body_wall_line";
 pub const AREA_LEVEL_TOLERANCE_FEET: f64 = 1e-3;
 
 /// How near the edges of a line's record box must lie to its host wall's centre
-/// line, and to half the wall's thickness off it, for the line to be one that
-/// Revit moved off the centre line for part of its length, feet (RE-332).
-pub const WALL_LINE_TOLERANCE_FEET: f64 = 0.006;
+/// line and to the wall's record box, and how near its width to half the wall's
+/// thickness, for the line to be read as a wall-hosted line, feet (RE-332
+/// section 6: the two measured lines are within 5e-7 ft, and the data cannot
+/// pin the value).
+pub const WALL_LINE_TOLERANCE_FEET: f64 = 0.001;
 
 /// The thinnest and the widest record box across a line that is read as a
-/// wall-hosted line, feet: half of a wall's thickness (RE-332).
+/// wall-hosted line, feet: half of a wall's thickness (RE-332 section 6: the
+/// two measured lines are 0.497 ft, and the data cannot pin either bound).
 pub const WALL_LINE_MIN_ACROSS_FEET: f64 = 0.05;
 /// See [`WALL_LINE_MIN_ACROSS_FEET`].
 pub const WALL_LINE_MAX_ACROSS_FEET: f64 = 1.0;
@@ -260,7 +265,8 @@ pub const REFUSED_OFF_REGION: &str = "named_lines_not_on_region";
 pub const REFUSED_REDUNDANT: &str = "two_areas_one_region";
 /// The Area's outline runs along a line picked from a wall on a stretch where
 /// Revit may have drawn the line on the wall's face or on its centre line, and
-/// nothing proves which (RE-332).
+/// nothing proves which (RE-332). Checked last: an Area refused for the lines
+/// it names, or whose region another Area shares, says that first.
 pub const REFUSED_WALL_LINE: &str = "wall_line_position_not_proven";
 
 /// How the chain records of a file are walked (RE-324).
@@ -594,7 +600,9 @@ impl WallLine {
     /// What the edge `a` to `b` of an outline takes from this line: `None` where
     /// it does not run along its centre path, `Some(true)` where it does and the
     /// stretch it shares with the line is one where no wall face can move the
-    /// line, `Some(false)` where it does and that stretch is not.
+    /// line, `Some(false)` where it does and that stretch is not. A free end of
+    /// the line may be carried on by up to [`MAX_CARRY_FEET`] (RE-330): that stub
+    /// is part of the line here, and is never proven.
     fn edge_use(&self, a: (f64, f64), b: (f64, f64)) -> Option<bool> {
         let (across_a, across_b, along_a, along_b) = if self.horizontal {
             (a.1, b.1, a.0, b.0)
@@ -606,8 +614,8 @@ impl WallLine {
         {
             return None;
         }
-        let low = along_a.min(along_b).max(self.low);
-        let high = along_a.max(along_b).min(self.high);
+        let low = along_a.min(along_b).max(self.low - MAX_CARRY_FEET);
+        let high = along_a.max(along_b).min(self.high + MAX_CARRY_FEET);
         if high - low <= NODE_TOLERANCE_FEET {
             return None;
         }
@@ -654,9 +662,19 @@ fn wall_line(from: (f64, f64), to: (f64, f64), wall: &[f64; 6]) -> Option<WallLi
     } else {
         ((wall[0] + wall[3]) / 2.0, wall[1], wall[4])
     };
-    let on_centre = |edge: f64| (edge - centre).abs() <= WALL_LINE_TOLERANCE_FEET;
+    let (side_lo, side_hi) = if horizontal {
+        (wall[1], wall[4])
+    } else {
+        (wall[0], wall[3])
+    };
+    let within = |edge: f64, wanted: f64| (edge - wanted).abs() <= WALL_LINE_TOLERANCE_FEET;
+    // The box runs from the wall's centre line to one of its faces, which must
+    // be a side of the wall's record box: for a wall turned off the axes that
+    // side is a corner, and the line is refused.
+    let low_is_centre = within(across_lo, centre) && within(across_hi, side_hi);
+    let high_is_centre = within(across_hi, centre) && within(across_lo, side_lo);
     if (across - thickness / 2.0).abs() > WALL_LINE_TOLERANCE_FEET
-        || !(on_centre(across_lo) || on_centre(across_hi))
+        || !(low_is_centre || high_is_centre)
     {
         return None;
     }
@@ -669,11 +687,7 @@ fn wall_line(from: (f64, f64), to: (f64, f64), wall: &[f64; 6]) -> Option<WallLi
     .collect();
     // The line's own edge, not the wall's centre: the lines that end on it end
     // at the line's coordinate, to the record's last digit.
-    let fixed = if on_centre(across_lo) {
-        across_lo
-    } else {
-        across_hi
-    };
+    let fixed = if low_is_centre { across_lo } else { across_hi };
     Some(WallLine {
         horizontal,
         fixed,
@@ -692,42 +706,47 @@ fn wide_box(line: &LineRecord) -> bool {
     (WALL_LINE_MIN_ACROSS_FEET..=WALL_LINE_MAX_ACROSS_FEET).contains(&across)
 }
 
-/// The record boxes of the walls of a file, by ElementId; a wall whose copies
-/// disagree, or whose box is not a number, is left out (RE-332).
-fn wall_boxes(
-    rf: &mut RevitFile,
-    revit_version: u32,
-    declared: &BTreeSet<u32>,
-) -> BTreeMap<u32, [f64; 6]> {
-    let records: Vec<PartitionElementRecord> = if per32::is_32bit_release(revit_version) {
-        per32::scan_records(rf, revit_version)
-            .into_iter()
-            .filter(|record| record.builtin_category == OST_WALLS)
-            .collect()
-    } else {
-        scan_category_records_multi(rf, revit_version, &[OST_WALLS], declared).unwrap_or_default()
-    };
-    let mut boxes: BTreeMap<u32, [f64; 6]> = BTreeMap::new();
-    let mut left_out: BTreeSet<u32> = BTreeSet::new();
-    for record in records {
-        if !record.bbox_feet.iter().all(|v| v.is_finite()) {
-            left_out.insert(record.element_id);
+/// A wall's ElementId and its record box.
+type WallBox = (u32, [f64; 6]);
+
+/// What one pass over a file's records gives the Areas: the area boundary
+/// lines, and the walls' record boxes (RE-332).
+struct LineScan {
+    lines: Vec<PartitionElementRecord>,
+    walls: Vec<WallBox>,
+}
+
+/// The walls of a file by ElementId: those whose record box was read, and those
+/// whose copies disagree or whose box is not a number (RE-332).
+struct WallBoxes {
+    read: BTreeMap<u32, [f64; 6]>,
+    unread: BTreeSet<u32>,
+}
+
+/// The record boxes of `walls`; a wall whose copies disagree, or whose box is
+/// not a number, is in [`WallBoxes::unread`] and in no other.
+fn wall_boxes(walls: Vec<WallBox>) -> WallBoxes {
+    let mut read: BTreeMap<u32, [f64; 6]> = BTreeMap::new();
+    let mut unread: BTreeSet<u32> = BTreeSet::new();
+    for (id, bbox) in walls {
+        if !bbox.iter().all(|v| v.is_finite()) {
+            unread.insert(id);
             continue;
         }
-        match boxes.get(&record.element_id) {
-            Some(held) if *held != record.bbox_feet => {
-                left_out.insert(record.element_id);
+        match read.get(&id) {
+            Some(held) if *held != bbox => {
+                unread.insert(id);
             }
             Some(_) => {}
             None => {
-                boxes.insert(record.element_id, record.bbox_feet);
+                read.insert(id, bbox);
             }
         }
     }
-    for id in left_out {
-        boxes.remove(&id);
+    for id in &unread {
+        read.remove(id);
     }
-    boxes
+    WallBoxes { read, unread }
 }
 
 /// What the body of an Area is: its region, the base and the height.
@@ -753,24 +772,37 @@ struct Surroundings<'a> {
     options_read: bool,
 }
 
-/// The element records of the area boundary lines of a file: the 32-bit
-/// records on Revit 2015 to 2023 (RE-324), the 2024 records otherwise. `None`
-/// where the scan fails.
+/// The element records of the area boundary lines of a file, and the record
+/// boxes of its walls, in one pass: the 32-bit records on Revit 2015 to 2023
+/// (RE-324), the 2024 records otherwise. `None` where the scan fails.
 fn scan_line_records(
     rf: &mut RevitFile,
     revit_version: u32,
     declared: &BTreeSet<u32>,
-) -> Option<Vec<PartitionElementRecord>> {
-    if per32::is_32bit_release(revit_version) {
-        Some(
-            per32::scan_records(rf, revit_version)
-                .into_iter()
-                .filter(|record| record.builtin_category == OST_AREA_SCHEME_LINES)
-                .collect(),
-        )
+) -> Option<LineScan> {
+    let records = if per32::is_32bit_release(revit_version) {
+        per32::scan_records(rf, revit_version)
     } else {
-        scan_category_records_multi(rf, revit_version, &[OST_AREA_SCHEME_LINES], declared).ok()
+        scan_category_records_multi(
+            rf,
+            revit_version,
+            &[OST_AREA_SCHEME_LINES, OST_WALLS],
+            declared,
+        )
+        .ok()?
+    };
+    let mut scan = LineScan {
+        lines: Vec::new(),
+        walls: Vec::new(),
+    };
+    for record in records {
+        if record.builtin_category == OST_AREA_SCHEME_LINES {
+            scan.lines.push(record);
+        } else if record.builtin_category == OST_WALLS {
+            scan.walls.push((record.element_id, record.bbox_feet));
+        }
     }
+    Some(scan)
 }
 
 /// The one Level and the one area scheme a line's reference list names.
@@ -800,10 +832,10 @@ fn boundary_lines(
     options: &DesignOptions,
 ) -> BoundaryLines {
     let mut out = BoundaryLines::default();
-    let Some(records) = scan_line_records(rf, revit_version, surroundings.declared) else {
+    let Some(scan) = scan_line_records(rf, revit_version, surroundings.declared) else {
         return out;
     };
-    for record in records {
+    for record in scan.lines {
         out.seen.insert(record.element_id);
         let [x0, y0, z0, x1, y1, z1] = record.bbox_feet;
         let finite = record.bbox_feet.iter().all(|v| v.is_finite());
@@ -862,7 +894,7 @@ fn boundary_lines(
         }
     }
     // A line whose box is as wide as half a wall's thickness may be picked from
-    // a wall (RE-332): the walls are read only when one is.
+    // a wall (RE-332); the walls' boxes came with the lines.
     let wide: Vec<u32> = out
         .by_id
         .iter()
@@ -870,10 +902,14 @@ fn boundary_lines(
         .map(|(id, _)| *id)
         .collect();
     if !wide.is_empty() {
-        let walls = wall_boxes(rf, revit_version, surroundings.declared);
+        let walls = wall_boxes(scan.walls);
         for id in wide {
             let line = &out.by_id[&id];
-            let mut hosts = line.names.iter().filter_map(|name| walls.get(name));
+            // A line that names a wall whose box was not read stays unread.
+            if line.names.iter().any(|name| walls.unread.contains(name)) {
+                continue;
+            }
+            let mut hosts = line.names.iter().filter_map(|name| walls.read.get(name));
             if let (Some(wall), None) = (hosts.next(), hosts.next()) {
                 if let Some(read) = wall_line(line.from, line.to, wall) {
                     out.wall_lines.insert(id, read);
@@ -1232,10 +1268,8 @@ struct Located {
     /// The region, or why there is none: the lines cannot be read, or the point
     /// is in no single region of them.
     face: Result<AreaFace, &'static str>,
-    /// Whether the region's outline runs along the centre path of a
-    /// wall-hosted line, all on stretches where no wall face can move it
-    /// (RE-332).
-    wall_line: bool,
+    /// What the region's outline takes from the wall-hosted lines (RE-332).
+    wall: WallUse,
 }
 
 /// The elevation of the Level `level`, feet.
@@ -1266,26 +1300,21 @@ fn locate(
     };
     let key = (level, scheme);
     let base_feet = level_elevation(surroundings.levels, level).ok_or(REFUSED_HEIGHT)?;
-    let (face, wall_line) = match arrangements
+    let (face, wall) = match arrangements
         .entry(key)
         .or_insert_with(|| group_arrangement(lines, key, base_feet))
     {
         Some(group) => match group.arrangement.face_at(point) {
-            None => (Err(REFUSED_REGION), false),
-            Some(face) if group.blocks(&face) => (Err(REFUSED_GROUP), false),
-            Some(face) => match group.wall_use(&face) {
-                WallUse::Unproven => (Err(REFUSED_WALL_LINE), false),
-                WallUse::Proven => (Ok(face), true),
-                WallUse::Untouched => (Ok(face), false),
-            },
+            None => (Err(REFUSED_REGION), WallUse::Untouched),
+            Some(face) if group.blocks(&face) => (Err(REFUSED_GROUP), WallUse::Untouched),
+            Some(face) => {
+                let wall = group.wall_use(&face);
+                (Ok(face), wall)
+            }
         },
-        None => (Err(REFUSED_GROUP), false),
+        None => (Err(REFUSED_GROUP), WallUse::Untouched),
     };
-    Ok(Located {
-        key,
-        face,
-        wall_line,
-    })
+    Ok(Located { key, face, wall })
 }
 
 /// The body of one Area: its region, where the lines its record names are all
@@ -1320,7 +1349,7 @@ fn draw_area(
         base_feet,
         height_feet,
         joined: face.joined,
-        wall_line: located.wall_line,
+        wall_line: located.wall == WallUse::Proven,
     })
 }
 
@@ -1407,9 +1436,16 @@ fn area_bodies(
             Some(Err(reason)) => Err(*reason),
             None => Err(REFUSED_NO_POINT),
         };
+        // The wall refusal comes last: an Area that is refused for the lines it
+        // names, or whose region another Area shares, says so first.
+        let unproven =
+            matches!(located.get(&id), Some(Ok(place)) if place.wall == WallUse::Unproven);
         match result {
             Ok(_) if redundant.contains(&id) => {
                 out.refused.insert(id, REFUSED_REDUNDANT);
+            }
+            Ok(_) if unproven => {
+                out.refused.insert(id, REFUSED_WALL_LINE);
             }
             Ok(body) => {
                 out.drawn.insert(id, body);

@@ -47,8 +47,10 @@ const OST_AREA_SCHEME_LINES: i64 = -2_000_079;
 /// A wall record's box, the stream it was found in and its class tag.
 type WallRecord = ([f64; 6], String, u16);
 
-/// How close two positions across a wall must be to be the same, feet.
-const SAME: f64 = 0.006;
+/// How close two positions across a wall must be to be the same, feet. The
+/// reader's tolerance (RE-332): the measured lines are within 5e-7 ft, and the
+/// nearest line that is neither on a centre line nor on a face is 0.041 ft off.
+const SAME: f64 = 0.001;
 /// A line this thin across is a line, not a box.
 const THIN: f64 = 1e-5;
 

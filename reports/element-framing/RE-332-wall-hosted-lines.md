@@ -4,7 +4,7 @@
 **Issues:** #1261 (the Areas of 2015 to 2023 files that Revit bounds partly by walls); follows RE-317, RE-324 and RE-330
 **Artefacts:** Autodesk's `rac_advanced_sample_project`, saves of 2015 to 2024 (`research/autodesk-sample-projects.tsv`, fetched by Measure's `-f samples=true`); the IFC2X3 export of the same project from the three.js repository (RE-330 section 1: `examples/models/ifc/rac_advanced_sample_project.ifc` at commit `7c1f47731608de51a2240ce31655634665cb51ce`, sha256 `9440a72eb2d27e3ba9edeafdcdfb71945e6baec56d5b09211bcde743de7fe0a5`, fetched by hand, never stored); the BIM4LCA office (Revit 2024); the held-out BIM Whale project, by counts only
 **Probe:** `probes/examples/probe_re332_wall_hosted_lines.rs`
-**Status:** positive and narrow, on one project, **in-sample**: the rule was read off the IFC2X3 export that scores it, and the Areas it draws are labelled under Griffin's decision of 2026-11-04 on IFC2X3 oracles. Of the nine Areas of `rac_advanced` that RE-330 left out, five have an edge on a line picked from a wall, and **two (Areas 2 and 5) are now drawn** on every save but 2021's, saying `SpaceOutlineSource` `area_boundary_wall_line`: 18 of the 25 Areas are drawn (16 before). On the 2020 save all 18 are within 0.1% in area and 0.01 ft in outline of the export, none is written that it lacks, and 7 of its 25 are not written (section 7). The other three wall Areas (1, 3, 4) and Area 6 stay out; Areas 7, 8 and 10 have no wall in them. BIM Whale's IFC is byte for byte main's (counts only, 0 extra). **No Area is bounded by a wall where no boundary line is.**
+**Status:** positive and narrow, on one project, **in-sample**: the rule was read off the IFC2X3 export that scores it, and the Areas it draws are labelled under Griffin's decision of 2026-11-04 on IFC2X3 oracles. Of the nine Areas of `rac_advanced` that RE-330 left out, five have an edge on a compound line, a line picked from a wall (sections 2 and 4), and **two (Areas 2 and 5) are now drawn** on every save but 2021's, saying `SpaceOutlineSource` `area_boundary_wall_line`: 18 of the 25 Areas are drawn (16 before). On the 2020 save all 18 are within 0.1% in area and 0.01 ft in outline of the export, none is written that it lacks, and 7 of its 25 are not written (section 7). Areas 1, 3, 4 and 6 stay out; Areas 7, 8 and 10 have no compound line, and are stopped by a slanted line and an arc. BIM Whale's IFC is byte for byte main's (counts only, 0 extra), which is vacuous: it draws no Area body. **No Area is bounded by a wall where no boundary line is.**
 
 ## 0. What the check rests on
 
@@ -24,11 +24,11 @@ Every edge of every Area's outline in the export lies on an area boundary line o
 | 3 | 1 | 26 lines, among them 177363, 177377, 178310 | 177363 and 177377 as for Areas 1 and 4, and the slanted line 178310 (RE-330 section 5) | many |
 | 4 | 1 | 177363, 177366, 177367, 177772, 177963 | its north edge runs along line 177363, as Area 1's south edge along 177377; and 177772 stops 0.101 ft short of 177963 (as Area 6) | 144837, 148769, 149877 |
 | 5 | 1 | 177377, 177513, 177586, 177634 | along 177377, on the stretch 74 to 85 ft beyond the host wall's east end: **drawn** | 169770 |
-| 6 | 1 | 177353, 177367, 177772, 177963 | 177772 stops 0.101 ft short of 177963 and names nothing there (RE-330 section 3), so its region is Area 4's and it runs along 177363 too: refused `wall_line_position_not_proven` | 139855, 149877 |
+| 6 | 1 | 177353, 177367, 177772, 177963 | 177772 stops 0.101 ft short of 177963 and names nothing there (RE-330 section 3), so its region is Area 4's, which runs along 177363: expected `two_areas_one_region` (section 7) | 139855, 149877 |
 | 7, 8 | 1 | 177368, 177369, 178053, 178096, 178178, 178258, 178310, 178440, 178525 | the slanted line 178310 (RE-330 section 5) | 178310 names none; the others name 150980, 153616 and more |
 | 10 | 2 | 178788 | an arc (RE-330 section 5) | 178788 names none |
 
-So the walls decide five Areas, through two lines, 177363 and 177377. Areas 6, 7, 8 and 10 have no wall in them.
+So the walls decide five Areas, through two lines, 177363 and 177377. Areas 6, 7, 8 and 10 have no compound line on their outline. Some of their lines are picked from walls (the table), and lie on a centre line or a face as every ordinary line does; what stops them is a join, a slanted line or an arc.
 
 ## 2. Where Revit puts a line picked from a wall
 
@@ -90,17 +90,32 @@ What the bytes hold of the two lines is the centre curve and the union box, and 
 
 ## 6. The rule
 
-A line is read as **picked from a wall** when its record box is as wide across as half of one named wall's thickness (0.05 to 1 ft), the wall (the one wall its reference list names; its record box) is parallel to the box's long side, the box's width equals half the wall's thickness to 0.006 ft, and one of the box's long edges lies on the wall's centre line to 0.006 ft. The line is then the wall's centre line, from one end of the box to the other. Only the stretches of it more than **one wall thickness beyond the wall's ends** are taken as drawn there. On those, no wall face can move the line, and the line is the straight line Revit drew; in the export the outline of Areas 2 and 5 there lies at y 73.267, which is neither the centre line (73.016) nor a face (72.789, 73.243) of the partition 143858 that runs beneath it from x 26.75 to 80.61.
+A line is read as **picked from a wall** when all of these hold:
 
-An Area whose outline runs along the line on any other stretch has no body, and says `wall_line_position_not_proven`. An Area whose outline runs along it only on those stretches is drawn, and says `area_boundary_wall_line` (taking precedence over `area_boundary_joined`). A line that does not meet the conditions is left out of the arrangement with its box, as before (RE-330).
+1. Its reference list names exactly one wall whose record box was read, and no wall whose record box was not read (a wall whose copies disagree, or whose box is not a number). A line that also names such a wall stays unread.
+2. Its record box is 0.05 to 1 ft across.
+3. The wall's record box runs the same way (its long side along the box's long side).
+4. The box's width equals half the wall's thickness (the short side of its record box) to 0.001 ft.
+5. One long edge of the box lies on the centre line of the wall's record box, and the other on one of the box's two sides, both to 0.001 ft. For a wall turned off the axes that side is a corner of its record box, so such a wall is refused: its short side is not its thickness.
 
-For 177377 the host wall ends at x -4.521, so the stretch from x -3.527 to 80.279 is read; Area 2's edge runs from x 39.969 to 69.780 and Area 5's from 69.780 to 80.279. For 177363 the host wall ends at x -4.748 and the line at -4.875: no stretch is read, and every Area along it is refused.
+The line is then the wall's centre line, from one end of the box to the other. Only the stretches of it more than **one wall thickness beyond the wall's record box** are taken as drawn there. On those, no wall face can move the line, and the line is the straight line Revit drew; in the export the outline of Areas 2 and 5 there lies at y 73.267, which is neither the centre line (73.016) nor a face (72.789, 73.243) of the partition 143858 that runs beneath it from x 26.75 to 80.61. A free end that RE-330's rule carries on (by at most 1 ft) is part of the line when an outline is tested, and is never proven: an outline that runs along the stub is refused.
 
-The walls are read only when a line's box could be one of these, so the BIM4LCA office, whose 689 lines are all axis lines, reads none.
+An Area whose outline runs along the line on any other stretch has no body, and says `wall_line_position_not_proven`, **after** every other refusal: an Area whose lines it names do not bound its region, or whose region another Area shares, says that first. An Area whose outline runs along the line only on proven stretches is drawn, and says `area_boundary_wall_line` (taking precedence over `area_boundary_joined`). A line that does not meet the conditions is left out of the arrangement with its box, as before (RE-330).
+
+For 177377 the host wall's record box ends at x -4.521, so the stretch from x -3.527 to 80.279 is read; Area 2's edge runs from x 39.969 to 69.780 and Area 5's from 69.780 to 80.279. For 177363 the host wall ends at x -4.748 and the line at -4.875: no stretch is read, and every Area along it is refused.
+
+The walls' record boxes come in the same pass over the file's records as the lines', so no scan is added; the BIM4LCA office, whose 689 lines are all axis lines, reads no wall.
+
+**How each number was chosen, and what the data can pin.** The file has two such lines, so none of these is fixed by the data; each is chosen to be wide of what was measured and narrow of what was not.
+
+- **Tolerance 0.001 ft.** Over the 10 `rac_advanced` saves the largest residual of any line against its wall is 5e-7 ft (a face, `face` in the probe, at the probe's six printed decimals), 0 for the centre lines and the two compound lines, and the nearest line that is neither on a centre line nor on a face is 0.041 ft off (the 440 `other` rows). Any tolerance from 1e-6 to 0.04 ft classifies every line alike here. 0.001 is 2000 times the residual and a fortieth of the nearest other line. The first version of the reader and the probe used 0.006, which gave the same counts.
+- **The margin of one wall thickness.** Areas 2 and 5 run 44.5 ft and more beyond the host wall's end, so **any margin from 0 to 44 ft gives the same Areas here**. One thickness is chosen because the joins of RE-330 act within about a thickness of a wall's end (carries of 0.497 and 0.666 ft against a thickness of 0.994 ft) and because the lines picked from the exterior and concrete walls run past their host's drawn body (177370, on the exterior wall 154427, by 0.33 and 0.50 ft): a margin of one thickness keeps every such join out of the proven stretch. No measurement fixes it larger or smaller.
+- **Across 0.05 to 1 ft.** The box width of a compound line is half the wall's thickness, 0.497 ft on both lines, so any lower bound up to 0.497 and any upper bound from it gives the same lines. 0.05 is just above 0.041 ft, the offset of a curtain wall's line from its axis (the smallest distance from a wall feature that any other line has), and keeps a degenerate box out; 1 ft is half of a 2 ft wall.
+- **"The stored curve is the centre line."** The reader never reads the curve: it takes the centre line from the box edge that lies on the wall's centre line (condition 5). That this is the line's stored curve was checked on the two lines (`probe_re330_area_line_curves`, run 41832621319: 177377 at y 73.267030 from x 80.278543 to -32.143371, 177363 at y 19.906295 from x -4.874670 to -32.312334), and on no other.
 
 ## 7. Results
 
-Measure, `--ref main`, filtered, all green. The reader is `8ed50748`; the probe alone is `3a3ceeeb`.
+Measure, `--ref main`, filtered, all green. These runs are of `8ed50748` (the probe alone of `3a3ceeeb`). The reader was then changed (section 6: a stub carried on is checked, the refusal order, the hosts and the walls' scan); **the filtered run on the final head, whose id is in the pull request, re-checks the counts below and the refusal reasons, which are expected to move as the last paragraph of this section says.**
 
 **The probe** (run 41862228192, the 10 `rac_advanced` saves): on every save but 2021's it reads 127 lines and 180 walls, with the counts of section 2 and the two compound lines with their stretches beyond one wall thickness (`177377`: line x -32.143371 to 80.278543, wall x -32.312334 to -4.521160, **-3.527065 to 80.278543**; `177363`: line x -32.312334 to -4.874670, wall x -32.312334 to -4.748358, none). The 2021 save has the same counts and 44 walls whose copies disagree.
 
@@ -110,7 +125,7 @@ Measure, `--ref main`, filtered, all green. The reader is `8ed50748`; the probe 
 
 | Save | Areas written | with `area_boundary` / `_joined` / `_wall_line` | Areas not written, by reason |
 |---|---:|---|---|
-| 2015, 2016, 2017, 2018, 2019, 2020 | 18 | 6 / 10 / 2 | 7: `point_in_no_single_region` 4 (Areas 3, 7, 8, 10), `wall_line_position_not_proven` 3 (Areas 1, 4, 6) |
+| 2015, 2016, 2017, 2018, 2019, 2020 | 18 | 6 / 10 / 2 | 7, at `8ed50748`: `point_in_no_single_region` 4 (Areas 3, 7, 8, 10), `wall_line_position_not_proven` 3 (Areas 1, 4, 6) |
 | 2021 | 0 | none | 25: `boundary_lines_not_readable` 22, `named_lines_not_in_scheme_and_level` 3 (as RE-330) |
 | 2022, 2023 | 18 | 6 / 10 / 2 | the same 7 |
 | 2024 | 18 with a body, of 25 written | 6 / 10 / 2 | 7 written without a body (`exported.area_body_refusals`): the same reasons |
@@ -131,13 +146,15 @@ The 2022 and 2023 saves have no export of their own; their Areas are drawn from 
 
 **The office** (`nordic-office-as-built`, `nordic-office-permit`): the first run, 41864941448, ran without `-f nordic=true` and measured nothing; the repeat, 41868440397, is queued. The office's 689 lines are all axis lines, so the walls are not read there and its IFC is expected byte for byte as before; the unfiltered run is the check.
 
+**Expected at the final head, not yet measured.** The 18 Areas and their markers do not move (Areas 2 and 5 meet every condition, and no outline of the 16 others runs along a compound line). What moves is the reason of Areas 1, 4 and 6, because the wall refusal now comes after the others. The Python port of the arrangement (`tools/re/area_joins_vs_ifc.py`'s rule, run on the 2024 save's probe output) puts Areas 4 and 6 in one region of 2638.383 ft2 whose outline holds the lines each of them names (177363, 177963; 177353, 177367), so neither fails the check of the lines it names. Both then share a region, which is the existing `two_areas_one_region`: that is Area 6's true cause (the 0.101 ft join is open), and Area 4's as well as its unproven stretch. Area 1 alone stays `wall_line_position_not_proven`. The expected per-save list is therefore `point_in_no_single_region` 4 (Areas 3, 7, 8, 10), `two_areas_one_region` 2 (Areas 4, 6) and `wall_line_position_not_proven` 1 (Area 1). The run on the final head confirms or corrects this.
+
 Runs 41863421756, 41863426128, 41864308314 and 41864311445 are of `c79a89e7`, which read a wall-hosted line at its host wall's centre rather than at its own edge; they are superseded.
 
 ## 8. What it leaves out
 
-- Areas 1, 3 and 4: sections 4 and 5. Area 3 also needs the slanted line 178310 (it says `point_in_no_single_region`); Area 4 the 0.101 ft join of Area 6. Areas 1 and 4 say `wall_line_position_not_proven`.
-- Area 6: its own lines have no wall in them, but its region is not closed at the 0.101 ft join (RE-330 section 3), so it is Area 4's region and runs along 177363: it says `wall_line_position_not_proven`, which is true of the region and not the cause.
-- Areas 7, 8 and 10: unchanged from RE-330 section 5 (the slanted line, the arc). They have no wall in them.
+- Areas 1, 3 and 4: sections 4 and 5. Area 3 also needs the slanted line 178310 (it says `point_in_no_single_region`); Area 4 the 0.101 ft join of Area 6. Area 1 says `wall_line_position_not_proven`.
+- Area 6 has no compound line on its outline, but its region is not closed at the 0.101 ft join (RE-330 section 3), so it is Area 4's region: it, and Area 4, are expected to say `two_areas_one_region` (section 7).
+- Areas 7, 8 and 10: unchanged from RE-330 section 5 (the slanted line, the arc). They have no compound line.
 - The 2021 save, unchanged (two copies of 16 lines, RE-324 section 7).
 
 ## 9. Not measured
