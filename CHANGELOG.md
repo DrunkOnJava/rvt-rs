@@ -8,6 +8,386 @@ fragments a release moves into this file.
 
 ## [Unreleased]
 
+## [0.13.0] — 2026-11-03
+
+0.13.0 makes room and space import dependable on more files, reads Revit
+2018 projects that exported nothing before, and shows the browser viewer's
+real progress. Most of it follows reports from inevitable-co-ai (#1260,
+#1261, #1262), hemanth1986 (#1075, #1247, #421) and puzzbobb (#421), and it
+takes puzzbobb's speed-up of the native record reads (#1301). Thanks to all
+three.
+
+Measured against 0.12.2 on every reference model, Autodesk's sample projects
+and the held-out models (Measure run 41741896192, this release's code
+against v0.12.2):
+- every `IfcSpace` says where its outline came from
+  (`RvtElementRecordGeometry.SpaceOutlineSource`). On the BIM4LCA office 229
+  of the 232 rooms paired with Revit's as built and 231 of 234 at building
+  permit have Revit's area to 0.1% (220 and 221 with 0.12.2). Of the 12 rooms
+  per file 0.12.2 drew as their box, 9 and 10 now have Revit's area; the rest
+  are labelled approximate (a column Revit's export may not take off, 0.45%
+  to 0.68% under Revit's floor area) or keep their box, and say so;
+- rooms on Revit 2026 and 2027 take their outline instead of their box: each
+  of the 257 rooms of Autodesk's four sample projects with rooms gives the
+  same verdict and area in its 2026 and 2027 saves as in 2025, the rooms
+  that keep their box in 2025 included; where an outline sits is not
+  measured on those files;
+- the BIM4LCA terrain office writes Revit's 9 `IfcSpace`, not 98: the 89
+  bicycle bays Revit's export leaves out are left out;
+- Revit 2018's `ALD26 Before` writes 1,136 of the 1,321 elements and all 73
+  spaces of Revit's export, where 0.12.2 wrote none; its held-out sibling
+  writes 1,336 elements and spaces against Revit's 1,520, none that Revit's
+  export lacks (counts only). Revit 2016 to 2023 exports now leave out
+  elements outside the export phase and in non-primary design options, as
+  2024 and later did; on that one 2018 project the two filters together
+  remove 198 elements Revit's export lacks, and the counts cannot say which
+  removed which;
+- on the BIM4LCA office 186 more columns as built and 250 more at building
+  permit carry Revit's `Length` (279 of 279 and 321 of 327; the 6 at permit
+  without it are not explained), and the two wall hatches have Revit's width
+  (268 of the 268 doors Revit sizes). Both are one building's measurement;
+- the T-shaped roof of puzzbobb's Revit 2025 `20_T_U_Roof` is Revit's body;
+  the U-shaped roof stays its box, and roofs with several slope arrows are
+  drawn on Revit 2025 only.
+
+Faster, measured on one runner in one run against `main` before #1301 (which
+already had #1237's 4% to 5%): #1301 makes Revit 2015 to 2023 exports of
+Autodesk's samples 5% to 19% faster, their 2024 and 2025 samples 5% to 13%,
+and the BIM4LCA office 7% to 9%; RE1 Architecture took 6% longer and RE1
+Electrical 2% less.
+
+What is not measured yet is said in each entry: among others, whether the
+202 MB model behind #1075 now reads whole at the default limits, whether the
+ElementIds of the #421 reporter's files are Revit's, the #1247 large-model
+door fix on the user's own project, and the door width rule on any building
+but the BIM4LCA office.
+
+### Upgrading from 0.12
+
+- Every export's IFC header names rvt-rs 0.13.0, so an export that is
+  otherwise unchanged still differs from 0.12.2's there.
+- Every `IfcSpace` in a geometry export carries
+  `RvtElementRecordGeometry.SpaceOutlineSource` (`stored_solid`,
+  `stored_solid_faces`, `stored_solid_approximate`, `record_box`,
+  `saved_mesh`, `family_body` or `none`). An importer can use it to tell a
+  room drawn as its box from one drawn as its outline. The room schedule
+  leaves the area of a boxed or approximate room blank.
+- A family instance exported as `IfcSpace` whose family draws no model form
+  for its parameters is no longer written, as Revit's export does not write
+  it (#1262; measured on Revit 2024, applied to 2023 to 2027). The export
+  diagnostics count it as `element_record_family_space_without_body`.
+- Revit 2016 to 2023 exports leave out elements outside the export phase and
+  in non-primary design options. Revit 2008 to 2023 projects whose element
+  frames carry no ElementId of their own export many more elements (measured
+  on one 2018 project).
+- `rvt-ifc` writes the IFC to `<output>.partial` and renames it when whole,
+  so a failed export leaves no truncated file under the output's name (with
+  `--observation` it writes the file directly).
+- At the default limits a partition may inflate to 16 times its stored size,
+  1 GiB to 4 GiB on a 64-bit build, so `--large-model` is needed less often.
+- A door or window sized from its symbol's box edges carries
+  `RvtElementRecordGeometry.SymbolWireWidth`.
+- `rvt::ifc::step_writer::write_step_to` streams the STEP text to any
+  writer.
+- The wasm binding `openRvtBytesWithDiagnosticsModeAndOpenLimits` takes an
+  optional fourth argument, a progress callback.
+- The export diagnostics add `exported.bounding_box_spaces`,
+  `exported.resolved_outline_spaces`, `exported.approximate_outline_spaces`
+  and a warning that counts doors and windows whose type record was not
+  read.
+
+### Added
+
+- **The browser viewer shows the decoder's own progress, and says when a
+  model is too large for a tab.** The loading card names the stage the
+  decoder is in (the stages `rvt-gltf --progress` prints) and fills its bar
+  with that stage's count, where it used to sweep and guess "about N s" from
+  the file's size. `openRvtBytesWithDiagnosticsModeAndOpenLimits` takes an
+  optional fourth argument, a function called with the stage, the count done
+  and the count it is out of. `rvt-gltf --progress` now also prints a
+  `partition-scan` line for each `Partitions/*` stream as it is first
+  inflated, which is most of a project's open, where it printed the stage's
+  start and end only. A file whose size says it may need more than a tab's
+  4 GiB (at least about ten times its size, the figure of the largest
+  reference model; the warning can fire on a file that fits) is warned about
+  before the decode and still tried. When the wasm instance runs out of
+  memory, the viewer says the model is too large for the browser, how far the
+  decode got and where, and that `rvt-ifc` and `rvt-gltf` with `--large-model`
+  (streams up to 2 GiB and, on a 64-bit machine, inflating up to 8 GiB, for a
+  file of up to 2 GiB), or Python with a larger `max_stream_bytes` and
+  `max_inflate_bytes`, can read a larger file, instead of
+  `RuntimeError: unreachable`. A stop a long way short of the ceiling says
+  "Ran out of memory" and that the file may be damaged, and a panic that is not
+  a memory failure keeps its own message (#1195).
+
+- **A column a clean join pairs with carries its `Length`.** On a column
+  drawn as its record box whose base quantities RE-291's rule writes,
+  `Qto_ColumnBaseQuantities.Length` is now written as the box's height where a
+  clean pair joins it: Revit's export writes it on every such column of the
+  BIM4LCA office, 186 of 186 as built and 250 of 250 at building permit,
+  equal to that height. The 18 columns Revit draws as a cut mesh, with no
+  `Length`, are those a cut slab straddles, which the rule leaves out (#1203).
+
+- **Every `IfcSpace`'s plan area and outline is scored against Revit's export,
+  and says where its outline came from.** Measure's new
+  `space_profiles_vs_ifc` scorer pairs the spaces of rvt-rs's export with
+  Revit's and counts those within 0.1% in area and 0.01 ft in outline (outline to outline, and by the mesh's vertices); the
+  IfcOpenShell CI job runs it on Core Interior (116 of 116 rooms) and RE1
+  Architecture (11 of 11) and fails below those counts. A room's
+  `RvtElementRecordGeometry.SpaceOutlineSource` is `stored_solid` where its
+  outline was read from the room's stored solid and `record_box` where the
+  body is the record's bounding box and its plan area is the box's, not the
+  space's (`saved_mesh` with `--saved-meshes`, `family_body` for a family
+  instance or Revit Space drawn as more than its box, `none` for an Area,
+  which has no body). A family instance written as a space gets the property
+  too. `exported.bounding_box_spaces` in the diagnostics and a line in
+  `rvt-ifc`'s summary count the spaces drawn as their record's box. What an
+  `IfcSpace` holds per release, and what is measured where, is in
+  [docs/rooms.md](docs/rooms.md) (#1260, RE-313).
+
+### Changed
+
+- **A partition may inflate to 16 times its stored size at the default
+  limits, at least 1 GiB and at most 4 GiB on a 64-bit build.** It was
+  1 GiB whatever its size. A 202 MB Revit 2024 model whose 148 MB partition
+  inflates past 1 GiB, which 0.6.1 read by cutting the partition short
+  without a word, has needed `--large-model` since 0.11.0; at 16 times its
+  stored size it should now read whole at the defaults, which is not yet
+  measured on that model. A small file still cannot make a reader hold more
+  than 1 GiB of one stream, and a 32-bit build and the browser viewer keep
+  1 GiB (#1075).
+
+- **`rvt-ifc` writes the IFC as it builds it.** The STEP text was built
+  whole in memory and then written. It is now handed to the file every MiB,
+  after the file handle and the partitions it keeps inflated are released.
+  The bytes are the same as before this change, but for the version the
+  header records. The text goes to a file beside the output, renamed
+  when whole, so a failed export leaves no truncated file under its name. On
+  the BIM4LCA office the text is 68 MB and the handle 362 MiB of inflated
+  partitions; the saved-graphics pass, which runs before, still sets the
+  peak there (#1075). With `--observation` the text is still built whole,
+  since the witness reads it back. `rvt::ifc::step_writer::write_step_to`
+  streams to any writer.
+
+- **Saved meshes read cone faces.** A `ConeSurf` face failed with
+  `unsupported surface ConeSurf`, which kept the whole element's box
+  (RE-224). It is read as a cone of revolution about its apex, `v` the
+  distance along the generator. With `--saved-meshes` RE1 Plumbing draws 8
+  more pipe transitions, every Revit vertex within 0.001 ft of the mesh and
+  all within 0.01 ft of Revit's body (1.08 to 1.10 of its volume: Revit's
+  export is a 6- or 8-sided polyhedron). No other body scored against
+  Revit's export changes, on RE1, the office or the Revit 2025 models, and no
+  default export changes. On Autodesk's 2024 samples, which have no Revit
+  export, `--saved-meshes` draws 471 more bodies: counted, not
+  scored. The two RE1 Electrical panels #1144 names keep their box for
+  trims RE-302 and RE-305 measured (#1144, RE-311).
+
+- **Exports read walls' native records once instead of twice, and skip
+  per-record hashes no export uses.** Measured on GitHub's runners against
+  0.12.x on every reference model and Autodesk's samples, with output
+  byte-identical but for the version its header records: Revit 2015 to 2023 exports take 4% to 5% less time, 2024 3%, 2025
+  3%, 2026 and 2027 1% to 2%, the reference and BIM4LCA models 4%. Peak
+  memory is unchanged within 1 MiB except on Autodesk's 2015 rme basic
+  sample, 361 to 386 MiB, which is not explained (#1237).
+
+- **The export diagnostics count the doors and windows whose type record was
+  not read.** Since #1271, a door or window whose type's record a read did
+  not reach (a large file over its limits) is written as a door or window
+  drawn as its record box, not as its opening alone. Its category comes from
+  its own record, but whether it draws geometry was never read. A warning
+  now gives their number, since one that is a cased opening in Revit is its
+  opening alone in Revit's export (#1247).
+
+- **A room whose stored solid the exact walk did not close is read again
+  from the faces its solid lists, and labelled apart.** The walk stopped at a
+  record longer than 0x200 bytes between two faces, walls on lines up to
+  0.0015 ft apart left a step no face crosses, a column overlapping a wall
+  put a loop partly inside the wall's, and a solid ran past the 64 KB window.
+  The solid ends at the count of its list of objects and at a gap of 1,024
+  bytes, so the faces of the element that follows are not read, and the work
+  is bounded (512 faces, 4,096 pieces; crafted solids take under 10 ms).
+  `SpaceOutlineSource` is `stored_solid_faces` where the faces' edges close as
+  the walk reads them, and `stored_solid_approximate` where a column overlaps
+  a wall (its area depends on whether Revit's export takes the column off),
+  an end of one wall edge lies on another, or the outline falls up to
+  0.02 ft short of the record box; `stored_solid`
+  stays the exact walk's. The diagnostics count both
+  (`exported.resolved_outline_spaces`, `exported.approximate_outline_spaces`)
+  and the room schedule leaves an approximate room's area blank. On the
+  BIM4LCA office as built the 13 rooms that kept their box take an outline:
+  nine are `stored_solid_faces`, all at Revit's area to 0.1% (their boxes were
+  3% to 67% over it), and four `stored_solid_approximate`, 0.45% to 0.68%
+  under Revit's floor area. At building permit 11 of 12 take an outline, all
+  `stored_solid_approximate`, ten at Revit's floor area to 0.1%; room 3095831
+  keeps its box. 6 of the 8 rooms that kept their box do on a held-out Revit
+  2021 project, all 6 at Revit's area. Measure's `space_profiles_vs_ifc`
+  compares the faces of Revit's mesh that point up, which read a room under a
+  stepped or sloped ceiling as a fraction of itself (room 1671995: 1218 of
+  5177 ft²; RE-313's 66% room); the new `space_overlaps_vs_ifc` also compares
+  the floor, where all 443 office `stored_solid` room scores agree. The six
+  `rac_advanced` rooms with round columns, 49 of the 50 `rme` rooms and
+  Snowdon Towers' seven keep their box. Core Interior and RE1 Architecture are
+  unchanged. A resolved room carries no `NetVolume` (#1260, RE-316).
+
+- **A roof sloped by several slope arrows is drawn as the planes they
+  define, where Revit's export is measured to resolve them so.** Each
+  arrow's plane rises from the boundary line its tail is on, at the arrow's
+  slope, with the top a plane's own thickness over the cosine of its angle
+  above the underside, and the planes meet in hips and valleys. On
+  puzzbobb's `20_T_U_Roof` (Revit 2025) the T-shaped roof 4149 is now
+  Revit's body, its farthest vertex 3.2e-06 ft from Revit's and its volume
+  436.7078 ft³ against Revit's 436.7074 (it was the outline over the record
+  box, 4,426.4 ft³). It is drawn on Revit 2025 only, for arrows set by
+  their heights. The U-shaped roof 5941 stays its record box: Revit slopes
+  its two long outer walls along the arms only, and a roof of its
+  configuration (a sloped edge met inside by a reflex edge's extension,
+  beside a sloped neighbour at a convex corner) is not drawn either, though
+  only the U is measured (#885, RE-307).
+
+- **Native record reads are faster: the graph decoder borrows the schema's
+  classes instead of copying them for every object, and a values read takes
+  only the types its elements name.** On one GitHub runner against `main`
+  before it (Measure 41736361020), Revit 2015 to 2023 exports of Autodesk's
+  samples take 5% to 19% less time (`rac_advanced` and `rme` 15% to 19%),
+  their 2024 and 2025 samples 5% to 13%, and the BIM4LCA office 7% to 9%;
+  RE1 Architecture, a one-second export, took 6% longer in that run and RE1
+  Electrical 2% less. Peak memory is within 5% of before on every file, the
+  largest rises Autodesk's 2015 `rme_basic` sample (361 to 379 MiB in that
+  run) and RE1 Electrical (175 to 183 MiB). The IFC and the diagnostics are
+  the same as the commit before this change (Measure 41740244025) (#1237,
+  #1301; thanks to puzzbobb).
+
+### Fixed
+
+- **`--large-model` now raises the budget of the reads of native records,
+  and a door or window is written as its opening alone only where its type's
+  record was read.** Each native read took a fixed 256 MiB budget for one
+  reassembled group, which `--large-model` did not raise. On a user's 438 MB
+  Revit 2024 project a group over it stopped the read of the door types and
+  of the saved graphics, even with `--large-model`. That project's 73 doors
+  then fell back to the type-parameter scan, which RE-299 showed misses
+  maps, and were written as their openings alone (#1247). The default
+  budget now follows the file's inflate limit, so `--large-model` raises it,
+  and is never more than the partition's own inflated bytes. On Revit 2024
+  to 2027, a door or window is written as its opening alone only where its
+  type's native record was read with an empty geometry map; a type the read
+  did not reach is not taken to draw nothing. Earlier releases keep their
+  rule.
+
+- **Rooms on Revit 2026 and 2027 files take their outline, not their box.**
+  The reader of a room's stored solid ran on Revit 2008 to 2025 only, so on
+  a 2026 or 2027 file every room was its record box, and an L-shaped room's
+  box covered its neighbours: Autodesk's `rac_basic` Entry Hall was 72.8 m²
+  where its 2025 save gives 30.3 m². Every room of Autodesk's four sample
+  projects with rooms (257) now gives the same verdict and area in its 2026
+  and 2027 saves as in 2025 (#1260, reported by inevitable-co-ai).
+
+- **A Revit 2008 to 2023 project whose element frames carry no ElementId of
+  their own now exports those elements, on their storeys (measured on one
+  Revit 2018 project).** Revit 2018's
+  `ALD26 Before` exported none of the 1,394 elements and spaces in Revit's own
+  export (#1261): most of its frames in `Partitions/0` do not open with a
+  declared `u32` ElementId, but sit inside their element's partition record, as
+  2024 and later frames do (RE-35). Those records are `u32` ElementId, `u32`
+  size, the tag of `ElementHeader`, a count, the body and a 12-byte trailer that
+  echoes the size; the 2024 walk's flag test stops at the first record with
+  another flag word, after 115 of this file's 12,626. A placed-instance frame
+  with no declared id now takes the id of the declared record around it when
+  its own reference list names that id, and so does a Level frame that is a
+  `Level` with a name block in its stream, which gives the file its 7 storeys.
+  The file now writes 1,136 of Revit's 1,321 elements by ElementId, 1,127 of
+  them in Revit's class or IFC4's for its IFC2X3 one (9 curtain walls come out
+  as walls), none that Revit's export lacks, 1,073 on Revit's storey. A curtain
+  panel frame that opens with a count rather than `ff ff ff ff` is left out,
+  since 96 of the 102 on that file are the shells of panels Revit does not
+  write. The 185 elements still missing are 178 conduits, conduit fittings and
+  gutters, whose categories are not yet recovered, 4 panel walls and 3
+  assemblies (RE-315). Files whose frames all open with their id export as
+  before.
+- **Revit 2016 to 2023 exports leave out the elements Revit's own export
+  leaves out by phase and by design option.** Only 2024 and later applied the
+  export phase (RE-184) and the primary design option (RE-40). A Revit 2018
+  project wrote 198 pipes, fittings and other elements that Revit's export does
+  not hold, and writes none now; the counts cannot say whether the phase or the
+  design options removed them, and the held-out file is not opened to find
+  out. The phase is read as RE-281 reads it. Design options are read as on 2024
+  with `u32` ids: on the `rst_basic_sample_project` of each of 2016 to 2023 the
+  one `Mass` in a non-primary option is found and counted, as the 2024 and 2025
+  copies of the model count it, and leaves the production counts of the
+  diagnostics without changing the exported IFC. Revit 2008 to 2015 keep every
+  element (RE-315).
+
+- **A family instance written as a space is left out where its family draws
+  no model form for its parameters.** Revit's export writes a family
+  instance that is not a door or a window only when it has a 3D body. On the
+  BIM4LCA terrain office, 92 of the 94 "Parking Space" instances whose
+  "Export to IFC As" is `IfcSpace` are bicycle bays whose "Stripe Y/N" is 0,
+  so no form of their family is drawn, and Revit's export holds only the two
+  car bays; `rvt` wrote 89 of the bicycle bays as `IfcSpace` too. The terrain
+  office's `IfcSpace` are now the 9 of Revit's export (9 of 98 before), and
+  the six reference models, the other office files, the R2025 and the
+  held-out models export byte for byte as the commit before this change
+  did. Only instances written as
+  `IfcSpace` are tested, other categories are not, and the export
+  diagnostics count what is left out (#1262).
+
+- **A 28-byte `Global/ElemTable` is recognised by its first id, the one
+  `declared_ids` reads as the ElementId.** The layout check tested the
+  second id, which on 8 client files saved by Revit 2024 to 2026 with a 2022
+  or 2023 schema holds an older, lower number on 1% to 37% of records, so
+  their tables were read as 12-byte records with a "fits neither its 28- nor
+  its 40-byte layout" warning. On the reporter's build of this change the
+  warning is gone on all 8; whether their records' ElementIds are Revit's is
+  not yet measured (#421, found by puzzbobb, measured by hemanth1986).
+
+- **A door or window whose symbol cuts no loop takes its `OverallWidth`
+  from the lines of no category in that symbol's saved graphics, and the
+  BIM4LCA office's two wall hatches now have Revit's (RE-318, #810).**
+  Doors 1756089 and 1765267 are `TRAPDOOR` hatches (family `LU-3.VSS`, types
+  `_90°` and `_180°`), not doors with a sidelight. Their record box was
+  0.1137 ft wider than Revit's 5.8629 ft, and neither their cut loop (none),
+  cut solid, stored lengths nor visible surfaces give it: the 90° type hides
+  the 180° leaf its width includes. A symbol's saved graphics hold the edges
+  of the boxes that bound its forms as lines of category -1, hidden forms
+  among them, and their extent along X is Revit's width on all 268 of the
+  office's doors Revit sizes and all 269 windows as built (268 and 265 at
+  building permit), where the record box missed 2 doors and the surfaces 2.
+  The rule fires only where the record box sized the door or window before,
+  and a symbol with no such line, a degenerate extent, an instance or
+  component reference in its graphics, two readings that disagree, or edges
+  reaching past the record box, keeps the width it had. Against `main`
+  (Measure 41725344128) the office's `IfcDoor` widths equal Revit's on 268
+  of 269, from 266, and three widths
+  move on the as-built file (1756089, 1765267 and, by 7 micrometres, 1722215);
+  the only other model with such a door, RE1 Architecture's curtain-wall
+  door 445975, keeps its width, and 31 of 34 measured models and all 18
+  held-out models write the same IFC as the commit before this change. One
+  building's families: what the
+  boxes are, and why their extent is Revit's width, is inferred from Revit's
+  widths, not documented (`reports/element-framing/RE-318-symbol-wire-width.md`).
+
+### Research
+
+- **Why saved pipe fittings measure 1.2 times Revit's volume (RE-311).**
+  Revit's export of a pipe elbow is a polyhedron of 6, 8 or 10 sides round
+  the pipe and two segments along its bend, inscribed in the surface: 16 to
+  26% short of the true torus, which rvt-rs's mesh reaches to within 1 to 2%.
+  The closet bends' wrong volumes (0.28 to 2.59, one negative) were the
+  scorer's, which took a mesh with cracks between its faces about the file's
+  origin; `mesh_bodies_vs_ifc.py` now takes it about the body's centre (the
+  three RE1 Mechanical bends: 1.1431 each) and counts the bodies whose Revit
+  vertices all lie on the mesh. `fitting_faces_vs_ifc.py` and
+  `probe_re311_fitting_faces` set each face of a saved fitting against
+  Revit's body (#1144).
+
+- **Measure scores the BIM4LCA terrain office, in concrete and in timber,
+  against Revit's exports of them.** `-f nordic=true` now reads the two
+  files at building permit and their IFC4 exports by byte range, beside the
+  concrete office. `probe_re312_parking_spaces` and
+  `tools/re/parking_spaces_vs_ifc.py` list the family instances written as
+  `IfcSpace` against Revit's export and the model forms of their families
+  (RE-312, #1262).
+
 ## [0.12.2] — 2026-11-03
 
 0.12.2 draws more doors from the meshes Revit saved for display in the
