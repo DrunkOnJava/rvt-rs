@@ -18,6 +18,7 @@ workspace = true
 rvt = { path = "..", features = ["unstable-research"] }
 anyhow = "1"
 cfb = "0.15"
+dhat = "0.3"
 memchr = "2"
 serde_json = "1"
 sha2 = "0.11"

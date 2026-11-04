@@ -326,6 +326,25 @@ Export modes:
 If strict mode fails, read the diagnostics JSON. The failure may mean the file is
 valid Revit but outside the current rvt-rs support profile.
 
+### The phase an export shows
+
+Revit's IFC export shows one phase of the project, the last unless the export
+setup names another, and leaves out what does not exist in it: an element
+created after it or demolished in it or before it, and a room whose own phase
+is not it. `rvt-ifc` does the same, and counts what it leaves out in the
+diagnostics (`element_record_not_in_export_phase`, `room_not_in_export_phase`).
+`--phase` names another phase, exactly as the project spells it or by its
+ElementId:
+
+```bash
+rvt-ifc model.rvt -o model.ifc --phase "Working Drawings"
+```
+
+A phase the file does not list is an error that lists the ones it does. A
+room whose phase is unset or unread is written whatever the phase, and so is
+an Area or an MEP space, which Revit's export does not check against a phase
+either. The Python bindings and the viewer export the last phase.
+
 ### Large models
 
 rvt-rs caps what it reads so that a hostile file cannot exhaust memory: 2 GiB
