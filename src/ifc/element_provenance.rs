@@ -10,11 +10,11 @@
 //! (`decoded.element_provenance`) when the export is asked for it
 //! (`rvt-ifc --element-provenance`, `ExportOptions::with_element_provenance`,
 //! the MCP server's decode, Python's `element_provenance=True`): it is large,
-//! 5,975,162 bytes of compact JSON with the value sources of #1360 against
-//! 38,640 bytes of diagnostics without it (about 155 times) on the BIM4LCA
-//! office as built, and the CLI's pretty-printed sidecar grows from 52,677 to
-//! 10,537,432 bytes (Measure run 41860806523), so it is off by default. It is
-//! never written into the IFC.
+//! 6,128,625 bytes of compact JSON with the value sources of #1360 and #1368
+//! against 38,640 bytes of diagnostics without it (about 159 times) on the
+//! BIM4LCA office as built, and the CLI's pretty-printed sidecar grows from
+//! 52,677 to 10,920,400 bytes (Measure run 41875078758), so it is off by
+//! default. It is never written into the IFC.
 //!
 //! An offset indexes the stream as `RevitFile::inflated_partition` returns it,
 //! which is what `rvt-dump` writes as `Partitions_NN.decomp` (#291). For the
