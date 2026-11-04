@@ -3,7 +3,7 @@
   in Deploy viewer's pull-request run, which `CI passed` did not wait for:
   #1370 merged before that run had finished and Deploy viewer went red on
   main. They are now `viewer-test.yml`, called by `ci.yml` as its `viewer`
-  job in the full set (a ready pull request, or a push to main), in three
+  job in the full set (a ready pull request, or a push to main), in four
   parallel shards. A change that touches only documentation skips them, and
   a skipped job passes. The saved-mesh measurement, which took 12 minutes
   of every pull request's run, moves to Deploy viewer (pushes to main and

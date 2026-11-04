@@ -12,7 +12,7 @@ name: Viewer tests
 # `CI passed`, so a commit is published only after the tests have passed on it.
 #
 # `legs` is the list of jobs that run at once, each building the viewer itself:
-# for ci.yml, the suite in three shards; for Deploy viewer, the saved-mesh
+# for ci.yml, the suite in four shards; for Deploy viewer, the saved-mesh
 # measurement, which runs alone so nothing else competes for the CPU. One job
 # of all of it took 12 to 20 minutes, which the rest of CI (6 to 9 minutes)
 # would have waited for.
@@ -23,13 +23,13 @@ on:
       legs:
         description: JSON list of the legs to run, each with a `name` and either a `shard` (the suite's `--shard`) or `measure` true (the saved-mesh measurement)
         type: string
-        default: '[{"name":"browser tests 1/3","shard":"1/3"},{"name":"browser tests 2/3","shard":"2/3"},{"name":"browser tests 3/3","shard":"3/3"}]'
+        default: '[{"name":"browser tests 1/4","shard":"1/4"},{"name":"browser tests 2/4","shard":"2/4"},{"name":"browser tests 3/4","shard":"3/4"},{"name":"browser tests 4/4","shard":"4/4"}]'
   workflow_dispatch:
     inputs:
       legs:
         description: JSON list of the legs to run, each with a `name` and either a `shard` (the suite's `--shard`) or `measure` true (the saved-mesh measurement)
         type: string
-        default: '[{"name":"browser tests 1/3","shard":"1/3"},{"name":"browser tests 2/3","shard":"2/3"},{"name":"browser tests 3/3","shard":"3/3"}]'
+        default: '[{"name":"browser tests 1/4","shard":"1/4"},{"name":"browser tests 2/4","shard":"2/4"},{"name":"browser tests 3/4","shard":"3/4"},{"name":"browser tests 4/4","shard":"4/4"}]'
 
 # Read-only. The jobs run pnpm dependencies and Playwright, and hold no write
 # scope. The caller passes `contents: read` through.
