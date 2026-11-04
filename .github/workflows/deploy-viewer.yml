@@ -5,7 +5,8 @@ name: Deploy viewer
 # the old `/viewer/` sub-path 404s).
 # Runs on every push to main that touches viewer/, src/ or rvt-wasm/ (so
 # the WASM stays fresh), plus manual runs. It builds and publishes the site,
-# and measures the viewer with and without saved meshes.
+# runs the browser tests and measures the viewer with and without saved meshes,
+# on the release build it publishes.
 # The browser tests are viewer-test.yml's: ci.yml runs them as part of
 # `CI passed` (#1374), so a pull request cannot merge before they have passed
 # on its head. To check a draft's viewer, dispatch viewer-test.yml on its
@@ -129,6 +130,17 @@ jobs:
         with:
           path: viewer/dist
 
+  # The browser tests again, on the release build of the WASM that this
+  # workflow publishes: ci.yml's `viewer` job tests the faster build without
+  # LTO, which is what a pull request waits for. One leg, since nothing waits
+  # for it but the deploy, which waits for `CI passed` as long.
+  tests:
+    permissions:
+      contents: read
+    uses: ./.github/workflows/viewer-test.yml
+    with:
+      legs: '[{"name":"browser tests","files":"/"}]'
+
   # The viewer draws doors and windows from their saved meshes by default, on
   # the condition (Griffin, 2026-10-30) that its memory and load time are
   # measured in Playwright on the reference models. The figures are for
@@ -143,7 +155,7 @@ jobs:
 
   deploy:
     if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
-    needs: [build, measure]
+    needs: [build, tests, measure]
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     permissions:

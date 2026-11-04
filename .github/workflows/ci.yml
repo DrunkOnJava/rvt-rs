@@ -1515,6 +1515,10 @@ jobs:
     uses: ./.github/workflows/viewer-test.yml
     permissions:
       contents: read
+    with:
+      # The WASM without LTO: a third of the build time (viewer-test.yml says
+      # why). Deploy viewer tests the release build before it publishes it.
+      release_wasm: false
 
   pii-guard:
     name: PII guard
