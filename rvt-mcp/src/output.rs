@@ -3,51 +3,59 @@
 //! An export is the one thing the server writes. It goes to the path the
 //! caller names, which must carry the format's extension, must not be the
 //! model that was read, and must not exist unless the caller passes
-//! `overwrite`. It is written beside its target and renamed when whole, so a
-//! failed or cancelled export never leaves a truncated file under the target's
-//! name.
+//! `overwrite`. It is written to a temporary file beside its target and put in
+//! place when whole, so a failed or cancelled export never leaves a truncated
+//! file under the target's name.
 
-use std::fs::File;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
+use rvt::control::WalkerControl;
 use sha2::{Digest, Sha256};
+use tempfile::NamedTempFile;
 
-use crate::config::Config;
+use crate::config::{Config, Failure};
 use crate::store::lower_hex;
 
-/// A writer that counts and hashes what passes through it.
-pub struct HashingWriter<W: Write> {
-    inner: W,
+/// A writer over the temporary file that counts and hashes what passes
+/// through it, and stops writing once the request is cancelled.
+pub struct HashingWriter<'a> {
+    inner: NamedTempFile,
     hasher: Sha256,
     bytes: u64,
+    control: &'a WalkerControl,
 }
 
-impl<W: Write> HashingWriter<W> {
-    fn new(inner: W) -> Self {
+impl<'a> HashingWriter<'a> {
+    fn new(inner: NamedTempFile, control: &'a WalkerControl) -> Self {
         Self {
             inner,
             hasher: Sha256::new(),
             bytes: 0,
+            control,
         }
     }
 
-    fn finish(self) -> (u64, String) {
+    fn finish(self) -> (NamedTempFile, u64, String) {
         let digest = self.hasher.finalize();
-        (self.bytes, lower_hex(&digest))
+        (self.inner, self.bytes, lower_hex(&digest))
     }
 }
 
-impl<W: Write> Write for HashingWriter<W> {
+impl Write for HashingWriter<'_> {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        let written = self.inner.write(buf)?;
+        // Not `Interrupted`: `write_all` retries on that, and would never stop.
+        if self.control.check().is_err() {
+            return Err(io::Error::other("the request was cancelled"));
+        }
+        let written = self.inner.as_file_mut().write(buf)?;
         self.hasher.update(&buf[..written]);
         self.bytes += written as u64;
         Ok(written)
     }
 
     fn flush(&mut self) -> io::Result<()> {
-        self.inner.flush()
+        self.inner.as_file_mut().flush()
     }
 }
 
@@ -135,39 +143,73 @@ pub fn plan(
     Ok(target)
 }
 
-/// Write the file `fill` produces at `path` (from [`plan`]): beside the
-/// target as `<target>.partial`, then renamed over it. `fill` writes through
-/// a [`HashingWriter`], so the result carries the size and SHA-256 of what
-/// was written.
+/// Write the file `fill` produces at `target` (from [`plan`]).
+///
+/// The bytes go to a uniquely named temporary file in the target's folder,
+/// which `tempfile` creates exclusively (so it cannot follow a planted link,
+/// and two exports to one target do not share it) and removes on every error
+/// path. When whole it is put in place: with `overwrite` it replaces the
+/// target; without, it is linked there and fails if the target exists, so a
+/// file that appeared meanwhile is never replaced. `fill` writes through a
+/// [`HashingWriter`], so the result carries the size and SHA-256 of what was
+/// written. A cancelled `control` stops the write at its next chunk and
+/// leaves nothing under the target's name.
 pub fn write(
-    path: &Path,
+    target: &Path,
     overwrite: bool,
-    fill: impl FnOnce(&mut HashingWriter<File>) -> io::Result<()>,
-) -> Result<Written, String> {
-    let mut partial = path.as_os_str().to_os_string();
-    partial.push(".partial");
-    let partial = PathBuf::from(partial);
-    let file = File::create(&partial)
-        .map_err(|error| format!("cannot write {}: {error}", partial.display()))?;
-    let mut writer = HashingWriter::new(file);
+    control: &WalkerControl,
+    fill: impl FnOnce(&mut HashingWriter<'_>) -> io::Result<()>,
+) -> Result<Written, Failure> {
+    let parent = match target.parent() {
+        Some(parent) if !parent.as_os_str().is_empty() => parent,
+        _ => Path::new("."),
+    };
+    let file = tempfile::Builder::new()
+        .prefix(".rvt-rs-mcp-")
+        .suffix(".partial")
+        .tempfile_in(parent)
+        .map_err(|error| {
+            Failure::Message(format!("cannot write in {}: {error}", parent.display()))
+        })?;
+    // The temporary file is private (mode 0600); an export is an ordinary file.
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = file
+            .as_file()
+            .set_permissions(std::fs::Permissions::from_mode(0o644));
+    }
+    let mut writer = HashingWriter::new(file, control);
     let outcome = fill(&mut writer).and_then(|()| writer.flush());
     if let Err(error) = outcome {
-        let _ = std::fs::remove_file(&partial);
-        return Err(format!("cannot write {}: {error}", path.display()));
+        drop(writer);
+        return Err(if control.check().is_err() {
+            Failure::Cancelled
+        } else {
+            Failure::Message(format!("cannot write {}: {error}", target.display()))
+        });
     }
-    let (bytes, sha256) = writer.finish();
-    if !overwrite && std::fs::symlink_metadata(path).is_ok() {
-        let _ = std::fs::remove_file(&partial);
-        return Err(format!(
-            "{} appeared while the export was written; pass overwrite=true to replace it",
-            path.display()
-        ));
+    let (file, bytes, sha256) = writer.finish();
+    if control.check().is_err() {
+        return Err(Failure::Cancelled);
     }
-    if let Err(error) = std::fs::rename(&partial, path) {
-        let _ = std::fs::remove_file(&partial);
-        return Err(format!("cannot write {}: {error}", path.display()));
+    let placed = if overwrite {
+        file.persist(target)
+    } else {
+        file.persist_noclobber(target)
+    };
+    if let Err(error) = placed {
+        let message = if error.error.kind() == io::ErrorKind::AlreadyExists {
+            format!(
+                "{} exists; pass overwrite=true to replace it, or name another file",
+                target.display()
+            )
+        } else {
+            format!("cannot write {}: {}", target.display(), error.error)
+        };
+        return Err(Failure::Message(message));
     }
-    let path = std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
+    let path = std::fs::canonicalize(target).unwrap_or_else(|_| target.to_path_buf());
     Ok(Written {
         path,
         bytes,

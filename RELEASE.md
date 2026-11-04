@@ -53,8 +53,9 @@ Every `vX.Y.Z` release:
   `gh attestation verify <archive> -R DrunkOnJava/rvt-rs` also reads from
   GitHub).
 - Publishes the `rvt` crate to [crates.io](https://crates.io/crates/rvt),
-  then the MCP server's crate `rvt-rs-mcp`
-  ([docs/mcp.md](docs/mcp.md)), which depends on that exact version, and
+  then, once the repository variable `PUBLISH_RVT_RS_MCP` is `true` (step 8),
+  the MCP server's crate `rvt-rs-mcp` ([docs/mcp.md](docs/mcp.md)), which
+  depends on that exact version, and
   Python wheels for Linux (glibc and musl), macOS and Windows and an sdist
   to [PyPI](https://pypi.org/project/rvt/), and the container image
   `ghcr.io/drunkonjava/rvt-rs:X.Y.Z`, all from
@@ -162,8 +163,14 @@ project treats a silent skipped step the same as an untested change.
    trusted publisher can be added only to a crate that exists, so the first
    version of `rvt-rs-mcp` is published by hand from the release commit
    (`cargo publish -p rvt-rs-mcp`, after `rvt` of that version is on
-   crates.io), and its trusted publisher added afterwards; later releases
-   need nothing.
+   crates.io), and its trusted publisher added afterwards. Until then
+   `publish.yml` skips its `rvt-rs-mcp` publish step: a publish that fails
+   after `rvt` is on crates.io would leave the tag half published. Set the
+   repository variable `PUBLISH_RVT_RS_MCP` to `true` (Settings, Secrets and
+   variables, Actions, Variables) once the trusted publisher is in place, and
+   later releases publish both crates. The `rvt-rs-mcp` binary is in the
+   release archives and the container image whether or not the variable is
+   set.
 9. **Tag the merged commit.** `git fetch origin`, check that
     `origin/main` is the release pull request's squash commit, then
     `git tag -s vX.Y.Z -m "rvt-rs X.Y.Z" origin/main`. The `-s` signs
@@ -201,6 +208,7 @@ publish, and viewer deploy finish. Replace `X.Y.Z` with the released version.
 ```bash
 cargo install rvt --version X.Y.Z --locked
 rvt-inspect --version
+# Once PUBLISH_RVT_RS_MCP is true (step 8); until then the archive's binary:
 cargo install rvt-rs-mcp --version X.Y.Z --locked
 rvt-rs-mcp --version
 

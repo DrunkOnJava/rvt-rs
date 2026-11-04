@@ -289,6 +289,15 @@ jobs:
         env:
           RVT_REQUIRE_CLI_PARITY: "1"
         run: cargo test --profile ci -p rvt-rs-mcp --no-fail-fast
+      # When the tool contract differs from the built server's, the server's
+      # tools/list (the new docs/mcp-tools.json) is here to commit.
+      - name: Upload the server's tool contract
+        if: ${{ failure() && matrix.os == 'ubuntu-24.04' && matrix.label != 'msrv' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: mcp-tools
+          path: target/tmp/mcp-tools.json
+          if-no-files-found: ignore
       # The synthetic IFC pair the integration tests write
       # (tests/common, write_synthetic_output): each release pull request
       # refreshes the viewer's download copies in tests/fixtures/ from it.
@@ -486,7 +495,12 @@ jobs:
         env:
           RVT_PROJECT_CORPUS_DIR: ${{ github.workspace }}/_project_corpus/Revit
           RVT_REQUIRE_CLI_PARITY: "1"
-        run: cargo test --profile ci -p rvt-rs-mcp --no-fail-fast
+        # The test compares the server's exports with rvt-ifc's and
+        # rvt-gltf's, which it finds beside the server in target/ci: built
+        # here, not left to a step that may not have run.
+        run: |
+          cargo build --profile ci --bin rvt-ifc --bin rvt-gltf
+          cargo test --profile ci -p rvt-rs-mcp --no-fail-fast
 
   writer-patch-corpus:
     # M9-01: stream-level writer coverage for real family + project
@@ -1325,6 +1339,12 @@ jobs:
       # lost or misplaced when a release assembles them.
       - name: Changelog fragments are in a section and start an item
         run: python3 tools/release/changelog.py check
+      # docs/mcp-tools.md is rendered from docs/mcp-tools.json, which the MCP
+      # server's end-to-end test holds to what the built server reports for
+      # tools/list (so a change to a tool fails there until both are
+      # regenerated).
+      - name: The MCP tool contract's Markdown is rendered from its JSON
+        run: python3 tools/ci/render-mcp-tools.py --check
       # The crate root tells docs.rs readers that every `RE-NN` is a report
       # under reports/, and that RE and issue numbers are the only tracker
       # ids the docs use; this keeps both true for the Rust and Python API

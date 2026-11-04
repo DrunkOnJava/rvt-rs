@@ -8,7 +8,9 @@ as IFC4 or glTF, with no Revit install and no network.
 - **Local.** It links the `rvt` crate in process and speaks MCP on stdin and
   stdout. It starts no subprocess, opens no socket and makes no network call.
 - **Read-only on the model.** The one thing it writes is an export file a tool
-  is asked for, at a path the caller names.
+  is asked for, at a path the caller names. Reading is not confined: a tool
+  opens any file the user running the server can read, wherever its `model`
+  path points, and `--output-dir` confines the writes only.
 - **One source of truth.** `open_model` runs the decode `rvt-ifc` runs, up to
   the model its exporter builds and the diagnostics that go with it, and keeps
   that model. Every query tool reads it, and the exports are written from it, so
@@ -30,11 +32,12 @@ cargo install --path rvt-mcp --locked
 rvt-rs-mcp --version
 ```
 
-From the next release, `cargo install rvt-rs-mcp --locked`, the prebuilt
-archives on [GitHub Releases](https://github.com/DrunkOnJava/rvt-rs/releases)
+From the next release, the prebuilt archives on
+[GitHub Releases](https://github.com/DrunkOnJava/rvt-rs/releases)
 (`rvt-rs-mcp` sits beside the CLIs) and the container image
-`ghcr.io/drunkonjava/rvt-rs` carry it. In the image the model's folder is
-mounted at `/data`:
+`ghcr.io/drunkonjava/rvt-rs` carry it, and `cargo install rvt-rs-mcp --locked`
+installs it once the crate's first version is on crates.io (RELEASE.md,
+step 8). In the image the model's folder is mounted at `/data`:
 
 ```bash
 docker run --rm -i -v "$PWD:/data" ghcr.io/drunkonjava/rvt-rs rvt-rs-mcp
@@ -82,10 +85,28 @@ or roots), so it works with a client that offers none of them.
   2026-07-28 client, since the inventory is fixed per binary.
 - Every tool declares an `outputSchema` and returns `structuredContent`, with
   the same JSON as a text block. A tool error has `isError` set and a text
-  message.
-- A request that carries a progress token gets `notifications/progress` while a
-  model decodes or an export is written, and `notifications/cancelled` stops the
-  walk: nothing partial is written.
+  message. Bad arguments (a missing field, a value of the wrong type) are tool
+  errors too, not JSON-RPC errors, so the model can correct them: the tools read
+  their arguments themselves, because rmcp's `Parameters` extractor answers a
+  malformed argument object with a protocol error.
+- The input and output schema of every tool, and their descriptions, are in
+  [`mcp-tools.md`](mcp-tools.md), rendered from [`mcp-tools.json`](mcp-tools.json),
+  which is what the built server reports for `tools/list` (the end-to-end test
+  fails when the committed file differs, and CI fails when the Markdown differs
+  from the JSON). This page does not restate them.
+- A request that carries a progress token gets `notifications/progress` while the
+  model decodes (the stages are those of `WalkerControl`: schema parse, candidate
+  scan, element decode, partition scan, saved graphics and saved meshes), and a
+  last one when the call ends. A cancelled call is cancelled by the client's
+  `notifications/cancelled`, which rmcp turns into a cancelled `context.ct`
+  (`rmcp` 3.8 `src/service.rs`, the serve loop: it removes the request from its
+  table and cancels its token, and `context.ct` is a child of that token), and
+  the server hands that to `WalkerControl`. The decode and the saved-mesh pass
+  stop at their next checkpoint, and an export being written stops at its next
+  chunk: nothing is left under the target's name, and the temporary file is
+  removed. rmcp sends no response to a cancelled request, as MCP says. A decode
+  already running when the cancellation arrives is not killed mid-step: the
+  walk checks between steps.
 - stdout carries only JSON-RPC. Logs go to stderr (`--log-level`). The server
   exits when the client closes stdin.
 
@@ -124,8 +145,15 @@ An export goes to the path the caller names. The path must end in `.ifc` or
 `.glb`, must not be the model being read, must not exist unless `overwrite` is
 true, and must be inside `--output-dir` when the server is started with one (a
 relative path is taken from it, otherwise from the server's working directory).
-The file is written beside its target and renamed when whole, so a failed or
-cancelled export leaves no truncated file under the target's name.
+The file is written to a uniquely named temporary file in the target's folder,
+created exclusively (so a link planted at a guessable name is not followed, and
+two exports to one target do not share it), and put in place when whole: with
+`overwrite` it replaces the target, without it it is linked there and fails if the
+target exists, so a file that appeared meanwhile is never replaced. A failed or
+cancelled export leaves no truncated file under the target's name and removes its
+temporary file. On a file system that cannot link files, an export without
+`overwrite` fails with the system's error; pass `overwrite` there. The export is
+an ordinary file (mode 0644 on Unix).
 
 The IFC is the file `rvt-ifc` writes from the same model with the same switches,
 byte for byte (the end-to-end test compares them), and the glb is `rvt-gltf`'s.
@@ -203,9 +231,12 @@ models are kept by default.
 ## Privacy
 
 Nothing leaves the machine. The server's dependency tree carries no HTTP client
-or server and no TLS stack (`tools/ci/audit-mcp-network.sh` fails the build if
-one appears), and the end-to-end test asserts, on Linux, that the running
-process holds no socket. What the client does with the answers is the client's
+or server and no TLS stack, and tokio's `net` feature (mio, socket2) is off: the
+server serves stdin and stdout through tokio's `io-std` and rmcp's
+`transport-async-rw`, not rmcp's `transport-io`, which turns `net` on
+(`tools/ci/audit-mcp-network.sh` fails the build if any of these appears). The
+end-to-end test asserts, on Linux, that the running process holds no socket.
+What the client does with the answers is the client's
 to say: an answer can name the file, the project, its levels and its elements.
 The model's path appears in no successful answer (the `model_id` is a hash and
 the diagnostics carry the file name only); an export's result names the path
@@ -218,7 +249,10 @@ stdio with rmcp's client in both lifecycles (`server/discover` at 2026-07-28,
 `initialize` at 2025-11-25) on the committed synthetic fixture under
 `corpus/tier1`, and on Einhoven when `RVT_PROJECT_CORPUS_DIR` is set. It
 compares the exports with `rvt-ifc` and `rvt-gltf` byte for byte, looks an
-element's GlobalId up in the IFC the export wrote, checks the unsupported
-version error (-32022), progress notifications, that stdout carries nothing but
-JSON, and that the server exits when stdin closes. CI runs it in the test
-matrix and again in Corpus health.
+element's GlobalId up in the IFC the export wrote, checks that bad arguments are
+tool errors, the unsupported version error (-32022), progress notifications,
+that cancelling an export stops it with nothing written or left over (on
+Einhoven the cancellation always lands during the decode), that stdout carries
+nothing but JSON, and that the server exits when stdin closes. Another test holds
+`mcp-tools.json` to what the server reports for `tools/list`. CI runs it in the
+test matrix and again in Corpus health, where Einhoven runs in both lifecycles.

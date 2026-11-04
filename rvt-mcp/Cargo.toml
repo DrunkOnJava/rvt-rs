@@ -31,16 +31,25 @@ workspace = true
 # The core library: every answer comes from the model its IFC exporter builds.
 rvt = { path = "..", version = "=0.13.0" }
 # stdio only: no HTTP transport feature, so the dependency tree carries no HTTP
-# client or server (tools/ci/audit-mcp-network.sh checks it).
-rmcp = { version = "3.8", features = ["server", "macros", "transport-io", "schemars"] }
+# client or server (tools/ci/audit-mcp-network.sh checks it). Not
+# `transport-io` either: it switches on tokio's `net` (and with it mio and
+# socket2) for a non-blocking pipe transport this server does not use, and
+# main.rs serves `(tokio::io::stdin(), tokio::io::stdout())`, which needs only
+# `server`'s `transport-async-rw` and tokio's `io-std`.
+rmcp = { version = "3.8", features = ["server", "macros", "schemars"] }
 # The tool schemas rmcp publishes come from this crate's derive.
 schemars = "1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 clap = { version = "4", features = ["derive"] }
-# One cheap runtime thread: the decoding runs on tokio's blocking pool.
-tokio = { version = "1", features = ["rt", "macros", "sync"] }
+# One cheap runtime thread: the decoding runs on tokio's blocking pool. No
+# `net`: the server opens no socket.
+tokio = { version = "1", features = ["rt", "macros", "sync", "io-std"] }
 sha2 = "0.11"
+# An export is written to a uniquely named file in the target's folder (created
+# exclusively, removed on every error path) and then linked or renamed into
+# place.
+tempfile = "3"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt"] }
 

@@ -28,7 +28,6 @@ use std::sync::Arc;
 
 use clap::{Parser, ValueEnum};
 use rmcp::ServiceExt;
-use rmcp::transport::stdio;
 use rvt::walker::WalkerLimits;
 
 use crate::config::Config;
@@ -190,8 +189,10 @@ fn main() -> ExitCode {
 async fn serve(config: Config) -> Result<(), String> {
     tracing::info!("rvt-rs-mcp {} serving on stdio", env!("CARGO_PKG_VERSION"));
     let server = RvtServer::new(Arc::new(Store::new(config)));
+    // stdin and stdout as one transport: rmcp's `stdio()` is this pair, but
+    // lives behind the `transport-io` feature, which turns on tokio's `net`.
     let running = server
-        .serve(stdio())
+        .serve((tokio::io::stdin(), tokio::io::stdout()))
         .await
         .map_err(|error| format!("cannot start the MCP server: {error}"))?;
     running

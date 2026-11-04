@@ -272,6 +272,24 @@ async fn drive(client: &Client, modern: bool, model: &Path, out: &Path, real_pro
     .await;
     assert!(error_text(&unknown).contains("open_model"));
 
+    // Bad arguments are tool errors the model can act on (`call` panics on a
+    // JSON-RPC protocol error), and they say which tool and what is wrong.
+    let no_model = call(client, "open_model", json!({})).await;
+    let message = error_text(&no_model);
+    assert!(
+        message.contains("Invalid arguments for open_model") && message.contains("model"),
+        "{message}"
+    );
+    let wrong_type = call(
+        client,
+        "list_elements",
+        json!({ "model": model_id, "limit": "ten" }),
+    )
+    .await;
+    assert!(error_text(&wrong_type).contains("Invalid arguments for list_elements"));
+    let no_id = call(client, "get_element", json!({ "model": model_id })).await;
+    assert!(error_text(&no_id).contains("Invalid arguments for get_element"));
+
     let listed = answer(
         &call(
             client,
@@ -548,10 +566,50 @@ async fn discover_lifecycle_on_einhoven() {
     let Some(model) = einhoven() else {
         return;
     };
-    let out = scratch("einhoven");
+    let out = scratch("einhoven-discover");
     let client = start_discover().await;
     drive(&client, true, &model, &out, true).await;
     client.cancel().await.expect("close the client");
+}
+
+#[tokio::test]
+async fn initialize_lifecycle_on_einhoven() {
+    let Some(model) = einhoven() else {
+        return;
+    };
+    let out = scratch("einhoven-initialize");
+    let client = start_initialize().await;
+    drive(&client, false, &model, &out, true).await;
+    client.cancel().await.expect("close the client");
+}
+
+/// The tool list the server reports is the committed contract,
+/// `docs/mcp-tools.json`, which `tools/ci/render-mcp-tools.py` renders as
+/// `docs/mcp-tools.md`. A change to a tool fails here until both are
+/// regenerated: `RVT_UPDATE_MCP_TOOLS=1 cargo test -p rvt-rs-mcp --test
+/// mcp_stdio tool_contract`, then `python3 tools/ci/render-mcp-tools.py`.
+#[tokio::test]
+async fn tool_contract_is_committed() {
+    let client = start_discover().await;
+    let list = client.list_tools(None).await.expect("tools/list");
+    client.cancel().await.expect("close the client");
+    let mut reported = serde_json::to_string_pretty(&list.tools).expect("serialize the tools");
+    reported.push('\n');
+    let fresh = Path::new(env!("CARGO_TARGET_TMPDIR")).join("mcp-tools.json");
+    std::fs::write(&fresh, &reported).expect("write the server's tool list");
+    let committed_path = repository().join("docs/mcp-tools.json");
+    if std::env::var_os("RVT_UPDATE_MCP_TOOLS").is_some() {
+        std::fs::write(&committed_path, &reported).expect("write docs/mcp-tools.json");
+        return;
+    }
+    let committed = std::fs::read_to_string(&committed_path)
+        .unwrap_or_default()
+        .replace("\r\n", "\n");
+    assert!(
+        committed == reported,
+        "docs/mcp-tools.json differs from what the server reports for tools/list (the server's is at {}). Regenerate it: RVT_UPDATE_MCP_TOOLS=1 cargo test -p rvt-rs-mcp --test mcp_stdio tool_contract, then python3 tools/ci/render-mcp-tools.py",
+        fresh.display()
+    );
 }
 
 /// A server on raw pipes.
@@ -743,4 +801,116 @@ fn a_path_outside_output_dir_is_refused() {
     assert_eq!(allowed["result"]["isError"], false, "{allowed}");
     assert!(!out.join("outside.ifc").exists());
     assert!(inside.join("relative.ifc").is_file());
+}
+
+/// The names of the files in `dir`.
+fn file_names(dir: &Path) -> Vec<String> {
+    std::fs::read_dir(dir)
+        .expect("list the export folder")
+        .flatten()
+        .map(|entry| entry.file_name().to_string_lossy().into_owned())
+        .collect()
+}
+
+/// Cancelling an export: no response comes back for it (rmcp drops the
+/// response of a cancelled request), nothing is left under its target's name
+/// or beside it as a temporary file, and the server goes on answering.
+/// `must_cancel` is for a model whose decode is long enough that the
+/// cancellation, sent at the export's first progress notification, always
+/// lands before the export is done; a tiny fixture can finish first, so there
+/// the export may complete and only the absence of temporary files is checked.
+fn cancel_an_export(model: &Path, name: &str, must_cancel: bool) {
+    let out = scratch(name);
+    let target = out.join("cancelled.ifc");
+    let mut server = Raw::start(&[]);
+    let mut meta = modern_meta();
+    meta["progressToken"] = json!("cancel-me");
+    server.send(&json!({
+        "jsonrpc": "2.0", "id": 10, "method": "tools/call",
+        "params": {
+            "name": "export_ifc",
+            "arguments": { "model": model, "out_path": target },
+            "_meta": meta
+        }
+    }));
+    let first = server.recv();
+    let mut answered = first["id"] == json!(10);
+    assert!(
+        !(must_cancel && answered),
+        "the export finished before it could be cancelled: {first}"
+    );
+    if !answered {
+        assert_eq!(first["method"], "notifications/progress", "{first}");
+        server.send(&json!({
+            "jsonrpc": "2.0", "method": "notifications/cancelled",
+            "params": { "requestId": 10, "reason": "the test cancels it" }
+        }));
+    }
+
+    // The server still answers.
+    server.send(&json!({
+        "jsonrpc": "2.0", "id": 11, "method": "tools/call",
+        "params": {
+            "name": "get_summary",
+            "arguments": { "model": fixture() },
+            "_meta": modern_meta()
+        }
+    }));
+    let seen = server.until_response(11);
+    let reply = seen.last().expect("a reply");
+    assert_eq!(reply["result"]["isError"], false, "{reply}");
+    answered |= seen.iter().any(|message| message["id"] == json!(10));
+    assert!(
+        !(must_cancel && answered),
+        "a cancelled export was answered: {seen:?}"
+    );
+
+    // Exporting again to another name waits for the cancelled export's decode
+    // to end, so once it answers the cancelled one has stopped.
+    let second = out.join("second.ifc");
+    server.send(&json!({
+        "jsonrpc": "2.0", "id": 12, "method": "tools/call",
+        "params": {
+            "name": "export_ifc",
+            "arguments": { "model": model, "out_path": second },
+            "_meta": modern_meta()
+        }
+    }));
+    let seen = server.until_response(12);
+    let reply = seen.last().expect("a reply");
+    assert_eq!(reply["result"]["isError"], false, "{reply}");
+
+    let deadline = Instant::now() + Duration::from_secs(30);
+    loop {
+        let names = file_names(&out);
+        let stray: Vec<&String> = names
+            .iter()
+            .filter(|found| {
+                found.as_str() != "second.ifc" && (must_cancel || found.as_str() != "cancelled.ifc")
+            })
+            .collect();
+        if stray.is_empty() {
+            break;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "files left by a cancelled export: {stray:?}"
+        );
+        std::thread::sleep(Duration::from_millis(100));
+    }
+    drop(server.stdin.take());
+    let _ = server.child.wait();
+}
+
+#[test]
+fn cancelling_an_export_of_the_fixture_leaves_nothing_partial() {
+    cancel_an_export(&fixture(), "cancel-fixture", false);
+}
+
+#[test]
+fn cancelling_an_export_of_einhoven_stops_it() {
+    let Some(model) = einhoven() else {
+        return;
+    };
+    cancel_an_export(&model, "cancel-einhoven", true);
 }

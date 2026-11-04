@@ -9,15 +9,16 @@
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use rmcp::handler::server::wrapper::Parameters;
 use rmcp::model::{
-    CacheScope, CallToolResult, ContentBlock, Implementation, ListToolsResult,
+    CacheScope, CallToolResult, ContentBlock, Implementation, JsonObject, ListToolsResult,
     PaginatedRequestParams, ProgressNotificationParam, ProtocolVersion, ServerCapabilities,
     ServerConfig,
 };
 use rmcp::service::RequestContext;
 use rmcp::{ErrorData, Json, RoleServer, ServerHandler, tool, tool_handler, tool_router};
 use rvt::control::{CancelToken, ProgressEvent, Stage, WalkerControl};
+use serde::de::DeserializeOwned;
+use serde_json::Value;
 
 use crate::args::{ExportGltfArgs, ExportIfcArgs, GetElementArgs, ListElementsArgs, ModelArgs};
 use crate::config::Failure;
@@ -65,6 +66,20 @@ impl RvtServer {
 
 fn fail(message: impl Into<String>) -> CallToolResult {
     CallToolResult::error(vec![ContentBlock::text(message)])
+}
+
+/// A tool's arguments as its type. The tools take the arguments as a JSON
+/// object and read them here, not through rmcp's `Parameters`, so that a
+/// missing field or a value of the wrong type is a tool error the model can
+/// act on (`isError` with a message), as MCP's tools page asks for input
+/// validation, and not a JSON-RPC protocol error the client would show as an
+/// opaque failure.
+fn parse<T: DeserializeOwned>(tool: &str, arguments: JsonObject) -> Result<T, CallToolResult> {
+    serde_json::from_value(Value::Object(arguments)).map_err(|error| {
+        fail(format!(
+            "Invalid arguments for {tool}: {error}. The tool's inputSchema lists them; `model` is a model_id from open_model or the path of a Revit file."
+        ))
+    })
 }
 
 fn failure_result(failure: Failure) -> CallToolResult {
@@ -183,6 +198,8 @@ fn export_result(exported: Exported) -> Result<CallToolResult, CallToolResult> {
 impl RvtServer {
     #[tool(
         name = "open_model",
+        input_schema = rmcp::handler::server::common::schema_for_input::<ModelArgs>()
+            .expect("the input schema is an object"),
         description = concat!(
             "Open a Revit file (.rvt, .rfa, .rte or .rft) and decode it once, with the same decode rvt-ifc runs. Every other tool answers from that decoded model and the IFC export is written from it, so an answer and the export cannot disagree. Returns model_id, the Revit release and build, element counts by IFC entity and Revit class, levels, and what was left out (diagnostics, unread streams). ",
             "Handle lifetime: model_id is opaque and stays valid while this server process runs and the model is among the most recently used ones the server keeps (2 by default); after an eviction or a restart a tool returns an error and you call open_model again. Every tool also takes the file path in place of the model_id. ",
@@ -198,14 +215,17 @@ impl RvtServer {
     )]
     async fn open_model(
         &self,
-        Parameters(args): Parameters<ModelArgs>,
+        arguments: JsonObject,
         context: RequestContext<RoleServer>,
     ) -> Result<Json<SummaryOut>, CallToolResult> {
+        let args = parse::<ModelArgs>("open_model", arguments)?;
         summary_answer(&self.store, &context, args.model).await
     }
 
     #[tool(
         name = "get_summary",
+        input_schema = rmcp::handler::server::common::schema_for_input::<ModelArgs>()
+            .expect("the input schema is an object"),
         description = concat!(
             "The summary open_model returns, for a model_id or a path: release and build, element counts by IFC entity and Revit class, levels, room count and the diagnostics summary (what was read, approximated, skipped and left unread). ",
             not_read!()
@@ -219,14 +239,17 @@ impl RvtServer {
     )]
     async fn get_summary(
         &self,
-        Parameters(args): Parameters<ModelArgs>,
+        arguments: JsonObject,
         context: RequestContext<RoleServer>,
     ) -> Result<Json<SummaryOut>, CallToolResult> {
+        let args = parse::<ModelArgs>("get_summary", arguments)?;
         summary_answer(&self.store, &context, args.model).await
     }
 
     #[tool(
         name = "list_elements",
+        input_schema = rmcp::handler::server::common::schema_for_input::<ListElementsArgs>()
+            .expect("the input schema is an object"),
         description = concat!(
             "List the building elements of a model, optionally by category (IFC entity such as IFCWALL), class (Revit class such as Wall) and level (storey name), paged by limit (100 by default, at most 1000) and offset. Each row has the Revit ElementId, name, level and a provenance object: element_id, global_id, category, class, body_source, profile_source, space_outline_source and area_body_refusal, each present only where the model has it. ",
             short_not_read!()
@@ -240,9 +263,10 @@ impl RvtServer {
     )]
     async fn list_elements(
         &self,
-        Parameters(args): Parameters<ListElementsArgs>,
+        arguments: JsonObject,
         context: RequestContext<RoleServer>,
     ) -> Result<Json<ListElementsOut>, CallToolResult> {
+        let args = parse::<ListElementsArgs>("list_elements", arguments)?;
         let store = Arc::clone(&self.store);
         let out = run_job(&context, move |control| {
             let (entry, computed) = decode(&store, &args.model, control)?;
@@ -264,6 +288,8 @@ impl RvtServer {
 
     #[tool(
         name = "get_element",
+        input_schema = rmcp::handler::server::common::schema_for_input::<GetElementArgs>()
+            .expect("the input schema is an object"),
         description = concat!(
             "One element, by Revit ElementId or IFC GlobalId (the Revit Mark parameter is not decoded, so it cannot be looked up). Returns its property sets and quantities as the IFC export writes them (quantities in the IFC's SI units), its trust markers (the ...Source, ...Resolved and ...Refusal properties of its record, such as BodySource), its provenance, and the file's: Revit release and build, schema class count and ElemTable record layout. ",
             short_not_read!()
@@ -277,9 +303,10 @@ impl RvtServer {
     )]
     async fn get_element(
         &self,
-        Parameters(args): Parameters<GetElementArgs>,
+        arguments: JsonObject,
         context: RequestContext<RoleServer>,
     ) -> Result<Json<ElementDetail>, CallToolResult> {
+        let args = parse::<GetElementArgs>("get_element", arguments)?;
         let store = Arc::clone(&self.store);
         let out = run_job(&context, move |control| {
             let (entry, computed) = decode(&store, &args.model, control)?;
@@ -291,8 +318,10 @@ impl RvtServer {
 
     #[tool(
         name = "list_rooms",
+        input_schema = rmcp::handler::server::common::schema_for_input::<ModelArgs>()
+            .expect("the input schema is an object"),
         description = concat!(
-            "List the rooms and spaces of a model: ElementId, number, name, level, area and provenance, whose space_outline_source says where the outline came from. The area is present only where the outline was read exactly (space_outline_source stored_solid, stored_solid_faces, or area_boundary for an Area); a room that keeps its record's bounding box (record_box) has no area, since the area of a box is not the area of a room.",
+            "List the rooms and spaces of a model: ElementId, number, name, level, area and provenance, whose space_outline_source says where the outline came from. The area is present only where the outline was read exactly (space_outline_source stored_solid, stored_solid_faces, or area_boundary for an Area); a room that keeps its record's bounding box (record_box) has no area, since the area of a box is not the area of a room. ",
             short_not_read!()
         ),
         annotations(
@@ -304,9 +333,10 @@ impl RvtServer {
     )]
     async fn list_rooms(
         &self,
-        Parameters(args): Parameters<ModelArgs>,
+        arguments: JsonObject,
         context: RequestContext<RoleServer>,
     ) -> Result<Json<RoomsOut>, CallToolResult> {
+        let args = parse::<ModelArgs>("list_rooms", arguments)?;
         let store = Arc::clone(&self.store);
         let out = run_job(&context, move |control| {
             let (entry, computed) = decode(&store, &args.model, control)?;
@@ -318,6 +348,8 @@ impl RvtServer {
 
     #[tool(
         name = "list_levels",
+        input_schema = rmcp::handler::server::common::schema_for_input::<ModelArgs>()
+            .expect("the input schema is an object"),
         description = concat!(
             "List the levels (building storeys) of a model with their elevation in feet and metres and how many building elements the export puts on each. ",
             short_not_read!()
@@ -331,9 +363,10 @@ impl RvtServer {
     )]
     async fn list_levels(
         &self,
-        Parameters(args): Parameters<ModelArgs>,
+        arguments: JsonObject,
         context: RequestContext<RoleServer>,
     ) -> Result<Json<LevelsOut>, CallToolResult> {
+        let args = parse::<ModelArgs>("list_levels", arguments)?;
         let store = Arc::clone(&self.store);
         let out = run_job(&context, move |control| {
             let (entry, computed) = decode(&store, &args.model, control)?;
@@ -345,6 +378,8 @@ impl RvtServer {
 
     #[tool(
         name = "get_diagnostics",
+        input_schema = rmcp::handler::server::common::schema_for_input::<ModelArgs>()
+            .expect("the input schema is an object"),
         description = concat!(
             "The export diagnostics of a model, as rvt-ifc --diagnostics writes them (docs/schemas/export-diagnostics.schema.json in the rvt-rs repository): what was decoded and exported, what was skipped, approximated or left out with the reason for each, unsupported features, warnings, the confidence level, and the streams a resource limit kept unread. ",
             not_read!()
@@ -358,9 +393,10 @@ impl RvtServer {
     )]
     async fn get_diagnostics(
         &self,
-        Parameters(args): Parameters<ModelArgs>,
+        arguments: JsonObject,
         context: RequestContext<RoleServer>,
     ) -> Result<Json<DiagnosticsOut>, CallToolResult> {
+        let args = parse::<ModelArgs>("get_diagnostics", arguments)?;
         let store = Arc::clone(&self.store);
         let out = run_job(&context, move |control| {
             let (entry, computed) = decode(&store, &args.model, control)?;
@@ -372,6 +408,8 @@ impl RvtServer {
 
     #[tool(
         name = "export_ifc",
+        input_schema = rmcp::handler::server::common::schema_for_input::<ExportIfcArgs>()
+            .expect("the input schema is an object"),
         description = concat!(
             "Write the model as IFC4 to out_path, which must end in .ifc, must not be the model, and must not exist unless overwrite is true. The file is the one rvt-ifc writes with the same switches (options); SOURCE_DATE_EPOCH fixes the time in its header. If a resource limit kept part of the file unread, nothing is written unless options.allow_partial is true. Returns a summary (entity counts, diagnostics, unread streams, size and sha256) and a resource_link to the file; the IFC is never returned inline. Sends progress notifications when the request carries a progress token, and cancelling it stops the export with nothing written. Writes only the file it is asked for. ",
             short_not_read!()
@@ -386,9 +424,10 @@ impl RvtServer {
     )]
     async fn export_ifc(
         &self,
-        Parameters(args): Parameters<ExportIfcArgs>,
+        arguments: JsonObject,
         context: RequestContext<RoleServer>,
     ) -> Result<CallToolResult, CallToolResult> {
+        let args = parse::<ExportIfcArgs>("export_ifc", arguments)?;
         let store = Arc::clone(&self.store);
         let exported = run_job(&context, move |control| {
             exports::ifc(&store, &args, control)
@@ -399,6 +438,8 @@ impl RvtServer {
 
     #[tool(
         name = "export_gltf",
+        input_schema = rmcp::handler::server::common::schema_for_input::<ExportGltfArgs>()
+            .expect("the input schema is an object"),
         description = concat!(
             "Write the model as a binary glTF 2.0 file to out_path, which must end in .glb, must not be the model, and must not exist unless overwrite is true. The file is the one rvt-gltf writes. If a resource limit kept part of the file unread, nothing is written unless allow_partial is true. Returns a summary (entity counts, unread streams, size and sha256) and a resource_link to the file; the glb is never returned inline. Sends progress notifications when the request carries a progress token, and cancelling it stops the export with nothing written. Writes only the file it is asked for. ",
             short_not_read!()
@@ -413,9 +454,10 @@ impl RvtServer {
     )]
     async fn export_gltf(
         &self,
-        Parameters(args): Parameters<ExportGltfArgs>,
+        arguments: JsonObject,
         context: RequestContext<RoleServer>,
     ) -> Result<CallToolResult, CallToolResult> {
+        let args = parse::<ExportGltfArgs>("export_gltf", arguments)?;
         let store = Arc::clone(&self.store);
         let exported = run_job(&context, move |control| {
             exports::gltf(&store, &args, control)

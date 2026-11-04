@@ -247,8 +247,9 @@ registry needs its trusted publisher configured on its side once (repository
 DrunkOnJava/rvt-rs, workflow `publish.yml`, environments `crates-io` and
 `pypi`); crates.io needs one for each of its crates, `rvt` and the MCP server's
 `rvt-rs-mcp`, which is added after that crate's first version is published by
-hand. Confirm it before pushing a tag; `.github/workflows/publish.yml` lists
-the settings.
+hand; the workflow publishes `rvt-rs-mcp` only once the repository variable
+`PUBLISH_RVT_RS_MCP` is `true` (RELEASE.md, step 8). Confirm it before pushing a
+tag; `.github/workflows/publish.yml` lists the settings.
 
 ## Security and automation settings
 

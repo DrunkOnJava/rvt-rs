@@ -7,6 +7,11 @@
 //! and the exports are written from it, so an answer and the IFC cannot
 //! disagree. The end-to-end test compares an export with `rvt-ifc`'s byte for
 //! byte.
+//!
+//! This is a copy of those steps, as `rvt-py` and `rvt-wasm` carry their own.
+//! #1331 replaces all four with one export function in `rvt`; until it lands,
+//! that comparison is what keeps this copy honest. `rvt-ifc` options added
+//! meanwhile (such as #1328's `--phase`) are not here until then.
 
 use rvt::RevitFile;
 use rvt::control::WalkerControl;

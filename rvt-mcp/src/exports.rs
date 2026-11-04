@@ -157,7 +157,7 @@ pub fn ifc(
         .map_err(|error| Failure::Message(error.to_string()))?;
     control.check().map_err(|_| Failure::Cancelled)?;
     let step_options = StepOptions { timestamp };
-    let written = output::write(&target, args.overwrite, |writer| {
+    let written = output::write(&target, args.overwrite, control, |writer| {
         write_step_to(source.model, &step_options, writer).map(|_| ())
     })?;
     Ok(finish(
@@ -188,7 +188,9 @@ pub fn gltf(
     refuse_partial(&computed.unread, args.allow_partial)?;
     control.check().map_err(|_| Failure::Cancelled)?;
     let glb = model_to_glb(&computed.model);
-    let written = output::write(&target, args.overwrite, |writer| writer.write_all(&glb))?;
+    let written = output::write(&target, args.overwrite, control, |writer| {
+        writer.write_all(&glb)
+    })?;
     let source = Source {
         model: &computed.model,
         diagnostics: &computed.diagnostics,
