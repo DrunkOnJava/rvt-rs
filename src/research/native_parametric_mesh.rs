@@ -609,6 +609,9 @@ fn extent(ring: &[[f64; 2]], axis: usize) -> (f64, f64) {
 /// `piece`: a fan where the piece is convex, else earcut.
 fn triangulate_piece(piece: &[[f64; 2]], sign: f64) -> Vec<[u32; 3]> {
     let n = piece.len();
+    if n < 3 {
+        return Vec::new();
+    }
     let convex =
         (0..n).all(|i| sign * cross_uv(piece[i], piece[(i + 1) % n], piece[(i + 2) % n]) >= -1e-15);
     if convex {
@@ -918,4 +921,145 @@ pub fn tessellate_uv(
         normals,
         triangles,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{clip_axis, cross_uv, double_area, extent, triangulate_piece};
+
+    const SQUARE: [[f64; 2]; 4] = [[0., 0.], [1., 0.], [1., 1.], [0., 1.]];
+
+    // A U: legs x in [0, 1] and [2, 3] above a bar y in [0, 1]; twice its area is 14.
+    const U_SHAPE: [[f64; 2]; 8] = [
+        [0., 0.],
+        [3., 0.],
+        [3., 3.],
+        [2., 3.],
+        [2., 1.],
+        [1., 1.],
+        [1., 3.],
+        [0., 3.],
+    ];
+
+    // An L: twice its area is 6.
+    const L_SHAPE: [[f64; 2]; 6] = [[0., 0.], [2., 0.], [2., 1.], [1., 1.], [1., 2.], [0., 2.]];
+
+    fn near(a: f64, b: f64) -> bool {
+        (a - b).abs() < 1e-12
+    }
+
+    #[test]
+    fn a_loop_wholly_on_the_kept_side_is_unchanged() {
+        assert_eq!(clip_axis(&SQUARE, 0, -1., true), SQUARE);
+        assert_eq!(clip_axis(&SQUARE, 1, 2., false), SQUARE);
+    }
+
+    #[test]
+    fn a_loop_wholly_on_the_other_side_is_empty() {
+        assert!(clip_axis(&SQUARE, 0, 2., true).is_empty());
+        assert!(clip_axis(&SQUARE, 0, -1., false).is_empty());
+    }
+
+    // An edge on the line is kept by the side that includes the line and leaves
+    // the other side a segment with no area, which the mesher skips.
+    #[test]
+    fn a_loop_with_an_edge_on_the_line_leaves_the_far_side_no_area() {
+        assert_eq!(clip_axis(&SQUARE, 0, 0., true), SQUARE);
+        let far = clip_axis(&SQUARE, 0, 0., false);
+        assert!(far.len() < 3);
+        assert!(near(double_area(&far), 0.));
+    }
+
+    #[test]
+    fn a_loop_cut_in_two_gives_two_halves_that_add_up_to_it() {
+        let right = clip_axis(&SQUARE, 0, 0.5, true);
+        let left = clip_axis(&SQUARE, 0, 0.5, false);
+        assert_eq!(right, [[0.5, 0.], [1., 0.], [1., 1.], [0.5, 1.]]);
+        assert!(near(double_area(&left), 1.));
+        assert!(near(
+            double_area(&left) + double_area(&right),
+            double_area(&SQUARE)
+        ));
+    }
+
+    // A vertex on the line is in both halves, so a cell and its neighbour share it.
+    #[test]
+    fn a_vertex_on_the_line_belongs_to_both_sides() {
+        let triangle = [[0., 0.], [0.5, 1.], [1., 0.]];
+        let right = clip_axis(&triangle, 0, 0.5, true);
+        let left = clip_axis(&triangle, 0, 0.5, false);
+        assert_eq!(right, [[0.5, 1.], [1., 0.], [0.5, 0.]]);
+        assert_eq!(left, [[0., 0.], [0.5, 1.], [0.5, 0.]]);
+        assert!(near(double_area(&left) + double_area(&right), -1.));
+    }
+
+    // Cut across the notch, a concave loop gives one ring that runs along the
+    // line between its two parts; the area is still exactly the two parts'.
+    #[test]
+    fn a_concave_loop_cut_across_its_notch_keeps_its_area() {
+        assert!(near(double_area(&U_SHAPE), 14.));
+        let top = clip_axis(&U_SHAPE, 1, 2., true);
+        let bottom = clip_axis(&U_SHAPE, 1, 2., false);
+        assert!(near(double_area(&top), 4.));
+        assert!(near(double_area(&bottom), 10.));
+    }
+
+    // The mesher's order: a column of cells first, then each cell of the column.
+    #[test]
+    fn the_cells_of_a_concave_loop_hold_its_area_and_stay_in_their_cells() {
+        let u = [0., 0.75, 2.];
+        let v = [0., 1.25, 2.];
+        let mut sum = 0.;
+        for cu in u.windows(2) {
+            let column = clip_axis(&clip_axis(&L_SHAPE, 0, cu[0], true), 0, cu[1], false);
+            for cv in v.windows(2) {
+                let piece = clip_axis(&clip_axis(&column, 1, cv[0], true), 1, cv[1], false);
+                if piece.is_empty() {
+                    continue;
+                }
+                let (lo, hi) = extent(&piece, 0);
+                assert!(lo >= cu[0] - 1e-12 && hi <= cu[1] + 1e-12);
+                let (lo, hi) = extent(&piece, 1);
+                assert!(lo >= cv[0] - 1e-12 && hi <= cv[1] + 1e-12);
+                sum += double_area(&piece);
+            }
+        }
+        assert!(near(sum, 6.));
+    }
+
+    #[test]
+    fn an_empty_or_single_point_loop_clips_to_nothing_with_an_area() {
+        assert!(clip_axis(&[], 0, 0., true).is_empty());
+        let point = clip_axis(&[[1., 1.]], 0, 0., true);
+        assert!(point.len() < 3);
+        assert!(near(double_area(&point), 0.));
+    }
+
+    #[test]
+    fn a_convex_piece_is_fanned_whichever_way_it_winds() {
+        assert_eq!(triangulate_piece(&SQUARE, 1.), [[0, 1, 2], [0, 2, 3]]);
+        let clockwise = [[0., 0.], [0., 1.], [1., 1.], [1., 0.]];
+        assert!(double_area(&clockwise) < 0.);
+        assert_eq!(triangulate_piece(&clockwise, -1.), [[0, 1, 2], [0, 2, 3]]);
+    }
+
+    #[test]
+    fn a_concave_piece_is_triangulated_to_its_own_area() {
+        let triangles = triangulate_piece(&L_SHAPE, 1.);
+        assert!(!triangles.is_empty());
+        let mut sum = 0.;
+        for t in &triangles {
+            assert!(t.iter().all(|&k| (k as usize) < L_SHAPE.len()));
+            let [a, b, c] = t.map(|k| L_SHAPE[k as usize]);
+            sum += cross_uv(a, b, c).abs();
+        }
+        assert!(near(sum, 6.));
+    }
+
+    #[test]
+    fn a_piece_of_fewer_than_three_points_has_no_triangles() {
+        assert!(triangulate_piece(&[], 1.).is_empty());
+        assert!(triangulate_piece(&[[0., 0.]], 1.).is_empty());
+        assert!(triangulate_piece(&[[0., 0.], [1., 0.]], 1.).is_empty());
+    }
 }
