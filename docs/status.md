@@ -992,12 +992,36 @@ Revit 2025's exports of two models made for it (a wall created in the last
 of three phases is exported, a wall demolished in it is not). On Snowdon
 Towers the phases run Legends, Existing, New Construction, so #328's six
 slabs, created and demolished in Legends, are left out, and nothing else
-is. An export setting that picks another phase is not read. Rooms are not
-checked: Revit's exporter skips a room whose own phase parameter is not the
-export phase instead of applying that rule, and no model here shows the
-parameter to be the room's created phase, so a room created in an earlier
-phase is still written (revit-ifc `ElementFilteringUtil.IsRoomInInvalidPhase`;
-`reports/element-framing/RE-184-phase-order.md`).
+is. An export setting that picks another phase is read since RE-326
+(`rvt-ifc --phase`), not a view's. Rooms are left out by a rule of their own
+(RE-326).
+
+**RE-326 (2026-11-04)** leaves out a room whose own phase is not the export
+phase, as Revit's exporter does (revit-ifc `IsRoomInInvalidPhase`). A room's
+phase is the `m_phaseId` field of its `RoomElem` record, on Revit 2015 to
+2027, and not its created phase, which is unset on every room. The export
+phase is the project's last, or the one `rvt-ifc --phase <name|id>` names, and
+the status rule of RE-184 for the other elements reads it from the same place.
+A room whose phase is unset, unread or not one of the project's is written,
+and so is an Area or an MEP space. The diagnostics count the rooms left out in
+`skipped` as `room_not_in_export_phase`, one item for each phase they sit in.
+The 621 rooms of the 12 models that have a Revit export (Core Interior, RE1
+Architecture, the BIM4LCA office as built and at permit and its two terrain
+variants, six R2025 room models) are all in the last phase and all in
+Revit's export, so none of them changes: in the unfiltered Measure (run
+41784044966) 12 of 111 exports move, the `rac_basic_sample_project` saves of
+Revit 2016 to 2027, and 99 are byte for byte as before, the held-out models
+included. The rule is unmeasured against a
+Revit export made with the default setup, because no project in the corpus
+has a room outside its last phase and such an export: Autodesk's
+`rac_basic_sample_project` has 14 rooms in the second of its three phases, on
+all 13 releases, and a public Revit 2018 export of it holds all 14. They are
+left out by default and written with `--phase "Working Drawings"`, which
+writes 14 of that export's 17 spaces by GlobalId and changes no other entity
+(Measure runs 41784415396 and 41784419457). Revit 2015
+and earlier write every room, as every element: both phase rules start at
+Revit 2016 (#1332). The Python bindings and the viewer follow the default
+(`reports/element-framing/RE-326-room-phases.md`).
 
 **RE-281 (2026-10-30)** reads the project's phases and each element's saved
 parameters on Revit 2015 to 2022, experimentally, and the phase order on
