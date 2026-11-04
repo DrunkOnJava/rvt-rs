@@ -23,8 +23,9 @@ body and by the largest radius of its arcs (up to 0.12 ft, where IfcOpenShell
 cuts any form of an arc within 0.00088 ft of it, or over), with how many of
 each hold "ref on ours", both directions within 0.001 ft and within 1e-5 ft
 (the tessellations coincide), and the volume within 1% and 0.01%. A row for the
-bodies decided by the fine tessellation says so at its end; the other rows are
-in the default one. Then the scored bodies with an arc that miss "ref on ours",
+bodies decided by the fine tessellation says so at its end, and an "all" row, which
+mixes the two, says how many of its bodies were; the other rows, and the bodies in the
+list of misses without `(fine tessellation)`, are in the default one. Then the scored bodies with an arc that miss "ref on ours",
 one line each.
 
 With RVT_SCORER_FINE_MESH=1 (#1355, RE-331) `mesh_bodies_vs_ifc` also prints its
@@ -133,6 +134,7 @@ def census(scored, label="", decided=frozenset()):
         for key in ((ref.get(tag, "not described"), written, by), ("all", written, ""), ("all", "all", "")):
             row = rows[key]
             row["n"] += 1
+            row["fine"] += tag in decided
             row["ref on ours"] += to_ours <= 0.001
             row["0.001 ft"] += far <= 0.001
             row["1e-5 ft"] += far <= 1e-5
@@ -151,7 +153,8 @@ def census(scored, label="", decided=frozenset()):
         row = rows[key]
         print(
             f"{label}{row['n']:>6} {row['ref on ours']:>11} {row['0.001 ft']:>8} {row['1e-5 ft']:>7} {row['vol 1%']:>7}"
-            f" {row['vol 0.01%']:>8}  {key[0]}; {key[1]}" + (f"; {key[2]}" if key[2] else "")
+            f" {row['vol 0.01%']:>8}  {key[0]}; {key[1]}"
+            + (f"; {key[2]}" if key[2] else f"; {row['fine']} of them decided by the fine tessellation" if key[0] == "all" and row["fine"] else "")
         )
     misses.sort(reverse=True)
     print(f"{label}scored bodies with an arc that miss 'ref on ours': {len(misses)}")
@@ -159,6 +162,7 @@ def census(scored, label="", decided=frozenset()):
         print(
             f"  {label}{tag} {cls} '{object_type}': volume ratio {ratio:.4f}, Revit's vertices to rvt-rs's surface"
             f" {to_ours:.4g} ft, rvt-rs's to Revit's {to_ref:.4g} ft, largest arc radius {largest:.4g} ft; Revit: {form}"
+            + (" (fine tessellation)" if tag in decided else "")
         )
 
 
