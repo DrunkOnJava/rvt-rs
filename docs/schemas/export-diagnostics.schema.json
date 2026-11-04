@@ -232,7 +232,7 @@
         },
         "element_record_stages": {
           "type": "object",
-          "description": "Where the element records of a Revit 2008 to 2023 file stop, stage by stage, per partition stream and in total (#1389): the markers found, those with a declared ElementId, those that gave a record, the placed instances, those with volume, the frames kept, the elements handed to the export and the elements written. Each count is exactly what the one before it passed on and left, so a stream's counts add up. Present for a project file that takes that record layout, and absent for Revit 2024 and later, whose rejected frames are in skipped (element_record_without_element_id and the reasons after it), for a family file (which reads its elements from Global/Latest) and for a placeholder export. Not written in the IFC file.",
+          "description": "Where the element records of a Revit 2008 to 2023 file stop, stage by stage, per partition stream and in total (#1389): the markers found, those with a declared ElementId, those that gave a record, the placed instances, those with volume, the frames kept, the elements handed to the export and the elements written. Each count is exactly what the one before it passed on and left, so a stream's counts add up. Present for a file that takes that record layout, even when every count is zero, and absent for Revit 2024 and later, whose rejected frames are in skipped (element_record_without_element_id and the reasons after it), and for a placeholder export. A family file reads its elements from Global/Latest, so its zero records mean nothing. Not written in the IFC file.",
           "required": ["layout_release", "total", "streams", "written_to_model"],
           "properties": {
             "layout_release": {

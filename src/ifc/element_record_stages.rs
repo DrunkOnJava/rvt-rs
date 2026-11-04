@@ -59,9 +59,13 @@
 //! The frames that stopped at steps 3 and 5 are also in `skipped` as
 //! `element_record_frame_stopped`, by stage, counted from those integers, and,
 //! when the log of decisions is asked for, listed in it with the stream and the
-//! offset of the ElementId's place. A family file (`.rfa`, `.rte`, `.rft`), whose
-//! elements are read from `Global/Latest`, and a placeholder export have no such
-//! report.
+//! offset of the ElementId's place. Every export of a file of these releases has
+//! the report, even when each count is zero (that is what says where the records
+//! stopped), but a placeholder export, which writes none of what was decoded. A
+//! family file (`.rfa`, `.rft`) reads its elements from `Global/Latest`, so its
+//! zero records mean nothing, and `rvt-ifc` prints no line for one; the file name
+//! tells, as the streams do not (the synthetic project fixtures carry a `PartAtom`
+//! stream as a family does).
 
 use std::collections::{BTreeMap, BTreeSet};
 

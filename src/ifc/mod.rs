@@ -3912,10 +3912,14 @@ pub(crate) fn build_export_diagnostics_and_decisions(
     // #1389: on a Revit 2008 to 2023 file the layout above is not read, and
     // the counts of what became of each frame at its markers are the ones the
     // recovery of its records made as it decided.
-    // A family file reads its elements from `Global/Latest`, and a placeholder
-    // export writes none of what was decoded: neither has the report.
+    // A placeholder export writes none of what was decoded, so it has no
+    // report. Every other export of a file of this layout has one, even when
+    // each count is zero: that is what says where the records stopped. A family
+    // reads its elements from `Global/Latest`, and `rvt-ifc` prints no line for
+    // one (the file name tells; the streams do not, as a synthetic project
+    // carries a `PartAtom` stream too).
     let element_record_stages = match rf.element_record_stages() {
-        Some(stages) if part.is_none() && mode != ExportDiagnosticsMode::Placeholder => Some(
+        Some(stages) if mode != ExportDiagnosticsMode::Placeholder => Some(
             element_record_stages::ElementRecordStages::build(stages, model, &below_min_ids),
         ),
         _ => None,

@@ -17,8 +17,10 @@
   nothing on these layouts, so a file such as the four on #421 that exports no
   element showed only `low_confidence_schema_scan_candidate`. The counts are
   integers added where the scan and the recovery already decide: no further pass
-  over the file, and the default export lists no frame. A family file and a
-  placeholder export have no report. The IFC is unchanged. On Autodesk's 33
+  over the file, and the default export lists no frame. Every export of a file of
+  these releases has the report, even with every count zero, but a placeholder
+  export's; `rvt-ifc` prints no line for a family file (`.rfa`, `.rft`), whose
+  elements are read from `Global/Latest`. The IFC is unchanged. On Autodesk's 33
   sample projects of 2015 to 2023 (Measure run 41932213967), every count added
   up, per stream and in total, and the IFC was byte-identical to main's; 192,811
   of their 197,463 markers gave a record, 87,366 elements were handed to the

@@ -29,10 +29,9 @@ and the streams' counts must sum to the file's. Beside them:
   that stopped before they were records and the placed instances with no volume.
 
 A Revit 2015 to 2023 project must have the block (Revit 2008 to 2014 files are not
-exported by rvt-rs, so a file of those years is not required to; a family file,
-which reads its elements from Global/Latest, has none). A file of a later release
-has it only when its schema is an older release's (#421); either way it is
-checked when present.
+exported by rvt-rs, so a file of those years is not required to). A file of a
+later release has it only when its schema is an older release's (#421); either
+way it is checked when present.
 
 Usage:
 

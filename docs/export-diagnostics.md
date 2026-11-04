@@ -337,12 +337,15 @@ files, so a file that exported no element showed only
 its elements (#1389, from the files reported on #421). `decoded.element_record_stages`
 counts what became of the frames at the file's markers, per partition stream
 (`streams`) and in total (`total`), where the scan and the recovery already decide:
-no further pass over the file. It is present for any export of a project file that
-takes that layout, which includes a file saved by Revit 2024 or later whose schema
-is an older release's, and absent otherwise: a family file (`.rfa`, `.rte`,
-`.rft`, recognised by its `PartAtom` stream) reads its elements from
-`Global/Latest`, and a placeholder export writes none of what was decoded. It is in
-the diagnostics only; the IFC is not changed.
+no further pass over the file. It is present for any export of a file that takes
+that layout, which includes a file saved by Revit 2024 or later whose schema is an
+older release's, even when each count is zero (that is what says where the records
+stopped), and absent otherwise and for a placeholder export, which writes none of
+what was decoded. A family file (`.rfa`, `.rft`) reads its elements from
+`Global/Latest`, so its project records are none and mean nothing: its report is
+there, and `rvt-ifc` prints no line for it. The file name decides that, not the
+file's streams: the synthetic project fixtures carry a `PartAtom` stream, as a
+family does. It is in the diagnostics only; the IFC is not changed.
 
 The counts are integers added where the scan already decides, whatever the export
 asks for: the default export lists no frame and allocates no name for one. Only
@@ -433,8 +436,8 @@ have the stages' counts, and the default export has the same counts and item; ea
 log entry points at a marker 52 bytes on. On the committed synthetic
 `corpus/tier1/structural-2023` project, whose partitions hold no record, nothing
 is written, `stopped_at` names a stage before any marker and `rvt-ifc` prints it;
-on the committed family `tests/fixtures/families/empty.rfa` there is no report and
-no line. `tools/re/element_stage_counts.py` makes the same checks on a
+on the committed family `tests/fixtures/families/empty.rfa` `rvt-ifc` prints no
+line. `tools/re/element_stage_counts.py` makes the same checks on a
 `diagnostics.json`; Measure runs it on each of Autodesk's sample projects
 (`-f samples=true`, `element_stage_counts.txt`).
 

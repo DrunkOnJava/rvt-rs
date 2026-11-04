@@ -328,7 +328,11 @@ fn run(args: Args) -> anyhow::Result<()> {
         }
     };
     eprintln!("rvt-ifc: wrote {written} bytes to {}", out_path.display());
-    for line in export_summary(&diagnostics, args.diagnostics.is_some()) {
+    for line in export_summary(
+        &diagnostics,
+        args.diagnostics.is_some(),
+        is_family_file(&args.input),
+    ) {
         eprintln!("{line}");
     }
     if let Some(diagnostics_path) = &args.diagnostics {
@@ -873,9 +877,25 @@ fn format_elevation_feet(feet: f64) -> String {
 /// How many IFC types the summary names before "and N more".
 const SUMMARY_TYPES: usize = 6;
 
+/// Whether `path` names a family (`.rfa`) or a family template (`.rft`), whose
+/// elements are read from `Global/Latest` and not from the project element
+/// records.
+fn is_family_file(path: &std::path::Path) -> bool {
+    path.extension()
+        .and_then(|extension| extension.to_str())
+        .is_some_and(|extension| {
+            ["rfa", "rft"]
+                .iter()
+                .any(|family| extension.eq_ignore_ascii_case(family))
+        })
+}
+
 /// A few lines saying what the IFC holds: building elements by IFC type,
 /// what was left out on purpose, and the readiness level.
-fn export_summary(diagnostics: &ExportDiagnostics, has_sidecar: bool) -> Vec<String> {
+///
+/// `family` is whether the input is a family file, for which the element
+/// records of a project say nothing.
+fn export_summary(diagnostics: &ExportDiagnostics, has_sidecar: bool, family: bool) -> Vec<String> {
     let mut lines = Vec::new();
     let exported = &diagnostics.exported;
     if exported.building_elements > 0 {
@@ -955,8 +975,14 @@ fn export_summary(diagnostics: &ExportDiagnostics, has_sidecar: bool) -> Vec<Str
     }
     // #1389: a Revit 2008 to 2023 project none of whose element records was
     // written says where they stopped, on a line of its own (it can be the only
-    // line, when nothing else was exported). A family has no such report.
-    if let Some(stages) = &diagnostics.decoded.element_record_stages {
+    // line, when nothing else was exported). A family file reads its elements
+    // from `Global/Latest`, so for one it says nothing.
+    if let Some(stages) = diagnostics
+        .decoded
+        .element_record_stages
+        .as_ref()
+        .filter(|_| !family)
+    {
         if let Some(stopped) = &stages.stopped_at {
             lines.push(format!(
                 "rvt-ifc: no element record of this Revit {} layout was written: {} marker(s) found, they stopped at {stopped} (decoded.element_record_stages in the diagnostics)",
