@@ -8,6 +8,7 @@ use std::collections::BTreeMap;
 
 use rvt::ifc::ELEMENT_RECORD_PROPERTY_SET;
 use rvt::ifc::IfcModel;
+use rvt::ifc::element_provenance::ValueSource;
 use rvt::ifc::entities::{IfcEntity, Property, PropertySet, PropertyValue};
 use rvt::ifc::export_content::SPACE_OUTLINE_SOURCE_PROPERTY;
 use rvt::ifc::schedule_csv::room_rows;
@@ -18,7 +19,7 @@ use crate::schema::{
     DecisionOut, DiagnosticsOut, DiagnosticsSummary, ElementCounts, ElementDetail,
     ElementProvenance, ElementRow, EntityRefOut, ExplainElementOut, LevelOut, LevelRefOut,
     LevelsOut, ListElementsOut, NativeRecordOut, PropertyOut, PropertySetOut, RoomOut, RoomsOut,
-    SkippedOut, SummaryOut, TypeOut, UnreadOut,
+    SkippedOut, SummaryOut, TypeOut, UnreadOut, ValueSourceOut,
 };
 use crate::store::{Computed, Entry};
 
@@ -52,8 +53,23 @@ fn storey_name(model: &IfcModel, storey_index: Option<usize>) -> Option<String> 
         .map(|storey| storey.name.clone())
 }
 
+/// A value source as the answers write it.
+fn value_source_out(source: &ValueSource) -> ValueSourceOut {
+    ValueSourceOut {
+        reader: source.reader.clone(),
+        rule: source.rule.as_str().to_string(),
+        copies: source.copies,
+        stream: source.stream.clone(),
+        offset: source.offset,
+        partitions: source.partitions.clone(),
+        differs_from_frame: source.differs_from_frame,
+    }
+}
+
 /// The provenance of the building element at `index` of the model's entities.
-fn provenance(computed: &Computed, index: usize) -> Option<ElementProvenance> {
+/// `sources` says whether the answer lists the element's value sources, which
+/// a list of elements does not.
+fn provenance(computed: &Computed, index: usize, sources: bool) -> Option<ElementProvenance> {
     let IfcEntity::BuildingElement {
         ifc_type,
         type_guid,
@@ -96,6 +112,10 @@ fn provenance(computed: &Computed, index: usize) -> Option<ElementProvenance> {
                 class_name: native.class_name.clone(),
             }),
         provenance_omitted: omitted.then_some(true),
+        value_sources: source
+            .filter(|_| sources)
+            .map(|entry| entry.value_sources.iter().map(value_source_out).collect())
+            .unwrap_or_default(),
     })
 }
 
@@ -115,7 +135,7 @@ fn element_row(computed: &Computed, index: usize) -> Option<ElementRow> {
         name: name.clone(),
         level: storey_name(&computed.model, *storey_index),
         predefined_type: predefined_type.clone(),
-        provenance: provenance(computed, index)?,
+        provenance: provenance(computed, index, false)?,
     })
 }
 
@@ -551,7 +571,7 @@ pub fn explain_element(
             let property_sets = element_property_sets(model, index, property_set);
             (
                 Some(name.clone()),
-                provenance(computed, index),
+                provenance(computed, index, true),
                 trust_markers_of(&property_sets),
             )
         }
@@ -595,8 +615,8 @@ pub fn get_element(entry: &Entry, computed: &Computed, id: &str) -> Result<Eleme
     else {
         return Err(format!("{id:?} is not a building element"));
     };
-    let provenance =
-        provenance(computed, index).ok_or_else(|| format!("{id:?} is not a building element"))?;
+    let provenance = provenance(computed, index, true)
+        .ok_or_else(|| format!("{id:?} is not a building element"))?;
     let level = storey_index.and_then(|storey| {
         model.building_storeys.get(storey).map(|found| LevelRefOut {
             index: storey,
@@ -670,7 +690,7 @@ pub fn rooms(entry: &Entry, computed: &Computed) -> RoomsOut {
                 area_square_metres: row
                     .area_square_feet
                     .map(|area| area * SQUARE_METRES_PER_SQUARE_FOOT),
-                provenance: provenance(computed, row.entity_index)?,
+                provenance: provenance(computed, row.entity_index, false)?,
             })
         })
         .collect();

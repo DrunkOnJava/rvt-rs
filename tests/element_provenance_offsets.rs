@@ -167,8 +167,15 @@ fn check_model(name: &str, path: &Path) -> BTreeMap<String, Checked> {
         .element_provenance
         .as_ref()
         .expect("the table when asked for");
+    // The export adds the value sources (#1360) once its model is final;
+    // `build` leaves them out.
+    let mut without_sources = table.clone();
+    without_sources.value_source_counts.clear();
+    for entry in without_sources.elements.values_mut() {
+        entry.value_sources.clear();
+    }
     assert_eq!(
-        table, &built,
+        without_sources, built,
         "{name}: the switch builds the table build gives"
     );
     let with_table_bytes = serde_json::to_string(&run.diagnostics)

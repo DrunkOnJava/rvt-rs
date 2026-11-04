@@ -181,6 +181,8 @@ mod type_global_ids;
 mod typed_no_geometry_types;
 #[path = "../unfilled_openings.rs"]
 mod unfilled_openings;
+#[path = "../value_sources_offsets.rs"]
+mod value_sources_offsets;
 #[path = "../walker_to_ifc_integration.rs"]
 mod walker_to_ifc_integration;
 #[path = "../wall_profile_openings.rs"]

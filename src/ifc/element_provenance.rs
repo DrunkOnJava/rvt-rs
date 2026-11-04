@@ -10,10 +10,11 @@
 //! (`decoded.element_provenance`) when the export is asked for it
 //! (`rvt-ifc --element-provenance`, `ExportOptions::with_element_provenance`,
 //! the MCP server's decode, Python's `element_provenance=True`): it is large,
-//! 4,462,401 bytes of compact JSON against 38,640 bytes of diagnostics without
-//! it (about 116 times) on the BIM4LCA office as built, and the CLI's
-//! pretty-printed sidecar grows from 52,677 to 7,370,747 bytes (Measure run
-//! 41831418684), so it is off by default. It is never written into the IFC.
+//! 5,975,162 bytes of compact JSON with the value sources of #1360 against
+//! 38,640 bytes of diagnostics without it (about 155 times) on the BIM4LCA
+//! office as built, and the CLI's pretty-printed sidecar grows from 52,677 to
+//! 10,537,432 bytes (Measure run 41860806523), so it is off by default. It is
+//! never written into the IFC.
 //!
 //! An offset indexes the stream as `RevitFile::inflated_partition` returns it,
 //! which is what `rvt-dump` writes as `Partitions_NN.decomp` (#291). For the
@@ -26,9 +27,18 @@
 //! The offset is the frame the exporter selected for the element's record.
 //! A body reader may take another copy of the element's data (the sketch-line
 //! readers take the current one, `native_document::current_partitions`,
-//! RE-216), and [`NativeRecordRef::stream`] names the current native copy, so
-//! `offset` and the native record's stream can name different partitions, and
-//! neither is guaranteed to be the copy a body came from.
+//! RE-216), so [`ElementProvenanceEntry::value_sources`] names, for each value
+//! such a reader took, the copy it took it from (#1360): a [`ValueSource`] with
+//! the reader, the [`CopyRule`] it chose the copy by, and the stream and
+//! offset of the copy. A reader notes its choice on the handle where it makes
+//! it, and only when the export is asked for this table
+//! (`RevitFile::record_value_sources`); `attach_value_sources` joins those
+//! notes with the final model's `BodySource`.
+//! [`ElementProvenanceTable::value_source_counts`] counts, by reader, the
+//! elements whose value source is in another partition than their frame.
+//! Which readers note their choice is in `docs/export-diagnostics.md`; a
+//! reader that does not leaves the element with no value source, which is not
+//! a claim that it read the frame.
 //!
 //! The table is built from what the export already read: the walk the handle
 //! memoised, the inflated partitions it holds and the index the native passes
@@ -42,6 +52,8 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use serde::{Deserialize, Serialize};
 
+use super::IfcModel;
+use super::entities::{IfcEntity, PropertyValue};
 use crate::control::WalkerControl;
 use crate::formats::SchemaClasses;
 use crate::walker::{
@@ -147,7 +159,8 @@ pub struct NativeRecordRef {
     pub copy: NativeRecordCopy,
     /// The partition of that copy, such as `Partitions/46`. It can differ
     /// from [`ElementProvenanceEntry::stream`], the frame the exporter
-    /// selected, and neither is guaranteed to be the copy a body came from.
+    /// selected. The record a reader decoded is a [`ValueSource`] with the
+    /// rule [`CopyRule::Native`], where that reader notes its choice.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub stream: Option<String>,
     /// Where the record's header starts in the partition inflated, where the
@@ -163,6 +176,149 @@ pub struct NativeRecordRef {
     /// The class that tag names in the file's schema.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub class_name: Option<String>,
+}
+
+/// How a reader chose the copy of an element's data it took a value from
+/// (#1360).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+#[non_exhaustive]
+pub enum CopyRule {
+    /// The frame the exporter selected: the stream and offset of the element's
+    /// entry. The value is read from it, or from it and its neighbours' frames.
+    Selected,
+    /// Every copy of the element's data in the partitions that hold one holds
+    /// the same value, so the reader took the first, the lowest-numbered
+    /// partition's. `copies` says how many copies held it.
+    Agreeing,
+    /// The copies disagree and the reader took the current partition's
+    /// (`native_document::current_partitions`, RE-216).
+    Current,
+    /// A native record by member name, the current copy of it
+    /// (`native_document`).
+    Native,
+}
+
+impl CopyRule {
+    /// The rule as the JSON diagnostics and the MCP server write it.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Selected => "selected",
+            Self::Agreeing => "agreeing",
+            Self::Current => "current",
+            Self::Native => "native",
+        }
+    }
+}
+
+/// The copy of an element's data a reader took a value from (#1360).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[non_exhaustive]
+pub struct ValueSource {
+    /// What was read, named by the reader that read it: `bounded_line` (a
+    /// wall's or beam's location line), `bounded_arc`, `sketch_curve`,
+    /// `sketch_circle`, `sketch_spline`, `instance_transform`, a native
+    /// reader's name, `selected_frame` for a body read from the frame, or
+    /// `selected_frame_box` for a body whose box and placement are read from
+    /// the frame and whose profile is read from another record, which no
+    /// reader notes yet (its `ProfileSource` names the reader).
+    pub reader: String,
+    /// How the copy was chosen.
+    pub rule: CopyRule,
+    /// In how many partitions the element's data named it, so how many copies
+    /// there were to choose from (two headers in one partition count once).
+    pub copies: u32,
+    /// The partition of the copy, such as `Partitions/46`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stream: Option<String>,
+    /// Where the copy starts in that partition inflated: the element-data
+    /// header whose element id follows it, for the readers of element data;
+    /// the record's header, for a native record; the frame, for the selected
+    /// frame.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub offset: Option<usize>,
+    /// For [`CopyRule::Agreeing`], the numbers of the partitions that hold a
+    /// copy, every one of which holds the same value: the copy named is the
+    /// lowest-numbered partition's, which says nothing about the frame's.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub partitions: Vec<u32>,
+    /// Whether the value is held in another partition than the element's frame
+    /// ([`ElementProvenanceEntry::stream`]): the copy named is in another, and,
+    /// for [`CopyRule::Agreeing`], so is every copy that agrees with it.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub differs_from_frame: bool,
+}
+
+fn is_false(value: &bool) -> bool {
+    !*value
+}
+
+impl ValueSource {
+    pub(crate) fn new(
+        reader: &str,
+        rule: CopyRule,
+        copies: u32,
+        stream: Option<String>,
+        offset: Option<usize>,
+    ) -> Self {
+        Self {
+            reader: reader.to_string(),
+            rule,
+            copies,
+            stream,
+            offset,
+            partitions: Vec::new(),
+            differs_from_frame: false,
+        }
+    }
+
+    /// The partitions that hold an agreeing copy.
+    pub(crate) fn with_partitions(mut self, partitions: Vec<u32>) -> Self {
+        self.partitions = partitions;
+        self
+    }
+
+    /// Whether the value is held in `stream`: the copy named is, or an
+    /// agreeing copy listed in [`Self::partitions`] is.
+    pub(crate) fn held_in(&self, stream: &str) -> bool {
+        self.stream.as_deref() == Some(stream)
+            || stream
+                .strip_prefix("Partitions/")
+                .and_then(|number| number.parse::<u32>().ok())
+                .is_some_and(|number| self.partitions.contains(&number))
+    }
+
+    /// The source of a copy in partition `partition` at `offset`.
+    pub(crate) fn in_partition(
+        reader: &str,
+        rule: CopyRule,
+        copies: usize,
+        partition: u32,
+        offset: Option<usize>,
+    ) -> Self {
+        Self::new(
+            reader,
+            rule,
+            u32::try_from(copies).unwrap_or(u32::MAX),
+            Some(format!("Partitions/{partition}")),
+            offset,
+        )
+    }
+}
+
+/// The value sources the readers noted on a handle, by ElementId.
+pub type ValueSourceNotes = BTreeMap<u32, Vec<ValueSource>>;
+
+/// How many elements a reader's value sources cover, and how many of those are
+/// in another partition than the element's frame.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[non_exhaustive]
+pub struct ValueSourceCount {
+    /// Elements with a value source from the reader.
+    pub elements: usize,
+    /// Of those, elements whose value source is in another partition than
+    /// their frame ([`ValueSource::differs_from_frame`]).
+    pub differ_from_frame: usize,
 }
 
 /// Where one element came from.
@@ -184,8 +340,8 @@ pub struct ElementProvenanceEntry {
     /// then the latest offset, with no extent test
     /// (`select_newest_instance_records`, RE-107). A body reader may take
     /// another copy (the sketch-line readers take the current one, RE-216),
-    /// so this and [`NativeRecordRef::stream`] can name different partitions,
-    /// and neither is guaranteed to be the copy a body came from.
+    /// so this and [`NativeRecordRef::stream`] can name different partitions:
+    /// the copy a reader took is in [`Self::value_sources`].
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub offset: Option<usize>,
     /// Where the ElementId is stored: the partition record header whose first
@@ -212,6 +368,10 @@ pub struct ElementProvenanceEntry {
     /// indexed one.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub native: Option<NativeRecordRef>,
+    /// The copy each reader took a value from, where it is not read straight
+    /// from [`Self::stream`] and [`Self::offset`], one per reader (#1360).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub value_sources: Vec<ValueSource>,
 }
 
 impl ElementProvenanceEntry {
@@ -226,6 +386,7 @@ impl ElementProvenanceEntry {
             class_name: None,
             builtin_category: None,
             native: None,
+            value_sources: Vec::new(),
         }
     }
 
@@ -301,6 +462,9 @@ pub struct ElementProvenanceTable {
     /// ones included.
     #[serde(default)]
     pub native: NativeRecordCount,
+    /// The value sources of the listed elements, counted by reader (#1360).
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub value_source_counts: BTreeMap<String, ValueSourceCount>,
     /// Elements left out of [`Self::elements`] by
     /// [`MAX_ELEMENT_PROVENANCE_ENTRIES`], the highest ElementIds.
     #[serde(default)]
@@ -605,6 +769,142 @@ fn attach_native_records(
             table.native.copy_unresolved += 1;
         }
         entry.native = Some(reference);
+    }
+}
+
+/// The reader name of the value source of a body read from the element's own
+/// frame ([`CopyRule::Selected`]).
+pub const SELECTED_FRAME_READER: &str = "selected_frame";
+
+/// The reader name of the value source of a body whose box and placement are
+/// read from the element's own frame and whose profile is read from another
+/// record (sketch lines, or the type's section): the frame is named for the
+/// box only, and the profile has no source yet.
+pub const SELECTED_FRAME_BOX_READER: &str = "selected_frame_box";
+
+/// The readers whose value a body with this `BodySource` is drawn from (#1360):
+/// a value source is listed for an element only when its reader is one of
+/// them, so a line a reader took for a wall that was drawn as its box is not
+/// claimed as the wall's body. A `BodySource` no row names has no value source
+/// yet.
+fn body_readers(body: &str) -> &'static [&'static str] {
+    use super::export_content as ec;
+    match body {
+        ec::RECORD_BBOX_BODY_SOURCE
+        | crate::element_record_wall_joins::WALL_BODY_JOIN_TRIMMED
+        | crate::element_record_column_cuts::COLUMN_BODY_JOIN_CUT
+        | crate::element_record_beam_cuts::BEAM_BODY_COLUMN_CUT => &[SELECTED_FRAME_READER],
+        ec::WALL_CENTRELINE_BODY_SOURCE
+        | ec::WALL_TAPERED_BODY_SOURCE
+        | ec::WALL_LAYER_JOIN_BODY_SOURCE
+        | ec::BEAM_AXIS_BODY_SOURCE
+        | ec::BEAM_BOX_BODY_SOURCE => &["bounded_line"],
+        ec::WALL_ARC_BODY_SOURCE => &["bounded_arc"],
+        ec::INSTANCE_TURNED_BODY_SOURCE | ec::INSTANCE_ORIENTED_BODY_SOURCE => {
+            &["instance_transform"]
+        }
+        super::saved_meshes::SAVED_MESH_BODY_SOURCE => &["saved_graphics"],
+        ec::SPIRAL_RUN_BODY_SOURCE => &["native_run"],
+        ec::LANDING_TREAD_BODY_SOURCE => &["native_landing"],
+        _ => &[],
+    }
+}
+
+/// Give each listed element the value sources the readers noted on `rf` while
+/// the export ran with `RevitFile::record_value_sources` on, and the frame
+/// itself as the source of a body read from it, each only where the final
+/// `model`'s `BodySource` for the element is drawn from that reader
+/// ([`body_readers`]); then count them by reader (#1360). Call it once the
+/// model is final: the saved graphics and the family extrusions replace bodies
+/// after the table is built.
+pub(crate) fn attach_value_sources(
+    table: &mut ElementProvenanceTable,
+    rf: &RevitFile,
+    model: &IfcModel,
+) {
+    let noted = rf.value_sources();
+    for entity in &model.entities {
+        let IfcEntity::BuildingElement {
+            type_guid,
+            property_set,
+            ..
+        } = entity
+        else {
+            continue;
+        };
+        let Some(id) = type_guid.as_deref().and_then(|tag| tag.parse::<u32>().ok()) else {
+            continue;
+        };
+        let mut body = None;
+        let mut profile_source = None;
+        let mut profile_resolved = false;
+        for property in property_set.iter().flat_map(|set| &set.properties) {
+            match (property.name.as_str(), &property.value) {
+                ("BodySource", PropertyValue::Text(text)) => body = Some(text.as_str()),
+                ("ProfileSource", PropertyValue::Text(text)) => {
+                    profile_source = Some(text.as_str())
+                }
+                ("ProfileResolved", PropertyValue::Boolean(true)) => profile_resolved = true,
+                _ => {}
+            }
+        }
+        let Some(body) = body else {
+            continue;
+        };
+        let readers = body_readers(body);
+        let Some(entry) = table.elements.get_mut(&id) else {
+            continue;
+        };
+        // A box whose profile was read from sketch lines or the type's section
+        // takes only its box and placement from the frame.
+        let profile_elsewhere = profile_resolved && profile_source != Some(body);
+        if readers.contains(&SELECTED_FRAME_READER)
+            && !entry
+                .value_sources
+                .iter()
+                .any(|source| source.rule == CopyRule::Selected)
+        {
+            let reader = if profile_elsewhere {
+                SELECTED_FRAME_BOX_READER
+            } else {
+                SELECTED_FRAME_READER
+            };
+            let source = ValueSource::new(
+                reader,
+                CopyRule::Selected,
+                1,
+                entry.stream.clone(),
+                entry.offset,
+            );
+            entry.value_sources.push(source);
+        }
+        for source in noted.and_then(|noted| noted.get(&id)).into_iter().flatten() {
+            if !readers.contains(&source.reader.as_str())
+                || entry
+                    .value_sources
+                    .iter()
+                    .any(|held| held.reader == source.reader)
+            {
+                continue;
+            }
+            let mut source = source.clone();
+            source.differs_from_frame = match (&entry.stream, &source.stream) {
+                (Some(frame), Some(_)) => !source.held_in(frame),
+                _ => false,
+            };
+            entry.value_sources.push(source);
+        }
+    }
+    table.value_source_counts.clear();
+    for entry in table.elements.values() {
+        for source in &entry.value_sources {
+            let count = table
+                .value_source_counts
+                .entry(source.reader.clone())
+                .or_default();
+            count.elements += 1;
+            count.differ_from_frame += usize::from(source.differs_from_frame);
+        }
     }
 }
 

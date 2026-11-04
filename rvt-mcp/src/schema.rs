@@ -57,7 +57,7 @@ pub struct NativeRecordOut {
     pub copies: u32,
     /// Which copy this is: `only`, `current` (the current one of several, RE-216) or `unresolved`.
     pub copy: String,
-    /// The partition of that copy, such as `Partitions/46`. It can differ from `provenance.stream`, and neither is guaranteed to be the copy a body came from.
+    /// The partition of that copy, such as `Partitions/46`. It can differ from `provenance.stream`, the frame the exporter selected. The record a reader decoded is in `provenance.value_sources`, where that reader notes its choice.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub stream: Option<String>,
     /// Where the record's header starts in that partition inflated.
@@ -66,6 +66,28 @@ pub struct NativeRecordOut {
     /// The class the record names in the file's schema.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub class_name: Option<String>,
+}
+
+/// The copy of an element's data a reader took a value from.
+#[derive(Debug, Clone, Serialize, JsonSchema)]
+pub struct ValueSourceOut {
+    /// What was read: `bounded_line` (a wall's or beam's location line), `bounded_arc`, `instance_transform`, `saved_graphics`, `native_run`, `native_landing`, `selected_frame` for a body read from the frame itself, or `selected_frame_box` for a body whose box and placement are read from the frame and whose profile is read from another record (see `profile_source`), which no reader notes yet.
+    pub reader: String,
+    /// How the copy was chosen: `selected` (the frame the exporter selected), `agreeing` (every copy holds the same value; the lowest-numbered partition's is named), `current` (the copies disagree; the current partition's) or `native` (a native record by member name, its current copy).
+    pub rule: String,
+    /// In how many partitions the element's data named it, so how many copies there were to choose from.
+    pub copies: u32,
+    /// The partition of the copy, such as `Partitions/46`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stream: Option<String>,
+    /// Where the copy starts in that partition inflated: the element-data header whose element id follows it, for the readers of element data; the record's header, for a native record; the frame, for `selected_frame`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub offset: Option<usize>,
+    /// For the rule `agreeing`, the numbers of the partitions that hold a copy, every one of which holds the same value; the copy named is the lowest-numbered partition's.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub partitions: Vec<u32>,
+    /// True when the value is held in another partition than `provenance.stream`, the frame: the copy named is in another and, for `agreeing`, so is every copy that agrees with it.
+    pub differs_from_frame: bool,
 }
 
 /// Where one element's answer comes from. Every element in an answer carries
@@ -110,7 +132,7 @@ pub struct ElementProvenance {
     /// The stream the record is in: `Partitions/NN` or `Global/Latest`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub stream: Option<String>,
-    /// Where the record or frame starts in that stream inflated: the frame the exporter selected (on Revit 2024 and later the greatest vertical extent, then the higher-numbered partition and later offset; on 2008 to 2023 the newest). A body reader may take another copy, so it can name another partition than `native_record.stream`, and neither is guaranteed to be the copy a body came from.
+    /// Where the record or frame starts in that stream inflated: the frame the exporter selected (on Revit 2024 and later the greatest vertical extent, then the higher-numbered partition and later offset; on 2008 to 2023 the newest). A body reader may take another copy; `value_sources` names it.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub offset: Option<usize>,
     /// Where the ElementId is stored: the partition record header it is the first bytes of.
@@ -131,6 +153,9 @@ pub struct ElementProvenance {
     /// True when the record fields are absent because the provenance table lists at most 250,000 elements and this one is past them (`file.omitted_entries`).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub provenance_omitted: Option<bool>,
+    /// The copy each reader took a value of the element's body from, where the reader notes it and the body is drawn from that reader (`body_source`): `get_element` and `explain_element` list them, `list_elements` does not. Absent for a body no reader notes yet.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub value_sources: Vec<ValueSourceOut>,
 }
 
 /// One element in a list.

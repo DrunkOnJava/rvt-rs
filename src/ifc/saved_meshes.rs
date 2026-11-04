@@ -164,6 +164,7 @@ pub fn attach_scoped_with_control(
         selected_ids: by_id.keys().copied().collect::<BTreeSet<_>>(),
         max_graph_values: 1_000_000,
         max_graph_objects: 1_000_000,
+        value_source: Some("saved_graphics"),
         ..Default::default()
     };
     // Each element is taken as it is meshed and its decoded graphs freed with

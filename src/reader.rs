@@ -250,6 +250,10 @@ pub struct RevitFile {
     /// How many family instances written as spaces were not checked for a 3D
     /// body, and why, where the check could not run (RE-312).
     bodiless_family_space_error: Option<(usize, String)>,
+    /// The copy of an element's data each reader took a value from, by
+    /// ElementId, noted where the reader chose it (#1360). `None` unless the
+    /// export asked for the provenance table: the readers then note nothing.
+    value_sources: Option<crate::ifc::element_provenance::ValueSourceNotes>,
 }
 
 /// The limits it was opened with and how many streams it has inflated so
@@ -475,6 +479,7 @@ impl RevitFile {
             unread_type_doors_windows: BTreeSet::new(),
             bodiless_family_spaces: BTreeMap::new(),
             bodiless_family_space_error: None,
+            value_sources: None,
         })
     }
 
@@ -525,6 +530,58 @@ impl RevitFile {
         self.bodiless_family_spaces.clear();
         self.bodiless_family_space_error = None;
         self.unread_type_doors_windows.clear();
+        if let Some(noted) = self.value_sources.as_mut() {
+            noted.clear();
+        }
+    }
+
+    /// Whether the readers note the copy they took each value from
+    /// ([`Self::record_value_sources`]).
+    pub(crate) fn recording_value_sources(&self) -> bool {
+        self.value_sources.is_some()
+    }
+
+    /// Start or stop noting the copy each reader takes a value from (#1360),
+    /// which the provenance table lists. Starting drops the memoised
+    /// production walk, since a walk made while the readers noted nothing has
+    /// no notes to give; stopping drops the notes. A reader that is not asked
+    /// notes nothing, so the default export does no extra work.
+    pub(crate) fn record_value_sources(&mut self, on: bool) {
+        if on == self.value_sources.is_some() {
+            return;
+        }
+        if on {
+            self.value_sources = Some(BTreeMap::new());
+            self.walk = None;
+        } else {
+            self.value_sources = None;
+        }
+    }
+
+    /// Note that a reader took a value of the element `element_id` from
+    /// `source`, in place of an earlier note of the same reader's. Does
+    /// nothing unless [`Self::record_value_sources`] is on.
+    pub(crate) fn note_value_source(
+        &mut self,
+        element_id: u32,
+        source: crate::ifc::element_provenance::ValueSource,
+    ) {
+        let Some(noted) = self.value_sources.as_mut() else {
+            return;
+        };
+        let sources = noted.entry(element_id).or_default();
+        match sources.iter_mut().find(|held| held.reader == source.reader) {
+            Some(held) => *held = source,
+            None => sources.push(source),
+        }
+    }
+
+    /// The notes of [`Self::note_value_source`], by ElementId; `None` unless
+    /// [`Self::record_value_sources`] is on.
+    pub(crate) fn value_sources(
+        &self,
+    ) -> Option<&crate::ifc::element_provenance::ValueSourceNotes> {
+        self.value_sources.as_ref()
     }
 
     /// How many family instances written as spaces were not checked for a 3D
