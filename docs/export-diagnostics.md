@@ -111,7 +111,11 @@ every reason of `skipped` the log's `total` is the sum of the items' counts and,
 for a reason that dropped none, the entries by class are the item's `classes`.
 `tests/export_decisions_counts.rs` checks this on Core Interior, the RE1 models,
 Einhoven and the BIM4LCA as-built office. The one item it leaves out is
-`stream_not_read_resource_limit`, which counts streams, not elements.
+`stream_not_read_resource_limit`, which counts streams, not elements. Core
+Interior has nothing left out (its `skipped` section is empty and the three
+`exported` counts are 0), so its log is empty and the test checks that; for the
+other models it names the reasons their diagnostics count and requires entries
+for each, so an empty log cannot pass.
 
 | Stage | Reason | What was decided | Counted in |
 |---|---|---|---|

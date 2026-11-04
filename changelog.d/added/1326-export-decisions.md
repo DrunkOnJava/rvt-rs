@@ -30,4 +30,6 @@
   Core Interior, the RE1 models, Einhoven and the BIM4LCA as-built office, that
   every reason of `skipped` has equal counts in the log and that the entries by
   class are its classes, re-reads the bytes at each frame an entry names, and
-  prints the counts per reason (CI's `export-decisions` artifact).
+  prints the counts per reason (CI's `export-decisions` artifact). Core
+  Interior has nothing left out, so its log is empty; the other models name
+  reasons that must have entries.

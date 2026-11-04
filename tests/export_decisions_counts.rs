@@ -21,7 +21,12 @@
 //!   the record it says: a frame with no ElementId carries none, and an
 //!   element's frame starts with its id or sits inside its record;
 //! - where the log took an entry's stream and offset from the provenance
-//!   table, the table has the same.
+//!   table, the table has the same;
+//! - an empty log cannot pass: each model names reasons its own diagnostics
+//!   count (measured on the model, in `REQUIRED`), and each must have entries.
+//!   Core Interior names none, because it has nothing left out: its `skipped`
+//!   section is empty and its box body, box room and Area refusal counts are
+//!   0, so its log is empty and equal to that.
 //!
 //! Per model, the counts by reason go to `export-decisions/<model>.json` and
 //! `summary.txt` under `CARGO_TARGET_TMPDIR`, which CI prints and uploads.
@@ -56,6 +61,42 @@ const FRAME_REASONS: [&str; 7] = [
     "room_not_in_export_phase",
     "element_record_empty_curtain_panel",
     "element_record_family_space_without_body",
+];
+
+/// The reasons each model's diagnostics count, which its log must hold entries
+/// for, as measured on `rvt-ifc` with no switch: RE1-Architecture, Einhoven and
+/// the BIM4LCA office. Core Interior has none to name. With `RVT_REQUIRE_CORPUS`
+/// set, a named model that is not in the corpus fails the test.
+const REQUIRED: [(&str, &[&str]); 4] = [
+    ("2024_Core_Interior", &[]),
+    (
+        "RE1-Architecture",
+        &[
+            "body_is_record_box",
+            "low_confidence_schema_scan_candidate",
+            "unsupported_geometry_missing_dimensions",
+            "unsupported_geometry_profile",
+            "unsupported_geometry_unresolved_host",
+        ],
+    ),
+    (
+        "Revit_IFC5_Einhoven",
+        &[
+            "body_is_record_box",
+            "low_confidence_schema_scan_candidate",
+            "unsupported_geometry_missing_level",
+        ],
+    ),
+    (
+        "nordic-office-as-built",
+        &[
+            "body_is_record_box",
+            "element_record_empty_curtain_panel",
+            "element_record_without_volume",
+            "space_outline_is_record_box",
+            "unsupported_geometry_unresolved_host",
+        ],
+    ),
 ];
 
 /// The reasons made from the model, whose evidence the log reads from the
@@ -119,7 +160,7 @@ fn counted<'a>(
     counts
 }
 
-fn check_model(name: &str, path: &Path, required: bool) {
+fn check_model(name: &str, path: &Path, required: &[&str]) {
     let mut rf = RevitFile::open(path).expect("open the model");
     let off = run_export(&mut rf, &ExportOptions::default()).expect("export the model");
     assert!(
@@ -305,8 +346,13 @@ fn check_model(name: &str, path: &Path, required: bool) {
         }
     }
 
-    if required {
-        assert!(!log.reasons.is_empty(), "{name}: the log holds no decision");
+    for reason in required {
+        assert!(
+            log.reasons
+                .get(*reason)
+                .is_some_and(|held| held.recorded > 0),
+            "{name}: the log holds no decision for {reason}, which its diagnostics count"
+        );
     }
 
     // The report.
@@ -373,14 +419,28 @@ fn check_model(name: &str, path: &Path, required: bool) {
         .expect("write the summary");
 }
 
-fn check_all(models: Vec<(String, PathBuf)>, required: &[&str]) {
-    let mut checked = 0;
-    for (name, path) in models {
-        check_model(&name, &path, required.contains(&name.as_str()));
-        checked += 1;
-    }
-    if checked == 0 {
+/// Check each model, against the reasons `REQUIRED` names for it. With
+/// `RVT_REQUIRE_CORPUS` set, a model of `must_hold` that the corpus lacks fails
+/// the test, so a corpus that lost a model cannot pass it.
+fn check_all(models: Vec<(String, PathBuf)>, must_hold: &[&str]) {
+    if models.is_empty() {
         eprintln!("skipping: no model to read");
+        return;
+    }
+    for (name, path) in &models {
+        let required = REQUIRED
+            .iter()
+            .find(|(model, _)| *model == name.as_str())
+            .map_or(&[][..], |(_, reasons)| *reasons);
+        check_model(name, path, required);
+    }
+    if std::env::var("RVT_REQUIRE_CORPUS").is_ok_and(|value| value == "1") {
+        for model in must_hold {
+            assert!(
+                models.iter().any(|(name, _)| name == model),
+                "{model} is not in the corpus, and RVT_REQUIRE_CORPUS is set"
+            );
+        }
     }
 }
 
@@ -388,7 +448,11 @@ fn check_all(models: Vec<(String, PathBuf)>, required: &[&str]) {
 fn project_corpus_decisions_match_the_aggregate() {
     check_all(
         project_models(),
-        &["2024_Core_Interior", "RE1-Architecture"],
+        &[
+            "2024_Core_Interior",
+            "RE1-Architecture",
+            "Revit_IFC5_Einhoven",
+        ],
     );
 }
 
