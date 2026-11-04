@@ -542,6 +542,35 @@ jobs:
           path: target/tmp/element-provenance/
           if-no-files-found: ignore
           retention-days: 14
+  corpus-mcp:
+    # The MCP server's end-to-end test on Einhoven, a job of its own beside
+    # Corpus health rather than a step after its tier-two gates: run after
+    # them it made Corpus health, already the slowest job on every pull
+    # request, about 3 minutes longer (8.1 to 10.2 minutes on main,
+    # 2026-11-04).
+    name: MCP server on Einhoven (tier 2 — external)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Fetch project corpus (magnetar MIT)
+        uses: $/.github/actions/fetch-corpus
+        with:
+          repository: magnetar-io/revit-test-datasets
+          path: _project_corpus
+      - name: Install Rust stable
+        shell: bash
+        run: |
+          rustup toolchain install stable --profile minimal --no-self-update
+          rustup default stable
+          echo CARGO_INCREMENTAL=0 >> "$GITHUB_ENV"
+          echo CARGO_TERM_COLOR=always >> "$GITHUB_ENV"
+          rustc --version
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          save-if: false
+          shared-key: ci-release
       # The MCP server's end-to-end test on Einhoven: elements, GlobalIds
       # looked up and found in the exported IFC, the exports against rvt-ifc's.
       - name: MCP server end to end on Einhoven
@@ -1507,6 +1536,7 @@ jobs:
       - test
       - i686-overflow
       - corpus-tier2
+      - corpus-mcp
       - writer-patch-corpus
       - ifcopenshell-validate
       - doc
