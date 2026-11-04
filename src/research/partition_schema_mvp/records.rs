@@ -434,9 +434,7 @@ pub(super) fn select_instance_records(
                 let candidate = z_extent_key(&record);
                 let held = z_extent_key(existing);
                 candidate > held
-                    || (candidate == held
-                        && (record.stream.as_str(), record.offset)
-                            > (existing.stream.as_str(), existing.offset))
+                    || (candidate == held && record.frame_order() > existing.frame_order())
             }
         };
         if better {

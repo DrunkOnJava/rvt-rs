@@ -420,10 +420,7 @@ pub fn plan_profiles_from_sketch_line_records(
         let segments = by_owner.entry(owner).or_default();
         let keep = match segments.get(&record.element_id) {
             None => true,
-            Some(existing) => {
-                (record.stream.as_str(), record.offset)
-                    < (existing.stream.as_str(), existing.offset)
-            }
+            Some(existing) => record.frame_order() < existing.frame_order(),
         };
         if keep {
             segments.insert(record.element_id, record.clone());

@@ -673,6 +673,21 @@ pub struct PartitionElementRecord {
 }
 
 impl PartitionElementRecord {
+    /// The order frames are written in: the number of the `Partitions/NN`
+    /// stream the frame is in, then the stream's name and the frame's
+    /// offset. The number, not the name, decides, since `Partitions/9` is
+    /// older than `Partitions/46` though its name sorts after it. A stream
+    /// whose name ends in no number sorts first.
+    pub fn frame_order(&self) -> (u32, &str, usize) {
+        let number = self
+            .stream
+            .rsplit('/')
+            .next()
+            .and_then(|n| n.parse::<u32>().ok())
+            .unwrap_or(0);
+        (number, self.stream.as_str(), self.offset)
+    }
+
     /// Plan-footprint origin, quantised to 1e-4 ft, for de-duplication.
     pub fn footprint_key(&self) -> (i64, i64, i64) {
         (
