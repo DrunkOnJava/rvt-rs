@@ -64,7 +64,7 @@ So the export either named Working Drawings (a setup or a view, as in §4) or Re
 
 - **Reads the phase.** `compute_phase_filter` reads `m_phaseId` of every `RoomElem` record in its existing pass (`PhaseFilter::room_phases`). An unset phase, an unread graph and a record whose copies disagree give none.
 - **Leaves out no room.** `PhaseFilter::excludes` still never excludes a room. A rule that drops no room that Revit's export holds drops none of the 14: there is no narrower rule, because the only rooms in another phase are those 14.
-- **Says so.** When a room it writes has a read phase other than the last, the export diagnostics' `warnings` give the count and the reason. It is 14 on each of Autodesk's `rac_basic_sample_project` saves and 0 on every other model here; the exported IFC does not change on any model.
+- **Says so.** When a room it writes has a read phase other than the last, the export diagnostics' `warnings` give the count and the reason. Expected from §3's probe, not yet read from a diagnostics file: 14 on each of Autodesk's `rac_basic_sample_project` saves and none on any other model of the corpus, with the exported IFC unchanged on every model (to be read from the unfiltered Measure of this change).
 
 ## 7. Not measured
 

@@ -11,7 +11,8 @@
   it holds all 14. Revit's exporter takes the export phase from the export
   setup or a view and only by default the last phase, and rvt-rs reads neither,
   so no room is left out. The export diagnostics' `warnings` give the number of
-  rooms written that are in another phase: 14 on every save of that sample and
-  none on any other model measured; no exported IFC changes. Unmeasured: a
-  Revit export made with the default setup that leaves such a room out.
+  rooms written that are in another phase (expected from the phase probe: 14
+  on every save of that sample and none on any other model of the corpus); the
+  exported IFC does not change. Unmeasured: a Revit export made with the
+  default setup that leaves such a room out.
   Report: `reports/element-framing/RE-326-room-phases.md`.

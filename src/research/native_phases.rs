@@ -20,9 +20,9 @@
 //!
 //! A room's phase is the `m_phaseId` field of its `RoomElem` record, not its
 //! `m_createdPhaseId`, which is unset on every room: [`PhaseFilter::room_phases`]
-//! (RE-326). Every room that Revit's exports hold, on the 20 models with one,
-//! is in the last phase, except Autodesk's `rac_basic_sample_project`, whose
-//! 14 rooms are in the second of three phases and are all in a Revit 2018
+//! (RE-326). On the 12 models with a Revit export, all 621 rooms are in the
+//! last phase and in Revit's export. Autodesk's `rac_basic_sample_project`
+//! has 14 rooms in the second of three phases, and all 14 are in a Revit 2018
 //! export of it. So [`PhaseFilter::excludes`] never excludes a room, and
 //! rvt-rs writes a room in an earlier phase and says so in the export
 //! diagnostics ([`PhaseFilter::room_outside_export_phase`]).

@@ -3902,10 +3902,8 @@ pub fn build_export_diagnostics_with_limits(
     if rooms_outside_export_phase > 0 {
         warnings.push(format!(
             "{rooms_outside_export_phase} room(s) are written that sit in a phase other than the \
-             project's last. Revit's exporter leaves a room out when its phase is not the export \
-             phase, which is the last unless the export setup or the view it is limited to names \
-             another, but Revit's export of Autodesk's rac_basic_sample_project holds its 14 rooms, \
-             which sit in the second of three phases, so none is left out here (RE-326)."
+             project's last. Revit's own export may leave them out, depending on the export phase \
+             it was made with; none is left out here (docs/rooms.md, RE-326)."
         ));
     }
     // #1247: a door or window whose type's record was not read is written as

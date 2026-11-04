@@ -1010,8 +1010,9 @@ no phase or view setting in the file) holds all 14. Revit's exporter takes
 the export phase from the export setup, then a view, and only by default the
 last phase, and rvt-rs reads neither, so the last-phase rule on rooms would
 drop rooms that Revit's export holds. No room is left out: the diagnostics'
-`warnings` count the rooms written that are in another phase (14 on that
-sample, 0 on every other model here). The rule waits for a Revit export, made
+`warnings` count the rooms written that are in another phase (expected from
+the phase probe, not yet read from a diagnostics file: 14 on that sample, none
+on any other model of the corpus). The rule waits for a Revit export, made
 with the default setup, that leaves such a room out
 (`reports/element-framing/RE-326-room-phases.md`).
 

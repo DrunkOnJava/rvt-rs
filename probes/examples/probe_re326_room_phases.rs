@@ -7,11 +7,12 @@
 //! RE-184 §5). rvt-rs applies the phase rule to no room, because no model
 //! here had shown where a room's phase is stored.
 //!
-//! FACT under test: a room's phase is an ElementId value in its own native
-//! record (`RoomElem`), either one of its saved parameters (a built-in
-//! parameter with ElementId storage whose value is a `ProjectPhase`) or a
-//! field of its data, and Revit's export holds exactly the rooms whose phase
-//! is the last one.
+//! FACT (measured, `reports/element-framing/RE-326-room-phases.md`): a room's
+//! phase is the ElementId field `m_phaseId` of its own native record
+//! (`RoomElem`) on Revit 2015 to 2027, not its `m_createdPhaseId` (-1 on every
+//! room) and not a saved parameter. On the 12 models that have a Revit export,
+//! all 621 rooms are in the last phase and in Revit's export. Autodesk's
+//! `rac_basic_sample_project` has 14 rooms in the second of three phases.
 //!
 //! The probe reads, for every `RoomElem` record of the file:
 //!
@@ -33,6 +34,12 @@
 //! Revit's `IfcSpace` by GlobalId and tabulates, for each candidate phase
 //! (the created phase, and each phase-valued parameter), the rooms in the
 //! export phase and not, and which of them Revit's export holds.
+//!
+//! Verify against Revit's own exports (Measure runs the probe on each model
+//! and the scorer on its output and Revit's export):
+//!   gh workflow run measure.yml --ref main -f ref=<commit sha> -f base=none \
+//!     -f probe=probe_re326_room_phases -f probe_scorer=room_phases_vs_ifc \
+//!     -f scorers=none -f nordic=true -f r2025=true -f samples=true
 //!
 //! Usage:
 //!   cargo run --profile ci -p rvt-probes --example probe_re326_room_phases -- MODEL.rvt ...

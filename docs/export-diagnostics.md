@@ -148,8 +148,10 @@ that fails on a Revit 2015 to 2027 file is reported in `warnings` ("The
 project's phases could not be read"), and the export then writes every
 element. When a room it writes has a phase that is read and is not the last,
 `warnings` gives how many ("N room(s) are written that sit in a phase other
-than the project's last"): 14 on every save of `rac_basic_sample_project`, and
-none on any other model here (RE-326). The exported IFC is the same either way.
+than the project's last"). Expected from the phase probe (RE-326, run
+41776212669), not yet read from a diagnostics file: 14 on every save of
+`rac_basic_sample_project`, and none on any other model of the corpus. The
+exported IFC is the same either way.
 
 On Revit 2024 to 2027, a door or window is written as its opening alone,
 with no door or window, only where its type's native record was read with
