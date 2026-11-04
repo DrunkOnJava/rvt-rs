@@ -260,7 +260,7 @@ jobs:
                   # measure samples only.
                   shards += [shard("samples-" + years.replace(" ", "-"), models="-",
                                    samples=True, years=years)
-                             for years in ("2008 2021", "2022 2099")]
+                             for years in ("2008 2023", "2024 2099")]
               if flag("HOLDOUT"):
                   # The held-out fetch brings the spent pairs too.
                   shards.append(shard("held-out", models="holdout-* spent-*", holdout=True))
