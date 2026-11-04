@@ -200,6 +200,8 @@ fn file_provenance(rf: &mut RevitFile) -> FileProvenance {
         revit_build,
         schema_class_count,
         elem_table,
+        partition_count: Some(rf.partition_stream_names().len()),
+        layout_release: rf.layout_release().ok(),
     }
 }
 

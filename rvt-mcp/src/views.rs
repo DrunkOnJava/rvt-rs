@@ -16,8 +16,8 @@ use serde_json::Value;
 
 use crate::schema::{
     DiagnosticsOut, DiagnosticsSummary, ElementCounts, ElementDetail, ElementProvenance,
-    ElementRow, EntityRefOut, LevelOut, LevelRefOut, LevelsOut, ListElementsOut, PropertyOut,
-    PropertySetOut, RoomOut, RoomsOut, SkippedOut, SummaryOut, TypeOut, UnreadOut,
+    ElementRow, EntityRefOut, LevelOut, LevelRefOut, LevelsOut, ListElementsOut, NativeRecordOut,
+    PropertyOut, PropertySetOut, RoomOut, RoomsOut, SkippedOut, SummaryOut, TypeOut, UnreadOut,
 };
 use crate::store::{Computed, Entry};
 
@@ -63,6 +63,10 @@ fn provenance(computed: &Computed, index: usize) -> Option<ElementProvenance> {
         return None;
     };
     let set = property_set.as_ref();
+    let source = type_guid
+        .as_deref()
+        .and_then(|tag| tag.parse::<u32>().ok())
+        .and_then(|id| computed.diagnostics.decoded.element_provenance.get(id));
     Some(ElementProvenance {
         element_id: type_guid.clone(),
         global_id: computed.global_ids.get(index).cloned().flatten(),
@@ -72,6 +76,24 @@ fn provenance(computed: &Computed, index: usize) -> Option<ElementProvenance> {
         profile_source: text_property(set, "ProfileSource"),
         space_outline_source: text_property(set, SPACE_OUTLINE_SOURCE_PROPERTY),
         area_body_refusal: text_property(set, "AreaBodyRefusal"),
+        carrier: source.map(|entry| entry.carrier.as_str().to_string()),
+        stream: source.and_then(|entry| entry.stream.clone()),
+        offset: source.and_then(|entry| entry.offset),
+        record_offset: source.and_then(|entry| entry.record_offset),
+        enclosing_record_id: source
+            .and_then(|entry| entry.enclosing_record_id)
+            .map(|id| id.to_string()),
+        class_tag: source.and_then(|entry| entry.class_tag).map(u32::from),
+        class_name: source.and_then(|entry| entry.class_name.clone()),
+        native_record: source
+            .and_then(|entry| entry.native.as_ref())
+            .map(|native| NativeRecordOut {
+                copies: native.copies,
+                copy: native.copy.as_str().to_string(),
+                stream: native.stream.clone(),
+                offset: native.offset,
+                class_name: native.class_name.clone(),
+            }),
     })
 }
 

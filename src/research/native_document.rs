@@ -649,9 +649,18 @@ pub struct RecordIndex {
     records: Vec<IndexedRecord>,
 }
 
-/// One record of a [`RecordIndex`]: its channel, ElementId, partition and
-/// the class tag its body opens with.
-type IndexedRecord = (u64, u64, u32, Option<u16>);
+/// One record of a [`RecordIndex`]: its channel, ElementId, partition, the
+/// class tag its body opens with and where its header starts in the
+/// partition's inflated bytes (#1325), where the record's group is those bytes
+/// ([`native_segments::GroupSource::inflated_offset`]).
+pub(crate) type IndexedRecord = (u64, u64, u32, Option<u16>, Option<usize>);
+
+impl RecordIndex {
+    /// Every record of the index, in the order the partitions were walked.
+    pub(crate) fn records(&self) -> &[IndexedRecord] {
+        &self.records
+    }
+}
 
 /// Extract selected current indexed records' object graphs without the
 /// parameter-definition pass [`extract`] makes over every definition owner
@@ -849,7 +858,7 @@ fn extract_records(
     let mut indexed: Option<Vec<IndexedRecord>> =
         (indexable && record_index.is_none()).then(Vec::new);
     let walked: Option<BTreeSet<u32>> = record_index.as_ref().map(|record_index| {
-        for &(channel, id, partition, tag) in &record_index.records {
+        for &(channel, id, partition, tag, _) in &record_index.records {
             if !options.channels.contains(&channel) {
                 continue;
             }
@@ -883,11 +892,14 @@ fn extract_records(
                 if source.content_key.is_some() || !options.channels.contains(&source.channel) {
                     return Ok(());
                 }
-                for (id, _, start, end) in group_records(source, bytes, version)? {
+                for (id, pos, start, end) in group_records(source, bytes, version)? {
                     let body = &bytes[start..end];
                     if let Some(indexed) = indexed.as_mut() {
                         let tag = le_bytes::u16_at(body, 0);
-                        indexed.push((source.channel, id, partition, tag));
+                        let at = source
+                            .inflated_offset
+                            .and_then(|base| base.checked_add(pos));
+                        indexed.push((source.channel, id, partition, tag, at));
                     }
                     if is_selected(id, body) {
                         holders

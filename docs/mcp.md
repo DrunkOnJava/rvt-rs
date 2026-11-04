@@ -188,8 +188,8 @@ unread streams either way.
 
 ## Provenance
 
-Every element in an answer carries a `provenance` object. These fields exist
-today, each present only where the model has it:
+Every element in an answer carries a `provenance` object. These fields exist,
+each present only where the model has it:
 
 | Field | What it says |
 |---|---|
@@ -201,19 +201,35 @@ today, each present only where the model has it:
 | `profile_source` | Where the plan profile of the body came from. |
 | `space_outline_source` | For a room or space: `stored_solid`, `stored_solid_faces`, `stored_solid_approximate`, `record_box`, `saved_mesh`, `family_body`, and for an Area `area_boundary` or `none`. |
 | `area_body_refusal` | For an Area with no body, why. |
+| `carrier` | The kind of record the element was read from: `partition_element_record_first_prologue` (a frame that starts its partition record, the ElementId at its first bytes), `partition_element_record_second_prologue` (a frame inside its element's partition record, RE-30 and RE-35), `global_latest_schema_walk`, `partition_arc_wall`, `partition_area_record`, `partition_derived` (a row with no frame of its own, such as a material) or `other`. |
+| `stream` | The stream the record is in: `Partitions/NN`, or `Global/Latest` for the schema walk. |
+| `offset` | Where the record or frame starts in that stream inflated: the bytes `rvt-dump` writes as `Partitions_NN.decomp` (`Global_Latest.decomp` for the schema walk), so the offset indexes that file directly (#291). |
+| `record_offset` | Where the ElementId is stored: the partition record header whose first bytes (8 from Revit 2024, 4 before) are the id. The frame's own `offset` for a first-prologue frame, the enclosing record's start for a second-prologue one. Absent for the schema walk, whose id is a field of the instance. |
+| `enclosing_record_id` | For a second-prologue frame, the ElementId of the partition record that encloses it, which is the element's (RE-35). |
+| `class_tag`, `class_name` | The class tag the record names (for an element record the `u16` at `+0x4a`) and the class it resolves to in the file's own `Formats/Latest`. `class` is the Revit class the export names the element by. |
+| `native_record` | The element's native record, where the export's native passes indexed one: `copies` (in how many partitions it has one), `copy` (`only`, `current` of several, or `unresolved`, RE-145 and RE-216), `stream`, `offset` (where the record header starts in that partition inflated; the id is its first bytes) and `class_name`. |
 
 `get_element` and the summary add the file's: the Revit release and build from
-`BasicFileInfo`, the number of classes in the embedded schema, and the record
-layout of `Global/ElemTable`. `get_element` also lists every `...Source`,
-`...Resolved` and `...Refusal` property of the element's record as
-`trust_markers`.
+`BasicFileInfo`, the number of classes in the embedded schema, the number of
+`Partitions/NN` streams, the release whose record layout the file takes
+(`layout_release`) and the record layout of `Global/ElemTable`. `get_element`
+also lists every `...Source`, `...Resolved` and `...Refusal` property of the
+element's record as `trust_markers`.
+
+The record fields come from `decoded.element_provenance` of the export
+diagnostics (`get_diagnostics`, `rvt-ifc --diagnostics`), where every decoded
+element is listed by ElementId and counted by carrier, with the number whose
+offset could not be given. They are never written into the IFC. A partition
+element record is chosen per ElementId as the exporter chooses it: the frame
+with the greatest vertical extent and, on a tie, the newest. Which copy of its
+data a body reader took (the current one, or the copies that agree, RE-216) is
+that reader's rule, and `body_source` names the reader; these fields do not
+repeat it.
 
 ### Not provided yet
 
-- Where an element's record sits (the stream and offset) and which carrier it
-  was read from (#1325), and the per-element export decisions behind an
-  `explain_element` tool (#1326). The provenance object leaves room for them;
-  they are not faked.
+- The per-element export decisions behind an `explain_element` tool (#1326).
+  The provenance object leaves room for them; they are not faked.
 - A Measure scorer for the server's answers (#1327).
 - Lookup by the Revit Mark parameter: nothing in rvt-rs decodes it.
 - The Tasks extension (`io.modelcontextprotocol/tasks`). A long export is one
