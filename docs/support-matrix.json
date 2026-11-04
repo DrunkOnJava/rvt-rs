@@ -85,7 +85,7 @@
       "area": "schema",
       "name": "Parse Formats/Latest schema with field classification",
       "status": "verified",
-      "evidence": "formats::parse_schema over the whole page-stripped stream (#410): 3,490 to 4,285 classes and 9,932 to 12,144 fields per release on the 2016-2026 family corpus, 122,107 fields in all; tests/field_type_coverage.rs gates classification with 9 to 12 fields per release listed as unclassified; probes/examples/probe_schema_page_strip.rs",
+      "evidence": "formats::parse_schema over the whole page-stripped stream (#410): 3,490 to 4,285 classes and 9,932 to 12,144 fields per release on the 2016-2026 family corpus, 122,107 fields in all; tests/field_type_coverage.rs gates classification, in the scan and in the exact grammar, with 2 or 3 fields per release listed as unclassified (RE-323); probes/examples/probe_schema_page_strip.rs",
       "notes": "Class and field structure for developers. Not per-element instance recovery. Before #410 only the first 64 KB were parsed (the 395 classes and 13,570 fields previously quoted), because the rest was inflated without its page strip and read as noise. The class tag here is the u16 after each name; the element records name their class by definition ordinal (#154, #223).",
       "user_impact": "Schema introspection works across the verified family band."
     },
