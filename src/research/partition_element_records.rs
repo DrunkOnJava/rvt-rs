@@ -673,6 +673,19 @@ pub struct PartitionElementRecord {
 }
 
 impl PartitionElementRecord {
+    /// The order frames are written in: the number of the `Partitions/NN`
+    /// stream the frame is in, then the stream's name and the frame's
+    /// offset. The number, not the name, decides, since `Partitions/9` is
+    /// older than `Partitions/46` though its name sorts after it. A stream
+    /// whose name ends in no number sorts first.
+    pub fn frame_order(&self) -> (u32, &str, usize) {
+        (
+            crate::partition_room_parameters::partition_number(&self.stream),
+            self.stream.as_str(),
+            self.offset,
+        )
+    }
+
     /// Plan-footprint origin, quantised to 1e-4 ft, for de-duplication.
     pub fn footprint_key(&self) -> (i64, i64, i64) {
         (
@@ -1707,7 +1720,8 @@ pub fn scan_category_records(
 /// (`OST_Floors`, `OST_BuildingPad`, `OST_SketchLines`).
 ///
 /// Records are returned grouped by category in the order given, and
-/// by `(stream, offset)` within a category.
+/// within a category in the order of [`RevitFile::partition_stream_names`]
+/// (by partition number) and then by offset.
 pub fn scan_category_records_multi(
     rf: &mut RevitFile,
     revit_version: u32,
