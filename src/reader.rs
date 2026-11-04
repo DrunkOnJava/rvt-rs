@@ -1021,7 +1021,9 @@ impl RevitFile {
     /// memoised production walk; on a handle that has chosen none this changes
     /// nothing.
     pub fn clear_export_phase(&mut self) {
-        self.chosen_export_phase = None;
+        if self.chosen_export_phase.take().is_none() {
+            return;
+        }
         let filter = self.memoised_phase_filter();
         if let Some(last) = filter.order.last().copied() {
             if filter.export != Some(last) {

@@ -4,6 +4,8 @@
 # and checks it against its row; nothing is stored in this repository. The archive's sha256 was
 # measured on a full download; the entries' on 2026-10-18 through the range reader, the four
 # .rvt ones equal to the full download's (corpus/tier2/README.md).
+# The Office Terrain Concrete .rvt row (2026-11-04, #1339) is copied from
+# research/bim4lca-measure.tsv, where Measure checks the same entry.
 # A mirror row names another URL that serves the same archive, tried before the archive's
 # own: the CDN that URL redirects to (2026-10-29), added after the first host timed out on the
 # runners.

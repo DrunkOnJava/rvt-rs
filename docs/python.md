@@ -435,6 +435,10 @@ f.write_ifc(phase=12589)             # by ElementId
 f.write_ifc()                        # the last phase again
 ```
 
+The handle keeps the phase an export names: `decoded_elements()` and
+`element_counts()` read at that phase until a call without `phase` goes back
+to the last.
+
 `mode` is one of `scaffold`, `typed-no-geometry`, `geometry`, or
 `strict`. `scaffold` accepts the historical spec-valid framework
 output; stronger modes fail loudly when the recovered Revit data does
