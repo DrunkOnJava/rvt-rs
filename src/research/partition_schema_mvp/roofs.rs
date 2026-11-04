@@ -353,9 +353,9 @@ pub(super) fn attach_extrusion_roofs(
     for line in &sketch_lines {
         if let Some(owner) = roof_of(line) {
             let kept = copies.entry(owner).or_default();
-            let first = kept.get(&line.element_id).is_none_or(|held| {
-                (line.stream.as_str(), line.offset) < (held.stream.as_str(), held.offset)
-            });
+            let first = kept
+                .get(&line.element_id)
+                .is_none_or(|held| line.frame_order() < held.frame_order());
             if first {
                 kept.insert(line.element_id, line);
             }

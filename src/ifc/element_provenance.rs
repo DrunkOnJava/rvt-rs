@@ -178,8 +178,8 @@ pub struct ElementProvenanceEntry {
     /// Where the record or frame starts in that stream inflated. For a
     /// partition element record it is the frame the exporter selected among
     /// the element's frames: on Revit 2024 and later the one with the
-    /// greatest vertical extent and, on a tie, the greater `(stream, offset)`
-    /// (`select_instance_records`, which compares the stream name as text);
+    /// greatest vertical extent and, on a tie, the higher-numbered partition
+    /// and then the later offset (`select_instance_records`);
     /// on Revit 2008 to 2023 the newest, the highest-numbered partition and
     /// then the latest offset, with no extent test
     /// (`select_newest_instance_records`, RE-107). A body reader may take

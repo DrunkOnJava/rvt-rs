@@ -404,7 +404,8 @@ pub(crate) fn loop_field(points: &[(f64, f64)]) -> InstanceField {
 /// partition stream — on `2024_Core_Interior.rvt` 3106 distinct
 /// sketch-line ids are framed 3724 times and every duplicate agrees
 /// on both the box and the owner — so records are de-duplicated by
-/// ElementId, keeping the first by `(stream, offset)`.
+/// ElementId, keeping the first by [`PartitionElementRecord::frame_order`]
+/// (partition number, then offset).
 ///
 /// Elements whose sketch does not close under
 /// [`plan_profile_from_segments`] are absent from the result: there
@@ -420,10 +421,7 @@ pub fn plan_profiles_from_sketch_line_records(
         let segments = by_owner.entry(owner).or_default();
         let keep = match segments.get(&record.element_id) {
             None => true,
-            Some(existing) => {
-                (record.stream.as_str(), record.offset)
-                    < (existing.stream.as_str(), existing.offset)
-            }
+            Some(existing) => record.frame_order() < existing.frame_order(),
         };
         if keep {
             segments.insert(record.element_id, record.clone());
