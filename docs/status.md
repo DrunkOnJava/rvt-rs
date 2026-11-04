@@ -1130,8 +1130,11 @@ Revit's vertices within 0.001 ft of their surface and one did not: Revit 26.2's
 IFC2X3 export draws that circle (0.2292 ft) as an `IfcCircleProfileDef`, which
 IfcOpenShell cuts into 27 chords, and two half arcs of it come out as 28, so
 no vertex coincides (a count mismatch, reproduced and measured in
-`reports/element-framing/RE-327-family-extrusions.md` §11). Revit 24.0.5's
-IFC4 export of the office writes a circle as half arcs. IfcOpenShell's default
+`reports/element-framing/RE-327-family-extrusions.md` §11). That count
+mismatch is the default tessellation's, not a difference of shape: the bar for
+a body both files write as true curves is the fine tessellation (RE-331 §8,
+the maintainer's decision on #1355), in which all 251 hold (Measure run 41854514903). Revit
+24.0.5's IFC4 export of the office writes a circle as half arcs. IfcOpenShell's default
 tessellation of the two forms of a circle has the same chords up to 0.164 ft
 and at 0.3281 ft and one chord more or fewer at 0.2292, 0.4921, 0.9843 and
 1.9685 ft; over 0.137 ft a chord's own deviation passes the 0.001 ft bar, so a

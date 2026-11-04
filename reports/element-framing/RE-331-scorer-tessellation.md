@@ -1,9 +1,9 @@
 # RE-331: The body scorers measure two tessellations, not two shapes
 
 **Date:** 2026-11-04
-**Issues:** #1355; follows #1346 and RE-327 section 11 (a circle in two forms, 27 chords against 28), #1280 (the "ref on ours" bar), RE-311 and RE-329 (the saved-mesh body scorer)
+**Issues:** #1355, #1365 (section 8); follows #1346 and RE-327 section 11 (a circle in two forms, 27 chords against 28), #1280 (the "ref on ours" bar), RE-311 and RE-329 (the saved-mesh body scorer)
 **Artefacts:** the RE-32 oracle pair of RE1 Architecture, `RE1-Architecture.ifc` (Revit's export, sha256 a9b5d366…6200) and `RE1-Architecture.rvt` (sha256 4a78bdd6…8ce4); Core Interior's `2024_Core_Interior_slim.ifc` (sha256 bfdf36ff…ad86d); IfcOpenShell 0.9.0.post1, the version `tools/ci/requirements-ifc.txt` pins
-**Tools:** `tools/re/fine_mesh.py` (the settings), `tools/re/mesh_bodies_vs_ifc.py`, `tools/re/saved_meshes_vs_ifc.py` and `tools/re/family_extrusion_bodies_vs_ifc.py` (the scorers), `tools/re/arc_tessellation_study.py` (the study of sections 2 and 3), Measure's `fine_mesh` input
+**Tools:** `tools/re/fine_mesh.py` (the settings), `tools/re/mesh_bodies_vs_ifc.py`, `tools/re/saved_meshes_vs_ifc.py` and `tools/re/family_extrusion_bodies_vs_ifc.py` (the scorers), `tools/re/arc_tessellation_study.py` (the study of sections 2 and 3), Measure's `fine_mesh` input; for section 8 `tools/re/true_curves.py` (which bodies both files write as true curves)
 **Runs:** Measure 41850758987 (the unfiltered run, default exports), 41850764234 (the flag run) and 41850769925 (`--saved-meshes` alone), all at `e024f03c`; 41854514903 (the arcs the current rule keeps as meshes, drawn by the first arc run's head `aaa38de8`, section 4.3). Section 4 reads them.
 **Result:** positive: the fine mode runs on every model (its longest step took 676 s of the 2,400 s limit) and changes no default row (99 of 99 files equal in each of two comparisons with `main`'s scorers). It finds that a tessellation decides some verdicts, and only for curved saved-mesh bodies: of the 3,816 saved-mesh bodies of the `--saved-meshes` run, 295 are meshed differently; 38 hold "ref on ours" in the default tessellation and miss it in the fine one (the largest is 0.001001 ft, printed to six decimals, against the bar's 0.001); 158 miss the 0.001 ft both-directions column in the default one and hold it in the fine one. None of the 1,368 doors and windows the default export draws from saved meshes, and none of the 66 family-extrusion bodies, changes verdict (2 of the 66, circles of 0.12 ft or less, are meshed differently and hold in both). Drawn as arcs by the first arc run's head, 185 of the 269 bodies the current rule keeps as meshes are scored: all 185 hold in the fine tessellation and 184 in the default one; the 84 other bodies, office spaces, are not scored by this scorer. Section 5 lists the options for the bar and records Griffin's choice, the fine tessellation where both files write true curves (option 3).
 
@@ -276,3 +276,47 @@ gh workflow run measure.yml --ref feat/1355-scorer-fine-mode -f ref=aaa38de808f1
 ```
 
 Once this lands, `--ref main` replaces the branch. The `fine` rows are in each model's `mesh_bodies_vs_ifc.txt`, `saved_meshes_vs_ifc.txt` and `family_extrusion_bodies_vs_ifc.txt`; the held-out models keep their counts only (`tools/ci/scrub-holdout-results.sh`), which section 4.1 sums over the models that hold some.
+
+## 8. The bar in the scorers (#1365)
+
+**The decision** (section 5, Griffin on #1355, 2026-11-04): the fine tessellation decides pass or fail where both files write true curves, and nothing else changes. #1365 puts it in the scorers. Without a switch, `mesh_bodies_vs_ifc`, `family_extrusion_bodies_vs_ifc` and `saved_meshes_vs_ifc` now judge a body in the fine tessellation when both files write it as true curves, and in IfcOpenShell's default one otherwise. A saved mesh is triangles on rvt-rs's side, so it is never in the set and keeps the default bar: no saved-mesh, door or window verdict can move.
+
+### 8.1 Which bodies are true curves
+
+`tools/re/true_curves.py` reads each file's own representation items, the ones the arc census prints for Revit's body: the items of an element's `Body` representations, mapped items followed and aggregated parts included. It gives each item one of four kinds:
+
+| kind | items |
+|---|---|
+| curve | an `IfcExtrudedAreaSolid` over an `IfcCircleProfileDef` (or its hollow form), `IfcEllipseProfileDef` or `IfcRoundedRectangleProfileDef`, or over an arbitrary profile (with voids too) whose outline has an arc: an `IfcIndexedPolyCurve` with an `IfcArcIndex`, an `IfcCompositeCurve` with a segment that is not on a line or a polyline, an `IfcTrimmedCurve` on a circle or another curve that is not a line, an `IfcCircle`, `IfcEllipse` or `IfcBSplineCurve`; a composite or derived profile of one of these; an `IfcRevolvedAreaSolid`, an `IfcSweptDiskSolid`, a swept area solid with such a profile or along such a directrix, an `IfcAdvancedBrep` with a face that is not on a plane, an `IfcSphere`, `IfcRightCircularCylinder` or `IfcRightCircularCone` |
+| straight | an extrusion of a polygon, an `IfcBlock`, an `IfcRectangularPyramid`, an `IfcBoundingBox`, a half space on a plane, a Boolean result of straight operands |
+| mesh | an `IfcTessellatedItem` (a triangulated or polygonal face set), an `IfcFacetedBrep` (with voids too) or other manifold B-rep that is not advanced, a face-based or shell-based surface model, a Boolean result with such an operand |
+| other | any class this list does not name |
+
+A file writes a body as true curves when it has at least one curve item and no mesh or other item (a straight item neither makes a body a curve nor stops it from being one: the dispenser's two rectangles do not take it out). A body is in the set only if **both** files write it so. A body that cannot be read, or that has an item of a class the list does not know, is not in the set: the default tessellation, the bar before #1365, decides it, so a gap in the list can only leave a body where it was.
+
+On Revit's own exports this finds, among the elements with a body: RE1 Architecture 4 (elements 360331, 370475, 377331 and 379016), Electrical 16, Mechanical 6 and Plumbing 70, the counts RE-327 section 11.1 gives for the circle profiles of those four files (its 5 for Architecture includes the opening element, which the scorers skip); in the office's concrete terrain file 19 (11 `IfcWasteTerminal` among them). None of those files' faceted bodies (16, 2, 6 and 53 in the first four files; 100 in the terrain file) is in it.
+
+### 8.2 What the scorers print
+
+When no body is decided by the fine tessellation the output is what it was before #1365. When some are:
+
+- a line, `decided by the fine tessellation (both files write true curves): N of M bodies` (elements, for the box scorer);
+- the class table of `mesh_bodies_vs_ifc` and of `saved_meshes_vs_ifc` gains a last column, `decided by fine` and `fine`, how many of each class (and under `mesh_bodies_vs_ifc`, of each Revit type) were decided so; the verdict columns count each body in its deciding tessellation;
+- `mesh_bodies_vs_ifc` prints its `fine` rows (section 2) for those bodies, which show each of them in both tessellations: how many hold "ref on ours" and "0.001 ft" in the default tessellation, in the fine one, in both or in neither;
+- its lists of the bodies furthest off end a body's line with `(fine tessellation)` when the fine tessellation decided it;
+- the census of `family_extrusion_bodies_vs_ifc` ends a row `decided by the fine tessellation` when its bodies were, and leaves the rows of the others as they were;
+- `RVT_SCORER_FINE_MESH=1` still prints the `fine` rows for every body (section 2); the class table follows the bar either way.
+
+The held-out scrub keeps the new line and the last column as counts beside an IFC class name.
+
+**Cost.** Only the set is meshed finely: rvt-rs's side for the bodies it writes with a curve (a handful: the family extrusions with an arc), Revit's for those among them that Revit writes with a curve too. The default meshes and scores are made for every body as before. So the office's saved-mesh step takes what it took, and the fine pass costs the bodies of the set, not the 300 per class of `RVT_SCORER_FINE_MESH`.
+
+### 8.3 Proved on files at hand
+
+- The saved-mesh pairs: `mesh_bodies_vs_ifc` and `saved_meshes_vs_ifc` print, byte for byte, what the scorers of `main` print on Core Interior's 138 doors and windows and on the saved-mesh doors of RE1 Architecture, Electrical, Mechanical and Plumbing (10 of 10 files).
+- A body both files write as true curves: RE1 Architecture's dispenser drawn as half arcs (section 3.3) against Revit's circle is decided by the fine tessellation, holds "ref on ours" (2.3e-6 ft) and prints `decided by the fine tessellation` on the class table and in the census; the box scorer decides the same element's box in the fine tessellation too.
+- The same arcs against a Revit body that is a mesh (a faceted brep: the pair borrows another element's Tag only to put a mesh on Revit's side, so its distances mean nothing): no body is decided by the fine tessellation, and the output has no fine column, line or rows.
+
+### 8.4 What the runs measured
+
+The runs, their comparison with the scorers of `main` on the same code, and the figures are in this section once they finish.
