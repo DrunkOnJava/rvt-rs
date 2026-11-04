@@ -1494,6 +1494,8 @@ const IFC_ENTITY_NAMES = [
   'IfcBuilding',
   'IfcBuildingElementProxy',
   'IfcBuildingStorey',
+  'IfcCableCarrierFitting',
+  'IfcCableCarrierSegment',
   'IfcColumn',
   'IfcCovering',
   'IfcCurtainWall',

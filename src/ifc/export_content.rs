@@ -1802,6 +1802,17 @@ fn wall_geometry_from_decoded(decoded: &DecodedElement) -> Option<RecoveredWallG
 /// record names (RE-172), under the names Revit's export uses for its class.
 fn level_parameter_property_set(decoded: &DecodedElement, ifc_type: &str) -> Option<PropertySet> {
     use crate::partition_level_parameters as lp;
+    // RE-319: the names Revit gives a conduit's, conduit fitting's or
+    // gutter's Level parameter are not measured: the one export that holds
+    // them, Revit 2018's IFC2X3, writes no Revit parameter-group set on any
+    // element. So none is written.
+    if matches!(
+        ifc_type,
+        "IFCCABLECARRIERSEGMENT" | "IFCCABLECARRIERFITTING"
+    ) || decoded.class == "Gutter"
+    {
+        return None;
+    }
     let text = |wanted: &str| {
         decoded.fields.iter().find_map(|(name, value)| match value {
             InstanceField::String(v) if name == wanted => Some(v.clone()),

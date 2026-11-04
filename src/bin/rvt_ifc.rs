@@ -989,6 +989,8 @@ fn ifc_type_display(upper: &str) -> String {
         "IfcAlarm",
         "IfcBeam",
         "IfcBuildingElementProxy",
+        "IfcCableCarrierFitting",
+        "IfcCableCarrierSegment",
         "IfcColumn",
         "IfcCovering",
         "IfcCurtainWall",
