@@ -17,9 +17,9 @@
 //!   the element's measures under [`COVER_TOLERANCE_SQUARE_FEET`].
 //!
 //! A wall the element covers in part is stepped, below (#1067, RE-320). A
-//! wall of which any of this is not known is left at its full height.
-//! Several elements may qualify; the wall is cut at the lowest underside,
-//! since a wall cannot rise through a floor above one that has cut it.
+//! wall of which any of this is not known is left at its full height. Several
+//! elements may qualify; the wall is cut at the lowest underside, since a wall
+//! cannot rise through a floor above one that has cut it.
 //!
 //! The same body, a lower top: the placement and `BoundingBoxHeight` stay,
 //! and the wall carries a `BodyHeightSource` and the element's ElementId. The
@@ -34,24 +34,27 @@
 //! the floor covers and the wall's own top elsewhere (RE-267 §2). Where no
 //! single element named by the wall covers the whole of its plan, and those
 //! that reach it lie inside the wall's height, the wall is drawn as that: a
-//! prism of its own plan up to the lowest underside, and, over each part of
-//! the plan not covered at or below an underside, a prism from that underside
-//! to the next one (the wall's top for the last), one item each in the one
-//! body representation. The parts are convex pieces: the plan (itself where
-//! it is convex, else its ear-clipped triangles joined where two make a convex
+//! prism of its own plan up to the lowest underside and, over each part of the
+//! plan not covered at or below an underside, a prism from that underside to
+//! the next one (the wall's top for the last), one item each in the one body
+//! representation. The parts are convex pieces: the plan (itself where it is
+//! convex, else its ear-clipped triangles joined where two make a convex
 //! piece) less each triangle of an outline in turn, with the pieces that share
 //! an edge and make a convex piece together joined. The holes and openings of
-//! an element count as uncovered, where one element alone is named. An element
-//! that only a cut pair names, and never the top join, cuts the top only where
-//! it reaches the wall's top: a Join Geometry cut takes the volume the two
-//! share, which is the wall's top only where the element rises to it (RE-320
-//! §5). A wall
-//! whose pieces pass [`MAX_RISERS`], whose plan does not break into convex
-//! pieces, or whose several elements share a hole or opening that lies over
-//! it, or of which only a small stub lies outside the floor, inside another wall
-//! (see [`embedded`]), is left as it was. The wall's `extrusion` stays the full prism, which
-//! the passes that read a wall's plan and its record's box use; the writer,
-//! the glTF and the plan outline draw its `solid_shape`.
+//! an element count as uncovered where one element alone is named.
+//!
+//! An element that only a cut pair names, and never the top join, cuts the
+//! top only where it reaches the wall's top: a Join Geometry cut takes the
+//! volume the two share, which is the wall's top only where the element rises
+//! to it (RE-320 §5).
+//!
+//! A wall whose pieces pass [`MAX_RISERS`], whose plan does not break into
+//! convex pieces, whose several elements share a hole or opening that lies
+//! over it, or of which only a small stub lies outside the floor, inside
+//! another wall (see [`embedded`]), is left as it was. The wall's `extrusion`
+//! stays the full prism, which the passes that read a wall's plan and its
+//! record's box use; the writer, the glTF and the plan outline draw its
+//! `solid_shape`.
 
 use std::collections::{HashMap, HashSet};
 
