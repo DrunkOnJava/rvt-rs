@@ -220,12 +220,12 @@ element's record as `trust_markers`.
 The record fields come from the element provenance table (#1325), which the
 export builds only when asked (`rvt-ifc --element-provenance`) and which the
 server asks for in the decode it makes when it opens a model. It is large: the
-table, with its value sources (#1360), is 5,975,162 bytes of compact JSON against
-38,640 bytes of diagnostics without it on the BIM4LCA office as built (about 155
-times); the CLI's pretty-printed sidecar grows from 52,677 to 10,537,432 bytes
-there and from 27,588 to 810,250 on Core Interior (Measure run 41860806523); RE1
-Architecture's grew from 13,956 to 85,470 before the value sources and has not
-been measured since. The server
+table, with its value sources (#1360, #1368), is 6,131,584 bytes of compact JSON
+against 38,640 bytes of diagnostics without it on the BIM4LCA office as built
+(about 159 times); the CLI's pretty-printed sidecar grows from 52,677 to
+10,927,629 bytes there and from 27,588 to 1,511,498 on Core Interior (Measure
+run 41882133812); RE1 Architecture's grew from 13,956 to 85,470 before the value
+sources and has not been measured since. The server
 keeps it in memory beside the model and does not return it: `get_diagnostics`
 and the exports' summaries are the diagnostics without it, as `rvt-ifc` writes
 them by default. Building it is one pass over the walk the decode already made
@@ -246,8 +246,12 @@ current native copy. So `offset` and `native_record.stream` can name different
 partitions. `get_element` and `explain_element` list, in `value_sources`, the
 copy each reader took a value of the body from (its reader, the rule that chose
 the copy, its stream and offset, and whether it is in another partition than the
-frame; #1360): the bounded line of a wall or beam, a family instance's
-transform, a saved mesh, a stair run or landing. `list_elements` does not. A
+frame; #1360, #1368): the bounded line of a wall or beam, a family instance's
+transform, a saved mesh, the sketch lines and curve list a floor's or roof's
+profile is solved from, a column's type symbol, a stair run's lines, ends and
+type, a landing's outline lines and native record. A source made of several
+records lists them in `parts`, at most 64, with the rest counted in
+`parts_left_out`. `list_elements` does not. A
 body whose reader does not note its copy yet has none; see
 `docs/export-diagnostics.md` for the readers.
 

@@ -128,6 +128,7 @@ pub fn native_run_base_cuts(
     }
     let options = Options {
         selected_ids: runs.clone(),
+        value_source: Some("stair_run_base_cuts"),
         ..Options::default()
     };
     let mut out = BTreeMap::new();
@@ -147,6 +148,12 @@ pub fn native_run_base_cuts(
         }
         Ok(())
     })?;
+    // A selected record that gave no cut is not a source of one (#1368).
+    for run in runs.iter().filter(|run| !out.contains_key(*run)) {
+        if let Ok(run) = u32::try_from(*run) {
+            rf.forget_value_source(run, "stair_run_base_cuts");
+        }
+    }
     Ok(out)
 }
 
@@ -423,7 +430,7 @@ pub fn native_runs(
         return Ok(BTreeMap::new());
     }
     let (types, found) = run_graphs(rf, runs)?;
-    Ok(found
+    let drawn: BTreeMap<u64, NativeRun> = found
         .into_iter()
         .filter_map(|(id, (run, treads))| {
             let type_id = runs[&id];
@@ -440,7 +447,15 @@ pub fn native_runs(
                 },
             ))
         })
-        .collect())
+        .collect();
+    // The run type's construction is the type's record's: a source of the run
+    // as well as the run's own record (#1368).
+    for (id, run) in &drawn {
+        if let (Ok(run_id), Ok(type_id)) = (u32::try_from(*id), u32::try_from(run.type_id)) {
+            rf.attribute_value_source(type_id, "native_run", run_id, "native_run_type");
+        }
+    }
+    Ok(drawn)
 }
 
 /// A Revit 2025 stair's actual number of risers, riser height and tread
@@ -770,7 +785,7 @@ pub fn native_landings_and_type_names(
         }
         Ok(())
     })?;
-    let found = tops
+    let found: BTreeMap<u64, NativeLanding> = tops
         .into_iter()
         .filter_map(|(id, top_feet)| {
             let thickness_feet = *thicknesses.get(&landings[&id])?;
@@ -783,6 +798,17 @@ pub fn native_landings_and_type_names(
             ))
         })
         .collect();
+    // The thickness is the landing type's: its record is a source of it (#1368).
+    for id in found.keys() {
+        if let (Ok(landing), Ok(landing_type)) = (u32::try_from(*id), u32::try_from(landings[id])) {
+            rf.attribute_value_source(
+                landing_type,
+                "native_landing",
+                landing,
+                "native_landing_type",
+            );
+        }
+    }
     Ok((found, names))
 }
 

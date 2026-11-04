@@ -319,7 +319,13 @@ pub fn recover_partition_schema_mvp(
             .into_values()
             .collect();
     out.walls = wall_instances_from_records(wall_records, &level_ids);
+    let symbol_frames = rf
+        .recording_value_sources()
+        .then(|| type_symbol_frames(&column_records));
     out.columns = column_instances_from_records(column_records, &level_ids, &wall_instances);
+    if let Some(frames) = symbol_frames {
+        note_type_sections(rf, &out.columns, &frames);
+    }
     // Doors and windows bind to a host wall (#222, RE-23). The
     // candidate set is exactly the wall instances recovered above —
     // a recovered host that is not itself an exported wall is
