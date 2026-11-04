@@ -1187,10 +1187,20 @@ prints it from any installed build.
 
 ## Roadmap Position
 
-- **v0.13.0** (2026-11-03) is the latest release: crates.io, docs.rs, the
-  `rvt` wheels on PyPI, GitHub Release archives for Linux, macOS and Windows,
-  and the container image, each checked from its published artifacts
-  ([`install.md`](install.md)). Every `IfcSpace` says where its outline came
+- **v0.14.0** (2026-11-04) is the latest release: crates.io (`rvt` and,
+  new, `rvt-rs-mcp`), the `rvt` wheels on PyPI, GitHub Release archives for
+  Linux, macOS and Windows, and the container image, each checked from its
+  published artifacts ([`install.md`](install.md)); docs.rs had queued its
+  build when they were checked. It adds `rvt-rs-mcp`, a local, read-only MCP
+  server, and one export function every surface builds from; rooms follow the
+  export phase, which `rvt-ifc`, Python, the viewer and `rvt-schedule` can
+  name; Revit 2024 Areas get a body and proven Revit 2015 to 2023 Areas are
+  written; the openings rectangular wall openings cut are written; walls a
+  floor covers in part are drawn stepped; conduits, conduit fittings and
+  gutters are exported; and every one of the 68 exports timed is faster than
+  0.13.0's. `[0.14.0]` in [`CHANGELOG.md`](../CHANGELOG.md) gives what each
+  change measures and what it does not.
+- **v0.13.0** (2026-11-03): every `IfcSpace` says where its outline came
   from; rooms on Revit 2026 and 2027 take their outline, rooms whose stored
   solid the walk did not close are read from its faces, and family instances
   Revit's export leaves out are left out of the spaces. A Revit 2018 project
@@ -1244,7 +1254,7 @@ prints it from any installed build.
   - elements outside the export phase left out (#328);
   - doors and windows drawn from their saved meshes by default in `rvt-ifc`;
   - Revit 2008 to 2014 exported experimentally.
-- `main` has everything v0.13.0 has, and is ahead of it by the fragments
+- `main` has everything v0.14.0 has, and is ahead of it by the fragments
   under [`changelog.d/`](../changelog.d/README.md).
 
 Open work is tracked as GitHub issues; [`docs/archive/TODO.md`](archive/TODO.md) is
