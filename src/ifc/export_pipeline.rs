@@ -86,9 +86,8 @@ pub struct ExportOptions {
     pub phase: Option<String>,
     /// Also list where each decoded element was read from in the diagnostics
     /// (`decoded.element_provenance`, `rvt-ifc --element-provenance`, #1325).
-    /// Off by default: the table is large (on the BIM4LCA office as built
-    /// 6,202,130 bytes of compact JSON against 38,640 bytes of diagnostics
-    /// without it, about 161 times) and never goes into the IFC. While it is
+    /// Off by default: the table is large (`docs/export-diagnostics.md`,
+    /// "Provenance table size") and never goes into the IFC. While it is
     /// on, the readers also note the copy they take each value from (#1360).
     pub element_provenance: bool,
     /// Also list each fail-closed decision per element in the diagnostics
@@ -97,7 +96,7 @@ pub struct ExportOptions {
     /// by default; the diagnostics are then the bytes they were. It is a
     /// switch of its own, not part of `element_provenance`, because the log
     /// is bounded (at most 5,000 entries a reason) where the table grows with
-    /// the model (161 times the diagnostics on the BIM4LCA office), and it
+    /// the model (`docs/export-diagnostics.md`, "Provenance table size"), and it
     /// needs no table in the diagnostics: where an entry's evidence is an
     /// element the walk decoded, its stream and offset are read from a table
     /// built for the purpose and dropped.

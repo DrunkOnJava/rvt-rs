@@ -551,8 +551,8 @@ One record a value source is made of.
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `element_id` | integer | yes | The ElementId of the record's element: a sketch line, a type symbol, a run type. |
-| `offset` | integer | yes | Where the record starts in that partition inflated: its frame, or for a run type the place its id is stored. |
+| `element_id` | integer | yes | The ElementId of the record's element, which need not be the element the source is of. |
+| `offset` | integer | yes | Where the record starts in that partition inflated; what starts there depends on the reader. |
 | `stream` | string | yes | The partition the record is in, such as `Partitions/46`. |
 
 ### TypeOut
@@ -578,16 +578,16 @@ A stream a resource limit kept from being read whole.
 
 ### ValueSourceOut
 
-The copy of an element's data a reader took a value from.
+The copy of an element's data a reader took a value from. The readers, the rules and what each source's `parts` are, are listed in `docs/export-diagnostics.md`, "Value sources".
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `copies` | integer | yes | In how many partitions the element's data named it, so how many copies there were to choose from; for a profile's sketch lines (`parts`), how many lines it is made of; for a source of one record in `parts`, in how many partitions that record was held. |
-| `differs_from_frame` | boolean | yes | True when the value is held in another partition than `provenance.stream`, the frame: the copy named is in another and, for `agreeing`, so is every copy that agrees with it; for a source made of `parts`, none of them is in the frame's partition (a profile's sketch lines are also held there when the Sketch's curve list, `sketch_list`, has a copy there). |
-| `offset` | integer \| null | no | Where the copy starts in that partition inflated: the element-data header whose element id follows it, for the readers of element data; the record's header, for a native record; the frame, for `selected_frame`. |
-| `partitions` | array of integer | yes | For the rule `agreeing`, the numbers of the partitions that hold a copy, every one of which holds the same value; the copy named is the lowest-numbered partition's. |
-| `parts` | array of [SourcePartOut](#sourcepartout) | yes | The records the value is made of, where it is made of several or of another element's (a profile's sketch lines, a type symbol's frame), at most 64. Such a source has no `stream` or `offset` of its own. |
+| `copies` | integer | yes | In how many partitions the element's data named it, so how many copies there were to choose from; for a source made of several `parts`, how many records it is made of; for one record, in how many partitions that record was held. |
+| `differs_from_frame` | boolean | yes | True when the value is held in another partition than `provenance.stream`, the frame: the copy named is in another and, where every copy holds the same value, so is every copy; for a source made of `parts`, none of them is in the frame's partition (`docs/export-diagnostics.md` says where a profile's records count as held there). |
+| `offset` | integer \| null | no | Where the copy starts in that partition inflated: the element-data header whose element id follows it, for the readers of element data; the record's header, for a native record; the frame, for a body read from the frame. |
+| `partitions` | array of integer | yes | Where every copy holds the same value, the numbers of the partitions that hold a copy; the copy named is the lowest-numbered partition's. |
+| `parts` | array of [SourcePartOut](#sourcepartout) | yes | The records the value is made of, where it is made of several or of another element's, at most 64. Such a source has no `stream` or `offset` of its own. |
 | `parts_left_out` | integer | yes | How many more records than the 64 listed in `parts` the value is made of. |
-| `reader` | string | yes | What was read: `bounded_line` (a wall's or beam's location line), `bounded_arc`, `instance_transform`, `saved_graphics`, `native_run`, `native_landing`, `selected_frame` for a body read from the frame itself (or, with a `sketch_lines` or `type_section` source beside it, for its box and placement only, the profile being that source's), or `selected_frame_box` for a body whose box and placement are read from the frame and whose profile is read from a record no reader notes yet (see `profile_source`). Also `sketch_lines` and `sketch_list` (the frames of a profile's sketch lines and the Sketch's curve list), `sketch_line_data`, `type_section` (the type symbol's frame), `stair_run_lines`, `stair_run_ends`, `stair_run_type`, `stair_run_base_cuts`, `landing_lines`, `native_run_type` and `native_landing_type` (the run type's and the landing type's records, which give a Revit 2025 run's construction and a landing slab's thickness), `room_solid_faces` (the stored solids a room's outline is read from), `type_hollow_section` and `type_i_section` (a column type's parameter entries) and `pipe_connectors` (a pipe's two connector entries). |
-| `rule` | string | yes | How the copy was chosen: `selected` (the frame the exporter selected), `agreeing` (every copy holds the same value; the lowest-numbered partition's is named), `current` (the copies disagree; the current partition's), `native` (a native record by member name, its current copy) or `frame` (one frame or partition of a record, as the reader's scan kept it, without its other copies being compared). For a source made of `parts` the rule is how each record's copy was chosen. |
+| `reader` | string | yes | The name of the reader that took the value, such as the reader of a wall's location line or of a type's parameters. Each reader and the body it belongs to is listed in `docs/export-diagnostics.md`, "Value sources". |
+| `rule` | string | yes | How the copy was chosen. The rules are listed in `docs/export-diagnostics.md`, "Value sources"; for a source made of `parts` it is how each record's copy was chosen. |
 | `stream` | string \| null | no | The partition of the copy, such as `Partitions/46`. |
