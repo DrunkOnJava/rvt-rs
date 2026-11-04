@@ -60,6 +60,10 @@ pub struct Options {
     /// passes (#1237). A caller that dumps records with their provenance, as
     /// `native_saved_scene` does, turns it on.
     pub record_extras: bool,
+    /// Whether each [`Record`] carries its body bytes ([`Record::body`]). Off
+    /// by default: a probe that decodes a body under another reading of the
+    /// schema (RE-325) turns it on.
+    pub keep_body: bool,
 }
 /// The default [`Options::max_group_bytes`]: one reassembled continuation
 /// group's bytes.
@@ -107,6 +111,7 @@ impl Default for Options {
             releases: 2023..=2027,
             definition_filter: None,
             record_extras: false,
+            keep_body: false,
         }
     }
 }
@@ -129,6 +134,9 @@ pub struct Record {
     /// left its graph undecoded.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub base: Option<crate::native_element::ElementBase>,
+    /// The record's body bytes, where [`Options::keep_body`] asks for them.
+    #[serde(skip_serializing)]
+    pub body: Option<Vec<u8>>,
 }
 #[derive(Debug, Serialize)]
 pub struct RecordSource {
@@ -451,6 +459,7 @@ fn definition_pass(file: &mut RevitFile, options: &Options) -> Result<Arc<Defini
         releases,
         definition_filter: _,
         record_extras: _,
+        keep_body: _,
     } = options;
     let key: DefinitionKey = (
         *max_group_bytes,
@@ -918,6 +927,7 @@ fn extract_records(
                                 saved_metadata: None,
                                 metadata_diagnostic: None,
                                 base: base.ok(),
+                                body: options.keep_body.then(|| body.to_vec()),
                             })?;
                             continue;
                         }
@@ -1052,6 +1062,7 @@ fn extract_records(
                         saved_metadata,
                         metadata_diagnostic,
                         base: None,
+                        body: options.keep_body.then(|| body.to_vec()),
                     })?;
                 }
                 Ok(())
