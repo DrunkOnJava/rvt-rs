@@ -15,9 +15,10 @@ use rvt::reader::UnreadStream;
 use serde_json::Value;
 
 use crate::schema::{
-    DiagnosticsOut, DiagnosticsSummary, ElementCounts, ElementDetail, ElementProvenance,
-    ElementRow, EntityRefOut, LevelOut, LevelRefOut, LevelsOut, ListElementsOut, NativeRecordOut,
-    PropertyOut, PropertySetOut, RoomOut, RoomsOut, SkippedOut, SummaryOut, TypeOut, UnreadOut,
+    DecisionOut, DiagnosticsOut, DiagnosticsSummary, ElementCounts, ElementDetail,
+    ElementProvenance, ElementRow, EntityRefOut, ExplainElementOut, LevelOut, LevelRefOut,
+    LevelsOut, ListElementsOut, NativeRecordOut, PropertyOut, PropertySetOut, RoomOut, RoomsOut,
+    SkippedOut, SummaryOut, TypeOut, UnreadOut,
 };
 use crate::store::{Computed, Entry};
 
@@ -450,6 +451,125 @@ fn is_marker(name: &str) -> bool {
     name.ends_with("Source") || name.ends_with("Resolved") || name.ends_with("Refusal")
 }
 
+/// The property sets of the entity at `index`: its own and the ones written
+/// beside it.
+fn element_property_sets(
+    model: &IfcModel,
+    index: usize,
+    property_set: &Option<PropertySet>,
+) -> Vec<PropertySetOut> {
+    let mut property_sets: Vec<PropertySetOut> = Vec::new();
+    if let Some(set) = property_set {
+        property_sets.extend(property_set_out(set));
+    }
+    for entity in &model.entities {
+        if let IfcEntity::ElementPropertySet { element, set } = entity
+            && *element == index
+        {
+            property_sets.extend(property_set_out(set));
+        }
+    }
+    property_sets
+}
+
+/// The `...Source`, `...Resolved` and `...Refusal` properties of the
+/// element's record.
+fn trust_markers_of(property_sets: &[PropertySetOut]) -> BTreeMap<String, Value> {
+    property_sets
+        .iter()
+        .filter(|set| set.name == ELEMENT_RECORD_PROPERTY_SET)
+        .flat_map(|set| set.properties.iter())
+        .filter(|property| is_marker(&property.name))
+        .map(|property| (property.name.clone(), property.value.clone()))
+        .collect()
+}
+
+/// An element, in the export or not, with every decision recorded for it
+/// (#1326). `id` is a Revit ElementId, which a left-out element has, or the
+/// GlobalId of an exported one.
+pub fn explain_element(
+    entry: &Entry,
+    computed: &Computed,
+    id: &str,
+) -> Result<ExplainElementOut, String> {
+    let model = &computed.model;
+    let id = id.trim();
+    let found = find_entities(computed, id)
+        .first()
+        .copied()
+        .and_then(|index| match model.entities.get(index)? {
+            IfcEntity::BuildingElement {
+                name,
+                type_guid,
+                property_set,
+                ..
+            } => Some((index, name, type_guid, property_set)),
+            _ => None,
+        });
+    let element_id: Option<u32> = match found {
+        Some((_, _, type_guid, _)) => type_guid.as_deref().and_then(|tag| tag.parse().ok()),
+        None => id.parse().ok(),
+    };
+    let log = computed.export_decisions.as_ref();
+    let decisions: Vec<DecisionOut> = match (log, element_id) {
+        (Some(log), Some(element_id)) => log
+            .for_element(element_id)
+            .map(|decision| DecisionOut {
+                stage: decision.stage.as_str().to_string(),
+                reason: decision.reason.clone(),
+                class: decision.class.clone(),
+                stream: decision.stream.clone(),
+                offset: decision.offset,
+                detail: decision.detail.clone(),
+            })
+            .collect(),
+        _ => Vec::new(),
+    };
+    let capped_reasons: Vec<String> = log
+        .map(|log| log.capped_reasons().map(str::to_string).collect())
+        .unwrap_or_default();
+    if found.is_none() && decisions.is_empty() {
+        let capped = if capped_reasons.is_empty() {
+            String::new()
+        } else {
+            format!(
+                " The log is full for {}, so a decision about it may be missing.",
+                capped_reasons.join(", ")
+            )
+        };
+        return Err(match element_id {
+            Some(element_id) => format!(
+                "ElementId {element_id} is not in the export and no decision is recorded for it.{capped} Use list_elements to find exported ids; a frame with no ElementId has no entry."
+            ),
+            None => format!(
+                "no element has Revit ElementId or IFC GlobalId {id:?} in this model. Use list_elements to find ids."
+            ),
+        });
+    }
+    let (name, provenance_out, trust_markers) = match found {
+        Some((index, name, _, property_set)) => {
+            let property_sets = element_property_sets(model, index, property_set);
+            (
+                Some(name.clone()),
+                provenance(computed, index),
+                trust_markers_of(&property_sets),
+            )
+        }
+        None => (None, None, BTreeMap::new()),
+    };
+    Ok(ExplainElementOut {
+        model_id: entry.id.clone(),
+        id: element_id.map_or_else(|| id.to_string(), |element_id| element_id.to_string()),
+        exported: found.is_some(),
+        name,
+        provenance: provenance_out,
+        trust_markers,
+        decisions,
+        capped_reasons,
+        file: computed.file.clone(),
+    })
+}
+
 pub fn get_element(entry: &Entry, computed: &Computed, id: &str) -> Result<ElementDetail, String> {
     let model = &computed.model;
     let indices = find_entities(computed, id);
@@ -500,24 +620,8 @@ pub fn get_element(entry: &Entry, computed: &Computed, id: &str) -> Result<Eleme
         "none"
     };
 
-    let mut property_sets: Vec<PropertySetOut> = Vec::new();
-    if let Some(set) = property_set {
-        property_sets.extend(property_set_out(set));
-    }
-    for entity in &model.entities {
-        if let IfcEntity::ElementPropertySet { element, set } = entity
-            && *element == index
-        {
-            property_sets.extend(property_set_out(set));
-        }
-    }
-    let trust_markers: BTreeMap<String, Value> = property_sets
-        .iter()
-        .filter(|set| set.name == ELEMENT_RECORD_PROPERTY_SET)
-        .flat_map(|set| set.properties.iter())
-        .filter(|property| is_marker(&property.name))
-        .map(|property| (property.name.clone(), property.value.clone()))
-        .collect();
+    let property_sets = element_property_sets(model, index, property_set);
+    let trust_markers = trust_markers_of(&property_sets);
     let other_entities = indices
         .iter()
         .skip(1)

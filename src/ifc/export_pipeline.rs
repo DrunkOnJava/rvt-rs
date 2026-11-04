@@ -90,6 +90,17 @@ pub struct ExportOptions {
     /// 4,462,401 bytes of compact JSON against 38,640 bytes of diagnostics
     /// without it, about 116 times) and never goes into the IFC.
     pub element_provenance: bool,
+    /// Also list each fail-closed decision per element in the diagnostics
+    /// (`export_decisions`, `rvt-ifc --export-decisions`, #1326): why an
+    /// element, body, opening or outline was left out, bounded per reason. Off
+    /// by default; the diagnostics are then the bytes they were. It is a
+    /// switch of its own, not part of `element_provenance`, because the log
+    /// is bounded (at most 5,000 entries a reason) where the table grows with
+    /// the model (116 times the diagnostics on the BIM4LCA office), and it
+    /// needs no table in the diagnostics: where an entry's evidence is an
+    /// element the walk decoded, its stream and offset are read from a table
+    /// built for the purpose and dropped.
+    pub export_decisions: bool,
 }
 
 impl Default for ExportOptions {
@@ -104,6 +115,7 @@ impl Default for ExportOptions {
             no_base_quantities: false,
             phase: None,
             element_provenance: false,
+            export_decisions: false,
         }
     }
 }
@@ -175,6 +187,16 @@ impl ExportOptions {
     #[must_use]
     pub fn with_element_provenance(mut self, element_provenance: bool) -> Self {
         self.element_provenance = element_provenance;
+        self
+    }
+
+    /// Whether the diagnostics list each fail-closed decision per element
+    /// ([`ExportDecisionLog`](super::export_decisions::ExportDecisionLog)). Off
+    /// by default; independent of
+    /// [`with_element_provenance`](Self::with_element_provenance).
+    #[must_use]
+    pub fn with_export_decisions(mut self, export_decisions: bool) -> Self {
+        self.export_decisions = export_decisions;
         self
     }
 }
@@ -449,7 +471,9 @@ pub fn run_export_with_limits(
 ///    DiagnosticProxies kinds;
 /// 5. Revit's parameter sets and their placement, when asked;
 /// 6. the base quantities left out, when asked;
-/// 7. the unread streams recorded in the diagnostics, which steps 4 and 5 may
+/// 7. the log of per-element decisions in the diagnostics, when asked, from the
+///    decisions step 2 made and the final model;
+/// 8. the unread streams recorded in the diagnostics, which steps 4 and 5 may
 ///    have added to.
 ///
 /// The saved graphics, the parameter sets and the placement only add to the
@@ -496,13 +520,24 @@ pub fn run_export_with_limits_and_control(
     };
     let mut model = result.model;
     let mut diagnostics = result.diagnostics;
+    let decisions = result.decisions;
     let mut notes = Vec::new();
 
     // #1325: built from the walk the exporter just made, which the handle
-    // memoised, before the steps below touch the handle again.
-    if options.element_provenance && options.kind != ExportKind::Placeholder {
-        control.check()?;
-        diagnostics.decoded.element_provenance = Some(super::element_provenance::build(rf, limits));
+    // memoised, before the steps below touch the handle again. The log of
+    // decisions (#1326) reads the same table for the place of an element's
+    // record, so where it is asked for without the table in the diagnostics
+    // the table is built here and kept apart, then dropped.
+    let mut log_provenance = None;
+    if options.kind != ExportKind::Placeholder {
+        if options.element_provenance {
+            control.check()?;
+            diagnostics.decoded.element_provenance =
+                Some(super::element_provenance::build(rf, limits));
+        } else if options.export_decisions {
+            control.check()?;
+            log_provenance = Some(super::element_provenance::build(rf, limits));
+        }
     }
 
     let scope = match (options.kind, options.saved_meshes) {
@@ -605,6 +640,21 @@ pub fn run_export_with_limits_and_control(
         let left_out = leave_out_base_quantities(&mut model);
         recount_exported(&mut diagnostics, &model);
         notes.push(ExportNote::BaseQuantities { left_out });
+    }
+
+    // #1326: the decisions the `skipped` counts were made from, and those
+    // behind the final model's box bodies and outlines.
+    if options.export_decisions && options.kind != ExportKind::Placeholder {
+        control.check()?;
+        let mut all = decisions;
+        all.extend(super::model_decisions(&model));
+        let table = diagnostics
+            .decoded
+            .element_provenance
+            .as_ref()
+            .or(log_provenance.as_ref());
+        let log = super::export_decisions::ExportDecisionLog::build(all, table);
+        diagnostics.export_decisions = Some(log);
     }
 
     // #1075: the steps above may have read more streams than the export did.

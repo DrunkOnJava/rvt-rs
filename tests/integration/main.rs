@@ -65,6 +65,8 @@ mod element_parameters;
 mod element_provenance_offsets;
 #[path = "../element_records_2025.rs"]
 mod element_records_2025;
+#[path = "../export_decisions_counts.rs"]
+mod export_decisions_counts;
 #[path = "../family_instance_ports.rs"]
 mod family_instance_ports;
 #[path = "../field_type_coverage.rs"]

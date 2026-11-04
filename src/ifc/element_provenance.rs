@@ -355,6 +355,26 @@ fn field_integer(element: &DecodedElement, wanted: &str) -> Option<i64> {
     })
 }
 
+/// The stream an element's record was read from and the offset in it, where
+/// the record kind is one that has them (#1326): the same places
+/// [`ElementProvenanceTable`] gives. Not read again from the bytes.
+pub(crate) fn placement(element: &DecodedElement) -> (Option<String>, Option<usize>) {
+    let provenance = &element.provenance;
+    match provenance.record_kind.as_deref() {
+        Some("schema_instance") => (
+            Some(streams::GLOBAL_LATEST.to_string()),
+            provenance.source_offset,
+        ),
+        Some("partition_element_record" | "partition_arcwall") => {
+            (provenance.source_stream.clone(), provenance.source_offset)
+        }
+        Some(kind) if kind == crate::partition_area_records::AREA_RECORD_SOURCE => {
+            (provenance.source_stream.clone(), provenance.source_offset)
+        }
+        _ => (None, None),
+    }
+}
+
 /// The entry for `element` before the partition frames are read again: its
 /// carrier as far as its record kind says, its stream, offset and class.
 fn entry_of(

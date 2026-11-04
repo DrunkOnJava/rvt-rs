@@ -83,6 +83,92 @@ What an element's `offset` is, and what has been measured:
 - `native` and `by_carrier` count every element with an ElementId, the
   omitted ones included.
 
+### Export decisions
+
+The `skipped` section counts what the exporter left out by reason and class,
+with sample names. It cannot say why one door has no opening or one room is a
+box. `--export-decisions` (#1326) adds `export_decisions`, one entry per element
+for each fail-closed decision:
+
+```bash
+rvt-ifc model.rvt -o model.ifc --diagnostics model.diagnostics.json --export-decisions
+```
+
+An entry has the ElementId (`element_id`, absent for a frame that carries none),
+a `stage`, a `reason` code, the `class` the aggregate counts it under, the
+`stream` and byte `offset` its record was read from where known (the bytes
+`rvt-dump` writes as `Partitions_NN.decomp`), and a `detail`. The `reasons`
+object gives each reason's `stage`, its `total` and how many were `recorded` and
+`dropped`; the log keeps at most 5,000 entries a reason, in ElementId order
+(then partition number, so `Partitions/99` comes before `Partitions/100`), and
+counts the rest. `ExportOptions::with_export_decisions(true)` and Python's
+`export_diagnostics(export_decisions=True)` do the same, and the MCP server turns
+it on for the models it opens and returns an element's entries from
+`explain_element`. Without the flag the field is absent and the sidecar is the
+bytes it was. The IFC is the same file either way. `--anonymize` scrubs the log
+as it scrubs `skipped`: the phase named in a left-out room's `detail` becomes
+`<redacted>`, as `skipped[].phase` does, and any `detail` that is not a code
+rvt-rs writes is replaced; reason codes, classes, streams, offsets and
+ElementIds, which are the file's structure, stay.
+
+The `skipped` items are counted from the same decisions, so the two agree: for
+every reason of `skipped` the log's `total` is the sum of the items' counts and,
+for a reason that dropped none, the entries by class are the item's `classes`.
+`tests/export_decisions_counts.rs` checks this on Core Interior, the RE1 models
+(the default export, and the first phase, which leaves the 11 rooms out),
+Einhoven and the BIM4LCA as-built office. The one item it leaves out is
+`stream_not_read_resource_limit`, which counts streams, not elements. Core
+Interior has nothing left out (its `skipped` section is empty and the three
+`exported` counts are 0), so its log is empty and the test checks that; for the
+other models it names the reasons their diagnostics count and requires entries
+for each, so an empty log cannot pass.
+
+| Stage | Reason | What was decided | Counted in |
+|---|---|---|---|
+| `element_skipped` | `below_min_element_confidence`, `low_confidence_schema_scan_candidate`, `element_record_without_element_id`, `element_record_without_volume`, `element_record_in_non_primary_design_option`, `element_record_not_in_export_phase`, `room_not_in_export_phase`, `element_record_empty_curtain_panel`, `element_record_family_space_without_body`, `area_without_proven_body` | The element is not in the export. | the `skipped` item of the same reason |
+| `body_not_drawn` | `unsupported_geometry_curve`, `unsupported_geometry_profile`, `unsupported_geometry_missing_dimensions` | The element is written with no body. | the `skipped` item |
+| `opening_not_cut` | `unsupported_geometry_unresolved_host`, `opening_index_without_host_geometry` | A door or window has no host to cut, or an opening index row has no host geometry. | the `skipped` item |
+| `storey_not_bound` | `unsupported_geometry_missing_level` | The element is written outside any storey. | the `skipped` item |
+| `outline_not_read` | `floor_boundary_annotation_only` | A floor keeps its boundary annotation alone. | the `skipped` item |
+| `outline_not_read` | `space_outline_is_record_box` | A room or space is its record's box. | `exported.bounding_box_spaces` |
+| `outline_not_read` | `area_body_refused` (`detail`: why) | An exported Area has no body. | `exported.area_body_refusals` |
+| `body_left_as_box` | `body_is_record_box` (`detail`: the `BodySource`) | The body is only the record's bounding box. | `exported.bounding_box_bodies` |
+| `value_left_out_exporters_disagree` | none | Not recorded: such a value is left out by a rule for a whole class of element, in the reader that would write it, and nothing counts them; there is no per-element decision to log until a reader does. | |
+
+A frame with no ElementId (`element_record_without_element_id`) has an entry with
+its stream and offset and no ElementId. An entry about a geometry gap or a body
+or outline decision takes its stream and offset from the element's provenance
+(see `--element-provenance`), when the walk decoded the element.
+
+What an entry's `offset` is, and what has been measured:
+
+- For the reasons made from the element-record frames
+  (`element_record_without_element_id`, `element_record_without_volume`,
+  `element_record_in_non_primary_design_option`,
+  `element_record_not_in_export_phase`, `room_not_in_export_phase`,
+  `element_record_empty_curtain_panel`) it is the frame the scan read. A scan that
+  finds an element framed in several partitions keeps the last frame in scan
+  order, partition number and then offset, with no test of vertical extent. The
+  frame `decoded.element_provenance` names for an exported element is the one
+  the exporter selected (`select_instance_records`: on Revit 2024 and later the
+  greatest vertical extent), so the two can name different frames of the same
+  element.
+- `tests/export_decisions_counts.rs` re-reads the bytes at the entries of those
+  seven frame reasons (the six above and `element_record_family_space_without_body`)
+  on Revit 2024 and later, and finds the element's id there or a second-prologue
+  frame inside its record. It does not read the offsets of Revit 2015 to 2023
+  files or of `Global/Latest`, and it checks the entries placed from the
+  provenance table only against that table. Those are not verified.
+
+Why a switch of its own, not `--element-provenance`: the log is bounded (at most
+5,000 entries a reason, whatever the model) where the provenance table lists
+every element (about 116 times the rest of the diagnostics in compact JSON on the
+BIM4LCA office as built), and it needs no table in the sidecar. Where an entry's
+evidence is an element the walk decoded, its stream and offset are read from a
+table built for the purpose and dropped. Someone asking why an element was left
+out should not have to pay for the table, and someone checking offsets should not
+get the log.
+
 ## Schema
 
 `schema_version` is currently `1`. Additive fields may appear in a future
@@ -249,6 +335,7 @@ Important nested fields:
 | `decoded.unknown_unit_identifiers` | array | Revit unit identifiers observed but not mapped to IFC units. |
 | `decoded.wall_curve_lengths_feet` | object | The length of each exported wall's native curve in feet, by ElementId (RE-252): one of the two lengths Revit's export may write as the wall's `Qto_WallBaseQuantities.Length`. `tools/re/qtos_vs_ifc.py` reads it to count apart a wall whose two lengths differ. It is not written in the IFC file, and is absent when no wall has one. |
 | `decoded.walls_type_confirmed` | array | The ElementIds of the exported walls whose native `SWall` record names the type the export gives them (RE-253). Where Revit's export gives such a wall another type, `tools/re/qtos_vs_ifc.py` counts its differing `Width` apart. Not written in the IFC file; absent when there is none. |
+| `export_decisions` | object | Present only with `rvt-ifc --export-decisions` (see Export decisions above). Each fail-closed decision behind `skipped` and the `exported` body and outline counts, one entry per element, with a stage, a reason code and where the evidence was read; bounded at 5,000 entries a reason with the rest counted in `dropped`. The `skipped` counts are made from the same decisions. Not written in the IFC file. |
 | `decoded.element_provenance` | object | Present only with `rvt-ifc --element-provenance` (see CLI above for the size: about 116 times the rest of the diagnostics in compact JSON on the BIM4LCA office). Where each decoded element was read from, by ElementId (#1325): `elements` maps an ElementId to its `carrier` (`partition_element_record_first_prologue`, `partition_element_record_second_prologue`, `global_latest_schema_walk`, `partition_arc_wall`, `partition_area_record`, `partition_derived` or `other`), its `stream` (`Partitions/46`, `Global/Latest`), its `offset` in that stream inflated, the `record_offset` where its ElementId is stored (a partition record header; for a second-prologue frame the enclosing record's, whose id is `enclosing_record_id`, RE-35), its `class_tag` and the `class_name` that resolves to in the file's own schema, its `builtin_category`, and its `native` record (`copies`, which `copy` is named, `stream`, `offset`). An offset indexes the stream as `RevitFile::inflated_partition` returns it, which `rvt-dump` writes as `Partitions_NN.decomp` (#291); for the schema walk it indexes `Global/Latest` inflated as the walk inflates it. `by_carrier` counts every element with an ElementId by carrier, with how many have their offset given (`located`) and how many do not (`unlocated`), whatever the cap of 250,000 listed entries (`omitted_entries` counts the highest ElementIds left out); `unkeyed_elements` counts decoded elements with no ElementId, which have no entry; `native` counts the native records of every element with an ElementId the same way; `layout_release`, `partition_count` and `record_id_bytes` (8 from Revit 2024, 4 before) describe the file. When an element has several partition element record frames, `offset` is the one the exporter selected: on Revit 2024 and later (`select_instance_records`) the frame with the greatest vertical extent and, on a tie, the higher-numbered partition and then the later offset; on Revit 2008 to 2023 (`select_newest_instance_records`, RE-107) the newest, with no extent test. A native record in several partitions names the current copy (RE-145, RE-216). A body reader may take another copy (the sketch-line readers take the current one), so `offset` and `native.stream` can name different partitions, and neither is guaranteed to be the copy a body came from. The schema-walk carrier is unmeasured: no model of the offsets test has such an element. Not written in the IFC file; absent for a placeholder export and unless asked for. |
 | `exported.by_ifc_type` | object | Count of exported building elements grouped by STEP entity type. |
 | `exported.building_elements_with_geometry` | integer | Exported elements with enough placement/body data for geometry. |

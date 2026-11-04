@@ -1199,9 +1199,19 @@ pub fn areas_from_partition_chain_records(
         // Area whose boundary yields no loop, and the Area's lines are all
         // that is read of its boundary. Every placed Area is drawn or refused
         // with a reason, so the refusals are the Areas left out.
-        let mut unwritten = BTreeMap::<String, usize>::new();
-        for reason in bodies.refused.values() {
-            *unwritten.entry((*reason).to_string()).or_insert(0) += 1;
+        let mut unwritten =
+            BTreeMap::<String, Vec<crate::partition_element_records::LeftOutElement>>::new();
+        for (id, reason) in &bodies.refused {
+            let record = placed.get(id);
+            unwritten.entry((*reason).to_string()).or_default().push(
+                crate::partition_element_records::LeftOutElement {
+                    element_id: Some(*id),
+                    class: "Area".to_string(),
+                    stream: record.map(|record| record.stream.clone()),
+                    offset: record.map(|record| record.offset),
+                    detail: Some((*reason).to_string()),
+                },
+            );
         }
         placed.retain(|id, _| bodies.drawn.contains_key(id));
         rf.set_unwritten_areas(unwritten);

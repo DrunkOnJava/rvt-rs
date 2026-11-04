@@ -103,7 +103,9 @@ fn phase_argument(phase: Option<&Bound<'_, PyAny>>) -> PyResult<Option<String>> 
 /// graphics only improve bodies: when they cannot be read, the export keeps the
 /// bodies it has and a `RuntimeWarning` says so. A phase the file lacks raises
 /// `ValueError`, listing the file's phases. `element_provenance` also lists
-/// where each decoded element was read from in the diagnostics (#1325).
+/// where each decoded element was read from in the diagnostics (#1325), and
+/// `export_decisions` each fail-closed decision per element (#1326).
+#[allow(clippy::too_many_arguments)]
 fn export_run(
     py: Python<'_>,
     rf: &mut RustRevitFile,
@@ -112,6 +114,7 @@ fn export_run(
     saved_meshes: bool,
     phase: Option<String>,
     element_provenance: bool,
+    export_decisions: bool,
 ) -> PyResult<ifc::ExportRun> {
     let options = ifc::ExportOptions::default()
         .with_mode(mode)
@@ -121,7 +124,8 @@ fn export_run(
             ifc::SavedMeshChoice::Off
         })
         .with_phase(phase)
-        .with_element_provenance(element_provenance);
+        .with_element_provenance(element_provenance)
+        .with_export_decisions(export_decisions);
     let run = ifc::run_export_with_limits(rf, &options, walker_limits).map_err(to_py_val)?;
     for note in run.notes.iter().filter(|note| note.skipped().is_some()) {
         let category = py.import("builtins")?.getattr("RuntimeWarning")?;
@@ -159,7 +163,16 @@ fn write_ifc_with_quality_mode_and_limits(
     saved_meshes: bool,
     phase: Option<String>,
 ) -> PyResult<String> {
-    let run = export_run(py, rf, mode, walker_limits, saved_meshes, phase, false)?;
+    let run = export_run(
+        py,
+        rf,
+        mode,
+        walker_limits,
+        saved_meshes,
+        phase,
+        false,
+        false,
+    )?;
     // #1075: a stream a resource limit kept from being read leaves the
     // export without what it holds; refuse unless the caller accepts that.
     if !allow_partial && !run.unread.is_empty() {
@@ -898,13 +911,20 @@ impl PyRevitFile {
     /// element was read from, as `rvt-ifc --element-provenance` does
     /// (`decoded.element_provenance`): much larger than the rest of the
     /// diagnostics, so off unless asked for.
-    #[pyo3(signature = (saved_meshes = true, phase = None, element_provenance = false))]
+    ///
+    /// `export_decisions` (default `False`) also lists each fail-closed
+    /// decision per element (`export_decisions`, as `rvt-ifc
+    /// --export-decisions`): why an element was left out, a body is only its
+    /// record's box, an opening was not cut or an outline was not read,
+    /// bounded per reason.
+    #[pyo3(signature = (saved_meshes = true, phase = None, element_provenance = false, export_decisions = false))]
     fn export_diagnostics_json(
         &mut self,
         py: Python<'_>,
         saved_meshes: bool,
         phase: Option<&Bound<'_, PyAny>>,
         element_provenance: bool,
+        export_decisions: bool,
     ) -> PyResult<String> {
         let phase = self.phase_for_export(phase)?;
         let run = export_run(
@@ -915,21 +935,30 @@ impl PyRevitFile {
             saved_meshes,
             phase,
             element_provenance,
+            export_decisions,
         )?;
         serde_json::to_string(&run.diagnostics).map_err(to_py_val)
     }
 
     /// Produce the default IFC export diagnostics as a Python dict.
-    /// `element_provenance` is `export_diagnostics_json`'s.
-    #[pyo3(signature = (saved_meshes = true, phase = None, element_provenance = false))]
+    /// `element_provenance` and `export_decisions` are
+    /// `export_diagnostics_json`'s.
+    #[pyo3(signature = (saved_meshes = true, phase = None, element_provenance = false, export_decisions = false))]
     fn export_diagnostics<'py>(
         &mut self,
         py: Python<'py>,
         saved_meshes: bool,
         phase: Option<&Bound<'py, PyAny>>,
         element_provenance: bool,
+        export_decisions: bool,
     ) -> PyResult<Bound<'py, PyAny>> {
-        let json = self.export_diagnostics_json(py, saved_meshes, phase, element_provenance)?;
+        let json = self.export_diagnostics_json(
+            py,
+            saved_meshes,
+            phase,
+            element_provenance,
+            export_decisions,
+        )?;
         let json_module = py.import("json")?;
         json_module.call_method1("loads", (json,))
     }
@@ -1040,16 +1069,17 @@ fn read_metadata<'py>(py: Python<'py>, path: &str, redact: bool) -> PyResult<Bou
 
 /// One-shot helper: open a Revit file, run the default IFC exporter,
 /// and return the JSON diagnostics sidecar of the export `rvt_to_ifc`
-/// writes with the same `saved_meshes`. `element_provenance` is
-/// `RevitFile.export_diagnostics_json`'s.
+/// writes with the same `saved_meshes`. `element_provenance` and
+/// `export_decisions` are `RevitFile.export_diagnostics_json`'s.
 #[pyfunction]
-#[pyo3(signature = (path, saved_meshes = true, phase = None, element_provenance = false))]
+#[pyo3(signature = (path, saved_meshes = true, phase = None, element_provenance = false, export_decisions = false))]
 fn rvt_to_ifc_diagnostics(
     py: Python<'_>,
     path: &str,
     saved_meshes: bool,
     phase: Option<&Bound<'_, PyAny>>,
     element_provenance: bool,
+    export_decisions: bool,
 ) -> PyResult<String> {
     let mut rf = RustRevitFile::open(path).map_err(to_py_io)?;
     let phase = phase_argument(phase)?;
@@ -1061,6 +1091,7 @@ fn rvt_to_ifc_diagnostics(
         saved_meshes,
         phase,
         element_provenance,
+        export_decisions,
     )?;
     serde_json::to_string(&run.diagnostics).map_err(to_py_val)
 }
