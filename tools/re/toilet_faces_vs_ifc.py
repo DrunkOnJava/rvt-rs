@@ -37,7 +37,7 @@ import sys
 import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from mesh_bodies_vs_ifc import distances, meshes, triangle_terms  # noqa: E402
+from mesh_bodies_vs_ifc import distances, meshes, segment_distances, triangle_terms  # noqa: E402
 
 FACE = re.compile(r"^face (\d+) owner (\d+) geometry (\d+) tag (-?\d+) surface (\S+) vertices (\d+) triangles (\d+) area (\S+)")
 EDGES = (1e-4, 1e-3, 2e-3, 5e-3, 1e-2, 2e-2)
@@ -78,8 +78,85 @@ def nearest(points, terms, chunk=400):
     return best, arg
 
 
+def boundary_edges(triangles, owner):
+    """Face -> the edges (pairs of points) used by one triangle of the face only."""
+    count = collections.Counter()
+    edge = {}
+    for t, face in zip(triangles, owner):
+        keys = [tuple(np.round(v * 1e6).astype(np.int64)) for v in t]
+        for i in range(3):
+            a, b = keys[i], keys[(i + 1) % 3]
+            if a == b:
+                continue
+            key = (int(face), min(a, b), max(a, b))
+            count[key] += 1
+            edge[key] = (t[i], t[(i + 1) % 3])
+    out = collections.defaultdict(list)
+    for key, n in count.items():
+        if n == 1:
+            out[key[0]].append(edge[key])
+    return {k: np.array(v) for k, v in out.items()}
+
+
+def explain(triangles, owner, faces, ref_triangles, ref_points, ref_terms, ours_terms,
+            centres, centre_distance, vertex_distance, vertex_face):
+    """Where Revit's vertices more than 0.001 ft from our surface lie, and what Revit's
+    triangles are where our triangles lie more than 0.01 ft from them."""
+    edges = boundary_edges(triangles, owner)
+    off = np.flatnonzero(vertex_distance > 1e-3)
+    print(f"  Revit's vertices off our surface by more than 0.001 ft: {len(off)} of {len(ref_points)}")
+    print(
+        f"  {'vertex':>6} {'dist':>7} {'face':>4} {'surface':<9} {'to edge':>8} {'next face':>9}"
+        f" {'dist':>7} {'side':>5}  position"
+    )
+    a, unit = ours_terms[0], ours_terms[3]
+    for i in off[np.argsort(-vertex_distance[off])]:
+        p = ref_points[i]
+        k = int(vertex_face[i])
+        others = np.flatnonzero(owner != k)
+        d_other, arg = nearest(p[None, :], tuple(x[others] for x in ours_terms))
+        other = int(owner[others[arg[0]]])
+        to_edge = float("inf")
+        if k in edges:
+            to_edge = float(segment_distances(p, edges[k][:, 0], edges[k][:, 1]).min())
+        mine = np.flatnonzero(owner == k)
+        _, arg_mine = nearest(p[None, :], tuple(x[mine] for x in ours_terms))
+        t = mine[arg_mine[0]]
+        side = float(np.dot(p - a[t], unit[t]))
+        print(
+            f"  {int(i):>6} {vertex_distance[i]:>7.4f} {k:>4} {faces[k][0]:<9} {to_edge:>8.4f}"
+            f" {other:>9} {float(d_other[0]):>7.4f} {'+' if side > 0 else '-':>5}  "
+            + " ".join(f"{x:.3f}" for x in p)
+        )
+    lengths = np.maximum.reduce(
+        [np.linalg.norm(ref_triangles[:, i] - ref_triangles[:, (i + 1) % 3], axis=1) for i in range(3)]
+    )
+    far = np.flatnonzero(centre_distance > 1e-2)
+    print(f"  our triangles with a centre more than 0.01 ft from Revit's surface: {len(far)} of {len(triangles)}")
+    if not len(far):
+        return
+    _, arg = nearest(centres[far], ref_terms)
+    order = np.argsort(-centre_distance[far])
+    print(f"  {'face':>4} {'surface':<9} {'dist':>7} {'Revit edge':>10} {'radius':>8}  (radius = edge^2 / 8 dist)")
+    for j in order[:24]:
+        t, r = far[j], arg[j]
+        d = centre_distance[t]
+        print(
+            f"  {int(owner[t]):>4} {faces[int(owner[t])][0]:<9} {d:>7.4f} {lengths[r]:>10.4f}"
+            f" {lengths[r] ** 2 / (8 * d):>8.3f}"
+        )
+    sag = collections.defaultdict(list)
+    for t, r in zip(far, arg):
+        sag[int(owner[t])].append(lengths[r] ** 2 / (8 * centre_distance[t]))
+    for k, v in sorted(sag.items()):
+        print(
+            f"  face {k} {faces[k][0]:<9}: {len(v)} triangles beyond 0.01 ft,"
+            f" median radius edge^2 / 8 dist {np.median(v):.3f} ft"
+        )
+
+
 def main():
-    args = [a for a in sys.argv[1:] if not a.startswith("--")]
+    args =[a for a in sys.argv[1:] if not a.startswith("--")]
     if len(args) != 2:
         print(__doc__)
         return 2
@@ -88,6 +165,7 @@ def main():
     if not ours:
         return 0
     ref = meshes(args[1], tags=set(ours))
+    listed = False
     for tag in sorted(ours):
         if tag not in ref:
             print(f"toilet {tag}: not in Revit's export")
@@ -150,6 +228,13 @@ def main():
                 f"  class {surface:<10} area {row[0]:.4f}, beyond .001 {row[1]:.4f},"
                 f" beyond .005 {row[2]:.4f}, beyond .01 {row[3]:.4f}, Revit vertices off {int(row[4])}"
             )
+        if listed:
+            continue
+        listed = True
+        explain(
+            triangles, owner, faces, ref_triangles, ref_points, ref_terms, ours_terms,
+            centres, centre_distance, vertex_distance, vertex_face,
+        )
     return 0
 
 
