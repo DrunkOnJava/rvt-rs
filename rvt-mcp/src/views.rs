@@ -66,7 +66,7 @@ fn provenance(computed: &Computed, index: usize) -> Option<ElementProvenance> {
     let source = type_guid
         .as_deref()
         .and_then(|tag| tag.parse::<u32>().ok())
-        .and_then(|id| computed.diagnostics.decoded.element_provenance.get(id));
+        .and_then(|id| computed.element_provenance.as_ref()?.get(id));
     Some(ElementProvenance {
         element_id: type_guid.clone(),
         global_id: computed.global_ids.get(index).cloned().flatten(),

@@ -216,15 +216,25 @@ each present only where the model has it:
 also lists every `...Source`, `...Resolved` and `...Refusal` property of the
 element's record as `trust_markers`.
 
-The record fields come from `decoded.element_provenance` of the export
-diagnostics (`get_diagnostics`, `rvt-ifc --diagnostics`), where every decoded
-element is listed by ElementId and counted by carrier, with the number whose
-offset could not be given. They are never written into the IFC. A partition
-element record is chosen per ElementId as the exporter chooses it: the frame
-with the greatest vertical extent and, on a tie, the newest. Which copy of its
-data a body reader took (the current one, or the copies that agree, RE-216) is
-that reader's rule, and `body_source` names the reader; these fields do not
-repeat it.
+The record fields come from the element provenance table (#1325), which the
+export builds only when asked (`rvt-ifc --element-provenance`) and which the
+server asks for in the decode it makes when it opens a model. It is large: the
+sidecar `rvt-ifc --diagnostics` writes grows from 52,677 to 7,370,747 bytes with
+it on the BIM4LCA office as built, from 27,588 to 571,989 on Core Interior and
+from 13,956 to 85,470 on RE1 Architecture (Measure run 41831418684). The server
+keeps it in memory beside the model and does not return it: `get_diagnostics`
+and the exports' summaries are the diagnostics without it, as `rvt-ifc` writes
+them by default. Building it is one pass over the walk the decode already made
+and a re-read of the first bytes of each partition record. Its time on each
+model is printed by `tests/element_provenance_offsets.rs` (the `build` line of
+its report, Corpus health's `element-provenance` artifact); no figure is stated
+here yet. The fields are never written into the IFC.
+
+A partition element record is chosen per ElementId as the exporter chooses it:
+the frame with the greatest vertical extent and, on a tie, the newest. Which
+copy of its data a body reader took (the current one, or the copies that agree,
+RE-216) is that reader's rule, and `body_source` names the reader; these fields
+do not repeat it.
 
 ### Not provided yet
 

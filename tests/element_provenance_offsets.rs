@@ -20,6 +20,12 @@
 //!   same self ElementId, as the walk decodes it;
 //! - an Area's chain record, and a native record, start with the ElementId.
 //!
+//! The table is off unless asked for (`ExportOptions::with_element_provenance`,
+//! `rvt-ifc --element-provenance`): the test checks that an export without the
+//! switch has no `element_provenance` in its diagnostics, then times what the
+//! switch adds on the warm handle (`build`, then the table's JSON) and the
+//! bytes it adds, so the cost is in the report beside the counts.
+//!
 //! Elements whose carrier this test cannot decode again (ArcWall records,
 //! rows with no frame) are counted as not re-decoded, and so are elements with
 //! no offset: nothing is skipped silently. Per model, the counts by carrier go
@@ -31,18 +37,19 @@
 //! `RVT_NORDIC_LCA_DIR`; each is skipped when its variable is unset.
 
 use crate::element_parameters::nordic_dir;
-use rvt::ifc::element_provenance::{ElementCarrier, ElementProvenanceEntry};
+use rvt::ifc::element_provenance::{self, ElementCarrier, ElementProvenanceEntry};
 use rvt::ifc::{ExportOptions, run_export};
 use rvt::research::partition_element_records::{
     PartitionRecordSpan, carries_no_element_id, decode_at_with_marker, decode_frame_as,
     enclosing_record, file_bbox_marker, partition_record_chain,
 };
-use rvt::walker::{InstanceField, find_self_id_field};
+use rvt::walker::{InstanceField, WalkerLimits, find_self_id_field};
 use rvt::{RevitFile, compression, elem_table, elements, streams};
 use serde_json::json;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::io::Write;
 use std::path::{Path, PathBuf};
+use std::time::Instant;
 
 /// The partition record chains read so far, by stream.
 type Chains = HashMap<String, Vec<PartitionRecordSpan>>;
@@ -121,8 +128,45 @@ fn office_model() -> Vec<(String, PathBuf)> {
 /// return the counts by carrier, with the mismatches of each.
 fn check_model(name: &str, path: &Path) -> BTreeMap<String, Checked> {
     let mut rf = RevitFile::open(path).expect("open the model");
-    let run = run_export(&mut rf, &ExportOptions::default()).expect("export the model");
-    let table = &run.diagnostics.decoded.element_provenance;
+    // Without the switch the diagnostics have no table.
+    let started = Instant::now();
+    let plain = run_export(&mut rf, &ExportOptions::default()).expect("export the model");
+    let export_ms = started.elapsed().as_millis();
+    assert!(
+        plain.diagnostics.decoded.element_provenance.is_none(),
+        "{name}: the table is built without the switch"
+    );
+    let plain_json = serde_json::to_string(&plain.diagnostics).expect("diagnostics json");
+    assert!(
+        !plain_json.contains("element_provenance"),
+        "{name}: the diagnostics name the table without the switch"
+    );
+    // What the switch adds, on the warm handle, as the pipeline adds it: the
+    // table, then its JSON.
+    let started = Instant::now();
+    let built = element_provenance::build(&mut rf, WalkerLimits::default());
+    let build_ms = started.elapsed().as_millis();
+    let started = Instant::now();
+    let table_json = serde_json::to_vec(&built).expect("serialise the table");
+    let json_ms = started.elapsed().as_millis();
+    let run = run_export(
+        &mut rf,
+        &ExportOptions::default().with_element_provenance(true),
+    )
+    .expect("export the model with the table");
+    let table = run
+        .diagnostics
+        .decoded
+        .element_provenance
+        .as_ref()
+        .expect("the table when asked for");
+    assert_eq!(
+        table, &built,
+        "{name}: the switch builds the table build gives"
+    );
+    let with_table_bytes = serde_json::to_string(&run.diagnostics)
+        .expect("diagnostics json")
+        .len();
     let version = rf.layout_release().expect("layout release");
     let width: u8 = table.record_id_bytes.expect("the record id width");
     assert_eq!(
@@ -250,9 +294,7 @@ fn check_model(name: &str, path: &Path) -> BTreeMap<String, Checked> {
         );
     }
 
-    let size = serde_json::to_vec(table)
-        .expect("serialise the table")
-        .len();
+    let size = table_json.len();
     let mut report = json!({
         "model": name,
         "layout_release": table.layout_release,
@@ -261,6 +303,11 @@ fn check_model(name: &str, path: &Path) -> BTreeMap<String, Checked> {
         "omitted_entries": table.omitted_entries,
         "unkeyed_elements": table.unkeyed_elements,
         "table_json_bytes": size,
+        "diagnostics_json_bytes_without_table": plain_json.len(),
+        "diagnostics_json_bytes_with_table": with_table_bytes,
+        "export_ms_without_table": export_ms,
+        "table_build_ms": build_ms,
+        "table_json_ms": json_ms,
         "native_record_index": table.native_record_index,
         "native": {
             "with_record": table.native.with_record,
@@ -296,11 +343,13 @@ fn check_model(name: &str, path: &Path) -> BTreeMap<String, Checked> {
     )
     .expect("write the report");
     let mut line = format!(
-        "{name}: Revit {version}, {} elements ({} omitted, {} unkeyed), {} partitions, table {size} bytes as JSON\n",
+        "{name}: Revit {version}, {} elements ({} omitted, {} unkeyed), {} partitions, table {size} bytes as JSON ({} bytes of diagnostics without it, {} with); export {export_ms} ms without the table, table built in {build_ms} ms and written as JSON in {json_ms} ms\n",
         table.elements.len(),
         table.omitted_entries,
         table.unkeyed_elements,
-        table.partition_count
+        table.partition_count,
+        plain_json.len(),
+        with_table_bytes
     );
     for (carrier, stat) in &by_carrier {
         let count = table.by_carrier.get(carrier);

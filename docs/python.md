@@ -372,7 +372,7 @@ Field kinds:
 ```text
 decoded_elements(self) -> list[dict]
 element_counts(self) -> dict
-export_diagnostics(self, saved_meshes: bool = True, phase: str | int | None = None) -> dict
+export_diagnostics(self, saved_meshes: bool = True, phase: str | int | None = None, element_provenance: bool = False) -> dict
 ```
 
 `decoded_elements()` returns production-walker elements. Each entry
@@ -393,10 +393,15 @@ CLI mirror: `rvt-elements file.rvt --counts`.
 
 `export_diagnostics()` / `export_diagnostics_json()` return the IFC
 export diagnostics sidecar (same payload as `rvt-ifc --diagnostics`).
+`element_provenance=True` adds `decoded.element_provenance`, where each
+decoded element was read from (its stream, byte offset in the inflated stream,
+class and native record), as `rvt-ifc --element-provenance` does (#1325). It
+is off by default: it is 7.4 MB of JSON against 53 KB of diagnostics on the
+BIM4LCA office as built.
 
 ```text
 write_ifc(self, mode: str = "scaffold", allow_partial: bool = False, saved_meshes: bool = True, phase: str | int | None = None) -> str
-export_diagnostics_json(self, saved_meshes: bool = True, phase: str | int | None = None) -> str
+export_diagnostics_json(self, saved_meshes: bool = True, phase: str | int | None = None, element_provenance: bool = False) -> str
 ```
 Produce an IFC4 STEP string via `ifc::RvtDocExporter`, the same
 exporter `rvt-ifc` runs. On Revit 2023, 2024 and 2025 projects it writes

@@ -7,8 +7,12 @@
 //! names and the class that tag resolves to in the file's own schema, the
 //! element's `BuiltInCategory`, and the record the native readers hold for it
 //! ([`NativeRecordRef`]). It rides in the export diagnostics
-//! (`decoded.element_provenance` of `rvt-ifc --diagnostics`) and so reaches
-//! `rvt-py`, `rvt-wasm` and `rvt-rs-mcp`; it is never written into the IFC.
+//! (`decoded.element_provenance`) when the export is asked for it
+//! (`rvt-ifc --element-provenance`, `ExportOptions::with_element_provenance`,
+//! the MCP server's decode, Python's `element_provenance=True`): it is large,
+//! 7.4 MB of JSON against 53 KB of diagnostics on the BIM4LCA office as built
+//! (Measure run 41831418684), so it is off by default. It is never written
+//! into the IFC.
 //!
 //! An offset indexes the stream as `RevitFile::inflated_partition` returns it,
 //! which is what `rvt-dump` writes as `Partitions_NN.decomp` (#291). For the
@@ -284,11 +288,6 @@ impl ElementProvenanceTable {
     /// The provenance of the element with `element_id`.
     pub fn get(&self, element_id: u32) -> Option<&ElementProvenanceEntry> {
         self.elements.get(&element_id)
-    }
-
-    /// Whether the table holds nothing: no element listed or counted.
-    pub fn is_empty(&self) -> bool {
-        self.elements.is_empty() && self.by_carrier.is_empty() && self.unkeyed_elements == 0
     }
 }
 

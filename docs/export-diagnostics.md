@@ -45,6 +45,22 @@ rvt-ifc model.rvt -o diagnostic.ifc --diagnostic-proxies \
   --diagnostics diagnostic.json
 ```
 
+Where each element was read from is a list as long as the file has elements,
+so it is off unless asked for (#1325):
+
+```bash
+rvt-ifc model.rvt -o model.ifc --diagnostics model.diagnostics.json --element-provenance
+```
+
+adds `decoded.element_provenance` to the sidecar. On the BIM4LCA office as
+built the sidecar is 52,677 bytes without it and 7,370,747 with it; on Core
+Interior 27,588 and 571,989; on RE1 Architecture 13,956 and 85,470 (Measure run
+41831418684). Without the flag the sidecar has no such field and is the bytes it
+was before the flag existed. `ExportOptions::with_element_provenance(true)`
+and Python's `export_diagnostics(element_provenance=True)` do the same, and
+the MCP server turns it on for the models it opens. The IFC is the same file
+either way.
+
 ## Schema
 
 `schema_version` is currently `1`. Additive fields may appear in a future
@@ -211,7 +227,7 @@ Important nested fields:
 | `decoded.unknown_unit_identifiers` | array | Revit unit identifiers observed but not mapped to IFC units. |
 | `decoded.wall_curve_lengths_feet` | object | The length of each exported wall's native curve in feet, by ElementId (RE-252): one of the two lengths Revit's export may write as the wall's `Qto_WallBaseQuantities.Length`. `tools/re/qtos_vs_ifc.py` reads it to count apart a wall whose two lengths differ. It is not written in the IFC file, and is absent when no wall has one. |
 | `decoded.walls_type_confirmed` | array | The ElementIds of the exported walls whose native `SWall` record names the type the export gives them (RE-253). Where Revit's export gives such a wall another type, `tools/re/qtos_vs_ifc.py` counts its differing `Width` apart. Not written in the IFC file; absent when there is none. |
-| `decoded.element_provenance` | object | Where each decoded element was read from, by ElementId (#1325): `elements` maps an ElementId to its `carrier` (`partition_element_record_first_prologue`, `partition_element_record_second_prologue`, `global_latest_schema_walk`, `partition_arc_wall`, `partition_area_record`, `partition_derived` or `other`), its `stream` (`Partitions/46`, `Global/Latest`), its `offset` in that stream inflated, the `record_offset` where its ElementId is stored (a partition record header; for a second-prologue frame the enclosing record's, whose id is `enclosing_record_id`, RE-35), its `class_tag` and the `class_name` that resolves to in the file's own schema, its `builtin_category`, and its `native` record (`copies`, which `copy` is named, `stream`, `offset`). An offset indexes the stream as `RevitFile::inflated_partition` returns it, which `rvt-dump` writes as `Partitions_NN.decomp` (#291); for the schema walk it indexes `Global/Latest` inflated as the walk inflates it. `by_carrier` counts every element with an ElementId by carrier, with how many have their offset given (`located`) and how many do not (`unlocated`), whatever the cap of 250,000 listed entries (`omitted_entries` counts the highest ElementIds left out); `unkeyed_elements` counts decoded elements with no ElementId, which have no entry; `native` counts the listed elements' native records the same way; `layout_release`, `partition_count` and `record_id_bytes` (8 from Revit 2024, 4 before) describe the file. Partition element records are chosen per ElementId as `select_instance_records` does, the frame with the greatest vertical extent and, on a tie, the newest `(stream, offset)`; a native record in several partitions names the current copy (RE-145, RE-216). Not written in the IFC file; absent for a placeholder export. |
+| `decoded.element_provenance` | object | Present only with `rvt-ifc --element-provenance` (see CLI above; 140 times the rest of the sidecar on the BIM4LCA office). Where each decoded element was read from, by ElementId (#1325): `elements` maps an ElementId to its `carrier` (`partition_element_record_first_prologue`, `partition_element_record_second_prologue`, `global_latest_schema_walk`, `partition_arc_wall`, `partition_area_record`, `partition_derived` or `other`), its `stream` (`Partitions/46`, `Global/Latest`), its `offset` in that stream inflated, the `record_offset` where its ElementId is stored (a partition record header; for a second-prologue frame the enclosing record's, whose id is `enclosing_record_id`, RE-35), its `class_tag` and the `class_name` that resolves to in the file's own schema, its `builtin_category`, and its `native` record (`copies`, which `copy` is named, `stream`, `offset`). An offset indexes the stream as `RevitFile::inflated_partition` returns it, which `rvt-dump` writes as `Partitions_NN.decomp` (#291); for the schema walk it indexes `Global/Latest` inflated as the walk inflates it. `by_carrier` counts every element with an ElementId by carrier, with how many have their offset given (`located`) and how many do not (`unlocated`), whatever the cap of 250,000 listed entries (`omitted_entries` counts the highest ElementIds left out); `unkeyed_elements` counts decoded elements with no ElementId, which have no entry; `native` counts the listed elements' native records the same way; `layout_release`, `partition_count` and `record_id_bytes` (8 from Revit 2024, 4 before) describe the file. Partition element records are chosen per ElementId as `select_instance_records` does, the frame with the greatest vertical extent and, on a tie, the newest `(stream, offset)`; a native record in several partitions names the current copy (RE-145, RE-216). Not written in the IFC file; absent for a placeholder export and unless asked for. |
 | `exported.by_ifc_type` | object | Count of exported building elements grouped by STEP entity type. |
 | `exported.building_elements_with_geometry` | integer | Exported elements with enough placement/body data for geometry. |
 | `exported.building_elements_carried_by_parts` | integer | Exported elements with no body of their own because their aggregated parts carry it, as in Revit's export: stairs (RE-39) and curtain walls (RE-46). Not counted in `building_elements_with_geometry`. |

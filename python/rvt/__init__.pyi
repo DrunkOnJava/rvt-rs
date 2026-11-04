@@ -348,21 +348,31 @@ class RevitFile:
         """
 
     def export_diagnostics_json(
-        self, saved_meshes: bool = True, phase: str | int | None = None
+        self,
+        saved_meshes: bool = True,
+        phase: str | int | None = None,
+        element_provenance: bool = False,
     ) -> str:
         """Produce the JSON diagnostics sidecar for the default IFC
         export. The schema matches ``rvt-ifc --diagnostics`` and
         ``docs/schemas/export-diagnostics.schema.json``. ``saved_meshes``
         and ``phase`` are ``write_ifc``'s: the diagnostics describe the
-        export it writes.
+        export it writes. ``element_provenance=True`` also lists where
+        each decoded element was read from (``decoded.element_provenance``,
+        as ``rvt-ifc --element-provenance``): far larger than the rest of
+        the diagnostics, so it is off unless asked for.
         """
 
     def export_diagnostics(
-        self, saved_meshes: bool = True, phase: str | int | None = None
+        self,
+        saved_meshes: bool = True,
+        phase: str | int | None = None,
+        element_provenance: bool = False,
     ) -> dict[str, Any]:
         """Produce the default IFC export diagnostics as a Python
         dict. Equivalent to
-        ``json.loads(export_diagnostics_json(saved_meshes, phase))``.
+        ``json.loads(export_diagnostics_json(saved_meshes, phase,
+        element_provenance))``.
         """
 
     def elem_table_header(self) -> dict[str, int]:
