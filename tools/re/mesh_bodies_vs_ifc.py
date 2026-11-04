@@ -16,8 +16,11 @@ coarser (RE-311). Then the elements furthest off.
 
 A class with more than 300 such bodies is scored on an even stride of 300 of
 them by Tag, and at most 400 vertices of each body are tested, so a file
-with thousands of mullions fits the time Measure allows. Bodies only exist
-in an export made with `--saved-meshes`; without it this prints none.
+with thousands of mullions fits the time Measure allows. The bodies are
+scored one process each over the CPUs (RVT_MESH_WORKERS sets the count), by
+the same arithmetic wherever a body runs, so the output does not depend on
+it. Bodies only exist in an export made with `--saved-meshes`; without it
+this prints none.
 
 Needs IfcOpenShell and numpy.
 
@@ -33,7 +36,6 @@ import multiprocessing
 import os
 import statistics
 import sys
-import time
 
 import ifcopenshell
 import ifcopenshell.geom
@@ -206,11 +208,14 @@ def surface_distance(points, triangles):
     ones (which have no plane, so only their box bounds them): the distance to a
     block of eight neighbouring triangles' box, then to a triangle's box, and for a
     triangle with a plane the distance to its plane combined with that to the side
-    planes of its edges. Slivers are measured against every point.
+    planes of its edges. A sliver's `inside` cannot be trusted, so a point is measured
+    against it unless the point is further than the nearest distance found plus the
+    slack from both its box (which bounds the distances to its edges) and its plane
+    (`distances` gives the plane's distance only for a point it takes as `inside`,
+    and then as exactly this height).
     """
     terms = triangle_terms(triangles)
     n = len(points)
-    _t0 = time.time()
     if n * len(triangles) <= EXHAUSTIVE or not (np.isfinite(points).all() and np.isfinite(triangles).all()):
         worst = 0.0
         step = max(1, PAIR_BUDGET // len(triangles))
@@ -233,12 +238,10 @@ def surface_distance(points, triangles):
     order = np.concatenate([order, np.full(-len(order) % BLOCK, order[-1])])
     blocks = order.reshape(-1, BLOCK)
     block_lo, block_hi = lo[blocks].min(axis=1), hi[blocks].max(axis=1)
-    TIMES["setup"] += time.time() - _t0
     seeds = min(SEEDS, len(blocks))
     nearest = np.empty(n)
     step = max(1, PAIR_BUDGET // len(blocks))
     for start in range(0, n, step):
-        _t = time.time()
         p = points[start : start + step]
         gap = np.maximum(np.maximum(block_lo[None] - p[:, None], p[:, None] - block_hi[None]), 0.0)
         bound = np.sqrt(dot(gap, gap))
@@ -248,10 +251,7 @@ def surface_distance(points, triangles):
         for column in range(seeds):
             best = np.minimum(best, distances(p[:, None, :], tuple(x[blocks[seed[:, column]]] for x in terms)).min(axis=1))
             bound[rows, seed[:, column]] = np.inf
-        TIMES["bound+seeds"] += time.time() - _t
-        _t = time.time()
         pair_rows, pair_blocks = np.nonzero(bound <= (best + slack)[:, None])
-        TIMES["block pairs"] += len(pair_rows)
         done = 0
         while done < len(pair_rows):
             stop = int(np.searchsorted(pair_rows, pair_rows[min(len(pair_rows) - 1, done + PAIR_BUDGET // BLOCK)], side="right"))
@@ -276,10 +276,7 @@ def surface_distance(points, triangles):
             row, tri = row[keep], tri[keep]
             np.minimum.at(best, row, distances(p[row][:, None, :], tuple(x[tri][:, None] for x in terms))[:, 0])
         nearest[start : start + step] = best
-        TIMES["pairs"] += time.time() - _t
-    _t = time.time()
     slivers = np.flatnonzero(sliver)
-    TIMES["slivers n"] += len(slivers)
     if len(slivers):
         near = tuple(x[slivers] for x in terms)
         near_lo, near_hi = lo[slivers], hi[slivers]
@@ -293,9 +290,6 @@ def surface_distance(points, triangles):
             for done in range(0, len(row), PAIR_BUDGET):
                 r, c = row[done : done + PAIR_BUDGET], col[done : done + PAIR_BUDGET]
                 np.minimum.at(held, r, distances(p[r][:, None, :], tuple(x[c][:, None] for x in near))[:, 0])
-                TIMES["sliver pairs kept"] += len(r)
-    TIMES["sliver"] += time.time() - _t
-    TIMES["pruned calls"] += 1
     return float(nearest.max())
 
 
@@ -310,7 +304,6 @@ def sample(triangles):
     return points[::step]
 
 
-TIMES = collections.defaultdict(float)
 SCORING = {}
 
 
@@ -353,37 +346,6 @@ def score_all(ours, ref, tags):
     return results
 
 
-def log(msg):
-    print(f"PROFILE {msg}", file=sys.stderr, flush=True)
-
-
-def experiment(ours, ref, tags):
-    import importlib.util
-
-    spec = importlib.util.spec_from_file_location("old", os.path.join(os.path.dirname(os.path.abspath(__file__)), "_mesh_bodies_main_tmp.py"))
-    old = importlib.util.module_from_spec(spec)
-    sys.modules["old"] = old
-    spec.loader.exec_module(old)
-    SCORING.update(ours=ours, ref=ref)
-    t = time.time()
-    res_old = []
-    for tag in tags:
-        a, b = ours[tag][2], ref[tag][2]
-        rv, ov = old.volume(b), old.volume(a)
-        res_old.append((ov / rv if rv > 0 else float("inf"), old.surface_distance(old.sample(b), a), old.surface_distance(old.sample(a), b)))
-    log(f"experiment: old serial {time.time() - t:.1f}s")
-    TIMES.clear()
-    t = time.time()
-    res_new = [score_pair(tag) for tag in tags]
-    log(f"experiment: new serial {time.time() - t:.1f}s, identical to old: {res_new == res_old}, mismatches {sum(a != b for a, b in zip(res_new, res_old))}")
-    log(f"experiment: new stages {dict((k, round(v, 2)) for k, v in TIMES.items())}")
-    cpus = os.cpu_count()
-    t = time.time()
-    res_proc = score_all(ours, ref, tags)
-    log(f"experiment: new processes x{cpus} {time.time() - t:.1f}s, identical: {res_proc == res_old}")
-    SCORING.clear()
-
-
 def main():
     if len(sys.argv) != 3:
         print(__doc__)
@@ -408,7 +370,6 @@ def main():
     ratios = collections.defaultdict(list)
     scored = []
     tags = sorted(set(ours) & set(ref), key=lambda t: (len(t), t))
-    experiment(ours, ref, tags)
     for tag, (ratio, to_ours, to_ref) in zip(tags, score_all(ours, ref, tags)):
         cls, object_type, _ = ref[tag]
         far = max(to_ours, to_ref)
