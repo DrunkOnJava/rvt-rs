@@ -223,7 +223,7 @@ pub fn strip_revit_page_checksums(data: &[u8]) -> Vec<u8> {
 /// [`strip_revit_page_checksums`] on bytes the caller owns: the payloads are
 /// moved down over the trailers in the same buffer, so a stream the caller has
 /// just read is not held twice while it is stripped (#1075).
-pub fn strip_revit_page_checksums_in_place(mut data: Vec<u8>) -> Vec<u8> {
+pub(crate) fn strip_revit_page_checksums_in_place(mut data: Vec<u8>) -> Vec<u8> {
     let full_pages = data.len() / REVIT_STORED_PAGE_BYTES;
     if full_pages == 0 {
         return data;
@@ -245,7 +245,7 @@ pub fn strip_revit_page_checksums_in_place(mut data: Vec<u8>) -> Vec<u8> {
 
 /// [`prepare_stream_for_inflate`] on stored bytes the caller owns, which are
 /// stripped in place rather than copied (#1075).
-pub fn prepare_stream_owned(stream_name: &str, stored: Vec<u8>) -> Vec<u8> {
+pub(crate) fn prepare_stream_owned(stream_name: &str, stored: Vec<u8>) -> Vec<u8> {
     if is_checksum_paged_stream(stream_name) {
         strip_revit_page_checksums_in_place(stored)
     } else {

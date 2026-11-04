@@ -320,6 +320,37 @@ const BATCH_OBJECT_BUDGET: usize = 20_000;
 const FIRST_BATCH_SYMBOLS: usize = 8;
 const MIN_BATCH_SYMBOLS: usize = 4;
 const MAX_BATCH_SYMBOLS: usize = 1024;
+/// An owner as a batch is planned: the first shared symbol it names (the
+/// order owners naming the same one together), its id, and the shared symbols
+/// it names itself.
+type Named = (Option<u64>, u64, BTreeSet<u64>);
+/// Adds to `wanted` the shared symbols named by `ids` that no read has asked
+/// for yet. An id that is an owner is not read again: the references of its
+/// own graph (`owner_references`) are followed instead, once, and so on through
+/// the owners they name.
+fn add_references(
+    ids: impl IntoIterator<Item = u64>,
+    owner_references: &BTreeMap<u64, Vec<u64>>,
+    expanded: &mut BTreeSet<u64>,
+    attempted: &BTreeSet<u64>,
+    wanted: &mut BTreeSet<u64>,
+) {
+    let mut pending: Vec<u64> = ids.into_iter().collect();
+    while let Some(id) = pending.pop() {
+        match owner_references.get(&id) {
+            Some(references) => {
+                if expanded.insert(id) {
+                    pending.extend(references.iter().copied());
+                }
+            }
+            None => {
+                if !attempted.contains(&id) {
+                    wanted.insert(id);
+                }
+            }
+        }
+    }
+}
 /// [`extract_at_detail_with_control`] for a caller that takes each element as
 /// it is meshed and keeps none of the graphs: `visit` receives every element,
 /// in no set order, and the decoded graphs of the shared symbols are freed
@@ -358,14 +389,22 @@ pub fn extract_in_batches_with_control(
         );
         Ok(())
     })?;
+    // Everything each owner's graph names. An owner can name another owner,
+    // whose own symbols its mesh then reaches, as the one-shot read finds them
+    // by reading every record's references.
+    let owner_references: BTreeMap<u64, Vec<u64>> = owners
+        .iter()
+        .map(|(&id, record)| (id, instance_symbols(record)))
+        .collect();
     // Each owner with the symbols it names that are not owners themselves,
     // ordered so that owners naming the same symbols are next to each other.
-    let mut named: Vec<(Option<u64>, u64, BTreeSet<u64>)> = owners
+    let mut named: Vec<Named> = owner_references
         .iter()
-        .map(|(&id, record)| {
-            let symbols: BTreeSet<u64> = instance_symbols(record)
-                .into_iter()
-                .filter(|symbol| !owners.contains_key(symbol))
+        .map(|(&id, references)| {
+            let symbols: BTreeSet<u64> = references
+                .iter()
+                .copied()
+                .filter(|symbol| !owner_references.contains_key(symbol))
                 .collect();
             (symbols.iter().next().copied(), id, symbols)
         })
@@ -402,9 +441,20 @@ pub fn extract_in_batches_with_control(
         if let Some(handle) = freeing.take() {
             let _ = handle.join();
         }
+        // The closure of the batch's owners: the symbols they name, those the
+        // symbols name, and, through any owner either names, the symbols that
+        // owner names. It is the one the one-shot read makes for these owners.
         let mut shared = BTreeMap::<u64, Record>::new();
-        let mut attempted: BTreeSet<u64> = owners.keys().copied().collect();
-        let mut wanted = symbols;
+        let mut attempted = BTreeSet::<u64>::new();
+        let mut expanded = BTreeSet::<u64>::new();
+        let mut wanted = BTreeSet::<u64>::new();
+        add_references(
+            ids.iter().copied(),
+            &owner_references,
+            &mut expanded,
+            &attempted,
+            &mut wanted,
+        );
         for depth in 0..=128 {
             if wanted.is_empty() {
                 break;
@@ -413,18 +463,22 @@ pub fn extract_in_batches_with_control(
             control.check()?;
             attempted.extend(&wanted);
             opts.selected_ids = std::mem::take(&mut wanted);
+            let mut found = Vec::new();
             native_document::extract_graphs(file, &opts, |r| {
-                for id in instance_symbols(&r) {
-                    if !attempted.contains(&id) {
-                        wanted.insert(id);
-                    }
-                }
+                found.extend(instance_symbols(&r));
                 ensure!(
                     shared.insert(r.identity.element_id, r).is_none(),
                     "duplicate shared graphics owner"
                 );
                 Ok(())
             })?;
+            add_references(
+                found,
+                &owner_references,
+                &mut expanded,
+                &attempted,
+                &mut wanted,
+            );
         }
         batches += 1;
         control.report(Stage::SavedGraphics, batches, None);
