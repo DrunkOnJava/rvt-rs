@@ -17,10 +17,11 @@ pub(super) fn recover_2023_records(
     out: &mut PartitionSchemaMvp,
 ) {
     use crate::partition_element_records as per;
-    let records = crate::partition_element_records_2023::scan_records(rf, revit_version);
+    let (records, mut stages) =
+        crate::partition_element_records_2023::scan_records_counted(rf, revit_version);
     let names = type_and_family_names_2023(rf, &records);
     let system_types = system_type_names_2023(rf, revit_version, &records);
-    let mut selected = select_newest_instance_records(records);
+    let mut selected = select_newest_instance_records(records, &mut stages);
     // Revit's export leaves out an element in a non-primary design option and
     // one that does not exist in the export phase, as on 2024 (RE-40, RE-184).
     // A room is left out by its own phase (RE-326). Applied on the releases
@@ -28,7 +29,19 @@ pub(super) fn recover_2023_records(
     if crate::partition_element_records_2023::applies_export_filters(revit_version) {
         let options = rf.memoised_design_options();
         let phases = rf.memoised_phase_filter();
-        selected.retain(|_, record| !options.excludes(record) && !phases.excludes(record));
+        selected.retain(|_, record| {
+            if options.excludes(record) {
+                stages
+                    .counts_mut(&record.stream)
+                    .in_non_primary_design_option += 1;
+                false
+            } else if phases.excludes(record) {
+                stages.counts_mut(&record.stream).not_in_export_phase += 1;
+                false
+            } else {
+                true
+            }
+        });
     }
     // Only a family instance can be nested; a host wall and the doors it
     // hosts name each other too (RE-76's class tag, at the same place on
@@ -49,14 +62,18 @@ pub(super) fn recover_2023_records(
     let level_ids = level_element_ids(rf, revit_version).unwrap_or_default();
     for record in selected.values() {
         if nested.contains(&record.element_id) {
+            stages.counts_mut(&record.stream).nested_in_door_or_window += 1;
             continue;
         }
         let Some((_, class)) = per::RECOVERED_CATEGORIES
             .iter()
             .find(|(category, _)| *category == record.builtin_category)
         else {
+            stages.counts_mut(&record.stream).category_not_exported += 1;
             continue;
         };
+        stages.counts_mut(&record.stream).handed_to_export += 1;
+        stages.handed.insert(record.element_id);
         let mut decoded = element_record_decoded(record, class, &level_ids);
         if let Some((type_id, type_name, family_name)) = names.get(&record.element_id) {
             decoded.fields.push((
@@ -97,6 +114,8 @@ pub(super) fn recover_2023_records(
             _ => out.products.push(decoded),
         }
     }
+    // What became of each frame, for the diagnostics (#1389).
+    rf.note_element_record_stages(stages);
     // --- Walls cut back by the walls they join, by 2024's solver (RE-26,
     // RE-29): a 2023 record box is the untrimmed wall too, and its
     // reference list names the walls it joins (RE-120) ---
@@ -307,8 +326,13 @@ pub(super) fn type_and_family_names_2023(
 /// `Partitions/2`, and Revit's export draws them from -1.7 m (-5.58 ft),
 /// on the Level the newer frame names. The greatest extent would keep the
 /// stale one.
+///
+/// Counts what became of each frame in `stages` (#1389): a record that is not a
+/// placed instance, a placed instance with or without volume, a frame another
+/// replaces, a nested component and the frame kept.
 pub(super) fn select_newest_instance_records(
     records: Vec<crate::partition_element_records::PartitionElementRecord>,
+    stages: &mut crate::partition_element_records_2023::RecordStages,
 ) -> BTreeMap<u32, crate::partition_element_records::PartitionElementRecord> {
     use crate::partition_element_records::PartitionElementRecord;
     let partition = |record: &PartitionElementRecord| {
@@ -321,15 +345,35 @@ pub(super) fn select_newest_instance_records(
     };
     let mut by_id: BTreeMap<u32, PartitionElementRecord> = BTreeMap::new();
     for record in records {
-        if !record.is_exported_instance() || !record.has_volume() {
+        if !record.is_exported_instance() {
+            stages.counts_mut(&record.stream).not_placed_instances += 1;
             continue;
         }
+        stages.counts_mut(&record.stream).placed_instances += 1;
+        if !record.has_volume() {
+            stages.counts_mut(&record.stream).without_volume += 1;
+            stages.note_volumeless(&record);
+            continue;
+        }
+        stages.counts_mut(&record.stream).with_volume += 1;
         let newer = by_id.get(&record.element_id).is_none_or(|held| {
             (partition(&record), record.offset) > (partition(held), held.offset)
         });
         if newer {
-            by_id.insert(record.element_id, record);
+            if let Some(replaced) = by_id.insert(record.element_id, record) {
+                stages.counts_mut(&replaced.stream).superseded += 1;
+            }
+        } else {
+            stages.counts_mut(&record.stream).superseded += 1;
         }
     }
-    without_nested_components(by_id)
+    for id in nested_component_ids(&by_id) {
+        if let Some(record) = by_id.remove(&id) {
+            stages.counts_mut(&record.stream).nested_components += 1;
+        }
+    }
+    for record in by_id.values() {
+        stages.counts_mut(&record.stream).selected += 1;
+    }
+    by_id
 }

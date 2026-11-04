@@ -953,6 +953,16 @@ fn export_summary(diagnostics: &ExportDiagnostics, has_sidecar: bool) -> Vec<Str
             left_out.join(", ")
         ));
     }
+    // #1389: a Revit 2008 to 2023 file none of whose element records was
+    // written says where they stopped.
+    if let Some(stages) = &diagnostics.decoded.element_record_stages {
+        if let Some(stopped) = &stages.stopped_at {
+            lines.push(format!(
+                "  no element record of this Revit {} layout was written: {} marker(s) found, stopped at {stopped} (decoded.element_record_stages)",
+                stages.layout_release, stages.total.markers
+            ));
+        }
+    }
     // A scaffold-only export already warned with the same advice.
     let hint = if has_sidecar || diagnostics.confidence.level == "scaffold" {
         ""

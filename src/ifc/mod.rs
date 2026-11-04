@@ -85,6 +85,7 @@ pub mod category_map;
 pub mod clipping;
 pub mod compare;
 pub mod element_provenance;
+pub mod element_record_stages;
 pub mod entities;
 pub mod export_content;
 pub mod export_decisions;
@@ -670,6 +671,16 @@ pub struct DecodedExportDiagnostics {
     /// [`element_provenance`].
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub element_provenance: Option<element_provenance::ElementProvenanceTable>,
+    /// Where the element records of a Revit 2008 to 2023 file stopped, stage
+    /// by stage, per partition stream and in total (#1389): the markers found,
+    /// those with a declared ElementId, those that gave a record, the placed
+    /// instances, those with volume, the frames kept, the elements handed to the
+    /// export and written, and, when none is written, the stage they stopped at.
+    /// Present only for a file that takes that record layout; absent for Revit
+    /// 2024 and later, whose rejected frames are in `skipped`. Not written in
+    /// the IFC file; see [`element_record_stages`].
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub element_record_stages: Option<element_record_stages::ElementRecordStages>,
 }
 
 fn default_min_element_confidence_serde() -> f32 {
@@ -3887,6 +3898,23 @@ pub(crate) fn build_export_diagnostics_and_decisions(
         unattributed_frames,
         ClassesBy::Class,
     );
+    // #1389: on a Revit 2008 to 2023 file the layout above is not read, and
+    // the counts of what became of each frame at its markers are the ones the
+    // recovery of its records made as it decided.
+    let record_stages = rf.element_record_stages().cloned();
+    let element_record_stages = record_stages
+        .as_ref()
+        .map(|stages| element_record_stages::ElementRecordStages::build(stages, model));
+    if let Some(stages) = &record_stages {
+        record_left_out(
+            &mut skipped,
+            &mut decisions,
+            element_record_stages::FRAME_STOPPED_REASON,
+            None,
+            stages.stopped.clone(),
+            ClassesBy::Class,
+        );
+    }
     // #309: placed instances with no 3D body are left out by design, as
     // Revit's own export leaves them out. They are not missing, so they
     // do not count toward `unexported_element_records`.
@@ -4318,6 +4346,7 @@ pub(crate) fn build_export_diagnostics_and_decisions(
             wall_curve_lengths_feet: walker_stats.wall_curve_lengths_feet,
             walls_type_confirmed: walker_stats.walls_type_confirmed,
             element_provenance: None,
+            element_record_stages,
         },
         source_coverage: {
             let coverage = SourceCoverageDiagnostics::measure(

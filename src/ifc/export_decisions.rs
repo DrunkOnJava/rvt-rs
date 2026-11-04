@@ -37,6 +37,14 @@
 //!   element ([`super::element_provenance`], `select_instance_records`) is
 //!   the one with the greatest extent, so the two can name different frames
 //!   of the same element.
+//! - `element_record_frame_stopped` is made on Revit 2008 to 2023 files, from the
+//!   frames of their marker scan that did not become an element: its `class` is
+//!   the stage the frame stopped at (`frame_outside_stream`,
+//!   `category_out_of_range`, `box_not_valid`, `no_declared_id` or
+//!   `without_volume`, [`super::element_record_stages`]). Its `offset` is where the
+//!   frame's ElementId is stored, 52 bytes before the marker (48 on Revit 2008),
+//!   in the stream inflated; a frame stopped before its record has no ElementId,
+//!   and one with no volume has its record's.
 //! - The reasons made from the model (the geometry gaps, `body_is_record_box`,
 //!   `space_outline_is_record_box`, `area_body_refused`) take the table's
 //!   stream and offset for the element.

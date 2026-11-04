@@ -261,7 +261,7 @@ for each, so an empty log cannot pass.
 
 | Stage | Reason | What was decided | Counted in |
 |---|---|---|---|
-| `element_skipped` | `below_min_element_confidence`, `low_confidence_schema_scan_candidate`, `element_record_without_element_id`, `element_record_without_volume`, `element_record_in_non_primary_design_option`, `element_record_not_in_export_phase`, `room_not_in_export_phase`, `element_record_empty_curtain_panel`, `element_record_family_space_without_body`, `area_without_proven_body` | The element is not in the export. | the `skipped` item of the same reason |
+| `element_skipped` | `below_min_element_confidence`, `low_confidence_schema_scan_candidate`, `element_record_without_element_id`, `element_record_frame_stopped` (`class`: the stage), `element_record_without_volume`, `element_record_in_non_primary_design_option`, `element_record_not_in_export_phase`, `room_not_in_export_phase`, `element_record_empty_curtain_panel`, `element_record_family_space_without_body`, `area_without_proven_body` | The element is not in the export. | the `skipped` item of the same reason |
 | `body_not_drawn` | `unsupported_geometry_curve`, `unsupported_geometry_profile`, `unsupported_geometry_missing_dimensions` | The element is written with no body. | the `skipped` item |
 | `opening_not_cut` | `unsupported_geometry_unresolved_host`, `opening_index_without_host_geometry` | A door or window has no host to cut, or an opening index row has no host geometry. | the `skipped` item |
 | `storey_not_bound` | `unsupported_geometry_missing_level` | The element is written outside any storey. | the `skipped` item |
@@ -289,6 +289,15 @@ What an entry's `offset` is, and what has been measured:
   the exporter selected (`select_instance_records`: on Revit 2024 and later the
   greatest vertical extent), so the two can name different frames of the same
   element.
+- On Revit 2008 to 2023 files `element_record_frame_stopped` is made from the
+  frames of the marker scan that did not become an element (see
+  [Element record stages](#element-record-stages)): its `class` is the stage the
+  frame stopped at, and its `offset` is where the frame's ElementId is stored, 52
+  bytes before the marker (48 on Revit 2008). A frame stopped before its record has
+  no ElementId; a frame with no volume has its record's.
+  `tests/element_record_stages.rs` re-reads the bytes at those entries on
+  Revit_IFC5_Einhoven (Revit 2023): a marker 52 bytes on and, where the entry
+  has an ElementId, that id at the offset.
 - `tests/export_decisions_counts.rs` re-reads the bytes at the entries of those
   seven frame reasons (the six above and `element_record_family_space_without_body`)
   on Revit 2024 and later, and finds the element's id there or a second-prologue
@@ -304,6 +313,69 @@ evidence is an element the walk decoded, its stream and offset are read from a
 table built for the purpose and dropped. Someone asking why an element was left
 out should not have to pay for the table, and someone checking offsets should not
 get the log.
+
+### Element record stages
+
+A Revit 2008 to 2023 file takes another element-record layout than 2024 and
+later: an ElementId 52 bytes before the record marker (48 on Revit 2008), not the
+frame's first bytes. The rejected-frame reasons above (`element_record_without_element_id`,
+`element_record_without_volume`) read the 2024 layout and count nothing on these
+files, so a file that exported no element showed only
+`low_confidence_schema_scan_candidate` and nobody could tell which stage lost
+its elements (#1389, from the files reported on #421). `decoded.element_record_stages`
+counts what became of the frames at the file's markers, per partition stream
+(`streams`) and in total (`total`), where the scan and the recovery already decide:
+no further pass over the file. It is present for any export of a file that takes
+that layout, which includes a file saved by Revit 2024 or later whose schema is an
+older release's, and absent otherwise. It is in the diagnostics only; the IFC is
+not changed.
+
+| Count | What it is |
+|---|---|
+| `markers` | Places that hold the file's marker: the tags of `Outline`, four `ff` bytes and `ElementParents`. |
+| `declared_id` | Of the markers, those with a `u32` ElementId that `Global/ElemTable` declares 52 bytes before them and the tag of `ElementHeader` 8 bytes after it. Counted beside the steps: a placed instance whose frame lies inside its element's record gets that record's id (`id_from_enclosing_record`, RE-315). |
+| `frame_outside_stream`, `category_out_of_range`, `box_not_valid`, `no_declared_id` | Markers that gave no record, by where they stopped: a field of the frame lies outside the stream; the `BuiltInCategory` is out of range; the bounding box is not finite or ends before it starts; the frame has no declared id of its own and none from a record around it. |
+| `records` | Markers that gave a record. |
+| `not_placed_instances`, `placed_instances` | Records that are container members or type symbols, and those that pass the RE-21 instance rule. |
+| `without_volume`, `with_volume` | Placed instances whose box has no volume (Revit's export leaves them out, #309), and those whose box has. |
+| `superseded`, `nested_components`, `selected` | Of the frames with volume, those a newer frame of the same ElementId replaces, the nested MEP components the export leaves out (#96), and the newest frame of each ElementId. |
+| `in_non_primary_design_option`, `not_in_export_phase`, `nested_in_door_or_window`, `category_not_exported`, `handed_to_export` | Of the selected frames, those left out for their design option, their phase, being nested in a door or window, or a category no class of the export has, and those that became elements handed to the export. |
+
+Each step counts exactly what the one before it passed on and left, so the
+counts add up, per stream and in total: `markers` is the four stops plus
+`records`, `records` is `not_placed_instances` plus `placed_instances`, and so on
+down to `selected`, which is the four ways it is left out plus `handed_to_export`.
+`written_to_model` then counts, in the IFC model, the elements of the last step,
+one for each ElementId; the walk or the export can set one aside after the
+recovery (below the minimum confidence, or an ElementId that another reader's
+element already held). When `written_to_model` is 0, `stopped_at` names the stage
+the file's records stopped at: `elem_table_not_read` or
+`schema_has_no_element_marker` (the scan could not start), `no_markers`, the stop
+that took most of the markers, `no_placed_instances`, `without_volume`,
+`nested_components`, the way that left out most of the selected frames, or
+`not_written_to_model` (which a placeholder export, writing no decoded element,
+also says). `rvt-ifc` prints a line with it on stderr.
+
+The frames that stopped before they were records, and the placed instances with
+no volume, are also in `skipped` as `element_record_frame_stopped`: `count` is
+their number, `classes` counts them by stage (`frame_outside_stream`,
+`category_out_of_range`, `box_not_valid`, `no_declared_id`, `without_volume`),
+and the log of decisions has one entry for each, with the stream and the offset
+of the place where the frame's ElementId is stored. They are frames, not
+elements: an element with a frame of no volume and a newer one with volume is
+written. The item does not feed `unexported_element_records` or the warning of
+`element_record_without_element_id`.
+
+`tests/element_record_stages.rs` checks it on Revit_IFC5_Einhoven (Revit 2023):
+the markers, and the markers with a declared id, are counted again from the
+partitions' bytes, stream by stream; every step adds up; the item and the log
+have the stages' counts; each log entry points at a marker 52 bytes on. On the
+committed synthetic `corpus/tier1/structural-2023` project, whose partitions hold
+no record, nothing is written and `stopped_at` names a stage before any marker.
+`tools/re/element_stage_counts.py` makes the same checks on a `diagnostics.json`;
+Measure runs it on each of Autodesk's sample projects (`-f samples=true`,
+`element_stage_counts.txt`). Not yet measured on this head: the counts on the
+sample projects.
 
 ## Schema
 
