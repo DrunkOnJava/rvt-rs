@@ -998,11 +998,11 @@ fn dot3(a: [f64; 3], b: [f64; 3]) -> f64 {
 }
 
 /// The least `|cos 2θ|` of the plan angle θ of a level line that
-/// [`beam_body_in_box`] solves: the free-length solve ([`box_along`]) divides
-/// by it, and it is 0 at 45 degrees. The rotated beams measured lie 24.5
-/// degrees off a model axis (0.656); a line within 30 degrees of an axis
-/// passes.
-pub const MIN_PLAN_CONDITION: f64 = 0.5;
+/// [`beam_body_in_box`] solves, `cos 50°`: a line within 25 degrees of a model
+/// axis. The free-length solve ([`box_along`]) divides by it, and it is 0 at
+/// 45 degrees. The beams it draws were measured on a model axis and 24.5
+/// degrees off one (0.656); wider angles are unmeasured and stay boxes.
+pub const MIN_PLAN_CONDITION: f64 = 0.6427876096865394;
 
 /// The body of a level beam whose line lies inside its record box but is
 /// shorter than the box, where [`beam_check`] declines it for a section that
@@ -1017,8 +1017,9 @@ pub const MIN_PLAN_CONDITION: f64 = 0.5;
 /// extents across the line are wider than the section, and the 16 sloped,
 /// rolled beams measured are smaller than the box along their line. `None`
 /// for any other line the check declines, for a line that is sloped, for a
-/// plan angle within 15 degrees of 45 ([`MIN_PLAN_CONDITION`]), for a box no
-/// longer than the line, and for a line that does not lie inside the body.
+/// plan angle more than 25 degrees off a model axis ([`MIN_PLAN_CONDITION`],
+/// unmeasured), for a box no longer than the line, and for a line that does
+/// not lie inside the body.
 pub fn beam_body_in_box(bbox: [f64; 6], start: [f64; 3], end: [f64; 3]) -> Option<BeamBody> {
     if !matches!(
         beam_check(bbox, start, end),
