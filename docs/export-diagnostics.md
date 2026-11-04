@@ -155,8 +155,8 @@ unset or unread is written and not counted, and so is an Area or an MEP space,
 which Revit's exporter does not check against a phase. Autodesk's
 `rac_basic_sample_project` has 14 rooms in Working Drawings, the second of
 three phases, so the default export counts 14 for that phase and
-`--phase "Working Drawings"` counts none (to be read from the unfiltered
-Measure of this change). Revit 2016 to 2023 apply it as they apply the
+`--phase "Working Drawings"` counts none (Measure runs 41784415396 and
+41784419457). Revit 2016 to 2023 apply it as they apply the
 element filter; Revit 2015 and earlier write every room, as every element
 (#1332).
 

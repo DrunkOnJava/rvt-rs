@@ -32,10 +32,10 @@
 //! Revit's export leaves out. Measured (RE-326, ref `0d12ba0e`, Measure run
 //! 41776212669): all 621 rooms of the 12 models with a Revit export are in the
 //! last phase and in Revit's export. Autodesk's `rac_basic_sample_project` has
-//! 14 rooms in the second of its three phases; they are expected to be left
-//! out by default and to come back with `--phase "Working Drawings"`, which
-//! should write the 14 rooms a public Revit 2018 export of it holds (to be
-//! read from the Measure runs of this change).
+//! 14 rooms in the second of its three phases; they are left out by default
+//! and come back with `--phase "Working Drawings"`, which writes the 14 rooms
+//! a public Revit 2018 export of it holds, with no other entity changed
+//! (Measure runs 41784415396 and 41784419457, ref `4532731d`).
 // Tracker: B46.
 
 use crate::native_json::{agree, identifier_i64};

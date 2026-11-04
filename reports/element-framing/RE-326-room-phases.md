@@ -68,7 +68,14 @@ So the export either named Working Drawings (a setup or a view, as in §4) or Re
 - **Counts what it leaves out.** The diagnostics' `skipped` has one `room_not_in_export_phase` item for each phase the rooms sit in, with the rooms in `count` and `classes.Room` and the phase's name in `phase`; `--anonymize` replaces the name. The rooms are not in `exported.by_ifc_type.IFCSPACE`.
 - **Releases.** Revit 2016 to 2023 apply the rule as they apply the RE-184 element filter (RE-315), and 2024 to 2027 apply it. Revit 2015 and earlier write every room, as every element, because both phase rules start at Revit 2016: the element rule's only evidence on a 32-bit file is a Revit 2018 project, and a room rule that reached further than it would stand on less. Autodesk's `rac_basic_sample_project` saved by Revit 2015 therefore keeps its 14 rooms. One gate covers both rules; #1332 extends them together to Revit 2015 once a 2015 export, or a measured read of a 2015 phase order against one, supports it.
 
-On Autodesk's `rac_basic_sample_project` (phases Existing, Working Drawings, Learning Content; 14 rooms in Working Drawings), by the unfiltered Measure of this change and `tools/re/spaces_by_globalid_vs_ifc.py` against the public Revit 2018 export of §5: to be read from the runs named in §8.
+On Autodesk's `rac_basic_sample_project` (phases Existing, Working Drawings, Learning Content; 14 rooms in Working Drawings), measured on the 2018 save with `tools/re/spaces_by_globalid_vs_ifc.py` against the public Revit 2018 export of §5 (Measure runs 41784415396 and 41784419457, ref `4532731d535663010438c2b5c00ace97dafc38a3`, `-f samples=true -f sample_years="2018 2018" -f keep_ifc=true`, the second with `-f ifc_flags="--phase 86961"`):
+
+| export | `IfcSpace` rvt-rs writes | in Revit's export (17) | only in Revit's export |
+|---|---:|---:|---:|
+| default (the last phase, Learning Content) | 0 | 0 | 17 |
+| `--phase 86961` (Working Drawings) | 14 | 14 | 3 (the MEP Spaces) |
+
+The default export's diagnostics hold one `room_not_in_export_phase` item (`count` 14, `classes.Room` 14, `phase` "Working Drawings"); the `--phase` export holds none. Every other entity count is the same in the two exports (`IFCSPACE` 0 and 14 is the only difference; 450 and 464 entities in all). So the rule leaves out the 14 rooms Revit's export of this project holds when the export phase is the last, and writes exactly them, none that Revit's export lacks, when it is Working Drawings. What §5 could not say stays unsaid: the forum export holds these rooms either because its export phase was Working Drawings or because its setup did not skip them, and the file does not say which. The unfiltered Measure of this change (run 41784044966) reads every other model: no `ifc.sha256` moves but the saves of this project from Revit 2016 on.
 
 ## 7. Not measured
 
@@ -87,6 +94,11 @@ gh workflow run measure.yml --ref main -f ref=0d12ba0e271b04ebd26831a2679c47766b
 gh workflow run measure.yml --ref main -f ref=ecfc16b3677dce5ec6d014c9718c7c1826272dff -f base=none \
   -f probe=probe_re326_phase_census -f scorers=none -f samples=true -f sample_years="2018 2018"
 python3 tools/re/phase_census_vs_ifc.py probe.txt rac_basic_sample_project.ifc --classes
+gh workflow run measure.yml --ref main -f ref=4532731d535663010438c2b5c00ace97dafc38a3 -f base=none \
+  -f samples=true -f sample_years="2018 2018" -f keep_ifc=true -f scorers=none
+gh workflow run measure.yml --ref main -f ref=4532731d535663010438c2b5c00ace97dafc38a3 -f base=none \
+  -f samples=true -f sample_years="2018 2018" -f keep_ifc=true -f scorers=none -f ifc_flags="--phase 86961"
+python3 tools/re/spaces_by_globalid_vs_ifc.py sample-2018-rac_basic_sample_project/model.ifc rac_basic_sample_project.ifc
 ```
 
 The second run's `probe.txt` of `sample-2018-rac_basic_sample_project`, and the public export above, are the inputs of the last command. The GlobalIds of the 14 rooms are the `global_id` of that probe's room lines in the first run.
