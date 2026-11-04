@@ -166,6 +166,9 @@ pub struct RevitFile {
     design_options: Option<Arc<crate::partition_design_options::DesignOptions>>,
     /// Memoised phase order and the elements not in the export phase (#328).
     phase_filter: Option<Arc<crate::native_phases::PhaseFilter>>,
+    /// The Areas of a Revit 2015 to 2023 file the reader left unwritten, by
+    /// why (RE-324), set when the Areas are read.
+    unwritten_areas: BTreeMap<String, usize>,
     /// Memoised production walk: the elements
     /// [`crate::walker::iter_elements_with_control`] yields for a minimum
     /// score and walker limits. An export walks once to write and again for
@@ -439,6 +442,7 @@ impl RevitFile {
             element_names: None,
             design_options: None,
             phase_filter: None,
+            unwritten_areas: BTreeMap::new(),
             walk: None,
             arc_wall_scan: None,
             partition_progress: None,
@@ -879,6 +883,19 @@ impl RevitFile {
         );
         self.phase_filter = Some(Arc::clone(&computed));
         computed
+    }
+
+    /// Record the Areas of a Revit 2015 to 2023 file that were left unwritten,
+    /// by reason (RE-324).
+    pub(crate) fn set_unwritten_areas(&mut self, by_reason: BTreeMap<String, usize>) {
+        self.unwritten_areas = by_reason;
+    }
+
+    /// The Areas of a Revit 2015 to 2023 file left unwritten because their
+    /// region and body are not proven, by the reason their body has none
+    /// (RE-324). Empty until the Areas are read.
+    pub(crate) fn unwritten_areas(&self) -> &BTreeMap<String, usize> {
+        &self.unwritten_areas
     }
 
     /// Sorted `Partitions/*` stream paths.
