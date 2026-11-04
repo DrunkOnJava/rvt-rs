@@ -178,7 +178,7 @@ Open an issue (or a draft PR) before starting work on any of:
 - **The modifying writer** (`src/writer::write_with_patches`). Any
   change to Revit's truncated-gzip framing must be verified
   against a round-trip test.
-- **Layer 4c field-type decoder changes.** All but 9 to 12 fields
+- **Layer 4c field-type decoder changes.** All but 2 or 3 fields
   per release are classified, and the rest are listed in the CI
   gate (`tests/field_type_coverage.rs`, #410). If you think a
   pattern is misclassified, file an issue with byte evidence from
