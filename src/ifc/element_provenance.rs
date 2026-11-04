@@ -947,7 +947,13 @@ pub(crate) fn attach_value_sources(
             continue;
         };
         let body_list = body_readers(body);
-        let profile_list = profile_readers(profile_source);
+        let profile_list: &[&str] = if profile_resolved
+            && (body_list.contains(&SELECTED_FRAME_READER) || profile_source == Some(body))
+        {
+            profile_readers(profile_source)
+        } else {
+            &[]
+        };
         let Some(entry) = table.elements.get_mut(&id) else {
             continue;
         };
