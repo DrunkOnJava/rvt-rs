@@ -66,6 +66,7 @@ fn main() -> anyhow::Result<()> {
     if !owners.is_empty() {
         let owner_options = Options {
             selected_ids: owners,
+            channels: BTreeSet::from([103]),
             ..options.clone()
         };
         extract_graphs(&mut rf, &owner_options, |record| {

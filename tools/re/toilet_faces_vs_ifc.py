@@ -107,6 +107,12 @@ def main():
             f" area {areas.sum():.4f}; Revit {len(ref_triangles)} triangles, {len(ref_points)} vertices,"
             f" area {0.5 * ref_terms[4].sum():.4f} sq ft"
         )
+        print(
+            "  centre of ours " + " ".join(f"{x:.3f}" for x in triangles.reshape(-1, 3).mean(axis=0))
+            + ", of Revit's " + " ".join(f"{x:.3f}" for x in ref_triangles.reshape(-1, 3).mean(axis=0))
+            + "; extent of ours " + " ".join(f"{x:.3f}" for x in np.ptp(triangles.reshape(-1, 3), axis=0))
+            + ", of Revit's " + " ".join(f"{x:.3f}" for x in np.ptp(ref_triangles.reshape(-1, 3), axis=0))
+        )
         histogram = np.searchsorted(EDGES, vertex_distance)
         labels = [f"<={e:g}" for e in EDGES] + [f">{EDGES[-1]:g}"]
         print(
