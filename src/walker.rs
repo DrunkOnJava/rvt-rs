@@ -47,8 +47,8 @@ pub enum InstanceField {
     /// Reference container, 2-column layout: `col_a` is the primary
     /// id list, `col_b` is typically masks or a parallel id stream.
     RefContainer { col_a: Vec<u16>, col_b: Vec<u16> },
-    /// Fixed-size integer primitive (bool / u16 / u32 / i32 / u64 /
-    /// i64). `signed` is `true` for signed variants; `value` is the
+    /// Fixed-size integer primitive (u8 for kind 0x02, i16 for 0x03,
+    /// u32 / i32 / u64 / i64). `signed` is `true` for signed variants; `value` is the
     /// widened 64-bit representation.
     Integer { value: i64, signed: bool, size: u8 },
     /// 32-bit or 64-bit IEEE 754 floating point.

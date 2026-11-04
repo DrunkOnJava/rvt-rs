@@ -480,6 +480,7 @@ fn definition_pass(file: &mut RevitFile, options: &Options) -> Result<Arc<Defini
     definition_options.selected_classes.clear();
     definition_options.channels = BTreeSet::from([102]);
     definition_options.record_extras = false;
+    definition_options.keep_body = false;
     let definition_summary =
         extract_records(
             file,

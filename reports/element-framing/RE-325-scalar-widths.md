@@ -5,8 +5,8 @@
 **Issues:** #1196 (classify the schema's field encodings from byte evidence); builds on RE-323 (#1309), which found the native graph decoder reading these two bases at 1 and 2 bytes and decoding 97,000 of 97,005 records of Revit 2027's sample projects with them
 **Probe:** `probes/examples/probe_re325_scalar_widths.rs`
 **Artefacts:** the `phi-ag/rvt` family corpus at bec25470413fbe659c3ab30d4cfd029b73d63fc3, the 2014 maker family and Autodesk's 58 sample projects of Revit 2015 to 2027, the files and sha256 of RE-323 (`reports/element-framing/RE-323-residual-field-encodings.md` lists the family hashes; `research/autodesk-sample-projects.tsv` the projects'). Measure fetches them for each run and never stores them.
-**Runs:** Measure 41762248491 (families), 41762555375 (samples 2015 to 2020), 41762559148 (2021 to 2026), 41762563120 (2027), all of probe commit `6f099c91` (the classification as it was before this change); RUNS_AFTER
-**Result:** across 13 releases, 402,293 native records hold an instance of a base-2 or base-3 field, and every one of them is read completely with 1 and 2 bytes. Reading the same bytes with a base-2 field at 2 or 4 bytes, or a base-3 field at 1 or 4, leaves a record whole only when it holds no non-empty instance of that field: none of the 683,178 non-empty instances (683,250 with 72 empty byte buffers) is read at another width.
+**Runs:** Measure 41762248491 (families), 41762555375 (samples 2015 to 2020), 41762559148 (2021 to 2026), 41762563120 (2027), all of probe commit `6f099c91` (the classification as it was before this change); 41765293473 (families, the probe on the head `3084c431`: the scan's kind-2 and kind-3 primitives are size 1 and 2 in all 13 files, with the same counts as before); 41765290302 (head against `main`, §6)
+**Result:** the 58 sample projects (13 releases, 2015 to 2027) hold 402,652 native records with an instance of a base-2 or base-3 field. 402,293 of them decode without the extensible-storage catalog (the other 359, in the 2024 projects, need it), and every one of those is read completely with 1 and 2 bytes. Reading the same bytes with a base-2 field at 2 or 4 bytes, or a base-3 field at 1 or 4, leaves a record whole only when it holds no non-empty instance of that field: none of the 683,178 non-empty instances (683,250 with 72 empty byte buffers) is read at another width.
 
 ## 1. What was written, and what the decoders did
 
@@ -56,7 +56,7 @@ The deprecated-alias entry was wrong on width and on release. `0x03` is in every
 
 ## 4. The instances
 
-The instance reader is the native graph decoder (`native_document::extract_graphs`): a record's body decodes only if the whole of it is consumed, so a field read at a wrong width fails the record or leaves bytes over. The 13 family files cannot be read by it (`invalid increment episode range`), so the instances come from Autodesk's 58 sample projects. For every record whose graph is complete and holds an instance of a base-2 or base-3 field the probe decodes the same bytes again with `native_parameters::decode_graph`, on a copy of the registry in which the base byte of the field (or of every such field) is rewritten so that the decoder reads another width: base 2 read as 2 bytes is base 3, as 4 bytes base 4; base 3 read as 1 byte is base 2, as 4 bytes base 4. The control, the schema as it is, must decode the record without the extensible-storage catalog (the probe has none): 359 records of the 2024 projects need it and are left out.
+The instance reader is the native graph decoder (`native_document::extract_graphs`): a record's body decodes only if the whole of it is consumed, so a field read at a wrong width fails the record or leaves bytes over. The 13 family files cannot be read by it (`invalid increment episode range`), so the instances come from Autodesk's 58 sample projects. For every record whose graph is complete and holds an instance of a base-2 or base-3 field the probe decodes the same bytes again with `native_parameters::decode_graph`, on a copy of the registry in which the base byte of the field (or of every such field) is rewritten so that the decoder reads another width: base 2 read as 2 bytes is base 3, as 4 bytes base 4; base 3 read as 1 byte is base 2, as 4 bytes base 4. The control, the schema as it is, must decode the record without the extensible-storage catalog (the probe has none): 359 of the 402,652 records, all in the 2024 projects, need it and are left out, so 402,293 are tested.
 
 **Every width at once** (`hyp`; "char 2, short 4" is `FieldType`'s reading). Records decoded by the native reader, over the 58 projects:
 
@@ -79,7 +79,7 @@ The instance reader is the native graph decoder (`native_document::extract_graph
 
 The records that are not complete are RE-323's (§2 there). The wrong readings complete only the records that hold no instance of what they rewrite. `FieldType`'s reading completes 65 of 402,293 records, and they are the 58 + 7 whose only base-2 instances are empty byte buffers (`FabricationDatabase::m_mem`, `StructuralConnectionHandlerType::m_detailedParametersBuffer` and `m_rangesOfApplicabilityBuffer`: a count of 0 occupies the same bytes at any width). Reading base 3 at 1 or at 4 bytes completes 393,581, and the 8,712 it leaves are exactly the records that hold a base-3 instance (4,846 `Viewer::m_viewerFlags`, 3,782 `LinePattern::m_pixelPattern`, 84 `FacetedTopology0` arrays). Of the 4,735 records the native reader cannot complete, none is read under any width.
 
-**One field at a time** (`field-alt`): for each field with an instance, the same records are decoded with only that field rewritten (at most 2,000 records per field and width):
+**One field at a time** (`field-alt`): for each field with an instance, the same records are decoded with only that field rewritten (at most 2,000 records per field and width in each file):
 
 | Field | Base | Releases | Instances | Alternative widths tried | Records tried (per width) | Complete |
 |---|---:|---|---:|---|---:|---:|
@@ -106,6 +106,8 @@ The values fit the widths: the base-2 flags take 0 to 215 (a `u8`; `Dimension::m
 
 **The byte buffers** hold files, and a file's own framing gives the count (`blobs`, `signatures`): the 13,517 `ARasterImage::m_compressedImage` arrays are 13,407 PNGs, 97 JPEGs and 13 GIFs by their first four bytes, and all 13,407 PNGs end with the IEND chunk's CRC (`49 45 4e 44 ae 42 60 82`) at exactly the declared count, one byte per element; the 8,067 `RtfData::m_arrRtfStream` and 90 `GRichText::m_arrRtfRawData` arrays all open with `{\rt`. At two bytes per element the same count would run past the file's end.
 
+**Scope of the instances.** They were measured in the native records of the `Partitions/*` streams (channel 102) only; none comes from `Global/Latest`, which the walker reads, and no field of the walker's `ADocument` (bases 1 and 14) is a `char` or a `short`. Of the 9 base-3 scalars the scan files, 2 have instances (`Viewer::m_viewerFlags`, `LinePattern::m_pixelPattern`); the grammar's 24 to 27 base-3 scalars and three arrays have 3 fields with instances (those two and the `FacetedTopology0` array). For the others base 3 at 2 bytes rests on the base byte (which every instance of those three fields confirms) and the pair-slot names of §2. Of the 34 to 38 base-2 scalars 11 have instances, and of the 9 to 32 byte buffers 3 have non-empty ones.
+
 ## 5. What changed
 
 - `FieldType::decode`: `Primitive { kind: 0x02 }` is 1 byte and `Primitive { kind: 0x03 }` 2 (`scalar_size`). Nothing else in the classification moves; `tests/field_type_coverage.rs` keeps its `RESIDUAL` lists. The doc table of `FieldType`, the `Primitive` and `Vector` docs, `docs/format.md`, `docs/extending-layer-5b.md` and `docs/container-wire-format-2026-04-21.md` carry the corrected widths, and `docs/format-reconnaissance.md` keeps its §Q5.2 entry with a correction note above it.
@@ -115,7 +117,7 @@ The values fit the widths: the base-2 flags take 0 to 215 (a `u8`; `Dimension::m
 
 ## 6. Identity
 
-IDENTITY
+Measure 41765290302, `-f base=main -f nordic=true -f r2025=true -f samples=true -f holdout=true -f families=true`, head `3084c431` (the commits after it change a doc comment, a reset of `keep_body` in a pass no measured reader uses, this report and the changelog) against `main` at `5aa4da77`: 124 items, which are the reference models, the BIM4LCA office as built and at permit, puzzbobb's R2025 models, the held-out models (counts only), the 58 sample projects and the 13 families. The 222 `ifc.sha256`, 186 `diagnostics.json`, 212 `info.json` and 212 `info.exit`, 186 `schema.txt` and the scorer outputs of 68 exports and the Core Interior witnesses are byte-identical between base and head, and the scorer comparison is empty: no export, no `rvt-info` output and no score moved. Measure 41764287400 (reference models and families, head `88da3002` against `main` at `8b8f1fee`) says the same. Nothing the measurement runs reads a `char` or `short` field through the walker: `ADocument`'s fields are bases 1 and 14, and the typed element decoders' classes (`Level`, `WallType`, `Floor`, `Material`) have base-4 fields and no base-2 or base-3 one. What moves is `rvt-schema`'s JSON, where the kind-2 and kind-3 `Primitive` sizes become 1 and 2 (run 41765293473 above); Measure does not compare it.
 
 ## 7. Reproduce
 
