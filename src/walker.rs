@@ -1549,6 +1549,11 @@ pub(crate) fn walk_shared(
     control.report(Stage::ElementDecode, candidate_total, Some(candidate_total));
     control.report(Stage::PartitionScan, 0, None);
 
+    // What the partition recovery below notes for the diagnostics follows this
+    // walk, which the handle memoises: a walk that runs again, at another
+    // export phase, starts from none.
+    rf.reset_export_notes();
+
     // Partition ArcWall merge (version-gated). Fail closed: only
     // records that pass the standard envelope decoder are emitted.
     if let Ok(version) = rf.layout_release() {

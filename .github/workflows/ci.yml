@@ -1152,6 +1152,28 @@ jobs:
           python3 tools/ci/wheel-smoke.py corpus/tier1/architectural-2024/architectural-2024.rvt
           family="_corpus/examples/Autodesk/racbasicsamplefamily-2024.rfa"
           if [ -f "$family" ]; then python3 tools/ci/wheel-smoke.py "$family"; fi
+      # #1339: the export phase through the Python API, on RE1 Architecture
+      # (tests/python/test_export_phase.py), pinned by commit and hash as the
+      # other jobs that fetch it do. The bytes come from the media host, which
+      # serves a Git LFS object's content (and a plain blob's, where the file
+      # is not in LFS), with the raw host as the fallback; either must hash to
+      # the pinned sha256. They are not cached by the Actions cache.
+      - name: Fetch RE1 Architecture (Drshelden/IFC-ECS, MIT)
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          commit=9e8b37175a0fba1397f7011aeee917fe52de7623
+          sum=4a78bdd68e7f4dd7806060db07c222da9a810e20b3f303c17a443294b91c8ce4
+          name=RE1-Architecture.rvt
+          out="${GITHUB_WORKSPACE}/_project_corpus/Revit/${name}"
+          mkdir -p "$(dirname "${out}")"
+          for host in media.githubusercontent.com/media raw.githubusercontent.com; do
+            curl -sSfL --retry 5 --retry-all-errors -o "${out}" "https://${host}/Drshelden/IFC-ECS/${commit}/data/RE1/${name}" || continue
+            if echo "${sum}  ${out}" | sha256sum -c - ; then exit 0; fi
+          done
+          echo "::error::${name} did not hash to ${sum} from either host"
+          exit 1
       - name: Python API integration tests on Revit files
         shell: bash
         run: |
@@ -1159,6 +1181,9 @@ jobs:
           python3 -m pip install --require-hashes -r tools/ci/requirements-test.txt
           if [ -d _corpus/examples/Autodesk ]; then
             export RVT_SAMPLES_DIR="$PWD/_corpus/examples/Autodesk"
+          fi
+          if [ -f _project_corpus/Revit/RE1-Architecture.rvt ]; then
+            export RVT_PROJECT_CORPUS_DIR="$PWD/_project_corpus/Revit"
           fi
           python3 -m pytest tests/python -q -rs
       # S2 (#873): the type stubs are the Python API's listing, and

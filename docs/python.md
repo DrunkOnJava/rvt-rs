@@ -103,8 +103,8 @@ Every signature below is verified against
 ```text
 rvt.__version__  # str — same as the Rust crate version (Cargo.toml)
 
-rvt.rvt_to_ifc(path: str, mode: str = "scaffold", allow_partial: bool = False, saved_meshes: bool = True) -> str
-rvt.rvt_to_ifc_diagnostics(path: str, saved_meshes: bool = True) -> str
+rvt.rvt_to_ifc(path: str, mode: str = "scaffold", allow_partial: bool = False, saved_meshes: bool = True, phase: str | int | None = None) -> str
+rvt.rvt_to_ifc_diagnostics(path: str, saved_meshes: bool = True, phase: str | int | None = None) -> str
 rvt.read_metadata(path: str, redact: bool = False) -> dict
 ```
 
@@ -125,17 +125,17 @@ It raises `FileNotFoundError` / `OSError` on I/O failure and `ValueError`
 when the file is not a readable Revit file. `redact=True` scrubs the user
 name and Windows user folders.
 
-`rvt_to_ifc(path, mode="scaffold", allow_partial=False, saved_meshes=True)`
+`rvt_to_ifc(path, mode="scaffold", allow_partial=False, saved_meshes=True, phase=None)`
 opens the file, runs the document-level IFC4 exporter
 (`ifc::RvtDocExporter`), and returns the IFC4 STEP text, the same file
 `rvt-ifc` writes. Equivalent to
-`rvt.RevitFile(path).write_ifc(mode=mode, allow_partial=allow_partial, saved_meshes=saved_meshes)`.
+`rvt.RevitFile(path).write_ifc(mode=mode, allow_partial=allow_partial, saved_meshes=saved_meshes, phase=phase)`.
 Raises `IOError` on open failure, `ValueError` if the file parses as CFB
 but the exporter can't build a model, the requested export mode cannot be
 satisfied, or a resource limit kept part of the file from being read and
 `allow_partial` is false.
 
-`rvt_to_ifc_diagnostics(path, saved_meshes=True)` returns the JSON
+`rvt_to_ifc_diagnostics(path, saved_meshes=True, phase=None)` returns the JSON
 diagnostics sidecar for the same export path. The schema matches `rvt-ifc --diagnostics`
 and is documented in [`docs/export-diagnostics.md`](export-diagnostics.md);
 the machine-readable contract is
@@ -272,13 +272,15 @@ Document identity, the same dict as `rvt.read_metadata(path)`, with the keys
 contract: [`file-metadata.schema.json`](schemas/file-metadata.schema.json).
 
 ```text
-schedule_csv(self, kind: str = "elements", metric: bool = False, excel: bool = False) -> str
+schedule_csv(self, kind: str = "elements", metric: bool = False, excel: bool = False, phase: str | int | None = None) -> str
 ```
 The element (`kind="elements"`) or room (`kind="rooms"`) schedule as CSV
 text, with the columns of `rvt-schedule`. `metric=True` writes lengths in
 metres, `excel=True` prefixes a UTF-8 byte-order mark for Excel on Windows.
-Only decoded values are written; unknowns are empty cells. Any other `kind`
-raises `ValueError`.
+Only decoded values are written; unknowns are empty cells. `phase` is
+`write_ifc`'s, and `rvt-schedule --phase <name|id>` is its command-line twin:
+the schedule is of the model the document exporter builds at that phase. Any
+other `kind` raises `ValueError`.
 
 ```text
 schema_summary(self) -> dict[str, int]
@@ -370,7 +372,7 @@ Field kinds:
 ```text
 decoded_elements(self) -> list[dict]
 element_counts(self) -> dict
-export_diagnostics(self, saved_meshes: bool = True) -> dict
+export_diagnostics(self, saved_meshes: bool = True, phase: str | int | None = None) -> dict
 ```
 
 `decoded_elements()` returns production-walker elements. Each entry
@@ -393,8 +395,8 @@ CLI mirror: `rvt-elements file.rvt --counts`.
 export diagnostics sidecar (same payload as `rvt-ifc --diagnostics`).
 
 ```text
-write_ifc(self, mode: str = "scaffold", allow_partial: bool = False, saved_meshes: bool = True) -> str
-export_diagnostics_json(self, saved_meshes: bool = True) -> str
+write_ifc(self, mode: str = "scaffold", allow_partial: bool = False, saved_meshes: bool = True, phase: str | int | None = None) -> str
+export_diagnostics_json(self, saved_meshes: bool = True, phase: str | int | None = None) -> str
 ```
 Produce an IFC4 STEP string via `ifc::RvtDocExporter`, the same
 exporter `rvt-ifc` runs. On Revit 2023, 2024 and 2025 projects it writes
@@ -413,6 +415,29 @@ the export keeps the bounding boxes and a `RuntimeWarning` says so.
 `export_diagnostics()`, `export_diagnostics_json()` and
 `rvt_to_ifc_diagnostics()` take the same `saved_meshes` and describe the
 export it gives.
+
+A Revit project can hold several phases, and an export shows one: the last, as
+Revit's own does. An element that does not exist in the export phase, and a
+room whose own phase is not it, are left out, and the diagnostics count them
+(the `room_not_in_export_phase` and `element_record_not_in_export_phase`
+skipped items). `phase` exports another, as `rvt-ifc --phase` does: a phase's
+name, matched exactly first, or its ElementId, as a `str` or an `int`; `None`,
+the default, is the last phase, so a call without it writes the bytes it
+always wrote. A phase the file does not have raises `ValueError` listing the
+phases it does, and so does a file whose phases are not read (a family, or
+Revit 2015 and earlier). `write_ifc`, `schedule_csv`, `export_diagnostics`,
+`export_diagnostics_json`, `rvt_to_ifc` and `rvt_to_ifc_diagnostics` take it,
+and one `RevitFile` can export different phases in turn:
+
+```text
+f.write_ifc(phase="Existing")        # by name
+f.write_ifc(phase=12589)             # by ElementId
+f.write_ifc()                        # the last phase again
+```
+
+The handle keeps the phase an export names: `decoded_elements()` and
+`element_counts()` read at that phase until a call without `phase` goes back
+to the last.
 
 `mode` is one of `scaffold`, `typed-no-geometry`, `geometry`, or
 `strict`. `scaffold` accepts the historical spec-valid framework
