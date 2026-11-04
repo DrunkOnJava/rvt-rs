@@ -134,9 +134,11 @@ in `src/`. Write the ways it can fail first, and test those: edge inputs,
 malformed input, boundaries. Never a tautology, never a test that only
 restates the code, and never a stand-in for end-to-end evidence of a feature.
 Anything that reads a file or decodes a real format is proved on real files,
-whatever its size. No such test exists yet; CI's test job runs the doc tests
-and the `tests/` targets, and the first helper test adds `cargo test --lib`
-to it.
+whatever its size. The first is `regions_tile` in
+`src/research/native_saved_mesh.rs` (RE-329: whether a plane face's region
+rings tile its outline, a function of 2D rings), with its failure modes
+tested; CI's test job runs these with `cargo test --lib` on Linux, beside
+the doc tests and the `tests/` targets.
 
 ## What's welcome
 
