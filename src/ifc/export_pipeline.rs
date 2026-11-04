@@ -256,13 +256,17 @@ pub enum ExportNote {
         vertices_differ: usize,
         /// By a sampled point of the extrusions' surface off the mesh.
         surface_differs: usize,
-        /// Reproduced, but left with their mesh because a loop is one whole
-        /// circle over 0.12 ft in radius in a Revit 2025 or later file.
+        /// Reproduced, but left with their mesh because a whole circle over
+        /// 0.12 ft in radius is a hole or has one, in a Revit 2025 or later
+        /// file.
         circles_kept: usize,
         /// Reproduced, but their profile cannot be written.
         unwritable: usize,
         /// Of the replaced, instances with an arc in a profile.
         with_arcs: usize,
+        /// Of the replaced, instances with a whole circle written as an
+        /// `IfcCircleProfileDef` (Revit 2025 or later files).
+        circle_profiles: usize,
         /// Instances left alone for sharing a Tag with another entity.
         ambiguous: usize,
     },
@@ -353,10 +357,11 @@ impl fmt::Display for ExportNote {
                 circles_kept,
                 unwritable,
                 with_arcs,
+                circle_profiles,
                 ambiguous,
             } => write!(
                 f,
-                "{replaced} of {candidates} saved-mesh bodies drawn from their family's extrusions ({families} families found, {families_rebuilt} rebuilt; {not_rebuilt} had no rebuilt family, {unplaced} no instance transform, {unchecked} a mesh too large to compare; the extrusions did not reproduce the mesh of {volume_differs} by volume, {vertices_differ} by vertices and {surface_differs} by surface; {circles_kept} reproduced but left with the mesh for a whole circle over 0.12 ft in a Revit 2025 or later file, {unwritable} reproduced but not writable; {with_arcs} of the drawn ones have an arc in a profile; {ambiguous} left alone for sharing a Tag)"
+                "{replaced} of {candidates} saved-mesh bodies drawn from their family's extrusions ({families} families found, {families_rebuilt} rebuilt; {not_rebuilt} had no rebuilt family, {unplaced} no instance transform, {unchecked} a mesh too large to compare; the extrusions did not reproduce the mesh of {volume_differs} by volume, {vertices_differ} by vertices and {surface_differs} by surface; {circles_kept} reproduced but left with the mesh for a whole circle over 0.12 ft that is a hole or has one, in a Revit 2025 or later file, {unwritable} reproduced but not writable; {with_arcs} of the drawn ones have an arc in a profile and {circle_profiles} a whole circle written as an IfcCircleProfileDef; {ambiguous} left alone for sharing a Tag)"
             ),
             Self::FamilyExtrusionsSkipped { error } => {
                 write!(f, "family extrusions not read, bodies unchanged: {error}")
@@ -526,6 +531,7 @@ pub fn run_export_with_limits_and_control(
                     circles_kept: report.circles_kept,
                     unwritable: report.unwritable,
                     with_arcs: report.with_arcs,
+                    circle_profiles: report.circle_profiles,
                     ambiguous: report.ambiguous,
                 });
             }

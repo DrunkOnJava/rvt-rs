@@ -1135,8 +1135,10 @@ Revit 26.2's IFC2X3 one; the office's IFC4 export of Revit 2024 writes a
 circle as half arcs, which ours coincide with (78 of 78 waste terminals at
 1.9e-6 ft). No one drawing of a circle meets both at a radius where the
 counts differ, so an arc is written as the arc, and in a Revit 2025 or later
-file an instance with a whole circle over 0.12 ft in radius keeps its mesh.
-The flag reads Revit 2024 to 2027
+file a whole circle is written as an `IfcCircleProfileDef` starting where the
+record's arc starts (an experiment the next Measure run decides), and an
+instance with a whole circle over 0.12 ft that is a hole or has one keeps its
+mesh. The flag reads Revit 2024 to 2027
 (measured on 2024 and 2025); an earlier file has no instance transform that
 reads, so nothing is replaced (`reports/element-framing/RE-327-family-extrusions.md`
 §9).

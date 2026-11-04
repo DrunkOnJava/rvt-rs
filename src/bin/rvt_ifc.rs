@@ -95,8 +95,9 @@ struct Args {
     /// lines they were drawn from, swept between their offsets) instead of
     /// its saved mesh, where they reproduce the mesh; every other instance
     /// keeps it (#156). An arc in a profile is written as the arc; in a Revit
-    /// 2025 or later file an instance with a whole circle over 0.12 ft in
-    /// radius keeps its mesh (#1346). Off by default. Implies
+    /// 2025 or later file a whole circle is an `IfcCircleProfileDef`, and an
+    /// instance with one over 0.12 ft that is a hole or has a hole keeps its
+    /// mesh (#1346). Off by default. Implies
     /// `--saved-meshes`. Each instance is checked against its own mesh. Revit
     /// 2024 to 2027 files (measured on 2024 and 2025). Slower on large files.
     #[arg(long, conflicts_with_all = ["placeholder", "no_saved_meshes"])]

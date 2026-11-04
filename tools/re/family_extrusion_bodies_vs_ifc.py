@@ -13,8 +13,9 @@ this prints none.
 
 After those rows it prints, for the scored bodies with an arc in a profile
 (#1346, RE-327 section 11), a census by the form Revit's export gives the
-body and by the largest radius of its arcs (up to 0.12 ft, where IfcOpenShell
-cuts any form of an arc within 0.00088 ft of it, or over), with how many of
+body and by how rvt-rs drew it: an `IfcCircleProfileDef` (a whole circle in a
+Revit 2025 or later file), or arcs, with the largest radius up to 0.12 ft (where
+IfcOpenShell cuts any form of an arc within 0.00088 ft of it) or over, with how many of
 each hold "ref on ours", both directions within 0.001 ft and within 1e-5 ft
 (the tessellations coincide), and the volume within 1% and 0.01%. Then the
 scored bodies with an arc that miss "ref on ours", one line each.
@@ -104,10 +105,15 @@ def curves_of(profile):
 
 
 def our_arcs(element):
-    """(arcs in the profiles of the body, the largest of their radii in feet)."""
-    count, largest = 0, 0.0
+    """(arcs and circle profiles in the body, the largest of their radii in feet, circle profiles)."""
+    count, largest, circles = 0, 0.0, 0
     for item in body_items(element):
         if not item.is_a("IfcExtrudedAreaSolid"):
+            continue
+        if item.SweptArea.is_a("IfcCircleProfileDef"):
+            count += 1
+            circles += 1
+            largest = max(largest, item.SweptArea.Radius / FEET)
             continue
         for curve in curves_of(item.SweptArea):
             if not curve.is_a("IfcIndexedPolyCurve"):
@@ -121,7 +127,7 @@ def our_arcs(element):
                 radius = circumradius(a, b, c)
                 if math.isfinite(radius):
                     largest = max(largest, radius / FEET)
-    return count, largest
+    return count, largest, circles
 
 
 def census(scored):
@@ -130,10 +136,13 @@ def census(scored):
     rows = collections.defaultdict(collections.Counter)
     misses = []
     for far, tag, cls, object_type, ratio, to_ours, to_ref in scored:
-        arcs, largest = ours.get(tag, (0, 0.0))
+        arcs, largest, circles = ours.get(tag, (0, 0.0, 0))
         if not arcs:
             continue
-        written = "arcs up to 0.12 ft" if largest <= SMALL_ARC_RADIUS else "arcs over 0.12 ft"
+        if circles:
+            written = "circle profile"
+        else:
+            written = "arcs up to 0.12 ft" if largest <= SMALL_ARC_RADIUS else "arcs over 0.12 ft"
         for key in ((ref.get(tag, "not described"), written), ("all", written), ("all", "all")):
             row = rows[key]
             row["n"] += 1
@@ -181,7 +190,7 @@ def lenient(describe, unread):
 
 def main():
     mesh_bodies_vs_ifc.SOURCE = "family_extrusions"
-    mesh_bodies_vs_ifc.DESCRIBE.update(ours=lenient(our_arcs, (0, 0.0)), ref=lenient(revit_form, "not read"))
+    mesh_bodies_vs_ifc.DESCRIBE.update(ours=lenient(our_arcs, (0, 0.0, 0)), ref=lenient(revit_form, "not read"))
     status = mesh_bodies_vs_ifc.main()
     if status == 0:
         census(mesh_bodies_vs_ifc.RESULT.get("scored", []))

@@ -20,9 +20,11 @@
 //! 0.001439 ft from rvt-rs's surface. No drawing of a circle meets both forms
 //! at those radii, and a circle of 0.12 ft or less meets both (IfcOpenShell
 //! cuts it within 0.00088 ft of itself). In a Revit 2025 or later file an
-//! instance with a loop that is one whole circle over 0.12 ft in radius
-//! therefore keeps its mesh, until the form Revit 2025's IFC4 export gives a
-//! circle is measured (RE-327 section 11).
+//! outline that is one whole circle is therefore written as an
+//! `IfcCircleProfileDef` whose first vertex is where the record's arc starts,
+//! which is exact where Revit's circle starts there (the experiment of RE-327
+//! section 11), and a whole circle over 0.12 ft that is a hole or has one
+//! keeps the mesh.
 //!
 //! An instance keeps its saved mesh unless the extrusions reproduce it. The
 //! family's document holds the family as saved, and a placed instance is
@@ -82,8 +84,9 @@ const VERTEX_TOLERANCE: f64 = 1e-4;
 /// feet: the 0.001 ft chords the mesh draws arcs with (the largest of the
 /// 6,014 printed forms is 0.000998 ft), and a tenth more.
 const SURFACE_TOLERANCE: f64 = 1.1e-3;
-/// The largest radius, feet, of a whole circle that is drawn from a Revit 2025
-/// or later file. IfcOpenShell 0.9 cuts a circle into chords of at most 0.2417
+/// The largest radius, feet, of a whole circle that is a hole or has one and is
+/// drawn from a Revit 2025 or later file. IfcOpenShell 0.9 cuts a circle into
+/// chords of at most 0.2417
 /// rad, which for a radius of 0.12 ft is a chord 0.00088 ft off the circle
 /// whether it is drawn as a circle or as two half arcs (the bar is 0.001 ft);
 /// over 0.137 ft the two forms can differ by a chord, and a vertex of Revit's
@@ -129,14 +132,18 @@ pub struct FamilyExtrusionReport {
     pub vertices_differ: usize,
     pub surface_differs: usize,
     /// Candidates the extrusions reproduce, left with their mesh because a
-    /// loop is one whole circle over 0.12 ft in radius in a Revit 2025 or later
-    /// file, where Revit's export writes it as an `IfcCircleProfileDef`.
+    /// whole circle over 0.12 ft in radius is a hole or has a hole in it, in a
+    /// Revit 2025 or later file, where Revit's export writes a circle as an
+    /// `IfcCircleProfileDef`.
     pub circles_kept: usize,
     /// Candidates the extrusions reproduce whose profile cannot be written: a
     /// solid of no depth.
     pub unwritable: usize,
     /// Of `replaced`, instances with an arc in a profile.
     pub with_arcs: usize,
+    /// Of `replaced`, instances with an outline that is one whole circle,
+    /// written as an `IfcCircleProfileDef` (from a Revit 2025 or later file).
+    pub circle_profiles: usize,
 }
 
 fn cross(a: [f64; 3], b: [f64; 3]) -> [f64; 3] {
@@ -238,16 +245,70 @@ fn to_element_frame(
     })
 }
 
-/// The radius of a loop that is one whole circle: a single arc that turns the
-/// full way round.
-fn whole_circle_radius(source: &Loop) -> Option<f64> {
-    match source.curves.as_slice() {
-        [
-            Curve::Arc {
-                radius, start, end, ..
-            },
-        ] if (end - start).abs() >= TAU - 1e-9 => Some(*radius),
+/// A loop that is one whole circle, a single arc that turns the full way
+/// round: its centre, radius and start point in the sketch plane.
+fn whole_circle(source: &Loop) -> Option<([f64; 2], f64, [f64; 2])> {
+    let [curve] = source.curves.as_slice() else {
+        return None;
+    };
+    match curve {
+        Curve::Arc {
+            center,
+            radius,
+            start,
+            end,
+            ..
+        } if (end - start).abs() >= TAU - 1e-9 => Some((*center, *radius, curve.start_point())),
         _ => None,
+    }
+}
+
+/// Whether a solid has a whole circle over `WHOLE_CIRCLE_MAX_RADIUS` that is
+/// not an outline with nothing in it: a hole, or an outline with a hole.
+fn has_circle_beyond_the_circle_form(solid: &ExtrusionSolid) -> bool {
+    let profile = &solid.profile;
+    let parents = profile.parents();
+    profile.loops.iter().enumerate().any(|(i, source)| {
+        let Some((_, radius, _)) = whole_circle(source) else {
+            return false;
+        };
+        if radius <= WHOLE_CIRCLE_MAX_RADIUS {
+            return false;
+        }
+        let holed =
+            (0..profile.loops.len()).any(|j| profile.depths[j] & 1 == 1 && parents[j] == Some(i));
+        profile.depths[i] & 1 == 1 || holed
+    })
+}
+
+/// A whole circle as an `IfcExtrudedAreaSolid` over an `IfcCircleProfileDef`,
+/// the form Revit 26.2's export gives it. The profile is placed by moving the
+/// solid's origin to the circle's centre and turning its reference direction
+/// to the circle's start point, in the plane IFC builds from the placement's
+/// axis `z` and reference direction `x` (`handed` is -1 where the solid's
+/// frame is left-handed, which mirrors the profile's y).
+fn circle_extrusion(
+    circle: ([f64; 2], f64, [f64; 2]),
+    handed: f64,
+    origin: [f64; 3],
+    x: [f64; 3],
+    z: [f64; 3],
+    depth: f64,
+) -> SolidShape {
+    let (center, radius, start) = circle;
+    let y = cross(z, x);
+    let (cx, cy) = (center[0], handed * center[1]);
+    let (sin, cos) = (handed * (start[1] - center[1]))
+        .atan2(start[0] - center[0])
+        .sin_cos();
+    SolidShape::PlacedExtrusion {
+        profile: ProfileDef::Circle {
+            radius_feet: radius,
+        },
+        origin_feet: [0usize, 1, 2].map(|i| origin[i] + cx * x[i] + cy * y[i]),
+        axis: z,
+        ref_direction: [0usize, 1, 2].map(|i| cos * x[i] + sin * y[i]),
+        depth_feet: depth,
     }
 }
 
@@ -309,8 +370,10 @@ fn indexed_curve(source: &Loop, counter_clockwise: bool, handed: f64) -> Option<
 }
 
 /// A solid as `IfcExtrudedAreaSolid`s, one for each outline of its profile
-/// with the holes inside it, placed by the solid's frame.
-fn placed_extrusions(solid: &ExtrusionSolid) -> Option<Vec<SolidShape>> {
+/// with the holes inside it, placed by the solid's frame. With `circle_forms`
+/// an outline that is one whole circle with nothing in it is an
+/// `IfcCircleProfileDef`.
+fn placed_extrusions(solid: &ExtrusionSolid, circle_forms: bool) -> Option<Vec<SolidShape>> {
     let [x, y, z] = solid.frame.axes;
     let handed = if dot(cross(x, y), z) >= 0.0 {
         1.0
@@ -332,6 +395,14 @@ fn placed_extrusions(solid: &ExtrusionSolid) -> Option<Vec<SolidShape>> {
     let mut out = Vec::new();
     for (i, outline) in profile.loops.iter().enumerate() {
         if profile.depths[i] & 1 == 1 {
+            continue;
+        }
+        let holed =
+            (0..profile.loops.len()).any(|j| profile.depths[j] & 1 == 1 && parents[j] == Some(i));
+        let circle = whole_circle(outline)
+            .filter(|c| circle_forms && !holed && c.1.is_finite() && c.1 > 1e-9);
+        if let Some(circle) = circle {
+            out.push(circle_extrusion(circle, handed, origin, x, z, depth));
             continue;
         }
         let outer = indexed_curve(outline, true, handed)?;
@@ -520,20 +591,28 @@ pub fn attach_with_control(
             .flat_map(|solid| solid.profile.loops.iter())
             .flat_map(|profile_loop| profile_loop.curves.iter())
             .any(|curve| matches!(curve, Curve::Arc { .. }));
-        let big_circle = local
-            .iter()
-            .flat_map(|solid| solid.profile.loops.iter())
-            .filter_map(whole_circle_radius)
-            .any(|radius| radius > WHOLE_CIRCLE_MAX_RADIUS);
-        if big_circle && release >= CIRCLE_PROFILE_FROM {
+        let circle_forms = release >= CIRCLE_PROFILE_FROM;
+        if circle_forms && local.iter().any(has_circle_beyond_the_circle_form) {
             report.circles_kept += 1;
             continue;
         }
-        let placed: Option<Vec<Vec<SolidShape>>> = local.iter().map(placed_extrusions).collect();
+        let placed: Option<Vec<Vec<SolidShape>>> = local
+            .iter()
+            .map(|solid| placed_extrusions(solid, circle_forms))
+            .collect();
         let Some(placed) = placed else {
             report.unwritable += 1;
             continue;
         };
+        let drew_circle = placed.iter().flatten().any(|shape| {
+            matches!(
+                shape,
+                SolidShape::PlacedExtrusion {
+                    profile: ProfileDef::Circle { .. },
+                    ..
+                }
+            )
+        });
         let IfcEntity::BuildingElement {
             solid_shape,
             property_set: Some(set),
@@ -552,6 +631,7 @@ pub fn attach_with_control(
         }
         report.replaced += 1;
         report.with_arcs += usize::from(with_arcs);
+        report.circle_profiles += usize::from(drew_circle);
     }
     Ok(report)
 }
