@@ -1,10 +1,16 @@
 //! What the tools take. Each type's schema is the tool's `inputSchema`.
 
-use rvt::ifc::ExportQualityMode;
+use rvt::ifc::{ExportOptions, ExportQualityMode, SavedMeshChoice};
 use schemars::JsonSchema;
 use serde::Deserialize;
 
-use crate::pipeline::{MeshScope, PipelineOptions};
+/// The phase an argument names: none when it is left out or blank.
+pub fn phase_of(phase: &Option<String>) -> Option<&str> {
+    phase
+        .as_deref()
+        .map(str::trim)
+        .filter(|phase| !phase.is_empty())
+}
 
 /// A model, by the `model_id` `open_model` returned or by path.
 #[derive(Debug, Deserialize, JsonSchema)]
@@ -13,6 +19,11 @@ pub struct ModelArgs {
     /// `.rfa`, `.rte` or `.rft` file. A path that is not open yet is opened.
     #[serde(alias = "model_id", alias = "path")]
     pub model: String,
+    /// The project phase to read, by its name (exactly) or its ElementId,
+    /// instead of the project's last (`rvt-ifc --phase`). It applies to a file
+    /// path: a `model_id` names the phase its model was opened at. An unknown
+    /// phase is an error that lists the file's phases.
+    pub phase: Option<String>,
 }
 
 #[derive(Debug, Deserialize, JsonSchema)]
@@ -20,6 +31,11 @@ pub struct ListElementsArgs {
     /// The `model_id` that `open_model` returned, or the path of the file.
     #[serde(alias = "model_id", alias = "path")]
     pub model: String,
+    /// The project phase to read, by its name (exactly) or its ElementId,
+    /// instead of the project's last (`rvt-ifc --phase`). It applies to a file
+    /// path: a `model_id` names the phase its model was opened at. An unknown
+    /// phase is an error that lists the file's phases.
+    pub phase: Option<String>,
     /// Only elements of this IFC entity: `IFCWALL`, `IfcWall` and `wall` all
     /// name walls. `get_summary` lists the entities the model holds.
     pub category: Option<String>,
@@ -59,6 +75,11 @@ pub struct GetElementArgs {
     /// The element's Revit ElementId (`1234`) or its 22-character IFC
     /// GlobalId, as `list_elements` gives them.
     pub id: IdArg,
+    /// The project phase to read, by its name (exactly) or its ElementId,
+    /// instead of the project's last (`rvt-ifc --phase`). It applies to a file
+    /// path: a `model_id` names the phase its model was opened at. An unknown
+    /// phase is an error that lists the file's phases.
+    pub phase: Option<String>,
 }
 
 /// The quality the export must reach, as `rvt-ifc --mode`.
@@ -127,18 +148,19 @@ pub struct IfcOptions {
 }
 
 impl IfcOptions {
-    pub fn pipeline(&self) -> PipelineOptions {
-        PipelineOptions {
-            mode: self.mode.into(),
-            saved_meshes: match self.saved_meshes {
-                MeshesArg::DoorsAndWindows => MeshScope::Default,
-                MeshesArg::All => MeshScope::All,
-                MeshesArg::Off => MeshScope::Off,
-            },
-            revit_property_sets: self.revit_property_sets,
-            revit_set_placement: self.revit_set_placement,
-            no_base_quantities: self.no_base_quantities,
-        }
+    /// The export these switches ask for. The phase is not among them: a
+    /// model is opened at its phase.
+    pub fn export_options(&self) -> ExportOptions {
+        ExportOptions::default()
+            .with_mode(self.mode.into())
+            .with_saved_meshes(match self.saved_meshes {
+                MeshesArg::DoorsAndWindows => SavedMeshChoice::Default,
+                MeshesArg::All => SavedMeshChoice::All,
+                MeshesArg::Off => SavedMeshChoice::Off,
+            })
+            .with_revit_property_sets(self.revit_property_sets)
+            .with_revit_set_placement(self.revit_set_placement)
+            .with_no_base_quantities(self.no_base_quantities)
     }
 }
 
@@ -156,6 +178,11 @@ pub struct ExportIfcArgs {
     /// The `rvt-ifc` switches; none by default.
     #[serde(default)]
     pub options: IfcOptions,
+    /// The project phase to read, by its name (exactly) or its ElementId,
+    /// instead of the project's last (`rvt-ifc --phase`). It applies to a file
+    /// path: a `model_id` names the phase its model was opened at. An unknown
+    /// phase is an error that lists the file's phases.
+    pub phase: Option<String>,
 }
 
 #[derive(Debug, Deserialize, JsonSchema)]
@@ -173,4 +200,9 @@ pub struct ExportGltfArgs {
     /// being read. The result lists the unread streams.
     #[serde(default)]
     pub allow_partial: bool,
+    /// The project phase to read, by its name (exactly) or its ElementId,
+    /// instead of the project's last (`rvt-ifc --phase`). It applies to a file
+    /// path: a `model_id` names the phase its model was opened at. An unknown
+    /// phase is an error that lists the file's phases.
+    pub phase: Option<String>,
 }

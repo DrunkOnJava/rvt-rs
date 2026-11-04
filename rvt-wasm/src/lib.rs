@@ -26,8 +26,10 @@ use wasm_bindgen::prelude::*;
 use rvt::RevitFile;
 use rvt::control::{ProgressEvent, Stage, WalkerControl};
 use rvt::ifc::{
-    ExportQualityMode, ExportResult, IfcModel, RvtDocExporter,
+    ExportDiagnostics, ExportNote, ExportOptions, ExportQualityMode, ExportRun, IfcModel,
+    SavedMeshChoice,
     gltf::model_to_glb,
+    record_unread_streams, run_export_with_limits_and_control,
     scene_graph::{
         ElementInfoPanel, SceneNode, Schedule, build_scene_graph, build_schedule,
         distinct_ifc_types, element_info_panel,
@@ -231,6 +233,13 @@ fn export_with_limits(
     result
 }
 
+/// What the viewer gets back: [`rvt::ifc::ExportResult`]'s two fields.
+#[derive(serde::Serialize)]
+struct ExportJson {
+    model: IfcModel,
+    diagnostics: ExportDiagnostics,
+}
+
 fn export_with_control(
     bytes: &[u8],
     mode: &str,
@@ -241,39 +250,41 @@ fn export_with_control(
 ) -> Result<JsValue, JsValue> {
     let quality_mode = ExportQualityMode::parse(mode).map_err(err_str)?;
     let mut rf = RevitFile::open_bytes_with_limits(bytes.to_vec(), open_limits).map_err(err_str)?;
-    let mut result = RvtDocExporter
-        .export_with_diagnostics_mode_limits_and_control(
-            &mut rf,
-            quality_mode,
-            walker_limits,
-            control,
-        )
+    // The build `rvt-ifc` runs ([`run_export_with_limits_and_control`]), with doors and windows drawn
+    // from their saved meshes (Revit 2023 to 2027 only) unless `saved_meshes`
+    // is false.
+    let options = ExportOptions::default()
+        .with_mode(quality_mode)
+        .with_saved_meshes(if saved_meshes {
+            SavedMeshChoice::Default
+        } else {
+            SavedMeshChoice::Off
+        });
+    let run = run_export_with_limits_and_control(&mut rf, &options, walker_limits, control)
         .map_err(err_str)?;
-    if saved_meshes {
-        attach_saved_meshes(&mut rf, &mut result, control);
+    let ExportRun {
+        model,
+        mut diagnostics,
+        unread,
+        notes,
+        ..
+    } = run;
+    // Saved graphics only improve bodies: when they cannot be read the model
+    // keeps its bounding boxes and the diagnostics carry a warning saying so.
+    let mut warned = false;
+    for note in &notes {
+        if let ExportNote::SavedMeshesSkipped { error, .. } = note {
+            diagnostics.warnings.push(format!(
+                "Saved graphics not read, door and window bodies unchanged: {error}"
+            ));
+            warned = true;
+        }
     }
-    serde_wasm_bindgen::to_value(&result).map_err(err_str)
-}
-
-/// Draw `result`'s doors and windows from their saved meshes, as `rvt-ifc`
-/// does by default ([`rvt::ifc::saved_meshes::default_scope`]: Revit 2023 to
-/// 2027 only), and recount its diagnostics. Saved graphics only improve
-/// bodies: when they cannot be read the model keeps its bounding boxes and the
-/// diagnostics carry a warning saying so.
-fn attach_saved_meshes(rf: &mut RevitFile, result: &mut ExportResult, control: &WalkerControl) {
-    let Some(scope) = rvt::ifc::saved_meshes::default_scope(rf) else {
-        return;
-    };
-    match rvt::ifc::saved_meshes::attach_scoped_with_control(rf, &mut result.model, scope, control)
-    {
-        Ok(_) => rvt::ifc::recount_exported(&mut result.diagnostics, &result.model),
-        Err(e) => result.diagnostics.warnings.push(format!(
-            "Saved graphics not read, door and window bodies unchanged: {e}"
-        )),
+    if warned {
+        // Recounts the warnings, and puts the unread-stream ones last.
+        record_unread_streams(&mut diagnostics, &unread);
     }
-    // Reading the saved graphics may stop at a resource limit too, and this
-    // also recounts the warnings.
-    rvt::ifc::record_unread_streams(&mut result.diagnostics, rf.unread_streams());
+    serde_wasm_bindgen::to_value(&ExportJson { model, diagnostics }).map_err(err_str)
 }
 
 #[derive(Default, serde::Deserialize)]
