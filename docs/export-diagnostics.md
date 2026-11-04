@@ -134,17 +134,31 @@ the production class counts and the exported IFC does not change.
 category that do not exist in the export phase: created after it, or
 demolished in it or before it. With no phase chosen, Revit's own IFC export
 shows the project's last phase and leaves these out; rvt-rs does the same,
-and they do not count toward `unexported_element_records`. Rooms are never
-counted or left out, because Revit's exporter skips a room by its own phase
-parameter, which is not measured to be its created phase. On Snowdon Towers
-Architectural (2024) the count is 6 (Floor), the slabs of #328, which are
-created and demolished in the Legends phase (RE-184). On Revit 2016 to 2023
-the same filter applies (RE-315); no Autodesk sample has an element outside
-its last phase, and the held-out Vitoria Project's counts are the only
-evidence that it is right on a 32-bit file. A read of the phases
-that fails on a Revit 2015 to 2027 file is reported in `warnings` ("The
-project's phases could not be read"), and the export then writes every
-element.
+and they do not count toward `unexported_element_records`. `rvt-ifc --phase`
+names another export phase, by its name or ElementId. A room is not counted
+here: Revit's exporter skips it by its own phase, not by its status. On
+Snowdon Towers Architectural (2024) the count is 6 (Floor), the slabs of #328,
+which are created and demolished in the Legends phase (RE-184). On Revit 2016
+to 2023 the same filter applies (RE-315); no Autodesk sample has an element
+outside its last phase, and the held-out Vitoria Project's counts are the only
+evidence that it is right on a 32-bit file. A read of the phases that fails on
+a Revit 2015 to 2027 file is reported in `warnings` ("The project's phases
+could not be read"), and the export then writes every element.
+
+`room_not_in_export_phase` counts placed rooms whose own phase
+(`RoomElem.m_phaseId`, Revit's `ROOM_PHASE`) is a phase of the project other
+than the export phase, which Revit's exporter leaves out and rvt-rs does too
+(RE-326). There is one item for each phase the rooms sit in: `count` and
+`classes.Room` are the rooms, and `phase` is that phase's name (`ElementId <n>`
+where the file names none; `--anonymize` replaces it). A room whose phase is
+unset or unread is written and not counted, and so is an Area or an MEP space,
+which Revit's exporter does not check against a phase. Autodesk's
+`rac_basic_sample_project` has 14 rooms in Working Drawings, the second of
+three phases, so the default export counts 14 for that phase and
+`--phase "Working Drawings"` counts none (Measure runs 41784415396 and
+41784419457). Revit 2016 to 2023 apply it as they apply the
+element filter; Revit 2015 and earlier write every room, as every element
+(#1332).
 
 On Revit 2024 to 2027, a door or window is written as its opening alone,
 with no door or window, only where its type's native record was read with

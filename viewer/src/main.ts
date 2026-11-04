@@ -929,7 +929,7 @@ interface ExportDiagnostics {
     bounding_box_bodies?: number;
   };
   unsupported_features?: string[];
-  skipped?: { reason?: string; count?: number; sample_names?: string[] }[];
+  skipped?: { reason?: string; count?: number; sample_names?: string[]; phase?: string }[];
   warnings?: string[];
   formats_latest_integrity?: {
     stream?: string;
@@ -3551,6 +3551,7 @@ function anonymizedDiagnostics(diagnostics: ExportDiagnostics): ExportDiagnostic
     );
   }
   for (const item of copy.skipped ?? []) {
+    if (item.phase !== undefined) item.phase = redacted;
     item.sample_names = (item.sample_names ?? []).map((name) => {
       const id = /(\d+)$/.exec(name)?.[1];
       return id ? `element-${id}` : redacted;
