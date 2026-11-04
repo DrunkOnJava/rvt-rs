@@ -971,10 +971,13 @@ struct BaseContext<'a> {
 /// `named` that covers it (#1384): at that element's level, or along the plane
 /// its shape-edited corners lie in, when that top lies between the wall's base
 /// and top over the whole of the wall's plan. Left as it was, with the reason,
-/// where the wall is not one plain extrusion or has an edited elevation
-/// profile, where a named element's edits are not read, where no named element
-/// drawn as a body covers the whole plan, where two do, or where the top
-/// crosses the wall's base or its top.
+/// where the wall is not one plain extrusion, where a named element's edits
+/// are not read, where no named element drawn as a body covers the whole plan,
+/// where two do, or where the top crosses the wall's base or its top. A wall
+/// with an edited elevation profile is cut like any other: the openings that
+/// profile cuts void the solid as they void the full prism, and Revit raises
+/// the base of the Basement walls of the BIM4LCA office that have one to the
+/// footing's top as it does the others (RE-336).
 fn decide_base(
     context: &BaseContext<'_>,
     cutters: &mut HashMap<u32, Option<Cutter>>,
@@ -986,9 +989,6 @@ fn decide_base(
         gathered,
         shapes,
     } = context;
-    if gathered.profiled.contains(&index) {
-        return BaseDecision::Left("wall_profile_edited");
-    }
     let Some(wall) = entities.get(index).and_then(build_wall) else {
         return BaseDecision::Left("wall_not_one_plain_extrusion");
     };
