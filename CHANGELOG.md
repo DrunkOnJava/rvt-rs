@@ -8,6 +8,572 @@ fragments a release moves into this file.
 
 ## [Unreleased]
 
+## [0.14.0] — 2026-11-04
+
+INTRO-PENDING-MEASURE-41803457521
+
+### Upgrading from 0.13
+
+- Every export's IFC header names rvt-rs 0.14.0, so an export that is
+  otherwise unchanged still differs from 0.13.0's there.
+- A door's or window's `RvtElementRecordGeometry` set no longer carries the
+  19 values the exporter used to hand from one stage to the next
+  (`OpeningCentreX` to `OpeningHeight`, `InstanceOriginX`/`Y`, `TypeWidth`,
+  `TypeHeight`, `CutWidth` to `CutSolidHeight`, `BoxWidth`, `BoxHeight`,
+  `SymbolWireWidth`). Read a door's or window's size from `OverallWidth` and
+  `OverallHeight`, and an opening's centre, axis and base from its
+  `IfcOpeningElement`'s placement and extrusion. `rvt::ifc::IfcModel` gains a
+  public field, `filler_sizes`, so a caller that builds an `IfcModel` as a
+  struct literal has to set it.
+- On Revit 2016 to 2027 a room whose own phase is not the export phase is
+  left out, as Revit's export leaves it out, and counted in the diagnostics as
+  `room_not_in_export_phase` (with the new `phase` field). The export phase is
+  the project's last; `rvt-ifc --phase <name|id>` and
+  `ExportOptions::with_phase` name another. Autodesk's
+  `rac_basic_sample_project` saves from 2016 on no longer write their 14
+  Working Drawings rooms unless that phase is named.
+- New entities in a default export: an `IfcOpeningElement` for each
+  rectangular wall opening that cuts a wall (with Revit's GlobalId),
+  conduits and conduit fittings as `IfcCableCarrierSegment` and
+  `IfcCableCarrierFitting`, gutters as `IfcPipeSegment`, Revit 2024 Areas
+  with a body (`SpaceOutlineSource` `area_boundary`) and Revit 2015 to 2023
+  Areas whose region and body are proven. An Area left without a body says
+  why in `AreaBodyRefusal` or is counted as `area_without_proven_body`.
+- New `BodySource` and body values: `partition_beam_box_along_axis` (a level
+  beam drawn as its record box along its line, with no
+  `Qto_BeamBaseQuantities.Length`), and a wall a floor covers in part carries
+  `BodyHeightSource` `wall_top_stepped_at_covering_floor` and
+  `TopCoverElementId`, with no `Height`, side areas or volumes; the room
+  schedule leaves its Width, Depth and Height empty.
+- `walker::read_field_by_type` and `write_field_by_type` read and write a
+  `0x02` primitive as a `u8` and a `0x03` primitive as an `i16` (they were a
+  `u16` and an `i32`), and a `0x02` vector or container as its bytes.
+  `FieldType` gains `PointerArray` and `PointerContainer`, and `Flagged`
+  takes byte 2 = 0x04.
+- `rvt::ifc::run_export`, `run_export_with_limits` and
+  `run_export_with_limits_and_control` build the model `rvt-ifc` writes, from
+  `ExportOptions`; `RevitFile::export_phase` reports the phase
+  `set_export_phase` resolved. A cancelled `WalkerControl` now ends an
+  export with `Error::Cancelled` also while the saved graphics are read, and
+  `rvt-ifc` prints its step notes after the decode (stderr only).
+- `rvt::research` (unstable): `native_element_parameters::read_defined_values`
+  is replaced by `read_property_values`.
+- `rvt-rs-mcp` is a crate of its own and needs Rust 1.88 to build; `rvt`
+  still needs 1.87.
+
+### Added
+
+- **The openings a rectangular wall opening cuts in a wall are written.** A
+  wall's native record names each element that cuts it, in the order Revit
+  numbers the wall's openings, and Revit's export writes an opening with
+  nothing to fill it for each rectangular wall opening among them. rvt-rs now
+  writes it voiding the wall Revit's export voids, as the rectangle the
+  opening's record saves, through the wall, tagged with the opening's
+  ElementId and named for the wall, with the wall's type name as
+  `Pset_OpeningElementCommon.Reference` and
+  `Pset_EnvironmentalImpactIndicators.Reference`, the rectangle's width and
+  height and the extrusion's depth as `Qto_OpeningElementBaseQuantities`, and
+  Revit's own GlobalId: 30 of 30 on the BIM4LCA office as built and 24 of 24
+  at building permit, each within 0.003 ft of Revit's box with every one of
+  those values equal. The office at permit holds one more such opening than
+  its Revit export (the records are the same in both files and Revit writes
+  it only as built), which the census counts apart. Fire hose cabinets (39
+  of 39 exact, one more than Revit's export in the office as built and two
+  at permit) and curtain walls (box exact on 52 of 68) are measured and not
+  written, and a door's further cut in a second wall, a door's cut in itself
+  and a wall's own profile are not read yet (RE-321, #1165).
+
+- **Areas of Revit 2015 to 2023 are written as `IfcSpace` where their
+  boundary lines prove a body.** The 32-bit partition record (RE-315) of an
+  Area is the 2024 one with `u32` ElementIds, and a 2015 to 2023 Area is read
+  like a 2024 one: number, name, Level, area scheme, the two boundary lines
+  it names, its point, and the region those lines enclose around the point,
+  extruded to the Level above (RE-317). On Autodesk's `rac_advanced` of 2015
+  to 2023 (25 Areas) and `rst_basic` of 2016 to 2023 (1) every Area has the
+  number, name, Level, scheme and named lines of the same project's 2024 save;
+  the point matches on 2021 to 2023 (24 of 25 on 2015 to 2020) and the line
+  boxes on 2022 and 2023 (111 of 127 on 2015 to 2021, whose saves hold an
+  earlier state of the sample model: 16 north-edge lines 0.0246 ft off, and the
+  2021 save holds both states, which makes its groups of lines unreadable).
+  Where the model is the 2024 one (the 2022 and 2023 `rac_advanced`, every
+  `rst_basic`) the reader gives the same body or the same refusal, field for
+  field. An Area is written only where its region and body are proven. Writing
+  every placed Area, as 2024 does, wrote 2 `IfcSpace` that Revit's export
+  lacks on the held-out Revit 2021 BIM Whale project (counts only; Revit's 8
+  found; the cause is not measured). Under the narrowed rule none of its 10
+  Areas has a proven body, so it writes 0 of Revit's 8 and 0 extras, as `main`
+  does; that zero is vacuous, and **its Areas stay undelivered (#1261)**, a
+  regression check under W5. Only the 3 `rac_advanced` bodies on 8 saves are
+  new, checked against the 2024 save's reader output: no 2015 to 2023 file
+  with Areas has a Revit export. An Area without a proven body is not written
+  and is counted by reason in the export diagnostics (`skipped`,
+  `area_without_proven_body`): 22 of `rac_advanced`'s 25 on each of 8 saves
+  (18 in groups with a line that is not along an axis, 4 bounded partly by
+  walls), all 25 on its 2021 save, and `rst_basic`'s one
+  (`next_storey_not_proven`). Not measured: a design option on a 32-bit Area
+  (an Area that names one is left out on 2015, which reads no option sets),
+  `Pset_SpaceCommon.IsExternal` and the other named parameters of these
+  spaces, and Revit 2008 to 2014 (not read)
+  ([docs/rooms.md](docs/rooms.md), #1194, #1261, RE-324).
+
+- **Conduits, conduit fittings and gutters are exported from their element
+  records, on every release the exporter reads.** `OST_Conduit`,
+  `OST_ConduitFitting` and `OST_Gutter` join the recovered categories under
+  the unchanged RE-21 instance rule, with the record's box as the body and the
+  Level its record names (a gutter's by its elevation). Against Revit's own
+  IFC2X3 export of BIM-Speed's Vitoria `ALD26 Before` (Revit 2018), the one
+  file with an export that holds any of them, all 102 conduits, 74 conduit
+  fittings and 2 gutters the rule selects are elements of Revit's by `Tag` and
+  none is outside it: 1,314 of its 1,321 elements are now written (1,136
+  before), 1,305 of them in Revit's class or IFC4's for its IFC2X3 one
+  (conduits as `IfcCableCarrierSegment`, their fittings as
+  `IfcCableCarrierFitting`, gutters as `IfcPipeSegment`, the entities Revit's
+  own type objects name, with no `PredefinedType`), and 1,251 on Revit's
+  storey (1,073 before), with every validation finding at 0 and the
+  properties Revit does not write unchanged at 20. The 7 still missing are 4
+  panel walls and 3 assemblies. Cable trays and cable tray fittings are not
+  recovered, since no file with a Revit export holds one, and neither are the
+  conduit centerline categories Revit's export leaves out. Autodesk's MEP
+  samples of 2015 to 2027 (19 or 20 conduits and 14 conduit fittings on
+  `rme_advanced` and `rme_basic`) and Snowdon Towers Electrical (530 conduits
+  and 322 fittings) now export them too, counted and not scored: no Revit
+  export of those files exists. See
+  [RE-319](reports/element-framing/RE-319-conduits-conduit-fittings-gutters.md)
+  (#1261).
+
+- **`rvt-rs-mcp`, a local, read-only MCP server over stdio, answers an
+  agent's questions about a Revit file.** It is the new `rvt-mcp` workspace
+  crate (its own `rust-version`, 1.88, rmcp's; `rvt` gains no async runtime and
+  stays at 1.87) and targets MCP 2026-07-28, the stateless revision, as well
+  as the older `initialize` handshake. `open_model` decodes a file once with
+  the decode `rvt-ifc` runs and returns an opaque `model_id`; `get_summary`,
+  `list_elements`, `get_element` (by ElementId or GlobalId), `list_rooms`,
+  `list_levels` and `get_diagnostics` answer from that same model, so an
+  answer and the IFC export cannot disagree, and each element carries a
+  provenance object (ElementId, GlobalId, category, class, `BodySource`,
+  `ProfileSource`, `SpaceOutlineSource`, `AreaBodyRefusal`, and the file's
+  release, build, schema class count and ElemTable layout). `export_ifc` and
+  `export_gltf` write to a path the caller names, refuse the model itself, and
+  return a summary, the SHA-256 and a `resource_link`, with progress and
+  cancellation. It opens no socket: its dependency tree has no HTTP crate (CI
+  checks it) and its end-to-end test, which drives the built binary over real
+  stdio in both lifecycles and compares its exports with `rvt-ifc`'s and
+  `rvt-gltf`'s byte for byte, asserts the server holds no network socket. The release
+  archives and the container image carry the binary. Two small public
+  functions let it name what the export writes:
+  `ifc::step_writer::element_global_ids` (the writer's own GlobalIds) and
+  `ifc::schedule_csv::room_rows` (the rooms of `rooms_csv`), with no change to
+  any export. See [docs/mcp.md](docs/mcp.md) (#1324).
+
+- **`ifc::run_export`, one function that builds the model `rvt-ifc` writes,
+  which `rvt-ifc`, `rvt-gltf`, the Python package, the viewer and
+  `rvt-rs-mcp` all call (#1331).** The steps were written out five times: the
+  exporter, the project phase, the bodies drawn from saved graphics, Revit's
+  property sets and their placement, the base-quantity switch and the record of
+  streams a resource limit kept unread. `run_export(&mut rf, &ExportOptions)`
+  takes the switches `rvt-ifc` has, `--phase` included
+  (`ExportOptions::with_phase`), and returns an `ExportRun`: the model, its
+  diagnostics, the unread streams and the notes `rvt-ifc` prints (`ExportNote`,
+  whose `Display` is the sentence, and whose `...Skipped` variants say why a
+  step did not run). `run_export_with_limits` adds the walker limits and
+  `run_export_with_limits_and_control` a `WalkerControl`, as the exporters'
+  own `..._with_limits` and `..._with_control` entry points do.
+  `RevitFile::export_phase` reports the ElementId that `set_export_phase`
+  resolved from a phase's name or number (`None` while the last phase is in
+  effect).
+  The callers keep their defaults and their signatures. `rvt-rs-mcp` gains an
+  optional `phase` argument on its tools that take a path: a model is opened
+  at a phase, has its own `model_id` (keyed by the phase's ElementId, so a
+  name and its number are one model), and exports what `rvt-ifc --phase`
+  writes. Two behaviors move, neither expected to change an export:
+  `rvt-ifc` prints its step notes after the decode instead of between steps
+  (stderr only, the same text), and a cancelled `WalkerControl` now ends an
+  export with `Error::Cancelled` also when it stops the saved-graphics step,
+  where the viewer's bindings used to turn that into a diagnostics warning and
+  carry on (the viewer cannot cancel a decode, it ends its worker, so it is
+  not affected). `ExportKind`, `ExportOptions`, `ExportNote`, `ExportRun` and
+  `SavedMeshChoice` are new public items.
+
+- **A Revit 2024 Area's `IfcSpace` has a body: the region its area boundary
+  lines enclose, from its Level up to the Level above it.** The Area stores no
+  boundary; rvt-rs takes the lines of its area scheme on its Level, splits
+  them where they meet or cross, leaves out the ones with a free end, and
+  draws the loop that holds the Area's point, with the loops directly inside it
+  as holes, as Revit's export draws it. On the BIM4LCA office all 30 Areas, as
+  built and at building permit, equal Revit's in area (within 0.1%) and in
+  outline (within 0.01 ft), where Measure scored none of them before. An Area
+  keeps no body, as before, and says why in
+  `RvtElementRecordGeometry.AreaBodyRefusal` and `exported.area_body_refusals`,
+  wherever its boundary is not proven: a boundary line that is not straight
+  along the plan axes, that was not read, or that is in a non-primary design
+  option, a point in no single region, two Areas that share a region, or a
+  Level that is not a building story. Not
+  measured: the top storey (no Level above), Levels that are not building
+  stories, a Level whose "Story Above" is not the next Level up (never read),
+  Areas bounded partly by walls, and releases other than 2024.
+  `SpaceOutlineSource` is `area_boundary` on a drawn Area and `none` on one that
+  is not; the room schedule gives it an area. An Area does not hold a room's
+  furniture. `Qto_SpaceBaseQuantities.Height`, which Revit's export writes on an
+  Area, is not written yet ([docs/rooms.md](docs/rooms.md), #763, RE-317).
+
+### Changed
+
+- **A large export no longer holds several copies of the same bytes at its
+  peak (#1075).** The peak of `rvt-ifc` and `rvt-gltf` on the reporter's
+  438 MB project (10.3 GB at the export stage) was not measured here, since
+  the file is not available; the figures below are from the BIM4LCA office
+  as built (Revit 2024, 90,842 entities), whose stages a counting allocator
+  sizes in exact heap bytes. Four copies are gone. Building the handle's
+  cache of inflated partitions held each partition twice (every gzip
+  member's output beside the joined copy) and the stored stream beside its
+  stripped copy: members now inflate straight into the one buffer and the
+  stored pages strip in place. Every native pass copied each partition it
+  read and joined each continuation group into a buffer of its own: a pass
+  strips in place, and a group of consecutive members of the cache is
+  borrowed from it. The partition's string records were scanned in a copy of
+  the whole partition, joined by a separator: each chunk is scanned where it
+  lies, after the records that begin in the separator before it. The saved
+  graphics of doors and windows decoded every symbol they share before
+  meshing the first door: a batch of symbols (about 20,000 graph objects) is
+  decoded now, the doors and windows that name it meshed, and the batch
+  freed before the next. The heap at the highest point of each stage, in MiB
+  (main in run 41778285915, this change in run 41781699897 at d1fc5d3c):
+  inflating the 361 MiB partition 901 to 633 (resident 907 to 489), the
+  partition strings 838 to 459, the export 848 to 770, the saved graphics
+  1,568 to 868, so the highest stage of the whole export from 1,568 to 868.
+  The peak resident memory of a whole `rvt-ifc` run, the median of three
+  alternating runs of main and of this change on one runner (run
+  41785668359 at 64db4426): the office as built 1,680 to 918 MiB, at
+  building permit 1,634 to 979, Snowdon Towers architectural 1,351 to 1,073,
+  Autodesk's 2024 MEP sample 623 to 519, and Core Interior 324 to 322. Of
+  the 68 files measured none peaks higher, 57 run 3 % to 17 % faster, and
+  two run slower: the office as built, 28.3 s to 29.2 s (3 %), and Snowdon
+  Towers architectural (1 %); the office at permit runs 27.4 s to 26.2 s. All
+  111 exports of that unfiltered run (the reference models, the BIM4LCA
+  office files, the Revit 2025 models, Autodesk's sample projects and the
+  held-out models) are byte-identical to main's, and the batched saved
+  graphics are element by element the one-shot read's, with its progress.
+  The probes `probe_1075_heap_stages` (exact heap bytes per stage),
+  `probe_1075_heap_sites` (the call sites that hold the heap, by dhat) and
+  `probe_1075_saved_batches` (the batched saved graphics against the
+  one-shot read) reproduce them.
+
+- **A room whose phase is not the export phase is left out, and `rvt-ifc
+  --phase` names the export phase (#1194, RE-326).** A room's phase is the
+  `m_phaseId` field of its `RoomElem` record on Revit 2015 to 2027, not its
+  created phase, which is unset on every room. Revit's exporter leaves out a
+  room whose own phase is not the export phase, the project's last unless the
+  export setup or a view names another, and rvt-rs now does the same: the
+  diagnostics count the rooms in `skipped` as `room_not_in_export_phase`, one
+  item for each phase they sit in (`phase`, new in the diagnostics schema), and
+  `rvt-ifc --phase <name|id>` chooses the phase, which the RE-184 rule for the
+  other elements reads too. A room whose phase is unset, unread or not one of
+  the project's is written, and so is an Area or an MEP space. The 621 rooms of
+  the 12 models with a Revit export are all in the last phase and in Revit's
+  export, so none changes; the rule is unmeasured against a Revit export made
+  with the default setup, because no project in the corpus has a room outside
+  its last phase and such an export. Autodesk's `rac_basic_sample_project` has
+  14 rooms in Working Drawings, the second of three phases, which a public
+  Revit 2018 export of it holds: its saves from Revit 2016 on no longer write
+  them by default, and write them with `--phase "Working Drawings"`, all 14
+  of the 17 `IfcSpace` of that export and no other entity changing (Measure
+  runs 41784415396 and 41784419457). Of the 111 exports of the unfiltered
+  Measure (run 41784044966), 12 move, those saves from Revit 2016 to 2027, and
+  the other 99 are byte for byte as before, the held-out models included. Its Revit 2015 save
+  keeps them, because both phase rules start at Revit 2016 (#1332). The Python
+  bindings and the viewer export the last phase. Report:
+  `reports/element-framing/RE-326-room-phases.md`.
+
+- **`Formats/Latest`: 11 of the 14 residual field names are classified, and
+  Revit 2027's flagged fields are shown to hold no instance bytes (#1196,
+  RE-323).** `FieldType` gains `PointerArray` (`0e 13`: `GEdge`'s three
+  face and edge arrays, two external pointers each) and `PointerContainer`
+  (`0e 53` and `0e 54`: a counted container of external or owning pointers),
+  appended to the non-exhaustive enum, and `Flagged` takes byte 2 = 0x04
+  (`VarExpr::m_refCt`, an `i32`). The native graph decoder reads the
+  instances of six of these fields in Autodesk's sample projects with no
+  layout failure, no record left with a byte unconsumed and every non-null
+  pointer resolving to an object of its record: `GEdge`'s three arrays
+  (111,985 instances each, 57 of 58 projects, all 13 releases 2015 to 2027),
+  `VarExpr::m_refCt` (138,477), `VarSketchConstrObj::m_constrElems` (58,876)
+  and `VarSketchObj::m_params` (93,092) on 2018 to 2027. Five more fields
+  (`LFormatDefaults`' three, `VarFunction::m_args`,
+  `VarSketchDimObj::m_refPts`) have no instance in any file read and are
+  classified by their header alone. `ZoningAppInfo::first` was `Unknown`
+  only because the schema scan cut a field's type at the end of its class's
+  4,096-byte window, two bytes after the field name; the scan now reads it
+  from the stream. 2027's 339 flagged fields (`DBView::m_horzDirTemp`,
+  edit-mode managers) occupy no bytes: the native decoder skips them, and
+  97,000 of the 97,005 records of Autodesk's five 2027 sample projects still
+  end exactly at their body's last byte (the other 5 fail on a size
+  budget), with 110 of the fields' classes among them. Still unclassified:
+  `ClassDefinitionRef::m_ref` (no instance in any file read),
+  `VarParam::m_pSubst` (31,705 instances in the 2015 to 2017 sample
+  projects, every one a null pointer, which two layouts read alike) and
+  `VarSketchDimObj::m_dimValue` (none). The coverage gate also reads each
+  schema with the exact grammar, which names these fields by the classes
+  that declare them (the scan files `GEdge`'s under `GInfo` and
+  `VarSketchDimObj`'s under `VarSketchObj`), and fails on a residual entry
+  that no longer decodes `Unknown`. The `schema-table` JSON schema gains two
+  `FieldType` branches. Report:
+  `reports/element-framing/RE-323-residual-field-encodings.md`.
+
+- **Exports of Revit 2015 to 2023 files take 0.54 to 0.78 of the time they
+  took, and 1.1 to 1.7 times as long as with 0.11.0 (#1237).** 0.12.0 took
+  2.0 to 3.4 times as long as 0.11.0. Four changes, none of which changes an
+  export (every Measure model, run 41793618569, 111 exports):
+  - the read of the parameters named for a property decodes a record only if
+    its body holds the id of a definition the read uses, and reads the types
+    only if one of those definitions is a plain `IsExternal`, whose type
+    value an element takes. This assumes that a value is saved against its
+    definition's id itself; on Autodesk's 33 sample projects of 2015 to 2023
+    every record that gave such a parameter held an id. On the 2015
+    `rac_advanced`, 6 of the 5,608 records it decoded held one, and no sample
+    defines `IsExternal`;
+  - the phase read, which takes the created and demolished phase of every
+    record in the file, reads a record's Element base fields straight from
+    its bytes where the schema has the layout measured on Revit 2015 to 2027,
+    and by the graph decoder otherwise. It agreed with the graph decoder on
+    all 1,014,473 records of Autodesk's 58 sample projects, 2015 to 2027;
+    none fell back (Measure run 41782852434, on a branch whose reader is
+    byte-identical to this change's);
+  - the graph decoder works out a class's field keys once for each class a
+    record uses, copies no field for the items of a container, and keeps no
+    field spans it never reads, and a class is found by name through an
+    index. The 25 samples of 2024 to 2027 take 0.80 to 0.89 of the time, and
+    the reference models and offices 0.75 to 0.87 (run 41793618569);
+  - the parameter definitions pass asks once for each class whether it owns a
+    definition, not for each record.
+
+  Each comparison was timed on one runner of its own, the median of three
+  exports each, so compare ratios, not seconds, between the two: this change
+  at its merged head against `main` (Measure run 41793618569) and, at
+  6f387fd1, against 0.11.0 (run 41782874568), on Autodesk's sample projects.
+  Every `ifc.sha256` and every diagnostics file of the 111 exports of run
+  41793618569 is unchanged. The time of this change over `main`'s is 0.62
+  for the 6 projects of 2015, 0.66 for the 9 of 2016 to 2018, 0.65 for the 15
+  of 2019 to 2022, 0.69 for the 3 of 2023 and 0.86 for the 25 of 2024 to
+  2027; over 0.11.0's, 1.49, 1.51, 1.47 and 1.13 for the first four, single
+  projects 1.09 to 1.65. Peak memory over `main`'s, per file, is 0.84 to 1.00
+  on the 58 samples and 0.93 to 1.04 on the reference models and offices
+  (Core Interior 1.04, 309 to 322 MiB). What remains over 0.11.0 is the
+  parameter definitions pass, which decodes every `FamilySymbol` record for
+  two root fields, the wall records' top joins and the native records'
+  preamble (#1335).
+- **`rvt::research` (unstable): the named-parameter read changes its entry
+  point (#1237).** `native_element_parameters::read_defined_values` is
+  replaced by `read_property_values`, which also takes the captions whose
+  type values the reader uses. `native_document::Options` gains
+  `filtered_parameters_only` (off by default), and `native_parameters` gains
+  `Spans` and `decode_object_fields_spanning`.
+
+- **Hand-off values no longer reach the IFC.** Nineteen properties of
+  `RvtElementRecordGeometry` were values one stage of the export wrote so a
+  later stage could read them back, not facts about the element: the opening
+  a window's or door's type and transform give (`OpeningCentreX`,
+  `OpeningCentreY`, `OpeningAxisX`, `OpeningAxisY`, `OpeningBaseElevation`,
+  `OpeningWidth`, `OpeningHeight`), a turned instance's origin
+  (`InstanceOriginX`, `InstanceOriginY`), and the sizes its type and symbol
+  give (`TypeWidth`, `TypeHeight`, `CutWidth`, `CutHeight`, `CutSolidWidth`,
+  `CutSolidDepth`, `CutSolidHeight`, `BoxWidth`, `BoxHeight`,
+  `SymbolWireWidth`). They stay inside the exporter, which works the openings
+  and each door's and window's `OverallWidth` and `OverallHeight` out of
+  them as before. The trust markers (`BodySource`, `ProfileResolved`,
+  `SpaceOutlineSource` and the rest), the identity properties and the
+  measured facts stay. Upgrading: nothing user-facing changes value,
+  `OverallWidth`, `OverallHeight` and every opening are what they were, and
+  only those 19 properties and their `IFCPROPERTYSINGLEVALUE` lines are gone
+  from a door's or window's set. An importer that read a door's or window's
+  size from one of them reads `OverallWidth` and `OverallHeight` instead; an
+  opening's centre, axis and base elevation are in its `IfcOpeningElement`'s
+  placement and extrusion. The `*_PROPERTIES` constants of
+  `rvt::ifc::export_content` stay, as the names of the hand-offs.
+  `rvt::ifc::IfcModel` gains a public field, `filler_sizes` (each door's and
+  window's size, serialised when it is not empty), which breaks a caller that
+  builds an `IfcModel` by hand.
+
+- **A level beam whose record box is longer than its location line is drawn
+  as that box along the line (#1247, RE-328).** `beam_body` declines a
+  line whose section does not close; on Autodesk's 2024 samples that is
+  every beam it declines with one line, bar 2 Snowdon beams whose line
+  leaves the box by up to 100 ft. 34 of the 52 are level, have no
+  Cross-Section Rotation and have a box longer than their line by at most a
+  foot (17 Snowdon, 9 rst_basic, 8 rac_advanced; RE-49 took 15 of Snowdon's
+  for beams with oblique end cuts, and their saved mesh says otherwise).
+  They are now the box's extents along the line, `BodySource`
+  `partition_beam_box_along_axis`, instead of the axis-aligned record box.
+  Read it as an envelope: its direction and section come from the line and
+  the box (the section across the line is the beam's own saved mesh's on all
+  25 whose mesh decodes whole; the mesh is Revit's tessellation, not an IFC
+  export), and **its length is the box's, not the beam's**: the mesh's ends
+  are the body's on 16 of the 25 and end inside it on 9, by more than
+  0.01 ft and at most 1 ft, so it can run past the beam at its ends (the
+  record box does on 21). The line must be level and within 25 degrees of a
+  model axis, the only angles measured.
+  The 9 without a decodable mesh are on a model axis, where the body is their
+  record box. It gets no `Qto_BeamBaseQuantities.Length`, `Span`, `Slope` or
+  `Roll`, and no I section; `AxisLength` is the line's length and
+  `BodyLength` the body's. The beams already drawn along their line, and
+  the BIM4LCA office, are unchanged. 16 sloped, rolled beams and the 2
+  Snowdon beams keep their box. New: `beam_check` and `BeamReject` in
+  `rvt::research::partition_beam_axes` name the test that declines a line
+  (`beam_body` is unchanged), and `probe_re328_beam_rejections` sorts a
+  file's beams by it, counts only. Report:
+  `reports/element-framing/RE-328-beam-rejections.md`.
+
+### Fixed
+
+- **A wall a floor covers in part is drawn stepped (RE-320, #1067).** Revit
+  cuts a wall's top at the underside of the floor, roof or footing its top
+  join or a Join Geometry cut pair names, over the part of the wall's plan
+  that element covers, and leaves the wall's own top over the rest; rvt-rs
+  drew that only where one element covers the whole plan (RE-267). A wall
+  such elements cover in part is now one `SweptSolid` body: its own plan up
+  to the lowest underside and, over the part of the plan they do not cover,
+  convex pieces up to the next underside or the wall's top. On the BIM4LCA
+  office that is 49 walls as built and 46 at building permit. Against
+  Revit's own export, rvt-rs's top equals Revit's over the whole plan on 583
+  of 607 walls as built (544 before) and 571 of 589 at permit (530), and the
+  area drawn at a wall's full height where Revit's body is cut falls from
+  1,915.8 to 238.2 ft2 as built and from 1,888.1 to 38.1 ft2 at permit; no
+  wall that was equal moved, the 64 and 70 walls cut whole, every wall's
+  lowest and highest point and the quantity, property set, layer and opening
+  scores are unchanged, and Core Interior, RE1 Architecture and the R2025
+  models export byte for byte as before. A stepped wall carries
+  `BodyHeightSource` `wall_top_stepped_at_covering_floor` and
+  `TopCoverElementId`, and gets no `Height`, side areas or volumes, as
+  before. The glTF and the plan sheet still draw it in its layers and by its
+  stepped plan.
+- **An element that only a cut pair names cuts a wall's top only where it
+  reaches it (RE-320, #1067).** A Join Geometry cut takes the volume the two
+  elements share, which is the wall's top only where the element rises to it.
+  Three office walls as built (3484876, 3490093, 3490551) pass through a slab
+  whose top is 0.984 ft below theirs, and Revit leaves their tops whole;
+  the rule that cut a wall at any element it names would have cut them. The
+  64 and 70 walls RE-267 cuts whole are unchanged, and a cut-pair element
+  that reaches the wall's top (20 walls as built, 10 at permit) still cuts.
+- **Not drawn, and measured.** A wall whose layers Revit ends at different
+  heights (the KS walls 1347198 to 1347201, taller in rvt-rs by 102.9, 14.3,
+  35.7 and 11.7 ft2 as built), a top Revit cuts at a height no join names,
+  and the gaps and ends Revit's walls have where no floor reaches. One wall as
+  built (3004978) keeps its full height: 0.0243 ft2 of its plan, all of it
+  inside the wall it abuts, is cut by Revit, and no width, area or position
+  of that piece separates it from the pieces Revit keeps, 0.032 ft slivers
+  included (they are drawn). The room schedule leaves a stepped wall's
+  Width, Depth and Height columns empty, since its body is no longer one
+  extrusion, and the GLB's stepped tops are not scored.
+
+- **A plane face split into regions that tile it is drawn whole (RE-329,
+  #1144, #1247).** Revit saves a face that was split, for paint or material,
+  as the face and a region face for each part, and rvt-rs refused any face
+  with regions, which kept the whole element's record box. A plane face
+  whose regions are plane faces on its own plane, each with one loop and
+  none of its own, listed once, is now drawn as the one face it is where the
+  regions tile it: each lies inside its outline, shares no area with
+  another, and together they cover exactly its area, measured on
+  triangulations. Any other face with regions is refused as before. Doors
+  and windows are drawn from their saved meshes by default, so this moves
+  the default export of the Revit 2025 models 12_Rooms_Door_Windows to
+  17_Rooms_Stairs_Spiral, three windows each from their record box to their
+  mesh, 18 in all. Against Revit's own export every one is exact (Measure
+  run 41790592582: volume ratio 1.0000, Revit's vertices within 1.8e-6 ft
+  of the mesh and the mesh's of Revit's), the census no longer lists
+  regions as a cause in any file, and no other line of those six files'
+  scores moves. No door or window of the BIM4LCA office, Core Interior or
+  RE1 is kept as a box for regions (census, run 41786625424), so none
+  changes there. The whole Measure (run 41791824472) moves 15 of 111
+  exports and no other: the six models above; 42 windows of Autodesk's
+  Snowdon Towers architectural sample, from box to mesh (172 of 172 door
+  and window bodies drawn, 130 before; no Revit export, so not scored); and
+  eight held-out models, 88 windows in all, every one exact against Revit's
+  export (counts only, run 41793911979). Not measured: a face with regions
+  on any other surface, or with holes, which stay refused; whether regions
+  explain #1247's boxed doors and windows is for its reporter's census to
+  say.
+
+- **A rectangular wall opening in a wall drawn stepped is written.** RE-321's
+  openings (#1305) took only walls drawn as one extrusion, so in a wall
+  RE-320 draws stepped (#1304) the opening was left out without a word. A
+  stepped wall keeps its whole prism, and the opening voids every piece of
+  its body, so it is written there too. An opening whose corners do not lie
+  in one plane across the wall, as on a wall whose axis was not read, is
+  left out (#1165, RE-321).
+
+- **A wall's end at a corner of three or more walls follows the order its
+  record joins them in (RE-322, #1194).** A join's walls are listed in the
+  order Revit joined them, and an earlier wall wins: counting only the walls
+  that overlap in elevation (the list also names the walls on other storeys
+  that end at the same point), a wall stops at the near face of the
+  perpendicular walls listed before it, meets flush a wall that continues it
+  when that is listed before the next perpendicular wall, and otherwise runs
+  through the perpendicular walls listed after it. The faces are those of each
+  wall where its own line ends, since walls of different thickness are
+  aligned on a face, not a centreline. It is read only where it is right on
+  every measured end: a butt join, every wall straight and meeting at a right
+  angle or straight on, no element but a wall cutting the wall, the faces that
+  decide agreeing, and the wall single-layer or stopping against single-layer
+  walls. An end it reads names the wall it stops at or runs through
+  (`JoinStartWallElementId`) only where one perpendicular wall alone decides
+  it. Against Revit's own export of the BIM4LCA office, 510 of 607 walls
+  as built have both ends within 0.001 ft (482 before) and 430 of 589 at
+  building permit (422); 30 and 8 ends go from wrong to right and none from
+  right to wrong. Two single-layer walls that meet at a mitre (R2025
+  `18_WallJoins`, the only one measured) end on the line through the two
+  corners: 9 of its 9 walls, from 7. Core Interior and RE1 export byte for
+  byte as before. Layered corners of two walls, a layered wall at layered
+  walls and every corner a column cuts were measured and are not read
+  (`reports/element-framing/RE-322-wall-corner-order.md`).
+
+- **`Formats/Latest`: a `char` field is 1 byte and a `short` field 2, not 2
+  and 4 (#1196, RE-325).** `FieldType::decode` gave the descriptors with base
+  byte 2 a size of 2 (a `u16`) and base byte 3 a size of 4 (a "deprecated
+  i32 alias seen in 2016 to 2018 only"); the native graph decoder had read
+  them as 1 and 2 bytes. The schema names the types (every `std::pair<
+  char, K >` slot carries base 2 and every `std::pair< short, K >` slot base
+  3, in all 13 family files, 2014 and 2016 to 2027), and the instances settle
+  the width: the 58 Autodesk sample projects of Revit 2015 to 2027 hold
+  402,652 native records with an instance of such a field, 402,293 of them
+  decodable without the extensible-storage catalog (the other 359 are
+  Revit 2024 records that need it), and all 402,293 are read to their last
+  byte at 1 and 2 bytes (683,250 instances of 20 fields). `FieldType`'s
+  widths read 65 of them, those whose only instances are empty byte buffers,
+  and each field rewritten alone to another width leaves none of its
+  non-empty records whole. The byte buffers are files that frame their own
+  length: 13,407 PNGs end with their IEND chunk at exactly the declared
+  count, and 8,157 RTF streams open with `{\rt`. Base 3 is not confined to
+  2016 to 2018: the schema has 24 to 27 `short` fields and three `short[3]`
+  arrays in every release 2014 to 2027. `walker::read_field_by_type` and
+  `write_field_by_type` read and write a `0x02` primitive as a `u8` and a
+  `0x03` primitive as an `i16`, and a `0x02` vector or container (a byte
+  blob, which the walker could only skip the count of) as its whole bytes.
+  Report: `reports/element-framing/RE-325-scalar-widths.md`.
+
+### Research
+
+- **What keeps a saved mesh from decoding whole, face by face (RE-329,
+  #1144, #1247).** `probe_re329_saved_graphics_census` meshes every face of
+  an element that keeps its box, not only the first that fails, and prints
+  counts: each failing face's surface, profile curve and trim, and each
+  element's set of causes, split into doors and windows (drawn by default)
+  and everything else (`--saved-meshes`). On the BIM4LCA office as built 146
+  of 11,246 candidates keep their box (147 of 11,363 at permit): 43 toilets
+  that need ellipse profiles, curved ruled surfaces and trimmed
+  revolutions together (RE-302), 30 fittings held by cylinder faces with
+  several loops alone (RE-305), 19 sanitary terminals that need
+  `HermiteSurf` and `GHermiteSpline` together, and 25 railings and terminals
+  held by the graphics walk alone, not by a face; no door or window of the
+  office, Core Interior or RE1 is among them (Measure run 41786625424).
+  RE-305's 30 fittings, read on today's `main` with the volume taken about
+  each body's centre, are still 1.1102 to 1.1105 of Revit's (run 41787545512)
+  and, face by face, draw no surface Revit lacks (run 41788644583: 2.3% more
+  area, no face off Revit's surface). They fail "Revit's vertices within
+  0.001 ft" on 72 of Revit's 1,083 vertices, all nearest surfaces of
+  revolution, up to 0.0051 ft: 26 in the pattern of RE-302's open item, a
+  junction between two curved faces, and 46 at 0.0011 to 0.0023 ft on three
+  other faces, for which no cause is shown. The reader stays off `main`. Not
+  claimed: that the excess volume is wholly Revit's faceting of thin rods,
+  or that any of the 72 vertices is Revit's error and not the mesh's.
+
 ## [0.13.0] — 2026-11-03
 
 0.13.0 makes room and space import dependable on more files, reads Revit
