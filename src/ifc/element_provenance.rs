@@ -197,9 +197,10 @@ pub enum CopyRule {
     /// A native record by member name, the current copy of it
     /// (`native_document`).
     Native,
-    /// The last frame of the record in file order, as the reader's scan kept
-    /// it, where the record's frames were not compared or do not agree (a
-    /// type symbol's box).
+    /// One frame or partition of the record, as the reader's scan kept it,
+    /// without the record's other copies being compared: the last frame of a
+    /// type symbol whose frames do not agree, and the solids of a room, read
+    /// in the room's own partition only.
     Frame,
 }
 

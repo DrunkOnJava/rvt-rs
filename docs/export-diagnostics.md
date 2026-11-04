@@ -103,8 +103,9 @@ number of sketch lines it is made of; a source of one record (a type symbol, a
 run type) counts the partitions that held that record. Its `rule` is how that
 record's copy was chosen: `agreeing` (every copy gives the same value),
 `current` (the copies disagreed and the current partition's was taken) or
-`frame` (the last of the record's frames, which were not compared or do not
-agree).
+`frame` (one frame or partition of the record, without its other copies being
+compared: the last frame of a type symbol whose frames differ, a room's solids
+read in the room's own partition).
 A reader notes its choice where it makes it, only while the export builds this
 table, and the entry is listed only where the element's final `BodySource` is
 drawn from that reader.
@@ -117,10 +118,10 @@ drawn from that reader.
 | The same | `sketch_list` | `agreeing` or `current` | The element-data header of the Sketch's curve list that names the lines (RE-97), the lowest-numbered partition's or the current one. Where the element has one. |
 | The same, where the outline is read from the lines' own ends rather than their boxes | `sketch_line_data` | `agreeing` or `current` | `parts`: the element-data header of each line's copy (as `bounded_line`). |
 | The same bodies where the section is the type symbol's box (`profile_source` `family_type_symbol_envelope`: columns) | `type_section` | `agreeing` or `frame` | `parts`: the type symbol's frame, the last of its frames the column scan kept; `agreeing` (with `partitions`) where every frame of the symbol gives the same box, `frame` where they do not. |
-| The same bodies where the profile is a room's outline read from its stored solid (`profile_source` `partition_room_solid_faces`, `partition_room_solid_faces_resolved` or `partition_room_solid_faces_approximate`, RE-101, RE-316) | `room_solid_faces` | `agreeing` | `parts`: the header of each stored solid of the room, in the room's own partition, that gave the outline (the ElementId, then the solid's tag); where more than one solid gave one, every one gave the same. |
-| `family_type_hollow_section` | `type_hollow_section` | `agreeing` | `parts`: the entries of the column type's parameters `b`, `Ht`, `t` and `kr` (`f64`, `ff` x 8, `i64` parameter id), in the type's value block; the first copy of each, every copy holding the same value. The element's `selected_frame` names the frame whose box the section is held to. |
-| `family_type_i_section` | `type_i_section` | `agreeing` | `parts`: the six entries of the type's I section (width, height, web and flange thickness, the centroid both ways), as for the hollow section. `instance_transform` (as below) gives the plan angle of the column's X axis. |
-| `partition_pipe_axis` | `pipe_connectors` | `agreeing` | `parts`: the two connector entries (`u32` index, `u32` 1, the point) that are the pipe's ends, in the partition of its record; the radius is the record box's. Where the pipe's body came from two partitions they agree. |
+| The same bodies where the profile is a room's outline read from its stored solid (`profile_source` `partition_room_solid_faces`, `partition_room_solid_faces_resolved` or `partition_room_solid_faces_approximate`, RE-101, RE-316) | `room_solid_faces` | `frame` | `parts`: the header of each stored solid of the room that gave the outline (the ElementId, then the solid's tag), in the room's own partition; where more than one solid gave one, every one gave the same. Only that partition is read: the room's solids in other partitions are not compared, so the rule is not `agreeing`. |
+| `family_type_hollow_section` | `type_hollow_section` | `agreeing` | `parts`: the entries of the column type's parameters `b`, `Ht`, `t` and `kr` (`f64`, `ff` x 8, `i64` parameter id), in the type's value block; the first copy of each, every copy holding the same value. A parameter whose value block holds two different values, or whose copies in two partitions differ, is skipped (the type then has no section): that is not counted as a disagreement among copies. The element's `selected_frame` names the frame whose box the section is held to. |
+| `family_type_i_section` | `type_i_section` | `agreeing` | `parts`: the six entries of the type's I section (width, height, web and flange thickness, the centroid both ways), as for the hollow section. `instance_transform` (as below) gives the plan angle of the column's X axis. On Core Interior, the BIM4LCA office and the RE1 models no element has this body (Measure run 41887789579), so this reader is untested on real files. |
+| `partition_pipe_axis` | `pipe_connectors` | `agreeing` | `parts`: the two connector entries (`u64` element, `u32` index, `u32` 1, the point) whose points are the pipe's ends, in the partition of its record. An entry is found by where its point falls, never by whose it is (RE-131): at a connected end it is keyed by the element connected there, so a part's `element_id` may be a neighbour of the pipe (a fitting), not the pipe. The radius is the record box's, held in the element's `selected_frame`. Where the pipe's body came from two partitions they agree. |
 | `partition_wall_centreline`, `partition_wall_centreline_layer_joins`, `partition_wall_tapered_section`, `partition_beam_axis`, `partition_beam_box_along_axis` | `bounded_line` | `agreeing` | The element-data header of the lowest-numbered partition's copy of its location line. Every copy holds the same line; a wall or beam whose copies differ is drawn as its box instead. |
 | `partition_wall_arc` | `bounded_arc` | `agreeing` | As `bounded_line`, for a curved wall's arc. |
 | `partition_family_instance_turned_box`, `partition_family_instance_oriented_box` | `instance_transform` | `agreeing` or `current` | The element-data header of the copy: the lowest-numbered partition's where the copies agree, the current partition's where they differ (RE-216). |
@@ -160,11 +161,17 @@ for a native record it finds the ElementId at the offset; for each record in
 has the element's id at its first bytes, or, on a second-prologue frame, the id
 of the record that encloses it (found from the bytes); a sketch line's data is
 an element-data header and then the line's own id; a room's solid is the room's
-id and the solid's tag; a type's parameter entry is `f64`, `ff` x 8 and an
-`i64`, in the value block whose owner is the type; a pipe's connector entry is a
-`u32` index at most 255, the `u32` 1 and three `f64`, the point lying in the
-pipe's record box; a run type or a native type record starts with its id; and a Sketch's curve list is a header followed by
-the sketched element's id. A frame of a 32-bit release with no id at its first
+id and the solid's tag, and read again (`room_outline_at`, or
+`resolved_outline_of_solids` for a resolved outline) it gives an outline with
+the vertex count the room holds; a type's parameter entry is `f64`, `ff` x 8 and
+an `i64`, in the value block whose owner (declared, as the reader's blocks
+are) is the type, and a section's parts are distinct entries of the expected
+parameters (an I section's six; a hollow section's four, whose captions the
+`ParamElemFamily` elements name `b`, `Ht`, `t` and `kr`); a pipe's connector
+entry is the keyed element's `u64`, an index of at most 255, the `u32` 1 and a
+point, and the two parts' points make a cylinder (`pipe_body`) with the pipe's
+record box; a run type or a native type record starts with its id; and a
+Sketch's curve list is a header followed by the sketched element's id. A frame of a 32-bit release with no id at its first
 bytes is counted as not read. It does not say the
 copy taken is the right one: `agreeing` copies are equal, and `current` is
 `current_partitions`, which it does not measure.

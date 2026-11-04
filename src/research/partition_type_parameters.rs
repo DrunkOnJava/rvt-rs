@@ -177,7 +177,7 @@ pub fn scan_partition_lengths(
     declared_ids: &BTreeSet<u32>,
     parameters: &BTreeSet<i64>,
 ) -> BTreeMap<u32, BTreeMap<i64, f64>> {
-    scan_partition_length_places(buf, declared_ids, parameters)
+    scan_partition_length_places(buf, declared_ids, parameters, false)
         .into_iter()
         .map(|(owner, held)| {
             let held = held
@@ -189,12 +189,14 @@ pub fn scan_partition_lengths(
         .collect()
 }
 
-/// [`scan_partition_lengths`], also giving where the first copy of each value
-/// is: the offset of its `f64` in `buf` (#1368).
+/// [`scan_partition_lengths`], also giving, when `want_places` asks, where the
+/// first copy of each value is: the offset of its `f64` in `buf` (0 when it
+/// does not ask) (#1368).
 pub fn scan_partition_length_places(
     buf: &[u8],
     declared_ids: &BTreeSet<u32>,
     parameters: &BTreeSet<i64>,
+    want_places: bool,
 ) -> BTreeMap<u32, BTreeMap<i64, (f64, usize)>> {
     let blocks = value_blocks(buf, declared_ids);
     let mut first_at: BTreeMap<(u32, i64), usize> = BTreeMap::new();
@@ -214,7 +216,9 @@ pub fn scan_partition_length_places(
             let Some(&(_, Some(owner))) = index.checked_sub(1).and_then(|i| blocks.get(i)) else {
                 continue;
             };
-            first_at.entry((owner, parameter)).or_insert(at - 16);
+            if want_places {
+                first_at.entry((owner, parameter)).or_insert(at - 16);
+            }
             values
                 .entry((owner, parameter))
                 .and_modify(|seen| {
@@ -227,7 +231,8 @@ pub fn scan_partition_length_places(
     }
     let mut out: BTreeMap<u32, BTreeMap<i64, (f64, usize)>> = BTreeMap::new();
     for ((owner, parameter), value) in values {
-        if let (Some(value), Some(&at)) = (value, first_at.get(&(owner, parameter))) {
+        if let Some(value) = value {
+            let at = first_at.get(&(owner, parameter)).copied().unwrap_or(0);
             out.entry(owner).or_default().insert(parameter, (value, at));
         }
     }
@@ -477,14 +482,7 @@ pub fn type_i_sections_at(
         return (BTreeMap::new(), ParameterPlaces::new());
     };
     let declared = crate::elem_table::declared_ids(&records);
-    let parameters = BTreeSet::from([
-        SECTION_WIDTH_PARAMETER,
-        SECTION_HEIGHT_PARAMETER,
-        SECTION_WEB_THICKNESS_PARAMETER,
-        SECTION_FLANGE_THICKNESS_PARAMETER,
-        SECTION_CENTROID_HORIZONTAL_PARAMETER,
-        SECTION_CENTROID_VERTICAL_PARAMETER,
-    ]);
+    let parameters = BTreeSet::from(I_SECTION_PARAMETERS);
     let (lengths, places) = type_lengths_at(rf, &declared, types, &parameters, want_places);
     let sections = lengths
         .into_iter()
@@ -770,7 +768,9 @@ fn type_lengths_at(
         let Ok(inflated) = rf.inflated_partition(&stream) else {
             continue;
         };
-        for (owner, found) in scan_partition_length_places(inflated.bytes(), declared, parameters) {
+        for (owner, found) in
+            scan_partition_length_places(inflated.bytes(), declared, parameters, want_places)
+        {
             if !types.contains(&owner) {
                 continue;
             }

@@ -24,11 +24,15 @@
 //!   the record that encloses the frame, which this test finds from the bytes
 //!   (`partition_record_chain`); a sketch line's data (`sketch_line_data`) is an
 //!   element-data header followed by the line's own id; a room's solid is the
-//!   room's id and the solid's tag; a type's parameter entry is an `f64`, `ff`
-//!   x 8 and an `i64`, in the value block the type owns (the nearest block mark
-//!   before it); a pipe's connector entry is an index of at most 255, the
-//!   `u32` 1 and a point inside the pipe's record box (the frame decoded
-//!   here); a run type is an id
+//!   room's id and the solid's tag, and read again it gives an outline of the
+//!   vertex count the room holds; a type's parameter entry is an `f64`, `ff` x 8
+//!   and an `i64`, in the value block the type owns (the nearest block mark
+//!   before it whose owner is declared), and a section's parts are distinct
+//!   entries of the expected parameters (an I section's six, a hollow
+//!   section's `b`, `Ht`, `t` and `kr` by their captions); a pipe's connector
+//!   entry is the keyed element's `u64`, an index of at most 255, the `u32` 1
+//!   and a point, the two parts' points making a cylinder (`pipe_body`) with
+//!   the pipe's record box (the frame decoded here); a run type is an id
 //!   object with the type's id; and a Sketch's curve list is an element-data
 //!   header followed, at a fixed place, by the sketched element's id. Frames of
 //!   a 32-bit release that carry no id at their first bytes are counted as not
@@ -63,20 +67,28 @@ use crate::element_parameters::nordic_dir;
 use rvt::ifc::entities::{IfcEntity, PropertyValue};
 use rvt::ifc::{ExportOptions, IfcModel, run_export};
 use rvt::research::element_record_plan_profiles::SKETCH_OWNER_OFFSET;
+use rvt::research::native_document::{Options, extract_graphs};
 use rvt::research::partition_beam_axes::{
     BEAM_DATA_WINDOW, BoundedArc, BoundedLine, first_bounded_arc, first_bounded_line,
     scan_first_bounded_arcs, scan_first_bounded_lines,
 };
 use rvt::research::partition_element_records::{
-    PartitionRecordSpan, carries_no_element_id, decode_at_with_marker, decode_frame_as,
-    enclosing_record, file_bbox_marker, partition_record_chain,
+    PartitionElementRecord, PartitionRecordSpan, carries_no_element_id, decode_at_with_marker,
+    decode_frame_as, enclosing_record, file_bbox_marker, partition_record_chain,
 };
 use rvt::research::partition_instance_transforms::{
     INSTANCE_TRANSFORM_WINDOW, InstanceTransform, instance_transform, scan_instance_transforms,
 };
 use rvt::research::partition_names::{ElementDataLayout, element_data_layout};
-use rvt::research::partition_room_boundaries::{ROOM_SOLID_TAG, is_room_outline_source};
-use rvt::research::partition_type_parameters::VALUE_BLOCK_MARK;
+use rvt::research::partition_pipe_axes::pipe_body;
+use rvt::research::partition_room_boundaries::{
+    ROOM_OUTLINE_SOURCE, ROOM_OUTLINE_SOURCE_APPROXIMATE, ROOM_OUTLINE_SOURCE_FACES,
+    ROOM_SOLID_TAG, ResolvedKind, is_room_outline_source, resolved_outline_of_solids,
+    room_outline_at,
+};
+use rvt::research::partition_type_parameters::{
+    HOLLOW_SECTION_PARAMETER_NAMES, I_SECTION_PARAMETERS, VALUE_BLOCK_MARK,
+};
 use rvt::{RevitFile, elem_table};
 use serde_json::json;
 use std::collections::{BTreeMap, BTreeSet};
@@ -214,6 +226,17 @@ const COVERAGE: &[(&str, Coverage)] = &[
     ("family_extrusions", NotYet),
 ];
 
+/// The readers that source what a box alone does not (a profile, a section, a
+/// radius): an element with one is `selected_frame`, not `selected_frame_box`.
+const PROFILE_FRAME_READERS: &[&str] = &[
+    "sketch_lines",
+    "type_section",
+    "room_solid_faces",
+    "type_hollow_section",
+    "type_i_section",
+    "pipe_connectors",
+];
+
 /// The readers each model's table must have at least one value source from.
 const MIN_READERS: &[(&str, &[&str])] = &[
     (
@@ -231,6 +254,8 @@ const MIN_READERS: &[(&str, &[&str])] = &[
         "RE1-Architecture",
         &["selected_frame", "bounded_line", "saved_graphics"],
     ),
+    ("RE1-Mechanical", &["selected_frame", "pipe_connectors"]),
+    ("RE1-Plumbing", &["selected_frame", "pipe_connectors"]),
     ("Revit_IFC5_Einhoven", &["selected_frame", "saved_graphics"]),
     (
         "nordic-office-as-built",
@@ -244,6 +269,8 @@ const MIN_READERS: &[(&str, &[&str])] = &[
             "stair_run_lines",
             "landing_lines",
             "room_solid_faces",
+            "type_hollow_section",
+            "pipe_connectors",
         ],
     ),
 ];
@@ -299,6 +326,8 @@ struct BodyInfo {
     profile_elsewhere: bool,
     /// The `ProfileSource` property.
     profile_source: Option<String>,
+    /// The `ProfileVertexCount` property.
+    profile_vertices: Option<i64>,
 }
 
 /// The elements of `model` by ElementId and `BodySource`, and how many entities
@@ -321,11 +350,15 @@ fn element_bodies(model: &IfcModel) -> (Bodies, usize) {
         let mut body = None;
         let mut profile_source = None;
         let mut profile_resolved = false;
+        let mut profile_vertices = None;
         for property in property_set.iter().flat_map(|set| &set.properties) {
             match (property.name.as_str(), &property.value) {
                 ("BodySource", PropertyValue::Text(text)) => body = Some(text.clone()),
                 ("ProfileSource", PropertyValue::Text(text)) => profile_source = Some(text.clone()),
                 ("ProfileResolved", PropertyValue::Boolean(true)) => profile_resolved = true,
+                ("ProfileVertexCount", PropertyValue::Integer(count)) => {
+                    profile_vertices = Some(*count)
+                }
                 _ => {}
             }
         }
@@ -335,6 +368,7 @@ fn element_bodies(model: &IfcModel) -> (Bodies, usize) {
             bodies.entry((id, body)).or_insert(BodyInfo {
                 profile_elsewhere: elsewhere,
                 profile_source,
+                profile_vertices,
             });
         }
     }
@@ -352,17 +386,36 @@ fn i64_at(buf: &[u8], at: usize) -> Option<i64> {
 }
 
 /// The ElementId of the value block that the entry at `at` is in: the nearest
-/// block mark before it, not preceded by a further `ff`, with the owner's id in
-/// the eight bytes before.
-fn value_block_owner(buf: &[u8], at: usize) -> Option<u32> {
+/// block mark before it, not preceded by a further `ff`, whose owner is
+/// declared or is 0, as the reader's blocks are. A mark with 0 before it ends
+/// the block before it and is owned by none.
+fn value_block_owner(buf: &[u8], at: usize, declared: &BTreeSet<u32>) -> Option<u32> {
     let mark = &VALUE_BLOCK_MARK[..];
     let mut start = at.checked_sub(mark.len())?;
     loop {
         if start >= 8 && buf.get(start..start + mark.len())? == mark && buf[start - 1] != 0xff {
-            return u32::try_from(u64_at(buf, start - 8)?).ok();
+            match u32::try_from(u64_at(buf, start - 8)?) {
+                Ok(0) if !declared.contains(&0) => return None,
+                Ok(id) if declared.contains(&id) => return Some(id),
+                _ => {}
+            }
         }
         start = start.checked_sub(1)?;
     }
+}
+
+/// The partition element record of the frame an entry names, read again.
+fn frame_record(
+    rf: &mut RevitFile,
+    frame: Option<(&str, usize)>,
+    id: u32,
+    marker: Option<[u8; 8]>,
+    declared: &BTreeSet<u32>,
+) -> Option<PartitionElementRecord> {
+    let ((stream, offset), marker) = frame.zip(marker)?;
+    let inflated = rf.inflated_partition(stream).ok()?;
+    decode_at_with_marker(stream, inflated.bytes(), offset, declared, &marker)
+        .or_else(|| decode_frame_as(stream, inflated.bytes(), offset, id, &marker))
 }
 
 fn u32_at(buf: &[u8], at: usize) -> Option<u32> {
@@ -472,6 +525,34 @@ fn check_model(name: &str, path: &Path) {
                     readers.contains(&source.reader.as_str())
                         && rules.contains(&source.rule.as_str())
                 });
+                // The frame an element's box is held to: `selected_frame`
+                // where a reader sourced its profile, else `selected_frame_box`.
+                if let Some(frame) = entry
+                    .value_sources
+                    .iter()
+                    .find(|held| held.rule.as_str() == "selected")
+                {
+                    let sourced = entry
+                        .value_sources
+                        .iter()
+                        .any(|held| PROFILE_FRAME_READERS.contains(&held.reader.as_str()));
+                    let expected = if profile_elsewhere && !sourced {
+                        "selected_frame_box"
+                    } else {
+                        "selected_frame"
+                    };
+                    if frame.reader != expected {
+                        problems.push(format!(
+                            "{id}: {body} has {}, and its profile {} another record",
+                            frame.reader,
+                            if profile_elsewhere {
+                                "is read from"
+                            } else {
+                                "is not read from"
+                            }
+                        ));
+                    }
+                }
                 match found {
                     Some(source) => {
                         stats.with_source += 1;
@@ -487,33 +568,6 @@ fn check_model(name: &str, path: &Path) {
                                 }
                                 _ => &[],
                             };
-                            let profile_sourced = entry.value_sources.iter().any(|held| {
-                                matches!(
-                                    held.reader.as_str(),
-                                    "sketch_lines"
-                                        | "type_section"
-                                        | "room_solid_faces"
-                                        | "type_hollow_section"
-                                        | "type_i_section"
-                                        | "pipe_connectors"
-                                )
-                            });
-                            let expected = if profile_elsewhere && !profile_sourced {
-                                "selected_frame_box"
-                            } else {
-                                "selected_frame"
-                            };
-                            if source.reader != expected {
-                                problems.push(format!(
-                                    "{id}: {body} has {}, and its profile {} another record",
-                                    source.reader,
-                                    if profile_elsewhere {
-                                        "is read from"
-                                    } else {
-                                        "is not read from"
-                                    }
-                                ));
-                            }
                             if !profile_readers.is_empty() {
                                 stats.profiled += 1;
                                 let sourced = entry
@@ -568,6 +622,13 @@ fn check_model(name: &str, path: &Path) {
     let mut decoded_lines: BTreeMap<u32, Option<BoundedLine>> = BTreeMap::new();
     let mut decoded_arcs: BTreeMap<u32, Option<BoundedArc>> = BTreeMap::new();
     let mut decoded_transforms: BTreeMap<u32, Option<InstanceTransform>> = BTreeMap::new();
+    // Each room's `ProfileSource` and `ProfileVertexCount`, to read its solids
+    // again; the hollow sections' parameters, to name them below.
+    let rooms: BTreeMap<u32, (Option<String>, Option<i64>)> = listed_bodies
+        .iter()
+        .map(|((id, _), info)| (*id, (info.profile_source.clone(), info.profile_vertices)))
+        .collect();
+    let mut hollow_checks: Vec<(u32, Vec<i64>)> = Vec::new();
     let mut parts_checked = 0usize;
     let mut parts_confirmed = 0usize;
     let mut parts_by_record = 0usize;
@@ -576,28 +637,6 @@ fn check_model(name: &str, path: &Path) {
     let mut by_rule: BTreeMap<String, usize> = BTreeMap::new();
     let width = usize::from(table.record_id_bytes.unwrap_or(8));
     for (&id, entry) in &table.elements {
-        // A box whose profile a reader sourced is not `selected_frame_box`.
-        let readers: BTreeSet<&str> = entry
-            .value_sources
-            .iter()
-            .map(|source| source.reader.as_str())
-            .collect();
-        if readers.contains("selected_frame_box")
-            && [
-                "sketch_lines",
-                "type_section",
-                "room_solid_faces",
-                "type_hollow_section",
-                "type_i_section",
-                "pipe_connectors",
-            ]
-            .iter()
-            .any(|reader| readers.contains(reader))
-        {
-            problems.push(format!(
-                "{id}: selected_frame_box beside a source for the profile"
-            ));
-        }
         for source in &entry.value_sources {
             let count = counts.entry(source.reader.clone()).or_default();
             count.0 += 1;
@@ -638,6 +677,24 @@ fn check_model(name: &str, path: &Path) {
             checked += 1;
             let holds = if !source.parts.is_empty() {
                 let mut all = true;
+                // What the section and pipe parts say, checked as a set below.
+                let mut parameters: Vec<i64> = Vec::new();
+                let mut points: Vec<[f64; 3]> = Vec::new();
+                let frame_box = if matches!(
+                    source.reader.as_str(),
+                    "room_solid_faces" | "pipe_connectors"
+                ) {
+                    frame_record(
+                        &mut rf,
+                        entry.stream.as_deref().zip(entry.offset),
+                        id,
+                        marker,
+                        &declared,
+                    )
+                    .map(|record| record.bbox_feet)
+                } else {
+                    None
+                };
                 for part in &source.parts {
                     parts_checked += 1;
                     let inflated = rf
@@ -667,83 +724,94 @@ fn check_model(name: &str, path: &Path) {
                             None => Part::Unverified,
                         },
                         // A room's solid: its room's id, then the solid's tag
-                        // directly or after `ff ff ff ff`.
+                        // directly or after `ff ff ff ff`; read again, the
+                        // solid gives the outline the room holds.
                         "room_solid_faces" => {
                             let tag_at = part.offset + 8;
                             let tagged = bytes.get(tag_at..tag_at + 4) == Some(&ROOM_SOLID_TAG[..])
                                 || (bytes.get(tag_at..tag_at + 4) == Some(&[0xff; 4][..])
                                     && bytes.get(tag_at + 4..tag_at + 8)
                                         == Some(&ROOM_SOLID_TAG[..]));
-                            if u64_at(bytes, part.offset) == Some(wanted) && tagged {
-                                Part::Confirmed
-                            } else {
-                                Part::Failed
+                            let held = rooms.get(&id);
+                            match (
+                                u64_at(bytes, part.offset) == Some(wanted) && tagged,
+                                frame_box,
+                            ) {
+                                (false, _) => Part::Failed,
+                                (true, Some(bbox)) => {
+                                    let again = match held {
+                                        Some((Some(profile), Some(vertices))) => {
+                                            let outline = if profile == ROOM_OUTLINE_SOURCE {
+                                                room_outline_at(bytes, part.offset, bbox)
+                                            } else {
+                                                resolved_outline_of_solids(
+                                                    bytes,
+                                                    &[part.offset],
+                                                    bbox,
+                                                )
+                                                .filter(|(_, kind)| {
+                                                    matches!(
+                                                        (profile.as_str(), kind),
+                                                        (
+                                                            ROOM_OUTLINE_SOURCE_FACES,
+                                                            ResolvedKind::Faces
+                                                        ) | (
+                                                            ROOM_OUTLINE_SOURCE_APPROXIMATE,
+                                                            ResolvedKind::Approximate
+                                                        )
+                                                    )
+                                                })
+                                                .map(|(outline, _)| outline)
+                                            };
+                                            outline.is_some_and(|outline| {
+                                                i64::try_from(outline.vertex_count())
+                                                    == Ok(*vertices)
+                                            })
+                                        }
+                                        _ => false,
+                                    };
+                                    if again { Part::Confirmed } else { Part::Failed }
+                                }
+                                (true, None) => Part::Unverified,
                             }
                         }
                         // A type's parameter entry, `f64 · ff × 8 · i64`, in
                         // the value block the type owns: the nearest block
                         // mark before it has the type's id before it.
                         "type_hollow_section" | "type_i_section" => {
+                            let parameter = i64_at(bytes, part.offset + 16);
                             let shaped = bytes.get(part.offset + 8..part.offset + 16)
                                 == Some(&[0xff; 8][..])
-                                && i64_at(bytes, part.offset + 16).is_some()
+                                && parameter.is_some()
                                 && f64_at(bytes, part.offset).is_some_and(f64::is_finite);
+                            if let Some(parameter) = parameter {
+                                parameters.push(parameter);
+                            }
                             if shaped
-                                && value_block_owner(bytes, part.offset) == Some(part.element_id)
+                                && value_block_owner(bytes, part.offset, &declared)
+                                    == Some(part.element_id)
                             {
                                 Part::Confirmed
                             } else {
                                 Part::Failed
                             }
                         }
-                        // A pipe's connector entry, `u32 index · u32 1 · f64 × 3`,
-                        // whose point lies in the pipe's record box.
+                        // A pipe's connector entry, `u64 element · u32 index ·
+                        // u32 1 · f64 × 3`: the element is the one at that end
+                        // (the pipe or a neighbour), the point is the end.
                         "pipe_connectors" => {
-                            let shaped = u32_at(bytes, part.offset)
-                                .is_some_and(|index| index <= 255)
-                                && u32_at(bytes, part.offset + 4) == Some(1);
                             let point: Option<Vec<f64>> = (0..3)
-                                .map(|axis| f64_at(bytes, part.offset + 8 + 8 * axis))
+                                .map(|axis| f64_at(bytes, part.offset + 16 + 8 * axis))
                                 .collect();
-                            let frame = entry.stream.as_deref().zip(entry.offset);
-                            let record = match (frame, marker) {
-                                (Some((frame_stream, frame_offset)), Some(marker)) => {
-                                    let frame_bytes = rf.inflated_partition(frame_stream).ok();
-                                    frame_bytes.and_then(|frame_bytes| {
-                                        decode_at_with_marker(
-                                            frame_stream,
-                                            frame_bytes.bytes(),
-                                            frame_offset,
-                                            &declared,
-                                            &marker,
-                                        )
-                                        .or_else(|| {
-                                            decode_frame_as(
-                                                frame_stream,
-                                                frame_bytes.bytes(),
-                                                frame_offset,
-                                                id,
-                                                &marker,
-                                            )
-                                        })
-                                    })
+                            let shaped = u64_at(bytes, part.offset) == Some(wanted)
+                                && u32_at(bytes, part.offset + 8).is_some_and(|index| index <= 255)
+                                && u32_at(bytes, part.offset + 12) == Some(1);
+                            match (shaped, point) {
+                                (true, Some(point)) if point.len() == 3 => {
+                                    points.push([point[0], point[1], point[2]]);
+                                    Part::Confirmed
                                 }
-                                _ => None,
-                            };
-                            match (shaped, point, record) {
-                                (true, Some(point), Some(record)) => {
-                                    let inside = (0..3).all(|axis| {
-                                        point[axis] >= record.bbox_feet[axis] - 1e-3
-                                            && point[axis] <= record.bbox_feet[axis + 3] + 1e-3
-                                    });
-                                    if inside {
-                                        Part::Confirmed
-                                    } else {
-                                        Part::Failed
-                                    }
-                                }
-                                (false, _, _) | (_, None, _) => Part::Failed,
-                                (_, _, None) => Part::Unverified,
+                                _ => Part::Failed,
                             }
                         }
                         // A run type's id object: its id is the u64 there.
@@ -804,6 +872,45 @@ fn check_model(name: &str, path: &Path) {
                             ));
                         }
                     }
+                }
+                // The parts of one source are distinct records, and a section
+                // or a pipe has the ones it is made of, not a sibling entry.
+                let places: BTreeSet<(&str, usize)> = source
+                    .parts
+                    .iter()
+                    .map(|part| (part.stream.as_str(), part.offset))
+                    .collect();
+                let mut sound = places.len() == source.parts.len();
+                match source.reader.as_str() {
+                    "type_i_section" => {
+                        let mut found = parameters.clone();
+                        found.sort_unstable();
+                        let mut wanted = I_SECTION_PARAMETERS.to_vec();
+                        wanted.sort_unstable();
+                        sound &= found == wanted;
+                    }
+                    "type_hollow_section" => {
+                        sound &= parameters.len() == HOLLOW_SECTION_PARAMETER_NAMES.len();
+                        hollow_checks.push((id, parameters.clone()));
+                    }
+                    "pipe_connectors" => {
+                        sound &= match (points.as_slice(), frame_box) {
+                            ([start, end], Some(bbox)) => pipe_body(bbox, *start, *end).is_some(),
+                            ([_, _], None) => {
+                                parts_unverified += 1;
+                                true
+                            }
+                            _ => false,
+                        };
+                    }
+                    _ => {}
+                }
+                if !sound {
+                    all = false;
+                    problems.push(format!(
+                        "{id}: {} is not made of the records it should be",
+                        source.reader
+                    ));
                 }
                 all
             } else {
@@ -890,6 +997,52 @@ fn check_model(name: &str, path: &Path) {
                     source.rule.as_str(),
                     source.stream,
                     source.offset
+                ));
+            }
+        }
+    }
+
+    // The four parameters of a hollow section are the ones captioned b, Ht, t
+    // and kr, by the ParamElemFamily elements the parameter ids name.
+    let hollow_ids: BTreeSet<u64> = hollow_checks
+        .iter()
+        .flat_map(|(_, parameters)| parameters.iter())
+        .filter_map(|parameter| u64::try_from(*parameter).ok())
+        .collect();
+    if !hollow_ids.is_empty() {
+        let mut captions: BTreeMap<i64, String> = BTreeMap::new();
+        let options = Options {
+            selected_ids: hollow_ids,
+            ..Options::default()
+        };
+        extract_graphs(&mut rf, &options, |record| {
+            let (Some("ParamElemFamily"), Some(graph)) =
+                (record.class_name.as_deref(), record.graph.as_ref())
+            else {
+                return Ok(());
+            };
+            let caption = graph
+                .objects
+                .iter()
+                .find(|object| object.class_name == "ParamDefValue")
+                .and_then(|object| object.fields.get("m_caption")?.as_str());
+            if let (Some(caption), Ok(id)) = (caption, i64::try_from(record.identity.element_id)) {
+                captions.insert(id, caption.to_string());
+            }
+            Ok(())
+        })
+        .expect("read the parameter captions");
+        let mut wanted: Vec<&str> = HOLLOW_SECTION_PARAMETER_NAMES.to_vec();
+        wanted.sort_unstable();
+        for (id, parameters) in &hollow_checks {
+            let mut found: Vec<&str> = parameters
+                .iter()
+                .filter_map(|parameter| captions.get(parameter).map(String::as_str))
+                .collect();
+            found.sort_unstable();
+            if found != wanted {
+                problems.push(format!(
+                    "{id}: type_hollow_section is made of the parameters {found:?}, not {wanted:?}"
                 ));
             }
         }

@@ -283,16 +283,20 @@ type EntryOffsets = Vec<Vec<usize>>;
 /// pass over `buf`. Points are kept in the order they are met, without
 /// repeats.
 ///
-/// When `with_offsets` asks, also the offset in `buf` of each point's entry
-/// (its `u32` index, then the `u32` 1 marker, then the point), in the same
-/// order (#1368).
+/// When `with_offsets` asks, also the offset in `buf` of each point's `u32` 1
+/// marker, in the same order (#1368); the entry starts 12 bytes before it,
+/// with the element it is keyed by.
 fn connector_points(
     buf: &[u8],
     boxes: &[(u32, [f64; 6])],
     with_offsets: bool,
 ) -> (Vec<Vec<[f64; 3]>>, EntryOffsets) {
     let mut found: Vec<Vec<[f64; 3]>> = vec![Vec::new(); boxes.len()];
-    let mut offsets: EntryOffsets = vec![Vec::new(); boxes.len()];
+    let mut offsets: EntryOffsets = if with_offsets {
+        vec![Vec::new(); boxes.len()]
+    } else {
+        Vec::new()
+    };
     // A pipe whose box is not indexed gets no points.
     let grid = BoxGrid::new(boxes.iter().map(|(_, bbox)| bbox));
     if grid.cells.is_empty() {
@@ -312,7 +316,7 @@ fn connector_points(
             {
                 points.push(point);
                 if with_offsets {
-                    offsets[index].push(at - 4);
+                    offsets[index].push(at);
                 }
             }
         }
@@ -440,7 +444,7 @@ pub fn scan_pipe_bodies(
             continue;
         };
         let (points, offsets) = connector_points(inflated.bytes(), boxes, recording);
-        for (((id, bbox), points), offsets) in boxes.iter().zip(points).zip(offsets) {
+        for (index, ((id, bbox), points)) in boxes.iter().zip(points).enumerate() {
             let Some(body) = best_pipe_body(*bbox, &points) else {
                 continue;
             };
@@ -453,12 +457,16 @@ pub fn scan_pipe_bodies(
                 None => {
                     bodies.insert(*id, Some(body));
                     if recording {
+                        // The entry is keyed by the element at that end, which may
+                        // be a neighbour of the pipe rather than the pipe.
                         let end_part = |point: [f64; 3]| {
                             let at = points.iter().position(|kept| *kept == point)?;
+                            let start = offsets.get(index)?.get(at)?.checked_sub(12)?;
+                            let keyed = le_bytes::u64_at(inflated.bytes(), start)?;
                             Some(SourcePart {
-                                element_id: *id,
+                                element_id: u32::try_from(keyed).ok()?,
                                 stream: stream.clone(),
-                                offset: *offsets.get(at)?,
+                                offset: start,
                             })
                         };
                         if let (Some(start), Some(end)) = (end_part(body.start), end_part(body.end))

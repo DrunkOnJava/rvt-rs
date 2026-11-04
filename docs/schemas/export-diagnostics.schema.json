@@ -348,7 +348,7 @@
                         "rule": {
                           "type": "string",
                           "enum": ["selected", "agreeing", "current", "native", "frame"],
-                          "description": "How the copy was chosen: the selected frame; every copy holds the same value (the lowest-numbered partition's is named); the copies disagree and the current partition's is taken (RE-216); a native record by member name, its current copy; the last of a record's frames, as the reader's scan kept it, where the frames were not compared or do not agree. For a source made of parts the rule is how each record's copy was chosen."
+                          "description": "How the copy was chosen: the selected frame; every copy holds the same value (the lowest-numbered partition's is named); the copies disagree and the current partition's is taken (RE-216); a native record by member name, its current copy; one frame or partition of a record, as the reader's scan kept it, without its other copies being compared. For a source made of parts the rule is how each record's copy was chosen."
                         },
                         "copies": {
                           "type": "integer",

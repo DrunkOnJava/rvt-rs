@@ -165,18 +165,17 @@ pub(super) fn attach_room_outlines(
         // RE-316: only a room none of whose solids the walk closes is resolved
         // from the faces up to the solid's end, so a room RE-101 reads is read
         // exactly as it was.
-        let walked = prb::outline_of_solids_at(inflated.bytes(), headers, bbox);
+        let walked = prb::outline_of_solids_at(inflated.bytes(), headers, bbox, recording);
         let outline = match walked {
             Some((profile, used)) => Some((profile, prb::ROOM_OUTLINE_SOURCE, true, used)),
-            None => prb::resolved_outline_of_solids_at(inflated.bytes(), headers, bbox).map(
-                |(profile, kind, used)| {
+            None => prb::resolved_outline_of_solids_at(inflated.bytes(), headers, bbox, recording)
+                .map(|(profile, kind, used)| {
                     let source = match kind {
                         prb::ResolvedKind::Faces => prb::ROOM_OUTLINE_SOURCE_FACES,
                         prb::ResolvedKind::Approximate => prb::ROOM_OUTLINE_SOURCE_APPROXIMATE,
                     };
                     (profile, source, false, used)
-                },
-            ),
+                }),
         };
         if let Some((profile, source, walk, used)) = outline {
             // The solids the outline was read from, in the room's own
@@ -194,7 +193,7 @@ pub(super) fn attach_room_outlines(
                 let copies = parts.len();
                 rf.note_value_source(
                     id,
-                    ValueSource::from_parts("room_solid_faces", CopyRule::Agreeing, copies, parts),
+                    ValueSource::from_parts("room_solid_faces", CopyRule::Frame, copies, parts),
                 );
             }
             let mut fields = profile.fields();
