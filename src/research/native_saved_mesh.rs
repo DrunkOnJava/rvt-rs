@@ -503,6 +503,87 @@ fn tessellation_axis(
     ensure!(values.len() >= 2, "degenerate tessellation axis");
     Ok(values)
 }
+const FACE_REGIONS: &str = "face regions need subdivision";
+/// A plane face whose regions are further plane faces on the same plane, each
+/// inside its outline, with one loop and no regions of their own, and
+/// together covering exactly its area, only has its area split (RE-329): the
+/// face is drawn whole. Anything else keeps the face refused.
+fn plane_regions_tile(
+    g: &ObjectGraph,
+    index: &PointerIndex<'_>,
+    fi: usize,
+    plane: usize,
+    regions: &[Value],
+) -> Result<()> {
+    let basis = |si: usize| -> Result<[[f64; 3]; 3]> {
+        let s = &g.objects[si];
+        Ok([
+            point::<3>(&s.fields["m_origin"])?,
+            point::<3>(&s.fields["m_xVec"])?,
+            point::<3>(&s.fields["m_yVec"])?,
+        ])
+    };
+    let single_ring = |face: usize| -> Result<Vec<[f64; 2]>> {
+        let li = index
+            .resolve(face, &g.objects[face].fields["m_pFirstLoop"])?
+            .context(FACE_REGIONS)?;
+        ensure!(
+            index
+                .resolve(li, &g.objects[li].fields["m_nextLoop"])?
+                .is_none(),
+            FACE_REGIONS
+        );
+        ring(g, index, face, li)
+    };
+    let parent_basis = basis(plane)?;
+    let parent = single_ring(fi)?;
+    let parent_area = area(&parent).abs();
+    let min: [f64; 2] =
+        std::array::from_fn(|k| parent.iter().map(|p| p[k]).fold(f64::INFINITY, f64::min));
+    let max: [f64; 2] = std::array::from_fn(|k| {
+        parent
+            .iter()
+            .map(|p| p[k])
+            .fold(f64::NEG_INFINITY, f64::max)
+    });
+    let mut covered = 0.;
+    for value in regions {
+        let ri = index.resolve(fi, value)?.context(FACE_REGIONS)?;
+        let region = &g.objects[ri];
+        ensure!(
+            region.class_name == "Face"
+                && region.fields["m_faceRegions"]
+                    .as_array()
+                    .is_some_and(Vec::is_empty),
+            FACE_REGIONS
+        );
+        let si = index
+            .resolve(ri, &region.fields["m_pSurf"])?
+            .context(FACE_REGIONS)?;
+        ensure!(g.objects[si].class_name == "Plane", FACE_REGIONS);
+        ensure!(
+            basis(si)?
+                .iter()
+                .flatten()
+                .zip(parent_basis.iter().flatten())
+                .all(|(a, b)| (a - b).abs() <= 1e-9),
+            FACE_REGIONS
+        );
+        let outline = single_ring(ri)?;
+        ensure!(
+            outline
+                .iter()
+                .all(|p| (0..2).all(|k| p[k] >= min[k] - 1e-7 && p[k] <= max[k] + 1e-7)),
+            FACE_REGIONS
+        );
+        covered += area(&outline).abs();
+    }
+    ensure!(
+        (covered - parent_area).abs() <= 1e-7 * parent_area.max(1e-6),
+        FACE_REGIONS
+    );
+    Ok(())
+}
 /// Returns no mesh for a face with no trimming boundary (an auxiliary surface).
 pub fn face(g: &ObjectGraph, fi: usize) -> Result<Option<FaceMesh>> {
     face_indexed(g, &PointerIndex::new(g), fi)
@@ -513,13 +594,9 @@ fn face_indexed(g: &ObjectGraph, index: &PointerIndex<'_>, fi: usize) -> Result<
     let Some(mut li) = index.resolve(fi, &f.fields["m_pFirstLoop"])? else {
         return Ok(None);
     };
-    ensure!(
-        f.fields["m_faceRegions"]
-            .as_array()
-            .context("face regions")?
-            .is_empty(),
-        "face regions need subdivision"
-    );
+    let regions = f.fields["m_faceRegions"]
+        .as_array()
+        .context("face regions")?;
     let pi = index
         .resolve(fi, &f.fields["m_pSurf"])?
         .context("face surface")?;
@@ -539,6 +616,9 @@ fn face_indexed(g: &ObjectGraph, index: &PointerIndex<'_>, fi: usize) -> Result<
         "unsupported surface {}",
         p.class_name
     );
+    if !regions.is_empty() {
+        plane_regions_tile(g, index, fi, pi, regions)?;
+    }
     let origin = point::<3>(&p.fields["m_origin"])?;
     let x = point::<3>(&p.fields["m_xVec"])?;
     let y = point::<3>(&p.fields["m_yVec"])?;
