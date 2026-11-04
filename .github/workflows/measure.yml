@@ -168,7 +168,7 @@ on:
         required: false
         default: ""
       fine_mesh:
-        description: The body scorers (mesh_bodies_vs_ifc, saved_meshes_vs_ifc, family_extrusion_bodies_vs_ifc) also mesh both IFC files at one equal, fine deflection and print `fine` rows after their own (tools/re/fine_mesh.py, #1355); their other output is as it was
+        description: 'The body scorers (mesh_bodies_vs_ifc, saved_meshes_vs_ifc, family_extrusion_bodies_vs_ifc) also mesh both IFC files at one equal, fine deflection and print `fine` rows after their own (tools/re/fine_mesh.py, #1355); their other output is as it was'
         type: boolean
         required: false
         default: false

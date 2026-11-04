@@ -12,8 +12,8 @@ are also meshed at one equal, fine deflection: every vertex of a body then
 lies within the deflection of its true surface, and two tessellations of one
 surface lie within about twice that of each other whichever chords they use.
 
-Fine mode is off unless RVT_SCORER_FINE_MESH is set to anything but "" or "0"
-(Measure's `fine_mesh` input sets it), and then adds labelled "fine" rows
+Fine mode is off unless RVT_SCORER_FINE_MESH is "1" or "true" (any case;
+Measure's `fine_mesh` input sets "1"), and then adds labelled "fine" rows
 after the scorer's own output, which it leaves as it was.
 
 LINEAR_DEFLECTION is 1e-5 ft, in metres, the unit of IfcOpenShell's
@@ -38,7 +38,7 @@ LABEL = (
 
 
 def enabled():
-    return os.environ.get("RVT_SCORER_FINE_MESH", "") not in ("", "0")
+    return os.environ.get("RVT_SCORER_FINE_MESH", "").lower() in ("1", "true")
 
 
 def settings():

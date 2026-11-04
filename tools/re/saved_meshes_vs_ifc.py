@@ -27,7 +27,8 @@ With RVT_SCORER_FINE_MESH=1 (#1355, RE-331) it then meshes an even stride of at
 most 300 of each class's paired elements again in both files at one equal, fine
 deflection (fine_mesh.py) and prints, after the table above, `fine` rows for
 them: the same buckets, with one for a box within 0.001 ft, beside the count
-within 0.001 ft in the default tessellation for the same elements. A box is
+within 0.001 ft in the default tessellation for the same elements, both with
+the file-wide offset of the table above. A box is
 the extent of a tessellated body, so a curved body's differs by the chords'
 sagitta between tessellations. The output without it is as it was.
 
@@ -133,14 +134,8 @@ def fine_table(args, wanted, frames, to_shared, ours, ref, offset):
     settings = fine_mesh.settings()
     ours_fine = world_boxes(args.ours, tags=sample, transform=None if frames else to_shared, wanted=wanted, frame=frames, settings=settings)
     ref_fine = world_boxes(args.reference, tags=set(ours_fine), frame=frames, settings=settings)
-    pairs = [(ours_fine[t][1], ref_fine[t][1]) for t in ours_fine if t in ref_fine]
-    if args.offset_ft:
-        fine_offset = offset
-    else:
-        fine_offset = [statistics.median(a[k] - b[k] for a, b in pairs) for k in range(3)] * 2 if pairs else [0.0] * 6
     print()
     print(f"fine tessellation: {fine_mesh.LABEL}, both files; {len(ours_fine)} of {len(sample)} sampled elements meshed")
-    print("fine file-wide offset removed (ft):", [round(v, 4) for v in fine_offset[:3]])
     rows = collections.defaultdict(lambda: [0] * 8)
     for tag, (cls, box, _) in ours_fine.items():
         for key in (cls, "total"):
@@ -150,7 +145,7 @@ def fine_table(args, wanted, frames, to_shared, ours, ref, offset):
             if tag not in ref_fine:
                 row[7] += 1
                 continue
-            err = box_error(box, ref_fine[tag][1], fine_offset)
+            err = box_error(box, ref_fine[tag][1], offset)
             row[2] += err <= 0.001
             row[3 if err <= 0.01 else 4 if err <= 0.1 else 5 if err <= 1 else 6] += 1
     heads = ("n", "default<=.001", "<=0.001ft", "<=0.01ft", "<=0.1", "<=1", ">1", "no ref")
