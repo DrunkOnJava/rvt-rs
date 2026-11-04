@@ -776,34 +776,66 @@ fn is_plate(element: &DecodedElement) -> bool {
 const SLAB_PLANE_TOLERANCE_FEET: f64 = 1e-5;
 
 /// What a floor's native `SlabShapeEditGStep` says of its top (#1384, RE-336).
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 enum SlabShape {
     /// No vertex is moved.
     Unedited,
     /// Its corners are moved to heights that lie in the plane
-    /// `z = a·x + b·y + c`, model feet.
-    Plane([f64; 3]),
+    /// `z = a·x + b·y + c`, model feet, with the plan place of each.
+    Plane {
+        plane: [f64; 3],
+        corners: Vec<[f64; 2]>,
+    },
     /// It is edited in a way that is not read: the reason.
     Unread(&'static str),
 }
 
-/// The top of the floor whose native record is `graph`: `None` where it holds
-/// no `SlabShapeEditGStep`. A step edits a floor's corner vertices, each given
-/// at its plan place with the offset of its height from the floor's original
-/// face height (`m_originalFaceHeight`); the interior vertices, edge vertices
-/// and creases a step can also hold are not read, and neither are corners that
-/// do not lie in one plane.
+/// The shape of the floor whose native record is `graph`: `None` only where
+/// it holds no `SlabShapeEditGStep`. Once there is one, a floor is
+/// [`SlabShape::Unedited`] only where every step says no vertex is moved and
+/// nothing is added; a step whose fields are not all read, or steps that
+/// disagree, make it [`SlabShape::Unread`] (#1384).
 fn slab_shape(graph: &crate::native_parameters::ObjectGraph) -> Option<SlabShape> {
-    let step = graph
+    let mut steps = graph
         .objects
         .iter()
-        .find(|object| object.class_name == "SlabShapeEditGStep")?;
-    let fields = &step.fields;
+        .filter(|object| object.class_name == "SlabShapeEditGStep")
+        .peekable();
+    steps.peek()?;
+    let mut edited: Option<SlabShape> = None;
+    for step in steps {
+        let shape = slab_step_shape(&step.fields);
+        if shape == SlabShape::Unedited {
+            continue;
+        }
+        match &edited {
+            None => edited = Some(shape),
+            Some(held) if *held == shape && !matches!(shape, SlabShape::Unread(_)) => {}
+            Some(_) => return Some(SlabShape::Unread("shape_edit_steps_disagree")),
+        }
+    }
+    Some(edited.unwrap_or(SlabShape::Unedited))
+}
+
+/// What one `SlabShapeEditGStep` says: its corner vertices, each given at its
+/// plan place with the offset of its height from the floor's original face
+/// height (`m_originalFaceHeight`). The interior vertices, edge vertices and
+/// creases a step can also hold are not read, and neither are corners that do
+/// not lie in one plane; a field that is absent or not of the shape read makes
+/// the step unread.
+fn slab_step_shape(fields: &serde_json::Value) -> SlabShape {
+    read_slab_step(fields).unwrap_or(SlabShape::Unread("shape_edit_fields_not_read"))
+}
+
+fn read_slab_step(fields: &serde_json::Value) -> Option<SlabShape> {
     let held = |name: &str| fields.get(name).and_then(serde_json::Value::as_array);
     let corners = held("m_cornerVertices")?;
     let others = ["m_interiorVertices", "m_edgeVertices", "m_explicitCreases"]
         .iter()
-        .any(|name| held(name).is_some_and(|items| !items.is_empty()));
+        .map(|name| held(name).map(|items| !items.is_empty()))
+        .collect::<Option<Vec<bool>>>()?
+        .into_iter()
+        .any(|added| added);
     let original = fields
         .get("m_originalFaceHeight")
         .and_then(serde_json::Value::as_f64)?;
@@ -849,7 +881,10 @@ fn slab_shape(graph: &crate::native_parameters::ObjectGraph) -> Option<SlabShape
     if !flat || !(a.is_finite() && b.is_finite() && c.is_finite()) {
         return Some(SlabShape::Unread("corners_not_in_one_plane"));
     }
-    Some(SlabShape::Plane([a, b, c]))
+    Some(SlabShape::Plane {
+        plane: [a, b, c],
+        corners: points.iter().map(|p| [p[0], p[1]]).collect(),
+    })
 }
 
 /// The plane [`SLAB_TOP_PLANE_FIELD`] records, `z = a·x + b·y + c` in model
@@ -868,6 +903,28 @@ pub fn slab_top_plane_from_fields(fields: &[(String, InstanceField)]) -> Option<
         }
         _ => None,
     })
+}
+
+/// The plan places [`SLAB_SHAPE_CORNERS_FIELD`] records, one `[x, y]` per
+/// corner vertex of a floor whose shape-edited corners lie in one plane,
+/// model feet (#1384). Empty where it holds none.
+pub fn slab_shape_corners_from_fields(fields: &[(String, InstanceField)]) -> Vec<[f64; 2]> {
+    let flat: Vec<f64> = fields
+        .iter()
+        .find_map(|(name, value)| match value {
+            InstanceField::Vector(items) if name == SLAB_SHAPE_CORNERS_FIELD => items
+                .iter()
+                .map(|item| match item {
+                    InstanceField::Float { value, .. } => Some(*value),
+                    _ => None,
+                })
+                .collect::<Option<Vec<f64>>>(),
+            _ => None,
+        })
+        .unwrap_or_default();
+    flat.chunks_exact(2)
+        .map(|pair| [pair[0], pair[1]])
+        .collect()
 }
 
 /// The reason [`SLAB_SHAPE_UNREAD_FIELD`] records: why a shape-edited floor's
@@ -918,7 +975,9 @@ pub(super) fn attach_slab_uncut(rf: &mut RevitFile, lists: &mut [&mut Vec<Decode
         });
         *cut.entry(record.identity.element_id).or_default() |= steps;
         if let Some(shape) = slab_shape(graph) {
-            let held = shapes.entry(record.identity.element_id).or_insert(shape);
+            let held = shapes
+                .entry(record.identity.element_id)
+                .or_insert_with(|| shape.clone());
             if *held != shape {
                 *held = SlabShape::Unread("record_copies_disagree");
             }
@@ -939,11 +998,20 @@ pub(super) fn attach_slab_uncut(rf: &mut RevitFile, lists: &mut [&mut Vec<Decode
                 .push((SLAB_UNCUT_FIELD.into(), InstanceField::Bool(true)));
         }
         match id.and_then(|id| shapes.get(&id)) {
-            Some(SlabShape::Plane([a, b, c])) => {
+            Some(SlabShape::Plane { plane, corners }) => {
                 let float = |value: f64| InstanceField::Float { value, size: 8 };
                 element.fields.push((
                     SLAB_TOP_PLANE_FIELD.into(),
-                    InstanceField::Vector(vec![float(*a), float(*b), float(*c)]),
+                    InstanceField::Vector(plane.iter().map(|&value| float(value)).collect()),
+                ));
+                element.fields.push((
+                    SLAB_SHAPE_CORNERS_FIELD.into(),
+                    InstanceField::Vector(
+                        corners
+                            .iter()
+                            .flat_map(|corner| corner.iter().map(|&value| float(value)))
+                            .collect(),
+                    ),
                 ));
             }
             Some(SlabShape::Unread(reason)) => element.fields.push((

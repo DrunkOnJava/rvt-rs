@@ -513,8 +513,10 @@ pub fn scan_rafter_cuts(
         Ok(())
     });
     // A selected record that gave no cut is not a source of one (#1368).
-    for roof in roofs.iter().filter(|roof| !found.contains_key(*roof)) {
-        rf.forget_value_source(*roof, "roof_rafter_cut");
+    if rf.recording_value_sources() {
+        for roof in roofs.iter().filter(|roof| !found.contains_key(*roof)) {
+            rf.forget_value_source(*roof, "roof_rafter_cut");
+        }
     }
     found
 }

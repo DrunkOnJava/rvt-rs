@@ -23,7 +23,5 @@
   so a run on any model shows whether the rule is exercised. The readers
   still without a source, and the elements that keep `selected_frame_box`
   (every room, whose outline is read from its solid's faces), are listed in
-  `docs/export-diagnostics.md`: area boundary lines, hollow and I sections
-  (the type's section parameters), pipe axes, roof slopes and extrusions, and
-  family extrusions. Nothing is noted unless the table is asked for, so the
-  default export and its diagnostics are unchanged.
+  `docs/export-diagnostics.md`. Nothing is noted unless the table is asked
+  for, so the default export and its diagnostics are unchanged.
