@@ -273,17 +273,14 @@ pub(super) fn attach_native_tee_reaches(
     }
 }
 
-/// Give each wall with a centreline the wall it butt-joins at each end and
-/// whether it runs through there, where its and its partner's join lists
-/// decide it, and, between single-layer walls, how far past the end its
-/// body reaches ([`crate::element_record_wall_joins::butt_joins`], RE-70).
-pub(super) fn attach_wall_butt_joins(
-    rf: &mut RevitFile,
-    revit_version: u32,
-    walls: &mut [DecodedElement],
+/// Each wall with a centreline, with its type's layers, its exterior side and
+/// its elevation range, which [`crate::element_record_wall_joins::butt_joins`]
+/// and [`crate::element_record_wall_joins::corner_joins`] read.
+fn wall_lines(
+    walls: &[DecodedElement],
     type_layers: &BTreeMap<u32, Vec<crate::partition_compound_structure::CompoundLayer>>,
     native: &BTreeMap<u64, crate::native_walls::NativeWall>,
-) {
+) -> Vec<crate::element_record_wall_joins::WallLine> {
     use crate::element_record_wall_joins as joins;
     let float = |wall: &DecodedElement, wanted: &str| {
         wall.fields.iter().find_map(|(name, value)| match value {
@@ -291,7 +288,7 @@ pub(super) fn attach_wall_butt_joins(
             _ => None,
         })
     };
-    let lines: Vec<joins::WallLine> = walls
+    walls
         .iter()
         .filter_map(|wall| {
             let axis = wall_axis_from_fields(&wall.fields)?;
@@ -323,7 +320,96 @@ pub(super) fn attach_wall_butt_joins(
                     .and_then(|native| native.shells),
             })
         })
+        .collect()
+}
+
+/// Where three or more walls meet end to end at a butt join, the end of each
+/// wall the record's join order decides
+/// ([`crate::element_record_wall_joins::corner_joins`], RE-322): how far past
+/// its line's end the body reaches, every layer alike, in place of the reach a
+/// join list or a T joint gave that end. Such an end has no one partner, so
+/// none is named.
+pub(super) fn attach_wall_corner_reaches(
+    walls: &mut [DecodedElement],
+    type_layers: &BTreeMap<u32, Vec<crate::partition_compound_structure::CompoundLayer>>,
+    native: &BTreeMap<u64, crate::native_walls::NativeWall>,
+) {
+    use crate::element_record_wall_joins as joins;
+    fn narrow(join: &Option<Vec<(u64, u32)>>) -> Option<Vec<(u32, u32)>> {
+        join.as_ref()?
+            .iter()
+            .map(|&(id, end)| Some((u32::try_from(id).ok()?, end)))
+            .collect()
+    }
+    let lines = wall_lines(walls, type_layers, native);
+    if lines.len() < 3 {
+        return;
+    }
+    let ends: BTreeMap<u32, joins::NativeEnds> = native
+        .iter()
+        .filter_map(|(&id, wall)| {
+            Some((
+                u32::try_from(id).ok()?,
+                joins::NativeEnds {
+                    members: [narrow(&wall.joins[0]), narrow(&wall.joins[1])],
+                    join_types: wall.join_types,
+                    other_cutters: wall
+                        .partners
+                        .iter()
+                        .any(|other| !native.contains_key(other)),
+                },
+            ))
+        })
         .collect();
+    let found = joins::corner_joins(&lines, &ends);
+    let layer_counts: BTreeMap<u32, usize> = lines
+        .iter()
+        .map(|line| (line.element_id, line.layers.len()))
+        .collect();
+    for wall in walls.iter_mut() {
+        let Some((id, reaches)) = wall.id.and_then(|id| Some((id, found.get(&id)?))) else {
+            continue;
+        };
+        for (slot, reach) in reaches.iter().enumerate() {
+            let Some(reach) = *reach else {
+                continue;
+            };
+            let replaced = [
+                WALL_JOIN_PARTNER_FIELDS[slot],
+                WALL_JOIN_THROUGH_FIELDS[slot],
+                WALL_JOIN_REACH_FIELDS[slot],
+                WALL_JOIN_LAYER_REACH_FIELDS[slot],
+                WALL_JOIN_LAYER_EDGE_REACH_FIELDS[slot],
+            ];
+            wall.fields
+                .retain(|(name, _)| !replaced.contains(&name.as_str()));
+            let float = |value: f64| InstanceField::Float { value, size: 8 };
+            wall.fields
+                .push((WALL_JOIN_REACH_FIELDS[slot].into(), float(reach)));
+            let layers = layer_counts.get(&id).copied().unwrap_or(1);
+            if layers > 1 {
+                wall.fields.push((
+                    WALL_JOIN_LAYER_REACH_FIELDS[slot].into(),
+                    InstanceField::Vector(vec![float(reach); layers]),
+                ));
+            }
+        }
+    }
+}
+
+/// Give each wall with a centreline the wall it butt-joins at each end and
+/// whether it runs through there, where its and its partner's join lists
+/// decide it, and, between single-layer walls, how far past the end its
+/// body reaches ([`crate::element_record_wall_joins::butt_joins`], RE-70).
+pub(super) fn attach_wall_butt_joins(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    walls: &mut [DecodedElement],
+    type_layers: &BTreeMap<u32, Vec<crate::partition_compound_structure::CompoundLayer>>,
+    native: &BTreeMap<u64, crate::native_walls::NativeWall>,
+) {
+    use crate::element_record_wall_joins as joins;
+    let lines = wall_lines(walls, type_layers, native);
     if lines.len() < 2 {
         return;
     }

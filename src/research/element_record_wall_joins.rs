@@ -954,3 +954,224 @@ pub fn layer_reaches(
 /// How closely two walls' bases and tops must agree for their layered join
 /// to be read ([`layer_reaches`]), in feet.
 pub const LAYER_JOIN_HEIGHT_EPS_FEET: f64 = 1e-3;
+
+/// What a wall's native record says about the joins at its two ends, for
+/// [`corner_joins`] (RE-322).
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct NativeEnds {
+    /// The walls in the join at the wall's start and at its end, in the order
+    /// the record lists them, the wall included, each with the end it joins
+    /// by (0 its start, 1 its end, 2 or 3 its middle). `None` where no join
+    /// lists that end or several do.
+    pub members: [Option<Vec<(u32, u32)>>; 2],
+    /// The join's `m_wallJoinType` at each end: 0 a butt join, 1 a mitre.
+    pub join_types: [Option<i64>; 2],
+    /// Whether an element other than a wall (a column, a curtain wall) cuts
+    /// the wall or is joined to it.
+    pub other_cutters: bool,
+}
+
+/// How far two faces may differ for them to be one, feet.
+pub const CORNER_AGREE_FEET: f64 = 1e-3;
+
+/// How a wall in a corner meets the wall whose end is read.
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum Meets {
+    Itself,
+    /// Perpendicular, running away from the joint to one side.
+    Across,
+    /// A continuation of the wall on the other side of the joint.
+    Along,
+}
+
+/// One wall of a corner, in the frame of the wall whose end is read: `x` runs
+/// out past the joint along that wall, `y` across it, and the member's own
+/// end point is at `(x, y)`.
+#[derive(Debug, Clone, Copy)]
+struct CornerMember {
+    id: u32,
+    meets: Meets,
+    x: f64,
+    y: f64,
+    thickness_feet: f64,
+    layered: bool,
+}
+
+/// The end of the wall `wall` at `slot` (0 its start, 1 its end), where three
+/// or more walls meet end to end at a butt join, from the order the record
+/// lists them (RE-322).
+///
+/// Counting only the walls that overlap `wall` in elevation, the record lists
+/// the walls of a corner in the order Revit joined them, and an earlier wall
+/// wins over a later one:
+/// - a perpendicular wall listed before `wall` is the one `wall` stops
+///   against, as at a T joint: it ends at that wall's near face;
+/// - otherwise, if a wall that continues `wall` across the joint is listed
+///   before the first perpendicular wall after it, the two meet flush and
+///   `wall` ends at the joint;
+/// - otherwise `wall` runs through the perpendicular walls listed after it,
+///   to their far face.
+///
+/// Faces are taken from where each wall's own line ends, not from the joint,
+/// since walls of different thickness are often aligned on a face rather
+/// than a centreline (a bar of 0.656 ft and 0.492 ft walls has its faces
+/// 0.082 ft apart). The rule is read only where:
+/// - the join is a butt join, no wall of the join is missing from `walls`
+///   or meets `wall` at another angle than a right angle or straight on,
+///   and no element but a wall cuts `wall`;
+/// - the deciding walls' faces agree;
+/// - `wall` has one layer, or has several and stops against walls of one
+///   layer each: against a layered wall, Revit's layers nest and a rule for
+///   the outermost does not give the others (RE-322 section 5).
+pub fn corner_joins(
+    walls: &[WallLine],
+    native: &BTreeMap<u32, NativeEnds>,
+) -> BTreeMap<u32, [Option<f64>; 2]> {
+    let by_id: BTreeMap<u32, &WallLine> =
+        walls.iter().map(|wall| (wall.element_id, wall)).collect();
+    let mut out = BTreeMap::new();
+    for wall in walls {
+        let Some(ends) = native.get(&wall.element_id).filter(|e| !e.other_cutters) else {
+            continue;
+        };
+        let reaches = [0, 1].map(|slot| corner_reach(wall, slot, ends, &by_id));
+        if reaches.iter().any(Option::is_some) {
+            out.insert(wall.element_id, reaches);
+        }
+    }
+    out
+}
+
+fn corner_reach(
+    wall: &WallLine,
+    slot: usize,
+    ends: &NativeEnds,
+    by_id: &BTreeMap<u32, &WallLine>,
+) -> Option<f64> {
+    if ends.join_types[slot] != Some(0) || wall.layers.is_empty() {
+        return None;
+    }
+    let end_index = u32::try_from(slot).ok()?;
+    let members = ends.members[slot].as_ref()?;
+    let length = (wall.end[0] - wall.start[0]).hypot(wall.end[1] - wall.start[1]);
+    if !(length.is_finite() && length > 1e-9) {
+        return None;
+    }
+    let (point, far) = if slot == 0 {
+        (wall.start, wall.end)
+    } else {
+        (wall.end, wall.start)
+    };
+    let into = [(far[0] - point[0]) / length, (far[1] - point[1]) / length];
+    let out = [-into[0], -into[1]];
+    let across = [-into[1], into[0]];
+    let mut corner: Vec<CornerMember> = Vec::new();
+    let mut itself = None;
+    for &(id, joined_end) in members {
+        if corner.iter().any(|member| member.id == id) {
+            return None;
+        }
+        if id == wall.element_id {
+            if joined_end != end_index {
+                return None;
+            }
+            itself = Some(corner.len());
+            corner.push(CornerMember {
+                id,
+                meets: Meets::Itself,
+                x: 0.0,
+                y: 0.0,
+                thickness_feet: wall.thickness_feet,
+                layered: wall.layers.len() > 1,
+            });
+            continue;
+        }
+        let other = by_id.get(&id)?;
+        if wall.top_feet.min(other.top_feet) - wall.base_feet.max(other.base_feet) <= JOIN_EPS_FEET
+        {
+            continue;
+        }
+        if joined_end > 1 || other.layers.is_empty() {
+            return None;
+        }
+        let (joint, beyond) = if joined_end == 0 {
+            (other.start, other.end)
+        } else {
+            (other.end, other.start)
+        };
+        let run = (beyond[0] - joint[0]).hypot(beyond[1] - joint[1]);
+        if !(run.is_finite() && run > 1e-9) {
+            return None;
+        }
+        let cosine = (into[0] * (beyond[0] - joint[0]) + into[1] * (beyond[1] - joint[1])) / run;
+        let meets = if cosine.abs() <= PERPENDICULAR_EPS {
+            Meets::Across
+        } else if cosine < -0.9999 {
+            Meets::Along
+        } else {
+            return None;
+        };
+        let offset = [joint[0] - point[0], joint[1] - point[1]];
+        let (x, y) = (
+            offset[0] * out[0] + offset[1] * out[1],
+            offset[0] * across[0] + offset[1] * across[1],
+        );
+        if meets == Meets::Along && (x.abs() > CORNER_AGREE_FEET || y.abs() > CORNER_AGREE_FEET) {
+            return None;
+        }
+        corner.push(CornerMember {
+            id,
+            meets,
+            x,
+            y,
+            thickness_feet: other.thickness_feet,
+            layered: other.layers.len() > 1,
+        });
+    }
+    let itself = itself?;
+    if corner.len() < 3 || !corner.iter().any(|member| member.meets == Meets::Across) {
+        return None;
+    }
+    let layered_wall = corner[itself].layered;
+    let layered_others = corner
+        .iter()
+        .enumerate()
+        .any(|(index, member)| index != itself && member.layered);
+    let agreed = |faces: Vec<f64>| -> Option<(f64, f64)> {
+        let low = faces.iter().copied().reduce(f64::min)?;
+        let high = faces.iter().copied().reduce(f64::max)?;
+        (high - low <= CORNER_AGREE_FEET).then_some((low, high))
+    };
+    let earlier: Vec<f64> = corner[..itself]
+        .iter()
+        .filter(|member| member.meets == Meets::Across)
+        .map(|member| member.x - member.thickness_feet / 2.0)
+        .collect();
+    if !earlier.is_empty() {
+        if layered_wall && layered_others {
+            return None;
+        }
+        return agreed(earlier).map(|(low, _)| low);
+    }
+    if layered_wall {
+        return None;
+    }
+    let later = &corner[itself + 1..];
+    let first_perpendicular = itself
+        + 1
+        + later
+            .iter()
+            .position(|member| member.meets == Meets::Across)?;
+    if corner[..first_perpendicular]
+        .iter()
+        .any(|member| member.meets == Meets::Along)
+    {
+        return Some(0.0);
+    }
+    let faces: Vec<f64> = later
+        .iter()
+        .filter(|member| member.meets == Meets::Across)
+        .map(|member| member.x + member.thickness_feet / 2.0)
+        .collect();
+    agreed(faces).map(|(_, high)| high)
+}
