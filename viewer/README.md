@@ -142,8 +142,10 @@ Reading the saved graphics is a second pass over the file, so it costs time
 and memory. `tests/saved-meshes-measure.spec.ts` opens each reference model
 with the option on and off in a fresh browser context and writes the load time,
 the wasm memory after the load and the number of bodies drawn from saved meshes
-to `measurements/saved-meshes.json`; `viewer-test.yml` (part of `CI passed`) runs
-it in a job of its own and uploads the file. Run it with `RVT_VIEWER_MEASURE=1 pnpm exec playwright test`; the
+to `measurements/saved-meshes.json`; Deploy viewer runs it (through
+`viewer-test.yml`) on pushes to main and uploads the file, and `CI passed` does not
+wait for it. The one test of the toggle that gates a merge, on Core Interior,
+is in the suite. Run it with `RVT_VIEWER_MEASURE=1 pnpm exec playwright test`; the
 reference models are read from `_project_corpus/Revit`.
 
 ## Architecture

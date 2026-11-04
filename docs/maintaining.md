@@ -63,9 +63,10 @@ when a release ships.
   ready runs the full set (#1237). A push to `main` runs `ci.yml` directly, as
   `CI passed`. Measure and the release and deploy workflows are not part of
   it. The viewer's browser tests are: `ci.yml` calls `viewer-test.yml` as its
-  `viewer` job in the full set (#1374), and a change that touches only
-  documentation skips it. Deploy viewer builds and publishes the site, and
-  its deploy job waits for `CI passed` on the pushed commit. To check a
+  `viewer` job in the full set (#1374), in three shards, and a change that
+  touches only documentation skips it. Deploy viewer builds and publishes the
+  site and runs the saved-mesh measurement, which `CI passed` does not wait
+  for; its deploy job waits for `CI passed` on the pushed commit. To check a
   draft's viewer, dispatch `viewer-test.yml` on its branch.
 - The squash commit's title is the pull request's title plus its number and its
   body is the pull request's description, so the description is permanent
