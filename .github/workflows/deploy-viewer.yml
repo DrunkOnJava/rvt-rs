@@ -4,7 +4,8 @@ name: Deploy viewer
 # https://drunkonjava.github.io/rvt-rs/ via GitHub Pages (Pages root;
 # the old `/viewer/` sub-path 404s).
 # Runs on every push to main that touches viewer/, src/ or rvt-wasm/ (so
-# the WASM stays fresh), plus manual runs. It builds and publishes the site.
+# the WASM stays fresh), plus manual runs. It builds and publishes the site,
+# and measures the viewer with and without saved meshes.
 # The browser tests are viewer-test.yml's: ci.yml runs them as part of
 # `CI passed` (#1374), so a pull request cannot merge before they have passed
 # on its head. To check a draft's viewer, dispatch viewer-test.yml on its
@@ -128,9 +129,21 @@ jobs:
         with:
           path: viewer/dist
 
+  # The viewer draws doors and windows from their saved meshes by default, on
+  # the condition (Griffin, 2026-10-30) that its memory and load time are
+  # measured in Playwright on the reference models. The figures are for
+  # reading and the spec asserts behaviour; `CI passed` does not wait for it
+  # (it took 12 minutes of every pull request's), but the deploy does.
+  measure:
+    permissions:
+      contents: read
+    uses: ./.github/workflows/viewer-test.yml
+    with:
+      legs: '[{"name":"saved-mesh measurement","measure":true}]'
+
   deploy:
     if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
-    needs: build
+    needs: [build, measure]
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     permissions:
