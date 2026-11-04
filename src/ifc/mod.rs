@@ -3787,6 +3787,20 @@ pub fn build_export_diagnostics_with_limits(
             sample_names: Vec::new(),
         });
     }
+    // RE-324: on Revit 2015 to 2023 an Area is written only where its region
+    // and body are proven. The others are not written, and not claimed to be
+    // left out by Revit's export: its exporter drops an Area with no
+    // enclosed boundary and rvt-rs does not read whether one encloses an area.
+    let unwritten_areas = rf.unwritten_areas().clone();
+    let unwritten_area_total: usize = unwritten_areas.values().sum();
+    if unwritten_area_total > 0 {
+        skipped.push(SkippedExportItem {
+            reason: "area_without_proven_body".into(),
+            count: unwritten_area_total,
+            classes: unwritten_areas,
+            sample_names: Vec::new(),
+        });
+    }
 
     let recovered_units = recover_project_units(rf);
     let mut warnings = diagnostic_candidates.warnings;

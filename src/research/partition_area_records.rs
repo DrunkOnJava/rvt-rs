@@ -86,6 +86,16 @@
 //! (`reports/element-framing/RE-324-areas-2015-2023.md`). Releases 2016 to 2023
 //! leave out an Area in a non-primary design option, as 2024 does; 2015 reads
 //! no option sets, so an Area that names any option is left out there.
+//!
+//! **An Area of Revit 2015 to 2023 is written only where its region and body
+//! are proven.** The first rule, writing every placed Area as 2024 does, wrote
+//! 2 `IfcSpace` that Revit's export lacks on a held-out Revit 2021 project
+//! (which also gave Revit's 8, by counts only). Revit's exporter makes no space
+//! for an Area whose boundary yields no loop (a redundant or not-enclosed Area,
+//! `SpatialElementExporter.CreateIFCSpace` in revit-ifc, CLEANROOM.md source
+//! 5), and the lines of its scheme are all that is read of an Area's boundary:
+//! a proven region is a boundary. The Areas left out are counted by the reason
+//! their body has none in the export diagnostics (`area_without_proven_body`).
 
 use crate::RevitFile;
 use crate::element_record_plan_profiles::{PLAN_PROFILE_SOURCE_FIELD, PlanProfile};
@@ -206,6 +216,9 @@ pub const REFUSED_OFF_REGION: &str = "named_lines_not_on_region";
 /// Another placed Area of the same scheme and Level has the same region,
 /// whether or not that Area is drawn.
 pub const REFUSED_REDUNDANT: &str = "two_areas_one_region";
+/// The Area has neither a body nor a reason (never returned by the readers
+/// above; the count of unwritten Areas names it only as a fallback).
+pub const REFUSED_UNPROVEN: &str = "body_not_proven";
 
 /// How the chain records of a file are walked (RE-324).
 #[derive(Debug, Clone, Copy)]
@@ -1026,8 +1039,10 @@ fn area_bodies(
 
 /// Every placed Area of a Revit 2015 to 2024 file, as a `DecodedElement` of
 /// class `Area` with its number, name and Level where they are read, and its
-/// boundary, base and height where they are proven (RE-317, RE-324). Empty on
-/// every other release.
+/// boundary, base and height where they are proven (RE-317, RE-324). On 2015
+/// to 2023 only the Areas whose body is proven; the others are counted by
+/// reason on the file (`RevitFile::unwritten_areas`). Empty on every other
+/// release.
 pub fn areas_from_partition_chain_records(
     rf: &mut RevitFile,
     revit_version: u32,
@@ -1047,7 +1062,7 @@ pub fn areas_from_partition_chain_records(
     let options = rf.memoised_design_options();
     let options_read = layout.reads_design_options(revit_version);
     let census = area_records(rf, layout, &declared);
-    let placed: BTreeMap<u32, AreaRecord> = census
+    let mut placed: BTreeMap<u32, AreaRecord> = census
         .areas
         .into_iter()
         .filter(|(_, record)| {
@@ -1059,9 +1074,6 @@ pub fn areas_from_partition_chain_records(
     if placed.is_empty() {
         return Vec::new();
     }
-    let ids: BTreeSet<u32> = placed.keys().copied().collect();
-    let entries =
-        crate::partition_room_parameters::scan_room_parameter_entries(rf, revit_version, &ids);
     let surroundings = Surroundings {
         declared: &declared,
         level_ids,
@@ -1077,6 +1089,29 @@ pub fn areas_from_partition_chain_records(
         &surroundings,
         &options,
     );
+    if matches!(layout, Layout::Narrow(_)) {
+        // On Revit 2015 to 2023 an Area is written only where its region and
+        // body are proven (RE-324): the one measurement of a wider rule, on a
+        // held-out project, wrote 2 spaces Revit's export lacks. Revit's
+        // exporter makes no space for an Area whose boundary yields no loop,
+        // and the Area's lines are all that is read of its boundary.
+        let mut unwritten = BTreeMap::<String, usize>::new();
+        placed.retain(|id, _| {
+            let drawn = bodies.drawn.contains_key(id);
+            if !drawn {
+                let reason = bodies.refused.get(id).copied().unwrap_or(REFUSED_UNPROVEN);
+                *unwritten.entry(reason.to_string()).or_insert(0) += 1;
+            }
+            drawn
+        });
+        rf.set_unwritten_areas(unwritten);
+        if placed.is_empty() {
+            return Vec::new();
+        }
+    }
+    let ids: BTreeSet<u32> = placed.keys().copied().collect();
+    let entries =
+        crate::partition_room_parameters::scan_room_parameter_entries(rf, revit_version, &ids);
     placed
         .into_iter()
         .map(|(id, record)| {
