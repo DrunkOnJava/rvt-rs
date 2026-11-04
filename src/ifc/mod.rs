@@ -1182,6 +1182,7 @@ fn export_rvt_doc(
     walker_limits: crate::walker::WalkerLimits,
     control: &crate::control::WalkerControl,
 ) -> Result<IfcModel> {
+    rf.reset_export_notes();
     rf.report_partition_inflates_to(control);
     let result = export_rvt_doc_reporting(rf, mode, quality_mode, walker_limits, control);
     rf.stop_reporting_partition_inflates();

@@ -12,7 +12,10 @@
   same, its result gains `phases` (`[{ id, name? }]`, in order, the last the
   default), and the File status panel lists the file's phases with the last
   as the default and reads the file again with the one chosen. Calls without
-  a phase export the last phase as before. `RevitFile::project_phases` is the
+  a phase export the last phase as before. A handle exported at one phase and
+  then at another no longer carries the first's notes (the family spaces left
+  out for want of a body, the Areas left unwritten) into the second's
+  diagnostics. `RevitFile::project_phases` is the
   new public method that lists a project's phases. The stubs
   (`python/rvt/__init__.pyi`), [docs/python.md](docs/python.md) and
   [docs/viewer-api.md](docs/viewer-api.md) follow, and RE1 Architecture

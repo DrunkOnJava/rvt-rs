@@ -508,6 +508,17 @@ impl RevitFile {
         self.bodiless_family_spaces = classes;
     }
 
+    /// Forget what an earlier export through this handle noted for its
+    /// diagnostics: the Areas left unwritten, the family spaces left out for
+    /// want of a body, and the error that stopped that check. The readers note
+    /// them only when they find some, so without this a handle exported at one
+    /// export phase and then at another would report the first's.
+    pub(crate) fn reset_export_notes(&mut self) {
+        self.unwritten_areas.clear();
+        self.bodiless_family_spaces.clear();
+        self.bodiless_family_space_error = None;
+    }
+
     /// How many family instances written as spaces were not checked for a 3D
     /// body, and why (RE-312).
     pub(crate) fn bodiless_family_space_error(&self) -> Option<&(usize, String)> {

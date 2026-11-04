@@ -89,15 +89,38 @@ def test_the_first_phase_leaves_out_the_rooms_that_sit_in_the_second(re1):
 
 
 def test_one_handle_exports_the_phases_in_turn(re1):
-    fresh_default = body(rvt.rvt_to_ifc(str(RE1)))
-    fresh_first = body(rvt.rvt_to_ifc(str(RE1), phase=FIRST))
-    assert body(re1.write_ifc()) == fresh_default
-    assert body(re1.write_ifc(phase=FIRST)) == fresh_first
+    """A handle that exports one phase and then another gives what a handle
+    opened for that phase gives: the IFC, its rooms and its diagnostics."""
+    fresh = {
+        None: rvt.RevitFile(str(RE1)),
+        FIRST: rvt.RevitFile(str(RE1)),
+    }
+    expected = {
+        phase: (
+            body(handle.write_ifc(phase=phase)),
+            handle.export_diagnostics(phase=phase),
+        )
+        for phase, handle in fresh.items()
+    }
+    assert spaces(expected[None][0]) == 11
+    assert spaces(expected[FIRST][0]) == 0
+
+    def check(phase, request):
+        ifc = re1.write_ifc(phase=request)
+        want_ifc, want_diagnostics = expected[phase]
+        assert spaces(ifc) == spaces(want_ifc), repr(request)
+        assert body(ifc) == want_ifc, repr(request)
+        assert re1.export_diagnostics(phase=request) == want_diagnostics, repr(request)
+
+    check(None, None)
+    check(FIRST, FIRST)
     # No phase after one was named is the last again, not the handle's
     # earlier choice.
-    assert body(re1.write_ifc()) == fresh_default
-    assert body(re1.write_ifc(phase=FIRST_ID)) == fresh_first
-    assert body(re1.write_ifc(phase=LAST)) == fresh_default
+    check(None, None)
+    check(FIRST, FIRST_ID)
+    check(None, LAST)
+    check(FIRST, str(FIRST_ID))
+    check(None, LAST_ID)
 
 
 def test_the_room_schedule_follows_the_phase(re1):
