@@ -345,32 +345,20 @@ fn decoded_element_to_dict<'py>(
 struct PyRevitFile {
     inner: RustRevitFile,
     walker_limits: walker::WalkerLimits,
-    /// Whether an export through this handle named a phase. The handle keeps
-    /// the phase it was given, so a later call that names none sets the
-    /// project's last phase again.
-    phase_set: bool,
 }
 
 impl PyRevitFile {
-    /// The phase an export through this handle runs at, from its `phase`
-    /// argument: the one named, the project's last when an earlier call moved
-    /// the handle off it, or none when the handle has never left it.
+    /// The phase an export through this handle names, from its `phase`
+    /// argument: the one given, or none, which is the project's last. The
+    /// handle keeps the phase it was given, so a call that names none first
+    /// takes it back to the last. A phase the file lacks is refused where the
+    /// export sets it, before any export runs.
     fn phase_for_export(&mut self, phase: Option<&Bound<'_, PyAny>>) -> PyResult<Option<String>> {
-        match phase_argument(phase)? {
-            Some(phase) => {
-                self.phase_set = true;
-                Ok(Some(phase))
-            }
-            None if self.phase_set => {
-                self.phase_set = false;
-                Ok(self
-                    .inner
-                    .project_phases()
-                    .last()
-                    .map(|last| last.id.to_string()))
-            }
-            None => Ok(None),
+        let phase = phase_argument(phase)?;
+        if phase.is_none() && self.inner.export_phase().is_some() {
+            self.inner.clear_export_phase();
         }
+        Ok(phase)
     }
 }
 
@@ -425,7 +413,6 @@ impl PyRevitFile {
         Ok(Self {
             inner,
             walker_limits,
-            phase_set: false,
         })
     }
 

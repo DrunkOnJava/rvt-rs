@@ -508,15 +508,17 @@ impl RevitFile {
         self.bodiless_family_spaces = classes;
     }
 
-    /// Forget what an earlier export through this handle noted for its
-    /// diagnostics: the Areas left unwritten, the family spaces left out for
-    /// want of a body, and the error that stopped that check. The readers note
-    /// them only when they find some, so without this a handle exported at one
-    /// export phase and then at another would report the first's.
+    /// Forget what an earlier production walk noted for its diagnostics: the
+    /// Areas left unwritten, the family spaces left out for want of a body,
+    /// the error that stopped that check, and the doors and windows written
+    /// though their type was not read. The partition recovery notes them, and
+    /// only when it finds some, so each walk starts from none: the notes
+    /// follow the memoised walk that produced them.
     pub(crate) fn reset_export_notes(&mut self) {
         self.unwritten_areas.clear();
         self.bodiless_family_spaces.clear();
         self.bodiless_family_space_error = None;
+        self.unread_type_doors_windows.clear();
     }
 
     /// How many family instances written as spaces were not checked for a 3D
@@ -958,12 +960,17 @@ impl RevitFile {
     /// Choose the phase the export shows, by the phase's name (exactly) or
     /// its ElementId, instead of the project's last (RE-326). Revit's IFC
     /// export shows one phase and leaves out an element that does not exist
-    /// in it and a room whose own phase is not it; this changes both. Call it
-    /// before the first export or element read of this handle. It fails,
+    /// in it and a room whose own phase is not it; this changes both. It fails,
     /// naming the phases the file lists, when none matches, and for a file
     /// whose phases are not read or whose release applies no export phase.
     /// [`Self::export_phase`] then reports the ElementId of the phase chosen,
     /// which `phase` may have named by its name or by that id.
+    ///
+    /// It may be called at any time. Choosing a phase other than the one in
+    /// effect drops the memoised production walk, the one read that holds
+    /// what the phase leaves out, so the next export reads again at the new
+    /// phase; choosing the one in effect keeps it. [`Self::clear_export_phase`]
+    /// goes back to the default.
     ///
     /// # Errors
     ///
@@ -1000,9 +1007,28 @@ impl RevitFile {
                 filter.phases_listing()
             )));
         };
+        if filter.export != Some(id) {
+            self.walk = None;
+        }
         self.phase_filter = Some(Arc::new(filter.with_export_phase(id)));
         self.chosen_export_phase = Some(id);
         Ok(())
+    }
+
+    /// Back to the default export phase, the project's last, as it is before
+    /// [`Self::set_export_phase`] chooses one: [`Self::export_phase`] is `None`
+    /// again. As a choice of another phase does, going back from one drops the
+    /// memoised production walk; on a handle that has chosen none this changes
+    /// nothing.
+    pub fn clear_export_phase(&mut self) {
+        self.chosen_export_phase = None;
+        let filter = self.memoised_phase_filter();
+        if let Some(last) = filter.order.last().copied() {
+            if filter.export != Some(last) {
+                self.walk = None;
+                self.phase_filter = Some(Arc::new(filter.with_export_phase(last)));
+            }
+        }
     }
 
     /// The ElementId of the phase [`Self::set_export_phase`] chose, whether it

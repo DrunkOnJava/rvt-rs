@@ -365,9 +365,12 @@ pub fn run_export_with_limits(
 /// steps after it use it; the diagnostic-proxies and placeholder exporters
 /// take none, as before.
 ///
-/// Choose the phase before the first export or read of a handle: reads of the
-/// handle are kept, and a handle that has been read under one phase keeps
-/// what it read. Giving the phase the handle already has is harmless.
+/// A handle may be exported at one phase and then at another: choosing a
+/// different phase drops the memoised walk that holds what the phase leaves
+/// out ([`RevitFile::set_export_phase`]), so each export is the one a handle
+/// opened for that phase gives, and giving the phase the handle already has
+/// keeps what it read. `options.phase` of `None` leaves the handle's phase as
+/// it is; [`RevitFile::clear_export_phase`] goes back to the project's last.
 ///
 /// # Errors
 ///

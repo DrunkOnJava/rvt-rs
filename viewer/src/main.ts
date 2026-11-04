@@ -1095,7 +1095,11 @@ async function loadBytes(file: File, limits?: OpenLimitsOptions): Promise<void> 
   firstOpenLimits = undefined;
   // The same file read again (a changed option, the large-model retry) keeps
   // its phase; another file starts at the project's last.
-  if (file !== currentFile) currentPhase = '';
+  if (file !== currentFile) {
+    currentPhase = '';
+    // The previous file's phases are not this one's choices.
+    renderPhases([]);
+  }
   const phase = currentPhase === '' ? undefined : Number(currentPhase);
   currentFile = file;
   currentOpenLimits = openLimits;

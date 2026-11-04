@@ -11,6 +11,8 @@
 //! Runs against `RVT_PROJECT_CORPUS_DIR` (`RE1-*.rvt` with Revit's
 //! `RE1-*.ifc`). Skips what is absent.
 
+use rvt::ifc::step_writer::{StepOptions, write_step_with_options};
+use rvt::ifc::{ExportOptions, run_export};
 use rvt::{RevitFile, research::native_document};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
@@ -93,4 +95,74 @@ fn re1_family_instances_carry_their_phases() {
         checked > 0 || !dir.join("RE1-Plumbing.rvt").exists(),
         "no RE1 model was checked"
     );
+}
+
+fn project(name: &str) -> Option<PathBuf> {
+    let path = PathBuf::from(std::env::var_os("RVT_PROJECT_CORPUS_DIR")?).join(name);
+    path.exists().then_some(path)
+}
+
+/// What an export of `rf` writes and reports, comparable across handles: its
+/// STEP text at a fixed time, and its diagnostics.
+fn exported(rf: &mut RevitFile, phase: Option<&str>) -> (String, serde_json::Value) {
+    let options = ExportOptions::default().with_phase(phase.map(str::to_string));
+    let run = run_export(rf, &options).expect("export");
+    let step = write_step_with_options(&run.model, &StepOptions { timestamp: Some(0) });
+    (
+        step,
+        serde_json::to_value(&run.diagnostics).expect("diagnostics"),
+    )
+}
+
+/// #1339: the production walk is memoised on the handle, and with it what the
+/// partition recovery notes for the diagnostics (Areas left unwritten, family
+/// spaces without a body). A second export of the same handle, which reads that
+/// walk back, must write and report what a fresh handle does. This holds for
+/// any model; it can only fail where a model has such notes, and whether
+/// Einhoven or RE1 Architecture has any is not known here.
+#[test]
+fn a_handle_exported_again_reports_what_a_fresh_one_reports() {
+    let mut checked = 0;
+    for name in ["Revit_IFC5_Einhoven.rvt", "RE1-Architecture.rvt"] {
+        let Some(path) = project(name) else {
+            eprintln!("skipping {name}: absent");
+            continue;
+        };
+        let fresh = exported(&mut RevitFile::open(&path).expect("open"), None);
+        let mut reused = RevitFile::open(&path).expect("open");
+        assert_eq!(exported(&mut reused, None), fresh, "{name}: first export");
+        assert_eq!(exported(&mut reused, None), fresh, "{name}: second export");
+        checked += 1;
+    }
+    eprintln!("{checked} model(s) exported twice");
+}
+
+/// #1339: one handle exported at one phase and then another gives what a
+/// handle opened for that phase gives, in the IFC and in the diagnostics. RE1
+/// Architecture's phases are Existing (12589) and New Construction (86961,
+/// the last), and its 11 rooms sit in the second.
+#[test]
+fn a_handle_exported_at_one_phase_and_then_another_gives_what_a_fresh_handle_gives() {
+    let Some(path) = project("RE1-Architecture.rvt") else {
+        eprintln!("skipping: RE1-Architecture.rvt absent");
+        return;
+    };
+    let open = || RevitFile::open(&path).expect("open");
+    let default = exported(&mut open(), None);
+    let existing = exported(&mut open(), Some("Existing"));
+    assert!(default.0.contains("=IFCSPACE("), "rooms by default");
+    assert!(!existing.0.contains("=IFCSPACE("), "no rooms in Existing");
+
+    let mut rf = open();
+    assert_eq!(exported(&mut rf, None), default);
+    assert_eq!(rf.export_phase(), None);
+    assert_eq!(exported(&mut rf, Some("Existing")), existing);
+    assert_eq!(rf.export_phase(), Some(12589));
+    // The phase in effect again keeps what the handle read.
+    assert_eq!(exported(&mut rf, Some("12589")), existing);
+    rf.clear_export_phase();
+    assert_eq!(rf.export_phase(), None);
+    assert_eq!(exported(&mut rf, None), default);
+    assert_eq!(exported(&mut rf, Some("New Construction")), default);
+    assert_eq!(rf.export_phase(), Some(86961));
 }
