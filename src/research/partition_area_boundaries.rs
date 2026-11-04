@@ -564,8 +564,10 @@ impl Arrangement {
         // Leave out the lines with a free end, and then those that the removal
         // frees, by a worklist of points with one line left: each line is
         // removed once, so the pass is linear in the lines.
-        let candidates: Vec<((usize, usize), (Option<u32>, bool))> =
-            edges.iter().map(|(&ends, &edge)| (ends, edge)).collect();
+        // An edge's two node indices, with its source line (`None` for a
+        // connector) and whether it was carried.
+        type Candidate = ((usize, usize), (Option<u32>, bool));
+        let candidates: Vec<Candidate> = edges.iter().map(|(&ends, &edge)| (ends, edge)).collect();
         let mut alive = vec![true; candidates.len()];
         let mut degree = vec![0usize; count];
         let mut incident: Vec<Vec<usize>> = vec![Vec::new(); count];
