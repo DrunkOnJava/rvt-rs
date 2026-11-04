@@ -495,7 +495,9 @@ fn solve_sketch_plan_profiles(
         if !(has_arc || relisted.contains(&owner)) || spans_box(owner, &profile) {
             erpp::tag_voids(&mut profile, &points);
             profile.segment_ids = segments.keys().copied().collect();
-            evidence.exact.insert(owner);
+            if recording {
+                evidence.exact.insert(owner);
+            }
             profiles.insert(owner, profile);
         }
     }
@@ -505,7 +507,9 @@ fn solve_sketch_plan_profiles(
 /// `records` with each sketch line whose records in different partitions
 /// disagree on its box kept only in its current partition (RE-216,
 /// [`crate::native_document`]), or left out where that cannot be told (#824).
-/// Copies that agree are kept as they are.
+/// Copies that agree are kept as they are. The second value names the lines
+/// that disagreed, and is filled only while the handle records value sources
+/// (#1374).
 pub(super) fn current_sketch_records(
     rf: &mut RevitFile,
     records: &[crate::partition_element_records::PartitionElementRecord],
@@ -538,6 +542,7 @@ pub(super) fn current_sketch_records(
     if disagreeing.is_empty() {
         return (records.to_vec(), BTreeSet::new());
     }
+    let recording = rf.recording_value_sources();
     let current = crate::native_document::current_partitions(rf, &disagreeing);
     let kept = records
         .iter()
@@ -549,7 +554,12 @@ pub(super) fn current_sketch_records(
         })
         .cloned()
         .collect();
-    (kept, disagreeing.into_keys().collect())
+    let current_lines = if recording {
+        disagreeing.into_keys().collect()
+    } else {
+        BTreeSet::new()
+    };
+    (kept, current_lines)
 }
 
 /// A sketch read from its lines' exact ends: the chords, whether any is an
