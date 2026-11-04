@@ -3,11 +3,12 @@
 (RE-302, #1247).
 
 `mesh_bodies_vs_ifc.py` judges a whole body: the BIM4LCA office's 43
-`WC-istuin:WC-1` toilets, drawn from their saved faces, are 1.027 to 1.047 of
-Revit's volume, with our vertices up to 0.0218 ft from Revit's surface and
-Revit's up to 0.0050 ft from ours. This reads `probe_re302_toilet_faces`'s
-output (every decoded face of a few toilets, in document feet) and Revit's
-export, and says, per face of ours:
+`WC-istuin:WC-1` toilets, drawn from their saved faces by the second attempt
+(Measure run 41766414367, b5d5546f), are 1.0060 of Revit's volume, with our
+vertices 0.0215 to 0.0222 ft from Revit's surface and Revit's 0.0046 to
+0.0050 ft from ours. This reads `probe_re302_toilet_faces`'s output (every
+decoded face of a few toilets, in document feet) and Revit's export, and says,
+per face of ours:
 
 - how far its triangle centres, area-weighted, lie from Revit's surface: the
   area beyond 0.001, 0.005 and 0.01 ft, and the largest distance (surface rvt-rs
@@ -21,6 +22,12 @@ distribution of their distance to our surface. A face drawn where Revit's
 export has nothing shows as area far from Revit's surface; Revit's export
 being the coarser polygonisation of the same surface shows as small distances
 on both sides and Revit's vertices near our faces.
+
+The per-face table and the sums are printed for every toilet. The list of
+Revit's vertices more than 0.001 ft off our surface, the count of our
+triangles more than 0.01 ft from Revit's and the sag of Revit's triangles
+there are printed for the first toilet (in id order) only, as Measure runs the
+scorer with no options; `--list` prints them for every toilet.
 
 Needs IfcOpenShell and numpy.
 
@@ -156,7 +163,8 @@ def explain(triangles, owner, faces, ref_triangles, ref_points, ref_terms, ours_
 
 
 def main():
-    args =[a for a in sys.argv[1:] if not a.startswith("--")]
+    args = [a for a in sys.argv[1:] if not a.startswith("--")]
+    every = "--list" in sys.argv[1:]
     if len(args) != 2:
         print(__doc__)
         return 2
@@ -228,7 +236,7 @@ def main():
                 f"  class {surface:<10} area {row[0]:.4f}, beyond .001 {row[1]:.4f},"
                 f" beyond .005 {row[2]:.4f}, beyond .01 {row[3]:.4f}, Revit vertices off {int(row[4])}"
             )
-        if listed:
+        if listed and not every:
             continue
         listed = True
         explain(
