@@ -13,8 +13,8 @@
 //! drawn at its type's values, so each instance is checked on its own, with
 //! no verdict shared between instances of a family: every vertex of its mesh
 //! must lie on the extrusions' surfaces, samples of their surfaces must lie
-//! on its mesh, and the volumes must agree within 1% and the chord loss of
-//! the mesh's arcs. A family with a void, a hidden form it cannot read, a form
+//! on its mesh, and the volumes must agree within the chord loss of the
+//! mesh's arcs and 0.01%. A family with a void, a hidden form it cannot read, a form
 //! that is not an extrusion or a profile the reader does not draw (an
 //! ellipse, a sketch whose curves do not close) draws nothing, and neither
 //! does an instance whose mesh the extrusions do not reproduce: the instance
@@ -47,13 +47,17 @@ use std::f64::consts::PI;
 pub const FAMILY_EXTRUSION_BODY_SOURCE: &str = "family_extrusions";
 
 /// How far a vertex of an instance's mesh may lie from the extrusions' surface
-/// for the extrusions to replace it, feet. Every vertex of the 6,172
+/// for the extrusions to replace it, feet. Every vertex of the 6,014
 /// extrusions of Autodesk's sample projects that have a complete mesh lies
-/// within 1e-6 ft of the rebuilt surface.
-const VERTEX_TOLERANCE: f64 = 5e-4;
+/// within 1e-6 ft of the rebuilt surface; the margin is the single-precision
+/// rounding of a mesh far from the origin. A looser 5e-4 ft replaced a
+/// Revit instance whose own export lies 1.4e-3 ft from the extrusions (run
+/// 41805333248), so it is no longer allowed.
+const VERTEX_TOLERANCE: f64 = 1e-4;
 /// How far a sampled point of the extrusions' surface may lie from the mesh,
-/// feet: the 0.001 ft chords the mesh draws arcs with, and half again.
-const SURFACE_TOLERANCE: f64 = 1.5e-3;
+/// feet: the 0.001 ft chords the mesh draws arcs with (the largest of the
+/// 6,014 forms is 0.000998 ft), and a tenth more.
+const SURFACE_TOLERANCE: f64 = 1.1e-3;
 
 /// What [`attach`] did. Every instance drawn from a saved mesh is counted
 /// once: `candidates = replaced + not_rebuilt + unplaced + unchecked +

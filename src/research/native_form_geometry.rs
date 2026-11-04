@@ -56,6 +56,9 @@ const MAX_MESH_TRIANGLES: usize = 50_000;
 const MESH_PAIR_BUDGET: usize = 2_000_000;
 /// The sagitta of the chords Revit's saved meshes tessellate arcs with, feet.
 const SAGITTA: f64 = 0.001;
+/// What [`MeshAgreement::volume_agrees`] allows beyond the chord loss, as a
+/// fraction of the mesh's volume: rounding in the mesh's coordinates.
+const VOLUME_MARGIN: f64 = 1e-4;
 const MAX_LOOPS: usize = 256;
 /// The most curves a sketch may have to be chained: the chaining compares
 /// every open end with every unused curve.
@@ -1509,10 +1512,12 @@ pub struct MeshAgreement {
 }
 
 impl MeshAgreement {
-    /// Whether the volumes agree within 1%, and the arcs' chord loss.
+    /// Whether the volumes agree within the arcs' chord loss and 0.01% of the
+    /// mesh's: on the 6,014 forms of Autodesk's sample projects that match
+    /// their own complete mesh the difference never exceeds the chord loss,
+    /// above or below.
     pub fn volume_agrees(&self) -> bool {
-        self.volume_deficit >= -0.01 * self.mesh_volume
-            && self.volume_deficit <= 0.01 * self.mesh_volume + self.volume_slack
+        self.volume_deficit.abs() <= VOLUME_MARGIN * self.mesh_volume + self.volume_slack
     }
 }
 
