@@ -242,8 +242,13 @@ newest, the highest-numbered partition and then the latest offset, with no exten
 test. A body reader may take another copy (the sketch-line readers take the
 current one, `current_partitions`, RE-216), and `native_record.stream` names the
 current native copy. So `offset` and `native_record.stream` can name different
-partitions, and neither is guaranteed to be the copy a body came from;
-`body_source` names the reader, not its copy.
+partitions. `get_element` and `explain_element` list, in `value_sources`, the
+copy each reader took a value of the body from (its reader, the rule that chose
+the copy, its stream and offset, and whether it is in another partition than the
+frame; #1360): the bounded line of a wall or beam, a family instance's
+transform, a saved mesh, a stair run or landing. `list_elements` does not. A
+body whose reader does not note its copy yet has none; see
+`docs/export-diagnostics.md` for the readers.
 
 What the offsets have been checked on: Core Interior, the RE1 models, Einhoven
 and the BIM4LCA as-built office, by reading the bytes at each offset

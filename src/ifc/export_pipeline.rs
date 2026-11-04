@@ -506,6 +506,9 @@ pub fn run_export_with_limits_and_control(
     if let Some(phase) = &options.phase {
         rf.set_export_phase(phase)?;
     }
+    // #1360: the readers note the copy they take each value from only when the
+    // table that lists them is asked for.
+    rf.record_value_sources(options.element_provenance && options.kind != ExportKind::Placeholder);
     let result = match options.kind {
         ExportKind::Document => RvtDocExporter.export_with_diagnostics_mode_limits_and_control(
             rf,
@@ -640,6 +643,12 @@ pub fn run_export_with_limits_and_control(
         let left_out = leave_out_base_quantities(&mut model);
         recount_exported(&mut diagnostics, &model);
         notes.push(ExportNote::BaseQuantities { left_out });
+    }
+
+    // #1360: the model is final, so the bodies the saved graphics and the
+    // family extrusions replaced name their own sources.
+    if let Some(table) = diagnostics.decoded.element_provenance.as_mut() {
+        super::element_provenance::attach_value_sources(table, rf, &model);
     }
 
     // #1326: the decisions the `skipped` counts were made from, and those
