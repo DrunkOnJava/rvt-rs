@@ -11,7 +11,9 @@
   every measured end: a butt join, every wall straight and meeting at a right
   angle or straight on, no element but a wall cutting the wall, the faces that
   decide agreeing, and the wall single-layer or stopping against single-layer
-  walls. Against Revit's own export of the BIM4LCA office, 510 of 607 walls
+  walls. An end it reads names the wall it stops at or runs through
+  (`JoinStartWallElementId`) only where one perpendicular wall alone decides
+  it. Against Revit's own export of the BIM4LCA office, 510 of 607 walls
   as built have both ends within 0.001 ft (482 before) and 430 of 589 at
   building permit (422); 30 and 8 ends go from wrong to right and none from
   right to wrong. Two single-layer walls that meet at a mitre (R2025

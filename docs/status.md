@@ -934,7 +934,9 @@ perpendicular wall, and otherwise runs through the perpendicular walls listed
 after it, to faces taken from where each wall's own line ends. It is read
 only where it is right on every measured end (a butt join, straight walls at
 right angles or straight on, nothing but walls cutting the wall, single-layer
-walls or a layered wall stopping against single-layer walls). On the office as
+walls or a layered wall stopping against single-layer walls), and names the
+wall it stops at or runs through only where one perpendicular wall alone
+decides the end. On the office as
 built 510 of 607 walls end where Revit's do (482 before), and 430 of 589 at
 building permit (422); two single-layer walls that meet at a mitre end on the
 line through its corners (R2025 `18_WallJoins`: 9 of 9, from 7). Core
