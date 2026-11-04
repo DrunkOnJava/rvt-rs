@@ -41,9 +41,17 @@ use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
 use std::f64::consts::PI;
 
-/// The largest angle one chord of an arc spans in a region's outline: 2°,
-/// which keeps the chord within 0.02% of the radius of the arc.
-pub const ARC_STEP_RADIANS: f64 = PI / 90.0;
+/// The largest angle one chord of an arc spans where an outline is tested
+/// for a point (2°, which keeps the chord within 0.02% of the radius of the
+/// arc). Only the test uses chords: a region's outline is written with its
+/// arcs as arcs.
+const POINT_TEST_ARC_STEP_RADIANS: f64 = PI / 90.0;
+
+/// How far an arc's middle may lie from its chord, feet, for the arc to be
+/// written as a line: the IFC writer rounds coordinates to a micrometre
+/// (3.3e-6 ft), and a middle that close to the chord can round onto it, which
+/// leaves three collinear points for an arc (as `family_extrusions` has it).
+pub const FLAT_ARC_SAGITTA_FEET: f64 = 1.6e-5;
 
 /// The relative difference allowed between a rebuilt loop's area and the
 /// area Revit saves for its circuit.
@@ -80,8 +88,12 @@ pub const REFUSED_NO_CIRCUIT: &str = "area_circuit_not_found";
 /// A side of the circuit has no segment, no area boundary line, or a curve
 /// that is not a line or an arc, or does not lie on the segment's points.
 pub const REFUSED_SIDE: &str = "area_circuit_side_not_read";
-/// The rebuilt loop does not have the circuit's area.
+/// The rebuilt loop does not have the circuit's area, whether as the edges
+/// are rebuilt or as the outline is written, arcs as arcs.
 pub const REFUSED_AREA: &str = "area_circuit_area_differs";
+/// An arc of the rebuilt loop cannot be written: its centre, radius or sweep
+/// is not finite, or it turns more than once.
+pub const REFUSED_ARC: &str = "area_arc_not_finite";
 /// The Area's point is not inside the rebuilt region.
 pub const REFUSED_POINT: &str = "area_point_outside_circuit";
 
@@ -89,12 +101,141 @@ pub const REFUSED_POINT: &str = "area_point_outside_circuit";
 /// ElementIds of the lines that bound it.
 #[derive(Debug, Clone, PartialEq)]
 pub struct AreaRegion {
-    /// The outer loop, counter-clockwise, without a repeated closing vertex.
+    /// The outer loop's vertices, counter-clockwise, without a repeated
+    /// closing vertex. The ends of an arc are vertices; so is the point where
+    /// an arc of more than a half turn is cut in two.
     pub outer: Vec<(f64, f64)>,
+    /// For each edge of the outer loop, from a vertex to the next (the last
+    /// to the first), the middle point of the arc it is, or `None` for a line.
+    pub outer_arcs: Vec<Option<(f64, f64)>>,
     /// The loops directly inside it, clockwise.
     pub holes: Vec<Vec<(f64, f64)>>,
+    /// The arcs of each hole, as `outer_arcs` has them.
+    pub hole_arcs: Vec<Vec<Option<(f64, f64)>>>,
     /// The ElementIds of the lines that bound the region, its holes' too.
     pub line_ids: BTreeSet<u32>,
+}
+
+impl AreaRegion {
+    /// The area of the outline less its holes, as the loops are written (an
+    /// arc is an arc, not its chord), or `None` where an arc is degenerate.
+    pub fn net_area_feet2(&self) -> Option<f64> {
+        let mut area = written_area(&self.outer, &self.outer_arcs)?;
+        for (hole, arcs) in self.holes.iter().zip(&self.hole_arcs) {
+            area += written_area(hole, arcs)?;
+        }
+        Some(area)
+    }
+}
+
+/// A circular arc through three points, found from them.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ThreePointArc {
+    /// The circle's centre.
+    pub center: (f64, f64),
+    /// The circle's radius.
+    pub radius: f64,
+    /// The angle of the first point about the centre.
+    pub start: f64,
+    /// The signed angle the arc turns from the first point through the
+    /// second to the third: positive counter-clockwise, at most a full turn.
+    pub sweep: f64,
+}
+
+/// The arc from `p` through `m` to `q`, or `None` where the three points are
+/// collinear, coincide or are not finite.
+pub fn three_point_arc(p: (f64, f64), m: (f64, f64), q: (f64, f64)) -> Option<ThreePointArc> {
+    let (bx, by) = (m.0 - p.0, m.1 - p.1);
+    let (cx, cy) = (q.0 - p.0, q.1 - p.1);
+    let d = 2.0 * (bx * cy - by * cx);
+    if !d.is_finite() || d == 0.0 {
+        return None;
+    }
+    let (b2, c2) = (bx * bx + by * by, cx * cx + cy * cy);
+    let center = (p.0 + (cy * b2 - by * c2) / d, p.1 + (bx * c2 - cx * b2) / d);
+    let radius = distance(center, p);
+    if !(center.0.is_finite() && center.1.is_finite() && radius.is_finite() && radius > 0.0) {
+        return None;
+    }
+    let counter_clockwise = d > 0.0;
+    let start = (p.1 - center.1).atan2(p.0 - center.0);
+    let end = (q.1 - center.1).atan2(q.0 - center.0);
+    let turn = (end - start).rem_euclid(2.0 * PI);
+    let sweep = if counter_clockwise {
+        turn
+    } else {
+        turn - 2.0 * PI
+    };
+    Some(ThreePointArc {
+        center,
+        radius,
+        start,
+        sweep,
+    })
+}
+
+/// The box `[min_x, min_y, max_x, max_y]` of the arc from `p` through `m` to
+/// `q`, its extreme points included, or `None` where it is degenerate.
+pub fn arc_bounds(p: (f64, f64), m: (f64, f64), q: (f64, f64)) -> Option<[f64; 4]> {
+    let arc = three_point_arc(p, m, q)?;
+    let mut bounds = [p.0.min(q.0), p.1.min(q.1), p.0.max(q.0), p.1.max(q.1)];
+    for quarter in 0..4 {
+        let angle = quarter as f64 * PI / 2.0;
+        let along = if arc.sweep >= 0.0 {
+            (angle - arc.start).rem_euclid(2.0 * PI)
+        } else {
+            (arc.start - angle).rem_euclid(2.0 * PI)
+        };
+        if along <= arc.sweep.abs() {
+            let (x, y) = (
+                arc.center.0 + arc.radius * angle.cos(),
+                arc.center.1 + arc.radius * angle.sin(),
+            );
+            bounds = [
+                bounds[0].min(x),
+                bounds[1].min(y),
+                bounds[2].max(x),
+                bounds[3].max(y),
+            ];
+        }
+    }
+    Some(bounds)
+}
+
+/// The signed area of a loop as it is written: its vertices, and for each edge
+/// the middle of its arc or `None` for a line, by Green's theorem, so an arc
+/// counts as itself and not its chord. `None` where an arc is degenerate.
+fn written_area(points: &[(f64, f64)], arcs: &[Option<(f64, f64)>]) -> Option<f64> {
+    let mut area = 0.0;
+    for (index, &p) in points.iter().enumerate() {
+        let q = points[(index + 1) % points.len()];
+        area += match arcs.get(index).copied().flatten() {
+            None => (p.0 * q.1 - q.0 * p.1) / 2.0,
+            Some(m) => {
+                let arc = three_point_arc(p, m, q)?;
+                (arc.radius * arc.radius * arc.sweep + arc.center.0 * (q.1 - p.1)
+                    - arc.center.1 * (q.0 - p.0))
+                    / 2.0
+            }
+        };
+    }
+    area.is_finite().then_some(area)
+}
+
+/// A loop turned round: its vertices in the other order, each edge's arc kept
+/// (an arc is named by its middle, which does not depend on its direction).
+fn reversed_loop(written: WrittenLoop) -> WrittenLoop {
+    let n = written.points.len();
+    if n == 0 {
+        return written;
+    }
+    let points: Vec<(f64, f64)> = written.points.iter().rev().copied().collect();
+    // Edge `j` of the turned loop joins turned[j] = old[n - 1 - j] to
+    // turned[j + 1] = old[n - 2 - j]: the old edge `n - 2 - j`, taken mod n.
+    let arcs = (0..n)
+        .map(|j| written.arcs.get((2 * n - 2 - j) % n).copied().flatten())
+        .collect();
+    WrittenLoop { points, arcs }
 }
 
 /// A segment key: the line's ElementId, the major and the sub index.
@@ -621,7 +762,7 @@ fn segment_of(side: SegmentKey) -> SegmentKey {
 /// `sides` without its spurs: a segment run one way and, by the next side,
 /// straight back, a line that ends inside the loop. Its two sides enclose
 /// nothing, and once moved by its offset it would leave a notch that
-/// Revit's area does not have (on Snowdon Towers, RE-333). Cancelling inverse
+/// Revit's area does not have (seen on the Snowdon Towers samples, RE-333). Cancelling inverse
 /// neighbours, round the loop, is a stack pass; a circuit that is nothing but
 /// spurs comes out empty.
 fn without_spurs(sides: &[SegmentKey]) -> Vec<SegmentKey> {
@@ -761,19 +902,80 @@ fn continues_straight(before: Edge, edge: Edge) -> bool {
     dot > 0.0 && cross.abs() <= 1e-12 * u.0.hypot(u.1) * v.0.hypot(v.1)
 }
 
-/// A loop of edges as points, each arc in chords of at most
-/// [`ARC_STEP_RADIANS`], without a repeated closing vertex. A point where
-/// two straight edges continue in a straight line is left out, unless a third
-/// line meets it (`keep`): then it is a vertex of the outline, as RE-317 §3
-/// has it and as Revit's export keeps it (RE-333 section 8, the office's
-/// Area 1).
-fn edges_points(edges: &[Edge], keep: &[bool]) -> Vec<(f64, f64)> {
-    let mut out = Vec::new();
+/// A loop of edges as it is written: its vertices, without a repeated closing
+/// vertex, and for each edge the middle of the arc it is, or `None` for a line.
+/// A point where two straight edges continue in a straight line is left out,
+/// unless a third line meets it (`keep`): then it is a vertex of the outline,
+/// as RE-317 §3 has it and as Revit's export keeps it (RE-333 section 8, the
+/// office's Area 1). An arc is written as the arc, in the form Revit's export
+/// gives it: a span over a half turn is two arcs, and an arc too flat to
+/// survive the writer's micrometre rounding is a line.
+fn written_loop(edges: &[Edge], keep: &[bool]) -> Result<WrittenLoop, &'static str> {
+    let mut points: Vec<(f64, f64)> = Vec::new();
+    let mut arcs: Vec<Option<(f64, f64)>> = Vec::new();
     for (k, edge) in edges.iter().enumerate() {
         let before = edges[(k + edges.len() - 1) % edges.len()];
         if !keep.get(k).copied().unwrap_or(false) && continues_straight(before, *edge) {
             continue;
         }
+        match *edge {
+            Edge::Line { from, .. } => {
+                points.push(from);
+                arcs.push(None);
+            }
+            Edge::Arc {
+                center,
+                radius,
+                start,
+                sweep,
+            } => {
+                let finite = center.0.is_finite()
+                    && center.1.is_finite()
+                    && radius.is_finite()
+                    && start.is_finite()
+                    && sweep.is_finite();
+                if !finite || sweep.abs() > 2.0 * PI + 1e-9 {
+                    return Err(REFUSED_ARC);
+                }
+                let pieces: usize = if sweep.abs() > PI + 1e-9 { 2 } else { 1 };
+                let half = sweep / pieces as f64;
+                let flat = radius * (1.0 - (half.abs() / 2.0).cos()) < FLAT_ARC_SAGITTA_FEET;
+                let on_circle = |angle: f64| {
+                    (
+                        center.0 + radius * angle.cos(),
+                        center.1 + radius * angle.sin(),
+                    )
+                };
+                for j in 0..pieces {
+                    let from = start + half * j as f64;
+                    points.push(on_circle(from));
+                    arcs.push((!flat).then(|| on_circle(from + half / 2.0)));
+                }
+            }
+        }
+    }
+    let finite = points
+        .iter()
+        .chain(arcs.iter().flatten())
+        .all(|p| p.0.is_finite() && p.1.is_finite());
+    if !finite {
+        return Err(REFUSED_ARC);
+    }
+    // A circle written as two half arcs has two vertices; anything else needs
+    // three.
+    let closed = points.len() >= 3 || (points.len() == 2 && arcs.iter().all(Option::is_some));
+    if !closed {
+        return Err(REFUSED_AREA);
+    }
+    Ok(WrittenLoop { points, arcs })
+}
+
+/// A loop of edges as a polygon whose arcs are chords of at most
+/// [`POINT_TEST_ARC_STEP_RADIANS`]: only for testing whether a point lies in
+/// it, never written.
+fn edges_polyline(edges: &[Edge]) -> Vec<(f64, f64)> {
+    let mut out = Vec::new();
+    for edge in edges {
         out.push(edge.start());
         if let Edge::Arc {
             center,
@@ -782,7 +984,9 @@ fn edges_points(edges: &[Edge], keep: &[bool]) -> Vec<(f64, f64)> {
             sweep,
         } = *edge
         {
-            let steps = (sweep.abs() / ARC_STEP_RADIANS).ceil().max(1.0) as usize;
+            let steps = (sweep.abs() / POINT_TEST_ARC_STEP_RADIANS)
+                .ceil()
+                .clamp(1.0, 100_000.0) as usize;
             for k in 1..steps {
                 let t = start + sweep * k as f64 / steps as f64;
                 out.push((center.0 + radius * t.cos(), center.1 + radius * t.sin()));
@@ -790,6 +994,13 @@ fn edges_points(edges: &[Edge], keep: &[bool]) -> Vec<(f64, f64)> {
         }
     }
     out
+}
+
+/// A loop as it is written: its vertices, and for each edge the middle of its
+/// arc or `None` for a line.
+struct WrittenLoop {
+    points: Vec<(f64, f64)>,
+    arcs: Vec<Option<(f64, f64)>>,
 }
 
 /// Whether `point` lies inside the loop `ring` (even-odd).
@@ -822,12 +1033,19 @@ fn region(
         .get(&place.circuit)
         .ok_or(REFUSED_NO_CIRCUIT)?;
     let outline = circuit_edges(plan, circuit, curves).ok_or(REFUSED_SIDE)?;
-    let area = edges_area(&outline.edges);
-    if area <= 0.0 || !area_agrees(area, circuit.area) {
+    let written = written_loop(&outline.edges, &outline.keep)?;
+    // The loop as the edges are rebuilt, and as it is written, arcs as arcs,
+    // must each have the area Revit saves for the circuit.
+    let rebuilt = edges_area(&outline.edges);
+    let area = written_area(&written.points, &written.arcs).ok_or(REFUSED_ARC)?;
+    if area <= 0.0 || !area_agrees(rebuilt, circuit.area) || !area_agrees(area, circuit.area) {
         return Err(REFUSED_AREA);
     }
-    let outer = edges_points(&outline.edges, &outline.keep);
+    let test_outer = edges_polyline(&outline.edges);
+    let (outer, outer_arcs) = (written.points, written.arcs);
     let mut holes = Vec::new();
+    let mut hole_arcs = Vec::new();
+    let mut test_holes = Vec::new();
     let mut line_ids: BTreeSet<u32> = circuit
         .sides
         .iter()
@@ -836,27 +1054,35 @@ fn region(
     for hole_id in plan.holes.get(&place.circuit).into_iter().flatten() {
         let hole = plan.circuits.get(hole_id).ok_or(REFUSED_NO_CIRCUIT)?;
         let hole_outline = circuit_edges(plan, hole, curves).ok_or(REFUSED_SIDE)?;
-        let area = edges_area(&hole_outline.edges);
-        if !area_agrees(area.abs(), hole.area.abs()) {
+        let hole_written = written_loop(&hole_outline.edges, &hole_outline.keep)?;
+        let rebuilt = edges_area(&hole_outline.edges);
+        let area = written_area(&hole_written.points, &hole_written.arcs).ok_or(REFUSED_ARC)?;
+        if !area_agrees(rebuilt.abs(), hole.area.abs()) || !area_agrees(area.abs(), hole.area.abs())
+        {
             return Err(REFUSED_AREA);
         }
-        let mut points = edges_points(&hole_outline.edges, &hole_outline.keep);
-        if area > 0.0 {
-            points.reverse();
-        }
-        holes.push(points);
+        let hole_written = if area > 0.0 {
+            reversed_loop(hole_written)
+        } else {
+            hole_written
+        };
+        holes.push(hole_written.points);
+        hole_arcs.push(hole_written.arcs);
+        test_holes.push(edges_polyline(&hole_outline.edges));
         line_ids.extend(
             hole.sides
                 .iter()
                 .filter_map(|side| u32::try_from(side.0).ok()),
         );
     }
-    if !inside(&outer, place.point) || holes.iter().any(|hole| inside(hole, place.point)) {
+    if !inside(&test_outer, place.point) || test_holes.iter().any(|h| inside(h, place.point)) {
         return Err(REFUSED_POINT);
     }
     Ok(AreaRegion {
         outer,
+        outer_arcs,
         holes,
+        hole_arcs,
         line_ids,
     })
 }

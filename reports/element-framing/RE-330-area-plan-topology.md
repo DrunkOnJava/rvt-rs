@@ -38,7 +38,7 @@ The checks: the outer loop's area, exact for arcs, equals the circuit's `m_area`
 
 The exporter takes this region first, where it is read and passes the checks above, and otherwise the region of the lines' arrangement with RE-330's joins (RE-317, RE-330). Neither is asked of a group of lines that cannot be read as a whole: a line in a non-primary design option, at a stray height, with copies that disagree, or missing. Where both are found they have the same region (16 of 16 on `rac_advanced`, 30 of 30 on the office); section 8 has what was measured, including the office Area whose outline has two fewer vertices. An Area refused by both says the plan topology's reason (one of the five `area_*` reasons above) rather than the arrangement's.
 
-Arcs are written in chords of at most 2° (`ARC_STEP_RADIANS`). Where two straight edges continue in a straight line (a line cut where another meets it), the point between them is left out. RE-317 §3 keeps that point where a third line meets, which this does not: one office Area has two fewer vertices than Revit's export (section 8).
+Arcs are written as arcs, in the form Revit's export gives them: an `IfcIndexedPolyCurve` of lines and three-point arcs, a span over a half turn as two arcs (a circle as two half arcs), and an arc whose middle lies within 1.6e-5 ft of its chord, which the writer's micrometre rounding could put on it, as a line. The outline is checked as it is written: its area, arcs as arcs, must be the circuit's saved area to 1e-6 relative, as must the rebuilt edges'; an arc whose centre, radius or sweep is not finite, or that turns more than once, refuses the Area (`area_arc_not_finite`). Only the test of the Area's point uses chords (of at most 2°). Where two straight edges continue in a straight line (a line cut where another meets it), the point between them is left out. RE-317 §3 keeps that point where a third line meets, which this does not: one office Area has two fewer vertices than Revit's export (section 8).
 
 ## 4. Results
 
@@ -52,8 +52,8 @@ Reading the plans and lines takes 80 to 95 ms on `rac_advanced` and about 0.3 s 
 
 ## 5. Not measured
 
-- No Revit 2015 to 2023 or 2026 to 2027 export with Areas exists to compare with. `rac_advanced` is checked against the areas Revit saves in the file, which are Revit's own figures for the same loops, not against Revit's IFC.
-- Areas of Revit 2025 to 2027 are still not written: the partition chain record that gives an Area its number, name, Level and height is read on 2015 to 2024 only. Their plans and regions read as on 2024.
+- No Revit IFC4 export of a 2015 to 2023 or 2026 to 2027 file with Areas exists to compare with. The only Revit export of `rac_advanced`'s Areas is the IFC2X3 one of RE-330 (2015 to 2020 state), which section 8 scores the topology against. `rac_advanced` is otherwise checked against the areas Revit saves in the file, which are Revit's own figures for the same loops, not against Revit's IFC.
+- Revit 2025 to 2027 Areas are written (section 6), measured against the same project's 2024 save only. Figures from a Snowdon Towers 2025 file await a recorded source (section 7).
 - Revit 2008 to 2014.
 - A line in a non-primary design option, and a plan topology per design option or per phase: none of the files has more than one plan for a scheme on a Level. An Area held by two plans keeps RE-317's region.
 - An Area that Revit reports "not enclosed": none here. Its circuit would be missing or would fail a check, and it keeps RE-317's refusal.
@@ -74,7 +74,7 @@ The Area's partition chain record, which gives its number, name, Level and heigh
 
 On 2027, and on some 2025 files, the same records are behind a block of entries. A 2024 and later chain record opens with its ElementId (`u64`), its size (`u32`) and `ElementHeader`'s tag (`u16`, `+0x0c`). The `u16` after the tag (`+0x0e`) is a count:
 
-- On the 2024 files read (the BIM4LCA office, Core Interior) and Autodesk's 2025 and 2026 `rac_advanced` the count is 0 on every record. RE1 Architecture (2025) has records with up to 11 entries, Snowdon Towers Architectural (2025) up to 1,815, and 2027 `rac_advanced` up to 15.
+- On the 2024 files read (the BIM4LCA office, Core Interior) and Autodesk's 2025 and 2026 `rac_advanced` the count is 0 on every record. RE1 Architecture (2025) has records with up to 11 entries, and 2027 `rac_advanced` up to 15; the recorded Snowdon Towers 2024 samples carry them too (section 8).
 - On 2027 the record has that many 22-byte entries from `+0x12`: an `i64` BuiltInParameter (negative), an `i64` -1, a `u16` and a `u32`.
 - After the entries comes the 2026 body, opening with the `BuiltInCategory`.
 
@@ -84,20 +84,12 @@ The Area reader reads a 2024 and later record after its entries. A 2027 `rac_adv
 
 Not measured: no Revit 2025 to 2027 export with Areas is available, so these releases are checked only against the 2024 save of the same project. Readers other than the Area reader that read a chain record's category at `+0x12` are not changed here.
 
-## 7. Snowdon Towers Architectural, against Revit's own 2025 export
+## 7. Two rules, and a 2025 source that is not recorded
 
-Snowdon Towers Architectural, Revit 2025, with a Revit 2025 IFC export of it (exporter 25.4.50.6, local only: neither file is redistributable here, as for RE-101). The export has 101 `IfcSpace` whose `Category` is `Areas`.
+The 2025 figures from a Snowdon Towers Architectural file and its Revit 2025 export await a recorded source (URL, sha256 and licence) and are not in this report. Two rules came from that file; neither changes anything on `rac_advanced` or the office:
 
-- **Spaces:** rvt-rs writes 101 Area spaces, all of them Revit's by GlobalId, with the same number and name, and none that Revit's export lacks. `main` writes none: 2025 Areas were not read.
-- **Bodies:** rvt-rs writes 96 bodies. 95 have the area of Revit's within 0.1% (worst 2.1e-4, Revit's arcs traced in chords to compare). The other is `P4` (Common), which Revit's export writes with no `Representation`, though the other Areas of its Level have one. Why is not found.
-- **No body:** 5 Areas have no body in rvt-rs where Revit's export draws one. On each, the loop rebuilt here differs from the area Revit saves for it, by 4e-6 to 1.6e-3 relative, and Revit's export has the saved area.
-  - Each has a sub-millimetre piece of a line with an offset of its own, and how Revit treats that is not found.
-  - The area check refuses them, as it is meant to, and they keep their partition refusals: `point_not_read` for 4 and `boundary_lines_not_readable` for 1.
-
-Two rules came from this file and change nothing on `rac_advanced` or the office:
-
-- **A spur is left out.** A spur is a segment that the loop runs one way and, by the next side, straight back: a line that ends inside the Area. Once offset its two sides would leave a notch that Revit's area does not have.
-- **Where an Area's partition point is not read**, the plan topology's region stands, checked against the point the topology's own Area saves. 48 of Snowdon's Areas were refused only for `point_not_read`.
+- **A spur is left out.** A spur is a segment that the loop runs one way and, by the next side, straight back: a line that ends inside the Area. Once offset its two sides would leave a notch that Revit's area does not have. The recorded Snowdon Towers 2024 samples exercise it (section 8 has what is written there).
+- **Where an Area's partition point is not read**, the plan topology's region stands, checked against the point the topology's own Area saves.
 
 A line's offset parts with the same offset are one edge, which avoids an edge of no length where a part ends at a segment's end.
 
@@ -121,7 +113,7 @@ The merge with main (#1351, RE-330) puts the plan topology first where it is rea
 | Snowdon Towers Architectural (2024) | 101 | 96 | `area_boundary` 96, `none` 5 | `area_circuit_area_differs` 1, `point_not_read` 4 (main writes none) |
 | Snowdon Towers Structural (2024) | 7 | 2 | `area_boundary` 2, `none` 5 | `next_storey_not_proven` 5 (main writes none) |
 
-The two Snowdon Towers files are the recorded Autodesk 2024 samples (`research/autodesk-sample-projects.tsv`, sha256 `33271010...` and `6dc833f9...`): their records carry entry blocks, which main does not read, so main writes no Area there. The counts are what rvt-rs writes; no Revit export of these two files is available, so nothing here compares them with one. The Revit 2025 file and export of section 7 are not these.
+The two Snowdon Towers files are the recorded Autodesk 2024 samples (`research/autodesk-sample-projects.tsv`, sha256 `33271010...` and `6dc833f9...`): their records carry entry blocks, which main does not read, so main writes no Area there. The counts are what rvt-rs writes; no Revit export of these two files is available, so nothing here compares them with one. The Snowdon Towers 2025 file of section 7 is not these.
 
 **The 2020 save against the three.js IFC2X3 export of RE-330 section 1** (`tools/re/space_profiles_vs_ifc.py model.ifc rac_advanced_sample_project.ifc --match globalid`, the export fetched by hand from its pin and never stored): `IfcSpace` in rvt-rs 116, in Revit 116 (91 rooms and 25 Areas); in both 116, **only in rvt-rs 0, only in Revit 0**. For the Areas that is **written 25, Revit's 25, extra 0, missing 0**. All 25 are within 0.1% in area and within 0.01 ft in outline, boundary and in the lowest and highest vertex of the body. **This is out of sample for the topology:** nothing in the plan-topology reader was read off that export; its offsets and loops come from the file (`m_schemeSegments`, `PlanCircuit`), and its only checks are against the area Revit saves in the file and the Area's point. (RE-330's joins were read off the export, so for them it was in-sample.) The export is not one of Revit's IFC4 exports and is counted apart, as RE-330 says, and it is never used to remove a value or to settle a disagreement between exporters.
 

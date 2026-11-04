@@ -12,8 +12,9 @@
 //! This probe prints, tab-separated:
 //!
 //! - `area`: every Area of an area scheme: its ElementId, then its region's
-//!   outer loop vertex count, its holes and its area less its holes (square
-//!   feet), or the reason it has none;
+//!   outer loop vertex count (the ends of its arcs), its holes, its area less
+//!   its holes (square feet, arcs counted exactly) and how many of its edges
+//!   are arcs, or the reason it has none;
 //! - `line`: every area boundary line: its ElementId, its curve (`GLine` or
 //!   `GArc`) and the offsets of its parts, `from-to:offset`;
 //! - `summary`: the Areas, those with a region and the lines with an offset
@@ -42,16 +43,6 @@ fn identifier(value: &Value) -> Option<i64> {
     id.get("m_id64")
         .or_else(|| id.get("m_id"))
         .and_then(Value::as_i64)
-}
-
-fn signed_area(points: &[(f64, f64)]) -> f64 {
-    (0..points.len())
-        .map(|k| {
-            let (a, b) = (points[k], points[(k + 1) % points.len()]);
-            a.0 * b.1 - b.0 * a.1
-        })
-        .sum::<f64>()
-        / 2.0
 }
 
 fn main() -> anyhow::Result<()> {
@@ -126,10 +117,11 @@ fn main() -> anyhow::Result<()> {
     for id in &areas {
         match regions.get(id) {
             Some(Ok(region)) => {
-                let net = signed_area(&region.outer)
-                    + region.holes.iter().map(|h| signed_area(h)).sum::<f64>();
+                let net = region.net_area_feet2().unwrap_or(f64::NAN);
+                let arcs = region.outer_arcs.iter().flatten().count()
+                    + region.hole_arcs.iter().flatten().flatten().count();
                 println!(
-                    "area\t{id}\t{}\t{}\t{net:.6}",
+                    "area\t{id}\t{}\t{}\t{net:.6}\tarcs {arcs}",
                     region.outer.len(),
                     region.holes.len()
                 );
