@@ -1117,11 +1117,15 @@ plane's normal as its matrix gives it, and 79, a down-facing plane that is
 not flipped and whose extrusion reads `m_alwaysRefPlaneNorm` false, with the
 normal reversed (a rule found on those 79). Ellipses (137 forms), two open
 sketches (26), sweeps, revolutions, blends and voids' cuts are not drawn. The 2014 family of Discussion #112 is outside
-the native releases, so its 85 of 86 is not reproduced. `rvt-ifc
---family-extrusions` (opt-in; the default export is unchanged) draws an
-instance from its family's extrusions where they reproduce its saved mesh;
-that export is not yet measured against Revit's own
-(`reports/element-framing/RE-327-family-extrusions.md`).
+the native releases, so its 85 of 86 is not reproduced. The 79 are
+reversed by default, a rule found on them and not held out; every instance in
+an export is checked against its own mesh. `rvt-ifc --family-extrusions`
+(opt-in; the default export is unchanged, hash for hash on 29 models) draws an
+instance from its family's extrusions where they reproduce its saved mesh.
+On Core Interior, RE1 and the BIM4LCA office files the first run replaced 335
+bodies; of the 251 the body scorer matched, 250 had Revit's vertices within
+0.001 ft of their surface and one did not, so its tolerances were narrowed
+(`reports/element-framing/RE-327-family-extrusions.md` §9 reads both runs).
 
 ## Performance
 
