@@ -60,8 +60,8 @@ pub struct Options {
     /// value for the definition and is not decoded. The assumption is
     /// measured, not proven: on Autodesk's 33 sample projects of Revit 2015
     /// to 2023 every record that gave an accepted parameter held one of the
-    /// ids, and the exports are unchanged with the filter. It is not
-    /// measured on 2024 to 2027 by that check. For a reader that takes
+    /// ids, and the exports of every Measure model are unchanged with the
+    /// filter (run 41793618569, 111 exports). For a reader that takes
     /// nothing but accepted parameters from the records it selects: not one
     /// that takes values from the records a record names (its type's),
     /// unless they are selected the same way. Off by default (#1237: on a

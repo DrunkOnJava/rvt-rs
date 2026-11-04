@@ -1,7 +1,7 @@
-- **Exports of Revit 2015 to 2023 files take 0.57 to 0.84 of the time they
+- **Exports of Revit 2015 to 2023 files take 0.54 to 0.78 of the time they
   took, and 1.1 to 1.7 times as long as with 0.11.0 (#1237).** 0.12.0 took
   2.0 to 3.4 times as long as 0.11.0. Four changes, none of which changes an
-  export (2015 to 2023; 2024 to 2027 pending the full Measure):
+  export (every Measure model, run 41793618569, 111 exports):
   - the read of the parameters named for a property decodes a record only if
     its body holds the id of a definition the read uses, and reads the types
     only if one of those definitions is a plain `IsExternal`, whose type
@@ -20,24 +20,26 @@
   - the graph decoder works out a class's field keys once for each class a
     record uses, copies no field for the items of a container, and keeps no
     field spans it never reads, and a class is found by name through an
-    index. The reference models, Revit 2023 to 2025, take 0.77 to 0.87 of
-    the time (run 41782871819);
+    index. The 25 samples of 2024 to 2027 take 0.80 to 0.89 of the time, and
+    the reference models and offices 0.75 to 0.87 (run 41793618569);
   - the parameter definitions pass asks once for each class whether it owns a
     definition, not for each record.
 
-  Each comparison was timed on a runner of its own, the median of three
+  Each comparison was timed on one runner of its own, the median of three
   exports each, so compare ratios, not seconds, between the two: this change
-  against `main` before it (Measure run 41782871819) and against 0.11.0 (run
-  41782874568), on Autodesk's sample projects. 33 of 33 exports and
-  diagnostics of 2015 to 2023 are byte-identical to `main`'s. The time of
-  this change over `main`'s is 0.64 for the 6 projects of 2015, 0.68 for the
-  9 of 2016 to 2018, 0.68 for the 15 of 2019 to 2022 and 0.76 for the 3 of
-  2023; over 0.11.0's, 1.49, 1.51, 1.47 and 1.13, single projects 1.09 to
-  1.65. No sample project's peak memory is more than `main`'s (0.91 to 1.00;
-  the reference models 0.94 to 1.01). What remains over 0.11.0 is the
+  at its merged head against `main` (Measure run 41793618569) and, at
+  6f387fd1, against 0.11.0 (run 41782874568), on Autodesk's sample projects.
+  Every `ifc.sha256` and every diagnostics file of the 111 exports of run
+  41793618569 is unchanged. The time of this change over `main`'s is 0.62
+  for the 6 projects of 2015, 0.66 for the 9 of 2016 to 2018, 0.65 for the 15
+  of 2019 to 2022, 0.69 for the 3 of 2023 and 0.86 for the 25 of 2024 to
+  2027; over 0.11.0's, 1.49, 1.51, 1.47 and 1.13 for the first four, single
+  projects 1.09 to 1.65. Peak memory over `main`'s, per file, is 0.84 to 1.00
+  on the 58 samples and 0.93 to 1.04 on the reference models and offices
+  (Core Interior 1.04, 309 to 322 MiB). What remains over 0.11.0 is the
   parameter definitions pass, which decodes every `FamilySymbol` record for
   two root fields, the wall records' top joins and the native records'
-  preamble.
+  preamble (#1335).
 - **`rvt::research` (unstable): the named-parameter read changes its entry
   point (#1237).** `native_element_parameters::read_defined_values` is
   replaced by `read_property_values`, which also takes the captions whose
