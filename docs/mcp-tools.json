@@ -460,7 +460,7 @@
               "type": "string"
             },
             "rule": {
-              "description": "How the copy was chosen: `selected` (the frame the exporter selected), `agreeing` (every copy holds the same value; the lowest-numbered partition's is named), `current` (the copies disagree; the current partition's), `native` (a native record by member name, its current copy) or `frame` (the last of a record's frames, as the reader's scan kept it, where the frames were not compared or do not agree). For a source made of `parts` the rule is how each record's copy was chosen.",
+              "description": "How the copy was chosen: `selected` (the frame the exporter selected), `agreeing` (every copy holds the same value; the lowest-numbered partition's is named), `current` (the copies disagree; the current partition's), `native` (a native record by member name, its current copy) or `frame` (one frame or partition of a record, as the reader's scan kept it, without its other copies being compared). For a source made of `parts` the rule is how each record's copy was chosen.",
               "type": "string"
             },
             "stream": {
@@ -1610,7 +1610,7 @@
               "type": "string"
             },
             "rule": {
-              "description": "How the copy was chosen: `selected` (the frame the exporter selected), `agreeing` (every copy holds the same value; the lowest-numbered partition's is named), `current` (the copies disagree; the current partition's), `native` (a native record by member name, its current copy) or `frame` (the last of a record's frames, as the reader's scan kept it, where the frames were not compared or do not agree). For a source made of `parts` the rule is how each record's copy was chosen.",
+              "description": "How the copy was chosen: `selected` (the frame the exporter selected), `agreeing` (every copy holds the same value; the lowest-numbered partition's is named), `current` (the copies disagree; the current partition's), `native` (a native record by member name, its current copy) or `frame` (one frame or partition of a record, as the reader's scan kept it, without its other copies being compared). For a source made of `parts` the rule is how each record's copy was chosen.",
               "type": "string"
             },
             "stream": {
@@ -2527,7 +2527,7 @@
               "type": "string"
             },
             "rule": {
-              "description": "How the copy was chosen: `selected` (the frame the exporter selected), `agreeing` (every copy holds the same value; the lowest-numbered partition's is named), `current` (the copies disagree; the current partition's), `native` (a native record by member name, its current copy) or `frame` (the last of a record's frames, as the reader's scan kept it, where the frames were not compared or do not agree). For a source made of `parts` the rule is how each record's copy was chosen.",
+              "description": "How the copy was chosen: `selected` (the frame the exporter selected), `agreeing` (every copy holds the same value; the lowest-numbered partition's is named), `current` (the copies disagree; the current partition's), `native` (a native record by member name, its current copy) or `frame` (one frame or partition of a record, as the reader's scan kept it, without its other copies being compared). For a source made of `parts` the rule is how each record's copy was chosen.",
               "type": "string"
             },
             "stream": {
@@ -3034,7 +3034,7 @@
               "type": "string"
             },
             "rule": {
-              "description": "How the copy was chosen: `selected` (the frame the exporter selected), `agreeing` (every copy holds the same value; the lowest-numbered partition's is named), `current` (the copies disagree; the current partition's), `native` (a native record by member name, its current copy) or `frame` (the last of a record's frames, as the reader's scan kept it, where the frames were not compared or do not agree). For a source made of `parts` the rule is how each record's copy was chosen.",
+              "description": "How the copy was chosen: `selected` (the frame the exporter selected), `agreeing` (every copy holds the same value; the lowest-numbered partition's is named), `current` (the copies disagree; the current partition's), `native` (a native record by member name, its current copy) or `frame` (one frame or partition of a record, as the reader's scan kept it, without its other copies being compared). For a source made of `parts` the rule is how each record's copy was chosen.",
               "type": "string"
             },
             "stream": {
