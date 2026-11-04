@@ -205,6 +205,7 @@ fn main() -> std::process::ExitCode {
 }
 
 fn run(args: Args) -> anyhow::Result<()> {
+    rvt::prof::start();
     let timestamp = source_date_epoch()?;
     let mut rf = RevitFile::open_with_limits(
         &args.input,
@@ -214,6 +215,7 @@ fn run(args: Args) -> anyhow::Result<()> {
             args.large_model,
         ),
     )?;
+    rvt::prof::lap("opened");
     let quality_mode = ExportQualityMode::from(args.mode);
     let walker_limits = walker_limits_from_args(&args);
 
@@ -230,6 +232,7 @@ fn run(args: Args) -> anyhow::Result<()> {
     };
     let mut model = result.model;
     let mut diagnostics = result.diagnostics;
+    rvt::prof::lap("exported");
     if let Some(scope) = saved_mesh_scope(&mut rf, &args) {
         // The saved graphics only improve bodies: when they cannot be read,
         // the export goes ahead with the bodies it has, and says so.
@@ -357,6 +360,7 @@ fn run(args: Args) -> anyhow::Result<()> {
             }
         }
     };
+    rvt::prof::lap("written");
     eprintln!("rvt-ifc: wrote {written} bytes to {}", out_path.display());
     for line in export_summary(&diagnostics, args.diagnostics.is_some()) {
         eprintln!("{line}");

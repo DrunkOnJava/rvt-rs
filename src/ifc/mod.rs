@@ -1066,12 +1066,14 @@ impl RvtDocExporter {
         control: &crate::control::WalkerControl,
     ) -> Result<ExportResult> {
         let model = self.export_with_mode_limits_and_control(rf, quality_mode, limits, control)?;
+        crate::prof::lap("export-model-done");
         let diagnostics = build_export_diagnostics_with_limits(
             rf,
             &model,
             ExportDiagnosticsMode::Default,
             limits,
         );
+        crate::prof::lap("export-diagnostics-done");
         Ok(ExportResult { model, diagnostics })
     }
 }
@@ -1265,6 +1267,7 @@ fn export_rvt_doc_reporting(
         walker_limits,
         control,
     )?;
+    crate::prof::lap("append_production_walker_elements");
     if mode == RvtDocExportMode::DiagnosticProxies {
         append_diagnostic_walker_proxy_candidates(rf, &mut entities, walker_limits);
     }
@@ -1287,6 +1290,7 @@ fn export_rvt_doc_reporting(
             &mut storey_properties,
         );
     }
+    crate::prof::lap("apply_partition_level_storeys");
 
     // RE-14.3 / RE-15 — shared partition ArcWall path. Production
     // `iter_elements` also merges validated ArcWalls as
@@ -1368,19 +1372,24 @@ fn export_rvt_doc_reporting(
     // no-geometry modes (where no record bbox was attached in the
     // first place) find nothing to bind and change nothing.
     apply_element_record_storeys(&mut entities, &mut building_storeys, &mut storey_properties);
+    crate::prof::lap("apply_element_record_storeys");
     // B63: a room's furniture, fixtures and equipment are contained in its
     // space, which needs both on their storeys.
     export_content::contain_in_spaces(&mut entities);
+    crate::prof::lap("contain_in_spaces");
     // B54: a family instance's connectors are ports, joined or not.
     attach_family_instance_ports(rf, &mut entities, &element_type_ids);
+    crate::prof::lap("family_instance_ports");
     // #824: the openings a face-hosted door's or window's symbol cuts in the
     // element whose face hosts it.
     attach_hosted_cut_openings(rf, &mut entities);
+    crate::prof::lap("hosted_cut_openings");
     // RE-321: the openings rectangular wall openings cut in a wall, which
     // nothing fills.
     if policy.include_geometry {
         wall_cut_openings::attach_wall_cut_openings(rf, &mut entities);
     }
+    crate::prof::lap("wall_cut_openings");
 
     if !policy.include_geometry {
         export_content::strip_building_element_geometry(&mut entities);

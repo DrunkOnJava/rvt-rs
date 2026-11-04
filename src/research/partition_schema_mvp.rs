@@ -157,18 +157,21 @@ pub fn recover_partition_schema_mvp(
 
     // --- Levels + Materials from partition strings / ArcWall elev ---
     let strings = rf.partition_string_records().unwrap_or_default();
+    crate::prof::lap("mvp-strings");
     let string_values: Vec<&str> = strings.iter().map(|r| r.value.as_str()).collect();
 
     let level_names = building_storey_name_candidates(string_values.iter().copied());
     let name_set = collect_name_candidates(string_values.iter().copied());
 
     let arc_walls = rf.memoised_arc_wall_scan(revit_version, limits);
+    crate::prof::lap("mvp-arc-walls");
 
     out.levels = levels_from_storeys_and_names(&arc_walls.walls, &level_names);
     out.materials = match materials_from_records(rf, revit_version) {
         Some(materials) => materials,
         None => materials_from_names(&name_set),
     };
+    crate::prof::lap("mvp-materials");
 
     // Rooms and floors come from partition element records only. The
     // name-only rooms (space-like display strings) and ArcWall-excluded
@@ -187,12 +190,16 @@ pub fn recover_partition_schema_mvp(
     // identity, category and box only; nothing else 2024 decodes on top of
     // records is read. ---
     if crate::partition_element_records_2023::is_32bit_release(revit_version) {
+        crate::prof::lap("mvp-start");
         recover_2023_records(rf, revit_version, &mut out);
+        crate::prof::lap("recover_2023_records");
         attach_room_outlines(rf, revit_version, &mut out.rooms);
+        crate::prof::lap("room_outlines");
         // --- Storeys from the Levels the records name (RE-107), by the
         // same rules as 2024's (RE-59, RE-68) ---
         let levels = crate::partition_level_records::recover_partition_levels(rf, revit_version)
             .unwrap_or_default();
+        crate::prof::lap("levels");
         let level_elevations: BTreeMap<u32, f64> = levels
             .iter()
             .map(|level| (level.element_id, level.elevation_feet))
@@ -206,6 +213,7 @@ pub fn recover_partition_schema_mvp(
             &level_ids,
             &levels,
         );
+        crate::prof::lap("areas");
         let mut record_backed = [
             &mut out.walls,
             &mut out.columns,
@@ -226,9 +234,11 @@ pub fn recover_partition_schema_mvp(
             revit_version,
             &mut [&mut out.walls, &mut out.slabs, &mut out.products],
         );
+        crate::prof::lap("system_family_names");
         // --- Walls', floors' and roofs' layers, for their material layer
         // sets (RE-114) ---
         attach_wall_layers(rf, revit_version, &mut out.walls, &mut wall_reads);
+        crate::prof::lap("wall_layers");
         attach_slab_layers(
             rf,
             revit_version,
@@ -237,6 +247,7 @@ pub fn recover_partition_schema_mvp(
                 .chain(out.products.iter_mut())
                 .collect(),
         );
+        crate::prof::lap("slab_layers");
         // --- The materials each family type's geometry uses (RE-113). A
         // system type's data holds its layers where a family type's holds
         // its map, and a layer reads as a one-entry map, so the types of
@@ -268,8 +279,11 @@ pub fn recover_partition_schema_mvp(
         // the parameters named for IsExternal or a standard property from the
         // saved parameters (RE-193, RE-194), and the IsExternal Revit's
         // exporter calculates from them (RE-283) ---
+        crate::prof::lap("type_materials");
         read_wall_records(rf, revit_version, &out.walls, &mut wall_reads);
+        crate::prof::lap("read_wall_records");
         attach_wall_type_functions(rf, revit_version, out.walls.iter_mut(), &mut wall_reads);
+        crate::prof::lap("wall_type_functions");
         attach_native_named_parameters(
             rf,
             revit_version,
@@ -282,6 +296,7 @@ pub fn recover_partition_schema_mvp(
                 .chain(out.rooms.iter_mut())
                 .chain(out.products.iter_mut()),
         );
+        crate::prof::lap("named_parameters");
         attach_record_is_external(
             out.walls
                 .iter_mut()
@@ -295,6 +310,7 @@ pub fn recover_partition_schema_mvp(
         // --- Whether a wall's top is joined to a roof or floor, from its
         // native record (RE-228, RE-284) ---
         attach_wall_top_joins(rf, revit_version, &mut out.walls, &mut wall_reads);
+        crate::prof::lap("top_joins");
 
         // --- A structural beam's or column's LoadBearing is its category's
         // (RE-285), unless a parameter named for it says otherwise ---
