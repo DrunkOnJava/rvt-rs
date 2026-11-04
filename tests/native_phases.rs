@@ -166,3 +166,67 @@ fn a_handle_exported_at_one_phase_and_then_another_gives_what_a_fresh_handle_giv
     assert_eq!(exported(&mut rf, Some("New Construction")), default);
     assert_eq!(rf.export_phase(), Some(86961));
 }
+
+fn nordic_model(name: &str) -> Option<PathBuf> {
+    let path = PathBuf::from(std::env::var_os("RVT_NORDIC_LCA_DIR")?).join(name);
+    path.exists().then_some(path)
+}
+
+/// #1339, RE-312, #1262: the walk, and the notes it makes for the diagnostics,
+/// are memoised on the handle, so a second export of the same handle must
+/// report what the first did. The BIM4LCA terrain office has 94 "Parking
+/// Space" family instances written as `IfcSpace` by their "Export to IFC As":
+/// Revit's export has no space for the 92 that draw no form, and rvt-rs leaves
+/// out 89 of them and counts them as `element_record_family_space_without_body`.
+/// That note is made only when the walk runs, so an export that wiped it before
+/// reading the memoised walk lost the count while the model still lacked the
+/// spaces. Runs against `RVT_NORDIC_LCA_DIR` (CI's tier-two job fetches the
+/// file; `research/bim4lca-models.tsv`) and skips without it.
+#[test]
+fn a_handle_exported_twice_keeps_the_count_of_family_spaces_it_leaves_out() {
+    let Some(path) = nordic_model("ARK_NordicLCA_Office_Terrain_Concrete_BuildingPermit.rvt")
+    else {
+        eprintln!("skipping: the terrain office is absent");
+        return;
+    };
+    let left_out = |diagnostics: &serde_json::Value| -> u64 {
+        diagnostics["skipped"]
+            .as_array()
+            .expect("skipped")
+            .iter()
+            .filter(|item| item["reason"] == "element_record_family_space_without_body")
+            .map(|item| item["count"].as_u64().expect("count"))
+            .sum()
+    };
+    // Spaces named for a bicycle bay, the ones the rule leaves out.
+    let bicycle_bays = |step: &str| {
+        step.lines()
+            .filter(|line| line.contains("=IFCSPACE(") && line.contains("Parking Space:PP:"))
+            .count()
+    };
+    let spaces = |step: &str| step.matches("=IFCSPACE(").count();
+
+    let fresh = exported(&mut RevitFile::open(&path).expect("open"), None);
+    let counted = left_out(&fresh.1);
+    assert!(
+        counted > 0,
+        "the terrain office leaves family spaces out (RE-312 counted 89), got {counted}"
+    );
+    assert!(
+        spaces(&fresh.0) < 94,
+        "of the 94 parking instances, the model keeps fewer than all as spaces"
+    );
+    assert_eq!(bicycle_bays(&fresh.0), 0, "no bicycle bay is written");
+
+    let mut reused = RevitFile::open(&path).expect("open");
+    for export in ["first", "second"] {
+        let run = exported(&mut reused, None);
+        assert_eq!(
+            left_out(&run.1),
+            counted,
+            "the {export} export counts the family spaces left out"
+        );
+        assert_eq!(bicycle_bays(&run.0), 0, "the {export} export writes no bay");
+        assert_eq!(run, fresh, "the {export} export is a fresh handle's");
+    }
+}
