@@ -192,7 +192,8 @@ The only place the table's size is stated. Every other document, doc comment
 and schema description links here and gives no number, so a change to the table
 (a new reader, say) updates this table and its run, and nothing else (a
 changelog fragment of unreleased work may state its own figure). Measured by
-Measure run 41890994176 (the head of #1373), with
+Measure runs 41890994176 (the head of #1373; the first four rows) and
+41902619175 (the head of #1379; the Revit 2025 rows), with
 `-f ifc_flags=--element-provenance` against the same models without it.
 "Compact" is the JSON the library and Python write; "pretty" is the CLI's
 sidecar.
@@ -203,11 +204,18 @@ sidecar.
 | Core Interior | 20,563 | 733,326 | 35.7 | 27,588 | 1,549,080 | 56.2 |
 | RE1 Mechanical | 11,809 | 43,745 | 3.7 | 13,935 | 91,938 | 6.6 |
 | RE1 Plumbing | 11,568 | 71,361 | 6.2 | 13,583 | 147,585 | 10.9 |
+| R2025 02_1Slope (a shed roof) | 7,899 | 11,131 | 1.4 | 9,549 | 30,336 | 3.2 |
+| R2025 11_RoofByExtrusion | 7,983 | 11,214 | 1.4 | 9,663 | 30,149 | 3.1 |
+| R2025 20_T_U_Roof (T and U hip roofs) | 7,835 | 18,855 | 2.4 | 9,445 | 45,915 | 4.9 |
 
 The table has an entry for every element, so it grows with the model, and it is
 off unless asked for. The value sources of #1368 added 3.6% to the office's
 compact table (5,987,841 bytes after #1360) and 66% to Core Interior's
 (440,909 bytes), where the sketch-line profiles are listed line by line.
+The roof sources of #1368 (run 41902619175) added 16% to the shed roof's
+compact table (9,614 bytes), 6% to the roof by extrusion's (10,541) and 21% to
+the T and U roofs' (15,602), and nothing to the office's or Core Interior's,
+which have no roof drawn from its slopes or an extrusion.
 RE1 Architecture's sidecar grew from 13,956 to 85,470 bytes before the value
 sources and has not been measured since.
 
