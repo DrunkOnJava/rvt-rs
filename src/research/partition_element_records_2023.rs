@@ -343,7 +343,14 @@ impl<'a> PartitionSpans<'a> {
     }
 }
 
-/// Where a frame at a marker stopped before it became a record (#1389).
+/// Where a frame at a marker stopped before it became a record (#1389). A frame
+/// is counted once, at the first check it fails, and the checks run in the order
+/// of the scan: the category is read and checked before the container, the
+/// placement kind, the class tag and the box are read, the box is checked before
+/// the ElementId is settled. A frame with an out-of-range category, a bad box
+/// and no declared id is a `Category` stop; one with a bad box and no declared id
+/// is a `BoxNotValid` stop; only a frame that passes both is a `NoDeclaredId`
+/// stop. A field outside the stream stops the frame at the first one read.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Stop {
     /// A field of the frame lies outside the stream.
@@ -370,7 +377,10 @@ impl Stop {
 
 /// What a scan of a Revit 2008 to 2023 file's markers found and what the
 /// recovery after it did with the frames (#1389): the counts of each partition
-/// stream, the frames that stopped, and the ElementIds handed to the export.
+/// stream and the ElementIds handed to the export. A count is an integer added
+/// where the scan already decides, so the default export keeps no list and
+/// allocates no name for a frame; the frames themselves are listed only when the
+/// log of decisions is asked for (`want_frames`).
 /// `ElementRecordStages` in `rvt::ifc::element_record_stages` is the report made
 /// from it.
 #[derive(Debug, Clone, Default)]
@@ -380,24 +390,44 @@ pub struct RecordStages {
     /// Why the scan could not start, where it could not: `elem_table_not_read`
     /// or `schema_has_no_element_marker`.
     pub setup: Option<&'static str>,
-    /// The counts of each partition stream the scan read.
-    pub streams: BTreeMap<String, StageCounts>,
+    /// The counts of each partition stream the scan read or failed to inflate,
+    /// in the order of the scan.
+    pub streams: Vec<(String, StageCounts)>,
+    /// Whether the frames that stopped are listed in [`Self::stopped`].
+    pub want_frames: bool,
     /// The frames that stopped before they became records, and the placed
     /// instances with no volume, each with the stage it stopped at as its class.
+    /// Empty unless [`Self::want_frames`].
     pub stopped: Vec<LeftOutElement>,
-    /// The ElementIds of the elements handed to the export.
-    pub handed: BTreeSet<u32>,
+    /// The ElementIds of the elements handed to the export, each with the Revit
+    /// class it was handed as.
+    pub handed: BTreeMap<u32, &'static str>,
+    /// Of the handed ElementIds, those whose element the walk dropped because an
+    /// element with the same ElementId was already in it.
+    pub held: BTreeSet<u32>,
 }
 
 impl RecordStages {
-    /// The counts of `stream`.
+    /// The counts of `stream`. A name met for the first time is added; a name
+    /// already there is found without allocating.
     pub fn counts_mut(&mut self, stream: &str) -> &mut StageCounts {
-        self.streams.entry(stream.to_string()).or_default()
+        let index = match self.streams.iter().position(|(name, _)| name == stream) {
+            Some(index) => index,
+            None => {
+                self.streams
+                    .push((stream.to_string(), StageCounts::default()));
+                self.streams.len() - 1
+            }
+        };
+        &mut self.streams[index].1
     }
 
     /// Note the frame of `record` as one the export leaves out for want of a
-    /// volume.
+    /// volume, where the frames are listed.
     pub fn note_volumeless(&mut self, record: &PartitionElementRecord) {
+        if !self.want_frames {
+            return;
+        }
         self.stopped.push(LeftOutElement {
             element_id: Some(record.element_id),
             class: "without_volume".to_string(),
@@ -405,6 +435,14 @@ impl RecordStages {
             offset: Some(record.offset),
             detail: None,
         });
+    }
+
+    /// Note that the walk dropped the element handed under `id`, because an
+    /// element with that ElementId was already in it.
+    pub fn note_held(&mut self, id: u32) {
+        if self.handed.contains_key(&id) {
+            self.held.insert(id);
+        }
     }
 }
 
@@ -418,13 +456,17 @@ pub fn scan_records(rf: &mut RevitFile, revit_version: u32) -> Vec<PartitionElem
 }
 
 /// [`scan_records`], also counting, per stream, the markers and where each
-/// stopped (#1389). It is the same pass: the counts cost a few additions to it.
+/// stopped (#1389). It is the same pass: the counts are integers added to it.
+/// With `want_frames` the frames that stop are also listed, with their stream
+/// and place.
 pub fn scan_records_counted(
     rf: &mut RevitFile,
     revit_version: u32,
+    want_frames: bool,
 ) -> (Vec<PartitionElementRecord>, RecordStages) {
     let mut stages = RecordStages {
         layout_release: revit_version,
+        want_frames,
         ..RecordStages::default()
     };
     let records = scan_records_into(rf, revit_version, Some(&mut stages));
@@ -453,14 +495,25 @@ fn scan_records_into(
         return Vec::new();
     };
     let shortfall = envelope_shortfall(revit_version);
+    let want_frames = stages.as_ref().is_some_and(|stages| stages.want_frames);
     let mut out = Vec::new();
     for stream in rf.partition_stream_names() {
         let Ok(inflated) = rf.inflated_partition(&stream) else {
+            if let Some(stages) = stages.as_mut() {
+                stages.streams.push((
+                    stream.clone(),
+                    StageCounts {
+                        stream_not_read: 1,
+                        ..StageCounts::default()
+                    },
+                ));
+            }
             continue;
         };
         let buf = inflated.bytes();
         let mut spans = PartitionSpans::new(buf, header_tag, &declared);
         let mut counts = StageCounts::default();
+        let mut stopped = Vec::new();
         for at in memchr::memmem::find_iter(buf, &marker) {
             counts.markers += 1;
             let own_id = own_declared_id(buf, at, &declared, header_tag, shortfall);
@@ -478,8 +531,8 @@ fn scan_records_into(
                         Stop::BoxNotValid => counts.box_not_valid += 1,
                         Stop::NoDeclaredId => counts.no_declared_id += 1,
                     }
-                    if let Some(stages) = stages.as_mut() {
-                        stages.stopped.push(LeftOutElement {
+                    if want_frames {
+                        stopped.push(LeftOutElement {
                             element_id: None,
                             class: stop.code().to_string(),
                             stream: Some(stream.clone()),
@@ -491,7 +544,8 @@ fn scan_records_into(
             }
         }
         if let Some(stages) = stages.as_mut() {
-            stages.streams.insert(stream.clone(), counts);
+            stages.streams.push((stream.clone(), counts));
+            stages.stopped.append(&mut stopped);
         }
     }
     out

@@ -20,7 +20,12 @@
 //!    of its frame lies outside the stream), `category_out_of_range` (its
 //!    `BuiltInCategory`), `box_not_valid` (its bounding box is not finite or ends
 //!    before it starts) or `no_declared_id` (no id of its own and none from the
-//!    record around it). The rest are `records`.
+//!    record around it). The rest are `records`. A frame is counted once, at the
+//!    first of these it fails, and the checks run in the order of the scan: the
+//!    category before the box, and the box before the id, so a frame with an
+//!    out-of-range category and no declared id is a `category_out_of_range` stop.
+//!    A partition stream that does not inflate has no markers to count and is
+//!    counted in `stream_not_read`.
 //! 4. Of the records, `placed_instances` are those that pass the RE-21 rule (no
 //!    container reference, the placed-instance kind); the others
 //!    (`not_placed_instances`) are container members and type symbols.
@@ -35,24 +40,36 @@
 //!    `nested_in_door_or_window` or `category_not_exported` (no class of the
 //!    export has the frame's category).
 //! 8. [`ElementRecordStages::written_to_model`] counts, in the IFC model, the
-//!    elements of the last step; the walk and the export can set one aside after
-//!    the recovery (a lower confidence, an ElementId an earlier reader took).
+//!    elements of the last step. The others were set aside after the recovery,
+//!    and each is counted once: [`ElementRecordStages::id_already_held`] (an
+//!    element of an earlier reader already held the ElementId),
+//!    [`ElementRecordStages::below_min_confidence`], or, for an element the
+//!    exporter writes nothing for, by its Revit class in
+//!    [`ElementRecordStages::not_written_by_class`].
 //!
 //! Each step counts exactly what the one before it passed on, so the counts of a
-//! stream add up ([`StageCounts::unbalanced`]). When no record of the file is
-//! written, [`ElementRecordStages::stopped_at`] names the stage they stopped at.
+//! stream add up ([`StageCounts::unbalanced`]), and the elements handed to the
+//! export add up to the elements written and the elements set aside
+//! ([`ElementRecordStages::unbalanced`]). When no record of the file is written,
+//! [`ElementRecordStages::stopped_at`] names the stage they stopped at.
 //!
-//! The counts are made for every export of a file of these releases, in the
-//! diagnostics only; the IFC is not changed. The frames that stopped at steps 3
-//! and 5 are also in `skipped` as `element_record_frame_stopped`, by stage, and
-//! in the log of decisions with the stream and the offset of the ElementId's
-//! place.
+//! The counts are integers, added where the scan already decides, for every
+//! export of a project file of these releases: the default export lists no frame
+//! and allocates no name for one. The diagnostics only; the IFC is not changed.
+//! The frames that stopped at steps 3 and 5 are also in `skipped` as
+//! `element_record_frame_stopped`, by stage, counted from those integers, and,
+//! when the log of decisions is asked for, listed in it with the stream and the
+//! offset of the ElementId's place. A family file (`.rfa`, `.rte`, `.rft`), whose
+//! elements are read from `Global/Latest`, and a placeholder export have no such
+//! report.
 
 use std::collections::{BTreeMap, BTreeSet};
 
 use serde::{Deserialize, Serialize};
 
-use super::{IfcModel, element_tag, entities::IfcEntity};
+use super::export_decisions::{DecisionStage, ExportDecision};
+use super::{IfcModel, SkippedExportItem, element_tag, entities::IfcEntity};
+use crate::partition_element_records::LeftOutElement;
 use crate::partition_element_records_2023::RecordStages;
 
 /// The reason of the `skipped` item, and of the decisions, for the frames that
@@ -143,10 +160,32 @@ pub struct StageCounts {
     /// Selected frames that became elements handed to the export.
     #[serde(default)]
     pub handed_to_export: usize,
+    /// Partition streams that did not inflate, so that their markers are not
+    /// counted: 1 on the entry of such a stream, 0 on the others. It enters no
+    /// step.
+    #[serde(default)]
+    pub stream_not_read: usize,
 }
 
 impl StageCounts {
+    /// The frames that stopped before they became an element, by the stage:
+    /// the entries of [`FRAME_STOP_STAGES`] that are not 0.
+    pub(crate) fn frame_stops(&self) -> BTreeMap<String, usize> {
+        [
+            ("frame_outside_stream", self.frame_outside_stream),
+            ("category_out_of_range", self.category_out_of_range),
+            ("box_not_valid", self.box_not_valid),
+            ("no_declared_id", self.no_declared_id),
+            ("without_volume", self.without_volume),
+        ]
+        .into_iter()
+        .filter(|(_, count)| *count > 0)
+        .map(|(stage, count)| (stage.to_string(), count))
+        .collect()
+    }
+
     fn add(&mut self, other: &StageCounts) {
+        self.stream_not_read += other.stream_not_read;
         self.markers += other.markers;
         self.declared_id += other.declared_id;
         self.frame_outside_stream += other.frame_outside_stream;
@@ -211,8 +250,8 @@ impl StageCounts {
 }
 
 /// Where the element records of a Revit 2008 to 2023 file stopped (#1389):
-/// [`StageCounts`] for each partition stream and for the file, and the count of
-/// the elements in the IFC model.
+/// [`StageCounts`] for each partition stream and for the file, and what became of
+/// the elements handed to the export.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[non_exhaustive]
 pub struct ElementRecordStages {
@@ -220,21 +259,35 @@ pub struct ElementRecordStages {
     pub layout_release: u32,
     /// The counts of all the streams.
     pub total: StageCounts,
-    /// The counts of each `Partitions/NN` stream the scan read, by name.
+    /// The counts of each `Partitions/NN` stream the scan read or failed to
+    /// inflate, by name.
     pub streams: BTreeMap<String, StageCounts>,
     /// Of `total.handed_to_export`, the elements the IFC model holds: one for each
-    /// ElementId, counted from the model. The rest were set aside after the
-    /// recovery (below the minimum confidence, or an ElementId that another
-    /// reader's element already held).
+    /// ElementId, counted from the model.
     pub written_to_model: usize,
+    /// Of `total.handed_to_export`, the elements the walk dropped because an
+    /// element of an earlier reader (an ArcWall, a `Global/Latest` instance)
+    /// already held the ElementId.
+    #[serde(default)]
+    pub id_already_held: usize,
+    /// Of `total.handed_to_export`, the elements below the minimum confidence,
+    /// which the default export hides.
+    #[serde(default)]
+    pub below_min_confidence: usize,
+    /// The rest of `total.handed_to_export`, by the Revit class they were handed
+    /// as: elements the exporter writes nothing for. Not attributed to a cause
+    /// beyond the class.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub not_written_by_class: BTreeMap<String, usize>,
     /// Present only when `written_to_model` is 0: the stage the records of the
     /// file stopped at. One of `elem_table_not_read`, `schema_has_no_element_marker`,
-    /// `no_markers`, the stages of [`FRAME_STOP_STAGES`] the markers stopped at (the
-    /// one that stopped most), `no_placed_instances`, `without_volume`,
-    /// `nested_components`, a count of the selected frames
-    /// (`in_non_primary_design_option`, `not_in_export_phase`,
-    /// `nested_in_door_or_window`, `category_not_exported`: the one that stopped
-    /// most) or `not_written_to_model`.
+    /// `stream_not_read`, `no_markers`, the stages of [`FRAME_STOP_STAGES`] the
+    /// markers stopped at (the one that stopped most), `no_placed_instances`,
+    /// `without_volume`, `nested_components`, the way the selected frames were left
+    /// out that left out most (`in_non_primary_design_option`,
+    /// `not_in_export_phase`, `nested_in_door_or_window`, `category_not_exported`),
+    /// or, of the elements handed to the export, the cause that set aside most
+    /// (`id_already_held`, `below_min_confidence`, `class_not_exported`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub stopped_at: Option<String>,
 }
@@ -249,66 +302,166 @@ fn most(candidates: &[(&'static str, usize)]) -> &'static str {
         .map_or("no_markers", |(name, _)| *name)
 }
 
-/// The stage at which a file whose elements are not written stopped.
-fn empty_stage(setup: Option<&'static str>, total: &StageCounts) -> &'static str {
-    if let Some(setup) = setup {
-        setup
-    } else if total.markers == 0 {
-        "no_markers"
-    } else if total.records == 0 {
-        most(&[
-            ("frame_outside_stream", total.frame_outside_stream),
-            ("category_out_of_range", total.category_out_of_range),
-            ("box_not_valid", total.box_not_valid),
-            ("no_declared_id", total.no_declared_id),
-        ])
-    } else if total.placed_instances == 0 {
-        "no_placed_instances"
-    } else if total.with_volume == 0 {
-        "without_volume"
-    } else if total.selected == 0 {
-        "nested_components"
-    } else if total.handed_to_export == 0 {
-        most(&[
-            (
-                "in_non_primary_design_option",
-                total.in_non_primary_design_option,
-            ),
-            ("not_in_export_phase", total.not_in_export_phase),
-            ("nested_in_door_or_window", total.nested_in_door_or_window),
-            ("category_not_exported", total.category_not_exported),
-        ])
-    } else {
-        "not_written_to_model"
-    }
-}
-
 impl ElementRecordStages {
-    /// The report of `stages`, with the elements of `model` that came from it.
-    pub(crate) fn build(stages: &RecordStages, model: &IfcModel) -> Self {
-        let mut total = StageCounts::default();
-        for counts in stages.streams.values() {
-            total.add(counts);
+    /// The steps whose counts do not add up: the file's and each stream's
+    /// ([`StageCounts::unbalanced`]), the streams' counts against the file's
+    /// (`streams`), and the elements handed to the export against those written
+    /// and those set aside (`handed_to_export`); empty when they all do.
+    pub fn unbalanced(&self) -> Vec<&'static str> {
+        let mut broken = self.total.unbalanced();
+        let mut summed = StageCounts::default();
+        for counts in self.streams.values() {
+            if !counts.unbalanced().is_empty() {
+                broken.push("streams");
+            }
+            summed.add(counts);
         }
-        let written: BTreeSet<u32> = model
+        if summed != self.total {
+            broken.push("streams_sum");
+        }
+        let set_aside: usize = self.not_written_by_class.values().sum();
+        if self.total.handed_to_export
+            != self.written_to_model + self.id_already_held + self.below_min_confidence + set_aside
+        {
+            broken.push("handed_to_export");
+        }
+        broken
+    }
+
+    /// The stage at which a file whose elements are not written stopped.
+    fn empty_stage(&self, setup: Option<&'static str>) -> &'static str {
+        let total = &self.total;
+        if let Some(setup) = setup {
+            setup
+        } else if total.markers == 0 {
+            if total.stream_not_read > 0 {
+                "stream_not_read"
+            } else {
+                "no_markers"
+            }
+        } else if total.records == 0 {
+            most(&[
+                ("frame_outside_stream", total.frame_outside_stream),
+                ("category_out_of_range", total.category_out_of_range),
+                ("box_not_valid", total.box_not_valid),
+                ("no_declared_id", total.no_declared_id),
+            ])
+        } else if total.placed_instances == 0 {
+            "no_placed_instances"
+        } else if total.with_volume == 0 {
+            "without_volume"
+        } else if total.selected == 0 {
+            "nested_components"
+        } else if total.handed_to_export == 0 {
+            most(&[
+                (
+                    "in_non_primary_design_option",
+                    total.in_non_primary_design_option,
+                ),
+                ("not_in_export_phase", total.not_in_export_phase),
+                ("nested_in_door_or_window", total.nested_in_door_or_window),
+                ("category_not_exported", total.category_not_exported),
+            ])
+        } else {
+            most(&[
+                ("id_already_held", self.id_already_held),
+                ("below_min_confidence", self.below_min_confidence),
+                (
+                    "class_not_exported",
+                    self.not_written_by_class.values().sum(),
+                ),
+            ])
+        }
+    }
+
+    /// The report of `stages`, with the elements of `model` that came from it.
+    /// `below_min` holds the ElementIds the walk found below the minimum
+    /// confidence.
+    pub(crate) fn build(
+        stages: &RecordStages,
+        model: &IfcModel,
+        below_min: &BTreeSet<u32>,
+    ) -> Self {
+        let mut total = StageCounts::default();
+        let mut streams = BTreeMap::new();
+        for (name, counts) in &stages.streams {
+            total.add(counts);
+            streams.insert(name.clone(), counts.clone());
+        }
+        let in_model: BTreeSet<u32> = model
             .entities
             .iter()
             .filter_map(|entity| match entity {
                 IfcEntity::BuildingElement { type_guid, .. } => {
-                    element_tag(type_guid).filter(|id| stages.handed.contains(id))
+                    element_tag(type_guid).filter(|id| stages.handed.contains_key(id))
                 }
                 _ => None,
             })
             .collect();
-        let stopped_at = written
-            .is_empty()
-            .then(|| empty_stage(stages.setup, &total).to_string());
-        Self {
+        // Each handed element is counted once: its ElementId was held by an
+        // earlier reader's element (then whatever the model holds under it is
+        // not this one), or the model holds it, or it is below the confidence
+        // floor, or the exporter writes nothing for its class.
+        let (mut written, mut held, mut below) = (0usize, 0usize, 0usize);
+        let mut not_written_by_class: BTreeMap<String, usize> = BTreeMap::new();
+        for (id, class) in &stages.handed {
+            if stages.held.contains(id) {
+                held += 1;
+            } else if in_model.contains(id) {
+                written += 1;
+            } else if below_min.contains(id) {
+                below += 1;
+            } else {
+                *not_written_by_class
+                    .entry((*class).to_string())
+                    .or_default() += 1;
+            }
+        }
+        let mut report = Self {
             layout_release: stages.layout_release,
             total,
-            streams: stages.streams.clone(),
-            written_to_model: written.len(),
-            stopped_at,
+            streams,
+            written_to_model: written,
+            id_already_held: held,
+            below_min_confidence: below,
+            not_written_by_class,
+            stopped_at: None,
+        };
+        if written == 0 {
+            report.stopped_at = Some(report.empty_stage(stages.setup).to_string());
         }
+        report
     }
+
+    /// The `skipped` item of the frames that stopped before they became an
+    /// element, counted by stage from the file's counts, or `None` where none
+    /// did (#1389).
+    pub(crate) fn skipped_item(&self) -> Option<SkippedExportItem> {
+        let classes = self.total.frame_stops();
+        let count: usize = classes.values().sum();
+        (count > 0).then(|| SkippedExportItem {
+            reason: FRAME_STOPPED_REASON.to_string(),
+            count,
+            classes,
+            sample_names: Vec::new(),
+            phase: None,
+        })
+    }
+}
+
+/// The decisions of the frames in `stopped`, one for each, with their stage as
+/// the class (#1389). Made only where the log of decisions is asked for.
+pub(crate) fn frame_stopped_decisions(stopped: &[LeftOutElement]) -> Vec<ExportDecision> {
+    stopped
+        .iter()
+        .map(|frame| {
+            let mut decision =
+                ExportDecision::new(DecisionStage::ElementSkipped, FRAME_STOPPED_REASON);
+            decision.element_id = frame.element_id;
+            decision.class = Some(frame.class.clone());
+            decision.stream = frame.stream.clone();
+            decision.offset = frame.offset;
+            decision
+        })
+        .collect()
 }

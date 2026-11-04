@@ -17,8 +17,10 @@ pub(super) fn recover_2023_records(
     out: &mut PartitionSchemaMvp,
 ) {
     use crate::partition_element_records as per;
+    // The frames that stop are listed only for the log of decisions.
+    let want_frames = rf.recording_frame_decisions();
     let (records, mut stages) =
-        crate::partition_element_records_2023::scan_records_counted(rf, revit_version);
+        crate::partition_element_records_2023::scan_records_counted(rf, revit_version, want_frames);
     let names = type_and_family_names_2023(rf, &records);
     let system_types = system_type_names_2023(rf, revit_version, &records);
     let mut selected = select_newest_instance_records(records, &mut stages);
@@ -73,7 +75,7 @@ pub(super) fn recover_2023_records(
             continue;
         };
         stages.counts_mut(&record.stream).handed_to_export += 1;
-        stages.handed.insert(record.element_id);
+        stages.handed.insert(record.element_id, *class);
         let mut decoded = element_record_decoded(record, class, &level_ids);
         if let Some((type_id, type_name, family_name)) = names.get(&record.element_id) {
             decoded.fields.push((
@@ -345,17 +347,18 @@ pub(super) fn select_newest_instance_records(
     };
     let mut by_id: BTreeMap<u32, PartitionElementRecord> = BTreeMap::new();
     for record in records {
+        let counts = stages.counts_mut(&record.stream);
         if !record.is_exported_instance() {
-            stages.counts_mut(&record.stream).not_placed_instances += 1;
+            counts.not_placed_instances += 1;
             continue;
         }
-        stages.counts_mut(&record.stream).placed_instances += 1;
+        counts.placed_instances += 1;
         if !record.has_volume() {
-            stages.counts_mut(&record.stream).without_volume += 1;
+            counts.without_volume += 1;
             stages.note_volumeless(&record);
             continue;
         }
-        stages.counts_mut(&record.stream).with_volume += 1;
+        counts.with_volume += 1;
         let newer = by_id.get(&record.element_id).is_none_or(|held| {
             (partition(&record), record.offset) > (partition(held), held.offset)
         });

@@ -3838,6 +3838,17 @@ pub(crate) fn build_export_diagnostics_and_decisions(
 
     let mut skipped = Vec::new();
     let mut decisions: Vec<ExportDecision> = Vec::new();
+    // The ElementIds below the minimum confidence, which the stage report of a
+    // Revit 2008 to 2023 file sets against the elements it handed to the export.
+    let below_min_ids: std::collections::BTreeSet<u32> = if rf.element_record_stages().is_some() {
+        walker_stats
+            .below_min_confidence
+            .iter()
+            .filter_map(|element| element.element_id)
+            .collect()
+    } else {
+        std::collections::BTreeSet::new()
+    };
     let below_min = left_out_decisions(
         "below_min_element_confidence",
         None,
@@ -3901,19 +3912,24 @@ pub(crate) fn build_export_diagnostics_and_decisions(
     // #1389: on a Revit 2008 to 2023 file the layout above is not read, and
     // the counts of what became of each frame at its markers are the ones the
     // recovery of its records made as it decided.
-    let mut record_stages = rf.element_record_stages().cloned();
-    let element_record_stages = record_stages
-        .as_ref()
-        .map(|stages| element_record_stages::ElementRecordStages::build(stages, model));
-    if let Some(stages) = record_stages.as_mut() {
-        record_left_out(
-            &mut skipped,
-            &mut decisions,
-            element_record_stages::FRAME_STOPPED_REASON,
-            None,
-            std::mem::take(&mut stages.stopped),
-            ClassesBy::Class,
-        );
+    // A family file reads its elements from `Global/Latest`, and a placeholder
+    // export writes none of what was decoded: neither has the report.
+    let element_record_stages = match rf.element_record_stages() {
+        Some(stages) if part.is_none() && mode != ExportDiagnosticsMode::Placeholder => Some(
+            element_record_stages::ElementRecordStages::build(stages, model, &below_min_ids),
+        ),
+        _ => None,
+    };
+    if let Some(report) = &element_record_stages {
+        skipped.extend(report.skipped_item());
+        // The frames themselves are listed only for the log of decisions.
+        if rf.recording_frame_decisions() {
+            if let Some(stages) = rf.element_record_stages() {
+                decisions.extend(element_record_stages::frame_stopped_decisions(
+                    &stages.stopped,
+                ));
+            }
+        }
     }
     // #309: placed instances with no 3D body are left out by design, as
     // Revit's own export leaves them out. They are not missing, so they

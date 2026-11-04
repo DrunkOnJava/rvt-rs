@@ -63,10 +63,15 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 
 use super::element_provenance::ElementProvenanceTable;
+use super::element_record_stages::{FRAME_STOP_STAGES, FRAME_STOPPED_REASON};
 use crate::partition_room_parameters::partition_number;
 
 /// The most entries the log keeps of one reason. The rest are counted in
-/// [`ExportDecisionReason::dropped`].
+/// [`ExportDecisionReason::dropped`]. The reason `element_record_frame_stopped`
+/// holds five stages, so its cap is shared out: it keeps at most this many
+/// divided by the number of stages for each stage, in ElementId order, the
+/// frames with no ElementId first, and the stage that fills its share does not
+/// crowd the others out (#1389).
 pub const MAX_DECISIONS_PER_REASON: usize = 5_000;
 
 /// The reasons whose `detail` is a code rvt-rs writes, not text from the
@@ -133,7 +138,10 @@ pub struct ExportDecision {
     pub element_id: Option<u32>,
     /// The class the aggregate counts it under: a Revit class for the
     /// element-record reasons, an IFC entity such as `IFCDOOR` for the
-    /// geometry gaps and the decisions behind the `exported` counts.
+    /// geometry gaps and the decisions behind the `exported` counts. For
+    /// `element_record_frame_stopped` it is the stage the frame stopped at
+    /// (`frame_outside_stream`, `category_out_of_range`, `box_not_valid`,
+    /// `no_declared_id` or `without_volume`), not a Revit class.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub class: Option<String>,
     /// The stream the evidence was read from, where known.
@@ -167,6 +175,17 @@ impl ExportDecision {
             offset: None,
             detail: None,
         }
+    }
+}
+
+/// The stage a decision of a reason that holds several is counted under, which
+/// the log sorts and caps by: the class of an `element_record_frame_stopped`
+/// decision, none for any other reason.
+fn stage_of(decision: &ExportDecision) -> Option<&String> {
+    if decision.reason == FRAME_STOPPED_REASON {
+        decision.class.as_ref()
+    } else {
+        None
     }
 }
 
@@ -215,6 +234,7 @@ impl ExportDecisionLog {
         decisions.sort_by(|a, b| {
             (
                 &a.reason,
+                stage_of(a),
                 a.element_id,
                 number(a),
                 &a.stream,
@@ -223,6 +243,7 @@ impl ExportDecisionLog {
             )
                 .cmp(&(
                     &b.reason,
+                    stage_of(b),
                     b.element_id,
                     number(b),
                     &b.stream,
@@ -234,7 +255,10 @@ impl ExportDecisionLog {
             cap_per_reason: MAX_DECISIONS_PER_REASON,
             ..Self::default()
         };
+        let share = MAX_DECISIONS_PER_REASON / FRAME_STOP_STAGES.len();
+        let mut recorded_by_stage: BTreeMap<String, usize> = BTreeMap::new();
         for mut decision in decisions {
+            let stage = stage_of(&decision);
             let reason = log
                 .reasons
                 .entry(decision.reason.clone())
@@ -245,7 +269,16 @@ impl ExportDecisionLog {
                     dropped: 0,
                 });
             reason.total += 1;
-            if reason.recorded >= MAX_DECISIONS_PER_REASON {
+            let full = match stage {
+                Some(stage) => {
+                    let held = recorded_by_stage.entry(stage.clone()).or_default();
+                    let full = *held >= share;
+                    *held += usize::from(!full);
+                    full
+                }
+                None => reason.recorded >= MAX_DECISIONS_PER_REASON,
+            };
+            if full {
                 reason.dropped += 1;
                 log.dropped += 1;
                 continue;

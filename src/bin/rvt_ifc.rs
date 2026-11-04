@@ -953,12 +953,13 @@ fn export_summary(diagnostics: &ExportDiagnostics, has_sidecar: bool) -> Vec<Str
             left_out.join(", ")
         ));
     }
-    // #1389: a Revit 2008 to 2023 file none of whose element records was
-    // written says where they stopped.
+    // #1389: a Revit 2008 to 2023 project none of whose element records was
+    // written says where they stopped, on a line of its own (it can be the only
+    // line, when nothing else was exported). A family has no such report.
     if let Some(stages) = &diagnostics.decoded.element_record_stages {
         if let Some(stopped) = &stages.stopped_at {
             lines.push(format!(
-                "  no element record of this Revit {} layout was written: {} marker(s) found, stopped at {stopped} (decoded.element_record_stages)",
+                "rvt-ifc: no element record of this Revit {} layout was written: {} marker(s) found, they stopped at {stopped} (decoded.element_record_stages in the diagnostics)",
                 stages.layout_release, stages.total.markers
             ));
         }

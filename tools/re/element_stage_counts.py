@@ -19,17 +19,20 @@ and the streams' counts must sum to the file's. Beside them:
 
 - `declared_id` is no more than `markers`, `id_from_enclosing_record` no more
   than `records`;
-- `written_to_model` (the elements the IFC model holds that the last step handed
-  to the export) is no more than `handed_to_export`, and no more than the model's
-  building elements (`exported.building_elements`);
+- the elements handed to the export are the elements written plus those set aside,
+  each counted for one cause: `handed_to_export = written_to_model +
+  id_already_held + below_min_confidence + sum(not_written_by_class)`; and
+  `written_to_model` is no more than the model's building elements
+  (`exported.building_elements`);
 - `stopped_at` is present exactly when `written_to_model` is 0, and names a stage;
 - the `skipped` item `element_record_frame_stopped` has, by stage, the frames
   that stopped before they were records and the placed instances with no volume.
 
-A Revit 2015 to 2023 file must have the block (Revit 2008 to 2014 files are not
-exported by rvt-rs, so a file of those years is not required to). A file of a
-later release has it only when its schema is an older release's (#421); either
-way it is checked when present.
+A Revit 2015 to 2023 project must have the block (Revit 2008 to 2014 files are not
+exported by rvt-rs, so a file of those years is not required to; a family file,
+which reads its elements from Global/Latest, has none). A file of a later release
+has it only when its schema is an older release's (#421); either way it is
+checked when present.
 
 Usage:
 
@@ -84,6 +87,7 @@ EMPTY_STAGES = {
     "category_out_of_range",
     "box_not_valid",
     "no_declared_id",
+    "stream_not_read",
     "no_placed_instances",
     "without_volume",
     "nested_components",
@@ -91,7 +95,9 @@ EMPTY_STAGES = {
     "not_in_export_phase",
     "nested_in_door_or_window",
     "category_not_exported",
-    "not_written_to_model",
+    "id_already_held",
+    "below_min_confidence",
+    "class_not_exported",
 }
 
 
@@ -146,8 +152,15 @@ def main(argv):
     written = stages["written_to_model"]
     handed = total["handed_to_export"]
     building = diagnostics.get("exported", {}).get("building_elements")
-    if written > handed:
-        problems.append(f"file: {written} elements written of {handed} handed to the export")
+    held = stages.get("id_already_held", 0)
+    below = stages.get("below_min_confidence", 0)
+    by_class = stages.get("not_written_by_class", {})
+    set_aside = sum(by_class.values())
+    if handed != written + held + below + set_aside:
+        problems.append(
+            f"file: {handed} elements handed to the export, {written} written + {held} id already held"
+            f" + {below} below the confidence floor + {set_aside} not written by class"
+        )
     if building is not None and written > building:
         problems.append(f"file: {written} elements written of {building} building elements")
     stopped_at = stages.get("stopped_at")
@@ -206,7 +219,11 @@ def main(argv):
         "handed_to_export",
     ]:
         print(f"  {field}: {total.get(field, 0)}")
+    print(f"  stream_not_read: {total.get('stream_not_read', 0)}")
     print(f"  written_to_model: {written}")
+    print(f"  id_already_held: {held}")
+    print(f"  below_min_confidence: {below}")
+    print(f"  not_written_by_class: {by_class}")
     print(f"  exported.building_elements: {building}")
     if stopped_at is not None:
         print(f"  stopped_at: {stopped_at}")

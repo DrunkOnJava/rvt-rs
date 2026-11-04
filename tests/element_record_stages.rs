@@ -16,9 +16,16 @@
 //!   `element_record_frame_stopped` counts the frames that stopped by stage, and
 //!   so does the log of decisions, whose entries each point at a marker (or, for
 //!   a frame with no volume, at the ElementId its record opens with);
+//!   the elements handed to the export are the elements written plus those set
+//!   aside, each for one cause; the default export counts the same as the
+//!   export with the log and lists no frame;
 //! - on the committed synthetic structural-2023 project (`corpus/tier1`),
 //!   whose partitions hold no record: no element is written, and the report
-//!   names the stage the records stopped at, the first stage that has none.
+//!   names the stage the records stopped at, the first stage that has none;
+//!   `rvt-ifc` prints that stage on a line of its own;
+//! - on the committed minimal family `tests/fixtures/families/empty.rfa`, whose
+//!   elements come from `Global/Latest`: no report, no `skipped` item and no
+//!   line from `rvt-ifc`.
 //!
 //! The public 2015 to 2023 sample projects are not in CI: Measure scores them
 //! (`tools/re/element_stage_counts.py`, run on each sample's diagnostics).
@@ -101,10 +108,10 @@ fn fields(counts: &StageCounts) -> BTreeMap<String, u64> {
 
 fn check_report(name: &str, stages: &ElementRecordStages) {
     assert!(
-        stages.total.unbalanced().is_empty(),
-        "{name}: the file's counts do not add up at {:?}: {:?}",
-        stages.total.unbalanced(),
-        stages.total
+        stages.unbalanced().is_empty(),
+        "{name}: the counts do not add up at {:?}: {:?}",
+        stages.unbalanced(),
+        stages
     );
     // A file whose scan could not start has no stream: its streams sum to zero.
     let mut summed = fields(&StageCounts::default());
@@ -123,11 +130,13 @@ fn check_report(name: &str, stages: &ElementRecordStages) {
         fields(&stages.total),
         "{name}: the streams' counts are not the file's"
     );
-    assert!(
-        stages.written_to_model <= stages.total.handed_to_export,
-        "{name}: {} elements written of {} handed to the export",
-        stages.written_to_model,
-        stages.total.handed_to_export
+    // The elements handed to the export are written or set aside for one cause
+    // each, summed here from the report's own fields.
+    let set_aside: usize = stages.not_written_by_class.values().sum();
+    assert_eq!(
+        stages.total.handed_to_export,
+        stages.written_to_model + stages.id_already_held + stages.below_min_confidence + set_aside,
+        "{name}: the elements handed to the export against those written and set aside"
     );
 }
 
@@ -275,9 +284,36 @@ fn einhoven_stage_counts_add_up_and_equal_the_bytes() {
         assert!(FRAME_STOP_STAGES.contains(&class), "stage {class}");
         read += 1;
     }
+
+    // The default export, asked again of the same file, counts the same and
+    // lists no frame: the counts and the `skipped` item are the logged export's.
+    let plain = run_export(&mut rf, &ExportOptions::default()).expect("export Einhoven");
+    assert!(plain.diagnostics.export_decisions.is_none());
+    assert_eq!(
+        plain.diagnostics.decoded.element_record_stages.as_ref(),
+        Some(&stages),
+        "Einhoven: the stage report with and without the log"
+    );
+    let plain_item = plain
+        .diagnostics
+        .skipped
+        .iter()
+        .find(|item| item.reason == FRAME_STOPPED_REASON)
+        .map(|item| (item.count, item.classes.clone()));
+    assert_eq!(
+        plain_item,
+        item.map(|item| (item.count, item.classes.clone())),
+        "Einhoven: the skipped item with and without the log"
+    );
     eprintln!(
-        "Einhoven (Revit {layout}): {} markers, {} records, {} handed, {} written; {read} stopped frames re-read; stopped by stage {stopped:?}",
-        total.markers, total.records, total.handed_to_export, stages.written_to_model
+        "Einhoven (Revit {layout}): {} markers, {} records, {} handed, {} written ({} held, {} below the floor, {:?} not written by class); {read} stopped frames re-read; stopped by stage {stopped:?}",
+        total.markers,
+        total.records,
+        total.handed_to_export,
+        stages.written_to_model,
+        stages.id_already_held,
+        stages.below_min_confidence,
+        stages.not_written_by_class
     );
 }
 
@@ -294,10 +330,14 @@ fn a_file_with_no_record_says_where_its_records_stopped() {
     );
 
     // The scan: nothing to count in empty partitions.
-    let (records, scanned) = scan_records_counted(&mut rf, layout);
+    let (records, scanned) = scan_records_counted(&mut rf, layout, false);
     assert!(records.is_empty(), "records in an empty fixture");
     assert!(scanned.handed.is_empty());
-    let markers: usize = scanned.streams.values().map(|counts| counts.markers).sum();
+    let markers: usize = scanned
+        .streams
+        .iter()
+        .map(|(_, counts)| counts.markers)
+        .sum();
     assert_eq!(markers, 0, "markers in an empty fixture");
 
     // The export: no element of the records is written, and the diagnostics say
@@ -319,6 +359,7 @@ fn a_file_with_no_record_says_where_its_records_stopped() {
     let before_any_marker: BTreeSet<&str> = [
         "elem_table_not_read",
         "schema_has_no_element_marker",
+        "stream_not_read",
         "no_markers",
     ]
     .into_iter()
@@ -327,10 +368,84 @@ fn a_file_with_no_record_says_where_its_records_stopped() {
         before_any_marker.contains(stopped_at),
         "the records of a file with no marker stopped at {stopped_at}"
     );
-    // The scan found no marker, so nothing it set aside is the reason.
+    // The stage and the scan's own notes agree: a setup note is the stage when
+    // the scan could not start, and a stream that did not inflate is counted.
     assert_eq!(
         scanned.setup.is_some(),
-        stopped_at != "no_markers",
+        matches!(
+            stopped_at,
+            "elem_table_not_read" | "schema_has_no_element_marker"
+        ),
         "the scan's setup note and the stage disagree"
+    );
+    assert_eq!(
+        stages.total.stream_not_read > 0,
+        stopped_at == "stream_not_read",
+        "the streams not read and the stage disagree"
+    );
+}
+
+/// The `rvt-ifc` binary on `path`: its standard error, with the diagnostics it
+/// wrote.
+fn run_cli(path: &std::path::Path, name: &str) -> (String, serde_json::Value) {
+    let dir = std::env::temp_dir().join(format!("rvt-rs-stages-{name}-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).expect("create a temp dir");
+    let diagnostics_path = dir.join("diagnostics.json");
+    let output = std::process::Command::new(env!("CARGO_BIN_EXE_rvt-ifc"))
+        .arg(path)
+        .arg("-o")
+        .arg(dir.join("model.ifc"))
+        .arg("--diagnostics")
+        .arg(&diagnostics_path)
+        .output()
+        .expect("run rvt-ifc");
+    let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
+    assert!(output.status.success(), "rvt-ifc failed:\n{stderr}");
+    let diagnostics = serde_json::from_slice(&std::fs::read(&diagnostics_path).expect("read"))
+        .expect("diagnostics json");
+    let _ = std::fs::remove_dir_all(&dir);
+    (stderr, diagnostics)
+}
+
+#[test]
+fn rvt_ifc_says_where_the_records_stopped_on_a_project_and_not_on_a_family() {
+    // A project none of whose records was written: a line of its own, and the
+    // stage in the diagnostics it points at.
+    let project = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("corpus/tier1/structural-2023/structural-2023.rvt");
+    let (stderr, diagnostics) = run_cli(&project, "project");
+    let stopped_at = diagnostics["decoded"]["element_record_stages"]["stopped_at"]
+        .as_str()
+        .expect("the diagnostics name the stage");
+    let line = stderr
+        .lines()
+        .find(|line| line.starts_with("rvt-ifc: no element record of this Revit"))
+        .unwrap_or_else(|| panic!("no line about the records in:\n{stderr}"));
+    assert!(
+        line.contains(&format!("stopped at {stopped_at} ")),
+        "{line} does not name {stopped_at}"
+    );
+
+    // A family reads its elements from Global/Latest: no report, no line.
+    let family =
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/families/empty.rfa");
+    let (stderr, diagnostics) = run_cli(&family, "family");
+    assert!(
+        diagnostics["decoded"]
+            .get("element_record_stages")
+            .is_none(),
+        "a family file has the stage report"
+    );
+    assert!(
+        diagnostics["skipped"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .all(|item| item["reason"] != FRAME_STOPPED_REASON),
+        "a family file has the skipped item"
+    );
+    assert!(
+        !stderr.contains("no element record"),
+        "a family file prints the record line:\n{stderr}"
     );
 }
