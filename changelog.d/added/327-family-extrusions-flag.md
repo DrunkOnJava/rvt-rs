@@ -16,11 +16,11 @@
   waste terminals, 1.9e-6 ft). Revit 26.2's IFC2X3 exports of RE1 write a
   circle as an `IfcCircleProfileDef` instead, one chord fewer than the half
   arcs at some radii (27 against 28 for a toilet-paper dispenser of 0.2292
-  ft, 0.001439 ft off), and no drawing meets both forms there, so in a Revit
-  2025 or later file a whole circle is written as an `IfcCircleProfileDef`
-  whose first vertex is where the record's arc starts, and an instance with
-  a whole circle over 0.12 ft in radius that is a hole or has one keeps its
-  mesh (RE-327 section 11). The default export is unchanged (29
+  ft, 0.001439 ft off), so under the scorers' default tessellation no one
+  form meets both exporters, and nothing in the `.rvt` says which will read
+  it: an instance with a loop that is one whole circle over 0.12 ft in
+  radius keeps its mesh in every release (RE-327 section 11; true arcs for
+  those circles return if the scorers' tessellation changes, #1355). The default export is unchanged (29
   models, hash for hash, held-out ones included). Revit 2024 to 2027 files,
   measured on 2024 and 2025: a file before 2024 has no instance transform
   that reads, so nothing is replaced.

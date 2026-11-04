@@ -1131,14 +1131,15 @@ export draws that circle (0.2292 ft) as an `IfcCircleProfileDef`, which
 IfcOpenShell cuts into 27 chords, and two half arcs of it come out as 28, so
 no vertex coincides (a count mismatch, reproduced and measured in
 `reports/element-framing/RE-327-family-extrusions.md` §11). That export is
-Revit 26.2's IFC2X3 one; the office's IFC4 export of Revit 2024 writes a
-circle as half arcs, which ours coincide with (78 of 78 waste terminals at
-1.9e-6 ft). No one drawing of a circle meets both at a radius where the
-counts differ, so an arc is written as the arc, and in a Revit 2025 or later
-file a whole circle is written as an `IfcCircleProfileDef` starting where the
-record's arc starts (an experiment the next Measure run decides), and an
-instance with a whole circle over 0.12 ft that is a hole or has one keeps its
-mesh. The flag reads Revit 2024 to 2027
+Revit 26.2's IFC2X3 one; Revit 24.0.5's IFC4 export of the office writes a
+circle as half arcs, which ours coincided with (78 of 78 waste terminals at
+1.9e-6 ft). At radii over about 0.14 ft IfcOpenShell's default tessellation of
+the two forms differs by one chord, so no one drawing of a circle meets both
+exporters, and nothing in the `.rvt` says which will read it. An arc is
+written as the arc, but an instance with a loop that is one whole circle over
+0.12 ft in radius keeps its mesh in every release, which meets the bar against
+both; true arcs for those circles come back if a finer tessellation of the
+scorers changes the bar (#1355, a decision for Griffin). The flag reads Revit 2024 to 2027
 (measured on 2024 and 2025); an earlier file has no instance transform that
 reads, so nothing is replaced (`reports/element-framing/RE-327-family-extrusions.md`
 §9).
