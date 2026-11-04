@@ -47,6 +47,13 @@ from roof_bodies_vs_ifc import shapes_of  # noqa: E402
 from saved_meshes_vs_ifc import body_sources  # noqa: E402
 
 SOURCE = "saved_graphics_mesh"
+# A wrapper (family_extrusion_bodies_vs_ifc.py) can have each scored body of
+# one file described while its model is open: DESCRIBE["ours"] or
+# DESCRIBE["ref"] is a function of the element, and what it returns is kept
+# for the wrapper in DESCRIBED[role][tag]. RESULT["scored"] is the scored rows.
+DESCRIBE = {}
+DESCRIBED = {}
+RESULT = {}
 PAIR_BUDGET = 1_000_000
 # surface_distance measures every pair up to this many, and beyond it prunes.
 EXHAUSTIVE = 200_000
@@ -63,7 +70,7 @@ VERTEX_CAP = 400
 POOL_FROM = 16
 
 
-def meshes(path, tags=None, source=None, model=None):
+def meshes(path, tags=None, source=None, model=None, role=None):
     """Tag -> (class, ObjectType, triangles (T, 3, 3) in internal feet)."""
     if model is None:
         model = ifcopenshell.open(path)
@@ -95,6 +102,8 @@ def meshes(path, tags=None, source=None, model=None):
         if element.Tag in out:
             triangles = np.concatenate([out[element.Tag][2], triangles])
         out[element.Tag] = (element.is_a(), element.ObjectType or "", triangles)
+        if role in DESCRIBE:
+            DESCRIBED.setdefault(role, {})[element.Tag] = DESCRIBE[role](element)
     return out
 
 
@@ -378,9 +387,9 @@ def main():
         chosen.update(tags[::step])
         if step > 1:
             print(f"{cls}: {len(tags)} bodies, every {step}th scored")
-    ours = meshes(sys.argv[1], tags=chosen, source=SOURCE, model=model)
+    ours = meshes(sys.argv[1], tags=chosen, source=SOURCE, model=model, role="ours")
     del model
-    ref = meshes(sys.argv[2], tags=set(ours))
+    ref = meshes(sys.argv[2], tags=set(ours), role="ref")
     print(f"{SOURCE} bodies scored: {len(ours)}; in Revit's export {len(ref)}")
     rows = collections.defaultdict(lambda: collections.defaultdict(collections.Counter))
     ratios = collections.defaultdict(list)
@@ -399,6 +408,7 @@ def main():
             row["ref on ours"] += to_ours <= 0.001
         ratios[cls].append(ratio)
         scored.append((far, tag, cls, object_type, ratio, to_ours, to_ref))
+    RESULT["scored"] = scored
     print(
         f"{'class':<28} {'n':>6} {'vol 1%':>7} {'vol .01%':>8} {'0.01 ft':>8} {'0.001 ft':>8}"
         f" {'ref on ours':>11}  median volume ratio"
