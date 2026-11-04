@@ -17,6 +17,19 @@
 //! - a vertex where two lines continue in a straight line is not a vertex of
 //!   the outline, and a vertex where a third line meets is.
 //!
+//! The lines of Autodesk's `rac_advanced` do not all meet at their ends: a line
+//! drawn along a wall stops at the other wall's centre, short of the line that
+//! it joins, and two parallel lines drawn on the two faces of a wall's end stop
+//! at the same place a wall's thickness apart. An IFC2X3 export of that project
+//! from the three.js repository (RE-330) draws such an Area to the lines' joins:
+//! a line's free end is carried on to the line it names and that names it
+//! back, and the free ends of two parallel lines that name each other are
+//! joined by a short connector. The partner comes from the lines' reference
+//! lists (`PartitionElementRecord::references`), which is inferred from that
+//! one export, and a distance only bounds it ([`MAX_CARRY_FEET`],
+//! [`MAX_CONNECTOR_FEET`]): a free end whose line names no such partner, or
+//! whose partner is not in reach, stays free, and bounds nothing.
+//!
 //! This module holds that geometry for straight lines along the plan axes,
 //! which is every line of the office. [`Arrangement::new`] returns `None` for
 //! a set it cannot read as such, and [`Arrangement::face_at`] returns `None`
@@ -42,6 +55,14 @@ pub const MAX_COORDINATE_FEET: f64 = 1.0e7;
 /// The smallest plan area of a ring that bounds a region, square feet.
 pub const MIN_RING_AREA: f64 = 1e-6;
 
+/// The farthest a free end is carried on, feet. The export of RE-330 carries
+/// 0.666 ft at most; a line whose partner is farther is left free.
+pub const MAX_CARRY_FEET: f64 = 1.0;
+
+/// The widest connector between two parallel lines, feet. The export of RE-330
+/// has 0.625 ft; lines farther apart are left free.
+pub const MAX_CONNECTOR_FEET: f64 = 1.0;
+
 /// One area boundary line: its ElementId and its two ends in plan, feet.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct BoundaryLine {
@@ -62,6 +83,10 @@ pub struct AreaFace {
     pub holes: Vec<Vec<(f64, f64)>>,
     /// The ElementIds of the lines that bound the region, its holes' too.
     pub line_ids: BTreeSet<u32>,
+    /// Whether the outline, a hole's too, runs along a stretch of a line that
+    /// was carried on past the extent its record gives, or along a connector
+    /// (RE-330): a region that needed a join to be drawn.
+    pub joined: bool,
 }
 
 /// A straight line along an axis.
@@ -72,6 +97,12 @@ struct AxisLine {
     fixed: f64,
     low: f64,
     high: f64,
+    /// The extent the line's record gives, before any end is carried on.
+    stored_low: f64,
+    stored_high: f64,
+    /// Whether this is a connector between two lines (RE-330), which has no
+    /// ElementId of its own.
+    connector: bool,
 }
 
 impl AxisLine {
@@ -89,20 +120,28 @@ impl AxisLine {
             return None;
         }
         if dy <= NODE_TOLERANCE_FEET {
+            let (low, high) = (line.from.0.min(line.to.0), line.from.0.max(line.to.0));
             Some(AxisLine {
                 id: line.id,
                 horizontal: true,
                 fixed: (line.from.1 + line.to.1) / 2.0,
-                low: line.from.0.min(line.to.0),
-                high: line.from.0.max(line.to.0),
+                low,
+                high,
+                stored_low: low,
+                stored_high: high,
+                connector: false,
             })
         } else if dx <= NODE_TOLERANCE_FEET {
+            let (low, high) = (line.from.1.min(line.to.1), line.from.1.max(line.to.1));
             Some(AxisLine {
                 id: line.id,
                 horizontal: false,
                 fixed: (line.from.0 + line.to.0) / 2.0,
-                low: line.from.1.min(line.to.1),
-                high: line.from.1.max(line.to.1),
+                low,
+                high,
+                stored_low: low,
+                stored_high: high,
+                connector: false,
             })
         } else {
             None
@@ -116,6 +155,176 @@ impl AxisLine {
             (self.fixed, along)
         }
     }
+
+    /// The coordinate along the line of its high or low end.
+    fn end(&self, high: bool) -> f64 {
+        if high { self.high } else { self.low }
+    }
+
+    /// Whether `point` lies on the line, to [`NODE_TOLERANCE_FEET`].
+    fn holds(&self, point: (f64, f64)) -> bool {
+        let (along, across) = if self.horizontal {
+            (point.0, point.1)
+        } else {
+            (point.1, point.0)
+        };
+        (across - self.fixed).abs() <= NODE_TOLERANCE_FEET
+            && along >= self.low - NODE_TOLERANCE_FEET
+            && along <= self.high + NODE_TOLERANCE_FEET
+    }
+}
+
+/// Whether line `a` names line `b` and `b` names `a`.
+fn name_each_other(joined: &BTreeMap<u32, BTreeSet<u32>>, a: u32, b: u32) -> bool {
+    joined.get(&a).is_some_and(|names| names.contains(&b))
+        && joined.get(&b).is_some_and(|names| names.contains(&a))
+}
+
+/// Carry the free ends of `axis` on to the lines that join them, and join the
+/// free ends that cannot be carried on (RE-330).
+///
+/// - A free end is an end that lies on no other line. It is carried on, along
+///   its own line, to the farthest line within [`MAX_CARRY_FEET`] that is
+///   perpendicular, names this line and is named by it: past any nearer line it
+///   crosses, and to the point where the two lines would meet. Both lines of a
+///   corner that stops short at both are carried on to it, each by its own end.
+///   A carry stands only if the line it ends on, after its own carry, spans the
+///   place it reaches; otherwise the end stays free. (Choosing the farthest of
+///   several such lines rather than the nearest rests on one line of the
+///   export, and is unmeasured elsewhere.)
+/// - A free end that had no such line is joined to the free end of a parallel
+///   line within [`MAX_CONNECTOR_FEET`] that names it and is named by it, when
+///   the two ends lie at the same place along the lines, the two lines run away
+///   from it on opposite sides, and each end is the other's only such partner:
+///   a connector across the gap, as wide as the two lines are apart.
+///
+/// An end whose line names no such partner stays free, and is left out with
+/// its line wherever it leads nowhere.
+fn resolve_joins(axis: &mut Vec<AxisLine>, joined: &BTreeMap<u32, BTreeSet<u32>>) {
+    if joined.is_empty() {
+        return;
+    }
+    let original = axis.clone();
+    let mut open: Vec<(usize, bool)> = Vec::new();
+    for (index, line) in original.iter().enumerate() {
+        for high in [false, true] {
+            let point = line.point_at(line.end(high));
+            let touching = original
+                .iter()
+                .enumerate()
+                .any(|(other, line)| other != index && line.holds(point));
+            if !touching {
+                open.push((index, high));
+            }
+        }
+    }
+
+    // The line each free end would be carried on to, and where it reaches.
+    let mut reach: BTreeMap<(usize, bool), (usize, f64)> = BTreeMap::new();
+    for &(index, high) in &open {
+        let line = original[index];
+        let end = line.end(high);
+        let outward = if high { 1.0 } else { -1.0 };
+        let mut farthest: Option<(f64, usize)> = None;
+        for (target, other) in original.iter().enumerate() {
+            if other.horizontal == line.horizontal || !name_each_other(joined, line.id, other.id) {
+                continue;
+            }
+            let distance = (other.fixed - end) * outward;
+            if distance < -NODE_TOLERANCE_FEET || distance > MAX_CARRY_FEET {
+                continue;
+            }
+            match farthest {
+                Some((held, _)) if held >= distance => {}
+                _ => farthest = Some((distance, target)),
+            }
+        }
+        if let Some((_, target)) = farthest {
+            reach.insert((index, high), (target, original[target].fixed));
+        }
+    }
+    // An end that had such a line is not offered a connector, whether or not
+    // its carry stands.
+    let claimed: BTreeSet<(usize, bool)> = reach.keys().copied().collect();
+    // A carry stands only where the line it ends on, once that line is carried
+    // on as far as its own carries stand, spans the place it reaches. Dropping
+    // one can drop another, so this runs until none is dropped.
+    loop {
+        let mut dropped = false;
+        for key in reach.keys().copied().collect::<Vec<_>>() {
+            let (target, _) = reach[&key];
+            let across = original[key.0].fixed;
+            let other = original[target];
+            let low = reach
+                .get(&(target, false))
+                .map_or(other.low, |&(_, to)| other.low.min(to));
+            let high = reach
+                .get(&(target, true))
+                .map_or(other.high, |&(_, to)| other.high.max(to));
+            if across < low - NODE_TOLERANCE_FEET || across > high + NODE_TOLERANCE_FEET {
+                reach.remove(&key);
+                dropped = true;
+            }
+        }
+        if !dropped {
+            break;
+        }
+    }
+
+    let bare: Vec<(usize, bool)> = open
+        .iter()
+        .copied()
+        .filter(|end| !claimed.contains(end))
+        .collect();
+    let partners = |(index, high): (usize, bool)| -> Vec<(usize, bool)> {
+        let line = original[index];
+        let along = line.end(high);
+        bare.iter()
+            .copied()
+            .filter(|&(other_index, other_high)| {
+                let other = original[other_index];
+                let apart = (other.fixed - line.fixed).abs();
+                other_index != index
+                    && other.horizontal == line.horizontal
+                    && apart > NODE_TOLERANCE_FEET
+                    && apart <= MAX_CONNECTOR_FEET
+                    && other_high != high
+                    && name_each_other(joined, line.id, other.id)
+                    && (other.end(other_high) - along).abs() <= NODE_TOLERANCE_FEET
+            })
+            .collect()
+    };
+    let mut connectors = Vec::new();
+    for &end in &bare {
+        let found = partners(end);
+        let &[(other_index, other_high)] = found.as_slice() else {
+            continue;
+        };
+        if other_index < end.0 || partners((other_index, other_high)) != [end] {
+            continue;
+        }
+        let (line, other) = (original[end.0], original[other_index]);
+        let (low, high) = (line.fixed.min(other.fixed), line.fixed.max(other.fixed));
+        connectors.push(AxisLine {
+            id: 0,
+            horizontal: !line.horizontal,
+            fixed: line.end(end.1),
+            low,
+            high,
+            stored_low: low,
+            stored_high: high,
+            connector: true,
+        });
+    }
+
+    for ((index, high), (_, target)) in reach {
+        if high {
+            axis[index].high = axis[index].high.max(target);
+        } else {
+            axis[index].low = axis[index].low.min(target);
+        }
+    }
+    axis.extend(connectors);
 }
 
 /// Points of the arrangement, merged where they are within the tolerance.
@@ -166,6 +375,9 @@ struct Ring {
     bounds: [f64; 4],
     area: f64,
     ids: BTreeSet<u32>,
+    /// Whether an edge of the ring is carried on past its line's record, or a
+    /// connector.
+    joined: bool,
     component: usize,
     simple: bool,
 }
@@ -254,9 +466,25 @@ fn inside_ring(ring: &Ring, point: (f64, f64)) -> Option<bool> {
 }
 
 impl Arrangement {
+    /// Whether `line` is a straight line along a plan axis, which is all
+    /// [`Arrangement::new`] reads.
+    pub fn reads(line: &BoundaryLine) -> bool {
+        AxisLine::new(line).is_some()
+    }
+
     /// The arrangement of `lines`, or `None` where they are not all straight
     /// lines along the plan axes, are more than [`MAX_LINES`], or overlap.
-    pub fn new(lines: &[BoundaryLine]) -> Option<Arrangement> {
+    ///
+    /// `joined` holds, for each line, the ElementIds its record names. A free
+    /// end is carried on, within [`MAX_CARRY_FEET`], to a line that names it and
+    /// that it names, where that line spans the place reached; and the free
+    /// ends of two such parallel lines within [`MAX_CONNECTOR_FEET`], on
+    /// opposite sides of the place they stop, are joined by a connector. An
+    /// empty `joined` leaves every line as it is.
+    pub fn new(
+        lines: &[BoundaryLine],
+        joined: &BTreeMap<u32, BTreeSet<u32>>,
+    ) -> Option<Arrangement> {
         if lines.is_empty() || lines.len() > MAX_LINES {
             return None;
         }
@@ -264,6 +492,7 @@ impl Arrangement {
         for line in lines {
             axis.push(AxisLine::new(line)?);
         }
+        resolve_joins(&mut axis, joined);
         let mut cuts: Vec<Vec<f64>> = vec![Vec::new(); axis.len()];
         for (i, &a) in axis.iter().enumerate() {
             for (j, &b) in axis.iter().enumerate().skip(i + 1) {
@@ -298,27 +527,36 @@ impl Arrangement {
             return None;
         }
         let mut nodes = Nodes::default();
-        let mut edges: BTreeMap<(usize, usize), u32> = BTreeMap::new();
+        let mut edges: BTreeMap<(usize, usize), (Option<u32>, bool)> = BTreeMap::new();
         for (line, cut) in axis.iter().zip(cuts.iter_mut()) {
             cut.push(line.low);
             cut.push(line.high);
+            // The ends the record gives are points of their own, so that an
+            // edge lies wholly on the stored extent or wholly past it.
+            cut.push(line.stored_low.clamp(line.low, line.high));
+            cut.push(line.stored_high.clamp(line.low, line.high));
             cut.sort_by(|p, q| p.partial_cmp(q).unwrap_or(std::cmp::Ordering::Equal));
-            let mut previous: Option<usize> = None;
+            let mut previous: Option<(usize, f64)> = None;
             for &along in cut.iter() {
                 let along = along.clamp(line.low, line.high);
                 let node = nodes.intern(line.point_at(along));
-                if let Some(last) = previous {
+                if let Some((last, last_along)) = previous {
                     if last != node {
                         let key = (last.min(node), last.max(node));
-                        if let Some(&held) = edges.get(&key) {
-                            if held != line.id {
+                        let source = (!line.connector).then_some(line.id);
+                        if let Some(&(held, _)) = edges.get(&key) {
+                            if held != source {
                                 return None;
                             }
                         }
-                        edges.insert(key, line.id);
+                        let middle = (last_along + along) / 2.0;
+                        let carried = line.connector
+                            || middle < line.stored_low - NODE_TOLERANCE_FEET
+                            || middle > line.stored_high + NODE_TOLERANCE_FEET;
+                        edges.insert(key, (source, carried));
                     }
                 }
-                previous = Some(node);
+                previous = Some((node, along));
             }
         }
 
@@ -326,8 +564,10 @@ impl Arrangement {
         // Leave out the lines with a free end, and then those that the removal
         // frees, by a worklist of points with one line left: each line is
         // removed once, so the pass is linear in the lines.
-        let candidates: Vec<((usize, usize), u32)> =
-            edges.iter().map(|(&ends, &id)| (ends, id)).collect();
+        // An edge's two node indices, with its source line (`None` for a
+        // connector) and whether it was carried.
+        type Candidate = ((usize, usize), (Option<u32>, bool));
+        let candidates: Vec<Candidate> = edges.iter().map(|(&ends, &edge)| (ends, edge)).collect();
         let mut alive = vec![true; candidates.len()];
         let mut degree = vec![0usize; count];
         let mut incident: Vec<Vec<usize>> = vec![Vec::new(); count];
@@ -354,14 +594,14 @@ impl Arrangement {
                 free.push(other);
             }
         }
-        let edge_list: Vec<(usize, usize, u32)> = candidates
+        let edge_list: Vec<(usize, usize, Option<u32>, bool)> = candidates
             .iter()
             .zip(&alive)
             .filter(|&(_, &kept)| kept)
-            .map(|(&((u, v), id), _)| (u, v, id))
+            .map(|(&((u, v), (id, carried)), _)| (u, v, id, carried))
             .collect();
         let origin = |half: usize| {
-            let (u, v, _) = edge_list[half / 2];
+            let (u, v, _, _) = edge_list[half / 2];
             if half.is_multiple_of(2) { u } else { v }
         };
         let target = |half: usize| origin(half ^ 1);
@@ -387,7 +627,7 @@ impl Arrangement {
         }
 
         let mut parent: Vec<usize> = (0..count).collect();
-        for &(u, v, _) in &edge_list {
+        for &(u, v, _, _) in &edge_list {
             let ru = find(&mut parent, u);
             let rv = find(&mut parent, v);
             parent[ru] = rv;
@@ -401,11 +641,13 @@ impl Arrangement {
             }
             let mut walk = Vec::new();
             let mut ids = BTreeSet::new();
+            let mut joined = false;
             let mut at = start;
             loop {
                 visited[at] = true;
                 walk.push(origin(at));
-                ids.insert(edge_list[at / 2].2);
+                ids.extend(edge_list[at / 2].2);
+                joined |= edge_list[at / 2].3;
                 let here = target(at);
                 let around = &outgoing[here];
                 let back = slot[at ^ 1];
@@ -433,6 +675,7 @@ impl Arrangement {
                 polygon: points,
                 bounds,
                 ids,
+                joined,
                 component,
             });
         }
@@ -548,10 +791,12 @@ impl Arrangement {
             line_ids.extend(hole.ids.iter().copied());
             hole_corners.push(self.corners(hole)?);
         }
+        let joined = face.joined || holes.iter().any(|hole| hole.joined);
         Some(AreaFace {
             outer: self.corners(face)?,
             holes: hole_corners,
             line_ids,
+            joined,
         })
     }
 }
