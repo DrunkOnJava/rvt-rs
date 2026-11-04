@@ -705,7 +705,20 @@ pub fn resolved_outline_of_solids(
     headers: &[usize],
     bbox: [f64; 6],
 ) -> Option<(PlanProfile, ResolvedKind)> {
+    resolved_outline_of_solids_at(buf, headers, bbox, false)
+        .map(|(profile, kind, _)| (profile, kind))
+}
+
+/// [`resolved_outline_of_solids`], also giving, when `want_used` asks, the
+/// headers of the solids that gave the outline (#1368).
+pub fn resolved_outline_of_solids_at(
+    buf: &[u8],
+    headers: &[usize],
+    bbox: [f64; 6],
+    want_used: bool,
+) -> Option<(PlanProfile, ResolvedKind, Vec<usize>)> {
     let mut found: Option<(PlanProfile, ResolvedKind)> = None;
+    let mut used = Vec::new();
     for &at in headers {
         let faces = solid_span(buf, at);
         let exact = SpanRead {
@@ -737,8 +750,11 @@ pub fn resolved_outline_of_solids(
             Some(held) if *held == this => {}
             Some(_) => return None,
         }
+        if want_used {
+            used.push(at);
+        }
     }
-    found
+    found.map(|(profile, kind)| (profile, kind, used))
 }
 
 /// Whether `faces`, the faces of a room's solid, make a prism of the room's
@@ -1074,7 +1090,19 @@ pub fn room_outline(
 /// against the room's record box; where more than one passes, every one
 /// must give the same outline.
 pub fn outline_of_solids(buf: &[u8], headers: &[usize], bbox: [f64; 6]) -> Option<PlanProfile> {
+    outline_of_solids_at(buf, headers, bbox, false).map(|(profile, _)| profile)
+}
+
+/// [`outline_of_solids`], also giving, when `want_used` asks, the headers of
+/// the solids that gave the outline (#1368).
+pub fn outline_of_solids_at(
+    buf: &[u8],
+    headers: &[usize],
+    bbox: [f64; 6],
+    want_used: bool,
+) -> Option<(PlanProfile, Vec<usize>)> {
     let mut found: Option<PlanProfile> = None;
+    let mut used = Vec::new();
     for &at in headers {
         let Some(profile) = room_outline_at(buf, at, bbox) else {
             continue;
@@ -1084,6 +1112,9 @@ pub fn outline_of_solids(buf: &[u8], headers: &[usize], bbox: [f64; 6]) -> Optio
             Some(held) if *held == profile => {}
             Some(_) => return None,
         }
+        if want_used {
+            used.push(at);
+        }
     }
-    found
+    found.map(|profile| (profile, used))
 }

@@ -108,7 +108,13 @@ pub(super) fn attach_column_sections(
     if types.is_empty() {
         return;
     }
-    let held = crate::partition_type_parameters::type_named_lengths(rf, revit_version, &types);
+    let recording = rf.recording_value_sources();
+    let (held, places) = crate::partition_type_parameters::type_named_lengths_at(
+        rf,
+        revit_version,
+        &types,
+        recording,
+    );
     for element in elements.iter_mut() {
         let Some(by_name) = type_of(element).and_then(|id| held.get(&id)) else {
             continue;
@@ -124,6 +130,16 @@ pub(super) fn attach_column_sections(
                 element
                     .fields
                     .push(((*name).into(), InstanceField::Float { value, size: 8 }));
+            }
+            if let (true, Some(id), Some(type_id)) = (recording, element.id, type_of(element)) {
+                crate::partition_type_parameters::note_parameter_source(
+                    rf,
+                    "type_hollow_section",
+                    (id, type_id),
+                    crate::partition_type_parameters::HOLLOW_SECTION_PARAMETER_NAMES
+                        .map(String::from),
+                    &places,
+                );
             }
         } else if let Some(sides) = crate::partition_type_parameters::rectangular_section(by_name) {
             for (name, value) in COLUMN_RECTANGLE_FIELDS.iter().zip(sides) {
@@ -157,7 +173,9 @@ pub(super) fn attach_beam_sections(
         .filter(|element| I_SECTION_CLASSES.contains(&element.class.as_str()))
         .filter_map(type_of)
         .collect();
-    let sections = crate::partition_type_parameters::type_i_sections(rf, revit_version, &types);
+    let recording = rf.recording_value_sources();
+    let (sections, places) =
+        crate::partition_type_parameters::type_i_sections_at(rf, revit_version, &types, recording);
     let columns: BTreeSet<u32> = products
         .iter()
         .filter(|element| element.class == "StructuralColumn")
@@ -187,6 +205,15 @@ pub(super) fn attach_beam_sections(
             element
                 .fields
                 .push(((*name).into(), InstanceField::Float { value, size: 8 }));
+        }
+        if let (true, Some(id), Some(type_id)) = (recording, element.id, type_of(element)) {
+            crate::partition_type_parameters::note_parameter_source(
+                rf,
+                "type_i_section",
+                (id, type_id),
+                crate::partition_type_parameters::I_SECTION_PARAMETERS,
+                &places,
+            );
         }
         let axis = element
             .id

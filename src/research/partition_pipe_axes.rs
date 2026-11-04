@@ -30,6 +30,7 @@
 //! six sides. A pair of points that does not pass both is not a pipe's ends:
 //! the pipe keeps its box.
 
+use crate::ifc::element_provenance::{CopyRule, SourcePart, ValueSource};
 use crate::le_bytes;
 use crate::{Result, RevitFile};
 use std::collections::{BTreeMap, HashMap};
@@ -274,15 +275,32 @@ fn entry_point(buf: &[u8], at: usize) -> Option<[f64; 3]> {
     Some(point)
 }
 
+/// The offsets in a partition of the connector entries kept for each box
+/// (#1368).
+type EntryOffsets = Vec<Vec<usize>>;
+
 /// For each of `boxes`, the connector entries' points inside it, found in one
 /// pass over `buf`. Points are kept in the order they are met, without
 /// repeats.
-fn connector_points(buf: &[u8], boxes: &[(u32, [f64; 6])]) -> Vec<Vec<[f64; 3]>> {
+///
+/// When `with_offsets` asks, also the offset in `buf` of each point's `u32` 1
+/// marker, in the same order (#1368); the entry starts 12 bytes before it,
+/// with the element it is keyed by.
+fn connector_points(
+    buf: &[u8],
+    boxes: &[(u32, [f64; 6])],
+    with_offsets: bool,
+) -> (Vec<Vec<[f64; 3]>>, EntryOffsets) {
     let mut found: Vec<Vec<[f64; 3]>> = vec![Vec::new(); boxes.len()];
+    let mut offsets: EntryOffsets = if with_offsets {
+        vec![Vec::new(); boxes.len()]
+    } else {
+        Vec::new()
+    };
     // A pipe whose box is not indexed gets no points.
     let grid = BoxGrid::new(boxes.iter().map(|(_, bbox)| bbox));
     if grid.cells.is_empty() {
-        return found;
+        return (found, offsets);
     }
     let marker = ENTRY_MARKER;
     for at in memchr::memmem::find_iter(buf, marker.as_slice()) {
@@ -297,10 +315,13 @@ fn connector_points(buf: &[u8], boxes: &[(u32, [f64; 6])]) -> Vec<Vec<[f64; 3]>>
                 && !points.iter().any(|kept| distance(*kept, point) < 1e-7)
             {
                 points.push(point);
+                if with_offsets {
+                    offsets[index].push(at);
+                }
             }
         }
     }
-    found
+    (found, offsets)
 }
 
 /// A connector entry's key: the element at that end (the pipe itself, or the
@@ -415,12 +436,15 @@ pub fn scan_pipe_bodies(
     if !supports_revit_version(revit_version) {
         return Ok(BTreeMap::new());
     }
+    let recording = rf.recording_value_sources();
+    // The connector entries each pipe's first body was made from (#1368).
+    let mut ends: BTreeMap<u32, Vec<SourcePart>> = BTreeMap::new();
     for (stream, boxes) in pipes {
         let Ok(inflated) = rf.inflated_partition(stream) else {
             continue;
         };
-        let points = connector_points(inflated.bytes(), boxes);
-        for ((id, bbox), points) in boxes.iter().zip(points) {
+        let (points, offsets) = connector_points(inflated.bytes(), boxes, recording);
+        for (index, ((id, bbox), points)) in boxes.iter().zip(points).enumerate() {
             let Some(body) = best_pipe_body(*bbox, &points) else {
                 continue;
             };
@@ -432,12 +456,42 @@ pub fn scan_pipe_bodies(
                 Some(_) => {}
                 None => {
                     bodies.insert(*id, Some(body));
+                    if recording {
+                        // The entry is keyed by the element at that end, which may
+                        // be a neighbour of the pipe rather than the pipe.
+                        let end_part = |point: [f64; 3]| {
+                            let at = points.iter().position(|kept| *kept == point)?;
+                            let start = offsets.get(index)?.get(at)?.checked_sub(12)?;
+                            let keyed = le_bytes::u64_at(inflated.bytes(), start)?;
+                            Some(SourcePart {
+                                element_id: u32::try_from(keyed).ok()?,
+                                stream: stream.clone(),
+                                offset: start,
+                            })
+                        };
+                        if let (Some(start), Some(end)) = (end_part(body.start), end_part(body.end))
+                        {
+                            ends.insert(*id, vec![start, end]);
+                        }
+                    }
                 }
             }
         }
     }
-    Ok(bodies
+    let found: BTreeMap<u32, PipeBody> = bodies
         .into_iter()
         .filter_map(|(id, body)| body.map(|body| (id, body)))
-        .collect())
+        .collect();
+    if recording {
+        for id in found.keys() {
+            if let Some(parts) = ends.remove(id) {
+                let copies = parts.len();
+                rf.note_value_source(
+                    *id,
+                    ValueSource::from_parts("pipe_connectors", CopyRule::Agreeing, copies, parts),
+                );
+            }
+        }
+    }
+    Ok(found)
 }
