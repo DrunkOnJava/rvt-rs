@@ -21,7 +21,8 @@ Measure fetches all of them and stores none. The reference export is Revit's own
 - [41753475029](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41753475029): `wall_bodies_vs_ifc`, `wall_ends_cv_vs_ifc` and `wall_ends_list` on `main`;
 - [41754748710](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41754748710): the probe on Core Interior, the four RE1 models and the R2025 models;
 - [41756871771](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41756871771) (360b458f, first rule), [41758238706](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41758238706) (bf6103c8, with the mitre) and [41759839869](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41759839869) (edc7bb08, the rule as it stands), each against `main`;
-- the final head, unfiltered, with the held-out models: RUN_FINAL.
+- [41761946033](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41761946033): the head (b5a7254e), unfiltered, against `main` (e5f065b5), with the Autodesk samples and the held-out models (section 7);
+- [41767062259](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41767062259): the probe on the 2024 Autodesk samples.
 
 **Status:** positive, narrowed: the order the record joins the walls in is a priority, and decides the end of a wall at a corner of three or more walls and at a mitre; read only where it is right on every measured end. Negative for layered corners of two walls, for a layered wall at layered walls and for every corner a column cuts (section 5).
 
@@ -102,16 +103,18 @@ The join type (`m_JoinInfo.m_wallJoinType`) is 0, a butt join, on every join of 
 
 ## 7. Measured
 
-Run [41759839869](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41759839869) (edc7bb08) against `main` (8da11dab, run 41753475029), filtered to the office, Core Interior, RE1 and `18_WallJoins`; the unfiltered run on the final head is RUN_FINAL.
+The table is the unfiltered run [41761946033](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41761946033) (b5a7254e) against `main` (e5f065b5), whose wall scorers differ from those of run 41753475029 (`main` at 8da11dab) only in the quantities (main now also writes the wall openings of RE-321). The code is that of the filtered run [41759839869](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41759839869) (edc7bb08), which the end-for-end figures below come from.
 
 | | office as built | | office at permit | | `18_WallJoins` | |
 |---|---:|---:|---:|---:|---:|---:|
 | | `main` | RE-322 | `main` | RE-322 | `main` | RE-322 |
 | walls with both ends within 0.001 ft (`wall_bodies_vs_ifc`) | 482 of 607 | 510 | 422 of 589 | 430 | 7 of 9 | 9 |
 | ends within 0.001 ft (`wall_ends_cv_vs_ifc`) | 1,073 of 1,212 | 1,103 | 978 of 1,178 | 986 | 16 of 18 | 18 |
-| Revit quantities equal (`qtos_vs_ifc`) | 29,448 | 29,472 | 29,762 | 29,777 | | |
+| Revit quantities equal (`qtos_vs_ifc`) | 29,538 | 29,562 | 29,834 | 29,849 | | |
 
-End for end (`wall_corner_ends_vs_ifc` DATA, runs 41753373378 and 41759839869): as built 30 ends go from off to right and none from right to off; 28 walls gain both ends and none loses them. Six ends that were right as built move by 3e-6 to 1.3e-5 ft, inside the tolerance (walls 2114504, 3098955 at both ends, 3121295, 3121883 and 3128081): their face now comes from where the other wall's line ends, not from the joint, and the last digits differ. At permit 8 ends go from off to right, none the other way, and 8 walls gain both ends. The scorer's reading of the rule fixes 9 permit ends and the exporter 8: the start of wall 2639982, a bar of unequal thickness with a layered wall off the line, is read by the scorer only. The one quantity that differs was there before. Layer sets and layer bands are unchanged. Core Interior's 360 walls stay 360 of 360, and its IFC and RE1's are byte for byte as before; `18_WallJoins` changes at walls 4511 and 4567. The other R2025 models were byte for byte as before at the first rule (run 41756871771); the unfiltered run on the final head repeats that.
+End for end (`wall_corner_ends_vs_ifc` DATA, runs 41753373378 and 41759839869): as built 30 ends go from off to right and none from right to off; 28 walls gain both ends and none loses them. Six ends that were right as built move by 3e-6 to 1.3e-5 ft, inside the tolerance (walls 2114504, 3098955 at both ends, 3121295, 3121883 and 3128081): their face now comes from where the other wall's line ends, not from the joint, and the last digits differ. At permit 8 ends go from off to right, none the other way, and 8 walls gain both ends. The scorer's reading of the rule fixes 9 permit ends and the exporter 8: the start of wall 2639982, a bar of unequal thickness with a layered wall off the line, is read by the scorer only. The one quantity that differs was there before. Layer sets and layer bands are unchanged. Core Interior's 360 walls stay 360 of 360, and its IFC and RE1's are byte for byte as before; `18_WallJoins` changes at walls 4511 and 4567. Of the 111 models the unfiltered run exports, 91 are byte for byte as before: Core Interior, RE1's four models, the other 23 R2025 models, the office's terrain variants, Einhoven, the 18 held-out models (the rule fires on none, and their counts are as before) and the remaining samples. Every other scorer's output is unchanged on all of them. Only the office, `18_WallJoins` and 17 Autodesk sample files differ.
+
+The samples have no Revit export, so nothing measures them. The 2024 to 2027 saves of the Basic, Advanced, MEP Basic and MEP Advanced sample projects and the 2024 Snowdon Towers Structural sample change by one to three walls each in their `BodySource` (a wall moves from the record box cut at its joins to its centreline, or to its layers' joins, as for the office); the 2015 to 2023 saves do not change. Those walls are read by the rule on the same conditions, and are not checked against Revit.
 
 ## 8. What it does not cover
 
