@@ -9,7 +9,9 @@
 # where tools/fetch-reference-models.sh put the models, with the R2025 models
 # in its r2025/ folder when tools/ci/fetch-r2025-models.sh fetched them, and
 # BIMcollab's Revit 2015 model in its bimcollab/ folder when
-# tools/ci/fetch-bimcollab.sh fetched it. For
+# tools/ci/fetch-bimcollab.sh fetched it, and Autodesk's rac_advanced samples
+# of 2015 to 2020 with their IFC2X3 export in its racadv/ folder when
+# tools/ci/fetch-rac-advanced-pair.sh fetched them. For
 # each model this writes OUT_DIR/<model>/:
 #   - model.ifc, when KEEP_IFC is set: the exported IFC itself;
 #   - ifc.sha256: the exported IFC's hash without its FILE_NAME and
@@ -114,6 +116,20 @@ fi
 if [ -f "$MODELS/bimcollab/02_BIMcollab_Example_STR.rvt" ]; then
   MODELS_LIST="$MODELS_LIST
 bimcollab-str-2015|bimcollab/02_BIMcollab_Example_STR.rvt|bimcollab/02_BIMcollab_Example_STR_optimized.ifc"
+fi
+# Autodesk's rac_advanced sample of 2015 to 2020, each scored against the one
+# IFC2X3 export of the project (research/rac-advanced-export.tsv, #1354), only
+# with `-f racadv=true`. The export is counted apart as IFC2X3 everywhere, these
+# models are never looked up in or stored to the score cache, and only their
+# summary counts leave the runner (tools/ci/scrub-holdout-results.sh).
+if [ -d "$MODELS/racadv" ]; then
+  for model in "$MODELS"/racadv/*.rvt; do
+    [ -f "$model" ] || continue
+    stem=$(basename "$model" .rvt)
+    [ -f "$MODELS/racadv/rac_advanced_sample_project.ifc" ] || { echo "racadv: no export beside the models, not measured" >&2; break; }
+    MODELS_LIST="$MODELS_LIST
+racadv-${stem%%-*}|racadv/$stem.rvt|racadv/rac_advanced_sample_project.ifc"
+  done
 fi
 # The held-out models (research/holdout-models.tsv, RE-252, and the archived
 # ones research/holdout-archive-models.tsv lists, #408, #1261), only with
@@ -223,8 +239,8 @@ score() { # name args...
 # its directory: a step whose every input is as it was in an earlier run takes
 # that run's output, and `<step> cached` stands for its time in timings.log. A
 # step is kept only if it finished with status 0, and the models whose results
-# only leave the runner as counts (holdout-*, bimcollab-*), and the pairs that
-# were once held out (spent-*), are never cached.
+# only leave the runner as counts (holdout-*, bimcollab-*, racadv-*), and the
+# pairs that were once held out (spent-*), are never cached.
 CACHE_TOOL="$(dirname "$0")/measure-cache.py"
 cscore() { # name args...: `score`, from the cache when the scorer and its inputs are unchanged
   local out="$1" dir step found=2; shift
