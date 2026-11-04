@@ -16,8 +16,11 @@ coarser (RE-311). Then the elements furthest off.
 
 A class with more than 300 such bodies is scored on an even stride of 300 of
 them by Tag, and at most 400 vertices of each body are tested, so a file
-with thousands of mullions fits the time Measure allows. Bodies only exist
-in an export made with `--saved-meshes`; without it this prints none.
+with thousands of mullions fits the time Measure allows. The bodies are
+scored one process each over the CPUs (RVT_MESH_WORKERS sets the count), by
+the same arithmetic wherever a body runs, so the output does not depend on
+it. Bodies only exist in an export made with `--saved-meshes`; without it
+this prints none.
 
 Needs IfcOpenShell and numpy.
 
@@ -27,6 +30,9 @@ Usage:
 """
 
 import collections
+import concurrent.futures
+import concurrent.futures.process
+import multiprocessing
 import os
 import statistics
 import sys
@@ -52,6 +58,9 @@ SLIVER = 1e-2
 # with thousands of mullions is scored in the time Measure allows.
 CLASS_CAP = 300
 VERTEX_CAP = 400
+# Fewer bodies than this are scored in this process: a forked worker has a
+# cost of its own that a handful do not repay.
+POOL_FROM = 16
 
 
 def meshes(path, tags=None, source=None, model=None):
@@ -199,7 +208,11 @@ def surface_distance(points, triangles):
     ones (which have no plane, so only their box bounds them): the distance to a
     block of eight neighbouring triangles' box, then to a triangle's box, and for a
     triangle with a plane the distance to its plane combined with that to the side
-    planes of its edges. Slivers are measured against every point.
+    planes of its edges. A sliver's `inside` cannot be trusted, so a point is measured
+    against it unless the point is further than the nearest distance found plus the
+    slack from both its box (which bounds the distances to its edges) and its plane
+    (`distances` gives the plane's distance only for a point it takes as `inside`,
+    and then as exactly this height).
     """
     terms = triangle_terms(triangles)
     n = len(points)
@@ -264,16 +277,89 @@ def surface_distance(points, triangles):
             np.minimum.at(best, row, distances(p[row][:, None, :], tuple(x[tri][:, None] for x in terms))[:, 0])
         nearest[start : start + step] = best
     slivers = np.flatnonzero(sliver)
-    for start in range(0, len(slivers), BLOCK):
-        part = slivers[start : start + BLOCK]
-        nearest = np.minimum(nearest, distances(points[:, None, :], tuple(x[part] for x in terms)).min(axis=1))
+    if len(slivers):
+        near = tuple(x[slivers] for x in terms)
+        near_lo, near_hi = lo[slivers], hi[slivers]
+        step = max(1, (PAIR_BUDGET // 4) // len(slivers))
+        for start in range(0, n, step):
+            p = points[start : start + step]
+            held = nearest[start : start + step]
+            gap = np.maximum(np.maximum(near_lo[None] - p[:, None], p[:, None] - near_hi[None]), 0.0)
+            floor = np.minimum(np.sqrt(dot(gap, gap)), np.abs(dot(p[:, None, :] - near[0][None], near[3][None])))
+            row, col = np.nonzero(floor <= (held + slack)[:, None])
+            for done in range(0, len(row), PAIR_BUDGET):
+                r, c = row[done : done + PAIR_BUDGET], col[done : done + PAIR_BUDGET]
+                np.minimum.at(held, r, distances(p[r][:, None, :], tuple(x[c][:, None] for x in near))[:, 0])
     return float(nearest.max())
 
 
 def sample(triangles):
-    points = np.unique(triangles.reshape(-1, 3), axis=0)
+    """The body's distinct vertices in lexicographic order, every `step`th of them so that
+    at most VERTEX_CAP are kept: the rows of `np.unique(axis=0)`, found by a sort that
+    does not compare structured values. Vertices equal but for the sign of a zero are
+    one vertex here as there; the one kept may differ from `np.unique`'s, and a zero's
+    sign changes no distance."""
+    vertices = triangles.reshape(-1, 3)
+    vertices = vertices[np.lexsort((vertices[:, 2], vertices[:, 1], vertices[:, 0]))]
+    points = vertices[np.r_[True, (vertices[1:] != vertices[:-1]).any(axis=1)]]
     step = max(1, -(-len(points) // VERTEX_CAP))
     return points[::step]
+
+
+SCORING = {}
+WORKER = {}
+
+
+def in_worker():
+    WORKER["parent"] = os.getppid()
+
+
+def score_pair(tag):
+    """(volume ratio, Revit's vertices to rvt-rs's surface, rvt-rs's to Revit's) for one body."""
+    # An OOM-killed parent leaves its workers with the queued bodies: stop at the next one.
+    if "parent" in WORKER and os.getppid() != WORKER["parent"]:
+        os._exit(1)
+    our_triangles, ref_triangles = SCORING["ours"][tag][2], SCORING["ref"][tag][2]
+    ref_volume, our_volume = volume(ref_triangles), volume(our_triangles)
+    ratio = our_volume / ref_volume if ref_volume > 0 else float("inf")
+    to_ours = surface_distance(sample(ref_triangles), our_triangles)
+    to_ref = surface_distance(sample(our_triangles), ref_triangles)
+    return ratio, to_ours, to_ref
+
+
+def score_all(ours, ref, tags):
+    """`score_pair` of each of `tags`, in their order, spread over the CPUs:
+    each body is scored alone, by the same arithmetic wherever it runs, so
+    what is printed does not depend on the number of workers."""
+    SCORING.update(ours=ours, ref=ref)
+    cpus = len(os.sched_getaffinity(0)) if hasattr(os, "sched_getaffinity") else os.cpu_count() or 1
+    try:
+        workers = int(os.environ.get("RVT_MESH_WORKERS") or cpus)
+    except ValueError:
+        workers = cpus
+    workers = min(workers, len(tags))
+    results = None
+    if workers > 1 and len(tags) >= POOL_FROM:
+        # The heaviest first, so the last body does not run alone. A forked
+        # worker flushes the buffered output it inherits when it ends.
+        order = sorted(range(len(tags)), key=lambda i: -(len(ours[tags[i]][2]) + len(ref[tags[i]][2])))
+        sys.stdout.flush()
+        sys.stderr.flush()
+        try:
+            with concurrent.futures.ProcessPoolExecutor(
+                workers, mp_context=multiprocessing.get_context("fork"), initializer=in_worker
+            ) as pool:
+                done = list(pool.map(score_pair, [tags[i] for i in order], chunksize=1))
+            results = [None] * len(tags)
+            for i, result in zip(order, done):
+                results[i] = result
+        except concurrent.futures.process.BrokenProcessPool:
+            print("mesh_bodies_vs_ifc: a worker died, so the bodies are scored one after another", file=sys.stderr)
+            results = None
+    if results is None:
+        results = [score_pair(tag) for tag in tags]
+    SCORING.clear()
+    return results
 
 
 def main():
@@ -299,13 +385,9 @@ def main():
     rows = collections.defaultdict(lambda: collections.defaultdict(collections.Counter))
     ratios = collections.defaultdict(list)
     scored = []
-    for tag in sorted(set(ours) & set(ref), key=lambda t: (len(t), t)):
-        _, _, our_triangles = ours[tag]
-        cls, object_type, ref_triangles = ref[tag]
-        ref_volume, our_volume = volume(ref_triangles), volume(our_triangles)
-        ratio = our_volume / ref_volume if ref_volume > 0 else float("inf")
-        to_ours = surface_distance(sample(ref_triangles), our_triangles)
-        to_ref = surface_distance(sample(our_triangles), ref_triangles)
+    tags = sorted(set(ours) & set(ref), key=lambda t: (len(t), t))
+    for tag, (ratio, to_ours, to_ref) in zip(tags, score_all(ours, ref, tags)):
+        cls, object_type, _ = ref[tag]
         far = max(to_ours, to_ref)
         for key in ("", object_type) if object_type else ("",):
             row = rows[cls][key]
