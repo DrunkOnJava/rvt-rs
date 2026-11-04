@@ -43,6 +43,8 @@ pub const END_PARAMETER: i64 = -1_001_801;
 
 /// How close two curve ends must be to join, feet.
 const TOLERANCE: f64 = 1e-6;
+/// How far from its plane a sketch curve may lie, feet.
+const PLANE_TOLERANCE: f64 = 1e-5;
 const MAX_LOOPS: usize = 64;
 const MAX_POLYGON_VERTICES: usize = 20_000;
 /// The angle an arc is drawn as a chord of when a polygon is needed.
@@ -382,20 +384,117 @@ impl Curve {
     }
 }
 
+/// A curve of a sketch as the record stores it, in the family's coordinates
+/// (feet), lying in the sketch plane.
+#[derive(Clone, Debug, PartialEq)]
+pub enum Curve3 {
+    Line {
+        from: V3,
+        to: V3,
+    },
+    /// Points `center + radius (cos t x_axis + sin t y_axis)`, `t` running
+    /// from `start` to `end`.
+    Arc {
+        center: V3,
+        x_axis: V3,
+        y_axis: V3,
+        radius: f64,
+        start: f64,
+        end: f64,
+    },
+}
+
+impl Curve3 {
+    /// The point a fraction `s` of the way from the start to the end.
+    pub fn point_at(&self, s: f64) -> V3 {
+        match self {
+            Curve3::Line { from, to } => [
+                from[0] + s * (to[0] - from[0]),
+                from[1] + s * (to[1] - from[1]),
+                from[2] + s * (to[2] - from[2]),
+            ],
+            Curve3::Arc {
+                center,
+                x_axis,
+                y_axis,
+                radius,
+                start,
+                end,
+            } => {
+                let (sin, cos) = (start + s * (end - start)).sin_cos();
+                [
+                    center[0] + radius * (cos * x_axis[0] + sin * y_axis[0]),
+                    center[1] + radius * (cos * x_axis[1] + sin * y_axis[1]),
+                    center[2] + radius * (cos * x_axis[2] + sin * y_axis[2]),
+                ]
+            }
+        }
+    }
+
+    /// The curve in `frame`'s plane, in the plane's own coordinates. Errs
+    /// where a point or an axis of it is off the plane.
+    fn to_plane(&self, frame: &Frame) -> Result<Curve, String> {
+        let [x, y, z] = frame.axes;
+        let o = frame.origin;
+        let place = |p: V3| {
+            let rel = [p[0] - o[0], p[1] - o[1], p[2] - o[2]];
+            ([dot3(rel, x), dot3(rel, y)], dot3(rel, z))
+        };
+        let direction = |v: V3| ([dot3(v, x), dot3(v, y)], dot3(v, z));
+        match self {
+            Curve3::Line { from, to } => {
+                let ((a, wa), (b, wb)) = (place(*from), place(*to));
+                if wa.abs() > PLANE_TOLERANCE || wb.abs() > PLANE_TOLERANCE {
+                    return Err("line off the sketch plane".into());
+                }
+                Ok(Curve::Line { from: a, to: b })
+            }
+            Curve3::Arc {
+                center,
+                x_axis,
+                y_axis,
+                radius,
+                start,
+                end,
+            } => {
+                let (c, wc) = place(*center);
+                let ((u, wu), (v, wv)) = (direction(*x_axis), direction(*y_axis));
+                if wc.abs() > PLANE_TOLERANCE
+                    || wu.abs() > PLANE_TOLERANCE
+                    || wv.abs() > PLANE_TOLERANCE
+                {
+                    return Err("arc off the sketch plane".into());
+                }
+                Ok(Curve::Arc {
+                    center: c,
+                    x_axis: u,
+                    y_axis: v,
+                    radius: *radius,
+                    start: *start,
+                    end: *end,
+                })
+            }
+        }
+    }
+}
+
 /// The curve an object of a sketch's graph is: a `GLine` or a `GArc`. Any
 /// other class (an ellipse, a spline) is refused by name.
-fn read_curve(object: &GraphObject) -> Result<Curve, String> {
+fn read_curve(object: &GraphObject) -> Result<Curve3, String> {
     let fields = &object.fields;
     match object.class_name.as_str() {
         "GLine" => {
             let origin = triple(fields.get("m_origin")).ok_or("line origin")?;
             let direction = triple(fields.get("m_dirVec")).ok_or("line direction")?;
             let range = pair(fields.get("m_endParams")).ok_or("line parameter range")?;
-            if origin[2].abs() > TOLERANCE || direction[2].abs() > TOLERANCE {
-                return Err("line off the sketch plane".into());
-            }
-            let at = |t: f64| [origin[0] + direction[0] * t, origin[1] + direction[1] * t];
-            Ok(Curve::Line {
+            let at = |t: f64| {
+                [
+                    origin[0] + direction[0] * t,
+                    origin[1] + direction[1] * t,
+                    origin[2] + direction[2] * t,
+                ]
+            };
+            Ok(Curve3::Line {
                 from: at(range[0]),
                 to: at(range[1]),
             })
@@ -410,20 +509,14 @@ fn read_curve(object: &GraphObject) -> Result<Curve, String> {
                 .filter(|r| r.is_finite() && *r > 0.0)
                 .ok_or("arc radius")?;
             let range = pair(fields.get("m_endParams")).ok_or("arc angle range")?;
-            if center[2].abs() > TOLERANCE
-                || x_axis[2].abs() > TOLERANCE
-                || y_axis[2].abs() > TOLERANCE
-            {
-                return Err("arc off the sketch plane".into());
-            }
             let unit = |v: V3| (dot3(v, v) - 1.0).abs() < TOLERANCE;
             if !unit(x_axis) || !unit(y_axis) || dot3(x_axis, y_axis).abs() > TOLERANCE {
                 return Err("arc axes not orthonormal".into());
             }
-            Ok(Curve::Arc {
-                center: [center[0], center[1]],
-                x_axis: [x_axis[0], x_axis[1]],
-                y_axis: [y_axis[0], y_axis[1]],
+            Ok(Curve3::Arc {
+                center,
+                x_axis,
+                y_axis,
                 radius,
                 start: range[0],
                 end: range[1],
@@ -762,6 +855,9 @@ pub struct Extrusion {
     pub sketch_id: u64,
     /// The `CurveElem` records of the sketch.
     pub curve_ids: Vec<u64>,
+    /// The sketch's curves, in the family's coordinates, in `curve_ids`'
+    /// order.
+    pub curves: Vec<Curve3>,
     pub plane_id: u64,
     /// The sketch plane's `m_flipZ`.
     pub plane_flipped: bool,
@@ -770,17 +866,18 @@ pub struct Extrusion {
     /// The value of [`START_PARAMETER`] and of [`END_PARAMETER`].
     pub start: f64,
     pub end: f64,
-    /// The sketch's curves, as assembled.
-    pub profile: Profile,
     /// Whether the loops the extrusion record stores are the sketch's
     /// curves, curve for curve; `None` where it stores none that read.
     pub stored_loops_agree: Option<bool>,
 }
 
 impl Extrusion {
-    /// The solid between the two offsets. `transposed` takes the matrix's
-    /// rows, not its columns, as the plane's axes; `apply_flip` reverses
-    /// the normal where the sketch plane is flipped.
+    /// The solid between the two offsets, the sketch's curves placed in the
+    /// sketch plane's frame and chained into a profile. `transposed` takes
+    /// the matrix's rows, not its columns, as the plane's axes; `apply_flip`
+    /// reverses the normal where the sketch plane is flipped. Errs where
+    /// the frame is not orthonormal, a curve is off the plane, or the curves
+    /// do not make closed, non-crossing loops.
     pub fn solid(&self, transposed: bool, apply_flip: bool) -> Result<ExtrusionSolid, String> {
         let frame = frame_of(
             self.matrix,
@@ -788,8 +885,13 @@ impl Extrusion {
             transposed,
             apply_flip && self.plane_flipped,
         )?;
+        let planar = self
+            .curves
+            .iter()
+            .map(|curve| curve.to_plane(&frame))
+            .collect::<Result<Vec<Curve>, String>>()?;
         Ok(ExtrusionSolid {
-            profile: self.profile.clone(),
+            profile: profile(assemble_loops(&planar)?)?,
             frame,
             low: self.start.min(self.end),
             high: self.start.max(self.end),
@@ -797,7 +899,7 @@ impl Extrusion {
     }
 }
 
-fn element_curve(graph: &ObjectGraph) -> Result<Curve, String> {
+fn element_curve(graph: &ObjectGraph) -> Result<Curve3, String> {
     let (index, driver) = graph
         .objects
         .iter()
@@ -816,15 +918,15 @@ fn element_curve(graph: &ObjectGraph) -> Result<Curve, String> {
     )
 }
 
-/// The loops an extrusion record stores: its helper's `m_pCurveLoops`, each
-/// a `CurveLoop` of pointers to curves.
-fn stored_loops(graph: &ObjectGraph, helper: usize) -> Result<Vec<Loop>, String> {
+/// The curves of the loops an extrusion record stores: its helper's
+/// `m_pCurveLoops`, each a `CurveLoop` of pointers to curves.
+fn stored_curves(graph: &ObjectGraph, helper: usize) -> Result<Vec<Curve3>, String> {
     let pointers = graph.objects[helper]
         .fields
         .get("m_pCurveLoops")
         .and_then(Value::as_array)
         .ok_or("no stored curve loops")?;
-    let mut loops = Vec::new();
+    let mut curves = Vec::new();
     for pointer in pointers {
         let target = native_saved_mesh::pointer(graph, helper, pointer)
             .map_err(|e| e.to_string())?
@@ -835,7 +937,6 @@ fn stored_loops(graph: &ObjectGraph, helper: usize) -> Result<Vec<Loop>, String>
             .and_then(|object| object.fields.get("m_curves"))
             .and_then(Value::as_array)
             .ok_or("curve loop has no curves")?;
-        let mut curves = Vec::new();
         for member in members {
             let at = native_saved_mesh::pointer(graph, target, member)
                 .map_err(|e| e.to_string())?
@@ -844,39 +945,42 @@ fn stored_loops(graph: &ObjectGraph, helper: usize) -> Result<Vec<Loop>, String>
                 graph.objects.get(at).ok_or("curve out of range")?,
             )?);
         }
-        loops.push(Loop { curves });
     }
-    Ok(loops)
+    Ok(curves)
 }
 
-fn same_curve(a: &Curve, b: &Curve) -> bool {
-    let (a0, a1) = (a.start_point(), a.end_point());
-    let (b0, b1) = (b.start_point(), b.end_point());
-    let ends = (dist2(a0, b0) <= TOLERANCE && dist2(a1, b1) <= TOLERANCE)
-        || (dist2(a0, b1) <= TOLERANCE && dist2(a1, b0) <= TOLERANCE);
+fn dist3(a: V3, b: V3) -> f64 {
+    ((a[0] - b[0]).powi(2) + (a[1] - b[1]).powi(2) + (a[2] - b[2]).powi(2)).sqrt()
+}
+
+fn same_curve(a: &Curve3, b: &Curve3) -> bool {
+    let (a0, a1) = (a.point_at(0.0), a.point_at(1.0));
+    let (b0, b1) = (b.point_at(0.0), b.point_at(1.0));
+    let ends = (dist3(a0, b0) <= TOLERANCE && dist3(a1, b1) <= TOLERANCE)
+        || (dist3(a0, b1) <= TOLERANCE && dist3(a1, b0) <= TOLERANCE);
     match (a, b) {
-        (Curve::Line { .. }, Curve::Line { .. }) => ends,
+        (Curve3::Line { .. }, Curve3::Line { .. }) => ends,
         (
-            Curve::Arc {
+            Curve3::Arc {
                 center: ca,
                 radius: ra,
                 ..
             },
-            Curve::Arc {
+            Curve3::Arc {
                 center: cb,
                 radius: rb,
                 ..
             },
         ) => {
-            ends && dist2(*ca, *cb) <= TOLERANCE
+            ends && dist3(*ca, *cb) <= TOLERANCE
                 && (ra - rb).abs() <= TOLERANCE
-                && dist2(a.point_at(0.5), b.point_at(0.5)) <= TOLERANCE
+                && dist3(a.point_at(0.5), b.point_at(0.5)) <= TOLERANCE
         }
         _ => false,
     }
 }
 
-fn same_curves(a: &[Curve], b: &[Curve]) -> bool {
+fn same_curves(a: &[Curve3], b: &[Curve3]) -> bool {
     if a.len() != b.len() {
         return false;
     }
@@ -942,8 +1046,8 @@ impl FormDocument {
             .collect()
     }
 
-    /// The extrusion `id`, its profile assembled from its sketch's curves.
-    /// Errs, naming why, where a record or a field the chain needs is
+    /// The extrusion `id` with its sketch's curves and sketch plane. Errs,
+    /// naming why, where a record or a field the chain needs is
     /// absent or outside what the reader draws.
     pub fn extrusion(&self, id: u64) -> Result<Extrusion, String> {
         let graph = self.graphs.get(&id).ok_or("no extrusion record")?;
@@ -1016,14 +1120,10 @@ impl FormDocument {
         if planes.next().is_some() {
             return Err("curves on several sketch planes".into());
         }
-        let profile = profile(assemble_loops(&curves)?)?;
-        let stored_loops_agree = stored_loops(graph, helper_index)
+        let stored_loops_agree = stored_curves(graph, helper_index)
             .ok()
-            .filter(|loops| !loops.is_empty())
-            .map(|loops| {
-                let stored: Vec<Curve> = loops.into_iter().flat_map(|l| l.curves).collect();
-                same_curves(&stored, &curves)
-            });
+            .filter(|stored| !stored.is_empty())
+            .map(|stored| same_curves(&stored, &curves));
 
         let plane = self
             .graphs
@@ -1056,13 +1156,13 @@ impl FormDocument {
             cutting,
             sketch_id,
             curve_ids,
+            curves,
             plane_id,
             plane_flipped,
             matrix,
             origin,
             start,
             end,
-            profile,
             stored_loops_agree,
         })
     }

@@ -44,7 +44,7 @@ use anyhow::Result;
 use rvt::RevitFile;
 use rvt::research::native_document::{self, Options};
 use rvt::research::native_family_forms::family_records_in;
-use rvt::research::native_form_geometry::{self, Curve, ExtrusionSolid, FormDocument};
+use rvt::research::native_form_geometry::{self, Curve, Curve3, ExtrusionSolid, FormDocument};
 use rvt::research::native_parameters::{self, GraphLimits, ObjectGraph};
 use rvt::research::native_saved_mesh::{self, Primitive};
 
@@ -426,7 +426,38 @@ fn bump(tally: &mut BTreeMap<String, usize>, key: impl Into<String>) {
     *tally.entry(key.into()).or_default() += 1;
 }
 
-fn judge(label: &str, run: &Run, tally: &mut BTreeMap<String, usize>, lines: &mut usize) {
+fn describe_curves(curves: &[Curve3]) -> String {
+    let point = |p: V3| format!("({:.4},{:.4},{:.4})", p[0], p[1], p[2]);
+    curves
+        .iter()
+        .take(12)
+        .map(|curve| match curve {
+            Curve3::Line { from, to } => format!("L{}>{}", point(*from), point(*to)),
+            Curve3::Arc {
+                center,
+                radius,
+                start,
+                end,
+                ..
+            } => format!(
+                "A{} r{:.4} [{:.4},{:.4}]",
+                point(*center),
+                radius,
+                start,
+                end
+            ),
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+fn judge(
+    label: &str,
+    run: &Run,
+    tally: &mut BTreeMap<String, usize>,
+    lines: &mut usize,
+    detailed: &mut usize,
+) {
     for id in run.document.extrusion_ids() {
         bump(tally, "forms");
         let extrusion = match run.document.extrusion(id) {
@@ -437,11 +468,51 @@ fn judge(label: &str, run: &Run, tally: &mut BTreeMap<String, usize>, lines: &mu
                 continue;
             }
         };
+        let mut variants: Vec<(&str, bool, bool)> =
+            vec![("columns", false, true), ("rows", true, true)];
+        if extrusion.plane_flipped {
+            variants.push(("columns-unflipped", false, false));
+            variants.push(("rows-unflipped", true, false));
+        }
+        let mut built: Vec<(&str, ExtrusionSolid)> = Vec::new();
+        let mut refusals: Vec<(&str, String)> = Vec::new();
+        for (name, transposed, flip) in variants {
+            match extrusion.solid(transposed, flip) {
+                Ok(solid) => built.push((name, solid)),
+                Err(reason) => refusals.push((name, reason)),
+            }
+        }
+        for (name, reason) in &refusals {
+            if !built.is_empty() {
+                bump(
+                    tally,
+                    format!("{name} refused where another builds: {reason}"),
+                );
+            }
+        }
+        let Some(first) = built.first() else {
+            let reason = refusals
+                .first()
+                .map(|(_, reason)| reason.clone())
+                .unwrap_or_default();
+            println!("unbuilt {label} {id} void {} {reason}", extrusion.cutting);
+            bump(tally, format!("unbuilt: {reason}"));
+            if *detailed < 14 && !reason.contains("sketch plane") {
+                *detailed += 1;
+                println!(
+                    "unbuilt-curves {label} {id} count {} {}",
+                    extrusion.curves.len(),
+                    describe_curves(&extrusion.curves)
+                );
+            }
+            continue;
+        };
         bump(tally, "built");
         if extrusion.cutting {
             bump(tally, "built void");
         }
-        let holes = extrusion
+        let holes = first
+            .1
             .profile
             .depths
             .iter()
@@ -457,8 +528,8 @@ fn judge(label: &str, run: &Run, tally: &mut BTreeMap<String, usize>, lines: &mu
             "form {label} {id} void {} curves {} loops {} holes {holes} area {:.6} start {:.6} end {:.6} stored {stored} flipped {}",
             extrusion.cutting,
             extrusion.curve_ids.len(),
-            extrusion.profile.loops.len(),
-            extrusion.profile.area,
+            first.1.profile.loops.len(),
+            first.1.profile.area,
             extrusion.start,
             extrusion.end,
             extrusion.plane_flipped
@@ -482,23 +553,15 @@ fn judge(label: &str, run: &Run, tally: &mut BTreeMap<String, usize>, lines: &mu
         if !mesh.complete {
             bump(tally, "mesh partial");
         }
-        let mut variants: Vec<(&str, bool, bool)> =
-            vec![("columns", false, true), ("rows", true, true)];
-        if extrusion.plane_flipped {
-            variants.push(("columns-unflipped", false, false));
-            variants.push(("rows-unflipped", true, false));
-        }
-        let mut results: Vec<(&str, Measured)> = Vec::new();
-        for (name, transposed, flip) in variants {
-            if let Ok(solid) = extrusion.solid(transposed, flip) {
-                results.push((name, measure(&solid, &mesh)));
-            }
-        }
-        let Some(default) = results.iter().find(|(name, _)| *name == "columns") else {
-            bump(tally, "frame refused");
-            println!("{head} mesh {} frame refused", mesh.triangles.len());
-            continue;
-        };
+        let results: Vec<(&str, Measured)> = built
+            .iter()
+            .map(|(name, solid)| (*name, measure(solid, &mesh)))
+            .collect();
+        let matching: Vec<&str> = results
+            .iter()
+            .filter(|(_, m)| m.ok(mesh.volume))
+            .map(|(name, _)| *name)
+            .collect();
         let best = results
             .iter()
             .min_by(|a, b| {
@@ -506,49 +569,43 @@ fn judge(label: &str, run: &Run, tally: &mut BTreeMap<String, usize>, lines: &mu
                     .max(a.1.surface)
                     .total_cmp(&b.1.vertex.max(b.1.surface))
             })
-            .unwrap_or(default);
-        let default_ok = default.1.ok(mesh.volume);
-        let best_ok = best.1.ok(mesh.volume);
-        let rows_ok = results
-            .iter()
-            .find(|(name, _)| *name == "rows")
-            .is_some_and(|(_, m)| m.ok(mesh.volume));
-        bump(
-            tally,
-            format!("default {}", if default_ok { "match" } else { "differ" }),
-        );
-        if default_ok && !mesh.complete {
-            bump(tally, "default match on partial mesh");
+            .unwrap_or(&results[0]);
+        let key = if mesh.complete {
+            "complete mesh"
+        } else {
+            "partial mesh"
+        };
+        if matching.is_empty() {
+            bump(tally, format!("DIFFER, {key}"));
+            if extrusion.cutting {
+                bump(tally, format!("DIFFER void, {key}"));
+            }
+        } else {
+            bump(tally, format!("MATCH, {key}"));
+            if extrusion.cutting {
+                bump(tally, format!("MATCH void, {key}"));
+            }
+            for name in &matching {
+                bump(tally, format!("matches under {name}"));
+            }
+            if matching.len() == 1 {
+                bump(tally, format!("matches only under {}", matching[0]));
+            }
         }
-        if best_ok {
-            bump(tally, "any convention match");
-        }
-        if default_ok && rows_ok {
-            bump(tally, "both conventions match");
-        } else if rows_ok {
-            bump(tally, "only rows match");
-        }
-        if extrusion.cutting {
-            bump(
-                tally,
-                if default_ok {
-                    "void match"
-                } else {
-                    "void differ"
-                },
-            );
-        }
-        if *lines < FORM_LINES {
+        if *lines < FORM_LINES || matching.is_empty() {
             println!(
-                "{head} mesh {} primitives {} complete {} volume {:.6} default {} best {} {} verdict {}",
+                "{head} mesh {} primitives {} complete {} volume {:.6} best {} {} matching {}",
                 mesh.triangles.len(),
                 mesh.primitives,
                 mesh.complete,
                 mesh.volume,
-                default.1.text(),
                 best.0,
                 best.1.text(),
-                if default_ok { "MATCH" } else { "DIFFER" }
+                if matching.is_empty() {
+                    "DIFFER".to_string()
+                } else {
+                    matching.join("+")
+                }
             );
         }
         *lines += 1;
@@ -576,8 +633,9 @@ fn main() -> Result<()> {
         }
     };
     let mut lines = 0usize;
+    let mut detailed = 0usize;
     for (label, run) in &runs {
-        judge(label, run, &mut tally, &mut lines);
+        judge(label, run, &mut tally, &mut lines, &mut detailed);
     }
     for (key, n) in &tally {
         println!("tally {key} {n}");
