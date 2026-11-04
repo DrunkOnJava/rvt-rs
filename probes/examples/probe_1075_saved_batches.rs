@@ -26,18 +26,34 @@
 //!   cargo run --profile ci -p rvt-probes --example probe_1075_saved_batches -- MODEL.rvt
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::sync::Arc;
-use std::sync::atomic::{AtomicU64, Ordering::Relaxed};
+use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
 use rvt::RevitFile;
-use rvt::control::{Stage, WalkerControl};
+use rvt::control::WalkerControl;
 use rvt::ifc::entities::IfcEntity;
 use rvt::ifc::{ExportQualityMode, IfcModel, RvtDocExporter};
 use rvt::research::native_document::Options;
 use rvt::research::native_saved_scene;
 
 const MOST_OWNERS: usize = 8_000;
+
+/// A progress event as the CLIs print it: stage, done, total.
+type Progress = (&'static str, u64, Option<u64>);
+
+/// A control that records every progress event it is given, and the record.
+fn recording() -> (WalkerControl, Arc<Mutex<Vec<Progress>>>) {
+    let events = Arc::new(Mutex::new(Vec::new()));
+    let kept = Arc::clone(&events);
+    let control = WalkerControl::new().with_progress(move |event| {
+        kept.lock().unwrap_or_else(|e| e.into_inner()).push((
+            event.stage.as_str(),
+            event.done,
+            event.total,
+        ));
+    });
+    (control, events)
+}
 
 fn main() -> anyhow::Result<()> {
     let path = std::env::args()
@@ -117,13 +133,9 @@ fn compare(
         ..Default::default()
     };
 
+    let (control, one_shot_progress) = recording();
     let started = Instant::now();
-    let scene = native_saved_scene::extract_at_detail_with_control(
-        rf,
-        &options,
-        3,
-        &WalkerControl::default(),
-    )?;
+    let scene = native_saved_scene::extract_at_detail_with_control(rf, &options, 3, &control)?;
     let one_shot_ms = started.elapsed().as_millis();
     let mut sources = BTreeSet::new();
     let mut naming_owners = 0usize;
@@ -141,13 +153,7 @@ fn compare(
     }
     drop(scene);
 
-    let batches = Arc::new(AtomicU64::new(0));
-    let counted = Arc::clone(&batches);
-    let control = WalkerControl::new().with_progress(move |event| {
-        if event.stage == Stage::SavedGraphics && event.total.is_none() {
-            counted.fetch_max(event.done, Relaxed);
-        }
-    });
+    let (control, batched_progress) = recording();
     let started = Instant::now();
     let mut batched: BTreeMap<u64, serde_json::Value> = BTreeMap::new();
     native_saved_scene::extract_in_batches_with_control(rf, &options, 3, &control, |element| {
@@ -162,14 +168,18 @@ fn compare(
             different.push(*id);
         }
     }
-    let identical = one_shot.len() == batched.len() && different.is_empty();
+    let one_shot_progress = one_shot_progress.lock().unwrap_or_else(|e| e.into_inner());
+    let batched_progress = batched_progress.lock().unwrap_or_else(|e| e.into_inner());
+    let same_progress = *one_shot_progress == *batched_progress;
+    let identical = one_shot.len() == batched.len() && different.is_empty() && same_progress;
     println!(
-        "saved_batches {scope} owners {} elements one_shot {} batched {} batches {} owners_naming_owners {naming_owners} different {} one_shot_ms {one_shot_ms} batched_ms {batched_ms} identical {identical}",
+        "saved_batches {scope} owners {} elements one_shot {} batched {} owners_naming_owners {naming_owners} different {} progress_events one_shot {} batched {} same_progress {same_progress} one_shot_ms {one_shot_ms} batched_ms {batched_ms} (batched_ms includes each element's JSON) identical {identical}",
         ids.len(),
         one_shot.len(),
         batched.len(),
-        batches.load(Relaxed),
         different.len(),
+        one_shot_progress.len(),
+        batched_progress.len(),
     );
     if !identical {
         println!(

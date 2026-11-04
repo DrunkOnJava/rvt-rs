@@ -364,7 +364,10 @@ fn add_references(
 /// owners next to each other by symbol, as many as hold about 20,000 graph
 /// objects (`BATCH_OBJECT_BUDGET`) by the size of the batch before. Each
 /// element is the one [`extract_at_detail_with_control`] makes; only the
-/// summaries of the passes are not returned.
+/// summaries of the passes are not returned. The progress reported to
+/// `control` is its too: [`Stage::SavedGraphics`] at 0 and then at 1 of 1
+/// once the owners are read, then [`Stage::SavedMeshes`] at 0 and once for each
+/// owner meshed, of the number of owners.
 pub fn extract_in_batches_with_control(
     file: &mut RevitFile,
     options: &Options,
@@ -411,6 +414,11 @@ pub fn extract_in_batches_with_control(
         .collect();
     named.sort();
     let total = named.len() as u64;
+    // The progress is the one-shot read's, whatever the batches: the graphics
+    // are reported read once the owners are, and each owner is reported meshed
+    // once, in order, against the same total.
+    control.check()?;
+    control.report(Stage::SavedGraphics, 1, Some(1));
     control.report(Stage::SavedMeshes, 0, Some(total));
     let done = Mutex::new(0u64);
     let run = MeshRun {
@@ -423,7 +431,6 @@ pub fn extract_in_batches_with_control(
     };
     let mut limit = FIRST_BATCH_SYMBOLS;
     let mut next = 0;
-    let mut batches = 0u64;
     let mut freeing: Option<std::thread::JoinHandle<()>> = None;
     while next < named.len() {
         control.check()?;
@@ -480,8 +487,6 @@ pub fn extract_in_batches_with_control(
                 &mut wanted,
             );
         }
-        batches += 1;
-        control.report(Stage::SavedGraphics, batches, None);
         let objects: usize = shared
             .values()
             .filter_map(|record| record.graph.as_ref())
@@ -506,7 +511,5 @@ pub fn extract_in_batches_with_control(
             freeing = Some(std::thread::spawn(move || drop(shared)));
         }
     }
-    control.check()?;
-    control.report(Stage::SavedGraphics, 1, Some(1));
     Ok(())
 }
