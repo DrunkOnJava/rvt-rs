@@ -396,7 +396,8 @@ Field schema types → `InstanceField` variants:
 | Schema field | Wire bytes | `InstanceField` variant |
 |---|---|---|
 | `Primitive { kind: 0x01, size: 1 }` | 1-byte padded bool | `Bool(bool)` |
-| `Primitive { kind: 0x02, size: 2 }` | u16 LE | `Integer { signed: false, size: 2, .. }` |
+| `Primitive { kind: 0x02, size: 1 }` | 1-byte `char` (RE-325) | `Integer { signed: false, size: 1, .. }` |
+| `Primitive { kind: 0x03, size: 2 }` | i16 LE, the C++ `short` (RE-325) | `Integer { signed: true, size: 2, .. }` |
 | `Primitive { kind: 0x04/0x05, size: 4 }` | u32/i32 LE | `Integer { signed: ?, size: 4, .. }` |
 | `Primitive { kind: 0x06, size: 4 }` | f32 LE | `Float { size: 4, .. }` |
 | `Primitive { kind: 0x07, size: 8 }` | f64 LE | `Float { size: 8, .. }` |
