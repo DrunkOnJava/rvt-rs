@@ -284,6 +284,36 @@ const MIN_READERS: &[(&str, &[&str])] = &[
         "RE1-Architecture",
         &["selected_frame", "bounded_line", "saved_graphics"],
     ),
+    // puzzbobb's Revit 2025 roofs: a shed by its edge, a shed by its slope
+    // arrow and a roof by extrusion, each drawn from the sources pinned here
+    // (RE-56, RE-199, RE-211).
+    (
+        "02_1Slope",
+        &[
+            "selected_frame",
+            "roof_slope_edges",
+            "roof_line_data",
+            "roof_type_layers",
+        ],
+    ),
+    (
+        "05_1Slope_ArrowDefined",
+        &[
+            "selected_frame",
+            "roof_slope_edges",
+            "roof_line_data",
+            "roof_type_layers",
+        ],
+    ),
+    (
+        "11_RoofByExtrusion",
+        &[
+            "selected_frame",
+            "sketch_lines",
+            "roof_line_data",
+            "roof_type_layers",
+        ],
+    ),
     ("RE1-Mechanical", &["selected_frame", "pipe_connectors"]),
     ("RE1-Plumbing", &["selected_frame", "pipe_connectors"]),
     ("Revit_IFC5_Einhoven", &["selected_frame", "saved_graphics"]),
@@ -1316,6 +1346,13 @@ fn r2025_value_sources_name_the_copy_the_reader_took() {
     if models.is_empty() {
         eprintln!("skipping: no Revit 2025 model to read");
         return;
+    }
+    // The models MIN_READERS pins are in the set, or those pins read nothing.
+    for pinned in ["02_1Slope", "05_1Slope_ArrowDefined", "11_RoofByExtrusion"] {
+        assert!(
+            models.iter().any(|(name, _)| name == pinned),
+            "{pinned} is not among the Revit 2025 models, and RVT_R2025_DIR is set"
+        );
     }
     let mut held: BTreeSet<String> = BTreeSet::new();
     for (name, path) in &models {

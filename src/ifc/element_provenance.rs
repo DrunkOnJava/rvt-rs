@@ -199,8 +199,9 @@ pub enum CopyRule {
     Native,
     /// One frame or partition of the record, as the reader's scan kept it,
     /// without the record's other copies being compared: the last frame of a
-    /// type symbol whose frames do not agree, and the solids of a room, read
-    /// in the room's own partition only.
+    /// type symbol whose frames do not agree, the solids of a room, read in
+    /// the room's own partition only, and the first frame of each sketch line
+    /// of a roof by extrusion.
     Frame,
 }
 

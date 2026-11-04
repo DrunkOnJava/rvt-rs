@@ -469,21 +469,41 @@ jobs:
       # #1368: puzzbobb's Revit 2025 models (Apache-2.0, #356, pinned in
       # research/r2025-models.tsv), the only models of the gate whose roofs are
       # drawn from their slopes and from an extrusion, so the only ones that
-      # let tests/value_sources_offsets.rs read those sources. An unreachable
-      # host leaves RVT_R2025_DIR unset and the target skips; an archive that no
-      # longer matches its pin fails the job.
+      # let tests/value_sources_offsets.rs read those sources. Kept in the
+      # Actions cache under the key Measure uses for them, saved on main and
+      # restored by pull requests. An unreachable host leaves RVT_R2025_DIR
+      # unset and the target skips; an archive that no longer matches its pin
+      # fails the job.
+      - name: Restore the R2025 models
+        id: r2025-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: _r2025
+          key: r2025-${{ hashFiles('research/r2025-models.tsv', 'tools/ci/fetch-r2025-models.sh') }}
       - name: Fetch the Revit 2025 models (puzzbobb, Apache-2.0)
         shell: bash
+        env:
+          HIT: ${{ steps.r2025-cache.outputs.cache-hit }}
         run: |
-          set +e
-          tools/ci/fetch-r2025-models.sh research/r2025-models.tsv _r2025
-          status=$?
-          set -e
+          if [ "$HIT" != true ]; then
+            set +e
+            tools/ci/fetch-r2025-models.sh research/r2025-models.tsv _r2025
+            status=$?
+            set -e
+          else
+            status=0
+          fi
           case "$status" in
             0) echo "RVT_R2025_DIR=${GITHUB_WORKSPACE}/_r2025/r2025" >> "$GITHUB_ENV" ;;
-            2) echo "::warning::R2025 models NOT MEASURED: the host was unreachable, so the targets that read them skip" ;;
-            *) echo "::error::the R2025 models no longer match research/r2025-models.tsv"; exit 1 ;;
+            2) echo "::warning::R2025 models NOT MEASURED: the archive could not be downloaded, so the target that reads them skips" ;;
+            *) echo "::error::an R2025 archive no longer matches research/r2025-models.tsv"; exit 1 ;;
           esac
+      - name: Save the R2025 models
+        if: github.ref == 'refs/heads/main' && steps.r2025-cache.outputs.cache-hit != 'true' && env.RVT_R2025_DIR != ''
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: _r2025
+          key: ${{ steps.r2025-cache.outputs.cache-primary-key }}
       - name: Install Rust stable
         shell: bash
         run: |
