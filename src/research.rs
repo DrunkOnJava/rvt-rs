@@ -16,7 +16,7 @@
 //!
 //! - [`partition_arc_walls`]: Shared partition ArcWall iteration (RE-15)
 //! - [`partition_area_boundaries`]: The region an Area occupies among its area boundary lines (RE-317)
-//! - [`partition_area_records`]: Revit 2024 Areas from their partition chain records (#763)
+//! - [`partition_area_records`]: Revit 2015 to 2024 Areas from their partition chain records (#763, #1194)
 //! - [`partition_beam_axes`]: Beam location lines from their serialised element data (RE-49)
 //! - [`partition_column_nodes`]: A column's true z-range from its instance geometry node (RE-173)
 //! - [`partition_compound_structure`]: Host types' layers and which side of a wall is its exterior (RE-53)

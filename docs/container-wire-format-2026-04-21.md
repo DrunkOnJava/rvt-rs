@@ -19,7 +19,7 @@ the `body` field for scalar-base Container kinds (0x01 / 0x02 / 0x04 /
 | kind | sub   | header        | body after header | semantic |
 |------|-------|---------------|-------------------|----------|
 | 0x01 | 0x0050| `01 50 00 00` | empty             | bool container |
-| 0x02 | 0x0050| `02 50 00 00` | empty             | u16 container |
+| 0x02 | 0x0050| `02 50 00 00` | empty             | char container: a byte blob, 1 byte per element (RE-325; this table first said u16) |
 | 0x04 | 0x0050| `04 50 00 00` | empty             | legacy-u32 container |
 | 0x05 | 0x0050| `05 50 00 00` | empty             | u32 container |
 | 0x07 | 0x0050| `07 50 00 00` | empty             | f64 container |
