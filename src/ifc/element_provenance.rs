@@ -9,11 +9,8 @@
 //! ([`NativeRecordRef`]). It rides in the export diagnostics
 //! (`decoded.element_provenance`) when the export is asked for it
 //! (`rvt-ifc --element-provenance`, `ExportOptions::with_element_provenance`,
-//! the MCP server's decode, Python's `element_provenance=True`): it is large,
-//! 6,202,130 bytes of compact JSON with the value sources of #1360 and #1368
-//! against 38,640 bytes of diagnostics without it (about 161 times) on the
-//! BIM4LCA office as built, and the CLI's pretty-printed sidecar grows from
-//! 52,677 to 11,098,081 bytes (Measure run 41890994176), so it is off by
+//! the MCP server's decode, Python's `element_provenance=True`): it is large
+//! (`docs/export-diagnostics.md`, "Provenance table size"), so it is off by
 //! default. It is never written into the IFC.
 //!
 //! An offset indexes the stream as `RevitFile::inflated_partition` returns it,
