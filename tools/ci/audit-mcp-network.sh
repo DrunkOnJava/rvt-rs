@@ -9,7 +9,7 @@
 # `server`, `macros`, `transport-io` and `schemars` features, none of which
 # pulls one in; turning on `transport-streamable-http-server` or a `reqwest`
 # feature would, and this is what fails then. The end-to-end test checks the
-# running process as well: on Linux it holds no socket.
+# running server as well: on Linux it holds no TCP, UDP or raw socket.
 #
 # Usage: tools/ci/audit-mcp-network.sh
 set -euo pipefail

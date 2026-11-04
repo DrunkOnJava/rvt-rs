@@ -15,7 +15,7 @@
   cancellation. It opens no socket: its dependency tree has no HTTP crate (CI
   checks it) and its end-to-end test, which drives the built binary over real
   stdio in both lifecycles and compares its exports with `rvt-ifc`'s and
-  `rvt-gltf`'s byte for byte, asserts the process holds none. The release
+  `rvt-gltf`'s byte for byte, asserts the server holds no network socket. The release
   archives and the container image carry the binary. Two small public
   functions let it name what the export writes:
   `ifc::step_writer::element_global_ids` (the writer's own GlobalIds) and

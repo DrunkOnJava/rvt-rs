@@ -122,7 +122,7 @@ jobs:
       - run: cargo clippy -p rvt-rs-mcp --all-targets --no-deps -- -D warnings
       # Zero upload: the server is stdio only, so its dependency tree must
       # carry no HTTP client or server (it is also checked on every run of
-      # the end-to-end test, which asserts the process holds no socket).
+      # the end-to-end test, which asserts the server holds no network socket).
       - name: The MCP server's dependency tree carries no HTTP client or server
         run: tools/ci/audit-mcp-network.sh
       # The RE probes are their own crate (probes/), so the `rvt` builds above

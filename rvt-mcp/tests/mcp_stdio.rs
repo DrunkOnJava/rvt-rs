@@ -746,18 +746,36 @@ fn wire_discipline_on_raw_stdio() {
     assert_eq!(response["result"]["isError"], false);
     assert!(response["result"]["structuredContent"]["model_id"].is_string());
 
-    // Opening the model made no socket (checked where /proc lists them).
+    // After opening a model the server holds no network socket (checked
+    // where /proc lists them): none of its file descriptors is a socket in a
+    // TCP, UDP, raw or packet table. A Unix socketpair is not one; tokio's
+    // signal driver opens one when this test build links its `process`
+    // feature (the test client needs it), which the shipped binary does not.
     #[cfg(target_os = "linux")]
     {
-        let fds =
-            std::fs::read_dir(format!("/proc/{}/fd", server.child.id())).expect("list the fds");
+        let pid = server.child.id();
+        let mut network = String::new();
+        for table in [
+            "tcp", "tcp6", "udp", "udp6", "udplite", "udplite6", "raw", "raw6", "packet",
+        ] {
+            network.push_str(
+                &std::fs::read_to_string(format!("/proc/{pid}/net/{table}")).unwrap_or_default(),
+            );
+            network.push('\n');
+        }
+        let fds = std::fs::read_dir(format!("/proc/{pid}/fd")).expect("list the fds");
         for fd in fds.flatten() {
             let target = std::fs::read_link(fd.path()).unwrap_or_default();
-            assert!(
-                !target.to_string_lossy().starts_with("socket:"),
-                "the server holds a socket: {}",
-                target.display()
-            );
+            let target = target.to_string_lossy();
+            if let Some(inode) = target
+                .strip_prefix("socket:[")
+                .and_then(|rest| rest.strip_suffix(']'))
+            {
+                assert!(
+                    !network.split_whitespace().any(|field| field == inode),
+                    "the server holds a network socket: {target}"
+                );
+            }
         }
     }
 

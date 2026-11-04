@@ -235,8 +235,10 @@ or server and no TLS stack, and tokio's `net` feature (mio, socket2) is off: the
 server serves stdin and stdout through tokio's `io-std` and rmcp's
 `transport-async-rw`, not rmcp's `transport-io`, which turns `net` on
 (`tools/ci/audit-mcp-network.sh` fails the build if any of these appears). The
-end-to-end test asserts, on Linux, that the running process holds no socket.
-What the client does with the answers is the client's
+end-to-end test asserts, on Linux, that the running server holds no TCP, UDP or
+raw socket (the test build links tokio's `process` feature for its client, whose
+signal driver opens a local socketpair; the shipped binary has neither the
+feature nor the socketpair). What the client does with the answers is the client's
 to say: an answer can name the file, the project, its levels and its elements.
 The model's path appears in no successful answer (the `model_id` is a hash and
 the diagnostics carry the file name only); an export's result names the path
