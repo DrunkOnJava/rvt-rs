@@ -26,8 +26,11 @@
 //!   the beam) or `mesh_past` (the mesh runs past an end).
 //!
 //! A candidate is never wrong where its section is `equal` and its ends are
-//! not `mesh_past` on every beam it draws. Counts only: no element id, name
-//! or coordinate is printed.
+//! not `mesh_past` on every beam it draws. For the `rule` body and for each
+//! control it also prints `body_overshoot`, how far the body runs past the
+//! mesh at its worse end by decade (0 within 0.01 ft), and for the rule body
+//! `box_overshoot`, the same for the record box's own extent along the line.
+//! Counts only: no element id, name or coordinate is printed.
 //!
 //! ```text
 //! cargo run --profile ci -p rvt-probes --example probe_re328_beam_meshes -- model.rvt
@@ -191,6 +194,24 @@ fn score(
     (section, ends)
 }
 
+/// How far the body runs past the mesh at its worse end along `d`, feet; 0
+/// where the mesh reaches both ends.
+fn overshoot(centre: [f64; 3], d: [f64; 3], length: f64, mesh: &Extents) -> f64 {
+    let middle = dot(centre, d);
+    f64::max(
+        f64::max(mesh.along.0 - (middle - length / 2.0), 0.0),
+        f64::max((middle + length / 2.0) - mesh.along.1, 0.0),
+    )
+}
+
+/// `feet` as the least power of ten above it, or `0` within [`MATCH_FEET`].
+fn decade(feet: f64) -> String {
+    if feet.is_nan() || feet <= MATCH_FEET {
+        return "0".to_string();
+    }
+    format!("<=1e{}", feet.log10().ceil().clamp(-30.0, 30.0) as i32)
+}
+
 fn centre_of(bbox: [f64; 6]) -> [f64; 3] {
     [
         (bbox[0] + bbox[3]) / 2.0,
@@ -346,6 +367,24 @@ fn main() -> anyhow::Result<()> {
                     &mut counts,
                     format!("{key} rule section {section} ends {ends}"),
                 );
+                bump(
+                    &mut counts,
+                    format!(
+                        "{key} rule body_overshoot {}",
+                        decade(overshoot(body.centre, d, body.length_feet, &seen))
+                    ),
+                );
+                // The record box's own extent along the line.
+                let box_length: f64 = (0..3)
+                    .map(|axis| d[axis].abs() * (target.bbox[axis + 3] - target.bbox[axis]))
+                    .sum();
+                bump(
+                    &mut counts,
+                    format!(
+                        "{key} rule box_overshoot {}",
+                        decade(overshoot(body.centre, d, box_length, &seen))
+                    ),
+                );
             }
         }
     }
@@ -380,6 +419,13 @@ fn main() -> anyhow::Result<()> {
         bump(
             &mut counts,
             format!("{key} body section {section} ends {ends}"),
+        );
+        bump(
+            &mut counts,
+            format!(
+                "{key} body_overshoot {}",
+                decade(overshoot(body.centre, d, body.length_feet, &seen))
+            ),
         );
     }
     for (key, n) in &counts {
