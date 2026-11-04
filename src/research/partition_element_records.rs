@@ -679,13 +679,11 @@ impl PartitionElementRecord {
     /// older than `Partitions/46` though its name sorts after it. A stream
     /// whose name ends in no number sorts first.
     pub fn frame_order(&self) -> (u32, &str, usize) {
-        let number = self
-            .stream
-            .rsplit('/')
-            .next()
-            .and_then(|n| n.parse::<u32>().ok())
-            .unwrap_or(0);
-        (number, self.stream.as_str(), self.offset)
+        (
+            crate::partition_room_parameters::partition_number(&self.stream),
+            self.stream.as_str(),
+            self.offset,
+        )
     }
 
     /// Plan-footprint origin, quantised to 1e-4 ft, for de-duplication.
@@ -1659,7 +1657,8 @@ pub fn scan_category_records(
 /// (`OST_Floors`, `OST_BuildingPad`, `OST_SketchLines`).
 ///
 /// Records are returned grouped by category in the order given, and
-/// by `(stream, offset)` within a category.
+/// within a category in the order of [`RevitFile::partition_stream_names`]
+/// (by partition number) and then by offset.
 pub fn scan_category_records_multi(
     rf: &mut RevitFile,
     revit_version: u32,

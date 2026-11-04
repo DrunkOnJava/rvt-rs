@@ -1,10 +1,15 @@
-- **Frames in more than one partition are ordered by partition number, not
-  by stream name, on Revit 2024 and later.** Three places picked an
-  element's copy by comparing its stream's name as text:
-  - the newest frame of an instance whose copies tie on vertical extent;
-  - the first copy of a sketch line;
-  - the first copy of a roof's sketch line.
-  As text, `Partitions/9` sorts after `Partitions/46`, so a file whose
-  copies sit in both one- and two-digit partitions kept the older copy
-  as the newest. Revit 2023 and earlier already compared the numbers.
-  No Measure model has such copies: all 111 exports are unchanged.
+- **Partition streams are taken in the order Revit numbers them, not by
+  name.** `RevitFile::partition_stream_names` sorted the `Partitions/NN`
+  streams as text, which puts `Partitions/9` after `Partitions/46` and
+  `Partitions/189` before it. So a reader that keeps the first or last copy
+  of an element framed in several partitions could keep the wrong one
+  when the partition numbers had different digit counts. Two cases had
+  their own text comparison on top: the newest frame of an instance whose
+  copies tie on vertical extent, and the first copy of a sketch line or a
+  roof's sketch line (Revit 2024 and later).
+  - `partition_stream_names` now sorts by partition number, and
+    `partition_stream_name` returns the lowest-numbered stream.
+  - The copy pickers compare partition numbers
+    (`PartitionElementRecord::frame_order`).
+  - Revit 2023 and earlier already compared numbers when picking a frame.
+  - On every Measure model no export moves (see the pull request).
