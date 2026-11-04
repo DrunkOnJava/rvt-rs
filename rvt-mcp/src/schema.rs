@@ -39,6 +39,33 @@ pub struct FileProvenance {
     /// The record layout of `Global/ElemTable`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub elem_table: Option<ElemTableProvenance>,
+    /// How many `Partitions/NN` streams the file has.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub partition_count: Option<usize>,
+    /// The release whose record layout the file takes, which can be older than the saving release.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub layout_release: Option<u32>,
+    /// How many elements the provenance table left out past its cap of 250,000 listed; their record fields are absent and `provenance_omitted` says so.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub omitted_entries: Option<usize>,
+}
+
+/// The native record the native readers hold for an element.
+#[derive(Debug, Clone, Serialize, JsonSchema)]
+pub struct NativeRecordOut {
+    /// In how many partitions the element has a native record.
+    pub copies: u32,
+    /// Which copy this is: `only`, `current` (the current one of several, RE-216) or `unresolved`.
+    pub copy: String,
+    /// The partition of that copy, such as `Partitions/46`. It can differ from `provenance.stream`, and neither is guaranteed to be the copy a body came from.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stream: Option<String>,
+    /// Where the record's header starts in that partition inflated.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub offset: Option<usize>,
+    /// The class the record names in the file's schema.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub class_name: Option<String>,
 }
 
 /// Where one element's answer comes from. Every element in an answer carries
@@ -77,6 +104,33 @@ pub struct ElementProvenance {
     /// For an Area with no body, why it has none.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub area_body_refusal: Option<String>,
+    /// The kind of record the element was read from, such as `partition_element_record_first_prologue`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub carrier: Option<String>,
+    /// The stream the record is in: `Partitions/NN` or `Global/Latest`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stream: Option<String>,
+    /// Where the record or frame starts in that stream inflated: the frame the exporter selected (on Revit 2024 and later the greatest vertical extent, then the higher-numbered partition and later offset; on 2008 to 2023 the newest). A body reader may take another copy, so it can name another partition than `native_record.stream`, and neither is guaranteed to be the copy a body came from.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub offset: Option<usize>,
+    /// Where the ElementId is stored: the partition record header it is the first bytes of.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub record_offset: Option<usize>,
+    /// For a frame inside another partition record, the ElementId of that record.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub enclosing_record_id: Option<String>,
+    /// The class tag the record names.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub class_tag: Option<u32>,
+    /// The class that tag resolves to in the file's own schema.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub class_name: Option<String>,
+    /// The element's native record, where the export's native passes indexed one.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub native_record: Option<NativeRecordOut>,
+    /// True when the record fields are absent because the provenance table lists at most 250,000 elements and this one is past them (`file.omitted_entries`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub provenance_omitted: Option<bool>,
 }
 
 /// One element in a list.

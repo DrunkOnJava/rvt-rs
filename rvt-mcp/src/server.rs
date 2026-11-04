@@ -255,7 +255,7 @@ impl RvtServer {
         input_schema = rmcp::handler::server::common::schema_for_input::<ListElementsArgs>()
             .expect("the input schema is an object"),
         description = concat!(
-            "List the building elements of a model, optionally by category (IFC entity such as IFCWALL), class (Revit class such as Wall) and level (storey name), paged by limit (100 by default, at most 1000) and offset. Each row has the Revit ElementId, name, level and a provenance object: element_id, global_id, category, class, body_source, profile_source, space_outline_source and area_body_refusal, each present only where the model has it. ",
+            "List the building elements of a model, optionally by category (IFC entity such as IFCWALL), class (Revit class such as Wall) and level (storey name), paged by limit (100 by default, at most 1000) and offset. Each row has the Revit ElementId, name, level and a provenance object: element_id, global_id, category, class, body_source, profile_source, space_outline_source and area_body_refusal, and where the element's record sits: carrier, stream, offset, record_offset, enclosing_record_id, class_tag, class_name and native_record, each present only where the model has it. ",
             short_not_read!()
         ),
         annotations(
@@ -295,7 +295,7 @@ impl RvtServer {
         input_schema = rmcp::handler::server::common::schema_for_input::<GetElementArgs>()
             .expect("the input schema is an object"),
         description = concat!(
-            "One element, by Revit ElementId or IFC GlobalId (the Revit Mark parameter is not decoded, so it cannot be looked up). Returns its property sets and quantities as the IFC export writes them (quantities in the IFC's SI units), its trust markers (the ...Source, ...Resolved and ...Refusal properties of its record, such as BodySource), its provenance, and the file's: Revit release and build, schema class count and ElemTable record layout. ",
+            "One element, by Revit ElementId or IFC GlobalId (the Revit Mark parameter is not decoded, so it cannot be looked up). Returns its property sets and quantities as the IFC export writes them (quantities in the IFC's SI units), its trust markers (the ...Source, ...Resolved and ...Refusal properties of its record, such as BodySource), its provenance (the carrier its record was read from, and its stream and byte offset), and the file's: Revit release and build, schema class count, partition count and ElemTable record layout. ",
             short_not_read!()
         ),
         annotations(

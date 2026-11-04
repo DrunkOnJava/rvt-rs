@@ -84,6 +84,7 @@ pub mod camera;
 pub mod category_map;
 pub mod clipping;
 pub mod compare;
+pub mod element_provenance;
 pub mod entities;
 pub mod export_content;
 mod export_pipeline;
@@ -383,7 +384,9 @@ impl ExportDiagnostics {
     /// the export does not apply keeps their count and drops the values,
     /// which the project writes; no other warning carries project text
     /// (counts, releases, type ElementIds, unit identifiers), so none is
-    /// rewritten. Counts, releases, body sources and ElementIds are kept.
+    /// rewritten. Counts, releases, body sources and ElementIds are kept, and
+    /// so is the element provenance: its stream names, offsets and schema class
+    /// names are the file's structure, not its text.
     pub fn anonymize(&mut self) {
         use crate::redact::{ANONYMIZED, anonymize_file_name};
         if let Some(path) = self.input.original_path.as_mut() {
@@ -634,6 +637,18 @@ pub struct DecodedExportDiagnostics {
     /// written in the IFC file.
     #[serde(default, skip_serializing_if = "std::collections::BTreeSet::is_empty")]
     pub walls_type_confirmed: std::collections::BTreeSet<u32>,
+    /// Where each decoded element was read from, by ElementId (#1325): its
+    /// carrier, the stream and byte offset in that stream inflated, where its
+    /// ElementId is stored, its class tag and the class that names in the
+    /// file's schema, and its native record. Present only when asked for
+    /// (`rvt-ifc --element-provenance`,
+    /// [`ExportOptions::with_element_provenance`]): the table is about 116
+    /// times the rest of the diagnostics on the BIM4LCA office, so without the
+    /// option the field is absent and the diagnostics are the bytes they were
+    /// before it existed. Not written in the IFC file; see
+    /// [`element_provenance`].
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub element_provenance: Option<element_provenance::ElementProvenanceTable>,
 }
 
 fn default_min_element_confidence_serde() -> f32 {
@@ -4234,6 +4249,7 @@ pub fn build_export_diagnostics_with_limits(
             unknown_unit_identifiers: recovered_units.unknown_identifiers,
             wall_curve_lengths_feet: walker_stats.wall_curve_lengths_feet,
             walls_type_confirmed: walker_stats.walls_type_confirmed,
+            element_provenance: None,
         },
         source_coverage: {
             let coverage = SourceCoverageDiagnostics::measure(

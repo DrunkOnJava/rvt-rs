@@ -18,6 +18,14 @@ pub struct GroupSource {
     pub segment_count: usize,
     pub declared_objects: u64,
     pub declared_body_bytes: u64,
+    /// Where the group's bytes start in the partition's inflated bytes
+    /// ([`crate::RevitFile::inflated_partition`]; `rvt-dump`'s
+    /// `Partitions_NN.decomp`), when they are those bytes: the segments are
+    /// consecutive whole members of it. `None` when the group was inflated
+    /// again or joined from segments that are not consecutive, whose bytes
+    /// are a copy with no place in the stream (#1325).
+    #[serde(skip_serializing)]
+    pub inflated_offset: Option<usize>,
 }
 #[derive(Debug, Default, Clone, Serialize)]
 pub struct Statistics {
@@ -272,6 +280,7 @@ pub fn walk_inflated(
                         segment_count: 1,
                         declared_objects: u64::from(count),
                         declared_body_bytes: u64::from(raw),
+                        inflated_offset: None,
                     },
                     Group {
                         data: bytes,
@@ -280,7 +289,11 @@ pub fn walk_inflated(
                 ));
             }
             if !to_next {
-                let (source, group) = active.take().unwrap();
+                let (mut source, group) = active.take().unwrap();
+                source.inflated_offset = match (group.span, inflated) {
+                    (Some((first, _)), Some(stream)) => stream.member_start(first),
+                    _ => None,
+                };
                 callback(&source, &group.data)?;
                 stats.groups += 1;
             }

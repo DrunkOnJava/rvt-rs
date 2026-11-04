@@ -252,6 +252,31 @@ pub(crate) fn partition_number(stream: &str) -> u32 {
         .unwrap_or(0)
 }
 
+#[cfg(test)]
+mod partition_number_tests {
+    use super::partition_number;
+
+    #[test]
+    fn orders_by_number_not_by_name() {
+        assert!(partition_number("Partitions/9") < partition_number("Partitions/46"));
+        assert!(partition_number("Partitions/46") < partition_number("Partitions/189"));
+    }
+
+    #[test]
+    fn a_name_without_a_number_is_zero() {
+        assert_eq!(partition_number("Partitions/"), 0);
+        assert_eq!(partition_number("Global/Latest"), 0);
+        assert_eq!(partition_number("Partitions/x9"), 0);
+        assert_eq!(partition_number("Partitions/-1"), 0);
+    }
+
+    #[test]
+    fn a_number_past_u32_is_zero() {
+        assert_eq!(partition_number("Partitions/4294967296"), 0);
+        assert_eq!(partition_number("Partitions/4294967295"), u32::MAX);
+    }
+}
+
 /// One value per element from the copies of its data that several
 /// partitions hold (#800): the latest partition's, which is the copy RE-145
 /// found current wherever an element's copies differ, and none where that

@@ -61,6 +61,8 @@ mod element_materials;
 mod element_names;
 #[path = "../element_parameters.rs"]
 mod element_parameters;
+#[path = "../element_provenance_offsets.rs"]
+mod element_provenance_offsets;
 #[path = "../element_records_2025.rs"]
 mod element_records_2025;
 #[path = "../family_instance_ports.rs"]
