@@ -1084,11 +1084,19 @@ prints it from any installed build.
 
 ## Roadmap Position
 
-- **v0.12.2** (2026-11-03) is the latest release: crates.io, the `rvt`
-  wheels on PyPI, GitHub Release archives for Linux, macOS and Windows, and
-  the container image, each checked from its published artifacts
-  ([`install.md`](install.md)); docs.rs had queued its build when they were
-  checked. In the default export it draws more doors from the meshes Revit
+- **v0.13.0** (2026-11-03) is the latest release: crates.io, docs.rs, the
+  `rvt` wheels on PyPI, GitHub Release archives for Linux, macOS and Windows,
+  and the container image, each checked from its published artifacts
+  ([`install.md`](install.md)). Every `IfcSpace` says where its outline came
+  from; rooms on Revit 2026 and 2027 take their outline, rooms whose stored
+  solid the walk did not close are read from its faces, and family instances
+  Revit's export leaves out are left out of the spaces. A Revit 2018 project
+  that exported nothing exports 1,136 of Revit's 1,321 elements and its 73
+  rooms, and Revit 2016 to 2023 exports leave out elements outside the export
+  phase and in non-primary design options. `[0.13.0]` in
+  [`CHANGELOG.md`](../CHANGELOG.md) gives what each change measures and what
+  it does not.
+- **v0.12.2** (2026-11-03): in the default export it draws more doors from the meshes Revit
   saved for them (the BIM4LCA office as built 269, against 48 with 0.12.1,
   265 exact to 0.001 ft against Revit's export), and it no longer calls a
   Revit 2008 to 2014 file an unsupported version in the viewer (#1247,
@@ -1133,7 +1141,7 @@ prints it from any installed build.
   - elements outside the export phase left out (#328);
   - doors and windows drawn from their saved meshes by default in `rvt-ifc`;
   - Revit 2008 to 2014 exported experimentally.
-- `main` has everything v0.12.2 has, and is ahead of it by the fragments
+- `main` has everything v0.13.0 has, and is ahead of it by the fragments
   under [`changelog.d/`](../changelog.d/README.md).
 
 Open work is tracked as GitHub issues; [`docs/archive/TODO.md`](archive/TODO.md) is
