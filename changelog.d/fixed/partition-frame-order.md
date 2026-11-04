@@ -7,4 +7,4 @@
   As text, `Partitions/9` sorts after `Partitions/46`, so a file whose
   copies sit in both one- and two-digit partitions kept the older copy
   as the newest. Revit 2023 and earlier already compared the numbers.
-  Measured on every Measure model: see the pull request.
+  No Measure model has such copies: all 111 exports are unchanged.
