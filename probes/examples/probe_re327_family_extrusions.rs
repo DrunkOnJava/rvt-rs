@@ -19,6 +19,7 @@
 //!   - bounding box, within 0.01 ft;
 //!   - every mesh vertex to the solid's surface, within 0.01 ft;
 //!   - samples of the solid's surface to the mesh's triangles, within 0.01 ft.
+//!
 //! It tries the sketch plane's matrix as columns and as rows, with and
 //! without its `m_flipZ`, and tallies which conventions agree.
 //!
