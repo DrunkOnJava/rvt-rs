@@ -59,6 +59,12 @@
 # another release and the same project saved by that one, the sample first,
 # into probe-pair.txt, ending with its exit status: the cross-release
 # comparisons of #740 and #742.
+# When MEASURE_CACHE_DIR names a directory, a scorer or schema step whose every
+# input is as it was in an earlier run takes that run's output
+# (tools/ci/measure-cache.py, docs/maintaining.md); its `<step> cached` line
+# stands for its time in timings.log, and OUT_DIR/score-cache.log (written by the
+# workflow) lists each hit and miss. Exports, rvt-info, rvt-gltf, the witness
+# exports and probes always run.
 # A scorer that fails is recorded, not fatal: its output is the evidence.
 # These runs check what the exports hold; their times are not benchmarks
 # (the workflow's `timing` job times both refs on one runner,
@@ -203,6 +209,48 @@ score() { # name args...
   echo "exit $?" >> "$out"
 }
 
+# The score cache (tools/ci/measure-cache.py), on when MEASURE_CACHE_DIR names
+# its directory: a step whose every input is as it was in an earlier run takes
+# that run's output, and `<step> cached` stands for its time in timings.log. A
+# step is kept only if it finished with status 0, and the models whose results
+# only leave the runner as counts are never cached.
+CACHE_TOOL="$(dirname "$0")/measure-cache.py"
+cscore() { # name args...: `score`, from the cache when the scorer and its inputs are unchanged
+  local out="$1" dir step found=2; shift
+  dir=$(dirname "$out"); step=$(basename "$out" .txt)
+  if [ -n "${MEASURE_CACHE_DIR:-}" ]; then
+    python "$CACHE_TOOL" lookup --step "$step" --dir "$dir" --dest "$out" -- "$@"
+    found=$?
+    [ "$found" = 0 ] && return 0
+  fi
+  score "$out" "$@"
+  [ "$found" = 1 ] && python "$CACHE_TOOL" store --step "$step" --dir "$dir" --dest "$out"
+  return 0
+}
+
+# A schema step's output on stdout, the cache's when the script and the file
+# are unchanged, else the step's own under its time limit. A file the step also
+# writes is named by CACHE_EXTRA and kept with the output.
+cached() { # dir step limit script args...
+  local dir="$1" step="$2" limit="$3" script="$4" tmp status found=2; shift 4
+  tmp="${RUNNER_TEMP:-/tmp}/cached-$$-$(basename "$dir")-$step"
+  if [ -n "${MEASURE_CACHE_DIR:-}" ]; then
+    python "$CACHE_TOOL" lookup --step "$step" --dir "$dir" --dest "$tmp" ${CACHE_EXTRA:+--extra "$CACHE_EXTRA"} -- "$script" "$@"
+    found=$?
+    if [ "$found" = 0 ]; then
+      cat "$tmp"
+      rm -f "$tmp"
+      return 0
+    fi
+  fi
+  timed "$dir" "$step" timeout "$limit" python "$script" "$@" > "$tmp" 2>&1
+  status=$?
+  cat "$tmp"
+  [ "$found" = 1 ] && python "$CACHE_TOOL" store --step "$step" --dir "$dir" --dest "$tmp" --status "$status" ${CACHE_EXTRA:+--extra "$CACHE_EXTRA"}
+  rm -f "$tmp"
+  return "$status"
+}
+
 info() { # file dir
   "$BIN/rvt-info" "$1" --redact --json > "$2/info.json" 2> "$2/info.log"
   echo "exit $?" > "$2/info.exit"
@@ -216,19 +264,19 @@ PSET_DEFINITIONS="${RUNNER_TEMP:-/tmp}/ifc4-pset-definitions.csv"
 schema() { # dir max_bytes
   {
     echo "arity:"
-    timed "$1" schema-arity timeout 600 python "$(dirname "$0")/ifc_schema_arity.py" "$1/model.ifc" 2>&1 \
+    cached "$1" schema-arity 600 "$(dirname "$0")/ifc_schema_arity.py" "$1/model.ifc" \
       | grep -v '^IFC schema conformance passed\|^  instances checked' || true
     if [ "$(stat -c %s "$1/model.ifc")" -le "$2" ]; then
       echo "validate:"
-      timed "$1" schema-validate timeout "$STEP_TIMEOUT" python "$(dirname "$0")/ifc_validate_summary.py" "$1/model.ifc" "$1/validation.jsonl" 2>&1
+      CACHE_EXTRA="$1/validation.jsonl" cached "$1" schema-validate "$STEP_TIMEOUT" "$(dirname "$0")/ifc_validate_summary.py" "$1/model.ifc" "$1/validation.jsonl"
       echo "rules:"
-      timed "$1" schema-rules timeout "$STEP_TIMEOUT" python "$(dirname "$0")/ifc_validate_summary.py" --rules "$1/model.ifc" 2>&1
+      cached "$1" schema-rules "$STEP_TIMEOUT" "$(dirname "$0")/ifc_validate_summary.py" --rules "$1/model.ifc"
     else
       echo "validate: skipped, over $(( $2 / 1048576 )) MB"
     fi
     echo "property sets:"
-    timed "$1" schema-psets timeout "$STEP_TIMEOUT" python "$(dirname "$0")/ifc4_property_sets.py" "$1/model.ifc" \
-      --definitions "$PSET_DEFINITIONS" 2>&1
+    cached "$1" schema-psets "$STEP_TIMEOUT" "$(dirname "$0")/ifc4_property_sets.py" "$1/model.ifc" \
+      --definitions "$PSET_DEFINITIONS"
   } > "$1/schema.txt"
 }
 
@@ -305,7 +353,7 @@ model_task() { # name rvt ref task
       if [ "$ref" != "-" ] && wanted ports_vs_ifc; then
         extra=()
         [ -f "$dir/validation.jsonl" ] && extra=(--validation "$dir/validation.jsonl")
-        score "$dir/ports_vs_ifc.txt" "$SCORERS/ports_vs_ifc.py" "$dir/model.ifc" "$MODELS/$ref" "${extra[@]}"
+        cscore "$dir/ports_vs_ifc.txt" "$SCORERS/ports_vs_ifc.py" "$dir/model.ifc" "$MODELS/$ref" "${extra[@]}"
       fi
       ;;
     witness)
@@ -322,18 +370,23 @@ model_task() { # name rvt ref task
       if [ "$ref" != "-" ]; then
         for s in $GLB_SCORERS; do
           wanted "$s" || continue
-          score "$dir/$s.txt" "$SCORERS/$s.py" "$dir/model.glb" "$MODELS/$ref"
+          cscore "$dir/$s.txt" "$SCORERS/$s.py" "$dir/model.glb" "$MODELS/$ref"
         done
       fi
       ;;
     ifc:*)
       s=${task#ifc:}
-      score "$dir/$s.txt" "$SCORERS/$s.py" "$dir/model.ifc" "$MODELS/$ref"
+      # A research lister named in MEASURE_SCORERS, in neither list, is not cached.
+      if listed "$s"; then
+        cscore "$dir/$s.txt" "$SCORERS/$s.py" "$dir/model.ifc" "$MODELS/$ref"
+      else
+        score "$dir/$s.txt" "$SCORERS/$s.py" "$dir/model.ifc" "$MODELS/$ref"
+      fi
       ;;
     meshes)
       for s in saved_meshes_vs_ifc mesh_bodies_vs_ifc; do
         wanted "$s" || continue
-        RVT_MESH_CACHE="$dir/mesh-cache" score "$dir/$s.txt" "$SCORERS/$s.py" "$dir/model.ifc" "$MODELS/$ref"
+        RVT_MESH_CACHE="$dir/mesh-cache" cscore "$dir/$s.txt" "$SCORERS/$s.py" "$dir/model.ifc" "$MODELS/$ref"
       done
       echo "$name: mesh cache $(du -sh "$dir/mesh-cache" 2>/dev/null | cut -f1), removed"
       rm -rf "$dir/mesh-cache"
@@ -351,7 +404,7 @@ model_task() { # name rvt ref task
       timed "$dir" rvt-ifc-revit-sets "$BIN/rvt-ifc" "$MODELS/$rvt" -o "$dir/revit-sets.ifc" ${RVT_IFC_FLAGS:-} "${flags[@]}" \
         > "$dir/rvt-ifc-revit-sets.log" 2>&1
       echo "exit $?" >> "$dir/rvt-ifc-revit-sets.log"
-      score "$dir/revit_property_sets_vs_ifc.txt" "$SCORERS/revit_property_sets_vs_ifc.py" "$dir/revit-sets.ifc" "$MODELS/$sets" --list
+      cscore "$dir/revit_property_sets_vs_ifc.txt" "$SCORERS/revit_property_sets_vs_ifc.py" "$dir/revit-sets.ifc" "$MODELS/$sets" --list
       rm -f "$dir/revit-sets.ifc"
       ;;
   esac

@@ -7,7 +7,9 @@
   again, apart from the newest few that a build may still restore from;
 - on `main`, the superseded overlay base databases of each CodeQL language and
   version: every analysis of `main` saves one under its commit, and the next
-  analysis on that version reads only the newest.
+  analysis on that version reads only the newest;
+- on `main`, the superseded generations of Measure's score cache, which a run
+  restores from the newest of its prefix and saves anew.
 
 The caches of live branches, of open pull requests, of tags, and `main`'s newest
 generations are kept. The repository's cache limit is 10 GB and GitHub evicts the
@@ -39,6 +41,9 @@ RUST_CACHE_KEY = re.compile(r"(v0-rust-.+)-[0-9a-f]{8}")
 # highest enabled CLI version among the cached bases, so each version keeps its
 # newest ones.
 CODEQL_OVERLAY_KEY = re.compile(r"(codeql-overlay-base-database-\d+-[0-9a-f]+-[a-z]+-[0-9.]+)-[0-9a-f]{40}-\d+-\d+")
+# Measure's score cache (tools/ci/measure-cache.py): measure-scores-v<format>-<main or x-name>-<side>-<run id>-<attempt>.
+# A run restores the newest of its prefix, so only the newest generations are read.
+SCORE_CACHE_KEY = re.compile(r"(measure-scores-v\d+-.+)-\d+-\d+")
 
 
 def gh(*args):
@@ -76,7 +81,7 @@ def unusable(caches, open_prs, live_branches, keep):
             if name != "main" and name not in live_branches:
                 doomed.append((c, f"branch {name} was deleted"))
             elif name == "main":
-                k = RUST_CACHE_KEY.fullmatch(c["key"]) or CODEQL_OVERLAY_KEY.fullmatch(c["key"])
+                k = RUST_CACHE_KEY.fullmatch(c["key"]) or CODEQL_OVERLAY_KEY.fullmatch(c["key"]) or SCORE_CACHE_KEY.fullmatch(c["key"])
                 if k:
                     generations.setdefault(k.group(1), []).append(c)
     for family, lst in generations.items():

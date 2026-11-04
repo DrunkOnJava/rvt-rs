@@ -64,6 +64,14 @@
 # probe-<probe>.txt and probe_score-<probe>.txt:
 #
 #   gh workflow run measure.yml -f ref=my-branch -f base=none -f nordic=true -f models="nordic-office-*" -f scorers=none -f probe="probe_a probe_b" -f probe_scorer="a_vs_ifc -"
+#
+# A scorer or schema step whose every input is as it was in an earlier run is
+# not run again: its output comes from the score cache (tools/ci/measure-cache.py;
+# its key, what is never cached and how it is saved are in docs/maintaining.md).
+# Exports, rvt-info, rvt-gltf, the witness exports, diagnostics and probes always
+# run. `score_cache=off` runs every step, as before.
+#
+#   gh workflow run measure.yml -f ref=my-branch -f base=main -f score_cache=off
 
 name: Measure
 
@@ -148,6 +156,10 @@ on:
         default: ""
       scorers:
         description: Only these steps on the models, tools/re scorers and info, gltf, schema, witness (e.g. "qtos_vs_ifc witness"; a tools/re script in no scorer list runs as an IFC scorer), none for none, empty for all; every model is still exported and hashed
+        required: false
+        default: ""
+      score_cache:
+        description: 'The score cache (tools/ci/measure-cache.py, docs/maintaining.md): empty for the shared one, off to run every step, or a name for a cache of its own that this run saves to from any ref (the shared one is read as well)'
         required: false
         default: ""
   # A change to the measurement itself measures its own PR against main.
@@ -235,6 +247,64 @@ jobs:
           python-version: "3.12"
       - name: Install IfcOpenShell
         run: python -m pip install --require-hashes -r tools/ci/requirements-ifc.txt
+      # The score cache (tools/ci/measure-cache.py, docs/maintaining.md): a
+      # scorer or schema step whose every input is as it was in an earlier run
+      # takes that run's output. Every run restores the newest cache, before
+      # the measured code builds; it is saved only where the cache above is
+      # (the workflow dispatched from main and the code measured main's, so a
+      # branch's build scripts can never write what a later main run reads), or
+      # under a name of its own that `score_cache` gives a run from any ref,
+      # which main's runs never read. Entries are named by what they were made
+      # from, so the models measured, the sides and the flags share them.
+      # The held-out models and BIMcollab's are never cached (RE-252).
+      - name: Score cache key
+        id: score-cache-key
+        shell: bash
+        env:
+          SCORE_CACHE: ${{ inputs.score_cache }}
+          SAVE_FROM_MAIN: ${{ github.ref == 'refs/heads/main' && (matrix.side == 'base' && (inputs.base == '' || inputs.base == 'main') || matrix.side != 'base' && inputs.ref == '') }}
+        run: |
+          enabled=true
+          save=false
+          case "$SCORE_CACHE" in
+            off)
+              enabled=false
+              ;;
+            "")
+              prefix=measure-scores-v1-main-
+              restore=$prefix
+              [ "$SAVE_FROM_MAIN" = true ] && save=true
+              ;;
+            *)
+              if ! [[ "$SCORE_CACHE" =~ ^[A-Za-z0-9._]{1,40}$ ]]; then
+                echo "::error::score_cache is off, or a name of up to 40 letters, digits, dots and underscores"
+                exit 1
+              fi
+              prefix="measure-scores-v1-x-$SCORE_CACHE-"
+              restore="$prefix"$'\n'measure-scores-v1-main-
+              save=true
+              ;;
+          esac
+          {
+            echo "enabled=$enabled"
+            echo "save=$save"
+            echo "prefix=$prefix"
+            echo "restore<<END"
+            echo "$restore"
+            echo "END"
+          } >> "$GITHUB_OUTPUT"
+          if [ "$enabled" = true ]; then
+            echo "MEASURE_CACHE_DIR=$GITHUB_WORKSPACE/_score-cache" >> "$GITHUB_ENV"
+            echo "MEASURE_CACHE_WORK=$RUNNER_TEMP/score-cache-work" >> "$GITHUB_ENV"
+          fi
+          echo "score cache: enabled=$enabled save=$save key prefix ${prefix:-none}"
+      - name: Restore the score cache
+        if: steps.score-cache-key.outputs.enabled == 'true'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: _score-cache
+          key: ${{ steps.score-cache-key.outputs.prefix }}${{ matrix.side }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: ${{ steps.score-cache-key.outputs.restore }}
       - name: Build
         working-directory: measured
         run: |
@@ -370,6 +440,23 @@ jobs:
           # The runner's CPU, so the compare job can say which machines the
           # wall times came from.
           grep -m1 'model name' /proc/cpuinfo | cut -d: -f2- | xargs > results/runner.txt
+      # Entries not used for 21 days go, then the oldest past 256 MiB; the cache
+      # is saved only if this run kept an entry, pruned one or refreshed one not
+      # used for three days (tools/maintainer/clean_caches.py deletes the
+      # generations it supersedes).
+      - name: Finish the score cache
+        id: score-cache
+        if: ${{ !cancelled() && steps.score-cache-key.outputs.enabled == 'true' }}
+        shell: bash
+        run: |
+          mkdir -p results
+          python tools/ci/measure-cache.py finish --report results/score-cache.log
+      - name: Save the score cache
+        if: ${{ !cancelled() && github.event_name == 'workflow_dispatch' && steps.score-cache.outputs.changed == 'true' && steps.score-cache-key.outputs.save == 'true' }}
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: _score-cache
+          key: ${{ steps.score-cache-key.outputs.prefix }}${{ matrix.side }}-${{ github.run_id }}-${{ github.run_attempt }}
       # The held-out models and BIMcollab's carry no licence: only their
       # counts leave the runner (RE-252).
       - name: Keep only the unlicensed models' counts

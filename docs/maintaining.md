@@ -91,6 +91,66 @@ when a release ships.
   ([`changelog.d/`](../changelog.d/README.md)) change in the same pull request
   as the capability they describe.
 
+## Measure's score cache
+
+Measure runs about 40 scorers and four schema checks on every model, and most
+pull requests move the export of only a few of them. A step whose inputs are as
+they were in an earlier run takes that run's output from the score cache
+(`tools/ci/measure-cache.py`) instead of running; exports, `rvt-info`,
+`rvt-gltf`, the witness exports, diagnostics and probes always run. A hit
+writes the cached output and a `<step> cached` line to the model's
+`timings.log`; every output is the one a run would have written.
+
+- **Key.** The sha256 of the step's name and arguments; the content of every
+  file argument (the rvt-rs IFC without its `FILE_NAME` and `IFCOWNERHISTORY`
+  lines, which carry the export time, so a rebuild that writes the same model
+  hits; Revit's export; the glTF; the validation findings); the scorer and
+  every module of `tools/re` and `tools/ci` it reaches by import, importlib
+  path or name; the value of every environment variable they read (apart from
+  the two that size the mesh cache), which is `PSETS_MISSING` for
+  `psets_vs_ifc` and `qtos_vs_ifc`; the files a scorer reads that its
+  arguments do not name (`qtos_vs_ifc`'s `diagnostics.json`,
+  `unfilled_openings_vs_ifc`'s sibling Revit exports); the Python, platform
+  and installed version of every package `tools/ci/requirements-ifc.txt`
+  pins; and `RVT_IFC_FLAGS`.
+- **What is never cached.** A step whose closure lists or walks a directory,
+  takes a directory from an argument, opens a file by a literal path, runs a
+  program, draws a number or a date, reads the IFC's export time or reads an
+  environment variable by a computed name: the cache tells the reason in
+  `score-cache.log` and runs it. A new scorer that reads anything but the
+  files it is given is run every time until `EXTRA_INPUTS` in
+  `measure-cache.py` names what it reads. A step is kept only if it finished
+  with status 0 and printed nothing that shows a failure a rerun could mend.
+  The held-out models and BIMcollab's (`holdout-*`, `bimcollab-*`), of which
+  only counts leave the runner (`tools/ci/scrub-holdout-results.sh`), are never
+  looked up or stored, so no per-element result of theirs is in the cache.
+- **Where it lives.** Every run restores the newest `measure-scores-v1-main-*`
+  cache before the measured code builds. It is saved only where rust-cache is
+  saved: the workflow dispatched from `main` and the side measuring `main`'s
+  own code (`inputs.ref` empty, or `base` `main`), because the build scripts of
+  any other ref run on the runner and must not write what a later `main` run
+  reads. A pull request run, and a run of any other ref, only reads. A run
+  dispatched with `-f score_cache=<name>` reads and saves a cache of its own,
+  `measure-scores-v1-x-<name>-*`, from any ref (GitHub scopes a branch's
+  caches to that branch, and `main`'s runs never read the name); this is how a
+  change to the cache itself is proved, and `-f score_cache=off` runs every
+  step as before.
+- **Bounds.** Entries not used for 21 days are removed, then the oldest past
+  256 MiB; a run saves a new cache only if it kept an entry, pruned one or
+  refreshed one unused for three days, and
+  `tools/maintainer/clean_caches.py` deletes the generations a newer one
+  supersedes. An entry is a scorer's text output (kilobytes), so the cache is
+  a few MiB, not GiB. `results/score-cache.log` in the artifact lists every
+  hit, miss, kept and uncached step with the first twelve characters of its key.
+- **Checking it.** The run after a change to an export is the check that the
+  key follows the IFC: its changed models miss and the rest hit. To check a
+  change to the cache or to a scorer, run Measure twice on one branch with
+  `-f score_cache=<name>` (cold, then warm) and once with `-f
+  score_cache=off`, and `diff -r` the three results apart from `*.log`,
+  `diagnostics.json`; a third warm run with `-f
+  psets_missing=Pset_WallCommon.Reference` must miss `psets_vs_ifc` on every
+  model and hit everything else.
+
 ## Dependencies and the MSRV
 
 `rust-version` in `Cargo.toml` is the oldest stable Rust the crate builds on, and
