@@ -38,7 +38,8 @@ FEET = 0.3048
 # src/ifc/family_extrusions.rs TRUE_ARC_MAX_RADIUS: a larger arc is written as
 # short arcs. The radius read back from 3 points rounded to a micrometre is good
 # to about 1.5% of the radius at the short arcs' sagitta, so the census calls an
-# arc short from 0.1215 ft.
+# arc short from 0.1215 ft; an arc within 1.5% of 0.12 ft can land in the wrong
+# row, which mislabels a census row and changes no score.
 SHORT_ARCS_FROM = 0.1215
 
 
