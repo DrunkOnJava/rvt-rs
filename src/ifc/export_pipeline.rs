@@ -67,6 +67,10 @@ pub struct ExportOptions {
     pub mode: ExportQualityMode,
     /// Which bodies are drawn from saved graphics.
     pub saved_meshes: SavedMeshChoice,
+    /// Draw a family instance from its family's own extrusions where they
+    /// reproduce its saved mesh (`--family-extrusions`): implies the saved
+    /// graphics of every boxed element.
+    pub family_extrusions: bool,
     /// Also write Revit's own parameter sets (`--revit-property-sets`).
     pub revit_property_sets: bool,
     /// Also place properties where Revit's exporter does
@@ -88,6 +92,7 @@ impl Default for ExportOptions {
             kind: ExportKind::Document,
             mode: ExportQualityMode::Scaffold,
             saved_meshes: SavedMeshChoice::Default,
+            family_extrusions: false,
             revit_property_sets: false,
             revit_set_placement: false,
             no_base_quantities: false,
@@ -115,6 +120,15 @@ impl ExportOptions {
     #[must_use]
     pub fn with_saved_meshes(mut self, saved_meshes: SavedMeshChoice) -> Self {
         self.saved_meshes = saved_meshes;
+        self
+    }
+
+    /// Whether a family instance is drawn from its family's own extrusions
+    /// where they reproduce its saved mesh. Off by default; implies the saved
+    /// graphics of every boxed element.
+    #[must_use]
+    pub fn with_family_extrusions(mut self, family_extrusions: bool) -> Self {
+        self.family_extrusions = family_extrusions;
         self
     }
 
@@ -219,6 +233,42 @@ pub enum ExportNote {
         /// How many quantities were left out.
         left_out: usize,
     },
+    /// Bodies drawn from their family's own extrusions.
+    #[non_exhaustive]
+    FamilyExtrusions {
+        /// Instances drawn from a saved mesh, alone in their Tag.
+        candidates: usize,
+        /// Of those, instances now drawn from their family's extrusions.
+        replaced: usize,
+        /// The families of the candidates whose document was found.
+        families: usize,
+        /// Of those, families all of whose extrusions rebuilt.
+        families_rebuilt: usize,
+        /// Candidates whose family was not found or not rebuilt.
+        not_rebuilt: usize,
+        /// Candidates with no instance transform that reads.
+        unplaced: usize,
+        /// Candidates whose mesh is too large to compare.
+        unchecked: usize,
+        /// Candidates whose mesh the extrusions do not reproduce, by volume.
+        volume_differs: usize,
+        /// By a vertex of the mesh off the extrusions' surface.
+        vertices_differ: usize,
+        /// By a sampled point of the extrusions' surface off the mesh.
+        surface_differs: usize,
+        /// Reproduced, but left with their mesh because a profile has an arc.
+        arcs: usize,
+        /// Reproduced, but their profile cannot be written.
+        unwritable: usize,
+        /// Instances left alone for sharing a Tag with another entity.
+        ambiguous: usize,
+    },
+    /// The family extrusions could not be read; the bodies are unchanged.
+    #[non_exhaustive]
+    FamilyExtrusionsSkipped {
+        /// The reason.
+        error: String,
+    },
 }
 
 impl ExportNote {
@@ -227,6 +277,7 @@ impl ExportNote {
     pub fn skipped(&self) -> Option<&str> {
         match self {
             Self::SavedMeshesSkipped { error }
+            | Self::FamilyExtrusionsSkipped { error }
             | Self::RevitPropertySetsSkipped { error }
             | Self::RevitSetPlacementSkipped { error } => Some(error),
             _ => None,
@@ -284,6 +335,27 @@ impl fmt::Display for ExportNote {
             ),
             Self::BaseQuantities { left_out } => {
                 write!(f, "{left_out} base quantities left out")
+            }
+            Self::FamilyExtrusions {
+                candidates,
+                replaced,
+                families,
+                families_rebuilt,
+                not_rebuilt,
+                unplaced,
+                unchecked,
+                volume_differs,
+                vertices_differ,
+                surface_differs,
+                arcs,
+                unwritable,
+                ambiguous,
+            } => write!(
+                f,
+                "{replaced} of {candidates} saved-mesh bodies drawn from their family's extrusions ({families} families found, {families_rebuilt} rebuilt; {not_rebuilt} had no rebuilt family, {unplaced} no instance transform, {unchecked} a mesh too large to compare; the extrusions did not reproduce the mesh of {volume_differs} by volume, {vertices_differ} by vertices and {surface_differs} by surface; {arcs} reproduced but with an arc in a profile, so left with the mesh; {unwritable} reproduced but not writable; {ambiguous} left alone for sharing a Tag)"
+            ),
+            Self::FamilyExtrusionsSkipped { error } => {
+                write!(f, "family extrusions not read, bodies unchanged: {error}")
             }
         }
     }
@@ -406,6 +478,7 @@ pub fn run_export_with_limits_and_control(
     let scope = match (options.kind, options.saved_meshes) {
         (ExportKind::Placeholder, _) | (_, SavedMeshChoice::Off) => None,
         (_, SavedMeshChoice::All) => Some(SavedMeshScope::All),
+        (_, SavedMeshChoice::Default) if options.family_extrusions => Some(SavedMeshScope::All),
         (_, SavedMeshChoice::Default) => default_scope(rf),
     };
     if let Some(scope) = scope {
@@ -426,6 +499,35 @@ pub fn run_export_with_limits_and_control(
                 control.check()?;
                 notes.push(ExportNote::SavedMeshesSkipped {
                     error: error.to_string(),
+                });
+            }
+        }
+    }
+
+    if options.family_extrusions && options.kind != ExportKind::Placeholder {
+        match super::family_extrusions::attach_with_control(rf, &mut model, control) {
+            Ok(report) => {
+                recount_exported(&mut diagnostics, &model);
+                notes.push(ExportNote::FamilyExtrusions {
+                    candidates: report.candidates,
+                    replaced: report.replaced,
+                    families: report.families,
+                    families_rebuilt: report.families_rebuilt,
+                    not_rebuilt: report.not_rebuilt,
+                    unplaced: report.unplaced,
+                    unchecked: report.unchecked,
+                    volume_differs: report.volume_differs,
+                    vertices_differ: report.vertices_differ,
+                    surface_differs: report.surface_differs,
+                    arcs: report.arcs,
+                    unwritable: report.unwritable,
+                    ambiguous: report.ambiguous,
+                });
+            }
+            Err(error) => {
+                control.check()?;
+                notes.push(ExportNote::FamilyExtrusionsSkipped {
+                    error: format!("{error:#}"),
                 });
             }
         }

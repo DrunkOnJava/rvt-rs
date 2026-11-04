@@ -91,6 +91,15 @@ struct Args {
     /// mesh Revit saved for them.
     #[arg(long, conflicts_with = "placeholder")]
     no_saved_meshes: bool,
+    /// Draw a family instance from its family's own extrusions (the sketch
+    /// lines they were drawn from, swept between their offsets) instead of
+    /// its saved mesh, where they reproduce the mesh; every other instance,
+    /// and every one with an arc in a profile, keeps it (#156). Off by
+    /// default. Implies `--saved-meshes`. Each instance is checked against its
+    /// own mesh. Revit 2024 to 2027 files (measured on 2024 and 2025). Slower
+    /// on large files.
+    #[arg(long, conflicts_with_all = ["placeholder", "no_saved_meshes"])]
+    family_extrusions: bool,
     /// Also write Revit's own property sets, as Revit's exporter does with
     /// "Export Revit property sets": each element's named parameters in one
     /// set per parameter group, and its type's on its type object (RE-210).
@@ -344,6 +353,7 @@ fn export_options(args: &Args) -> ExportOptions {
         .with_kind(kind)
         .with_mode(args.mode.into())
         .with_saved_meshes(saved_meshes)
+        .with_family_extrusions(args.family_extrusions)
         .with_revit_property_sets(args.revit_property_sets)
         .with_revit_set_placement(args.revit_set_placement)
         .with_no_base_quantities(args.no_base_quantities)
