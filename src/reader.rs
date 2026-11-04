@@ -1053,12 +1053,22 @@ impl RevitFile {
         &self.unwritten_areas
     }
 
-    /// Sorted `Partitions/*` stream paths.
+    /// The `Partitions/*` stream paths in the order Revit numbers them:
+    /// by the number after `Partitions/` (`Partitions/9` before
+    /// `Partitions/46`), then by name. A higher number is a later partition,
+    /// so a reader that keeps the first or the last copy of a record gets the
+    /// oldest or the newest.
     pub fn partition_stream_names(&self) -> Vec<String> {
-        self.stream_names()
+        let mut names: Vec<String> = self
+            .stream_names()
             .into_iter()
             .filter(|name| name.starts_with("Partitions/"))
-            .collect()
+            .collect();
+        names.sort_by(|a, b| {
+            let number = crate::partition_room_parameters::partition_number;
+            (number(a), a).cmp(&(number(b), b))
+        });
+        names
     }
 
     /// String records extracted from the `Partitions/NN` stream, memoised.
@@ -1280,11 +1290,10 @@ impl RevitFile {
         Ok(crate::formats::schema_classes(&decompressed))
     }
 
-    /// Find the version-specific `Partitions/NN` stream name.
+    /// The first `Partitions/NN` stream, in [`Self::partition_stream_names`]'
+    /// order: the lowest-numbered.
     pub fn partition_stream_name(&self) -> Option<String> {
-        self.stream_names()
-            .into_iter()
-            .find(|n| n.starts_with("Partitions/"))
+        self.partition_stream_names().into_iter().next()
     }
 
     /// Produce a one-shot summary of everything we can parse.
