@@ -384,17 +384,44 @@
           ],
           "type": "object"
         },
+        "SourcePartOut": {
+          "description": "One record a value source is made of.",
+          "properties": {
+            "element_id": {
+              "description": "The ElementId of the record's element: a sketch line, a type symbol, a run type.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "offset": {
+              "description": "Where the record starts in that partition inflated: its frame, or for a run type the place its id is stored.",
+              "format": "uint",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "stream": {
+              "description": "The partition the record is in, such as `Partitions/46`.",
+              "type": "string"
+            }
+          },
+          "required": [
+            "element_id",
+            "stream",
+            "offset"
+          ],
+          "type": "object"
+        },
         "ValueSourceOut": {
           "description": "The copy of an element's data a reader took a value from.",
           "properties": {
             "copies": {
-              "description": "In how many partitions the element's data named it, so how many copies there were to choose from.",
+              "description": "In how many partitions the element's data named it, so how many copies there were to choose from; for a profile's sketch lines (`parts`), how many lines it is made of; for a source of one record in `parts`, in how many partitions that record was held.",
               "format": "uint32",
               "minimum": 0,
               "type": "integer"
             },
             "differs_from_frame": {
-              "description": "True when the value is held in another partition than `provenance.stream`, the frame: the copy named is in another and, for `agreeing`, so is every copy that agrees with it.",
+              "description": "True when the value is held in another partition than `provenance.stream`, the frame: the copy named is in another and, for `agreeing`, so is every copy that agrees with it; for a source made of `parts`, none of them is in the frame's partition (a profile's sketch lines are also held there when the Sketch's curve list, `sketch_list`, has a copy there).",
               "type": "boolean"
             },
             "offset": {
@@ -415,12 +442,25 @@
               },
               "type": "array"
             },
+            "parts": {
+              "description": "The records the value is made of, where it is made of several or of another element's (a profile's sketch lines, a type symbol's frame), at most 64. Such a source has no `stream` or `offset` of its own.",
+              "items": {
+                "$ref": "#/$defs/SourcePartOut"
+              },
+              "type": "array"
+            },
+            "parts_left_out": {
+              "description": "How many more records than the 64 listed in `parts` the value is made of.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
             "reader": {
-              "description": "What was read: `bounded_line` (a wall's or beam's location line), `bounded_arc`, `instance_transform`, `saved_graphics`, `native_run`, `native_landing`, `selected_frame` for a body read from the frame itself, or `selected_frame_box` for a body whose box and placement are read from the frame and whose profile is read from another record (see `profile_source`), which no reader notes yet.",
+              "description": "What was read: `bounded_line` (a wall's or beam's location line), `bounded_arc`, `instance_transform`, `saved_graphics`, `native_run`, `native_landing`, `selected_frame` for a body read from the frame itself (or, with a `sketch_lines` or `type_section` source beside it, for its box and placement only, the profile being that source's), or `selected_frame_box` for a body whose box and placement are read from the frame and whose profile is read from a record no reader notes yet (see `profile_source`). Also `sketch_lines` and `sketch_list` (the frames of a profile's sketch lines and the Sketch's curve list), `sketch_line_data`, `type_section` (the type symbol's frame), `stair_run_lines`, `stair_run_ends`, `stair_run_type`, `stair_run_base_cuts`, `landing_lines`, `native_run_type` and `native_landing_type` (the run type's and the landing type's records, which give a Revit 2025 run's construction and a landing slab's thickness).",
               "type": "string"
             },
             "rule": {
-              "description": "How the copy was chosen: `selected` (the frame the exporter selected), `agreeing` (every copy holds the same value; the lowest-numbered partition's is named), `current` (the copies disagree; the current partition's) or `native` (a native record by member name, its current copy).",
+              "description": "How the copy was chosen: `selected` (the frame the exporter selected), `agreeing` (every copy holds the same value; the lowest-numbered partition's is named), `current` (the copies disagree; the current partition's), `native` (a native record by member name, its current copy) or `frame` (the last of a record's frames, as the reader's scan kept it, where the frames were not compared or do not agree). For a source made of `parts` the rule is how each record's copy was chosen.",
               "type": "string"
             },
             "stream": {
@@ -436,6 +476,8 @@
             "rule",
             "copies",
             "partitions",
+            "parts",
+            "parts_left_out",
             "differs_from_frame"
           ],
           "type": "object"
@@ -1472,6 +1514,33 @@
           ],
           "type": "object"
         },
+        "SourcePartOut": {
+          "description": "One record a value source is made of.",
+          "properties": {
+            "element_id": {
+              "description": "The ElementId of the record's element: a sketch line, a type symbol, a run type.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "offset": {
+              "description": "Where the record starts in that partition inflated: its frame, or for a run type the place its id is stored.",
+              "format": "uint",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "stream": {
+              "description": "The partition the record is in, such as `Partitions/46`.",
+              "type": "string"
+            }
+          },
+          "required": [
+            "element_id",
+            "stream",
+            "offset"
+          ],
+          "type": "object"
+        },
         "TypeOut": {
           "description": "The type object an element is typed by.",
           "properties": {
@@ -1496,13 +1565,13 @@
           "description": "The copy of an element's data a reader took a value from.",
           "properties": {
             "copies": {
-              "description": "In how many partitions the element's data named it, so how many copies there were to choose from.",
+              "description": "In how many partitions the element's data named it, so how many copies there were to choose from; for a profile's sketch lines (`parts`), how many lines it is made of; for a source of one record in `parts`, in how many partitions that record was held.",
               "format": "uint32",
               "minimum": 0,
               "type": "integer"
             },
             "differs_from_frame": {
-              "description": "True when the value is held in another partition than `provenance.stream`, the frame: the copy named is in another and, for `agreeing`, so is every copy that agrees with it.",
+              "description": "True when the value is held in another partition than `provenance.stream`, the frame: the copy named is in another and, for `agreeing`, so is every copy that agrees with it; for a source made of `parts`, none of them is in the frame's partition (a profile's sketch lines are also held there when the Sketch's curve list, `sketch_list`, has a copy there).",
               "type": "boolean"
             },
             "offset": {
@@ -1523,12 +1592,25 @@
               },
               "type": "array"
             },
+            "parts": {
+              "description": "The records the value is made of, where it is made of several or of another element's (a profile's sketch lines, a type symbol's frame), at most 64. Such a source has no `stream` or `offset` of its own.",
+              "items": {
+                "$ref": "#/$defs/SourcePartOut"
+              },
+              "type": "array"
+            },
+            "parts_left_out": {
+              "description": "How many more records than the 64 listed in `parts` the value is made of.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
             "reader": {
-              "description": "What was read: `bounded_line` (a wall's or beam's location line), `bounded_arc`, `instance_transform`, `saved_graphics`, `native_run`, `native_landing`, `selected_frame` for a body read from the frame itself, or `selected_frame_box` for a body whose box and placement are read from the frame and whose profile is read from another record (see `profile_source`), which no reader notes yet.",
+              "description": "What was read: `bounded_line` (a wall's or beam's location line), `bounded_arc`, `instance_transform`, `saved_graphics`, `native_run`, `native_landing`, `selected_frame` for a body read from the frame itself (or, with a `sketch_lines` or `type_section` source beside it, for its box and placement only, the profile being that source's), or `selected_frame_box` for a body whose box and placement are read from the frame and whose profile is read from a record no reader notes yet (see `profile_source`). Also `sketch_lines` and `sketch_list` (the frames of a profile's sketch lines and the Sketch's curve list), `sketch_line_data`, `type_section` (the type symbol's frame), `stair_run_lines`, `stair_run_ends`, `stair_run_type`, `stair_run_base_cuts`, `landing_lines`, `native_run_type` and `native_landing_type` (the run type's and the landing type's records, which give a Revit 2025 run's construction and a landing slab's thickness).",
               "type": "string"
             },
             "rule": {
-              "description": "How the copy was chosen: `selected` (the frame the exporter selected), `agreeing` (every copy holds the same value; the lowest-numbered partition's is named), `current` (the copies disagree; the current partition's) or `native` (a native record by member name, its current copy).",
+              "description": "How the copy was chosen: `selected` (the frame the exporter selected), `agreeing` (every copy holds the same value; the lowest-numbered partition's is named), `current` (the copies disagree; the current partition's), `native` (a native record by member name, its current copy) or `frame` (the last of a record's frames, as the reader's scan kept it, where the frames were not compared or do not agree). For a source made of `parts` the rule is how each record's copy was chosen.",
               "type": "string"
             },
             "stream": {
@@ -1544,6 +1626,8 @@
             "rule",
             "copies",
             "partitions",
+            "parts",
+            "parts_left_out",
             "differs_from_frame"
           ],
           "type": "object"
@@ -2367,17 +2451,44 @@
           ],
           "type": "object"
         },
+        "SourcePartOut": {
+          "description": "One record a value source is made of.",
+          "properties": {
+            "element_id": {
+              "description": "The ElementId of the record's element: a sketch line, a type symbol, a run type.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "offset": {
+              "description": "Where the record starts in that partition inflated: its frame, or for a run type the place its id is stored.",
+              "format": "uint",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "stream": {
+              "description": "The partition the record is in, such as `Partitions/46`.",
+              "type": "string"
+            }
+          },
+          "required": [
+            "element_id",
+            "stream",
+            "offset"
+          ],
+          "type": "object"
+        },
         "ValueSourceOut": {
           "description": "The copy of an element's data a reader took a value from.",
           "properties": {
             "copies": {
-              "description": "In how many partitions the element's data named it, so how many copies there were to choose from.",
+              "description": "In how many partitions the element's data named it, so how many copies there were to choose from; for a profile's sketch lines (`parts`), how many lines it is made of; for a source of one record in `parts`, in how many partitions that record was held.",
               "format": "uint32",
               "minimum": 0,
               "type": "integer"
             },
             "differs_from_frame": {
-              "description": "True when the value is held in another partition than `provenance.stream`, the frame: the copy named is in another and, for `agreeing`, so is every copy that agrees with it.",
+              "description": "True when the value is held in another partition than `provenance.stream`, the frame: the copy named is in another and, for `agreeing`, so is every copy that agrees with it; for a source made of `parts`, none of them is in the frame's partition (a profile's sketch lines are also held there when the Sketch's curve list, `sketch_list`, has a copy there).",
               "type": "boolean"
             },
             "offset": {
@@ -2398,12 +2509,25 @@
               },
               "type": "array"
             },
+            "parts": {
+              "description": "The records the value is made of, where it is made of several or of another element's (a profile's sketch lines, a type symbol's frame), at most 64. Such a source has no `stream` or `offset` of its own.",
+              "items": {
+                "$ref": "#/$defs/SourcePartOut"
+              },
+              "type": "array"
+            },
+            "parts_left_out": {
+              "description": "How many more records than the 64 listed in `parts` the value is made of.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
             "reader": {
-              "description": "What was read: `bounded_line` (a wall's or beam's location line), `bounded_arc`, `instance_transform`, `saved_graphics`, `native_run`, `native_landing`, `selected_frame` for a body read from the frame itself, or `selected_frame_box` for a body whose box and placement are read from the frame and whose profile is read from another record (see `profile_source`), which no reader notes yet.",
+              "description": "What was read: `bounded_line` (a wall's or beam's location line), `bounded_arc`, `instance_transform`, `saved_graphics`, `native_run`, `native_landing`, `selected_frame` for a body read from the frame itself (or, with a `sketch_lines` or `type_section` source beside it, for its box and placement only, the profile being that source's), or `selected_frame_box` for a body whose box and placement are read from the frame and whose profile is read from a record no reader notes yet (see `profile_source`). Also `sketch_lines` and `sketch_list` (the frames of a profile's sketch lines and the Sketch's curve list), `sketch_line_data`, `type_section` (the type symbol's frame), `stair_run_lines`, `stair_run_ends`, `stair_run_type`, `stair_run_base_cuts`, `landing_lines`, `native_run_type` and `native_landing_type` (the run type's and the landing type's records, which give a Revit 2025 run's construction and a landing slab's thickness).",
               "type": "string"
             },
             "rule": {
-              "description": "How the copy was chosen: `selected` (the frame the exporter selected), `agreeing` (every copy holds the same value; the lowest-numbered partition's is named), `current` (the copies disagree; the current partition's) or `native` (a native record by member name, its current copy).",
+              "description": "How the copy was chosen: `selected` (the frame the exporter selected), `agreeing` (every copy holds the same value; the lowest-numbered partition's is named), `current` (the copies disagree; the current partition's), `native` (a native record by member name, its current copy) or `frame` (the last of a record's frames, as the reader's scan kept it, where the frames were not compared or do not agree). For a source made of `parts` the rule is how each record's copy was chosen.",
               "type": "string"
             },
             "stream": {
@@ -2419,6 +2543,8 @@
             "rule",
             "copies",
             "partitions",
+            "parts",
+            "parts_left_out",
             "differs_from_frame"
           ],
           "type": "object"
@@ -2832,17 +2958,44 @@
           ],
           "type": "object"
         },
+        "SourcePartOut": {
+          "description": "One record a value source is made of.",
+          "properties": {
+            "element_id": {
+              "description": "The ElementId of the record's element: a sketch line, a type symbol, a run type.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "offset": {
+              "description": "Where the record starts in that partition inflated: its frame, or for a run type the place its id is stored.",
+              "format": "uint",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "stream": {
+              "description": "The partition the record is in, such as `Partitions/46`.",
+              "type": "string"
+            }
+          },
+          "required": [
+            "element_id",
+            "stream",
+            "offset"
+          ],
+          "type": "object"
+        },
         "ValueSourceOut": {
           "description": "The copy of an element's data a reader took a value from.",
           "properties": {
             "copies": {
-              "description": "In how many partitions the element's data named it, so how many copies there were to choose from.",
+              "description": "In how many partitions the element's data named it, so how many copies there were to choose from; for a profile's sketch lines (`parts`), how many lines it is made of; for a source of one record in `parts`, in how many partitions that record was held.",
               "format": "uint32",
               "minimum": 0,
               "type": "integer"
             },
             "differs_from_frame": {
-              "description": "True when the value is held in another partition than `provenance.stream`, the frame: the copy named is in another and, for `agreeing`, so is every copy that agrees with it.",
+              "description": "True when the value is held in another partition than `provenance.stream`, the frame: the copy named is in another and, for `agreeing`, so is every copy that agrees with it; for a source made of `parts`, none of them is in the frame's partition (a profile's sketch lines are also held there when the Sketch's curve list, `sketch_list`, has a copy there).",
               "type": "boolean"
             },
             "offset": {
@@ -2863,12 +3016,25 @@
               },
               "type": "array"
             },
+            "parts": {
+              "description": "The records the value is made of, where it is made of several or of another element's (a profile's sketch lines, a type symbol's frame), at most 64. Such a source has no `stream` or `offset` of its own.",
+              "items": {
+                "$ref": "#/$defs/SourcePartOut"
+              },
+              "type": "array"
+            },
+            "parts_left_out": {
+              "description": "How many more records than the 64 listed in `parts` the value is made of.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
             "reader": {
-              "description": "What was read: `bounded_line` (a wall's or beam's location line), `bounded_arc`, `instance_transform`, `saved_graphics`, `native_run`, `native_landing`, `selected_frame` for a body read from the frame itself, or `selected_frame_box` for a body whose box and placement are read from the frame and whose profile is read from another record (see `profile_source`), which no reader notes yet.",
+              "description": "What was read: `bounded_line` (a wall's or beam's location line), `bounded_arc`, `instance_transform`, `saved_graphics`, `native_run`, `native_landing`, `selected_frame` for a body read from the frame itself (or, with a `sketch_lines` or `type_section` source beside it, for its box and placement only, the profile being that source's), or `selected_frame_box` for a body whose box and placement are read from the frame and whose profile is read from a record no reader notes yet (see `profile_source`). Also `sketch_lines` and `sketch_list` (the frames of a profile's sketch lines and the Sketch's curve list), `sketch_line_data`, `type_section` (the type symbol's frame), `stair_run_lines`, `stair_run_ends`, `stair_run_type`, `stair_run_base_cuts`, `landing_lines`, `native_run_type` and `native_landing_type` (the run type's and the landing type's records, which give a Revit 2025 run's construction and a landing slab's thickness).",
               "type": "string"
             },
             "rule": {
-              "description": "How the copy was chosen: `selected` (the frame the exporter selected), `agreeing` (every copy holds the same value; the lowest-numbered partition's is named), `current` (the copies disagree; the current partition's) or `native` (a native record by member name, its current copy).",
+              "description": "How the copy was chosen: `selected` (the frame the exporter selected), `agreeing` (every copy holds the same value; the lowest-numbered partition's is named), `current` (the copies disagree; the current partition's), `native` (a native record by member name, its current copy) or `frame` (the last of a record's frames, as the reader's scan kept it, where the frames were not compared or do not agree). For a source made of `parts` the rule is how each record's copy was chosen.",
               "type": "string"
             },
             "stream": {
@@ -2884,6 +3050,8 @@
             "rule",
             "copies",
             "partitions",
+            "parts",
+            "parts_left_out",
             "differs_from_frame"
           ],
           "type": "object"

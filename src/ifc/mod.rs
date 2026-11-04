@@ -663,7 +663,7 @@ pub struct DecodedExportDiagnostics {
     /// ElementId is stored, its class tag and the class that names in the
     /// file's schema, and its native record. Present only when asked for
     /// (`rvt-ifc --element-provenance`,
-    /// [`ExportOptions::with_element_provenance`]): the table is about 155
+    /// [`ExportOptions::with_element_provenance`]): the table is about 159
     /// times the rest of the diagnostics on the BIM4LCA office, so without the
     /// option the field is absent and the diagnostics are the bytes they were
     /// before it existed. Not written in the IFC file; see
