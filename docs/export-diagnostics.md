@@ -334,7 +334,7 @@ not changed.
 |---|---|
 | `markers` | Places that hold the file's marker: the tags of `Outline`, four `ff` bytes and `ElementParents`. |
 | `declared_id` | Of the markers, those with a `u32` ElementId that `Global/ElemTable` declares 52 bytes before them and the tag of `ElementHeader` 8 bytes after it. Counted beside the steps: a placed instance whose frame lies inside its element's record gets that record's id (`id_from_enclosing_record`, RE-315). |
-| `frame_outside_stream`, `category_out_of_range`, `box_not_valid`, `no_declared_id` | Markers that gave no record, by where they stopped: a field of the frame lies outside the stream; the `BuiltInCategory` is out of range; the bounding box is not finite or ends before it starts; the frame has no declared id of its own and none from a record around it. |
+| `frame_outside_stream`, `category_out_of_range`, `box_not_valid`, `no_declared_id` | Markers that gave no record, by where they stopped: a field of the frame lies outside the stream; the `BuiltInCategory` is out of range; the bounding box is not finite or ends before it starts; the frame has no declared id of its own and none from a record around it (this one can include frames inside the documents of loaded families, RE-135, whose ids no ElemTable record declares: it is not a count of lost elements). |
 | `records` | Markers that gave a record. |
 | `not_placed_instances`, `placed_instances` | Records that are container members or type symbols, and those that pass the RE-21 instance rule. |
 | `without_volume`, `with_volume` | Placed instances whose box has no volume (Revit's export leaves them out, #309), and those whose box has. |
@@ -348,7 +348,10 @@ down to `selected`, which is the four ways it is left out plus `handed_to_export
 `written_to_model` then counts, in the IFC model, the elements of the last step,
 one for each ElementId; the walk or the export can set one aside after the
 recovery (below the minimum confidence, or an ElementId that another reader's
-element already held). When `written_to_model` is 0, `stopped_at` names the stage
+element already held); that difference is counted, not attributed to a stage,
+and `exported.building_elements` also holds the elements other readers write
+(Areas, ArcWalls, the parts of stairs and curtain walls), so `written_to_model`
+is checked to be no more than it, not equal to it. When `written_to_model` is 0, `stopped_at` names the stage
 the file's records stopped at: `elem_table_not_read` or
 `schema_has_no_element_marker` (the scan could not start), `no_markers`, the stop
 that took most of the markers, `no_placed_instances`, `without_volume`,

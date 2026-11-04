@@ -3901,17 +3901,17 @@ pub(crate) fn build_export_diagnostics_and_decisions(
     // #1389: on a Revit 2008 to 2023 file the layout above is not read, and
     // the counts of what became of each frame at its markers are the ones the
     // recovery of its records made as it decided.
-    let record_stages = rf.element_record_stages().cloned();
+    let mut record_stages = rf.element_record_stages().cloned();
     let element_record_stages = record_stages
         .as_ref()
         .map(|stages| element_record_stages::ElementRecordStages::build(stages, model));
-    if let Some(stages) = &record_stages {
+    if let Some(stages) = record_stages.as_mut() {
         record_left_out(
             &mut skipped,
             &mut decisions,
             element_record_stages::FRAME_STOPPED_REASON,
             None,
-            stages.stopped.clone(),
+            std::mem::take(&mut stages.stopped),
             ClassesBy::Class,
         );
     }

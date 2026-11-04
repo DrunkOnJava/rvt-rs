@@ -31,7 +31,9 @@ use rvt::ifc::element_record_stages::{
     ElementRecordStages, FRAME_STOP_STAGES, FRAME_STOPPED_REASON, StageCounts,
 };
 use rvt::ifc::{ExportOptions, run_export};
-use rvt::research::partition_element_records_2023::{record_marker, scan_records_counted};
+use rvt::research::partition_element_records_2023::{
+    RecordSpan, enclosing_span, record_marker, record_spans, scan_records_counted,
+};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 
@@ -104,7 +106,8 @@ fn check_report(name: &str, stages: &ElementRecordStages) {
         stages.total.unbalanced(),
         stages.total
     );
-    let mut summed: BTreeMap<String, u64> = BTreeMap::new();
+    // A file whose scan could not start has no stream: its streams sum to zero.
+    let mut summed = fields(&StageCounts::default());
     for (stream, counts) in &stages.streams {
         assert!(
             counts.unbalanced().is_empty(),
@@ -227,9 +230,13 @@ fn einhoven_stage_counts_add_up_and_equal_the_bytes() {
     );
 
     // Each entry points at the bytes it says: a marker 52 bytes on from a frame
-    // that stopped before its record, the record's own ElementId for a frame
-    // with no volume.
-    let (marker, _) = record_marker(&mut rf).expect("marker");
+    // that stopped before its record, and for a frame with no volume its
+    // ElementId at the offset or, for a frame inside its element's record (the
+    // second prologue, RE-315), that record's.
+    let (marker, header_tag) = record_marker(&mut rf).expect("marker");
+    let table = rvt::elem_table::parse_records(&mut rf).expect("ElemTable");
+    let declared = rvt::elem_table::declared_ids(&table);
+    let mut spans_of: BTreeMap<String, Vec<RecordSpan>> = BTreeMap::new();
     let mut read = 0usize;
     for entry in log
         .entries
@@ -253,10 +260,16 @@ fn einhoven_stage_counts_add_up_and_equal_the_bytes() {
             );
         }
         if let Some(id) = entry.element_id {
-            assert_eq!(
-                u32_at(buf, offset),
-                Some(id),
-                "Einhoven: {stream}:{offset} does not open with ElementId {id}"
+            let opens_with_id = u32_at(buf, offset) == Some(id);
+            let in_its_record = !opens_with_id && {
+                let spans = spans_of
+                    .entry(stream.to_string())
+                    .or_insert_with(|| record_spans(buf, header_tag, &declared));
+                enclosing_span(spans, offset).is_some_and(|span| span.element_id == id)
+            };
+            assert!(
+                opens_with_id || in_its_record,
+                "Einhoven: {stream}:{offset} neither opens with ElementId {id} nor sits in its record"
             );
         }
         assert!(FRAME_STOP_STAGES.contains(&class), "stage {class}");

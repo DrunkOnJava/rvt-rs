@@ -94,7 +94,9 @@ pub struct StageCounts {
     #[serde(default)]
     pub box_not_valid: usize,
     /// Markers stopped because the frame has no declared ElementId of its own and
-    /// none from a record around it.
+    /// none from a record around it. It can include frames inside the documents
+    /// of loaded families (RE-135), whose ids no ElemTable record declares: a
+    /// count here is not a count of lost elements.
     #[serde(default)]
     pub no_declared_id: usize,
     /// Markers that gave a record.

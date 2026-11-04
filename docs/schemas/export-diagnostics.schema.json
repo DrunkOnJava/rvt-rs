@@ -33,7 +33,7 @@
         "frame_outside_stream": { "type": "integer", "minimum": 0, "description": "Markers stopped because a field of their frame lies outside the stream." },
         "category_out_of_range": { "type": "integer", "minimum": 0, "description": "Markers stopped because their BuiltInCategory is outside the range of Revit's categories." },
         "box_not_valid": { "type": "integer", "minimum": 0, "description": "Markers stopped because their bounding box is not finite or ends before it starts." },
-        "no_declared_id": { "type": "integer", "minimum": 0, "description": "Markers stopped because the frame has no declared ElementId of its own and none from a record around it." },
+        "no_declared_id": { "type": "integer", "minimum": 0, "description": "Markers stopped because the frame has no declared ElementId of its own and none from a record around it. It can include frames inside the documents of loaded families (RE-135), whose ids no ElemTable record declares: a count here is not a count of lost elements." },
         "records": { "type": "integer", "minimum": 0, "description": "Markers that gave a record." },
         "id_from_enclosing_record": { "type": "integer", "minimum": 0, "description": "Of the records, those whose ElementId is the one of the record around the frame (the second prologue, RE-315)." },
         "not_placed_instances": { "type": "integer", "minimum": 0, "description": "Records that are not placed instances: container members and type symbols." },
