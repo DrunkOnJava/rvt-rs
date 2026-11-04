@@ -22,15 +22,27 @@ the same arithmetic wherever a body runs, so the output does not depend on
 it. Bodies only exist in an export made with `--saved-meshes`; without it
 this prints none.
 
-With RVT_SCORER_FINE_MESH=1 (#1355, RE-331) the scored bodies are meshed a
-second time in both files at one equal, fine deflection (fine_mesh.py), scored
-the same way, and printed after everything above as `fine` rows: per class the
-same columns beside "ref on ours" within 0.0015 and 0.002 ft and both
-directions within 1e-5 ft (two tessellations of one surface coincide), the
-median volume ratio and the largest "ref on ours", then per class how many
-bodies hold "ref on ours" and "0.001 ft" in the default tessellation, in the
-fine one, in both or in neither, then the bodies that miss in the fine one.
-The output without it is as it was.
+The bar (#1365, RE-331 section 8; Griffin, #1355): a body that both files
+write as true curves (true_curves.py: an extrusion of a circle or of an outline
+with an arc, and the like, and no mesh) is meshed again in both at one equal,
+fine deflection (fine_mesh.py) and its verdict comes from that tessellation,
+because IfcOpenShell's default one cuts the forms one circle takes into chords
+that need not coincide (RE-327 section 11); every other body keeps the default
+tessellation, so a saved mesh, which is triangles on rvt-rs's side, never
+changes. When any body is decided by the fine tessellation the class table
+gains a last column, how many of its bodies were, a line says how many in all,
+and `fine` rows (below) show those bodies in both tessellations; when none is,
+the output is what it was before #1365.
+
+With RVT_SCORER_FINE_MESH=1 (#1355, RE-331) every scored body is also meshed a
+second time in both files at the fine deflection, scored the same way, and
+printed after everything above as `fine` rows: per class the same columns
+beside "ref on ours" within 0.0015 and 0.002 ft and both directions within 1e-5
+ft (two tessellations of one surface coincide), the median volume ratio and the
+largest "ref on ours", then per class how many bodies hold "ref on ours" and
+"0.001 ft" in the default tessellation, in the fine one, in both or in neither,
+then the bodies that miss in the fine one. The verdicts of the class table are
+those of the bar above either way.
 
 Needs IfcOpenShell and numpy.
 
@@ -53,6 +65,7 @@ import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import fine_mesh  # noqa: E402
+import true_curves  # noqa: E402
 from ifc_common import mesh_parts, site_frame  # noqa: E402
 from roof_bodies_vs_ifc import shapes_of  # noqa: E402
 from saved_meshes_vs_ifc import body_sources  # noqa: E402
@@ -65,6 +78,10 @@ SOURCE = "saved_graphics_mesh"
 DESCRIBE = {}
 DESCRIBED = {}
 RESULT = {}
+# role -> Tag -> whether the body is made of true curves (true_curves.py), for the
+# bodies `meshes` was asked to test; the fine tessellation decides a body both files
+# write so. RESULT["decided_fine"] is the set of Tags it decided.
+CURVES = {}
 PAIR_BUDGET = 1_000_000
 # surface_distance measures every pair up to this many, and beyond it prunes.
 EXHAUSTIVE = 200_000
@@ -81,8 +98,10 @@ VERTEX_CAP = 400
 POOL_FROM = 16
 
 
-def meshes(path, tags=None, source=None, model=None, role=None, settings=None):
-    """Tag -> (class, ObjectType, triangles (T, 3, 3) in internal feet)."""
+def meshes(path, tags=None, source=None, model=None, role=None, settings=None, detect=None):
+    """Tag -> (class, ObjectType, triangles (T, 3, 3) in internal feet). With `detect` (True for
+    every body, or the Tags to test) and a `role`, CURVES[role] says which bodies are made of
+    true curves."""
     if model is None:
         model = ifcopenshell.open(path)
     frame = site_frame(model)
@@ -116,6 +135,9 @@ def meshes(path, tags=None, source=None, model=None, role=None, settings=None):
         out[element.Tag] = (element.is_a(), element.ObjectType or "", triangles)
         if role in DESCRIBE:
             DESCRIBED.setdefault(role, {})[element.Tag] = DESCRIBE[role](element)
+        if role is not None and detect and (detect is True or element.Tag in detect):
+            flags = CURVES.setdefault(role, {})
+            flags[element.Tag] = flags.get(element.Tag, True) and true_curves.is_true_curve_body(element)
     return out
 
 
@@ -388,18 +410,26 @@ def held(default, fine):
     return "both" if default and fine else "default only" if default else "fine only" if fine else "neither"
 
 
-def fine_block(ours_fine, ref_fine, ours, ref, default_scores):
-    """Score the bodies meshed in both files at the fine deflection and print the
-    `fine` rows beside the default ones (#1355). A body whose two meshes are the
-    triangles of the default ones (a faceted body, which the deflection does not
-    touch) keeps its default scores: the same triangles give the same scores.
-    Returns the fine scores like `scored`."""
-    tags = sorted(set(ours_fine) & set(ref_fine) & set(default_scores), key=lambda t: (len(t), t))
+def score_fine(pool, ours_fine, ref_fine, ours, ref, default_scores):
+    """(Tag -> scores in the fine tessellation, the Tags whose meshes differ from the default
+    ones) for the bodies of `pool` meshed finely in both files. A body whose two meshes are
+    the triangles of the default ones (a faceted body, which the deflection does not touch)
+    keeps its default scores: the same triangles give the same scores."""
+    tags = sorted(set(pool) & set(ours_fine) & set(ref_fine) & set(default_scores), key=lambda t: (len(t), t))
     moved = [
         t
         for t in tags
         if not (np.array_equal(ours_fine[t][2], ours[t][2]) and np.array_equal(ref_fine[t][2], ref[t][2]))
     ]
+    fine_scores = {t: default_scores[t] for t in tags}
+    fine_scores.update(zip(moved, score_all(ours_fine, ref_fine, moved)))
+    return fine_scores, set(moved)
+
+
+def fine_block(fine_scores, moved, ref, default_scores):
+    """Print the `fine` rows of the bodies scored in the fine tessellation beside the default
+    ones (#1355, #1365). Returns the fine scores like `scored`."""
+    tags = sorted(fine_scores, key=lambda t: (len(t), t))
     print()
     print(
         f"fine tessellation: {fine_mesh.LABEL}, both files; {len(tags)} of {len(default_scores)} bodies meshed in both,"
@@ -407,14 +437,11 @@ def fine_block(ours_fine, ref_fine, ours, ref, default_scores):
     )
     if not tags:
         return []
-    fine_scores = {t: default_scores[t] for t in tags}
-    fine_scores.update(zip(moved, score_all(ours_fine, ref_fine, moved)))
     rows = collections.defaultdict(collections.Counter)
     ratios = collections.defaultdict(list)
     largest = collections.defaultdict(float)
     changes = collections.defaultdict(collections.Counter)
     scored = []
-    differ = set(moved)
     for tag in tags:
         ratio, to_ours, to_ref = fine_scores[tag]
         cls, object_type, _ = ref[tag]
@@ -424,7 +451,7 @@ def fine_block(ours_fine, ref_fine, ours, ref, default_scores):
         for key in (cls, "total"):
             row = rows[key]
             row["n"] += 1
-            row["differ"] += tag in differ
+            row["differ"] += tag in moved
             row["vol 1%"] += abs(ratio - 1) <= 0.01
             row["vol 0.01%"] += abs(ratio - 1) <= 1e-4
             row["0.01 ft"] += far <= 0.01
@@ -486,27 +513,44 @@ def main():
         chosen.update(tags[::step])
         if step > 1:
             print(f"{cls}: {len(tags)} bodies, every {step}th scored")
-    fine = fine_mesh.enabled()
-    ours = meshes(sys.argv[1], tags=chosen, source=SOURCE, model=model, role="ours")
-    ours_fine = meshes(sys.argv[1], tags=set(ours), source=SOURCE, model=model, settings=fine_mesh.settings()) if fine else {}
+    study = fine_mesh.enabled()
+    CURVES.clear()
+    ours = meshes(sys.argv[1], tags=chosen, source=SOURCE, model=model, role="ours", detect=True)
+    curve_ours = {t for t, flag in CURVES.get("ours", {}).items() if flag}
+    ours_fine = {}
+    if study or curve_ours:
+        ours_fine = meshes(
+            sys.argv[1], tags=set(ours) if study else curve_ours, source=SOURCE, model=model, settings=fine_mesh.settings()
+        )
     del model
-    ref_model = ifcopenshell.open(sys.argv[2]) if fine else None
-    ref = meshes(sys.argv[2], tags=set(ours), model=ref_model, role="ref")
-    ref_fine = meshes(sys.argv[2], tags=set(ours), model=ref_model, settings=fine_mesh.settings()) if fine else {}
+    ref_model = ifcopenshell.open(sys.argv[2]) if (study or curve_ours) else None
+    ref = meshes(sys.argv[2], tags=set(ours), model=ref_model, role="ref", detect=curve_ours)
+    curve_set = {t for t in curve_ours if CURVES.get("ref", {}).get(t)}
+    ref_fine = {}
+    if study or curve_set:
+        ref_fine = meshes(sys.argv[2], tags=set(ours) if study else curve_set, model=ref_model, settings=fine_mesh.settings())
     del ref_model
     print(f"{SOURCE} bodies scored: {len(ours)}; in Revit's export {len(ref)}")
+    tags = sorted(set(ours) & set(ref), key=lambda t: (len(t), t))
+    default_scores = dict(zip(tags, score_all(ours, ref, tags)))
+    fine_scores, fine_moved = score_fine(
+        set(ours_fine) & set(ref_fine) if study else curve_set, ours_fine, ref_fine, ours, ref, default_scores
+    )
+    decided = {t for t in curve_set if t in fine_scores}
+    scores = {t: fine_scores[t] if t in decided else default_scores[t] for t in tags}
+    if decided:
+        print(f"decided by the fine tessellation (both files write true curves): {len(decided)} of {len(tags)} bodies")
     rows = collections.defaultdict(lambda: collections.defaultdict(collections.Counter))
     ratios = collections.defaultdict(list)
     scored = []
-    default_scores = {}
-    tags = sorted(set(ours) & set(ref), key=lambda t: (len(t), t))
-    for tag, (ratio, to_ours, to_ref) in zip(tags, score_all(ours, ref, tags)):
+    for tag in tags:
+        ratio, to_ours, to_ref = scores[tag]
         cls, object_type, _ = ref[tag]
         far = max(to_ours, to_ref)
-        default_scores[tag] = (ratio, to_ours, to_ref)
         for key in ("", object_type) if object_type else ("",):
             row = rows[cls][key]
             row["n"] += 1
+            row["fine"] += tag in decided
             row["vol 1%"] += abs(ratio - 1) <= 0.01
             row["vol 0.01%"] += abs(ratio - 1) <= 1e-4
             row["0.01 ft"] += far <= 0.01
@@ -515,28 +559,30 @@ def main():
         ratios[cls].append(ratio)
         scored.append((far, tag, cls, object_type, ratio, to_ours, to_ref))
     RESULT["scored"] = scored
+    RESULT["decided_fine"] = decided
+    last = f"  {'decided by fine':>15}" if decided else ""
     print(
         f"{'class':<28} {'n':>6} {'vol 1%':>7} {'vol .01%':>8} {'0.01 ft':>8} {'0.001 ft':>8}"
-        f" {'ref on ours':>11}  median volume ratio"
+        f" {'ref on ours':>11}  median volume ratio" + last
     )
     for cls in sorted(rows, key=lambda c: -rows[c][""]["n"]):
         row = rows[cls][""]
         print(
             f"{cls:<28} {row['n']:>6} {row['vol 1%']:>7} {row['vol 0.01%']:>8} {row['0.01 ft']:>8} {row['0.001 ft']:>8}"
-            f" {row['ref on ours']:>11}  {statistics.median(ratios[cls]):.4f}"
+            f" {row['ref on ours']:>11}  {statistics.median(ratios[cls]):.4f}" + (f"  {row['fine']:>15}" if decided else "")
         )
         types = sorted((k for k in rows[cls] if k), key=lambda k: -rows[cls][k]["n"])
         for key in types[:6]:
             t = rows[cls][key]
             print(
                 f"    {t['n']:>5} {t['vol 1%']:>7} {t['vol 0.01%']:>8} {t['0.01 ft']:>8} {t['0.001 ft']:>8}"
-                f" {t['ref on ours']:>11}  {key}"
+                f" {t['ref on ours']:>11}  " + (f"{'':>6}  {t['fine']:>15}  " if decided else "") + key
             )
     scored.sort(reverse=True)
     for far, tag, cls, object_type, ratio, to_ours, to_ref in scored[:15]:
         print(
             f"  {tag} {cls} '{object_type}': volume ratio {ratio:.4f}, Revit's vertices to rvt-rs's surface"
-            f" {to_ours:.4g} ft, rvt-rs's to Revit's {to_ref:.4g} ft"
+            f" {to_ours:.4g} ft, rvt-rs's to Revit's {to_ref:.4g} ft" + (" (fine tessellation)" if tag in decided else "")
         )
     # Bodies whose surfaces agree but whose enclosed volumes do not, which
     # the distance ranking above does not reach.
@@ -544,14 +590,19 @@ def main():
     for _, (far, tag, cls, object_type, ratio, to_ours, to_ref) in outliers[-15:]:
         print(
             f"  volume {tag} {cls} '{object_type}': volume ratio {ratio:.4f},"
-            f" farthest vertex {far:.4g} ft"
+            f" farthest vertex {far:.4g} ft" + (" (fine tessellation)" if tag in decided else "")
         )
-        for side, triangles in (("rvt-rs", ours[tag][2]), ("Revit", ref[tag][2])):
+        for side, triangles in (
+            ("rvt-rs", (ours_fine if tag in decided else ours)[tag][2]),
+            ("Revit", (ref_fine if tag in decided else ref)[tag][2]),
+        ):
             shells = shell_volumes(triangles)
             listed = " ".join(f"{v:.4f}" for v in shells[:8])
             print(f"    {side} shells {len(shells)}, signed volumes (cubic ft): {listed}")
-    if fine:
-        RESULT["scored_fine"] = fine_block(ours_fine, ref_fine, ours, ref, default_scores)
+    if study:
+        RESULT["scored_fine"] = fine_block(fine_scores, fine_moved, ref, default_scores)
+    elif decided:
+        fine_block(fine_scores, fine_moved, ref, default_scores)
     return 0
 
 

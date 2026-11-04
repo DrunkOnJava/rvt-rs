@@ -55,7 +55,7 @@ Exact where the element's data is decoded, the record's box elsewhere;
 the diagnostics count each ([#409](https://github.com/DrunkOnJava/rvt-rs/issues/409)).
 Doors and windows are drawn by default from the mesh Revit saved, where all of it decodes (the maintainer,
 2026-10-29);
-other loadable families are boxes unless `--saved-meshes` draws theirs, which is Revit's own shape where it is complete (every vertex within 0.001 ft on all 138 of Core Interior's doors and windows and 1,294 of 1,709 bodies scored on the BIM4LCA office) but part of the body elsewhere (RE-78).
+other loadable families are boxes unless `--saved-meshes` draws theirs, which is Revit's own shape where it is complete (every vertex within 0.001 ft on all 138 of Core Interior's doors and windows and 1,294 of 1,709 bodies scored on the BIM4LCA office, in IfcOpenShell's default tessellation, where a saved mesh is judged; a body both files write as true curves is judged in the fine one, RE-331 section 8) but part of the body elsewhere (RE-78).
 A face the saved graphics do not decode marks a partial mesh, which keeps its box since RE-224: on the office 1,294 of the 1,352 bodies then drawn are exact.
 Some partial meshes record nothing, so every class but doors and windows stays opt-in;
 on the office 221 of 269 doors keep their box, their saved graphics not decoding whole (Measure run 40932136360).

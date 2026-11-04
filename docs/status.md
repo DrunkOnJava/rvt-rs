@@ -1130,8 +1130,12 @@ Revit's vertices within 0.001 ft of their surface and one did not: Revit 26.2's
 IFC2X3 export draws that circle (0.2292 ft) as an `IfcCircleProfileDef`, which
 IfcOpenShell cuts into 27 chords, and two half arcs of it come out as 28, so
 no vertex coincides (a count mismatch, reproduced and measured in
-`reports/element-framing/RE-327-family-extrusions.md` §11). Revit 24.0.5's
-IFC4 export of the office writes a circle as half arcs. IfcOpenShell's default
+`reports/element-framing/RE-327-family-extrusions.md` §11). That count
+mismatch is the default tessellation's, not a difference of shape: the bar for
+a body both files write as true curves is the fine tessellation (RE-331 §8,
+the maintainer's decision on #1355): all 251 hold, 187 decided by the fine
+tessellation and 64 by the default one (Measure run 41871114299). Revit
+24.0.5's IFC4 export of the office writes a circle as half arcs. IfcOpenShell's default
 tessellation of the two forms of a circle has the same chords up to 0.164 ft
 and at 0.3281 ft and one chord more or fewer at 0.2292, 0.4921, 0.9843 and
 1.9685 ft; over 0.137 ft a chord's own deviation passes the 0.001 ft bar, so a
@@ -1229,7 +1233,8 @@ prints it from any installed build.
   it does not.
 - **v0.12.2** (2026-11-03): in the default export it draws more doors from the meshes Revit
   saved for them (the BIM4LCA office as built 269, against 48 with 0.12.1,
-  265 exact to 0.001 ft against Revit's export), and it no longer calls a
+  265 exact to 0.001 ft against Revit's export, in IfcOpenShell's default
+  tessellation), and it no longer calls a
   Revit 2008 to 2014 file an unsupported version in the viewer (#1247,
   #1266). With `--saved-meshes` it draws more bodies, not all of them
   Revit's (RE1 Plumbing's new pipe fittings are 1.44 to 1.47 of Revit's
