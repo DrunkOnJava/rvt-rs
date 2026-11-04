@@ -4415,8 +4415,10 @@ pub const SPACE_OUTLINE_AREA_BOUNDARY: &str = "area_boundary";
 /// [`SPACE_OUTLINE_AREA_BOUNDARY`] is, whose outline runs along a stretch of a
 /// boundary line carried on past the extent its record gives, or along a
 /// connector between two parallel lines that stop at the same place (RE-330).
-/// The only external check of those Areas is an IFC2X3 export by a third-party
-/// build of Revit's 2021 exporter, of Autodesk's `rac_advanced` project.
+/// The only external check of those Areas is an IFC2X3 export of Autodesk's
+/// `rac_advanced` project from the three.js repository, by a build of Revit
+/// 2021's exporter whose string ends "IU alternativa 21.0.0.383" (publisher not
+/// established), showing the project's 2015 to 2020 state.
 pub const SPACE_OUTLINE_AREA_BOUNDARY_JOINED: &str = "area_boundary_joined";
 
 /// `BodyHeightSource` of an Area's body: from its Level up to the Level above

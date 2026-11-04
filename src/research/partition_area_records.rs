@@ -57,7 +57,8 @@
 //!   before, and says why in [`AREA_BODY_REFUSAL_FIELD`].
 //! - Lines that stop short of the line they join are carried on to it, and
 //!   parallel lines that stop at the same place a wall's thickness apart are
-//!   joined by a connector, where their records name each other (RE-330). A
+//!   joined by a connector, where their records name each other and the gap is
+//!   at most 1 ft (RE-330; the premise is inferred from one IFC2X3 export). A
 //!   line that is not a straight line along an axis (its record holds its box
 //!   and no more) is left out of the arrangement, and so is an Area whose
 //!   region its box touches, or a line that names it bounds.

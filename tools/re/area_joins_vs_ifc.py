@@ -10,15 +10,17 @@ point. This reads those, applies the rule `partition_area_boundaries` and
 Area with the profile of its `IfcSpace` in a Revit export, found by GlobalId:
 
 1. a line along a plan axis is read as its box; a line that is not (a slanted
-   line, an arc: its record holds only its box) is left out, with the lines
-   that name it, and an Area whose region's box comes within 0.01 ft of one
-   is refused;
+   line, an arc, a line whose box is wider than the line: its record holds only
+   its box) is left out, with the lines that name it, and an Area whose
+   region's box comes within 0.01 ft of one is refused;
 2. an end that lies on no other line is carried on, along its line, to the
-   farthest perpendicular line that names it and that it names, whatever its
-   distance;
-3. an end that cannot be carried on is joined to the free end of a parallel
-   line that names it and that it names, at the same place along the lines, by
-   a connector, when each is the other's only such end;
+   farthest perpendicular line within 1 ft that names it and that it names,
+   when that line, once carried on itself, spans the place reached; else the
+   end stays free;
+3. an end that had no such line is joined to the free end of a parallel line
+   within 1 ft that names it and that it names, at the same place along the
+   lines and running away on the other side, by a connector, when each is the
+   other's only such end;
 4. a line whose end is still free then bounds nothing; the Area is the smallest
    loop round its point, less the loops directly inside it.
 
@@ -51,6 +53,8 @@ from area_boundaries_vs_ifc import elevation_of, profile_points, read_probe, sto
 from ifc_common import site_frame
 
 TOLERANCE = 1e-5
+MAX_CARRY = 1.0
+MAX_CONNECTOR = 1.0
 SNAP = 1e-4
 MARGIN = 0.01
 SAME_REGION = 1e-3
@@ -111,6 +115,7 @@ def mutual(a, b):
 def resolve(readable):
     """The segments of the readable lines once their free ends are carried on
     and joined."""
+    by_id = {line.id: line for line in readable}
     ends = {}
     for line in readable:
         for high in (0, 1):
@@ -126,11 +131,28 @@ def resolve(readable):
             if other.axis == line.axis or not mutual(line, other):
                 continue
             distance = (other.fixed() - here) * outward
-            if distance >= -TOLERANCE and (best is None or distance > best[0]):
-                best = (distance, other.fixed())
+            if distance < -TOLERANCE or distance > MAX_CARRY:
+                continue
+            if best is None or distance > best[0]:
+                best = (distance, other)
         if best:
-            reach[(line_id, high)] = best[1]
-    bare = {k: v for k, v in ends.items() if k not in reach}
+            reach[(line_id, high)] = (best[1].id, best[1].fixed())
+    claimed = set(reach)
+    dropped = True
+    while dropped:
+        dropped = False
+        for key in list(reach):
+            target_id, _ = reach[key]
+            across = by_id[key[0]].fixed()
+            low, high = by_id[target_id].ends()
+            if (target_id, 0) in reach:
+                low = min(low, reach[(target_id, 0)][1])
+            if (target_id, 1) in reach:
+                high = max(high, reach[(target_id, 1)][1])
+            if across < low - TOLERANCE or across > high + TOLERANCE:
+                del reach[key]
+                dropped = True
+    bare = {k: v for k, v in ends.items() if k not in claimed}
 
     def partners(key):
         line, _ = bare[key]
@@ -140,7 +162,8 @@ def resolve(readable):
             for k, (other, _) in bare.items()
             if other is not line
             and other.axis == line.axis
-            and abs(other.fixed() - line.fixed()) > TOLERANCE
+            and TOLERANCE < abs(other.fixed() - line.fixed()) <= MAX_CONNECTOR
+            and k[1] != key[1]
             and mutual(line, other)
             and abs(other.ends()[k[1]] - here) <= TOLERANCE
         ]
@@ -160,8 +183,8 @@ def resolve(readable):
     segments = []
     for line in readable:
         lo, hi = line.ends()
-        lo = reach.get((line.id, 0), lo)
-        hi = reach.get((line.id, 1), hi)
+        lo = reach.get((line.id, 0), (None, lo))[1]
+        hi = reach.get((line.id, 1), (None, hi))[1]
         segments.append((point_on(line, min(lo, line.ends()[0])), point_on(line, max(hi, line.ends()[1]))))
     return segments + connectors
 
