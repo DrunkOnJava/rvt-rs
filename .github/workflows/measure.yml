@@ -150,6 +150,14 @@ on:
         description: Only these steps on the models, tools/re scorers and info, gltf, schema, witness (e.g. "qtos_vs_ifc witness"; a tools/re script in no scorer list runs as an IFC scorer), none for none, empty for all; every model is still exported and hashed
         required: false
         default: ""
+      benchmark_shards:
+        description: Temporary benchmark layout (filtered and paired runs stay together)
+        type: choice
+        options:
+          - "4"
+          - "2"
+          - "1"
+        default: "4"
   # A change to the measurement itself measures its own PR against main.
   pull_request:
     paths:
@@ -229,6 +237,7 @@ jobs:
           HOLDOUT: ${{ inputs.holdout && 'true' || 'false' }}
           BIMCOLLAB: ${{ inputs.bimcollab && 'true' || 'false' }}
           FAMILIES: ${{ (inputs.families || github.event_name == 'pull_request') && 'true' || 'false' }}
+          BENCHMARK_SHARDS: ${{ inputs.benchmark_shards || '4' }}
         run: |
           python3 - <<'PY' >> "$GITHUB_OUTPUT"
           import json, os
@@ -249,6 +258,14 @@ jobs:
           if e["MODELS"] or e["YEARS"] or e["PAIR"]:
               shards = [shard("all", models=e["MODELS"], samples=flag("SAMPLES"),
                               years=e["YEARS"], **rest)]
+          elif e["BENCHMARK_SHARDS"] == "1":
+              shards = [shard("all", samples=flag("SAMPLES"), **rest)]
+          elif e["BENCHMARK_SHARDS"] == "2" and flag("NORDIC"):
+              shards = [shard("office-samples", models=offices["office-as-built"],
+                              samples=flag("SAMPLES"), nordic=True),
+                        shard("rest", skip=offices["office-as-built"], **rest)]
+          elif e["BENCHMARK_SHARDS"] == "2" and flag("SAMPLES"):
+              shards = [shard("samples", models="-", samples=True), shard("rest", **rest)]
           else:
               shards = []
               if flag("NORDIC"):
@@ -420,6 +437,18 @@ jobs:
         run: |
           # shellcheck disable=SC2086 # SAMPLE_YEARS is the first and last year.
           tools/fetch-autodesk-samples.sh _samples $SAMPLE_YEARS
+      - name: Record benchmark inputs and tools
+        env:
+          SHARD: ${{ matrix.shard }}
+        run: |
+          mkdir -p results
+          python3 tools/ci/measure-benchmark-manifest.py inputs . "results/inputs-$SHARD.json"
+          {
+            git rev-parse HEAD
+            rustc --version --verbose
+            python --version
+            python -c 'import ifcopenshell; print("IfcOpenShell", ifcopenshell.version)'
+          } > "results/toolchain-$SHARD.txt"
       - name: Measure
         env:
           PROBE: ${{ inputs.probe }}
@@ -449,6 +478,10 @@ jobs:
           grep -m1 'model name' /proc/cpuinfo | cut -d: -f2- | xargs > "results/runner-$SHARD.txt"
       # The held-out models and BIMcollab's carry no licence: only their
       # counts leave the runner (RE-252).
+      - name: Record benchmark coverage
+        env:
+          SHARD: ${{ matrix.shard }}
+        run: python3 tools/ci/measure-benchmark-manifest.py coverage results "results/coverage-$SHARD.json"
       - name: Keep only the unlicensed models' counts
         shell: bash
         run: tools/ci/scrub-holdout-results.sh results
