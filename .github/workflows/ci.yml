@@ -34,10 +34,15 @@ on:
 # back-to-back pushes do not burn runner-minutes on stale matrices. A run
 # on main is never cancelled: two merges in a row used to cancel the first
 # one's run, and that commit never got a full result. The group key is per
-# ref, so a pull request and main never cancel each other.
+# ref and per kind (a pull request's fast and full runs, called from
+# ci-pr.yml, share the caller's ref, and a called workflow's group lives in
+# the caller's namespace), so a pull request and main never cancel each
+# other, and neither do a draft's fast run and its full run once ready. Only
+# a new push cancels: marking a draft ready, or converting it back, on the
+# same commit waits for the run in flight (#1237).
 concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  group: ci-${{ github.ref }}-${{ inputs.fast && 'fast' || 'full' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' && github.event.action == 'synchronize' }}
 
 # Least-privilege at the workflow level. No CI job here modifies the
 # repo, opens issues, comments on PRs, or otherwise needs write
