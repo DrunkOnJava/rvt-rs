@@ -484,6 +484,7 @@ jobs:
         run: |
           python3 tools/ci/measure-benchmark-manifest.py coverage results "results/coverage-$SHARD.json"
           python3 tools/ci/measure-protected-errors.py results "results/error-counts-$SHARD.json"
+          python3 tools/ci/measure-protected-summary.py results "results/scorer-counts-$SHARD.json"
       - name: Keep only the unlicensed models' counts
         shell: bash
         run: tools/ci/scrub-holdout-results.sh results

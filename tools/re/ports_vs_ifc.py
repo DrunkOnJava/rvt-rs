@@ -63,7 +63,7 @@ def read(path):
     (ElementId, connector index), and those of PORT_ATTRIBUTES the file's
     schema gives a port."""
     model = ifcopenshell.open(path)
-    declaration = ifcopenshell.ifcopenshell_wrapper.schema_by_name(model.schema).declaration_by_name(
+    declaration = ifcopenshell.ifcopenshell_wrapper.schema_by_name(model.schema_identifier).declaration_by_name(
         "IfcDistributionPort"
     )
     names = {attribute.name() for attribute in declaration.all_attributes()}

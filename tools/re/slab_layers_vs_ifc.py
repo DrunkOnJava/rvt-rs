@@ -113,7 +113,7 @@ def main():
     colours = collections.Counter()
     errors = []
     by_tag = {}
-    for element in f.by_type("IfcBuildingElement"):
+    for element in f.by_type("IfcBuiltElement" if f.schema == "IFC4X3" else "IfcBuildingElement"):
         if element.Tag and element.Tag.isdigit():
             by_tag.setdefault(int(element.Tag), element)
     for tag, (kind, layers) in sorted(ours.items()):

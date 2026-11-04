@@ -42,7 +42,10 @@ const CLASSES: &[&str] = &[
 const PLACE_FIELDS: &[&str] = &["m_source_stream", "m_source_offset", "m_class_tag"];
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let paths: Vec<String> = std::env::args().skip(1).collect();
+    let paths: Vec<String> = std::env::args()
+        .skip(1)
+        .filter(|arg| arg != "--records")
+        .collect();
     if paths.is_empty() || paths.len() > 2 {
         return Err("usage: probe_re179_revit_2027 <file.rvt> [<other release's copy.rvt>]".into());
     }
