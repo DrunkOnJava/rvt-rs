@@ -41,6 +41,18 @@
 #
 #   gh workflow run measure.yml -f ref=my-branch -f base=main -f bimcollab=true
 #
+# Autodesk's rac_advanced sample project of the releases 2015 to 2020 is scored
+# against the one public IFC2X3 export of it, from the three.js repository
+# (research/rac-advanced-export.tsv, no licence of its own, #1354, RE-330)
+# when `racadv` is set, as models racadv-2015 to racadv-2020; the export and the
+# files are fetched for the run and never stored or cached, only their summary
+# counts are uploaded (tools/ci/scrub-holdout-results.sh), as for BIMcollab's
+# example, and the export is counted apart as IFC2X3 everywhere. Name the
+# scorers, since most of the suite says nothing of an IFC2X3 export; the kept
+# IFC of a model is deleted with the rest of its files:
+#
+#   gh workflow run measure.yml -f ref=my-branch -f base=none -f racadv=true -f models="racadv-*" -f scorers=space_profiles_vs_ifc
+#
 # With `holdout`, the held-out models (research/holdout-models.tsv, RE-252,
 # and research/holdout-archive-models.tsv, #1261), for checking a rule against
 # files it was not derived on: only their summary counts are uploaded
@@ -150,6 +162,11 @@ on:
         type: boolean
         required: false
         default: false
+      racadv:
+        description: Also score Autodesk's rac_advanced sample project of 2015 to 2020 (models racadv-2015 to racadv-2020) against the IFC2X3 export of it from the three.js repository (research/rac-advanced-export.tsv, no licence stated, fetched for the run, never stored or cached; only the summary counts are uploaded)
+        type: boolean
+        required: false
+        default: false
       holdout:
         description: Also score the held-out models against Revit's exports of them (research/holdout-models.tsv and research/holdout-archive-models.tsv, fetched for the run; only their summary counts are uploaded)
         type: boolean
@@ -254,6 +271,7 @@ jobs:
           R2025: ${{ inputs.r2025 && 'true' || 'false' }}
           HOLDOUT: ${{ inputs.holdout && 'true' || 'false' }}
           BIMCOLLAB: ${{ inputs.bimcollab && 'true' || 'false' }}
+          RACADV: ${{ inputs.racadv && 'true' || 'false' }}
           FAMILIES: ${{ (inputs.families || github.event_name == 'pull_request') && 'true' || 'false' }}
         run: |
           python3 - <<'PY' >> "$GITHUB_OUTPUT"
@@ -263,13 +281,14 @@ jobs:
               return e[name] == "true"
           base = e["EVENT"] == "pull_request" or e["BASE"] not in ("", "none")
           def shard(name, models="", skip="", families=False, samples=False,
-                    years="", nordic=False, r2025=False, holdout=False, bimcollab=False):
+                    years="", nordic=False, r2025=False, holdout=False, bimcollab=False,
+                    racadv=False):
               return dict(shard=name, models=models, skip=skip, families=families,
                           samples=samples, years=years, nordic=nordic, r2025=r2025,
-                          holdout=holdout, bimcollab=bimcollab)
+                          holdout=holdout, bimcollab=bimcollab, racadv=racadv)
           rest = dict(families=flag("FAMILIES"), nordic=flag("NORDIC"),
                       r2025=flag("R2025"), holdout=flag("HOLDOUT"),
-                      bimcollab=flag("BIMCOLLAB"))
+                      bimcollab=flag("BIMCOLLAB"), racadv=flag("RACADV"))
           offices = {"office-as-built": "nordic-office-as-built",
                      "office-permit": "nordic-office-permit"}
           if e["MODELS"] or e["YEARS"] or e["PAIR"]:
@@ -289,8 +308,10 @@ jobs:
               if flag("HOLDOUT"):
                   # The held-out fetch brings the spent pairs too.
                   shards.append(shard("held-out", models="holdout-* spent-*", holdout=True))
+              if flag("RACADV"):
+                  shards.append(shard("racadv", models="racadv-*", racadv=True))
               skip = " ".join(offices.values()) if flag("NORDIC") else ""
-              shards.append(shard("rest", skip=skip, **dict(rest, holdout=False)))
+              shards.append(shard("rest", skip=skip, **dict(rest, holdout=False, racadv=False)))
           sides = ["head", "base"] if base else ["head"]
           include = [dict(side=side, **s) for side in sides for s in shards]
           print("matrix=" + json.dumps({"include": include}))
@@ -398,8 +419,9 @@ jobs:
       # keeps a cache of its own, named by the shard whatever the shard is
       # called, and ends its name with a `.` that no shard name holds, so one
       # shard's prefix is never another's.
-      # The held-out models, BIMcollab's and the pairs once held out (spent-*)
-      # are never cached (RE-252).
+      # The held-out models, BIMcollab's, Autodesk's rac_advanced sample scored
+      # against an export with no licence (racadv-*) and the pairs once held out
+      # (spent-*) are never cached (RE-252).
       - name: Score cache key
         id: score-cache-key
         shell: bash
@@ -621,8 +643,25 @@ jobs:
             2) echo "::warning::BIMcollab example model NOT MEASURED: an archive could not be downloaded" ;;
             *) echo "::error::the BIMcollab example model no longer matches research/bimcollab-models.tsv"; exit 1 ;;
           esac
-      # A held-out model's host being unreachable is NOT MEASURED; a file
-      # that no longer matches its pin fails the run.
+      # The export's host being unreachable is NOT MEASURED; a file that no
+      # longer matches its pin fails the run. Nothing is cached.
+      - name: Fetch Autodesk's rac_advanced sample and its IFC2X3 export
+        if: matrix.racadv
+        shell: bash
+        run: |
+          set +e
+          tools/ci/fetch-rac-advanced-pair.sh models
+          status=$?
+          set -e
+          case "$status" in
+            0) ;;
+            2) echo "::warning::rac_advanced and its IFC2X3 export NOT MEASURED: a file could not be downloaded" ;;
+            *) echo "::error::a rac_advanced file or its export no longer matches its pin (research/rac-advanced-export.tsv, research/autodesk-sample-projects.tsv)"; exit 1 ;;
+          esac
+      # A held-out model's host still unreachable after the fetchers' resumed
+      # retries (tools/ci/fetch-resume.sh) fails the run with NOT MEASURED, as a
+      # file that no longer matches its pin does: a run asked for the held-out
+      # check that checked nothing must not read as a pass (#1392).
       - name: Fetch the held-out models
         if: matrix.holdout
         shell: bash
@@ -637,7 +676,7 @@ jobs:
           set -e
           case "$status" in
             0) ;;
-            2) echo "::warning::held-out models NOT MEASURED: a file could not be downloaded" ;;
+            2) echo "::error::held-out models NOT MEASURED: a file could not be downloaded after every retry"; exit 1 ;;
             *) echo "::error::a held-out model no longer matches its pin in research/holdout-models.tsv or research/holdout-archive-models.tsv"; exit 1 ;;
           esac
       - name: Fetch the family corpus
@@ -705,8 +744,22 @@ jobs:
         with:
           path: _score-cache
           key: ${{ steps.score-cache-key.outputs.prefix }}${{ matrix.side }}-${{ matrix.side == 'base' && needs.plan.outputs.base_sha || needs.plan.outputs.head_sha }}-${{ github.run_id }}-${{ github.run_attempt }}
-      # The held-out models and BIMcollab's carry no licence: only their
-      # counts leave the runner (RE-252).
+      # The held-out models, BIMcollab's and the racadv-* models (scored against
+      # an export that carries no licence) leave the runner as counts only
+      # (RE-252, #1354).
+      # A shard asked for the held-out check that produced no held-out result
+      # (every model filtered out by `models`, or nothing scored) fails, so an
+      # empty check never reads as a pass (#1392).
+      - name: The held-out check measured something
+        if: matrix.holdout
+        shell: bash
+        run: |
+          measured=$(find results -maxdepth 1 -type d \( -name 'holdout-*' -o -name 'spent-*' \) | wc -l | tr -d ' ')
+          echo "held-out and spent models measured: ${measured}"
+          if [ "${measured}" = 0 ]; then
+            echo "::error::holdout=true but no held-out model was measured: the models input excluded them (use models=\"holdout-* spent-*\" or leave it empty), or none could be scored"
+            exit 1
+          fi
       - name: Keep only the unlicensed models' counts
         shell: bash
         run: tools/ci/scrub-holdout-results.sh results

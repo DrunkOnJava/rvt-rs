@@ -52,10 +52,16 @@
 //! source, never
 //! as the walk's. A face whose record is 44 bytes longer than a plane's is a
 //! cylinder's (a round column): its axis, a unit vector at right angles to
-//! the face's u and v, at +158, and its radius at +182 ([`RoomCylinder`]). Its
-//! arc closes the loops of the six `rac_advanced` rooms RE-101 left open, but
-//! whether Revit takes a column off a room's area is unmeasured (it does not
-//! on four office rooms), so a solid with one is left unresolved.
+//! the face's u and v, at +158, and its radius at +182 ([`RoomCylinder`]). A
+//! vertical one that reaches the floor is an edge of the outline like a wall
+//! face, as chords of its arc, in the walk and in the span: a column the room
+//! surrounds is a void of the outline and one against a wall a notch (#1354,
+//! RE-334). Before that the walk ignored the cylinder, so a room kept its
+//! columns' area, and the loops of six `rac_advanced` rooms stayed open. Revit
+//! draws each column as a void in its IFC2X3 export of `rac_advanced` and in
+//! its IFC4 export of `rac_basic` (room 101); the exports of the BIM4LCA
+//! office, Core Interior, RE1, the R2025 models and the held-out files are byte
+//! for byte as before, so none of them has a room with one.
 //!
 //! Core Interior keeps a room's record and solid in more than one partition,
 //! and the copies can disagree: room 20832's outline spans 10.5 ft in one and
@@ -161,6 +167,13 @@ const ARC_CHORD_TOLERANCE_FEET: f64 = 0.0005;
 /// the back of a column that overlaps a wall stands 0.0164 ft behind the
 /// wall's face on three rooms of the BIM4LCA office, and the box holds it.
 pub const ROOM_SLIVER_FEET: f64 = 0.02;
+
+/// The most plan segments a room's walls and the chords of its columns' arcs
+/// may make before the room is left to its box (#1354): a column of 0.49 ft
+/// radius is 70 chords and the largest room measured has 13 of them, about 950
+/// segments, and the work of joining and nesting the segments is quadratic in
+/// them.
+pub const PLAN_SEGMENTS_MAX: usize = 2048;
 
 /// The most plan segments [`region_boundary`] resolves.
 pub const BOUNDARY_SEGMENTS_MAX: usize = RESOLVE_FACES_MAX;
@@ -552,12 +565,16 @@ pub struct SpanRead {
 }
 
 /// The plan edges of the wall faces among `faces` that reach `anchor`, and,
-/// where `span` reads arcs, of the round columns that do.
+/// where `arcs` is set (a span asks through [`SpanRead::arcs`]; the walk of
+/// RE-101 asks first and falls back to none, #1354), of the vertical cylinders,
+/// the round columns, that do. `None` where a column's arc cannot be read or
+/// the edges pass [`PLAN_SEGMENTS_MAX`].
 fn wall_edges(
     faces: &[RoomFace],
     bbox: [f64; 6],
     anchor: OutlineAnchor,
     span: Option<SpanRead>,
+    arcs: bool,
 ) -> Option<Vec<[f64; 4]>> {
     let mut lines = Vec::new();
     for face in faces {
@@ -566,7 +583,7 @@ fn wall_edges(
                 lines.push(edge);
             }
         }
-        if span.is_some_and(|read| read.arcs) {
+        if arcs {
             if let Some((low, high)) = face.vertical_cylinder_heights() {
                 let reached = match anchor {
                     OutlineAnchor::Floor => (low - bbox[2]).abs() <= BOX_TOLERANCE_FEET,
@@ -576,6 +593,9 @@ fn wall_edges(
                     lines.extend(face.arc_segments()?);
                 }
             }
+        }
+        if lines.len() > PLAN_SEGMENTS_MAX {
+            return None;
         }
     }
     Some(lines)
@@ -621,12 +641,20 @@ fn span_outline(
     {
         return None;
     }
-    let mut lines = wall_edges(faces, bbox, anchor, Some(read))?;
+    let mut lines = wall_edges(faces, bbox, anchor, Some(read), read.arcs)?;
     snap_ends_within(&mut lines, ROOM_STEP_TOLERANCE_FEET);
     if let Some(profile) = plan_profile_from_lines(&lines) {
         if profile.pieces.is_empty() && !crosses(&lines) {
             return profile_on_box(profile, bbox, read.slack).map(|profile| (profile, true));
         }
+    }
+    // `region_boundary` reads each edge as directed with the room on its left,
+    // and an arc is run clockwise about its axis, which is right for a column
+    // the room surrounds and backwards for a concave curved wall: nothing in
+    // the face's record says which side the room is on (#1354). A span with a
+    // cylinder in it closes as the walk reads it, undirected, or not at all.
+    if faces.iter().any(|face| face.cylinder.is_some()) {
+        return None;
     }
     let boundary = region_boundary(&lines).ok()?;
     profile_on_box(plan_profile_from_lines(&boundary)?, bbox, read.slack)
@@ -643,13 +671,31 @@ fn outline_from_faces(
     span: Option<SpanRead>,
 ) -> Option<PlanProfile> {
     match span {
-        None => {
-            let mut lines = wall_edges(faces, bbox, anchor, None)?;
-            snap_ends(&mut lines);
-            profile_on_box(plan_profile_from_lines(&lines)?, bbox, 0.0)
-        }
+        // The walk reads the arcs of round columns, and where that does not
+        // close it reads the faces as `main` did, the columns ignored, so a
+        // room whose walls closed before still does (#1354).
+        None => walk_outline(faces, bbox, anchor, true).or_else(|| {
+            faces
+                .iter()
+                .any(|face| face.cylinder.is_some())
+                .then(|| walk_outline(faces, bbox, anchor, false))
+                .flatten()
+        }),
         Some(read) => span_outline(faces, bbox, anchor, read).map(|(profile, _)| profile),
     }
+}
+
+/// The walk of RE-101 over `faces`, with the arcs of round columns as edges
+/// where `arcs` is set.
+fn walk_outline(
+    faces: &[RoomFace],
+    bbox: [f64; 6],
+    anchor: OutlineAnchor,
+    arcs: bool,
+) -> Option<PlanProfile> {
+    let mut lines = wall_edges(faces, bbox, anchor, None, arcs)?;
+    snap_ends(&mut lines);
+    profile_on_box(plan_profile_from_lines(&lines)?, bbox, 0.0)
 }
 
 /// The room's outline from the solid whose header starts at `header`, where
@@ -722,11 +768,11 @@ pub fn resolved_outline_of_solids_at(
     for &at in headers {
         let faces = solid_span(buf, at);
         let exact = SpanRead {
-            arcs: false,
+            arcs: true,
             slack: 0.0,
         };
         let slack = SpanRead {
-            arcs: false,
+            arcs: true,
             slack: ROOM_SLIVER_FEET,
         };
         let Some(this) = span_outline(&faces, bbox, OutlineAnchor::Floor, exact)

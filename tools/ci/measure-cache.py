@@ -43,7 +43,9 @@ IFC's export time, or reads an environment variable by a computed name; or when
 an argument is a directory. The models that Measure keeps only counts of, or
 once did (`holdout-*`, `bimcollab-*`, the directories
 tools/ci/scrub-holdout-results.sh reduces, and `spent-*`, a pair that left the
-held-out list and came back), are never looked up or stored, because the Actions
+held-out list and came back), and `racadv-*`, Autodesk's rac_advanced sample
+scored against an export with no licence (counts only, #1354), are never
+looked up or stored, because the Actions
 cache of a public repository can be restored by a workflow a fork's pull request
 changes, so what the scrub removes must not be in it; each entry names its model,
 and `finish` removes any that names one of those or none. Only status 0 is kept,
@@ -74,7 +76,10 @@ FORMAT = 2
 NEUTRAL_ENV = {"RVT_MESH_CACHE", "RVT_MESH_WORKERS"}
 # BIM Whale's AdvancedProject was spent, then held out again (2026-11-03,
 # research/holdout-archive-models.tsv): a spent pair's results are not safe either.
-HELD_OUT = ("holdout-*", "bimcollab-*", "spent-*")
+# racadv-* is Autodesk's rac_advanced sample scored against an IFC2X3 export that carries no
+# licence (research/rac-advanced-export.tsv, #1354): only its summary counts leave the runner
+# (tools/ci/scrub-holdout-results.sh), and nothing derived from the export is put in the Actions cache.
+HELD_OUT = ("holdout-*", "bimcollab-*", "spent-*", "racadv-*")
 MAX_ENTRY_BYTES = 4 * 1024 * 1024
 STALE_SECONDS = 3 * 24 * 3600
 # Output that shows a failure a rerun could mend, whatever the status says.

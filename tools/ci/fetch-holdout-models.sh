@@ -13,10 +13,13 @@ set -euo pipefail
 PINS="${1:?usage: fetch-holdout-models.sh PINS TARGET_DIR}"
 TARGET="${2:?usage: fetch-holdout-models.sh PINS TARGET_DIR}"
 sha256() { if command -v sha256sum > /dev/null; then sha256sum "$1"; else shasum -a 256 "$1"; fi | cut -d' ' -f1; }
+# shellcheck source=tools/ci/fetch-resume.sh
+. "$(dirname "$0")/fetch-resume.sh"
 mkdir -p "$TARGET/holdout"
 while IFS=$'\t' read -r name url sha bytes; do
   file="$TARGET/holdout/$name"
-  if ! curl -fsSL --retry 3 --retry-all-errors --retry-delay 5 --max-time 900 -o "$file" "$url"; then
+  rm -f "$file"
+  if ! fetch_resume "$url" "$file"; then
     echo "could not download $name"
     rm -f "$file"
     exit 2
