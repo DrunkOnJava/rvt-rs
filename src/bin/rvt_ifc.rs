@@ -9,9 +9,10 @@
 use clap::{Parser, ValueEnum};
 use rvt::{
     RevitFile,
+    control::WalkerControl,
     ifc::{
-        DiagnosticRvtDocExporter, ExportDiagnostics, ExportQualityMode, PlaceholderExporter,
-        RvtDocExporter,
+        ExportDiagnostics, ExportKind, ExportOptions, ExportQualityMode, SavedMeshChoice,
+        run_export,
         step_writer::{StepOptions, write_step_to, write_step_with_options},
     },
     walker::WalkerLimits,
@@ -223,87 +224,17 @@ fn run(args: Args) -> anyhow::Result<()> {
             args.large_model,
         ),
     )?;
-    if let Some(phase) = &args.phase {
-        rf.set_export_phase(phase)?;
-    }
     let quality_mode = ExportQualityMode::from(args.mode);
-    let walker_limits = walker_limits_from_args(&args);
-
-    let result = if args.placeholder {
-        PlaceholderExporter.export_with_diagnostics(&mut rf)?
-    } else if args.diagnostic_proxies {
-        DiagnosticRvtDocExporter.export_with_diagnostics_and_limits(&mut rf, walker_limits)?
-    } else {
-        RvtDocExporter.export_with_diagnostics_mode_and_limits(
-            &mut rf,
-            quality_mode,
-            walker_limits,
-        )?
-    };
-    let mut model = result.model;
-    let mut diagnostics = result.diagnostics;
-    if let Some(scope) = saved_mesh_scope(&mut rf, &args) {
-        // The saved graphics only improve bodies: when they cannot be read,
-        // the export goes ahead with the bodies it has, and says so.
-        let control = rvt::control::WalkerControl::default();
-        match rvt::ifc::saved_meshes::attach_scoped_with_control(
-            &mut rf, &mut model, scope, &control,
-        ) {
-            Ok(report) => {
-                rvt::ifc::recount_exported(&mut diagnostics, &model);
-                if report.candidates > 0 {
-                    let what = if args.saved_meshes {
-                        "bounding-box bodies"
-                    } else {
-                        "door and window bounding-box bodies"
-                    };
-                    eprintln!(
-                        "rvt-ifc: {} of {} {what} drawn from their saved graphics ({} triangles); {} kept their box, their saved graphics not decoding whole",
-                        report.replaced, report.candidates, report.triangles, report.partial
-                    );
-                }
-            }
-            Err(e) => eprintln!("rvt-ifc: saved graphics not read, bodies unchanged: {e}"),
-        }
-    }
-
-    if args.revit_property_sets {
-        // Like the saved graphics, the parameters only add to the export:
-        // when they cannot be read, it goes ahead without them, and says so.
-        match rvt::ifc::revit_property_sets::attach(&mut rf, &mut model) {
-            Ok(report) => eprintln!(
-                "rvt-ifc: Revit property sets on {} elements and {} types, and type sets on {} elements of types with no type object ({} properties, {} named parameters left out)",
-                report.elements,
-                report.types,
-                report.untyped_elements,
-                report.properties,
-                report.left_out
-            ),
-            Err(e) => eprintln!("rvt-ifc: Revit property sets not written: {e:#}"),
-        }
-    }
-
-    if args.revit_set_placement {
-        // Like Revit's property sets, this only adds to the export: when the
-        // parameters cannot be read, it goes ahead without them, and says so.
-        match rvt::ifc::revit_set_placement::attach(&mut rf, &mut model) {
-            Ok(report) => {
-                rvt::ifc::recount_exported(&mut diagnostics, &model);
-                eprintln!(
-                    "rvt-ifc: {} properties on {} elements written where Revit's exporter writes them ({} parameters of a kind not written left out)",
-                    report.properties, report.elements, report.left_out
-                );
-            }
-            Err(e) => {
-                eprintln!("rvt-ifc: properties not placed as Revit's exporter places them: {e:#}")
-            }
-        }
-    }
-
-    if args.no_base_quantities {
-        let left_out = rvt::ifc::leave_out_base_quantities(&mut model);
-        rvt::ifc::recount_exported(&mut diagnostics, &model);
-        eprintln!("rvt-ifc: {left_out} base quantities left out");
+    let run = run_export(
+        &mut rf,
+        &export_options(&args),
+        walker_limits_from_args(&args),
+        &WalkerControl::default(),
+    )?;
+    let model = run.model;
+    let diagnostics = run.diagnostics;
+    for note in &run.notes {
+        eprintln!("rvt-ifc: {}", note.text);
     }
 
     let out_path = args.output.clone().unwrap_or_else(|| {
@@ -312,14 +243,12 @@ fn run(args: Args) -> anyhow::Result<()> {
         p
     });
 
-    // #1075: the steps above may have read more streams than the export did.
-    rvt::ifc::record_unread_streams(&mut diagnostics, rf.unread_streams());
-    let unread = rf.unread_streams().len();
-    if unread > 0 {
+    if !run.unread.is_empty() {
         eprintln!(
-            "rvt-ifc: {unread} stream(s) not read whole, so the export is missing what they hold:"
+            "rvt-ifc: {} stream(s) not read whole, so the export is missing what they hold:",
+            run.unread.len()
         );
-        for line in rvt::cli::unread_stream_report(rf.unread_streams()) {
+        for line in rvt::cli::unread_stream_report(&run.unread) {
             eprintln!("{line}");
         }
         if !args.allow_partial {
@@ -394,22 +323,33 @@ fn run(args: Args) -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Which bodies to draw from the saved graphics: every boxed one with
-/// `--saved-meshes`, none with `--no-saved-meshes` or `--placeholder`, and
-/// otherwise the default ([`rvt::ifc::saved_meshes::default_scope`]: doors
-/// and windows on Revit 2023 to 2027).
-fn saved_mesh_scope(
-    rf: &mut RevitFile,
-    args: &Args,
-) -> Option<rvt::ifc::saved_meshes::SavedMeshScope> {
-    use rvt::ifc::saved_meshes::SavedMeshScope;
-    if args.placeholder || args.no_saved_meshes {
-        return None;
-    }
-    if args.saved_meshes {
-        return Some(SavedMeshScope::All);
-    }
-    rvt::ifc::saved_meshes::default_scope(rf)
+/// The switches that change the model: the document exporter by default,
+/// `--placeholder` or `--diagnostic-proxies` for the others; the saved-graphics
+/// bodies are every boxed one with `--saved-meshes`, none with
+/// `--no-saved-meshes`, and otherwise doors and windows on Revit 2023 to 2027.
+fn export_options(args: &Args) -> ExportOptions {
+    let kind = if args.placeholder {
+        ExportKind::Placeholder
+    } else if args.diagnostic_proxies {
+        ExportKind::DiagnosticProxies
+    } else {
+        ExportKind::Document
+    };
+    let saved_meshes = if args.no_saved_meshes {
+        SavedMeshChoice::Off
+    } else if args.saved_meshes {
+        SavedMeshChoice::All
+    } else {
+        SavedMeshChoice::Default
+    };
+    ExportOptions::default()
+        .with_kind(kind)
+        .with_mode(args.mode.into())
+        .with_saved_meshes(saved_meshes)
+        .with_revit_property_sets(args.revit_property_sets)
+        .with_revit_set_placement(args.revit_set_placement)
+        .with_no_base_quantities(args.no_base_quantities)
+        .with_phase(args.phase.clone())
 }
 
 fn walker_limits_from_args(args: &Args) -> WalkerLimits {

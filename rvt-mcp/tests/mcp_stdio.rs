@@ -53,11 +53,16 @@ fn fixture() -> PathBuf {
     repository().join("corpus/tier1/architectural-2024/architectural-2024.rvt")
 }
 
+/// A model of the project corpus, when it is present.
+fn project(name: &str) -> Option<PathBuf> {
+    let dir = std::env::var_os("RVT_PROJECT_CORPUS_DIR")?;
+    let path = Path::new(&dir).join(name);
+    path.is_file().then_some(path)
+}
+
 /// Einhoven, when the project corpus is present.
 fn einhoven() -> Option<PathBuf> {
-    let dir = std::env::var_os("RVT_PROJECT_CORPUS_DIR")?;
-    let path = Path::new(&dir).join("Revit_IFC5_Einhoven.rvt");
-    path.is_file().then_some(path)
+    project("Revit_IFC5_Einhoven.rvt")
 }
 
 /// A fresh folder for one test's exports.
@@ -580,6 +585,195 @@ async fn initialize_lifecycle_on_einhoven() {
     let out = scratch("einhoven-initialize");
     let client = start_initialize().await;
     drive(&client, false, &model, &out, true).await;
+    client.cancel().await.expect("close the client");
+}
+
+/// A phase is chosen when a path is opened: a blank one is none, an id cannot
+/// change the phase it names, and a phase the file lacks is a tool error that
+/// leaves the model it was not opened at untouched.
+#[tokio::test]
+async fn a_phase_the_file_lacks_or_one_that_clashes_with_an_id_is_a_tool_error() {
+    let client = start_discover().await;
+    let path = fixture().to_string_lossy().into_owned();
+    let opened = answer(&call(&client, "open_model", json!({ "model": path })).await);
+    let id = opened["model_id"].as_str().expect("model_id").to_string();
+
+    let clash = error_text(
+        &call(
+            &client,
+            "get_summary",
+            json!({ "model": id, "phase": "Existing" }),
+        )
+        .await,
+    );
+    assert!(
+        clash.contains("cannot be combined with model_id"),
+        "{clash}"
+    );
+
+    let unknown = error_text(
+        &call(
+            &client,
+            "open_model",
+            json!({ "model": path, "phase": "No such phase" }),
+        )
+        .await,
+    );
+    assert!(unknown.contains("phase"), "{unknown}");
+
+    let blank = answer(
+        &call(
+            &client,
+            "open_model",
+            json!({ "model": path, "phase": "  " }),
+        )
+        .await,
+    );
+    assert_eq!(blank["model_id"], id, "a blank phase is no phase");
+    let again = answer(&call(&client, "get_summary", json!({ "model": id })).await);
+    assert_eq!(again["model_id"], id);
+    client.cancel().await.expect("close the client");
+}
+
+/// RE-326 through the server. RE1 Architecture's phases are Existing and New
+/// Construction (the last), and its 11 rooms sit in the second. A model opened
+/// at a phase has its own id, reads at that phase, and exports the bytes
+/// `rvt-ifc --phase` writes.
+#[tokio::test]
+async fn a_model_opened_at_a_phase_reads_and_exports_that_phase() {
+    let Some(model) = project("RE1-Architecture.rvt") else {
+        return;
+    };
+    let out = scratch("phase");
+    let client = start_discover().await;
+    let path = model.to_string_lossy().into_owned();
+    let rooms_of = |answered: &Value| answered["rooms"].as_array().expect("rooms").len();
+
+    let last = answer(&call(&client, "open_model", json!({ "model": path })).await);
+    assert_eq!(last["room_count"], 11);
+    let default_rooms = answer(&call(&client, "list_rooms", json!({ "model": path })).await);
+    assert_eq!(
+        rooms_of(&default_rooms),
+        11,
+        "the path alone is the last phase"
+    );
+    let existing = answer(
+        &call(
+            &client,
+            "open_model",
+            json!({ "model": path, "phase": "Existing" }),
+        )
+        .await,
+    );
+    let existing_id = existing["model_id"].as_str().expect("model_id").to_string();
+    assert_eq!(existing["room_count"], 0);
+    let rooms = answer(&call(&client, "list_rooms", json!({ "model": existing_id })).await);
+    assert_eq!(rooms_of(&rooms), 0);
+    let diagnostics =
+        answer(&call(&client, "get_diagnostics", json!({ "model": existing_id })).await);
+    let left_out: Vec<&Value> = diagnostics["diagnostics"]["skipped"]
+        .as_array()
+        .expect("skipped")
+        .iter()
+        .filter(|item| item["reason"] == "room_not_in_export_phase")
+        .collect();
+    assert_eq!(left_out.len(), 1, "{left_out:?}");
+    assert_eq!(left_out[0]["count"], 11);
+    assert_eq!(left_out[0]["phase"], "New Construction");
+    let unknown = error_text(
+        &call(
+            &client,
+            "open_model",
+            json!({ "model": path, "phase": "No such phase" }),
+        )
+        .await,
+    );
+    assert!(
+        unknown.contains("Existing") && unknown.contains("New Construction"),
+        "the error lists the file's phases: {unknown}"
+    );
+    let clash = error_text(
+        &call(
+            &client,
+            "get_summary",
+            json!({ "model": existing_id, "phase": "New Construction" }),
+        )
+        .await,
+    );
+    assert!(clash.contains("cannot be combined"), "{clash}");
+    let same = answer(
+        &call(
+            &client,
+            "get_summary",
+            json!({ "model": existing_id, "phase": "Existing" }),
+        )
+        .await,
+    );
+    assert_eq!(same["model_id"], existing_id.as_str());
+
+    // The exports are what `rvt-ifc --phase` writes.
+    let by_id = out.join("existing.ifc");
+    answer(
+        &call(
+            &client,
+            "export_ifc",
+            json!({ "model": existing_id, "out_path": by_id }),
+        )
+        .await,
+    );
+    let switched = out.join("existing-switched.ifc");
+    answer(
+        &call(
+            &client,
+            "export_ifc",
+            json!({
+                "model": path,
+                "phase": "Existing",
+                "out_path": switched,
+                "options": { "no_base_quantities": true }
+            }),
+        )
+        .await,
+    );
+    if let Some(rvt_ifc) = sibling("rvt-ifc") {
+        for (tag, flags, written) in [
+            ("cli-existing.ifc", vec!["--phase", "Existing"], &by_id),
+            (
+                "cli-existing-switched.ifc",
+                vec!["--phase", "Existing", "--no-base-quantities"],
+                &switched,
+            ),
+        ] {
+            let cli = out.join(tag);
+            let status = Command::new(&rvt_ifc)
+                .arg(&model)
+                .arg("-o")
+                .arg(&cli)
+                .args(flags)
+                .env("SOURCE_DATE_EPOCH", EPOCH)
+                .status()
+                .expect("run rvt-ifc");
+            assert!(status.success(), "rvt-ifc failed");
+            assert_eq!(
+                std::fs::read(&cli).expect("rvt-ifc output"),
+                std::fs::read(written).expect("export_ifc output"),
+                "export_ifc differs from rvt-ifc {tag}"
+            );
+        }
+    }
+
+    // The last phase named is the model of the bare path, and has its own id.
+    let named = answer(
+        &call(
+            &client,
+            "open_model",
+            json!({ "model": path, "phase": "New Construction" }),
+        )
+        .await,
+    );
+    assert_ne!(named["model_id"], last["model_id"], "an id names its phase");
+    assert_ne!(named["model_id"], existing_id.as_str());
+    assert_eq!(named["room_count"], 11);
     client.cancel().await.expect("close the client");
 }
 

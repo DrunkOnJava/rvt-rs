@@ -1,11 +1,12 @@
 //! The decoded models the server keeps.
 //!
 //! A model is identified by its file's canonical path, size and modification
-//! time. `open_model` decodes it once and returns an opaque `model_id` hashed
-//! from that identity; every tool takes the `model_id` or the path. The
-//! server keeps the most recently used few and drops the others, so an id can
-//! be unknown after an eviction or a restart, and the tools then say so and
-//! ask for `open_model` again.
+//! time, and by the project phase it was opened at, when one was named.
+//! `open_model` decodes it once and returns an opaque `model_id` hashed from
+//! that identity; every tool takes the `model_id` or the path. The server
+//! keeps the most recently used few and drops the others, so an id can be
+//! unknown after an eviction or a restart, and the tools then say so and ask
+//! for `open_model` again.
 
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
@@ -15,12 +16,11 @@ use rvt::RevitFile;
 use rvt::control::WalkerControl;
 use rvt::elem_table::RecordFraming;
 use rvt::ifc::step_writer::element_global_ids;
-use rvt::ifc::{ExportDiagnostics, IfcModel};
+use rvt::ifc::{ExportDiagnostics, ExportNote, ExportOptions, ExportRun, IfcModel, run_export};
 use rvt::reader::UnreadStream;
 use sha2::{Digest, Sha256};
 
 use crate::config::{Config, Failure};
-use crate::pipeline::{Pipeline, PipelineOptions, run_pipeline};
 use crate::schema::{ElemTableProvenance, FileProvenance};
 
 /// `bytes` as lowercase hex, two digits a byte.
@@ -30,6 +30,34 @@ pub fn lower_hex(bytes: &[u8]) -> String {
 
 fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
     mutex.lock().unwrap_or_else(PoisonError::into_inner)
+}
+
+/// How a failed export ends the tool job: a cancelled request is cancelled,
+/// and a phase the file does not have says what the file has.
+fn export_failure(error: rvt::Error) -> Failure {
+    match error {
+        rvt::Error::Cancelled => Failure::Cancelled,
+        rvt::Error::InvalidInput(message) => Failure::Message(message),
+        other => Failure::Message(format!("the export could not read the file: {other}")),
+    }
+}
+
+/// The decode every tool answers from and the exports are written from:
+/// [`run_export`] under the server's walker limits, at the phase `options`
+/// names. A cancelled `control` ends the run with [`Failure::Cancelled`] and
+/// nothing is kept.
+pub fn run_decode(
+    rf: &mut RevitFile,
+    config: &Config,
+    options: &ExportOptions,
+    control: &WalkerControl,
+) -> Result<ExportRun, Failure> {
+    run_export(rf, options, config.walker_limits, control).map_err(export_failure)
+}
+
+/// What `rvt-ifc` prints about the run's steps, one sentence each.
+pub fn note_texts(notes: &[ExportNote]) -> Vec<String> {
+    notes.iter().map(|note| note.text.clone()).collect()
 }
 
 /// A file as the server identifies it: where it is and which bytes it holds,
@@ -70,13 +98,18 @@ impl Identity {
         })
     }
 
-    /// The opaque handle: a hash of the identity, with no path in it.
-    pub fn model_id(&self) -> String {
+    /// The opaque handle: a hash of the identity and the phase it was opened
+    /// at, with no path in it.
+    pub fn model_id(&self, phase: Option<&str>) -> String {
         let mut hasher = Sha256::new();
         hasher.update(self.path.to_string_lossy().as_bytes());
         hasher.update([0u8]);
         hasher.update(self.size.to_le_bytes());
         hasher.update(self.modified_nanos.to_le_bytes());
+        if let Some(phase) = phase {
+            hasher.update([1u8]);
+            hasher.update(phase.as_bytes());
+        }
         let digest = hasher.finalize();
         format!("rvt-{}", &lower_hex(&digest)[..16])
     }
@@ -125,13 +158,14 @@ pub struct Computed {
 }
 
 impl Computed {
-    fn new(pipeline: Pipeline, file: FileProvenance) -> Self {
-        let global_ids = element_global_ids(&pipeline.model);
+    fn new(run: ExportRun, file: FileProvenance) -> Self {
+        let global_ids = element_global_ids(&run.model);
+        let notes = note_texts(&run.notes);
         Self {
-            model: pipeline.model,
-            diagnostics: pipeline.diagnostics,
-            unread: pipeline.unread,
-            notes: pipeline.notes,
+            model: run.model,
+            diagnostics: run.diagnostics,
+            unread: run.unread,
+            notes,
             global_ids,
             file,
         }
@@ -170,20 +204,28 @@ fn file_provenance(rf: &mut RevitFile) -> FileProvenance {
 /// and the default decode once it has run.
 pub struct Entry {
     pub identity: Identity,
+    /// The project phase the handle was opened at (`None`: the project's
+    /// last). It is set before anything is read from the handle.
+    pub phase: Option<String>,
     pub id: String,
     file: Mutex<RevitFile>,
     default: Mutex<Option<Arc<Computed>>>,
 }
 
 impl Entry {
-    fn new(identity: Identity, file: RevitFile) -> Self {
-        let id = identity.model_id();
+    fn new(identity: Identity, phase: Option<String>, file: RevitFile) -> Self {
+        let id = identity.model_id(phase.as_deref());
         Self {
             identity,
+            phase,
             id,
             file: Mutex::new(file),
             default: Mutex::new(None),
         }
+    }
+
+    fn is(&self, identity: &Identity, phase: Option<&str>) -> bool {
+        self.identity == *identity && self.phase.as_deref() == phase
     }
 
     /// The decode `rvt-ifc` runs with no switch, run once and kept.
@@ -197,10 +239,11 @@ impl Entry {
             return Ok(Arc::clone(done));
         }
         let mut file = lock(&self.file);
-        let pipeline = run_pipeline(&mut file, config, &PipelineOptions::default(), control)?;
+        let options = ExportOptions::default().with_phase(self.phase.clone());
+        let run = run_decode(&mut file, config, &options, control)?;
         let provenance = file_provenance(&mut file);
         drop(file);
-        let done = Arc::new(Computed::new(pipeline, provenance));
+        let done = Arc::new(Computed::new(run, provenance));
         *slot = Some(Arc::clone(&done));
         Ok(done)
     }
@@ -230,14 +273,26 @@ impl Store {
         &self.config
     }
 
-    /// The entry for `model`, a `model_id` or a path. A path that is not
-    /// held is opened, which reads the file into memory.
-    pub fn open(&self, model: &str) -> Result<Arc<Entry>, String> {
+    /// The entry for `model`, a `model_id` or a path, at `phase` (a phase's
+    /// name or ElementId; `None` is the project's last). A path that is not
+    /// held is opened, which reads the file into memory. A `model_id` already
+    /// names the phase it was opened at, so a different `phase` with one is
+    /// refused.
+    pub fn open(&self, model: &str, phase: Option<&str>) -> Result<Arc<Entry>, String> {
         let model = model.trim();
-        if looks_like_id(model) {
-            self.by_id(model)
-        } else {
-            self.by_path(model)
+        if !looks_like_id(model) {
+            return self.by_path(model, phase);
+        }
+        let entry = self.by_id(model)?;
+        match phase {
+            Some(phase) if entry.phase.as_deref() != Some(phase) => Err(format!(
+                "phase {phase:?} cannot be combined with model_id {model}: an id names the phase its model was opened at ({}). Pass the file path with phase, or call open_model with the path and phase.",
+                entry
+                    .phase
+                    .as_deref()
+                    .map_or("the project's last".to_string(), |at| format!("{at:?}"))
+            )),
+            _ => Ok(entry),
         }
     }
 
@@ -266,35 +321,43 @@ impl Store {
         Ok(entry)
     }
 
-    fn by_path(&self, path: &str) -> Result<Arc<Entry>, String> {
+    fn by_path(&self, path: &str, phase: Option<&str>) -> Result<Arc<Entry>, String> {
         if path.is_empty() {
             return Err("model is empty: pass a model_id from open_model, or the path of a .rvt, .rfa, .rte or .rft file".to_string());
         }
         let identity = Identity::of(Path::new(path))?;
-        if let Some(entry) = self.touch(&identity) {
+        if let Some(entry) = self.touch(&identity, phase) {
             return Ok(entry);
         }
-        let file = RevitFile::open_with_limits(&identity.path, self.config.open_limits)
+        let mut file = RevitFile::open_with_limits(&identity.path, self.config.open_limits)
             .map_err(|error| error.to_string())?;
-        let entry = Arc::new(Entry::new(identity, file));
+        // Every decode of the entry names this phase in its `ExportOptions`.
+        // It is also checked here, before anything is read from the handle, so
+        // an unknown phase is refused listing the file's phases and never
+        // takes one of the held slots.
+        if let Some(phase) = phase {
+            file.set_export_phase(phase)
+                .map_err(|error| error.to_string())?;
+        }
+        let entry = Arc::new(Entry::new(identity, phase.map(str::to_string), file));
         let mut entries = lock(&self.entries);
         // Another call may have opened it while this one read the file.
-        if let Some(existing) = entries.iter().find(|held| held.identity == entry.identity) {
+        if let Some(existing) = entries.iter().find(|held| held.is(&entry.identity, phase)) {
             return Ok(Arc::clone(existing));
         }
         // The same path with another size or time is the file's earlier self.
-        entries.retain(|held| held.identity.path != entry.identity.path);
+        entries.retain(|held| {
+            held.identity.path != entry.identity.path || held.identity == entry.identity
+        });
         entries.insert(0, Arc::clone(&entry));
         entries.truncate(self.config.max_open_models);
         Ok(entry)
     }
 
-    /// The held entry of `identity`, made the most recent.
-    fn touch(&self, identity: &Identity) -> Option<Arc<Entry>> {
+    /// The held entry of `identity` at `phase`, made the most recent.
+    fn touch(&self, identity: &Identity, phase: Option<&str>) -> Option<Arc<Entry>> {
         let mut entries = lock(&self.entries);
-        let position = entries
-            .iter()
-            .position(|entry| entry.identity == *identity)?;
+        let position = entries.iter().position(|entry| entry.is(identity, phase))?;
         let entry = entries.remove(position);
         entries.insert(0, Arc::clone(&entry));
         Some(entry)

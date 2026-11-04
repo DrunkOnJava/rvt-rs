@@ -10,15 +10,14 @@ use rmcp::model::Resource;
 use rvt::control::WalkerControl;
 use rvt::ifc::gltf::model_to_glb;
 use rvt::ifc::step_writer::{StepOptions, write_step_to};
-use rvt::ifc::{ExportDiagnostics, IfcModel};
+use rvt::ifc::{ExportDiagnostics, ExportOptions, IfcModel};
 use rvt::reader::UnreadStream;
 
-use crate::args::{ExportGltfArgs, ExportIfcArgs};
+use crate::args::{ExportGltfArgs, ExportIfcArgs, phase_of};
 use crate::config::Failure;
 use crate::output::{self, Written};
-use crate::pipeline::{PipelineOptions, run_pipeline};
 use crate::schema::{ExportOut, OutputOut};
-use crate::store::{Entry, Store};
+use crate::store::{Entry, Store, note_texts, run_decode};
 use crate::views::unread_out;
 
 /// An export's summary, and the link to its file.
@@ -117,7 +116,7 @@ pub fn ifc(
     args: &ExportIfcArgs,
     control: &WalkerControl,
 ) -> Result<Exported, Failure> {
-    let entry = store.open(&args.model)?;
+    let entry = store.open(&args.model, phase_of(&args.phase))?;
     let config = store.config();
     let timestamp = source_date_epoch()?;
     let target = output::plan(
@@ -127,13 +126,15 @@ pub fn ifc(
         args.overwrite,
         &entry.identity.path,
     )?;
-    let options = args.options.pipeline();
+    let switches = args.options.export_options();
     // The model kept for `rvt-ifc` with no switch is the export of the
     // default switches; any other switch decodes again on the same handle,
-    // which still holds what the first decode inflated.
+    // which still holds what the first decode inflated. Both are at the
+    // phase the model was opened at.
     let default;
     let custom;
-    let source = if options == PipelineOptions::default() {
+    let custom_notes;
+    let source = if switches == ExportOptions::default() {
         default = entry.computed(config, control)?;
         Source {
             model: &default.model,
@@ -142,16 +143,18 @@ pub fn ifc(
             notes: &default.notes,
         }
     } else {
-        custom = entry.with_file(|file| run_pipeline(file, config, &options, control))?;
+        let options = switches.clone().with_phase(entry.phase.clone());
+        custom = entry.with_file(|file| run_decode(file, config, &options, control))?;
+        custom_notes = note_texts(&custom.notes);
         Source {
             model: &custom.model,
             diagnostics: &custom.diagnostics,
             unread: &custom.unread,
-            notes: &custom.notes,
+            notes: &custom_notes,
         }
     };
     refuse_partial(source.unread, args.options.allow_partial)?;
-    options
+    switches
         .mode
         .validate(source.diagnostics)
         .map_err(|error| Failure::Message(error.to_string()))?;
@@ -175,7 +178,7 @@ pub fn gltf(
     args: &ExportGltfArgs,
     control: &WalkerControl,
 ) -> Result<Exported, Failure> {
-    let entry = store.open(&args.model)?;
+    let entry = store.open(&args.model, phase_of(&args.phase))?;
     let config = store.config();
     let target = output::plan(
         config,

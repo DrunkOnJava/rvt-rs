@@ -14,7 +14,9 @@ as IFC4 or glTF, with no Revit install and no network.
 - **One source of truth.** `open_model` runs the decode `rvt-ifc` runs, up to
   the model its exporter builds and the diagnostics that go with it, and keeps
   that model. Every query tool reads it, and the exports are written from it, so
-  an answer and the IFC cannot disagree.
+  an answer and the IFC cannot disagree. The decode is one library function,
+  `rvt::ifc::run_export`, which `rvt-ifc`, the Python package and the viewer
+  call as well, so the steps are written once.
 - **Honest about gaps.** It reports what it left out the way the CLIs do:
   unread streams, skipped items, diagnostics. A field the model does not have is
   absent from an answer, never guessed.
@@ -120,6 +122,18 @@ sixteen hex digits, a hash of the file's canonical path, size and modification
 time, with no path in it). Every other tool takes the `model_id` or the path in
 its `model` parameter (`model_id` and `path` are accepted as names for it), and
 a path that is not open yet is opened.
+
+A Revit project can hold several phases, and an export shows one: the last, as
+Revit's own does, unless told otherwise. Every tool that takes a `model` path
+also takes `phase`, a phase's name (exactly) or its ElementId, as
+`rvt-ifc --phase` does. The model is then read at that phase: an element that
+does not exist in it, and a room whose own phase is not it, are left out, and
+`get_diagnostics` counts them. A model opened at a phase is a different model
+from the same file at the last one: it has its own `model_id` (the hash covers
+the phase), and the server keeps both. A `model_id` names the phase it was
+opened at, so passing a different `phase` with one is a tool error; pass the
+path with `phase` instead. A phase the file does not have is a tool error that
+lists the phases it does.
 
 The handle lives while the server process runs and while the model is among the
 most recently used ones the server keeps (2 by default, `--max-open-models`):
