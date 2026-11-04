@@ -123,12 +123,12 @@ on:
         required: false
         default: false
       nordic:
-        description: Also score the BIM4LCA office as built and at building permit, and its two terrain variants, against Revit's exports of them (research/bim4lca-measure.tsv, CC BY-SA 4.0, read by byte range for the run and never stored)
+        description: Also score the BIM4LCA office as built and at building permit, and its two terrain variants, against Revit's exports of them (research/bim4lca-measure.tsv, CC BY-SA 4.0, read by byte range and kept in the Actions cache, never committed)
         type: boolean
         required: false
         default: false
       r2025:
-        description: Also score puzzbobb's 23 purpose-made Revit 2025 models against Revit's exports of them (research/r2025-models.tsv, Apache-2.0, fetched for the run and never stored)
+        description: Also score puzzbobb's 23 purpose-made Revit 2025 models against Revit's exports of them (research/r2025-models.tsv, Apache-2.0, fetched for a run and kept in the Actions cache, never committed)
         type: boolean
         required: false
         default: false
@@ -347,34 +347,87 @@ jobs:
         run: tools/fetch-reference-models.sh models
       # The office models' host being down is NOT MEASURED; a file that no
       # longer matches its pin fails the run.
+      # The office files (VTT, CC BY-SA 4.0) and puzzbobb's R2025 models
+      # (Apache-2.0) are restored from the Actions cache, as CI restores its
+      # BIM4LCA models, and saved from main: with the models in shards of
+      # their own, up to six jobs fetched them at once, and in run 41767184413
+      # one shard waited 27 minutes on the office host before giving up
+      # (#1237). A restored office file is checked against its pin like a
+      # fetched one; a restored R2025 model was checked when the run that
+      # saved it fetched its archive, and only a job measuring main's own code
+      # saves. The held-out models carry no licence and are never cached.
+      - name: Restore the BIM4LCA office models
+        id: bim4lca-cache
+        if: matrix.nordic
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: _bim4lca-measure
+          key: bim4lca-measure-${{ hashFiles('research/bim4lca-measure.tsv', 'tools/ci/fetch-bim4lca.py') }}
       - name: Fetch the BIM4LCA office models
+        id: bim4lca
         if: matrix.nordic
         shell: bash
         run: |
           set +e
-          python3 tools/ci/fetch-bim4lca.py research/bim4lca-measure.tsv models
+          python3 tools/ci/fetch-bim4lca.py research/bim4lca-measure.tsv _bim4lca-measure
           status=$?
           set -e
           case "$status" in
-            0) ;;
+            0)
+              # Only the pinned files, by name, so nothing else in the
+              # folder reaches the models.
+              mkdir -p models
+              awk -F'\t' '$1 == "entry" { n = split($2, a, "/"); print a[n] }' research/bim4lca-measure.tsv |
+                while read -r name; do ln -f "_bim4lca-measure/$name" models/; done
+              echo "ok=true" >> "$GITHUB_OUTPUT" ;;
             2) echo "::warning::BIM4LCA office models NOT MEASURED: the host was unreachable" ;;
             *) echo "::error::the BIM4LCA office models no longer match research/bim4lca-measure.tsv"; exit 1 ;;
           esac
+      - name: Save the BIM4LCA office models
+        # Saved only by a job that measured main's own code, as rust-cache's
+        # save-if: a job building another ref ran that ref's build scripts
+        # before the fetch, and they could have written into the folder.
+        if: matrix.nordic && github.ref == 'refs/heads/main' && steps.bim4lca-cache.outputs.cache-hit != 'true' && steps.bim4lca.outputs.ok == 'true' && (matrix.side == 'base' && (inputs.base == '' || inputs.base == 'main') || matrix.side != 'base' && inputs.ref == '')
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: _bim4lca-measure
+          key: ${{ steps.bim4lca-cache.outputs.cache-primary-key }}
       # The archive being unreachable is NOT MEASURED; an archive that no
       # longer matches its pin fails the run.
+      - name: Restore the R2025 models
+        id: r2025-cache
+        if: matrix.r2025
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: _r2025
+          key: r2025-${{ hashFiles('research/r2025-models.tsv', 'tools/ci/fetch-r2025-models.sh') }}
       - name: Fetch the R2025 models
+        id: r2025
         if: matrix.r2025
         shell: bash
+        env:
+          HIT: ${{ steps.r2025-cache.outputs.cache-hit }}
         run: |
-          set +e
-          tools/ci/fetch-r2025-models.sh research/r2025-models.tsv models
-          status=$?
-          set -e
+          if [ "$HIT" != true ]; then
+            set +e
+            tools/ci/fetch-r2025-models.sh research/r2025-models.tsv _r2025
+            status=$?
+            set -e
+          else
+            status=0
+          fi
           case "$status" in
-            0) ;;
+            0) mkdir -p models/r2025 && ln -f _r2025/r2025/* models/r2025/ && echo "ok=true" >> "$GITHUB_OUTPUT" ;;
             2) echo "::warning::R2025 models NOT MEASURED: the archive could not be downloaded" ;;
             *) echo "::error::an R2025 archive no longer matches research/r2025-models.tsv"; exit 1 ;;
           esac
+      - name: Save the R2025 models
+        # Saved only by a job that measured main's own code (see above).
+        if: matrix.r2025 && github.ref == 'refs/heads/main' && steps.r2025-cache.outputs.cache-hit != 'true' && steps.r2025.outputs.ok == 'true' && (matrix.side == 'base' && (inputs.base == '' || inputs.base == 'main') || matrix.side != 'base' && inputs.ref == '')
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: _r2025
+          key: ${{ steps.r2025-cache.outputs.cache-primary-key }}
       # BIMcollab's host being unreachable is NOT MEASURED; a file that no
       # longer matches its pin fails the run.
       - name: Fetch the BIMcollab example model
