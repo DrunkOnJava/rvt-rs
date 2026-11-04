@@ -850,6 +850,7 @@ pub(super) fn attach_wall_layers(
     if centreline_bodies {
         attach_wall_butt_joins(rf, revit_version, walls, &layers, &native);
         attach_native_tee_reaches(walls, &native);
+        attach_wall_corner_reaches(walls, &layers, &native);
         attach_wall_lengths(walls, &native);
     }
 }
