@@ -358,7 +358,7 @@ impl RvtServer {
         input_schema = rmcp::handler::server::common::schema_for_input::<ModelArgs>()
             .expect("the input schema is an object"),
         description = concat!(
-            "List the rooms and spaces of a model: ElementId, number, name, level, area and provenance, whose space_outline_source says where the outline came from. The area is present only where the outline was read exactly (space_outline_source stored_solid, stored_solid_faces, or area_boundary or area_boundary_joined for an Area); a room that keeps its record's bounding box (record_box) has no area, since the area of a box is not the area of a room. ",
+            "List the rooms and spaces of a model: ElementId, number, name, level, area and provenance, whose space_outline_source says where the outline came from. The area is present only where the outline was read exactly (space_outline_source stored_solid, stored_solid_faces, or area_plan_topology, area_boundary or area_boundary_joined for an Area); a room that keeps its record's bounding box (record_box) has no area, since the area of a box is not the area of a room. ",
             short_not_read!()
         ),
         annotations(

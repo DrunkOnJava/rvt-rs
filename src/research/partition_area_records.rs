@@ -212,6 +212,10 @@ pub const AREA_BODY_HEIGHT_FIELD: &str = "m_area_body_height";
 /// carried on past the extent its record gives, or along a connector (RE-330).
 pub const AREA_JOINED_FIELD: &str = "m_area_body_joined";
 
+/// The field of an Area, true where its region is the loop of Revit's plan
+/// topology (RE-333) and not the arrangement of its lines.
+pub const AREA_TOPOLOGY_FIELD: &str = "m_area_body_plan_topology";
+
 /// How far a boundary line's height may lie from its Level's, feet.
 pub const AREA_LEVEL_TOLERANCE_FEET: f64 = 1e-3;
 
@@ -604,6 +608,8 @@ struct AreaBody {
     base_feet: f64,
     height_feet: f64,
     joined: bool,
+    /// Whether the region is the plan topology's (RE-333).
+    topology: bool,
 }
 
 /// What is known of the file around its Areas.
@@ -1042,6 +1048,8 @@ struct Located {
     /// The region, or why there is none: the lines cannot be read, or the point
     /// is in no single region of them.
     face: Result<AreaFace, &'static str>,
+    /// Whether the region is the plan topology's (RE-333).
+    topology: bool,
 }
 
 /// The elevation of the Level `level`, feet.
@@ -1079,29 +1087,43 @@ fn locate(
     };
     let key = (level, scheme);
     let base_feet = level_elevation(surroundings.levels, level).ok_or(REFUSED_HEIGHT)?;
-    let face = match point {
-        None => Err(REFUSED_NO_POINT),
-        Some(point) => match arrangements
-            .entry(key)
-            .or_insert_with(|| group_arrangement(lines, key, base_feet))
-        {
-            Some(arrangement) => arrangement.face_at(point).ok_or(REFUSED_REGION),
-            None => Err(REFUSED_GROUP),
+    let group = arrangements
+        .entry(key)
+        .or_insert_with(|| group_arrangement(lines, key, base_feet));
+    if matches!(group, Group::Unreadable) {
+        return Ok(Located {
+            key,
+            face: Err(REFUSED_GROUP),
+            topology: false,
+        });
+    }
+    let by_lines = match (&*group, point) {
+        (Group::Arranged(group), Some(point)) => match group.arrangement.face_at(point) {
+            None => Err(REFUSED_REGION),
+            Some(face) if group.blocks(&face) => Err(REFUSED_GROUP),
+            Some(face) => Ok(face),
         },
+        (Group::Arranged(_), None) => Err(REFUSED_NO_POINT),
+        (_, _) => Err(REFUSED_GROUP),
     };
-    // Where the lines' arrangement finds no region, or the point is not read,
-    // Revit's plan topology may give one (RE-330): lines that meet only once
-    // moved by their offsets, or an arc or a slanted line in the group.
-    let face = face.or_else(|reason| {
-        topology
-            .map(|region| AreaFace {
+    let (face, from_topology) = match topology {
+        Some(Ok(region)) => (
+            Ok(AreaFace {
                 outer: region.outer,
                 holes: region.holes,
                 line_ids: region.line_ids,
-            })
-            .ok_or(reason)
-    });
-    Ok(Located { key, face })
+                joined: false,
+            }),
+            true,
+        ),
+        Some(Err(reason)) => (by_lines.map_err(|_| reason), false),
+        None => (by_lines, false),
+    };
+    Ok(Located {
+        key,
+        face,
+        topology: from_topology,
+    })
 }
 
 /// The body of one Area: its region, where the lines its record names are all
@@ -1136,6 +1158,7 @@ fn draw_area(
         base_feet,
         height_feet,
         joined: face.joined,
+        topology: located.topology,
     })
 }
 
@@ -1333,6 +1356,10 @@ pub fn areas_from_partition_chain_records(
     let options = rf.memoised_design_options();
     let options_read = layout.reads_design_options(revit_version);
     let census = area_records(rf, layout, &declared);
+    // The records dropped are counted only on a file that holds an Area or an
+    // area boundary line: elsewhere nothing of an Area can be lost with them.
+    let holds_areas = !census.areas.is_empty() || !census.line_ids.is_empty();
+    rf.set_dropped_chain_entries(if holds_areas { census.dropped } else { 0 });
     let mut placed: BTreeMap<u32, AreaRecord> = census
         .areas
         .into_iter()
@@ -1470,6 +1497,9 @@ pub fn areas_from_partition_chain_records(
                 ));
                 if body.joined {
                     fields.push((AREA_JOINED_FIELD.into(), InstanceField::Bool(true)));
+                }
+                if body.topology {
+                    fields.push((AREA_TOPOLOGY_FIELD.into(), InstanceField::Bool(true)));
                 }
             }
             DecodedElement {

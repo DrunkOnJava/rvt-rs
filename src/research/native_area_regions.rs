@@ -57,6 +57,22 @@ pub const PARAMETER_TOLERANCE: f64 = 1e-9;
 /// topology saves for it.
 pub const SEGMENT_POINT_TOLERANCE_FEET: f64 = 1e-6;
 
+/// The most sides a circuit may have to be read: a loop of a room is never
+/// near this many.
+pub const MAX_CIRCUIT_SIDES: usize = 10_000;
+
+/// How close, feet, two segments' ends must be to be the same node of a plan
+/// topology (RE-317's node tolerance).
+pub const NODE_TOLERANCE_FEET: f64 = 1e-5;
+
+/// The side, feet, of the cells the plan's nodes are kept in to be found by
+/// position: much wider than [`NODE_TOLERANCE_FEET`].
+const NODE_CELL_FEET: f64 = 1e-3;
+
+/// The most parts a line's area rule may split it into: `offset_at` is
+/// searched for every cut.
+pub const MAX_OFFSET_PARTS: usize = 1_000;
+
 /// The Area is in no plan topology, or in more than one.
 pub const REFUSED_NO_PLAN: &str = "area_not_in_one_plan_topology";
 /// The circuit the Area names is not one of its plan's.
@@ -104,6 +120,37 @@ struct Plan {
     circuits: BTreeMap<i64, Circuit>,
     holes: BTreeMap<i64, Vec<i64>>,
     areas: BTreeSet<i64>,
+    /// The ends of the segments that bound a region (a segment no circuit
+    /// runs only as a spur), by cell, to count the segments that meet at a
+    /// node.
+    nodes: BTreeMap<(i64, i64), Vec<(f64, f64)>>,
+}
+
+fn node_cell(point: (f64, f64)) -> (i64, i64) {
+    (
+        (point.0 / NODE_CELL_FEET).floor() as i64,
+        (point.1 / NODE_CELL_FEET).floor() as i64,
+    )
+}
+
+impl Plan {
+    /// The number of ends of segments that bound a region at `point`: 2 where
+    /// a line runs on through it or two lines meet end to end, more where a
+    /// third meets them (RE-317: that point is a vertex of an outline).
+    fn degree_at(&self, point: (f64, f64)) -> usize {
+        let (cx, cy) = node_cell(point);
+        let mut count = 0;
+        for x in cx.saturating_sub(1)..=cx.saturating_add(1) {
+            for y in cy.saturating_sub(1)..=cy.saturating_add(1) {
+                count += self.nodes.get(&(x, y)).map_or(0, |ends| {
+                    ends.iter()
+                        .filter(|end| distance(**end, point) <= NODE_TOLERANCE_FEET)
+                        .count()
+                });
+            }
+        }
+        count
+    }
 }
 
 /// What an Area saves of its place: its circuit and its point.
@@ -345,6 +392,19 @@ fn plan(fields: &Value) -> Option<Plan> {
     for room in fields.get("m_rooms")?.as_array()? {
         out.areas.insert(identifier_i64(room)?);
     }
+    let mut live: BTreeSet<SegmentKey> = BTreeSet::new();
+    for circuit in out.circuits.values() {
+        if circuit.sides.len() <= MAX_CIRCUIT_SIDES {
+            live.extend(without_spurs(&circuit.sides).into_iter().map(segment_of));
+        }
+    }
+    for key in live {
+        if let Some(segment) = out.segments.get(&key) {
+            for end in [segment.ends.0, segment.ends.1] {
+                out.nodes.entry(node_cell(end)).or_default().push(end);
+            }
+        }
+    }
     Some(out)
 }
 
@@ -561,31 +621,48 @@ fn segment_of(side: SegmentKey) -> SegmentKey {
 /// `sides` without its spurs: a segment run one way and, by the next side,
 /// straight back, a line that ends inside the loop. Its two sides enclose
 /// nothing, and once moved by its offset it would leave a notch that
-/// Revit's area does not have (on Snowdon Towers, RE-330).
+/// Revit's area does not have (on Snowdon Towers, RE-333). Cancelling inverse
+/// neighbours, round the loop, is a stack pass; a circuit that is nothing but
+/// spurs comes out empty.
 fn without_spurs(sides: &[SegmentKey]) -> Vec<SegmentKey> {
-    let mut out = sides.to_vec();
-    'removed: while out.len() > 2 {
-        for k in 0..out.len() {
-            let next = (k + 1) % out.len();
-            let (a, b) = (out[k], out[next]);
-            if segment_of(a) == segment_of(b) && (a.2 < 0) != (b.2 < 0) {
-                out.remove(k.max(next));
-                out.remove(k.min(next));
-                continue 'removed;
+    let inverse =
+        |a: SegmentKey, b: SegmentKey| segment_of(a) == segment_of(b) && (a.2 < 0) != (b.2 < 0);
+    let mut out: Vec<SegmentKey> = Vec::with_capacity(sides.len());
+    for &side in sides {
+        match out.last() {
+            Some(&last) if inverse(last, side) => {
+                out.pop();
             }
+            _ => out.push(side),
         }
-        break;
     }
-    out
+    // The loop is a ring: its last side may cancel its first.
+    let (mut from, mut to) = (0, out.len());
+    while to - from >= 2 && inverse(out[from], out[to - 1]) {
+        from += 1;
+        to -= 1;
+    }
+    out[from..to].to_vec()
+}
+
+/// A loop of edges and, for each, whether its start is kept as a vertex of the
+/// outline where the loop runs straight on through it.
+struct Loop {
+    edges: Vec<Edge>,
+    keep: Vec<bool>,
 }
 
 fn circuit_edges(
     plan: &Plan,
     circuit: &Circuit,
     curves: &BTreeMap<i64, BoundaryCurve>,
-) -> Option<Vec<Edge>> {
-    // Each side's edges, and where its unmoved line ends.
-    let mut pieces: Vec<(Vec<Edge>, (f64, f64))> = Vec::new();
+) -> Option<Loop> {
+    if circuit.sides.len() > MAX_CIRCUIT_SIDES {
+        return None;
+    }
+    // A side's edges, and the end of its unmoved line.
+    type Side = (Vec<Edge>, (f64, f64));
+    let mut pieces: Vec<Side> = Vec::new();
     for (line, major, sub) in without_spurs(&circuit.sides) {
         let backwards = sub < 0;
         let index = if backwards { -sub - 1 } else { sub };
@@ -620,6 +697,8 @@ fn circuit_edges(
     // step between them.
     let n = edges.len();
     let mut joins: Vec<Option<(f64, f64)>> = vec![None; n];
+    // Whether a third segment meets the node a join is at.
+    let mut third: Vec<bool> = vec![false; n];
     let mut at = 0;
     for (side_edges, unmoved_end) in &pieces {
         at += side_edges.len();
@@ -635,6 +714,7 @@ fn circuit_edges(
                 .min_by(|p, q| distance(*p, *unmoved_end).total_cmp(&distance(*q, *unmoved_end)))
         };
         joins[next] = meet;
+        third[next] = plan.degree_at(*unmoved_end) > 2;
     }
     for k in 0..n {
         let mut edge = edges[k];
@@ -647,18 +727,21 @@ fn circuit_edges(
         edges[k] = edge;
     }
     let mut out: Vec<Edge> = Vec::new();
+    let mut keep: Vec<bool> = Vec::new();
     for k in 0..n {
         let edge = edges[k];
         let next = edges[(k + 1) % n];
         out.push(edge);
+        keep.push(third[k]);
         if distance(edge.end(), next.start()) > SEGMENT_POINT_TOLERANCE_FEET {
             out.push(Edge::Line {
                 from: edge.end(),
                 to: next.start(),
             });
+            keep.push(false);
         }
     }
-    Some(out)
+    Some(Loop { edges: out, keep })
 }
 
 /// The signed area of a loop of edges, exact for arcs.
@@ -666,23 +749,30 @@ fn edges_area(edges: &[Edge]) -> f64 {
     edges.iter().map(Edge::area_share).sum()
 }
 
+/// Whether the straight edge `edge` continues `before`, also straight, in the
+/// same direction.
+fn continues_straight(before: Edge, edge: Edge) -> bool {
+    let (Edge::Line { from: a, .. }, Edge::Line { from: b, to: c }) = (before, edge) else {
+        return false;
+    };
+    let (u, v) = ((b.0 - a.0, b.1 - a.1), (c.0 - b.0, c.1 - b.1));
+    let cross = u.0 * v.1 - u.1 * v.0;
+    let dot = u.0 * v.0 + u.1 * v.1;
+    dot > 0.0 && cross.abs() <= 1e-12 * u.0.hypot(u.1) * v.0.hypot(v.1)
+}
+
 /// A loop of edges as points, each arc in chords of at most
 /// [`ARC_STEP_RADIANS`], without a repeated closing vertex. A point where
-/// two straight edges continue in a straight line, a line cut where another
-/// meets it, is left out. RE-317 §3 keeps that point where a third line
-/// meets it, which this does not (RE-333 section 8: one office Area has two
-/// fewer vertices than Revit's export).
-fn edges_points(edges: &[Edge]) -> Vec<(f64, f64)> {
+/// two straight edges continue in a straight line is left out, unless a third
+/// line meets it (`keep`): then it is a vertex of the outline, as RE-317 §3
+/// has it and as Revit's export keeps it (RE-333 section 8, the office's
+/// Area 1).
+fn edges_points(edges: &[Edge], keep: &[bool]) -> Vec<(f64, f64)> {
     let mut out = Vec::new();
     for (k, edge) in edges.iter().enumerate() {
         let before = edges[(k + edges.len() - 1) % edges.len()];
-        if let (Edge::Line { from: a, .. }, Edge::Line { from: b, to: c }) = (before, *edge) {
-            let (u, v) = ((b.0 - a.0, b.1 - a.1), (c.0 - b.0, c.1 - b.1));
-            let cross = u.0 * v.1 - u.1 * v.0;
-            let dot = u.0 * v.0 + u.1 * v.1;
-            if dot > 0.0 && cross.abs() <= 1e-12 * u.0.hypot(u.1) * v.0.hypot(v.1) {
-                continue;
-            }
+        if !keep.get(k).copied().unwrap_or(false) && continues_straight(before, *edge) {
+            continue;
         }
         out.push(edge.start());
         if let Edge::Arc {
@@ -731,12 +821,12 @@ fn region(
         .circuits
         .get(&place.circuit)
         .ok_or(REFUSED_NO_CIRCUIT)?;
-    let edges = circuit_edges(plan, circuit, curves).ok_or(REFUSED_SIDE)?;
-    let area = edges_area(&edges);
+    let outline = circuit_edges(plan, circuit, curves).ok_or(REFUSED_SIDE)?;
+    let area = edges_area(&outline.edges);
     if area <= 0.0 || !area_agrees(area, circuit.area) {
         return Err(REFUSED_AREA);
     }
-    let outer = edges_points(&edges);
+    let outer = edges_points(&outline.edges, &outline.keep);
     let mut holes = Vec::new();
     let mut line_ids: BTreeSet<u32> = circuit
         .sides
@@ -745,12 +835,12 @@ fn region(
         .collect();
     for hole_id in plan.holes.get(&place.circuit).into_iter().flatten() {
         let hole = plan.circuits.get(hole_id).ok_or(REFUSED_NO_CIRCUIT)?;
-        let edges = circuit_edges(plan, hole, curves).ok_or(REFUSED_SIDE)?;
-        let area = edges_area(&edges);
+        let hole_outline = circuit_edges(plan, hole, curves).ok_or(REFUSED_SIDE)?;
+        let area = edges_area(&hole_outline.edges);
         if !area_agrees(area.abs(), hole.area.abs()) {
             return Err(REFUSED_AREA);
         }
-        let mut points = edges_points(&edges);
+        let mut points = edges_points(&hole_outline.edges, &hole_outline.keep);
         if area > 0.0 {
             points.reverse();
         }
