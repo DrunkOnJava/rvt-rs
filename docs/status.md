@@ -1112,7 +1112,9 @@ into loops, placed in the `SketchPlane`'s frame and swept between the
 extrusion's two `Double` parameters. Against the mesh Revit saved for each
 form, the 24 extrusions of the family corpus (12 releases) match within
 0.001 ft and so do all 6,172 extrusions of Autodesk's 58 sample projects
-(Revit 2015 to 2027) whose saved mesh decodes whole: 6,093 with the sketch
+(Revit 2015 to 2027) whose saved mesh decodes whole (by the report's §4
+criterion: volume within 1%, bounding box, vertices and surface samples
+within 0.01 ft): 6,093 with the sketch
 plane's normal as its matrix gives it, and 79, a down-facing plane that is
 not flipped and whose extrusion reads `m_alwaysRefPlaneNorm` false, with the
 normal reversed (a rule found on those 79). Ellipses (137 forms), two open
@@ -1124,11 +1126,14 @@ an export is checked against its own mesh. `rvt-ifc --family-extrusions`
 instance from its family's extrusions where they reproduce its saved mesh.
 On Core Interior, RE1 and the BIM4LCA office files the first run, which drew
 arcs as arcs, replaced 335 bodies; of the 251 the body scorer matched, 250 had
-Revit's vertices within 0.001 ft of their surface and one did not (Revit's own
-tessellation of an arc starts where the file does not say). An instance with
-an arc in a profile therefore keeps its mesh: 64 bodies are replaced, all 64
-within 0.001 ft, and every scorer row equals the saved-mesh baseline's
-(`reports/element-framing/RE-327-family-extrusions.md` §9).
+Revit's vertices within 0.001 ft of their surface and one did not (the volumes
+suggest a difference in where Revit's tessellation of an arc starts: an
+inference, not a measurement). An instance with an arc in a profile therefore
+keeps its mesh: 64 bodies are replaced, all 64 within 0.001 ft, and every
+scorer row equals the saved-mesh baseline's. The flag reads Revit 2024 to 2027
+(measured on 2024 and 2025); an earlier file has no instance transform that
+reads, so nothing is replaced (`reports/element-framing/RE-327-family-extrusions.md`
+§9).
 
 ## Performance
 

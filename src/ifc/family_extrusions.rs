@@ -93,8 +93,9 @@ pub struct FamilyExtrusionReport {
     /// every candidate of a file before Revit 2024, and one whose transform
     /// is not a rotation (a reflection is never read).
     pub unplaced: usize,
-    /// Candidates whose mesh is too large to compare or indexes outside its
-    /// vertices.
+    /// Candidates whose mesh is too large to compare (more triangles than the
+    /// reader bounds, or more vertices than the comparison budget allows for
+    /// the extrusions' curves) or indexes outside its vertices.
     pub unchecked: usize,
     /// Candidates whose mesh the extrusions do not reproduce, by the first
     /// thing that differs: the volume, a vertex, a sampled point of the
