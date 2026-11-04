@@ -51,6 +51,19 @@ pub struct Options {
     /// needs only some parameters skips the per-element pass on a file that
     /// defines none of them.
     pub definition_filter: Option<fn(&str) -> bool>,
+    /// With [`Self::definition_filter`], whether [`extract`] leaves out a
+    /// selected record whose body holds none of the ids of the definitions
+    /// the filter accepts. A record saves a value against its definition's
+    /// id, a whole little-endian integer in its body (an `Identifier`: 4
+    /// bytes from Revit 2015 to 2023, 8 from 2024), so a record that does not
+    /// hold the integer's first four bytes holds no value for the definition
+    /// and is not decoded. For a reader that takes nothing but accepted
+    /// parameters from the records it selects: not one that takes values
+    /// from the records a record names (its type's), unless they are
+    /// selected the same way. Off by default (#1237: on a Revit 2015 to 2023
+    /// project the parameters named for a property are on a handful of the
+    /// thousands of records the read decoded).
+    pub filtered_parameters_only: bool,
     /// Whether each [`Record`] carries what is derived from it beyond its
     /// graph and saved metadata: [`RecordSource::body_sha256`], the default
     /// IFC GUID and the effective IFC parameter. A record read without them
@@ -110,9 +123,47 @@ impl Default for Options {
             graph_classes: None,
             releases: 2023..=2027,
             definition_filter: None,
+            filtered_parameters_only: false,
             record_extras: false,
             keep_body: false,
         }
+    }
+}
+
+/// The ids of parameter definitions to find in record bodies
+/// ([`Options::filtered_parameters_only`]): each id's low 32 bits, which
+/// are the first four bytes of its integer in a record whatever its width.
+struct IdNeedles {
+    /// A bit for each low 16 bits of an id, to rule most positions out
+    /// before the set is asked.
+    low: Vec<u64>,
+    ids: BTreeSet<u32>,
+}
+
+impl IdNeedles {
+    /// The word and bit of `low` that `value`'s low 16 bits select.
+    fn slot(value: u32) -> (usize, u64) {
+        let bit = (value & 0xffff) as usize;
+        (bit / 64, 1u64 << (bit % 64))
+    }
+
+    fn new(ids: impl IntoIterator<Item = i64>) -> Self {
+        let ids: BTreeSet<u32> = ids.into_iter().map(|id| id as u32).collect();
+        let mut low = vec![0u64; 1024];
+        for &id in &ids {
+            let (word, bit) = Self::slot(id);
+            low[word] |= bit;
+        }
+        Self { low, ids }
+    }
+
+    /// Whether any of the ids' four bytes is anywhere in `body`.
+    fn occur_in(&self, body: &[u8]) -> bool {
+        body.windows(4).any(|window| {
+            let value = u32::from_le_bytes([window[0], window[1], window[2], window[3]]);
+            let (word, bit) = Self::slot(value);
+            self.low[word] & bit != 0 && self.ids.contains(&value)
+        })
     }
 }
 #[derive(Debug, Serialize)]
@@ -410,7 +461,26 @@ pub fn extract(
         nothing.selected_ids.clear();
         nothing.selected_classes = BTreeSet::from([String::new()]);
     }
-    let mut summary = extract_records(file, &nothing, false, definitions, emit)?;
+    let needles = options
+        .definition_filter
+        .filter(|_| options.filtered_parameters_only)
+        .map(|accepts| {
+            IdNeedles::new(
+                definitions
+                    .definitions
+                    .values()
+                    .filter(|definition| accepts(&definition.caption))
+                    .map(|definition| definition.parameter_id)
+                    .chain(
+                        definitions
+                            .builtin_definitions
+                            .values()
+                            .filter(|definition| accepts(&definition.caption))
+                            .map(|definition| definition.parameter_id),
+                    ),
+            )
+        });
+    let mut summary = extract_records(file, &nothing, false, definitions, needles.as_ref(), emit)?;
     summary.parameter_binding_context = serde_json::json!({
         "bindings": definitions.bindings,
         "family_categories": definitions.family_categories,
@@ -421,6 +491,31 @@ pub fn extract(
     summary.builtin_catalog_provenance = definitions.builtin_catalog_provenance.clone();
     summary.definition_diagnostics = pass.diagnostics.clone();
     Ok(summary)
+}
+
+/// The captions of the file's parameter definitions that `accepts`, from the
+/// handle's [`DefinitionPass`] for `options` (read if it has none, and kept
+/// for the [`extract`] that follows).
+pub(crate) fn definition_captions(
+    file: &mut RevitFile,
+    options: &Options,
+    accepts: fn(&str) -> bool,
+) -> Result<Vec<String>> {
+    let pass = definition_pass(file, options)?;
+    Ok(pass
+        .registry
+        .definitions
+        .values()
+        .map(|definition| definition.caption.as_str())
+        .chain(
+            pass.registry
+                .builtin_definitions
+                .values()
+                .map(|definition| definition.caption.as_str()),
+        )
+        .filter(|caption| accepts(caption))
+        .map(str::to_string)
+        .collect())
 }
 
 /// What [`extract`]'s first pass reads: the file's parameter definitions,
@@ -458,6 +553,7 @@ fn definition_pass(file: &mut RevitFile, options: &Options) -> Result<Arc<Defini
         graph_classes,
         releases,
         definition_filter: _,
+        filtered_parameters_only: _,
         record_extras: _,
         keep_body: _,
     } = options;
@@ -487,6 +583,7 @@ fn definition_pass(file: &mut RevitFile, options: &Options) -> Result<Arc<Defini
             &definition_options,
             true,
             &crate::native_parameter_definitions::Registry::default(),
+            None,
             |record| {
                 let result =
                     match record.graph.as_ref() {
@@ -567,6 +664,7 @@ pub fn extract_graphs(
         options,
         false,
         &crate::native_parameter_definitions::Registry::default(),
+        None,
         emit,
     )
 }
@@ -635,6 +733,7 @@ fn extract_records(
     options: &Options,
     definitions_only: bool,
     definitions: &crate::native_parameter_definitions::Registry,
+    needles: Option<&IdNeedles>,
     mut emit: impl FnMut(Record) -> Result<()>,
 ) -> Result<Summary> {
     let version = file.layout_release()?;
@@ -802,6 +901,7 @@ fn extract_records(
     }
     let mut seen = BTreeSet::new();
     let mut seen_ids = BTreeSet::new();
+    let mut definition_owners: BTreeMap<u16, bool> = BTreeMap::new();
     for name in names {
         let partition: u32 = name[11..].parse()?;
         if walked
@@ -877,20 +977,30 @@ fn extract_records(
                         .and_then(|tag| registry.class(tag))
                         .map(|c| c.name.clone());
                     if definitions_only {
-                        let mut tag = le_bytes::u16_at(body, 0)
+                        let first = le_bytes::u16_at(body, 0)
                             .ok_or_else(|| anyhow::anyhow!("truncated definition candidate tag"))?;
-                        let mut owns_definition = matches!(
-                            class_name.as_deref(),
-                            Some("UnitsElem" | "ParamBinding" | "Family" | "FamilySymbol")
-                        );
-                        for _ in 0..128 {
-                            let Some(class) = registry.class(tag) else {
-                                break;
-                            };
-                            owns_definition |=
-                                class.fields.iter().any(|field| field.name == "m_pParamDef");
-                            tag = class.parent_reference.tag;
-                        }
+                        // Whether a class owns a definition depends on its
+                        // tag alone: asked once for each, not for each of
+                        // the file's records (#1237).
+                        let owns_definition =
+                            *definition_owners.entry(first).or_insert_with(|| {
+                                let mut tag = first;
+                                let mut owns = matches!(
+                                    class_name.as_deref(),
+                                    Some("UnitsElem" | "ParamBinding" | "Family" | "FamilySymbol")
+                                );
+                                for _ in 0..128 {
+                                    let Some(class) = registry.class(tag) else {
+                                        break;
+                                    };
+                                    owns |= class
+                                        .fields
+                                        .iter()
+                                        .any(|field| field.name == "m_pParamDef");
+                                    tag = class.parent_reference.tag;
+                                }
+                                owns
+                            });
                         if !owns_definition {
                             continue;
                         }
@@ -932,6 +1042,9 @@ fn extract_records(
                             })?;
                             continue;
                         }
+                    }
+                    if needles.is_some_and(|needles| !needles.occur_in(body)) {
+                        continue;
                     }
                     let decoded = native_parameters::decode_graph_with_catalog_usage(
                         body,
