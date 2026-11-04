@@ -278,7 +278,9 @@ The element (`kind="elements"`) or room (`kind="rooms"`) schedule as CSV
 text, with the columns of `rvt-schedule`. `metric=True` writes lengths in
 metres, `excel=True` prefixes a UTF-8 byte-order mark for Excel on Windows.
 Only decoded values are written; unknowns are empty cells. `phase` is
-`write_ifc`'s. Any other `kind` raises `ValueError`.
+`write_ifc`'s, and `rvt-schedule --phase <name|id>` is its command-line twin:
+the schedule is of the model the document exporter builds at that phase. Any
+other `kind` raises `ValueError`.
 
 ```text
 schema_summary(self) -> dict[str, int]

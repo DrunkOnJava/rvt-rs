@@ -855,27 +855,29 @@ impl PyRevitFile {
     /// metres; `excel=True` prefixes a UTF-8 byte-order mark for Excel on
     /// Windows. Only decoded values are written; unknowns are empty cells.
     /// `phase` (a phase's name or its ElementId, default the project's last)
-    /// schedules that export phase, as `write_ifc` does.
+    /// schedules that export phase, as `rvt-schedule --phase` does.
     #[pyo3(signature = (kind = "elements", metric = false, excel = false, phase = None))]
     fn schedule_csv(
         &mut self,
-        py: Python<'_>,
         kind: &str,
         metric: bool,
         excel: bool,
         phase: Option<&Bound<'_, PyAny>>,
     ) -> PyResult<String> {
         use rvt::ifc::schedule_csv::{CsvOptions, LengthUnit, elements_csv, rooms_csv};
-        let phase = self.phase_for_export(phase)?;
-        let model = export_run(
-            py,
-            &mut self.inner,
-            ifc::ExportQualityMode::Scaffold,
-            self.walker_limits,
-            false,
-            phase,
-        )?
-        .model;
+        // The model `rvt-schedule` builds: the document exporter alone, at the
+        // phase set on the handle first.
+        if let Some(phase) = self.phase_for_export(phase)? {
+            self.inner.set_export_phase(&phase).map_err(to_py_val)?;
+        }
+        let model = ifc::RvtDocExporter
+            .export_with_diagnostics_mode_and_limits(
+                &mut self.inner,
+                ifc::ExportQualityMode::Scaffold,
+                self.walker_limits,
+            )
+            .map_err(to_py_val)?
+            .model;
         let options = CsvOptions {
             unit: if metric {
                 LengthUnit::Metres

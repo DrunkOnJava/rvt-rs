@@ -15,8 +15,10 @@
   a phase export the last phase as before. A handle exported at one phase and
   then at another no longer carries the first's notes (the family spaces left
   out for want of a body, the Areas left unwritten) into the second's
-  diagnostics. `RevitFile::project_phases` is the
-  new public method that lists a project's phases. The stubs
+  diagnostics. `rvt-schedule --phase <name|id>` schedules another phase, and
+  Python's `schedule_csv(phase=...)` builds the model it builds (the document
+  exporter at the phase set on the handle first). `RevitFile::project_phases`
+  is the new public method that lists a project's phases. The stubs
   (`python/rvt/__init__.pyi`), [docs/python.md](docs/python.md) and
   [docs/viewer-api.md](docs/viewer-api.md) follow, and RE1 Architecture
   checks it in Python (`tests/python/test_export_phase.py`) and in the

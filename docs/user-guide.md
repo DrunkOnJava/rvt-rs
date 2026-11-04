@@ -211,6 +211,7 @@ rvt-schedule model.rvt                          # model.elements.csv next to the
 rvt-schedule model.rvt --schedule rooms         # model.rooms.csv: number, name, level, area
 rvt-schedule model.rvt --metric --excel         # metres, and a BOM so Excel reads non-ASCII names
 rvt-schedule model.rvt -o -                     # print the CSV instead of writing a file
+rvt-schedule model.rvt --phase "Existing"       # another phase than the project's last (a name or an ElementId)
 ```
 
 The element schedule has one row per decoded building element: Revit
