@@ -16,6 +16,7 @@
   14 rooms in Working Drawings, the second of three phases, which a public
   Revit 2018 export of it holds: its saves from Revit 2016 on no longer write
   them by default, and write them with `--phase "Working Drawings"` (to be
-  confirmed by the unfiltered Measure of this change). The Python bindings and
-  the viewer export the last phase. Report:
+  confirmed by the unfiltered Measure of this change). Its Revit 2015 save
+  keeps them, because both phase rules start at Revit 2016 (#1332). The Python
+  bindings and the viewer export the last phase. Report:
   `reports/element-framing/RE-326-room-phases.md`.

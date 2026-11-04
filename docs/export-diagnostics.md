@@ -157,7 +157,8 @@ which Revit's exporter does not check against a phase. Autodesk's
 three phases, so the default export counts 14 for that phase and
 `--phase "Working Drawings"` counts none (to be read from the unfiltered
 Measure of this change). Revit 2016 to 2023 apply it as they apply the
-element filter; Revit 2015 and earlier write every room.
+element filter; Revit 2015 and earlier write every room, as every element
+(#1332).
 
 On Revit 2024 to 2027, a door or window is written as its opening alone,
 with no door or window, only where its type's native record was read with

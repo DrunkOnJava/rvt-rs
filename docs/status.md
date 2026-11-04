@@ -1014,8 +1014,8 @@ has a room outside its last phase and such an export: Autodesk's
 `rac_basic_sample_project` has 14 rooms in the second of its three phases, on
 all 13 releases, and a public Revit 2018 export of it holds all 14. They are
 left out by default and written with `--phase "Working Drawings"`. Revit 2015
-and earlier write every room, as every element. The Python bindings and the
-viewer follow the default
+and earlier write every room, as every element: both phase rules start at
+Revit 2016 (#1332). The Python bindings and the viewer follow the default
 (`reports/element-framing/RE-326-room-phases.md`).
 
 **RE-281 (2026-10-30)** reads the project's phases and each element's saved
