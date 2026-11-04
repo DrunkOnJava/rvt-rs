@@ -7,7 +7,11 @@
   again, apart from the newest few that a build may still restore from;
 - on `main`, the superseded overlay base databases of each CodeQL language and
   version: every analysis of `main` saves one under its commit, and the next
-  analysis on that version reads only the newest.
+  analysis on that version reads only the newest;
+- on `main`, the superseded generations of Measure's score cache, which a run
+  restores from the newest of its prefix and saves anew, and all but the newest
+  sixteen of its binary caches, one per commit built, which only runs of that
+  commit read.
 
 The caches of live branches, of open pull requests, of tags, and `main`'s newest
 generations are kept. The repository's cache limit is 10 GB and GitHub evicts the
@@ -39,6 +43,15 @@ RUST_CACHE_KEY = re.compile(r"(v0-rust-.+)-[0-9a-f]{8}")
 # highest enabled CLI version among the cached bases, so each version keeps its
 # newest ones.
 CODEQL_OVERLAY_KEY = re.compile(r"(codeql-overlay-base-database-\d+-[0-9a-f]+-[a-z]+-[0-9.]+)-[0-9a-f]{40}-\d+-\d+")
+# Measure's score cache (tools/ci/measure-cache.py):
+# measure-scores-v<format>-<main or x-name>-<shard>.<side>-<measured sha>-<run id>-<attempt>.
+# A run restores the newest of its shard's prefix, so only the newest generations are read.
+SCORE_CACHE_KEY = re.compile(r"(measure-scores-v\d+-.+?)(?:-[0-9a-f]{40})?-\d+-\d+")
+# Measure's binary cache: rvt-bin-v<format>-<measured commit>-<os>-<arch>-<toolchain>-<profile>, one
+# per commit built. A commit's key is read only by runs of that commit, which are
+# the last few: the newest BINARY_GENERATIONS are kept.
+BINARY_CACHE_KEY = re.compile(r"(rvt-bin-v\d+)-[0-9a-f]{40}-.+")
+BINARY_GENERATIONS = 16
 
 
 def gh(*args):
@@ -76,12 +89,17 @@ def unusable(caches, open_prs, live_branches, keep):
             if name != "main" and name not in live_branches:
                 doomed.append((c, f"branch {name} was deleted"))
             elif name == "main":
-                k = RUST_CACHE_KEY.fullmatch(c["key"]) or CODEQL_OVERLAY_KEY.fullmatch(c["key"])
+                k = (
+                    RUST_CACHE_KEY.fullmatch(c["key"])
+                    or CODEQL_OVERLAY_KEY.fullmatch(c["key"])
+                    or SCORE_CACHE_KEY.fullmatch(c["key"])
+                    or BINARY_CACHE_KEY.fullmatch(c["key"])
+                )
                 if k:
                     generations.setdefault(k.group(1), []).append(c)
     for family, lst in generations.items():
         lst.sort(key=lambda c: c["last_accessed_at"], reverse=True)
-        for c in lst[keep:]:
+        for c in lst[(BINARY_GENERATIONS if family.startswith("rvt-bin-") else keep):]:
             doomed.append((c, f"superseded generation of {family}"))
     return doomed
 
