@@ -2694,44 +2694,10 @@ impl StepWriter<'_> {
                 let ifc_upper = ifc_type.to_ascii_uppercase();
                 // RE-93, RE-94: a window's or door's OverallHeight and
                 // OverallWidth are its opening's, which Revit's export writes
-                // there.
-                let property_length = |key: &str| {
-                    property_set.as_ref().and_then(|set| {
-                        set.properties.iter().find_map(|p| match &p.value {
-                            super::entities::PropertyValue::PositiveLengthFeet(value)
-                                if p.name == key =>
-                            {
-                                Some(*value)
-                            }
-                            _ => None,
-                        })
-                    })
-                };
-                let [.., width_key, height_key] = super::export_content::FILLER_OPENING_PROPERTIES;
-                // RE-187: a door with no opening read takes its type's Width and
-                // Height, which Revit's export writes there too.
-                let [type_width, type_height] = super::export_content::DOOR_TYPE_SIZE_PROPERTIES;
-                // RE-215: before either, the extents of the outline the symbol
-                // that draws it cuts, which Revit's exporter sizes it from.
-                let [cut_width, cut_height] = super::export_content::CUT_LOOP_SIZE_PROPERTIES;
-                // #810: where the symbol cuts no loop and no opening is read,
-                // the record box along its own X axis and its height, ahead
-                // of the type's size, which on the BIM4LCA office is 10 mm
-                // short of Revit's.
-                let [box_width, box_height] = super::export_content::INSTANCE_BOX_SIZE_PROPERTIES;
-                // RE-318: where the symbol's saved graphics hold lines of no
-                // category, their extent along X is the width, ahead of the
-                // record box's.
-                let symbol_width =
-                    property_length(super::export_content::SYMBOL_WIRE_WIDTH_PROPERTY);
-                let overall = property_length(cut_height)
-                    .zip(property_length(cut_width))
-                    .or_else(|| property_length(height_key).zip(property_length(width_key)))
-                    .or_else(|| {
-                        property_length(box_height)
-                            .zip(symbol_width.or_else(|| property_length(box_width)))
-                    })
-                    .or_else(|| property_length(type_height).zip(property_length(type_width)));
+                // there; `IfcModel::filler_sizes` has what they are worked out
+                // to.
+                let filler_size = model.filler_sizes.get(&entity_idx);
+                let overall = filler_size.map(|size| (size.height_feet, size.width_feet));
                 let tail = element_attribute_tail(
                     &ifc_upper,
                     &tag_quoted,
@@ -2965,7 +2931,7 @@ impl StepWriter<'_> {
                         // (RE-215), which Revit's export draws the opening
                         // as an extrusion of; with no cut loop it writes no
                         // quantities on the opening.
-                        let extruded = property_length(cut_width).is_some();
+                        let extruded = filler_size.is_some_and(|size| size.cut_loop);
                         if let (true, Some(&width)) = (extruded, wall_widths.get(h_idx)) {
                             let quantities = PropertySet {
                                 name: "Qto_OpeningElementBaseQuantities".into(),
