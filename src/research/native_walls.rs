@@ -48,6 +48,7 @@ use serde_json::Value;
 use crate::RevitFile;
 use crate::native_document::{Options, extract_graphs};
 use crate::native_json::{element_id, element_id_i64};
+use crate::native_wall_types::{functions_of_types, type_function, wall_type_id};
 
 /// A wall's curve and the joins at its ends, from its native record.
 #[derive(Debug, Clone, PartialEq)]
@@ -153,17 +154,22 @@ fn line_ends(fields: &Value) -> Option<([f64; 2], [f64; 2])> {
 
 /// The ElementIds named by a wall's top join (every `JoinToRoofGStep` with
 /// `m_baseOrTop` 1, its `m_ids`) and by its `CutPairGStep`s (`m_otherId`),
-/// from the `(class, fields)` of the objects of its record; a null reference
-/// (an id of 0 or less) names nothing. `None` where a step names its
-/// elements in a shape that is not read, so that no step is left out unseen.
-fn named_by_steps<'a>(steps: impl Iterator<Item = (&'a str, &'a Value)>) -> Option<BTreeSet<u64>> {
-    let mut named = BTreeSet::new();
+/// each as its own set, from the `(class, fields)` of the objects of its
+/// record; a null reference (an id of 0 or less) names nothing. `None` where
+/// a step names its elements in a shape that is not read, so that no step is
+/// left out unseen.
+fn named_by_steps<'a>(
+    steps: impl Iterator<Item = (&'a str, &'a Value)>,
+) -> Option<(BTreeSet<u64>, BTreeSet<u64>)> {
+    let mut joined = BTreeSet::new();
+    let mut paired = BTreeSet::new();
     for (class, fields) in steps {
-        let references: Vec<&Value> = match class {
-            "JoinToRoofGStep" if fields.get("m_baseOrTop").and_then(Value::as_i64) == Some(1) => {
-                fields.get("m_ids")?.as_array()?.iter().collect()
-            }
-            "CutPairGStep" => vec![fields.get("m_otherId")?],
+        let (references, named): (Vec<&Value>, &mut BTreeSet<u64>) = match class {
+            "JoinToRoofGStep" if fields.get("m_baseOrTop").and_then(Value::as_i64) == Some(1) => (
+                fields.get("m_ids")?.as_array()?.iter().collect(),
+                &mut joined,
+            ),
+            "CutPairGStep" => (vec![fields.get("m_otherId")?], &mut paired),
             _ => continue,
         };
         for reference in references {
@@ -173,7 +179,7 @@ fn named_by_steps<'a>(steps: impl Iterator<Item = (&'a str, &'a Value)>) -> Opti
             }
         }
     }
-    Some(named)
+    Some((joined, paired))
 }
 
 /// The join listing `wall`'s `end`, as (member, end it joins by) pairs.
@@ -282,6 +288,11 @@ pub struct WallRecords {
     /// `CutPairGStep`s name, in ascending order. A wall that names none, or
     /// one of whose steps is not readable, is left out.
     pub top_cutters: BTreeMap<u64, Vec<u64>>,
+    /// Those of [`Self::top_cutters`] that only a `CutPairGStep` names, never
+    /// the top join (RE-320): a Join Geometry cut takes the volume the element
+    /// shares with the wall, which is the wall's top only where the element
+    /// reaches it. A wall with none is left out.
+    pub pair_only: BTreeMap<u64, Vec<u64>>,
     /// The walls whose record holds no step but the harmless ones (a wall's
     /// base, ends, split faces, reference planes, join tweaks and layer
     /// extensions):
@@ -306,6 +317,116 @@ fn is_top_joined(graph: &crate::native_parameters::ObjectGraph) -> bool {
     })
 }
 
+/// What reads of walls' native records have found, kept so that the reader
+/// of the same walls that follows finds it rather than reading the records
+/// again (#1237: each read is a pass over the file, and on a Revit 2015 to
+/// 2023 file the wall types' ids and the top joins read the same records).
+/// Each fact is kept with the walls it was read for, so a wall a read did not
+/// cover is read when it is asked for.
+#[derive(Debug, Default)]
+pub struct WallReads {
+    type_ids: BTreeMap<u64, u64>,
+    type_ids_read: BTreeSet<u64>,
+    top_joined: BTreeMap<u64, bool>,
+    top_joins_read: BTreeSet<u64>,
+    functions: BTreeMap<u64, i64>,
+    functions_read: BTreeSet<u64>,
+}
+
+impl WallReads {
+    /// The type id ([`crate::native_wall_types::wall_type_functions`]) of each
+    /// of `type_walls` and whether the top of each of `join_walls` is joined
+    /// ([`wall_top_joins`]), in one pass over the records of the walls not
+    /// read already. Nothing is read where there are none.
+    pub fn read(
+        &mut self,
+        rf: &mut RevitFile,
+        type_walls: &BTreeSet<u64>,
+        join_walls: &BTreeSet<u64>,
+    ) -> anyhow::Result<()> {
+        let types: BTreeSet<u64> = type_walls
+            .difference(&self.type_ids_read)
+            .copied()
+            .collect();
+        let joins: BTreeSet<u64> = join_walls
+            .difference(&self.top_joins_read)
+            .copied()
+            .collect();
+        let selected: BTreeSet<u64> = types.union(&joins).copied().collect();
+        if selected.is_empty() {
+            return Ok(());
+        }
+        let options = Options {
+            selected_ids: selected,
+            releases: crate::native_document::NATIVE_RELEASES,
+            ..Options::default()
+        };
+        let mut type_ids: BTreeMap<u64, u64> = BTreeMap::new();
+        let mut top_joined: BTreeMap<u64, bool> = BTreeMap::new();
+        extract_graphs(rf, &options, |record| {
+            let Some(graph) = record.graph.as_ref() else {
+                return Ok(());
+            };
+            let id = record.identity.element_id;
+            if types.contains(&id) {
+                if let Some(type_id) = wall_type_id(graph) {
+                    type_ids.insert(id, type_id);
+                }
+            }
+            if joins.contains(&id)
+                && matches!(record.class_name.as_deref(), Some("SWall" | "ArcWall"))
+            {
+                top_joined.insert(id, is_top_joined(graph));
+            }
+            Ok(())
+        })?;
+        self.type_ids.extend(type_ids);
+        self.type_ids_read.extend(types);
+        self.top_joined.extend(top_joined);
+        self.top_joins_read.extend(joins);
+        Ok(())
+    }
+
+    /// [`wall_top_joins`], reading only the walls not read already.
+    pub fn top_joins(
+        &mut self,
+        rf: &mut RevitFile,
+        walls: &BTreeSet<u64>,
+    ) -> anyhow::Result<BTreeMap<u64, bool>> {
+        self.read(rf, &BTreeSet::new(), walls)?;
+        Ok(walls
+            .iter()
+            .filter_map(|id| Some((*id, *self.top_joined.get(id)?)))
+            .collect())
+    }
+
+    /// [`crate::native_wall_types::wall_type_functions`], reading only the
+    /// walls and the types not read already.
+    pub fn type_functions(
+        &mut self,
+        rf: &mut RevitFile,
+        walls: &BTreeSet<u64>,
+    ) -> anyhow::Result<BTreeMap<u64, i64>> {
+        self.read(rf, walls, &BTreeSet::new())?;
+        let wall_type: BTreeMap<u64, u64> = walls
+            .iter()
+            .filter_map(|id| Some((*id, *self.type_ids.get(id)?)))
+            .collect();
+        let unread: BTreeSet<u64> = wall_type
+            .values()
+            .copied()
+            .filter(|type_id| !self.functions_read.contains(type_id))
+            .collect();
+        let found = functions_of_types(rf, &unread)?;
+        self.functions.extend(found);
+        self.functions_read.extend(unread);
+        Ok(wall_type
+            .into_iter()
+            .filter_map(|(wall, type_id)| Some((wall, *self.functions.get(&type_id)?)))
+            .collect())
+    }
+}
+
 /// Whether the top of each of `walls` whose `SWall` or `ArcWall` record is
 /// read is joined to a roof or floor ([`WallRecords::top_joined`]), without
 /// the rest of [`native_walls_and_top_joins`]. Read on Revit 2015 to 2027
@@ -315,27 +436,7 @@ pub fn wall_top_joins(
     rf: &mut RevitFile,
     walls: &BTreeSet<u64>,
 ) -> anyhow::Result<BTreeMap<u64, bool>> {
-    let mut top_joined: BTreeMap<u64, bool> = BTreeMap::new();
-    if walls.is_empty() {
-        return Ok(top_joined);
-    }
-    let options = Options {
-        selected_ids: walls.clone(),
-        releases: crate::native_document::NATIVE_RELEASES,
-        ..Options::default()
-    };
-    extract_graphs(rf, &options, |record| {
-        let (Some(class), Some(graph)) = (record.class_name.as_deref(), record.graph.as_ref())
-        else {
-            return Ok(());
-        };
-        let id = record.identity.element_id;
-        if matches!(class, "SWall" | "ArcWall") && walls.contains(&id) {
-            top_joined.insert(id, is_top_joined(graph));
-        }
-        Ok(())
-    })?;
-    Ok(top_joined)
+    WallReads::default().top_joins(rf, walls)
 }
 
 /// [`native_walls`], and for every one of `walls` whose `SWall` or `ArcWall`
@@ -359,12 +460,27 @@ pub fn native_walls_and_top_joins(
     rf: &mut RevitFile,
     walls: &BTreeSet<u64>,
 ) -> anyhow::Result<WallRecords> {
+    native_walls_and_top_joins_into(rf, walls, &mut WallReads::default())
+}
+
+/// [`native_walls_and_top_joins`], leaving in `reads` what the same records
+/// give a reader of the walls' types: each of `walls`' type ids, and the
+/// Function of each `BasicWallType` record the read takes besides (#1237).
+pub fn native_walls_and_top_joins_into(
+    rf: &mut RevitFile,
+    walls: &BTreeSet<u64>,
+    reads: &mut WallReads,
+) -> anyhow::Result<WallRecords> {
     if walls.is_empty() {
         return Ok(WallRecords::default());
     }
+    let mut type_ids: BTreeMap<u64, u64> = BTreeMap::new();
+    let mut functions: BTreeMap<u64, i64> = BTreeMap::new();
+    let mut functions_read: BTreeSet<u64> = BTreeSet::new();
     let mut top_joined: BTreeMap<u64, bool> = BTreeMap::new();
     let mut uncut: BTreeSet<u64> = BTreeSet::new();
     let mut top_cutters: BTreeMap<u64, Vec<u64>> = BTreeMap::new();
+    let mut pair_only: BTreeMap<u64, Vec<u64>> = BTreeMap::new();
     let mut whole: BTreeSet<u64> = BTreeSet::new();
     let mut bounded: BTreeMap<u64, Vec<u64>> = BTreeMap::new();
     let options = Options {
@@ -375,12 +491,24 @@ pub fn native_walls_and_top_joins(
     let mut found: BTreeMap<u64, (NativeWall, Option<u64>)> = BTreeMap::new();
     let mut types: BTreeMap<u64, [f64; 2]> = BTreeMap::new();
     extract_graphs(rf, &options, |record| {
+        if let Some(graph) = record.graph.as_ref() {
+            let id = record.identity.element_id;
+            if walls.contains(&id) {
+                if let Some(type_id) = wall_type_id(graph) {
+                    type_ids.insert(id, type_id);
+                }
+            }
+        }
         let (Some(class), Some(graph)) = (record.class_name.as_deref(), record.graph.as_ref())
         else {
             return Ok(());
         };
         let id = record.identity.element_id;
         if class == "BasicWallType" {
+            functions_read.insert(id);
+            if let Some(function) = type_function(graph) {
+                functions.insert(id, function);
+            }
             if let Some(shells) = graph
                 .objects
                 .iter()
@@ -407,8 +535,14 @@ pub fn native_walls_and_top_joins(
             .objects
             .iter()
             .map(|object| (object.class_name.as_str(), &object.fields));
-        if let Some(named) = named_by_steps(steps).filter(|named| !named.is_empty()) {
-            top_cutters.insert(id, named.into_iter().collect());
+        if let Some((joined, paired)) = named_by_steps(steps)
+            .filter(|(joined, paired)| !(joined.is_empty() && paired.is_empty()))
+        {
+            let only: Vec<u64> = paired.difference(&joined).copied().collect();
+            top_cutters.insert(id, joined.union(&paired).copied().collect());
+            if !only.is_empty() {
+                pair_only.insert(id, only);
+            }
         }
         if graph.objects.iter().all(|object| {
             !object.class_name.ends_with("Step")
@@ -548,6 +682,10 @@ pub fn native_walls_and_top_joins(
         }
         Ok(())
     })?;
+    reads.type_ids.extend(type_ids);
+    reads.type_ids_read.extend(walls.iter().copied());
+    reads.functions.extend(functions);
+    reads.functions_read.extend(functions_read);
     let walls = found
         .into_iter()
         .map(|(id, (mut wall, type_id))| {
@@ -561,6 +699,7 @@ pub fn native_walls_and_top_joins(
         top_joined,
         uncut,
         top_cutters,
+        pair_only,
         whole,
         bounded,
     })

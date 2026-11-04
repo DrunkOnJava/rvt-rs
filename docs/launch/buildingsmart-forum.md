@@ -13,7 +13,7 @@ The repository is public here:
 - License: Apache-2.0
 - Sample output: [`tests/fixtures/synthetic-project.ifc`](https://github.com/DrunkOnJava/rvt-rs/blob/main/tests/fixtures/synthetic-project.ifc)
 - Compatibility page: [`docs/compatibility.md`](https://github.com/DrunkOnJava/rvt-rs/blob/main/docs/compatibility.md)
-- What is read, measured against Revit's own exports: [`README.md`](https://github.com/DrunkOnJava/rvt-rs/blob/main/README.md#what-rvt-rs-reads-from-real-projects)
+- What is read, measured against Revit's own exports: [`docs/evidence.md`](https://github.com/DrunkOnJava/rvt-rs/blob/main/docs/evidence.md#what-rvt-rs-reads-from-real-projects)
 
 ## Why another exporter
 

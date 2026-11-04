@@ -9,6 +9,9 @@ The pages under `docs/` are of three kinds. The user pages say what rvt-rs does 
 - [Python](python.md): the `rvt` package's API, with examples that run in CI.
 - [Status](status.md) and [compatibility](compatibility.md): what each Revit release, file type and element class gives, with the evidence. The [support matrix](support-matrix.json) is the machine-readable ceiling.
 - [Supported profile](supported-profile.md): the inputs rvt-rs is measured on.
+- [Evidence](evidence.md): the measured figures behind the README, by input, by element category and by known gap.
+- [Library and tools](library.md): the command-line tools, the Rust modules, the research probes and the browser viewer in more detail.
+- [Format research](format.md): the Revit file format, the state of the reverse engineering and the first reconnaissance's findings.
 - [Export diagnostics](export-diagnostics.md) and [diagnostic semantics](diagnostic-semantics.md): what an export says it approximated or left out.
 - [`rvt-inspect`](inspect.md) and [`rvt-ifc-compare`](ifc-compare.md): checking a file before relying on it, and comparing an export with Revit's.
 - [Validation evidence](validation-evidence.md) and the [verification protocol](verification-protocol.md): how an IFC export is checked, and what "verified" means.
@@ -23,4 +26,4 @@ The pages under `docs/` are of three kinds. The user pages say what rvt-rs does 
 
 ## Research record
 
-The [reconnaissance report](rvt-moat-break-reconnaissance.md), the dated probe notes and session logs (the pages whose names carry a date), [`research/`](research/), [`recon/`](recon/), [`re/`](re/), the OctetProof [specification](octetproof-spec.md) and its [draft](octetproof-spec-draft.md), the coordination notes, [`blog/`](blog/), [`launch/`](launch/), and the archived planning files under [`archive/`](archive/) (the 2026-04 task decomposition and the maintainer sessions' backlog). These pages record what was known when they were written, and they use the project's internal ids (backlog items, work-plan lanes and phases) as they were used then. The format findings themselves are the RE reports under [`reports/element-framing/`](../reports/element-framing/).
+The [reconnaissance report](format-reconnaissance.md), the dated probe notes and session logs (the pages whose names carry a date), [`research/`](research/), [`recon/`](recon/), [`re/`](re/), the OctetProof [specification](octetproof-spec.md) and its [draft](octetproof-spec-draft.md), the coordination notes, [`blog/`](blog/), [`launch/`](launch/), and the archived planning files under [`archive/`](archive/) (the 2026-04 task decomposition and the maintainer sessions' backlog). These pages record what was known when they were written, and they use the project's internal ids (backlog items, work-plan lanes and phases) as they were used then. The format findings themselves are the RE reports under [`reports/element-framing/`](../reports/element-framing/).

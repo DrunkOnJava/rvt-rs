@@ -1,0 +1,557 @@
+//! The face a Revit Area occupies among its area boundary lines (RE-317).
+//!
+//! An Area's boundary is not stored in the Area. The lines that make it are
+//! elements of their own, `OST_AreaSchemeLines` (-2000079), each with a
+//! bounding-box record (the same frame as any element record), a Level and an
+//! area scheme in its reference list, and no more. Revit draws an Area as the
+//! region of the plane that its scheme's lines on its Level enclose around the
+//! Area's point:
+//!
+//! - lines meet at their ends, and a line that ends on another, or crosses it,
+//!   splits both there;
+//! - a line with a free end bounds nothing and is left out, as a line that
+//!   leads nowhere;
+//! - a region is bounded by a loop of lines, and every loop that lies directly
+//!   inside it is a hole of it, whether or not another Area sits in that
+//!   hole;
+//! - a vertex where two lines continue in a straight line is not a vertex of
+//!   the outline, and a vertex where a third line meets is.
+//!
+//! This module holds that geometry for straight lines along the plan axes,
+//! which is every line of the office. [`Arrangement::new`] returns `None` for
+//! a set it cannot read as such, and [`Arrangement::face_at`] returns `None`
+//! for a point it cannot place in exactly one region bounded by simple
+//! loops, so nothing is drawn that is not proven. The Area's point and the
+//! rest come from [`crate::partition_area_records`].
+
+use std::collections::{BTreeMap, BTreeSet};
+
+/// How close two points, or a point and a line, must be to be the same, feet.
+pub const NODE_TOLERANCE_FEET: f64 = 1e-5;
+
+/// The most lines one arrangement takes. A set of more is not read.
+pub const MAX_LINES: usize = 2048;
+
+/// The most points one arrangement takes, its lines' ends and the places they
+/// cross included. Lines that cross in more places are not read.
+pub const MAX_NODES: usize = 200_000;
+
+/// The largest coordinate taken, feet.
+pub const MAX_COORDINATE_FEET: f64 = 1.0e7;
+
+/// The smallest plan area of a ring that bounds a region, square feet.
+pub const MIN_RING_AREA: f64 = 1e-6;
+
+/// One area boundary line: its ElementId and its two ends in plan, feet.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct BoundaryLine {
+    /// The line's ElementId.
+    pub id: u32,
+    /// One end.
+    pub from: (f64, f64),
+    /// The other end.
+    pub to: (f64, f64),
+}
+
+/// The region of the plane around a point, bounded by lines.
+#[derive(Debug, Clone, PartialEq)]
+pub struct AreaFace {
+    /// The outer loop, counter-clockwise, without a repeated closing vertex.
+    pub outer: Vec<(f64, f64)>,
+    /// The loops directly inside it, clockwise, the largest first.
+    pub holes: Vec<Vec<(f64, f64)>>,
+    /// The ElementIds of the lines that bound the region, its holes' too.
+    pub line_ids: BTreeSet<u32>,
+}
+
+/// A straight line along an axis.
+#[derive(Debug, Clone, Copy)]
+struct AxisLine {
+    id: u32,
+    horizontal: bool,
+    fixed: f64,
+    low: f64,
+    high: f64,
+}
+
+impl AxisLine {
+    fn new(line: &BoundaryLine) -> Option<AxisLine> {
+        let ends = [line.from.0, line.from.1, line.to.0, line.to.1];
+        if ends
+            .iter()
+            .any(|v| !v.is_finite() || v.abs() > MAX_COORDINATE_FEET)
+        {
+            return None;
+        }
+        let dx = (line.to.0 - line.from.0).abs();
+        let dy = (line.to.1 - line.from.1).abs();
+        if dx <= NODE_TOLERANCE_FEET && dy <= NODE_TOLERANCE_FEET {
+            return None;
+        }
+        if dy <= NODE_TOLERANCE_FEET {
+            Some(AxisLine {
+                id: line.id,
+                horizontal: true,
+                fixed: (line.from.1 + line.to.1) / 2.0,
+                low: line.from.0.min(line.to.0),
+                high: line.from.0.max(line.to.0),
+            })
+        } else if dx <= NODE_TOLERANCE_FEET {
+            Some(AxisLine {
+                id: line.id,
+                horizontal: false,
+                fixed: (line.from.0 + line.to.0) / 2.0,
+                low: line.from.1.min(line.to.1),
+                high: line.from.1.max(line.to.1),
+            })
+        } else {
+            None
+        }
+    }
+
+    fn point_at(&self, along: f64) -> (f64, f64) {
+        if self.horizontal {
+            (along, self.fixed)
+        } else {
+            (self.fixed, along)
+        }
+    }
+}
+
+/// Points of the arrangement, merged where they are within the tolerance.
+#[derive(Default)]
+struct Nodes {
+    points: Vec<(f64, f64)>,
+    cells: BTreeMap<(i64, i64), Vec<usize>>,
+}
+
+impl Nodes {
+    fn cell(point: (f64, f64)) -> (i64, i64) {
+        (
+            (point.0 / NODE_TOLERANCE_FEET).floor() as i64,
+            (point.1 / NODE_TOLERANCE_FEET).floor() as i64,
+        )
+    }
+
+    fn intern(&mut self, point: (f64, f64)) -> usize {
+        let (cx, cy) = Nodes::cell(point);
+        for x in cx - 1..=cx + 1 {
+            for y in cy - 1..=cy + 1 {
+                let Some(held) = self.cells.get(&(x, y)) else {
+                    continue;
+                };
+                for &index in held {
+                    let other = self.points[index];
+                    if (other.0 - point.0).abs() <= NODE_TOLERANCE_FEET
+                        && (other.1 - point.1).abs() <= NODE_TOLERANCE_FEET
+                    {
+                        return index;
+                    }
+                }
+            }
+        }
+        let index = self.points.len();
+        self.points.push(point);
+        self.cells.entry((cx, cy)).or_default().push(index);
+        index
+    }
+}
+
+/// One closed walk along the arrangement's edges with the same region on its
+/// left.
+#[derive(Debug)]
+struct Ring {
+    nodes: Vec<usize>,
+    polygon: Vec<(f64, f64)>,
+    bounds: [f64; 4],
+    area: f64,
+    ids: BTreeSet<u32>,
+    component: usize,
+    simple: bool,
+}
+
+/// The planar arrangement of a set of area boundary lines.
+#[derive(Debug)]
+pub struct Arrangement {
+    points: Vec<(f64, f64)>,
+    degree: Vec<usize>,
+    rings: Vec<Ring>,
+    /// The rings of positive area: the regions.
+    bounded: Vec<usize>,
+    /// The ring of negative area that walks round each connected set of
+    /// lines, by the set.
+    outer_of: BTreeMap<usize, usize>,
+    /// The sets with more than one such ring.
+    unclear: BTreeSet<usize>,
+}
+
+fn find(parent: &mut [usize], node: usize) -> usize {
+    let mut root = node;
+    while parent[root] != root {
+        root = parent[root];
+    }
+    let mut at = node;
+    while parent[at] != root {
+        let next = parent[at];
+        parent[at] = root;
+        at = next;
+    }
+    root
+}
+
+fn signed_area(points: &[(f64, f64)]) -> f64 {
+    let mut sum = 0.0;
+    for (index, p) in points.iter().enumerate() {
+        let q = points[(index + 1) % points.len()];
+        sum += p.0 * q.1 - q.0 * p.1;
+    }
+    sum / 2.0
+}
+
+/// Whether `point` lies within the tolerance of the segment `a` to `b`.
+fn on_segment(a: (f64, f64), b: (f64, f64), point: (f64, f64)) -> bool {
+    let (dx, dy) = (b.0 - a.0, b.1 - a.1);
+    let length_squared = dx * dx + dy * dy;
+    let t = if length_squared <= 0.0 {
+        0.0
+    } else {
+        (((point.0 - a.0) * dx + (point.1 - a.1) * dy) / length_squared).clamp(0.0, 1.0)
+    };
+    let (cx, cy) = (a.0 + t * dx, a.1 + t * dy);
+    (point.0 - cx).hypot(point.1 - cy) <= NODE_TOLERANCE_FEET
+}
+
+/// Whether `point` is inside the loop `ring`: `None` when it is on the loop.
+fn inside(ring: &[(f64, f64)], point: (f64, f64)) -> Option<bool> {
+    let mut crossings = 0usize;
+    for (index, &a) in ring.iter().enumerate() {
+        let b = ring[(index + 1) % ring.len()];
+        if on_segment(a, b, point) {
+            return None;
+        }
+        if (a.1 > point.1) != (b.1 > point.1) {
+            let x = a.0 + (point.1 - a.1) / (b.1 - a.1) * (b.0 - a.0);
+            if x > point.0 {
+                crossings += 1;
+            }
+        }
+    }
+    Some(!crossings.is_multiple_of(2))
+}
+
+/// [`inside`] for a ring, with a quick answer for a point outside its box.
+fn inside_ring(ring: &Ring, point: (f64, f64)) -> Option<bool> {
+    let [min_x, min_y, max_x, max_y] = ring.bounds;
+    let reach = NODE_TOLERANCE_FEET * 2.0;
+    if point.0 < min_x - reach
+        || point.0 > max_x + reach
+        || point.1 < min_y - reach
+        || point.1 > max_y + reach
+    {
+        return Some(false);
+    }
+    inside(&ring.polygon, point)
+}
+
+impl Arrangement {
+    /// The arrangement of `lines`, or `None` where they are not all straight
+    /// lines along the plan axes, are more than [`MAX_LINES`], or overlap.
+    pub fn new(lines: &[BoundaryLine]) -> Option<Arrangement> {
+        if lines.is_empty() || lines.len() > MAX_LINES {
+            return None;
+        }
+        let mut axis = Vec::with_capacity(lines.len());
+        for line in lines {
+            axis.push(AxisLine::new(line)?);
+        }
+        let mut cuts: Vec<Vec<f64>> = vec![Vec::new(); axis.len()];
+        for (i, &a) in axis.iter().enumerate() {
+            for (j, &b) in axis.iter().enumerate().skip(i + 1) {
+                if a.horizontal == b.horizontal {
+                    let overlap = a.high.min(b.high) - a.low.max(b.low);
+                    if (a.fixed - b.fixed).abs() <= NODE_TOLERANCE_FEET
+                        && overlap > NODE_TOLERANCE_FEET
+                    {
+                        return None;
+                    }
+                    continue;
+                }
+                let (h, v, hi, vi) = if a.horizontal {
+                    (a, b, i, j)
+                } else {
+                    (b, a, j, i)
+                };
+                let (x, y) = (v.fixed, h.fixed);
+                if x >= h.low - NODE_TOLERANCE_FEET
+                    && x <= h.high + NODE_TOLERANCE_FEET
+                    && y >= v.low - NODE_TOLERANCE_FEET
+                    && y <= v.high + NODE_TOLERANCE_FEET
+                {
+                    cuts[hi].push(x);
+                    cuts[vi].push(y);
+                }
+            }
+        }
+
+        let cut_count: usize = cuts.iter().map(Vec::len).sum();
+        if cut_count.saturating_add(axis.len().saturating_mul(2)) > MAX_NODES {
+            return None;
+        }
+        let mut nodes = Nodes::default();
+        let mut edges: BTreeMap<(usize, usize), u32> = BTreeMap::new();
+        for (line, cut) in axis.iter().zip(cuts.iter_mut()) {
+            cut.push(line.low);
+            cut.push(line.high);
+            cut.sort_by(|p, q| p.partial_cmp(q).unwrap_or(std::cmp::Ordering::Equal));
+            let mut previous: Option<usize> = None;
+            for &along in cut.iter() {
+                let along = along.clamp(line.low, line.high);
+                let node = nodes.intern(line.point_at(along));
+                if let Some(last) = previous {
+                    if last != node {
+                        let key = (last.min(node), last.max(node));
+                        if let Some(&held) = edges.get(&key) {
+                            if held != line.id {
+                                return None;
+                            }
+                        }
+                        edges.insert(key, line.id);
+                    }
+                }
+                previous = Some(node);
+            }
+        }
+
+        let count = nodes.points.len();
+        // Leave out the lines with a free end, and then those that the removal
+        // frees, by a worklist of points with one line left: each line is
+        // removed once, so the pass is linear in the lines.
+        let candidates: Vec<((usize, usize), u32)> =
+            edges.iter().map(|(&ends, &id)| (ends, id)).collect();
+        let mut alive = vec![true; candidates.len()];
+        let mut degree = vec![0usize; count];
+        let mut incident: Vec<Vec<usize>> = vec![Vec::new(); count];
+        for (index, &((u, v), _)) in candidates.iter().enumerate() {
+            degree[u] += 1;
+            degree[v] += 1;
+            incident[u].push(index);
+            incident[v].push(index);
+        }
+        let mut free: Vec<usize> = (0..count).filter(|&node| degree[node] == 1).collect();
+        while let Some(node) = free.pop() {
+            if degree[node] != 1 {
+                continue;
+            }
+            let Some(&edge) = incident[node].iter().find(|&&index| alive[index]) else {
+                continue;
+            };
+            alive[edge] = false;
+            let ((u, v), _) = candidates[edge];
+            let other = if u == node { v } else { u };
+            degree[node] -= 1;
+            degree[other] -= 1;
+            if degree[other] == 1 {
+                free.push(other);
+            }
+        }
+        let edge_list: Vec<(usize, usize, u32)> = candidates
+            .iter()
+            .zip(&alive)
+            .filter(|&(_, &kept)| kept)
+            .map(|(&((u, v), id), _)| (u, v, id))
+            .collect();
+        let origin = |half: usize| {
+            let (u, v, _) = edge_list[half / 2];
+            if half.is_multiple_of(2) { u } else { v }
+        };
+        let target = |half: usize| origin(half ^ 1);
+        let mut outgoing: Vec<Vec<usize>> = vec![Vec::new(); count];
+        for half in 0..edge_list.len() * 2 {
+            outgoing[origin(half)].push(half);
+        }
+        let mut slot = vec![0usize; edge_list.len() * 2];
+        for (node, halves) in outgoing.iter_mut().enumerate() {
+            let here = nodes.points[node];
+            halves.sort_by(|&p, &q| {
+                let angle = |half: usize| {
+                    let there = nodes.points[target(half)];
+                    (there.1 - here.1).atan2(there.0 - here.0)
+                };
+                angle(p)
+                    .partial_cmp(&angle(q))
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            });
+            for (index, &half) in halves.iter().enumerate() {
+                slot[half] = index;
+            }
+        }
+
+        let mut parent: Vec<usize> = (0..count).collect();
+        for &(u, v, _) in &edge_list {
+            let ru = find(&mut parent, u);
+            let rv = find(&mut parent, v);
+            parent[ru] = rv;
+        }
+
+        let mut visited = vec![false; edge_list.len() * 2];
+        let mut rings = Vec::new();
+        for start in 0..edge_list.len() * 2 {
+            if visited.get(start).copied().unwrap_or(true) {
+                continue;
+            }
+            let mut walk = Vec::new();
+            let mut ids = BTreeSet::new();
+            let mut at = start;
+            loop {
+                visited[at] = true;
+                walk.push(origin(at));
+                ids.insert(edge_list[at / 2].2);
+                let here = target(at);
+                let around = &outgoing[here];
+                let back = slot[at ^ 1];
+                at = around[(back + around.len() - 1) % around.len()];
+                if at == start || walk.len() > edge_list.len() * 2 {
+                    break;
+                }
+            }
+            let points: Vec<(f64, f64)> = walk.iter().map(|&n| nodes.points[n]).collect();
+            let distinct: BTreeSet<usize> = walk.iter().copied().collect();
+            let component = find(&mut parent, walk[0]);
+            let bounds = points.iter().fold(
+                [
+                    f64::INFINITY,
+                    f64::INFINITY,
+                    f64::NEG_INFINITY,
+                    f64::NEG_INFINITY,
+                ],
+                |b, p| [b[0].min(p.0), b[1].min(p.1), b[2].max(p.0), b[3].max(p.1)],
+            );
+            rings.push(Ring {
+                area: signed_area(&points),
+                simple: distinct.len() == walk.len(),
+                nodes: walk,
+                polygon: points,
+                bounds,
+                ids,
+                component,
+            });
+        }
+
+        let degree = outgoing.iter().map(Vec::len).collect();
+        let bounded = (0..rings.len())
+            .filter(|&i| rings[i].area > MIN_RING_AREA)
+            .collect();
+        let mut outer_of: BTreeMap<usize, usize> = BTreeMap::new();
+        let mut unclear = BTreeSet::new();
+        for (index, ring) in rings.iter().enumerate() {
+            if ring.area < -MIN_RING_AREA && outer_of.insert(ring.component, index).is_some() {
+                unclear.insert(ring.component);
+            }
+        }
+        Some(Arrangement {
+            points: nodes.points,
+            degree,
+            rings,
+            bounded,
+            outer_of,
+            unclear,
+        })
+    }
+
+    /// The ring's corners: its nodes, less those where two lines continue
+    /// straight on.
+    fn corners(&self, ring: &Ring) -> Option<Vec<(f64, f64)>> {
+        let near = |p: f64, q: f64| (p - q).abs() <= NODE_TOLERANCE_FEET;
+        let count = ring.nodes.len();
+        let mut out = Vec::with_capacity(count);
+        for (index, &node) in ring.nodes.iter().enumerate() {
+            let a = self.points[ring.nodes[(index + count - 1) % count]];
+            let b = self.points[node];
+            let c = self.points[ring.nodes[(index + 1) % count]];
+            let straight = (near(a.0, b.0) && near(b.0, c.0)) || (near(a.1, b.1) && near(b.1, c.1));
+            if !(straight && self.degree[node] == 2) {
+                out.push(b);
+            }
+        }
+        (out.len() >= 3).then_some(out)
+    }
+
+    /// The region around `point`: the smallest loop of lines that encloses it,
+    /// less the loops directly inside that. `None` where the point is on a
+    /// line, in no loop, or in two loops of one size, or where its loop or one
+    /// of its holes touches itself.
+    pub fn face_at(&self, point: (f64, f64)) -> Option<AreaFace> {
+        if !point.0.is_finite() || !point.1.is_finite() {
+            return None;
+        }
+        let mut chosen: Option<usize> = None;
+        for &i in &self.bounded {
+            if inside_ring(&self.rings[i], point)? {
+                match chosen {
+                    Some(held) if self.rings[held].area <= self.rings[i].area => {
+                        if (self.rings[held].area - self.rings[i].area).abs() <= MIN_RING_AREA {
+                            return None;
+                        }
+                    }
+                    _ => chosen = Some(i),
+                }
+            }
+        }
+        let face = &self.rings[chosen?];
+        if !face.simple {
+            return None;
+        }
+
+        let mut holes: Vec<&Ring> = Vec::new();
+        for (component, &outer_index) in &self.outer_of {
+            if *component == face.component {
+                continue;
+            }
+            if self.unclear.contains(component) {
+                return None;
+            }
+            let outer = &self.rings[outer_index];
+            let probe = self.points[outer.nodes[0]];
+            if !inside_ring(face, probe)? {
+                continue;
+            }
+            let mut parent: Option<&Ring> = None;
+            for &i in &self.bounded {
+                let ring = &self.rings[i];
+                if ring.component == *component {
+                    continue;
+                }
+                if inside_ring(ring, probe)? {
+                    match parent {
+                        Some(held) if held.area <= ring.area => {}
+                        _ => parent = Some(ring),
+                    }
+                }
+            }
+            if parent.is_some_and(|p| std::ptr::eq(p, face)) {
+                if !outer.simple {
+                    return None;
+                }
+                holes.push(outer);
+            }
+        }
+        holes.sort_by(|p, q| {
+            q.area
+                .abs()
+                .partial_cmp(&p.area.abs())
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+
+        let mut line_ids = face.ids.clone();
+        let mut hole_corners = Vec::with_capacity(holes.len());
+        for hole in &holes {
+            line_ids.extend(hole.ids.iter().copied());
+            hole_corners.push(self.corners(hole)?);
+        }
+        Some(AreaFace {
+            outer: self.corners(face)?,
+            holes: hole_corners,
+            line_ids,
+        })
+    }
+}

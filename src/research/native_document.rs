@@ -51,19 +51,62 @@ pub struct Options {
     /// needs only some parameters skips the per-element pass on a file that
     /// defines none of them.
     pub definition_filter: Option<fn(&str) -> bool>,
+    /// Whether each [`Record`] carries what is derived from it beyond its
+    /// graph and saved metadata: [`RecordSource::body_sha256`], the default
+    /// IFC GUID and the effective IFC parameter. A record read without them
+    /// has an empty digest and `None` for the rest, as an element base record
+    /// does. Off by default: no reader of the export path uses them, and
+    /// deriving them for every record was part of 0.12.0's slower native
+    /// passes (#1237). A caller that dumps records with their provenance, as
+    /// `native_saved_scene` does, turns it on.
+    pub record_extras: bool,
 }
+/// The default [`Options::max_group_bytes`]: one reassembled continuation
+/// group's bytes.
+pub const DEFAULT_MAX_GROUP_BYTES: usize = 256 * 1024 * 1024;
+
+/// The group budget a read of `file` takes for `requested`. The default
+/// follows the file's inflate limit, so `--large-model`, which raises the
+/// limit, raises the budget with it: a group is part of a partition the read
+/// has inflated, so it is never larger. A budget a caller sets is kept
+/// (#1247: a 438 MB project's group stopped every native read with
+/// `--large-model` at 256 MiB).
+pub(crate) fn group_budget(file: &RevitFile, requested: usize) -> usize {
+    if requested == DEFAULT_MAX_GROUP_BYTES {
+        requested.max(file.limits().inflate_limits.max_output_bytes)
+    } else {
+        requested
+    }
+}
+
+/// The group budget of one partition's walk: `budget` ([`group_budget`]),
+/// but no more than the partition's inflated bytes where the handle holds
+/// them, since a group is part of them, and never below `requested`. Where
+/// they are not held, `requested`.
+pub(crate) fn partition_budget(
+    budget: usize,
+    requested: usize,
+    inflated: Option<&compression::InflatedStream>,
+) -> usize {
+    match inflated {
+        Some(stream) => budget.min(stream.bytes().len().max(requested)),
+        None => requested,
+    }
+}
+
 impl Default for Options {
     fn default() -> Self {
         Self {
             selected_ids: BTreeSet::new(),
             selected_classes: BTreeSet::new(),
             channels: BTreeSet::from([102]),
-            max_group_bytes: 256 * 1024 * 1024,
+            max_group_bytes: DEFAULT_MAX_GROUP_BYTES,
             max_graph_values: 100_000,
             max_graph_objects: 100_000,
             graph_classes: None,
             releases: 2023..=2027,
             definition_filter: None,
+            record_extras: false,
         }
     }
 }
@@ -161,6 +204,17 @@ pub struct StreamEnvelope {
     pub opaque_suffix_sha256: String,
     pub suffix_interpreted: bool,
 }
+/// `bytes` as lowercase hex, two digits a byte: `format!("{byte:02x}")` for
+/// each, without a `String` for every one (#1237).
+fn lower_hex(bytes: &[u8]) -> String {
+    const DIGITS: &[u8; 16] = b"0123456789abcdef";
+    let mut hex = String::with_capacity(bytes.len() * 2);
+    for &byte in bytes {
+        hex.push(char::from(DIGITS[usize::from(byte >> 4)]));
+        hex.push(char::from(DIGITS[usize::from(byte & 15)]));
+    }
+    hex
+}
 fn decode_single(prepared: &[u8], offset: usize) -> Result<(Vec<u8>, StreamEnvelope)> {
     let compressed = prepared
         .get(offset..)
@@ -186,10 +240,7 @@ fn decode_single(prepared: &[u8], offset: usize) -> Result<(Vec<u8>, StreamEnvel
             member_offset: offset,
             member_bytes: compressed.len() - suffix.len(),
             opaque_suffix_bytes: suffix.len(),
-            opaque_suffix_sha256: Sha256::digest(suffix)
-                .iter()
-                .map(|b| format!("{b:02x}"))
-                .collect::<String>(),
+            opaque_suffix_sha256: lower_hex(&Sha256::digest(suffix)),
             suffix_interpreted: suffix.is_empty(),
         },
     ))
@@ -399,6 +450,7 @@ fn definition_pass(file: &mut RevitFile, options: &Options) -> Result<Arc<Defini
         graph_classes,
         releases,
         definition_filter: _,
+        record_extras: _,
     } = options;
     let key: DefinitionKey = (
         *max_group_bytes,
@@ -418,6 +470,7 @@ fn definition_pass(file: &mut RevitFile, options: &Options) -> Result<Arc<Defini
     definition_options.selected_ids.clear();
     definition_options.selected_classes.clear();
     definition_options.channels = BTreeSet::from([102]);
+    definition_options.record_extras = false;
     let definition_summary =
         extract_records(
             file,
@@ -629,10 +682,11 @@ fn extract_records(
                     .and_then(|tag| registry.class(tag))
                     .is_some_and(|class| options.selected_classes.contains(&class.name)))
     };
+    let max_group_bytes = group_budget(file, options.max_group_bytes);
     let mut summary = Summary {
         budgets: ResourceBudget {
             max_stream_bytes: file.limits().max_stream_bytes,
-            max_group_bytes: options.max_group_bytes,
+            max_group_bytes,
             max_graph_values: options.max_graph_values,
             max_graph_objects: options.max_graph_objects,
         },
@@ -707,7 +761,11 @@ fn extract_records(
             &prepared,
             inflated.as_deref(),
             registry,
-            options.max_group_bytes,
+            partition_budget(
+                max_group_bytes,
+                options.max_group_bytes,
+                inflated.as_deref(),
+            ),
             |source, bytes| {
                 if source.content_key.is_some() || !options.channels.contains(&source.channel) {
                     return Ok(());
@@ -751,7 +809,11 @@ fn extract_records(
             &prepared,
             inflated.as_deref(),
             registry,
-            options.max_group_bytes,
+            partition_budget(
+                max_group_bytes,
+                options.max_group_bytes,
+                inflated.as_deref(),
+            ),
             |source, bytes| {
                 if source.content_key.is_some() {
                     summary.skipped_embedded_content_groups += 1;
@@ -937,11 +999,16 @@ fn extract_records(
                     summary.unsupported_metadata_records +=
                         usize::from(metadata_diagnostic.is_some());
                     summary.emitted_records += 1;
-                    let (derived_default_ifc_guid, derived_identifier_diagnostic) =
+                    let (derived_default_ifc_guid, derived_identifier_diagnostic) = if options
+                        .record_extras
+                    {
                         match crate::native_metadata::derive_default_ifc_guid(&identity.unique_id) {
                             Ok(value) => (Some(value), None),
                             Err(error) => (None, Some(error.to_string())),
-                        };
+                        }
+                    } else {
+                        (None, None)
+                    };
                     let (effective_ifc_parameter, effective_ifc_parameter_diagnostic) = match (
                         class_name.as_deref(),
                         saved_metadata.as_ref(),
@@ -975,10 +1042,11 @@ fn extract_records(
                             group: source.clone(),
                             group_record_offset: offset,
                             body_bytes: body.len(),
-                            body_sha256: Sha256::digest(body)
-                                .iter()
-                                .map(|b| format!("{b:02x}"))
-                                .collect::<String>(),
+                            body_sha256: if options.record_extras {
+                                lower_hex(&Sha256::digest(body))
+                            } else {
+                                String::new()
+                            },
                         },
                         graph,
                         saved_metadata,

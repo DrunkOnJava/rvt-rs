@@ -218,9 +218,10 @@ ElementId, IFC type, level and its elevation, material, placement, body
 size, the host wall of each door and window, and where the body came from
 (`body_source`, `profile_resolved`). A value rvt-rs did not decode is an
 empty cell, never a guess. The room schedule gives a room's plan area
-where its outline was read from the solid Revit stores for it (RE-101); a
-room that keeps its bounding box has an empty area, since the area of a box
-is not the area of a room.
+where its outline was read from the solid Revit stores for it (RE-101), and
+an Area's where its boundary lines gave it a region (RE-317); a room that
+keeps its bounding box has an empty area, since the area of a box is not the
+area of a room.
 
 The columns, in order. Lengths are in feet; with `--metric` they are in
 metres and `_ft` in a column's name becomes `_m`. A later release may add
@@ -328,8 +329,9 @@ valid Revit but outside the current rvt-rs support profile.
 ### Large models
 
 rvt-rs caps what it reads so that a hostile file cannot exhaust memory: 2 GiB
-for the file, 256 MiB for one stream, 256 MiB for one inflated member and 1 GiB
-inflated per stream. Large client models can keep most of their elements in
+for the file, 256 MiB for one stream, 256 MiB for one inflated member and, per
+stream, 16 times its stored size inflated, at least 1 GiB and at most 4 GiB (1
+GiB in a 32-bit build and in the browser viewer). Large client models can keep most of their elements in
 one partition stream of 400 MiB to 1 GiB. When a limit stops a stream,
 `rvt-ifc` names it, writes no IFC and exits with status 3:
 
@@ -349,8 +351,9 @@ at the default limits and, when a stream is not read, shows "Part of the file
 not read" in the File status panel with a "Retry with large-model limits"
 button, which reopens the same file with `--large-model`'s limits (streams up
 to 2 GiB). A browser tab can use at most 4 GiB of memory, so a very large
-model can still fail to open there; `rvt-ifc --large-model` has no such
-ceiling.
+model can still fail to open there; `rvt-ifc --large-model` is not held to a
+tab's 4 GiB (its caps are a 2 GiB stream and, on a 64-bit machine, 8 GiB
+inflated, and a file over 2 GiB is rejected whatever the flags).
 
 Two exports of the same file are the same bytes except for the export time,
 which the IFC header and owner history record. Set `SOURCE_DATE_EPOCH` (Unix
@@ -390,7 +393,7 @@ The most important status words are:
 | Scaffold-only export | IFC can be written as a framework, but no validated building elements were decoded. |
 | Partial decode | Some data was recovered, but warnings, unsupported features, or missing geometry remain. |
 | Supported file, unsupported model layout | The file opened, but rvt-rs did not recover validated model elements from this layout. |
-| Unsupported Revit version | The file opened, but its version is outside the 2015 to 2027 releases rvt-rs reads. |
+| Unsupported Revit version | The file opened, but its version is outside the 2008 to 2027 releases rvt-rs reads. |
 | Corrupt or unreadable file | The input could not be opened as a readable Revit OLE/CFB container. |
 | Parser bug, please report | The file opened, but diagnostics could not classify export readiness. |
 

@@ -12,7 +12,7 @@
 //! and the entry-point detector.
 //!
 //! Fields 2–5 and the 2016–2023 stream layout still need work. See
-//! `docs/rvt-moat-break-reconnaissance.md` §Q6.5 for the full decode
+//! `docs/format-reconnaissance.md` §Q6.5 for the full decode
 //! state + open questions.
 //!
 //! Wire encoding (observed as of v0.1.2):
@@ -887,8 +887,14 @@ pub fn read_field_by_type(
             *cursor += consumed;
             InstanceField::Bytes(out)
         }
-        // RE-264: what a flagged field's instance bytes hold is not measured.
-        FieldType::Unknown { .. } | FieldType::Flagged { .. } => {
+        // RE-264, RE-323: the pointer arrays and containers and the flagged
+        // fields are classified from the schema and their instances were
+        // measured in the native graphs, not in this walker's record shapes,
+        // so it reads them as it read them when they were `Unknown`.
+        FieldType::Unknown { .. }
+        | FieldType::Flagged { .. }
+        | FieldType::PointerArray { .. }
+        | FieldType::PointerContainer { .. } => {
             // Forward remaining bytes. Callers can inspect them.
             let slice = rem();
             let out = slice.to_vec();

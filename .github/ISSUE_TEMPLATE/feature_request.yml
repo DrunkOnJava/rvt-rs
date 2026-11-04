@@ -6,7 +6,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Before opening, check whether the request is already tracked in [`CHANGELOG.md`](../blob/main/CHANGELOG.md) or the open research questions in [`docs/rvt-moat-break-reconnaissance.md`](../blob/main/docs/rvt-moat-break-reconnaissance.md). For Layer 5 work in particular, a comment on an existing question is often more productive than a new issue.
+        Before opening, check whether the request is already tracked in [`CHANGELOG.md`](../blob/main/CHANGELOG.md) or the open research questions in [`docs/format-reconnaissance.md`](../blob/main/docs/format-reconnaissance.md). For Layer 5 work in particular, a comment on an existing question is often more productive than a new issue.
   - type: textarea
     id: problem
     attributes:

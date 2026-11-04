@@ -80,6 +80,16 @@ pub struct TypedProductionAppend {
     /// as elements of their own (#823), by index in the entities
     /// ([`super::IfcModel::body_pieces`]).
     pub body_pieces: BTreeMap<usize, Vec<usize>>,
+    /// What the element record gives a door or window for a later stage of
+    /// the export to read, by index in the entities: not properties of the
+    /// element, so not written in the file. The openings it cuts
+    /// ([`super::IfcModel::opening_cuts`]) and its `OverallWidth` and
+    /// `OverallHeight` ([`super::IfcModel::filler_sizes`]) are worked out from
+    /// them. The names are [`INSTANCE_ORIGIN_PROPERTIES`],
+    /// [`FILLER_OPENING_PROPERTIES`], [`DOOR_TYPE_SIZE_PROPERTIES`],
+    /// [`CUT_LOOP_SIZE_PROPERTIES`], [`CUT_SOLID_SIZE_PROPERTIES`],
+    /// [`INSTANCE_BOX_SIZE_PROPERTIES`] and [`SYMBOL_WIRE_WIDTH_PROPERTY`].
+    pub record_handoffs: BTreeMap<usize, Vec<Property>>,
 }
 
 /// What a quality mode allows the document exporter to emit.
@@ -267,11 +277,76 @@ fn identity_property_set(mut set: PropertySet, decoded: &DecodedElement) -> Prop
     set
 }
 
+/// An Area's body (RE-317): its placement, the extrusion of its boundary and
+/// the profile that made it.
+struct AreaDrawn {
+    location: [f64; 3],
+    body: Extrusion,
+    profile: crate::element_record_plan_profiles::PlanProfile,
+}
+
+/// The body an Area's decoded fields hold: the profile its boundary lines
+/// made, the elevation of its base and its height.
+fn area_body_from_decoded(decoded: &DecodedElement) -> Option<AreaDrawn> {
+    let from_lines = decoded.fields.iter().any(|(field, value)| {
+        field == crate::element_record_plan_profiles::PLAN_PROFILE_SOURCE_FIELD
+            && matches!(value, InstanceField::String(source)
+                if source == crate::partition_area_records::AREA_BOUNDARY_SOURCE)
+    });
+    if !from_lines {
+        return None;
+    }
+    let profile = crate::element_record_plan_profiles::plan_profile_from_fields(&decoded.fields)?;
+    if !profile.pieces.is_empty() {
+        return None;
+    }
+    let float = |wanted: &str| {
+        decoded
+            .fields
+            .iter()
+            .find_map(|(field, value)| match value {
+                InstanceField::Float { value, .. } if field == wanted => Some(*value),
+                _ => None,
+            })
+    };
+    let base = float(crate::partition_area_records::AREA_BODY_BASE_FIELD)?;
+    let height = float(crate::partition_area_records::AREA_BODY_HEIGHT_FIELD)?;
+    if !(base.is_finite() && height.is_finite() && height > 0.0) {
+        return None;
+    }
+    let bounds = profile.plan_bounds_feet()?;
+    let centre = ((bounds[0] + bounds[2]) / 2.0, (bounds[1] + bounds[3]) / 2.0);
+    let relative = |ring: &[(f64, f64)]| -> Vec<(f64, f64)> {
+        ring.iter()
+            .map(|(px, py)| (px - centre.0, py - centre.1))
+            .collect()
+    };
+    let points = relative(&profile.outer_xy);
+    let voids: Vec<Vec<(f64, f64)>> = profile.inner_xy.iter().map(|ring| relative(ring)).collect();
+    let section = if voids.is_empty() {
+        entities::ProfileDef::ArbitraryClosed { points }
+    } else {
+        entities::ProfileDef::ArbitraryWithVoids { points, voids }
+    };
+    Some(AreaDrawn {
+        location: [centre.0, centre.1, base],
+        body: Extrusion {
+            width_feet: bounds[2] - bounds[0],
+            depth_feet: bounds[3] - bounds[1],
+            height_feet: height,
+            profile_override: Some(section),
+        },
+        profile,
+    })
+}
+
 /// An Area's ElementId, number, name and Level (#763), in the set a room's
 /// are written in, so the writer names its `IfcSpace` as it names a room's
 /// (`Name` the number and `LongName` the name, as Revit's export does) and
 /// `ifc::apply_record_level_reference_storeys` puts it in its Level's storey.
-fn area_property_set(decoded: &DecodedElement) -> PropertySet {
+/// Where its boundary is read (RE-317) the set also says where the body came
+/// from.
+fn area_property_set(decoded: &DecodedElement, drawn: Option<&AreaDrawn>) -> PropertySet {
     let text = |wanted: &str| {
         decoded
             .fields
@@ -325,6 +400,69 @@ fn area_property_set(decoded: &DecodedElement) -> PropertySet {
             ),
         });
     }
+    // RE-313, RE-317: an Area is drawn from its boundary lines where they
+    // give it a region, and written without a body, so without an outline,
+    // where they do not.
+    if let Some(drawn) = drawn {
+        for (name, value) in [
+            (
+                "BodySource",
+                PropertyValue::Text(crate::partition_area_records::AREA_BOUNDARY_SOURCE.into()),
+            ),
+            ("ProfileResolved", PropertyValue::Boolean(true)),
+            (
+                "ProfileSource",
+                PropertyValue::Text(crate::partition_area_records::AREA_BOUNDARY_SOURCE.into()),
+            ),
+            (
+                "ProfileVertexCount",
+                PropertyValue::Integer(drawn.profile.vertex_count() as i64),
+            ),
+            (
+                "ProfileVoidCount",
+                PropertyValue::Integer(drawn.profile.inner_xy.len() as i64),
+            ),
+            (
+                "BodyHeightSource",
+                PropertyValue::Text(AREA_BODY_HEIGHT_SOURCE.into()),
+            ),
+        ] {
+            properties.push(Property {
+                name: name.into(),
+                value,
+            });
+        }
+    }
+    if drawn.is_none() {
+        let refusal = decoded
+            .fields
+            .iter()
+            .find_map(|(field, value)| match value {
+                InstanceField::String(reason)
+                    if field == crate::partition_area_records::AREA_BODY_REFUSAL_FIELD =>
+                {
+                    Some(reason.clone())
+                }
+                _ => None,
+            });
+        if let Some(reason) = refusal {
+            properties.push(Property {
+                name: AREA_BODY_REFUSAL_PROPERTY.into(),
+                value: PropertyValue::Text(reason),
+            });
+        }
+    }
+    properties.push(Property {
+        name: SPACE_OUTLINE_SOURCE_PROPERTY.into(),
+        value: PropertyValue::Text(
+            if drawn.is_some() {
+                SPACE_OUTLINE_AREA_BOUNDARY
+            } else {
+                SPACE_OUTLINE_NONE
+            }
+            .into(),
+        ),
+    });
     PropertySet {
         name: ELEMENT_RECORD_PROPERTY_SET.into(),
         properties,
@@ -406,7 +544,7 @@ pub fn append_typed_production_elements(
     let mut opening_hosts: Vec<(usize, u32, u32)> = Vec::new();
     // RE-267: each wall's entity index and the elements its top join and cut
     // pairs name, for the cut at the floor that covers it.
-    let mut pending_tops: Vec<(usize, Vec<u32>)> = Vec::new();
+    let mut pending_tops: Vec<wall_tops::Pending> = Vec::new();
     let mut level_bind = crate::level_bind::LevelStoreyBind::new();
     // RE-286: what each type object's common set holds, by type and type
     // entity; `None` once two of its elements disagree.
@@ -685,6 +823,7 @@ pub fn append_typed_production_elements(
         let mut rotation_radians = None;
         let mut extrusion = None;
         let mut property_set = None;
+        let mut record_handoffs: Vec<Property> = Vec::new();
         let mut pending_host_id = None;
         let mut piece_bodies: Vec<Extrusion> = Vec::new();
         let mut void_bodies: Vec<VoidBody> = Vec::new();
@@ -712,6 +851,7 @@ pub fn append_typed_production_elements(
                 body,
                 solid,
                 properties,
+                handoffs,
                 pieces,
                 void_openings,
             }) = element_record_geometry
@@ -732,6 +872,7 @@ pub fn append_typed_production_elements(
                     extrusion = Some(body);
                 }
                 property_set = Some(properties);
+                record_handoffs = handoffs;
             } else {
                 match decoded.class.as_str() {
                     "Wall" | "ArcWall" => {
@@ -749,9 +890,17 @@ pub fn append_typed_production_elements(
                             property_set = Some(geom);
                         }
                     }
-                    // #763: an Area's record holds no box, so its space has
-                    // no body, but it is named as a room's is.
-                    "Area" => property_set = Some(area_property_set(&decoded)),
+                    // #763: an Area's record holds no box, but it is named as a
+                    // room's is. RE-317: where its boundary lines give it a
+                    // region, that is its body.
+                    "Area" => {
+                        let drawn = area_body_from_decoded(&decoded);
+                        property_set = Some(area_property_set(&decoded, drawn.as_ref()));
+                        if let Some(drawn) = drawn {
+                            location_feet = Some(drawn.location);
+                            extrusion = Some(drawn.body);
+                        }
+                    }
                     _ => {}
                 }
             }
@@ -801,6 +950,7 @@ pub fn append_typed_production_elements(
             property_set = property_set
                 .filter(|set| set.name == ELEMENT_RECORD_PROPERTY_SET)
                 .map(|set| identity_property_set(set, &decoded));
+            record_handoffs.clear();
             pending_host_id = None;
             piece_bodies.clear();
             void_bodies.clear();
@@ -1049,10 +1199,19 @@ pub fn append_typed_production_elements(
             solid_shape,
             representation_map_index: None,
         });
+        if !record_handoffs.is_empty() {
+            out.record_handoffs.insert(entity_index, record_handoffs);
+        }
         if policy.include_geometry && decoded.class == "Wall" {
             let named = crate::partition_schema_mvp::wall_top_cutters_from_fields(&decoded.fields);
             if !named.is_empty() {
-                pending_tops.push((entity_index, named));
+                pending_tops.push(wall_tops::Pending {
+                    index: entity_index,
+                    named,
+                    pair_only: crate::partition_schema_mvp::wall_top_pair_only_from_fields(
+                        &decoded.fields,
+                    ),
+                });
             }
         }
         // RE-291: a column whose type is a plain rectangle, with the elements its pairs name.
@@ -1660,6 +1819,17 @@ fn wall_geometry_from_decoded(decoded: &DecodedElement) -> Option<RecoveredWallG
 /// record names (RE-172), under the names Revit's export uses for its class.
 fn level_parameter_property_set(decoded: &DecodedElement, ifc_type: &str) -> Option<PropertySet> {
     use crate::partition_level_parameters as lp;
+    // RE-319: the names Revit gives a conduit's, conduit fitting's or
+    // gutter's Level parameter are not measured: the one export that holds
+    // them, Revit 2018's IFC2X3, writes no Revit parameter-group set on any
+    // element. So none is written.
+    if matches!(
+        ifc_type,
+        "IFCCABLECARRIERSEGMENT" | "IFCCABLECARRIERFITTING"
+    ) || decoded.class == "Gutter"
+    {
+        return None;
+    }
     let text = |wanted: &str| {
         decoded.fields.iter().find_map(|(name, value)| match value {
             InstanceField::String(v) if name == wanted => Some(v.clone()),
@@ -3858,6 +4028,15 @@ pub(super) fn contain_in_spaces(entities: &mut Vec<entities::IfcEntity>) {
             })
         })
     };
+    let is_area = |set: &Option<PropertySet>| {
+        set.as_ref().is_some_and(|set| {
+            set.properties.iter().any(|p| {
+                p.name == SPACE_OUTLINE_SOURCE_PROPERTY
+                    && matches!(&p.value, PropertyValue::Text(source)
+                        if source == SPACE_OUTLINE_AREA_BOUNDARY)
+            })
+        })
+    };
     let mut spaces = Vec::new();
     for (index, entity) in entities.iter().enumerate() {
         let entities::IfcEntity::BuildingElement {
@@ -3873,8 +4052,9 @@ pub(super) fn contain_in_spaces(entities: &mut Vec<entities::IfcEntity>) {
             continue;
         };
         // #763: a family instance written as a space holds nothing; the
-        // furniture around it stays in its room.
-        if ifc_type != "IFCSPACE" || is_family_instance(property_set) {
+        // furniture around it stays in its room. RE-317: nor does an Area,
+        // which Revit's export draws over its rooms.
+        if ifc_type != "IFCSPACE" || is_family_instance(property_set) || is_area(property_set) {
             continue;
         }
         if let Some((outer, voids)) =
@@ -4127,6 +4307,9 @@ struct RecordGeometry {
     /// stays the record box for consumers that read only extrusions.
     solid: Option<entities::SolidShape>,
     properties: PropertySet,
+    /// The values the record gives for a later stage to read, which are not
+    /// properties of the element ([`TypedProductionAppend::record_handoffs`]).
+    handoffs: Vec<Property>,
     pieces: Vec<Extrusion>,
     /// Each tagged void of a floor's sketch (RE-151): the piece it is in, its
     /// tag, its outline in the body's frame and the floor's thickness.
@@ -4157,9 +4340,80 @@ pub const LANDING_SLAB_BODY_HEIGHT_SOURCE: &str = "native_landing_top_and_type_t
 /// element covers the whole of the wall's plan (#1067, RE-267).
 pub const WALL_TOP_COVER_BODY_HEIGHT_SOURCE: &str = "wall_top_cut_at_covering_floor";
 
+/// `BodyHeightSource` of a wall whose top is cut at the underside of the
+/// floor, roof or footing its top join or a cut pair names over the part of
+/// the wall's plan the element covers, and left at the wall's own top over
+/// the rest: drawn as one prism of its plan to the underside and the pieces
+/// of the plan outside the element from there to the top (#1067, RE-320).
+pub const WALL_TOP_STEPPED_BODY_HEIGHT_SOURCE: &str = "wall_top_stepped_at_covering_floor";
+
 /// `BodySource` of a body that is the element record's bounding box, where
 /// no carrier refines it (#409).
 pub const RECORD_BBOX_BODY_SOURCE: &str = "partition_element_record_bbox";
+
+/// Property of an `IfcSpace`'s [`ELEMENT_RECORD_PROPERTY_SET`] saying where its
+/// outline, and so the plan area of its body, came from (RE-313). A room's
+/// `BodySource` stays [`RECORD_BBOX_BODY_SOURCE`] even when its outline was
+/// read from the room's stored solid, because the placement and the height
+/// are the record box's; this property is the one to read.
+pub const SPACE_OUTLINE_SOURCE_PROPERTY: &str = "SpaceOutlineSource";
+
+/// [`SPACE_OUTLINE_SOURCE_PROPERTY`] of a room whose outline was read from the
+/// faces of its stored solid, which close into loops as they are (RE-101).
+pub const SPACE_OUTLINE_STORED_SOLID: &str = "stored_solid";
+
+/// [`SPACE_OUTLINE_SOURCE_PROPERTY`] of a room whose outline was read from the
+/// faces its stored solid lists, up to the solid's own end, where the walk of
+/// RE-101 did not close them (RE-316): the wall edges close as that walk reads
+/// them (one outer loop, the loops inside it nested, no edge crossing
+/// another) and span the record box. Equal to Revit's area to 0.1% on every
+/// such room measured, 9 of 9 on the BIM4LCA office as built. It is not
+/// `stored_solid`: the solid's end is bounded by its list of objects and a gap,
+/// not by the walk, so a closed loop of another element's faces inside the box
+/// would be read as one of the room's.
+pub const SPACE_OUTLINE_STORED_SOLID_FACES: &str = "stored_solid_faces";
+
+/// [`SPACE_OUTLINE_SOURCE_PROPERTY`] of a room whose outline was read as
+/// [`SPACE_OUTLINE_STORED_SOLID_FACES`] but is the boundary of the region the
+/// edges wind around, because a column overlaps a wall and its loop lies partly
+/// inside the wall's, or falls up to 0.02 ft short of its record box on a side
+/// (RE-316). Whether the area has the column taken off depends on Revit's
+/// export, which does not always: of the 15 room scores of the BIM4LCA office
+/// so read (4 as built, 11 at building permit), 5 are 0.45% to 0.68% under
+/// Revit's floor area (four rooms, 1671995 in both files) and 10 are equal.
+pub const SPACE_OUTLINE_STORED_SOLID_APPROXIMATE: &str = "stored_solid_approximate";
+
+/// [`SPACE_OUTLINE_SOURCE_PROPERTY`] of a space drawn as its record's bounding
+/// box (a room whose outline was not read, a Revit Space or a family instance
+/// written as a space): placed and sized by the box, its plan area the box's,
+/// not the space's.
+pub const SPACE_OUTLINE_RECORD_BOX: &str = "record_box";
+
+/// [`SPACE_OUTLINE_SOURCE_PROPERTY`] of a room drawn from the mesh Revit saved
+/// for it (`rvt-ifc --saved-meshes`).
+pub const SPACE_OUTLINE_SAVED_MESH: &str = "saved_mesh";
+
+/// [`SPACE_OUTLINE_SOURCE_PROPERTY`] of an Area whose boundary is not read, so
+/// it has no body.
+pub const SPACE_OUTLINE_NONE: &str = "none";
+
+/// [`SPACE_OUTLINE_SOURCE_PROPERTY`] of an Area drawn as the region its
+/// scheme's boundary lines enclose around its point, from its Level to the
+/// Level above, when both are building stories (RE-317).
+pub const SPACE_OUTLINE_AREA_BOUNDARY: &str = "area_boundary";
+
+/// `BodyHeightSource` of an Area's body: from its Level up to the Level above
+/// it, when both are building stories (RE-317).
+pub const AREA_BODY_HEIGHT_SOURCE: &str = "area_level_to_next_storey";
+
+/// Property of an Area's [`ELEMENT_RECORD_PROPERTY_SET`] that says why it has no
+/// body, where its boundary was not proven (RE-317).
+pub const AREA_BODY_REFUSAL_PROPERTY: &str = "AreaBodyRefusal";
+
+/// [`SPACE_OUTLINE_SOURCE_PROPERTY`] of a Revit Space or a family instance
+/// written as an `IfcSpace` whose body is more than its record's box: its
+/// `BodySource` says how it was drawn.
+pub const SPACE_OUTLINE_FAMILY_BODY: &str = "family_body";
 
 /// `BodySource` of a family instance turned off the model's axes, drawn as
 /// the rectangle at its angle whose box is its record box (RE-87).
@@ -4226,14 +4480,15 @@ fn oriented_box_solid(axes: [[f64; 3]; 3], half: [f64; 3], height: f64) -> entit
     }
 }
 
-/// Properties holding a turned family instance's plan origin from its
-/// transform, model feet (RE-87, RE-89).
+/// The name of each hand-off ([`TypedProductionAppend::record_handoffs`]) holding a
+/// turned family instance's plan origin from its transform, model feet (RE-87,
+/// RE-89).
 pub const INSTANCE_ORIGIN_PROPERTIES: [&str; 2] = ["InstanceOriginX", "InstanceOriginY"];
 
-/// Properties holding a window's opening from its type and transform
-/// (RE-93, `crate::partition_schema_mvp::FillerOpening`): the plan point
-/// it is centred on and the direction of its width, model feet and a unit
-/// vector, then its base elevation, width and height, feet.
+/// The name of each hand-off holding a window's opening from its type and
+/// transform (RE-93, `crate::partition_schema_mvp::FillerOpening`): the plan
+/// point it is centred on and the direction of its width, model feet and a
+/// unit vector, then its base elevation, width and height, feet.
 pub const FILLER_OPENING_PROPERTIES: [&str; 7] = [
     "OpeningCentreX",
     "OpeningCentreY",
@@ -4244,25 +4499,31 @@ pub const FILLER_OPENING_PROPERTIES: [&str; 7] = [
     "OpeningHeight",
 ];
 
-/// Properties holding a door's Width and Height from its type (RE-187,
-/// `crate::partition_schema_mvp::DOOR_TYPE_SIZE_FIELDS`), feet.
+/// The name of each hand-off holding a door's Width and Height from its type
+/// (RE-187, `crate::partition_schema_mvp::DOOR_TYPE_SIZE_FIELDS`), feet.
 pub const DOOR_TYPE_SIZE_PROPERTIES: [&str; 2] = ["TypeWidth", "TypeHeight"];
 
-/// Properties holding the extent along X and along Z of the outline a
-/// door's or window's symbol cuts in its host (RE-215,
+/// The name of each hand-off holding the extent along X and along Z of the
+/// outline a door's or window's symbol cuts in its host (RE-215,
 /// `crate::partition_schema_mvp::CUT_LOOP_SIZE_FIELDS`), feet.
 pub const CUT_LOOP_SIZE_PROPERTIES: [&str; 2] = ["CutWidth", "CutHeight"];
 
-/// Properties holding the extents along X, Y and Z of the solid a door's or
-/// window's symbol cuts where it cuts no loop (RE-225,
+/// The name of each hand-off holding the extents along X, Y and Z of the
+/// solid a door's or window's symbol cuts where it cuts no loop (RE-225,
 /// `crate::partition_schema_mvp::CUT_SOLID_SIZE_FIELDS`), feet.
 pub const CUT_SOLID_SIZE_PROPERTIES: [&str; 3] =
     ["CutSolidWidth", "CutSolidDepth", "CutSolidHeight"];
 
-/// Properties holding a door's or window's record box extent along its own
-/// X axis and its height, where its symbol cuts no loop (#810,
+/// The name of each hand-off holding a door's or window's record box extent
+/// along its own X axis and its height, where its symbol cuts no loop (#810,
 /// `crate::partition_schema_mvp::INSTANCE_BOX_SIZE_FIELDS`), feet.
 pub const INSTANCE_BOX_SIZE_PROPERTIES: [&str; 2] = ["BoxWidth", "BoxHeight"];
+
+/// The name of the hand-off holding the extent along X of the lines of no
+/// category in the saved graphics of a door's or window's symbol, the edges of
+/// its bounding boxes, where the symbol cuts no loop (RE-318,
+/// `crate::partition_schema_mvp::SYMBOL_WIRE_WIDTH_FIELD`), feet.
+pub const SYMBOL_WIRE_WIDTH_PROPERTY: &str = "SymbolWireWidth";
 
 /// Classes whose body another rule draws, which a family instance's turn
 /// leaves alone: columns (their type's section), beams (their line), and
@@ -4865,6 +5126,240 @@ fn roof_planes_solid(
         .map(|v| v[2])
         .fold(f64::NEG_INFINITY, f64::max);
     if (highest - height).abs() > ROOF_SLOPE_CLOSURE_FEET {
+        return None;
+    }
+    Some(entities::SolidShape::FacetedBrep {
+        vertices_feet: mesh.vertices,
+        triangles: mesh
+            .triangles
+            .into_iter()
+            .map(|[a, b, c]| entities::BrepTriangle(a, b, c))
+            .collect(),
+    })
+}
+
+/// How near a slope arrow's edge must lie to an outline edge to be it, feet
+/// (RE-307).
+const ROOF_ARROW_EDGE_FEET: f64 = 1e-4;
+
+/// Whether a footprint roof's sloped edges meet in a way Revit is measured
+/// not to resolve as their planes' wedges do (RE-307).
+///
+/// On `20_T_U_Roof`'s U, the two long outer walls (5962, 5956) are each met
+/// inside by the extension of a reflex edge, and Revit slopes them along the
+/// arms alone: the bar they continue past stays upright between its other
+/// planes, with no hip where the wall meets the bar's eave. The wedges slope
+/// the whole edge, so a roof holding a sloped edge so met, with a sloped
+/// neighbour at a convex corner (the hip the wedges would draw), is left to
+/// its record box. Only the U is measured: whether Revit slopes every edge of
+/// this configuration along part of its length is not known, and the guard
+/// boxes the class on that account. The T's long eave (4166) is met inside by
+/// the stem's walls the same way, but its corners lie against upright gable
+/// ends, and the wedges are exact there.
+///
+/// `sloped` holds the outline edges (`ring[k]` to `ring[k + 1]`) the roof's
+/// arrows slope.
+fn arrow_roof_hip_ambiguous(ring: &[(f64, f64)], sloped: &[usize]) -> bool {
+    let n = ring.len();
+    let area: f64 = (0..n)
+        .map(|i| {
+            let (a, b) = (ring[i], ring[(i + 1) % n]);
+            a.0 * b.1 - b.0 * a.1
+        })
+        .sum::<f64>()
+        / 2.0;
+    if !(area.is_finite() && area.abs() > 1e-9) {
+        return true;
+    }
+    // Sine of the turn at a vertex, positive where it is convex.
+    let turn = |i: usize| {
+        let (p, c, q) = (ring[(i + n - 1) % n], ring[i], ring[(i + 1) % n]);
+        let (u, v) = ((c.0 - p.0, c.1 - p.1), (q.0 - c.0, q.1 - c.1));
+        let scale = u.0.hypot(u.1) * v.0.hypot(v.1);
+        if scale > 0.0 {
+            (u.0 * v.1 - u.1 * v.0) * area.signum() / scale
+        } else {
+            0.0
+        }
+    };
+    let mut met: Vec<usize> = Vec::new();
+    for i in (0..n).filter(|&i| turn(i) < -1e-9) {
+        let (p, c, q) = (ring[(i + n - 1) % n], ring[i], ring[(i + 1) % n]);
+        for d in [(c.0 - p.0, c.1 - p.1), (c.0 - q.0, c.1 - q.1)] {
+            // The nearest edge the extension of a reflex edge reaches: its
+            // distance along the ray, the edge, and the distance along the
+            // edge.
+            let mut nearest: Option<(f64, usize, f64)> = None;
+            for k in (0..n).filter(|&k| k != i && k != (i + n - 1) % n) {
+                let (a, b) = (ring[k], ring[(k + 1) % n]);
+                let e = (b.0 - a.0, b.1 - a.1);
+                let denom = d.0 * e.1 - d.1 * e.0;
+                if denom.abs() < 1e-12 {
+                    continue;
+                }
+                let ac = (a.0 - c.0, a.1 - c.1);
+                let t = (ac.0 * e.1 - ac.1 * e.0) / denom;
+                let s = (ac.0 * d.1 - ac.1 * d.0) / denom;
+                if t > 1e-9
+                    && (-1e-9..=1.0 + 1e-9).contains(&s)
+                    && nearest.is_none_or(|(best, _, _)| t < best - 1e-12)
+                {
+                    nearest = Some((t, k, s * e.0.hypot(e.1)));
+                }
+            }
+            // Meeting an edge at one of its ends is meeting a vertex.
+            if let Some((_, k, along)) = nearest {
+                let (a, b) = (ring[k], ring[(k + 1) % n]);
+                let length = (b.0 - a.0).hypot(b.1 - a.1);
+                if along > 1e-6 && length - along > 1e-6 && sloped.contains(&k) && !met.contains(&k)
+                {
+                    met.push(k);
+                }
+            }
+        }
+    }
+    met.into_iter().any(|k| {
+        [(k, (k + n - 1) % n), ((k + 1) % n, (k + 1) % n)]
+            .into_iter()
+            .any(|(vertex, other)| turn(vertex) > 1e-9 && sloped.contains(&other))
+    })
+}
+
+/// A roof sloped by several slope arrows and no defining edge (RE-307): one
+/// plane per arrow, rising from the outline edge its tail lies on, square to
+/// it, at the arrow's slope. The plane is the underside: it is level with the
+/// record box's base at the edge, and the top lies the plane's own
+/// `T / cos θ` above it there, so the eaves of two arrows of different slopes
+/// stand at different heights. Each top is the lowest counting top plane at
+/// each point and each underside the lowest counting underside plane, never
+/// below the base, with upright sides.
+///
+/// A plane counts within the wedge between the lines where it meets the
+/// planes of the edges that share an end with its own (RE-199), and each
+/// surface has its own wedges: the lines where the tops meet differ from the
+/// lines where the undersides meet by the planes' different verticals. An
+/// underside also counts only on its edge's side, while a top does not: a top
+/// plane reaches past its edge's line to where it meets its neighbour's top,
+/// which is how Revit's valley between two tops lies beyond the line of the
+/// edge whose underside it rises from.
+///
+/// Revit's export of `20_T_U_Roof`'s T (roof 4149, six arrows of five
+/// slopes, a stem hipped at its end on a bar with upright gable ends) is
+/// this shape at every point of its top and underside. `None` unless every
+/// sloped edge is an outline edge, the outline is a single loop, no
+/// configuration [`arrow_roof_hip_ambiguous`] names is present, and the
+/// highest point of the top reproduces `height` and the lowest the base,
+/// within [`ROOF_SLOPE_CLOSURE_FEET`].
+fn roof_arrow_planes_solid(
+    slopes: &[crate::partition_schema_mvp::RoofSlope],
+    [x, y]: [f64; 2],
+    outer: &[(f64, f64)],
+    inner: &[Vec<(f64, f64)>],
+    height: f64,
+) -> Option<entities::SolidShape> {
+    if outer.len() < 3 || !inner.is_empty() || slopes.len() < 2 {
+        return None;
+    }
+    let near = |a: (f64, f64), b: (f64, f64)| {
+        (a.0 - b.0).abs() < ROOF_ARROW_EDGE_FEET && (a.1 - b.1).abs() < ROOF_ARROW_EDGE_FEET
+    };
+    let mut tops: Vec<super::body_geometry::PlanPlane> = Vec::new();
+    let mut under_planes: Vec<super::body_geometry::PlanPlane> = Vec::new();
+    let mut top_domains: Vec<Vec<super::body_geometry::PlanPlane>> = Vec::new();
+    let mut bottom_domains: Vec<Vec<super::body_geometry::PlanPlane>> = Vec::new();
+    let mut edge_of: Vec<usize> = Vec::new();
+    let mut ends: Vec<[(f64, f64); 2]> = Vec::new();
+    let mut probes: Vec<(f64, f64)> = Vec::new();
+    for slope in slopes {
+        let [sx, sy] = slope.edge_start;
+        let [ex, ey] = slope.edge_end;
+        let length = (ex - sx).hypot(ey - sy);
+        let angle = slope.angle_radians;
+        if !(length > 1e-9
+            && angle.is_finite()
+            && angle > 0.0
+            && angle < std::f64::consts::FRAC_PI_2
+            && slope.thickness_feet > 0.0
+            && slope.plate_offset_feet == 0.0)
+        {
+            return None;
+        }
+        let (start, end) = ((sx - x, sy - y), (ex - x, ey - y));
+        let k = (0..outer.len()).find(|&k| {
+            let (a, b) = (outer[k], outer[(k + 1) % outer.len()]);
+            (near(a, start) && near(b, end)) || (near(a, end) && near(b, start))
+        })?;
+        if edge_of.contains(&k) {
+            return None;
+        }
+        edge_of.push(k);
+        let (ux, uy) = ((ex - sx) / length, (ey - sy) / length);
+        // Distance from the edge in local coordinates: -uy·px + ux·py + c.
+        let c = (x - sx) * -uy + (y - sy) * ux;
+        let mid = ((start.0 + end.0) / 2.0, (start.1 + end.1) / 2.0);
+        let probe = (mid.0 - uy * 1e-3, mid.1 + ux * 1e-3);
+        let sign = if point_in_ring(probe, outer) {
+            1.0
+        } else {
+            -1.0
+        };
+        let rise = sign * angle.tan();
+        let under = [-uy * rise, ux * rise, c * rise];
+        let vertical = slope.thickness_feet / angle.cos();
+        tops.push([under[0], under[1], under[2] + vertical]);
+        under_planes.push(under);
+        top_domains.push(Vec::new());
+        bottom_domains.push(vec![[-uy * sign, ux * sign, c * sign]]);
+        ends.push([start, end]);
+        probes.push((mid.0 - uy * sign * 1e-3, mid.1 + ux * sign * 1e-3));
+    }
+    if arrow_roof_hip_ambiguous(outer, &edge_of) {
+        return None;
+    }
+    let at = |[a, b, c]: super::body_geometry::PlanPlane, (px, py): (f64, f64)| a * px + b * py + c;
+    for i in 0..slopes.len() {
+        for j in 0..slopes.len() {
+            let shared = i != j && ends[i].iter().any(|&p| ends[j].iter().any(|&q| near(p, q)));
+            if !shared {
+                continue;
+            }
+            let wedge = |planes: &[super::body_geometry::PlanPlane]| {
+                let mut line = [
+                    planes[i][0] - planes[j][0],
+                    planes[i][1] - planes[j][1],
+                    planes[i][2] - planes[j][2],
+                ];
+                if line[0].hypot(line[1]) < 1e-12 {
+                    return None;
+                }
+                if at(line, probes[i]) < 0.0 {
+                    line = line.map(|v| -v);
+                }
+                Some(line)
+            };
+            if let Some(line) = wedge(&tops) {
+                top_domains[i].push(line);
+            }
+            if let Some(line) = wedge(&under_planes) {
+                bottom_domains[i].push(line);
+            }
+        }
+    }
+    let undersides: Vec<(super::body_geometry::PlanPlane, f64)> =
+        under_planes.iter().map(|&plane| (plane, 0.0)).collect();
+    let mesh = super::body_geometry::envelope_slab_mesh_split(
+        outer,
+        inner,
+        &tops,
+        &undersides,
+        &top_domains,
+        Some(bottom_domains.as_slice()),
+    )?;
+    let heights = mesh.vertices.iter().map(|v| v[2]);
+    let highest = heights.clone().fold(f64::NEG_INFINITY, f64::max);
+    let lowest = heights.fold(f64::INFINITY, f64::min);
+    if (highest - height).abs() > ROOF_SLOPE_CLOSURE_FEET || lowest.abs() > ROOF_SLOPE_CLOSURE_FEET
+    {
         return None;
     }
     Some(entities::SolidShape::FacetedBrep {
@@ -5831,6 +6326,21 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
                 .map(|ring| ring.iter().map(|(px, py)| (px - x, py - y)).collect())
                 .collect();
             use crate::partition_roof_slopes::RafterCut;
+            // RE-307: several slope arrows. Measured on one loop, a plumb cut
+            // and a fascia depth read as 0 only.
+            if crate::partition_schema_mvp::roof_arrow_planes_from_fields(&decoded.fields) {
+                let plumb =
+                    crate::partition_schema_mvp::roof_rafter_cut_from_fields(&decoded.fields)
+                        == Some(RafterCut::Plumb);
+                let no_fascia =
+                    crate::partition_schema_mvp::roof_fascia_depth_from_fields(&decoded.fields)
+                        == Some(0.0);
+                return if plumb && no_fascia && profile.pieces.is_empty() {
+                    roof_arrow_planes_solid(&slopes, [x, y], &outer, &inner, height)
+                } else {
+                    None
+                };
+            }
             let plain = || match slopes.as_slice() {
                 [] => None,
                 [slope] => roof_slope_solid(*slope, [x, y], &outer, &inner, height),
@@ -5926,6 +6436,7 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
     } else {
         type_section.unwrap_or((width, depth))
     };
+    let mut handoffs: Vec<Property> = Vec::new();
     let mut properties = vec![
         // `BodySource` stays the record box unless a wall resolved its
         // joins: the placement, the plan envelope and the extrusion
@@ -6098,7 +6609,7 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
             crate::partition_schema_mvp::instance_origin_from_fields(&decoded.fields)
         {
             for (name, value) in INSTANCE_ORIGIN_PROPERTIES.iter().zip(origin) {
-                properties.push(Property {
+                handoffs.push(Property {
                     name: (*name).into(),
                     value: PropertyValue::LengthFeet(value),
                 });
@@ -6118,7 +6629,7 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
             PropertyValue::PositiveLengthFeet(opening.height_feet),
         ];
         for (name, value) in FILLER_OPENING_PROPERTIES.iter().zip(values) {
-            properties.push(Property {
+            handoffs.push(Property {
                 name: (*name).into(),
                 value,
             });
@@ -6149,7 +6660,7 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
             .iter()
             .zip([size.width_feet, size.height_feet])
         {
-            properties.push(Property {
+            handoffs.push(Property {
                 name: (*name).into(),
                 value: PropertyValue::PositiveLengthFeet(feet),
             });
@@ -6159,7 +6670,7 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
     // symbol cuts in its host.
     if let Some(size) = crate::partition_schema_mvp::cut_loop_size_from_fields(&decoded.fields) {
         for (name, feet) in CUT_LOOP_SIZE_PROPERTIES.iter().zip(size) {
-            properties.push(Property {
+            handoffs.push(Property {
                 name: (*name).into(),
                 value: PropertyValue::PositiveLengthFeet(feet),
             });
@@ -6168,7 +6679,7 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
     // RE-225: one whose symbol cuts a solid and no loop, the solid's extents.
     if let Some(size) = crate::partition_schema_mvp::cut_solid_size_from_fields(&decoded.fields) {
         for (name, feet) in CUT_SOLID_SIZE_PROPERTIES.iter().zip(size) {
-            properties.push(Property {
+            handoffs.push(Property {
                 name: (*name).into(),
                 value: PropertyValue::PositiveLengthFeet(feet),
             });
@@ -6179,11 +6690,20 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
     if let Some(size) = crate::partition_schema_mvp::instance_box_size_from_fields(&decoded.fields)
     {
         for (name, feet) in INSTANCE_BOX_SIZE_PROPERTIES.iter().zip(size) {
-            properties.push(Property {
+            handoffs.push(Property {
                 name: (*name).into(),
                 value: PropertyValue::PositiveLengthFeet(feet),
             });
         }
+    }
+    // RE-318: one whose symbol cuts no loop, the extent along X of the lines
+    // of no category in its symbol's saved graphics.
+    if let Some(feet) = crate::partition_schema_mvp::symbol_wire_width_from_fields(&decoded.fields)
+    {
+        handoffs.push(Property {
+            name: SYMBOL_WIRE_WIDTH_PROPERTY.into(),
+            value: PropertyValue::PositiveLengthFeet(feet),
+        });
     }
     // A wall drawn from its centreline reports its type's thickness
     // (RE-54); one whose joins resolved reports the trim it took and, unless
@@ -6270,6 +6790,68 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
                 value: PropertyValue::Integer(i64::from(id)),
             });
         }
+    }
+    // RE-313: a Revit Space, or a family instance written as an `IfcSpace`,
+    // is its record's box (turned with the instance where it is turned) unless
+    // a carrier drew more.
+    if class == "Space" || space_by_export_value(decoded) {
+        let resolved = properties.iter().any(|property| {
+            property.name == "ProfileResolved"
+                && matches!(property.value, PropertyValue::Boolean(true))
+        });
+        let boxed = properties.iter().any(|property| {
+            property.name == "BodySource"
+                && matches!(&property.value, PropertyValue::Text(source)
+                    if source == RECORD_BBOX_BODY_SOURCE
+                        || source == INSTANCE_TURNED_BODY_SOURCE
+                        || source == INSTANCE_ORIENTED_BODY_SOURCE)
+        });
+        properties.push(Property {
+            name: SPACE_OUTLINE_SOURCE_PROPERTY.into(),
+            value: PropertyValue::Text(
+                if boxed && !resolved {
+                    SPACE_OUTLINE_RECORD_BOX
+                } else {
+                    SPACE_OUTLINE_FAMILY_BODY
+                }
+                .into(),
+            ),
+        });
+    }
+    // RE-313, RE-316: whether the room's outline is its stored solid's (as the
+    // walk reads it, or resolved from the faces up to the solid's end, exactly
+    // or approximately) or its box.
+    if class == "Room" {
+        let source = profile
+            .is_some()
+            .then(|| {
+                decoded.fields.iter().find_map(|(name, value)| match value {
+                    InstanceField::String(source)
+                        if name
+                            == crate::element_record_plan_profiles::PLAN_PROFILE_SOURCE_FIELD =>
+                    {
+                        Some(source.as_str())
+                    }
+                    _ => None,
+                })
+            })
+            .flatten();
+        let marker = match source {
+            Some(crate::partition_room_boundaries::ROOM_OUTLINE_SOURCE) => {
+                SPACE_OUTLINE_STORED_SOLID
+            }
+            Some(crate::partition_room_boundaries::ROOM_OUTLINE_SOURCE_FACES) => {
+                SPACE_OUTLINE_STORED_SOLID_FACES
+            }
+            Some(crate::partition_room_boundaries::ROOM_OUTLINE_SOURCE_APPROXIMATE) => {
+                SPACE_OUTLINE_STORED_SOLID_APPROXIMATE
+            }
+            _ => SPACE_OUTLINE_RECORD_BOX,
+        };
+        properties.push(Property {
+            name: SPACE_OUTLINE_SOURCE_PROPERTY.into(),
+            value: PropertyValue::Text(marker.into()),
+        });
     }
     if let Some(number) = room_number {
         properties.push(Property {
@@ -6526,6 +7108,7 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
             name: ELEMENT_RECORD_PROPERTY_SET.into(),
             properties,
         },
+        handoffs,
         pieces: piece_bodies,
         void_openings,
     })

@@ -277,6 +277,29 @@ pub enum IfcEntity {
         outline_feet: Vec<(f64, f64)>,
         depth_feet: f64,
     },
+    /// The opening a rectangular wall opening cuts in the wall at `host` (an
+    /// index into `IfcModel::entities`), voiding it with no filling element,
+    /// as Revit's export writes it (RE-321, #1165). `tag` is the opening's
+    /// ElementId and `name` the wall's. Placed as a
+    /// [`IfcEntity::WallProfileOpening`] is: `outline_feet` in the wall's
+    /// vertical plane, extruded `thickness_feet` centred on the plane
+    /// `plane_offset_feet` to the axis's left of the placement's origin. It
+    /// is the `number`th opening of its wall, and `cutter_global_id` is the
+    /// GlobalId of the opening's record, which Revit hashes with that
+    /// number and the wall's GlobalId into the opening's own (revit-ifc's
+    /// `OpeningUtil`). Its `Pset_OpeningElementCommon.Reference` is the
+    /// wall's type name.
+    WallCutOpening {
+        host: usize,
+        number: u32,
+        tag: String,
+        name: String,
+        cutter_global_id: Option<String>,
+        outline_feet: Vec<(f64, f64)>,
+        axis_turn_radians: f64,
+        plane_offset_feet: f64,
+        thickness_feet: f64,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -817,6 +840,18 @@ pub struct OpeningCut {
     /// it is, feet (RE-93). `None` takes the element body's height.
     #[serde(default)]
     pub z_range_feet: Option<[f64; 2]>,
+}
+
+/// A door's or window's `OverallWidth` and `OverallHeight`, feet.
+#[derive(Debug, Clone, Copy, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct FillerSize {
+    pub width_feet: f64,
+    pub height_feet: f64,
+    /// Whether its symbol cuts an outline in its host (RE-215): Revit's export
+    /// draws its opening as an extrusion of it and gives that opening a
+    /// `Depth` (RE-244). A size read any other way leaves this unset.
+    #[serde(default)]
+    pub cut_loop: bool,
 }
 
 /// A family instance's materials (RE-82): IFC4 `IfcMaterialConstituentSet`,

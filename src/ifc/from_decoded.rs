@@ -361,5 +361,6 @@ pub fn build_ifc_model(inputs: &[ElementInput<'_>], options: BuilderOptions) -> 
         opening_cuts: Default::default(),
         body_pieces: Default::default(),
         storey_properties: Default::default(),
+        filler_sizes: Default::default(),
     }
 }

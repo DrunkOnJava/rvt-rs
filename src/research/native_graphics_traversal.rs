@@ -21,6 +21,14 @@ pub struct SelectedGraphics {
     pub source_owner_id: Option<u64>,
     pub world_transform: GraphicsTransform,
     pub path: Vec<usize>,
+    /// Whether a node on the way here is flagged not visible. Only a
+    /// selection made including hidden branches holds any (RE-318).
+    pub hidden: bool,
+    /// Whether a filter on the way here rejects the context (a detail level,
+    /// a view direction) or holds a condition not read, and was walked
+    /// anyway. Only a selection made including filtered branches holds any
+    /// (RE-318).
+    pub filtered: bool,
 }
 #[derive(Debug, Clone, Serialize)]
 pub struct TraversalDiagnostic {
@@ -57,6 +65,37 @@ pub fn select_graphics_with_resolver_at_detail<'a>(
     resolver: &dyn Fn(u64) -> Option<&'a ObjectGraph>,
     detail_level: i64,
 ) -> GraphicsSelection {
+    select_graphics_impl(graph, resolver, detail_level, false, false)
+}
+/// [`select_graphics_with_resolver_at_detail`], also walking the branches
+/// whose visibility flags hide them, each selected carrier marked
+/// [`SelectedGraphics::hidden`] where one lies on its way (RE-318). Nothing
+/// else about the selection changes.
+pub fn select_graphics_including_hidden_at_detail<'a>(
+    graph: &'a ObjectGraph,
+    resolver: &dyn Fn(u64) -> Option<&'a ObjectGraph>,
+    detail_level: i64,
+) -> GraphicsSelection {
+    select_graphics_impl(graph, resolver, detail_level, true, false)
+}
+/// [`select_graphics_including_hidden_at_detail`], also walking the children
+/// of a filter whose conditions reject the context or are not read, each
+/// selected carrier marked [`SelectedGraphics::filtered`] where one lies on
+/// its way (RE-318).
+pub fn select_graphics_including_filtered_at_detail<'a>(
+    graph: &'a ObjectGraph,
+    resolver: &dyn Fn(u64) -> Option<&'a ObjectGraph>,
+    detail_level: i64,
+) -> GraphicsSelection {
+    select_graphics_impl(graph, resolver, detail_level, true, true)
+}
+fn select_graphics_impl<'a>(
+    graph: &'a ObjectGraph,
+    resolver: &dyn Fn(u64) -> Option<&'a ObjectGraph>,
+    detail_level: i64,
+    include_hidden: bool,
+    include_filtered: bool,
+) -> GraphicsSelection {
     let mut walk = Walker {
         graph,
         edge_indexes: HashMap::from([(graph as *const ObjectGraph as usize, edge_index(graph))]),
@@ -66,6 +105,10 @@ pub fn select_graphics_with_resolver_at_detail<'a>(
         ancestry: Vec::new(),
         result: GraphicsSelection::default(),
         visits: 0,
+        include_hidden,
+        hidden_depth: 0,
+        include_filtered,
+        filtered_depth: 0,
     };
     if !(1..=3).contains(&detail_level) {
         walk.fail(0, "detail level must be1,2,or3");
@@ -113,6 +156,10 @@ struct Walker<'a, 'r> {
     ancestry: Vec<(Option<u64>, usize)>,
     result: GraphicsSelection,
     visits: usize,
+    include_hidden: bool,
+    hidden_depth: usize,
+    include_filtered: bool,
+    filtered_depth: usize,
 }
 impl Walker<'_, '_> {
     fn fail(&mut self, index: usize, message: &str) {
@@ -163,7 +210,17 @@ impl Walker<'_, '_> {
         }
         path.push(index);
         self.ancestry.push((self.source_owner_id, index));
+        let hidden = self.include_hidden
+            && self.graph.objects[index].fields["m_GInfo"]["m_flags"]
+                .as_u64()
+                .is_some_and(|flags| matches!(graphics_visibility(flags), 1 | 3));
+        if hidden {
+            self.hidden_depth += 1;
+        }
         let result = self.visit_inner(index, matrix, path);
+        if hidden {
+            self.hidden_depth -= 1;
+        }
         if let Err(message) = result {
             self.fail(index, &message)
         }
@@ -180,7 +237,7 @@ impl Walker<'_, '_> {
         // GGroup native child traversal admits visibility0/2;1/3 are skipped
         // outside special draw mode7. The default export uses normal mode.
         if let Some(flags) = obj.fields["m_GInfo"]["m_flags"].as_u64() {
-            if matches!(graphics_visibility(flags), 1 | 3) {
+            if !self.include_hidden && matches!(graphics_visibility(flags), 1 | 3) {
                 self.result.excluded_visibility_branches += 1;
                 return Ok(());
             }
@@ -191,6 +248,8 @@ impl Walker<'_, '_> {
                 source_owner_id: self.source_owner_id,
                 world_transform: matrix,
                 path: path.clone(),
+                hidden: self.hidden_depth > 0,
+                filtered: self.filtered_depth > 0,
             }),
             "GElement" | "GGroup" | "GFilter" => {
                 let children = self.children(index)?;
@@ -243,6 +302,7 @@ impl Walker<'_, '_> {
                         .as_array()
                         .ok_or("missing filter conditions")?;
                     let mut unknown = None;
+                    let mut rejected = false;
                     for p in conditions {
                         let ci = self.target(index, p)?;
                         let field = &self.graph.objects[ci].fields;
@@ -269,6 +329,7 @@ impl Walker<'_, '_> {
                                 self.detail_level,
                             )
                         } {
+                            Ok(false) if self.include_filtered => rejected = true,
                             Ok(false) => {
                                 self.result.rejected_filters += 1;
                                 return Ok(());
@@ -278,7 +339,18 @@ impl Walker<'_, '_> {
                         }
                     }
                     if let Some(e) = unknown {
-                        return Err(e);
+                        if !self.include_filtered {
+                            return Err(e);
+                        }
+                        rejected = true;
+                    }
+                    if rejected {
+                        self.filtered_depth += 1;
+                        for child in children {
+                            self.visit(child, matrix, path)
+                        }
+                        self.filtered_depth -= 1;
+                        return Ok(());
                     }
                 }
                 for child in children {

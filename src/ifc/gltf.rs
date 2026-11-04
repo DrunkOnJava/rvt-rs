@@ -449,17 +449,24 @@ pub fn build_gltf(model: &IfcModel) -> (GltfDocument, Vec<u8>) {
             .as_deref()
             .and_then(|tag| tag.parse::<u32>().ok())
             .and_then(|id| model.element_layers.get(&id));
-        if let (Some(layers), Some(Body::Extrusion(extrusion))) = (layered, body) {
+        if let (Some(layers), Some(body)) = (layered, body) {
             let [nx, ny] = layers.exterior_normal;
             let local = [
                 nx * placement.cos + ny * placement.sin,
                 -nx * placement.sin + ny * placement.cos,
             ];
             let widths: Vec<f64> = layers.layers.iter().map(|l| l.width_feet).collect();
-            let meshes = if layers.stacked {
-                body_geometry::stacked_extrusion_meshes(extrusion, &widths)
-            } else {
-                body_geometry::layered_extrusion_meshes(extrusion, local, &widths)
+            let meshes = match body {
+                Body::Extrusion(extrusion) if layers.stacked => {
+                    body_geometry::stacked_extrusion_meshes(extrusion, &widths)
+                }
+                Body::Extrusion(extrusion) => {
+                    body_geometry::layered_extrusion_meshes(extrusion, local, &widths)
+                }
+                Body::Solid(shape) if !layers.stacked => {
+                    body_geometry::layered_stepped_meshes(shape, local, &widths)
+                }
+                _ => None,
             };
             if let Some(meshes) = meshes {
                 for (mesh, band) in meshes.iter().zip(&layers.layers) {

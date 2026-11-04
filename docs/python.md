@@ -1,4 +1,4 @@
-# rvt-rs — Python bindings (v0.12.1)
+# rvt-rs — Python bindings (v0.13.0)
 
 `rvt` is a Python package built on top of the Rust `rvt` crate. It
 exposes the file reader, metadata, schema introspection, the
@@ -25,12 +25,12 @@ For all installation paths, including release smoke tests, see
 pip install rvt
 ```
 
-**PyPI `rvt` 0.12.1 is the current release.** Wheels target Python ≥ 3.8
+**PyPI `rvt` 0.13.0 is the current release.** Wheels target Python ≥ 3.8
 via pyo3's `abi3-py38` feature, so one wheel per OS/architecture covers
 every supported Python minor. The matching Rust crate is on crates.io
 (`cargo add rvt`); platforms and the other install channels are in
 [`install.md`](install.md). This page describes `main`, which can be ahead
-of the latest release: what has landed since 0.12.1 is in the fragments
+of the latest release: what has landed since 0.13.0 is in the fragments
 under [`changelog.d/`](../changelog.d/README.md).
 
 ### From source
@@ -96,7 +96,7 @@ with open("my-family.ifc", "w") as out:
 ## API reference
 
 Every signature below is verified against
-[`rvt-py/src/lib.rs`](../rvt-py/src/lib.rs) on `main` (0.12.0).
+[`rvt-py/src/lib.rs`](../rvt-py/src/lib.rs) on `main` (0.13.0).
 
 ### Module-level
 
@@ -172,7 +172,7 @@ Resource limits map directly to the Rust `OpenLimits` /
 |---|---|---|
 | `max_file_bytes` | 2 GiB (`2 * 1024³`) | File size cap, enforced before reading |
 | `max_stream_bytes` | 256 MiB (`256 * 1024²`) | Per-stream size cap in `read_stream` |
-| `max_inflate_bytes` | 256 MiB (`256 * 1024²`) | Decompressed output cap per inflate call; a multi-member stream such as `Partitions/NN` may inflate to this or 1 GiB in total, whichever is larger |
+| `max_inflate_bytes` | 256 MiB (`256 * 1024²`) | Decompressed output cap per inflate call; a multi-member stream such as `Partitions/NN` may inflate in total to this or, whichever is larger, 16 times its stored size, at least 1 GiB and at most 4 GiB (1 GiB on a 32-bit build) |
 | `max_walker_scan_bytes` | 128 MiB (`128 * 1024²`) | Decompressed `Global/Latest` bytes scanned by walker fallback paths |
 | `max_walker_candidates` | 100,000 | Maximum schema-scan candidates retained |
 | `max_walker_trial_offsets` | 16,000,000 | Maximum trial decodes attempted by walker scans |
@@ -465,8 +465,9 @@ caps from [`src/walker.rs`](../src/walker.rs):
 - `max_inflate_bytes` (default 256 MiB) — enforced per inflate
   call in the truncated-gzip decompressor; protects against
   compressed-bomb input. The members of one multi-member stream
-  (`Partitions/NN`) may together inflate to this or 1 GiB, whichever
-  is larger.
+  (`Partitions/NN`) may together inflate to this or, whichever is
+  larger, 16 times the stream's stored size, at least 1 GiB and at most
+  4 GiB (1 GiB on a 32-bit build).
 - `max_walker_scan_bytes`, `max_walker_candidates`,
   `max_walker_trial_offsets`, `max_walker_record_decode_bytes`,
   and `max_walker_container_records` — bound schema-directed

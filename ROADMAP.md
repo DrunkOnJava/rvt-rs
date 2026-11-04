@@ -28,8 +28,9 @@ zero-upload browser viewer. Revit 2023 projects get a narrower version of the
 same, and Revit 2015 to 2022, 2026 and 2027 projects are experimental. Every
 recovery claim is measured against the oracle its report names: Revit's own
 IFC export of the same model wherever one is measured, and for 2015 to 2018,
-2019 to 2022 and 2027, which have no measured same-release export (except one
-2015 project, RE-198), the same
+2019 to 2022 and 2027, which have no measured same-release export (except two
+projects, BIMcollab's 2015 example, RE-198, and Vitoria's 2018 `ALD26 Before`,
+RE-315), the same
 sample projects saved by Revit
 2019, 2023 and 2026 (but 2015's `rst_basic`, another model than its 2019 copy).
 What is not decoded
@@ -43,7 +44,7 @@ the four levels a file can reach are in the
 | Area | Status | Current state | Next decision point |
 |---|---|---|---|
 | Container, compression, metadata | Verified | MS-CFB container, Revit's truncated-gzip streams, PartAtom and previews open on every release from 2016 to 2027; 2015 project files open on Autodesk's sample projects, where PartAtom and previews are not measured. | Maintain compatibility and bounds checks against hostile input. |
-| `Formats/Latest` schema | Verified | The whole schema is read (#410: 4,126 classes on Revit 2024, where 395 were read before). A class's tag is its definition ordinal (#154), and element records name their class by it (RE-76). | Classify the 9 to 12 residual field encodings per release, only with byte evidence. |
+| `Formats/Latest` schema | Verified | The whole schema is read (#410: 4,126 classes on Revit 2024, where 395 were read before). A class's tag is its definition ordinal (#154), and element records name their class by it (RE-76). | Classify the three fields still unclassified (`ClassDefinitionRef::m_ref`, `VarParam::m_pSubst`, `VarSketchDimObj::m_dimValue`: no instance, or only null pointers), only with byte evidence (RE-323). |
 | ADocument walker | Partial | Document-level metadata for triage; the root ADocument walk is validated on 2024 to 2026. | Expand confidence across project releases and older files. |
 | Typed project elements | Partial | Elements come from their partition element records, typed by `BuiltInCategory` and matched against Revit's own exports. On Revit 2024 walls, doors, windows, columns, floor slabs and building pads match element for element (verified, RE-21); 2025 and 2023 are partial; 2026 is experimental (one local model), and so are 2015 to 2022 and 2027, measured against the same sample projects saved by Revit 2019, 2023 and 2026 (RE-181, RE-180, RE-179), but 2015's `rst_basic`, another model. Schema-field walls and opening-index doors and windows stay unsupported (RE-19). | A Revit export of a 2016 to 2022 or 2027 project to measure against, and a second 2015 one (#421, #878, #879), instance and type parameters in IFC (#35, #155, 0.13.0), held-out models (#408). |
 | IFC writer | Partial | IFC4 with storeys, IFC type objects, material layer sets, materials and stable generated GlobalIds. Bodies are exact where the element's data is decoded and the record's bounding box elsewhere, and the diagnostics count each (#409). | The geometry issues open under the 0.13.0 milestone (below). |
@@ -155,16 +156,26 @@ the four levels a file can reach are in the
 - **0.12.1, 2026-11-01.** Exports of Revit 2015 to 2023 files faster than in
   0.12.0, each the same as 0.12.0's but for the version its IFC header
   records; still slower than with 0.11.0 (#1237).
+- **0.12.2, 2026-11-03.** More doors drawn from Revit's saved meshes in the
+  default export and more bodies with `--saved-meshes`, from a user's
+  comparison of 0.6.1 and 0.12.0; some cases it found stay open (#1247).
+- **0.13.0, 2026-11-03.** Rooms and spaces: every `IfcSpace` says where its
+  outline came from, Revit 2026 and 2027 rooms take their outline, unclosed
+  room solids are read from their faces, and bodiless family spaces are left
+  out (#1260, #1262); Revit 2018 projects that exported nothing export
+  (#1261); joined columns' `Length`, the office's wall hatch widths, roofs
+  with several slope arrows, the viewer's real progress, and faster native
+  reads (#1203, #810, #885, #1195, #1237).
 
-### 0.13.0: IFC geometry and element data
+### 0.14.0: IFC geometry and element data
 
-The geometry and element-data work that continues after 0.12.0, moved from the
-0.12.0 milestone when 0.12.0 shipped. Each
+The geometry and element-data work that continues after 0.13.0, moved from the
+0.13.0 milestone when 0.13.0 shipped. Each
 slice records a baseline, an improvement and a residual against Revit's own
 exports on the reference pack (#407), approximations stay labelled (#409), and
 a slice ships in the next release that contains it. Geometry open now: wall
-bodies thicker or thinner than their type's layers (#358) and the tops of walls Revit
-steps over a floor that covers them in part (#1067), stair flights
+bodies thicker or thinner than their type's layers (#358) and the tops of walls whose layers Revit
+ends at different heights (#1067), stair flights
 (#357), roofs Revit splits into slab parts (#323), hip roofs over T and U footprints and roof cases
 with no oracle (#884, #885), the openings on releases other than 2024 and 2025
 (#227), room boundaries whose solid does not
@@ -174,7 +185,8 @@ that is not in Revit's export (#309); and the export time on Revit 2015 to 2023
 (#1237). Element data: instance and type parameters with units and precedence
 (#35, #155) and the element-record fields that carry them (#223), written to
 IFC property sets and shown in the viewer; door and window sizes where the
-symbol cuts no outline, two doors still wide (#810); and ports' system classification (#834).
+symbol cuts no outline, measured on one building's families only
+(RE-318); and ports' system classification (#834).
 
 ### 1.0.0: first-class utility
 

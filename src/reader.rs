@@ -100,7 +100,7 @@ pub enum UnreadKind {
     /// [`compression::InflateLimits::max_output_bytes`] and was left out.
     MemberTooLarge,
     /// Its members together would inflate past
-    /// [`compression::InflateLimits::max_stream_total_bytes`]; those after
+    /// [`compression::InflateLimits::max_stream_total_bytes_for`]; those after
     /// the cap were left out.
     InflatedTotalTooLarge,
 }
@@ -176,6 +176,14 @@ pub struct RevitFile {
     /// production walk, the partition MVP and the IFC export (twice) each ran
     /// the same scan over every partition.
     arc_wall_scan: Option<CachedArcWallScan>,
+    /// Where an export in progress reports each `Partitions/*` stream it
+    /// inflates, and how many there are ([`Self::report_partition_inflates_to`]).
+    /// Held as `AssertUnwindSafe` so the handle keeps the unwind-safety it
+    /// has without one: a control wraps a caller's closure, which is neither.
+    partition_progress: Option<(
+        std::panic::AssertUnwindSafe<crate::control::WalkerControl>,
+        u64,
+    )>,
     /// Memoised data objects (RE-153) of each partition stream: the
     /// original symbols, railing types and MEP systems each scanned every
     /// partition for them.
@@ -216,6 +224,15 @@ pub struct RevitFile {
     category_style_materials: Option<Arc<BTreeMap<i64, BTreeSet<u32>>>>,
     /// Streams a resource limit kept from being read whole (#1075).
     unread_streams: Vec<UnreadStream>,
+    /// Doors and windows written as such though their type's record was not
+    /// read (#1247).
+    unread_type_doors_windows: BTreeSet<u32>,
+    /// Family instances written as spaces that were left out because their
+    /// family draws no model form (RE-312, #1262), by class.
+    bodiless_family_spaces: BTreeMap<String, usize>,
+    /// How many family instances written as spaces were not checked for a 3D
+    /// body, and why, where the check could not run (RE-312).
+    bodiless_family_space_error: Option<(usize, String)>,
 }
 
 /// The limits it was opened with and how many streams it has inflated so
@@ -424,6 +441,7 @@ impl RevitFile {
             phase_filter: None,
             walk: None,
             arc_wall_scan: None,
+            partition_progress: None,
             data_objects: std::collections::HashMap::new(),
             header_hits: std::collections::HashMap::new(),
             native_preamble: None,
@@ -435,6 +453,9 @@ impl RevitFile {
             material_appearances: std::collections::HashMap::new(),
             category_style_materials: None,
             unread_streams: Vec::new(),
+            unread_type_doors_windows: BTreeSet::new(),
+            bodiless_family_spaces: BTreeMap::new(),
+            bodiless_family_space_error: None,
         })
     }
 
@@ -444,6 +465,38 @@ impl RevitFile {
     /// anything produced from this handle is missing what they hold.
     pub fn unread_streams(&self) -> &[UnreadStream] {
         &self.unread_streams
+    }
+
+    /// The doors and windows this handle's export wrote as doors and
+    /// windows though their type's record was not read (#1247), by
+    /// ElementId: whether each draws geometry, or is its opening alone in
+    /// Revit's export as a cased opening is, is not known.
+    pub(crate) fn unread_type_doors_windows(&self) -> &BTreeSet<u32> {
+        &self.unread_type_doors_windows
+    }
+
+    pub(crate) fn note_unread_type_doors_windows(&mut self, ids: impl IntoIterator<Item = u32>) {
+        self.unread_type_doors_windows.extend(ids);
+    }
+
+    /// The family instances written as spaces that this handle's export left
+    /// out because their family draws no model form (RE-312), by class.
+    pub(crate) fn bodiless_family_spaces(&self) -> &BTreeMap<String, usize> {
+        &self.bodiless_family_spaces
+    }
+
+    pub(crate) fn note_bodiless_family_spaces(&mut self, classes: BTreeMap<String, usize>) {
+        self.bodiless_family_spaces = classes;
+    }
+
+    /// How many family instances written as spaces were not checked for a 3D
+    /// body, and why (RE-312).
+    pub(crate) fn bodiless_family_space_error(&self) -> Option<&(usize, String)> {
+        self.bodiless_family_space_error.as_ref()
+    }
+
+    pub(crate) fn note_bodiless_family_space_error(&mut self, checked: usize, error: String) {
+        self.bodiless_family_space_error = Some((checked, error));
     }
 
     fn note_unread(&mut self, unread: UnreadStream) {
@@ -504,13 +557,41 @@ impl RevitFile {
                 name: name.to_string(),
                 stored_bytes: raw.len() as u64,
                 kind: UnreadKind::InflatedTotalTooLarge,
-                limit: limits.max_stream_total_bytes() as u64,
+                limit: limits.max_stream_total_bytes_for(raw.len()) as u64,
             });
         }
         let inflated = Arc::new(inflated);
         self.inflated
             .insert(name.to_string(), Arc::clone(&inflated));
+        if let Some((control, total)) = &self.partition_progress {
+            let done = self
+                .inflated
+                .keys()
+                .filter(|key| key.starts_with("Partitions/"))
+                .count() as u64;
+            control.report(
+                crate::control::Stage::PartitionScan,
+                done.min(*total),
+                Some(*total),
+            );
+        }
         Ok(inflated)
+    }
+
+    /// From now until [`Self::stop_reporting_partition_inflates`], reports to
+    /// `control` each time a `Partitions/*` stream is inflated for the first
+    /// time, as [`crate::control::Stage::PartitionScan`] with the number
+    /// inflated so far out of the number of partition streams. Whichever pass
+    /// reads the partitions first inflates them all, in turn, and on a project
+    /// that is most of an open's time, in passes that have no control of their
+    /// own.
+    pub(crate) fn report_partition_inflates_to(&mut self, control: &crate::control::WalkerControl) {
+        let total = self.partition_stream_names().len() as u64;
+        self.partition_progress = Some((std::panic::AssertUnwindSafe(control.clone()), total));
+    }
+
+    pub(crate) fn stop_reporting_partition_inflates(&mut self) {
+        self.partition_progress = None;
     }
 
     /// The data objects (RE-153) of partition stream `name`, each at its

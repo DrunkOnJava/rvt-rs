@@ -58,6 +58,56 @@ pub(super) fn attach_ifc_export_overrides(
     }
 }
 
+/// Leave out the family instances written as spaces through their "Export to
+/// IFC As" that have no 3D body, as Revit's export leaves them out (RE-312,
+/// #1262). Revit writes a family instance that is not a door or a window
+/// only when it has a 3D body, and an instance has none when every model
+/// form of its family is a void or hidden for its parameter values
+/// ([`crate::native_family_forms::instances_without_body`]). On the BIM4LCA
+/// terrain office the 92 bicycle bays of "Parking Space", whose "Stripe
+/// Y/N" is 0, are not in Revit's export and its 2 car bays are. The
+/// export diagnostics count what is left out, and a check that could not
+/// run is reported there with every instance kept.
+pub(super) fn without_bodiless_family_spaces(
+    rf: &mut RevitFile,
+    products: &mut Vec<DecodedElement>,
+) {
+    let candidates: BTreeSet<u64> = products
+        .iter()
+        .filter(|element| {
+            element.fields.iter().any(|(name, value)| {
+                matches!(value, InstanceField::String(entity)
+                    if name == IFC_EXPORT_AS_FIELD && entity.trim().eq_ignore_ascii_case("IfcSpace"))
+            })
+        })
+        .filter_map(|element| element.id.map(u64::from))
+        .collect();
+    if candidates.is_empty() {
+        return;
+    }
+    let bodiless = match crate::native_family_forms::instances_without_body(rf, &candidates) {
+        Ok(bodiless) => bodiless,
+        Err(error) => {
+            rf.note_bodiless_family_space_error(candidates.len(), error.to_string());
+            return;
+        }
+    };
+    if bodiless.is_empty() {
+        return;
+    }
+    let mut classes: BTreeMap<String, usize> = BTreeMap::new();
+    products.retain(|element| {
+        let left_out = element
+            .id
+            .is_some_and(|id| bodiless.contains(&u64::from(id)));
+        if left_out {
+            *classes.entry(element.class.clone()).or_default() += 1;
+        }
+        !left_out
+    });
+    rf.note_bodiless_family_spaces(classes);
+}
+
 /// Give elements of system families (walls, floors, roofs, ceilings,
 /// railings) their type's name (#322).
 ///
@@ -914,27 +964,31 @@ pub(super) fn attach_type_functions(
     }
 }
 
+/// Whether `element` has a [`TYPE_FUNCTION_FIELD`].
+pub(super) fn has_type_function(element: &DecodedElement) -> bool {
+    element
+        .fields
+        .iter()
+        .any(|(name, _)| name == TYPE_FUNCTION_FIELD)
+}
+
 /// Give each of `walls` with no [`TYPE_FUNCTION_FIELD`] its type's Function
 /// from the type's native record ([`crate::native_wall_types`], RE-185).
 /// Nothing on a release not measured, or where the native records are not
-/// read.
+/// read. `reads` holds what earlier reads of the walls' records found, and
+/// takes what this one does.
 pub(super) fn attach_wall_type_functions<'a>(
     rf: &mut RevitFile,
     revit_version: u32,
     walls: impl IntoIterator<Item = &'a mut DecodedElement>,
+    reads: &mut crate::native_walls::WallReads,
 ) {
     if !WALL_TYPE_FUNCTION_REVIT_VERSIONS.contains(&revit_version) {
         return;
     }
-    let has_function = |element: &DecodedElement| {
-        element
-            .fields
-            .iter()
-            .any(|(name, _)| name == TYPE_FUNCTION_FIELD)
-    };
     let mut walls: Vec<&mut DecodedElement> = walls
         .into_iter()
-        .filter(|element| !has_function(element))
+        .filter(|element| !has_type_function(element))
         .collect();
     let ids: BTreeSet<u64> = walls
         .iter()
@@ -943,7 +997,7 @@ pub(super) fn attach_wall_type_functions<'a>(
     if ids.is_empty() {
         return;
     }
-    let Ok(functions) = crate::native_wall_types::wall_type_functions(rf, &ids) else {
+    let Ok(functions) = reads.type_functions(rf, &ids) else {
         return;
     };
     for element in walls.iter_mut() {

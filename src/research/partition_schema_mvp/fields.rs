@@ -235,6 +235,11 @@ pub const CUT_LOOP_SIZE_FIELDS: [&str; 2] = ["m_cut_loop_width", "m_cut_loop_hei
 /// axis and its height, where its symbol cuts no loop (#810), feet.
 pub const INSTANCE_BOX_SIZE_FIELDS: [&str; 2] = ["m_instance_box_width", "m_instance_box_height"];
 
+/// Field carrying the extent along X of the lines of no category in the
+/// saved graphics of the symbol that draws a door or window whose symbol cuts
+/// no loop: the edges of its bounding boxes (RE-318), feet.
+pub const SYMBOL_WIRE_WIDTH_FIELD: &str = "m_symbol_wire_width";
+
 /// Fields carrying the extents along X, Y and Z of the solid a door's or
 /// window's symbol cuts where it cuts no loop (RE-225), feet.
 pub const CUT_SOLID_SIZE_FIELDS: [&str; 3] = [
@@ -735,7 +740,7 @@ pub const WALL_TOP_JOINED_FIELD: &str = "m_wall_top_joined";
 /// Releases that read walls from their element records
 /// ([`crate::partition_element_records_2023`]) whose native record's top join
 /// is measured (RE-284), where [`WALL_TOP_JOINED_FIELD`] comes from
-/// [`crate::native_walls::wall_top_joins`] alone.
+/// [`crate::native_walls::WallReads::top_joins`] alone.
 pub const WALL_TOP_JOIN_RECORD_REVIT_VERSIONS: &[u32] =
     &[2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023];
 
@@ -750,6 +755,11 @@ pub const WALL_UNCUT_FIELD: &str = "m_wall_uncut";
 /// ([`crate::native_walls::WallRecords::top_cutters`], RE-267): the floors,
 /// roofs and footings the export may cut its top at.
 pub const WALL_TOP_CUTTERS_FIELD: &str = "m_wall_top_cutters";
+
+/// Field holding, as a vector of ElementIds, those of
+/// [`WALL_TOP_CUTTERS_FIELD`] that only a `CutPairGStep` names and the top
+/// join does not ([`crate::native_walls::WallRecords::pair_only`], RE-320).
+pub const WALL_TOP_PAIR_ONLY_FIELD: &str = "m_wall_top_pair_only";
 
 /// Field set on a wall whose native record holds no step that cuts, embeds or
 /// sweeps its solid ([`crate::native_walls::WallRecords::whole`], RE-270).
@@ -965,6 +975,12 @@ pub const ROOF_RAFTER_CUT_FIELD: &str = "m_roof_rafter_cut";
 /// Field holding a roof's fascia depth, feet, where it is read (RE-199).
 pub const ROOF_FASCIA_DEPTH_FIELD: &str = "m_roof_fascia_depth";
 
+/// Field marking a roof whose planes are its several slope arrows', one per
+/// edge field set (RE-307): each plane rises from the boundary line its
+/// arrow starts on, square to it, at the arrow's slope, and its top lies a
+/// plane's own `T / cos θ` above its underside at that line.
+pub const ROOF_ARROW_PLANES_FIELD: &str = "m_roof_arrow_planes";
+
 /// Classes whose type's layers stack from the top down (RE-57).
 pub const STACKED_LAYER_CLASSES: &[&str] = &["Floor", "BuildingPad", "Roof", "Ceiling"];
 
@@ -1034,6 +1050,8 @@ pub const FRAMING_TOP_LEVEL_SOURCE: &str = "structural_framing_top_level";
 /// light fixture, wall sweep, generic model, hardscape element and stair is
 /// on the Level [`crate::element_record_level_refs::elevation_band_level`]
 /// gives, while plumbing fixtures follow the Level object they name instead.
+/// A gutter is placed the same way (RE-319): both of `ALD26 Before`'s, whose
+/// records name no Level, are on the storey of Revit's export.
 pub const ELEVATION_PLACED_CLASSES: &[&str] = &[
     "SlabEdge",
     "LightingFixture",
@@ -1041,4 +1059,5 @@ pub const ELEVATION_PLACED_CLASSES: &[&str] = &[
     "GenericModel",
     "Hardscape",
     "Stair",
+    "Gutter",
 ];

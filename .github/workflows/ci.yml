@@ -244,7 +244,7 @@ jobs:
       # cargo-nextest runs the manifest's test binaries in parallel (C6).
       - name: Install cargo-nextest
         if: matrix.label != 'msrv'
-        uses: taiki-e/install-action@1e29709c0ec63babbe8f266397a465f29a825f91 # v2.87.31
+        uses: taiki-e/install-action@68a389c788b2cd04016ce8c80ee23b80d2ab3d68 # v2.88.1
         with:
           tool: cargo-nextest@0.9.146
       - name: Real-file, CLI and contract verification
@@ -332,7 +332,7 @@ jobs:
           save-if: ${{ github.ref == 'refs/heads/main' }}
           shared-key: ci-i686
       - name: Install cargo-nextest
-        uses: taiki-e/install-action@1e29709c0ec63babbe8f266397a465f29a825f91 # v2.87.31
+        uses: taiki-e/install-action@68a389c788b2cd04016ce8c80ee23b80d2ab3d68 # v2.88.1
         with:
           tool: cargo-nextest@0.9.146
       - name: Real-file, CLI, contract and hardening checks on i686
@@ -433,7 +433,7 @@ jobs:
       # corpus-reading target is gated the moment it exists.
       # cargo-nextest runs the manifest's test binaries in parallel (C6).
       - name: Install cargo-nextest
-        uses: taiki-e/install-action@1e29709c0ec63babbe8f266397a465f29a825f91 # v2.87.31
+        uses: taiki-e/install-action@68a389c788b2cd04016ce8c80ee23b80d2ab3d68 # v2.88.1
         with:
           tool: cargo-nextest@0.9.146
       - name: Tier-two gates (real-file, CLI and contract targets against the project corpus)
@@ -628,6 +628,40 @@ jobs:
           python -m ifcopenshell.validate /tmp/walker-real-project.ifc
           python -m ifcopenshell.validate /tmp/core-interior.ifc
           python tools/ci/ifc_schema_arity.py /tmp/walker-real-project.ifc /tmp/core-interior.ifc
+      # RE-313: every room's plan area and outline against Revit's own export
+      # of the same project (tools/re/space_profiles_vs_ifc.py), on the two
+      # projects whose rooms were measured whole: Core Interior (Revit 2024)
+      # and RE1 Architecture (Revit 2025). The minimums are the measured
+      # counts, in area, in outline (the mesh's vertices to the other outline)
+      # and in boundary (outline to outline), so a room that stops matching
+      # fails the job, and `--match globalid` keeps a room that loses Revit's
+      # GlobalId from pairing by position instead. A model's
+      # rooms are scored here, not by `Corpus health`, because only this
+      # job has IfcOpenShell, NumPy and Shapely.
+      - name: Fetch RE1 Architecture and Revit's export of it (Drshelden/IFC-ECS, MIT)
+        run: |
+          set -euo pipefail
+          base=https://raw.githubusercontent.com/Drshelden/IFC-ECS/9e8b37175a0fba1397f7011aeee917fe52de7623/data/RE1
+          dir="${GITHUB_WORKSPACE}/_project_corpus/Revit"
+          while read -r name sum; do
+            curl -sSfL --retry 5 --retry-all-errors -o "${dir}/${name}" "${base}/${name}"
+            echo "${sum}  ${dir}/${name}" | sha256sum -c -
+          done <<'LIST'
+          RE1-Architecture.rvt 4a78bdd68e7f4dd7806060db07c222da9a810e20b3f303c17a443294b91c8ce4
+          RE1-Architecture.ifc a9b5d36677aa6a8bb91b77d8bc354ed9028a7ca3e9e2491a47ba14cfd8e26200
+          LIST
+      - name: Room areas and outlines against Revit's exports
+        env:
+          RVT_PROJECT_CORPUS_DIR: ${{ github.workspace }}/_project_corpus/Revit
+        run: |
+          set -euo pipefail
+          ./target/ci/rvt-ifc "${RVT_PROJECT_CORPUS_DIR}/RE1-Architecture.rvt" -o /tmp/re1-architecture.ifc
+          python tools/re/space_profiles_vs_ifc.py /tmp/core-interior.ifc \
+            "${RVT_PROJECT_CORPUS_DIR}/../IFC Exports/2024_Core_Interior_slim.ifc" \
+            --match globalid --min-in-both 116 --min-area 116 --min-outline 116 --min-boundary 116
+          python tools/re/space_profiles_vs_ifc.py /tmp/re1-architecture.ifc \
+            "${RVT_PROJECT_CORPUS_DIR}/RE1-Architecture.ifc" \
+            --match globalid --min-in-both 11 --min-area 11 --min-outline 11 --min-boundary 11
       # #908: doors and windows are drawn from their saved graphics by
       # default (2026-10-29); every other class only with --saved-meshes, so
       # no other job reads theirs. Export both real projects with it, fail
@@ -834,7 +868,7 @@ jobs:
           echo CARGO_TERM_COLOR=always >> "$GITHUB_ENV"
           rustc --version
       - name: Install cargo-semver-checks and cargo-public-api
-        uses: taiki-e/install-action@1e29709c0ec63babbe8f266397a465f29a825f91 # v2.87.31
+        uses: taiki-e/install-action@68a389c788b2cd04016ce8c80ee23b80d2ab3d68 # v2.88.1
         with:
           tool: cargo-semver-checks@0.51.0,cargo-public-api@0.52.0
       - name: The stable API breaks nothing the pull request does not announce
@@ -1093,7 +1127,7 @@ jobs:
       # `curl --silent -L` and failed the check when GitHub returned an
       # error page ("gzip: invalid magic").
       - name: Install cargo-deny
-        uses: taiki-e/install-action@1e29709c0ec63babbe8f266397a465f29a825f91 # v2.87.31
+        uses: taiki-e/install-action@68a389c788b2cd04016ce8c80ee23b80d2ab3d68 # v2.88.1
         with:
           tool: cargo-deny@0.20.2
       - run: cargo deny check
@@ -1118,7 +1152,7 @@ jobs:
           echo CARGO_TERM_COLOR=always >> "$GITHUB_ENV"
           rustc --version
       - name: Install cargo-audit
-        uses: taiki-e/install-action@1e29709c0ec63babbe8f266397a465f29a825f91 # v2.87.31
+        uses: taiki-e/install-action@68a389c788b2cd04016ce8c80ee23b80d2ab3d68 # v2.88.1
         with:
           tool: cargo-audit@0.22.2
       - name: Audit Rust dependencies
@@ -1253,6 +1287,10 @@ jobs:
       # bindings rvt-wasm exports.
       - name: The docs list every wasm binding
         run: python3 tools/ci/wasm-api.py docs rvt-wasm/src/lib.rs README.md docs/viewer-api.md
+      # The README's support-by-release table is rendered from
+      # docs/support-matrix.json, so it cannot claim more than the matrix.
+      - name: The README support table matches the support matrix
+        run: python3 tools/ci/readme-matrix.py --check
 
   # Guards the development environments' config: shellcheck the Cursor
   # install script and the devcontainer's scripts, install the

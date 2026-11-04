@@ -93,6 +93,7 @@ pub mod sheet;
 pub mod standard_property_sets;
 pub mod step_writer;
 mod storey_properties;
+mod wall_cut_openings;
 
 pub use export_content::{
     ELEMENT_RECORD_PROPERTY_SET, ExportContentPolicy, is_misleading_proxy_class,
@@ -204,6 +205,11 @@ pub struct IfcModel {
     /// its `EntranceLevel` parameter.
     #[serde(default)]
     pub storey_properties: std::collections::BTreeMap<usize, entities::StoreyProperties>,
+    /// Each door's and window's `OverallWidth` and `OverallHeight`, by index
+    /// into `entities` (RE-93, RE-94, RE-187, RE-215, #810, RE-318). An
+    /// element with no entry gets `$` for both.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub filler_sizes: std::collections::BTreeMap<usize, entities::FillerSize>,
 }
 
 /// A layered element's layers across its thickness (RE-53).
@@ -669,6 +675,37 @@ pub struct ExportedModelDiagnostics {
     /// (#409).
     #[serde(default)]
     pub bounding_box_bodies: usize,
+    /// Of the exported `IfcSpace`s, those drawn as their record's bounding
+    /// box (`SpaceOutlineSource` is `record_box`): a room whose outline was
+    /// not read from its stored solid, or a family instance written as a space
+    /// and drawn as its box. Their plan area is the box's, not the space's
+    /// (RE-313). Each is also in `bounding_box_bodies`, except a family
+    /// instance turned or tilted off the model's axes, whose `BodySource`
+    /// names the turned box.
+    #[serde(default)]
+    pub bounding_box_spaces: usize,
+    /// Of the exported Areas that have no body, why, by reason: the
+    /// `AreaBodyRefusal` property of each (RE-317), such as
+    /// `boundary_lines_not_readable` or `point_in_no_single_region`.
+    #[serde(default)]
+    pub area_body_refusals: std::collections::BTreeMap<String, usize>,
+    /// Of the exported `IfcSpace`s, the rooms whose outline was read from the
+    /// faces their stored solid lists, up to the solid's own end, where the
+    /// walk of RE-101 did not close them (`SpaceOutlineSource` is
+    /// `stored_solid_faces`, RE-316): equal to Revit's area on every such room
+    /// measured, but bounded by the solid's list of objects and a gap, so a
+    /// closed loop of another element's faces inside the room's box would be
+    /// read as the room's.
+    #[serde(default)]
+    pub resolved_outline_spaces: usize,
+    /// Of the exported `IfcSpace`s, the rooms whose resolved outline is the
+    /// boundary of a region, a column overlapping a wall having been taken
+    /// off it, or falls up to 0.02 ft short of their record box on a side
+    /// (`SpaceOutlineSource` is `stored_solid_approximate`, RE-316): their
+    /// area is approximate, up to 0.68% under Revit's floor area where
+    /// Revit's export does not take the column off.
+    #[serde(default)]
+    pub approximate_outline_spaces: usize,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -894,6 +931,7 @@ impl Exporter for PlaceholderExporter {
             opening_cuts: Default::default(),
             body_pieces: Default::default(),
             storey_properties: Default::default(),
+            filler_sizes: Default::default(),
         })
     }
 }
@@ -1007,7 +1045,27 @@ impl RvtDocExporter {
         quality_mode: ExportQualityMode,
         limits: crate::walker::WalkerLimits,
     ) -> Result<ExportResult> {
-        let model = self.export_with_mode_and_limits(rf, quality_mode, limits)?;
+        self.export_with_diagnostics_mode_limits_and_control(
+            rf,
+            quality_mode,
+            limits,
+            &crate::control::WalkerControl::default(),
+        )
+    }
+
+    /// Same as [`Self::export_with_diagnostics_mode_and_limits`], with the
+    /// walk's progress reported to `control` and a cancelled token stopping
+    /// the export with [`crate::Error::Cancelled`], as
+    /// [`Self::export_with_mode_limits_and_control`] does for the model alone.
+    /// The diagnostics are built after the walk and report nothing.
+    pub fn export_with_diagnostics_mode_limits_and_control(
+        &self,
+        rf: &mut crate::RevitFile,
+        quality_mode: ExportQualityMode,
+        limits: crate::walker::WalkerLimits,
+        control: &crate::control::WalkerControl,
+    ) -> Result<ExportResult> {
+        let model = self.export_with_mode_limits_and_control(rf, quality_mode, limits, control)?;
         let diagnostics = build_export_diagnostics_with_limits(
             rf,
             &model,
@@ -1105,6 +1163,19 @@ fn export_rvt_doc(
     walker_limits: crate::walker::WalkerLimits,
     control: &crate::control::WalkerControl,
 ) -> Result<IfcModel> {
+    rf.report_partition_inflates_to(control);
+    let result = export_rvt_doc_reporting(rf, mode, quality_mode, walker_limits, control);
+    rf.stop_reporting_partition_inflates();
+    result
+}
+
+fn export_rvt_doc_reporting(
+    rf: &mut crate::RevitFile,
+    mode: RvtDocExportMode,
+    quality_mode: ExportQualityMode,
+    walker_limits: crate::walker::WalkerLimits,
+    control: &crate::control::WalkerControl,
+) -> Result<IfcModel> {
     let policy = ExportContentPolicy::for_quality_mode(quality_mode);
     // Identity from PartAtom if present; fall back to the file name in
     // BasicFileInfo's original path.
@@ -1184,6 +1255,7 @@ fn export_rvt_doc(
         _,
         body_pieces,
         type_entity_sets,
+        record_handoffs,
     ) = append_production_walker_elements(
         rf,
         &mut entities,
@@ -1304,6 +1376,11 @@ fn export_rvt_doc(
     // #824: the openings a face-hosted door's or window's symbol cuts in the
     // element whose face hosts it.
     attach_hosted_cut_openings(rf, &mut entities);
+    // RE-321: the openings rectangular wall openings cut in a wall, which
+    // nothing fills.
+    if policy.include_geometry {
+        wall_cut_openings::attach_wall_cut_openings(rf, &mut entities);
+    }
 
     if !policy.include_geometry {
         export_content::strip_building_element_geometry(&mut entities);
@@ -1332,7 +1409,8 @@ fn export_rvt_doc(
     material_constituent_sets.extend(layer_constituent_sets);
     let material_profile_sets =
         material_profile_sets_from_sections(&mut entities, &mut material_constituent_sets);
-    let opening_cuts = opening_cuts_through_hosts(&entities);
+    let opening_cuts = opening_cuts_through_hosts(&entities, &record_handoffs);
+    let filler_sizes = filler_sizes_from_handoffs(&record_handoffs);
 
     Ok(IfcModel {
         project_name,
@@ -1356,6 +1434,7 @@ fn export_rvt_doc(
         opening_cuts,
         body_pieces,
         storey_properties,
+        filler_sizes,
     })
 }
 
@@ -1369,6 +1448,7 @@ fn export_rvt_doc(
 /// the body-shaped opening.
 fn opening_cuts_through_hosts(
     entities: &[entities::IfcEntity],
+    record_handoffs: &std::collections::BTreeMap<usize, Vec<entities::Property>>,
 ) -> std::collections::BTreeMap<usize, entities::OpeningCut> {
     const MAX_THICKNESS_FEET: f64 = 3.0;
     let mut cuts = std::collections::BTreeMap::new();
@@ -1389,9 +1469,13 @@ fn opening_cuts_through_hosts(
         if body.profile_override.is_some() {
             continue;
         }
+        let handoffs = record_handoffs
+            .get(&index)
+            .map(Vec::as_slice)
+            .unwrap_or_default();
         let window_cut =
-            |base: Option<entities::OpeningCut>| filler_type_cut(entity, base).or(base);
-        if let Some(cut) = tapered_host_window_cut(entity, &entities[*host]) {
+            |base: Option<entities::OpeningCut>| filler_type_cut(entity, handoffs, base).or(base);
+        if let Some(cut) = tapered_host_window_cut(entity, handoffs, &entities[*host]) {
             if let Some(cut) = window_cut(Some(cut)) {
                 cuts.insert(index, cut);
             }
@@ -1434,7 +1518,7 @@ fn opening_cuts_through_hosts(
         // extent, down from the body's top (the BIM4LCA office's windows).
         // A door's keeps its box: on the office its solid gives none of
         // Revit's openings.
-        let solid = cut_solid_size(entity).filter(|_| ifc_type.eq_ignore_ascii_case("IfcWindow"));
+        let solid = cut_solid_size(handoffs).filter(|_| ifc_type.eq_ignore_ascii_case("IfcWindow"));
         let solid_z = solid.map(|[_, _, height]| [body.height_feet - height, height]);
         let cut = if y_width <= MAX_THICKNESS_FEET && y_width < x_width / 2.0 && y_width > 0.0 {
             Some(entities::OpeningCut {
@@ -1468,13 +1552,54 @@ fn opening_cuts_through_hosts(
 /// The extents along X, Y and Z of the solid a door's or window's symbol
 /// cuts where it cuts no loop (RE-225,
 /// [`export_content::CUT_SOLID_SIZE_PROPERTIES`]), feet.
-fn cut_solid_size(entity: &entities::IfcEntity) -> Option<[f64; 3]> {
+fn cut_solid_size(handoffs: &[entities::Property]) -> Option<[f64; 3]> {
     let [width, depth, height] = export_content::CUT_SOLID_SIZE_PROPERTIES;
     Some([
-        positive_length_property(entity, width)?,
-        positive_length_property(entity, depth)?,
-        positive_length_property(entity, height)?,
+        handoff_positive_length(handoffs, width)?,
+        handoff_positive_length(handoffs, depth)?,
+        handoff_positive_length(handoffs, height)?,
     ])
+}
+
+/// Each door's and window's `OverallWidth` and `OverallHeight` from its
+/// hand-offs, by entity index, and whether its symbol cuts an outline.
+///
+/// RE-93, RE-94: they are its opening's, which Revit's export writes there.
+/// RE-187: a door with no opening read takes its type's Width and Height,
+/// which Revit's export writes there too. RE-215: before either, the extents
+/// of the outline the symbol that draws it cuts, which Revit's exporter sizes
+/// it from. #810: where the symbol cuts no loop and no opening is read, the
+/// record box along its own X axis and its height, ahead of the type's size,
+/// which on the BIM4LCA office is 10 mm short of Revit's. RE-318: where the
+/// symbol's saved graphics hold lines of no category, their extent along X is
+/// the width, ahead of the record box's.
+fn filler_sizes_from_handoffs(
+    record_handoffs: &std::collections::BTreeMap<usize, Vec<entities::Property>>,
+) -> std::collections::BTreeMap<usize, entities::FillerSize> {
+    let [.., width_key, height_key] = export_content::FILLER_OPENING_PROPERTIES;
+    let [type_width, type_height] = export_content::DOOR_TYPE_SIZE_PROPERTIES;
+    let [cut_width, cut_height] = export_content::CUT_LOOP_SIZE_PROPERTIES;
+    let [box_width, box_height] = export_content::INSTANCE_BOX_SIZE_PROPERTIES;
+    record_handoffs
+        .iter()
+        .filter_map(|(&index, handoffs)| {
+            let length = |key: &str| handoff_positive_length(handoffs, key);
+            let symbol_width = length(export_content::SYMBOL_WIRE_WIDTH_PROPERTY);
+            let (height_feet, width_feet) = length(cut_height)
+                .zip(length(cut_width))
+                .or_else(|| length(height_key).zip(length(width_key)))
+                .or_else(|| length(box_height).zip(symbol_width.or_else(|| length(box_width))))
+                .or_else(|| length(type_height).zip(length(type_width)))?;
+            Some((
+                index,
+                entities::FillerSize {
+                    width_feet,
+                    height_feet,
+                    cut_loop: length(cut_width).is_some(),
+                },
+            ))
+        })
+        .collect()
 }
 
 /// A length property of an element's own property set, feet.
@@ -1502,6 +1627,7 @@ fn length_property(entity: &entities::IfcEntity, wanted: &str) -> Option<f64> {
 /// its origin read, and the host is tapered with its thickness read.
 fn tapered_host_window_cut(
     filler: &entities::IfcEntity,
+    handoffs: &[entities::Property],
     host: &entities::IfcEntity,
 ) -> Option<entities::OpeningCut> {
     let entities::IfcEntity::BuildingElement {
@@ -1534,7 +1660,7 @@ fn tapered_host_window_cut(
     }
     let thickness = length_property(host, "Thickness").filter(|t| t.is_finite() && *t > 0.0)?;
     let [ox, oy] =
-        export_content::INSTANCE_ORIGIN_PROPERTIES.map(|name| length_property(filler, name));
+        export_content::INSTANCE_ORIGIN_PROPERTIES.map(|name| handoff_length(handoffs, name));
     let origin = [ox?, oy?];
     // The window must run along its host's line, either way.
     if (rotation - host_rotation).sin().abs() > 1e-6 {
@@ -1555,21 +1681,30 @@ fn tapered_host_window_cut(
     })
 }
 
-/// A real property of an element's own property set.
-fn real_property(entity: &entities::IfcEntity, wanted: &str) -> Option<f64> {
-    let entities::IfcEntity::BuildingElement {
-        property_set: Some(set),
-        ..
-    } = entity
-    else {
-        return None;
-    };
-    set.properties
-        .iter()
-        .find_map(|property| match &property.value {
-            entities::PropertyValue::Real(value) if property.name == wanted => Some(*value),
-            _ => None,
-        })
+/// A length among an element's hand-offs, feet.
+fn handoff_length(handoffs: &[entities::Property], wanted: &str) -> Option<f64> {
+    handoffs.iter().find_map(|property| match &property.value {
+        entities::PropertyValue::LengthFeet(value) if property.name == wanted => Some(*value),
+        _ => None,
+    })
+}
+
+/// A real among an element's hand-offs.
+fn handoff_real(handoffs: &[entities::Property], wanted: &str) -> Option<f64> {
+    handoffs.iter().find_map(|property| match &property.value {
+        entities::PropertyValue::Real(value) if property.name == wanted => Some(*value),
+        _ => None,
+    })
+}
+
+/// A positive length among an element's hand-offs, feet.
+fn handoff_positive_length(handoffs: &[entities::Property], wanted: &str) -> Option<f64> {
+    handoffs.iter().find_map(|property| match &property.value {
+        entities::PropertyValue::PositiveLengthFeet(value) if property.name == wanted => {
+            Some(*value)
+        }
+        _ => None,
+    })
 }
 
 /// How far a window's record box may reach past the opening its type gives
@@ -1589,6 +1724,7 @@ pub const WINDOW_TRIM_MAX_FEET: f64 = 0.5;
 /// bottom.
 fn filler_type_cut(
     filler: &entities::IfcEntity,
+    handoffs: &[entities::Property],
     base: Option<entities::OpeningCut>,
 ) -> Option<entities::OpeningCut> {
     let entities::IfcEntity::BuildingElement {
@@ -1605,11 +1741,11 @@ fn filler_type_cut(
         return None;
     }
     let [cx, cy, ax, ay, base_z, width, height] = export_content::FILLER_OPENING_PROPERTIES;
-    let centre = [length_property(filler, cx)?, length_property(filler, cy)?];
-    let [ax, ay] = [real_property(filler, ax)?, real_property(filler, ay)?];
-    let base_z = length_property(filler, base_z)?;
-    let width = positive_length_property(filler, width)?;
-    let height = positive_length_property(filler, height)?;
+    let centre = [handoff_length(handoffs, cx)?, handoff_length(handoffs, cy)?];
+    let [ax, ay] = [handoff_real(handoffs, ax)?, handoff_real(handoffs, ay)?];
+    let base_z = handoff_length(handoffs, base_z)?;
+    let width = handoff_positive_length(handoffs, width)?;
+    let height = handoff_positive_length(handoffs, height)?;
     let angle = rotation_radians.unwrap_or(0.0);
     let local_x = [angle.cos(), angle.sin()];
     let local_y = [-angle.sin(), angle.cos()];
@@ -1659,25 +1795,6 @@ fn filler_type_cut(
     } else {
         None
     }
-}
-
-/// A positive length property of an element's own property set, feet.
-fn positive_length_property(entity: &entities::IfcEntity, wanted: &str) -> Option<f64> {
-    let entities::IfcEntity::BuildingElement {
-        property_set: Some(set),
-        ..
-    } = entity
-    else {
-        return None;
-    };
-    set.properties
-        .iter()
-        .find_map(|property| match &property.value {
-            entities::PropertyValue::PositiveLengthFeet(value) if property.name == wanted => {
-                Some(*value)
-            }
-            _ => None,
-        })
 }
 
 /// RE-82: one constituent set per distinct set of type materials, for each
@@ -3317,6 +3434,7 @@ type WalkerElementData = (
     Vec<usize>,
     std::collections::BTreeMap<usize, Vec<usize>>,
     std::collections::BTreeMap<u32, std::collections::BTreeMap<String, Vec<entities::PropertySet>>>,
+    std::collections::BTreeMap<usize, Vec<entities::Property>>,
 );
 
 fn append_production_walker_elements(
@@ -3359,6 +3477,7 @@ fn append_production_walker_elements(
             append.computed_inverts,
             append.body_pieces,
             append.type_entity_sets,
+            append.record_handoffs,
         ));
     }
     Ok(Default::default())
@@ -3734,6 +3853,36 @@ pub fn build_export_diagnostics_with_limits(
             "The project's phases could not be read ({error}); elements that do not exist in the export phase are written (#328, RE-184)."
         ));
     }
+    // #1247: a door or window whose type's record was not read is written as
+    // a door or window, not as its opening alone, which it may be.
+    let unread_type_doors_windows = rf.unread_type_doors_windows().len();
+    if unread_type_doors_windows > 0 && mode != ExportDiagnosticsMode::Placeholder {
+        warnings.push(format!(
+            "{unread_type_doors_windows} door(s) and window(s) are written as doors and windows \
+             though nothing read tells whether their type draws geometry: its parameter block \
+             holds no geometry map, and its native record was not read. One that is a cased \
+             opening in Revit is its opening alone in Revit's export (#1247)."
+        ));
+    }
+    // RE-312: a family instance written as a space whose family draws no
+    // model form has no 3D body, and is left out as Revit's own export leaves
+    // it out. A check that could not run keeps every instance.
+    let bodiless_spaces: usize = rf.bodiless_family_spaces().values().sum();
+    if bodiless_spaces > 0 {
+        skipped.push(SkippedExportItem {
+            reason: "element_record_family_space_without_body".into(),
+            count: bodiless_spaces,
+            classes: rf.bodiless_family_spaces().clone(),
+            sample_names: Vec::new(),
+        });
+    }
+    if let Some((checked, error)) = rf.bodiless_family_space_error() {
+        warnings.push(format!(
+            "{checked} family instance(s) written as spaces could not be checked for a 3D body \
+             ({error}); they are written, though Revit's export leaves out one whose family draws \
+             no model form (RE-312)."
+        ));
+    }
     if !empty_panels.types_with_material.is_empty() {
         warnings.push(format!(
             "{} empty curtain panel type(s) carry a material, which an empty panel should not: {:?}",
@@ -3754,7 +3903,22 @@ pub fn build_export_diagnostics_with_limits(
         layout.filter(|&version| crate::partition_element_records_2023::is_32bit_release(version))
     {
         // RE-81, RE-102, RE-107, RE-109, RE-111 to RE-115, RE-180: what a
-        // 2015 to 2023 export carries, and what it does not (RE-181).
+        // 2008 to 2023 export carries, and what it does not (RE-181). The
+        // export phase and design options are applied on 2016 to 2023 only
+        // (RE-315).
+        let filters = if crate::partition_element_records_2023::applies_export_filters(version) {
+            format!(
+                "The export phase and design options are applied for {version}: elements that \
+                 do not exist in the last phase or are in a non-primary design option are left \
+                 out."
+            )
+        } else {
+            format!(
+                "Neither the export phase nor design options are applied for {version} (they \
+                 are on 2016 to 2023): elements outside the last phase or in a non-primary \
+                 design option are written."
+            )
+        };
         warnings.push(format!(
             "Revit {version}: elements come from their records with their ElementId, category and \
              bounding box, doors and windows with their host wall, rooms with their outline, \
@@ -3763,7 +3927,7 @@ pub fn build_export_diagnostics_with_limits(
              type names, and family instances their type's materials. Layers become \
              material layer sets where their materials are named, a layer that takes its \
              category's material taking the object styles' one, and walls keep their record box. \
-             Wall joins and profiles, design options, parameters and \
+             {filters} Wall joins and profiles, parameters and \
              \"Export to IFC As\" overrides are not read for {version}, and components \
              nested in doors and windows are left out."
         ));
@@ -4129,6 +4293,10 @@ fn exported_model_diagnostics(model: &IfcModel) -> ExportedModelDiagnostics {
     let mut building_elements_carried_by_parts = 0usize;
     let mut body_sources = std::collections::BTreeMap::<String, usize>::new();
     let mut bounding_box_bodies = 0usize;
+    let mut bounding_box_spaces = 0usize;
+    let mut area_body_refusals = std::collections::BTreeMap::<String, usize>::new();
+    let mut resolved_outline_spaces = 0usize;
+    let mut approximate_outline_spaces = 0usize;
     for (index, entity) in model.entities.iter().enumerate() {
         if let entities::IfcEntity::BuildingElement {
             ifc_type,
@@ -4149,10 +4317,19 @@ fn exported_model_diagnostics(model: &IfcModel) -> ExportedModelDiagnostics {
             }
             let properties = property_set.iter().flat_map(|set| &set.properties);
             let mut source = None;
+            let mut space_outline = None;
             let mut profile_resolved = false;
             for property in properties {
                 match (property.name.as_str(), &property.value) {
+                    (
+                        export_content::AREA_BODY_REFUSAL_PROPERTY,
+                        entities::PropertyValue::Text(text),
+                    ) => *area_body_refusals.entry(text.clone()).or_insert(0) += 1,
                     ("BodySource", entities::PropertyValue::Text(text)) => source = Some(text),
+                    (
+                        export_content::SPACE_OUTLINE_SOURCE_PROPERTY,
+                        entities::PropertyValue::Text(text),
+                    ) => space_outline = Some(text),
                     ("ProfileResolved", entities::PropertyValue::Boolean(true)) => {
                         profile_resolved = true
                     }
@@ -4163,6 +4340,23 @@ fn exported_model_diagnostics(model: &IfcModel) -> ExportedModelDiagnostics {
                 *body_sources.entry(source.clone()).or_insert(0) += 1;
                 if source == export_content::RECORD_BBOX_BODY_SOURCE && !profile_resolved {
                     bounding_box_bodies += 1;
+                }
+            }
+            if ifc_type == "IFCSPACE"
+                && space_outline
+                    .is_some_and(|text| text == export_content::SPACE_OUTLINE_RECORD_BOX)
+            {
+                bounding_box_spaces += 1;
+            }
+            if ifc_type == "IFCSPACE" {
+                match space_outline.map(String::as_str) {
+                    Some(export_content::SPACE_OUTLINE_STORED_SOLID_FACES) => {
+                        resolved_outline_spaces += 1;
+                    }
+                    Some(export_content::SPACE_OUTLINE_STORED_SOLID_APPROXIMATE) => {
+                        approximate_outline_spaces += 1;
+                    }
+                    _ => {}
                 }
             }
             building_elements += 1;
@@ -4213,6 +4407,10 @@ fn exported_model_diagnostics(model: &IfcModel) -> ExportedModelDiagnostics {
         layered_element_count: model.element_layers.len(),
         body_sources,
         bounding_box_bodies,
+        bounding_box_spaces,
+        area_body_refusals,
+        resolved_outline_spaces,
+        approximate_outline_spaces,
     }
 }
 
@@ -4637,6 +4835,16 @@ fn pset_property_value_count(model: &IfcModel) -> usize {
             _ => false,
         })
         .count();
+    // RE-321: a wall's cut opening holds the wall's type name twice, in
+    // `Pset_OpeningElementCommon` and `Pset_EnvironmentalImpactIndicators`.
+    let wall_cuts = 2 * model
+        .entities
+        .iter()
+        .filter(|entity| match entity {
+            entities::IfcEntity::WallCutOpening { host, .. } => references.contains_key(host),
+            _ => false,
+        })
+        .count();
     let storeys: usize = (0..model.building_storeys.len())
         .flat_map(|index| {
             entities::PropertySet::storey_sets_for(model.storey_properties.get(&index))
@@ -4650,7 +4858,12 @@ fn pset_property_value_count(model: &IfcModel) -> usize {
             model.building_storeys.len(),
         )) - usize::from(!step_writer::every_storey_holds_an_element(model))
     };
-    elements + storeys + building + openings + step_writer::type_object_pset_values(model)
+    elements
+        + storeys
+        + building
+        + openings
+        + wall_cuts
+        + step_writer::type_object_pset_values(model)
 }
 
 fn export_confidence_summary(

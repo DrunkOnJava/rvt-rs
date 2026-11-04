@@ -105,7 +105,7 @@ If you want to help:
 - Compatibility matrix: [`docs/compatibility.md`](../compatibility.md)
 - Demo gallery with committed CLI output + the synthetic IFC fixture: [`docs/demos.md`](../demos.md)
 - Python bindings guide: [`docs/python.md`](../python.md) — `pip install rvt`
-- Recon report (the full Revit-format reverse-engineering narrative with 12 dated addenda): [`docs/rvt-moat-break-reconnaissance.md`](../rvt-moat-break-reconnaissance.md)
+- Recon report (the full Revit-format reverse-engineering narrative with 12 dated addenda): [`docs/format-reconnaissance.md`](../format-reconnaissance.md)
 - License: Apache-2.0. Autodesk and Revit are registered trademarks of Autodesk, Inc.; this project is not affiliated with, endorsed by, or sponsored by Autodesk.
 
 Thanks for reading — and for all the openBIM work this project stands on top of. Every decoded element that lands in BlenderBIM owes something to the IfcOpenShell STEP parser, the BlenderBIM viewer code, the OSArch wiki pages on Revit interop, and years of buildingSMART standards work. I'm trying to feed the Revit end of that pipeline with something that doesn't need Autodesk in the room.

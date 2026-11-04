@@ -57,6 +57,26 @@ pub fn wall_top_cutters_from_fields(fields: &[(String, InstanceField)]) -> Vec<u
         .unwrap_or_default()
 }
 
+/// The ElementIds [`WALL_TOP_PAIR_ONLY_FIELD`] records: those of a wall's top
+/// cutters that only a cut pair names (RE-320). Empty where it holds none.
+pub fn wall_top_pair_only_from_fields(fields: &[(String, InstanceField)]) -> Vec<u32> {
+    fields
+        .iter()
+        .find_map(|(name, value)| match value {
+            InstanceField::Vector(items) if name == WALL_TOP_PAIR_ONLY_FIELD => Some(
+                items
+                    .iter()
+                    .filter_map(|item| match item {
+                        InstanceField::ElementId { id, .. } => Some(*id),
+                        _ => None,
+                    })
+                    .collect(),
+            ),
+            _ => None,
+        })
+        .unwrap_or_default()
+}
+
 /// The ElementIds [`WALL_BOUNDED_FIELD`] records: the elements a wall's roof
 /// and floor joins name (RE-270). `None` where the field is absent, an empty
 /// list where the wall is joined to none.
@@ -484,6 +504,34 @@ pub fn profile_openings_from_fields(
         .collect()
 }
 
+/// Read in one pass what [`attach_wall_type_functions`] and
+/// [`attach_wall_top_joins`] take from `walls`' native records: the type ids
+/// of the walls with no type Function yet and whether each wall's top is
+/// joined, on the releases each is measured on. The records are the same, so
+/// two passes over them would decode each wall twice (#1237). An error is
+/// left to those two to meet again.
+pub(super) fn read_wall_records(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    walls: &[DecodedElement],
+    reads: &mut crate::native_walls::WallReads,
+) {
+    let mut type_walls: BTreeSet<u64> = BTreeSet::new();
+    let mut join_walls: BTreeSet<u64> = BTreeSet::new();
+    for wall in walls {
+        let Some(id) = wall.id.map(u64::from) else {
+            continue;
+        };
+        if WALL_TYPE_FUNCTION_REVIT_VERSIONS.contains(&revit_version) && !has_type_function(wall) {
+            type_walls.insert(id);
+        }
+        if WALL_TOP_JOIN_RECORD_REVIT_VERSIONS.contains(&revit_version) {
+            join_walls.insert(id);
+        }
+    }
+    let _ = reads.read(rf, &type_walls, &join_walls);
+}
+
 /// Give each of `walls` whether its top is joined to a roof or floor
 /// ([`WALL_TOP_JOINED_FIELD`], RE-228) from its native record, on the
 /// releases in [`WALL_TOP_JOIN_RECORD_REVIT_VERSIONS`], whose walls come from
@@ -495,6 +543,7 @@ pub(super) fn attach_wall_top_joins(
     rf: &mut RevitFile,
     revit_version: u32,
     walls: &mut [DecodedElement],
+    reads: &mut crate::native_walls::WallReads,
 ) {
     if !WALL_TOP_JOIN_RECORD_REVIT_VERSIONS.contains(&revit_version) {
         return;
@@ -503,7 +552,7 @@ pub(super) fn attach_wall_top_joins(
         .iter()
         .filter_map(|wall| wall.id.map(u64::from))
         .collect();
-    let Ok(joined) = crate::native_walls::wall_top_joins(rf, &ids) else {
+    let Ok(joined) = reads.top_joins(rf, &ids) else {
         return;
     };
     for wall in walls.iter_mut() {
@@ -518,6 +567,7 @@ pub(super) fn attach_wall_layers(
     rf: &mut RevitFile,
     revit_version: u32,
     walls: &mut [DecodedElement],
+    reads: &mut crate::native_walls::WallReads,
 ) {
     use crate::partition_compound_structure as pcs;
     if !pcs::WALL_LINE_SUPPORTED_REVIT_VERSIONS.contains(&revit_version)
@@ -569,11 +619,12 @@ pub(super) fn attach_wall_layers(
         top_joined,
         uncut,
         top_cutters,
+        pair_only,
         whole,
         bounded,
     } = if centreline_bodies {
         let ids: BTreeSet<u64> = wall_ids.iter().map(|&id| u64::from(id)).collect();
-        crate::native_walls::native_walls_and_top_joins(rf, &ids).unwrap_or_default()
+        crate::native_walls::native_walls_and_top_joins_into(rf, &ids, reads).unwrap_or_default()
     } else {
         Default::default()
     };
@@ -601,6 +652,23 @@ pub(super) fn attach_wall_layers(
             if let Some(items) = items {
                 wall.fields
                     .push((WALL_TOP_CUTTERS_FIELD.into(), InstanceField::Vector(items)));
+            }
+        }
+        if let Some(only) = wall.id.and_then(|id| pair_only.get(&u64::from(id))) {
+            let items: Option<Vec<InstanceField>> = only
+                .iter()
+                .map(|&id| {
+                    Some(InstanceField::ElementId {
+                        tag: 0,
+                        id: u32::try_from(id).ok()?,
+                    })
+                })
+                .collect();
+            if let Some(items) = items {
+                wall.fields.push((
+                    WALL_TOP_PAIR_ONLY_FIELD.into(),
+                    InstanceField::Vector(items),
+                ));
             }
         }
         if wall.id.is_some_and(|id| whole.contains(&u64::from(id))) {

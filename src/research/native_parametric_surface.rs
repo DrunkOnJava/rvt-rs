@@ -269,6 +269,18 @@ pub enum ParametricSurface {
         profile1: Curve,
         profile2: Curve,
     },
+    /// A cone `apex + v (cos α z + sin α (cos u x + sin u y))`: `v` is the
+    /// distance from the apex along the generator, and the radius at `v` is
+    /// `v sin α` (RE-311).
+    ConeSurf {
+        apex: Point,
+        x: Point,
+        y: Point,
+        z: Point,
+        half_angle: f64,
+        envelope: [[f64; 2]; 2],
+        orient: bool,
+    },
 }
 
 impl ParametricSurface {
@@ -309,17 +321,47 @@ impl ParametricSurface {
                 profile1: Curve::read(g, target(g, si, &s.fields["m_pProfileCurve1"])?)?,
                 profile2: Curve::read(g, target(g, si, &s.fields["m_pProfileCurve2"])?)?,
             }),
+            "ConeSurf" => {
+                let (x, y, z) = basis(&s.fields)?;
+                let half_angle = s.fields["m_halfAngle"]
+                    .as_f64()
+                    .context("cone half angle")?;
+                ensure!(
+                    half_angle.is_finite()
+                        && half_angle > 1e-6
+                        && half_angle < std::f64::consts::FRAC_PI_2 - 1e-6,
+                    "invalid cone half angle"
+                );
+                // Only `v` above the apex is measured (0.81 to 0.93, RE-311):
+                // a face across the apex or on the far nappe is refused.
+                ensure!(envelope[0][1] > 0., "cone face not above its apex");
+                Ok(Self::ConeSurf {
+                    apex: p(&s.fields["m_center"], "cone apex")?,
+                    x,
+                    y,
+                    z,
+                    half_angle,
+                    envelope,
+                    orient: s.fields["m_orientFlag"]
+                        .as_bool()
+                        .context("surface orientation")?,
+                })
+            }
             name => bail!("unsupported parametric surface {name}"),
         }
     }
     pub fn bounds(&self) -> [[f64; 2]; 2] {
         match self {
-            Self::SurfRev { envelope, .. } | Self::RuledSurf { envelope, .. } => *envelope,
+            Self::SurfRev { envelope, .. }
+            | Self::RuledSurf { envelope, .. }
+            | Self::ConeSurf { envelope, .. } => *envelope,
         }
     }
     pub fn orientation(&self) -> bool {
         match self {
-            Self::SurfRev { orient, .. } | Self::RuledSurf { orient, .. } => *orient,
+            Self::SurfRev { orient, .. }
+            | Self::RuledSurf { orient, .. }
+            | Self::ConeSurf { orient, .. } => *orient,
         }
     }
     pub fn evaluate(&self, u: f64, v: f64) -> Result<Point> {
@@ -362,6 +404,19 @@ impl ParametricSurface {
                     mul(profile1.eval(t(profile1)), 1. - v),
                     mul(profile2.eval(t(profile2)), v),
                 )
+            }
+            Self::ConeSurf {
+                apex,
+                x,
+                y,
+                z,
+                half_angle,
+                ..
+            } => {
+                let (sa, ca) = half_angle.sin_cos();
+                let (su, cu) = u.sin_cos();
+                let radial = add(mul(*x, cu), mul(*y, su));
+                add(*apex, mul(add(mul(*z, ca), mul(radial, sa)), v))
             }
         })
     }
@@ -416,6 +471,28 @@ impl ParametricSurface {
                 ensure!(len(n) > 1e-12, "surface normal is singular");
             }
             return Ok(mul(n, if *orient { 1. / len(n) } else { -1. / len(n) }));
+        }
+        if let Self::ConeSurf {
+            x,
+            y,
+            z,
+            half_angle,
+            orient,
+            ..
+        } = self
+        {
+            let (sa, ca) = half_angle.sin_cos();
+            let (su, cu) = u.sin_cos();
+            let tu = mul(add(mul(*x, -su), mul(*y, cu)), v * sa);
+            let tv = add(mul(*z, ca), mul(add(mul(*x, cu), mul(*y, su)), sa));
+            let n = cross(tu, tv);
+            ensure!(
+                n.iter().all(|value| value.is_finite()),
+                "nonfinite surface normal"
+            );
+            let l = len(n);
+            ensure!(l > 1e-12, "surface normal is singular");
+            return Ok(mul(n, if *orient { 1. / l } else { -1. / l }));
         }
         let Self::RuledSurf {
             profile1,

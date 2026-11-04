@@ -1,6 +1,6 @@
 [package]
 name = "rvt"
-version = "0.12.1"
+version = "0.13.0"
 edition = "2024"
 rust-version = "1.87"
 license = "Apache-2.0"
@@ -73,8 +73,8 @@ unstable-research = []
 cfb = "0.15"
 # DEFLATE / raw inflate — for the truncated-gzip streams Revit ships.
 flate2 = "1.0"
-# UTF-16LE decoder — robust enough to recover from Revit's malformed
-# surrogate pairs (encoding_rs doesn't panic where stdlib does).
+# UTF-16LE decoder — replaces Revit's malformed surrogate pairs with U+FFFD,
+# where std's String::from_utf16 rejects the whole string.
 encoding_rs = "0.8"
 # Vectorised substring search. The partition element-record sweep scans
 # every inflated `Partitions/*` byte once per BuiltInCategory — ~1 GiB

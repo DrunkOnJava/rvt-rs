@@ -20,7 +20,8 @@
 //!
 //! Second FACT under test (after RE-302 traced such edges, the WCs it then
 //! drew are 1.03 to 1.05 of Revit's volume): whether the trace could have
-//! followed the wrong branch. `edge_on_plane` moves each of 7 points between
+//! followed the wrong branch. `edge_on_plane` (at f4d82ed7, on
+//! `research/1247-ellipse-profiles`) moves each of 7 points between
 //! two samples across the line between them, within that line's length on
 //! either side, onto the plane, taking the sign change nearest the line
 //! among 32 steps. For every such point this counts the sign changes those
@@ -28,6 +29,10 @@
 //! shared edge, `traced` points, how many saw more than one sign change
 //! (`multi`), and how many saw none (`none`); then `census branch` lines by
 //! surface class and count.
+//!
+//! Run it at 827718ff, where the RE-302 readers read every profile: on
+//! `main` a surface with a `GEllipse` profile is not read, so its edges are
+//! skipped.
 //!
 //! ```text
 //! cargo run --profile ci -p rvt-probes --example probe_re302_plane_edges -- model.rvt

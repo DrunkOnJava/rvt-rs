@@ -33,7 +33,12 @@
 # storey verdict counts by kind, and
 # the `native levels:` lines of tools/re/native_levels_vs_ifc.py (RE-281:
 # counts, the same restricted alphabet), the totals and per property counts of
-# its property set census (standard Pset_ and Qto_ names only; RE-281), and
+# its property set census (standard Pset_ and Qto_ names only; RE-281),
+# the `space profiles:` count lines of tools/re/space_profiles_vs_ifc.py
+# (RE-313: how many spaces pair, and their area and outline within a tolerance,
+# never a GlobalId), the `space overlaps:` count lines of
+# tools/re/space_overlaps_vs_ifc.py (RE-316: how many rooms of each source have
+# the area of Revit's upward faces, floor or every face, never a GlobalId), and
 # ifc.sha256, the hash of rvt-rs's own export; every other file is deleted.
 set -euo pipefail
 
@@ -94,6 +99,14 @@ for dir in "$RESULTS"/holdout-*/ "$RESULTS"/bimcollab-*/; do
     for f in "$dir"global_ids_vs_ifc.txt; do
       [ -f "$f" ] || continue
       grep -E "^(elements: \{((\"not in Revit's export\"|\"GlobalId = Revit's\"|'differs'): [0-9]+(, )?)*\}|storeys: [0-9]+ of [0-9]+ equal Revit's|storeys whose GlobalId is one of Revit's: [0-9]+ of [0-9]+|(IfcProject|IfcSite|IfcBuilding): [0-9]+ of [0-9]+ equal Revit's|spaces: [0-9]+ of [0-9]+ equal one of Revit's)$" "$f" | sed 's/^/global ids: /' || true
+    done
+    for f in "$dir"space_profiles_vs_ifc.txt; do
+      [ -f "$f" ] || continue
+      grep -E '^space profiles: [A-Za-z0-9 %.,:()-]+$' "$f" || true
+    done
+    for f in "$dir"space_overlaps_vs_ifc.txt; do
+      [ -f "$f" ] || continue
+      grep -E "^space overlaps: (upward|downward|every) faces?, [a-z ]+: [0-9]+ paired rooms, area within 0\.1% of Revit's on [0-9]+$" "$f" || true
     done
     for f in "$dir"storeys_vs_ifc.txt; do
       [ -f "$f" ] || continue

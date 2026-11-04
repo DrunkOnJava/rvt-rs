@@ -741,13 +741,31 @@ pub fn envelope_slab_mesh(
     undersides: &[(PlanPlane, f64)],
     domains: &[Vec<PlanPlane>],
 ) -> Option<Mesh> {
+    envelope_slab_mesh_split(outer, holes, tops, undersides, domains, None)
+}
+
+/// [`envelope_slab_mesh`] with the underside's planes counting within
+/// `bottom_domains`, where given, rather than the same domains as the top's
+/// (RE-307): where each plane's top lies a different height above its
+/// underside, the lines where the tops meet and the lines where the
+/// undersides meet differ, and so do the wedges each surface is cut into.
+pub(super) fn envelope_slab_mesh_split(
+    outer: &[Point2],
+    holes: &[Ring],
+    tops: &[PlanPlane],
+    undersides: &[(PlanPlane, f64)],
+    domains: &[Vec<PlanPlane>],
+    bottom_domains: Option<&[Vec<PlanPlane>]>,
+) -> Option<Mesh> {
     if tops.is_empty()
         || tops.len() != undersides.len()
         || tops.len() != domains.len()
+        || bottom_domains.is_some_and(|b| b.len() != tops.len())
         || tops.len() > MAX_ENVELOPE_PLANES
     {
         return None;
     }
+    let bottom_domains = bottom_domains.unwrap_or(domains);
     let section = section(outer, holes)?;
     let difference = |p: PlanPlane, q: PlanPlane| [p[0] - q[0], p[1] - q[1], p[2] - q[2]];
     let mut lines: Vec<PlanPlane> = Vec::new();
@@ -763,17 +781,22 @@ pub fn envelope_slab_mesh(
         );
     }
     lines.extend(domains.iter().flatten().copied());
+    if !std::ptr::eq(bottom_domains, domains) {
+        lines.extend(bottom_domains.iter().flatten().copied());
+    }
     lines.retain(|l| l[0].hypot(l[1]) > ENVELOPE_SPLIT_EPS);
-    let covers = |i: usize, p: Point2| domains[i].iter().all(|&d| plane_at(d, p) >= -1e-7);
+    let covers_in = |dom: &[Vec<PlanPlane>], i: usize, p: Point2| {
+        dom[i].iter().all(|&d| plane_at(d, p) >= -1e-7)
+    };
     let top = |p: Point2| {
         (0..tops.len())
-            .filter(|&i| covers(i, p))
+            .filter(|&i| covers_in(domains, i, p))
             .map(|i| plane_at(tops[i], p))
             .fold(f64::INFINITY, f64::min)
     };
     let bottom = |p: Point2| {
         (0..undersides.len())
-            .filter(|&i| covers(i, p))
+            .filter(|&i| covers_in(bottom_domains, i, p))
             .map(|i| plane_at(undersides[i].0, p).max(undersides[i].1))
             .fold(f64::INFINITY, f64::min)
     };
@@ -1007,6 +1030,82 @@ pub fn layered_extrusion_meshes(
         let mesh = section(&band, &[])
             .map(|section| prism(&section, |(x, y), t| [x, y, t * height]))
             .unwrap_or_default();
+        meshes.push(mesh);
+    }
+    Some(meshes)
+}
+
+/// A stepped wall's body (RE-320): a [`SolidShape::Compound`] of the wall's
+/// plan to a height and pieces of that plan standing on it, cut into its
+/// layers like [`layered_extrusion_meshes`] cuts an extrusion. The layers are
+/// laid across the first item's plan, and every piece is clipped to them.
+/// `None` for any other shape.
+pub fn layered_stepped_meshes(
+    shape: &SolidShape,
+    exterior: [f64; 2],
+    widths: &[f64],
+) -> Option<Vec<Mesh>> {
+    let SolidShape::Compound(items) = shape else {
+        return None;
+    };
+    let Some(SolidShape::ExtrudedArea(base)) = items.first() else {
+        return None;
+    };
+    let (plan, holes) = extrusion_rings(base)?;
+    if !holes.is_empty() || plan.len() < 3 || widths.is_empty() {
+        return None;
+    }
+    let (min, max) = plan
+        .iter()
+        .map(|p| p.0 * exterior[0] + p.1 * exterior[1])
+        .fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), s| {
+            (lo.min(s), hi.max(s))
+        });
+    let total: f64 = widths.iter().sum();
+    if !total.is_finite()
+        || total <= 0.0
+        || ((max - min) - total).abs() > LAYER_THICKNESS_TOLERANCE_FEET
+    {
+        return None;
+    }
+    let mut parts: Vec<(Ring, f64, f64)> = vec![(plan, 0.0, base.height_feet)];
+    for item in &items[1..] {
+        let SolidShape::PlacedExtrusion {
+            profile,
+            origin_feet,
+            axis,
+            ref_direction,
+            depth_feet,
+        } = item
+        else {
+            return None;
+        };
+        if *axis != [0.0, 0.0, 1.0] || *ref_direction != [1.0, 0.0, 0.0] {
+            return None;
+        }
+        let (outer, holes) = profile_rings(profile)?;
+        if !holes.is_empty() {
+            return None;
+        }
+        parts.push((outer, origin_feet[2], *depth_feet));
+    }
+    if parts
+        .iter()
+        .any(|(_, z, height)| !(z.is_finite() && height.is_finite() && *height > 0.0))
+    {
+        return None;
+    }
+    let mut meshes = Vec::with_capacity(widths.len());
+    let mut face = max;
+    for &width in widths {
+        let mut mesh = Mesh::default();
+        for (ring, z, height) in &parts {
+            let band = clip_ring_to_band(ring, exterior, face - width, face);
+            if let Some(section) = section(&band, &[]) {
+                mesh.append(prism(&section, |(x, y), t| [x, y, z + t * height]));
+            }
+        }
+        face -= width;
         meshes.push(mesh);
     }
     Some(meshes)
@@ -1255,7 +1354,8 @@ fn convex_hull(mut points: Vec<Point2>) -> Ring {
 }
 
 /// What an element covers in plan, in model feet: an extrusion's profile
-/// (holes kept) where it stands, and the convex hull of any other body.
+/// (holes kept) where it stands, the profile of a stepped wall's first item
+/// where the rest stand within it, and the convex hull of any other body.
 pub fn plan_outline(body: Body<'_>, placement: &Placement) -> Option<(Ring, Vec<Ring>)> {
     let to_model = |ring: &Ring| -> Ring {
         ring.iter()
@@ -1283,7 +1383,24 @@ pub fn plan_outline(body: Body<'_>, placement: &Placement) -> Option<(Ring, Vec<
                     })
                     .collect(),
             );
-            (hull.len() >= 3).then_some((hull, Vec::new()))
+            if hull.len() < 3 {
+                return None;
+            }
+            // A stepped wall (RE-320) is its own plan to a height and pieces of
+            // it above: its first item is that plan, and the rest stand
+            // within it, so the hull of the first item is the hull of all.
+            if let SolidShape::Compound(items) = shape {
+                if let Some(SolidShape::ExtrudedArea(first)) = items.first() {
+                    if let Some((outer, holes)) = plan_outline(Body::Extrusion(first), placement) {
+                        let first_hull = convex_hull(outer.clone());
+                        if (signed_area(&first_hull).abs() - signed_area(&hull).abs()).abs() <= 1e-6
+                        {
+                            return Some((outer, holes));
+                        }
+                    }
+                }
+            }
+            Some((hull, Vec::new()))
         }
     }
 }

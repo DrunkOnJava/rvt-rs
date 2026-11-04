@@ -9,7 +9,7 @@ AEC users without overstating current capability.
 |---|---|---|
 | Documentation | Clarify support boundaries, add screenshots, improve non-technical wording | [`docs/status.md`](status.md), [`README.md`](../README.md) |
 | Corpus | Submit redistributable files and expected counts | [`docs/corpus.md`](corpus.md), [`docs/corpus-intake.md`](corpus-intake.md), corpus issue form |
-| Decoder research | Add a byte probe and evidence table for one class or partition pattern | decoder issue form, [`docs/rvt-moat-break-reconnaissance.md`](rvt-moat-break-reconnaissance.md) |
+| Decoder research | Add a byte probe and evidence table for one class or partition pattern | decoder issue form, [`docs/format-reconnaissance.md`](format-reconnaissance.md) |
 | Tests | Add fixture assertions that prevent false-positive decode claims | `tests/project_corpus_smoke.rs`, `tests/walker_to_ifc_integration.rs` |
 | Viewer UX | Make unsupported-file states clearer and accessible | `viewer/`, [`docs/viewer-privacy-posture.md`](viewer-privacy-posture.md) |
 
@@ -21,7 +21,7 @@ solved carrier: the reports under `reports/element-framing/` say what each
 negative result ruled out, and [`ROADMAP.md`](../ROADMAP.md) says what each
 milestone is for.
 
-### 0.13.0: IFC geometry and element data
+### 0.14.0: IFC geometry and element data
 
 | Issue | Remainder |
 |---|---|
@@ -30,15 +30,14 @@ milestone is for.
 | [#1196](https://github.com/DrunkOnJava/rvt-rs/issues/1196) | `Formats/Latest`: classify the residual field encodings and Revit 2027's flagged runtime-state fields from byte evidence |
 | [#1195](https://github.com/DrunkOnJava/rvt-rs/issues/1195) | Viewer: show real decode progress, and say clearly when a model is too large for the browser |
 | [#1194](https://github.com/DrunkOnJava/rvt-rs/issues/1194) | Geometry and element remainders on Revit 2024 and 2025: wall corners, landing undersides, column sections, Areas, room phases |
-| [#1165](https://github.com/DrunkOnJava/rvt-rs/issues/1165) | Unfilled openings Revit's export writes and rvt-rs does not: a door's further cuts, curtain-wall cuts and fire hose cabinets |
-| [#1144](https://github.com/DrunkOnJava/rvt-rs/issues/1144) | Saved graphics: mesh cone faces and spline-profile surfaces (a contributor's proposal; cylinder faces with non-rectangular trims were taken in RE-304) |
+| [#1165](https://github.com/DrunkOnJava/rvt-rs/issues/1165) | Unfilled openings Revit's export writes and rvt-rs does not: rectangular wall openings are written since RE-321 (BIM4LCA office only measured); curtain-wall cuts and fire hose cabinets (measured, withheld: extras with nothing to separate them), a door's further cuts in a second wall, a door's cut in itself and a wall's own profile remain |
+| [#1144](https://github.com/DrunkOnJava/rvt-rs/issues/1144) | Saved graphics: cone faces are read (RE-311: 8 more RE1 Plumbing transitions are drawn); spline profile curves were read and measured to gain no body Revit's export holds, because the two RE1 Electrical panels keep their box for the trims below (a contributor's proposal; cylinder faces with non-rectangular trims were taken in RE-304). Read RE-302 and RE-305 first: ellipse profiles, curved ruled surfaces, parametric faces trimmed by any single loop and cylinders with holes were measured and left off `main`, since the bodies they drew are not Revit's |
 | [#1117](https://github.com/DrunkOnJava/rvt-rs/issues/1117) | Viewports and their centres on sheets (a contributor's request) |
-| [#1067](https://github.com/DrunkOnJava/rvt-rs/issues/1067) | BIM4LCA office: walls a floor covers in part, which Revit steps and rvt-rs draws at their full height (29 as built, 26 at permit), and one wall as built that Revit cuts although 0.0243 ft² of its plan lies outside the floor; the walls a floor covers whole are cut since RE-267 (RE-257, RE-267) |
-| [#885](https://github.com/DrunkOnJava/rvt-rs/issues/885) | Roof cases with no oracle: 2024 gables and hips, a slope arrow stopping short; roofs sloped by several slope arrows (puzzbobb's T and U roofs) are drawn as their record box (RE-199 follow-up) |
+| [#1067](https://github.com/DrunkOnJava/rvt-rs/issues/1067) | BIM4LCA office: walls a floor covers in part are drawn stepped since RE-320 (49 as built, 46 at permit); left open are the walls whose layers Revit ends at different heights or cuts at a height no join names, the openings that reach a wall's top, and one wall as built whose 0.0243 ft² stub inside an abutting wall Revit cuts (RE-257, RE-267, RE-320) |
+| [#885](https://github.com/DrunkOnJava/rvt-rs/issues/885) | Roof cases with no oracle: 2024 gables and hips, a slope arrow stopping short; of puzzbobb's T and U roofs, each sloped by six slope arrows, the T is drawn as its planes and the U, whose long outer walls Revit slopes along the arms only, as its record box (RE-307) |
 | [#884](https://github.com/DrunkOnJava/rvt-rs/issues/884) | Hip roofs over T and U footprints stay level blocks: straight-skeleton split events (RE-199 follow-up) |
 | [#869](https://github.com/DrunkOnJava/rvt-rs/issues/869) | MEP ports and pipe cylinders outside Revit 2024 and 2025: no 2026 or 2027 MEP model has a Revit export to measure against |
 | [#834](https://github.com/DrunkOnJava/rvt-rs/issues/834) | A port's SystemType (its connector's system classification) and an electrical port's Flow=Source/Sink description are not written (RE-212 follow-up) |
-| [#810](https://github.com/DrunkOnJava/rvt-rs/issues/810) | BIM4LCA office: 2 doors' OverallWidth is 0.1137 ft wider than Revit's (1756089, 1765267) |
 | [#358](https://github.com/DrunkOnJava/rvt-rs/issues/358) | Wall bodies thicker or thinner than their type's layers: 165 Snowdon walls drawn whole (RE-53) |
 | [#357](https://github.com/DrunkOnJava/rvt-rs/issues/357) | Stair flights not yet drawn: monolithic spiral runs, riserless runs with a nosing, and nosing profiles |
 | [#323](https://github.com/DrunkOnJava/rvt-rs/issues/323) | Roofs Revit's export decomposes into IfcSlab .ROOF. parts (7 of Snowdon's 20) are written whole |
@@ -62,7 +61,7 @@ The requirements these serve, each with its bar, status and evidence, are in
 | [#1209](https://github.com/DrunkOnJava/rvt-rs/issues/1209) | W7: coverings' `GrossArea` on ceilings in pieces and cut ceilings, and the roofing coverings (RE-297) |
 | [#1208](https://github.com/DrunkOnJava/rvt-rs/issues/1208) | W7: single-layer slabs' `Width` and `Length`, sloped floors' `Depth` and the stair landings' volume (RE-295) |
 | [#1207](https://github.com/DrunkOnJava/rvt-rs/issues/1207) | W7: spaces' `GrossVolume`, stepped rooms' `NetVolume` and Revit 25's area quantities |
-| [#1203](https://github.com/DrunkOnJava/rvt-rs/issues/1203) | W7: a joined column's `Length` and the round column |
+| [#1203](https://github.com/DrunkOnJava/rvt-rs/issues/1203) | W7: the round column and the 18 meshed columns' values; a joined column's `Length` is written where RE-291's rule takes it |
 | [#1193](https://github.com/DrunkOnJava/rvt-rs/issues/1193) | W7: the BIM4LCA office's remaining property values without a rule (column Slope, opening Reference, mullion Span, sloped slab PitchAngle) |
 | [#1192](https://github.com/DrunkOnJava/rvt-rs/issues/1192) | W10: check that every number in the README and the supported profile names its model |
 | [#1191](https://github.com/DrunkOnJava/rvt-rs/issues/1191) | W6: draw family instances from their saved meshes by default (decode the remaining saved-graphics faces) |

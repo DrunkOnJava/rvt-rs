@@ -1,11 +1,12 @@
-# The two versions of the BIM4LCA office (concrete structure) that Measure reads with
-# `-f nordic=true` (#763): as built and at building permit, each with Revit's own IFC export, from
-# VTT's ARCH.zip under CC BY-SA 4.0 (https://cris.vtt.fi/en/publications/bim-files-to-download/).
+# The BIM4LCA office files that Measure reads with `-f nordic=true` (#763): the concrete structure
+# as built and at building permit, and (#1262) the terrain variants at building permit in concrete
+# and timber, each with Revit's own IFC export, from VTT's ARCH.zip under CC BY-SA 4.0
+# (https://cris.vtt.fi/en/publications/bim-files-to-download/).
 # Read by byte range by tools/ci/fetch-bim4lca.py and never stored; same format as
 # research/bim4lca-models.tsv, whose archive row this repeats. Entries measured 2026-10-18.
 # A mirror row names another URL that serves the same archive, tried before the archive's
 # own: the CDN that URL redirects to (2026-10-29), added after the first host timed out on the
-# runners.
+# runners. The terrain entries were measured 2026-11-03 through the range reader.
 # kind	path	sha256	bytes
 archive	https://www.nordicsustainableconstruction.com/Media/638593249820446520/ARCH.zip	025e33fb0c0ce3b7a869f4177a0862918cc987408f4cd34e58a0eabd8d9917c4	1579459850
 mirror	https://cdn2.gopublic.dk/socialboligstyrelsennordic/Media/638593249820446520/ARCH.zip	025e33fb0c0ce3b7a869f4177a0862918cc987408f4cd34e58a0eabd8d9917c4	1579459850
@@ -13,3 +14,7 @@ entry	ARCH/REVIT/ARK_NordicLCA_Office_Concrete_As-Built.rvt	747120005b4b35c7cb66
 entry	ARCH/REVIT/ARK_NordicLCA_Office_Concrete_BuildingPermit.rvt	1c12c2058128315edbd65a8bf97f60da971aee8625f21233b8477d9c6165c1d1	78319616
 entry	ARCH/IFC/ARK_NordicLCA_Office_Concrete_As-Built_Revit.ifc	b2f530eba8b4424c4542b98e9a2c7bbcc726367f21b2740f3074e4a6ce917382	83761311
 entry	ARCH/IFC/ARK_NordicLCA_Office_Concrete_BuildingPermit_Revit.ifc	bc3bd3366a3c413ce74840300a590f59102b740118ef37898e906253b6b7c08d	82294444
+entry	ARCH/REVIT/ARK_NordicLCA_Office_Terrain_Concrete_BuildingPermit.rvt	12477111d81ffca78d87a22a64d5e1f69ff1f8d027148c749e7c2d570087ecad	7634944
+entry	ARCH/IFC/ARK_NordicLCA_Office_Terrain_Concrete_BuildingPermit_Revit.ifc	efe164b29316e5b8959152bb883cfbb70555ee9a787114b4a22d7c43ea72ea63	2841182
+entry	ARCH/REVIT/ARK_NordicLCA_Office_Terrain_Timber_BuildingPermit.rvt	838118fd85da2451e47448dd4dae1b1dac9b3a74dbaedfbae4afce9ca915c57c	7749632
+entry	ARCH/IFC/ARK_NordicLCA_Office_Terrain_Timber_BuildingPermit_Revit.ifc	4defb5d158fcbd6dc3098c423c153e6fc2778796bda1cf5c4fe33c86199ff39b	2033808

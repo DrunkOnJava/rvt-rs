@@ -12,7 +12,7 @@ use rvt::{
     ifc::{
         DiagnosticRvtDocExporter, ExportDiagnostics, ExportQualityMode, PlaceholderExporter,
         RvtDocExporter,
-        step_writer::{StepOptions, write_step_with_options},
+        step_writer::{StepOptions, write_step_to, write_step_with_options},
     },
     walker::WalkerLimits,
 };
@@ -160,8 +160,9 @@ struct Args {
     #[arg(long, value_name = "BYTES")]
     max_stream_bytes: Option<u64>,
     /// Maximum inflated bytes of one compressed member (default 256 MiB). The
-    /// members of one stream may inflate to this or 1 GiB together,
-    /// whichever is larger.
+    /// members of one stream may inflate to this or, whichever is larger,
+    /// 16 times their stored size, at least 1 GiB and at most 4 GiB (1 GiB
+    /// on a 32-bit build).
     #[arg(long, value_name = "BYTES")]
     max_inflate_bytes: Option<usize>,
     /// Raise the stream, inflate and walker-scan limits for large models:
@@ -327,26 +328,49 @@ fn run(args: Args) -> anyhow::Result<()> {
 
     warn_about_export_quality(&diagnostics);
 
-    let step = write_step_with_options(&model, &StepOptions { timestamp });
-    std::fs::write(&out_path, step.as_bytes())?;
-    eprintln!(
-        "rvt-ifc: wrote {} bytes to {}",
-        step.len(),
-        out_path.display()
-    );
+    let options = StepOptions { timestamp };
+    // The witness observation reads the text back; otherwise it is written as
+    // it is built, after the file handle and the partitions it holds inflated
+    // are released (#1075).
+    let mut observed_step = None;
+    drop(rf);
+    let written = if args.observation.is_some() {
+        let step = write_step_with_options(&model, &options);
+        std::fs::write(&out_path, step.as_bytes())?;
+        let written = step.len() as u64;
+        observed_step = Some(step);
+        written
+    } else {
+        // Written beside the output and renamed when whole, so a failed or
+        // killed export never leaves a truncated IFC under the output's name.
+        let mut partial = out_path.clone().into_os_string();
+        partial.push(".partial");
+        let partial = PathBuf::from(partial);
+        let streamed = std::fs::File::create(&partial)
+            .and_then(|file| write_step_to(&model, &options, file))
+            .and_then(|written| std::fs::rename(&partial, &out_path).map(|()| written));
+        match streamed {
+            Ok(written) => written,
+            Err(error) => {
+                let _ = std::fs::remove_file(&partial);
+                return Err(error.into());
+            }
+        }
+    };
+    eprintln!("rvt-ifc: wrote {written} bytes to {}", out_path.display());
     for line in export_summary(&diagnostics, args.diagnostics.is_some()) {
         eprintln!("{line}");
     }
     if let Some(diagnostics_path) = &args.diagnostics {
         write_diagnostics_sidecar(diagnostics_path, &diagnostics, args.anonymize)?;
     }
-    if let Some(observation_path) = &args.observation {
+    if let (Some(observation_path), Some(step)) = (&args.observation, &observed_step) {
         write_observation(
             observation_path,
             &args.input,
             args.artifact_id.as_deref(),
             &diagnostics,
-            &step,
+            step,
         )?;
     }
     if model.project_name.is_none() {
@@ -899,6 +923,28 @@ fn export_summary(diagnostics: &ExportDiagnostics, has_sidecar: bool) -> Vec<Str
                 exported.bounding_box_bodies
             ));
         }
+        // RE-313: say how many spaces are a box, as their area is the box's.
+        if exported.bounding_box_spaces > 0 {
+            lines.push(format!(
+                "  {} of {} spaces are their record's box: the area of their body is the box's, not the space's (SpaceOutlineSource record_box)",
+                exported.bounding_box_spaces,
+                exported.by_ifc_type.get("IFCSPACE").copied().unwrap_or(0)
+            ));
+        }
+        // RE-316: rooms read from their stored solid by a rule that is not
+        // the exact one.
+        if exported.resolved_outline_spaces > 0 {
+            lines.push(format!(
+                "  {} rooms take an outline read from the faces their stored solid lists, where the exact walk did not close them (SpaceOutlineSource stored_solid_faces)",
+                exported.resolved_outline_spaces
+            ));
+        }
+        if exported.approximate_outline_spaces > 0 {
+            lines.push(format!(
+                "  {} rooms take an approximate outline, a column that overlaps a wall taken off it or up to 0.02 ft short of their record box on a side: the area is within about 1% of the space's, not 0.1% (SpaceOutlineSource stored_solid_approximate)",
+                exported.approximate_outline_spaces
+            ));
+        }
     }
     let left_out: Vec<String> = diagnostics
         .skipped
@@ -908,6 +954,9 @@ fn export_summary(diagnostics: &ExportDiagnostics, has_sidecar: bool) -> Vec<Str
                 "element_record_without_volume" => "without a 3D body",
                 "element_record_in_non_primary_design_option" => "in non-primary design options",
                 "element_record_empty_curtain_panel" => "empty curtain panels",
+                "element_record_family_space_without_body" => {
+                    "family instances written as spaces whose family draws no model form"
+                }
                 _ => return None,
             };
             Some(format!("{} {what}", item.count))
@@ -940,6 +989,8 @@ fn ifc_type_display(upper: &str) -> String {
         "IfcAlarm",
         "IfcBeam",
         "IfcBuildingElementProxy",
+        "IfcCableCarrierFitting",
+        "IfcCableCarrierSegment",
         "IfcColumn",
         "IfcCovering",
         "IfcCurtainWall",

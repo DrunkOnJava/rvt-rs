@@ -279,6 +279,29 @@
           "type": "integer",
           "minimum": 0,
           "description": "Bodies that are only the element record's bounding box, with no recovered plan profile: placed and sized correctly, not the element's shape (#409)."
+        },
+        "bounding_box_spaces": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Exported IfcSpaces drawn as their record's bounding box (SpaceOutlineSource record_box): a room whose outline was not read from its stored solid, or a family instance written as a space and drawn as its box. Their body's plan area is the box's, not the space's (RE-313). Each is also in bounding_box_bodies, except a family instance turned or tilted off the model's axes."
+        },
+        "area_body_refusals": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "description": "Of the exported Areas that have no body, why, by reason (RvtElementRecordGeometry.AreaBodyRefusal, RE-317): levels_not_recovered, boundary_line_not_read, no_boundary_lines, point_not_read, level_or_scheme_not_named, named_lines_not_in_scheme_and_level, next_storey_not_proven, boundary_lines_not_readable, point_in_no_single_region, named_lines_not_on_region, two_areas_one_region. Empty when every Area is drawn or the export has no geometry."
+        },
+        "resolved_outline_spaces": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Exported IfcSpaces that are rooms whose outline was read from the faces their stored solid lists, up to the solid's own end, where the walk of RE-101 did not close them (SpaceOutlineSource stored_solid_faces, RE-316): equal to Revit's area on every such room measured, bounded by the solid's list of objects and a gap, so a closed loop of another element's faces inside the room's box would be read as the room's."
+        },
+        "approximate_outline_spaces": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Exported IfcSpaces that are rooms whose resolved outline is the boundary of a region, a column overlapping a wall having been taken off it or an end of one wall edge lying on another, or falls up to 0.02 ft short of their record box on a side (SpaceOutlineSource stored_solid_approximate, RE-316): their area is approximate, up to 0.68% under Revit's floor area where Revit's export does not take the column off."
         }
       }
     },

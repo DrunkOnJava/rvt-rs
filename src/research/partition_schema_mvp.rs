@@ -153,6 +153,7 @@ pub fn recover_partition_schema_mvp(
     limits: WalkerLimits,
 ) -> Result<PartitionSchemaMvp> {
     let mut out = PartitionSchemaMvp::default();
+    let mut wall_reads = crate::native_walls::WallReads::default();
 
     // --- Levels + Materials from partition strings / ArcWall elev ---
     let strings = rf.partition_string_records().unwrap_or_default();
@@ -218,7 +219,7 @@ pub fn recover_partition_schema_mvp(
         );
         // --- Walls', floors' and roofs' layers, for their material layer
         // sets (RE-114) ---
-        attach_wall_layers(rf, revit_version, &mut out.walls);
+        attach_wall_layers(rf, revit_version, &mut out.walls, &mut wall_reads);
         attach_slab_layers(
             rf,
             revit_version,
@@ -258,7 +259,8 @@ pub fn recover_partition_schema_mvp(
         // the parameters named for IsExternal or a standard property from the
         // saved parameters (RE-193, RE-194), and the IsExternal Revit's
         // exporter calculates from them (RE-283) ---
-        attach_wall_type_functions(rf, revit_version, out.walls.iter_mut());
+        read_wall_records(rf, revit_version, &out.walls, &mut wall_reads);
+        attach_wall_type_functions(rf, revit_version, out.walls.iter_mut(), &mut wall_reads);
         attach_native_named_parameters(
             rf,
             revit_version,
@@ -283,7 +285,7 @@ pub fn recover_partition_schema_mvp(
         );
         // --- Whether a wall's top is joined to a roof or floor, from its
         // native record (RE-228, RE-284) ---
-        attach_wall_top_joins(rf, revit_version, &mut out.walls);
+        attach_wall_top_joins(rf, revit_version, &mut out.walls, &mut wall_reads);
 
         // --- A structural beam's or column's LoadBearing is its category's
         // (RE-285), unless a parameter named for it says otherwise ---
@@ -348,11 +350,15 @@ pub fn recover_partition_schema_mvp(
     attach_room_outlines(rf, revit_version, &mut out.rooms);
     // Their heights from their native records (RE-255).
     attach_room_heights(rf, revit_version, &mut out.rooms);
-    // --- Areas, which carry no record box (#763) ---
+    // --- Areas, which carry no record box (#763), and the bodies their
+    // boundary lines give them (RE-317) ---
+    let levels = crate::partition_level_records::recover_partition_levels(rf, revit_version)
+        .unwrap_or_default();
     out.areas = crate::partition_area_records::areas_from_partition_chain_records(
         rf,
         revit_version,
         &level_ids,
+        &levels,
     );
 
     // --- Other product categories from element records (RE-33) ---
@@ -362,12 +368,10 @@ pub fn recover_partition_schema_mvp(
     // --- Base constraints of elements naming two Levels (RE-59), then
     // railings by their host and elements by the Level objects they name
     // (RE-60) ---
-    let level_elevations: BTreeMap<u32, f64> =
-        crate::partition_level_records::recover_partition_levels(rf, revit_version)
-            .unwrap_or_default()
-            .iter()
-            .map(|level| (level.element_id, level.elevation_feet))
-            .collect();
+    let level_elevations: BTreeMap<u32, f64> = levels
+        .iter()
+        .map(|level| (level.element_id, level.elevation_feet))
+        .collect();
     let mut record_backed = [
         &mut out.walls,
         &mut out.columns,
@@ -563,7 +567,7 @@ pub fn recover_partition_schema_mvp(
     // --- Curtain mullions drawn as an extrusion of their section (RE-243) ---
     attach_mullion_plain_hosts(rf, &mut out.products);
     // --- Walls' layers and exterior side (RE-53) ---
-    attach_wall_layers(rf, revit_version, &mut out.walls);
+    attach_wall_layers(rf, revit_version, &mut out.walls, &mut wall_reads);
     // --- The openings a wall's edited elevation profile cuts (B55) ---
     attach_wall_profile_openings(rf, revit_version, &mut out.walls);
     // --- A shed roof's slope (RE-56) ---
@@ -604,6 +608,9 @@ pub fn recover_partition_schema_mvp(
             &mut out.products,
         ],
     );
+    // --- Family instances written as spaces that have no 3D body are left
+    // out, as Revit leaves them out (RE-312, #1262) ---
+    without_bodiless_family_spaces(rf, &mut out.products);
     // --- Empty curtain panels are left out, as Revit leaves them out (#309) ---
     out.products
         .retain(|product| !is_empty_curtain_panel(product));
@@ -672,7 +679,25 @@ pub fn recover_partition_schema_mvp(
         crate::partition_type_materials::type_material_names(rf, revit_version);
     // The map read by name, where the scan also takes a nested component's
     // materials (RE-203).
-    let partly_unset = refine_type_materials(rf, revit_version, &mut type_materials, &out);
+    let (partly_unset, unread_types) =
+        refine_type_materials(rf, revit_version, &mut type_materials, &out);
+    // #1247: these doors and windows are written as such, though nothing read
+    // tells whether their type draws geometry; the diagnostics count them.
+    if !unread_types.is_empty() {
+        let ids: Vec<u32> = out
+            .doors
+            .iter()
+            .chain(&out.windows)
+            .filter(|element| {
+                element.fields.iter().any(|(name, value)| {
+                    matches!(value, InstanceField::ElementId { id, .. }
+                        if name == TYPE_ID_FIELD && unread_types.contains(id))
+                })
+            })
+            .filter_map(|element| element.id)
+            .collect();
+        rf.note_unread_type_doors_windows(ids);
+    }
     if !type_materials.is_empty() {
         for elements in [
             &mut out.walls,
@@ -814,6 +839,7 @@ pub fn recover_partition_schema_mvp(
                 .iter_mut()
                 .filter(|product| product.class == CURTAIN_PANEL_WALL_CLASS),
         ),
+        &mut wall_reads,
     );
     // --- IsExternal: the parameters named for it, and Revit's calculation (RE-193) ---
     attach_is_external(

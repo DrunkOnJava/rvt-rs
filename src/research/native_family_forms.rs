@@ -106,6 +106,9 @@ struct Document {
     /// The `Family` records it holds, with their bodies.
     families: Vec<(u64, Vec<u8>)>,
     unread: bool,
+    /// A group of its blocks did not parse, so records of it are missing
+    /// (RE-312). Kept apart from `unread`, which the material readers use.
+    partial: bool,
 }
 
 /// `{"m_id":{"m_id64":n}}` as `n`.
@@ -155,6 +158,7 @@ fn read_documents(
     let other_tags: BTreeSet<u16> = OTHER_CLASSES.iter().filter_map(|name| tag(name)).collect();
     let instance_tag = tag("FamilyInstance");
     let mut documents: BTreeMap<u64, Document> = BTreeMap::new();
+    let budget = native_document::group_budget(rf, native_document::DEFAULT_MAX_GROUP_BYTES);
     for name in streams {
         let stored = rf.read_stream(name)?;
         let prepared = compression::prepare_stream_for_inflate(name, &stored);
@@ -163,7 +167,11 @@ fn read_documents(
             &prepared,
             inflated.as_deref(),
             registry,
-            256 * 1024 * 1024,
+            native_document::partition_budget(
+                budget,
+                native_document::DEFAULT_MAX_GROUP_BYTES,
+                inflated.as_deref(),
+            ),
             |source, bytes| {
                 let Some(family) = source.content_key.and_then(|key| blocks.get(&key)) else {
                     return Ok(());
@@ -171,10 +179,11 @@ fn read_documents(
                 if !CHANNELS.contains(&source.channel) {
                     return Ok(());
                 }
+                let document = documents.entry(*family).or_default();
                 let Ok(records) = native_document::group_records(source, bytes, version) else {
+                    document.partial = true;
                     return Ok(());
                 };
-                let document = documents.entry(*family).or_default();
                 for (id, _, start, end) in records {
                     let body = &bytes[start..end];
                     let Some(class) = le_bytes::u16_at(body, 0) else {
@@ -280,17 +289,22 @@ fn blocks_of(
     out
 }
 
-/// [`FamilyForms`] of each of `families`, by the family's ElementId. A family
-/// whose document is not found, or holds no form or nested instance that
-/// decodes, is left out. Errs where the file's partitions or schema are not
-/// read.
-pub fn family_forms(
-    rf: &mut RevitFile,
-    families: &BTreeSet<u64>,
-) -> anyhow::Result<BTreeMap<u64, FamilyForms>> {
-    let mut out = BTreeMap::new();
+/// What [`load`] reads: the schema, the release, the partitions, the block
+/// keys and the family documents.
+struct Loaded {
+    registry: crate::schema_registry::Registry,
+    version: u32,
+    streams: Vec<String>,
+    keys: BTreeSet<[u8; 16]>,
+    blocks: BTreeMap<[u8; 16], u64>,
+    documents: BTreeMap<u64, Document>,
+}
+
+/// The documents of `families`, by ElementId, with what was read to find
+/// them. `None` where there are no families or none has a document.
+fn load(rf: &mut RevitFile, families: &BTreeSet<u64>) -> anyhow::Result<Option<Loaded>> {
     if families.is_empty() {
-        return Ok(out);
+        return Ok(None);
     }
     let version = rf.layout_release()?;
     anyhow::ensure!(
@@ -312,6 +326,7 @@ pub fn family_forms(
     // Each wanted family's record outside every block, and every block key.
     let mut bodies: Vec<(u64, Vec<u8>)> = Vec::new();
     let mut keys: BTreeSet<[u8; 16]> = BTreeSet::new();
+    let budget = native_document::group_budget(rf, native_document::DEFAULT_MAX_GROUP_BYTES);
     for name in &streams {
         let stored = rf.read_stream(name)?;
         let prepared = compression::prepare_stream_for_inflate(name, &stored);
@@ -320,7 +335,11 @@ pub fn family_forms(
             &prepared,
             inflated.as_deref(),
             &registry,
-            256 * 1024 * 1024,
+            native_document::partition_budget(
+                budget,
+                native_document::DEFAULT_MAX_GROUP_BYTES,
+                inflated.as_deref(),
+            ),
             |source, bytes| {
                 if let Some(key) = source.content_key {
                     keys.insert(key);
@@ -343,9 +362,39 @@ pub fn family_forms(
     }
     let blocks = blocks_of(&bodies, families, &keys);
     if blocks.is_empty() {
-        return Ok(out);
+        return Ok(None);
     }
     let documents = read_documents(rf, &registry, version, &streams, &blocks)?;
+    Ok(Some(Loaded {
+        registry,
+        version,
+        streams,
+        keys,
+        blocks,
+        documents,
+    }))
+}
+
+/// [`FamilyForms`] of each of `families`, by the family's ElementId. A family
+/// whose document is not found, or holds no form or nested instance that
+/// decodes, is left out. Errs where the file's partitions or schema are not
+/// read.
+pub fn family_forms(
+    rf: &mut RevitFile,
+    families: &BTreeSet<u64>,
+) -> anyhow::Result<BTreeMap<u64, FamilyForms>> {
+    let mut out = BTreeMap::new();
+    let Some(Loaded {
+        registry,
+        version,
+        streams,
+        keys,
+        documents,
+        ..
+    }) = load(rf, families)?
+    else {
+        return Ok(out);
+    };
 
     // The documents of the families nested in them.
     let mut nested_families: BTreeSet<u64> = BTreeSet::new();
@@ -433,6 +482,268 @@ pub fn family_forms(
                 hidden_only: hidden.difference(&visible).copied().collect(),
             },
         );
+    }
+    Ok(out)
+}
+
+/// A model form of a loaded family's document, and what shows it (RE-312).
+#[derive(Clone, Debug)]
+pub struct ModelForm {
+    /// Whether it is a void, which draws nothing.
+    pub cutting: bool,
+    /// Its stored `Visible`, where it holds one.
+    pub visible: Option<i64>,
+    /// Whether its `Visible` is bound to a family parameter.
+    pub bound: bool,
+    /// The caption of that parameter in the family's own document, where it
+    /// was read.
+    pub bound_caption: Option<String>,
+}
+
+/// The model forms of a loaded family's document (RE-312).
+#[derive(Clone, Debug, Default)]
+pub struct FamilySolids {
+    pub forms: Vec<ModelForm>,
+    /// True where the document nests a family instance, or a form or an
+    /// instance in it did not decode, or a group of it did not parse: the
+    /// forms may not be all it draws.
+    pub incomplete: bool,
+}
+
+/// [`FamilySolids`] of each of `families`, by the family's ElementId. A
+/// family whose document is not found is left out. Errs where the file's
+/// partitions or schema are not read.
+pub fn family_solids(
+    rf: &mut RevitFile,
+    families: &BTreeSet<u64>,
+) -> anyhow::Result<BTreeMap<u64, FamilySolids>> {
+    let mut out = BTreeMap::new();
+    let Some(loaded) = load(rf, families)? else {
+        return Ok(out);
+    };
+    for (family, document) in &loaded.documents {
+        out.insert(
+            *family,
+            FamilySolids {
+                forms: document
+                    .forms
+                    .iter()
+                    .map(|form| ModelForm {
+                        cutting: form.cutting,
+                        visible: form.visible,
+                        bound: form.bound.is_some(),
+                        bound_caption: form
+                            .bound
+                            .and_then(|id| document.captions.get(&id).cloned()),
+                    })
+                    .collect(),
+                incomplete: !document.nested.is_empty() || document.unread || document.partial,
+            },
+        );
+    }
+    Ok(out)
+}
+
+/// The records of loaded families' own documents whose class is one of
+/// `classes` (every record when it is empty), each as its decoded graph, by
+/// the family's ElementId (RE-318). A family whose document is not found is
+/// left out, as is a record that does not decode. Errs where the file's
+/// partitions or schema are not read.
+pub fn family_records(
+    rf: &mut RevitFile,
+    families: &BTreeSet<u64>,
+    classes: &BTreeSet<String>,
+) -> anyhow::Result<BTreeMap<u64, Vec<(u64, ObjectGraph)>>> {
+    let mut out: BTreeMap<u64, Vec<(u64, ObjectGraph)>> = BTreeMap::new();
+    let Some(loaded) = load(rf, families)? else {
+        return Ok(out);
+    };
+    let tags: BTreeSet<u16> = classes
+        .iter()
+        .filter_map(|name| loaded.registry.named(name).map(|class| class.tag))
+        .collect();
+    let budget = native_document::group_budget(rf, native_document::DEFAULT_MAX_GROUP_BYTES);
+    for name in &loaded.streams {
+        let stored = rf.read_stream(name)?;
+        let prepared = compression::prepare_stream_for_inflate(name, &stored);
+        let inflated = rf.inflated_partition(name).ok();
+        native_segments::walk_inflated(
+            &prepared,
+            inflated.as_deref(),
+            &loaded.registry,
+            native_document::partition_budget(
+                budget,
+                native_document::DEFAULT_MAX_GROUP_BYTES,
+                inflated.as_deref(),
+            ),
+            |source, bytes| {
+                let Some(family) = source.content_key.and_then(|key| loaded.blocks.get(&key))
+                else {
+                    return Ok(());
+                };
+                if !CHANNELS.contains(&source.channel) {
+                    return Ok(());
+                }
+                let Ok(records) = native_document::group_records(source, bytes, loaded.version)
+                else {
+                    return Ok(());
+                };
+                for (id, _, start, end) in records {
+                    let body = &bytes[start..end];
+                    let Some(class) = le_bytes::u16_at(body, 0) else {
+                        continue;
+                    };
+                    if !tags.is_empty() && !tags.contains(&class) {
+                        continue;
+                    }
+                    if let Ok(graph) = native_parameters::decode_graph(body, &loaded.registry) {
+                        out.entry(*family).or_default().push((id, graph));
+                    }
+                }
+                Ok(())
+            },
+        )?;
+    }
+    Ok(out)
+}
+
+/// Each selected record's graph, by ElementId.
+fn read_graphs(
+    rf: &mut RevitFile,
+    ids: &BTreeSet<u64>,
+    mut each: impl FnMut(u64, &ObjectGraph),
+) -> anyhow::Result<()> {
+    if ids.is_empty() {
+        return Ok(());
+    }
+    let options = native_document::Options {
+        selected_ids: ids.clone(),
+        ..native_document::Options::default()
+    };
+    native_document::extract_graphs(rf, &options, |record| {
+        if let Some(graph) = record.graph.as_ref() {
+            each(record.identity.element_id, graph);
+        }
+        Ok(())
+    })?;
+    Ok(())
+}
+
+/// A graph's root element as the id in `field`.
+fn root_id(graph: &ObjectGraph, class: &str, field: &str) -> Option<u64> {
+    let root = graph.objects.first()?;
+    if root.class_name != class {
+        return None;
+    }
+    u64::try_from(element_id(root.fields.get(field))?).ok()
+}
+
+/// The family instances of `instances` that have no 3D body (RE-312, #1262).
+///
+/// Revit's exporter writes a family instance that is not a door or a window
+/// only when it has a 3D body (`FamilyInstanceExporter.
+/// ExportFamilyInstanceElement` in revit-ifc, CLEANROOM.md source 5). An
+/// instance has none when no model form of its family's document is drawn
+/// for its parameter values: a form is drawn unless it is a void or its
+/// `Visible` is 0, where `Visible` is the value of the family parameter it
+/// is bound to (the instance's, else its type's, matched to the family's by
+/// caption) or else its stored value. On the BIM4LCA terrain office the 92
+/// bicycle bays of "Parking Space" carry "Stripe Y/N" as 0 and are not in
+/// Revit's export, and its 2 car bays do not.
+///
+/// An instance is left out of the result, so is not called bodiless, where
+/// its family's document is not found, holds no form, nests a family
+/// instance, has a form or instance that does not decode or a group that
+/// does not parse, or has a form bound to a parameter whose caption or value
+/// was not read: the stored `Visible` of a bound form says nothing of what
+/// the parameter shows.
+pub fn instances_without_body(
+    rf: &mut RevitFile,
+    instances: &BTreeSet<u64>,
+) -> anyhow::Result<BTreeSet<u64>> {
+    let mut symbol_of: BTreeMap<u64, u64> = BTreeMap::new();
+    let mut instance_params: BTreeMap<u64, Vec<(u64, i64)>> = BTreeMap::new();
+    read_graphs(rf, instances, |id, graph| {
+        if let Some(symbol) = root_id(graph, "FamilyInstance", "m_masterSymbolId") {
+            symbol_of.insert(id, symbol);
+            instance_params.insert(id, family_params(graph));
+        }
+    })?;
+
+    // The types, and the captions of the parameters the instances set.
+    let symbols: BTreeSet<u64> = symbol_of.values().copied().collect();
+    let mut selected = symbols.clone();
+    selected.extend(instance_params.values().flatten().map(|(id, _)| *id));
+    let mut family_of: BTreeMap<u64, u64> = BTreeMap::new();
+    let mut symbol_params: BTreeMap<u64, Vec<(u64, i64)>> = BTreeMap::new();
+    let mut captions: BTreeMap<u64, String> = BTreeMap::new();
+    let caption_of = |graph: &ObjectGraph| {
+        graph
+            .objects
+            .iter()
+            .find_map(|object| object.fields.get("m_caption")?.as_str())
+            .map(str::to_string)
+    };
+    read_graphs(rf, &selected, |id, graph| {
+        if symbols.contains(&id) {
+            if let Some(family) = root_id(graph, "FamilySymbol", "m_familyId") {
+                family_of.insert(id, family);
+                symbol_params.insert(id, family_params(graph));
+            }
+        } else if let Some(caption) = caption_of(graph) {
+            captions.insert(id, caption);
+        }
+    })?;
+    let unread: BTreeSet<u64> = symbol_params
+        .values()
+        .flatten()
+        .map(|(id, _)| *id)
+        .filter(|id| !selected.contains(id))
+        .collect();
+    read_graphs(rf, &unread, |id, graph| {
+        if let Some(caption) = caption_of(graph) {
+            captions.insert(id, caption);
+        }
+    })?;
+
+    let families: BTreeSet<u64> = family_of.values().copied().collect();
+    let solids = family_solids(rf, &families)?;
+    let mut out = BTreeSet::new();
+    for (instance, symbol) in &symbol_of {
+        let Some(solid) = family_of.get(symbol).and_then(|family| solids.get(family)) else {
+            continue;
+        };
+        if solid.incomplete || solid.forms.is_empty() {
+            continue;
+        }
+        // The instance's value of a parameter, else its type's.
+        let mut by_caption: BTreeMap<&str, i64> = BTreeMap::new();
+        let own = instance_params.get(instance);
+        let of_type = symbol_params.get(symbol);
+        for (parameter, value) in of_type.into_iter().chain(own).flatten() {
+            if let Some(caption) = captions.get(parameter) {
+                by_caption.insert(caption.as_str(), *value);
+            }
+        }
+        let (mut drawn, mut unresolved) = (false, false);
+        for form in solid.forms.iter().filter(|form| !form.cutting) {
+            let shown = if form.bound {
+                form.bound_caption
+                    .as_deref()
+                    .and_then(|caption| by_caption.get(caption).copied())
+                    .map(|value| value != 0)
+            } else {
+                Some(form.visible != Some(0))
+            };
+            match shown {
+                Some(true) => drawn = true,
+                Some(false) => {}
+                None => unresolved = true,
+            }
+        }
+        if !drawn && !unresolved {
+            out.insert(*instance);
+        }
     }
     Ok(out)
 }
