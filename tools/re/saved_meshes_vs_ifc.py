@@ -23,6 +23,14 @@ a transform.
 Only the rvt-rs elements with a wanted `BodySource`, and the reference's
 elements with their Tags, are meshed.
 
+The bar (#1365, RE-331 section 8; Griffin, #1355): an element that both files
+write as true curves (true_curves.py), which a saved mesh never is, since
+rvt-rs writes it as triangles, has its box taken from a mesh at the fine
+deflection (fine_mesh.py) in both files; every other element keeps the default
+tessellation. When any element is so decided a line says how many and the
+table gains a last column, `fine`, how many of each class were; when none is,
+the output is what it was before #1365.
+
 With RVT_SCORER_FINE_MESH=1 (#1355, RE-331) it then meshes an even stride of at
 most 300 of each class's paired elements again in both files at one equal, fine
 deflection (fine_mesh.py) and prints, after the table above, `fine` rows for
@@ -54,6 +62,7 @@ import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import fine_mesh  # noqa: E402
+import true_curves  # noqa: E402
 from ifc_common import mesh_parts, site_frame  # noqa: E402
 
 FT = 0.3048
@@ -69,11 +78,13 @@ def body_sources(element):
     return None
 
 
-def world_boxes(path, tags=None, transform=None, wanted=None, frame=True, settings=None):
+def world_boxes(path, tags=None, transform=None, wanted=None, frame=True, settings=None, curves=None, detect=None):
     """Tag -> (class, box in feet, BodySource) for elements with a body: in
     the file's internal feet through its site placement (`frame`), else in
     its world feet, moved by `transform` when given. With `wanted`, only the
-    elements with one of those BodySources are meshed."""
+    elements with one of those BodySources are meshed. With `detect` (True for
+    every element, or the Tags to test), `curves` is filled with whether each
+    body is made of true curves (true_curves.py)."""
     model = ifcopenshell.open(path)
     if settings is None:
         settings = ifcopenshell.geom.settings()
@@ -110,6 +121,8 @@ def world_boxes(path, tags=None, transform=None, wanted=None, frame=True, settin
                     points = np.array([transform(p) for p in points])
             box = [float(v) for v in points.min(axis=0)] + [float(v) for v in points.max(axis=0)]
             out[element.Tag] = (element.is_a(), box, sources.get(element.Tag))
+            if curves is not None and detect and (detect is True or element.Tag in detect):
+                curves[element.Tag] = curves.get(element.Tag, True) and true_curves.is_true_curve_body(element)
     return out
 
 
@@ -174,8 +187,17 @@ def main():
         x, y, z = p
         return (x * c - y * s + tx, x * s + y * c + ty, z + tz)
 
-    ours = world_boxes(args.ours, transform=None if frames else to_shared, wanted=wanted, frame=frames)
-    ref = world_boxes(args.reference, tags=set(ours), frame=frames)
+    ours_curves, ref_curves = {}, {}
+    ours = world_boxes(args.ours, transform=None if frames else to_shared, wanted=wanted, frame=frames, curves=ours_curves, detect=True)
+    curve_ours = {t for t, flag in ours_curves.items() if flag}
+    ref = world_boxes(args.reference, tags=set(ours), frame=frames, curves=ref_curves, detect=curve_ours)
+    decided = {t for t in curve_ours if ref_curves.get(t)}
+    ours_decided = ref_decided = {}
+    if decided:
+        settings = fine_mesh.settings()
+        ours_decided = world_boxes(args.ours, tags=decided, transform=None if frames else to_shared, wanted=wanted, frame=frames, settings=settings)
+        ref_decided = world_boxes(args.reference, tags=decided, frame=frames, settings=settings)
+        decided = {t for t in decided if t in ours_decided and t in ref_decided}
     print("frames:", "each file's site placement undone" if frames else "rvt-rs moved by the given transform")
     pairs = [(ours[t][1], ref[t][1]) for t in ours if t in ref]
     if args.offset_ft:
@@ -185,18 +207,25 @@ def main():
     offset *= 2
     print("file-wide offset removed (ft):", [round(v, 4) for v in offset[:3]])
 
-    rows = collections.defaultdict(lambda: [0] * 6)
+    rows = collections.defaultdict(lambda: [0] * 7)
     for tag, (cls, box, _) in ours.items():
         row = rows[cls]
         row[0] += 1
         if tag not in ref:
             row[5] += 1
             continue
-        err = max(abs(box[k] - offset[k] - ref[tag][1][k]) for k in range(6))
+        other = ref[tag][1]
+        if tag in decided:
+            box, other = ours_decided[tag][1], ref_decided[tag][1]
+            row[6] += 1
+        err = max(abs(box[k] - offset[k] - other[k]) for k in range(6))
         row[1 if err <= 0.01 else 2 if err <= 0.1 else 3 if err <= 1 else 4] += 1
-    widths = (6, 10, 8, 8, 7, 8)
-    print(f"{'class':28}" + "".join(f"{h:>{w}}" for h, w in zip(("n", "<=0.01ft", "<=0.1", "<=1", ">1", "no ref"), widths)))
-    total = [0] * 6
+    shown = 7 if decided else 6
+    widths = (6, 10, 8, 8, 7, 8, 6)[:shown]
+    if decided:
+        print(f"decided by the fine tessellation (both files write true curves): {len(decided)} of {len(ours)} elements")
+    print(f"{'class':28}" + "".join(f"{h:>{w}}" for h, w in zip(("n", "<=0.01ft", "<=0.1", "<=1", ">1", "no ref", "fine"), widths)))
+    total = [0] * 7
     for cls, row in sorted(rows.items(), key=lambda kv: -kv[1][0]):
         print(f"{cls:28}" + "".join(f"{v:>{w}}" for v, w in zip(row, widths)))
         total = [a + b for a, b in zip(total, row)]
