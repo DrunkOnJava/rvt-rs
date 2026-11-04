@@ -34,7 +34,7 @@ RE-222 section 4 measured a corner rule from the join order and dropped it: it w
 |---|---:|---:|---:|---:|---:|---:|
 | T (another wall meets its middle) | 398 | 381 | 17 | 384 | 324 | 60 |
 | free (no wall) | 102 | 100 | 2 | 140 | 125 | 15 |
-| two walls, square, one layer each | 274 | 273 | 1 | 288 | 265 | 23 |
+| two walls, square, one layer each | 275 | 274 | 1 | 288 | 265 | 23 |
 | two walls, square, a layered wall | 199 | 162 | 37 | 202 | 167 | 35 |
 | two walls, straight on or angled | 14 | 13 | 1 | 6 | 5 | 1 |
 | three walls, single layers | 49 | 35 | 14 | 45 | 21 | 24 |
@@ -42,7 +42,7 @@ RE-222 section 4 measured a corner rule from the join order and dropped it: it w
 | four walls or more, single layers | 23 | 11 | 12 | 12 | 4 | 8 |
 | four walls or more, a layered wall | 54 | 29 | 25 | 8 | 5 | 3 |
 
-(The table leaves out one end as built, right, that no wall meets end to end.) Walls with both ends right: 482 of 607 as built, 422 of 589 at permit, so 125 and 167 walls are not. Of those, 14 and 55 are off only at T or free ends; 111 and 112 have a corner end that is off. The two-wall single-layer corners RE-70 and RE-127 read are right except where a column cuts the wall (23 at permit, section 5).
+A wall that has no body in Revit's export or no straight line (214 ends as built and 197 at permit have one in their join) is left out of the classes, as if it did not overlap; the scorer prints the table so, and the rule leaves such an end alone. Walls with both ends right: 482 of 607 as built, 422 of 589 at permit, so 125 and 167 walls are not. Of those, 14 and 55 are off only at T or free ends; 111 and 112 have a corner end that is off. The two-wall single-layer corners RE-70 and RE-127 read are right except where a column cuts the wall (23 at permit, section 5).
 
 ## 2. The join order is a priority
 
@@ -63,15 +63,15 @@ The faces a wall stops at are the other wall's faces where its own line ends, no
 ## 4. The rule
 
 `element_record_wall_joins::corner_joins` reads an end where three or more walls meet end to end at a butt join (`m_wallJoinType` 0). Walls are counted if they overlap the wall in elevation (the record box, as `butt_joins` does). The end is left alone unless:
-- every wall of the join is a straight wall with a line, and meets this one at a right angle or straight on;
+- every wall of the join is a straight wall with a line whose own line ends within the two walls' thicknesses of this end, and meets this one at a right angle or straight on (straight on: the cosine of the angle within 1e-6 of -1, about 0.08 degrees);
 - no element but a wall cuts the wall (`CleanPairGStep`, `CutPairGStep`, `WallEmbedWallGStep`, as RE-252 reads them);
 - no layered wall that continues this one has its line end off the joint;
 - the faces of the walls that decide agree to 1e-3 ft;
 - the wall has one layer, or has several and stops against walls of one layer each.
 
-Then the end is, every layer alike: at the near face of the earlier perpendicular walls; else at the joint if a wall that continues the wall is listed before the first perpendicular wall after it (and every continuing wall's line ends on the joint); else at the far face of the perpendicular walls after it. `attach_wall_corner_reaches` writes it as the wall's join reach (and as each layer's, for a layered wall), in place of the reach a join list or a T joint gave the end, and names no partner: a corner of three has none. So an end it reads loses the `JoinStartWallElementId` and `JoinStartRunsThrough` that RE-70's lists gave it (the viewer's "stops at" link), also where one perpendicular wall decides it.
+Then the end is, every layer alike: at the near face of the earlier perpendicular walls; else at the joint if a wall that continues the wall is listed before the first perpendicular wall after it (and every continuing wall's line ends on the joint); else at the far face of the perpendicular walls after it. `attach_wall_corner_reaches` maps the record's ends to the axis' (a wall whose curve is not its axis, either way round, is left out), refuses a corner with a wall whose line ends further from the joint than the two walls' thicknesses, and writes the end as the wall's join reach (and as each layer's, for a layered wall), in place of the reach a join list or a T joint gave the end, and names no partner: a corner of three has none. It names a partner (`JoinStartWallElementId`, `JoinStartRunsThrough`, the viewer's "stops at" link) only where one perpendicular wall alone decides the end; at a corner where several do, flush with a wall that continues it, and at a mitre, it names none and the link RE-70's lists gave the end is dropped (PARTNER_COUNTS).
 
-The tally of the scorer's reading of the rule, over the same data as section 1 (the scorer leaves out a corner with a wall that has no body in Revit's export, which the exporter does not):
+The tally of the scorer's reading of the rule, over the same data as section 1 (the scorer leaves a corner alone when one of its walls has no body in Revit's export or no straight line: its elevation is not known. Read as not overlapping instead, the rule would be wrong on one end, wall 3128240's end, which the exporter leaves alone: it is wrong before and after):
 
 | | fires | right | wrong | ends it fixes | ends it breaks |
 |---|---:|---:|---:|---:|---:|
@@ -99,7 +99,7 @@ What separates the unguarded rule's misses (section 3, and as built 13 of 64): 1
 
 ## 6. Mitres
 
-The join type (`m_JoinInfo.m_wallJoinType`) is 0, a butt join, on every join of the office and Core Interior. R2025 `18_WallJoins` has one join of type 1, walls 4511 and 4567, which Revit mitres: each wall's end is the line through the outer corner and the inner corner, so the union of its body reaches half the other wall's thickness past its line's end on the outer face and as far short on the inner. rvt-rs drew them as butt joins (7 of the model's 9 walls had both ends right). `corner_joins` reads a mitre of two single-layer walls whose lines end at one point at right angles, and writes the slanted end as RE-74 does for an angled join (the reach along the exterior-side and the interior-side edge): 9 of 9, every end within 0.001 ft. It is the only mitre in the measured corpora, two ends of two walls: the rule is the geometry of a mitre, not a fit, but it is measured on that pair only.
+The join type (`m_JoinInfo.m_wallJoinType`) is 0, a butt join, on every join of the office and Core Interior. R2025 `18_WallJoins` has one join of type 1, walls 4511 and 4567, which Revit mitres: each wall's end is the line through the outer corner and the inner corner, so the union of its body reaches half the other wall's thickness past its line's end on the outer face and as far short on the inner. rvt-rs drew them as butt joins (7 of the model's 9 walls had both ends right). `corner_joins` reads a mitre of two single-layer walls of the same base and top whose lines end at one point at right angles, and writes the slanted end as RE-74 does for an angled join (the reach along the exterior-side and the interior-side edge): 9 of 9, every end within 0.001 ft. It is the only mitre in the measured corpora, two ends of two walls: the rule is the geometry of a mitre, not a fit, but it is measured on that pair only.
 
 ## 7. Measured
 
@@ -121,7 +121,8 @@ The samples have no Revit export, so nothing measures them. The 2024 to 2027 sav
 - Layered corners (section 5), and every corner a column cuts.
 - A corner whose walls meet at other than a right angle or straight on.
 - A T joint (RE-222, RE-223).
-- Snowdon Towers (724 of 1,078 walls with both ends right in RE-70 to RE-74) is local only and was not measured again.
+- Snowdon Towers: its Architectural sample exports byte for byte as before in the unfiltered run, so nothing moves there; the local Revit export RE-70 to RE-74 scored it against (724 of 1,078 walls with both ends right) was not used.
+- The Autodesk samples of 2024 to 2027 (section 7), which no export measures.
 
 ## 9. Reproduce
 

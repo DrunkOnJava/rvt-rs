@@ -974,6 +974,10 @@ pub struct NativeEnds {
 /// How far two faces may differ for them to be one, feet.
 pub const CORNER_AGREE_FEET: f64 = 1e-3;
 
+/// How far from -1 the cosine of the angle between a wall and one that
+/// continues it across a joint may be, as a fraction (about 0.08 degrees).
+pub const COLLINEAR_EPS: f64 = 1e-6;
+
 /// How a wall in a corner meets the wall whose end is read.
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum Meets {
@@ -1005,8 +1009,13 @@ struct CornerMember {
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum CornerEnd {
     /// The body ends square, this far past its line's end (negative where it
-    /// stops short), every layer alike.
-    Reach(f64),
+    /// stops short), every layer alike. Where one perpendicular wall alone
+    /// decides the end, `partner` names it and whether this wall runs
+    /// through it (true) or stops at it (false).
+    Reach {
+        reach_feet: f64,
+        partner: Option<(u32, bool)>,
+    },
     /// The wall meets one other wall at a mitre: its end is the slanted line
     /// through the two walls' outer corner and inner corner. How far past its
     /// line's end it reaches along its exterior-side edge and along its
@@ -1139,7 +1148,7 @@ fn corner_end(
         let cosine = (into[0] * (beyond[0] - joint[0]) + into[1] * (beyond[1] - joint[1])) / run;
         let meets = if cosine.abs() <= PERPENDICULAR_EPS {
             Meets::Across
-        } else if cosine < -0.9999 {
+        } else if cosine < -(1.0 - COLLINEAR_EPS) {
             Meets::Along
         } else {
             return None;
@@ -1149,6 +1158,11 @@ fn corner_end(
             offset[0] * out[0] + offset[1] * out[1],
             offset[0] * across[0] + offset[1] * across[1],
         );
+        // A wall of the join meets this wall's end within the two walls'
+        // thicknesses; one whose line ends further off is not at this end.
+        if x.hypot(y) > wall.thickness_feet + other.thickness_feet {
+            return None;
+        }
         corner.push(CornerMember {
             id,
             meets,
@@ -1166,7 +1180,7 @@ fn corner_end(
             return None;
         };
         let other = if itself == 0 { second } else { first };
-        return mitre_end(wall, &other);
+        return mitre_end(wall, &other, by_id.get(&other.id)?);
     }
     if corner.len() < 3 || !corner.iter().any(|member| member.meets == Meets::Across) {
         return None;
@@ -1189,16 +1203,26 @@ fn corner_end(
         let high = faces.iter().copied().reduce(f64::max)?;
         (high - low <= CORNER_AGREE_FEET).then_some((low, high))
     };
-    let earlier: Vec<f64> = corner[..itself]
+    let earlier_walls: Vec<&CornerMember> = corner[..itself]
         .iter()
         .filter(|member| member.meets == Meets::Across)
-        .map(|member| member.x - member.thickness_feet / 2.0)
         .collect();
-    if !earlier.is_empty() {
+    if !earlier_walls.is_empty() {
         if layered_wall && layered_others {
             return None;
         }
-        return agreed(earlier).map(|(low, _)| CornerEnd::Reach(low));
+        let faces: Vec<f64> = earlier_walls
+            .iter()
+            .map(|member| member.x - member.thickness_feet / 2.0)
+            .collect();
+        let partner = match earlier_walls[..] {
+            [only] => Some((only.id, false)),
+            _ => None,
+        };
+        return agreed(faces).map(|(low, _)| CornerEnd::Reach {
+            reach_feet: low,
+            partner,
+        });
     }
     if layered_wall {
         return None;
@@ -1216,25 +1240,40 @@ fn corner_end(
         if corner.iter().any(|member| off_line(&member)) {
             return None;
         }
-        return Some(CornerEnd::Reach(0.0));
+        return Some(CornerEnd::Reach {
+            reach_feet: 0.0,
+            partner: None,
+        });
     }
-    let faces: Vec<f64> = later
+    let later_walls: Vec<&CornerMember> = later
         .iter()
         .filter(|member| member.meets == Meets::Across)
+        .collect();
+    let faces: Vec<f64> = later_walls
+        .iter()
         .map(|member| member.x + member.thickness_feet / 2.0)
         .collect();
-    agreed(faces).map(|(_, high)| CornerEnd::Reach(high))
+    let partner = match later_walls[..] {
+        [only] => Some((only.id, true)),
+        _ => None,
+    };
+    agreed(faces).map(|(_, high)| CornerEnd::Reach {
+        reach_feet: high,
+        partner,
+    })
 }
 
 /// The mitre `wall` makes with `other` at one end, when both walls have one
-/// layer, `other` runs away at a right angle from the point `wall`'s line ends
-/// at, and its own line ends there too.
-fn mitre_end(wall: &WallLine, other: &CornerMember) -> Option<CornerEnd> {
+/// layer and the same base and top, `other` runs away at a right angle from
+/// the point `wall`'s line ends at, and its own line ends there too.
+fn mitre_end(wall: &WallLine, other: &CornerMember, line: &WallLine) -> Option<CornerEnd> {
     if other.meets != Meets::Across
         || other.layered
         || wall.layers.len() != 1
         || other.x.abs() > CORNER_AGREE_FEET
         || other.y.abs() > CORNER_AGREE_FEET
+        || (wall.base_feet - line.base_feet).abs() > LAYER_JOIN_HEIGHT_EPS_FEET
+        || (wall.top_feet - line.top_feet).abs() > LAYER_JOIN_HEIGHT_EPS_FEET
     {
         return None;
     }

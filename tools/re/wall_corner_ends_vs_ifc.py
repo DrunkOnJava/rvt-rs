@@ -185,7 +185,11 @@ def corner_members(walls, types, zs, tag, end):
             members.append({"id": tag, "kind": "self", "t": thickness(walls, types, tag), "n": layer_count(walls, types, tag), "x": 0.0, "y": 0.0})
             continue
         if other not in zs or other not in walls or not walls[other].get("curve"):
-            return None
+            # No body in Revit's export or no straight line: its elevation is
+            # not known, so it is left out of the classes and the rule leaves
+            # the end alone.
+            members.append({"id": other, "kind": "unplaced", "t": None, "n": None, "x": None, "y": None})
+            continue
         if min(zs[tag][1], zs[other][1]) - max(zs[tag][0], zs[other][0]) <= 0.01:
             continue
         t, n = thickness(walls, types, other), layer_count(walls, types, other)
@@ -199,16 +203,18 @@ def corner_members(walls, types, zs, tag, end):
         if away is None:
             return None
         cosine = into[0] * away[0] + into[1] * away[1]
-        kind = "perp" if abs(cosine) <= 1e-6 else "col" if cosine < -0.9999 else "angled" if abs(cosine) <= math.sqrt(0.5) else "shallow"
+        kind = "perp" if abs(cosine) <= 1e-6 else "col" if cosine < -(1 - COLLINEAR_EPS) else "angled" if abs(cosine) <= math.sqrt(0.5) else "shallow"
         offset = (joint[0] - point[0], joint[1] - point[1])
+        x, y = offset[0] * out[0] + offset[1] * out[1], offset[0] * across[0] + offset[1] * across[1]
         members.append(
             {
                 "id": other,
                 "kind": kind,
                 "t": t,
                 "n": n,
-                "x": offset[0] * out[0] + offset[1] * out[1],
-                "y": offset[0] * across[0] + offset[1] * across[1],
+                "x": x,
+                "y": y,
+                "near": t is not None and thickness(walls, types, tag) is not None and math.hypot(x, y) <= thickness(walls, types, tag) + t,
             }
         )
     return members
@@ -218,7 +224,7 @@ def classify(members):
     """(kind, detail) of an end from its members (see `corner_members`)."""
     if members is None:
         return "unplaced", "a member has no straight line or body"
-    others = [m for m in members if m["kind"] != "self"]
+    others = [m for m in members if m["kind"] not in ("self", "unplaced")]
     if not others:
         return "free", "-"
     if any(m["kind"] == "tee" for m in others):
@@ -231,15 +237,20 @@ def classify(members):
 
 
 LINE_FT = 0.001
+COLLINEAR_EPS = 1e-6
 
 
 def order_rule(walls, members, tag, end):
     """The order rule of `element_record_wall_joins::corner_joins` for an end
     where three or more walls meet end to end at a butt join: (reach in feet,
     which branch) or (None, why it is left alone)."""
+    if any(m["kind"] == "unplaced" for m in members):
+        return None, "a wall has no body in Revit's export or no straight line"
     others = [m for m in members if m["kind"] != "self"]
     if len(others) < 2:
         return None, "fewer than three walls"
+    if any(not m.get("near", True) for m in others):
+        return None, "a wall's line ends away from the joint"
     controls = end_join(walls[tag], tag, end)
     if (controls[0]["m_JoinInfo"].get("m_wallJoinType") if controls else None) != 0:
         return None, "not a butt join"

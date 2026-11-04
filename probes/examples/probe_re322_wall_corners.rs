@@ -1,15 +1,22 @@
-//! RE-322 (#1194): what a wall's native record holds at a corner, where two
-//! walls meet end to end, that says which of them Revit runs on and which it
-//! stops.
+//! RE-322 (#1194): the order a wall's native record lists the walls of a join
+//! in is a priority, and it says which wall runs through and which stops at a
+//! corner of three or more walls.
 //!
-//! FACT under test: at an L join the wall that runs through reaches the other
-//! wall's far face and the wall that stops ends at its near face (RE-70), but
-//! the join order the record lists (RE-222 section 4) is no rule. Hypotheses:
-//! `JoinEndGStep` (`m_exposedFaceMap`, `m_realJoined`, `m_geomJoined`,
-//! `m_omittedTarget`, `m_flags`), `WallJoinTweakGStep`, `CleanPairGStep`,
-//! `CutPairGStep`, `CDJoinInfo.m_wallJoinType` or the wall's own root fields
-//! tell the two apart. Measured against Revit's body by
-//! `tools/re/wall_corner_ends_vs_ifc.py`.
+//! FACT: `VWallDriver.m_controlJoinsSet` lists each join's walls
+//! (`m_JoinInfo.m_info`, `m_elemId`, `m_joinedEnd`) in the order Revit joined
+//! them, and its type (`m_JoinInfo.m_wallJoinType`, 0 a butt join, 1 a mitre).
+//! Counting only the walls that overlap a wall in elevation (the list names
+//! every wall that ends at the point, on every storey), an earlier wall wins:
+//! a wall stops at the near face of the perpendicular walls listed before it,
+//! meets flush a wall that continues it when that is listed before the next
+//! perpendicular wall, and otherwise runs through the perpendicular walls
+//! listed after it. The faces are those of each wall where its own line ends.
+//! The probe prints the fields the rule reads (the join lists, each wall's
+//! curve and type, each type's layers) and the steps and planes of the record,
+//! which the scorer's `DATA` lines carry beside Revit's and rvt-rs's end of
+//! each wall. `tools/re/wall_corner_ends_vs_ifc.py` measures it against
+//! Revit's body, per class of end and per predicate of the rule, and
+//! `reports/element-framing/RE-322-wall-corner-order.md` has the tallies.
 //!
 //! Output, one JSON object per line:
 //!   {"wall": id, "class": ..., "root": {...}, "curve": {"start": [x, y], "end": [x, y], "z": z} | null,
