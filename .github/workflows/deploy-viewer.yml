@@ -24,6 +24,9 @@ on:
       - '.github/workflows/deploy-viewer.yml'
   pull_request:
     branches: [main]
+    # A draft is built once it is marked ready (#1237); to check a draft's
+    # viewer first, dispatch this workflow on its branch.
+    types: [opened, synchronize, reopened, ready_for_review]
     paths:
       - 'src/**'
       - 'rvt-wasm/**'
@@ -51,6 +54,7 @@ concurrency:
 
 jobs:
   build:
+    if: github.event.pull_request.draft != true
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout
