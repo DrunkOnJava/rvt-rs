@@ -1,4 +1,4 @@
-//! RE-326 (#156, Discussion #112), discovery run: where does a family's own
+//! RE-327 (#156, Discussion #112), discovery run: where does a family's own
 //! document keep its extrusions, their sketches, their sketch planes and
 //! their start and end offsets, and does the file hold a saved display
 //! mesh of each form to measure a rebuilt solid against?
@@ -24,7 +24,7 @@
 //!                                                       primitives, triangles, bounding box, volume
 //!
 //! Usage:
-//!   cargo run --profile ci -p rvt-probes --example probe_re326_family_extrusions -- FAMILY.rfa
+//!   cargo run --profile ci -p rvt-probes --example probe_re327_family_extrusions -- FAMILY.rfa
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -273,7 +273,7 @@ fn mesh_box(primitives: &[Primitive]) -> Option<([f64; 3], [f64; 3])> {
 fn main() -> Result<()> {
     let path = std::env::args()
         .nth(1)
-        .ok_or_else(|| anyhow::anyhow!("usage: probe_re326_family_extrusions FAMILY.rfa"))?;
+        .ok_or_else(|| anyhow::anyhow!("usage: probe_re327_family_extrusions FAMILY.rfa"))?;
     let mut rf = RevitFile::open(&path)?;
     let release = rf.layout_release()?;
     println!("file {path} release {release}");
