@@ -20,6 +20,19 @@ on:
       - "CITATION.cff"
   pull_request:
     branches: [main]
+    # `ready_for_review` is not in the default set: without it, marking a
+    # draft ready would run nothing on its head (#1237).
+    types: [opened, synchronize, reopened, ready_for_review]
+
+# A draft pull request runs the jobs that tell its author whether the code
+# builds and reads the corpora: fmt, clippy, cargo doc, the PII guard, the
+# env lint, Corpus health, and the Ubuntu stable and MSRV builds with their
+# real-file checks. Every other job, and `CI passed` itself, waits until it
+# is marked ready, which runs the whole set on its head. `CI passed` is
+# skipped on a draft, never green, so a draft head can never carry the
+# required check from a partial run. In the three hours before this (#1237)
+# pull-request CI took 1,277 runner-minutes, about a third of the account's
+# 40 concurrent jobs, most of it on drafts' pushes.
 
 # Supersede a pull request's in-flight run when a new push arrives, so
 # back-to-back pushes do not burn runner-minutes on stale matrices. A run
@@ -120,21 +133,10 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
+      # A draft builds on Ubuntu only (stable and MSRV); ready, every OS. The
+      # MSRV entry's "1.87" is `rust-version` in Cargo.toml.
       matrix:
-        include:
-          - os: ubuntu-24.04
-            rust: stable
-            with_corpus: true
-          - os: windows-latest
-            rust: stable
-            with_corpus: true
-          - os: macos-latest
-            rust: stable
-            with_corpus: false
-          - os: ubuntu-24.04
-            rust: "1.87"  # MSRV, `rust-version` in Cargo.toml
-            label: msrv
-            with_corpus: false
+        include: ${{ fromJSON(github.event.pull_request.draft == true && '[{"os":"ubuntu-24.04","rust":"stable","with_corpus":true},{"os":"ubuntu-24.04","rust":"1.87","label":"msrv","with_corpus":false}]' || '[{"os":"ubuntu-24.04","rust":"stable","with_corpus":true},{"os":"windows-latest","rust":"stable","with_corpus":true},{"os":"macos-latest","rust":"stable","with_corpus":false},{"os":"ubuntu-24.04","rust":"1.87","label":"msrv","with_corpus":false}]') }}
     steps:
       # Windows' git default `core.autocrlf=true` mangles binary files
       # that aren't explicitly marked `binary` in `.gitattributes`.
@@ -289,6 +291,7 @@ jobs:
   # wrap panics there instead of passing.
   i686-overflow:
     name: 32-bit overflow checks (i686)
+    if: github.event.pull_request.draft != true
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     env:
@@ -450,6 +453,7 @@ jobs:
     # from silently regressing while semantic editing remains out of
     # scope.
     name: Writer patch corpus
+    if: github.event.pull_request.draft != true
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -521,6 +525,7 @@ jobs:
     # exports are small (24 instances each); the real projects carry most of
     # what this job validates.
     name: IfcOpenShell validates exports
+    if: github.event.pull_request.draft != true
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -842,7 +847,7 @@ jobs:
   # 2025-11-22, so its nightly is pinned near its release.
   semver:
     name: semver checks
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' && github.event.pull_request.draft != true
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -895,6 +900,7 @@ jobs:
   # high-value, low-noise version we can enforce on every push.
   bench-build:
     name: cargo bench --no-run
+    if: github.event.pull_request.draft != true
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -931,6 +937,7 @@ jobs:
   # properly on docs.rs before the release cut.
   docs-rs-preview:
     name: docs.rs build preview
+    if: github.event.pull_request.draft != true
     runs-on: ubuntu-24.04
     env:
       # Same flags docs.rs passes, plus -D warnings so this job fails
@@ -969,6 +976,7 @@ jobs:
   # after merge, twice (#236 -> #259, #934 -> #965).
   fuzz-check:
     name: fuzz targets build
+    if: github.event.pull_request.draft != true
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -989,6 +997,7 @@ jobs:
 
   python-wheel:
     name: Python wheel / ${{ matrix.os }}
+    if: github.event.pull_request.draft != true
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -1109,6 +1118,7 @@ jobs:
   # project grows.
   deny:
     name: cargo deny
+    if: github.event.pull_request.draft != true
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -1138,6 +1148,7 @@ jobs:
   # fresh advisories the moment they land.
   audit:
     name: cargo audit
+    if: github.event.pull_request.draft != true
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -1160,6 +1171,7 @@ jobs:
 
   viewer-dependencies:
     name: viewer dependency audit
+    if: github.event.pull_request.draft != true
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -1345,7 +1357,7 @@ jobs:
   # running or has failed, and renaming a job never touches the ruleset.
   ci-ok:
     name: CI passed
-    if: always()
+    if: always() && github.event.pull_request.draft != true
     needs:
       - fmt
       - clippy
