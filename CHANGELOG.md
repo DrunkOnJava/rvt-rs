@@ -16,50 +16,74 @@ from, and one export function, `rvt::ifc::run_export`, that `rvt-ifc`, the
 Python package, the viewer and the MCP server all build that model with.
 Exports follow the project phase as Revit's do (`rvt-ifc --phase` names
 another), write Revit 2024 Areas with a body and Revit 2015 to 2023 Areas
-where their boundary proves one, write the openings rectangular wall openings
-cut, draw a wall a floor covers in part as stepped and end walls at a corner
-in the order their record joins them, and export conduits, conduit fittings
-and gutters. A large export holds less memory at its peak, and Revit 2015 to
-2023 exports are faster than 0.13.0's. Much of it follows reports from
-hemanth1986 (#1075, #1247) and inevitable-co-ai (#1261). Thanks to both.
+where their boundary proves one, write the openings that rectangular wall
+openings cut, draw a wall a floor covers in part as stepped, end walls at a
+corner in the order their record joins them, draw a level beam whose record
+box is longer than its line as that box along the line, and export conduits,
+conduit fittings and gutters. A large export holds less memory at its peak,
+and every measured export is faster than 0.13.0's. Much of it follows
+reports from hemanth1986 (#1075, #1247) and inevitable-co-ai (#1261).
+Thanks to both.
 
 Measured against 0.13.0 on every reference model, Autodesk's sample projects,
 the held-out models and the family files (Measure run 41803457521, `main` at
 48930287 against v0.13.0):
-- every one of the 67 files timed exports faster, each timed against 0.13.0
+- every one of the 68 files timed exports faster, each timed against 0.13.0
   on one runner: Autodesk's Revit 2015 to 2023 samples in 0.53 to 0.74 of
   0.13.0's time, their 2024 to 2027 samples in 0.74 to 0.92, and the
   reference models and the BIM4LCA offices in 0.75 to 0.91. None peaks
   higher in memory (0.54 to 0.99 of 0.13.0's peak; the office as built 1,690
   to 913 MiB);
-- on the BIM4LCA office as built 30 more unfilled openings are written (24 at
-  building permit), each within 0.01 ft of Revit's box with its GlobalId,
-  name, sets and depth equal; all 30 Areas have a body equal to Revit's in
-  area and outline in both files, where none had one; 510 of 607 walls have
-  both ends within 0.001 ft of Revit's (482) and 430 of 589 at permit (422).
-  No value moves from equal to different. The values Revit's export does not
-  write are unchanged as built and go from 14 to 16 at permit, both on the
-  one opening Revit's export writes only as built, which the census counts
-  apart;
+- on the BIM4LCA office as built, 30 more unfilled openings are written,
+  each within 0.01 ft of Revit's box with its GlobalId, name, sets and depth
+  equal, so 58 of the unfilled openings in Revit's export are now written
+  (28 before); at building permit 25 more are written, 24 of them in Revit's
+  export (52, from 28) and one that Revit's export writes only as built, which the census counts
+  apart. A door's or wall's cut in a further host, curtain walls' and
+  cabinets' cuts are still not written. All 30 Areas of that one building
+  have a body equal to Revit's in area and outline, as built and at permit,
+  where none had one. 510 of 607 walls have both ends within 0.001 ft of
+  Revit's (482) and 430 of 589 at permit (422). No value moves from equal to
+  different. The values Revit's export does not write are unchanged as built
+  and go from 14 to 16 at permit, both on that one opening;
 - on the held-out Revit 2018 Vitoria project 1,514 elements and spaces pair
-  with Revit's (1,336), conduits, conduit fittings and gutters among them,
-  1,359 on Revit's storey (1,181), and the values Revit does not write stay
-  at 18; on eight held-out Revit 2024 to 2027 models 88 windows go from their
-  box to their saved mesh, every one exact against Revit's export (counts
-  only). Six Revit 2025 models draw 18 windows from their mesh, each exact,
-  and the two mitred walls of `18_WallJoins` now end where Revit's do (9 of 9
-  walls, from 7);
+  with Revit's (1,336), among them 102 conduits, 74 conduit fittings and 2
+  gutters, 1,359 on Revit's storey (1,181), and the values Revit does not
+  write stay at 18 (counts only). Conduits, their fittings and gutters are
+  drawn as their record box (Revit's bodies fill 0.37 and 0.31 of it for
+  conduits and fittings). On eight held-out Revit 2024 to 2027 models 88
+  windows go from their box to their saved mesh, every one exact against
+  Revit's export (counts only). Six Revit 2025 models draw 18 windows from
+  their mesh, each exact, and the two mitred walls of `18_WallJoins` now end
+  where Revit's do (9 of 9 walls, from 7);
 - Autodesk's `rac_basic_sample_project` saves from 2016 on leave out the 14
-  rooms of its Working Drawings phase, as Revit's export does by default;
+  rooms of its Working Drawings phase, the second of three;
   `rvt-ifc --phase "Working Drawings"` writes them.
 
-Every export's header names 0.14.0, so every `ifc.sha256` moves; the figures
-above are the scorers'. Not measured by this run: the stepped wall tops,
-which no default scorer reads (the entry's figures are from its own runs),
-#1075's 438 MB project, and the room phase rule against a Revit export made
-with the default setup. The held-out BIM Whale project's Areas stay
-undelivered (#1261), and a level beam drawn along its line takes the box's
-length, not the beam's.
+The run compares `main`, whose export header still named 0.13.0: 46 of the
+111 exports are byte for byte 0.13.0's and 65 moved, and the figures above
+are the scorers' on those. This release's own exports name 0.14.0, so every
+one differs from 0.13.0's there.
+
+Not measured by this run, and said in each entry:
+- the stepped wall tops, which no default scorer reads (the entry's figures
+  are from its pull request's runs, #1304): 24 of 607 walls as built and 18
+  of 589 at permit still differ from Revit's top, among them walls whose
+  layers Revit ends at different heights, and the GLB's stepped tops are not
+  scored;
+- the Areas outside that one building: on Revit 2024 the top storey, Levels
+  that are not building stories, a "Story Above" that is not the next Level,
+  Areas bounded partly by walls, and `Qto_SpaceBaseQuantities.Height`, which
+  is not written. No Revit 2015 to 2023 file with Areas has a Revit export:
+  3 `rac_advanced` bodies on 8 saves are new, checked against the 2024
+  save's, 22 of its 25 Areas stay unwritten on each of those saves, and the
+  held-out BIM Whale project's Areas stay undelivered (#1261);
+- the room phase rule against a Revit export made with the default setup;
+- conduits on Autodesk's MEP samples and Snowdon Towers Electrical, which are
+  counted, not scored;
+- #1075's 438 MB project.
+
+A level beam drawn along its line takes the box's length, not the beam's.
 
 ### Upgrading from 0.13
 
@@ -107,6 +131,23 @@ length, not the beam's.
   `rvt-ifc` prints its step notes after the decode (stderr only).
 - `rvt::research` (unstable): `native_element_parameters::read_defined_values`
   is replaced by `read_property_values`.
+- A plane face of a saved mesh split into regions that tile it is drawn
+  whole, so windows with such faces are drawn from their saved mesh in the
+  default export (Revit 2023 to 2027) where they kept their box.
+- A level beam drawn along its line (`partition_beam_box_along_axis`) gets no
+  `Qto_BeamBaseQuantities.Length`, `Span`, `Slope` or `Roll`, and no I
+  section.
+- `FieldType::Primitive`'s `size` for the descriptors with base byte 2 and 3
+  is 1 and 2 (it was 2 and 4), so `rvt-schema --json` output changes; the
+  schema-table JSON schema gains the `PointerArray` and `PointerContainer`
+  branches. The export diagnostics gain `exported.area_body_refusals` and a
+  skipped item's optional `phase`.
+- `rvt-ifc --phase`, `RevitFile::set_export_phase` and
+  `ExportOptions::with_phase` fail, listing the file's phases, for a phase the
+  file does not have, for a family, and for Revit 2015 and earlier, whose
+  phases the export does not apply.
+- New public items: `ifc::FillerSize` (the type of `IfcModel::filler_sizes`),
+  `ifc::step_writer::element_global_ids` and `ifc::schedule_csv::room_rows`.
 - `rvt-rs-mcp` is a crate of its own and needs Rust 1.88 to build; `rvt`
   still needs 1.87.
 
@@ -171,7 +212,8 @@ length, not the beam's.
   the unchanged RE-21 instance rule, with the record's box as the body and the
   Level its record names (a gutter's by its elevation). Against Revit's own
   IFC2X3 export of BIM-Speed's Vitoria `ALD26 Before` (Revit 2018), the one
-  file with an export that holds any of them, all 102 conduits, 74 conduit
+  file with an export open to scoring that holds any of them (its held-out
+  sibling pairs the same counts, counts only), all 102 conduits, 74 conduit
   fittings and 2 gutters the rule selects are elements of Revit's by `Tag` and
   none is outside it: 1,314 of its 1,321 elements are now written (1,136
   before), 1,305 of them in Revit's class or IFC4's for its IFC2X3 one
@@ -368,7 +410,8 @@ length, not the beam's.
   `reports/element-framing/RE-323-residual-field-encodings.md`.
 
 - **Exports of Revit 2015 to 2023 files take 0.54 to 0.78 of the time they
-  took, and 1.1 to 1.7 times as long as with 0.11.0 (#1237).** 0.12.0 took
+  took on `main` before this change, and 1.1 to 1.7 times as long as with
+  0.11.0 (#1237).** 0.12.0 took
   2.0 to 3.4 times as long as 0.11.0. Four changes, none of which changes an
   export (every Measure model, run 41793618569, 111 exports):
   - the read of the parameters named for a property decodes a record only if
