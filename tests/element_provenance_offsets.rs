@@ -12,12 +12,17 @@
 //! - a first-prologue partition element record decodes at its offset
 //!   (`decode_at_with_marker`) to the same ElementId, category and class tag,
 //!   and the id is the first bytes of the frame;
-//! - a second-prologue frame carries no id at its first bytes, sits inside the
-//!   partition record the entry names (`partition_record_chain`), whose first
-//!   bytes are the ElementId, and decodes as that element's frame
-//!   (`decode_frame_as`);
+//! - a second-prologue frame carries no id at its first bytes, and the record
+//!   header at the entry's `record_offset` starts with the ElementId, carries
+//!   the release's header constant and a `u32` size that spans the frame's
+//!   offset (read from the bytes, not through the reader that found the
+//!   record); the frame decodes as that element's (`decode_frame_as`);
 //! - a schema-walk instance decodes at its offset in `Global/Latest` to the
-//!   same self ElementId, as the walk decodes it;
+//!   same self ElementId, as the walk decodes it. No model below has such an
+//!   element, so that check has not run on any: the carrier's offsets are
+//!   unmeasured, and the walk inflates `Global/Latest` with
+//!   `inflate_stream_auto` where `rvt-dump` has its own routine, which this
+//!   test does not compare;
 //! - an Area's chain record, and a native record, start with the ElementId.
 //!
 //! The table is off unless asked for (`ExportOptions::with_element_provenance`,
@@ -40,8 +45,8 @@ use crate::element_parameters::nordic_dir;
 use rvt::ifc::element_provenance::{self, ElementCarrier, ElementProvenanceEntry};
 use rvt::ifc::{ExportOptions, run_export};
 use rvt::research::partition_element_records::{
-    PartitionRecordSpan, carries_no_element_id, decode_at_with_marker, decode_frame_as,
-    enclosing_record, file_bbox_marker, partition_record_chain,
+    carries_no_element_id, decode_at_with_marker, decode_frame_as, file_bbox_marker,
+    record_prologue_constant,
 };
 use rvt::walker::{InstanceField, WalkerLimits, find_self_id_field};
 use rvt::{RevitFile, compression, elem_table, elements, streams};
@@ -51,8 +56,10 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
-/// The partition record chains read so far, by stream.
-type Chains = HashMap<String, Vec<PartitionRecordSpan>>;
+fn u16_at(buf: &[u8], at: usize) -> Option<u16> {
+    buf.get(at..at.checked_add(2)?)
+        .map(|b| u16::from_le_bytes(b.try_into().expect("2 bytes")))
+}
 
 fn u32_at(buf: &[u8], at: usize) -> Option<u32> {
     buf.get(at..at.checked_add(4)?)
@@ -196,7 +203,6 @@ fn check_model(name: &str, path: &Path) -> BTreeMap<String, Checked> {
 
     let mut by_carrier: BTreeMap<String, Checked> = BTreeMap::new();
     let mut native = Checked::default();
-    let mut chains: Chains = HashMap::new();
 
     for (&id, entry) in &table.elements {
         let stat = by_carrier
@@ -252,7 +258,6 @@ fn check_model(name: &str, path: &Path) -> BTreeMap<String, Checked> {
                             inflated.bytes(),
                             (width, marker),
                             &declared,
-                            &mut chains,
                         ),
                         Err(_) => stat.not_checked += 1,
                     }
@@ -387,7 +392,10 @@ fn check_model(name: &str, path: &Path) -> BTreeMap<String, Checked> {
 
 /// Read the frame of a partition element record again: `at` is its stream and
 /// offset, `format` the width of an ElementId in the file and its bbox marker.
-#[allow(clippy::too_many_arguments)]
+/// A second-prologue frame is checked against the record header's own bytes,
+/// not against the reader that found the record: the header at `record_offset`
+/// starts with the ElementId, its `u32` size follows the id, and the frame's
+/// offset lies inside the `size` bytes from the header.
 fn check_partition_frame(
     stat: &mut Checked,
     id: u32,
@@ -396,7 +404,6 @@ fn check_partition_frame(
     buf: &[u8],
     format: (u8, Option<[u8; 8]>),
     declared: &BTreeSet<u32>,
-    chains: &mut Chains,
 ) {
     let (stream, offset) = at;
     let (width, marker) = format;
@@ -429,20 +436,17 @@ fn check_partition_frame(
         );
         return;
     }
+    let size = u32_at(buf, record_offset + usize::from(width)).map(|size| size as usize);
     let mut holds = id_stored_at_record
-        && record_offset < offset
-        && entry.enclosing_record_id == Some(id)
+        && size.is_some_and(|size| record_offset < offset && offset < record_offset + size)
         && if width == 8 {
             u64_at(buf, offset).is_some_and(carries_no_element_id)
         } else {
             id_at(buf, offset, width) != Some(key)
         };
     if let (8, Some(marker)) = (width, marker) {
-        let chain = chains
-            .entry(stream.to_string())
-            .or_insert_with(|| partition_record_chain(buf, &marker));
-        holds &= enclosing_record(chain.as_slice(), offset)
-            .is_some_and(|span| span.start == record_offset && span.element_id == key);
+        // The release's record header constant, at +0x0c of every header.
+        holds &= u16_at(buf, record_offset + 0x0c) == Some(record_prologue_constant(&marker));
         holds &= decode_frame_as(stream, buf, offset, id, &marker).is_some_and(|record| {
             record.element_id == id
                 && Some(record.class_tag) == entry.class_tag

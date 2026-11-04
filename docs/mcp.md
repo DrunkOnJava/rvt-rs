@@ -203,7 +203,7 @@ each present only where the model has it:
 | `area_body_refusal` | For an Area with no body, why. |
 | `carrier` | The kind of record the element was read from: `partition_element_record_first_prologue` (a frame that starts its partition record, the ElementId at its first bytes), `partition_element_record_second_prologue` (a frame inside its element's partition record, RE-30 and RE-35), `global_latest_schema_walk`, `partition_arc_wall`, `partition_area_record`, `partition_derived` (a row with no frame of its own, such as a material) or `other`. |
 | `stream` | The stream the record is in: `Partitions/NN`, or `Global/Latest` for the schema walk. |
-| `offset` | Where the record or frame starts in that stream inflated: the bytes `rvt-dump` writes as `Partitions_NN.decomp` (`Global_Latest.decomp` for the schema walk), so the offset indexes that file directly (#291). |
+| `offset` | Where the record or frame starts in that stream inflated: the bytes `rvt-dump` writes as `Partitions_NN.decomp`, so the offset indexes that file directly (#291). It is the frame the exporter selected among the element's frames, not necessarily the copy a body came from (see below). For the schema walk it indexes `Global/Latest` as the walk inflates it, which is unmeasured. |
 | `record_offset` | Where the ElementId is stored: the partition record header whose first bytes (8 from Revit 2024, 4 before) are the id. The frame's own `offset` for a first-prologue frame, the enclosing record's start for a second-prologue one. Absent for the schema walk, whose id is a field of the instance. |
 | `enclosing_record_id` | For a second-prologue frame, the ElementId of the partition record that encloses it, which is the element's (RE-35). |
 | `class_tag`, `class_name` | The class tag the record names (for an element record the `u16` at `+0x4a`) and the class it resolves to in the file's own `Formats/Latest`. `class` is the Revit class the export names the element by. |
@@ -219,9 +219,11 @@ element's record as `trust_markers`.
 The record fields come from the element provenance table (#1325), which the
 export builds only when asked (`rvt-ifc --element-provenance`) and which the
 server asks for in the decode it makes when it opens a model. It is large: the
-sidecar `rvt-ifc --diagnostics` writes grows from 52,677 to 7,370,747 bytes with
-it on the BIM4LCA office as built, from 27,588 to 571,989 on Core Interior and
-from 13,956 to 85,470 on RE1 Architecture (Measure run 41831418684). The server
+table is 4,462,401 bytes of compact JSON against 38,640 bytes of diagnostics
+without it on the BIM4LCA office as built (about 116 times); the CLI's
+pretty-printed sidecar grows from 52,677 to 7,370,747 bytes there, from 27,588 to
+571,989 on Core Interior and from 13,956 to 85,470 on RE1 Architecture (Measure
+run 41831418684). The server
 keeps it in memory beside the model and does not return it: `get_diagnostics`
 and the exports' summaries are the diagnostics without it, as `rvt-ifc` writes
 them by default. Building it is one pass over the walk the decode already made
@@ -230,11 +232,31 @@ model is printed by `tests/element_provenance_offsets.rs` (the `build` line of
 its report, Corpus health's `element-provenance` artifact); no figure is stated
 here yet. The fields are never written into the IFC.
 
-A partition element record is chosen per ElementId as the exporter chooses it:
-the frame with the greatest vertical extent and, on a tie, the newest. Which
-copy of its data a body reader took (the current one, or the copies that agree,
-RE-216) is that reader's rule, and `body_source` names the reader; these fields
-do not repeat it.
+When an element has several partition element record frames, `offset` is the
+one the exporter selected. On Revit 2024 and later
+(`select_instance_records`) that is the frame with the greatest vertical extent
+and, on a tie, the greater `(stream, offset)`, the stream name compared as text;
+on Revit 2008 to 2023 (`select_newest_instance_records`, RE-107) it is the
+newest, the highest-numbered partition and then the latest offset, with no extent
+test. A body reader may take another copy (the sketch-line readers take the
+current one, `current_partitions`, RE-216), and `native_record.stream` names the
+current native copy. So `offset` and `native_record.stream` can name different
+partitions, and neither is guaranteed to be the copy a body came from;
+`body_source` names the reader, not its copy.
+
+What the offsets have been checked on: Core Interior, the RE1 models, Einhoven
+and the BIM4LCA as-built office, by reading the bytes at each offset
+(`tests/element_provenance_offsets.rs`). Einhoven (Revit 2023) confirmed 13 of 13
+first-prologue frames and 71 of 71 native records. Not measured: Revit 2008 to
+2022, and the second-prologue path of 2023. The schema-walk carrier
+(`global_latest_schema_walk`) has no element on any of those models, so its
+offsets have not been checked: the walk inflates `Global/Latest` with
+`inflate_stream_auto` and `rvt-dump` with its own routine, and the two are not
+compared.
+
+The table lists at most 250,000 elements. An element past that has no record
+fields and says `provenance_omitted: true`; the file's `omitted_entries` counts
+them.
 
 ### Not provided yet
 

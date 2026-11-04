@@ -162,14 +162,17 @@ pub struct Computed {
     /// Where each decoded element was read from (#1325). The decode asks for
     /// it and it is taken out of `diagnostics`, so the diagnostics the tools
     /// return and the exports' summaries stay what `rvt-ifc --diagnostics`
-    /// writes without `--element-provenance`: the table is 7.4 MB of JSON on
-    /// the BIM4LCA office.
+    /// writes without `--element-provenance`: the table is 4.5 MB of compact
+    /// JSON on the BIM4LCA office.
     pub element_provenance: Option<ElementProvenanceTable>,
 }
 
 impl Computed {
-    fn new(mut run: ExportRun, file: FileProvenance) -> Self {
+    fn new(mut run: ExportRun, mut file: FileProvenance) -> Self {
         let element_provenance = run.diagnostics.decoded.element_provenance.take();
+        file.omitted_entries = element_provenance
+            .as_ref()
+            .map(|table| table.omitted_entries);
         let global_ids = element_global_ids(&run.model);
         let notes = note_texts(&run.notes);
         Self {
@@ -211,6 +214,7 @@ fn file_provenance(rf: &mut RevitFile) -> FileProvenance {
         elem_table,
         partition_count: Some(rf.partition_stream_names().len()),
         layout_release: rf.layout_release().ok(),
+        omitted_entries: None,
     }
 }
 

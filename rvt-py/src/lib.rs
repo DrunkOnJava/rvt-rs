@@ -1040,14 +1040,16 @@ fn read_metadata<'py>(py: Python<'py>, path: &str, redact: bool) -> PyResult<Bou
 
 /// One-shot helper: open a Revit file, run the default IFC exporter,
 /// and return the JSON diagnostics sidecar of the export `rvt_to_ifc`
-/// writes with the same `saved_meshes`.
+/// writes with the same `saved_meshes`. `element_provenance` is
+/// `RevitFile.export_diagnostics_json`'s.
 #[pyfunction]
-#[pyo3(signature = (path, saved_meshes = true, phase = None))]
+#[pyo3(signature = (path, saved_meshes = true, phase = None, element_provenance = false))]
 fn rvt_to_ifc_diagnostics(
     py: Python<'_>,
     path: &str,
     saved_meshes: bool,
     phase: Option<&Bound<'_, PyAny>>,
+    element_provenance: bool,
 ) -> PyResult<String> {
     let mut rf = RustRevitFile::open(path).map_err(to_py_io)?;
     let phase = phase_argument(phase)?;
@@ -1058,7 +1060,7 @@ fn rvt_to_ifc_diagnostics(
         walker::WalkerLimits::default(),
         saved_meshes,
         phase,
-        false,
+        element_provenance,
     )?;
     serde_json::to_string(&run.diagnostics).map_err(to_py_val)
 }

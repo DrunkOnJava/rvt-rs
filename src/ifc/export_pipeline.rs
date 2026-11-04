@@ -86,9 +86,9 @@ pub struct ExportOptions {
     pub phase: Option<String>,
     /// Also list where each decoded element was read from in the diagnostics
     /// (`decoded.element_provenance`, `rvt-ifc --element-provenance`, #1325).
-    /// Off by default: the table is large (7.4 MB of JSON on the BIM4LCA
-    /// office, 140 times the diagnostics without it) and never goes into the
-    /// IFC.
+    /// Off by default: the table is large (on the BIM4LCA office as built
+    /// 4,462,401 bytes of compact JSON against 38,640 bytes of diagnostics
+    /// without it, about 116 times) and never goes into the IFC.
     pub element_provenance: bool,
 }
 

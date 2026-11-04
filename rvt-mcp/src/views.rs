@@ -63,10 +63,10 @@ fn provenance(computed: &Computed, index: usize) -> Option<ElementProvenance> {
         return None;
     };
     let set = property_set.as_ref();
-    let source = type_guid
-        .as_deref()
-        .and_then(|tag| tag.parse::<u32>().ok())
-        .and_then(|id| computed.element_provenance.as_ref()?.get(id));
+    let id = type_guid.as_deref().and_then(|tag| tag.parse::<u32>().ok());
+    let table = computed.element_provenance.as_ref();
+    let source = id.and_then(|id| table?.get(id));
+    let omitted = id.is_some_and(|id| table.is_some_and(|table| table.is_omitted(id)));
     Some(ElementProvenance {
         element_id: type_guid.clone(),
         global_id: computed.global_ids.get(index).cloned().flatten(),
@@ -94,6 +94,7 @@ fn provenance(computed: &Computed, index: usize) -> Option<ElementProvenance> {
                 offset: native.offset,
                 class_name: native.class_name.clone(),
             }),
+        provenance_omitted: omitted.then_some(true),
     })
 }
 

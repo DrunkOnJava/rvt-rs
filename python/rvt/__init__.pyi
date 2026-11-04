@@ -427,9 +427,13 @@ def rvt_to_ifc(
 
 
 def rvt_to_ifc_diagnostics(
-    path: str, saved_meshes: bool = True, phase: str | int | None = None
+    path: str,
+    saved_meshes: bool = True,
+    phase: str | int | None = None,
+    element_provenance: bool = False,
 ) -> str:
     """One-shot: open ``path``, run ``RvtDocExporter``, return the
     JSON diagnostics sidecar of the export ``rvt_to_ifc`` writes with the
-    same ``saved_meshes`` and ``phase``.
+    same ``saved_meshes`` and ``phase``. ``element_provenance`` is
+    ``RevitFile.export_diagnostics_json``'s.
     """

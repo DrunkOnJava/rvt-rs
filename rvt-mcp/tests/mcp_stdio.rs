@@ -477,6 +477,17 @@ async fn drive(client: &Client, modern: bool, model: &Path, out: &Path, real_pro
 /// the file itself rather than through the server.
 fn record_checks(model: &Path, detail: &Value) {
     let provenance = &detail["provenance"];
+    if provenance["provenance_omitted"].as_bool() == Some(true) {
+        // Past the cap on the listed entries: the file says how many.
+        assert!(
+            detail["file"]["omitted_entries"]
+                .as_u64()
+                .is_some_and(|omitted| omitted > 0),
+            "{detail}"
+        );
+        assert!(provenance["carrier"].is_null());
+        return;
+    }
     let carrier = provenance["carrier"]
         .as_str()
         .expect("every decoded element has a carrier");

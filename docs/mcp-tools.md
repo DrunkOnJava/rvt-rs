@@ -327,8 +327,9 @@ Where one element's answer comes from. Every element in an answer carries one. F
 | `enclosing_record_id` | string \| null | no | For a frame inside another partition record, the ElementId of that record. |
 | `global_id` | string \| null | no | The IFC GlobalId the export writes: Revit's own where the file yields it, otherwise one derived from the document's identity and the ElementId. |
 | `native_record` | [NativeRecordOut](#nativerecordout) \| null | no | The element's native record, where the export's native passes indexed one. |
-| `offset` | integer \| null | no | Where the record or frame starts in that stream inflated. |
+| `offset` | integer \| null | no | Where the record or frame starts in that stream inflated: the frame the exporter selected (on Revit 2024 and later the greatest vertical extent, then the greater stream and offset; on 2008 to 2023 the newest). A body reader may take another copy, so it can name another partition than `native_record.stream`, and neither is guaranteed to be the copy a body came from. |
 | `profile_source` | string \| null | no | Where the plan profile of the body came from. |
+| `provenance_omitted` | boolean \| null | no | True when the record fields are absent because the provenance table lists at most 250,000 elements and this one is past them (`file.omitted_entries`). |
 | `record_offset` | integer \| null | no | Where the ElementId is stored: the partition record header it is the first bytes of. |
 | `space_outline_source` | string \| null | no | For a room or space, where its outline came from: `record_box` (the area of its box, not of the room), `stored_solid`, `stored_solid_faces`, `stored_solid_approximate`, `saved_mesh`, `family_body`, and for an Area `area_boundary` or `none`. |
 | `stream` | string \| null | no | The stream the record is in: `Partitions/NN` or `Global/Latest`. |
@@ -363,6 +364,7 @@ What the file itself says about where its elements come from.
 |---|---|---|---|
 | `elem_table` | [ElemTableProvenance](#elemtableprovenance) \| null | no | The record layout of `Global/ElemTable`. |
 | `layout_release` | integer \| null | no | The release whose record layout the file takes, which can be older than the saving release. |
+| `omitted_entries` | integer \| null | no | How many elements the provenance table left out past its cap of 250,000 listed; their record fields are absent and `provenance_omitted` says so. |
 | `partition_count` | integer \| null | no | How many `Partitions/NN` streams the file has. |
 | `revit_build` | string \| null | no | That release's build tag (from `BasicFileInfo`). |
 | `revit_release` | integer \| null | no | The Revit release that saved the file (from `BasicFileInfo`). |
@@ -443,7 +445,7 @@ The native record the native readers hold for an element.
 | `copies` | integer | yes | In how many partitions the element has a native record. |
 | `copy` | string | yes | Which copy this is: `only`, `current` (the current one of several, RE-216) or `unresolved`. |
 | `offset` | integer \| null | no | Where the record's header starts in that partition inflated. |
-| `stream` | string \| null | no | The partition of that copy, such as `Partitions/46`. |
+| `stream` | string \| null | no | The partition of that copy, such as `Partitions/46`. It can differ from `provenance.stream`, and neither is guaranteed to be the copy a body came from. |
 
 ### OutputOut
 

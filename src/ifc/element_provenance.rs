@@ -10,14 +10,25 @@
 //! (`decoded.element_provenance`) when the export is asked for it
 //! (`rvt-ifc --element-provenance`, `ExportOptions::with_element_provenance`,
 //! the MCP server's decode, Python's `element_provenance=True`): it is large,
-//! 7.4 MB of JSON against 53 KB of diagnostics on the BIM4LCA office as built
-//! (Measure run 41831418684), so it is off by default. It is never written
-//! into the IFC.
+//! 4,462,401 bytes of compact JSON against 38,640 bytes of diagnostics without
+//! it (about 116 times) on the BIM4LCA office as built, and the CLI's
+//! pretty-printed sidecar grows from 52,677 to 7,370,747 bytes (Measure run
+//! 41831418684), so it is off by default. It is never written into the IFC.
 //!
 //! An offset indexes the stream as `RevitFile::inflated_partition` returns it,
 //! which is what `rvt-dump` writes as `Partitions_NN.decomp` (#291). For the
 //! schema walk it indexes `Global/Latest` inflated as the walk inflates it
-//! (`Global_Latest.decomp`).
+//! (`inflate_stream_auto`); `rvt-dump` inflates that stream with its own
+//! routine, and the two are not compared. The schema-walk carrier had no
+//! element on any of the seven models the offsets test reads, so its offsets
+//! are unmeasured.
+//!
+//! The offset is the frame the exporter selected for the element's record.
+//! A body reader may take another copy of the element's data (the sketch-line
+//! readers take the current one, `native_document::current_partitions`,
+//! RE-216), and [`NativeRecordRef::stream`] names the current native copy, so
+//! `offset` and the native record's stream can name different partitions, and
+//! neither is guaranteed to be the copy a body came from.
 //!
 //! The table is built from what the export already read: the walk the handle
 //! memoised, the inflated partitions it holds and the index the native passes
@@ -62,6 +73,7 @@ pub enum ElementCarrier {
     PartitionElementRecordSecondPrologue,
     /// An instance of the `Global/Latest` schema walk (RE-14): the ElementId
     /// is the instance's own id field, at no fixed place from `offset`.
+    /// Unmeasured: no model of the offsets test has one.
     GlobalLatestSchemaWalk,
     /// A Revit 2023 ArcWall record in a partition (RE-14.3): the offset is
     /// that of the record's envelope.
@@ -74,7 +86,7 @@ pub enum ElementCarrier {
     /// material from its material record: no stream or offset is given.
     PartitionDerived,
     /// A record of a kind this table does not place, or a frame whose stream
-    /// could not be read again: no offset is given.
+    /// could not be read again: no stream or offset is given.
     Other,
 }
 
@@ -133,7 +145,9 @@ pub struct NativeRecordRef {
     pub copies: u32,
     /// Which copy [`Self::stream`] and [`Self::offset`] name.
     pub copy: NativeRecordCopy,
-    /// The partition of that copy, such as `Partitions/46`.
+    /// The partition of that copy, such as `Partitions/46`. It can differ
+    /// from [`ElementProvenanceEntry::stream`], the frame the exporter
+    /// selected, and neither is guaranteed to be the copy a body came from.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub stream: Option<String>,
     /// Where the record's header starts in the partition inflated, where the
@@ -161,7 +175,17 @@ pub struct ElementProvenanceEntry {
     /// or `Global/Latest`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub stream: Option<String>,
-    /// Where the record or frame starts in that stream inflated.
+    /// Where the record or frame starts in that stream inflated. For a
+    /// partition element record it is the frame the exporter selected among
+    /// the element's frames: on Revit 2024 and later the one with the
+    /// greatest vertical extent and, on a tie, the greater `(stream, offset)`
+    /// (`select_instance_records`, which compares the stream name as text);
+    /// on Revit 2008 to 2023 the newest, the highest-numbered partition and
+    /// then the latest offset, with no extent test
+    /// (`select_newest_instance_records`, RE-107). A body reader may take
+    /// another copy (the sketch-line readers take the current one, RE-216),
+    /// so this and [`NativeRecordRef::stream`] can name different partitions,
+    /// and neither is guaranteed to be the copy a body came from.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub offset: Option<usize>,
     /// Where the ElementId is stored: the partition record header whose first
@@ -229,7 +253,8 @@ pub struct CarrierCount {
 }
 
 /// How many elements have a native record and how many of those have its
-/// offset given.
+/// offset given, counted over every element with an ElementId, whatever the
+/// cap on the listed entries.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[non_exhaustive]
 pub struct NativeRecordCount {
@@ -272,7 +297,8 @@ pub struct ElementProvenanceTable {
     /// ([`ElementCarrier::as_str`]); every element, whatever the cap.
     #[serde(default)]
     pub by_carrier: BTreeMap<String, CarrierCount>,
-    /// The native records of the listed elements.
+    /// The native records of every element with an ElementId, the omitted
+    /// ones included.
     #[serde(default)]
     pub native: NativeRecordCount,
     /// Elements left out of [`Self::elements`] by
@@ -289,6 +315,18 @@ impl ElementProvenanceTable {
     pub fn get(&self, element_id: u32) -> Option<&ElementProvenanceEntry> {
         self.elements.get(&element_id)
     }
+
+    /// Whether `element_id` has no entry because the cap on the listed
+    /// entries ([`MAX_ELEMENT_PROVENANCE_ENTRIES`]) left it out: the cap
+    /// leaves out the highest ElementIds, so it is one past the last listed.
+    pub fn is_omitted(&self, element_id: u32) -> bool {
+        self.omitted_entries > 0
+            && self
+                .elements
+                .keys()
+                .next_back()
+                .is_some_and(|last| element_id > *last)
+    }
 }
 
 /// The field of an element-record element that holds its `BuiltInCategory`.
@@ -298,6 +336,16 @@ const BUILTIN_CATEGORY_FIELD: &str = "m_builtinCategory";
 /// (Revit 2024 and later) rather than a `u32`.
 fn wide_record_ids(version: u32) -> bool {
     !crate::partition_element_records_2023::is_32bit_release(version)
+}
+
+/// An entry whose record cannot be read again: carrier `Other`, and no stream
+/// or offset to give.
+fn unplace(entry: &mut ElementProvenanceEntry) {
+    entry.carrier = ElementCarrier::Other;
+    entry.stream = None;
+    entry.offset = None;
+    entry.record_offset = None;
+    entry.enclosing_record_id = None;
 }
 
 fn field_integer(element: &DecodedElement, wanted: &str) -> Option<i64> {
@@ -376,7 +424,7 @@ fn classify_frames(
     let Some(version) = layout_release else {
         for id in pending.values().flatten() {
             if let Some(entry) = entries.get_mut(id) {
-                entry.carrier = ElementCarrier::Other;
+                unplace(entry);
             }
         }
         return;
@@ -403,7 +451,7 @@ fn classify_frames(
         let Ok(inflated) = rf.inflated_partition(&stream) else {
             for id in &ids {
                 if let Some(entry) = entries.get_mut(id) {
-                    entry.carrier = ElementCarrier::Other;
+                    unplace(entry);
                 }
             }
             continue;
@@ -564,7 +612,9 @@ pub fn build(rf: &mut RevitFile, limits: WalkerLimits) -> ElementProvenanceTable
     let mut tag_by_name: HashMap<&str, u16> = HashMap::new();
     if let Some(classes) = classes {
         for class in &classes.classes {
-            tag_by_name.entry(class.name.as_str()).or_insert(class.tag);
+            // The last class of a name wins, as in the walk's own lookup by
+            // name.
+            tag_by_name.insert(class.name.as_str(), class.tag);
         }
     }
 

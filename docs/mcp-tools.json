@@ -688,7 +688,7 @@
               "description": "The element's native record, where the export's native passes indexed one."
             },
             "offset": {
-              "description": "Where the record or frame starts in that stream inflated.",
+              "description": "Where the record or frame starts in that stream inflated: the frame the exporter selected (on Revit 2024 and later the greatest vertical extent, then the greater stream and offset; on 2008 to 2023 the newest). A body reader may take another copy, so it can name another partition than `native_record.stream`, and neither is guaranteed to be the copy a body came from.",
               "format": "uint",
               "minimum": 0,
               "type": [
@@ -700,6 +700,13 @@
               "description": "Where the plan profile of the body came from.",
               "type": [
                 "string",
+                "null"
+              ]
+            },
+            "provenance_omitted": {
+              "description": "True when the record fields are absent because the provenance table lists at most 250,000 elements and this one is past them (`file.omitted_entries`).",
+              "type": [
+                "boolean",
                 "null"
               ]
             },
@@ -768,6 +775,15 @@
             "layout_release": {
               "description": "The release whose record layout the file takes, which can be older than the saving release.",
               "format": "uint32",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "omitted_entries": {
+              "description": "How many elements the provenance table left out past its cap of 250,000 listed; their record fields are absent and `provenance_omitted` says so.",
+              "format": "uint",
               "minimum": 0,
               "type": [
                 "integer",
@@ -864,7 +880,7 @@
               ]
             },
             "stream": {
-              "description": "The partition of that copy, such as `Partitions/46`.",
+              "description": "The partition of that copy, such as `Partitions/46`. It can differ from `provenance.stream`, and neither is guaranteed to be the copy a body came from.",
               "type": [
                 "string",
                 "null"
@@ -1266,6 +1282,15 @@
                 "null"
               ]
             },
+            "omitted_entries": {
+              "description": "How many elements the provenance table left out past its cap of 250,000 listed; their record fields are absent and `provenance_omitted` says so.",
+              "format": "uint",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
             "partition_count": {
               "description": "How many `Partitions/NN` streams the file has.",
               "format": "uint",
@@ -1623,7 +1648,7 @@
               "description": "The element's native record, where the export's native passes indexed one."
             },
             "offset": {
-              "description": "Where the record or frame starts in that stream inflated.",
+              "description": "Where the record or frame starts in that stream inflated: the frame the exporter selected (on Revit 2024 and later the greatest vertical extent, then the greater stream and offset; on 2008 to 2023 the newest). A body reader may take another copy, so it can name another partition than `native_record.stream`, and neither is guaranteed to be the copy a body came from.",
               "format": "uint",
               "minimum": 0,
               "type": [
@@ -1635,6 +1660,13 @@
               "description": "Where the plan profile of the body came from.",
               "type": [
                 "string",
+                "null"
+              ]
+            },
+            "provenance_omitted": {
+              "description": "True when the record fields are absent because the provenance table lists at most 250,000 elements and this one is past them (`file.omitted_entries`).",
+              "type": [
+                "boolean",
                 "null"
               ]
             },
@@ -1731,7 +1763,7 @@
               ]
             },
             "stream": {
-              "description": "The partition of that copy, such as `Partitions/46`.",
+              "description": "The partition of that copy, such as `Partitions/46`. It can differ from `provenance.stream`, and neither is guaranteed to be the copy a body came from.",
               "type": [
                 "string",
                 "null"
@@ -1994,7 +2026,7 @@
               "description": "The element's native record, where the export's native passes indexed one."
             },
             "offset": {
-              "description": "Where the record or frame starts in that stream inflated.",
+              "description": "Where the record or frame starts in that stream inflated: the frame the exporter selected (on Revit 2024 and later the greatest vertical extent, then the greater stream and offset; on 2008 to 2023 the newest). A body reader may take another copy, so it can name another partition than `native_record.stream`, and neither is guaranteed to be the copy a body came from.",
               "format": "uint",
               "minimum": 0,
               "type": [
@@ -2006,6 +2038,13 @@
               "description": "Where the plan profile of the body came from.",
               "type": [
                 "string",
+                "null"
+              ]
+            },
+            "provenance_omitted": {
+              "description": "True when the record fields are absent because the provenance table lists at most 250,000 elements and this one is past them (`file.omitted_entries`).",
+              "type": [
+                "boolean",
                 "null"
               ]
             },
@@ -2065,7 +2104,7 @@
               ]
             },
             "stream": {
-              "description": "The partition of that copy, such as `Partitions/46`.",
+              "description": "The partition of that copy, such as `Partitions/46`. It can differ from `provenance.stream`, and neither is guaranteed to be the copy a body came from.",
               "type": [
                 "string",
                 "null"
@@ -2352,6 +2391,15 @@
             "layout_release": {
               "description": "The release whose record layout the file takes, which can be older than the saving release.",
               "format": "uint32",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "omitted_entries": {
+              "description": "How many elements the provenance table left out past its cap of 250,000 listed; their record fields are absent and `provenance_omitted` says so.",
+              "format": "uint",
               "minimum": 0,
               "type": [
                 "integer",

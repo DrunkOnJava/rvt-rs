@@ -195,7 +195,7 @@
         },
         "element_provenance": {
           "type": "object",
-          "description": "Where each decoded element was read from, by ElementId (#1325): the carrier of its record, the stream and byte offset in that stream inflated (the bytes rvt-dump writes as Partitions_NN.decomp), where its ElementId is stored, its class tag and the class that names in the file's own schema, and its native record. Not written in the IFC file. Present only when asked for (rvt-ifc --element-provenance): it is 140 times the rest of the sidecar on the BIM4LCA office. Absent for a placeholder export. An element whose offset cannot be given is listed without one and counted in by_carrier.",
+          "description": "Where each decoded element was read from, by ElementId (#1325): the carrier of its record, the stream and byte offset in that stream inflated (the bytes rvt-dump writes as Partitions_NN.decomp), where its ElementId is stored, its class tag and the class that names in the file's own schema, and its native record. Not written in the IFC file. Present only when asked for (rvt-ifc --element-provenance): it is about 116 times the rest of the diagnostics in compact JSON on the BIM4LCA office as built (4,462,401 bytes against 38,640), and 140 times in the CLI's pretty-printed sidecar. Absent for a placeholder export. An element whose offset cannot be given is listed without one and counted in by_carrier.",
           "properties": {
             "layout_release": {
               "type": "integer",
@@ -236,7 +236,7 @@
             },
             "native": {
               "type": "object",
-              "description": "The listed elements' native records: how many there are, how many have their partition and offset given, how many elements have a copy in several partitions (RE-216) and how many of those have no copy named current.",
+              "description": "The native records of every element with an ElementId, the omitted ones included: how many there are, how many have their partition and offset given, how many elements have a copy in several partitions (RE-216) and how many of those have no copy named current.",
               "properties": {
                 "with_record": { "type": "integer", "minimum": 0 },
                 "located": { "type": "integer", "minimum": 0 },
@@ -280,7 +280,7 @@
                   "offset": {
                     "type": "integer",
                     "minimum": 0,
-                    "description": "Where the record or frame starts in that stream inflated."
+                    "description": "Where the record or frame starts in that stream inflated: the frame the exporter selected among the element's frames (Revit 2024 and later: the greatest vertical extent, then the greater stream and offset; 2008 to 2023: the newest), which a body reader may not have taken. It and native.stream can name different partitions, and neither is guaranteed to be the copy a body came from. For the global_latest_schema_walk carrier it indexes Global/Latest as the walk inflates it; that carrier is unmeasured."
                   },
                   "record_offset": {
                     "type": "integer",
@@ -321,7 +321,10 @@
                         "enum": ["only", "current", "unresolved"],
                         "description": "Which copy stream and offset name: the only one, the current one of several (RE-216), or none because none could be named current."
                       },
-                      "stream": { "type": "string" },
+                      "stream": {
+                        "type": "string",
+                        "description": "The partition of that copy. It can differ from the element's stream, and neither is guaranteed to be the copy a body came from."
+                      },
                       "offset": {
                         "type": "integer",
                         "minimum": 0,
