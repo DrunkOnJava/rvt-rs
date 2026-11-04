@@ -1024,6 +1024,34 @@ and earlier write every room, as every element: both phase rules start at
 Revit 2016 (#1332). The Python bindings and the viewer follow the default
 (`reports/element-framing/RE-326-room-phases.md`).
 
+**RE-328 (2026-11-04)** finds which test of `beam_body` keeps a beam as its
+record box when its element data holds one location line (#1247), and draws
+one class of them. Every beam of Autodesk's 2024 samples with one line that
+the check declines fails the closure of the section solve, bar 2 of Snowdon's
+whose line leaves the box by up to 100 ft. 34 of the 52 are level, have no
+Cross-Section Rotation and have a record box longer than their line, by at
+most a foot; RE-49 took 15 of Snowdon's for beams with oblique end cuts, and
+the saved mesh says they are rectangles. Those 34 (17 Snowdon, 9 rst_basic,
+8 rac_advanced) are now drawn as the record box's extents along the line,
+`BodySource` `partition_beam_box_along_axis`. Its direction and its section
+come from the line and the box, and the section across the line is the beam's
+own saved mesh's (Revit's tessellation, not an IFC export; there is no Revit
+IFC of a 2024 structural model) on all 25 whose mesh decodes whole. **Its
+length is the box's, not the beam's**: the mesh's ends are the body's on 16 of
+the 25 and end inside it on 9, by more than 0.01 ft and at most 1 ft (the
+record box's extent along the line runs past the mesh on 21 of the 25, by up
+to 1 ft), so it can run past the beam at its ends. The line must be level
+and within 25 degrees of a model axis, the only angles measured. The 9
+rst_basic beams have no decodable mesh and sit on a model axis, where the
+body is their record box. It gets no
+`Qto_BeamBaseQuantities.Length` (so no `Span`, `Slope` or `Roll`) and no I
+section; `AxisLength` is the line's length and `BodyLength` the body's. 16
+sloped, rolled beams of rst_basic and the 2 Snowdon beams keep their box. The
+beams that were drawn along their line are unchanged, and the BIM4LCA office
+is byte for byte the same. The probe for a private file is
+`probe_re328_beam_rejections`
+(`reports/element-framing/RE-328-beam-rejections.md`).
+
 **RE-281 (2026-10-30)** reads the project's phases and each element's saved
 parameters on Revit 2015 to 2022, experimentally, and the phase order on
 Revit 2023, which `native_element::decode_base` refused with every 2015 to

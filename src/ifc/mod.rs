@@ -2931,7 +2931,12 @@ fn record_base_elevation_feet(entity: &entities::IfcEntity) -> Option<f64> {
     // the two plan ends of the run, and on the recorded edge no
     // column cut moves the box's `z` at either end — all 256 agree
     // with Revit's own world `z` exactly — so the elevation this
-    // reads is the same byte in every case.
+    // reads is the same byte in every case. So is a beam drawn as its record
+    // box along its line (RE-328): it is still placed at the record box's
+    // plan centre and base, so `location_feet` is that base exactly as for
+    // the record box it replaces. It is listed so that these beams bind by
+    // their base as they did before that body; leaving it out would change
+    // a written value (their storey binding), listing it changes none.
     let from_record = property_set.as_ref().is_some_and(|set| {
         set.properties.iter().any(|property| {
             property.name == "BodySource"
@@ -2939,6 +2944,7 @@ fn record_base_elevation_feet(entity: &entities::IfcEntity) -> Option<f64> {
                     &property.value,
                     entities::PropertyValue::Text(text)
                         if text == RECORD_BBOX_BODY_SOURCE
+                            || text == export_content::BEAM_BOX_BODY_SOURCE
                             || text == crate::element_record_wall_joins::WALL_BODY_JOIN_TRIMMED
                             || text == crate::element_record_column_cuts::COLUMN_BODY_JOIN_CUT
                             || text == crate::element_record_beam_cuts::BEAM_BODY_COLUMN_CUT
@@ -4385,7 +4391,12 @@ fn exported_model_diagnostics(model: &IfcModel) -> ExportedModelDiagnostics {
             }
             if let Some(source) = source {
                 *body_sources.entry(source.clone()).or_insert(0) += 1;
-                if source == export_content::RECORD_BBOX_BODY_SOURCE && !profile_resolved {
+                // A beam drawn as its record box along its line (RE-328) is
+                // still the record box's extents, only turned to the line.
+                if (source == export_content::RECORD_BBOX_BODY_SOURCE
+                    || source == export_content::BEAM_BOX_BODY_SOURCE)
+                    && !profile_resolved
+                {
                     bounding_box_bodies += 1;
                 }
             }
