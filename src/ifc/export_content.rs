@@ -1666,9 +1666,9 @@ fn wall_geometry_from_decoded(decoded: &DecodedElement) -> Option<RecoveredWallG
 fn level_parameter_property_set(decoded: &DecodedElement, ifc_type: &str) -> Option<PropertySet> {
     use crate::partition_level_parameters as lp;
     // RE-319: the names Revit gives a conduit's, conduit fitting's or
-    // gutter's Level parameter are measured on no export (the one export that
-    // holds them is Revit 2018's IFC2X3, which writes no `Constraints` set on
-    // them), so none is written.
+    // gutter's Level parameter are not measured: the one export that holds
+    // them, Revit 2018's IFC2X3, writes no Revit parameter-group set on any
+    // element. So none is written.
     if matches!(
         ifc_type,
         "IFCCABLECARRIERSEGMENT" | "IFCCABLECARRIERFITTING"
