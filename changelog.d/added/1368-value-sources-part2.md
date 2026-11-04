@@ -9,6 +9,8 @@
   holds the same value); and a pipe drawn from its connector entries lists
   the two entries that are its ends (`pipe_connectors`). The readers still
   without a source are area boundary lines, roof slopes and extrusions and
-  family extrusions (`docs/export-diagnostics.md`). Nothing is noted unless the
-  table is asked for, so the default export and its diagnostics are
-  unchanged.
+  family extrusions (`docs/export-diagnostics.md`). These sources add 1.2% to
+  the BIM4LCA office's table (6,131,584 to 6,202,130 bytes of compact JSON) and
+  2.0% to Core Interior's (718,828 to 733,326; Measure run 41890994176).
+  Nothing is noted unless the table is asked for, so the default export and its
+  diagnostics are unchanged.
