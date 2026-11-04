@@ -142,8 +142,7 @@ use std::collections::{BTreeMap, BTreeSet};
 /// Releases where the Area record is measured: Revit 2015 to 2023 (RE-324),
 /// 2024 (RE-191), and 2025 to 2027, whose records are 2024's after the
 /// entries some carry before their body (RE-333): Autodesk's `rac_advanced`
-/// gets the Areas of its 2024 save, and Snowdon Towers Architectural (2025)
-/// the 101 of Revit's own export.
+/// gets the Areas of its 2024 save.
 pub const AREA_SUPPORTED_REVIT_VERSIONS: &[u32] = &[
     2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026, 2027,
 ];
@@ -210,6 +209,13 @@ pub const AREA_JOINED_FIELD: &str = "m_area_body_joined";
 /// The field of an Area, true where its region is the loop of Revit's plan
 /// topology (RE-333) and not the arrangement of its lines.
 pub const AREA_TOPOLOGY_FIELD: &str = "m_area_body_plan_topology";
+
+/// The field of an Area that holds the arcs of its outline and holes, where it
+/// has any (RE-333): a vector with one entry for the outline and one for each
+/// hole, each a vector with one entry for each edge, from a vertex to the next,
+/// that is empty for a line and holds the x and y of the arc's middle point for
+/// an arc.
+pub const AREA_ARCS_FIELD: &str = "m_area_body_arcs";
 
 /// How far a boundary line's height may lie from its Level's, feet.
 pub const AREA_LEVEL_TOLERANCE_FEET: f64 = 1e-3;
@@ -293,8 +299,8 @@ const CHAIN_ENTRY_LEN: usize = 22;
 /// The bytes of the entries before the body of the chain record at
 /// `start..end`, or `None` where they do not fit or an entry's second word
 /// is not -1. No 2024 file read here has any; files saved by Revit 2025 to
-/// 2027 may (RE1 Architecture and Snowdon Towers on 2025, `rac_advanced` on
-/// 2027), and the body after them is the one a record without them has
+/// 2027 may (RE1 Architecture on 2025, `rac_advanced` on 2027, and the
+/// Snowdon Towers 2024 samples), and the body after them is the one a record without them has
 /// (RE-333).
 fn chain_entries(buf: &[u8], start: usize, end: usize) -> Option<usize> {
     let count = usize::from(le_bytes::u16_at(buf, start + CHAIN_ENTRY_COUNT_OFFSET)?);
@@ -1145,7 +1151,9 @@ fn locate(
         Some(Ok(region)) => (
             Ok(AreaFace {
                 outer: region.outer,
+                outer_arcs: region.outer_arcs,
                 holes: region.holes,
+                hole_arcs: region.hole_arcs,
                 line_ids: region.line_ids,
                 joined: false,
             }),
@@ -1305,6 +1313,38 @@ fn area_bodies(
     out
 }
 
+/// The arcs of a face as [`AREA_ARCS_FIELD`] holds them, or `None` where
+/// every edge is a line.
+fn arcs_field(face: &AreaFace) -> Option<InstanceField> {
+    let edges = |arcs: &[Option<(f64, f64)>]| {
+        InstanceField::Vector(
+            arcs.iter()
+                .map(|arc| {
+                    InstanceField::Vector(match arc {
+                        None => Vec::new(),
+                        Some((x, y)) => vec![
+                            InstanceField::Float { value: *x, size: 8 },
+                            InstanceField::Float { value: *y, size: 8 },
+                        ],
+                    })
+                })
+                .collect(),
+        )
+    };
+    let curved = |arcs: &[Option<(f64, f64)>]| arcs.iter().any(Option::is_some);
+    if !curved(&face.outer_arcs) && !face.hole_arcs.iter().any(|arcs| curved(arcs)) {
+        return None;
+    }
+    let mut loops = vec![edges(&face.outer_arcs)];
+    for (index, hole) in face.holes.iter().enumerate() {
+        match face.hole_arcs.get(index) {
+            Some(arcs) => loops.push(edges(arcs)),
+            None => loops.push(edges(&vec![None; hole.len()])),
+        }
+    }
+    Some(InstanceField::Vector(loops))
+}
+
 /// Every placed Area of a Revit 2015 to 2027 file, as a `DecodedElement` of
 /// class `Area` with its number, name and Level where they are read, and its
 /// boundary, base and height where they are proven (RE-317, RE-324). On 2015
@@ -1442,6 +1482,7 @@ pub fn areas_from_partition_chain_records(
                 ));
             }
             if let Some(body) = bodies.drawn.remove(&id) {
+                let arcs = arcs_field(&body.face);
                 let profile = PlanProfile {
                     outer_xy: body.face.outer,
                     inner_xy: body.face.holes,
@@ -1469,6 +1510,9 @@ pub fn areas_from_partition_chain_records(
                         size: 8,
                     },
                 ));
+                if let Some(arcs) = arcs {
+                    fields.push((AREA_ARCS_FIELD.into(), arcs));
+                }
                 if body.joined {
                     fields.push((AREA_JOINED_FIELD.into(), InstanceField::Bool(true)));
                 }
