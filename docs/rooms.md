@@ -78,7 +78,7 @@ On Warmond, RE-316 closes 6 of the 8 rooms that kept their box (5 were off in ar
 
 A model with no rooms in Revit's export (the other R2025 models, RE1 Electrical, Mechanical and Plumbing) scores 0 of 0. One held-out model writes none of Revit's spaces: BIM Whale's 2021 project (8), whose spaces are Areas, which rvt-rs reads on Revit 2024 only. Vitoria's 2018 project exported no element, and none of its 73 spaces, before PR #1286 (#1261): its spent `ALD26 Before` now writes all 73 (run 41707934595, full output, in the row above), and its held-out sibling `ALD26 Project` writes 73 `IfcSpace` against Revit's 73 (counts only, not scored here).
 
-The other held-out figures are Measure run 41728355227 (`main` at 7fd339e2), counts only; the office's Area figures are Measure run __MERGED_RUN__ (RE-317), which leaves every held-out count as it was. On the 2026 house and on Gdynia, every room's area is right where it is scored, but none of their outlines is within 0.01 ft of Revit's; the files are held out, so why is not examined.
+The other held-out figures are Measure run 41728355227 (`main` at 7fd339e2), counts only; the office's Area figures are Measure run 41740909229 (RE-317), which leaves every held-out count as it was. On the 2026 house and on Gdynia, every room's area is right where it is scored, but none of their outlines is within 0.01 ft of Revit's; the files are held out, so why is not examined.
 
 What the misses are:
 
