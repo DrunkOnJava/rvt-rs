@@ -181,10 +181,12 @@ env:
 jobs:
   # The work is CPU-bound (run 41748430211: 164 task-minutes in a 43-minute
   # Measure step on one 4-core runner), so each side runs as shards on runners
-  # of their own: each BIM4LCA office file, Autodesk's samples, and every
-  # other model with the families (four jobs a side; in run 41760244593 each
-  # third of the samples took 3 minutes to score after 2.5 of setup, too
-  # little to keep a runner of its own). A run given
+  # of their own: each BIM4LCA office file, Autodesk's samples in two halves
+  # by release (2008 to 2023 and 2024 on: 477 and 658 MB, 2024 alone 328),
+  # the held-out and spent models, and every other model with the families
+  # (six jobs a side). In run 41761654404, with four a side, the
+  # samples took 11.7 minutes to score and the rest, held-out models
+  # included, 14.7, against 6.1 and 9.0 for the office files. A run given
   # `models`, `sample_years` or `probe_pair_release` keeps one shard, since a
   # pair probe needs both releases' samples on one runner. Compare merges the
   # shards back into the measure-head and measure-base artifacts.
@@ -267,11 +269,16 @@ jobs:
                   shards += [shard(name, models=model, nordic=True)
                              for name, model in offices.items()]
               if flag("SAMPLES"):
-                  # "-" is a pattern no model's name matches, so this shard
-                  # measures samples only.
-                  shards.append(shard("samples", models="-", samples=True))
+                  # "-" is a pattern no model's name matches, so these shards
+                  # measure samples only.
+                  shards += [shard("samples-" + years.replace(" ", "-"), models="-",
+                                   samples=True, years=years)
+                             for years in ("2008 2023", "2024 2099")]
+              if flag("HOLDOUT"):
+                  # The held-out fetch brings the spent pairs too.
+                  shards.append(shard("held-out", models="holdout-* spent-*", holdout=True))
               skip = " ".join(offices.values()) if flag("NORDIC") else ""
-              shards.append(shard("rest", skip=skip, **rest))
+              shards.append(shard("rest", skip=skip, **dict(rest, holdout=False)))
           sides = ["head", "base"] if base else ["head"]
           include = [dict(side=side, **s) for side in sides for s in shards]
           print("matrix=" + json.dumps({"include": include}))
