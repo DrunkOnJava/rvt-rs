@@ -66,6 +66,60 @@ pub(super) fn attach_roof_profiles(
     }
 }
 
+/// The readers that note a sketch line's geometry (#1368).
+const ROOF_LINE_READERS: &[&str] = &[
+    "sketch_line",
+    "sketch_curve",
+    "sketch_circle",
+    "sketch_spline",
+];
+
+/// Note for `roof`, as one source named `reader`, the places the readers in
+/// `readers` noted for the sketch lines `lines`: one part for each line, the
+/// first reader that noted it (#1368). `current` where a line's copy was
+/// chosen as the current partition's.
+fn note_line_source(
+    rf: &mut RevitFile,
+    roof: u32,
+    reader: &str,
+    lines: &BTreeSet<u32>,
+    readers: &[&str],
+) {
+    use crate::ifc::element_provenance::{CopyRule, SourcePart, ValueSource};
+    let mut parts = Vec::new();
+    let mut current = false;
+    if let Some(noted) = rf.value_sources() {
+        for line in lines {
+            let note = noted.get(line).and_then(|sources| {
+                sources
+                    .iter()
+                    .find(|s| readers.contains(&s.reader.as_str()))
+            });
+            let Some((note, stream, offset)) =
+                note.and_then(|n| Some((n, n.stream.clone()?, n.offset?)))
+            else {
+                continue;
+            };
+            current |= note.rule == CopyRule::Current;
+            parts.push(SourcePart {
+                element_id: *line,
+                stream,
+                offset,
+            });
+        }
+    }
+    if parts.is_empty() {
+        return;
+    }
+    let rule = if current {
+        CopyRule::Current
+    } else {
+        CopyRule::Agreeing
+    };
+    let copies = parts.len();
+    rf.note_value_source(roof, ValueSource::from_parts(reader, rule, copies, parts));
+}
+
 /// A roof by extrusion's section (RE-211): its top and its underside, each
 /// `(u, z)` with `u` rising along the plane its sketch is in, and the model
 /// axis it runs along.
@@ -322,6 +376,7 @@ pub(super) fn attach_extrusion_roofs(
     if boxes.is_empty() {
         return;
     }
+    let recording = rf.recording_value_sources();
     let declared = match crate::elem_table::parse_records(rf) {
         Ok(records) => crate::elem_table::declared_ids(&records),
         Err(_) => return,
@@ -506,6 +561,29 @@ pub(super) fn attach_extrusion_roofs(
         if !reproduces {
             continue;
         }
+        if recording {
+            use crate::ifc::element_provenance::{CopyRule, SourcePart, ValueSource};
+            // The first frame of each of the roof's sketch lines, the lines'
+            // own data, and the type whose layers gave the thickness.
+            let frames: Vec<SourcePart> = lines_of[&id]
+                .iter()
+                .map(|line| SourcePart {
+                    element_id: line.element_id,
+                    stream: line.stream.clone(),
+                    offset: line.offset,
+                })
+                .collect();
+            let copies = frames.len();
+            rf.note_value_source(
+                id,
+                ValueSource::from_parts("sketch_lines", CopyRule::Frame, copies, frames),
+            );
+            let used: BTreeSet<u32> = lines_of[&id].iter().map(|line| line.element_id).collect();
+            note_line_source(rf, id, "roof_line_data", &used, ROOF_LINE_READERS);
+            if let Some(type_id) = type_of(roof) {
+                rf.attribute_value_source(type_id, "type_layers", id, "roof_type_layers");
+            }
+        }
         roof.fields.push((
             ROOF_EXTRUSION_AXIS_FIELD.into(),
             InstanceField::Integer {
@@ -638,6 +716,7 @@ pub(super) fn attach_roof_slopes(
     if roofs.is_empty() {
         return;
     }
+    let recording = rf.recording_value_sources();
     let declared = match crate::elem_table::parse_records(rf) {
         Ok(records) => crate::elem_table::declared_ids(&records),
         Err(_) => return,
@@ -825,6 +904,38 @@ pub(super) fn attach_roof_slopes(
         let thickness: f64 = type_layers.iter().map(|layer| layer.width_feet).sum();
         if !(thickness.is_finite() && thickness > 0.0) {
             continue;
+        }
+        if recording {
+            // The sketch lines whose slope blocks and geometry the edges were
+            // made from, and the type whose layers gave the thickness.
+            let used: BTreeSet<u32> = if let Some((line_id, _)) = sloped_by_arrow.get(&id) {
+                BTreeSet::from([*line_id])
+            } else if let Some((boundary, found)) = sloped_by_arrows.get(&id) {
+                boundary
+                    .iter()
+                    .copied()
+                    .chain(found.iter().map(|(line, _)| *line))
+                    .collect()
+            } else {
+                defining
+                    .get(&id)
+                    .map(|sloped| {
+                        sloped
+                            .iter()
+                            .map(|(line, _, _)| *line)
+                            .collect::<BTreeSet<u32>>()
+                    })
+                    .unwrap_or_default()
+            };
+            note_line_source(
+                rf,
+                id,
+                "roof_slope_edges",
+                &used,
+                &["edge_slope", "arrow_heights"],
+            );
+            note_line_source(rf, id, "roof_line_data", &used, ROOF_LINE_READERS);
+            rf.attribute_value_source(type_id, "type_layers", id, "roof_type_layers");
         }
         if sloped_by_arrows.contains_key(&id) {
             roof.fields.push((
