@@ -21,9 +21,11 @@ on:
 # run at once and leaves the draft's fast run to finish. Cancelling it left
 # eight cancelled `fast / ...` checks and a failed `fast / CI passed` on the
 # head, which the pr-queue mod reads as a failing PR (#1317, 2026-11-04).
+# Only a new push cancels; a change of draft state on the same commit waits
+# for the run of its kind in flight (ci.yml's group, keyed the same way).
 concurrency:
   group: ci-pr-${{ github.ref }}-${{ github.event.pull_request.draft && 'fast' || 'full' }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event.action == 'synchronize' }}
 
 permissions:
   contents: read
