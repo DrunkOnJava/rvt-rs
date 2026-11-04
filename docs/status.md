@@ -1008,7 +1008,10 @@ and so is an Area or an MEP space. The diagnostics count the rooms left out in
 The 621 rooms of the 12 models that have a Revit export (Core Interior, RE1
 Architecture, the BIM4LCA office as built and at permit and its two terrain
 variants, six R2025 room models) are all in the last phase and all in
-Revit's export, so none of them changes. The rule is unmeasured against a
+Revit's export, so none of them changes: in the unfiltered Measure (run
+41784044966) 12 of 111 exports move, the `rac_basic_sample_project` saves of
+Revit 2016 to 2027, and 99 are byte for byte as before, the held-out models
+included. The rule is unmeasured against a
 Revit export made with the default setup, because no project in the corpus
 has a room outside its last phase and such an export: Autodesk's
 `rac_basic_sample_project` has 14 rooms in the second of its three phases, on

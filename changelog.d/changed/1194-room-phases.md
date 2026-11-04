@@ -17,7 +17,9 @@
   Revit 2018 export of it holds: its saves from Revit 2016 on no longer write
   them by default, and write them with `--phase "Working Drawings"`, all 14
   of the 17 `IfcSpace` of that export and no other entity changing (Measure
-  runs 41784415396 and 41784419457). Its Revit 2015 save
+  runs 41784415396 and 41784419457). Of the 111 exports of the unfiltered
+  Measure (run 41784044966), 12 move, those saves from Revit 2016 to 2027, and
+  the other 99 are byte for byte as before, the held-out models included. Its Revit 2015 save
   keeps them, because both phase rules start at Revit 2016 (#1332). The Python
   bindings and the viewer export the last phase. Report:
   `reports/element-framing/RE-326-room-phases.md`.
