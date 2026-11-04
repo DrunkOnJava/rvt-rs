@@ -246,7 +246,7 @@
               ]
             },
             "space_outline_source": {
-              "description": "For a room or space, where its outline came from: `record_box`\n(the area of its box, not of the room), `stored_solid`,\n`stored_solid_faces`, `stored_solid_approximate`, `saved_mesh`,\n`family_body`, and for an Area `area_boundary`,\n`area_boundary_joined` or `none`.",
+              "description": "For a room or space, where its outline came from: `record_box`\n(the area of its box, not of the room), `stored_solid`,\n`stored_solid_faces`, `stored_solid_approximate`, `saved_mesh`,\n`family_body`, and for an Area `area_boundary`,\n`area_boundary_joined`, `area_boundary_wall_line` or `none`.",
               "type": [
                 "string",
                 "null"
@@ -1169,7 +1169,7 @@
               ]
             },
             "space_outline_source": {
-              "description": "For a room or space, where its outline came from: `record_box`\n(the area of its box, not of the room), `stored_solid`,\n`stored_solid_faces`, `stored_solid_approximate`, `saved_mesh`,\n`family_body`, and for an Area `area_boundary`,\n`area_boundary_joined` or `none`.",
+              "description": "For a room or space, where its outline came from: `record_box`\n(the area of its box, not of the room), `stored_solid`,\n`stored_solid_faces`, `stored_solid_approximate`, `saved_mesh`,\n`family_body`, and for an Area `area_boundary`,\n`area_boundary_joined`, `area_boundary_wall_line` or `none`.",
               "type": [
                 "string",
                 "null"
@@ -2129,7 +2129,7 @@
               ]
             },
             "space_outline_source": {
-              "description": "For a room or space, where its outline came from: `record_box`\n(the area of its box, not of the room), `stored_solid`,\n`stored_solid_faces`, `stored_solid_approximate`, `saved_mesh`,\n`family_body`, and for an Area `area_boundary`,\n`area_boundary_joined` or `none`.",
+              "description": "For a room or space, where its outline came from: `record_box`\n(the area of its box, not of the room), `stored_solid`,\n`stored_solid_faces`, `stored_solid_approximate`, `saved_mesh`,\n`family_body`, and for an Area `area_boundary`,\n`area_boundary_joined`, `area_boundary_wall_line` or `none`.",
               "type": [
                 "string",
                 "null"
@@ -2365,7 +2365,7 @@
   },
   {
     "name": "list_rooms",
-    "description": "List the rooms and spaces of a model: ElementId, number, name, level, area and provenance, whose space_outline_source says where the outline came from. The area is present only where the outline was read exactly (space_outline_source stored_solid, stored_solid_faces, or area_boundary or area_boundary_joined for an Area); a room that keeps its record's bounding box (record_box) has no area, since the area of a box is not the area of a room. Not read: family geometry, the Revit Mark parameter, and any body but the record's bounding box where provenance.body_source says so; see the summary's not_read and docs/status.md in the rvt-rs repository.",
+    "description": "List the rooms and spaces of a model: ElementId, number, name, level, area and provenance, whose space_outline_source says where the outline came from. The area is present only where the outline was read exactly (space_outline_source stored_solid, stored_solid_faces, or area_boundary, area_boundary_joined or area_boundary_wall_line for an Area); a room that keeps its record's bounding box (record_box) has no area, since the area of a box is not the area of a room. Not read: family geometry, the Revit Mark parameter, and any body but the record's bounding box where provenance.body_source says so; see the summary's not_read and docs/status.md in the rvt-rs repository.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
@@ -2507,7 +2507,7 @@
               ]
             },
             "space_outline_source": {
-              "description": "For a room or space, where its outline came from: `record_box`\n(the area of its box, not of the room), `stored_solid`,\n`stored_solid_faces`, `stored_solid_approximate`, `saved_mesh`,\n`family_body`, and for an Area `area_boundary`,\n`area_boundary_joined` or `none`.",
+              "description": "For a room or space, where its outline came from: `record_box`\n(the area of its box, not of the room), `stored_solid`,\n`stored_solid_faces`, `stored_solid_approximate`, `saved_mesh`,\n`family_body`, and for an Area `area_boundary`,\n`area_boundary_joined`, `area_boundary_wall_line` or `none`.",
               "type": [
                 "string",
                 "null"
@@ -2570,7 +2570,7 @@
           "description": "One room.",
           "properties": {
             "area_square_feet": {
-              "description": "The plan area of the room's outline, where the outline is one read\nexactly (`space_outline_source` is `stored_solid`, `stored_solid_faces`\nor, for an Area, `area_boundary` or `area_boundary_joined`). Absent for\n`record_box`, where the area of a box is not the area of a room, and for\n`stored_solid_approximate`.",
+              "description": "The plan area of the room's outline, where the outline is one read\nexactly (`space_outline_source` is `stored_solid`, `stored_solid_faces`\nor, for an Area, `area_boundary`, `area_boundary_joined` or\n`area_boundary_wall_line`). Absent for\n`record_box`, where the area of a box is not the area of a room, and for\n`stored_solid_approximate`.",
               "format": "double",
               "type": [
                 "number",
