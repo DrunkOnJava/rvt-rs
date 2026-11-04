@@ -290,6 +290,28 @@ pub const OST_PIPE_CURVES: i64 = -2_008_044;
 /// Autodesk `BuiltInCategory.OST_PipeFitting`.
 pub const OST_PIPE_FITTING: i64 = -2_008_049;
 
+// RE-319: conduits, conduit fittings and gutters, measured on the one file
+// with a Revit export that holds them (BIM-Speed Vitoria `ALD26 Before`,
+// Revit 2018): every instance the RE-21 rule selects is a `Tag` of Revit's
+// own export, as `IfcFlowSegment` or `IfcFlowFitting`, and none is missing.
+// The centerline categories that sit beside every conduit and fitting
+// (`OST_ConduitCenterLine` -2008139, `OST_ConduitFittingCenterLine`
+// -2008141, and for pipes `OST_PipeCurvesCenterLine` -2008045 and
+// `OST_PipeFittingCenterLine` -2008072) are never recovered: none is in
+// Revit's export, and revit-ifc's `ElementFilteringUtil` lists the conduit
+// ones among the categories it leaves out. Cable trays and cable tray
+// fittings (`OST_CableTray` -2008130, `OST_CableTrayFitting` -2008126) are
+// not recovered either: no file with a Revit export holds an instance of
+// either, so nothing shows that Revit's export writes them.
+
+/// Autodesk `BuiltInCategory.OST_Conduit` — conduits.
+pub const OST_CONDUITS: i64 = -2_008_132;
+/// Autodesk `BuiltInCategory.OST_ConduitFitting`.
+pub const OST_CONDUIT_FITTING: i64 = -2_008_128;
+/// Autodesk `BuiltInCategory.OST_Gutter` — gutters. Revit's IFC2X3 export
+/// writes them as `IfcFlowSegment`.
+pub const OST_GUTTER: i64 = -2_001_391;
+
 // RE-36: structural categories. Nearly every frame of these uses the
 // second prologue, so their instances export through RE-34's inferred
 // ElementIds; the oracle is the VIM export of the same sample
@@ -388,7 +410,12 @@ pub const OST_EDGE_SLAB: i64 = -2_001_392;
 /// RE-39 adds stairs with their runs, landings and stringers, and roofs.
 /// RE-40 adds slab edges, once elements in non-primary design options are
 /// left out: all 59 exported on Snowdon Towers are Revit's.
-pub const PRODUCT_RECORD_CATEGORIES: [(i64, &str); 39] = [
+///
+/// RE-319 adds conduits, conduit fittings and gutters: on BIM-Speed Vitoria
+/// `ALD26 Before` (Revit 2018) all 102, 74 and 2 instances the rule selects
+/// are `Tag`s of Revit's own export, written there as `IfcFlowSegment`,
+/// `IfcFlowFitting` and `IfcFlowSegment`.
+pub const PRODUCT_RECORD_CATEGORIES: [(i64, &str); 42] = [
     (OST_FURNITURE, "Furniture"),
     (OST_CASEWORK, "Casework"),
     (OST_PLUMBING_FIXTURES, "PlumbingFixture"),
@@ -402,6 +429,9 @@ pub const PRODUCT_RECORD_CATEGORIES: [(i64, &str); 39] = [
     (OST_DUCT_FITTING, "DuctFitting"),
     (OST_PIPE_CURVES, "Pipe"),
     (OST_PIPE_FITTING, "PipeFitting"),
+    (OST_CONDUITS, "Conduit"),
+    (OST_CONDUIT_FITTING, "ConduitFitting"),
+    (OST_GUTTER, "Gutter"),
     (OST_STRUCTURAL_FRAMING, "StructuralFraming"),
     (OST_STRUCTURAL_COLUMNS, "StructuralColumn"),
     (OST_STRUCTURAL_FOUNDATION, "StructuralFoundation"),
@@ -1385,7 +1415,7 @@ pub(crate) fn find_subslice(haystack: &[u8], needle: &[u8]) -> Option<usize> {
 /// The categories the exporter recovers instances of, with the class name
 /// each is decoded as: the architectural core plus
 /// [`PRODUCT_RECORD_CATEGORIES`].
-pub const RECOVERED_CATEGORIES: [(i64, &str); 46] = [
+pub const RECOVERED_CATEGORIES: [(i64, &str); 49] = [
     (OST_WALLS, "Wall"),
     (OST_DOORS, "Door"),
     (OST_WINDOWS, "Window"),
@@ -1406,6 +1436,9 @@ pub const RECOVERED_CATEGORIES: [(i64, &str); 46] = [
     (OST_DUCT_FITTING, "DuctFitting"),
     (OST_PIPE_CURVES, "Pipe"),
     (OST_PIPE_FITTING, "PipeFitting"),
+    (OST_CONDUITS, "Conduit"),
+    (OST_CONDUIT_FITTING, "ConduitFitting"),
+    (OST_GUTTER, "Gutter"),
     (OST_STRUCTURAL_FRAMING, "StructuralFraming"),
     (OST_STRUCTURAL_COLUMNS, "StructuralColumn"),
     (OST_STRUCTURAL_FOUNDATION, "StructuralFoundation"),
