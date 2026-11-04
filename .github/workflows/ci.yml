@@ -1355,7 +1355,13 @@ jobs:
   # running or has failed, and renaming a job never touches the ruleset.
   ci-ok:
     name: CI passed
-    if: always()
+    # A fast run (a draft's) that is cancelled, as marking the draft ready
+    # cancels it, ends skipped, not failed: its `fast / CI passed` is not
+    # the required check, and a stale failure there made the PR read as
+    # failing (#1317, 2026-11-04). A full or push run that is cancelled
+    # still fails, since a skipped `full / CI passed` would count as a
+    # success.
+    if: ${{ always() && (inputs.fast != true || !cancelled()) }}
     needs:
       - fmt
       - clippy
