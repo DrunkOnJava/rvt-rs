@@ -150,23 +150,45 @@ pub fn read_defined(
     ids: &BTreeSet<u64>,
     filter: Option<fn(&str) -> bool>,
 ) -> Result<ElementParameters> {
-    read_selected(file, ids, filter, Types::Named)
+    read_selected(file, ids, filter, Types::Named, false)
 }
 
-/// [`read_defined`] without the family and material records, which only
-/// name an ElementId value, and with only the types `ids` name: every
-/// value, its level and the type values it takes are the same, but
-/// `target_name` and `target_family` are not filled for a material or
-/// family target, nor for a type no element of `ids` names. For readers
-/// that use values alone, such as the parameters named for a property
-/// (#1237: on a Revit 2015 to 2023 file those records, and the types no
-/// element names, were most of the read).
-pub fn read_defined_values(
+/// The values of the parameters of `ids` whose definitions' captions
+/// `accepts`, for a reader that uses nothing else: with their level, a
+/// family instance's own first, and a type's after them where `inherits`
+/// accepts the caption. `unresolved_family_slots` and
+/// `instance_parameters_without_value` are not filled, nor `target_name` and
+/// `target_family`, and an element may list parameters of other captions or
+/// none at all.
+///
+/// A record is read only if it holds the id of a definition `accepts`
+/// ([`native_document::Options::filtered_parameters_only`]), and the types
+/// the elements name only if a definition `inherits` accepts: otherwise no
+/// type value can be one the reader uses. On a Revit 2015 to 2023 file those
+/// records, and the types, were most of the read (#1237).
+pub fn read_property_values(
     file: &mut RevitFile,
     ids: &BTreeSet<u64>,
-    filter: Option<fn(&str) -> bool>,
+    accepts: fn(&str) -> bool,
+    inherits: fn(&str) -> bool,
 ) -> Result<ElementParameters> {
-    read_selected(file, ids, filter, Types::Values)
+    if !native_document::NATIVE_RELEASES.contains(&file.layout_release()?) || ids.is_empty() {
+        return Ok(ElementParameters::default());
+    }
+    let options = Options {
+        releases: native_document::NATIVE_RELEASES,
+        definition_filter: Some(accepts),
+        ..Default::default()
+    };
+    let inherited = native_document::definition_captions(file, &options, accepts)?
+        .iter()
+        .any(|caption| inherits(caption));
+    if inherited {
+        // A type's value can be one the reader uses: every record whose
+        // value it may take is read.
+        return read_selected(file, ids, Some(accepts), Types::Values, false);
+    }
+    read_selected(file, ids, Some(accepts), Types::None, true)
 }
 
 /// [`read_defined`] reading the records of `ids` alone: no type, family or
@@ -177,7 +199,7 @@ pub fn read_own_defined(
     ids: &BTreeSet<u64>,
     filter: Option<fn(&str) -> bool>,
 ) -> Result<ElementParameters> {
-    read_selected(file, ids, filter, Types::None)
+    read_selected(file, ids, filter, Types::None, false)
 }
 
 /// Which records besides those of the selected ids a read selects by class.
@@ -196,6 +218,7 @@ fn read_selected(
     ids: &BTreeSet<u64>,
     filter: Option<fn(&str) -> bool>,
     types: Types,
+    filtered_only: bool,
 ) -> Result<ElementParameters> {
     if !native_document::NATIVE_RELEASES.contains(&file.layout_release()?) || ids.is_empty() {
         return Ok(ElementParameters::default());
@@ -218,6 +241,7 @@ fn read_selected(
         selected_classes,
         releases: native_document::NATIVE_RELEASES,
         definition_filter: filter,
+        filtered_parameters_only: filtered_only,
         ..Default::default()
     };
     let mut records: BTreeMap<i64, RecordParameters> = BTreeMap::new();

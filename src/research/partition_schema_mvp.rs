@@ -416,10 +416,12 @@ pub fn recover_partition_schema_mvp(
     attach_spiral_run_bodies(rf, revit_version, &mut out.products);
     // --- Monolithic landings as their slabs (#824) ---
     attach_landing_slabs(rf, revit_version, &mut out.products);
-    // --- Beams along their location lines (RE-49) ---
-    attach_beam_axes(rf, revit_version, &mut out.products);
-    // --- Beams' Cross-Section Rotation, from their native records (RE-276) ---
+    // --- Beams' Cross-Section Rotation, from their native records (RE-276),
+    // before the axes, which RE-328's level beams longer than their lines
+    // need it for ---
     attach_beam_rotations(rf, &mut out.products);
+    // --- Beams along their location lines (RE-49, RE-328) ---
+    attach_beam_axes(rf, revit_version, &mut out.products);
     // --- Pipes as cylinders along their ends (RE-131) ---
     attach_pipe_axes(rf, revit_version, &mut out.products);
     // --- Which element each end of a duct or pipe is joined to (RE-138) ---

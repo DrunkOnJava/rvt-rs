@@ -5,11 +5,12 @@
 //! multiple serialized declarations of that name; those keys are all emitted
 //! as `DeclaringClass::field`. Inline objects have independent naming scopes.
 use crate::le_bytes;
-use crate::schema_registry::{Field, Registry};
+use crate::schema_registry::{Class, Field, Registry};
 use anyhow::{Result, ensure};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value, json};
-use std::collections::{BTreeMap, VecDeque};
+use std::collections::{BTreeMap, HashMap, VecDeque};
+use std::rc::Rc;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Parameter {
@@ -161,16 +162,7 @@ pub fn decode_graph_with_catalog_usage(
     );
     let tag =
         le_bytes::u16_at(body, 0).ok_or_else(|| anyhow::anyhow!("truncated root object tag"))?;
-    let mut cursor = Cursor {
-        body,
-        registry,
-        catalog,
-        pos: 2,
-        items: 0,
-        pending: Vec::new(),
-        spans: Vec::new(),
-        limits: *limits,
-    };
+    let mut cursor = Cursor::new(body, registry, catalog, 2, *limits, Spans::None);
     let mut objects = Vec::new();
     let mut edges = Vec::new();
     let mut shared = BTreeMap::<u32, (usize, u16)>::new();
@@ -283,6 +275,31 @@ pub fn decode_object_fields_with_limits(
     class_tag: u16,
     limits: &GraphLimits,
 ) -> Result<ObjectFields> {
+    decode_object_fields_spanning(body, registry, start, class_tag, limits, Spans::All)
+}
+
+/// Which fields' byte spans a decode keeps ([`ObjectFields::field_spans`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Spans {
+    /// None: a graph decode never reads them.
+    None,
+    /// Every field's, nested objects' included.
+    All,
+    /// Those of the fields declared by the class with this tag.
+    Class(u16),
+}
+
+/// [`decode_object_fields_with_limits`], keeping the spans `spans` names: a
+/// span copies its field's name, and a caller that reads one field's span
+/// has no use for the rest (#1237).
+pub fn decode_object_fields_spanning(
+    body: &[u8],
+    registry: &Registry,
+    start: usize,
+    class_tag: u16,
+    limits: &GraphLimits,
+    spans: Spans,
+) -> Result<ObjectFields> {
     ensure!(
         start <= body.len(),
         "native object offset outside bounded body"
@@ -292,16 +309,7 @@ pub fn decode_object_fields_with_limits(
         .ok_or_else(|| anyhow::anyhow!("native object class absent"))?
         .name
         .clone();
-    let mut cursor = Cursor {
-        body,
-        registry,
-        catalog: None,
-        pos: start,
-        items: 0,
-        pending: Vec::new(),
-        spans: Vec::new(),
-        limits: *limits,
-    };
+    let mut cursor = Cursor::new(body, registry, None, start, *limits, spans);
     let fields = cursor.class(class_tag, 0)?;
     Ok(ObjectFields {
         class_tag,
@@ -318,6 +326,15 @@ struct PendingPointer {
     offset: usize,
     schema_guid: Option<String>,
 }
+/// A class's inheritance chain, base class last, and the key each of its
+/// fields takes in a decoded object: the bare name, or `Declaring::name`
+/// where the chain declares that name more than once. It depends on the
+/// schema alone, so a decode makes it once for each class it meets (#1237:
+/// most of an object's allocations were this, made again for every one).
+struct ClassPlan<'a> {
+    lineage: Vec<&'a Class>,
+    keys: Vec<Vec<String>>,
+}
 struct Cursor<'a> {
     body: &'a [u8],
     registry: &'a Registry,
@@ -326,9 +343,32 @@ struct Cursor<'a> {
     items: usize,
     pending: Vec<PendingPointer>,
     spans: Vec<FieldSpan>,
+    keep_spans: Spans,
+    plans: HashMap<u16, Rc<ClassPlan<'a>>>,
     limits: GraphLimits,
 }
 impl<'a> Cursor<'a> {
+    fn new(
+        body: &'a [u8],
+        registry: &'a Registry,
+        catalog: Option<&'a crate::native_extensible_storage::Catalog>,
+        pos: usize,
+        limits: GraphLimits,
+        keep_spans: Spans,
+    ) -> Self {
+        Self {
+            body,
+            registry,
+            catalog,
+            pos,
+            items: 0,
+            pending: Vec::new(),
+            spans: Vec::new(),
+            keep_spans,
+            plans: HashMap::new(),
+            limits,
+        }
+    }
     fn take(&mut self, n: usize) -> Result<&[u8]> {
         let end = self
             .pos
@@ -485,41 +525,10 @@ impl<'a> Cursor<'a> {
             depth < self.limits.max_depth,
             "native class recursion budget exceeded"
         );
-        // The lineage borrows the registry's classes: cloning them, every
-        // field name with them, for each object decoded was most of a
-        // graph's allocations (#1237).
-        let registry: &'a Registry = self.registry;
-        let mut lineage = Vec::new();
-        let mut current = tag;
-        loop {
-            ensure!(
-                depth + lineage.len() < self.limits.max_depth,
-                "native class recursion budget exceeded"
-            );
-            let c = registry
-                .class(current)
-                .ok_or_else(|| anyhow::anyhow!("unknown inline native class {current}"))?;
-            current = c.parent_reference.tag;
-            lineage.push(c);
-            if current < 12 {
-                break;
-            }
-        }
-        // Field names are scoped to their declaring class in the schema. Keep
-        // convenient bare keys where unambiguous, but qualify every occurrence
-        // of an inherited collision (including the base field). Counting before
-        // decoding also handles three or more classes shadowing the same name.
-        let mut names = BTreeMap::new();
-        for c in &lineage {
-            for f in &c.fields {
-                if f.uninterpreted_flags & 2 == 0 {
-                    *names.entry(f.name.as_str()).or_insert(0usize) += 1;
-                }
-            }
-        }
+        let plan = self.plan(tag, depth)?;
         let mut values = Map::new();
-        for (distance, c) in lineage.iter().enumerate().rev() {
-            for f in &c.fields {
+        for (distance, c) in plan.lineage.iter().enumerate().rev() {
+            for (field_index, f) in c.fields.iter().enumerate() {
                 // Measured VWall transient flags; other flags remain unsupported.
                 if f.uninterpreted_flags & 2 != 0 {
                     continue;
@@ -559,25 +568,21 @@ impl<'a> Cursor<'a> {
                 {
                     // Qualified typeless owning-pointer vector: each entry still
                     // carries its concrete VarParam class tag in the wire data.
-                    let mut qualified = f.clone();
-                    qualified.modifier = 0x51;
-                    self.field(&qualified, depth + distance + 1)?
+                    self.field_as(f, 0x51, f.array_count, depth + distance + 1)?
                 } else {
                     self.field(f, depth + distance + 1).map_err(|e| {
                         anyhow::anyhow!("{}.{} at {}: {e}", c.name, f.name, self.pos)
                     })?
                 };
-                self.spans.push(FieldSpan {
-                    class_tag: c.tag,
-                    name: f.name.clone(),
-                    start,
-                    end: self.pos,
-                });
-                let key = if names[f.name.as_str()] > 1 {
-                    format!("{}::{}", c.name, f.name)
-                } else {
-                    f.name.clone()
-                };
+                if self.keeps_spans_of(c.tag) {
+                    self.spans.push(FieldSpan {
+                        class_tag: c.tag,
+                        name: f.name.clone(),
+                        start,
+                        end: self.pos,
+                    });
+                }
+                let key = plan.keys[distance][field_index].clone();
                 ensure!(
                     !values.contains_key(&key),
                     "ambiguous native field key {key} in declaring class {} (tag {})",
@@ -589,7 +594,92 @@ impl<'a> Cursor<'a> {
         }
         Ok(Value::Object(values))
     }
+    /// Whether the spans of the fields class `tag` declares are kept.
+    fn keeps_spans_of(&self, tag: u16) -> bool {
+        match self.keep_spans {
+            Spans::None => false,
+            Spans::All => true,
+            Spans::Class(only) => only == tag,
+        }
+    }
+    /// The class `tag`'s [`ClassPlan`], made on first use.
+    fn plan(&mut self, tag: u16, depth: usize) -> Result<Rc<ClassPlan<'a>>> {
+        if let Some(plan) = self.plans.get(&tag) {
+            // The chain was made under a budget that held at its own depth:
+            // the check that matters is the one before its last class.
+            ensure!(
+                depth + plan.lineage.len() - 1 < self.limits.max_depth,
+                "native class recursion budget exceeded"
+            );
+            return Ok(Rc::clone(plan));
+        }
+        // The lineage borrows the registry's classes: cloning them, every
+        // field name with them, for each object decoded was most of a
+        // graph's allocations (#1237).
+        let registry: &'a Registry = self.registry;
+        let mut lineage: Vec<&'a Class> = Vec::new();
+        let mut current = tag;
+        loop {
+            ensure!(
+                depth + lineage.len() < self.limits.max_depth,
+                "native class recursion budget exceeded"
+            );
+            let c = registry
+                .class(current)
+                .ok_or_else(|| anyhow::anyhow!("unknown inline native class {current}"))?;
+            current = c.parent_reference.tag;
+            lineage.push(c);
+            if current < 12 {
+                break;
+            }
+        }
+        // Field names are scoped to their declaring class in the schema. Keep
+        // convenient bare keys where unambiguous, but qualify every occurrence
+        // of an inherited collision (including the base field). Counting before
+        // decoding also handles three or more classes shadowing the same name.
+        let mut names = BTreeMap::new();
+        for c in &lineage {
+            for f in &c.fields {
+                if f.uninterpreted_flags & 2 == 0 {
+                    *names.entry(f.name.as_str()).or_insert(0usize) += 1;
+                }
+            }
+        }
+        let keys: Vec<Vec<String>> = lineage
+            .iter()
+            .map(|c| {
+                c.fields
+                    .iter()
+                    .map(|f| {
+                        if f.uninterpreted_flags & 2 != 0 {
+                            String::new()
+                        } else if names[f.name.as_str()] > 1 {
+                            format!("{}::{}", c.name, f.name)
+                        } else {
+                            f.name.clone()
+                        }
+                    })
+                    .collect::<Vec<String>>()
+            })
+            .collect();
+        let plan = Rc::new(ClassPlan { lineage, keys });
+        self.plans.insert(tag, Rc::clone(&plan));
+        Ok(plan)
+    }
     fn field(&mut self, f: &Field, depth: usize) -> Result<Value> {
+        self.field_as(f, f.modifier, f.array_count, depth)
+    }
+    /// [`Self::field`] reading `f` with `modifier` and `array_count` in place
+    /// of its own: a container's items are `f` itself, one level down, which
+    /// copying the field for each container was a share of a graph's
+    /// allocations (#1237).
+    fn field_as(
+        &mut self,
+        f: &Field,
+        modifier: u8,
+        array_count: Option<u32>,
+        depth: usize,
+    ) -> Result<Value> {
         ensure!(
             depth < self.limits.max_depth,
             "native field recursion budget exceeded ({})",
@@ -601,8 +691,8 @@ impl<'a> Cursor<'a> {
             self.limits.max_values
         );
         self.items += 1;
-        match f.modifier {
-            1..=3 if f.base == 14 => self.pointer(f.modifier == 3),
+        match modifier {
+            1..=3 if f.base == 14 => self.pointer(modifier == 3),
             0x60 if f.base == 8 => {
                 let n = self.u32()? as usize;
                 ensure!(n <= 1_000_000, "native string unit budget exceeded");
@@ -610,19 +700,15 @@ impl<'a> Cursor<'a> {
                 Ok(Value::String(String::from_utf16(&units)?))
             }
             0x10 | 0x11 | 0x12 | 0x13 | 0x50 | 0x51 | 0x52 | 0x53 => {
-                let n = if f.modifier < 0x50 {
-                    f.array_count
-                        .ok_or_else(|| anyhow::anyhow!("fixed array schema count absent"))?
+                let n = if modifier < 0x50 {
+                    array_count.ok_or_else(|| anyhow::anyhow!("fixed array schema count absent"))?
                 } else {
                     self.u32()?
                 };
                 ensure!(n <= 100_000, "native container count budget exceeded");
-                let mut item = f.clone();
-                item.modifier &= 0xf;
-                item.array_count = None;
-                let mut values = Vec::new();
+                let mut values = Vec::with_capacity(n.min(1024) as usize);
                 for _ in 0..n {
-                    values.push(self.field(&item, depth + 1)?);
+                    values.push(self.field_as(f, modifier & 0xf, None, depth + 1)?);
                 }
                 Ok(Value::Array(values))
             }
@@ -663,7 +749,7 @@ impl<'a> Cursor<'a> {
                 }
                 _ => anyhow::bail!("unsupported native scalar {}", f.base),
             },
-            _ => anyhow::bail!("unsupported native modifier {}", f.modifier),
+            _ => anyhow::bail!("unsupported native modifier {modifier}"),
         }
     }
 }
@@ -679,16 +765,7 @@ fn identifier(value: &Value) -> Result<i64> {
 /// remain unconsumed. Callers must separately establish current record ownership.
 pub fn decode(body: &[u8], registry: &Registry) -> Result<Parameters> {
     let base = crate::native_element::decode_base(body, registry)?;
-    let mut cursor = Cursor {
-        body,
-        registry,
-        catalog: None,
-        pos: 2,
-        items: 0,
-        pending: Vec::new(),
-        spans: Vec::new(),
-        limits: GraphLimits::default(),
-    };
+    let mut cursor = Cursor::new(body, registry, None, 2, GraphLimits::default(), Spans::None);
     let fields = cursor.class(base.class_tag, 0)?;
     let derived_fields_end = cursor.pos;
     let mut parameters = Vec::new();

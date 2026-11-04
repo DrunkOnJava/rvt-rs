@@ -11,6 +11,12 @@
 //! model as deterministic ISO 10303-21 text, and [`gltf`], [`sheet`] and
 //! [`schedule_csv`] write the same model as GLB, plan SVG and CSV.
 //!
+//! To build the model as `rvt-ifc` builds it (the exporter, the project phase,
+//! the bodies drawn from saved graphics, Revit's property sets, the
+//! base-quantity switch and the record of unread streams), call
+//! [`run_export`] with [`ExportOptions`]: `rvt-ifc`, `rvt-gltf`, the Python
+//! package, the viewer and `rvt-rs-mcp` all do.
+//!
 //! What is read on which release and input, category by category, is in
 //! `docs/supported-profile.md`, and every export's diagnostics name what was
 //! approximated or left out ([`RvtDocExporter::export_with_diagnostics`]).
@@ -80,6 +86,7 @@ pub mod clipping;
 pub mod compare;
 pub mod entities;
 pub mod export_content;
+mod export_pipeline;
 pub mod from_decoded;
 pub mod gltf;
 pub mod pbr;
@@ -97,6 +104,10 @@ mod wall_cut_openings;
 
 pub use export_content::{
     ELEMENT_RECORD_PROPERTY_SET, ExportContentPolicy, is_misleading_proxy_class,
+};
+pub use export_pipeline::{
+    ExportKind, ExportNote, ExportOptions, ExportRun, SavedMeshChoice, run_export,
+    run_export_with_limits, run_export_with_limits_and_control,
 };
 pub use from_decoded::{BuilderOptions, ElementInput, build_ifc_model};
 pub use step_writer::write_step;
@@ -2930,7 +2941,12 @@ fn record_base_elevation_feet(entity: &entities::IfcEntity) -> Option<f64> {
     // the two plan ends of the run, and on the recorded edge no
     // column cut moves the box's `z` at either end — all 256 agree
     // with Revit's own world `z` exactly — so the elevation this
-    // reads is the same byte in every case.
+    // reads is the same byte in every case. So is a beam drawn as its record
+    // box along its line (RE-328): it is still placed at the record box's
+    // plan centre and base, so `location_feet` is that base exactly as for
+    // the record box it replaces. It is listed so that these beams bind by
+    // their base as they did before that body; leaving it out would change
+    // a written value (their storey binding), listing it changes none.
     let from_record = property_set.as_ref().is_some_and(|set| {
         set.properties.iter().any(|property| {
             property.name == "BodySource"
@@ -2938,6 +2954,7 @@ fn record_base_elevation_feet(entity: &entities::IfcEntity) -> Option<f64> {
                     &property.value,
                     entities::PropertyValue::Text(text)
                         if text == RECORD_BBOX_BODY_SOURCE
+                            || text == export_content::BEAM_BOX_BODY_SOURCE
                             || text == crate::element_record_wall_joins::WALL_BODY_JOIN_TRIMMED
                             || text == crate::element_record_column_cuts::COLUMN_BODY_JOIN_CUT
                             || text == crate::element_record_beam_cuts::BEAM_BODY_COLUMN_CUT
@@ -4384,7 +4401,12 @@ fn exported_model_diagnostics(model: &IfcModel) -> ExportedModelDiagnostics {
             }
             if let Some(source) = source {
                 *body_sources.entry(source.clone()).or_insert(0) += 1;
-                if source == export_content::RECORD_BBOX_BODY_SOURCE && !profile_resolved {
+                // A beam drawn as its record box along its line (RE-328) is
+                // still the record box's extents, only turned to the line.
+                if (source == export_content::RECORD_BBOX_BODY_SOURCE
+                    || source == export_content::BEAM_BOX_BODY_SOURCE)
+                    && !profile_resolved
+                {
                     bounding_box_bodies += 1;
                 }
             }
