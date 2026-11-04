@@ -119,8 +119,9 @@ bimcollab-str-2015|bimcollab/02_BIMcollab_Example_STR.rvt|bimcollab/02_BIMcollab
 fi
 # Autodesk's rac_advanced sample of 2015 to 2020, each scored against the one
 # IFC2X3 export of the project (research/rac-advanced-export.tsv, #1354), only
-# with `-f racadv=true`. The export is counted apart as IFC2X3 everywhere, and
-# these models are never looked up in or stored to the score cache.
+# with `-f racadv=true`. The export is counted apart as IFC2X3 everywhere, these
+# models are never looked up in or stored to the score cache, and only their
+# summary counts leave the runner (tools/ci/scrub-holdout-results.sh).
 if [ -d "$MODELS/racadv" ]; then
   for model in "$MODELS"/racadv/*.rvt; do
     [ -f "$model" ] || continue
@@ -238,8 +239,8 @@ score() { # name args...
 # its directory: a step whose every input is as it was in an earlier run takes
 # that run's output, and `<step> cached` stands for its time in timings.log. A
 # step is kept only if it finished with status 0, and the models whose results
-# only leave the runner as counts (holdout-*, bimcollab-*), and the pairs that
-# were once held out (spent-*), are never cached.
+# only leave the runner as counts (holdout-*, bimcollab-*, racadv-*), and the
+# pairs that were once held out (spent-*), are never cached.
 CACHE_TOOL="$(dirname "$0")/measure-cache.py"
 cscore() { # name args...: `score`, from the cache when the scorer and its inputs are unchanged
   local out="$1" dir step found=2; shift

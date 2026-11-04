@@ -170,9 +170,10 @@ pub const ROOM_SLIVER_FEET: f64 = 0.02;
 
 /// The most plan segments a room's walls and the chords of its columns' arcs
 /// may make before the room is left to its box (#1354): a column of 0.49 ft
-/// radius is 70 chords and the largest room measured has 13 of them, and the
-/// work of joining and nesting the segments is quadratic in them.
-pub const PLAN_SEGMENTS_MAX: usize = 4096;
+/// radius is 70 chords and the largest room measured has 13 of them, about 950
+/// segments, and the work of joining and nesting the segments is quadratic in
+/// them.
+pub const PLAN_SEGMENTS_MAX: usize = 2048;
 
 /// The most plan segments [`region_boundary`] resolves.
 pub const BOUNDARY_SEGMENTS_MAX: usize = RESOLVE_FACES_MAX;
@@ -564,16 +565,17 @@ pub struct SpanRead {
 }
 
 /// The plan edges of the wall faces among `faces` that reach `anchor`, and,
-/// where `span` reads arcs or is unset (the walk of RE-101 reads them, #1354),
-/// of the round columns that do. `None` where a column's arc cannot be read or
+/// where `arcs` is set (a span asks through [`SpanRead::arcs`]; the walk of
+/// RE-101 asks first and falls back to none, #1354), of the vertical cylinders,
+/// the round columns, that do. `None` where a column's arc cannot be read or
 /// the edges pass [`PLAN_SEGMENTS_MAX`].
 fn wall_edges(
     faces: &[RoomFace],
     bbox: [f64; 6],
     anchor: OutlineAnchor,
     span: Option<SpanRead>,
+    arcs: bool,
 ) -> Option<Vec<[f64; 4]>> {
-    let arcs = span.is_none_or(|read| read.arcs);
     let mut lines = Vec::new();
     for face in faces {
         if span.is_none() || face.cylinder.is_none() {
@@ -639,12 +641,20 @@ fn span_outline(
     {
         return None;
     }
-    let mut lines = wall_edges(faces, bbox, anchor, Some(read))?;
+    let mut lines = wall_edges(faces, bbox, anchor, Some(read), read.arcs)?;
     snap_ends_within(&mut lines, ROOM_STEP_TOLERANCE_FEET);
     if let Some(profile) = plan_profile_from_lines(&lines) {
         if profile.pieces.is_empty() && !crosses(&lines) {
             return profile_on_box(profile, bbox, read.slack).map(|profile| (profile, true));
         }
+    }
+    // `region_boundary` reads each edge as directed with the room on its left,
+    // and an arc is run clockwise about its axis, which is right for a column
+    // the room surrounds and backwards for a concave curved wall: nothing in
+    // the face's record says which side the room is on (#1354). A span with a
+    // cylinder in it closes as the walk reads it, undirected, or not at all.
+    if faces.iter().any(|face| face.cylinder.is_some()) {
+        return None;
     }
     let boundary = region_boundary(&lines).ok()?;
     profile_on_box(plan_profile_from_lines(&boundary)?, bbox, read.slack)
@@ -661,13 +671,31 @@ fn outline_from_faces(
     span: Option<SpanRead>,
 ) -> Option<PlanProfile> {
     match span {
-        None => {
-            let mut lines = wall_edges(faces, bbox, anchor, None)?;
-            snap_ends(&mut lines);
-            profile_on_box(plan_profile_from_lines(&lines)?, bbox, 0.0)
-        }
+        // The walk reads the arcs of round columns, and where that does not
+        // close it reads the faces as `main` did, the columns ignored, so a
+        // room whose walls closed before still does (#1354).
+        None => walk_outline(faces, bbox, anchor, true).or_else(|| {
+            faces
+                .iter()
+                .any(|face| face.cylinder.is_some())
+                .then(|| walk_outline(faces, bbox, anchor, false))
+                .flatten()
+        }),
         Some(read) => span_outline(faces, bbox, anchor, read).map(|(profile, _)| profile),
     }
+}
+
+/// The walk of RE-101 over `faces`, with the arcs of round columns as edges
+/// where `arcs` is set.
+fn walk_outline(
+    faces: &[RoomFace],
+    bbox: [f64; 6],
+    anchor: OutlineAnchor,
+    arcs: bool,
+) -> Option<PlanProfile> {
+    let mut lines = wall_edges(faces, bbox, anchor, None, arcs)?;
+    snap_ends(&mut lines);
+    profile_on_box(plan_profile_from_lines(&lines)?, bbox, 0.0)
 }
 
 /// The room's outline from the solid whose header starts at `header`, where

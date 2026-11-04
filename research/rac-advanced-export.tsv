@@ -11,6 +11,7 @@
 # for the sample it exports were not checked, so it is fetched for a run by
 # tools/ci/fetch-rac-advanced-pair.sh from raw.githubusercontent.com, pinned by sha256 and byte
 # count, and never committed, stored or put in the Actions cache (the score cache skips racadv-*,
-# tools/ci/measure-cache.py). Measured 2026-11-04.
+# tools/ci/measure-cache.py). Only the run's summary counts are uploaded
+# (tools/ci/scrub-holdout-results.sh), as for BIMcollab's example. Measured 2026-11-04.
 # kind	name	url	sha256	bytes
 export	rac_advanced_sample_project.ifc	https://raw.githubusercontent.com/mrdoob/three.js/7c1f47731608de51a2240ce31655634665cb51ce/examples/models/ifc/rac_advanced_sample_project.ifc	9440a72eb2d27e3ba9edeafdcdfb71945e6baec56d5b09211bcde743de7fe0a5	42831859

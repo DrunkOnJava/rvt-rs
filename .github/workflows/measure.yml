@@ -45,9 +45,11 @@
 # against the one public IFC2X3 export of it, from the three.js repository
 # (research/rac-advanced-export.tsv, no licence of its own, #1354, RE-330)
 # when `racadv` is set, as models racadv-2015 to racadv-2020; the export and the
-# files are fetched for the run and never stored or cached, and the export is
-# counted apart as IFC2X3 everywhere. Name the scorers, since most of the suite
-# says nothing of an IFC2X3 export:
+# files are fetched for the run and never stored or cached, only their summary
+# counts are uploaded (tools/ci/scrub-holdout-results.sh), as for BIMcollab's
+# example, and the export is counted apart as IFC2X3 everywhere. Name the
+# scorers, since most of the suite says nothing of an IFC2X3 export; the kept
+# IFC of a model is deleted with the rest of its files:
 #
 #   gh workflow run measure.yml -f ref=my-branch -f base=none -f racadv=true -f models="racadv-*" -f scorers=space_profiles_vs_ifc
 #
@@ -161,7 +163,7 @@ on:
         required: false
         default: false
       racadv:
-        description: Also score Autodesk's rac_advanced sample project of 2015 to 2020 (models racadv-2015 to racadv-2020) against the IFC2X3 export of it from the three.js repository (research/rac-advanced-export.tsv, no licence stated, fetched for the run, never stored or cached)
+        description: Also score Autodesk's rac_advanced sample project of 2015 to 2020 (models racadv-2015 to racadv-2020) against the IFC2X3 export of it from the three.js repository (research/rac-advanced-export.tsv, no licence stated, fetched for the run, never stored or cached; only the summary counts are uploaded)
         type: boolean
         required: false
         default: false
@@ -417,8 +419,9 @@ jobs:
       # keeps a cache of its own, named by the shard whatever the shard is
       # called, and ends its name with a `.` that no shard name holds, so one
       # shard's prefix is never another's.
-      # The held-out models, BIMcollab's and the pairs once held out (spent-*)
-      # are never cached (RE-252).
+      # The held-out models, BIMcollab's, Autodesk's rac_advanced sample scored
+      # against an export with no licence (racadv-*) and the pairs once held out
+      # (spent-*) are never cached (RE-252).
       - name: Score cache key
         id: score-cache-key
         shell: bash
@@ -739,8 +742,9 @@ jobs:
         with:
           path: _score-cache
           key: ${{ steps.score-cache-key.outputs.prefix }}${{ matrix.side }}-${{ matrix.side == 'base' && needs.plan.outputs.base_sha || needs.plan.outputs.head_sha }}-${{ github.run_id }}-${{ github.run_attempt }}
-      # The held-out models and BIMcollab's carry no licence: only their
-      # counts leave the runner (RE-252).
+      # The held-out models, BIMcollab's and the racadv-* models (scored against
+      # an export that carries no licence) leave the runner as counts only
+      # (RE-252, #1354).
       - name: Keep only the unlicensed models' counts
         shell: bash
         run: tools/ci/scrub-holdout-results.sh results
