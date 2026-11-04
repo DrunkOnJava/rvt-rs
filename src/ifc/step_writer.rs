@@ -3189,6 +3189,182 @@ impl StepWriter<'_> {
             void_fill_triples.push((*host, opening_id, None, opening_gid));
         }
 
+        // RE-321: the opening a rectangular wall opening cuts in a wall,
+        // which nothing fills. Placed in the wall's frame as the opening of
+        // its elevation profile is, tagged with the opening's ElementId and
+        // named for the wall. Its Reference is the wall's type name, and its
+        // GlobalId Revit's: revit-ifc's `OpeningUtil` hashes the opening's
+        // number in the wall's openings with the wall's and the opening
+        // record's GlobalIds (CLEANROOM.md source 5).
+        for entity in &model.entities {
+            let super::entities::IfcEntity::WallCutOpening {
+                host,
+                number,
+                tag,
+                name,
+                cutter_global_id,
+                outline_feet,
+                axis_turn_radians,
+                plane_offset_feet,
+                thickness_feet,
+            } = entity
+            else {
+                continue;
+            };
+            let (Some(Some(host_el_id)), Some(Some(host_placement))) = (
+                entity_index_to_el_id.get(*host),
+                entity_index_to_placement.get(*host),
+            ) else {
+                continue;
+            };
+            let profile_origin = self.id();
+            self.emit_entity(profile_origin, "IFCCARTESIANPOINT((0.,0.))");
+            let profile_x_axis = self.id();
+            self.emit_entity(profile_x_axis, "IFCDIRECTION((1.,0.))");
+            let profile_placement = self.id();
+            self.emit_entity(
+                profile_placement,
+                format!("IFCAXIS2PLACEMENT2D(#{profile_origin},#{profile_x_axis})"),
+            );
+            let body = Extrusion {
+                width_feet: 0.0,
+                depth_feet: 0.0,
+                height_feet: *thickness_feet,
+                profile_override: Some(super::entities::ProfileDef::ArbitraryClosed {
+                    points: outline_feet.clone(),
+                }),
+            };
+            let profile_id = self.emit_profile_def(&body, profile_placement);
+            let (sin, cos) = axis_turn_radians.sin_cos();
+            let start = (plane_offset_feet + thickness_feet / 2.0) * 0.3048;
+            let solid_origin = self.id();
+            self.emit_entity(
+                solid_origin,
+                format!(
+                    "IFCCARTESIANPOINT(({:.6},{:.6},0.))",
+                    -sin * start,
+                    cos * start
+                ),
+            );
+            let solid_axis = self.id();
+            self.emit_entity(
+                solid_axis,
+                format!("IFCDIRECTION(({sin:.9},{:.9},0.))", -cos),
+            );
+            let solid_x = self.id();
+            self.emit_entity(solid_x, format!("IFCDIRECTION(({cos:.9},{sin:.9},0.))"));
+            let solid_position = self.id();
+            self.emit_entity(
+                solid_position,
+                format!("IFCAXIS2PLACEMENT3D(#{solid_origin},#{solid_axis},#{solid_x})"),
+            );
+            let solid_id = self.id();
+            self.emit_entity(
+                solid_id,
+                format!(
+                    "IFCEXTRUDEDAREASOLID(#{profile_id},#{solid_position},#{z_axis},{:.6})",
+                    thickness_feet * 0.3048
+                ),
+            );
+            let rep_id = self.id();
+            self.emit_entity(
+                rep_id,
+                format!("IFCSHAPEREPRESENTATION(#{geom_ctx},'Body','SweptSolid',(#{solid_id}))"),
+            );
+            let prod_shape_id = self.id();
+            self.emit_entity(
+                prod_shape_id,
+                format!("IFCPRODUCTDEFINITIONSHAPE($,$,(#{rep_id}))"),
+            );
+            let opening_axis = self.id();
+            self.emit_entity(opening_axis, format!("IFCAXIS2PLACEMENT3D(#{origin},$,$)"));
+            let placement_id = self.id();
+            self.emit_entity(
+                placement_id,
+                format!("IFCLOCALPLACEMENT(#{host_placement},#{opening_axis})"),
+            );
+            let host_gid = el_id_to_gid.get(host_el_id).copied().unwrap_or_default();
+            let opening_gid = match cutter_global_id {
+                Some(cutter) if !host_gid.is_empty() => crate::revit_global_ids::hashed_global_id(
+                    &format!("Opening:{number}Solid:1{host_gid}{cutter}"),
+                ),
+                _ => gid(&["wall-cut-opening", host_gid, tag]),
+            };
+            let opening_id = self.id();
+            self.emit_entity(
+                opening_id,
+                format!(
+                    "IFCOPENINGELEMENT('{opening_gid}',#{owner_hist},{},$,$,#{placement_id},#{prod_shape_id},'{}',.OPENING.)",
+                    quoted_or_dollar(&escape(name)),
+                    escape(tag),
+                ),
+            );
+            if let Some(reference) = host_references.get(host) {
+                for set_name in [
+                    "Pset_OpeningElementCommon",
+                    "Pset_EnvironmentalImpactIndicators",
+                ] {
+                    let set = PropertySet {
+                        name: set_name.into(),
+                        properties: vec![super::entities::Property {
+                            name: "Reference".into(),
+                            value: super::entities::PropertyValue::Identifier(reference.clone()),
+                        }],
+                    };
+                    self.emit_property_set(
+                        owner_hist,
+                        opening_id,
+                        &set,
+                        &gid(&["property-set", opening_gid.as_str(), set_name]),
+                        &gid(&["defines-by-properties", opening_gid.as_str(), set_name]),
+                    );
+                }
+            }
+            // RE-321: Revit's `Depth` is the extrusion's depth, and its `Width`
+            // and `Height` are the rectangle's extents along the wall and up,
+            // which are the right way round on a rectangular opening (not on
+            // a door's, RE-244). With base quantities off the wall has none
+            // and the opening none either.
+            if wall_widths.contains_key(host) {
+                let extent = |axis: fn(&(f64, f64)) -> f64| {
+                    let low = outline_feet.iter().map(axis).fold(f64::INFINITY, f64::min);
+                    let high = outline_feet
+                        .iter()
+                        .map(axis)
+                        .fold(f64::NEG_INFINITY, f64::max);
+                    high - low
+                };
+                let length = |name: &str, feet: f64| super::entities::Property {
+                    name: name.into(),
+                    value: super::entities::PropertyValue::PositiveLengthFeet(feet),
+                };
+                let quantities = PropertySet {
+                    name: "Qto_OpeningElementBaseQuantities".into(),
+                    properties: vec![
+                        length("Width", extent(|point| point.0)),
+                        length("Height", extent(|point| point.1)),
+                        length("Depth", *thickness_feet),
+                    ],
+                };
+                self.emit_property_set(
+                    owner_hist,
+                    opening_id,
+                    &quantities,
+                    &gid(&[
+                        "property-set",
+                        opening_gid.as_str(),
+                        "Qto_OpeningElementBaseQuantities",
+                    ]),
+                    &gid(&[
+                        "defines-by-properties",
+                        opening_gid.as_str(),
+                        "Qto_OpeningElementBaseQuantities",
+                    ]),
+                );
+            }
+            void_fill_triples.push((*host, opening_id, None, opening_gid));
+        }
+
         // IfcRelVoidsElement + IfcRelFillsElement — for each
         // (host, opening, element) triple we collected during
         // element emission, emit:

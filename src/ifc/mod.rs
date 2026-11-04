@@ -93,6 +93,7 @@ pub mod sheet;
 pub mod standard_property_sets;
 pub mod step_writer;
 mod storey_properties;
+mod wall_cut_openings;
 
 pub use export_content::{
     ELEMENT_RECORD_PROPERTY_SET, ExportContentPolicy, is_misleading_proxy_class,
@@ -1375,6 +1376,11 @@ fn export_rvt_doc_reporting(
     // #824: the openings a face-hosted door's or window's symbol cuts in the
     // element whose face hosts it.
     attach_hosted_cut_openings(rf, &mut entities);
+    // RE-321: the openings rectangular wall openings cut in a wall, which
+    // nothing fills.
+    if policy.include_geometry {
+        wall_cut_openings::attach_wall_cut_openings(rf, &mut entities);
+    }
 
     if !policy.include_geometry {
         export_content::strip_building_element_geometry(&mut entities);
@@ -4829,6 +4835,16 @@ fn pset_property_value_count(model: &IfcModel) -> usize {
             _ => false,
         })
         .count();
+    // RE-321: a wall's cut opening holds the wall's type name twice, in
+    // `Pset_OpeningElementCommon` and `Pset_EnvironmentalImpactIndicators`.
+    let wall_cuts = 2 * model
+        .entities
+        .iter()
+        .filter(|entity| match entity {
+            entities::IfcEntity::WallCutOpening { host, .. } => references.contains_key(host),
+            _ => false,
+        })
+        .count();
     let storeys: usize = (0..model.building_storeys.len())
         .flat_map(|index| {
             entities::PropertySet::storey_sets_for(model.storey_properties.get(&index))
@@ -4842,7 +4858,12 @@ fn pset_property_value_count(model: &IfcModel) -> usize {
             model.building_storeys.len(),
         )) - usize::from(!step_writer::every_storey_holds_an_element(model))
     };
-    elements + storeys + building + openings + step_writer::type_object_pset_values(model)
+    elements
+        + storeys
+        + building
+        + openings
+        + wall_cuts
+        + step_writer::type_object_pset_values(model)
 }
 
 fn export_confidence_summary(
