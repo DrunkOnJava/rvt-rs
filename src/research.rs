@@ -59,6 +59,7 @@
 //!
 //! ## Native records
 //!
+//! - [`native_area_regions`]: An Area's region from Revit's own plan topology, with area-rule offsets and arcs (#1261, RE-330)
 //! - [`native_column_joins`]: The wall a column is first joined to, and the side of it the column stands on (RE-202, #355)
 //! - [`native_connectors`]: A family symbol's connectors, from its own native record and its family's (#528)
 //! - [`native_document`]: Streaming current-record extraction with structural schemas and native IDs
@@ -110,6 +111,7 @@ pub mod element_record_wall_joins;
 pub mod es_refs;
 pub mod evidence;
 pub mod identity;
+pub mod native_area_regions;
 pub mod native_column_joins;
 pub mod native_connectors;
 pub mod native_document;

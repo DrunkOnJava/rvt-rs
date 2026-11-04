@@ -43,6 +43,16 @@
 //! (within 0.01 ft), and 29 of the 30 in the mesh's vertices
 //! (`reports/element-framing/RE-317-area-boundaries.md`).
 //!
+//! Where the lines' arrangement finds no region, the region of Revit's own
+//! plan topology is used ([`crate::native_area_regions`], RE-330): the loop
+//! Revit computed for the Area, with each line moved by its area rule's
+//! offset and arcs drawn, checked against the area Revit saves for it and
+//! against the Area's point. It draws the Areas whose lines meet only once
+//! offset or include an arc or a slanted line. Where both give a region they
+//! agree (the BIM4LCA office, 30 of 30, and the 3 of Autodesk's
+//! `rac_advanced` the lines draw). Every other check below applies to it as
+//! to the lines' region.
+//!
 //! # Honesty
 //!
 //! - An Area has a body only where its point lies in exactly one region of
@@ -109,6 +119,7 @@
 use crate::RevitFile;
 use crate::element_record_plan_profiles::{PLAN_PROFILE_SOURCE_FIELD, PlanProfile};
 use crate::le_bytes;
+use crate::native_area_regions::AreaRegion;
 use crate::partition_area_boundaries::{AreaFace, Arrangement, BoundaryLine};
 use crate::partition_design_options::DesignOptions;
 use crate::partition_element_records::{
@@ -996,11 +1007,14 @@ fn level_elevation(levels: &[PartitionLevel], level: u32) -> Option<f64> {
 }
 
 /// The region of one Area, whatever else stops it from being drawn: its point
-/// among the lines of its scheme on its Level. `Err` where it has no point, or
-/// its Level or scheme is not named, or its Level's elevation is not known.
+/// among the lines of its scheme on its Level, else the region of Revit's
+/// plan topology, `topology`, where it is read (RE-330). `Err` where it has
+/// no point, or its Level or scheme is not named, or its Level's elevation is
+/// not known.
 fn locate(
     record: &AreaRecord,
     point: Option<(f64, f64)>,
+    topology: Option<AreaRegion>,
     lines: &BoundaryLines,
     surroundings: &Surroundings<'_>,
     arrangements: &mut BTreeMap<GroupKey, Option<GroupArrangement>>,
@@ -1025,6 +1039,18 @@ fn locate(
         },
         None => Err(REFUSED_GROUP),
     };
+    // Where the lines' arrangement finds no region, Revit's plan topology
+    // may (RE-330): lines that meet only once moved by their offsets, or an
+    // arc or a slanted line in the group.
+    let face = face.or_else(|reason| {
+        topology
+            .map(|region| AreaFace {
+                outer: region.outer,
+                holes: region.holes,
+                line_ids: region.line_ids,
+            })
+            .ok_or(reason)
+    });
     Ok(Located { key, face })
 }
 
@@ -1151,14 +1177,23 @@ fn area_bodies(
         return out;
     }
     let points = area_points(rf, revit_version, placed, surroundings.level_ids);
-    let record_sources = rf.recording_value_sources();
-    let mut arrangements: BTreeMap<GroupKey, Option<GroupArrangement>> = BTreeMap::new();
+    let ids: BTreeSet<u64> = placed.keys().map(|&id| u64::from(id)).collect();
+    let mut topology = crate::native_area_regions::area_regions(rf, &ids);
+    let mut arrangements: BTreeMap<GroupKey, Option<Arrangement>> = BTreeMap::new();
     let mut located: BTreeMap<u32, Result<Located, &'static str>> = BTreeMap::new();
     for (&id, record) in placed {
-        let point = points.get(&id).map(|(point, _)| *point);
+        let point = points.get(&id).copied();
+        let region = topology.remove(&u64::from(id)).and_then(Result::ok);
         located.insert(
             id,
-            locate(record, point, &lines, surroundings, &mut arrangements),
+            locate(
+                record,
+                point,
+                region,
+                &lines,
+                surroundings,
+                &mut arrangements,
+            ),
         );
     }
     // Each Area's region is located; the groups' arrangements are not needed
