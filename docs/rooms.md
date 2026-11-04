@@ -47,6 +47,8 @@ The export also counts the spaces drawn as their record's box (rooms and family 
 | 2025 | stored solid | RE1 Architecture, six purpose-made R2025 models, held-out models (below) |
 | 2026, 2027 | stored solid, as on 2025 (RE-314, #1260) | 16 held-out rooms, all rectangles, and a held-out house (below) |
 
+Areas as spaces, with a body where their boundary lines prove one, are read on Revit 2024. On Revit 2015 to 2023 an Area is written only where its region and body are proven; the others are not written and are counted by reason in `skipped` (`area_without_proven_body`, RE-324). They are measured against the same project's 2024 save on Autodesk's samples, and against no Revit export: the first rule, writing every placed Area as 2024 does, wrote 2 spaces Revit's export lacks on a held-out project.
+
 `ROOM_SOLID_SUPPORTED_REVIT_VERSIONS` in `src/research/partition_room_boundaries.rs` is the list of releases whose room solids are read.
 
 ## What is measured, and where
@@ -90,8 +92,8 @@ What the misses are:
 
 ## What is not measured
 
-- **Areas** (RE-317), measured on the BIM4LCA office only:
-  - releases other than Revit 2024;
+- **Areas** (RE-317, RE-324), measured against Revit's export on the BIM4LCA office only:
+  - Revit 2015 to 2023 against any Revit export: Autodesk's `rac_advanced` (2015 to 2023) and `rst_basic` (2016 to 2023) are read like the same project's 2024 save, and the held-out BIM Whale project is a regression check, quoted by counts only (RE-324). An Area there is written only where its body is proven, so 22 of `rac_advanced`'s 25 Areas (18 in groups with a line that is not along an axis, 4 bounded partly by walls) are not written, nor all 25 on its 2021 save (`skipped`, `area_without_proven_body`). Revit 2008 to 2014 are not read, and a 2015 Area that names a design option is left out;
   - the top storey: an Area on the highest Level has no body, where Revit draws it one unit high;
   - Levels that are not building stories: an Area has a body only where its Level and the Level above are both read as building stories and no other Level lies between them or at either elevation. All ten of the office's Levels are storeys, so every Area there meets that, and a Level that breaks it is unmeasured;
   - the Level's "Story Above", which Revit's exporter takes first for an Area's height and rvt-rs never reads: the office's heights equal the distance to the next Level up, so a Level whose Story Above is another Level is unmeasured;
