@@ -4,8 +4,8 @@
 **Issues:** #1355; follows #1346 and RE-327 section 11 (a circle in two forms, 27 chords against 28), #1280 (the "ref on ours" bar), RE-311 and RE-329 (the saved-mesh body scorer)
 **Artefacts:** the RE-32 oracle pair of RE1 Architecture, `RE1-Architecture.ifc` (Revit's export, sha256 a9b5d366…6200) and `RE1-Architecture.rvt` (sha256 4a78bdd6…8ce4); Core Interior's `2024_Core_Interior_slim.ifc` (sha256 bfdf36ff…ad86d); IfcOpenShell 0.9.0.post1, the version `tools/ci/requirements-ifc.txt` pins
 **Tools:** `tools/re/fine_mesh.py` (the settings), `tools/re/mesh_bodies_vs_ifc.py`, `tools/re/saved_meshes_vs_ifc.py` and `tools/re/family_extrusion_bodies_vs_ifc.py` (the scorers), `tools/re/arc_tessellation_study.py` (the study of sections 2 and 3), Measure's `fine_mesh` input
-**Runs:** to be added when they finish (section 4)
-**Result:** the fine mode is built and proved on the known cases (sections 2 and 3). The measured effect of the fine mode across the models, and the options for the bar, are in sections 4 and 5, which are filled in when the Measure runs have finished.
+**Runs:** Measure 41850758987 (the unfiltered run, default exports), 41850764234 (the flag run) and 41850769925 (`--saved-meshes` alone), all at `e024f03c`; 41854514903 (the arcs the current rule keeps as meshes, section 4.3), dispatched afterwards and not finished when section 4 was written. Section 4 reads them.
+**Result:** positive: the fine mode runs on every model (its longest step took 676 s of the 2,400 s limit) and changes no default row (99 of 99 files equal in each of two comparisons with `main`'s scorers). It finds that a tessellation decides some verdicts, and only for curved saved-mesh bodies: of the 3,816 saved-mesh bodies of the `--saved-meshes` run, 295 are meshed differently; 38 hold "ref on ours" in the default tessellation and miss it in the fine one, by at most 1.1e-6 ft; 158 miss the 0.001 ft both-directions column in the default one and hold it in the fine one. None of the 1,368 doors and windows the default export draws from saved meshes, and none of the 66 family-extrusion bodies, changes verdict. Section 5 lists the options for the bar; the choice is Griffin's.
 
 ## 1. The question
 
@@ -95,15 +95,134 @@ The three scorers' output without the variable was compared, byte for byte, with
 
 ## 4. What the runs measured
 
-RUNS
+**Runs.** The scorers are this branch's (`--ref feat/1355-scorer-fine-mode`, `-f fine_mesh=true`); the code is `main` at `ac7884e0`, which the branch merges; `-f ref=e024f03c9cd14837c8ed49d0ab38d1fd414ff02b`; the branch's later commit changes this report only.
+
+- **41850758987**, the unfiltered run: `-f base=none -f nordic=true -f r2025=true -f holdout=true`, 53 models, every scorer, default exports. The door and window saved meshes of every model (section 4.1).
+- **41850764234**, the flag run: the models of 41843267888 (`core-interior re1-* einhoven nordic-office-* r2025-*`) with `-f ifc_flags="--saved-meshes --family-extrusions"`, the scorers `family_extrusion_bodies_vs_ifc mesh_bodies_vs_ifc saved_meshes_vs_ifc`. The family-extrusion bodies (section 4.2).
+- **41850769925**, the same models with `-f ifc_flags="--saved-meshes"`: every saved-mesh body, the curved ones among them (section 4.4).
+- **41854514903**, the arcs (section 4.3), dispatched after the three above: `-f ref=aaa38de808f1731acf6f6a6dace59904f873335b`, the head of the first arc run (41805333248), which drew every arc as an arc, with `-f ifc_flags="--saved-meshes --family-extrusions"`, `-f scorers=family_extrusion_bodies_vs_ifc` and `-f fine_mesh=true`, on `core-interior re1-* nordic-office-*`.
+
+The first three finished green and every scorer step in them ended `exit 0`; the fourth had not finished.
+
+**The default rows did not move.** Take the `fine` lines out of the flag run's scorer files and what is left, for each of the 99 files (33 models with a Revit export, three scorers), is the text of the earlier run of `main`'s scorers with the same flags, byte for byte: 41843267888 (`--saved-meshes --family-extrusions`) against 41850764234, and 41843276506 (`--saved-meshes`) against 41850769925. 99 of 99 equal, none different, in each pair (the earlier runs were at `7ebb1bab`; these are at `e024f03c`, which adds #1351's area change and `main`'s later commits, and no body moved). The unfiltered run has no earlier run of `main`'s scorers at the default flags to read against; the default rows of its Core Interior (138 bodies) and RE1 Architecture (5) files equal what `main`'s scorers print on exports of an earlier head (section 3.4), and its code path is the one the two pairs above proved.
+
+**Run time.** No scorer step brushed its limit (2,400 s). The longest, `saved_meshes_vs_ifc` on the office at permit in the flag run, took 676 s. The fine pass roughly doubles that scorer on the office files (as built 341 s without it in 41843267888, 673 s with it; at permit 345 and 676 s) and adds about 14 s to `mesh_bodies_vs_ifc` on them (27 and 26 s to 41 and 40 s); on the small models it adds seconds (RE1 Architecture's `saved_meshes_vs_ifc` 12 s to 41 s). A step runs beside the others on its runner, so those times compare with each other and are not benchmarks.
+
+In the tables below, "ref on ours" is every tested vertex of Revit's body within 0.001 ft of rvt-rs's surface, and "both directions" is every tested vertex of each body within 0.001 ft of the other's surface; the four counts under each say how many bodies hold it in the default tessellation and in the fine one, in both, in only the default one ("default only": the bodies a change of bar would cost), in only the fine one, or in neither. "Meshed differently" counts the bodies whose triangles are not the default ones in either file, which are the bodies the deflection touches: a faceted body keeps its default scores.
+
+### 4.1 The default door and window saved meshes (run 41850758987)
+
+| model | class | bodies | meshed differently | ref on ours: both | default only | fine only | neither | both directions 0.001 ft: both | default only | fine only | neither |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| Core Interior | IfcDoor | 132 | 0 | 132 | 0 | 0 | 0 | 132 | 0 | 0 | 0 |
+| Core Interior | IfcWindow | 6 | 0 | 6 | 0 | 0 | 0 | 6 | 0 | 0 | 0 |
+| office, as built | IfcDoor | 269 | 0 | 269 | 0 | 0 | 0 | 265 | 0 | 0 | 4 |
+| office, as built | IfcWindow | 269 | 0 | 269 | 0 | 0 | 0 | 269 | 0 | 0 | 0 |
+| office, permit | IfcDoor | 269 | 0 | 269 | 0 | 0 | 0 | 265 | 0 | 0 | 4 |
+| office, permit | IfcWindow | 265 | 0 | 265 | 0 | 0 | 0 | 265 | 0 | 0 | 0 |
+| R2025 12 | IfcWindow | 3 | 0 | 3 | 0 | 0 | 0 | 3 | 0 | 0 | 0 |
+| R2025 12 | IfcDoor | 1 | 0 | 0 | 0 | 0 | 1 | 0 | 0 | 0 | 1 |
+| R2025 13 | IfcWindow | 3 | 0 | 3 | 0 | 0 | 0 | 3 | 0 | 0 | 0 |
+| R2025 13 | IfcDoor | 1 | 0 | 0 | 0 | 0 | 1 | 0 | 0 | 0 | 1 |
+| R2025 14 | IfcWindow | 3 | 0 | 3 | 0 | 0 | 0 | 3 | 0 | 0 | 0 |
+| R2025 14 | IfcDoor | 1 | 0 | 0 | 0 | 0 | 1 | 0 | 0 | 0 | 1 |
+| R2025 15 | IfcWindow | 3 | 0 | 3 | 0 | 0 | 0 | 3 | 0 | 0 | 0 |
+| R2025 15 | IfcDoor | 1 | 0 | 0 | 0 | 0 | 1 | 0 | 0 | 0 | 1 |
+| R2025 16 | IfcWindow | 3 | 0 | 3 | 0 | 0 | 0 | 3 | 0 | 0 | 0 |
+| R2025 16 | IfcDoor | 1 | 0 | 0 | 0 | 0 | 1 | 0 | 0 | 0 | 1 |
+| R2025 17 | IfcWindow | 3 | 0 | 3 | 0 | 0 | 0 | 3 | 0 | 0 | 0 |
+| R2025 17 | IfcDoor | 1 | 0 | 0 | 0 | 0 | 1 | 0 | 0 | 0 | 1 |
+| RE1 Architecture | IfcDoor | 5 | 0 | 5 | 0 | 0 | 0 | 5 | 0 | 0 | 0 |
+| held-out models (9 of 18 hold some) | IfcDoor | 29 | 0 | 1 | 0 | 0 | 28 | 1 | 0 | 0 | 28 |
+| held-out models (10 of 18 hold some) | IfcWindow | 100 | 0 | 100 | 0 | 0 | 0 | 100 | 0 | 0 | 0 |
+| every model | all | 1368 | 0 | 1334 | 0 | 0 | 34 | 1326 | 0 | 0 | 42 |
+
+(The held-out models are counts only, summed over the models that hold some.) The default export draws only doors and windows from saved meshes, and 1,368 of them are scored across the models.
+
+- **No door or window is meshed differently** in any model, held-out included: Revit writes them faceted, so the two tessellations are the same triangles and every default figure is a fine figure. Default only 0, fine only 0.
+- 1,334 hold "ref on ours" in both. The 34 that miss it miss it in both: 28 of the held-out models' 29 doors and the one door of each of R2025 12 to 17. They are not a matter of tessellation (their meshes are identical) and the default rows already count them. Both directions within 0.001 ft: 1,326 in both, 42 in neither (the 34, and 4 doors in each office file).
+- So switching the bar costs no door or window. The 0.14.0 changelog's counts for them (the windows drawn from their mesh, "every one exact against Revit's export": the 88 held-out windows, the 18 R2025 windows) are the same in the fine tessellation: the 18 R2025 windows and all 100 held-out windows hold in both.
+
+### 4.2 The family-extrusion bodies (run 41850764234)
+
+| model | class | bodies | meshed differently | ref on ours: both | default only | fine only | neither | both directions 0.001 ft: both | default only | fine only | neither | fine: ref on ours within 0.0015 ft | largest ref on ours, ft |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| Core Interior | IfcDoor | 37 | 0 | 37 | 0 | 0 | 0 | 37 | 0 | 0 | 0 | 37 | 0.000002 |
+| RE1 Architecture | IfcFurnishingElement | 5 | 0 | 5 | 0 | 0 | 0 | 5 | 0 | 0 | 0 | 5 | 0.000003 |
+| RE1 Architecture | IfcBuildingElementProxy | 2 | 1 | 2 | 0 | 0 | 0 | 2 | 0 | 0 | 0 | 2 | 0.000003 |
+| RE1 Electrical | IfcFlowTerminal | 2 | 0 | 2 | 0 | 0 | 0 | 2 | 0 | 0 | 0 | 2 | 0.000002 |
+| RE1 Mechanical | IfcBuildingElementProxy | 1 | 0 | 1 | 0 | 0 | 0 | 1 | 0 | 0 | 0 | 1 | 0.000002 |
+| RE1 Plumbing | IfcFlowTerminal | 1 | 1 | 1 | 0 | 0 | 0 | 1 | 0 | 0 | 0 | 1 | 0.000002 |
+| office, as built | IfcDoor | 4 | 0 | 4 | 0 | 0 | 0 | 4 | 0 | 0 | 0 | 4 | 0.000034 |
+| office, as built | IfcFurniture | 3 | 0 | 3 | 0 | 0 | 0 | 3 | 0 | 0 | 0 | 3 | 0.000001 |
+| office, as built | IfcBuildingElementProxy | 2 | 0 | 2 | 0 | 0 | 0 | 2 | 0 | 0 | 0 | 2 | 0.000002 |
+| office, permit | IfcDoor | 4 | 0 | 4 | 0 | 0 | 0 | 4 | 0 | 0 | 0 | 4 | 0.000034 |
+| office, permit | IfcFurniture | 3 | 0 | 3 | 0 | 0 | 0 | 3 | 0 | 0 | 0 | 3 | 0.000001 |
+| office, permit | IfcBuildingElementProxy | 2 | 0 | 2 | 0 | 0 | 0 | 2 | 0 | 0 | 0 | 2 | 0.000002 |
+
+- 66 bodies are replaced, as in the runs of section 9 of RE-327 (Core Interior 37, each office file 9, RE1 Architecture 7, Electrical 2, Mechanical 1, Plumbing 1), and **all 66 hold "ref on ours" and both directions within 0.001 ft in both tessellations**: default only 0, fine only 0, neither 0.
+- Only 2 of the 66 are meshed differently: the circles of 0.12 ft or less drawn as arcs, RE1 Architecture's proxy and Plumbing's flow terminal (Revit's IFC2X3 export writes them as an `IfcCircleProfileDef`). Both are within 3e-6 ft of Revit's in the fine tessellation and within 1e-5 ft in the default one. The other 64 are straight and unaffected.
+- The 269 instances the rule keeps as meshes for an arc over 0.12 ft are not in this run; section 4.3.
+
+### 4.3 The arcs the current rule keeps as meshes
+
+The flag run cannot show whether they would pass in the fine tessellation if drawn as arcs, because the rule keeps them as meshes: the 269 bodies (the office files 120 each, the terrain files 11 each, RE1 Architecture 1, Electrical 6) are saved-mesh bodies in it. Two things bear on it.
+
+- **The same elements as saved meshes** (run 41850769925, section 4.4): the office's 78 `IfcWasteTerminal` bodies per file and the terrain files' 11 each, which are among the arc bodies of the first arc run. In the default tessellation they hold "ref on ours" 78 of 78, and 0 of 78 hold both directions within 0.001 ft (the default polygon of Revit's circle is coarser than the mesh). In the fine tessellation 59 of 78 hold "ref on ours" and 19 miss it by at most 1.1e-6 ft (the largest is 0.001001 ft); all 78 hold within 0.0015 ft, and 59 hold both directions within 0.001 ft. The saved mesh is Revit's chords, so against Revit's true circle it sits at its own chord tolerance, 0.001 ft.
+- **The arcs themselves**, measured so far only by the studies of section 3 (a circle from 6 to 600 mm in radius in both of Revit's forms: within 7e-6 ft at every start; RE1 Architecture's dispenser, rvt-rs's half arcs against Revit's own circle: 2e-6 ft) and in the default tessellation by the first arc run (41805333248: the 78 terminals exact, 1.9e-6 ft in both directions, volume ratio 1.0000). In the IFC4 dialect the arcs rvt-rs writes are the profile Revit writes (the same two half arcs under a solid at the origin), so any tessellation cuts them into the same triangles.
+- **What measures it**: rvt-rs's own export with every arc drawn, scored with the fine scorers. That is run 41854514903, the head of the first arc run (`aaa38de8`, the last head that drew every arc as an arc) with the scorers of this branch. Its figures belong here when it finishes: how many of the 335 bodies it replaces hold "ref on ours" in the default tessellation and in the fine one, and the 269 among them in particular.
+
+### 4.4 Every other curved saved-mesh body (run 41850769925)
+
+Under `--saved-meshes`, 3,816 bodies are scored (Core Interior 138, the office 1,650 and 1,738, the terrain files 16 each, RE1 53, 47, 68 and 60, the R2025 models 30). **295 are meshed differently**, which makes them the curved bodies of Revit's export; the other 3,521 are faceted and have the same scores in both tessellations. The classes with a curved body:
+
+| model | class | bodies | meshed differently | ref on ours: both | default only | fine only | neither | both directions 0.001 ft: both | default only | fine only | neither | fine: ref on ours within 0.0015 ft | largest ref on ours, ft |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| RE1 Architecture | IfcFurnishingElement | 21 | 1 | 21 | 0 | 0 | 0 | 18 | 0 | 0 | 3 | 21 | 0.000980 |
+| RE1 Architecture | IfcBuildingElementProxy | 9 | 2 | 9 | 0 | 0 | 0 | 8 | 0 | 1 | 0 | 9 | 0.000980 |
+| RE1 Architecture | IfcFlowTerminal | 6 | 1 | 3 | 0 | 0 | 3 | 2 | 0 | 1 | 3 | 3 | 0.004030 |
+| RE1 Electrical | IfcBuildingElementProxy | 28 | 6 | 28 | 0 | 0 | 0 | 22 | 0 | 6 | 0 | 28 | 0.000953 |
+| RE1 Electrical | IfcFlowTerminal | 14 | 10 | 14 | 0 | 0 | 0 | 4 | 0 | 10 | 0 | 14 | 0.000953 |
+| RE1 Plumbing | IfcFlowFitting | 54 | 1 | 39 | 0 | 0 | 15 | 1 | 0 | 0 | 53 | 39 | 0.017311 |
+| RE1 Plumbing | IfcFlowTerminal | 6 | 6 | 6 | 0 | 0 | 0 | 6 | 0 | 0 | 0 | 6 | 0.000702 |
+| office, as built | IfcWasteTerminal | 78 | 78 | 59 | 19 | 0 | 0 | 0 | 0 | 59 | 19 | 78 | 0.001001 |
+| office, as built | IfcLightFixture | 43 | 43 | 43 | 0 | 0 | 0 | 43 | 0 | 0 | 0 | 43 | 0.000016 |
+| office, as built | IfcStair | 2 | 2 | 2 | 0 | 0 | 0 | 2 | 0 | 0 | 0 | 2 | 0.000282 |
+| office, permit | IfcWasteTerminal | 78 | 78 | 59 | 19 | 0 | 0 | 0 | 0 | 59 | 19 | 78 | 0.001001 |
+| office, permit | IfcLightFixture | 43 | 43 | 43 | 0 | 0 | 0 | 43 | 0 | 0 | 0 | 43 | 0.000003 |
+| office, permit | IfcStair | 2 | 2 | 2 | 0 | 0 | 0 | 2 | 0 | 0 | 0 | 2 | 0.000282 |
+| office terrain, concrete | IfcWasteTerminal | 11 | 11 | 11 | 0 | 0 | 0 | 0 | 0 | 11 | 0 | 11 | 0.000965 |
+| office terrain, timber | IfcWasteTerminal | 11 | 11 | 11 | 0 | 0 | 0 | 0 | 0 | 11 | 0 | 11 | 0.000965 |
+
+Core Interior, RE1 Mechanical and the R2025 models have none.
+
+- **"Ref on ours" at 0.001 ft.** Today 3,759 of 3,816 hold it. In the fine tessellation 3,721 do: both 3,721, **default only 38**, fine only 0, neither 57. The 38 are `IfcWasteTerminal` saved meshes, 19 in each office file, over the bar by at most 1.1e-6 ft; every one of the 78 per file is within 0.0015 ft. The 57 that miss in both are the same bodies as today (the office's 14 as built and 16 at permit, sinks and a flow terminal; RE1 Architecture's 3, Mechanical's 3 and Plumbing's 15; the 6 doors of R2025 12 to 17), and no fine-only body exists: a mesh that is Revit's chords can only be as far from the true surface in the fine tessellation as it is.
+- **Both directions within 0.001 ft.** Today 3,512 of 3,816 hold it; in the fine tessellation 3,670: **fine only 158**, default only 0, neither 146. The 158 are the terminals (59 in each office file, 11 in each terrain file) and RE1 Electrical's 16 and Architecture's 2 curved proxies and terminals, which Revit's own coarse polygon of a circle made miss the default column, and a finer polygon of both makes hold.
+- **Volume.** The terminals' median volume ratio is 0.9962 in the fine tessellation against 1.0035 in the default one: the saved mesh is 0.4% under the true circle, and in the fine tessellation `vol .01%` holds for none of them.
+- **Boxes** (`saved_meshes_vs_ifc`, an even stride of at most 300 per class): every sampled body stays within 0.01 ft of Revit's box in both tessellations, except two walls at permit that miss it in both. Within 0.001 ft the office as built goes from 1,572 to 1,650 of 1,650 sampled, the 78 terminals being the difference (0 of 78 in the default tessellation), and the office at permit from 1,658 to 1,736 of 1,738; the other models do not change.
 
 ## 5. Options for the bar
 
-OPTIONS
+The decision is Griffin's. Each option below is stated with what the runs of section 4 measured for it. The family-extrusion bodies and the doors and windows are not in the difference between them (4.1 and 4.2: no verdict changes); what differs is the 3,816 saved-mesh bodies of 4.4, and what rvt-rs may draw.
+
+| | **1. Keep the default tessellation** | **2. "Ref on ours" in the fine tessellation** | **3. Report both; the fine one decides only for bodies Revit writes as true curves** |
+|---|---|---|---|
+| What decides | today's rule: both files meshed by IfcOpenShell's defaults, 0.001 ft | the same bar, both files meshed at the fine deflection | for a body rvt-rs draws as true arcs against Revit's true circle (a family extrusion), the fine tessellation; for a saved mesh, which is itself a tessellation, today's rule |
+| Bodies that change verdict (3,816 saved-mesh bodies; 66 family bodies; 1,368 doors and windows) | none | **38 saved meshes would fail "ref on ours"** (19 `IfcWasteTerminal` in each office file, over the bar by at most 1.1e-6 ft); 158 would newly hold both directions within 0.001 ft; no door, window or family body changes. With the bar at 0.0015 ft none fails | none of the saved meshes, doors, windows or the 66 family bodies; the arcs it would let in are judged by the fine tessellation |
+| 0.14.0 changelog's door and window counts | unchanged | unchanged (no door or window is meshed differently, 4.1) | unchanged |
+| Docs (`docs/supported-profile.md`, `docs/evidence.md`) | unchanged: the family-extrusion rows keep "an arc over 0.12 ft keeps its mesh" and the dispenser as "a count mismatch" | the "every vertex within 0.001 ft" figures rise (the office as built from 1,554 to 1,613 of 1,650 scored, at permit from 1,638 to 1,697 of 1,738, in 41850769925's counts; the terrain files and RE1 Electrical too), the family-extrusion rows change with the rule, and the count-mismatch explanation of the dispenser is restated as a tessellation artefact | the saved-mesh figures are unchanged; the family-extrusion rows change with the rule (66 replaced bodies growing by the arcs drawn), and the dispenser's explanation is restated as a tessellation artefact |
+| 1.0 criterion W6 (its sentence on the saved meshes: "every vertex within 0.001 ft" on Core Interior's 138 and the office's 1,294 of 1,709) | unchanged | the office count rises, Core Interior's 138 of 138 does not move | unchanged |
+| What rvt-rs may draw | nothing new: any arc over 0.12 ft in radius keeps its saved mesh (269 bodies on the measured models) | true arcs for big circles again in every release (the 269, up to the first arc run's 335 replaced), if run 41854514903 shows they hold | the same arcs |
+| What it costs | nothing | 38 saved meshes that are Revit's own tessellation fall under a bar they were built to meet; the fine tessellation is a second definition of the 0.001 ft figures | a body is judged by one tessellation or the other by how it is written, which needs a rule for "Revit writes it as a true curve" (the form the census prints for Revit's body is the evidence) |
+
+In plain terms. Option 1 changes nothing and keeps big circles as meshes. Option 2 moves the measure itself to the true shape: 38 of Revit's own saved meshes would stop counting as exact by about a micrometre, 158 curved bodies would start counting as exact in both directions, and big circles could be drawn again. Option 3 moves no existing figure and lets big circles be drawn again, judged by the fine tessellation, at the price of a rule that says which bodies Revit writes as true curves.
+
+Neither 2 nor 3 changes what rvt-rs writes today; the follow-up in either case is the one #1355 names: restoring true arcs for big circles, which `src/ifc/family_extrusions.rs` keeps as meshes under the any-arc rule of #1346. Run 41854514903 is the measurement that decides whether that follow-up holds the bar in the fine tessellation.
 
 ## 6. Not done, and not measured
 
 - **Analytic distances** for planes, cylinders and circles (the issue's "where cheaper and exact") are not used. The fine tessellation alone reaches the 1e-5 ft the two forms of a circle need (section 3.2) at 0.2 to 0.3 s per circle body, bounded by the scorers' 300 bodies per class, so an exact surface model of each body would have added code without changing a figure. Circles over 2 ft in radius were not measured.
+- **rvt-rs's own export with every arc drawn, in the fine tessellation**, until run 41854514903 finishes (section 4.3): the flag runs cannot show it, because the current rule keeps those arcs as meshes.
 - **IfcOpenShell other than 0.9.0.post1**, which is what CI pins and what the values of section 2 were found on; another consumer's tessellation of an arc.
 - **Bodies the scorers do not reach**: more than 300 of a class (every Nth is scored, as in the default mode), and a body IfcOpenShell cannot mesh at either deflection.
 - **A tolerance for the fine tessellation** other than the three columns of "ref on ours" (0.001, 0.0015 and 0.002 ft): the bar is Griffin's.
@@ -115,4 +234,20 @@ python3 tools/re/arc_tessellation_study.py RE1-Architecture.ifc --write-ours our
 RVT_SCORER_FINE_MESH=1 python3 tools/re/family_extrusion_bodies_vs_ifc.py ours.ifc RE1-Architecture.ifc
 ```
 
-RUN_COMMANDS
+```bash
+gh workflow run measure.yml --ref feat/1355-scorer-fine-mode -f ref=e024f03c9cd14837c8ed49d0ab38d1fd414ff02b \
+  -f base=none -f nordic=true -f r2025=true -f holdout=true -f fine_mesh=true
+gh workflow run measure.yml --ref feat/1355-scorer-fine-mode -f ref=e024f03c9cd14837c8ed49d0ab38d1fd414ff02b \
+  -f base=none -f nordic=true -f r2025=true -f fine_mesh=true \
+  -f models="core-interior re1-* einhoven nordic-office-* r2025-*" -f ifc_flags="--saved-meshes --family-extrusions" \
+  -f scorers="family_extrusion_bodies_vs_ifc mesh_bodies_vs_ifc saved_meshes_vs_ifc"
+gh workflow run measure.yml --ref feat/1355-scorer-fine-mode -f ref=e024f03c9cd14837c8ed49d0ab38d1fd414ff02b \
+  -f base=none -f nordic=true -f r2025=true -f fine_mesh=true \
+  -f models="core-interior re1-* einhoven nordic-office-* r2025-*" -f ifc_flags="--saved-meshes" \
+  -f scorers="family_extrusion_bodies_vs_ifc mesh_bodies_vs_ifc saved_meshes_vs_ifc"
+gh workflow run measure.yml --ref feat/1355-scorer-fine-mode -f ref=aaa38de808f1731acf6f6a6dace59904f873335b \
+  -f base=none -f nordic=true -f fine_mesh=true -f models="core-interior re1-* nordic-office-*" \
+  -f ifc_flags="--saved-meshes --family-extrusions" -f scorers="family_extrusion_bodies_vs_ifc"
+```
+
+Once this lands, `--ref main` replaces the branch. The `fine` rows are in each model's `mesh_bodies_vs_ifc.txt`, `saved_meshes_vs_ifc.txt` and `family_extrusion_bodies_vs_ifc.txt`; the held-out models keep their counts only (`tools/ci/scrub-holdout-results.sh`), which section 4.1 sums over the models that hold some.
