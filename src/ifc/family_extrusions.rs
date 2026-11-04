@@ -5,8 +5,11 @@
 //! extruded between. Where the bodies of a family's instances are the meshes
 //! Revit saved for display ([`super::saved_meshes`]), [`attach`] rebuilds the
 //! family's extrusions and draws the instance from them instead, as
-//! `IfcExtrudedAreaSolid`s over `IfcIndexedPolyCurve` profiles whose arcs are
-//! arcs, the form Revit's own export writes.
+//! `IfcExtrudedAreaSolid`s over `IfcIndexedPolyCurve` profiles of straight
+//! segments. An instance with an arc in a profile keeps its mesh: Revit's
+//! export tessellates an arc from a start the file does not give, and where
+//! that is out of phase with a consumer's tessellation of ours, Revit's
+//! vertices lie up to 0.0014 ft from the extrusions' (RE-327 section 9).
 //!
 //! An instance keeps its saved mesh unless the extrusions reproduce it. The
 //! family's document holds the family as saved, and a placed instance is
@@ -61,7 +64,7 @@ const SURFACE_TOLERANCE: f64 = 1.1e-3;
 
 /// What [`attach`] did. Every instance drawn from a saved mesh is counted
 /// once: `candidates = replaced + not_rebuilt + unplaced + unchecked +
-/// volume_differs + vertices_differ + surface_differs + unwritable`.
+/// volume_differs + vertices_differ + surface_differs + arcs + unwritable`.
 #[derive(Debug, Default, Clone, PartialEq, Eq, serde::Serialize)]
 #[non_exhaustive]
 pub struct FamilyExtrusionReport {
@@ -89,6 +92,12 @@ pub struct FamilyExtrusionReport {
     pub volume_differs: usize,
     pub vertices_differ: usize,
     pub surface_differs: usize,
+    /// Candidates the extrusions reproduce, left with their mesh because a
+    /// profile has an arc: Revit's export tessellates its arcs from a start
+    /// the file does not give, and where the two tessellations are out of
+    /// phase Revit's vertices lie up to 0.0014 ft from the extrusions'
+    /// (RE-327 section 9).
+    pub arcs: usize,
     /// Candidates the extrusions reproduce whose profile cannot be written.
     pub unwritable: usize,
 }
@@ -438,6 +447,15 @@ pub fn attach(
         }
         if agreement.surface_max > SURFACE_TOLERANCE {
             report.surface_differs += 1;
+            continue;
+        }
+        let has_arc = local
+            .iter()
+            .flat_map(|solid| solid.profile.loops.iter())
+            .flat_map(|profile_loop| profile_loop.curves.iter())
+            .any(|curve| matches!(curve, Curve::Arc { .. }));
+        if has_arc {
+            report.arcs += 1;
             continue;
         }
         let placed: Option<Vec<Vec<SolidShape>>> = local.iter().map(placed_extrusions).collect();

@@ -92,11 +92,11 @@ struct Args {
     #[arg(long, conflicts_with = "placeholder")]
     no_saved_meshes: bool,
     /// Draw a family instance from its family's own extrusions (the sketch
-    /// curves they were drawn from, swept between their offsets, with true
-    /// arcs) instead of its saved mesh, where they reproduce the mesh; every
-    /// other instance keeps it (#156). Off by default. Implies
-    /// `--saved-meshes`. Each instance is checked against its own mesh. Revit
-    /// 2023 to 2027 files. Slower on large files.
+    /// lines they were drawn from, swept between their offsets) instead of
+    /// its saved mesh, where they reproduce the mesh; every other instance,
+    /// and every one with an arc in a profile, keeps it (#156). Off by
+    /// default. Implies `--saved-meshes`. Each instance is checked against its
+    /// own mesh. Revit 2023 to 2027 files. Slower on large files.
     #[arg(long, conflicts_with_all = ["placeholder", "no_saved_meshes"])]
     family_extrusions: bool,
     /// Also write Revit's own property sets, as Revit's exporter does with
