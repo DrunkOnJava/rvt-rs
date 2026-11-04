@@ -89,6 +89,18 @@ pub struct UnreadStream {
     pub limit: u64,
 }
 
+/// One phase of a project: its ElementId and, where the file names it, its
+/// name ([`RevitFile::project_phases`]).
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[non_exhaustive]
+pub struct ProjectPhase {
+    /// The phase's ElementId, which [`RevitFile::set_export_phase`] takes as
+    /// well as its name.
+    pub id: i64,
+    /// The phase's name (`ProjectPhase.m_name`), if the file holds one.
+    pub name: Option<String>,
+}
+
 /// Which resource limit stopped a stream ([`UnreadStream`]).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 #[non_exhaustive]
@@ -903,6 +915,33 @@ impl RevitFile {
         );
         self.phase_filter = Some(Arc::clone(&computed));
         computed
+    }
+
+    /// The project's phases in order, the last being the one an export shows
+    /// unless [`Self::set_export_phase`] chooses another. Empty where the
+    /// export applies no phase: a family, a release whose phases are not read
+    /// (Revit 2015 and earlier), or a file whose phases could not be read.
+    /// Reads nothing the export does not.
+    pub fn project_phases(&mut self) -> Vec<ProjectPhase> {
+        if let Ok(release) = self.layout_release() {
+            if crate::partition_element_records_2023::is_32bit_release(release)
+                && !crate::partition_element_records_2023::applies_export_filters(release)
+            {
+                return Vec::new();
+            }
+        }
+        let filter = self.memoised_phase_filter();
+        if filter.read_error.is_some() {
+            return Vec::new();
+        }
+        filter
+            .order
+            .iter()
+            .map(|id| ProjectPhase {
+                id: *id,
+                name: filter.names.get(id).cloned(),
+            })
+            .collect()
     }
 
     /// Choose the phase the export shows, by the phase's name (exactly) or

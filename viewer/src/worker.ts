@@ -8,6 +8,9 @@
  *                    limits?: OpenLimitsOptions }
  *                  `limits` are the reader's resource limits; absent means the
  *                  defaults (the large-model retry sends `largeModel: true`).
+ *                  `limits.phase` (a phase's name or ElementId) exports that
+ *                  project phase, as `rvt-ifc --phase` does; absent is the
+ *                  project's last.
  *   main → worker: { type: 'info', index: number }
  *   worker → main: { type: 'progress', step: string }
  *   worker → main: { type: 'stage', stage, done, total, wasmMemoryBytes } (#1195)
@@ -20,7 +23,11 @@
  *                  ends and once per whole percent in between.
  *   worker → main: { type: 'summary', summary, document } (VW1-20 partial;
  *                   `document` is the FileMetadata or null)
- *   worker → main: { type: 'ready', model, scene, glb, types, diagnostics, stats }
+ *   worker → main: { type: 'ready', model, scene, glb, types, diagnostics, stats,
+ *                    phases }
+ *                  `phases` is the project's phases in order, `{ id, name? }`,
+ *                  the last being the default export's; empty where the export
+ *                  applies no phase.
  *                  `stats` is { openMs, workerMs, wasmMemoryBytes }: the
  *                  milliseconds spent in the wasm open (saved meshes included)
  *                  and in the whole parse, and the wasm linear memory after it,
@@ -52,6 +59,8 @@ interface OpenLimitsOptions {
   maxInflateBytes?: number;
   /** Draw doors and windows from their saved meshes; the binding's default is true. */
   savedMeshes?: boolean;
+  /** The project phase to export, by name or ElementId; the binding's default is the last. */
+  phase?: string | number;
 }
 
 /** The decoder's last report before a stop. */
@@ -195,6 +204,7 @@ self.addEventListener('message', async (ev: MessageEvent<ParseMsg>) => {
     ) as {
       model: unknown;
       diagnostics: unknown;
+      phases?: unknown[];
     };
     const openMs = performance.now() - openStartedAt;
     // The open call is over: a stop after it is in the worker's own steps.
@@ -228,6 +238,7 @@ self.addEventListener('message', async (ev: MessageEvent<ParseMsg>) => {
         glb,
         schedule,
         diagnostics: exportResult.diagnostics,
+        phases: exportResult.phases ?? [],
         stats,
       },
       // Cast for lib.dom.d.ts variants that parameterise

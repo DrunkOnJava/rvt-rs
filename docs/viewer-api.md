@@ -264,6 +264,28 @@ opens with. It is a laptop's figure: Deploy viewer's runner takes about
 since #1195 the card shows the decoder's own progress as soon as it reports,
 and the hint is only the first thing it says.
 
+## Export phase
+
+A Revit project can hold several phases, and an export shows one: the last, as
+Revit's own does. An element that does not exist in the export phase, and a
+room whose own phase is not it, are left out, and the diagnostics count them
+(#1339, RE-326). `limits.phase` of
+`openRvtBytesWithDiagnosticsModeAndOpenLimits` exports another, as `rvt-ifc
+--phase` and the Python API's `phase` do: a phase's name (matched exactly
+first) or its ElementId as a number. Left out, the export is the last phase,
+so a call without it returns what it always did. A phase the file lacks
+throws, and its message lists the file's phases.
+
+The result carries `phases`, the project's phases in order, `[{ id, name? }]`,
+the last being the default export's; it is empty for a family, for Revit 2015
+and earlier, and for a file whose phases could not be read. The viewer lists
+them in the File status panel ("Phase", the last marked as the default) and
+reads the file again with the chosen phase, as it does for the saved-mesh
+option; the model, the schedules and every export it offers are then that
+phase's. A file with one phase shows it fixed, and a file with none hides the
+field. The worker forwards `limits.phase` from its `parse` message and sends
+`phases` with `ready`.
+
 ## Decode progress
 
 `openRvtBytesWithDiagnosticsModeAndOpenLimits(bytes, mode, limits, progress)`
@@ -471,7 +493,7 @@ describing the error.
 | Binding | Arguments | Returns | What it does |
 |---|---|---|---|
 | `openRvtBytesWithDiagnosticsMode` | `bytes`, `mode: string` | `{ model, diagnostics }` | The same at an export quality mode: `scaffold`, `typed-no-geometry`, `geometry` or `strict`, the stronger ones failing when the file cannot meet them. Doors and windows are drawn from their saved meshes, as in the next row with the default options |
-| `openRvtBytesWithDiagnosticsModeAndOpenLimits` | `bytes`, `mode: string`, `limits: { largeModel?, maxStreamBytes?, maxInflateBytes?, savedMeshes? }` or `null`, `progress?: (stage: string, done: number, total: number \| null) => void` | `{ model, diagnostics }` | `openRvtBytesWithDiagnosticsMode` under the reader's resource limits: `largeModel` is `rvt-ifc --large-model` (streams up to 2 GiB, inflating up to the 4 GiB wasm32 holds, the walker's scan cap lifted to match), `maxStreamBytes` and `maxInflateBytes` are whole numbers of bytes that win over it, and a field left out keeps its default. `savedMeshes` (default `true`) draws the doors and windows of Revit 2023 to 2027 files from the meshes Revit saved for them, as `rvt-ifc` does by default; `false` keeps their bounding boxes and skips the pass over the saved graphics. A stream a limit stops is listed in the diagnostics (`stream_not_read_resource_limit`, a `Not read whole:` warning each) and the viewer offers "Retry with large-model limits"; unknown fields and fractional or negative limits throw. When the saved graphics cannot be read the model keeps its boxes and the diagnostics carry a warning. `progress`, when given, is called as the decoder works with the stage name (`schema-parse`, `candidate-scan`, `element-decode`, `partition-scan`, `saved-graphics`, `saved-meshes`) and how many of how many it has done (`total` is `null` where the stage has no count yet), at a stage's start, its end and each whole percent between; see [Decode progress](#decode-progress). A function that throws is ignored |
+| `openRvtBytesWithDiagnosticsModeAndOpenLimits` | `bytes`, `mode: string`, `limits: { largeModel?, maxStreamBytes?, maxInflateBytes?, savedMeshes?, phase? }` or `null`, `progress?: (stage: string, done: number, total: number \| null) => void` | `{ model, diagnostics, phases }` | `openRvtBytesWithDiagnosticsMode` under the reader's resource limits: `largeModel` is `rvt-ifc --large-model` (streams up to 2 GiB, inflating up to the 4 GiB wasm32 holds, the walker's scan cap lifted to match), `maxStreamBytes` and `maxInflateBytes` are whole numbers of bytes that win over it, and a field left out keeps its default. `savedMeshes` (default `true`) draws the doors and windows of Revit 2023 to 2027 files from the meshes Revit saved for them, as `rvt-ifc` does by default; `false` keeps their bounding boxes and skips the pass over the saved graphics. `phase` (a phase's name, matched exactly first, or its ElementId as a number) exports that project phase, as `rvt-ifc --phase` does; see [Export phase](#export-phase). A stream a limit stops is listed in the diagnostics (`stream_not_read_resource_limit`, a `Not read whole:` warning each) and the viewer offers "Retry with large-model limits"; unknown fields and fractional or negative limits throw. When the saved graphics cannot be read the model keeps its boxes and the diagnostics carry a warning. `progress`, when given, is called as the decoder works with the stage name (`schema-parse`, `candidate-scan`, `element-decode`, `partition-scan`, `saved-graphics`, `saved-meshes`) and how many of how many it has done (`total` is `null` where the stage has no count yet), at a stage's start, its end and each whole percent between; see [Decode progress](#decode-progress). A function that throws is ignored |
 | `quickSummary` | `bytes` | `Summary` | Release, build, PartAtom and the stream inventory, read without decoding the model |
 | `fileMetadata` | `bytes` | `FileMetadata` | Document identity (release, worksharing, last save, GUID, save counter), from the two identity streams only |
 | `scheduleCsv` | `model`, `kind: string`, `metric: boolean`, `excel: boolean` | `string` | The element (`kind` `"elements"`) or room (`"rooms"`) schedule as CSV, the columns of the [user guide](user-guide.md#get-a-schedule-into-excel) |

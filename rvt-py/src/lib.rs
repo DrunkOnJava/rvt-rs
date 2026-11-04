@@ -37,9 +37,9 @@
 #![allow(unsafe_op_in_unsafe_fn)]
 #![allow(clippy::useless_conversion)]
 
-use pyo3::exceptions::{PyFileNotFoundError, PyIOError, PyValueError};
+use pyo3::exceptions::{PyFileNotFoundError, PyIOError, PyTypeError, PyValueError};
 use pyo3::prelude::*;
-use pyo3::types::{PyAny, PyBytes, PyDict, PyList};
+use pyo3::types::{PyAny, PyBool, PyBytes, PyDict, PyList};
 
 use rvt::{RevitFile as RustRevitFile, elem_table, elements, ifc, walker};
 
@@ -74,17 +74,42 @@ fn parse_export_quality_mode(mode: &str) -> PyResult<ifc::ExportQualityMode> {
     ifc::ExportQualityMode::parse(mode).map_err(to_py_val)
 }
 
+/// The `phase` argument of an export: a phase's name (`str`), its ElementId
+/// (`int`), or `None` for the project's last phase. A name is matched first and
+/// an ElementId only when no phase has that name, as `rvt-ifc --phase` does.
+fn phase_argument(phase: Option<&Bound<'_, PyAny>>) -> PyResult<Option<String>> {
+    let Some(phase) = phase.filter(|phase| !phase.is_none()) else {
+        return Ok(None);
+    };
+    if phase.is_instance_of::<PyBool>() {
+        return Err(PyTypeError::new_err(
+            "phase must be a phase name (str), an ElementId (int) or None, not a bool",
+        ));
+    }
+    if let Ok(name) = phase.extract::<String>() {
+        return Ok(Some(name));
+    }
+    if let Ok(id) = phase.extract::<i64>() {
+        return Ok(Some(id.to_string()));
+    }
+    Err(PyTypeError::new_err(
+        "phase must be a phase name (str), an ElementId (int) or None",
+    ))
+}
+
 /// The default IFC export of `rf` (`ifc::run_export_with_limits`, the build `rvt-ifc`
 /// runs), drawing doors and windows from their saved meshes (Revit 2023 to
-/// 2027) when `saved_meshes`. Saved graphics only improve bodies: when they
-/// cannot be read, the export keeps the bodies it has and a `RuntimeWarning`
-/// says so.
+/// 2027) when `saved_meshes`, at `phase` (`None`: the project's last). Saved
+/// graphics only improve bodies: when they cannot be read, the export keeps the
+/// bodies it has and a `RuntimeWarning` says so. A phase the file lacks raises
+/// `ValueError`, listing the file's phases.
 fn export_run(
     py: Python<'_>,
     rf: &mut RustRevitFile,
     mode: ifc::ExportQualityMode,
     walker_limits: walker::WalkerLimits,
     saved_meshes: bool,
+    phase: Option<String>,
 ) -> PyResult<ifc::ExportRun> {
     let options = ifc::ExportOptions::default()
         .with_mode(mode)
@@ -92,7 +117,8 @@ fn export_run(
             ifc::SavedMeshChoice::Default
         } else {
             ifc::SavedMeshChoice::Off
-        });
+        })
+        .with_phase(phase);
     let run = ifc::run_export_with_limits(rf, &options, walker_limits).map_err(to_py_val)?;
     for note in run.notes.iter().filter(|note| note.skipped().is_some()) {
         let category = py.import("builtins")?.getattr("RuntimeWarning")?;
@@ -108,6 +134,7 @@ fn write_ifc_with_quality_mode(
     mode: ifc::ExportQualityMode,
     allow_partial: bool,
     saved_meshes: bool,
+    phase: Option<String>,
 ) -> PyResult<String> {
     write_ifc_with_quality_mode_and_limits(
         py,
@@ -116,6 +143,7 @@ fn write_ifc_with_quality_mode(
         walker::WalkerLimits::default(),
         allow_partial,
         saved_meshes,
+        phase,
     )
 }
 
@@ -126,8 +154,9 @@ fn write_ifc_with_quality_mode_and_limits(
     walker_limits: walker::WalkerLimits,
     allow_partial: bool,
     saved_meshes: bool,
+    phase: Option<String>,
 ) -> PyResult<String> {
-    let run = export_run(py, rf, mode, walker_limits, saved_meshes)?;
+    let run = export_run(py, rf, mode, walker_limits, saved_meshes, phase)?;
     // #1075: a stream a resource limit kept from being read leaves the
     // export without what it holds; refuse unless the caller accepts that.
     if !allow_partial && !run.unread.is_empty() {
@@ -316,6 +345,33 @@ fn decoded_element_to_dict<'py>(
 struct PyRevitFile {
     inner: RustRevitFile,
     walker_limits: walker::WalkerLimits,
+    /// Whether an export through this handle named a phase. The handle keeps
+    /// the phase it was given, so a later call that names none sets the
+    /// project's last phase again.
+    phase_set: bool,
+}
+
+impl PyRevitFile {
+    /// The phase an export through this handle runs at, from its `phase`
+    /// argument: the one named, the project's last when an earlier call moved
+    /// the handle off it, or none when the handle has never left it.
+    fn phase_for_export(&mut self, phase: Option<&Bound<'_, PyAny>>) -> PyResult<Option<String>> {
+        match phase_argument(phase)? {
+            Some(phase) => {
+                self.phase_set = true;
+                Ok(Some(phase))
+            }
+            None if self.phase_set => {
+                self.phase_set = false;
+                Ok(self
+                    .inner
+                    .project_phases()
+                    .last()
+                    .map(|last| last.id.to_string()))
+            }
+            None => Ok(None),
+        }
+    }
 }
 
 #[pymethods]
@@ -369,6 +425,7 @@ impl PyRevitFile {
         Ok(Self {
             inner,
             walker_limits,
+            phase_set: false,
         })
     }
 
@@ -764,15 +821,22 @@ impl PyRevitFile {
     /// meshes Revit saved for them where all of a mesh decodes, as `rvt-ifc`
     /// draws them; `saved_meshes=False` keeps their bounding boxes
     /// (`rvt-ifc --no-saved-meshes`).
-    #[pyo3(signature = (mode = "scaffold", allow_partial = false, saved_meshes = true))]
+    ///
+    /// `phase` (a phase's name or its ElementId, default the project's last)
+    /// exports that phase, as `rvt-ifc --phase` does: an element that does not
+    /// exist in it, and a room whose own phase is not it, are left out. A
+    /// phase the file lacks raises `ValueError`, listing the file's phases.
+    #[pyo3(signature = (mode = "scaffold", allow_partial = false, saved_meshes = true, phase = None))]
     fn write_ifc(
         &mut self,
         py: Python<'_>,
         mode: &str,
         allow_partial: bool,
         saved_meshes: bool,
+        phase: Option<&Bound<'_, PyAny>>,
     ) -> PyResult<String> {
         let mode = parse_export_quality_mode(mode)?;
+        let phase = self.phase_for_export(phase)?;
         write_ifc_with_quality_mode_and_limits(
             py,
             &mut self.inner,
@@ -780,6 +844,7 @@ impl PyRevitFile {
             self.walker_limits,
             allow_partial,
             saved_meshes,
+            phase,
         )
     }
 
@@ -789,17 +854,28 @@ impl PyRevitFile {
     /// `kind="rooms"` (number, name, level). `metric=True` writes lengths in
     /// metres; `excel=True` prefixes a UTF-8 byte-order mark for Excel on
     /// Windows. Only decoded values are written; unknowns are empty cells.
-    #[pyo3(signature = (kind = "elements", metric = false, excel = false))]
-    fn schedule_csv(&mut self, kind: &str, metric: bool, excel: bool) -> PyResult<String> {
+    /// `phase` (a phase's name or its ElementId, default the project's last)
+    /// schedules that export phase, as `write_ifc` does.
+    #[pyo3(signature = (kind = "elements", metric = false, excel = false, phase = None))]
+    fn schedule_csv(
+        &mut self,
+        py: Python<'_>,
+        kind: &str,
+        metric: bool,
+        excel: bool,
+        phase: Option<&Bound<'_, PyAny>>,
+    ) -> PyResult<String> {
         use rvt::ifc::schedule_csv::{CsvOptions, LengthUnit, elements_csv, rooms_csv};
-        let model = ifc::RvtDocExporter
-            .export_with_diagnostics_mode_and_limits(
-                &mut self.inner,
-                ifc::ExportQualityMode::Scaffold,
-                self.walker_limits,
-            )
-            .map_err(to_py_val)?
-            .model;
+        let phase = self.phase_for_export(phase)?;
+        let model = export_run(
+            py,
+            &mut self.inner,
+            ifc::ExportQualityMode::Scaffold,
+            self.walker_limits,
+            false,
+            phase,
+        )?
+        .model;
         let options = CsvOptions {
             unit: if metric {
                 LengthUnit::Metres
@@ -823,26 +899,36 @@ impl PyRevitFile {
     /// for bug reports, support bundles, and automated readiness checks.
     /// `saved_meshes` is `write_ifc`'s: the diagnostics describe the export
     /// it writes.
-    #[pyo3(signature = (saved_meshes = true))]
-    fn export_diagnostics_json(&mut self, py: Python<'_>, saved_meshes: bool) -> PyResult<String> {
+    ///
+    /// `phase` is `write_ifc`'s: the diagnostics describe the export it writes.
+    #[pyo3(signature = (saved_meshes = true, phase = None))]
+    fn export_diagnostics_json(
+        &mut self,
+        py: Python<'_>,
+        saved_meshes: bool,
+        phase: Option<&Bound<'_, PyAny>>,
+    ) -> PyResult<String> {
+        let phase = self.phase_for_export(phase)?;
         let run = export_run(
             py,
             &mut self.inner,
             ifc::ExportQualityMode::Scaffold,
             self.walker_limits,
             saved_meshes,
+            phase,
         )?;
         serde_json::to_string(&run.diagnostics).map_err(to_py_val)
     }
 
     /// Produce the default IFC export diagnostics as a Python dict.
-    #[pyo3(signature = (saved_meshes = true))]
+    #[pyo3(signature = (saved_meshes = true, phase = None))]
     fn export_diagnostics<'py>(
         &mut self,
         py: Python<'py>,
         saved_meshes: bool,
+        phase: Option<&Bound<'py, PyAny>>,
     ) -> PyResult<Bound<'py, PyAny>> {
-        let json = self.export_diagnostics_json(py, saved_meshes)?;
+        let json = self.export_diagnostics_json(py, saved_meshes, phase)?;
         let json_module = py.import("json")?;
         json_module.call_method1("loads", (json,))
     }
@@ -921,17 +1007,19 @@ impl PyRevitFile {
 /// read, unless `allow_partial=True`, and draws doors and windows from their
 /// saved meshes unless `saved_meshes=False`.
 #[pyfunction]
-#[pyo3(signature = (path, mode = "scaffold", allow_partial = false, saved_meshes = true))]
+#[pyo3(signature = (path, mode = "scaffold", allow_partial = false, saved_meshes = true, phase = None))]
 fn rvt_to_ifc(
     py: Python<'_>,
     path: &str,
     mode: &str,
     allow_partial: bool,
     saved_meshes: bool,
+    phase: Option<&Bound<'_, PyAny>>,
 ) -> PyResult<String> {
     let mut rf = RustRevitFile::open(path).map_err(to_py_io)?;
     let mode = parse_export_quality_mode(mode)?;
-    write_ifc_with_quality_mode(py, &mut rf, mode, allow_partial, saved_meshes)
+    let phase = phase_argument(phase)?;
+    write_ifc_with_quality_mode(py, &mut rf, mode, allow_partial, saved_meshes, phase)
 }
 
 /// Document identity for the file at `path` without loading the whole
@@ -953,15 +1041,22 @@ fn read_metadata<'py>(py: Python<'py>, path: &str, redact: bool) -> PyResult<Bou
 /// and return the JSON diagnostics sidecar of the export `rvt_to_ifc`
 /// writes with the same `saved_meshes`.
 #[pyfunction]
-#[pyo3(signature = (path, saved_meshes = true))]
-fn rvt_to_ifc_diagnostics(py: Python<'_>, path: &str, saved_meshes: bool) -> PyResult<String> {
+#[pyo3(signature = (path, saved_meshes = true, phase = None))]
+fn rvt_to_ifc_diagnostics(
+    py: Python<'_>,
+    path: &str,
+    saved_meshes: bool,
+    phase: Option<&Bound<'_, PyAny>>,
+) -> PyResult<String> {
     let mut rf = RustRevitFile::open(path).map_err(to_py_io)?;
+    let phase = phase_argument(phase)?;
     let run = export_run(
         py,
         &mut rf,
         ifc::ExportQualityMode::Scaffold,
         walker::WalkerLimits::default(),
         saved_meshes,
+        phase,
     )?;
     serde_json::to_string(&run.diagnostics).map_err(to_py_val)
 }
