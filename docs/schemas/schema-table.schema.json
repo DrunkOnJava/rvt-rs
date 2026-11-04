@@ -340,6 +340,53 @@
               }
             }
           }
+        },
+        {
+          "type": "object",
+          "required": [
+            "PointerArray"
+          ],
+          "properties": {
+            "PointerArray": {
+              "type": "object",
+              "required": [
+                "modifier",
+                "count"
+              ],
+              "properties": {
+                "modifier": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 255
+                },
+                "count": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "PointerContainer"
+          ],
+          "properties": {
+            "PointerContainer": {
+              "type": "object",
+              "required": [
+                "modifier"
+              ],
+              "properties": {
+                "modifier": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 255
+                }
+              }
+            }
+          }
         }
       ]
     }

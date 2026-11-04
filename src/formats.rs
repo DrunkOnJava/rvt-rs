@@ -332,14 +332,41 @@ pub enum FieldType {
     /// Anything we haven't classified yet. Preserves the raw bytes so
     /// downstream tools can reanalyse.
     Unknown { bytes: Vec<u8> },
-    /// `{kind} {sub} {flags} 0x00 ...` with `flags` 0x02, 0x12 or 0x22:
-    /// any other encoding with byte 2 set (RE-264). Revit 2027's schema
-    /// gives it to 325 fields that no 2016 to 2026 schema lists, and to no
-    /// other; with byte 2 cleared each decodes as `base`. Their names are
-    /// runtime state (`DBView::m_horzDirTemp`, `ImageSymbol::m_flags_unsaved`,
-    /// edit-mode managers). Whether instance data holds a value for them is
-    /// not measured, so readers treat them as [`FieldType::Unknown`].
+    /// `{kind} {sub} {flags} 0x00 ...`: any other encoding with byte 2 set to
+    /// 0x02, 0x12, 0x22 (RE-264) or 0x04 (RE-323); with byte 2 cleared it
+    /// decodes as `base`.
+    ///
+    /// Bit 1 (0x02, also set in 0x12 and 0x22): Revit 2027's schema gives it
+    /// to 339 fields, and the 2016 to 2026 family schemas to none. Their
+    /// names are runtime state (`DBView::m_horzDirTemp`,
+    /// `ImageSymbol::m_flags_unsaved`, edit-mode managers). Instance data
+    /// holds no bytes for them: the native graph decoder skips every such
+    /// field and still consumes each record body exactly, on every instance
+    /// of 110 of them in Autodesk's five 2027 sample projects (RE-323). The
+    /// walker has not measured them in its own record shapes, so it reads
+    /// them as [`FieldType::Unknown`].
+    ///
+    /// Byte 2 = 0x04: `VarExpr::m_refCt` in every release (`04 00 04 00`).
+    /// Its instances are a `base` value, an `i32` (RE-323).
     Flagged { flags: u8, base: Box<FieldType> },
+    /// `0x0e {modifier} 0x00 0x00 <count:u32>` with `modifier` 0x13: a
+    /// fixed array of `count` external pointers (`GEdge::m_pFace`,
+    /// `m_next`, `m_prev`, each with count 2). The count is in the schema;
+    /// each instance is `count` `u32` pointer tokens, with no class tag
+    /// (RE-323).
+    PointerArray { modifier: u8, count: u32 },
+    /// `0x0e {modifier} 0x00 0x00`, `modifier` 0x53 or 0x54: a `u32`-counted
+    /// container of pointers, with no class reference after the header.
+    /// 0x53 holds external pointers, a `u32` token each; 0x54 holds owning
+    /// pointers, a `u32` token and, where the token is not 0, the `u16` tag
+    /// of the object's own class (RE-323). The layouts were measured on
+    /// `VarSketchConstrObj::m_constrElems` (0x53) and
+    /// `VarSketchObj::m_params` (0x54), the only fields of either with
+    /// instances in the corpus; the other fields with these headers
+    /// (`LFormatDefaults::m_unit` and two siblings, `VarFunction::m_args`,
+    /// `VarSketchDimObj::m_refPts`) have none, and are classified by their
+    /// header alone.
+    PointerContainer { modifier: u8 },
 }
 
 impl FieldType {
@@ -349,7 +376,7 @@ impl FieldType {
         if bytes.is_empty() {
             return FieldType::Unknown { bytes: Vec::new() };
         }
-        if bytes.len() >= 4 && matches!(bytes[2], 0x02 | 0x12 | 0x22) && bytes[3] == 0x00 {
+        if bytes.len() >= 4 && matches!(bytes[2], 0x02 | 0x04 | 0x12 | 0x22) && bytes[3] == 0x00 {
             let mut unflagged = bytes.to_vec();
             unflagged[2] = 0x00;
             let base = FieldType::decode(&unflagged);
@@ -454,6 +481,13 @@ impl FieldType {
                     body: body_after_header.clone(),
                 },
                 0x0050 | 0x0051 => extract_container(0x0e, &body_after_header),
+                // A fixed array of external pointers: the u32 count follows
+                // the header (RE-323).
+                0x0013 if bytes.len() >= 8 => FieldType::PointerArray {
+                    modifier: bytes[1],
+                    count: u32::from_le_bytes([bytes[4], bytes[5], bytes[6], bytes[7]]),
+                },
+                0x0053 | 0x0054 => FieldType::PointerContainer { modifier: bytes[1] },
                 _ => FieldType::Unknown {
                     bytes: bytes.to_vec(),
                 },
@@ -513,6 +547,12 @@ impl FieldType {
                 out
             }
             FieldType::Unknown { bytes } => bytes.clone(),
+            FieldType::PointerArray { modifier, count } => {
+                let mut out = vec![0x0e, *modifier, 0x00, 0x00];
+                out.extend_from_slice(&count.to_le_bytes());
+                out
+            }
+            FieldType::PointerContainer { modifier } => vec![0x0e, *modifier, 0x00, 0x00],
             FieldType::Flagged { flags, base } => {
                 // A flagged string keeps the `08 60` form: in the common
                 // `08 00 60 00` byte 2 is the string's own.
@@ -880,8 +920,12 @@ fn scan_fields_until_next_class_bounded(
                 // immediately after the field name. We cap at 32 bytes
                 // because field_type's Unknown variant preserves the raw
                 // input, and we don't want to accidentally swallow the
-                // next field's header.
-                let enc_end = (post_name + 32).min(hard_stop);
+                // next field's header. The window runs to the end of the
+                // stream, not the end of this class's scan window: a field
+                // within 6 bytes of `hard_stop` was read as two bytes
+                // (`ZoningAppInfo::first` on Revit 2026, `0e 00` for a
+                // class reference) and left `Unknown` (RE-323).
+                let enc_end = (post_name + 32).min(data.len());
                 let field_type = if enc_end > post_name {
                     Some(FieldType::decode(&data[post_name..enc_end]))
                 } else {
