@@ -87,10 +87,11 @@ export of each, under CC BY-SA 4.0
 They hold what the reference models lack, and several fixes rest on them:
 a table of more than 65,535 records (#745), a reference Level at a storey's
 elevation (#746), columns cut by the slabs they join (#756). The archive,
-`ARCH.zip`, is 1.58 GB, so CI's tier-two job reads only the five files its
+`ARCH.zip`, is 1.58 GB, so CI's tier-two job reads only the six files its
 targets need, by byte range (`tools/ci/fetch-bim4lca.py`), and checks each
 against [`research/bim4lca-models.tsv`](../research/bim4lca-models.tsv):
-four `.rvt` models and Revit's IFC export of one. Locally, point
+five `.rvt` models (the small terrain office, concrete, among them) and
+Revit's IFC export of one. Locally, point
 `RVT_NORDIC_LCA_DIR` at a folder holding them
 ([`corpus/tier2/README.md`](../corpus/tier2/README.md)). Measure scores the
 concrete office, as built and at building permit, and the small terrain

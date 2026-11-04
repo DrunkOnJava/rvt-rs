@@ -47,14 +47,15 @@ The measured detail behind each row is in [`docs/evidence.md`](docs/evidence.md)
 
 ## Install and quick start
 
-The latest release is [v0.13.0](https://github.com/DrunkOnJava/rvt-rs/releases/tag/v0.13.0) (2026-11-03). Install it with any of:
+The latest release is [v0.14.0](https://github.com/DrunkOnJava/rvt-rs/releases/tag/v0.14.0) (2026-11-04). Install it with any of:
 
 - the prebuilt Linux, macOS and Windows binaries on [GitHub Releases](https://github.com/DrunkOnJava/rvt-rs/releases), or the container image `ghcr.io/drunkonjava/rvt-rs`;
 - `cargo install rvt --locked`;
 - `pip install rvt`, for the Python bindings;
+- `cargo install rvt-rs-mcp --locked`, for the [MCP server](#mcp-server) alone;
 - nothing at all: the [browser viewer](https://drunkonjava.github.io/rvt-rs/) reads a file inside the tab.
 
-[`docs/install.md`](docs/install.md) covers every channel, building from source and the smoke tests. This README describes `main`, which the browser viewer is also built from, so it can be ahead of the latest release: "Upgrading from 0.12" in the [changelog](CHANGELOG.md#upgrading-from-012) says what a user of 0.12 has to change, and each change `main` adds after 0.13.0 is a fragment in [`changelog.d/`](changelog.d/README.md), which the next release moves into `CHANGELOG.md`. To use `main` before the next release, build from source ([`docs/install.md`](docs/install.md#build-from-source)).
+[`docs/install.md`](docs/install.md) covers every channel, building from source and the smoke tests. This README describes `main`, which the browser viewer is also built from, so it can be ahead of the latest release: "Upgrading from 0.13" in the [changelog](CHANGELOG.md#upgrading-from-013) says what a user of 0.13 has to change, and each change `main` adds after 0.14.0 is a fragment in [`changelog.d/`](changelog.d/README.md), which the next release moves into `CHANGELOG.md`. To use `main` before the next release, build from source ([`docs/install.md`](docs/install.md#build-from-source)).
 
 Three commands cover most of what the command line does:
 
@@ -87,7 +88,7 @@ Every deploy checks the viewer's privacy posture in two ways. `viewer/scripts/au
 
 ## MCP server
 
-`rvt-rs-mcp` is a local, read-only [Model Context Protocol](https://modelcontextprotocol.io) server over stdio, the `rvt-mcp` workspace member, so an agent can ask about a Revit file with no Revit install and no network. `open_model` decodes a file once, with the decode `rvt-ifc` runs, and every tool (`get_summary`, `list_elements`, `get_element`, `list_rooms`, `list_levels`, `get_diagnostics`) answers from that same model, each element with its provenance, so an answer and the IFC export cannot disagree; `export_ifc` and `export_gltf` write to a path the agent names. It opens no socket and makes no network call, and it reports what it left out the way the CLIs do. It is a crate of its own, so `rvt` gains no async runtime, and it needs Rust 1.88, one above the CLIs. It is not in v0.13.0; [`docs/mcp.md`](docs/mcp.md) has the install, the client configuration, the tools, the handle lifetime and what it does not read.
+`rvt-rs-mcp` is a local, read-only [Model Context Protocol](https://modelcontextprotocol.io) server over stdio, the `rvt-mcp` workspace member, so an agent can ask about a Revit file with no Revit install and no network. `open_model` decodes a file once, with the decode `rvt-ifc` runs, and every tool (`get_summary`, `list_elements`, `get_element`, `list_rooms`, `list_levels`, `get_diagnostics`) answers from that same model, each element with its provenance, so an answer and the IFC export cannot disagree; `export_ifc` and `export_gltf` write to a path the agent names. It opens no socket and makes no network call, and it reports what it left out the way the CLIs do. It is a crate of its own, so `rvt` gains no async runtime, and it needs Rust 1.88, one above the CLIs. It ships from v0.14.0, in the release archives, the container image and as the `rvt-rs-mcp` crate; [`docs/mcp.md`](docs/mcp.md) has the install, the client configuration, the tools, the handle lifetime and what it does not read.
 
 ## What does not work yet
 

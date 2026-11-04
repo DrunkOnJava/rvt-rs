@@ -21,6 +21,12 @@ fn core_interior() -> Option<PathBuf> {
     path.exists().then_some(path)
 }
 
+fn re1_architecture() -> Option<PathBuf> {
+    let dir = std::env::var_os("RVT_PROJECT_CORPUS_DIR")?;
+    let path = PathBuf::from(dir).join("RE1-Architecture.rvt");
+    path.exists().then_some(path)
+}
+
 fn schedule(args: &[&std::ffi::OsStr]) -> Output {
     Command::new(env!("CARGO_BIN_EXE_rvt-schedule"))
         .args(args)
@@ -239,4 +245,61 @@ fn core_interior_schedules_match_the_measured_counts() {
         "a Core Interior room with no area"
     );
     let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// RE-326 (#1339): `--phase` schedules another phase, as `rvt-ifc --phase` and
+/// Python's `schedule_csv(phase=...)` do. RE1 Architecture's phases are
+/// Existing (12589) and New Construction (86961, the last), and its 11 rooms
+/// sit in the second.
+#[test]
+fn phase_chooses_the_scheduled_phase_of_a_real_file() {
+    let Some(rvt) = re1_architecture() else {
+        return;
+    };
+    let rooms = |phase: Option<&str>| -> Output {
+        let mut args: Vec<&std::ffi::OsStr> = vec![
+            rvt.as_os_str(),
+            "--schedule".as_ref(),
+            "rooms".as_ref(),
+            "-o".as_ref(),
+            "-".as_ref(),
+        ];
+        if let Some(phase) = phase {
+            args.push("--phase".as_ref());
+            args.push(phase.as_ref());
+        }
+        schedule(&args)
+    };
+    let rows = |output: &Output| -> usize {
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        csv_rows(&String::from_utf8_lossy(&output.stdout)).len() - 1
+    };
+
+    // The default is the last phase, with every room.
+    let default = rooms(None);
+    assert_eq!(rows(&default), 11);
+    // The last phase, by its name and by its ElementId, is the default.
+    for phase in ["New Construction", "86961"] {
+        assert_eq!(
+            rooms(Some(phase)).stdout,
+            default.stdout,
+            "--phase {phase} is the default schedule"
+        );
+    }
+    // The first phase has none of them.
+    for phase in ["Existing", "12589"] {
+        assert_eq!(rows(&rooms(Some(phase))), 0, "--phase {phase}");
+    }
+    // A phase the file lacks is an error that lists the file's phases.
+    let unknown = rooms(Some("No such phase"));
+    assert_eq!(unknown.status.code(), Some(1), "an unknown phase");
+    let stderr = String::from_utf8_lossy(&unknown.stderr);
+    assert!(
+        stderr.contains("Existing") && stderr.contains("New Construction"),
+        "the error lists the file's phases: {stderr}"
+    );
 }
