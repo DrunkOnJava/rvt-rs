@@ -42,7 +42,9 @@
 # same order ("-" for none); each probe then writes probe-<probe>.txt and
 # probe_score-<probe>.txt.
 # MEASURE_MODELS, when set, keeps only the models whose names match one of
-# its patterns (e.g. "nordic-office-* core-interior"). MEASURE_SCORERS, when
+# its patterns (e.g. "nordic-office-* core-interior"); MEASURE_SKIP, when set,
+# leaves out the models whose names match one of its patterns, which is how
+# the workflow's shards split the models between runners. MEASURE_SCORERS, when
 # set, runs on the models only the steps it names: tools/re scorers, and
 # info, gltf, schema and witness ("none" for none of them; rvt-gltf runs
 # when a .glb scorer or gltf is named). A tools/re script it names that is
@@ -144,9 +146,14 @@ unfilled_openings_vs_ifc"
 GLB_SCORERS="wall_bodies_vs_ifc wall_ends_cv_vs_ifc wall_layers_vs_ifc slab_layers_vs_ifc glb_material_colours_vs_ifc"
 
 read -ra MODEL_PATTERNS <<< "${MEASURE_MODELS:-}"
+read -ra SKIP_PATTERNS <<< "${MEASURE_SKIP:-}"
 read -ra STEPS <<< "${MEASURE_SCORERS:-}"
 wanted_model() { # name
   local pattern
+  for pattern in "${SKIP_PATTERNS[@]}"; do
+    # shellcheck disable=SC2254 # each is a pattern
+    case "$1" in $pattern) return 1 ;; esac
+  done
   [ "${#MODEL_PATTERNS[@]}" -gt 0 ] || return 0
   for pattern in "${MODEL_PATTERNS[@]}"; do
     # shellcheck disable=SC2254 # each is a pattern

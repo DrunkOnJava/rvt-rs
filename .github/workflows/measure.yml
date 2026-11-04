@@ -179,24 +179,31 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  measure:
-    name: Measure ${{ matrix.side }}
+  # The work is CPU-bound (run 41748430211: 164 task-minutes in a 43-minute
+  # Measure step on one 4-core runner), so each side runs as shards on runners
+  # of their own: each BIM4LCA office file, Autodesk's samples, and every
+  # other model with the families (four jobs a side; in run 41760244593 each
+  # third of the samples took 3 minutes to score after 2.5 of setup, too
+  # little to keep a runner of its own). A run given
+  # `models`, `sample_years` or `probe_pair_release` keeps one shard, since a
+  # pair probe needs both releases' samples on one runner. Compare merges the
+  # shards back into the measure-head and measure-base artifacts.
+  plan:
+    name: Plan the shards
     runs-on: ubuntu-24.04
-    timeout-minutes: 90
-    strategy:
-      fail-fast: false
-      matrix:
-        side: ${{ fromJSON((github.event_name == 'pull_request' || (inputs.base != '' && inputs.base != 'none')) && '["head","base"]' || '["head"]') }}
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+      base: ${{ steps.plan.outputs.base }}
+      head_sha: ${{ steps.refs.outputs.head }}
+      base_sha: ${{ steps.refs.outputs.base }}
     steps:
-      - name: Workflow tools
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      # A ref given as an abbreviated SHA is not a ref checkout can fetch:
-      # it is expanded to the full SHA here. Branches, tags and full SHAs pass
-      # through unchanged. The timing job, which saves its cache from the
-      # code it checks out, keeps the inputs as given (CodeQL's cache-poisoning
-      # rule flags a checkout of a step's output there), so it takes full SHAs.
+      # Each ref is resolved to a full SHA once, here, so every shard of a side
+      # checks out the same commit even when its branch moves during the run
+      # (shards start up to minutes apart). A ref the commits API cannot
+      # resolve (a pull request's refs/pull/N/head) is passed on as given. The
+      # timing job, which saves its cache from the code it checks out, keeps
+      # the inputs as given (CodeQL's cache-poisoning rule flags a checkout of
+      # a step's output there), so it takes full SHAs.
       - name: Resolve the refs
         id: refs
         shell: bash
@@ -206,9 +213,12 @@ jobs:
           BASE_REF: ${{ inputs.base || 'main' }}
         run: |
           full() {
-            if [[ "$1" =~ ^[0-9a-f]{7,39}$ ]]; then
-              gh api "repos/$GITHUB_REPOSITORY/commits/$1" --jq .sha
+            if [[ "$1" =~ ^[0-9a-f]{40}$ || "$1" == none ]]; then
+              echo "$1"
+            elif sha=$(gh api "repos/$GITHUB_REPOSITORY/commits/$1" --jq .sha 2>/dev/null) && [[ "$sha" =~ ^[0-9a-f]{40}$ ]]; then
+              echo "$sha"
             else
+              echo "::warning::$1 is not a commit the API resolves; every shard checks it out as given" >&2
               echo "$1"
             fi
           }
@@ -217,11 +227,75 @@ jobs:
           echo "head=$head" >> "$GITHUB_OUTPUT"
           echo "base=$base" >> "$GITHUB_OUTPUT"
           echo "head ${HEAD_REF} -> ${head}; base ${BASE_REF} -> ${base}"
+      - id: plan
+        shell: bash
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE: ${{ inputs.base }}
+          MODELS: ${{ inputs.models }}
+          YEARS: ${{ inputs.sample_years }}
+          PAIR: ${{ inputs.probe_pair_release }}
+          NORDIC: ${{ inputs.nordic && 'true' || 'false' }}
+          SAMPLES: ${{ inputs.samples && 'true' || 'false' }}
+          R2025: ${{ inputs.r2025 && 'true' || 'false' }}
+          HOLDOUT: ${{ inputs.holdout && 'true' || 'false' }}
+          BIMCOLLAB: ${{ inputs.bimcollab && 'true' || 'false' }}
+          FAMILIES: ${{ (inputs.families || github.event_name == 'pull_request') && 'true' || 'false' }}
+        run: |
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import json, os
+          e = os.environ
+          def flag(name):
+              return e[name] == "true"
+          base = e["EVENT"] == "pull_request" or e["BASE"] not in ("", "none")
+          def shard(name, models="", skip="", families=False, samples=False,
+                    years="", nordic=False, r2025=False, holdout=False, bimcollab=False):
+              return dict(shard=name, models=models, skip=skip, families=families,
+                          samples=samples, years=years, nordic=nordic, r2025=r2025,
+                          holdout=holdout, bimcollab=bimcollab)
+          rest = dict(families=flag("FAMILIES"), nordic=flag("NORDIC"),
+                      r2025=flag("R2025"), holdout=flag("HOLDOUT"),
+                      bimcollab=flag("BIMCOLLAB"))
+          offices = {"office-as-built": "nordic-office-as-built",
+                     "office-permit": "nordic-office-permit"}
+          if e["MODELS"] or e["YEARS"] or e["PAIR"]:
+              shards = [shard("all", models=e["MODELS"], samples=flag("SAMPLES"),
+                              years=e["YEARS"], **rest)]
+          else:
+              shards = []
+              if flag("NORDIC"):
+                  shards += [shard(name, models=model, nordic=True)
+                             for name, model in offices.items()]
+              if flag("SAMPLES"):
+                  # "-" is a pattern no model's name matches, so this shard
+                  # measures samples only.
+                  shards.append(shard("samples", models="-", samples=True))
+              skip = " ".join(offices.values()) if flag("NORDIC") else ""
+              shards.append(shard("rest", skip=skip, **rest))
+          sides = ["head", "base"] if base else ["head"]
+          include = [dict(side=side, **s) for side in sides for s in shards]
+          print("matrix=" + json.dumps({"include": include}))
+          print("base=" + ("true" if base else "false"))
+          PY
+
+  measure:
+    name: Measure ${{ matrix.side }} ${{ matrix.shard }}
+    needs: plan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    steps:
+      - name: Workflow tools
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - name: Measured source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          ref: ${{ matrix.side == 'base' && steps.refs.outputs.base || steps.refs.outputs.head }}
+          ref: ${{ matrix.side == 'base' && needs.plan.outputs.base_sha || needs.plan.outputs.head_sha }}
           path: measured
       - name: Install Rust stable
         shell: bash
@@ -241,7 +315,8 @@ jobs:
           # request) does not save either: that code's build scripts run
           # here, and a cache they wrote would be restored by every later
           # main run.
-          save-if: ${{ github.ref == 'refs/heads/main' && (matrix.side == 'base' && (inputs.base == '' || inputs.base == 'main') || matrix.side != 'base' && inputs.ref == '') }}
+          # One shard of a side saves it; the others build the same code.
+          save-if: ${{ github.ref == 'refs/heads/main' && (matrix.shard == 'rest' || matrix.shard == 'all') && (matrix.side == 'base' && (inputs.base == '' || inputs.base == 'main') || matrix.side != 'base' && inputs.ref == '') }}
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.12"
@@ -249,30 +324,33 @@ jobs:
         run: python -m pip install --require-hashes -r tools/ci/requirements-ifc.txt
       # The score cache (tools/ci/measure-cache.py, docs/maintaining.md): a
       # scorer or schema step whose every input is as it was in an earlier run
-      # takes that run's output. Every run restores the newest cache, before
-      # the measured code builds; it is saved only where the cache above is
-      # (the workflow dispatched from main and the code measured main's, so a
-      # branch's build scripts can never write what a later main run reads), or
-      # under a name of its own that `score_cache` gives a run from any ref,
-      # which main's runs never read. Entries are named by what they were made
-      # from, so the models measured, the sides and the flags share them.
+      # takes that run's output. Every run restores the newest cache of its
+      # shard, before the measured code builds; it is saved only where the
+      # Rust cache is (the workflow dispatched from main and the code measured
+      # main's, so a branch's build scripts can never write what a later main
+      # run reads), or under a name of its own that `score_cache` gives a run
+      # from any ref, which main's runs never read. Entries are named by what
+      # they were made from, so the sides and the flags share them; a shard
+      # holds its own models' entries, and a run given `models` (the shard
+      # `all`) also restores the other shards'.
       # The held-out models and BIMcollab's are never cached (RE-252).
       - name: Score cache key
         id: score-cache-key
         shell: bash
         env:
           SCORE_CACHE: ${{ inputs.score_cache }}
+          SHARD: ${{ matrix.shard }}
           SAVE_FROM_MAIN: ${{ github.ref == 'refs/heads/main' && (matrix.side == 'base' && (inputs.base == '' || inputs.base == 'main') || matrix.side != 'base' && inputs.ref == '') }}
         run: |
           enabled=true
           save=false
+          main=measure-scores-v1-main-
           case "$SCORE_CACHE" in
             off)
               enabled=false
               ;;
             "")
-              prefix=measure-scores-v1-main-
-              restore=$prefix
+              own=$main
               [ "$SAVE_FROM_MAIN" = true ] && save=true
               ;;
             *)
@@ -280,24 +358,26 @@ jobs:
                 echo "::error::score_cache is off, or a name of up to 40 letters, digits, dots and underscores"
                 exit 1
               fi
-              prefix="measure-scores-v1-x-$SCORE_CACHE-"
-              restore="$prefix"$'\n'measure-scores-v1-main-
+              own="measure-scores-v1-x-$SCORE_CACHE-"
               save=true
               ;;
           esac
           {
             echo "enabled=$enabled"
             echo "save=$save"
-            echo "prefix=$prefix"
+            echo "own=$own"
+            echo "main=$main"
+            echo "prefix=$own$SHARD-"
             echo "restore<<END"
-            echo "$restore"
+            echo "$own$SHARD-"
+            [ "$own" != "$main" ] && echo "$main$SHARD-"
             echo "END"
           } >> "$GITHUB_OUTPUT"
           if [ "$enabled" = true ]; then
             echo "MEASURE_CACHE_DIR=$GITHUB_WORKSPACE/_score-cache" >> "$GITHUB_ENV"
             echo "MEASURE_CACHE_WORK=$RUNNER_TEMP/score-cache-work" >> "$GITHUB_ENV"
           fi
-          echo "score cache: enabled=$enabled save=$save key prefix ${prefix:-none}"
+          echo "score cache: enabled=$enabled save=$save key prefix $own$SHARD-"
       - name: Restore the score cache
         if: steps.score-cache-key.outputs.enabled == 'true'
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -305,6 +385,45 @@ jobs:
           path: _score-cache
           key: ${{ steps.score-cache-key.outputs.prefix }}${{ matrix.side }}-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: ${{ steps.score-cache-key.outputs.restore }}
+      # A run given `models` is one shard, `all`, whatever models it names: it
+      # also takes what the other shards saved. Each restore adds its entries
+      # beside the others (they are named by their content).
+      - name: Restore the rest shard's score cache
+        if: steps.score-cache-key.outputs.enabled == 'true' && matrix.shard == 'all'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: _score-cache
+          key: ${{ steps.score-cache-key.outputs.own }}rest-${{ matrix.side }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            ${{ steps.score-cache-key.outputs.own }}rest-
+            ${{ steps.score-cache-key.outputs.main }}rest-
+      - name: Restore the as-built office shard's score cache
+        if: steps.score-cache-key.outputs.enabled == 'true' && matrix.shard == 'all'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: _score-cache
+          key: ${{ steps.score-cache-key.outputs.own }}office-as-built-${{ matrix.side }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            ${{ steps.score-cache-key.outputs.own }}office-as-built-
+            ${{ steps.score-cache-key.outputs.main }}office-as-built-
+      - name: Restore the permit office shard's score cache
+        if: steps.score-cache-key.outputs.enabled == 'true' && matrix.shard == 'all'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: _score-cache
+          key: ${{ steps.score-cache-key.outputs.own }}office-permit-${{ matrix.side }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            ${{ steps.score-cache-key.outputs.own }}office-permit-
+            ${{ steps.score-cache-key.outputs.main }}office-permit-
+      - name: Restore the samples shard's score cache
+        if: steps.score-cache-key.outputs.enabled == 'true' && matrix.shard == 'all'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: _score-cache
+          key: ${{ steps.score-cache-key.outputs.own }}samples-${{ matrix.side }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            ${{ steps.score-cache-key.outputs.own }}samples-
+            ${{ steps.score-cache-key.outputs.main }}samples-
       - name: Build
         working-directory: measured
         run: |
@@ -336,7 +455,7 @@ jobs:
       # The office models' host being down is NOT MEASURED; a file that no
       # longer matches its pin fails the run.
       - name: Fetch the BIM4LCA office models
-        if: inputs.nordic
+        if: matrix.nordic
         shell: bash
         run: |
           set +e
@@ -351,7 +470,7 @@ jobs:
       # The archive being unreachable is NOT MEASURED; an archive that no
       # longer matches its pin fails the run.
       - name: Fetch the R2025 models
-        if: inputs.r2025
+        if: matrix.r2025
         shell: bash
         run: |
           set +e
@@ -366,7 +485,7 @@ jobs:
       # BIMcollab's host being unreachable is NOT MEASURED; a file that no
       # longer matches its pin fails the run.
       - name: Fetch the BIMcollab example model
-        if: inputs.bimcollab
+        if: matrix.bimcollab
         shell: bash
         run: |
           set +e
@@ -381,7 +500,7 @@ jobs:
       # A held-out model's host being unreachable is NOT MEASURED; a file
       # that no longer matches its pin fails the run.
       - name: Fetch the held-out models
-        if: inputs.holdout
+        if: matrix.holdout
         shell: bash
         run: |
           set +e
@@ -398,7 +517,7 @@ jobs:
             *) echo "::error::a held-out model no longer matches its pin in research/holdout-models.tsv or research/holdout-archive-models.tsv"; exit 1 ;;
           esac
       - name: Fetch the family corpus
-        if: inputs.families || github.event_name == 'pull_request'
+        if: matrix.families
         uses: $/.github/actions/fetch-corpus
         with:
           repository: phi-ag/rvt
@@ -406,12 +525,12 @@ jobs:
       # Families their makers publish (research/public-families.tsv, #152),
       # read with the family corpus. An unreachable host is NOT MEASURED.
       - name: Fetch the makers' public families
-        if: inputs.families || github.event_name == 'pull_request'
+        if: matrix.families
         run: tools/fetch-public-families.sh _corpus/examples/Autodesk
       - name: Fetch Autodesk's sample projects
-        if: inputs.samples
+        if: matrix.samples
         env:
-          SAMPLE_YEARS: ${{ inputs.sample_years }}
+          SAMPLE_YEARS: ${{ matrix.years }}
         run: |
           # shellcheck disable=SC2086 # SAMPLE_YEARS is the first and last year.
           tools/fetch-autodesk-samples.sh _samples $SAMPLE_YEARS
@@ -422,12 +541,14 @@ jobs:
           PROBE_SCORER: ${{ inputs.probe_scorer }}
           PROBE_PAIR_RELEASE: ${{ inputs.probe_pair_release }}
           PROBE_SCORER_DIR: measured/tools/re
-          MEASURE_MODELS: ${{ inputs.models }}
+          MEASURE_MODELS: ${{ matrix.models }}
+          MEASURE_SKIP: ${{ matrix.skip }}
           MEASURE_SCORERS: ${{ inputs.scorers }}
           PSETS_MISSING: ${{ inputs.psets_missing }}
           KEEP_IFC: ${{ inputs.keep_ifc && '1' || '' }}
-          FAMILY_DIR: ${{ (inputs.families || github.event_name == 'pull_request') && format('{0}/_corpus/examples/Autodesk', github.workspace) || '' }}
-          SAMPLE_DIR: ${{ inputs.samples && format('{0}/_samples', github.workspace) || '' }}
+          FAMILY_DIR: ${{ matrix.families && format('{0}/_corpus/examples/Autodesk', github.workspace) || '' }}
+          SAMPLE_DIR: ${{ matrix.samples && format('{0}/_samples', github.workspace) || '' }}
+          SHARD: ${{ matrix.shard }}
         run: |
           # The runner's CPU and memory use every 10 s, so a run shows how much
           # of the machine it used.
@@ -435,11 +556,11 @@ jobs:
           sampler=$!
           tools/ci/measure-reference-models.sh measured/target/ci models results
           kill "$sampler"
-          cp "$RUNNER_TEMP/vmstat.log" results/vmstat.log
+          cp "$RUNNER_TEMP/vmstat.log" "results/vmstat-$SHARD.log"
           cp measured-commit.txt results/commit.txt
           # The runner's CPU, so the compare job can say which machines the
           # wall times came from.
-          grep -m1 'model name' /proc/cpuinfo | cut -d: -f2- | xargs > results/runner.txt
+          grep -m1 'model name' /proc/cpuinfo | cut -d: -f2- | xargs > "results/runner-$SHARD.txt"
       # Entries not used for 21 days go, then the oldest past 256 MiB; the cache
       # is saved only if this run kept an entry, pruned one or refreshed one not
       # used for three days (tools/maintainer/clean_caches.py deletes the
@@ -448,15 +569,17 @@ jobs:
         id: score-cache
         if: ${{ !cancelled() && steps.score-cache-key.outputs.enabled == 'true' }}
         shell: bash
+        env:
+          SHARD: ${{ matrix.shard }}
         run: |
           mkdir -p results
-          python tools/ci/measure-cache.py finish --report results/score-cache.log
+          python tools/ci/measure-cache.py finish --report "results/score-cache-$SHARD.log"
       - name: Save the score cache
         if: ${{ !cancelled() && github.event_name == 'workflow_dispatch' && steps.score-cache.outputs.changed == 'true' && steps.score-cache-key.outputs.save == 'true' }}
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: _score-cache
-          key: ${{ steps.score-cache-key.outputs.prefix }}${{ matrix.side }}-${{ github.run_id }}-${{ github.run_attempt }}
+          key: ${{ steps.score-cache-key.outputs.prefix }}${{ matrix.side }}-${{ matrix.side == 'base' && needs.plan.outputs.base_sha || needs.plan.outputs.head_sha }}-${{ github.run_id }}-${{ github.run_attempt }}
       # The held-out models and BIMcollab's carry no licence: only their
       # counts leave the runner (RE-252).
       - name: Keep only the unlicensed models' counts
@@ -464,18 +587,46 @@ jobs:
         run: tools/ci/scrub-holdout-results.sh results
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: measure-${{ matrix.side }}
+          name: measure-${{ matrix.side }}-${{ matrix.shard }}
           path: results
           if-no-files-found: error
+          # Compare re-uploads them merged as measure-head and measure-base.
+          retention-days: 7
 
   compare:
     name: Compare
-    needs: measure
+    needs: [plan, measure]
     runs-on: ubuntu-24.04
     steps:
+      # Each side's shards hold disjoint models; merged, they are the
+      # measure-head and measure-base directories one runner used to write.
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
-          pattern: measure-*
+          pattern: measure-head-*
+          path: measure-head
+          merge-multiple: true
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        if: needs.plan.outputs.base == 'true'
+        with:
+          pattern: measure-base-*
+          path: measure-base
+          merge-multiple: true
+      # The merged sides, under the names every reader downloads
+      # (`gh run download -n measure-head`), uploaded before the summary so a
+      # summary over GitHub's limit cannot lose them.
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: measure-head
+          path: measure-head
+          if-no-files-found: error
+          overwrite: true
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: needs.plan.outputs.base == 'true'
+        with:
+          name: measure-base
+          path: measure-base
+          if-no-files-found: error
+          overwrite: true
       - name: Summary
         run: |
           {
@@ -504,7 +655,7 @@ jobs:
               echo
               echo "### Times"
               echo
-              echo "These jobs check what the exports hold. They run exports and scorers several at once, on two runners whose speed alone differs by up to about 1.7x, so their times are not benchmarks. Dispatch with \`timing\` to time both refs' exports on one runner (tools/ci/measure-timing.sh)."
+              echo "These jobs check what the exports hold. They run exports and scorers several at once, on several runners whose speed alone differs by up to about 1.7x, so their times are not benchmarks. Dispatch with \`timing\` to time both refs' exports on one runner (tools/ci/measure-timing.sh)."
               echo
               echo "### Scorer differences (base → head)"
               echo
@@ -512,7 +663,7 @@ jobs:
               # text they made a 3 GB summary GitHub refused (run
               # 41537426493). The whole diff is the compare-scorer-diff
               # artifact; the summary shows its start, under GitHub's 1 MiB.
-              diff -r -U0 -x commit.txt -x runner.txt -x '*.log' -x ifc.sha256 -x diagnostics.json \
+              diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json \
                 -x '*.ifc' -x '*.glb' measure-base measure-head > scorer-diff.txt || true
               limit=$((640 * 1024))
               size=$(stat -c %s scorer-diff.txt)
@@ -535,7 +686,9 @@ jobs:
           fi
           cat summary.md >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        if: ${{ hashFiles('scorer-diff.txt') != '' }}
+        # Also when the summary failed for its size: the diff is then the
+        # only place the scorer differences are.
+        if: ${{ !cancelled() && hashFiles('scorer-diff.txt') != '' }}
         with:
           name: compare-scorer-diff
           path: scorer-diff.txt
