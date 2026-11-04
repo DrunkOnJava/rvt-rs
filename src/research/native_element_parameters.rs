@@ -154,11 +154,13 @@ pub fn read_defined(
 }
 
 /// [`read_defined`] without the family and material records, which only
-/// name an ElementId value: every value, its level and the type values it
-/// takes are the same, but `target_name` and `target_family` are not filled
-/// for a material or family target. For readers that use
-/// values alone, such as the parameters named for a property (#1237: on a
-/// Revit 2015 to 2023 file those records were most of the read).
+/// name an ElementId value, and with only the types `ids` name: every
+/// value, its level and the type values it takes are the same, but
+/// `target_name` and `target_family` are not filled for a material or
+/// family target, nor for a type no element of `ids` names. For readers
+/// that use values alone, such as the parameters named for a property
+/// (#1237: on a Revit 2015 to 2023 file those records, and the types no
+/// element names, were most of the read).
 pub fn read_defined_values(
     file: &mut RevitFile,
     ids: &BTreeSet<u64>,
@@ -202,9 +204,10 @@ fn read_selected(
         Types::Named => &["Family", "MaterialElem"],
         Types::Values | Types::None => &[],
     };
+    // A values read takes its types from what its elements name, after them.
     let selected_classes = match types {
-        Types::None => BTreeSet::new(),
-        Types::Named | Types::Values => std::iter::once("FamilySymbol")
+        Types::None | Types::Values => BTreeSet::new(),
+        Types::Named => std::iter::once("FamilySymbol")
             .chain(naming.iter().copied())
             .chain(SYSTEM_TYPE_LINKS.iter().map(|link| link.2))
             .map(String::from)
@@ -221,142 +224,163 @@ fn read_selected(
     let mut materials: BTreeMap<i64, String> = BTreeMap::new();
     let mut families: BTreeMap<i64, String> = BTreeMap::new();
     let mut symbols: BTreeMap<i64, (Option<i64>, String)> = BTreeMap::new();
-    native_document::extract(file, &options, |record| {
-        let (Some(graph), Some(metadata)) = (&record.graph, &record.saved_metadata) else {
-            return Ok(());
-        };
-        let Ok(id) = i64::try_from(record.identity.element_id) else {
-            return Ok(());
-        };
-        let root = &graph.objects[0];
-        let string_field = |class: &str, field: &str| {
-            graph
-                .objects
+    // `records` is passed in, so the types its elements name can be read
+    // from it between the two extractions.
+    let mut visit =
+        |records: &mut BTreeMap<i64, RecordParameters>, record: native_document::Record| {
+            let (Some(graph), Some(metadata)) = (&record.graph, &record.saved_metadata) else {
+                return Ok(());
+            };
+            let Ok(id) = i64::try_from(record.identity.element_id) else {
+                return Ok(());
+            };
+            let root = &graph.objects[0];
+            let string_field = |class: &str, field: &str| {
+                graph
+                    .objects
+                    .iter()
+                    .find(|object| object.class_name == class)
+                    .and_then(|object| object.fields.get(field))
+                    .and_then(Value::as_str)
+                    .map(str::to_string)
+            };
+            match root.class_name.as_str() {
+                "MaterialElem" => {
+                    if let Some(name) = string_field("Material", "m_name") {
+                        materials.insert(id, name);
+                    }
+                }
+                "Family" => {
+                    if let Some(name) = string_field("Family", "m_name") {
+                        families.insert(id, name);
+                    }
+                }
+                "FamilySymbol" => {
+                    let family = root
+                        .fields
+                        .get("m_familyId")
+                        .and_then(|value| crate::native_metadata::identifier(value).ok());
+                    if let Some(name) = string_field("SymbolInfo", "m_name") {
+                        symbols.insert(id, (family, name));
+                    }
+                }
+                _ => {}
+            }
+            let is_type = root.class_name == "FamilySymbol"
+                || SYSTEM_TYPE_LINKS
+                    .iter()
+                    .any(|link| link.2 == root.class_name);
+            if !ids.contains(&record.identity.element_id) && !is_type {
+                return Ok(());
+            }
+            let definitions: BTreeMap<i64, &Definition> = metadata
+                .parameter_definitions
                 .iter()
-                .find(|object| object.class_name == class)
-                .and_then(|object| object.fields.get(field))
-                .and_then(Value::as_str)
-                .map(str::to_string)
-        };
-        match root.class_name.as_str() {
-            "MaterialElem" => {
-                if let Some(name) = string_field("Material", "m_name") {
-                    materials.insert(id, name);
+                .map(|definition| (definition.parameter_id, definition))
+                .collect();
+            let class_name = root.class_name.clone();
+            let entry = |parameter_id: i64, storage_type: &str, raw: &Value| {
+                parameter(
+                    parameter_id,
+                    storage_type,
+                    raw,
+                    definitions.get(&parameter_id).copied(),
+                    id,
+                    &class_name,
+                )
+            };
+            let mut own = Vec::new();
+            for set in &metadata.parameter_sets {
+                for value in &set.parameters {
+                    own.push(entry(
+                        value.serialized_parameter_id,
+                        &value.storage_type,
+                        &value.raw_value,
+                    ));
                 }
             }
-            "Family" => {
-                if let Some(name) = string_field("Family", "m_name") {
-                    families.insert(id, name);
+            let mut instance_defaults = BTreeSet::new();
+            for value in &metadata.resolved_family_parameters {
+                let is_instance = definitions
+                    .get(&value.parameter_id)
+                    .and_then(|definition| definition.owner_fields.get("m_instanceParam"))
+                    .and_then(Value::as_bool)
+                    == Some(true);
+                if is_instance {
+                    instance_defaults.insert(value.parameter_id);
                 }
-            }
-            "FamilySymbol" => {
-                let family = root
-                    .fields
-                    .get("m_familyId")
-                    .and_then(|value| crate::native_metadata::identifier(value).ok());
-                if let Some(name) = string_field("SymbolInfo", "m_name") {
-                    symbols.insert(id, (family, name));
-                }
-            }
-            _ => {}
-        }
-        let is_type = root.class_name == "FamilySymbol"
-            || SYSTEM_TYPE_LINKS
-                .iter()
-                .any(|link| link.2 == root.class_name);
-        if !ids.contains(&record.identity.element_id) && !is_type {
-            return Ok(());
-        }
-        let definitions: BTreeMap<i64, &Definition> = metadata
-            .parameter_definitions
-            .iter()
-            .map(|definition| (definition.parameter_id, definition))
-            .collect();
-        let class_name = root.class_name.clone();
-        let entry = |parameter_id: i64, storage_type: &str, raw: &Value| {
-            parameter(
-                parameter_id,
-                storage_type,
-                raw,
-                definitions.get(&parameter_id).copied(),
-                id,
-                &class_name,
-            )
-        };
-        let mut own = Vec::new();
-        for set in &metadata.parameter_sets {
-            for value in &set.parameters {
                 own.push(entry(
-                    value.serialized_parameter_id,
+                    value.parameter_id,
                     &value.storage_type,
                     &value.raw_value,
                 ));
             }
-        }
-        let mut instance_defaults = BTreeSet::new();
-        for value in &metadata.resolved_family_parameters {
-            let is_instance = definitions
-                .get(&value.parameter_id)
-                .and_then(|definition| definition.owner_fields.get("m_instanceParam"))
-                .and_then(Value::as_bool)
-                == Some(true);
-            if is_instance {
-                instance_defaults.insert(value.parameter_id);
+            for value in &metadata.raw_field_parameters {
+                own.push(entry(
+                    value.parameter_id,
+                    &value.storage_type,
+                    &value.raw_value,
+                ));
             }
-            own.push(entry(
-                value.parameter_id,
-                &value.storage_type,
-                &value.raw_value,
-            ));
-        }
-        for value in &metadata.raw_field_parameters {
-            own.push(entry(
-                value.parameter_id,
-                &value.storage_type,
-                &value.raw_value,
-            ));
-        }
-        // One value per parameter: the first source read keeps it.
-        let mut seen = BTreeSet::new();
-        own.retain(|value| seen.insert(value.parameter_id));
-        // The owner's own FamilyParams, as `project_with_definitions` picks
-        // it; a Family record's graph also holds its types' slots.
-        let owner_object = match class_name.as_str() {
-            "FamilySymbol" => Some("m_pParams"),
-            "FamilyInstance" => Some("m_pInstParams"),
-            _ => None,
-        }
-        .and_then(|field| root.fields.get(field))
-        .and_then(|pointer| pointer["offset"].as_u64())
-        .and_then(|offset| {
-            graph
-                .edges
+            // One value per parameter: the first source read keeps it.
+            let mut seen = BTreeSet::new();
+            own.retain(|value| seen.insert(value.parameter_id));
+            // The owner's own FamilyParams, as `project_with_definitions` picks
+            // it; a Family record's graph also holds its types' slots.
+            let owner_object = match class_name.as_str() {
+                "FamilySymbol" => Some("m_pParams"),
+                "FamilyInstance" => Some("m_pInstParams"),
+                _ => None,
+            }
+            .and_then(|field| root.fields.get(field))
+            .and_then(|pointer| pointer["offset"].as_u64())
+            .and_then(|offset| {
+                graph.edges.iter().find(|edge| {
+                    edge.source_object_index == 0 && edge.pointer_offset as u64 == offset
+                })
+            })
+            .map(|edge| edge.target_object_index);
+            let owner_slots = metadata
+                .family_parameter_slots
                 .iter()
-                .find(|edge| edge.source_object_index == 0 && edge.pointer_offset as u64 == offset)
-        })
-        .map(|edge| edge.target_object_index);
-        let owner_slots = metadata
-            .family_parameter_slots
-            .iter()
-            .filter(|slot| Some(slot.source_object) == owner_object)
-            .count();
-        records.insert(
-            id,
-            RecordParameters {
-                class_name: class_name.clone(),
-                own,
-                instance_defaults,
-                unresolved_slots: owner_slots
-                    .saturating_sub(metadata.resolved_family_parameters.len()),
-                master_symbol: std::iter::once(("FamilyInstance", "m_masterSymbolId"))
-                    .chain(SYSTEM_TYPE_LINKS.iter().map(|link| (link.0, link.1)))
-                    .find(|link| link.0 == class_name)
-                    .and_then(|link| root.fields.get(link.1))
-                    .and_then(|value| crate::native_metadata::identifier(value).ok()),
-            },
-        );
-        Ok(())
-    })?;
+                .filter(|slot| Some(slot.source_object) == owner_object)
+                .count();
+            records.insert(
+                id,
+                RecordParameters {
+                    class_name: class_name.clone(),
+                    own,
+                    instance_defaults,
+                    unresolved_slots: owner_slots
+                        .saturating_sub(metadata.resolved_family_parameters.len()),
+                    master_symbol: std::iter::once(("FamilyInstance", "m_masterSymbolId"))
+                        .chain(SYSTEM_TYPE_LINKS.iter().map(|link| (link.0, link.1)))
+                        .find(|link| link.0 == class_name)
+                        .and_then(|link| root.fields.get(link.1))
+                        .and_then(|value| crate::native_metadata::identifier(value).ok()),
+                },
+            );
+            Ok(())
+        };
+    native_document::extract(file, &options, |record| visit(&mut records, record))?;
+    if let Types::Values = types {
+        // Only the types the elements name give them values: reading every
+        // FamilySymbol and system type was most of this read on a Revit 2015
+        // to 2023 sample (#1237). A type record of no type class is skipped
+        // by `visit`, as the class selection skipped it.
+        let named: BTreeSet<u64> = records
+            .values()
+            .filter_map(|record| u64::try_from(record.master_symbol?).ok())
+            .filter(|id| !ids.contains(id))
+            .collect();
+        if !named.is_empty() {
+            let options = Options {
+                selected_ids: named,
+                ..options
+            };
+            native_document::extract(file, &options, |record| visit(&mut records, record))?;
+        }
+    }
     let mut result = ElementParameters::default();
     for &element_id in ids {
         let Some(record) = i64::try_from(element_id)

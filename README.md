@@ -46,14 +46,14 @@ The measured detail behind each row is in [`docs/evidence.md`](docs/evidence.md)
 
 ## Install and quick start
 
-The latest release is [v0.12.2](https://github.com/DrunkOnJava/rvt-rs/releases/tag/v0.12.2) (2026-11-03). Install it with any of:
+The latest release is [v0.13.0](https://github.com/DrunkOnJava/rvt-rs/releases/tag/v0.13.0) (2026-11-03). Install it with any of:
 
 - the prebuilt Linux, macOS and Windows binaries on [GitHub Releases](https://github.com/DrunkOnJava/rvt-rs/releases), or the container image `ghcr.io/drunkonjava/rvt-rs`;
 - `cargo install rvt --locked`;
 - `pip install rvt`, for the Python bindings;
 - nothing at all: the [browser viewer](https://drunkonjava.github.io/rvt-rs/) reads a file inside the tab.
 
-[`docs/install.md`](docs/install.md) covers every channel, building from source and the smoke tests. This README describes `main`, which the browser viewer is also built from, so it can be ahead of the latest release: "Upgrading from 0.11" in the [changelog](CHANGELOG.md#upgrading-from-011) says what a user of 0.11 has to change and "[Upgrading from 0.12.1](CHANGELOG.md#upgrading-from-0121)" what a user of 0.12.1 has to, and each change `main` adds after 0.12.2 is a fragment in [`changelog.d/`](changelog.d/README.md), which the next release moves into `CHANGELOG.md`. To use `main` before the next release, build from source ([`docs/install.md`](docs/install.md#build-from-source)).
+[`docs/install.md`](docs/install.md) covers every channel, building from source and the smoke tests. This README describes `main`, which the browser viewer is also built from, so it can be ahead of the latest release: "Upgrading from 0.12" in the [changelog](CHANGELOG.md#upgrading-from-012) says what a user of 0.12 has to change, and each change `main` adds after 0.13.0 is a fragment in [`changelog.d/`](changelog.d/README.md), which the next release moves into `CHANGELOG.md`. To use `main` before the next release, build from source ([`docs/install.md`](docs/install.md#build-from-source)).
 
 Three commands cover most of what the command line does:
 
