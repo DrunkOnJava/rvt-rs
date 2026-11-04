@@ -6,8 +6,8 @@
   opening's record saves, through the wall, tagged with the opening's
   ElementId and named for the wall, with the wall's type name as
   `Pset_OpeningElementCommon.Reference` and
-  `Pset_EnvironmentalImpactIndicators.Reference`, the extrusion's depth as
-  `Qto_OpeningElementBaseQuantities.Depth` and Revit's own GlobalId: 30 of
+  `Pset_EnvironmentalImpactIndicators.Reference`, the rectangle's width and height and the
+  extrusion's depth as `Qto_OpeningElementBaseQuantities` and Revit's own GlobalId: 30 of
   30 on the BIM4LCA office as built and 24 of 24 at building permit, each
   within 0.003 ft of Revit's box with every one of those values equal. The
   office at permit holds one more such opening than its Revit export (the

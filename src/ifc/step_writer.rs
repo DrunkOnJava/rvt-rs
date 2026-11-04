@@ -3354,17 +3354,31 @@ impl StepWriter<'_> {
                     );
                 }
             }
-            // RE-244: the depth of the extrusion, which is Revit's `Depth`;
-            // its `Width` and `Height` are the profile's axes, which do not
-            // follow the opening's orientation, and are left out. With base
-            // quantities off the wall has none and the opening none either.
+            // RE-321: Revit's `Depth` is the extrusion's depth, and its `Width`
+            // and `Height` are the rectangle's extents along the wall and up,
+            // which are the right way round on a rectangular opening (not on
+            // a door's, RE-244). With base quantities off the wall has none
+            // and the opening none either.
             if wall_widths.contains_key(host) {
+                let extent = |axis: fn(&(f64, f64)) -> f64| {
+                    let low = outline_feet.iter().map(axis).fold(f64::INFINITY, f64::min);
+                    let high = outline_feet
+                        .iter()
+                        .map(axis)
+                        .fold(f64::NEG_INFINITY, f64::max);
+                    high - low
+                };
+                let length = |name: &str, feet: f64| super::entities::Property {
+                    name: name.into(),
+                    value: super::entities::PropertyValue::PositiveLengthFeet(feet),
+                };
                 let quantities = PropertySet {
                     name: "Qto_OpeningElementBaseQuantities".into(),
-                    properties: vec![super::entities::Property {
-                        name: "Depth".into(),
-                        value: super::entities::PropertyValue::PositiveLengthFeet(*thickness_feet),
-                    }],
+                    properties: vec![
+                        length("Width", extent(|point| point.0)),
+                        length("Height", extent(|point| point.1)),
+                        length("Depth", *thickness_feet),
+                    ],
                 };
                 self.emit_property_set(
                     owner_hist,
