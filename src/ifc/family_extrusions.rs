@@ -92,7 +92,7 @@ const WHOLE_CIRCLE_MAX_RADIUS: f64 = 0.12;
 
 /// What [`attach`] did. Every instance drawn from a saved mesh is counted
 /// once: `candidates = replaced + not_rebuilt + unplaced + unchecked +
-/// volume_differs + vertices_differ + surface_differs + circles_kept +
+/// volume_differs + vertices_differ + surface_differs + arcs +
 /// unwritable`.
 #[derive(Debug, Default, Clone, PartialEq, Eq, serde::Serialize)]
 #[non_exhaustive]
@@ -123,11 +123,11 @@ pub struct FamilyExtrusionReport {
     pub volume_differs: usize,
     pub vertices_differ: usize,
     pub surface_differs: usize,
-    /// Candidates the extrusions reproduce, left with their mesh because a
-    /// loop is one whole circle over 0.12 ft in radius, which Revit 24.0.5's
-    /// IFC4 export writes as arcs and Revit 26.2's IFC2X3 export as an
-    /// `IfcCircleProfileDef`.
-    pub circles_kept: usize,
+    /// Candidates the extrusions reproduce, left with their mesh for an arc
+    /// the rule does not draw: a whole circle over 0.12 ft in radius, which
+    /// Revit 24.0.5's IFC4 export writes as arcs and Revit 26.2's IFC2X3 export
+    /// as an `IfcCircleProfileDef` (RE-327 section 11).
+    pub arcs: usize,
     /// Candidates the extrusions reproduce whose profile cannot be written: a
     /// solid of no depth.
     pub unwritable: usize,
@@ -523,7 +523,7 @@ pub fn attach_with_control(
             .filter_map(whole_circle_radius)
             .any(|radius| radius > WHOLE_CIRCLE_MAX_RADIUS);
         if big_circle {
-            report.circles_kept += 1;
+            report.arcs += 1;
             continue;
         }
         let placed: Option<Vec<Vec<SolidShape>>> = local.iter().map(placed_extrusions).collect();

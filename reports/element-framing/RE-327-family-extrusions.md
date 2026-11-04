@@ -240,7 +240,7 @@ What the rule says, and why:
 - The rule follows from the scorers' default tessellation of the two exporters' forms. True arcs for these circles come back if #1355 (a fine-tessellation mode for the body scorers, measured beside today's bar) changes the bar; the bar's change is Griffin's to make. Under a fine tessellation the dispenser's two forms are one exact circle, and the miss of §11.2 is a tessellation artefact, not a geometry error.
 - A circle of 0.12 ft or less is drawn: IfcOpenShell cuts it into 26 chords in either form, 0.00088 ft off the circle at most. The r2025 IFC4 exports hold none of these bodies (§11.7).
 
-`FamilyExtrusionReport` and the `rvt-ifc` note drop `arcs` for `circles_kept` (candidates left with the mesh for such a circle) and `with_arcs` (replaced bodies with an arc in a profile). The default export does not reach any of this and stays byte for byte.
+`FamilyExtrusionReport` and the `rvt-ifc` note keep `arcs`, now the candidates the extrusions reproduce that are left with their mesh for an arc the rule does not draw: a whole circle over 0.12 ft in radius (it counted the instances kept for any arc before). They add `with_arcs`, the replaced bodies with an arc in a profile. The default export does not reach any of this and stays byte for byte.
 
 ### 11.6 What the scorer measures
 

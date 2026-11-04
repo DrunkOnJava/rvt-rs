@@ -256,9 +256,9 @@ pub enum ExportNote {
         vertices_differ: usize,
         /// By a sampled point of the extrusions' surface off the mesh.
         surface_differs: usize,
-        /// Reproduced, but left with their mesh because a loop is one whole
-        /// circle over 0.12 ft in radius.
-        circles_kept: usize,
+        /// Reproduced, but left with their mesh for an arc the rule does not
+        /// draw: a whole circle over 0.12 ft in radius.
+        arcs: usize,
         /// Reproduced, but their profile cannot be written.
         unwritable: usize,
         /// Of the replaced, instances with an arc in a profile.
@@ -350,13 +350,13 @@ impl fmt::Display for ExportNote {
                 volume_differs,
                 vertices_differ,
                 surface_differs,
-                circles_kept,
+                arcs,
                 unwritable,
                 with_arcs,
                 ambiguous,
             } => write!(
                 f,
-                "{replaced} of {candidates} saved-mesh bodies drawn from their family's extrusions ({families} families found, {families_rebuilt} rebuilt; {not_rebuilt} had no rebuilt family, {unplaced} no instance transform, {unchecked} a mesh too large to compare; the extrusions did not reproduce the mesh of {volume_differs} by volume, {vertices_differ} by vertices and {surface_differs} by surface; {circles_kept} reproduced but left with the mesh for a whole circle over 0.12 ft in radius, {unwritable} reproduced but not writable; {with_arcs} of the drawn ones have an arc in a profile; {ambiguous} left alone for sharing a Tag)"
+                "{replaced} of {candidates} saved-mesh bodies drawn from their family's extrusions ({families} families found, {families_rebuilt} rebuilt; {not_rebuilt} had no rebuilt family, {unplaced} no instance transform, {unchecked} a mesh too large to compare; the extrusions did not reproduce the mesh of {volume_differs} by volume, {vertices_differ} by vertices and {surface_differs} by surface; {arcs} reproduced but left with the mesh for an arc the rule does not draw (a whole circle over 0.12 ft in radius), {unwritable} reproduced but not writable; {with_arcs} of the drawn ones have an arc in a profile; {ambiguous} left alone for sharing a Tag)"
             ),
             Self::FamilyExtrusionsSkipped { error } => {
                 write!(f, "family extrusions not read, bodies unchanged: {error}")
@@ -523,7 +523,7 @@ pub fn run_export_with_limits_and_control(
                     volume_differs: report.volume_differs,
                     vertices_differ: report.vertices_differ,
                     surface_differs: report.surface_differs,
-                    circles_kept: report.circles_kept,
+                    arcs: report.arcs,
                     unwritable: report.unwritable,
                     with_arcs: report.with_arcs,
                     ambiguous: report.ambiguous,
