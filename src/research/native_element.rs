@@ -150,7 +150,16 @@ pub fn decode_base(body: &[u8], registry: &Registry) -> Result<ElementBase> {
             "unsupported Element flag layout"
         );
     }
-    let decoded = crate::native_parameters::decode_object_fields(body, registry, 2, element.tag)?;
+    // Only the identity field's span is read below: spans of the nested
+    // objects' fields would copy a name each (#1237).
+    let decoded = crate::native_parameters::decode_object_fields_spanning(
+        body,
+        registry,
+        2,
+        element.tag,
+        &crate::native_parameters::GraphLimits::default(),
+        crate::native_parameters::Spans::Class(element.tag),
+    )?;
     let fields = &decoded.fields;
     let mut tokens = Vec::new();
     for name in pointers {
