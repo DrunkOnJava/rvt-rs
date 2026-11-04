@@ -18,9 +18,13 @@
 //!   asked again;
 //! - reads the bytes at the offset of each native record: the ElementId is the
 //!   first bytes there;
-//! - checks that a `selected` source names the element's frame, that
-//!   `differs_from_frame` says whether a source is in another partition than
-//!   the frame, and that `value_source_counts` equals the count made here;
+//! - checks that a `selected` source names the frame the element's entry
+//!   names (that the frame's own bytes hold the element is the #1325 test's,
+//!   `element_provenance_offsets.rs`, and is not read again here), that an
+//!   element whose profile is read from another record has `selected_frame_box`
+//!   and no other `selected_frame`, that `differs_from_frame` says whether the
+//!   value is held in another partition than the frame, and that
+//!   `value_source_counts` equals the count made here;
 //! - requires each model's `MIN_READERS` to have sources, so a table with no
 //!   sources cannot pass.
 //!
@@ -70,9 +74,11 @@ enum Coverage {
 use Coverage::{NotYet, Recorded};
 
 /// The record's box, or the box trimmed or cut by joins: read from the
-/// selected frame.
+/// selected frame. `selected_frame_box` is the same where the profile is read
+/// from another record (sketch lines, the type's section), which no reader
+/// notes yet.
 const FRAME: Coverage = Recorded {
-    readers: &["selected_frame"],
+    readers: &["selected_frame", "selected_frame_box"],
     rules: &["selected"],
 };
 
@@ -88,6 +94,7 @@ const COVERAGE: &[(&str, Coverage)] = &[
     ("partition_element_record_bbox", FRAME),
     ("partition_element_record_join_trimmed", FRAME),
     ("partition_element_record_join_cut", FRAME),
+    ("partition_element_record_column_cut", FRAME),
     ("partition_wall_centreline", LINE),
     ("partition_wall_centreline_layer_joins", LINE),
     ("partition_wall_tapered_section", LINE),
@@ -202,9 +209,16 @@ fn office_model() -> Vec<(String, PathBuf)> {
     vec![("nordic-office-as-built".to_string(), path)]
 }
 
-/// Each element of `model` with its ElementId and `BodySource`.
-fn element_bodies(model: &IfcModel) -> BTreeSet<(u32, String)> {
-    let mut bodies = BTreeSet::new();
+/// Each element's ElementId and `BodySource`, with whether its profile is read
+/// from another record than its body's (a `ProfileSource` that is not the
+/// `BodySource`, with the profile resolved).
+type Bodies = BTreeMap<(u32, String), bool>;
+
+/// The elements of `model` by ElementId and `BodySource`, and how many entities
+/// they are: entities that share a Tag (the pieces of a floor) are one element.
+fn element_bodies(model: &IfcModel) -> (Bodies, usize) {
+    let mut bodies = Bodies::new();
+    let mut entities = 0usize;
     for entity in &model.entities {
         let IfcEntity::BuildingElement {
             type_guid,
@@ -217,18 +231,24 @@ fn element_bodies(model: &IfcModel) -> BTreeSet<(u32, String)> {
         let Some(id) = type_guid.as_deref().and_then(|tag| tag.parse::<u32>().ok()) else {
             continue;
         };
-        let body = property_set
-            .iter()
-            .flat_map(|set| &set.properties)
-            .find_map(|property| match (property.name.as_str(), &property.value) {
-                ("BodySource", PropertyValue::Text(text)) => Some(text.clone()),
-                _ => None,
-            });
+        let mut body = None;
+        let mut profile_source = None;
+        let mut profile_resolved = false;
+        for property in property_set.iter().flat_map(|set| &set.properties) {
+            match (property.name.as_str(), &property.value) {
+                ("BodySource", PropertyValue::Text(text)) => body = Some(text.clone()),
+                ("ProfileSource", PropertyValue::Text(text)) => profile_source = Some(text.clone()),
+                ("ProfileResolved", PropertyValue::Boolean(true)) => profile_resolved = true,
+                _ => {}
+            }
+        }
         if let Some(body) = body {
-            bodies.insert((id, body));
+            entities += 1;
+            let elsewhere = profile_resolved && profile_source.as_ref() != Some(&body);
+            bodies.entry((id, body)).or_insert(elsewhere);
         }
     }
-    bodies
+    (bodies, entities)
 }
 
 fn u32_at(buf: &[u8], at: usize) -> Option<u32> {
@@ -282,6 +302,7 @@ struct BodyStats {
     elements: usize,
     unlisted: usize,
     with_source: usize,
+    box_only: usize,
     missing: Vec<u32>,
     by_reader: BTreeMap<String, usize>,
 }
@@ -303,17 +324,28 @@ fn check_model(name: &str, path: &Path) {
     let layout = element_data_layout(version);
     let mut problems: Vec<String> = Vec::new();
 
-    // Coverage by body source.
+    // Coverage by body source: every element, listed in the table or not.
     let mut by_body: BTreeMap<String, BodyStats> = BTreeMap::new();
-    for (id, body) in element_bodies(&run.model) {
+    let (listed_bodies, entities) = element_bodies(&run.model);
+    let distinct_ids = listed_bodies
+        .keys()
+        .map(|(id, _)| *id)
+        .collect::<BTreeSet<u32>>()
+        .len();
+    for ((id, body), profile_elsewhere) in &listed_bodies {
+        let (id, profile_elsewhere) = (*id, *profile_elsewhere);
         let stats = by_body.entry(body.clone()).or_default();
         stats.elements += 1;
+        let coverage = COVERAGE.iter().find(|(source, _)| source == body);
+        if coverage.is_none() {
+            problems.push(format!("{id}: BodySource {body} is not in COVERAGE"));
+        }
         let Some(entry) = table.get(id) else {
             stats.unlisted += 1;
             continue;
         };
-        match COVERAGE.iter().find(|(source, _)| *source == body) {
-            None => problems.push(format!("{id}: BodySource {body} is not in COVERAGE")),
+        match coverage {
+            None => {}
             Some((_, Recorded { readers, rules })) => {
                 let found = entry.value_sources.iter().find(|source| {
                     readers.contains(&source.reader.as_str())
@@ -322,7 +354,26 @@ fn check_model(name: &str, path: &Path) {
                 match found {
                     Some(source) => {
                         stats.with_source += 1;
+                        stats.box_only += usize::from(source.reader == "selected_frame_box");
                         *stats.by_reader.entry(source.reader.clone()).or_default() += 1;
+                        if source.rule.as_str() == "selected" {
+                            let expected = if profile_elsewhere {
+                                "selected_frame_box"
+                            } else {
+                                "selected_frame"
+                            };
+                            if source.reader != expected {
+                                problems.push(format!(
+                                    "{id}: {body} has {}, and its profile {} another record",
+                                    source.reader,
+                                    if profile_elsewhere {
+                                        "is read from"
+                                    } else {
+                                        "is not read from"
+                                    }
+                                ));
+                            }
+                        }
                     }
                     None if stats.missing.len() < 10 => stats.missing.push(id),
                     None => {}
@@ -367,10 +418,18 @@ fn check_model(name: &str, path: &Path) {
             *by_rule
                 .entry(format!("{}:{}", source.reader, source.rule.as_str()))
                 .or_default() += 1;
-            let differs = matches!(
-                (&entry.stream, &source.stream),
-                (Some(frame), Some(copy)) if frame != copy
-            );
+            let frame_partition = entry
+                .stream
+                .as_deref()
+                .and_then(|stream| stream.strip_prefix("Partitions/"))
+                .and_then(|number| number.parse::<u32>().ok());
+            let differs = match (&entry.stream, &source.stream) {
+                (Some(frame), Some(copy)) => {
+                    frame != copy
+                        && !frame_partition.is_some_and(|n| source.partitions.contains(&n))
+                }
+                _ => false,
+            };
             if differs != source.differs_from_frame {
                 problems.push(format!(
                     "{id}: {} differs_from_frame is {}, the streams say {differs}",
@@ -487,7 +546,13 @@ fn check_model(name: &str, path: &Path) {
             continue;
         }
         for reader in *readers {
-            if counts.get(*reader).is_none_or(|count| count.0 == 0) {
+            let held = counts.get(*reader).map_or(0, |count| count.0)
+                + if *reader == "selected_frame" {
+                    counts.get("selected_frame_box").map_or(0, |count| count.0)
+                } else {
+                    0
+                };
+            if held == 0 {
                 problems.push(format!("{name}: no element has a source from {reader}"));
             }
         }
@@ -495,7 +560,9 @@ fn check_model(name: &str, path: &Path) {
 
     // The report.
     let mut line = format!(
-        "{name}: Revit {version}, {} value sources on {} elements, {confirmed} of {checked} re-read and confirmed\n",
+        "{name}: Revit {version}, {entities} entities with a BodySource, {} elements ({} entities share an ElementId with another), {} value sources on {} elements, {confirmed} of {checked} re-read and confirmed\n",
+        listed_bodies.len(),
+        entities - listed_bodies.len(),
         counts.values().map(|count| count.0).sum::<usize>(),
         table
             .elements
@@ -518,8 +585,8 @@ fn check_model(name: &str, path: &Path) {
             },
         );
         line.push_str(&format!(
-            "  {body} ({covered}): {} elements, {} with a source, {} not in the table\n",
-            stats.elements, stats.with_source, stats.unlisted
+            "  {body} ({covered}): {} elements, {} with a source ({} box only), {} not in the table\n",
+            stats.elements, stats.with_source, stats.box_only, stats.unlisted
         ));
         bodies.insert(
             body.clone(),
@@ -528,6 +595,7 @@ fn check_model(name: &str, path: &Path) {
                 "elements": stats.elements,
                 "not_in_table": stats.unlisted,
                 "with_source": stats.with_source,
+                "box_only": stats.box_only,
                 "by_reader": stats.by_reader,
             }),
         );
@@ -535,6 +603,9 @@ fn check_model(name: &str, path: &Path) {
     let report = json!({
         "model": name,
         "layout_release": version,
+        "entities_with_a_body_source": entities,
+        "elements_with_a_body_source": listed_bodies.len(),
+        "distinct_element_ids": distinct_ids,
         "value_sources_checked": checked,
         "value_sources_confirmed": confirmed,
         "by_reader": counts

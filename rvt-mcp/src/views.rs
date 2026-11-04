@@ -61,6 +61,7 @@ fn value_source_out(source: &ValueSource) -> ValueSourceOut {
         copies: source.copies,
         stream: source.stream.clone(),
         offset: source.offset,
+        partitions: source.partitions.clone(),
         differs_from_frame: source.differs_from_frame,
     }
 }

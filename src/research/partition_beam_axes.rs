@@ -645,7 +645,8 @@ type Copied<T> = (
 );
 
 /// Where each copy in [`Copied`] starts, in the same order: the offset of its
-/// element-data header in the partition inflated (#1360).
+/// element-data header in the partition inflated (#1360). Empty unless the
+/// caller asks for them.
 type CopyOffsets = BTreeMap<u32, Vec<usize>>;
 
 fn collect_copies<T>(
@@ -653,6 +654,7 @@ fn collect_copies<T>(
     revit_version: u32,
     ids: &BTreeSet<u32>,
     read: fn(&[u8]) -> Option<T>,
+    with_offsets: bool,
 ) -> Result<Copied<T>> {
     let Some(layout) = crate::partition_names::element_data_layout(revit_version) else {
         return Ok((BTreeMap::new(), BTreeMap::new(), BTreeMap::new()));
@@ -694,7 +696,9 @@ fn collect_copies<T>(
                 continue;
             };
             found.entry(id).or_default().push((partition, line));
-            offsets.entry(id).or_default().push(hit);
+            if with_offsets {
+                offsets.entry(id).or_default().push(hit);
+            }
         }
     }
     Ok((found, holders, offsets))
@@ -712,7 +716,8 @@ pub fn line_copies(
     if !supports_revit_version(revit_version) {
         return Ok(BTreeMap::new());
     }
-    let (mut found, holders, _) = collect_copies(rf, revit_version, ids, first_bounded_line)?;
+    let (mut found, holders, _) =
+        collect_copies(rf, revit_version, ids, first_bounded_line, false)?;
     Ok(holders
         .into_iter()
         .map(|(id, partitions)| {
@@ -736,7 +741,7 @@ pub fn all_line_copies(
     if !supports_revit_version(revit_version) {
         return Ok(BTreeMap::new());
     }
-    let (found, _, _) = collect_copies(rf, revit_version, ids, all_bounded_lines)?;
+    let (found, _, _) = collect_copies(rf, revit_version, ids, all_bounded_lines, false)?;
     Ok(found)
 }
 
@@ -764,7 +769,8 @@ fn scan_first_records<T: PartialEq>(
     copies: Copies,
     reader: &'static str,
 ) -> Result<BTreeMap<u32, T>> {
-    let (found, holders, offsets) = collect_copies(rf, revit_version, ids, read)?;
+    let recording = rf.recording_value_sources();
+    let (found, holders, offsets) = collect_copies(rf, revit_version, ids, read, recording)?;
     // RE-216: where an element's copies in different partitions disagree,
     // the copy taken is its current partition's (#824).
     let disagreeing: BTreeMap<u32, BTreeSet<u32>> = found
@@ -776,14 +782,18 @@ fn scan_first_records<T: PartialEq>(
         Copies::Current => crate::native_document::current_partitions(rf, &disagreeing),
         Copies::Agreeing => BTreeMap::new(),
     };
-    let recording = rf.recording_value_sources();
     let mut noted: Vec<(u32, ValueSource)> = Vec::new();
     let picked: BTreeMap<u32, T> = found
         .into_iter()
         .filter_map(|(id, copies)| {
-            let held = copies.len();
+            let held = holders.get(&id).map_or(0, BTreeSet::len);
             let offset_of = |index: usize| offsets.get(&id).and_then(|at| at.get(index)).copied();
             if !disagreeing.contains_key(&id) {
+                let partitions: BTreeSet<u32> = if recording {
+                    copies.iter().map(|(partition, _)| *partition).collect()
+                } else {
+                    BTreeSet::new()
+                };
                 let (partition, line) = copies.into_iter().next()?;
                 if recording {
                     let source = ValueSource::in_partition(
@@ -792,7 +802,8 @@ fn scan_first_records<T: PartialEq>(
                         held,
                         partition,
                         offset_of(0),
-                    );
+                    )
+                    .with_partitions(partitions.into_iter().collect());
                     noted.push((id, source));
                 }
                 return Some((id, line));

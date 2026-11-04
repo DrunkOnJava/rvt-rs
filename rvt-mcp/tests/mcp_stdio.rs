@@ -661,10 +661,18 @@ async fn element_checks(client: &Client, model_id: &str, row: &Value, model: &Pa
     assert!(detail["property_sets"].is_array());
     assert!(detail["trust_markers"].is_object());
     assert!(detail["file"]["revit_release"].is_number());
-    assert_eq!(
-        detail["provenance"], row["provenance"],
-        "list and detail agree"
+    // The list leaves out the value sources by design, to stay small; the
+    // detail lists them, and is otherwise the row's provenance (#1360).
+    assert!(
+        row["provenance"].get("value_sources").is_none(),
+        "the list omits value sources"
     );
+    let mut detailed = detail["provenance"].clone();
+    detailed
+        .as_object_mut()
+        .expect("provenance is an object")
+        .remove("value_sources");
+    assert_eq!(detailed, row["provenance"], "list and detail agree");
     assert_eq!(detail["provenance"]["element_id"], row["id"]);
     let category = detail["provenance"]["category"].as_str().expect("category");
     let global_id = detail["provenance"]["global_id"]

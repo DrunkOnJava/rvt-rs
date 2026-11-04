@@ -71,11 +71,11 @@ pub struct NativeRecordOut {
 /// The copy of an element's data a reader took a value from.
 #[derive(Debug, Clone, Serialize, JsonSchema)]
 pub struct ValueSourceOut {
-    /// What was read: `bounded_line` (a wall's or beam's location line), `bounded_arc`, `instance_transform`, `saved_graphics`, `native_run`, `native_landing`, or `selected_frame` for a body read from the frame itself.
+    /// What was read: `bounded_line` (a wall's or beam's location line), `bounded_arc`, `instance_transform`, `saved_graphics`, `native_run`, `native_landing`, `selected_frame` for a body read from the frame itself, or `selected_frame_box` for a body whose box and placement are read from the frame and whose profile is read from another record (see `profile_source`), which no reader notes yet.
     pub reader: String,
     /// How the copy was chosen: `selected` (the frame the exporter selected), `agreeing` (every copy holds the same value; the lowest-numbered partition's is named), `current` (the copies disagree; the current partition's) or `native` (a native record by member name, its current copy).
     pub rule: String,
-    /// In how many partitions the element had a copy to choose from.
+    /// In how many partitions the element's data named it, so how many copies there were to choose from.
     pub copies: u32,
     /// The partition of the copy, such as `Partitions/46`.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -83,7 +83,10 @@ pub struct ValueSourceOut {
     /// Where the copy starts in that partition inflated: the element-data header whose element id follows it, for the readers of element data; the record's header, for a native record; the frame, for `selected_frame`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub offset: Option<usize>,
-    /// True when the copy is in another partition than `provenance.stream`, the frame.
+    /// For the rule `agreeing`, the numbers of the partitions that hold a copy, every one of which holds the same value; the copy named is the lowest-numbered partition's.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub partitions: Vec<u32>,
+    /// True when the value is held in another partition than `provenance.stream`, the frame: the copy named is in another and, for `agreeing`, so is every copy that agrees with it.
     pub differs_from_frame: bool,
 }
 

@@ -12,8 +12,12 @@
   built, so the default export does nothing more and its IFC and diagnostics
   are byte for byte what they were. The table's `value_source_counts` counts,
   by reader, the elements whose source is in another partition than their
-  frame. The entry lists a source only where the element's final `BodySource`
-  is drawn from that reader. The MCP `get_element` and `explain_element` list
+  frame (for an `agreeing` copy, in none of the partitions that hold one). The
+  entry lists a source only where the element's final `BodySource` is drawn
+  from that reader. A body that is the record's box but whose profile is read
+  from sketch lines or the type's section (floors, columns) names the frame as
+  `selected_frame_box`, for the box and the placement only; the profile has no
+  source yet. The MCP `get_element` and `explain_element` list
   the sources in the element's provenance; `list_elements` does not. This
   replaces the #1325 caveat that the offset may not be the copy a body came
   from. `tests/value_sources_offsets.rs` reads the bytes at each recorded

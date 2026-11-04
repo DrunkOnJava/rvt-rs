@@ -220,11 +220,12 @@ element's record as `trust_markers`.
 The record fields come from the element provenance table (#1325), which the
 export builds only when asked (`rvt-ifc --element-provenance`) and which the
 server asks for in the decode it makes when it opens a model. It is large: the
-table is 4,462,401 bytes of compact JSON against 38,640 bytes of diagnostics
-without it on the BIM4LCA office as built (about 116 times); the CLI's
-pretty-printed sidecar grows from 52,677 to 7,370,747 bytes there, from 27,588 to
-571,989 on Core Interior and from 13,956 to 85,470 on RE1 Architecture (Measure
-run 41831418684). The server
+table, with its value sources (#1360), is 5,975,162 bytes of compact JSON against
+38,640 bytes of diagnostics without it on the BIM4LCA office as built (about 155
+times); the CLI's pretty-printed sidecar grows from 52,677 to 10,537,432 bytes
+there and from 27,588 to 810,250 on Core Interior (Measure run 41860806523); RE1
+Architecture's grew from 13,956 to 85,470 before the value sources and has not
+been measured since. The server
 keeps it in memory beside the model and does not return it: `get_diagnostics`
 and the exports' summaries are the diagnostics without it, as `rvt-ifc` writes
 them by default. Building it is one pass over the walk the decode already made

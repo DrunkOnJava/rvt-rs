@@ -10,10 +10,11 @@
 //! (`decoded.element_provenance`) when the export is asked for it
 //! (`rvt-ifc --element-provenance`, `ExportOptions::with_element_provenance`,
 //! the MCP server's decode, Python's `element_provenance=True`): it is large,
-//! 4,462,401 bytes of compact JSON against 38,640 bytes of diagnostics without
-//! it (about 116 times) on the BIM4LCA office as built, and the CLI's
-//! pretty-printed sidecar grows from 52,677 to 7,370,747 bytes (Measure run
-//! 41831418684), so it is off by default. It is never written into the IFC.
+//! 5,975,162 bytes of compact JSON with the value sources of #1360 against
+//! 38,640 bytes of diagnostics without it (about 155 times) on the BIM4LCA
+//! office as built, and the CLI's pretty-printed sidecar grows from 52,677 to
+//! 10,537,432 bytes (Measure run 41860806523), so it is off by default. It is
+//! never written into the IFC.
 //!
 //! An offset indexes the stream as `RevitFile::inflated_partition` returns it,
 //! which is what `rvt-dump` writes as `Partitions_NN.decomp` (#291). For the
@@ -217,11 +218,15 @@ pub struct ValueSource {
     /// What was read, named by the reader that read it: `bounded_line` (a
     /// wall's or beam's location line), `bounded_arc`, `sketch_curve`,
     /// `sketch_circle`, `sketch_spline`, `instance_transform`, a native
-    /// reader's name, or `selected_frame` for a body read from the frame.
+    /// reader's name, `selected_frame` for a body read from the frame, or
+    /// `selected_frame_box` for a body whose box and placement are read from
+    /// the frame and whose profile is read from another record, which no
+    /// reader notes yet (its `ProfileSource` names the reader).
     pub reader: String,
     /// How the copy was chosen.
     pub rule: CopyRule,
-    /// In how many partitions the element had a copy to choose from.
+    /// In how many partitions the element's data named it, so how many copies
+    /// there were to choose from (two headers in one partition count once).
     pub copies: u32,
     /// The partition of the copy, such as `Partitions/46`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -232,8 +237,14 @@ pub struct ValueSource {
     /// frame.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub offset: Option<usize>,
-    /// Whether the copy is in another partition than the element's frame
-    /// ([`ElementProvenanceEntry::stream`]).
+    /// For [`CopyRule::Agreeing`], the numbers of the partitions that hold a
+    /// copy, every one of which holds the same value: the copy named is the
+    /// lowest-numbered partition's, which says nothing about the frame's.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub partitions: Vec<u32>,
+    /// Whether the value is held in another partition than the element's frame
+    /// ([`ElementProvenanceEntry::stream`]): the copy named is in another, and,
+    /// for [`CopyRule::Agreeing`], so is every copy that agrees with it.
     #[serde(default, skip_serializing_if = "is_false")]
     pub differs_from_frame: bool,
 }
@@ -256,8 +267,25 @@ impl ValueSource {
             copies,
             stream,
             offset,
+            partitions: Vec::new(),
             differs_from_frame: false,
         }
+    }
+
+    /// The partitions that hold an agreeing copy.
+    pub(crate) fn with_partitions(mut self, partitions: Vec<u32>) -> Self {
+        self.partitions = partitions;
+        self
+    }
+
+    /// Whether the value is held in `stream`: the copy named is, or an
+    /// agreeing copy listed in [`Self::partitions`] is.
+    pub(crate) fn held_in(&self, stream: &str) -> bool {
+        self.stream.as_deref() == Some(stream)
+            || stream
+                .strip_prefix("Partitions/")
+                .and_then(|number| number.parse::<u32>().ok())
+                .is_some_and(|number| self.partitions.contains(&number))
     }
 
     /// The source of a copy in partition `partition` at `offset`.
@@ -748,6 +776,12 @@ fn attach_native_records(
 /// frame ([`CopyRule::Selected`]).
 pub const SELECTED_FRAME_READER: &str = "selected_frame";
 
+/// The reader name of the value source of a body whose box and placement are
+/// read from the element's own frame and whose profile is read from another
+/// record (sketch lines, or the type's section): the frame is named for the
+/// box only, and the profile has no source yet.
+pub const SELECTED_FRAME_BOX_READER: &str = "selected_frame_box";
+
 /// The readers whose value a body with this `BodySource` is drawn from (#1360):
 /// a value source is listed for an element only when its reader is one of
 /// them, so a line a reader took for a wall that was drawn as its box is not
@@ -758,7 +792,8 @@ fn body_readers(body: &str) -> &'static [&'static str] {
     match body {
         ec::RECORD_BBOX_BODY_SOURCE
         | crate::element_record_wall_joins::WALL_BODY_JOIN_TRIMMED
-        | crate::element_record_column_cuts::COLUMN_BODY_JOIN_CUT => &[SELECTED_FRAME_READER],
+        | crate::element_record_column_cuts::COLUMN_BODY_JOIN_CUT
+        | crate::element_record_beam_cuts::BEAM_BODY_COLUMN_CUT => &[SELECTED_FRAME_READER],
         ec::WALL_CENTRELINE_BODY_SOURCE
         | ec::WALL_TAPERED_BODY_SOURCE
         | ec::WALL_LAYER_JOIN_BODY_SOURCE
@@ -770,7 +805,7 @@ fn body_readers(body: &str) -> &'static [&'static str] {
         }
         super::saved_meshes::SAVED_MESH_BODY_SOURCE => &["saved_graphics"],
         ec::SPIRAL_RUN_BODY_SOURCE => &["native_run"],
-        ec::LANDING_TREAD_BODY_SOURCE | ec::LANDING_SLAB_BODY_SOURCE => &["native_landing"],
+        ec::LANDING_TREAD_BODY_SOURCE => &["native_landing"],
         _ => &[],
     }
 }
@@ -800,28 +835,42 @@ pub(crate) fn attach_value_sources(
         let Some(id) = type_guid.as_deref().and_then(|tag| tag.parse::<u32>().ok()) else {
             continue;
         };
-        let Some(body) = property_set
-            .iter()
-            .flat_map(|set| &set.properties)
-            .find_map(|property| match (property.name.as_str(), &property.value) {
-                ("BodySource", PropertyValue::Text(text)) => Some(text.as_str()),
-                _ => None,
-            })
-        else {
+        let mut body = None;
+        let mut profile_source = None;
+        let mut profile_resolved = false;
+        for property in property_set.iter().flat_map(|set| &set.properties) {
+            match (property.name.as_str(), &property.value) {
+                ("BodySource", PropertyValue::Text(text)) => body = Some(text.as_str()),
+                ("ProfileSource", PropertyValue::Text(text)) => {
+                    profile_source = Some(text.as_str())
+                }
+                ("ProfileResolved", PropertyValue::Boolean(true)) => profile_resolved = true,
+                _ => {}
+            }
+        }
+        let Some(body) = body else {
             continue;
         };
         let readers = body_readers(body);
         let Some(entry) = table.elements.get_mut(&id) else {
             continue;
         };
+        // A box whose profile was read from sketch lines or the type's section
+        // takes only its box and placement from the frame.
+        let profile_elsewhere = profile_resolved && profile_source != Some(body);
         if readers.contains(&SELECTED_FRAME_READER)
             && !entry
                 .value_sources
                 .iter()
-                .any(|source| source.reader == SELECTED_FRAME_READER)
+                .any(|source| source.rule == CopyRule::Selected)
         {
+            let reader = if profile_elsewhere {
+                SELECTED_FRAME_BOX_READER
+            } else {
+                SELECTED_FRAME_READER
+            };
             let source = ValueSource::new(
-                SELECTED_FRAME_READER,
+                reader,
                 CopyRule::Selected,
                 1,
                 entry.stream.clone(),
@@ -839,10 +888,10 @@ pub(crate) fn attach_value_sources(
                 continue;
             }
             let mut source = source.clone();
-            source.differs_from_frame = matches!(
-                (&entry.stream, &source.stream),
-                (Some(frame), Some(copy)) if frame != copy
-            );
+            source.differs_from_frame = match (&entry.stream, &source.stream) {
+                (Some(frame), Some(_)) => !source.held_in(frame),
+                _ => false,
+            };
             entry.value_sources.push(source);
         }
     }

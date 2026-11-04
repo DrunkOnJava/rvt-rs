@@ -138,8 +138,9 @@ pub fn scan_instance_transforms(
     };
     let mut found: BTreeMap<u32, Vec<(u32, InstanceTransform)>> = BTreeMap::new();
     let mut holders: BTreeMap<u32, BTreeSet<u32>> = BTreeMap::new();
-    // Where each copy's element-data header starts, in the order of `found`
-    // (#1360).
+    // Where each copy's element-data header starts, in the order of `found`,
+    // kept only while the handle records value sources (#1360).
+    let recording = rf.recording_value_sources();
     let mut offsets: BTreeMap<u32, Vec<usize>> = BTreeMap::new();
     for stream in rf.partition_stream_names() {
         let Some(partition) = stream
@@ -174,7 +175,9 @@ pub fn scan_instance_transforms(
                 continue;
             };
             found.entry(id).or_default().push((partition, transform));
-            offsets.entry(id).or_default().push(hit);
+            if recording {
+                offsets.entry(id).or_default().push(hit);
+            }
         }
     }
     let disagreeing: BTreeMap<u32, BTreeSet<u32>> = found
@@ -183,23 +186,25 @@ pub fn scan_instance_transforms(
         .filter_map(|(id, _)| Some((*id, holders.get(id)?.clone())))
         .collect();
     let current_partitions = crate::native_document::current_partitions(rf, &disagreeing);
-    let recording = rf.recording_value_sources();
     let mut noted: Vec<(u32, ValueSource)> = Vec::new();
     let picked: BTreeMap<u32, InstanceTransform> = found
         .into_iter()
         .filter_map(|(id, copies)| {
-            let held = copies.len();
+            let held = holders.get(&id).map_or(0, BTreeSet::len);
             let offset_of = |index: usize| offsets.get(&id).and_then(|at| at.get(index)).copied();
             let first = copies[0].1;
             if copies.iter().all(|(_, t)| *t == first) {
                 if recording {
+                    let partitions: BTreeSet<u32> =
+                        copies.iter().map(|(partition, _)| *partition).collect();
                     let source = ValueSource::in_partition(
                         READER,
                         CopyRule::Agreeing,
                         held,
                         copies[0].0,
                         offset_of(0),
-                    );
+                    )
+                    .with_partitions(partitions.into_iter().collect());
                     noted.push((id, source));
                 }
                 return Some((id, first));

@@ -257,7 +257,7 @@ impl RvtServer {
         input_schema = rmcp::handler::server::common::schema_for_input::<ListElementsArgs>()
             .expect("the input schema is an object"),
         description = concat!(
-            "List the building elements of a model, optionally by category (IFC entity such as IFCWALL), class (Revit class such as Wall) and level (storey name), paged by limit (100 by default, at most 1000) and offset. Each row has the Revit ElementId, name, level and a provenance object: element_id, global_id, category, class, body_source, profile_source, space_outline_source and area_body_refusal, and where the element's record sits: carrier, stream, offset, record_offset, enclosing_record_id, class_tag, class_name and native_record, each present only where the model has it. ",
+            "List the building elements of a model, optionally by category (IFC entity such as IFCWALL), class (Revit class such as Wall) and level (storey name), paged by limit (100 by default, at most 1000) and offset. Each row has the Revit ElementId, name, level and a provenance object: element_id, global_id, category, class, body_source, profile_source, space_outline_source and area_body_refusal, and where the element's record sits: carrier, stream, offset, record_offset, enclosing_record_id, class_tag, class_name and native_record, each present only where the model has it. The rows leave out value_sources, the copy each reader took a value of the body from: get_element lists them. ",
             short_not_read!()
         ),
         annotations(
