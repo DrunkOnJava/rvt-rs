@@ -34,4 +34,6 @@
   built (3004978) keeps its full height: 0.0243 ft2 of its plan, all of it
   inside the wall it abuts, is cut by Revit, and no width, area or position
   of that piece separates it from the pieces Revit keeps, 0.032 ft slivers
-  included (they are drawn).
+  included (they are drawn). The room schedule leaves a stepped wall's
+  Width, Depth and Height columns empty, since its body is no longer one
+  extrusion, and the GLB's stepped tops are not scored.
