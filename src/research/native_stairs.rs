@@ -359,6 +359,7 @@ type RunGraphs = (BTreeMap<u64, RunType>, BTreeMap<u64, (Value, Vec<Value>)>);
 fn run_graphs(rf: &mut RevitFile, runs: &BTreeMap<u64, u64>) -> anyhow::Result<RunGraphs> {
     let options = Options {
         selected_ids: runs.keys().chain(runs.values()).copied().collect(),
+        value_source: Some("native_run"),
         ..Options::default()
     };
     let mut types: BTreeMap<u64, RunType> = BTreeMap::new();
@@ -728,6 +729,7 @@ pub fn native_landings_and_type_names(
     }
     let options = Options {
         selected_ids: landings.keys().chain(landings.values()).copied().collect(),
+        value_source: Some("native_landing"),
         ..Options::default()
     };
     let mut tops: BTreeMap<u64, f64> = BTreeMap::new();
@@ -1339,6 +1341,7 @@ pub fn native_tread_landings(
             .chain(runs.values())
             .copied()
             .collect(),
+        value_source: Some("native_landing"),
         ..Options::default()
     };
     // Each landing's stair, top and outline.

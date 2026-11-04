@@ -87,8 +87,9 @@ pub struct ExportOptions {
     /// Also list where each decoded element was read from in the diagnostics
     /// (`decoded.element_provenance`, `rvt-ifc --element-provenance`, #1325).
     /// Off by default: the table is large (on the BIM4LCA office as built
-    /// 4,462,401 bytes of compact JSON against 38,640 bytes of diagnostics
-    /// without it, about 116 times) and never goes into the IFC.
+    /// 5,975,162 bytes of compact JSON against 38,640 bytes of diagnostics
+    /// without it, about 155 times) and never goes into the IFC. While it is
+    /// on, the readers also note the copy they take each value from (#1360).
     pub element_provenance: bool,
     /// Also list each fail-closed decision per element in the diagnostics
     /// (`export_decisions`, `rvt-ifc --export-decisions`, #1326): why an
@@ -96,7 +97,7 @@ pub struct ExportOptions {
     /// by default; the diagnostics are then the bytes they were. It is a
     /// switch of its own, not part of `element_provenance`, because the log
     /// is bounded (at most 5,000 entries a reason) where the table grows with
-    /// the model (116 times the diagnostics on the BIM4LCA office), and it
+    /// the model (155 times the diagnostics on the BIM4LCA office), and it
     /// needs no table in the diagnostics: where an entry's evidence is an
     /// element the walk decoded, its stream and offset are read from a table
     /// built for the purpose and dropped.
@@ -506,6 +507,9 @@ pub fn run_export_with_limits_and_control(
     if let Some(phase) = &options.phase {
         rf.set_export_phase(phase)?;
     }
+    // #1360: the readers note the copy they take each value from only when the
+    // table that lists them is asked for.
+    rf.record_value_sources(options.element_provenance && options.kind != ExportKind::Placeholder);
     let result = match options.kind {
         ExportKind::Document => RvtDocExporter.export_with_diagnostics_mode_limits_and_control(
             rf,
@@ -640,6 +644,12 @@ pub fn run_export_with_limits_and_control(
         let left_out = leave_out_base_quantities(&mut model);
         recount_exported(&mut diagnostics, &model);
         notes.push(ExportNote::BaseQuantities { left_out });
+    }
+
+    // #1360: the model is final, so the bodies the saved graphics and the
+    // family extrusions replaced name their own sources.
+    if let Some(table) = diagnostics.decoded.element_provenance.as_mut() {
+        super::element_provenance::attach_value_sources(table, rf, &model);
     }
 
     // #1326: the decisions the `skipped` counts were made from, and those

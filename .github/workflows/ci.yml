@@ -519,6 +519,21 @@ jobs:
           path: target/tmp/export-decisions/
           if-no-files-found: ignore
           retention-days: 14
+      # #1360: tests/value_sources_offsets.rs re-reads the copy each body
+      # reader took its value from; its report, per model, body source and
+      # reader, is printed and kept.
+      - name: Print the value sources report
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: cat target/tmp/value-sources/summary.txt || echo "no value sources report was written"
+      - name: Upload the value sources report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: value-sources
+          path: target/tmp/value-sources/
+          if-no-files-found: ignore
+          retention-days: 14
       - name: Upload the element provenance report
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

@@ -195,7 +195,7 @@
         },
         "element_provenance": {
           "type": "object",
-          "description": "Where each decoded element was read from, by ElementId (#1325): the carrier of its record, the stream and byte offset in that stream inflated (the bytes rvt-dump writes as Partitions_NN.decomp), where its ElementId is stored, its class tag and the class that names in the file's own schema, and its native record. Not written in the IFC file. Present only when asked for (rvt-ifc --element-provenance): it is about 116 times the rest of the diagnostics in compact JSON on the BIM4LCA office as built (4,462,401 bytes against 38,640), and 140 times in the CLI's pretty-printed sidecar. Absent for a placeholder export. An element whose offset cannot be given is listed without one and counted in by_carrier.",
+          "description": "Where each decoded element was read from, by ElementId (#1325): the carrier of its record, the stream and byte offset in that stream inflated (the bytes rvt-dump writes as Partitions_NN.decomp), where its ElementId is stored, its class tag and the class that names in the file's own schema, and its native record. Not written in the IFC file. Present only when asked for (rvt-ifc --element-provenance): it is about 155 times the rest of the diagnostics in compact JSON on the BIM4LCA office as built (5,975,162 bytes against 38,640), and 200 times in the CLI's pretty-printed sidecar. Absent for a placeholder export. An element whose offset cannot be given is listed without one and counted in by_carrier.",
           "properties": {
             "layout_release": {
               "type": "integer",
@@ -280,7 +280,7 @@
                   "offset": {
                     "type": "integer",
                     "minimum": 0,
-                    "description": "Where the record or frame starts in that stream inflated: the frame the exporter selected among the element's frames (Revit 2024 and later: the greatest vertical extent, then the greater stream and offset; 2008 to 2023: the newest), which a body reader may not have taken. It and native.stream can name different partitions, and neither is guaranteed to be the copy a body came from. For the global_latest_schema_walk carrier it indexes Global/Latest as the walk inflates it; that carrier is unmeasured."
+                    "description": "Where the record or frame starts in that stream inflated: the frame the exporter selected among the element's frames (Revit 2024 and later: the greatest vertical extent, then the greater stream and offset; 2008 to 2023: the newest), which a body reader may not have taken: value_sources names the copy a reader took a value from. It and native.stream can name different partitions. For the global_latest_schema_walk carrier it indexes Global/Latest as the walk inflates it; that carrier is unmeasured."
                   },
                   "record_offset": {
                     "type": "integer",
@@ -323,7 +323,7 @@
                       },
                       "stream": {
                         "type": "string",
-                        "description": "The partition of that copy. It can differ from the element's stream, and neither is guaranteed to be the copy a body came from."
+                        "description": "The partition of that copy. It can differ from the element's stream; the record a reader decoded is a value source with the rule native, where that reader notes it."
                       },
                       "offset": {
                         "type": "integer",
@@ -333,7 +333,61 @@
                       "class_tag": { "type": "integer", "minimum": 0, "maximum": 65535 },
                       "class_name": { "type": "string" }
                     }
+                  },
+                  "value_sources": {
+                    "type": "array",
+                    "description": "The copy each reader took a value of the element's body from, one per reader, where the reader notes its choice and the final BodySource is drawn from it (#1360). Present only with rvt-ifc --element-provenance, and only for the bodies docs/export-diagnostics.md lists.",
+                    "items": {
+                      "type": "object",
+                      "required": ["reader", "rule", "copies"],
+                      "properties": {
+                        "reader": {
+                          "type": "string",
+                          "description": "What was read: bounded_line (a wall's or beam's location line), bounded_arc, instance_transform, saved_graphics, native_run, native_landing, selected_frame for a body read from the frame, or selected_frame_box for a body whose box and placement are read from the frame and whose profile is read from another record, which no reader notes yet."
+                        },
+                        "rule": {
+                          "type": "string",
+                          "enum": ["selected", "agreeing", "current", "native"],
+                          "description": "How the copy was chosen: the selected frame; every copy holds the same value (the lowest-numbered partition's is named); the copies disagree and the current partition's is taken (RE-216); a native record by member name, its current copy."
+                        },
+                        "copies": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "description": "In how many partitions the element's data named it, so how many copies there were to choose from."
+                        },
+                        "stream": {
+                          "type": "string",
+                          "description": "The partition of the copy, such as Partitions/46."
+                        },
+                        "offset": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "description": "Where the copy starts in that partition inflated: the element-data header whose element id follows it, for the readers of element data; the record's header, for a native record; the frame, for selected_frame."
+                        },
+                        "partitions": {
+                          "type": "array",
+                          "items": { "type": "integer", "minimum": 0 },
+                          "description": "For the rule agreeing, the numbers of the partitions that hold a copy, every one of which holds the same value; the copy named is the lowest-numbered partition's."
+                        },
+                        "differs_from_frame": {
+                          "type": "boolean",
+                          "description": "Whether the value is held in another partition than the element's frame: the copy named is in another and, for agreeing, so is every copy that agrees with it."
+                        }
+                      }
+                    }
                   }
+                }
+              }
+            },
+            "value_source_counts": {
+              "type": "object",
+              "description": "The value sources of the listed elements, counted by reader: how many elements have one, and how many of those are in another partition than their frame.",
+              "additionalProperties": {
+                "type": "object",
+                "required": ["elements", "differ_from_frame"],
+                "properties": {
+                  "elements": { "type": "integer", "minimum": 0 },
+                  "differ_from_frame": { "type": "integer", "minimum": 0 }
                 }
               }
             }

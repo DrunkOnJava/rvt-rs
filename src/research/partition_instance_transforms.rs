@@ -15,6 +15,7 @@
 //! f64 Xx · f64 Yx · f64 Zx · f64 Xy · f64 Yy · f64 Zy · f64 Xz · f64 Yz · f64 Zz · f64 ox · f64 oy · f64 oz
 //! ```
 
+use crate::ifc::element_provenance::{CopyRule, ValueSource};
 use crate::le_bytes;
 use crate::{Result, RevitFile};
 use std::collections::{BTreeMap, BTreeSet};
@@ -137,6 +138,10 @@ pub fn scan_instance_transforms(
     };
     let mut found: BTreeMap<u32, Vec<(u32, InstanceTransform)>> = BTreeMap::new();
     let mut holders: BTreeMap<u32, BTreeSet<u32>> = BTreeMap::new();
+    // Where each copy's element-data header starts, in the order of `found`,
+    // kept only while the handle records value sources (#1360).
+    let recording = rf.recording_value_sources();
+    let mut offsets: BTreeMap<u32, Vec<usize>> = BTreeMap::new();
     for stream in rf.partition_stream_names() {
         let Some(partition) = stream
             .strip_prefix("Partitions/")
@@ -170,6 +175,9 @@ pub fn scan_instance_transforms(
                 continue;
             };
             found.entry(id).or_default().push((partition, transform));
+            if recording {
+                offsets.entry(id).or_default().push(hit);
+            }
         }
     }
     let disagreeing: BTreeMap<u32, BTreeSet<u32>> = found
@@ -178,20 +186,57 @@ pub fn scan_instance_transforms(
         .filter_map(|(id, _)| Some((*id, holders.get(id)?.clone())))
         .collect();
     let current_partitions = crate::native_document::current_partitions(rf, &disagreeing);
-    Ok(found
+    let mut noted: Vec<(u32, ValueSource)> = Vec::new();
+    let picked: BTreeMap<u32, InstanceTransform> = found
         .into_iter()
         .filter_map(|(id, copies)| {
+            let held = holders.get(&id).map_or(0, BTreeSet::len);
+            let offset_of = |index: usize| offsets.get(&id).and_then(|at| at.get(index)).copied();
             let first = copies[0].1;
             if copies.iter().all(|(_, t)| *t == first) {
+                if recording {
+                    let partitions: BTreeSet<u32> =
+                        copies.iter().map(|(partition, _)| *partition).collect();
+                    let source = ValueSource::in_partition(
+                        READER,
+                        CopyRule::Agreeing,
+                        held,
+                        copies[0].0,
+                        offset_of(0),
+                    )
+                    .with_partitions(partitions.into_iter().collect());
+                    noted.push((id, source));
+                }
                 return Some((id, first));
             }
             let current = *current_partitions.get(&id)?;
             let mut in_current = copies
                 .iter()
-                .filter(|(p, _)| *p == current)
-                .map(|(_, t)| *t);
-            let pick = in_current.next()?;
-            in_current.all(|t| t == pick).then_some((id, pick))
+                .enumerate()
+                .filter(|(_, (p, _))| *p == current)
+                .map(|(index, (_, t))| (index, *t));
+            let (index, pick) = in_current.next()?;
+            if !in_current.all(|(_, t)| t == pick) {
+                return None;
+            }
+            if recording {
+                let source = ValueSource::in_partition(
+                    READER,
+                    CopyRule::Current,
+                    held,
+                    current,
+                    offset_of(index),
+                );
+                noted.push((id, source));
+            }
+            Some((id, pick))
         })
-        .collect())
+        .collect();
+    for (id, source) in noted {
+        rf.note_value_source(id, source);
+    }
+    Ok(picked)
 }
+
+/// The reader name a value source of [`scan_instance_transforms`] carries.
+const READER: &str = "instance_transform";

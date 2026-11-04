@@ -257,7 +257,7 @@ impl RvtServer {
         input_schema = rmcp::handler::server::common::schema_for_input::<ListElementsArgs>()
             .expect("the input schema is an object"),
         description = concat!(
-            "List the building elements of a model, optionally by category (IFC entity such as IFCWALL), class (Revit class such as Wall) and level (storey name), paged by limit (100 by default, at most 1000) and offset. Each row has the Revit ElementId, name, level and a provenance object: element_id, global_id, category, class, body_source, profile_source, space_outline_source and area_body_refusal, and where the element's record sits: carrier, stream, offset, record_offset, enclosing_record_id, class_tag, class_name and native_record, each present only where the model has it. ",
+            "List the building elements of a model, optionally by category (IFC entity such as IFCWALL), class (Revit class such as Wall) and level (storey name), paged by limit (100 by default, at most 1000) and offset. Each row has the Revit ElementId, name, level and a provenance object: element_id, global_id, category, class, body_source, profile_source, space_outline_source and area_body_refusal, and where the element's record sits: carrier, stream, offset, record_offset, enclosing_record_id, class_tag, class_name and native_record, each present only where the model has it. The rows leave out value_sources, the copy each reader took a value of the body from: get_element lists them. ",
             short_not_read!()
         ),
         annotations(
@@ -297,7 +297,7 @@ impl RvtServer {
         input_schema = rmcp::handler::server::common::schema_for_input::<GetElementArgs>()
             .expect("the input schema is an object"),
         description = concat!(
-            "One element, by Revit ElementId or IFC GlobalId (the Revit Mark parameter is not decoded, so it cannot be looked up). Returns its property sets and quantities as the IFC export writes them (quantities in the IFC's SI units), its trust markers (the ...Source, ...Resolved and ...Refusal properties of its record, such as BodySource), its provenance (the carrier its record was read from, and its stream and byte offset), and the file's: Revit release and build, schema class count, partition count and ElemTable record layout. ",
+            "One element, by Revit ElementId or IFC GlobalId (the Revit Mark parameter is not decoded, so it cannot be looked up). Returns its property sets and quantities as the IFC export writes them (quantities in the IFC's SI units), its trust markers (the ...Source, ...Resolved and ...Refusal properties of its record, such as BodySource), its provenance (the carrier its record was read from, its stream and byte offset, and in value_sources the copy each reader took a value of its body from), and the file's: Revit release and build, schema class count, partition count and ElemTable record layout. ",
             short_not_read!()
         ),
         annotations(
@@ -327,7 +327,7 @@ impl RvtServer {
         input_schema = rmcp::handler::server::common::schema_for_input::<ExplainElementArgs>()
             .expect("the input schema is an object"),
         description = concat!(
-            "Why an element is in the export as it is, or is not in it: its provenance, its trust markers (the ...Source, ...Resolved and ...Refusal properties of its record) and every fail-closed decision recorded for it, each with a stage (element_skipped, body_not_drawn, body_left_as_box, opening_not_cut, outline_not_read, storey_not_bound), a reason code (the reason of the skipped item in get_diagnostics, or body_is_record_box, space_outline_is_record_box, area_body_refused), the stream and byte offset its record was read from where known, and a detail. Takes a Revit ElementId whether or not the export holds the element (a left-out element has decisions and no provenance), or the GlobalId of an exported one. The log keeps at most 5000 decisions a reason; capped_reasons names the reasons that dropped some, whose decisions about this element may be missing. A frame with no ElementId has no entry. ",
+            "Why an element is in the export as it is, or is not in it: its provenance (with value_sources, the copy each reader took a value of its body from), its trust markers (the ...Source, ...Resolved and ...Refusal properties of its record) and every fail-closed decision recorded for it, each with a stage (element_skipped, body_not_drawn, body_left_as_box, opening_not_cut, outline_not_read, storey_not_bound), a reason code (the reason of the skipped item in get_diagnostics, or body_is_record_box, space_outline_is_record_box, area_body_refused), the stream and byte offset its record was read from where known, and a detail. Takes a Revit ElementId whether or not the export holds the element (a left-out element has decisions and no provenance), or the GlobalId of an exported one. The log keeps at most 5000 decisions a reason; capped_reasons names the reasons that dropped some, whose decisions about this element may be missing. A frame with no ElementId has no entry. ",
             short_not_read!()
         ),
         annotations(
