@@ -1,14 +1,14 @@
-# RE-330: an Area's region from Revit's own plan topology
+# RE-333: an Area's region from Revit's own plan topology
 
 **Date:** 2026-11-04
 **Issues:** #1261 (BIM Whale's Areas), #1194 (Areas beyond Revit 2024), #763 (Areas as spaces); follows RE-317 (an Area's region from its area boundary lines) and RE-324 (the Areas of Revit 2015 to 2023)
 **Artefacts:** Autodesk's `rac_advanced` sample project, every save from 2015 to 2027 that `research/autodesk-sample-projects.tsv` pins and 2026 and 2027 (fetched, never stored); the BIM4LCA office, concrete structure, as built and at building permit (Revit 2024), with Revit's own IFC export of each (`research/bim4lca-measure.tsv`, CC BY-SA 4.0, never stored)
-**Probe:** `probes/examples/probe_re330_area_plan_topology.rs`
-**Status:** positive. Every Area of every file read here has its region: 25 of 25 on each `rac_advanced` save, 30 of 30 on each office file. Each region has the area Revit saves for its loop, and on the office the area of Revit's own export of the Area.
+**Probe:** `probes/examples/probe_re333_area_plan_topology.rs`
+**Status:** positive; section 8 has what the merged reader writes. Every Area of every file read here has a region from the plan topology: 25 of 25 on each `rac_advanced` save, 30 of 30 on each office file, each with the area Revit saves for its loop, and on the office the area of Revit's own export of the Area. The exporter writes them on every `rac_advanced` save but 2021's, where two copies of 16 lines make the group unreadable and the topology is not asked.
 
 ## 1. Before
 
-RE-317 draws an Area's region from the boxes of its scheme's area boundary lines on its Level, where every line is straight along a plan axis and the lines meet. On `rac_advanced` that drew 3 of the 25 Areas. RE-317 §6 put the other 22 down to lines that are not along an axis (18) and to Areas "bounded partly by walls" (4), whose point lay in no loop of the lines. RE-324 drew the same 3 on the 2015 to 2023 saves and left the rest unwritten (`area_without_proven_body`).
+RE-317 draws an Area's region from the boxes of its scheme's area boundary lines on its Level, where every line is straight along a plan axis and the lines meet. On `rac_advanced` that drew 3 of the 25 Areas. RE-317 §6 put the other 22 down to lines that are not along an axis (18) and to Areas "bounded partly by walls" (4), whose point lay in no loop of the lines. RE-324 drew the same 3 on the 2015 to 2023 saves and left the rest unwritten (`area_without_proven_body`). RE-330 (#1351) carries lines on to the lines that name them and joins parallel lines that stop at the same place, and draws **16 of the 25** on every save but 2021's: main writes 16, not 3, on the saves where it applies. The 9 it leaves out are the ones this report's topology covers.
 
 Neither cause is the one. On that sample 71 of the 127 area boundary lines are drawn a distance from where the area is measured: the area scheme measures to a wall's face, and the line's box is the measured line, not the drawn one. Lines that meet where they are drawn do not meet where they are measured. Revit closes the loop by meeting the measured lines where they cross, which the boxes cannot show.
 
@@ -36,7 +36,7 @@ The region of an Area is its circuit rebuilt from its lines:
 
 The checks: the outer loop's area, exact for arcs, equals the circuit's `m_area` to 1e-6 relative. Each hole's area equals its circuit's. The Area's point lies inside the outer loop and in no hole. An Area that fails a check, or whose plan, circuit, segments or lines are not read, keeps RE-317's refusal, as before (fail closed).
 
-The exporter takes RE-317's region where the lines' arrangement finds one, and this region where it finds none. Where both are found they agree: on the office every region has the same area and perimeter both ways, and on `rac_advanced` the 3 Areas RE-317 draws have their circuits' areas. So every body written before is written as before, byte for byte.
+The exporter takes this region first, where it is read and passes the checks above, and otherwise the region of the lines' arrangement with RE-330's joins (RE-317, RE-330). Neither is asked of a group of lines that cannot be read as a whole: a line in a non-primary design option, at a stray height, with copies that disagree, or missing. Where both are found they are expected to agree; section 8 has what was measured. An Area refused by both says the plan topology's reason (one of the five `area_*` reasons above) rather than the arrangement's.
 
 Arcs are written in chords of at most 2° (`ARC_STEP_RADIANS`). Where two straight edges continue in a straight line (a line cut where another meets it), the point between them is left out, as Revit's profile leaves it out (RE-317 §3).
 
@@ -46,18 +46,14 @@ Arcs are written in chords of at most 2° (`ARC_STEP_RADIANS`). Where two straig
 
 **The BIM4LCA office:** as built and at building permit, 30 of 30 Areas have a region, eleven of them with holes. The outer loop equals the circuit's area on all 30. The region less its holes equals the area of Revit's own export of the same Area, paired by GlobalId, to 2.1e-10 relative on 30 of 30 on each file. No line of the office has an offset, and every one of these regions has the area and perimeter of RE-317's.
 
-**The export:** `rvt-ifc` on `main` (fadd80b5) and on this change, with `SOURCE_DATE_EPOCH` fixed:
-
-- each `rac_advanced` save from 2015 to 2024 but 2021 writes 25 Area spaces with a body, where `main` writes 3. `skipped` no longer has `area_without_proven_body`, and `exported.area_body_refusals` is empty;
-- the 2021 save writes 22, where `main` writes none. Its other 3 Areas have a region here, but they name lines whose two copies in the file disagree (the save holds two states of the model, RE-324), so RE-317's check still refuses them (`named_lines_not_in_scheme_and_level`);
-- every other export compared is byte-identical, the office's included: 70 local files of every release from 2015 to 2027, among them Autodesk's samples, the magnetar corpus and the BIM4LCA models.
+**The export:** measured on the merged reader in section 8.
 
 Reading the plans and lines takes 80 to 95 ms on `rac_advanced` and about 0.3 s on the office.
 
 ## 5. Not measured
 
-- No Revit 2015 to 2023 or 2026 to 2027 export with Areas exists to compare with. `rac_advanced` is checked against the areas Revit saves in the file, which are Revit's own figures for the same loops, not against Revit's IFC.
-- Areas of Revit 2025 to 2027 are still not written: the partition chain record that gives an Area its number, name, Level and height is read on 2015 to 2024 only. Their plans and regions read as on 2024.
+- No Revit IFC4 export of a 2015 to 2023 or 2026 to 2027 file with Areas exists to compare with. The only Revit export of `rac_advanced`'s Areas is the IFC2X3 one of RE-330 (2015 to 2020 state), which section 8 scores the topology against. `rac_advanced` is otherwise checked against the areas Revit saves in the file, which are Revit's own figures for the same loops, not against Revit's IFC.
+- Revit 2025 to 2027 Areas are written (section 6), measured against the same project's 2024 save and, for Snowdon Towers Architectural, section 7's export, whose provenance is not recorded.
 - Revit 2008 to 2014.
 - A line in a non-primary design option, and a plan topology per design option or per phase: none of the files has more than one plan for a scheme on a Level. An Area held by two plans keeps RE-317's region.
 - An Area that Revit reports "not enclosed": none here. Its circuit would be missing or would fail a check, and it keeps RE-317's refusal.
@@ -67,7 +63,7 @@ Reading the plans and lines takes 80 to 95 ms on `rac_advanced` and about 0.3 s 
 ## Reproduce
 
 ```bash
-cargo run --profile ci -p rvt-probes --example probe_re330_area_plan_topology -- rac_advanced_sample_project.rvt
+cargo run --profile ci -p rvt-probes --example probe_re333_area_plan_topology -- rac_advanced_sample_project.rvt
 rvt-ifc rac_advanced_sample_project.rvt -o out.ifc --diagnostics out.json
 python3 tools/re/space_profiles_vs_ifc.py office.ifc office_Revit.ifc --match globalid
 ```
@@ -90,6 +86,8 @@ Not measured: no Revit 2025 to 2027 export with Areas is available, so these rel
 
 ## 7. Snowdon Towers Architectural, against Revit's own 2025 export
 
+**Provenance not recorded.** Neither file's source, sha256 or licence is recorded (`research/autodesk-sample-projects.tsv` holds only the 2024 set), so under `CLEANROOM.md` these figures are not admissible until it is; the review asked for it (item 4) and the author has not answered. They stand here unchanged, and come out if the origin is never recorded.
+
 Snowdon Towers Architectural, Revit 2025, with a Revit 2025 IFC export of it (exporter 25.4.50.6, local only: neither file is redistributable here, as for RE-101). The export has 101 `IfcSpace` whose `Category` is `Areas`.
 
 - **Spaces:** rvt-rs writes 101 Area spaces, all of them Revit's by GlobalId, with the same number and name, and none that Revit's export lacks. `main` writes none: 2025 Areas were not read.
@@ -104,3 +102,7 @@ Two rules came from this file and change nothing on `rac_advanced` or the office
 - **Where an Area's partition point is not read**, the plan topology's region stands, checked against the point the topology's own Area saves. 48 of Snowdon's Areas were refused only for `point_not_read`.
 
 A line's offset parts with the same offset are one edge, which avoids an edge of no length where a part ends at a segment's end.
+
+## 8. The merged reader
+
+To be filled from the Measure runs.

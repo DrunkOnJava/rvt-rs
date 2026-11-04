@@ -31,7 +31,8 @@ use sha2::{Digest, Sha256};
 
 const SERVER: &str = env!("CARGO_BIN_EXE_rvt-rs-mcp");
 const EPOCH: &str = "1700000000";
-const TOOLS: [&str; 9] = [
+const TOOLS: [&str; 10] = [
+    "explain_element",
     "export_gltf",
     "export_ifc",
     "get_diagnostics",
@@ -187,7 +188,7 @@ fn transport() -> TokioChildProcess {
 async fn drive(client: &Client, modern: bool, model: &Path, out: &Path, real_project: bool) {
     let path = model.to_string_lossy().into_owned();
 
-    // The tool list: nine tools, each with an output schema; fresh for an hour
+    // The tool list: ten tools, each with an output schema; fresh for an hour
     // (and result types present) only for a 2026-07-28 peer.
     let list = client.list_tools(None).await.expect("tools/list");
     let names: Vec<String> = list
@@ -314,6 +315,13 @@ async fn drive(client: &Client, modern: bool, model: &Path, out: &Path, real_pro
     let diagnostics = answer(&call(client, "get_diagnostics", json!({ "model": model_id })).await);
     assert_eq!(diagnostics["diagnostics"]["schema_version"], 1);
     assert!(diagnostics["diagnostics"]["exported"].is_object());
+    // The tables the server keeps for its answers are not in the diagnostics.
+    assert!(diagnostics["diagnostics"].get("export_decisions").is_none());
+    assert!(
+        diagnostics["diagnostics"]["decoded"]
+            .get("element_provenance")
+            .is_none()
+    );
 
     // An element that is not there is a tool error, not a protocol error.
     let missing = call(
@@ -325,7 +333,8 @@ async fn drive(client: &Client, modern: bool, model: &Path, out: &Path, real_pro
     assert!(error_text(&missing).contains("list_elements"));
 
     if let Some(first) = rows.iter().find(|row| row["id"].is_string()) {
-        element_checks(client, &model_id, first, out).await;
+        element_checks(client, &model_id, first, model, out).await;
+        explain_checks(client, &model_id, first, model).await;
     }
 
     // Exports: a summary and a link, the file where it was asked for.
@@ -471,9 +480,174 @@ async fn drive(client: &Client, modern: bool, model: &Path, out: &Path, real_pro
     }
 }
 
+/// Where the element's record sits (#1325): its carrier names a stream that
+/// agrees with it, and the ElementId is where `record_offset` says in the
+/// partition as `rvt-dump` writes it (`Partitions_NN.decomp`), read here from
+/// the file itself rather than through the server.
+fn record_checks(model: &Path, detail: &Value) {
+    let provenance = &detail["provenance"];
+    if provenance["provenance_omitted"].as_bool() == Some(true) {
+        // Past the cap on the listed entries: the file says how many.
+        assert!(
+            detail["file"]["omitted_entries"]
+                .as_u64()
+                .is_some_and(|omitted| omitted > 0),
+            "{detail}"
+        );
+        assert!(provenance["carrier"].is_null());
+        return;
+    }
+    let carrier = provenance["carrier"]
+        .as_str()
+        .expect("every decoded element has a carrier");
+    let stream = provenance["stream"].as_str();
+    if carrier == "global_latest_schema_walk" {
+        assert_eq!(stream, Some("Global/Latest"));
+        assert!(provenance["offset"].is_u64(), "{provenance}");
+        assert!(provenance["record_offset"].is_null());
+    }
+    if carrier.starts_with("partition_element_record") {
+        assert!(
+            stream.is_some_and(|stream| stream.starts_with("Partitions/")),
+            "{provenance}"
+        );
+        assert!(provenance["offset"].is_u64(), "{provenance}");
+        assert!(provenance["class_tag"].is_u64(), "{provenance}");
+        assert!(provenance["class_name"].is_string(), "{provenance}");
+    }
+    assert!(detail["file"]["partition_count"].is_u64());
+    let (Some(stream), Some(record_offset)) = (
+        stream.filter(|stream| stream.starts_with("Partitions/")),
+        provenance["record_offset"].as_u64(),
+    ) else {
+        return;
+    };
+    let id: u64 = provenance["element_id"]
+        .as_str()
+        .expect("element id")
+        .parse()
+        .expect("a numeric ElementId");
+    let width = if detail["file"]["layout_release"]
+        .as_u64()
+        .is_some_and(|release| release >= 2024)
+    {
+        8
+    } else {
+        4
+    };
+    let mut file = rvt::RevitFile::open(model).expect("open the model");
+    let inflated = file
+        .inflated_partition(stream)
+        .expect("inflate the partition");
+    let at = usize::try_from(record_offset).expect("an offset");
+    let stored = inflated
+        .bytes()
+        .get(at..at + width)
+        .expect("the offset is inside the partition");
+    let mut word = [0u8; 8];
+    word[..width].copy_from_slice(stored);
+    assert_eq!(
+        u64::from_le_bytes(word),
+        id,
+        "the ElementId at {stream}:{record_offset}"
+    );
+    if carrier == "partition_element_record_second_prologue" {
+        assert_eq!(
+            provenance["enclosing_record_id"].as_str(),
+            provenance["element_id"].as_str()
+        );
+    }
+}
+
+/// `explain_element` (#1326): an exported element gives its provenance and
+/// trust markers as `get_element` does, with the decisions recorded for it; an
+/// element the decode made a decision about is explained by what the same
+/// decode, run in this process, recorded; an unknown id is a tool error.
+async fn explain_checks(client: &Client, model_id: &str, row: &Value, model: &Path) {
+    let id = row["id"].as_str().expect("element id");
+    let detail = answer(
+        &call(
+            client,
+            "get_element",
+            json!({ "model": model_id, "id": id }),
+        )
+        .await,
+    );
+    let explained = answer(
+        &call(
+            client,
+            "explain_element",
+            json!({ "model": model_id, "element": id }),
+        )
+        .await,
+    );
+    assert_eq!(explained["exported"], true);
+    assert_eq!(explained["id"], row["id"]);
+    assert_eq!(explained["provenance"], detail["provenance"]);
+    assert_eq!(explained["trust_markers"], detail["trust_markers"]);
+    assert_eq!(explained["file"], detail["file"]);
+    assert!(explained["decisions"].is_array());
+    assert!(explained["capped_reasons"].is_array());
+
+    // `model_id` and `id` name the model and the element as in the other tools.
+    let aliased = answer(
+        &call(
+            client,
+            "explain_element",
+            json!({ "model_id": model_id, "id": id }),
+        )
+        .await,
+    );
+    assert_eq!(aliased, explained);
+
+    let missing = call(
+        client,
+        "explain_element",
+        json!({ "model": model_id, "element": "999999999" }),
+    )
+    .await;
+    assert!(error_text(&missing).contains("list_elements"));
+
+    // What the decode records, run again here with the log on.
+    let mut file = rvt::RevitFile::open(model).expect("open the model");
+    let run = rvt::ifc::run_export(
+        &mut file,
+        &rvt::ifc::ExportOptions::default().with_export_decisions(true),
+    )
+    .expect("export the model");
+    let log = run
+        .diagnostics
+        .export_decisions
+        .expect("the log when it is asked for");
+    let Some((recorded, element)) = log
+        .entries
+        .iter()
+        .find_map(|decision| Some((decision, decision.element_id?)))
+    else {
+        return;
+    };
+    let explained = answer(
+        &call(
+            client,
+            "explain_element",
+            json!({ "model": model_id, "element": element.to_string() }),
+        )
+        .await,
+    );
+    assert_eq!(explained["id"], element.to_string());
+    let decisions = explained["decisions"].as_array().expect("decisions");
+    assert!(
+        decisions.iter().any(|decision| {
+            decision["reason"] == recorded.reason.as_str()
+                && decision["stage"] == recorded.stage.as_str()
+        }),
+        "{recorded:?} is not in {decisions:?}"
+    );
+}
+
 /// `get_element` on the first listed element: provenance, lookup by either id,
 /// and the GlobalId in the IFC the export writes.
-async fn element_checks(client: &Client, model_id: &str, row: &Value, out: &Path) {
+async fn element_checks(client: &Client, model_id: &str, row: &Value, model: &Path, out: &Path) {
     let id = row["id"].as_str().expect("element id");
     let detail = answer(
         &call(
@@ -487,10 +661,18 @@ async fn element_checks(client: &Client, model_id: &str, row: &Value, out: &Path
     assert!(detail["property_sets"].is_array());
     assert!(detail["trust_markers"].is_object());
     assert!(detail["file"]["revit_release"].is_number());
-    assert_eq!(
-        detail["provenance"], row["provenance"],
-        "list and detail agree"
+    // The list leaves out the value sources by design, to stay small; the
+    // detail lists them, and is otherwise the row's provenance (#1360).
+    assert!(
+        row["provenance"].get("value_sources").is_none(),
+        "the list omits value sources"
     );
+    let mut detailed = detail["provenance"].clone();
+    detailed
+        .as_object_mut()
+        .expect("provenance is an object")
+        .remove("value_sources");
+    assert_eq!(detailed, row["provenance"], "list and detail agree");
     assert_eq!(detail["provenance"]["element_id"], row["id"]);
     let category = detail["provenance"]["category"].as_str().expect("category");
     let global_id = detail["provenance"]["global_id"]
@@ -498,6 +680,7 @@ async fn element_checks(client: &Client, model_id: &str, row: &Value, out: &Path
         .expect("every building element has a GlobalId")
         .to_string();
     assert_eq!(global_id.len(), 22, "{global_id}");
+    record_checks(model, &detail);
 
     let by_global = answer(
         &call(

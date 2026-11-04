@@ -403,6 +403,15 @@ objects only on one side are what a [practitioner
 report](https://github.com/DrunkOnJava/rvt-rs/issues/new?template=practitioner_report.yml)
 needs; no model file is.
 
+To check what the sidecar reports against the file itself, `--element-provenance`
+adds where each decoded element was read from: its stream, its byte offset in
+the inflated stream (the bytes `rvt-dump` writes as `Partitions_NN.decomp`) and
+its class. It is off by default, since the list is much larger than the rest of
+the sidecar ([Export diagnostics](export-diagnostics.md#cli)).
+`--export-decisions` adds why each element was left out, a body is only its
+record's box, an opening was not cut or an outline was not read, one entry per
+element and bounded per reason ([Export decisions](export-diagnostics.md#export-decisions)).
+
 ## Understand Warnings
 
 The most important status words are:

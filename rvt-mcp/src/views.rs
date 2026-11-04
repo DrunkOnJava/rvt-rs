@@ -8,6 +8,7 @@ use std::collections::BTreeMap;
 
 use rvt::ifc::ELEMENT_RECORD_PROPERTY_SET;
 use rvt::ifc::IfcModel;
+use rvt::ifc::element_provenance::ValueSource;
 use rvt::ifc::entities::{IfcEntity, Property, PropertySet, PropertyValue};
 use rvt::ifc::export_content::SPACE_OUTLINE_SOURCE_PROPERTY;
 use rvt::ifc::schedule_csv::room_rows;
@@ -15,9 +16,10 @@ use rvt::reader::UnreadStream;
 use serde_json::Value;
 
 use crate::schema::{
-    DiagnosticsOut, DiagnosticsSummary, ElementCounts, ElementDetail, ElementProvenance,
-    ElementRow, EntityRefOut, LevelOut, LevelRefOut, LevelsOut, ListElementsOut, PropertyOut,
-    PropertySetOut, RoomOut, RoomsOut, SkippedOut, SummaryOut, TypeOut, UnreadOut,
+    DecisionOut, DiagnosticsOut, DiagnosticsSummary, ElementCounts, ElementDetail,
+    ElementProvenance, ElementRow, EntityRefOut, ExplainElementOut, LevelOut, LevelRefOut,
+    LevelsOut, ListElementsOut, NativeRecordOut, PropertyOut, PropertySetOut, RoomOut, RoomsOut,
+    SkippedOut, SummaryOut, TypeOut, UnreadOut, ValueSourceOut,
 };
 use crate::store::{Computed, Entry};
 
@@ -51,8 +53,23 @@ fn storey_name(model: &IfcModel, storey_index: Option<usize>) -> Option<String> 
         .map(|storey| storey.name.clone())
 }
 
+/// A value source as the answers write it.
+fn value_source_out(source: &ValueSource) -> ValueSourceOut {
+    ValueSourceOut {
+        reader: source.reader.clone(),
+        rule: source.rule.as_str().to_string(),
+        copies: source.copies,
+        stream: source.stream.clone(),
+        offset: source.offset,
+        partitions: source.partitions.clone(),
+        differs_from_frame: source.differs_from_frame,
+    }
+}
+
 /// The provenance of the building element at `index` of the model's entities.
-fn provenance(computed: &Computed, index: usize) -> Option<ElementProvenance> {
+/// `sources` says whether the answer lists the element's value sources, which
+/// a list of elements does not.
+fn provenance(computed: &Computed, index: usize, sources: bool) -> Option<ElementProvenance> {
     let IfcEntity::BuildingElement {
         ifc_type,
         type_guid,
@@ -63,6 +80,10 @@ fn provenance(computed: &Computed, index: usize) -> Option<ElementProvenance> {
         return None;
     };
     let set = property_set.as_ref();
+    let id = type_guid.as_deref().and_then(|tag| tag.parse::<u32>().ok());
+    let table = computed.element_provenance.as_ref();
+    let source = id.and_then(|id| table?.get(id));
+    let omitted = id.is_some_and(|id| table.is_some_and(|table| table.is_omitted(id)));
     Some(ElementProvenance {
         element_id: type_guid.clone(),
         global_id: computed.global_ids.get(index).cloned().flatten(),
@@ -72,6 +93,29 @@ fn provenance(computed: &Computed, index: usize) -> Option<ElementProvenance> {
         profile_source: text_property(set, "ProfileSource"),
         space_outline_source: text_property(set, SPACE_OUTLINE_SOURCE_PROPERTY),
         area_body_refusal: text_property(set, "AreaBodyRefusal"),
+        carrier: source.map(|entry| entry.carrier.as_str().to_string()),
+        stream: source.and_then(|entry| entry.stream.clone()),
+        offset: source.and_then(|entry| entry.offset),
+        record_offset: source.and_then(|entry| entry.record_offset),
+        enclosing_record_id: source
+            .and_then(|entry| entry.enclosing_record_id)
+            .map(|id| id.to_string()),
+        class_tag: source.and_then(|entry| entry.class_tag).map(u32::from),
+        class_name: source.and_then(|entry| entry.class_name.clone()),
+        native_record: source
+            .and_then(|entry| entry.native.as_ref())
+            .map(|native| NativeRecordOut {
+                copies: native.copies,
+                copy: native.copy.as_str().to_string(),
+                stream: native.stream.clone(),
+                offset: native.offset,
+                class_name: native.class_name.clone(),
+            }),
+        provenance_omitted: omitted.then_some(true),
+        value_sources: source
+            .filter(|_| sources)
+            .map(|entry| entry.value_sources.iter().map(value_source_out).collect())
+            .unwrap_or_default(),
     })
 }
 
@@ -91,7 +135,7 @@ fn element_row(computed: &Computed, index: usize) -> Option<ElementRow> {
         name: name.clone(),
         level: storey_name(&computed.model, *storey_index),
         predefined_type: predefined_type.clone(),
-        provenance: provenance(computed, index)?,
+        provenance: provenance(computed, index, false)?,
     })
 }
 
@@ -427,6 +471,125 @@ fn is_marker(name: &str) -> bool {
     name.ends_with("Source") || name.ends_with("Resolved") || name.ends_with("Refusal")
 }
 
+/// The property sets of the entity at `index`: its own and the ones written
+/// beside it.
+fn element_property_sets(
+    model: &IfcModel,
+    index: usize,
+    property_set: &Option<PropertySet>,
+) -> Vec<PropertySetOut> {
+    let mut property_sets: Vec<PropertySetOut> = Vec::new();
+    if let Some(set) = property_set {
+        property_sets.extend(property_set_out(set));
+    }
+    for entity in &model.entities {
+        if let IfcEntity::ElementPropertySet { element, set } = entity
+            && *element == index
+        {
+            property_sets.extend(property_set_out(set));
+        }
+    }
+    property_sets
+}
+
+/// The `...Source`, `...Resolved` and `...Refusal` properties of the
+/// element's record.
+fn trust_markers_of(property_sets: &[PropertySetOut]) -> BTreeMap<String, Value> {
+    property_sets
+        .iter()
+        .filter(|set| set.name == ELEMENT_RECORD_PROPERTY_SET)
+        .flat_map(|set| set.properties.iter())
+        .filter(|property| is_marker(&property.name))
+        .map(|property| (property.name.clone(), property.value.clone()))
+        .collect()
+}
+
+/// An element, in the export or not, with every decision recorded for it
+/// (#1326). `id` is a Revit ElementId, which a left-out element has, or the
+/// GlobalId of an exported one.
+pub fn explain_element(
+    entry: &Entry,
+    computed: &Computed,
+    id: &str,
+) -> Result<ExplainElementOut, String> {
+    let model = &computed.model;
+    let id = id.trim();
+    let found = find_entities(computed, id)
+        .first()
+        .copied()
+        .and_then(|index| match model.entities.get(index)? {
+            IfcEntity::BuildingElement {
+                name,
+                type_guid,
+                property_set,
+                ..
+            } => Some((index, name, type_guid, property_set)),
+            _ => None,
+        });
+    let element_id: Option<u32> = match found {
+        Some((_, _, type_guid, _)) => type_guid.as_deref().and_then(|tag| tag.parse().ok()),
+        None => id.parse().ok(),
+    };
+    let log = computed.export_decisions.as_ref();
+    let decisions: Vec<DecisionOut> = match (log, element_id) {
+        (Some(log), Some(element_id)) => log
+            .for_element(element_id)
+            .map(|decision| DecisionOut {
+                stage: decision.stage.as_str().to_string(),
+                reason: decision.reason.clone(),
+                class: decision.class.clone(),
+                stream: decision.stream.clone(),
+                offset: decision.offset,
+                detail: decision.detail.clone(),
+            })
+            .collect(),
+        _ => Vec::new(),
+    };
+    let capped_reasons: Vec<String> = log
+        .map(|log| log.capped_reasons().map(str::to_string).collect())
+        .unwrap_or_default();
+    if found.is_none() && decisions.is_empty() {
+        let capped = if capped_reasons.is_empty() {
+            String::new()
+        } else {
+            format!(
+                " The log is full for {}, so a decision about it may be missing.",
+                capped_reasons.join(", ")
+            )
+        };
+        return Err(match element_id {
+            Some(element_id) => format!(
+                "ElementId {element_id} is not in the export and no decision is recorded for it.{capped} Use list_elements to find exported ids; a frame with no ElementId has no entry."
+            ),
+            None => format!(
+                "no element has Revit ElementId or IFC GlobalId {id:?} in this model. Use list_elements to find ids."
+            ),
+        });
+    }
+    let (name, provenance_out, trust_markers) = match found {
+        Some((index, name, _, property_set)) => {
+            let property_sets = element_property_sets(model, index, property_set);
+            (
+                Some(name.clone()),
+                provenance(computed, index, true),
+                trust_markers_of(&property_sets),
+            )
+        }
+        None => (None, None, BTreeMap::new()),
+    };
+    Ok(ExplainElementOut {
+        model_id: entry.id.clone(),
+        id: element_id.map_or_else(|| id.to_string(), |element_id| element_id.to_string()),
+        exported: found.is_some(),
+        name,
+        provenance: provenance_out,
+        trust_markers,
+        decisions,
+        capped_reasons,
+        file: computed.file.clone(),
+    })
+}
+
 pub fn get_element(entry: &Entry, computed: &Computed, id: &str) -> Result<ElementDetail, String> {
     let model = &computed.model;
     let indices = find_entities(computed, id);
@@ -452,8 +615,8 @@ pub fn get_element(entry: &Entry, computed: &Computed, id: &str) -> Result<Eleme
     else {
         return Err(format!("{id:?} is not a building element"));
     };
-    let provenance =
-        provenance(computed, index).ok_or_else(|| format!("{id:?} is not a building element"))?;
+    let provenance = provenance(computed, index, true)
+        .ok_or_else(|| format!("{id:?} is not a building element"))?;
     let level = storey_index.and_then(|storey| {
         model.building_storeys.get(storey).map(|found| LevelRefOut {
             index: storey,
@@ -477,24 +640,8 @@ pub fn get_element(entry: &Entry, computed: &Computed, id: &str) -> Result<Eleme
         "none"
     };
 
-    let mut property_sets: Vec<PropertySetOut> = Vec::new();
-    if let Some(set) = property_set {
-        property_sets.extend(property_set_out(set));
-    }
-    for entity in &model.entities {
-        if let IfcEntity::ElementPropertySet { element, set } = entity
-            && *element == index
-        {
-            property_sets.extend(property_set_out(set));
-        }
-    }
-    let trust_markers: BTreeMap<String, Value> = property_sets
-        .iter()
-        .filter(|set| set.name == ELEMENT_RECORD_PROPERTY_SET)
-        .flat_map(|set| set.properties.iter())
-        .filter(|property| is_marker(&property.name))
-        .map(|property| (property.name.clone(), property.value.clone()))
-        .collect();
+    let property_sets = element_property_sets(model, index, property_set);
+    let trust_markers = trust_markers_of(&property_sets);
     let other_entities = indices
         .iter()
         .skip(1)
@@ -543,7 +690,7 @@ pub fn rooms(entry: &Entry, computed: &Computed) -> RoomsOut {
                 area_square_metres: row
                     .area_square_feet
                     .map(|area| area * SQUARE_METRES_PER_SQUARE_FOOT),
-                provenance: provenance(computed, row.entity_index)?,
+                provenance: provenance(computed, row.entity_index, false)?,
             })
         })
         .collect();

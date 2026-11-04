@@ -39,6 +39,55 @@ pub struct FileProvenance {
     /// The record layout of `Global/ElemTable`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub elem_table: Option<ElemTableProvenance>,
+    /// How many `Partitions/NN` streams the file has.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub partition_count: Option<usize>,
+    /// The release whose record layout the file takes, which can be older than the saving release.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub layout_release: Option<u32>,
+    /// How many elements the provenance table left out past its cap of 250,000 listed; their record fields are absent and `provenance_omitted` says so.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub omitted_entries: Option<usize>,
+}
+
+/// The native record the native readers hold for an element.
+#[derive(Debug, Clone, Serialize, JsonSchema)]
+pub struct NativeRecordOut {
+    /// In how many partitions the element has a native record.
+    pub copies: u32,
+    /// Which copy this is: `only`, `current` (the current one of several, RE-216) or `unresolved`.
+    pub copy: String,
+    /// The partition of that copy, such as `Partitions/46`. It can differ from `provenance.stream`, the frame the exporter selected. The record a reader decoded is in `provenance.value_sources`, where that reader notes its choice.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stream: Option<String>,
+    /// Where the record's header starts in that partition inflated.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub offset: Option<usize>,
+    /// The class the record names in the file's schema.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub class_name: Option<String>,
+}
+
+/// The copy of an element's data a reader took a value from.
+#[derive(Debug, Clone, Serialize, JsonSchema)]
+pub struct ValueSourceOut {
+    /// What was read: `bounded_line` (a wall's or beam's location line), `bounded_arc`, `instance_transform`, `saved_graphics`, `native_run`, `native_landing`, `selected_frame` for a body read from the frame itself, or `selected_frame_box` for a body whose box and placement are read from the frame and whose profile is read from another record (see `profile_source`), which no reader notes yet.
+    pub reader: String,
+    /// How the copy was chosen: `selected` (the frame the exporter selected), `agreeing` (every copy holds the same value; the lowest-numbered partition's is named), `current` (the copies disagree; the current partition's) or `native` (a native record by member name, its current copy).
+    pub rule: String,
+    /// In how many partitions the element's data named it, so how many copies there were to choose from.
+    pub copies: u32,
+    /// The partition of the copy, such as `Partitions/46`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stream: Option<String>,
+    /// Where the copy starts in that partition inflated: the element-data header whose element id follows it, for the readers of element data; the record's header, for a native record; the frame, for `selected_frame`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub offset: Option<usize>,
+    /// For the rule `agreeing`, the numbers of the partitions that hold a copy, every one of which holds the same value; the copy named is the lowest-numbered partition's.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub partitions: Vec<u32>,
+    /// True when the value is held in another partition than `provenance.stream`, the frame: the copy named is in another and, for `agreeing`, so is every copy that agrees with it.
+    pub differs_from_frame: bool,
 }
 
 /// Where one element's answer comes from. Every element in an answer carries
@@ -70,12 +119,43 @@ pub struct ElementProvenance {
     /// For a room or space, where its outline came from: `record_box`
     /// (the area of its box, not of the room), `stored_solid`,
     /// `stored_solid_faces`, `stored_solid_approximate`, `saved_mesh`,
-    /// `family_body`, and for an Area `area_boundary` or `none`.
+    /// `family_body`, and for an Area `area_boundary`,
+    /// `area_boundary_joined` or `none`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub space_outline_source: Option<String>,
     /// For an Area with no body, why it has none.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub area_body_refusal: Option<String>,
+    /// The kind of record the element was read from, such as `partition_element_record_first_prologue`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub carrier: Option<String>,
+    /// The stream the record is in: `Partitions/NN` or `Global/Latest`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stream: Option<String>,
+    /// Where the record or frame starts in that stream inflated: the frame the exporter selected (on Revit 2024 and later the greatest vertical extent, then the higher-numbered partition and later offset; on 2008 to 2023 the newest). A body reader may take another copy; `value_sources` names it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub offset: Option<usize>,
+    /// Where the ElementId is stored: the partition record header it is the first bytes of.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub record_offset: Option<usize>,
+    /// For a frame inside another partition record, the ElementId of that record.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub enclosing_record_id: Option<String>,
+    /// The class tag the record names.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub class_tag: Option<u32>,
+    /// The class that tag resolves to in the file's own schema.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub class_name: Option<String>,
+    /// The element's native record, where the export's native passes indexed one.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub native_record: Option<NativeRecordOut>,
+    /// True when the record fields are absent because the provenance table lists at most 250,000 elements and this one is past them (`file.omitted_entries`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub provenance_omitted: Option<bool>,
+    /// The copy each reader took a value of the element's body from, where the reader notes it and the body is drawn from that reader (`body_source`): `get_element` and `explain_element` list them, `list_elements` does not. Absent for a body no reader notes yet.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub value_sources: Vec<ValueSourceOut>,
 }
 
 /// One element in a list.
@@ -279,7 +359,7 @@ pub struct ElementDetail {
     pub file: FileProvenance,
     /// Every `...Source`, `...Resolved` and `...Refusal` property of the
     /// element's record: how its body, profile, thickness, level and family
-    /// name were derived. Absent where the export has no record for it.
+    /// name were derived. Empty (`{}`) where the export has no record for it.
     pub trust_markers: BTreeMap<String, Value>,
     pub property_sets: Vec<PropertySetOut>,
     /// The element's type object and its sets, where the model has them.
@@ -287,6 +367,52 @@ pub struct ElementDetail {
     pub element_type: Option<TypeOut>,
     /// Other entities with the same ElementId.
     pub other_entities: Vec<EntityRefOut>,
+}
+
+/// One fail-closed decision about an element (#1326).
+#[derive(Debug, Serialize, JsonSchema)]
+pub struct DecisionOut {
+    /// The step that made it: `element_skipped`, `body_not_drawn`, `body_left_as_box`, `opening_not_cut`, `outline_not_read` or `storey_not_bound`.
+    pub stage: String,
+    /// The reason code: the `reason` of the `skipped` item in `get_diagnostics`, or `body_is_record_box`, `space_outline_is_record_box` or `area_body_refused`.
+    pub reason: String,
+    /// The class the diagnostics count it under: a Revit class, or an IFC entity such as `IFCDOOR`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub class: Option<String>,
+    /// The stream its record was read from, where known.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stream: Option<String>,
+    /// The byte offset of the record in that stream inflated, where known. For the element-record reasons it is the element's last frame in scan order (partition number, then offset), which can differ from the frame `get_element`'s provenance names.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub offset: Option<usize>,
+    /// What tells the reason apart: a phase's name, why an Area has no body, the `BodySource` of a box body.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub detail: Option<String>,
+}
+
+// What `explain_element` returns: the element, in the export or not, with
+// every decision recorded for it.
+#[derive(Debug, Serialize, JsonSchema)]
+pub struct ExplainElementOut {
+    pub model_id: String,
+    /// The Revit ElementId asked about.
+    pub id: String,
+    /// Whether the export holds the element. A left-out element has decisions and no provenance.
+    pub exported: bool,
+    /// The element's name in the export, where it is exported.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    /// Where the element's record was read from, where the export holds it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub provenance: Option<ElementProvenance>,
+    /// Every `...Source`, `...Resolved` and `...Refusal` property of the element's record. Empty (`{}`) where the export has no record for it.
+    pub trust_markers: BTreeMap<String, Value>,
+    /// Every decision recorded for the element, by reason.
+    pub decisions: Vec<DecisionOut>,
+    /// The reasons whose log was full: a decision of one of these about this element may be missing.
+    pub capped_reasons: Vec<String>,
+    /// The file the element comes from.
+    pub file: FileProvenance,
 }
 
 /// One room.
@@ -304,8 +430,8 @@ pub struct RoomOut {
     pub level_elevation_feet: Option<f64>,
     /// The plan area of the room's outline, where the outline is one read
     /// exactly (`space_outline_source` is `stored_solid`, `stored_solid_faces`
-    /// or, for an Area, `area_boundary`). Absent for `record_box`, where the
-    /// area of a box is not the area of a room, and for
+    /// or, for an Area, `area_boundary` or `area_boundary_joined`). Absent for
+    /// `record_box`, where the area of a box is not the area of a room, and for
     /// `stored_solid_approximate`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub area_square_feet: Option<f64>,

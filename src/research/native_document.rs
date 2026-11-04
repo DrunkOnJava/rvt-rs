@@ -1,4 +1,5 @@
 //! Streaming current-record extraction with structural schemas and native IDs.
+use crate::ifc::element_provenance::{CopyRule, ValueSource};
 use crate::le_bytes;
 use crate::{
     RevitFile, compression,
@@ -81,6 +82,11 @@ pub struct Options {
     /// by default: a probe that decodes a body under another reading of the
     /// schema (RE-325) turns it on.
     pub keep_body: bool,
+    /// The name of the reader, where it takes a body, profile or outline from
+    /// the records it selects: each selected record's partition and offset are
+    /// then noted on the handle as a [`CopyRule::Native`] value source of its
+    /// element (#1360), while the handle records them. `None` notes nothing.
+    pub value_source: Option<&'static str>,
 }
 /// The default [`Options::max_group_bytes`]: one reassembled continuation
 /// group's bytes.
@@ -130,6 +136,7 @@ impl Default for Options {
             filtered_parameters_only: false,
             record_extras: false,
             keep_body: false,
+            value_source: None,
         }
     }
 }
@@ -561,6 +568,7 @@ fn definition_pass(file: &mut RevitFile, options: &Options) -> Result<Arc<Defini
         filtered_parameters_only: _,
         record_extras: _,
         keep_body: _,
+        value_source: _,
     } = options;
     let key: DefinitionKey = (
         *max_group_bytes,
@@ -582,6 +590,7 @@ fn definition_pass(file: &mut RevitFile, options: &Options) -> Result<Arc<Defini
     definition_options.channels = BTreeSet::from([102]);
     definition_options.record_extras = false;
     definition_options.keep_body = false;
+    definition_options.value_source = None;
     let definition_summary =
         extract_records(
             file,
@@ -649,9 +658,18 @@ pub struct RecordIndex {
     records: Vec<IndexedRecord>,
 }
 
-/// One record of a [`RecordIndex`]: its channel, ElementId, partition and
-/// the class tag its body opens with.
-type IndexedRecord = (u64, u64, u32, Option<u16>);
+/// One record of a [`RecordIndex`]: its channel, ElementId, partition, the
+/// class tag its body opens with and where its header starts in the
+/// partition's inflated bytes (#1325), where the record's group is those bytes
+/// ([`native_segments::GroupSource::inflated_offset`]).
+pub(crate) type IndexedRecord = (u64, u64, u32, Option<u16>, Option<usize>);
+
+impl RecordIndex {
+    /// Every record of the index, in the order the partitions were walked.
+    pub(crate) fn records(&self) -> &[IndexedRecord] {
+        &self.records
+    }
+}
 
 /// Extract selected current indexed records' object graphs without the
 /// parameter-definition pass [`extract`] makes over every definition owner
@@ -849,7 +867,7 @@ fn extract_records(
     let mut indexed: Option<Vec<IndexedRecord>> =
         (indexable && record_index.is_none()).then(Vec::new);
     let walked: Option<BTreeSet<u32>> = record_index.as_ref().map(|record_index| {
-        for &(channel, id, partition, tag) in &record_index.records {
+        for &(channel, id, partition, tag, _) in &record_index.records {
             if !options.channels.contains(&channel) {
                 continue;
             }
@@ -883,11 +901,14 @@ fn extract_records(
                 if source.content_key.is_some() || !options.channels.contains(&source.channel) {
                     return Ok(());
                 }
-                for (id, _, start, end) in group_records(source, bytes, version)? {
+                for (id, pos, start, end) in group_records(source, bytes, version)? {
                     let body = &bytes[start..end];
                     if let Some(indexed) = indexed.as_mut() {
                         let tag = le_bytes::u16_at(body, 0);
-                        indexed.push((source.channel, id, partition, tag));
+                        let at = source
+                            .inflated_offset
+                            .and_then(|base| base.checked_add(pos));
+                        indexed.push((source.channel, id, partition, tag, at));
                     }
                     if is_selected(id, body) {
                         holders
@@ -906,6 +927,10 @@ fn extract_records(
     let mut seen = BTreeSet::new();
     let mut seen_ids = BTreeSet::new();
     let mut definition_owners: BTreeMap<u16, bool> = BTreeMap::new();
+    // #1360: the partition and offset of each selected current record, noted
+    // on the handle once the walk is over.
+    let record_sources = options.value_source.is_some() && file.recording_value_sources();
+    let mut native_notes: Vec<(u32, ValueSource)> = Vec::new();
     for name in names {
         let partition: u32 = name[11..].parse()?;
         if walked
@@ -975,6 +1000,24 @@ fn extract_records(
                         source.channel
                     );
                     seen_ids.insert(id);
+                    let note = options
+                        .value_source
+                        .filter(|_| record_sources)
+                        .zip(u32::try_from(id).ok());
+                    if let Some((reader, element_id)) = note {
+                        let copies = holders.get(&(source.channel, id)).map_or(1, BTreeSet::len);
+                        let at = source
+                            .inflated_offset
+                            .and_then(|base| base.checked_add(offset));
+                        let value_source = ValueSource::in_partition(
+                            reader,
+                            CopyRule::Native,
+                            copies,
+                            partition,
+                            at,
+                        );
+                        native_notes.push((element_id, value_source));
+                    }
                     let body = &bytes[start..end];
                     let class_name = le_bytes::u16_at(body, 0)
                         .and_then(|tag| registry.class(tag))
@@ -1186,6 +1229,9 @@ fn extract_records(
             },
         )?;
         summary.partitions.insert(name, stats);
+    }
+    for (element_id, source) in native_notes {
+        file.note_value_source(element_id, source);
     }
     summary.selected_ids_without_records = selected.difference(&seen_ids).copied().collect();
     Ok(summary)

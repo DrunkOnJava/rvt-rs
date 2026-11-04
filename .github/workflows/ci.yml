@@ -496,6 +496,52 @@ jobs:
           RVT_CORPUS_TIER1_DIR: ${{ github.workspace }}/corpus/tier1
           RVT_CORPUS_TIER2_LIMIT: "8"
         run: tools/ci/verify-real-files.sh --profile ci --no-fail-fast
+      # #1325: tests/element_provenance_offsets.rs re-reads every offset the
+      # export reports for an element. A passing nextest test prints nothing,
+      # so its report, per model and carrier (elements with and without an
+      # offset, offsets re-read and confirmed), is printed and kept here.
+      - name: Print the element provenance report
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: cat target/tmp/element-provenance/summary.txt || echo "no element provenance report was written"
+      # #1326: tests/export_decisions_counts.rs checks the per-element
+      # decisions against the diagnostics' counts; its report, per model and
+      # reason (total, recorded, dropped, the aggregate), is printed and kept.
+      - name: Print the export decisions report
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: cat target/tmp/export-decisions/summary.txt || echo "no export decisions report was written"
+      - name: Upload the export decisions report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: export-decisions
+          path: target/tmp/export-decisions/
+          if-no-files-found: ignore
+          retention-days: 14
+      # #1360: tests/value_sources_offsets.rs re-reads the copy each body
+      # reader took its value from; its report, per model, body source and
+      # reader, is printed and kept.
+      - name: Print the value sources report
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: cat target/tmp/value-sources/summary.txt || echo "no value sources report was written"
+      - name: Upload the value sources report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: value-sources
+          path: target/tmp/value-sources/
+          if-no-files-found: ignore
+          retention-days: 14
+      - name: Upload the element provenance report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: element-provenance
+          path: target/tmp/element-provenance/
+          if-no-files-found: ignore
+          retention-days: 14
       # The MCP server's end-to-end test on Einhoven: elements, GlobalIds
       # looked up and found in the exported IFC, the exports against rvt-ifc's.
       - name: MCP server end to end on Einhoven

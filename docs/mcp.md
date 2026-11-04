@@ -152,6 +152,7 @@ that says to call `open_model` again. The tool descriptions say the same.
 | `get_summary` | The same summary for a `model_id` or a path. |
 | `list_elements` | Building elements, filtered by `category` (IFC entity: `IFCWALL`, `IfcWall` and `wall` are the same), `class` (Revit class: `Wall`, `Room`) and `level` (storey name), paged by `limit` (100 by default, at most 1000) and `offset`. Each row has the ElementId, name, level, `predefined_type` and its provenance. |
 | `get_element` | One element by Revit ElementId or IFC GlobalId: its property sets and quantities as the IFC export writes them (quantities in the IFC's SI units, each property with its IfcValue type), its trust markers, its provenance, the file's, its type object's sets and any other entity with the same ElementId. |
+| `explain_element` | Why one element is in the export as it is, or is not in it (#1326). `element` is a Revit ElementId, whether or not the export holds the element, or the GlobalId of an exported one. Returns the element's provenance and trust markers where it is exported, and every fail-closed decision recorded for it: a `stage` (`element_skipped`, `body_not_drawn`, `body_left_as_box`, `opening_not_cut`, `outline_not_read`, `storey_not_bound`), a `reason` (the `reason` of the `skipped` item in `get_diagnostics`, or `body_is_record_box`, `space_outline_is_record_box`, `area_body_refused`), the `stream` and byte `offset` its record was read from where known, and a `detail`. |
 | `list_rooms` | Rooms and spaces: ElementId, number, name, level, area and provenance. The area is present only where the outline was read exactly. |
 | `list_levels` | Storeys with elevation (feet and metres) and element count. |
 | `get_diagnostics` | The export diagnostics, as `rvt-ifc --diagnostics` writes them ([`export-diagnostics.schema.json`](schemas/export-diagnostics.schema.json)): what was decoded, exported, skipped, approximated and left unread, and why. |
@@ -188,8 +189,8 @@ unread streams either way.
 
 ## Provenance
 
-Every element in an answer carries a `provenance` object. These fields exist
-today, each present only where the model has it:
+Every element in an answer carries a `provenance` object. These fields exist,
+each present only where the model has it:
 
 | Field | What it says |
 |---|---|
@@ -199,21 +200,94 @@ today, each present only where the model has it:
 | `class` | The Revit class the element's record names (`Wall`). |
 | `body_source` | How the element's body was derived. `partition_element_record_bbox` means only the element record's bounding box: placed and sized, shape not decoded. |
 | `profile_source` | Where the plan profile of the body came from. |
-| `space_outline_source` | For a room or space: `stored_solid`, `stored_solid_faces`, `stored_solid_approximate`, `record_box`, `saved_mesh`, `family_body`, and for an Area `area_boundary` or `none`. |
+| `space_outline_source` | For a room or space: `stored_solid`, `stored_solid_faces`, `stored_solid_approximate`, `record_box`, `saved_mesh`, `family_body`, and for an Area `area_boundary`, `area_boundary_joined` or `none`. |
 | `area_body_refusal` | For an Area with no body, why. |
+| `carrier` | The kind of record the element was read from: `partition_element_record_first_prologue` (a frame that starts its partition record, the ElementId at its first bytes), `partition_element_record_second_prologue` (a frame inside its element's partition record, RE-30 and RE-35), `global_latest_schema_walk`, `partition_arc_wall`, `partition_area_record`, `partition_derived` (a row with no frame of its own, such as a material) or `other`. |
+| `stream` | The stream the record is in: `Partitions/NN`, or `Global/Latest` for the schema walk. |
+| `offset` | Where the record or frame starts in that stream inflated: the bytes `rvt-dump` writes as `Partitions_NN.decomp`, so the offset indexes that file directly (#291). It is the frame the exporter selected among the element's frames, not necessarily the copy a body came from (see below). For the schema walk it indexes `Global/Latest` as the walk inflates it, which is unmeasured. |
+| `record_offset` | Where the ElementId is stored: the partition record header whose first bytes (8 from Revit 2024, 4 before) are the id. The frame's own `offset` for a first-prologue frame, the enclosing record's start for a second-prologue one. Absent for the schema walk, whose id is a field of the instance. |
+| `enclosing_record_id` | For a second-prologue frame, the ElementId of the partition record that encloses it, which is the element's (RE-35). |
+| `class_tag`, `class_name` | The class tag the record names (for an element record the `u16` at `+0x4a`) and the class it resolves to in the file's own `Formats/Latest`. `class` is the Revit class the export names the element by. |
+| `native_record` | The element's native record, where the export's native passes indexed one: `copies` (in how many partitions it has one), `copy` (`only`, `current` of several, or `unresolved`, RE-145 and RE-216), `stream`, `offset` (where the record header starts in that partition inflated; the id is its first bytes) and `class_name`. |
 
 `get_element` and the summary add the file's: the Revit release and build from
-`BasicFileInfo`, the number of classes in the embedded schema, and the record
-layout of `Global/ElemTable`. `get_element` also lists every `...Source`,
-`...Resolved` and `...Refusal` property of the element's record as
-`trust_markers`.
+`BasicFileInfo`, the number of classes in the embedded schema, the number of
+`Partitions/NN` streams, the release whose record layout the file takes
+(`layout_release`) and the record layout of `Global/ElemTable`. `get_element`
+also lists every `...Source`, `...Resolved` and `...Refusal` property of the
+element's record as `trust_markers`.
+
+The record fields come from the element provenance table (#1325), which the
+export builds only when asked (`rvt-ifc --element-provenance`) and which the
+server asks for in the decode it makes when it opens a model. It is large: the
+table, with its value sources (#1360), is 5,975,162 bytes of compact JSON against
+38,640 bytes of diagnostics without it on the BIM4LCA office as built (about 155
+times); the CLI's pretty-printed sidecar grows from 52,677 to 10,537,432 bytes
+there and from 27,588 to 810,250 on Core Interior (Measure run 41860806523); RE1
+Architecture's grew from 13,956 to 85,470 before the value sources and has not
+been measured since. The server
+keeps it in memory beside the model and does not return it: `get_diagnostics`
+and the exports' summaries are the diagnostics without it, as `rvt-ifc` writes
+them by default. Building it is one pass over the walk the decode already made
+and a re-read of the first bytes of each partition record. Its time on each
+model is printed by `tests/element_provenance_offsets.rs` (the `build` line of
+its report, Corpus health's `element-provenance` artifact); no figure is stated
+here yet. The fields are never written into the IFC.
+
+When an element has several partition element record frames, `offset` is the
+one the exporter selected. On Revit 2024 and later
+(`select_instance_records`) that is the frame with the greatest vertical extent
+and, on a tie, the higher-numbered partition and then the later offset;
+on Revit 2008 to 2023 (`select_newest_instance_records`, RE-107) it is the
+newest, the highest-numbered partition and then the latest offset, with no extent
+test. A body reader may take another copy (the sketch-line readers take the
+current one, `current_partitions`, RE-216), and `native_record.stream` names the
+current native copy. So `offset` and `native_record.stream` can name different
+partitions. `get_element` and `explain_element` list, in `value_sources`, the
+copy each reader took a value of the body from (its reader, the rule that chose
+the copy, its stream and offset, and whether it is in another partition than the
+frame; #1360): the bounded line of a wall or beam, a family instance's
+transform, a saved mesh, a stair run or landing. `list_elements` does not. A
+body whose reader does not note its copy yet has none; see
+`docs/export-diagnostics.md` for the readers.
+
+What the offsets have been checked on: Core Interior, the RE1 models, Einhoven
+and the BIM4LCA as-built office, by reading the bytes at each offset
+(`tests/element_provenance_offsets.rs`). Einhoven (Revit 2023) confirmed 13 of 13
+first-prologue frames and 71 of 71 native records. Not measured: Revit 2008 to
+2022, and the second-prologue path of 2023. The schema-walk carrier
+(`global_latest_schema_walk`) has no element on any of those models, so its
+offsets have not been checked: the walk inflates `Global/Latest` with
+`inflate_stream_auto` and `rvt-dump` with its own routine, and the two are not
+compared.
+
+The table lists at most 250,000 elements. An element past that has no record
+fields and says `provenance_omitted: true`; the file's `omitted_entries` counts
+them.
+
+### Decisions
+
+`explain_element` answers from the log of per-element decisions (#1326) that the
+server asks the export for when it opens a model, as it asks for the provenance
+table. The log is bounded: at most 5,000 entries a reason, in ElementId order,
+and `capped_reasons` names the reasons that dropped some, whose decisions about
+the element may be missing. The `skipped` counts `get_diagnostics` returns are
+made from the same decisions, and, like the table, the log is not part of
+`get_diagnostics`. A left-out element has decisions and no provenance
+(`exported: false`); a frame with no ElementId has no entry. The values Revit's
+exporters disagree about are left out by a rule for a whole class and have no
+per-element decision to return. A decision's `stream` and `offset` for an
+element-record reason are the element's last frame in scan order (partition
+number, then offset), which can differ from the frame `provenance` names; only
+those frames on Revit 2024 and later have been re-read from the bytes. The log
+holds at most 5,000 entries a reason
+whatever the model; its size in JSON is printed per model by
+`tests/export_decisions_counts.rs` (Corpus health's `export-decisions`
+artifact), and no figure for it, or for the time it adds to a decode, is stated
+here yet.
 
 ### Not provided yet
 
-- Where an element's record sits (the stream and offset) and which carrier it
-  was read from (#1325), and the per-element export decisions behind an
-  `explain_element` tool (#1326). The provenance object leaves room for them;
-  they are not faked.
 - A Measure scorer for the server's answers (#1327).
 - Lookup by the Revit Mark parameter: nothing in rvt-rs decodes it.
 - The Tasks extension (`io.modelcontextprotocol/tasks`). A long export is one

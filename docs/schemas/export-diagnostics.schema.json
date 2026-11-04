@@ -192,6 +192,206 @@
             "minimum": 0
           },
           "uniqueItems": true
+        },
+        "element_provenance": {
+          "type": "object",
+          "description": "Where each decoded element was read from, by ElementId (#1325): the carrier of its record, the stream and byte offset in that stream inflated (the bytes rvt-dump writes as Partitions_NN.decomp), where its ElementId is stored, its class tag and the class that names in the file's own schema, and its native record. Not written in the IFC file. Present only when asked for (rvt-ifc --element-provenance): it is about 155 times the rest of the diagnostics in compact JSON on the BIM4LCA office as built (5,975,162 bytes against 38,640), and 200 times in the CLI's pretty-printed sidecar. Absent for a placeholder export. An element whose offset cannot be given is listed without one and counted in by_carrier.",
+          "properties": {
+            "layout_release": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "The release whose record layout the file takes."
+            },
+            "partition_count": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "How many Partitions/NN streams the file has."
+            },
+            "record_id_bytes": {
+              "type": "integer",
+              "enum": [4, 8],
+              "description": "The width of the ElementId stored at a partition record's first bytes: 8 from Revit 2024, 4 on 2008 to 2023."
+            },
+            "native_record_index": {
+              "type": "boolean",
+              "description": "Whether the export's native passes built the index of native records; an element's native record is given only where they did."
+            },
+            "unkeyed_elements": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Decoded elements with no ElementId, which have no entry."
+            },
+            "by_carrier": {
+              "type": "object",
+              "description": "Every element with an ElementId, counted by carrier, whatever the cap on the listed entries: how many have their stream and offset given and how many do not.",
+              "additionalProperties": {
+                "type": "object",
+                "required": ["elements", "located", "unlocated"],
+                "properties": {
+                  "elements": { "type": "integer", "minimum": 0 },
+                  "located": { "type": "integer", "minimum": 0 },
+                  "unlocated": { "type": "integer", "minimum": 0 }
+                }
+              }
+            },
+            "native": {
+              "type": "object",
+              "description": "The native records of every element with an ElementId, the omitted ones included: how many there are, how many have their partition and offset given, how many elements have a copy in several partitions (RE-216) and how many of those have no copy named current.",
+              "properties": {
+                "with_record": { "type": "integer", "minimum": 0 },
+                "located": { "type": "integer", "minimum": 0 },
+                "unlocated": { "type": "integer", "minimum": 0 },
+                "several_copies": { "type": "integer", "minimum": 0 },
+                "copy_unresolved": { "type": "integer", "minimum": 0 }
+              }
+            },
+            "omitted_entries": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Elements left out of elements by the cap on the listed entries, the highest ElementIds; they are counted in by_carrier."
+            },
+            "elements": {
+              "type": "object",
+              "description": "Each element's provenance, keyed by ElementId.",
+              "propertyNames": {
+                "pattern": "^[0-9]+$"
+              },
+              "additionalProperties": {
+                "type": "object",
+                "required": ["carrier"],
+                "properties": {
+                  "carrier": {
+                    "type": "string",
+                    "enum": [
+                      "partition_element_record_first_prologue",
+                      "partition_element_record_second_prologue",
+                      "global_latest_schema_walk",
+                      "partition_arc_wall",
+                      "partition_area_record",
+                      "partition_derived",
+                      "other"
+                    ],
+                    "description": "The kind of record the element was read from."
+                  },
+                  "stream": {
+                    "type": "string",
+                    "description": "The stream the record is in: Partitions/NN or Global/Latest."
+                  },
+                  "offset": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "description": "Where the record or frame starts in that stream inflated: the frame the exporter selected among the element's frames (Revit 2024 and later: the greatest vertical extent, then the greater stream and offset; 2008 to 2023: the newest), which a body reader may not have taken: value_sources names the copy a reader took a value from. It and native.stream can name different partitions. For the global_latest_schema_walk carrier it indexes Global/Latest as the walk inflates it; that carrier is unmeasured."
+                  },
+                  "record_offset": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "description": "Where the ElementId is stored: the partition record header whose first bytes are the id (the frame's own start for a first-prologue frame, the enclosing record's start for a second-prologue one)."
+                  },
+                  "enclosing_record_id": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "description": "For a second-prologue frame, the ElementId of the partition record that encloses it (RE-35)."
+                  },
+                  "class_tag": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 65535,
+                    "description": "The class tag the record names."
+                  },
+                  "class_name": {
+                    "type": "string",
+                    "description": "The class that tag resolves to in the file's own Formats/Latest."
+                  },
+                  "builtin_category": {
+                    "type": "integer",
+                    "description": "The element record's BuiltInCategory (a negative OST_* id)."
+                  },
+                  "native": {
+                    "type": "object",
+                    "required": ["copies", "copy"],
+                    "description": "The element's native record, where the export's native passes indexed one.",
+                    "properties": {
+                      "copies": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "description": "In how many partitions the element has a native record."
+                      },
+                      "copy": {
+                        "type": "string",
+                        "enum": ["only", "current", "unresolved"],
+                        "description": "Which copy stream and offset name: the only one, the current one of several (RE-216), or none because none could be named current."
+                      },
+                      "stream": {
+                        "type": "string",
+                        "description": "The partition of that copy. It can differ from the element's stream; the record a reader decoded is a value source with the rule native, where that reader notes it."
+                      },
+                      "offset": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "description": "Where the record's header starts in the partition inflated; the ElementId is the first bytes there. Absent when the record's group is not a span of the inflated stream."
+                      },
+                      "class_tag": { "type": "integer", "minimum": 0, "maximum": 65535 },
+                      "class_name": { "type": "string" }
+                    }
+                  },
+                  "value_sources": {
+                    "type": "array",
+                    "description": "The copy each reader took a value of the element's body from, one per reader, where the reader notes its choice and the final BodySource is drawn from it (#1360). Present only with rvt-ifc --element-provenance, and only for the bodies docs/export-diagnostics.md lists.",
+                    "items": {
+                      "type": "object",
+                      "required": ["reader", "rule", "copies"],
+                      "properties": {
+                        "reader": {
+                          "type": "string",
+                          "description": "What was read: bounded_line (a wall's or beam's location line), bounded_arc, instance_transform, saved_graphics, native_run, native_landing, selected_frame for a body read from the frame, or selected_frame_box for a body whose box and placement are read from the frame and whose profile is read from another record, which no reader notes yet."
+                        },
+                        "rule": {
+                          "type": "string",
+                          "enum": ["selected", "agreeing", "current", "native"],
+                          "description": "How the copy was chosen: the selected frame; every copy holds the same value (the lowest-numbered partition's is named); the copies disagree and the current partition's is taken (RE-216); a native record by member name, its current copy."
+                        },
+                        "copies": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "description": "In how many partitions the element's data named it, so how many copies there were to choose from."
+                        },
+                        "stream": {
+                          "type": "string",
+                          "description": "The partition of the copy, such as Partitions/46."
+                        },
+                        "offset": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "description": "Where the copy starts in that partition inflated: the element-data header whose element id follows it, for the readers of element data; the record's header, for a native record; the frame, for selected_frame."
+                        },
+                        "partitions": {
+                          "type": "array",
+                          "items": { "type": "integer", "minimum": 0 },
+                          "description": "For the rule agreeing, the numbers of the partitions that hold a copy, every one of which holds the same value; the copy named is the lowest-numbered partition's."
+                        },
+                        "differs_from_frame": {
+                          "type": "boolean",
+                          "description": "Whether the value is held in another partition than the element's frame: the copy named is in another and, for agreeing, so is every copy that agrees with it."
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "value_source_counts": {
+              "type": "object",
+              "description": "The value sources of the listed elements, counted by reader: how many elements have one, and how many of those are in another partition than their frame.",
+              "additionalProperties": {
+                "type": "object",
+                "required": ["elements", "differ_from_frame"],
+                "properties": {
+                  "elements": { "type": "integer", "minimum": 0 },
+                  "differ_from_frame": { "type": "integer", "minimum": 0 }
+                }
+              }
+            }
+          }
         }
       }
     },
@@ -291,7 +491,7 @@
             "type": "integer",
             "minimum": 0
           },
-          "description": "Of the exported Areas that have no body, why, by reason (RvtElementRecordGeometry.AreaBodyRefusal, RE-317): levels_not_recovered, boundary_line_not_read, no_boundary_lines, point_not_read, level_or_scheme_not_named, named_lines_not_in_scheme_and_level, next_storey_not_proven, boundary_lines_not_readable, point_in_no_single_region, named_lines_not_on_region, two_areas_one_region. Empty when every Area is drawn or the export has no geometry."
+          "description": "Of the exported Areas that have no body, why, by reason (RvtElementRecordGeometry.AreaBodyRefusal, RE-317): levels_not_recovered, boundary_line_not_read, no_boundary_lines, point_not_read, level_or_scheme_not_named, named_lines_not_in_scheme_and_level, next_storey_not_proven, boundary_lines_not_readable, point_in_no_single_region, named_lines_not_on_region, two_areas_one_region, area_not_in_one_plan_topology, area_circuit_not_found, area_circuit_side_not_read, area_circuit_area_differs, area_point_outside_circuit. Empty when every Area is drawn or the export has no geometry."
         },
         "resolved_outline_spaces": {
           "type": "integer",
@@ -521,6 +721,110 @@
           ],
           "minimum": 0,
           "description": "Bytes schema parsing would scan: min(inflated_bytes, 65536), or null when inflate failed."
+        }
+      }
+    },
+    "export_decisions": {
+      "type": "object",
+      "description": "Each fail-closed decision behind skipped and the exported body and outline counts, one entry per element (#1326): why an element was left out, a body is only its record's box, an opening was not cut, an outline was not read. Present only when asked for (rvt-ifc --export-decisions); without it the diagnostics are the bytes they were. Bounded: at most cap_per_reason entries a reason, the rest counted as dropped. Not written in the IFC file. The skipped items are counted from the same decisions: for every reason of skipped (the stream_not_read_resource_limit item apart, which counts streams) reasons[reason].total is the sum of the items' counts; body_is_record_box, space_outline_is_record_box and area_body_refused total exported.bounding_box_bodies, bounding_box_spaces and area_body_refusals.",
+      "required": ["cap_per_reason", "dropped", "reasons", "entries"],
+      "properties": {
+        "cap_per_reason": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "The most entries kept of one reason."
+        },
+        "dropped": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Decisions left out by the cap, over all reasons."
+        },
+        "reasons": {
+          "type": "object",
+          "description": "Each reason with decisions, by reason code.",
+          "additionalProperties": {
+            "type": "object",
+            "required": ["stage", "total", "recorded", "dropped"],
+            "properties": {
+              "stage": {
+                "type": "string",
+                "enum": [
+                  "element_skipped",
+                  "body_not_drawn",
+                  "body_left_as_box",
+                  "opening_not_cut",
+                  "outline_not_read",
+                  "storey_not_bound",
+                  "value_left_out_exporters_disagree"
+                ],
+                "description": "The stage of every decision of the reason. value_left_out_exporters_disagree records nothing yet, so no reason has it."
+              },
+              "total": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "Every decision of the reason, kept or not."
+              },
+              "recorded": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "How many are in entries."
+              },
+              "dropped": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "total less recorded."
+              }
+            }
+          }
+        },
+        "entries": {
+          "type": "array",
+          "description": "The kept decisions, by reason and then ElementId, partition number, stream and offset.",
+          "items": {
+            "type": "object",
+            "required": ["stage", "reason"],
+            "properties": {
+              "stage": {
+                "type": "string",
+                "enum": [
+                  "element_skipped",
+                  "body_not_drawn",
+                  "body_left_as_box",
+                  "opening_not_cut",
+                  "outline_not_read",
+                  "storey_not_bound",
+                  "value_left_out_exporters_disagree"
+                ],
+                "description": "The step that made the decision. value_left_out_exporters_disagree records nothing yet."
+              },
+              "reason": {
+                "type": "string",
+                "description": "The reason of the skipped item the decision is counted in, or body_is_record_box, space_outline_is_record_box or area_body_refused."
+              },
+              "element_id": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "The Revit ElementId. Absent for a frame that carries none (element_record_without_element_id)."
+              },
+              "class": {
+                "type": "string",
+                "description": "The class the aggregate counts it under: a Revit class for the element-record reasons, an IFC entity such as IFCDOOR for the geometry gaps and the exported counts."
+              },
+              "stream": {
+                "type": "string",
+                "description": "The stream the evidence was read from, where known."
+              },
+              "offset": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "The byte offset of the record in that stream inflated (the bytes rvt-dump writes as Partitions_NN.decomp), where known. For the element-record reasons it is the element's last frame in scan order (partition number, then offset), which can differ from the frame decoded.element_provenance names for it. Only the offsets of those frames on Revit 2024 and later have been re-read from the bytes."
+              },
+              "detail": {
+                "type": "string",
+                "description": "What tells the reason apart: the phase's name for room_not_in_export_phase (replaced by <redacted> under --anonymize), why an Area's body is not proven for area_without_proven_body and area_body_refused, the BodySource for body_is_record_box."
+              }
+            }
+          }
         }
       }
     }

@@ -42,6 +42,7 @@
 //! a median 0.625 ft at the larger end), so the solid runs the line's full
 //! length.
 
+use crate::ifc::element_provenance::{CopyRule, ValueSource};
 use crate::le_bytes;
 use crate::{Result, RevitFile};
 use std::collections::{BTreeMap, BTreeSet};
@@ -309,7 +310,14 @@ pub fn scan_sketch_circles(
     if !supports_revit_version(revit_version) {
         return Ok(BTreeMap::new());
     }
-    scan_first_records(rf, revit_version, ids, first_circle, Copies::Current)
+    scan_first_records(
+        rf,
+        revit_version,
+        ids,
+        first_circle,
+        Copies::Current,
+        "sketch_circle",
+    )
 }
 
 /// A sketch line's curve (RE-96): the first [`BOUNDED_LINE_TAG`] record in
@@ -346,7 +354,14 @@ pub fn scan_sketch_curves(
     if !supports_revit_version(revit_version) {
         return Ok(BTreeMap::new());
     }
-    scan_first_records(rf, revit_version, ids, first_sketch_curve, Copies::Current)
+    scan_first_records(
+        rf,
+        revit_version,
+        ids,
+        first_sketch_curve,
+        Copies::Current,
+        "sketch_curve",
+    )
 }
 
 /// The first bounded line in the element data of each id in `ids` (a
@@ -382,7 +397,14 @@ pub fn scan_sketch_bounded_lines(
     if !SKETCH_LINE_SUPPORTED_REVIT_VERSIONS.contains(&revit_version) {
         return Ok(BTreeMap::new());
     }
-    scan_first_records(rf, revit_version, ids, first_bounded_line, Copies::Current)
+    scan_first_records(
+        rf,
+        revit_version,
+        ids,
+        first_bounded_line,
+        Copies::Current,
+        "sketch_line",
+    )
 }
 
 /// Releases where a sketch line's B-spline ([`BoundedSpline`]) is measured
@@ -560,6 +582,7 @@ pub fn scan_sketch_splines(
         ids,
         first_bounded_spline,
         Copies::Current,
+        "sketch_spline",
     )
 }
 
@@ -571,7 +594,14 @@ pub fn scan_first_bounded_lines(
     revit_version: u32,
     ids: &BTreeSet<u32>,
 ) -> Result<BTreeMap<u32, BoundedLine>> {
-    scan_first_records(rf, revit_version, ids, first_bounded_line, Copies::Agreeing)
+    scan_first_records(
+        rf,
+        revit_version,
+        ids,
+        first_bounded_line,
+        Copies::Agreeing,
+        "bounded_line",
+    )
 }
 
 /// The arc in the element data of each id in `ids` whose first curve record
@@ -582,7 +612,14 @@ pub fn scan_first_bounded_arcs(
     revit_version: u32,
     ids: &BTreeSet<u32>,
 ) -> Result<BTreeMap<u32, BoundedArc>> {
-    scan_first_records(rf, revit_version, ids, first_bounded_arc, Copies::Agreeing)
+    scan_first_records(
+        rf,
+        revit_version,
+        ids,
+        first_bounded_arc,
+        Copies::Agreeing,
+        "bounded_arc",
+    )
 }
 
 /// Which of an element's data copies [`scan_first_records`] takes where they
@@ -601,20 +638,31 @@ enum Copies {
 
 /// Every copy of each id's element data in `ids`, from every partition: the
 /// partitions whose data names the id, and what `read` finds in each copy.
-type Copied<T> = (BTreeMap<u32, Vec<(u32, T)>>, BTreeMap<u32, BTreeSet<u32>>);
+type Copied<T> = (
+    BTreeMap<u32, Vec<(u32, T)>>,
+    BTreeMap<u32, BTreeSet<u32>>,
+    CopyOffsets,
+);
+
+/// Where each copy in [`Copied`] starts, in the same order: the offset of its
+/// element-data header in the partition inflated (#1360). Empty unless the
+/// caller asks for them.
+type CopyOffsets = BTreeMap<u32, Vec<usize>>;
 
 fn collect_copies<T>(
     rf: &mut RevitFile,
     revit_version: u32,
     ids: &BTreeSet<u32>,
     read: fn(&[u8]) -> Option<T>,
+    with_offsets: bool,
 ) -> Result<Copied<T>> {
     let Some(layout) = crate::partition_names::element_data_layout(revit_version) else {
-        return Ok((BTreeMap::new(), BTreeMap::new()));
+        return Ok((BTreeMap::new(), BTreeMap::new(), BTreeMap::new()));
     };
     let header = layout.header;
     let mut found: BTreeMap<u32, Vec<(u32, T)>> = BTreeMap::new();
     let mut holders: BTreeMap<u32, BTreeSet<u32>> = BTreeMap::new();
+    let mut offsets: CopyOffsets = BTreeMap::new();
     for stream in rf.partition_stream_names() {
         let Some(partition) = stream
             .strip_prefix("Partitions/")
@@ -648,9 +696,12 @@ fn collect_copies<T>(
                 continue;
             };
             found.entry(id).or_default().push((partition, line));
+            if with_offsets {
+                offsets.entry(id).or_default().push(hit);
+            }
         }
     }
-    Ok((found, holders))
+    Ok((found, holders, offsets))
 }
 
 /// What [`scan_bounded_lines`] finds for each id in `ids`, without choosing
@@ -665,7 +716,8 @@ pub fn line_copies(
     if !supports_revit_version(revit_version) {
         return Ok(BTreeMap::new());
     }
-    let (mut found, holders) = collect_copies(rf, revit_version, ids, first_bounded_line)?;
+    let (mut found, holders, _) =
+        collect_copies(rf, revit_version, ids, first_bounded_line, false)?;
     Ok(holders
         .into_iter()
         .map(|(id, partitions)| {
@@ -689,7 +741,7 @@ pub fn all_line_copies(
     if !supports_revit_version(revit_version) {
         return Ok(BTreeMap::new());
     }
-    let (found, _) = collect_copies(rf, revit_version, ids, all_bounded_lines)?;
+    let (found, _, _) = collect_copies(rf, revit_version, ids, all_bounded_lines, false)?;
     Ok(found)
 }
 
@@ -705,15 +757,20 @@ pub struct LineCopies {
 /// What `read` finds in the element data of each id in `ids`, from every
 /// partition. An id whose copies disagree is dropped, or takes its current
 /// partition's copy where `copies` says so; one whose current copy cannot be
-/// told, or holds copies that disagree, is dropped.
+/// told, or holds copies that disagree, is dropped. While the handle records
+/// value sources (#1360), the copy taken is noted for each id under `reader`:
+/// the lowest-numbered partition's where the copies agree, the current
+/// partition's where they do not.
 fn scan_first_records<T: PartialEq>(
     rf: &mut RevitFile,
     revit_version: u32,
     ids: &BTreeSet<u32>,
     read: fn(&[u8]) -> Option<T>,
     copies: Copies,
+    reader: &'static str,
 ) -> Result<BTreeMap<u32, T>> {
-    let (found, holders) = collect_copies(rf, revit_version, ids, read)?;
+    let recording = rf.recording_value_sources();
+    let (found, holders, offsets) = collect_copies(rf, revit_version, ids, read, recording)?;
     // RE-216: where an element's copies in different partitions disagree,
     // the copy taken is its current partition's (#824).
     let disagreeing: BTreeMap<u32, BTreeSet<u32>> = found
@@ -725,20 +782,58 @@ fn scan_first_records<T: PartialEq>(
         Copies::Current => crate::native_document::current_partitions(rf, &disagreeing),
         Copies::Agreeing => BTreeMap::new(),
     };
-    Ok(found
+    let mut noted: Vec<(u32, ValueSource)> = Vec::new();
+    let picked: BTreeMap<u32, T> = found
         .into_iter()
         .filter_map(|(id, copies)| {
+            let held = holders.get(&id).map_or(0, BTreeSet::len);
+            let offset_of = |index: usize| offsets.get(&id).and_then(|at| at.get(index)).copied();
             if !disagreeing.contains_key(&id) {
-                return copies.into_iter().next().map(|(_, line)| (id, line));
+                let partitions: BTreeSet<u32> = if recording {
+                    copies.iter().map(|(partition, _)| *partition).collect()
+                } else {
+                    BTreeSet::new()
+                };
+                let (partition, line) = copies.into_iter().next()?;
+                if recording {
+                    let source = ValueSource::in_partition(
+                        reader,
+                        CopyRule::Agreeing,
+                        held,
+                        partition,
+                        offset_of(0),
+                    )
+                    .with_partitions(partitions.into_iter().collect());
+                    noted.push((id, source));
+                }
+                return Some((id, line));
             }
             let current = *current_partitions.get(&id)?;
-            let mut in_current = copies.into_iter().filter(|(p, _)| *p == current);
-            let (_, pick) = in_current.next()?;
-            in_current
-                .all(|(_, line)| line == pick)
-                .then_some((id, pick))
+            let mut in_current = copies
+                .into_iter()
+                .enumerate()
+                .filter(|(_, (p, _))| *p == current);
+            let (index, (_, pick)) = in_current.next()?;
+            if !in_current.all(|(_, (_, line))| line == pick) {
+                return None;
+            }
+            if recording {
+                let source = ValueSource::in_partition(
+                    reader,
+                    CopyRule::Current,
+                    held,
+                    current,
+                    offset_of(index),
+                );
+                noted.push((id, source));
+            }
+            Some((id, pick))
         })
-        .collect())
+        .collect();
+    for (id, source) in noted {
+        rf.note_value_source(id, source);
+    }
+    Ok(picked)
 }
 
 /// A beam's solid: a box along its location line.

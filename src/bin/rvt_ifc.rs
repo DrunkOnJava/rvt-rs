@@ -46,6 +46,8 @@ impl From<CliExportQualityMode> for ExportQualityMode {
         rvt-ifc model.rvt                     writes model.ifc next to the input\n  \
         rvt-ifc model.rvt -o out.ifc --diagnostics out.diagnostics.json\n  \
         rvt-ifc model.rvt --diagnostics out.diagnostics.json --anonymize   to post publicly\n  \
+        rvt-ifc model.rvt --diagnostics out.diagnostics.json --element-provenance   list where each element was read from\n  \
+        rvt-ifc model.rvt --diagnostics out.diagnostics.json --export-decisions   list why each element was left out\n  \
         rvt-ifc model.rvt --mode geometry\n  \
         rvt-ifc model.rvt --phase \"Working Drawings\"   export that phase, not the last\n\n\
         SOURCE_DATE_EPOCH (Unix seconds) sets the time the IFC header and owner\n\
@@ -93,11 +95,13 @@ struct Args {
     no_saved_meshes: bool,
     /// Draw a family instance from its family's own extrusions (the sketch
     /// lines they were drawn from, swept between their offsets) instead of
-    /// its saved mesh, where they reproduce the mesh; every other instance,
-    /// and every one with an arc in a profile, keeps it (#156). Off by
-    /// default. Implies `--saved-meshes`. Each instance is checked against its
-    /// own mesh. Revit 2024 to 2027 files (measured on 2024 and 2025). Slower
-    /// on large files.
+    /// its saved mesh, where they reproduce the mesh; every other instance
+    /// keeps it (#156). An arc in a profile is written as the arc, but an
+    /// instance with an arc over 0.12 ft in radius keeps its mesh, since
+    /// Revit's two exporters write a circle in two forms that IfcOpenShell cuts
+    /// differently (#1346, #1355). Off by default. Implies `--saved-meshes`.
+    /// Each instance is checked against its own mesh. Revit 2024 to 2027 files
+    /// (measured on 2024 and 2025). Slower on large files.
     #[arg(long, conflicts_with_all = ["placeholder", "no_saved_meshes"])]
     family_extrusions: bool,
     /// Also write Revit's own property sets, as Revit's exporter does with
@@ -130,11 +134,30 @@ struct Args {
     #[arg(long, value_name = "PATH")]
     diagnostics: Option<PathBuf>,
     /// Replace every name the diagnostics sidecar takes from the project
-    /// with a placeholder: the file and project names, levels, materials and
-    /// sample element names. Counts and ElementIds stay, so the sidecar can
+    /// with a placeholder: the file and project names, levels, materials,
+    /// sample element names and the phase a left-out room sits in, in the
+    /// list of decisions too. Counts and ElementIds stay, so the sidecar can
     /// be posted publicly.
     #[arg(long, requires = "diagnostics")]
     anonymize: bool,
+    /// Also list, in the diagnostics sidecar, where each decoded element was
+    /// read from (#1325): the kind of record, its stream and byte offset in
+    /// the inflated stream (what rvt-dump writes as Partitions_NN.decomp),
+    /// where its ElementId is stored, its class and its native record. Off by
+    /// default: the list is about 140 times the rest of the pretty-printed
+    /// sidecar on a large model (7.4 MB against 53 KB on the BIM4LCA office
+    /// as built). Never written into the IFC.
+    #[arg(long, requires = "diagnostics", conflicts_with = "placeholder")]
+    element_provenance: bool,
+    /// Also list, in the diagnostics sidecar, each fail-closed decision per
+    /// element (#1326): why an element was left out, a body is only its
+    /// record's box, an opening was not cut or an outline was not read, as
+    /// its ElementId, a stage and a reason code, with the stream and byte
+    /// offset its record was read from where known. The `skipped` counts are
+    /// made from the same decisions. Bounded at 5,000 entries a reason, with
+    /// the rest counted as dropped. Off by default. Never written into the IFC.
+    #[arg(long, requires = "diagnostics", conflicts_with = "placeholder")]
+    export_decisions: bool,
     /// Witness mode: write an OctetProof observation of this input.
     ///
     /// The observation (docs/octetproof-spec.md §6.2) records the
@@ -358,6 +381,8 @@ fn export_options(args: &Args) -> ExportOptions {
         .with_revit_set_placement(args.revit_set_placement)
         .with_no_base_quantities(args.no_base_quantities)
         .with_phase(args.phase.clone())
+        .with_element_provenance(args.element_provenance)
+        .with_export_decisions(args.export_decisions)
 }
 
 fn walker_limits_from_args(args: &Args) -> WalkerLimits {

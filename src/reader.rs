@@ -182,7 +182,10 @@ pub struct RevitFile {
     chosen_export_phase: Option<i64>,
     /// The Areas of a Revit 2015 to 2023 file the reader left unwritten, by
     /// why (RE-324), set when the Areas are read.
-    unwritten_areas: BTreeMap<String, usize>,
+    unwritten_areas: BTreeMap<String, Vec<crate::partition_element_records::LeftOutElement>>,
+    /// The chain records of Revit 2024 and later, declared, whose entry block
+    /// did not read when the Areas were looked for (RE-333).
+    dropped_chain_entries: usize,
     /// Memoised production walk: the elements
     /// [`crate::walker::iter_elements_with_control`] yields for a minimum
     /// score and walker limits. An export walks once to write and again for
@@ -246,10 +249,14 @@ pub struct RevitFile {
     unread_type_doors_windows: BTreeSet<u32>,
     /// Family instances written as spaces that were left out because their
     /// family draws no model form (RE-312, #1262), by class.
-    bodiless_family_spaces: BTreeMap<String, usize>,
+    bodiless_family_spaces: BTreeMap<String, Vec<crate::partition_element_records::LeftOutElement>>,
     /// How many family instances written as spaces were not checked for a 3D
     /// body, and why, where the check could not run (RE-312).
     bodiless_family_space_error: Option<(usize, String)>,
+    /// The copy of an element's data each reader took a value from, by
+    /// ElementId, noted where the reader chose it (#1360). `None` unless the
+    /// export asked for the provenance table: the readers then note nothing.
+    value_sources: Option<crate::ifc::element_provenance::ValueSourceNotes>,
 }
 
 /// The limits it was opened with and how many streams it has inflated so
@@ -458,6 +465,7 @@ impl RevitFile {
             phase_filter: None,
             chosen_export_phase: None,
             unwritten_areas: BTreeMap::new(),
+            dropped_chain_entries: 0,
             walk: None,
             arc_wall_scan: None,
             partition_progress: None,
@@ -475,6 +483,7 @@ impl RevitFile {
             unread_type_doors_windows: BTreeSet::new(),
             bodiless_family_spaces: BTreeMap::new(),
             bodiless_family_space_error: None,
+            value_sources: None,
         })
     }
 
@@ -499,12 +508,18 @@ impl RevitFile {
     }
 
     /// The family instances written as spaces that this handle's export left
-    /// out because their family draws no model form (RE-312), by class.
-    pub(crate) fn bodiless_family_spaces(&self) -> &BTreeMap<String, usize> {
+    /// out because their family draws no model form (RE-312), by class, each
+    /// with the frame it was read from (#1326).
+    pub(crate) fn bodiless_family_spaces(
+        &self,
+    ) -> &BTreeMap<String, Vec<crate::partition_element_records::LeftOutElement>> {
         &self.bodiless_family_spaces
     }
 
-    pub(crate) fn note_bodiless_family_spaces(&mut self, classes: BTreeMap<String, usize>) {
+    pub(crate) fn note_bodiless_family_spaces(
+        &mut self,
+        classes: BTreeMap<String, Vec<crate::partition_element_records::LeftOutElement>>,
+    ) {
         self.bodiless_family_spaces = classes;
     }
 
@@ -516,9 +531,62 @@ impl RevitFile {
     /// follow the memoised walk that produced them.
     pub(crate) fn reset_export_notes(&mut self) {
         self.unwritten_areas.clear();
+        self.dropped_chain_entries = 0;
         self.bodiless_family_spaces.clear();
         self.bodiless_family_space_error = None;
         self.unread_type_doors_windows.clear();
+        if let Some(noted) = self.value_sources.as_mut() {
+            noted.clear();
+        }
+    }
+
+    /// Whether the readers note the copy they took each value from
+    /// ([`Self::record_value_sources`]).
+    pub(crate) fn recording_value_sources(&self) -> bool {
+        self.value_sources.is_some()
+    }
+
+    /// Start or stop noting the copy each reader takes a value from (#1360),
+    /// which the provenance table lists. Starting drops the memoised
+    /// production walk, since a walk made while the readers noted nothing has
+    /// no notes to give; stopping drops the notes. A reader that is not asked
+    /// notes nothing, so the default export does no extra work.
+    pub(crate) fn record_value_sources(&mut self, on: bool) {
+        if on == self.value_sources.is_some() {
+            return;
+        }
+        if on {
+            self.value_sources = Some(BTreeMap::new());
+            self.walk = None;
+        } else {
+            self.value_sources = None;
+        }
+    }
+
+    /// Note that a reader took a value of the element `element_id` from
+    /// `source`, in place of an earlier note of the same reader's. Does
+    /// nothing unless [`Self::record_value_sources`] is on.
+    pub(crate) fn note_value_source(
+        &mut self,
+        element_id: u32,
+        source: crate::ifc::element_provenance::ValueSource,
+    ) {
+        let Some(noted) = self.value_sources.as_mut() else {
+            return;
+        };
+        let sources = noted.entry(element_id).or_default();
+        match sources.iter_mut().find(|held| held.reader == source.reader) {
+            Some(held) => *held = source,
+            None => sources.push(source),
+        }
+    }
+
+    /// The notes of [`Self::note_value_source`], by ElementId; `None` unless
+    /// [`Self::record_value_sources`] is on.
+    pub(crate) fn value_sources(
+        &self,
+    ) -> Option<&crate::ifc::element_provenance::ValueSourceNotes> {
+        self.value_sources.as_ref()
     }
 
     /// How many family instances written as spaces were not checked for a 3D
@@ -1041,24 +1109,51 @@ impl RevitFile {
     }
 
     /// Record the Areas of a Revit 2015 to 2023 file that were left unwritten,
-    /// by reason (RE-324).
-    pub(crate) fn set_unwritten_areas(&mut self, by_reason: BTreeMap<String, usize>) {
+    /// by reason (RE-324), each with the record it was read from (#1326).
+    pub(crate) fn set_unwritten_areas(
+        &mut self,
+        by_reason: BTreeMap<String, Vec<crate::partition_element_records::LeftOutElement>>,
+    ) {
         self.unwritten_areas = by_reason;
+    }
+
+    /// Record the number of declared chain records of a Revit 2024 or later
+    /// file whose entry block did not read (RE-333).
+    pub(crate) fn set_dropped_chain_entries(&mut self, dropped: usize) {
+        self.dropped_chain_entries = dropped;
+    }
+
+    /// The declared chain records whose entry block did not read when the
+    /// Areas were looked for; 0 until they are (RE-333).
+    pub(crate) fn dropped_chain_entries(&self) -> usize {
+        self.dropped_chain_entries
     }
 
     /// The Areas of a Revit 2015 to 2023 file left unwritten because their
     /// region and body are not proven, by the reason their body has none
     /// (RE-324). Empty until the Areas are read.
-    pub(crate) fn unwritten_areas(&self) -> &BTreeMap<String, usize> {
+    pub(crate) fn unwritten_areas(
+        &self,
+    ) -> &BTreeMap<String, Vec<crate::partition_element_records::LeftOutElement>> {
         &self.unwritten_areas
     }
 
-    /// Sorted `Partitions/*` stream paths.
+    /// The `Partitions/*` stream paths in the order Revit numbers them:
+    /// by the number after `Partitions/` (`Partitions/9` before
+    /// `Partitions/46`), then by name. A higher number is a later partition,
+    /// so a reader that keeps the first or the last copy of a record gets the
+    /// oldest or the newest.
     pub fn partition_stream_names(&self) -> Vec<String> {
-        self.stream_names()
+        let mut names: Vec<String> = self
+            .stream_names()
             .into_iter()
             .filter(|name| name.starts_with("Partitions/"))
-            .collect()
+            .collect();
+        names.sort_by(|a, b| {
+            let number = crate::partition_room_parameters::partition_number;
+            (number(a), a).cmp(&(number(b), b))
+        });
+        names
     }
 
     /// String records extracted from the `Partitions/NN` stream, memoised.
@@ -1280,11 +1375,10 @@ impl RevitFile {
         Ok(crate::formats::schema_classes(&decompressed))
     }
 
-    /// Find the version-specific `Partitions/NN` stream name.
+    /// The first `Partitions/NN` stream, in [`Self::partition_stream_names`]'
+    /// order: the lowest-numbered.
     pub fn partition_stream_name(&self) -> Option<String> {
-        self.stream_names()
-            .into_iter()
-            .find(|n| n.starts_with("Partitions/"))
+        self.partition_stream_names().into_iter().next()
     }
 
     /// Produce a one-shot summary of everything we can parse.

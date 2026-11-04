@@ -1,4 +1,4 @@
-//! Areas' regions from Revit's own plan topology (#1261, RE-330).
+//! Areas' regions from Revit's own plan topology (#1261, RE-333).
 //!
 //! Revit keeps, for each area scheme on each Level, a `LevelRoomPlan`
 //! element whose `PlanTopology` is the arrangement of that scheme's area
@@ -56,6 +56,14 @@ pub const PARAMETER_TOLERANCE: f64 = 1e-9;
 /// How far, feet, the curve of a segment may lie from the points its plan
 /// topology saves for it.
 pub const SEGMENT_POINT_TOLERANCE_FEET: f64 = 1e-6;
+
+/// The most sides a circuit may have to be read: `without_spurs` is quadratic
+/// in them, and a loop of a room is never near this many.
+pub const MAX_CIRCUIT_SIDES: usize = 10_000;
+
+/// The most parts a line's area rule may split it into: `offset_at` is
+/// searched for every cut.
+pub const MAX_OFFSET_PARTS: usize = 1_000;
 
 /// The Area is in no plan topology, or in more than one.
 pub const REFUSED_NO_PLAN: &str = "area_not_in_one_plan_topology";
@@ -386,7 +394,11 @@ fn boundary_curve(objects: &[crate::native_parameters::GraphObject]) -> Option<B
         .iter()
         .find(|o| o.class_name == "AreaMeasureCurveData")
     {
-        for part in data.fields.get("m_schemeSegments")?.as_array()? {
+        let parts = data.fields.get("m_schemeSegments")?.as_array()?;
+        if parts.len() > MAX_OFFSET_PARTS {
+            return None;
+        }
+        for part in parts {
             offsets.push((
                 part.get("m_startParam")?.as_f64()?,
                 part.get("m_endParam")?.as_f64()?,
@@ -550,18 +562,16 @@ fn crossings(a: &Edge, b: &Edge) -> Vec<(f64, f64)> {
     }
 }
 
-/// The edges of one circuit, each moved by its offset and met by its
-/// neighbours where their curves cross, or `None` where a side is not read.
 /// A segment key with its direction left out: the segment a side runs.
 fn segment_of(side: SegmentKey) -> SegmentKey {
     let (line, major, sub) = side;
-    (line, major, if sub < 0 { -sub - 1 } else { sub })
+    (line, major, if sub < 0 { !sub } else { sub })
 }
 
 /// `sides` without its spurs: a segment run one way and, by the next side,
 /// straight back, a line that ends inside the loop. Its two sides enclose
 /// nothing, and once moved by its offset it would leave a notch that
-/// Revit's area does not have (on Snowdon Towers, RE-330).
+/// Revit's area does not have (on Snowdon Towers, RE-333).
 fn without_spurs(sides: &[SegmentKey]) -> Vec<SegmentKey> {
     let mut out = sides.to_vec();
     'removed: while out.len() > 2 {
@@ -579,16 +589,22 @@ fn without_spurs(sides: &[SegmentKey]) -> Vec<SegmentKey> {
     out
 }
 
+/// The edges of one circuit, each moved by its offset and met by its
+/// neighbours where their curves cross, or `None` where a side is not read.
 fn circuit_edges(
     plan: &Plan,
     circuit: &Circuit,
     curves: &BTreeMap<i64, BoundaryCurve>,
 ) -> Option<Vec<Edge>> {
-    // Each side's edges, and where its unmoved line ends.
-    let mut pieces: Vec<(Vec<Edge>, (f64, f64))> = Vec::new();
+    if circuit.sides.len() > MAX_CIRCUIT_SIDES {
+        return None;
+    }
+    // A side's edges, and the end of its unmoved line.
+    type Side = (Vec<Edge>, (f64, f64));
+    let mut pieces: Vec<Side> = Vec::new();
     for (line, major, sub) in without_spurs(&circuit.sides) {
         let backwards = sub < 0;
-        let index = if backwards { -sub - 1 } else { sub };
+        let index = if backwards { !sub } else { sub };
         let segment = plan.segments.get(&(line, major, index))?;
         let curve = curves.get(&line)?;
         if major != 0 {

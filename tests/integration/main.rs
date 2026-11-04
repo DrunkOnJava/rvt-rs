@@ -61,8 +61,12 @@ mod element_materials;
 mod element_names;
 #[path = "../element_parameters.rs"]
 mod element_parameters;
+#[path = "../element_provenance_offsets.rs"]
+mod element_provenance_offsets;
 #[path = "../element_records_2025.rs"]
 mod element_records_2025;
+#[path = "../export_decisions_counts.rs"]
+mod export_decisions_counts;
 #[path = "../family_instance_ports.rs"]
 mod family_instance_ports;
 #[path = "../field_type_coverage.rs"]
@@ -177,6 +181,8 @@ mod type_global_ids;
 mod typed_no_geometry_types;
 #[path = "../unfilled_openings.rs"]
 mod unfilled_openings;
+#[path = "../value_sources_offsets.rs"]
+mod value_sources_offsets;
 #[path = "../walker_to_ifc_integration.rs"]
 mod walker_to_ifc_integration;
 #[path = "../wall_profile_openings.rs"]

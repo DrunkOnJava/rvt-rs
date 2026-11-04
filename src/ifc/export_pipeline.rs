@@ -84,6 +84,24 @@ pub struct ExportOptions {
     /// [`Error::InvalidInput`](crate::Error::InvalidInput) listing the file's
     /// phases.
     pub phase: Option<String>,
+    /// Also list where each decoded element was read from in the diagnostics
+    /// (`decoded.element_provenance`, `rvt-ifc --element-provenance`, #1325).
+    /// Off by default: the table is large (on the BIM4LCA office as built
+    /// 5,975,162 bytes of compact JSON against 38,640 bytes of diagnostics
+    /// without it, about 155 times) and never goes into the IFC. While it is
+    /// on, the readers also note the copy they take each value from (#1360).
+    pub element_provenance: bool,
+    /// Also list each fail-closed decision per element in the diagnostics
+    /// (`export_decisions`, `rvt-ifc --export-decisions`, #1326): why an
+    /// element, body, opening or outline was left out, bounded per reason. Off
+    /// by default; the diagnostics are then the bytes they were. It is a
+    /// switch of its own, not part of `element_provenance`, because the log
+    /// is bounded (at most 5,000 entries a reason) where the table grows with
+    /// the model (155 times the diagnostics on the BIM4LCA office), and it
+    /// needs no table in the diagnostics: where an entry's evidence is an
+    /// element the walk decoded, its stream and offset are read from a table
+    /// built for the purpose and dropped.
+    pub export_decisions: bool,
 }
 
 impl Default for ExportOptions {
@@ -97,6 +115,8 @@ impl Default for ExportOptions {
             revit_set_placement: false,
             no_base_quantities: false,
             phase: None,
+            element_provenance: false,
+            export_decisions: false,
         }
     }
 }
@@ -158,6 +178,26 @@ impl ExportOptions {
     #[must_use]
     pub fn with_phase(mut self, phase: Option<String>) -> Self {
         self.phase = phase;
+        self
+    }
+
+    /// Whether the diagnostics list where each decoded element was read from
+    /// ([`ElementProvenanceTable`](super::element_provenance::ElementProvenanceTable)).
+    /// Off by default; the diagnostics are then the bytes they were before
+    /// the option existed.
+    #[must_use]
+    pub fn with_element_provenance(mut self, element_provenance: bool) -> Self {
+        self.element_provenance = element_provenance;
+        self
+    }
+
+    /// Whether the diagnostics list each fail-closed decision per element
+    /// ([`ExportDecisionLog`](super::export_decisions::ExportDecisionLog)). Off
+    /// by default; independent of
+    /// [`with_element_provenance`](Self::with_element_provenance).
+    #[must_use]
+    pub fn with_export_decisions(mut self, export_decisions: bool) -> Self {
+        self.export_decisions = export_decisions;
         self
     }
 }
@@ -256,10 +296,13 @@ pub enum ExportNote {
         vertices_differ: usize,
         /// By a sampled point of the extrusions' surface off the mesh.
         surface_differs: usize,
-        /// Reproduced, but left with their mesh because a profile has an arc.
+        /// Reproduced, but left with their mesh for an arc over 0.12 ft in
+        /// radius.
         arcs: usize,
         /// Reproduced, but their profile cannot be written.
         unwritable: usize,
+        /// Of the replaced, instances with an arc in a profile.
+        with_arcs: usize,
         /// Instances left alone for sharing a Tag with another entity.
         ambiguous: usize,
     },
@@ -349,10 +392,11 @@ impl fmt::Display for ExportNote {
                 surface_differs,
                 arcs,
                 unwritable,
+                with_arcs,
                 ambiguous,
             } => write!(
                 f,
-                "{replaced} of {candidates} saved-mesh bodies drawn from their family's extrusions ({families} families found, {families_rebuilt} rebuilt; {not_rebuilt} had no rebuilt family, {unplaced} no instance transform, {unchecked} a mesh too large to compare; the extrusions did not reproduce the mesh of {volume_differs} by volume, {vertices_differ} by vertices and {surface_differs} by surface; {arcs} reproduced but with an arc in a profile, so left with the mesh; {unwritable} reproduced but not writable; {ambiguous} left alone for sharing a Tag)"
+                "{replaced} of {candidates} saved-mesh bodies drawn from their family's extrusions ({families} families found, {families_rebuilt} rebuilt; {not_rebuilt} had no rebuilt family, {unplaced} no instance transform, {unchecked} a mesh too large to compare; the extrusions did not reproduce the mesh of {volume_differs} by volume, {vertices_differ} by vertices and {surface_differs} by surface; {arcs} reproduced but left with the mesh for an arc over 0.12 ft in radius, {unwritable} reproduced but not writable; {with_arcs} of the drawn ones have an arc in a profile; {ambiguous} left alone for sharing a Tag)"
             ),
             Self::FamilyExtrusionsSkipped { error } => {
                 write!(f, "family extrusions not read, bodies unchanged: {error}")
@@ -422,11 +466,15 @@ pub fn run_export_with_limits(
 ///
 /// 1. the phase, when `options.phase` names one (before anything is read);
 /// 2. the exporter `options.kind` names, under `limits`;
-/// 3. the bodies drawn from saved graphics, for the Document and
+/// 3. the element provenance table in the diagnostics, when asked, from the
+///    walk step 2 made;
+/// 4. the bodies drawn from saved graphics, for the Document and
 ///    DiagnosticProxies kinds;
-/// 4. Revit's parameter sets and their placement, when asked;
-/// 5. the base quantities left out, when asked;
-/// 6. the unread streams recorded in the diagnostics, which steps 3 and 4 may
+/// 5. Revit's parameter sets and their placement, when asked;
+/// 6. the base quantities left out, when asked;
+/// 7. the log of per-element decisions in the diagnostics, when asked, from the
+///    decisions step 2 made and the final model;
+/// 8. the unread streams recorded in the diagnostics, which steps 4 and 5 may
 ///    have added to.
 ///
 /// The saved graphics, the parameter sets and the placement only add to the
@@ -459,6 +507,9 @@ pub fn run_export_with_limits_and_control(
     if let Some(phase) = &options.phase {
         rf.set_export_phase(phase)?;
     }
+    // #1360: the readers note the copy they take each value from only when the
+    // table that lists them is asked for.
+    rf.record_value_sources(options.element_provenance && options.kind != ExportKind::Placeholder);
     let result = match options.kind {
         ExportKind::Document => RvtDocExporter.export_with_diagnostics_mode_limits_and_control(
             rf,
@@ -473,7 +524,25 @@ pub fn run_export_with_limits_and_control(
     };
     let mut model = result.model;
     let mut diagnostics = result.diagnostics;
+    let decisions = result.decisions;
     let mut notes = Vec::new();
+
+    // #1325: built from the walk the exporter just made, which the handle
+    // memoised, before the steps below touch the handle again. The log of
+    // decisions (#1326) reads the same table for the place of an element's
+    // record, so where it is asked for without the table in the diagnostics
+    // the table is built here and kept apart, then dropped.
+    let mut log_provenance = None;
+    if options.kind != ExportKind::Placeholder {
+        if options.element_provenance {
+            control.check()?;
+            diagnostics.decoded.element_provenance =
+                Some(super::element_provenance::build(rf, limits));
+        } else if options.export_decisions {
+            control.check()?;
+            log_provenance = Some(super::element_provenance::build(rf, limits));
+        }
+    }
 
     let scope = match (options.kind, options.saved_meshes) {
         (ExportKind::Placeholder, _) | (_, SavedMeshChoice::Off) => None,
@@ -521,6 +590,7 @@ pub fn run_export_with_limits_and_control(
                     surface_differs: report.surface_differs,
                     arcs: report.arcs,
                     unwritable: report.unwritable,
+                    with_arcs: report.with_arcs,
                     ambiguous: report.ambiguous,
                 });
             }
@@ -574,6 +644,27 @@ pub fn run_export_with_limits_and_control(
         let left_out = leave_out_base_quantities(&mut model);
         recount_exported(&mut diagnostics, &model);
         notes.push(ExportNote::BaseQuantities { left_out });
+    }
+
+    // #1360: the model is final, so the bodies the saved graphics and the
+    // family extrusions replaced name their own sources.
+    if let Some(table) = diagnostics.decoded.element_provenance.as_mut() {
+        super::element_provenance::attach_value_sources(table, rf, &model);
+    }
+
+    // #1326: the decisions the `skipped` counts were made from, and those
+    // behind the final model's box bodies and outlines.
+    if options.export_decisions && options.kind != ExportKind::Placeholder {
+        control.check()?;
+        let mut all = decisions;
+        all.extend(super::model_decisions(&model));
+        let table = diagnostics
+            .decoded
+            .element_provenance
+            .as_ref()
+            .or(log_provenance.as_ref());
+        let log = super::export_decisions::ExportDecisionLog::build(all, table);
+        diagnostics.export_decisions = Some(log);
     }
 
     // #1075: the steps above may have read more streams than the export did.

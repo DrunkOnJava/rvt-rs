@@ -22,6 +22,16 @@ the same arithmetic wherever a body runs, so the output does not depend on
 it. Bodies only exist in an export made with `--saved-meshes`; without it
 this prints none.
 
+With RVT_SCORER_FINE_MESH=1 (#1355, RE-331) the scored bodies are meshed a
+second time in both files at one equal, fine deflection (fine_mesh.py), scored
+the same way, and printed after everything above as `fine` rows: per class the
+same columns beside "ref on ours" within 0.0015 and 0.002 ft and both
+directions within 1e-5 ft (two tessellations of one surface coincide), the
+median volume ratio and the largest "ref on ours", then per class how many
+bodies hold "ref on ours" and "0.001 ft" in the default tessellation, in the
+fine one, in both or in neither, then the bodies that miss in the fine one.
+The output without it is as it was.
+
 Needs IfcOpenShell and numpy.
 
 Usage:
@@ -42,11 +52,19 @@ import ifcopenshell.geom
 import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import fine_mesh  # noqa: E402
 from ifc_common import mesh_parts, site_frame  # noqa: E402
 from roof_bodies_vs_ifc import shapes_of  # noqa: E402
 from saved_meshes_vs_ifc import body_sources  # noqa: E402
 
 SOURCE = "saved_graphics_mesh"
+# A wrapper (family_extrusion_bodies_vs_ifc.py) can have each scored body of
+# one file described while its model is open: DESCRIBE["ours"] or
+# DESCRIBE["ref"] is a function of the element, and what it returns is kept
+# for the wrapper in DESCRIBED[role][tag]. RESULT["scored"] is the scored rows.
+DESCRIBE = {}
+DESCRIBED = {}
+RESULT = {}
 PAIR_BUDGET = 1_000_000
 # surface_distance measures every pair up to this many, and beyond it prunes.
 EXHAUSTIVE = 200_000
@@ -63,13 +81,14 @@ VERTEX_CAP = 400
 POOL_FROM = 16
 
 
-def meshes(path, tags=None, source=None, model=None):
+def meshes(path, tags=None, source=None, model=None, role=None, settings=None):
     """Tag -> (class, ObjectType, triangles (T, 3, 3) in internal feet)."""
     if model is None:
         model = ifcopenshell.open(path)
     frame = site_frame(model)
-    settings = ifcopenshell.geom.settings()
-    settings.set("use-world-coords", True)
+    if settings is None:
+        settings = ifcopenshell.geom.settings()
+        settings.set("use-world-coords", True)
     chosen = []
     for element in model.by_type("IfcElement"):
         if element.is_a("IfcOpeningElement") or not element.Tag:
@@ -95,6 +114,8 @@ def meshes(path, tags=None, source=None, model=None):
         if element.Tag in out:
             triangles = np.concatenate([out[element.Tag][2], triangles])
         out[element.Tag] = (element.is_a(), element.ObjectType or "", triangles)
+        if role in DESCRIBE:
+            DESCRIBED.setdefault(role, {})[element.Tag] = DESCRIBE[role](element)
     return out
 
 
@@ -362,6 +383,93 @@ def score_all(ours, ref, tags):
     return results
 
 
+def held(default, fine):
+    """Which of the two tessellations a body holds a bar in."""
+    return "both" if default and fine else "default only" if default else "fine only" if fine else "neither"
+
+
+def fine_block(ours_fine, ref_fine, ours, ref, default_scores):
+    """Score the bodies meshed in both files at the fine deflection and print the
+    `fine` rows beside the default ones (#1355). A body whose two meshes are the
+    triangles of the default ones (a faceted body, which the deflection does not
+    touch) keeps its default scores: the same triangles give the same scores.
+    Returns the fine scores like `scored`."""
+    tags = sorted(set(ours_fine) & set(ref_fine) & set(default_scores), key=lambda t: (len(t), t))
+    moved = [
+        t
+        for t in tags
+        if not (np.array_equal(ours_fine[t][2], ours[t][2]) and np.array_equal(ref_fine[t][2], ref[t][2]))
+    ]
+    print()
+    print(
+        f"fine tessellation: {fine_mesh.LABEL}, both files; {len(tags)} of {len(default_scores)} bodies meshed in both,"
+        f" {len(moved)} of them meshed differently"
+    )
+    if not tags:
+        return []
+    fine_scores = {t: default_scores[t] for t in tags}
+    fine_scores.update(zip(moved, score_all(ours_fine, ref_fine, moved)))
+    rows = collections.defaultdict(collections.Counter)
+    ratios = collections.defaultdict(list)
+    largest = collections.defaultdict(float)
+    changes = collections.defaultdict(collections.Counter)
+    scored = []
+    differ = set(moved)
+    for tag in tags:
+        ratio, to_ours, to_ref = fine_scores[tag]
+        cls, object_type, _ = ref[tag]
+        far = max(to_ours, to_ref)
+        d_ratio, d_to_ours, d_to_ref = default_scores[tag]
+        d_far = max(d_to_ours, d_to_ref)
+        for key in (cls, "total"):
+            row = rows[key]
+            row["n"] += 1
+            row["differ"] += tag in differ
+            row["vol 1%"] += abs(ratio - 1) <= 0.01
+            row["vol 0.01%"] += abs(ratio - 1) <= 1e-4
+            row["0.01 ft"] += far <= 0.01
+            row["0.001 ft"] += far <= 0.001
+            row["ref on ours"] += to_ours <= 0.001
+            row["ref 0.0015"] += to_ours <= 0.0015
+            row["ref 0.002"] += to_ours <= 0.002
+            row["1e-5 ft"] += far <= 1e-5
+            ratios[key].append(ratio)
+            largest[key] = max(largest[key], to_ours)
+            changes[key]["ref " + held(d_to_ours <= 0.001, to_ours <= 0.001)] += 1
+            changes[key]["0.001 ft " + held(d_far <= 0.001, far <= 0.001)] += 1
+        scored.append((far, tag, cls, object_type, ratio, to_ours, to_ref))
+    order = sorted((k for k in rows if k != "total"), key=lambda c: (-rows[c]["n"], c)) + ["total"]
+    print(
+        f"fine {'class':<28} {'n':>6} {'vol 1%':>7} {'vol .01%':>8} {'0.01 ft':>8} {'0.001 ft':>8}"
+        f" {'ref on ours':>11} {'ref .0015':>9} {'ref .002':>8} {'1e-5 ft':>8}  median volume ratio, largest ref on ours (ft)"
+    )
+    for cls in order:
+        row = rows[cls]
+        print(
+            f"fine {cls:<28} {row['n']:>6} {row['vol 1%']:>7} {row['vol 0.01%']:>8} {row['0.01 ft']:>8} {row['0.001 ft']:>8}"
+            f" {row['ref on ours']:>11} {row['ref 0.0015']:>9} {row['ref 0.002']:>8} {row['1e-5 ft']:>8}"
+            f"  {statistics.median(ratios[cls]):.4f} {largest[cls]:.6f}"
+        )
+    print(
+        f"fine change {'class':<28} {'n':>6} {'differ':>6}  bodies meshed differently; then holding 'ref on ours' (0.001 ft):"
+        " both, default only, fine only, neither; then the same for both directions within 0.001 ft"
+    )
+    for cls in order:
+        row, change = rows[cls], changes[cls]
+        counts = [change[f"{bar} {kind}"] for bar in ("ref", "0.001 ft") for kind in ("both", "default only", "fine only", "neither")]
+        print(f"fine change {cls:<28} {row['n']:>6} {row['differ']:>6} " + " ".join(f"{v:>6}" for v in counts))
+    misses = sorted((s for s in scored if s[5] > 0.001), key=lambda s: -s[5])
+    print(f"fine bodies that miss 'ref on ours': {len(misses)}")
+    for far, tag, cls, object_type, ratio, to_ours, to_ref in misses[:15]:
+        d_ratio, d_to_ours, d_to_ref = default_scores[tag]
+        print(
+            f"  fine {tag} {cls} '{object_type}': Revit's vertices to rvt-rs's surface {to_ours:.4g} ft"
+            f" (default {d_to_ours:.4g}), rvt-rs's to Revit's {to_ref:.4g} ft (default {d_to_ref:.4g}),"
+            f" volume ratio {ratio:.4f} (default {d_ratio:.4f})"
+        )
+    return scored
+
+
 def main():
     if len(sys.argv) != 3:
         print(__doc__)
@@ -378,17 +486,24 @@ def main():
         chosen.update(tags[::step])
         if step > 1:
             print(f"{cls}: {len(tags)} bodies, every {step}th scored")
-    ours = meshes(sys.argv[1], tags=chosen, source=SOURCE, model=model)
+    fine = fine_mesh.enabled()
+    ours = meshes(sys.argv[1], tags=chosen, source=SOURCE, model=model, role="ours")
+    ours_fine = meshes(sys.argv[1], tags=set(ours), source=SOURCE, model=model, settings=fine_mesh.settings()) if fine else {}
     del model
-    ref = meshes(sys.argv[2], tags=set(ours))
+    ref_model = ifcopenshell.open(sys.argv[2]) if fine else None
+    ref = meshes(sys.argv[2], tags=set(ours), model=ref_model, role="ref")
+    ref_fine = meshes(sys.argv[2], tags=set(ours), model=ref_model, settings=fine_mesh.settings()) if fine else {}
+    del ref_model
     print(f"{SOURCE} bodies scored: {len(ours)}; in Revit's export {len(ref)}")
     rows = collections.defaultdict(lambda: collections.defaultdict(collections.Counter))
     ratios = collections.defaultdict(list)
     scored = []
+    default_scores = {}
     tags = sorted(set(ours) & set(ref), key=lambda t: (len(t), t))
     for tag, (ratio, to_ours, to_ref) in zip(tags, score_all(ours, ref, tags)):
         cls, object_type, _ = ref[tag]
         far = max(to_ours, to_ref)
+        default_scores[tag] = (ratio, to_ours, to_ref)
         for key in ("", object_type) if object_type else ("",):
             row = rows[cls][key]
             row["n"] += 1
@@ -399,6 +514,7 @@ def main():
             row["ref on ours"] += to_ours <= 0.001
         ratios[cls].append(ratio)
         scored.append((far, tag, cls, object_type, ratio, to_ours, to_ref))
+    RESULT["scored"] = scored
     print(
         f"{'class':<28} {'n':>6} {'vol 1%':>7} {'vol .01%':>8} {'0.01 ft':>8} {'0.001 ft':>8}"
         f" {'ref on ours':>11}  median volume ratio"
@@ -434,6 +550,8 @@ def main():
             shells = shell_volumes(triangles)
             listed = " ".join(f"{v:.4f}" for v in shells[:8])
             print(f"    {side} shells {len(shells)}, signed volumes (cubic ft): {listed}")
+    if fine:
+        RESULT["scored_fine"] = fine_block(ours_fine, ref_fine, ours, ref, default_scores)
     return 0
 
 

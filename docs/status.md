@@ -119,7 +119,7 @@ walls whose layers Revit ends at different heights or cuts at a height no join n
 the rooms whose stored solid still does not close (RE-316 §4) and opening
 profiles are not decoded, and rvt-rs does not edit Revit model data.
 
-**Rooms.** Each `IfcSpace` says in `RvtElementRecordGeometry.SpaceOutlineSource` whether its outline was read from the room's stored solid (`stored_solid`), is the record's bounding box (`record_box`), was drawn from a saved mesh or a family's body, is an Area's region among its boundary lines (`area_boundary`, RE-317), or has no body (an Area whose boundary is not proven), and the diagnostics count the boxes (`exported.bounding_box_spaces`) and, by reason, the Areas that have no body (`exported.area_body_refusals`, RE-317). Areas are read on Revit 2015 to 2024 (RE-324); those of 2015 to 2023 are written only where their body is proven, counted otherwise in `skipped` as `area_without_proven_body`, and checked against the same project's 2024 save on Autodesk's samples, and against no Revit export of a 2015 to 2023 file. Measure scores every space's plan area and outline against Revit's export, and CI gates Core Interior (116 of 116 rooms) and RE1 Architecture (11 of 11). A room whose stored solid the exact walk did not close is read again from the faces its solid lists, up to the solid's own end, and says so: `stored_solid_faces` where the faces' edges close as the walk reads them (9 of the BIM4LCA office's 13 such rooms as built, all at Revit's area to 0.1%) or `stored_solid_approximate` where a column overlaps a wall, an end of one wall edge lies on another, or the outline falls up to 0.02 ft short of the box (4 as built and 11 of the 12 at building permit: 10 of the 15 at Revit's floor area to 0.1%, the 5 others, four rooms, 0.45% to 0.68% under it); the diagnostics count them (`exported.resolved_outline_spaces`, `exported.approximate_outline_spaces`). The scorer's upward-face area reads one of them (1671995) as 323% over and RE-313's 66% room as 66% off; by Revit's floor both are within 0.5% and 0.1%. The 6 `rac_advanced` rooms with round columns, 49 of the 50 `rme` rooms, Snowdon Towers' 7 and office room 3095831 at permit keep their box (RE-316). [docs/rooms.md](rooms.md) says what to trust per release, and RE-313 has the runs.
+**Rooms.** Each `IfcSpace` says in `RvtElementRecordGeometry.SpaceOutlineSource` whether its outline was read from the room's stored solid (`stored_solid`), is the record's bounding box (`record_box`), was drawn from a saved mesh or a family's body, is an Area's region among its boundary lines (`area_boundary`, RE-317; `area_boundary_joined` where its outline needed a boundary line carried on to the line it joins, or a connector, RE-330), or has no body (an Area whose boundary is not proven), and the diagnostics count the boxes (`exported.bounding_box_spaces`) and, by reason, the Areas that have no body (`exported.area_body_refusals`, RE-317). Areas are read on Revit 2015 to 2027 (RE-324, RE-333), the region first the loop of Revit's own plan topology where that is read and passes its checks (RE-333), else the lines' arrangement with its joins; those of 2015 to 2023 are written only where their body is proven, counted otherwise in `skipped` as `area_without_proven_body`, and checked against the same project's 2024 save on Autodesk's samples and, for the 16 Areas of `rac_advanced` it draws, against an IFC2X3 export of that project from the three.js repository, by a build of Revit 2021's exporter whose string ends "IU alternativa 21.0.0.383" (publisher not established), showing the 2015 to 2020 state of the project (RE-330): the only export of a 2015 to 2023 Area there is, and not one of Revit's IFC4 exports. Measure scores every space's plan area and outline against Revit's export, and CI gates Core Interior (116 of 116 rooms) and RE1 Architecture (11 of 11). A room whose stored solid the exact walk did not close is read again from the faces its solid lists, up to the solid's own end, and says so: `stored_solid_faces` where the faces' edges close as the walk reads them (9 of the BIM4LCA office's 13 such rooms as built, all at Revit's area to 0.1%) or `stored_solid_approximate` where a column overlaps a wall, an end of one wall edge lies on another, or the outline falls up to 0.02 ft short of the box (4 as built and 11 of the 12 at building permit: 10 of the 15 at Revit's floor area to 0.1%, the 5 others, four rooms, 0.45% to 0.68% under it); the diagnostics count them (`exported.resolved_outline_spaces`, `exported.approximate_outline_spaces`). The scorer's upward-face area reads one of them (1671995) as 323% over and RE-313's 66% room as 66% off; by Revit's floor both are within 0.5% and 0.1%. The 6 `rac_advanced` rooms with round columns, 49 of the 50 `rme` rooms, Snowdon Towers' 7 and office room 3095831 at permit keep their box (RE-316). [docs/rooms.md](rooms.md) says what to trust per release, and RE-313 has the runs.
 
 ## Finding history
 
@@ -1122,15 +1122,33 @@ sketches (26), sweeps, revolutions, blends and voids' cuts are not drawn. The 20
 the native releases, so its 85 of 86 is not reproduced. The 79 are
 reversed by default, a rule found on them and not held out; every instance in
 an export is checked against its own mesh. `rvt-ifc --family-extrusions`
-(opt-in; the default export is unchanged, hash for hash on 29 models) draws an
+(opt-in; the default export is unchanged, hash for hash on 111 of 111 models) draws an
 instance from its family's extrusions where they reproduce its saved mesh.
 On Core Interior, RE1 and the BIM4LCA office files the first run, which drew
 arcs as arcs, replaced 335 bodies; of the 251 the body scorer matched, 250 had
-Revit's vertices within 0.001 ft of their surface and one did not (the volumes
-suggest a difference in where Revit's tessellation of an arc starts: an
-inference, not a measurement). An instance with an arc in a profile therefore
-keeps its mesh: 64 bodies are replaced, all 64 within 0.001 ft, and every
-scorer row equals the saved-mesh baseline's. The flag reads Revit 2024 to 2027
+Revit's vertices within 0.001 ft of their surface and one did not: Revit 26.2's
+IFC2X3 export draws that circle (0.2292 ft) as an `IfcCircleProfileDef`, which
+IfcOpenShell cuts into 27 chords, and two half arcs of it come out as 28, so
+no vertex coincides (a count mismatch, reproduced and measured in
+`reports/element-framing/RE-327-family-extrusions.md` §11). Revit 24.0.5's
+IFC4 export of the office writes a circle as half arcs. IfcOpenShell's default
+tessellation of the two forms of a circle has the same chords up to 0.164 ft
+and at 0.3281 ft and one chord more or fewer at 0.2292, 0.4921, 0.9843 and
+1.9685 ft; over 0.137 ft a chord's own deviation passes the 0.001 ft bar, so a
+difference in the count or in where the circle starts misses it, for a partial
+arc as for a whole circle. No one form meets both exporters, and nothing in the
+`.rvt` says which will read it. An arc of 0.12 ft in radius or less is written
+as the arc, and an instance with an arc over 0.12 ft in radius keeps its mesh in
+every release, which meets the bar against both. The shipped rule replaces 66
+of the 335 (Core Interior 37, each office file 9, RE1 Architecture 7,
+Electrical 2, Mechanical 1, Plumbing 1) and keeps 269 for an arc (the office
+files 120 each, the terrain files 11 each, RE1 Architecture 1, Electrical 6);
+every combined row of `mesh_bodies_vs_ifc` equals the `--saved-meshes`
+baseline's, and the 2 replaced bodies with an arc, circles of 0.12 ft or less
+in RE1's IFC2X3 export, each hold the bar and coincide with Revit's at 1e-5 ft.
+No partial arc and no arc of the IFC4 dialect is among the 66: the arcs the rule
+draws are thinly measured. True arcs for the larger ones come back if a finer
+tessellation of the scorers changes the bar (#1355, a decision for Griffin). The flag reads Revit 2024 to 2027
 (measured on 2024 and 2025); an earlier file has no instance transform that
 reads, so nothing is replaced (`reports/element-framing/RE-327-family-extrusions.md`
 §9).

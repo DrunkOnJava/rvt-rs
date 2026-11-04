@@ -331,6 +331,112 @@ fn tier1_elements_cli_validates_decoded_and_counts_schemas() {
     assert!(counts["total"].as_u64().is_some());
 }
 
+/// `rvt-ifc --diagnostics` on `model` with the `extra` flags, parsed.
+fn ifc_diagnostics(model: &Path, tag: &str, extra: &[&str]) -> Value {
+    let dir = std::env::temp_dir();
+    let diagnostics_path = dir.join(format!(
+        "rvt-schema-contract-{}-{tag}-diagnostics.json",
+        std::process::id()
+    ));
+    let ifc_path = dir.join(format!(
+        "rvt-schema-contract-{}-{tag}-out.ifc",
+        std::process::id()
+    ));
+    let output = Command::new(env!("CARGO_BIN_EXE_rvt-ifc"))
+        .arg(model)
+        .arg("-o")
+        .arg(&ifc_path)
+        .arg("--diagnostics")
+        .arg(&diagnostics_path)
+        .args(extra)
+        .output()
+        .expect("run rvt-ifc");
+    assert!(
+        output.status.success(),
+        "rvt-ifc failed\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let value = serde_json::from_str(
+        &std::fs::read_to_string(&diagnostics_path).expect("read diagnostics JSON"),
+    )
+    .expect("parse diagnostics JSON");
+    let _ = std::fs::remove_file(&diagnostics_path);
+    let _ = std::fs::remove_file(&ifc_path);
+    value
+}
+
+/// #1325: the diagnostics have no `decoded.element_provenance` unless
+/// `rvt-ifc --element-provenance` asks for it, and, asked for, the section
+/// validates against the schema on real output: the committed synthetic
+/// project, and Einhoven (partition element records and native records) when
+/// the project corpus is present.
+#[test]
+fn element_provenance_section_validates_against_the_diagnostics_schema() {
+    let schema = load_schema("export-diagnostics.schema.json");
+    let mut models = vec![(
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("corpus")
+            .join("tier1")
+            .join("architectural-2024")
+            .join("architectural-2024.rvt"),
+        false,
+    )];
+    if let Some(dir) = std::env::var_os("RVT_PROJECT_CORPUS_DIR") {
+        let einhoven = Path::new(&dir).join("Revit_IFC5_Einhoven.rvt");
+        if einhoven.is_file() {
+            models.push((einhoven, true));
+        }
+    }
+    for (index, (model, has_elements)) in models.iter().enumerate() {
+        let without = ifc_diagnostics(model, &format!("off{index}"), &[]);
+        assert!(
+            without["decoded"].get("element_provenance").is_none(),
+            "{}: the diagnostics list element provenance unasked",
+            model.display()
+        );
+        let with = ifc_diagnostics(model, &format!("on{index}"), &["--element-provenance"]);
+        validate(&schema, &with).expect("element provenance schema validation");
+        let table = &with["decoded"]["element_provenance"];
+        assert!(table.is_object(), "{}: no table", model.display());
+        assert!(table["by_carrier"].is_object(), "{table}");
+        if *has_elements {
+            assert!(
+                table["elements"]
+                    .as_object()
+                    .is_some_and(|elements| !elements.is_empty()),
+                "{}: no element listed",
+                model.display()
+            );
+        }
+        // #1326: the same for the log of per-element decisions.
+        assert!(
+            without.get("export_decisions").is_none(),
+            "{}: the diagnostics list decisions unasked",
+            model.display()
+        );
+        let with = ifc_diagnostics(model, &format!("log{index}"), &["--export-decisions"]);
+        validate(&schema, &with).expect("export decisions schema validation");
+        let log = &with["export_decisions"];
+        assert!(log.is_object(), "{}: no log", model.display());
+        assert!(log["reasons"].is_object() && log["entries"].is_array());
+        if *has_elements {
+            assert!(
+                log["entries"]
+                    .as_array()
+                    .is_some_and(|entries| !entries.is_empty()),
+                "{}: no decision listed",
+                model.display()
+            );
+        }
+        assert!(
+            with["decoded"].get("element_provenance").is_none(),
+            "{}: the table comes with the log",
+            model.display()
+        );
+    }
+}
+
 /// The CLIs whose JSON had no contract (#873, S2), on the tier-1 synthetic
 /// project and the committed synthetic IFC files, so they run with no
 /// Autodesk corpus present. `rvt-history`'s default output needs a real
