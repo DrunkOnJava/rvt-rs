@@ -170,8 +170,9 @@ jobs:
   # The work is CPU-bound (run 41748430211: 164 task-minutes in a 43-minute
   # Measure step on one 4-core runner), so each side runs as shards on runners
   # of their own: each BIM4LCA office file, Autodesk's samples in two halves
-  # by release, the held-out and spent models, and every other model with
-  # the families (six jobs a side). In run 41761654404, with four a side, the
+  # by release (2008 to 2023 and 2024 on: 477 and 658 MB, 2024 alone 328),
+  # the held-out and spent models, and every other model with the families
+  # (six jobs a side). In run 41761654404, with four a side, the
   # samples took 11.7 minutes to score and the rest, held-out models
   # included, 14.7, against 6.1 and 9.0 for the office files. A run given
   # `models`, `sample_years` or `probe_pair_release` keeps one shard, since a
