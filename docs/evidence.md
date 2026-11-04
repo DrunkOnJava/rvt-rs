@@ -37,7 +37,7 @@ The recovery figures in this README compare rvt-rs's export with Revit's own IFC
 | `PartAtom` XML | ✓ | Title, OmniClass code, taxonomies |
 | Stream preview extraction | ✓ | Clean PNG, wrapper stripped |
 | `Formats/Latest` schema parse | ✓ | the whole page-stripped schema: 4,126 classes and 11,562 fields on Revit 2024, 134,794 fields across the 12 releases (#410) |
-| Field-type classification | ✓ | 9 to 12 fields per release unclassified out of 10,000 to 12,000, all listed in the CI gate (`tests/field_type_coverage.rs`, #410); the 100% figure before #410 covered only the first 64 KB of each schema |
+| Field-type classification | ✓ | 2 or 3 fields per release unclassified out of 10,000 to 12,000, all listed in the CI gate (`tests/field_type_coverage.rs`, #410, RE-323); the 100% figure before #410 covered only the first 64 KB of each schema |
 | Cross-release tag-drift table | ✓ | First public 122×11 dataset |
 | Layer 5a ADocument walker | partial | Reliable on Revit 2024–2026; 2016–2023 entry-point detection pending. Real project elements come mostly from each element's partition record ([next section](#what-rvt-rs-reads-from-real-projects)), merged with what this walker decodes, so its range does not limit which releases' elements are recovered |
 | Stream-level modifying writer | ✓ | 13/13 streams byte-preserving; `rvt-write` CLI + JSON patch manifests |

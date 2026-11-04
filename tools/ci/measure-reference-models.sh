@@ -42,7 +42,9 @@
 # same order ("-" for none); each probe then writes probe-<probe>.txt and
 # probe_score-<probe>.txt.
 # MEASURE_MODELS, when set, keeps only the models whose names match one of
-# its patterns (e.g. "nordic-office-* core-interior"). MEASURE_SCORERS, when
+# its patterns (e.g. "nordic-office-* core-interior"); MEASURE_SKIP, when set,
+# leaves out the models whose names match one of its patterns, which is how
+# the workflow's shards split the models between runners. MEASURE_SCORERS, when
 # set, runs on the models only the steps it names: tools/re scorers, and
 # info, gltf, schema and witness ("none" for none of them; rvt-gltf runs
 # when a .glb scorer or gltf is named). A tools/re script it names that is
@@ -133,13 +135,19 @@ IFC_SCORERS="class_sets_vs_ifc aggregates_vs_ifc global_ids_vs_ifc names_vs_ifc 
 room_names_vs_ifc type_objects_vs_ifc layer_sets_vs_ifc element_materials_vs_ifc
 material_colours_vs_ifc openings_vs_ifc opening_hosts_vs_ifc opening_boxes_vs_ifc
 door_bodies_vs_ifc door_window_sizes_vs_ifc oriented_boxes_vs_ifc plan_profiles_vs_ifc
-pipe_bodies_vs_ifc duct_bodies_vs_ifc roof_bodies_vs_ifc stair_bodies_vs_ifc ports_vs_ifc psets_vs_ifc qtos_vs_ifc saved_meshes_vs_ifc tagged_spaces_vs_ifc port_places_vs_ifc predefined_types_vs_ifc box_bodies_vs_ifc column_bodies_vs_ifc mesh_bodies_vs_ifc wall_ends_list wall_heights_vs_ifc frames_vs_ifc space_profiles_vs_ifc space_overlaps_vs_ifc"
+pipe_bodies_vs_ifc duct_bodies_vs_ifc roof_bodies_vs_ifc stair_bodies_vs_ifc ports_vs_ifc psets_vs_ifc qtos_vs_ifc saved_meshes_vs_ifc tagged_spaces_vs_ifc port_places_vs_ifc predefined_types_vs_ifc box_bodies_vs_ifc column_bodies_vs_ifc mesh_bodies_vs_ifc wall_ends_list wall_heights_vs_ifc frames_vs_ifc space_profiles_vs_ifc space_overlaps_vs_ifc
+unfilled_openings_vs_ifc"
 GLB_SCORERS="wall_bodies_vs_ifc wall_ends_cv_vs_ifc wall_layers_vs_ifc slab_layers_vs_ifc glb_material_colours_vs_ifc"
 
 read -ra MODEL_PATTERNS <<< "${MEASURE_MODELS:-}"
+read -ra SKIP_PATTERNS <<< "${MEASURE_SKIP:-}"
 read -ra STEPS <<< "${MEASURE_SCORERS:-}"
 wanted_model() { # name
   local pattern
+  for pattern in "${SKIP_PATTERNS[@]}"; do
+    # shellcheck disable=SC2254 # each is a pattern
+    case "$1" in $pattern) return 1 ;; esac
+  done
   [ "${#MODEL_PATTERNS[@]}" -gt 0 ] || return 0
   for pattern in "${MODEL_PATTERNS[@]}"; do
     # shellcheck disable=SC2254 # each is a pattern
