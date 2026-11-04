@@ -790,31 +790,30 @@ enum SlabShape {
     Unread(&'static str),
 }
 
-/// The shape of the floor whose native record is `graph`: `None` only where
-/// it holds no `SlabShapeEditGStep`. Once there is one, a floor is
-/// [`SlabShape::Unedited`] only where every step says no vertex is moved and
-/// nothing is added; a step whose fields are not all read, or steps that
-/// disagree, make it [`SlabShape::Unread`] (#1384).
-fn slab_shape(graph: &crate::native_parameters::ObjectGraph) -> Option<SlabShape> {
-    let mut steps = graph
+/// The shape of the floor whose native record is `graph`: [`SlabShape::Unedited`]
+/// where it holds no `SlabShapeEditGStep` or every one says no vertex is moved
+/// and nothing is added. A step whose fields are not all read makes it
+/// [`SlabShape::Unread`]; so do steps that disagree, and an unedited step beside
+/// an edited one, since the order of the steps is not known (#1384).
+fn slab_shape(graph: &crate::native_parameters::ObjectGraph) -> SlabShape {
+    let steps: Vec<SlabShape> = graph
         .objects
         .iter()
         .filter(|object| object.class_name == "SlabShapeEditGStep")
-        .peekable();
-    steps.peek()?;
-    let mut edited: Option<SlabShape> = None;
-    for step in steps {
-        let shape = slab_step_shape(&step.fields);
-        if shape == SlabShape::Unedited {
-            continue;
-        }
-        match &edited {
-            None => edited = Some(shape),
-            Some(held) if *held == shape && !matches!(shape, SlabShape::Unread(_)) => {}
-            Some(_) => return Some(SlabShape::Unread("shape_edit_steps_disagree")),
-        }
+        .map(|object| slab_step_shape(&object.fields))
+        .collect();
+    if steps.iter().all(|step| *step == SlabShape::Unedited) {
+        return SlabShape::Unedited;
     }
-    Some(edited.unwrap_or(SlabShape::Unedited))
+    match steps.as_slice() {
+        [only] => only.clone(),
+        [first, rest @ ..]
+            if !matches!(first, SlabShape::Unread(_)) && rest.iter().all(|step| step == first) =>
+        {
+            first.clone()
+        }
+        _ => SlabShape::Unread("shape_edit_steps_disagree"),
+    }
 }
 
 /// What one `SlabShapeEditGStep` says: its corner vertices, each given at its
@@ -927,6 +926,13 @@ pub fn slab_shape_corners_from_fields(fields: &[(String, InstanceField)]) -> Vec
         .collect()
 }
 
+/// Whether the plate was read ([`SLAB_SHAPE_READ_FIELD`], #1384).
+pub fn slab_shape_read_from_fields(fields: &[(String, InstanceField)]) -> bool {
+    fields.iter().any(|(name, value)| {
+        name == SLAB_SHAPE_READ_FIELD && matches!(value, InstanceField::Bool(true))
+    })
+}
+
 /// The reason [`SLAB_SHAPE_UNREAD_FIELD`] records: why a shape-edited floor's
 /// top is not read (#1384).
 pub fn slab_shape_unread_from_fields(fields: &[(String, InstanceField)]) -> Option<&str> {
@@ -941,12 +947,14 @@ pub fn slab_shape_unread_from_fields(fields: &[(String, InstanceField)]) -> Opti
 /// that cuts one element with another, and no `WallCutoutGStep`, the cut a
 /// hosted symbol makes. Revit's export measures a cut floor's `NetVolume` less
 /// the cut, which the floor's profile and layers do not give. An element whose
-/// record is not read, on a release the native record path does not read, is
-/// not marked.
+/// record is not read, on a release the native record path does not read, or
+/// when the pass fails, is not marked.
 ///
-/// The same pass gives a floor whose `SlabShapeEditGStep` moves its corner
-/// vertices the plane of its top ([`SLAB_TOP_PLANE_FIELD`]), and one whose
-/// edits are not read the reason ([`SLAB_SHAPE_UNREAD_FIELD`], #1384).
+/// The same pass marks each plate it read ([`SLAB_SHAPE_READ_FIELD`]) and gives
+/// a floor whose `SlabShapeEditGStep` moves its corner vertices the plane of
+/// its top ([`SLAB_TOP_PLANE_FIELD`]), and one whose edits are not read the
+/// reason ([`SLAB_SHAPE_UNREAD_FIELD`], #1384). A plate without the read mark
+/// has no known top, and nothing may take it for flat.
 pub(super) fn attach_slab_uncut(rf: &mut RevitFile, lists: &mut [&mut Vec<DecodedElement>]) {
     let ids: BTreeSet<u64> = lists
         .iter()
@@ -963,8 +971,10 @@ pub(super) fn attach_slab_uncut(rf: &mut RevitFile, lists: &mut [&mut Vec<Decode
     };
     let mut cut: BTreeMap<u64, bool> = BTreeMap::new();
     let mut shapes: BTreeMap<u64, SlabShape> = BTreeMap::new();
+    let mut blind: BTreeSet<u64> = BTreeSet::new();
     let read = crate::native_document::extract_graphs(rf, &options, |record| {
         let Some(graph) = record.graph.as_ref() else {
+            blind.insert(record.identity.element_id);
             return Ok(());
         };
         let steps = graph.objects.iter().any(|object| {
@@ -974,24 +984,36 @@ pub(super) fn attach_slab_uncut(rf: &mut RevitFile, lists: &mut [&mut Vec<Decode
             )
         });
         *cut.entry(record.identity.element_id).or_default() |= steps;
-        if let Some(shape) = slab_shape(graph) {
-            let held = shapes
-                .entry(record.identity.element_id)
-                .or_insert_with(|| shape.clone());
-            if *held != shape {
-                *held = SlabShape::Unread("record_copies_disagree");
-            }
+        let shape = slab_shape(graph);
+        let held = shapes
+            .entry(record.identity.element_id)
+            .or_insert_with(|| shape.clone());
+        if *held != shape {
+            *held = SlabShape::Unread("record_copies_disagree");
         }
         Ok(())
     });
     if read.is_err() {
         return;
     }
+    // A copy of a record that was not read beside one that was: the top is not
+    // known.
+    for id in &blind {
+        if let Some(shape) = shapes.get_mut(id) {
+            *shape = SlabShape::Unread("record_copy_not_read");
+        }
+    }
     for element in lists.iter_mut().flat_map(|list| list.iter_mut()) {
         if !is_plate(element) {
             continue;
         }
         let id = element.id.map(u64::from);
+        // A plate with no record read keeps neither mark: its top is unknown.
+        if id.is_some_and(|id| shapes.contains_key(&id)) {
+            element
+                .fields
+                .push((SLAB_SHAPE_READ_FIELD.into(), InstanceField::Bool(true)));
+        }
         if id.and_then(|id| cut.get(&id)).is_some_and(|seen| !seen) {
             element
                 .fields

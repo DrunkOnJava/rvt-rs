@@ -418,6 +418,12 @@ pub const SLAB_UNCUT_FIELD: &str = "m_slab_uncut";
 /// shape-edits its corner vertices (`SlabShapeEditGStep`, #1384, RE-336).
 pub const SLAB_TOP_PLANE_FIELD: &str = "m_slab_top_plane";
 
+/// Field set on a floor, ceiling or roof whose native record was read, with
+/// the shape it holds (or none) given by [`SLAB_TOP_PLANE_FIELD`] or
+/// [`SLAB_SHAPE_UNREAD_FIELD`] or by neither (#1384): the mark that its top is
+/// known to be flat where it has neither. A plate without it was not read.
+pub const SLAB_SHAPE_READ_FIELD: &str = "m_slab_shape_read";
+
 /// Field holding, as a flat vector of floats `[x0, y0, x1, y1, ...]`, the plan
 /// place of each corner vertex of a floor whose shape-edited corners lie in one
 /// plane ([`SLAB_TOP_PLANE_FIELD`], #1384): the places the plane is made from,

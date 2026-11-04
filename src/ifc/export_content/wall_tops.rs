@@ -914,6 +914,18 @@ pub(super) fn cut_wall_tops(entities: &mut [IfcEntity], pending: &[Pending]) {
     }
 }
 
+/// What the wall pass knows of the top of a floor, roof or ceiling (#1384).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(super) enum SlabTop {
+    /// Its record was read and no vertex of its top is moved.
+    Flat,
+    /// Its top is the plane `z = a·x + b·y + c`.
+    Plane(PlanPlane),
+    /// Its top is not known: its record was not read, or its shape edits are
+    /// not, or it is a roof or a ceiling with an edit.
+    NotRead,
+}
+
 /// A wall whose base join names elements, waiting for the pass (#1384).
 pub(super) struct PendingBase {
     /// The wall's entity index.
@@ -986,7 +998,7 @@ enum BaseDecision {
 struct BaseContext<'a> {
     entities: &'a [IfcEntity],
     gathered: Gathered<'a>,
-    shapes: &'a HashMap<u32, Option<PlanPlane>>,
+    shapes: &'a HashMap<u32, SlabTop>,
 }
 
 /// How the base of `wall` (the entity at `index`) is cut at the one element of
@@ -1020,16 +1032,23 @@ fn decide_base(
     let mut above = false;
     let mut below = false;
     for &id in named {
+        // First of all, before the element is looked for among those that cut:
+        // a floor, roof or ceiling whose top is not known leaves the wall,
+        // whatever else the wall names.
+        let top = shapes.get(&id).copied();
+        if top == Some(SlabTop::NotRead) {
+            return BaseDecision::Left("slab_shape_not_read");
+        }
+        let plane = match top {
+            Some(SlabTop::Plane(plane)) => Some(plane),
+            _ => None,
+        };
         let Some(found) = gathered.pieces.get(&id) else {
             continue;
         };
-        let shape = shapes.get(&id);
-        if matches!(shape, Some(None)) {
-            return BaseDecision::Left("slab_shape_not_read");
-        }
         let Some(cutter) = cutters
             .entry(id)
-            .or_insert_with(|| build_cutter(entities, found, &gathered.voids, shape.is_some()))
+            .or_insert_with(|| build_cutter(entities, found, &gathered.voids, plane.is_some()))
             .as_ref()
         else {
             continue;
@@ -1038,8 +1057,8 @@ fn decide_base(
         if !covers(cutter, &wall) {
             continue;
         }
-        let (low, high, cut) = match shape {
-            Some(Some(plane)) => {
+        let (low, high, cut) = match plane {
+            Some(plane) => {
                 let (low, high) = wall
                     .plan
                     .iter()
@@ -1047,7 +1066,7 @@ fn decide_base(
                     .fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), h| {
                         (lo.min(h), hi.max(h))
                     });
-                (low, high, BaseCut::Plane { plane: *plane, id })
+                (low, high, BaseCut::Plane { plane, id })
             }
             _ => (
                 cutter.top,
@@ -1089,7 +1108,7 @@ fn decide_base(
 fn decide_bases(
     entities: &[IfcEntity],
     pending: &[PendingBase],
-    shapes: &HashMap<u32, Option<PlanPlane>>,
+    shapes: &HashMap<u32, SlabTop>,
 ) -> Vec<(usize, BaseDecision)> {
     let context = BaseContext {
         entities,
@@ -1100,7 +1119,9 @@ fn decide_bases(
     let mut decisions = Vec::new();
     for PendingBase { index, named } in pending {
         let decision = decide_base(&context, &mut cutters, *index, named);
-        let edited = named.iter().any(|id| shapes.contains_key(id));
+        let edited = named
+            .iter()
+            .any(|id| matches!(shapes.get(id), Some(SlabTop::Plane(_) | SlabTop::NotRead)));
         if matches!(decision, BaseDecision::Cut(_)) || edited {
             decisions.push((*index, decision));
         }
@@ -1117,7 +1138,7 @@ fn decide_bases(
 pub(super) fn cut_wall_bases(
     entities: &mut [IfcEntity],
     pending: &[PendingBase],
-    shapes: &HashMap<u32, Option<PlanPlane>>,
+    shapes: &HashMap<u32, SlabTop>,
 ) {
     if pending.is_empty() {
         return;
