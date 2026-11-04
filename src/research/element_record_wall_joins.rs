@@ -991,15 +991,31 @@ enum Meets {
 struct CornerMember {
     id: u32,
     meets: Meets,
+    /// Plan unit vector along the member, away from the joint.
+    away: [f64; 2],
     x: f64,
     y: f64,
     thickness_feet: f64,
     layered: bool,
 }
 
+/// How a wall is cut at one end of a corner (RE-322).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum CornerEnd {
+    /// The body ends square, this far past its line's end (negative where it
+    /// stops short), every layer alike.
+    Reach(f64),
+    /// The wall meets one other wall at a mitre: its end is the slanted line
+    /// through the two walls' outer corner and inner corner. How far past its
+    /// line's end it reaches along its exterior-side edge and along its
+    /// interior-side edge, feet.
+    Mitre([f64; 2]),
+}
+
 /// The end of the wall `wall` at `slot` (0 its start, 1 its end), where three
 /// or more walls meet end to end at a butt join, from the order the record
-/// lists them (RE-322).
+/// lists them, or where two single-layer walls meet at right angles at a mitre
+/// (RE-322).
 ///
 /// Counting only the walls that overlap `wall` in elevation, the record lists
 /// the walls of a corner in the order Revit joined them, and an earlier wall
@@ -1023,10 +1039,16 @@ struct CornerMember {
 /// - `wall` has one layer, or has several and stops against walls of one
 ///   layer each: against a layered wall, Revit's layers nest and a rule for
 ///   the outermost does not give the others (RE-322 section 5).
+///
+/// A mitre (`m_wallJoinType` 1) of two single-layer walls whose lines end at
+/// one point at right angles ends each on the line through the outer corner,
+/// where the outer faces meet, and the inner corner, where the inner faces
+/// meet: half the other wall's thickness past the line's end along the outer
+/// edge, and as much short of it along the inner.
 pub fn corner_joins(
     walls: &[WallLine],
     native: &BTreeMap<u32, NativeEnds>,
-) -> BTreeMap<u32, [Option<f64>; 2]> {
+) -> BTreeMap<u32, [Option<CornerEnd>; 2]> {
     let by_id: BTreeMap<u32, &WallLine> =
         walls.iter().map(|wall| (wall.element_id, wall)).collect();
     let mut out = BTreeMap::new();
@@ -1034,21 +1056,26 @@ pub fn corner_joins(
         let Some(ends) = native.get(&wall.element_id).filter(|e| !e.other_cutters) else {
             continue;
         };
-        let reaches = [0, 1].map(|slot| corner_reach(wall, slot, ends, &by_id));
-        if reaches.iter().any(Option::is_some) {
-            out.insert(wall.element_id, reaches);
+        let cuts = [0, 1].map(|slot| corner_end(wall, slot, ends, &by_id));
+        if cuts.iter().any(Option::is_some) {
+            out.insert(wall.element_id, cuts);
         }
     }
     out
 }
 
-fn corner_reach(
+fn corner_end(
     wall: &WallLine,
     slot: usize,
     ends: &NativeEnds,
     by_id: &BTreeMap<u32, &WallLine>,
-) -> Option<f64> {
-    if ends.join_types[slot] != Some(0) || wall.layers.is_empty() {
+) -> Option<CornerEnd> {
+    let mitred = match ends.join_types[slot] {
+        Some(0) => false,
+        Some(1) => true,
+        _ => return None,
+    };
+    if wall.layers.is_empty() {
         return None;
     }
     let end_index = u32::try_from(slot).ok()?;
@@ -1079,6 +1106,7 @@ fn corner_reach(
             corner.push(CornerMember {
                 id,
                 meets: Meets::Itself,
+                away: [0.0, 0.0],
                 x: 0.0,
                 y: 0.0,
                 thickness_feet: wall.thickness_feet,
@@ -1122,6 +1150,7 @@ fn corner_reach(
         corner.push(CornerMember {
             id,
             meets,
+            away: [(beyond[0] - joint[0]) / run, (beyond[1] - joint[1]) / run],
             x,
             y,
             thickness_feet: other.thickness_feet,
@@ -1129,6 +1158,13 @@ fn corner_reach(
         });
     }
     let itself = itself?;
+    if mitred {
+        let [first, second] = corner[..] else {
+            return None;
+        };
+        let other = if itself == 0 { second } else { first };
+        return mitre_end(wall, &other);
+    }
     if corner.len() < 3 || !corner.iter().any(|member| member.meets == Meets::Across) {
         return None;
     }
@@ -1151,7 +1187,7 @@ fn corner_reach(
         if layered_wall && layered_others {
             return None;
         }
-        return agreed(earlier).map(|(low, _)| low);
+        return agreed(earlier).map(|(low, _)| CornerEnd::Reach(low));
     }
     if layered_wall {
         return None;
@@ -1166,12 +1202,37 @@ fn corner_reach(
         .iter()
         .any(|member| member.meets == Meets::Along)
     {
-        return Some(0.0);
+        return Some(CornerEnd::Reach(0.0));
     }
     let faces: Vec<f64> = later
         .iter()
         .filter(|member| member.meets == Meets::Across)
         .map(|member| member.x + member.thickness_feet / 2.0)
         .collect();
-    agreed(faces).map(|(_, high)| high)
+    agreed(faces).map(|(_, high)| CornerEnd::Reach(high))
+}
+
+/// The mitre `wall` makes with `other` at one end, when both walls have one
+/// layer, `other` runs away at a right angle from the point `wall`'s line ends
+/// at, and its own line ends there too.
+fn mitre_end(wall: &WallLine, other: &CornerMember) -> Option<CornerEnd> {
+    if other.meets != Meets::Across
+        || other.layered
+        || wall.layers.len() != 1
+        || other.x.abs() > CORNER_AGREE_FEET
+        || other.y.abs() > CORNER_AGREE_FEET
+    {
+        return None;
+    }
+    let half = other.thickness_feet / 2.0;
+    let towards = wall.exterior[0] * other.away[0] + wall.exterior[1] * other.away[1];
+    if towards.abs() < 0.5 {
+        return None;
+    }
+    // The outer corner is on the side the other wall runs away from.
+    Some(CornerEnd::Mitre(if towards > 0.0 {
+        [-half, half]
+    } else {
+        [half, -half]
+    }))
 }

@@ -328,7 +328,8 @@ fn wall_lines(
 /// ([`crate::element_record_wall_joins::corner_joins`], RE-322): how far past
 /// its line's end the body reaches, every layer alike, in place of the reach a
 /// join list or a T joint gave that end. Such an end has no one partner, so
-/// none is named.
+/// none is named. Two single-layer walls that meet at a mitre get the slanted
+/// end it makes, along their exterior-side and interior-side edges.
 pub(super) fn attach_wall_corner_reaches(
     walls: &mut [DecodedElement],
     type_layers: &BTreeMap<u32, Vec<crate::partition_compound_structure::CompoundLayer>>,
@@ -370,8 +371,8 @@ pub(super) fn attach_wall_corner_reaches(
         let Some((id, reaches)) = wall.id.and_then(|id| Some((id, found.get(&id)?))) else {
             continue;
         };
-        for (slot, reach) in reaches.iter().enumerate() {
-            let Some(reach) = *reach else {
+        for (slot, cut) in reaches.iter().enumerate() {
+            let Some(cut) = *cut else {
                 continue;
             };
             let replaced = [
@@ -384,14 +385,24 @@ pub(super) fn attach_wall_corner_reaches(
             wall.fields
                 .retain(|(name, _)| !replaced.contains(&name.as_str()));
             let float = |value: f64| InstanceField::Float { value, size: 8 };
-            wall.fields
-                .push((WALL_JOIN_REACH_FIELDS[slot].into(), float(reach)));
-            let layers = layer_counts.get(&id).copied().unwrap_or(1);
-            if layers > 1 {
-                wall.fields.push((
-                    WALL_JOIN_LAYER_REACH_FIELDS[slot].into(),
-                    InstanceField::Vector(vec![float(reach); layers]),
-                ));
+            match cut {
+                joins::CornerEnd::Reach(reach) => {
+                    wall.fields
+                        .push((WALL_JOIN_REACH_FIELDS[slot].into(), float(reach)));
+                    let layers = layer_counts.get(&id).copied().unwrap_or(1);
+                    if layers > 1 {
+                        wall.fields.push((
+                            WALL_JOIN_LAYER_REACH_FIELDS[slot].into(),
+                            InstanceField::Vector(vec![float(reach); layers]),
+                        ));
+                    }
+                }
+                joins::CornerEnd::Mitre(edges) => {
+                    wall.fields.push((
+                        WALL_JOIN_LAYER_EDGE_REACH_FIELDS[slot].into(),
+                        InstanceField::Vector(edges.into_iter().map(float).collect()),
+                    ));
+                }
             }
         }
     }
