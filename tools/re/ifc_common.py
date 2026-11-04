@@ -11,6 +11,7 @@ import time
 
 import ifcopenshell.geom
 import ifcopenshell.util.placement
+import ifcopenshell.util.unit
 import numpy as np
 
 FEET = 0.3048
@@ -19,13 +20,17 @@ MESH_ERRORS = set()
 
 def site_frame(f):
     """Shared metres (IfcOpenShell world) -> Revit internal feet; a file with
-    no IfcSite is taken as placed at the origin."""
+    no IfcSite is taken as placed at the origin. The site's placement is in the
+    file's length unit (millimetres in the held-out 2026 house's and Gdynia's
+    exports), so its origin is scaled to metres first: read as metres, it put
+    Revit's side of every comparison 1000 times its offset from rvt-rs's."""
     sites = f.by_type("IfcSite")
     if not sites:
         return lambda v: v / FEET
     site = sites[0]
     mat = ifcopenshell.util.placement.get_local_placement(site.ObjectPlacement)
-    ox, oy, oz = mat[0][3], mat[1][3], mat[2][3]
+    unit = ifcopenshell.util.unit.calculate_unit_scale(f)
+    ox, oy, oz = mat[0][3] * unit, mat[1][3] * unit, mat[2][3] * unit
     c, s = mat[0][0], mat[1][0]
 
     def points(v):

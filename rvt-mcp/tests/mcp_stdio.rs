@@ -325,7 +325,7 @@ async fn drive(client: &Client, modern: bool, model: &Path, out: &Path, real_pro
     assert!(error_text(&missing).contains("list_elements"));
 
     if let Some(first) = rows.iter().find(|row| row["id"].is_string()) {
-        element_checks(client, &model_id, first, out).await;
+        element_checks(client, &model_id, first, model, out).await;
     }
 
     // Exports: a summary and a link, the file where it was asked for.
@@ -471,9 +471,88 @@ async fn drive(client: &Client, modern: bool, model: &Path, out: &Path, real_pro
     }
 }
 
+/// Where the element's record sits (#1325): its carrier names a stream that
+/// agrees with it, and the ElementId is where `record_offset` says in the
+/// partition as `rvt-dump` writes it (`Partitions_NN.decomp`), read here from
+/// the file itself rather than through the server.
+fn record_checks(model: &Path, detail: &Value) {
+    let provenance = &detail["provenance"];
+    if provenance["provenance_omitted"].as_bool() == Some(true) {
+        // Past the cap on the listed entries: the file says how many.
+        assert!(
+            detail["file"]["omitted_entries"]
+                .as_u64()
+                .is_some_and(|omitted| omitted > 0),
+            "{detail}"
+        );
+        assert!(provenance["carrier"].is_null());
+        return;
+    }
+    let carrier = provenance["carrier"]
+        .as_str()
+        .expect("every decoded element has a carrier");
+    let stream = provenance["stream"].as_str();
+    if carrier == "global_latest_schema_walk" {
+        assert_eq!(stream, Some("Global/Latest"));
+        assert!(provenance["offset"].is_u64(), "{provenance}");
+        assert!(provenance["record_offset"].is_null());
+    }
+    if carrier.starts_with("partition_element_record") {
+        assert!(
+            stream.is_some_and(|stream| stream.starts_with("Partitions/")),
+            "{provenance}"
+        );
+        assert!(provenance["offset"].is_u64(), "{provenance}");
+        assert!(provenance["class_tag"].is_u64(), "{provenance}");
+        assert!(provenance["class_name"].is_string(), "{provenance}");
+    }
+    assert!(detail["file"]["partition_count"].is_u64());
+    let (Some(stream), Some(record_offset)) = (
+        stream.filter(|stream| stream.starts_with("Partitions/")),
+        provenance["record_offset"].as_u64(),
+    ) else {
+        return;
+    };
+    let id: u64 = provenance["element_id"]
+        .as_str()
+        .expect("element id")
+        .parse()
+        .expect("a numeric ElementId");
+    let width = if detail["file"]["layout_release"]
+        .as_u64()
+        .is_some_and(|release| release >= 2024)
+    {
+        8
+    } else {
+        4
+    };
+    let mut file = rvt::RevitFile::open(model).expect("open the model");
+    let inflated = file
+        .inflated_partition(stream)
+        .expect("inflate the partition");
+    let at = usize::try_from(record_offset).expect("an offset");
+    let stored = inflated
+        .bytes()
+        .get(at..at + width)
+        .expect("the offset is inside the partition");
+    let mut word = [0u8; 8];
+    word[..width].copy_from_slice(stored);
+    assert_eq!(
+        u64::from_le_bytes(word),
+        id,
+        "the ElementId at {stream}:{record_offset}"
+    );
+    if carrier == "partition_element_record_second_prologue" {
+        assert_eq!(
+            provenance["enclosing_record_id"].as_str(),
+            provenance["element_id"].as_str()
+        );
+    }
+}
+
 /// `get_element` on the first listed element: provenance, lookup by either id,
 /// and the GlobalId in the IFC the export writes.
-async fn element_checks(client: &Client, model_id: &str, row: &Value, out: &Path) {
+async fn element_checks(client: &Client, model_id: &str, row: &Value, model: &Path, out: &Path) {
     let id = row["id"].as_str().expect("element id");
     let detail = answer(
         &call(
@@ -498,6 +577,7 @@ async fn element_checks(client: &Client, model_id: &str, row: &Value, out: &Path
         .expect("every building element has a GlobalId")
         .to_string();
     assert_eq!(global_id.len(), 22, "{global_id}");
+    record_checks(model, &detail);
 
     let by_global = answer(
         &call(

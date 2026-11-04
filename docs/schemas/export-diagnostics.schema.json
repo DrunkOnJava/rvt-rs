@@ -192,6 +192,152 @@
             "minimum": 0
           },
           "uniqueItems": true
+        },
+        "element_provenance": {
+          "type": "object",
+          "description": "Where each decoded element was read from, by ElementId (#1325): the carrier of its record, the stream and byte offset in that stream inflated (the bytes rvt-dump writes as Partitions_NN.decomp), where its ElementId is stored, its class tag and the class that names in the file's own schema, and its native record. Not written in the IFC file. Present only when asked for (rvt-ifc --element-provenance): it is about 116 times the rest of the diagnostics in compact JSON on the BIM4LCA office as built (4,462,401 bytes against 38,640), and 140 times in the CLI's pretty-printed sidecar. Absent for a placeholder export. An element whose offset cannot be given is listed without one and counted in by_carrier.",
+          "properties": {
+            "layout_release": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "The release whose record layout the file takes."
+            },
+            "partition_count": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "How many Partitions/NN streams the file has."
+            },
+            "record_id_bytes": {
+              "type": "integer",
+              "enum": [4, 8],
+              "description": "The width of the ElementId stored at a partition record's first bytes: 8 from Revit 2024, 4 on 2008 to 2023."
+            },
+            "native_record_index": {
+              "type": "boolean",
+              "description": "Whether the export's native passes built the index of native records; an element's native record is given only where they did."
+            },
+            "unkeyed_elements": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Decoded elements with no ElementId, which have no entry."
+            },
+            "by_carrier": {
+              "type": "object",
+              "description": "Every element with an ElementId, counted by carrier, whatever the cap on the listed entries: how many have their stream and offset given and how many do not.",
+              "additionalProperties": {
+                "type": "object",
+                "required": ["elements", "located", "unlocated"],
+                "properties": {
+                  "elements": { "type": "integer", "minimum": 0 },
+                  "located": { "type": "integer", "minimum": 0 },
+                  "unlocated": { "type": "integer", "minimum": 0 }
+                }
+              }
+            },
+            "native": {
+              "type": "object",
+              "description": "The native records of every element with an ElementId, the omitted ones included: how many there are, how many have their partition and offset given, how many elements have a copy in several partitions (RE-216) and how many of those have no copy named current.",
+              "properties": {
+                "with_record": { "type": "integer", "minimum": 0 },
+                "located": { "type": "integer", "minimum": 0 },
+                "unlocated": { "type": "integer", "minimum": 0 },
+                "several_copies": { "type": "integer", "minimum": 0 },
+                "copy_unresolved": { "type": "integer", "minimum": 0 }
+              }
+            },
+            "omitted_entries": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Elements left out of elements by the cap on the listed entries, the highest ElementIds; they are counted in by_carrier."
+            },
+            "elements": {
+              "type": "object",
+              "description": "Each element's provenance, keyed by ElementId.",
+              "propertyNames": {
+                "pattern": "^[0-9]+$"
+              },
+              "additionalProperties": {
+                "type": "object",
+                "required": ["carrier"],
+                "properties": {
+                  "carrier": {
+                    "type": "string",
+                    "enum": [
+                      "partition_element_record_first_prologue",
+                      "partition_element_record_second_prologue",
+                      "global_latest_schema_walk",
+                      "partition_arc_wall",
+                      "partition_area_record",
+                      "partition_derived",
+                      "other"
+                    ],
+                    "description": "The kind of record the element was read from."
+                  },
+                  "stream": {
+                    "type": "string",
+                    "description": "The stream the record is in: Partitions/NN or Global/Latest."
+                  },
+                  "offset": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "description": "Where the record or frame starts in that stream inflated: the frame the exporter selected among the element's frames (Revit 2024 and later: the greatest vertical extent, then the greater stream and offset; 2008 to 2023: the newest), which a body reader may not have taken. It and native.stream can name different partitions, and neither is guaranteed to be the copy a body came from. For the global_latest_schema_walk carrier it indexes Global/Latest as the walk inflates it; that carrier is unmeasured."
+                  },
+                  "record_offset": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "description": "Where the ElementId is stored: the partition record header whose first bytes are the id (the frame's own start for a first-prologue frame, the enclosing record's start for a second-prologue one)."
+                  },
+                  "enclosing_record_id": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "description": "For a second-prologue frame, the ElementId of the partition record that encloses it (RE-35)."
+                  },
+                  "class_tag": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 65535,
+                    "description": "The class tag the record names."
+                  },
+                  "class_name": {
+                    "type": "string",
+                    "description": "The class that tag resolves to in the file's own Formats/Latest."
+                  },
+                  "builtin_category": {
+                    "type": "integer",
+                    "description": "The element record's BuiltInCategory (a negative OST_* id)."
+                  },
+                  "native": {
+                    "type": "object",
+                    "required": ["copies", "copy"],
+                    "description": "The element's native record, where the export's native passes indexed one.",
+                    "properties": {
+                      "copies": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "description": "In how many partitions the element has a native record."
+                      },
+                      "copy": {
+                        "type": "string",
+                        "enum": ["only", "current", "unresolved"],
+                        "description": "Which copy stream and offset name: the only one, the current one of several (RE-216), or none because none could be named current."
+                      },
+                      "stream": {
+                        "type": "string",
+                        "description": "The partition of that copy. It can differ from the element's stream, and neither is guaranteed to be the copy a body came from."
+                      },
+                      "offset": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "description": "Where the record's header starts in the partition inflated; the ElementId is the first bytes there. Absent when the record's group is not a span of the inflated stream."
+                      },
+                      "class_tag": { "type": "integer", "minimum": 0, "maximum": 65535 },
+                      "class_name": { "type": "string" }
+                    }
+                  }
+                }
+              }
+            }
+          }
         }
       }
     },

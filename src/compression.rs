@@ -451,6 +451,15 @@ impl InflatedStream {
         self.members.get(index).map(|&(_, consumed)| consumed)
     }
 
+    /// Where member `index` starts in the concatenated inflated bytes
+    /// ([`Self::bytes`]).
+    pub(crate) fn member_start(&self, index: usize) -> Option<usize> {
+        if index >= self.chunk_ends.len() {
+            return None;
+        }
+        Some(index.checked_sub(1).map_or(0, |prev| self.chunk_ends[prev]))
+    }
+
     /// The inflated bytes of members `first` to `last` together, which are
     /// stored one after the other.
     pub(crate) fn members_span(&self, first: usize, last: usize) -> Option<&[u8]> {

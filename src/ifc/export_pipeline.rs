@@ -84,6 +84,12 @@ pub struct ExportOptions {
     /// [`Error::InvalidInput`](crate::Error::InvalidInput) listing the file's
     /// phases.
     pub phase: Option<String>,
+    /// Also list where each decoded element was read from in the diagnostics
+    /// (`decoded.element_provenance`, `rvt-ifc --element-provenance`, #1325).
+    /// Off by default: the table is large (on the BIM4LCA office as built
+    /// 4,462,401 bytes of compact JSON against 38,640 bytes of diagnostics
+    /// without it, about 116 times) and never goes into the IFC.
+    pub element_provenance: bool,
 }
 
 impl Default for ExportOptions {
@@ -97,6 +103,7 @@ impl Default for ExportOptions {
             revit_set_placement: false,
             no_base_quantities: false,
             phase: None,
+            element_provenance: false,
         }
     }
 }
@@ -158,6 +165,16 @@ impl ExportOptions {
     #[must_use]
     pub fn with_phase(mut self, phase: Option<String>) -> Self {
         self.phase = phase;
+        self
+    }
+
+    /// Whether the diagnostics list where each decoded element was read from
+    /// ([`ElementProvenanceTable`](super::element_provenance::ElementProvenanceTable)).
+    /// Off by default; the diagnostics are then the bytes they were before
+    /// the option existed.
+    #[must_use]
+    pub fn with_element_provenance(mut self, element_provenance: bool) -> Self {
+        self.element_provenance = element_provenance;
         self
     }
 }
@@ -426,11 +443,13 @@ pub fn run_export_with_limits(
 ///
 /// 1. the phase, when `options.phase` names one (before anything is read);
 /// 2. the exporter `options.kind` names, under `limits`;
-/// 3. the bodies drawn from saved graphics, for the Document and
+/// 3. the element provenance table in the diagnostics, when asked, from the
+///    walk step 2 made;
+/// 4. the bodies drawn from saved graphics, for the Document and
 ///    DiagnosticProxies kinds;
-/// 4. Revit's parameter sets and their placement, when asked;
-/// 5. the base quantities left out, when asked;
-/// 6. the unread streams recorded in the diagnostics, which steps 3 and 4 may
+/// 5. Revit's parameter sets and their placement, when asked;
+/// 6. the base quantities left out, when asked;
+/// 7. the unread streams recorded in the diagnostics, which steps 4 and 5 may
 ///    have added to.
 ///
 /// The saved graphics, the parameter sets and the placement only add to the
@@ -478,6 +497,13 @@ pub fn run_export_with_limits_and_control(
     let mut model = result.model;
     let mut diagnostics = result.diagnostics;
     let mut notes = Vec::new();
+
+    // #1325: built from the walk the exporter just made, which the handle
+    // memoised, before the steps below touch the handle again.
+    if options.element_provenance && options.kind != ExportKind::Placeholder {
+        control.check()?;
+        diagnostics.decoded.element_provenance = Some(super::element_provenance::build(rf, limits));
+    }
 
     let scope = match (options.kind, options.saved_meshes) {
         (ExportKind::Placeholder, _) | (_, SavedMeshChoice::Off) => None,

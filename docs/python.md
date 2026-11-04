@@ -104,7 +104,7 @@ Every signature below is verified against
 rvt.__version__  # str — same as the Rust crate version (Cargo.toml)
 
 rvt.rvt_to_ifc(path: str, mode: str = "scaffold", allow_partial: bool = False, saved_meshes: bool = True, phase: str | int | None = None) -> str
-rvt.rvt_to_ifc_diagnostics(path: str, saved_meshes: bool = True, phase: str | int | None = None) -> str
+rvt.rvt_to_ifc_diagnostics(path: str, saved_meshes: bool = True, phase: str | int | None = None, element_provenance: bool = False) -> str
 rvt.read_metadata(path: str, redact: bool = False) -> dict
 ```
 
@@ -135,7 +135,7 @@ but the exporter can't build a model, the requested export mode cannot be
 satisfied, or a resource limit kept part of the file from being read and
 `allow_partial` is false.
 
-`rvt_to_ifc_diagnostics(path, saved_meshes=True, phase=None)` returns the JSON
+`rvt_to_ifc_diagnostics(path, saved_meshes=True, phase=None, element_provenance=False)` returns the JSON
 diagnostics sidecar for the same export path. The schema matches `rvt-ifc --diagnostics`
 and is documented in [`docs/export-diagnostics.md`](export-diagnostics.md);
 the machine-readable contract is
@@ -372,7 +372,7 @@ Field kinds:
 ```text
 decoded_elements(self) -> list[dict]
 element_counts(self) -> dict
-export_diagnostics(self, saved_meshes: bool = True, phase: str | int | None = None) -> dict
+export_diagnostics(self, saved_meshes: bool = True, phase: str | int | None = None, element_provenance: bool = False) -> dict
 ```
 
 `decoded_elements()` returns production-walker elements. Each entry
@@ -393,10 +393,19 @@ CLI mirror: `rvt-elements file.rvt --counts`.
 
 `export_diagnostics()` / `export_diagnostics_json()` return the IFC
 export diagnostics sidecar (same payload as `rvt-ifc --diagnostics`).
+`element_provenance=True` adds `decoded.element_provenance`, where each
+decoded element was read from (its stream, byte offset in the inflated stream,
+class and native record), as `rvt-ifc --element-provenance` does (#1325);
+`rvt_to_ifc_diagnostics()` takes it too. It is off by default: the table is
+4,462,401 bytes of compact JSON against 38,640 bytes of diagnostics without it
+(about 116 times) on the BIM4LCA office as built. An `offset` is the frame the
+exporter selected for the element, which is not guaranteed to be the copy a body
+reader took, so it can name another partition than the native record's `stream`
+([Export diagnostics](export-diagnostics.md#cli)).
 
 ```text
 write_ifc(self, mode: str = "scaffold", allow_partial: bool = False, saved_meshes: bool = True, phase: str | int | None = None) -> str
-export_diagnostics_json(self, saved_meshes: bool = True, phase: str | int | None = None) -> str
+export_diagnostics_json(self, saved_meshes: bool = True, phase: str | int | None = None, element_provenance: bool = False) -> str
 ```
 Produce an IFC4 STEP string via `ifc::RvtDocExporter`, the same
 exporter `rvt-ifc` runs. On Revit 2023, 2024 and 2025 projects it writes
