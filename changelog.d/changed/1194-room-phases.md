@@ -1,18 +1,21 @@
-- **A room's phase is read, and a room in an earlier phase than the last is
-  written and counted, not left out (#1194, RE-326).** A room's phase is the
+- **A room whose phase is not the export phase is left out, and `rvt-ifc
+  --phase` names the export phase (#1194, RE-326).** A room's phase is the
   `m_phaseId` field of its `RoomElem` record on Revit 2015 to 2027, not its
-  created phase, which is unset on every room. The 621 rooms of the 12 models
-  with a Revit export (Core Interior, RE1 Architecture, the BIM4LCA office as
-  built and at permit and its two terrain variants, six R2025 room models) are
-  all in the last phase and all in Revit's export, so none of them tells a rule
-  that leaves out a room in another phase from one that does not. The only
-  rooms in another phase are Autodesk's `rac_basic_sample_project`'s 14, in the
-  second of three phases on all 13 releases, and a public Revit 2018 export of
-  it holds all 14. Revit's exporter takes the export phase from the export
-  setup or a view and only by default the last phase, and rvt-rs reads neither,
-  so no room is left out. The export diagnostics' `warnings` give the number of
-  rooms written that are in another phase (expected from the phase probe: 14
-  on every save of that sample and none on any other model of the corpus); the
-  exported IFC does not change. Unmeasured: a Revit export made with the
-  default setup that leaves such a room out.
-  Report: `reports/element-framing/RE-326-room-phases.md`.
+  created phase, which is unset on every room. Revit's exporter leaves out a
+  room whose own phase is not the export phase, the project's last unless the
+  export setup or a view names another, and rvt-rs now does the same: the
+  diagnostics count the rooms in `skipped` as `room_not_in_export_phase`, one
+  item for each phase they sit in (`phase`, new in the diagnostics schema), and
+  `rvt-ifc --phase <name|id>` chooses the phase, which the RE-184 rule for the
+  other elements reads too. A room whose phase is unset, unread or not one of
+  the project's is written, and so is an Area or an MEP space. The 621 rooms of
+  the 12 models with a Revit export are all in the last phase and in Revit's
+  export, so none changes; the rule is unmeasured against a Revit export made
+  with the default setup, because no project in the corpus has a room outside
+  its last phase and such an export. Autodesk's `rac_basic_sample_project` has
+  14 rooms in Working Drawings, the second of three phases, which a public
+  Revit 2018 export of it holds: its saves from Revit 2016 on no longer write
+  them by default, and write them with `--phase "Working Drawings"` (to be
+  confirmed by the unfiltered Measure of this change). The Python bindings and
+  the viewer export the last phase. Report:
+  `reports/element-framing/RE-326-room-phases.md`.

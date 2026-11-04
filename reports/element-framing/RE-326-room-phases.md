@@ -4,7 +4,7 @@
 **Issue:** the "Rooms and phases" item of #1194; follows RE-184 §5 (#328).
 **Artefacts:** 12 models with rooms and a Revit export (Core Interior, RE1 Architecture, the BIM4LCA office as built and at building permit, its two terrain variants, six R2025 room models: 621 rooms), Autodesk's sample projects of every release 2015 to 2027 (no Revit export in the corpus), and one public Revit 2018 export of Autodesk's `rac_basic_sample_project` (below). Held-out models were not read.
 **Probes:** `probes/examples/probe_re326_room_phases.rs` and `probes/examples/probe_re326_phase_census.rs`; scorers `tools/re/room_phases_vs_ifc.py` and `tools/re/phase_census_vs_ifc.py`.
-**Status:** positive for where a room's phase is stored. **Negative for the rule "leave out a room that is not in the last phase"**: the one export measured that holds a room outside the last phase holds all 14 of that project's rooms, so rvt-rs applies no room phase rule, writes those rooms, and says so in the export diagnostics. What decides the export phase of that export is not in its file.
+**Status:** positive for where a room's phase is stored and for the default rule; unmeasured against a Revit export made with the default setup. A room's phase is `RoomElem.m_phaseId`. Revit's exporter leaves out a room whose phase is not the export phase, the last unless the export setup or a view names another, and rvt-rs does too, with `rvt-ifc --phase <name|id>` naming the export phase (Griffin, 2026-11-04). On the 12 models that have a Revit export the rule changes nothing; the one project with rooms outside its last phase, Autodesk's `rac_basic_sample_project`, has a public Revit export that holds all 14, which the default leaves out and `--phase "Working Drawings"` writes.
 
 ## 1. The question
 
@@ -62,16 +62,21 @@ So the export either named Working Drawings (a setup or a view, as in §4) or Re
 
 ## 6. What rvt-rs does
 
-- **Reads the phase.** `compute_phase_filter` reads `m_phaseId` of every `RoomElem` record in its existing pass (`PhaseFilter::room_phases`). An unset phase, an unread graph and a record whose copies disagree give none.
-- **Leaves out no room.** `PhaseFilter::excludes` still never excludes a room. A rule that drops no room that Revit's export holds drops none of the 14: there is no narrower rule, because the only rooms in another phase are those 14.
-- **Says so.** When a room it writes has a read phase other than the last, the export diagnostics' `warnings` give the count and the reason. Expected from §3's probe, not yet read from a diagnostics file: 14 on each of Autodesk's `rac_basic_sample_project` saves and none on any other model of the corpus, with the exported IFC unchanged on every model (to be read from the unfiltered Measure of this change).
+- **Reads the phase.** `compute_phase_filter` reads `m_phaseId` of every `RoomElem` record, and each phase's name, in its existing pass (`PhaseFilter::room_phases`, `PhaseFilter::names`). An unset phase, an unread graph and a record whose copies disagree give none.
+- **Leaves out a room whose phase is read and is not the export phase.** `PhaseFilter::excludes` takes a room by `room_outside_export_phase`, and every element by the RE-184 status rule against the same `PhaseFilter::export_phase`. A room whose phase is unset, unread or not one of the project's phases is written, and so is an Area or an MEP space, as revit-ifc checks a `Room` only.
+- **Names the export phase.** The last phase by default. `RevitFile::set_export_phase` and `rvt-ifc --phase <name|id>` choose another by its name, exactly, or its ElementId; a phase the file does not list is an error that lists the phases it does, and so is a file whose phases are not read (a family, Revit 2015 and earlier, where no phase filter applies). The Python bindings and the viewer take the default.
+- **Counts what it leaves out.** The diagnostics' `skipped` has one `room_not_in_export_phase` item for each phase the rooms sit in, with the rooms in `count` and `classes.Room` and the phase's name in `phase`; `--anonymize` replaces the name. The rooms are not in `exported.by_ifc_type.IFCSPACE`.
+- **Releases.** Revit 2016 to 2023 apply the rule as they apply the RE-184 element filter (RE-315), and 2024 to 2027 apply it; Revit 2015 and earlier write every room.
+
+On Autodesk's `rac_basic_sample_project` (phases Existing, Working Drawings, Learning Content; 14 rooms in Working Drawings), by the unfiltered Measure of this change and `tools/re/spaces_by_globalid_vs_ifc.py` against the public Revit 2018 export of §5: to be read from the runs named in §8.
 
 ## 7. Not measured
 
-- **A room in an earlier phase under a Revit export whose settings are known**, with the export phase either the last (the room is left out) or another (the room is held). A model like that, with its export and the setup, would settle whether `ROOM_PHASE` is `m_phaseId` and decide the rule: it applies once an export with the default setup leaves such a room out. An openly licensed model is welcome through the corpus form (#1194).
-- **The export phase.** Neither a setup's phase nor a view's is read, here or for the elements of RE-184.
-- **Held-out models.** Not read in this work. Their first measurement is the regression check: the warning counts their diagnostics give under this change, and an unchanged IFC.
+- **A room outside the last phase under a Revit export made with the default setup.** None exists in the corpus, so the rule's default (the last phase) is revit-ifc's documented behaviour, checked on no export; what is measured is that it changes no room on the 12 models that have one. A Revit export of a project with such a room, with its export setup, would settle whether `ROOM_PHASE` is `m_phaseId` and whether the default is the last phase. An openly licensed model is welcome through the corpus form (#1194).
+- **The export setup's phase and a view's.** Neither is read from a file; `--phase` is how the setup's is given.
+- **Held-out models.** Not read in this work. Their first measurement is the regression check: their exports under this change, counts only.
 - **The 3 MEP Spaces** of the Revit 2018 export, which rvt-rs reads as no room.
+- **Python and the viewer.** They export the last phase; a phase option for them is a follow-up.
 
 ## 8. Reproduce
 

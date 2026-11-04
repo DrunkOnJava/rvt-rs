@@ -367,7 +367,7 @@ impl ExportDiagnostics {
     /// [`crate::redact::ANONYMIZED`], the levels' and the material sample's
     /// names `Level 1`, `Material 1` and so on in their order, and each
     /// skipped element's sample name, which can name its family and type,
-    /// `element-<ElementId>`. The warning listing "Export to IFC As" values
+    /// `element-<ElementId>`, and the phase a left-out room sits in. The warning listing "Export to IFC As" values
     /// the export does not apply keeps their count and drops the values,
     /// which the project writes; no other warning carries project text
     /// (counts, releases, type ElementIds, unit identifiers), so none is
@@ -389,6 +389,9 @@ impl ExportDiagnostics {
             }
         }
         for item in &mut self.skipped {
+            if item.phase.is_some() {
+                item.phase = Some(ANONYMIZED.to_string());
+            }
             for name in &mut item.sample_names {
                 let id = &name[name.trim_end_matches(|c: char| c.is_ascii_digit()).len()..];
                 *name = if id.is_empty() {
@@ -715,6 +718,11 @@ pub struct SkippedExportItem {
     pub count: usize,
     pub classes: std::collections::BTreeMap<String, usize>,
     pub sample_names: Vec<String>,
+    /// The phase the left-out elements sit in, for `room_not_in_export_phase`
+    /// (RE-326): the phase's name, or `ElementId <n>` where the file names
+    /// none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub phase: Option<String>,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -3737,6 +3745,7 @@ pub fn build_export_diagnostics_with_limits(
     let mut skipped = Vec::new();
     if walker_stats.elements_below_min_confidence > 0 {
         skipped.push(SkippedExportItem {
+            phase: None,
             reason: "below_min_element_confidence".into(),
             count: walker_stats.elements_below_min_confidence,
             classes: std::collections::BTreeMap::new(),
@@ -3745,6 +3754,7 @@ pub fn build_export_diagnostics_with_limits(
     }
     if mode == ExportDiagnosticsMode::Default && !diagnostic_candidates.candidates.is_empty() {
         skipped.push(SkippedExportItem {
+            phase: None,
             reason: "low_confidence_schema_scan_candidate".into(),
             count: diagnostic_candidates.candidates.len(),
             classes: candidate_class_counts.clone(),
@@ -3770,6 +3780,7 @@ pub fn build_export_diagnostics_with_limits(
     let unattributed_total: usize = unattributed_frames.values().sum();
     if unattributed_total > 0 {
         skipped.push(SkippedExportItem {
+            phase: None,
             reason: "element_record_without_element_id".into(),
             count: unattributed_total,
             classes: unattributed_frames,
@@ -3787,6 +3798,7 @@ pub fn build_export_diagnostics_with_limits(
     let volumeless_total: usize = volumeless.values().sum();
     if volumeless_total > 0 {
         skipped.push(SkippedExportItem {
+            phase: None,
             reason: "element_record_without_volume".into(),
             count: volumeless_total,
             classes: volumeless,
@@ -3803,6 +3815,7 @@ pub fn build_export_diagnostics_with_limits(
     let non_primary_total: usize = non_primary.values().sum();
     if non_primary_total > 0 {
         skipped.push(SkippedExportItem {
+            phase: None,
             reason: "element_record_in_non_primary_design_option".into(),
             count: non_primary_total,
             classes: non_primary,
@@ -3810,18 +3823,33 @@ pub fn build_export_diagnostics_with_limits(
         });
     }
     // #328: elements that do not exist in the export phase (the project's
-    // last) are left out as Revit's own export leaves them out (RE-184).
+    // last, or the one `--phase` names) are left out as Revit's own export
+    // leaves them out (RE-184). A room is left out by its own phase, and
+    // counted by the phase it sits in (RE-326).
     let phase_excluded = layout
         .and_then(|version| crate::native_phases::scan_phase_excluded_instances(rf, version).ok())
         .unwrap_or_default();
-    let phase_excluded_total: usize = phase_excluded.values().sum();
+    let phase_excluded_total: usize = phase_excluded.by_class.values().sum();
     if phase_excluded_total > 0 {
         skipped.push(SkippedExportItem {
+            phase: None,
             reason: "element_record_not_in_export_phase".into(),
             count: phase_excluded_total,
-            classes: phase_excluded,
+            classes: phase_excluded.by_class,
             sample_names: Vec::new(),
         });
+    }
+    if !phase_excluded.rooms_by_phase.is_empty() {
+        let phases = rf.memoised_phase_filter();
+        for (phase, count) in &phase_excluded.rooms_by_phase {
+            skipped.push(SkippedExportItem {
+                phase: Some(phases.phase_label(*phase)),
+                reason: "room_not_in_export_phase".into(),
+                count: *count,
+                classes: std::collections::BTreeMap::from([("Room".to_string(), *count)]),
+                sample_names: Vec::new(),
+            });
+        }
     }
     // #309: empty curtain panels are left out as Revit's own export leaves
     // them out, recognised by their family's name. A type of theirs with a
@@ -3833,6 +3861,7 @@ pub fn build_export_diagnostics_with_limits(
         .unwrap_or_default();
     if empty_panels.count > 0 {
         skipped.push(SkippedExportItem {
+            phase: None,
             reason: "element_record_empty_curtain_panel".into(),
             count: empty_panels.count,
             classes: std::collections::BTreeMap::from([(
@@ -3850,6 +3879,7 @@ pub fn build_export_diagnostics_with_limits(
     let unwritten_area_total: usize = unwritten_areas.values().sum();
     if unwritten_area_total > 0 {
         skipped.push(SkippedExportItem {
+            phase: None,
             reason: "area_without_proven_body".into(),
             count: unwritten_area_total,
             classes: unwritten_areas,
@@ -3865,45 +3895,6 @@ pub fn build_export_diagnostics_with_limits(
     if let Some(error) = &rf.memoised_phase_filter().read_error {
         warnings.push(format!(
             "The project's phases could not be read ({error}); elements that do not exist in the export phase are written (#328, RE-184)."
-        ));
-    }
-    // RE-326: a room whose own phase is read and is not the project's last is
-    // written. Revit's exporter leaves a room out when its phase is not the
-    // export phase, which is the last unless the export setup or the view it
-    // is limited to names another, but Revit's export of Autodesk's
-    // rac_basic_sample_project holds its 14 rooms, which sit in the second of
-    // three phases. So the rule is not applied; the count says which rooms it
-    // would concern.
-    let phases = rf.memoised_phase_filter();
-    let rooms_outside_export_phase = model
-        .entities
-        .iter()
-        .filter_map(|entity| match entity {
-            entities::IfcEntity::BuildingElement {
-                ifc_type,
-                property_set,
-                ..
-            } if ifc_type == "IFCSPACE" => property_set.as_ref(),
-            _ => None,
-        })
-        .filter_map(|set| {
-            set.properties.iter().find_map(|property| {
-                match (property.name.as_str(), &property.value) {
-                    (
-                        export_content::ROOM_ELEMENT_ID_PROPERTY,
-                        entities::PropertyValue::Integer(id),
-                    ) => u64::try_from(*id).ok(),
-                    _ => None,
-                }
-            })
-        })
-        .filter(|id| phases.room_outside_export_phase(*id).is_some())
-        .count();
-    if rooms_outside_export_phase > 0 {
-        warnings.push(format!(
-            "{rooms_outside_export_phase} room(s) are written that sit in a phase other than the \
-             project's last. Revit's own export may leave them out, depending on the export phase \
-             it was made with; none is left out here (docs/rooms.md, RE-326)."
         ));
     }
     // #1247: a door or window whose type's record was not read is written as
@@ -3923,6 +3914,7 @@ pub fn build_export_diagnostics_with_limits(
     let bodiless_spaces: usize = rf.bodiless_family_spaces().values().sum();
     if bodiless_spaces > 0 {
         skipped.push(SkippedExportItem {
+            phase: None,
             reason: "element_record_family_space_without_body".into(),
             count: bodiless_spaces,
             classes: rf.bodiless_family_spaces().clone(),
@@ -4275,6 +4267,7 @@ pub fn record_unread_streams(
             *streams.entry(stream.name.clone()).or_insert(0) += 1;
         }
         diagnostics.skipped.push(SkippedExportItem {
+            phase: None,
             reason: UNREAD_STREAMS_REASON.into(),
             count: streams.len(),
             classes: streams,
@@ -4495,6 +4488,7 @@ impl GeometryGapBucket {
 
     fn into_item(self) -> Option<SkippedExportItem> {
         (self.count > 0).then(|| SkippedExportItem {
+            phase: None,
             reason: self.reason.into(),
             count: self.count,
             classes: self.classes,

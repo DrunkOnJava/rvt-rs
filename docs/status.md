@@ -992,28 +992,30 @@ Revit 2025's exports of two models made for it (a wall created in the last
 of three phases is exported, a wall demolished in it is not). On Snowdon
 Towers the phases run Legends, Existing, New Construction, so #328's six
 slabs, created and demolished in Legends, are left out, and nothing else
-is. An export setting that picks another phase is not read. Rooms are not
-checked: Revit's exporter skips a room whose own phase parameter is not the
-export phase instead of applying that rule (revit-ifc
-`ElementFilteringUtil.IsRoomInInvalidPhase`;
-`reports/element-framing/RE-184-phase-order.md`).
+is. An export setting that picks another phase is read since RE-326
+(`rvt-ifc --phase`), not a view's. Rooms are left out by a rule of their own
+(RE-326).
 
-**RE-326 (2026-11-04)** finds that a room's phase is the `m_phaseId` field of
-its `RoomElem` record, on Revit 2015 to 2027, and not its created phase, which
-is unset on every room. The 621 rooms of the 12 models that have a Revit export
-(Core Interior, RE1 Architecture, the BIM4LCA office as built and at permit
-and its two terrain variants, six R2025 room models) are all in the last
-phase and all in Revit's export. Autodesk's `rac_basic_sample_project` has 14
-rooms in the second of its three phases, on all 13 releases, and a public
-Revit 2018 export of it (the exporter 17.4.0, IFC4 Reference View, with
-no phase or view setting in the file) holds all 14. Revit's exporter takes
-the export phase from the export setup, then a view, and only by default the
-last phase, and rvt-rs reads neither, so the last-phase rule on rooms would
-drop rooms that Revit's export holds. No room is left out: the diagnostics'
-`warnings` count the rooms written that are in another phase (expected from
-the phase probe, not yet read from a diagnostics file: 14 on that sample, none
-on any other model of the corpus). The rule waits for a Revit export, made
-with the default setup, that leaves such a room out
+**RE-326 (2026-11-04)** leaves out a room whose own phase is not the export
+phase, as Revit's exporter does (revit-ifc `IsRoomInInvalidPhase`). A room's
+phase is the `m_phaseId` field of its `RoomElem` record, on Revit 2015 to
+2027, and not its created phase, which is unset on every room. The export
+phase is the project's last, or the one `rvt-ifc --phase <name|id>` names, and
+the status rule of RE-184 for the other elements reads it from the same place.
+A room whose phase is unset, unread or not one of the project's is written,
+and so is an Area or an MEP space. The diagnostics count the rooms left out in
+`skipped` as `room_not_in_export_phase`, one item for each phase they sit in.
+The 621 rooms of the 12 models that have a Revit export (Core Interior, RE1
+Architecture, the BIM4LCA office as built and at permit and its two terrain
+variants, six R2025 room models) are all in the last phase and all in
+Revit's export, so none of them changes. The rule is unmeasured against a
+Revit export made with the default setup, because no project in the corpus
+has a room outside its last phase and such an export: Autodesk's
+`rac_basic_sample_project` has 14 rooms in the second of its three phases, on
+all 13 releases, and a public Revit 2018 export of it holds all 14. They are
+left out by default and written with `--phase "Working Drawings"`. Revit 2015
+and earlier write every room, as every element. The Python bindings and the
+viewer follow the default
 (`reports/element-framing/RE-326-room-phases.md`).
 
 **RE-281 (2026-10-30)** reads the project's phases and each element's saved
