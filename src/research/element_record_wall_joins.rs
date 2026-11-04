@@ -995,6 +995,8 @@ struct CornerMember {
     away: [f64; 2],
     x: f64,
     y: f64,
+    /// Whether the member's own line ends at the joint.
+    on_line: bool,
     thickness_feet: f64,
     layered: bool,
 }
@@ -1031,10 +1033,12 @@ pub enum CornerEnd {
 /// Faces are taken from where each wall's own line ends, not from the joint,
 /// since walls of different thickness are often aligned on a face rather
 /// than a centreline (a bar of 0.656 ft and 0.492 ft walls has its faces
-/// 0.082 ft apart). The rule is read only where:
+/// 0.082 ft apart). Two walls that continue `wall` across the joint are flush
+/// with it only if their lines end at the joint. The rule is read only where:
 /// - the join is a butt join, no wall of the join is missing from `walls`
 ///   or meets `wall` at another angle than a right angle or straight on,
-///   and no element but a wall cuts `wall`;
+///   no layered wall that continues `wall` ends off the joint, and no
+///   element but a wall cuts `wall`;
 /// - the deciding walls' faces agree;
 /// - `wall` has one layer, or has several and stops against walls of one
 ///   layer each: against a layered wall, Revit's layers nest and a rule for
@@ -1109,6 +1113,7 @@ fn corner_end(
                 away: [0.0, 0.0],
                 x: 0.0,
                 y: 0.0,
+                on_line: true,
                 thickness_feet: wall.thickness_feet,
                 layered: wall.layers.len() > 1,
             });
@@ -1144,15 +1149,13 @@ fn corner_end(
             offset[0] * out[0] + offset[1] * out[1],
             offset[0] * across[0] + offset[1] * across[1],
         );
-        if meets == Meets::Along && (x.abs() > CORNER_AGREE_FEET || y.abs() > CORNER_AGREE_FEET) {
-            return None;
-        }
         corner.push(CornerMember {
             id,
             meets,
             away: [(beyond[0] - joint[0]) / run, (beyond[1] - joint[1]) / run],
             x,
             y,
+            on_line: x.abs() <= CORNER_AGREE_FEET && y.abs() <= CORNER_AGREE_FEET,
             thickness_feet: other.thickness_feet,
             layered: other.layers.len() > 1,
         });
@@ -1166,6 +1169,14 @@ fn corner_end(
         return mitre_end(wall, &other);
     }
     if corner.len() < 3 || !corner.iter().any(|member| member.meets == Meets::Across) {
+        return None;
+    }
+    // A wall that continues the wall across the joint but whose line ends
+    // off the joint is aligned on a face rather than a centreline. It
+    // changes nothing about the walls Revit's end stops against, but it is
+    // not flush with the wall.
+    let off_line = |member: &&CornerMember| member.meets == Meets::Along && !member.on_line;
+    if corner.iter().filter(off_line).any(|member| member.layered) {
         return None;
     }
     let layered_wall = corner[itself].layered;
@@ -1202,6 +1213,9 @@ fn corner_end(
         .iter()
         .any(|member| member.meets == Meets::Along)
     {
+        if corner.iter().any(|member| off_line(&member)) {
+            return None;
+        }
         return Some(CornerEnd::Reach(0.0));
     }
     let faces: Vec<f64> = later
