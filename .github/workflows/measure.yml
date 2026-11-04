@@ -330,9 +330,10 @@ jobs:
       # main's, so a branch's build scripts can never write what a later main
       # run reads), or under a name of its own that `score_cache` gives a run
       # from any ref, which main's runs never read. Entries are named by what
-      # they were made from, so the sides and the flags share them; a shard
-      # holds its own models' entries, and a run given `models` (the shard
-      # `all`) also restores the other shards'.
+      # they were made from, so the sides and the flags share them. Each shard
+      # keeps a cache of its own, named by the shard whatever the shard is
+      # called, and ends its name with a `.` that no shard name holds, so one
+      # shard's prefix is never another's.
       # The held-out models and BIMcollab's are never cached (RE-252).
       - name: Score cache key
         id: score-cache-key
@@ -365,19 +366,17 @@ jobs:
           {
             echo "enabled=$enabled"
             echo "save=$save"
-            echo "own=$own"
-            echo "main=$main"
-            echo "prefix=$own$SHARD-"
+            echo "prefix=$own$SHARD."
             echo "restore<<END"
-            echo "$own$SHARD-"
-            [ "$own" != "$main" ] && echo "$main$SHARD-"
+            echo "$own$SHARD."
+            [ "$own" != "$main" ] && echo "$main$SHARD."
             echo "END"
           } >> "$GITHUB_OUTPUT"
           if [ "$enabled" = true ]; then
             echo "MEASURE_CACHE_DIR=$GITHUB_WORKSPACE/_score-cache" >> "$GITHUB_ENV"
             echo "MEASURE_CACHE_WORK=$RUNNER_TEMP/score-cache-work" >> "$GITHUB_ENV"
           fi
-          echo "score cache: enabled=$enabled save=$save key prefix $own$SHARD-"
+          echo "score cache: enabled=$enabled save=$save key prefix $own$SHARD."
       - name: Restore the score cache
         if: steps.score-cache-key.outputs.enabled == 'true'
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -385,45 +384,6 @@ jobs:
           path: _score-cache
           key: ${{ steps.score-cache-key.outputs.prefix }}${{ matrix.side }}-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: ${{ steps.score-cache-key.outputs.restore }}
-      # A run given `models` is one shard, `all`, whatever models it names: it
-      # also takes what the other shards saved. Each restore adds its entries
-      # beside the others (they are named by their content).
-      - name: Restore the rest shard's score cache
-        if: steps.score-cache-key.outputs.enabled == 'true' && matrix.shard == 'all'
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: _score-cache
-          key: ${{ steps.score-cache-key.outputs.own }}rest-${{ matrix.side }}-${{ github.run_id }}-${{ github.run_attempt }}
-          restore-keys: |
-            ${{ steps.score-cache-key.outputs.own }}rest-
-            ${{ steps.score-cache-key.outputs.main }}rest-
-      - name: Restore the as-built office shard's score cache
-        if: steps.score-cache-key.outputs.enabled == 'true' && matrix.shard == 'all'
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: _score-cache
-          key: ${{ steps.score-cache-key.outputs.own }}office-as-built-${{ matrix.side }}-${{ github.run_id }}-${{ github.run_attempt }}
-          restore-keys: |
-            ${{ steps.score-cache-key.outputs.own }}office-as-built-
-            ${{ steps.score-cache-key.outputs.main }}office-as-built-
-      - name: Restore the permit office shard's score cache
-        if: steps.score-cache-key.outputs.enabled == 'true' && matrix.shard == 'all'
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: _score-cache
-          key: ${{ steps.score-cache-key.outputs.own }}office-permit-${{ matrix.side }}-${{ github.run_id }}-${{ github.run_attempt }}
-          restore-keys: |
-            ${{ steps.score-cache-key.outputs.own }}office-permit-
-            ${{ steps.score-cache-key.outputs.main }}office-permit-
-      - name: Restore the samples shard's score cache
-        if: steps.score-cache-key.outputs.enabled == 'true' && matrix.shard == 'all'
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: _score-cache
-          key: ${{ steps.score-cache-key.outputs.own }}samples-${{ matrix.side }}-${{ github.run_id }}-${{ github.run_attempt }}
-          restore-keys: |
-            ${{ steps.score-cache-key.outputs.own }}samples-
-            ${{ steps.score-cache-key.outputs.main }}samples-
       - name: Build
         working-directory: measured
         run: |

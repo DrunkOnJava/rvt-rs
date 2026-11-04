@@ -42,7 +42,7 @@ RUST_CACHE_KEY = re.compile(r"(v0-rust-.+)-[0-9a-f]{8}")
 # newest ones.
 CODEQL_OVERLAY_KEY = re.compile(r"(codeql-overlay-base-database-\d+-[0-9a-f]+-[a-z]+-[0-9.]+)-[0-9a-f]{40}-\d+-\d+")
 # Measure's score cache (tools/ci/measure-cache.py):
-# measure-scores-v<format>-<main or x-name>-<shard>-<side>-<measured sha>-<run id>-<attempt>.
+# measure-scores-v<format>-<main or x-name>-<shard>.<side>-<measured sha>-<run id>-<attempt>.
 # A run restores the newest of its shard's prefix, so only the newest generations are read.
 SCORE_CACHE_KEY = re.compile(r"(measure-scores-v\d+-.+?)(?:-[0-9a-f]{40})?-\d+-\d+")
 

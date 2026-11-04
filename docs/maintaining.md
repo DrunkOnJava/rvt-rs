@@ -135,10 +135,10 @@ writes the cached output and a `<step> cached` line to the model's
   up caching a share of the work, not a small one: in the unfiltered run
   41748430211 the 18 held-out models took 32.8 of the 119 task-minutes of
   model steps (28%); they run only with `-f holdout=true`.
-- **Where it lives.** Each shard (`office-as-built`, `office-permit`,
-  `samples`, `rest`) restores the newest `measure-scores-v1-main-<shard>-*`
-  cache before the measured code builds, and a run given `models` (the shard
-  `all`) restores all of them. It is saved only where rust-cache is saved: the
+- **Where it lives.** Each shard of the run, whatever it is called, restores
+  the newest `measure-scores-v1-main-<shard>.*` cache before the measured code
+  builds (a run given `models` is the shard `all`, with a cache of its own,
+  built by earlier runs of that kind). It is saved only where rust-cache is saved: the
   workflow dispatched from `main` and the side measuring `main`'s own code
   (`inputs.ref` empty, or `base` `main`), because the build scripts of any
   other ref run on the runner and must not write what a later `main` run
@@ -149,7 +149,7 @@ writes the cached output and a `<step> cached` line to the model's
   names only by version, and the cache would then hold what that run produced.
   That is why only `main`'s own code saves it. A run dispatched with `-f
   score_cache=<name>` reads and saves a cache of its own,
-  `measure-scores-v1-x-<name>-<shard>-*`, from any ref (GitHub scopes a
+  `measure-scores-v1-x-<name>-<shard>.*`, from any ref (GitHub scopes a
   branch's caches to that branch, and the shared cache never reads the name);
   this is how a change to the cache itself is proved. `-f score_cache=off`
   runs every step as before.
