@@ -239,8 +239,11 @@ pub fn write_field_by_type(value: &InstanceField, ty: &formats::FieldType, out: 
                         out.push(0);
                     }
                 }
-                (0x02, 2, InstanceField::Integer { value, .. }) => {
-                    out.extend_from_slice(&(*value as u16).to_le_bytes());
+                (0x02, 1, InstanceField::Integer { value, .. }) => {
+                    out.push(*value as u8);
+                }
+                (0x03, 2, InstanceField::Integer { value, .. }) => {
+                    out.extend_from_slice(&(*value as i16).to_le_bytes());
                 }
                 (0x04, 4, InstanceField::Integer { value, .. })
                 | (0x05, 4, InstanceField::Integer { value, .. }) => {
@@ -628,12 +631,21 @@ pub fn read_field_by_type(
                     *cursor += n.max(1);
                     InstanceField::Bool(b)
                 }
-                (0x02, 2) => {
-                    let v = u16::from_le_bytes([slice[0], slice[1]]) as i64;
-                    *cursor += 2;
+                (0x02, 1) => {
+                    let v = i64::from(slice[0]);
+                    *cursor += 1;
                     InstanceField::Integer {
                         value: v,
                         signed: false,
+                        size: 1,
+                    }
+                }
+                (0x03, 2) => {
+                    let v = i64::from(i16::from_le_bytes([slice[0], slice[1]]));
+                    *cursor += 2;
+                    InstanceField::Integer {
+                        value: v,
+                        signed: true,
                         size: 2,
                     }
                 }
@@ -757,6 +769,17 @@ pub fn read_field_by_type(
                 return InstanceField::Bytes(slice.to_vec());
             }
             let count = u32::from_le_bytes([slice[0], slice[1], slice[2], slice[3]]) as usize;
+            if *kind == 0x02 {
+                // RE-325: a `char` is one byte, so this is a byte blob (a PNG,
+                // a zip, RTF) of `count` bytes. Kept whole with its count
+                // prefix, so it writes back verbatim, not one item per byte.
+                let needed = count.saturating_add(4);
+                if slice.len() < needed {
+                    return InstanceField::Bytes(slice.to_vec());
+                }
+                *cursor += needed;
+                return InstanceField::Bytes(slice[..needed].to_vec());
+            }
             // Per-element byte size for kinds we decode directly.
             let elem_size: Option<usize> = match *kind {
                 0x01 => Some(1),
