@@ -47,6 +47,8 @@ RE-313's space scorer (Measure 41668846939, `--ref` its branch, the fix against 
 
 The four projects' rooms are rectangles, which their record box already drew. On the house, 3 more rooms take Revit's area, and 2 remain off. No room's outline is within 0.01 ft of Revit's either way. The house is held out, so why is not examined.
 
+**Correction, 2026-11-04.** The outline column above, and the sentence before this one, were read through a wrong frame: the house's export is in millimetres with a placed `IfcSite`, and `tools/re/ifc_common.py::site_frame` read the site's origin as metres, so Revit's side was misplaced. With the frame fixed, Measure run 41833543727 against 41833547378 gives, on `main` as it is now, all 13 of the house's rooms within 0.1% in area and within 0.01 ft in outline and boundary (counts only). The area column was right in kind (the frame moves Revit's outline, and a room's area is the same wherever it sits), and the 4 other projects' rooms are in metres, unchanged. What this report could not say, whether the house's outlines sit where Revit's do, is now measured for that one house.
+
 ## 5. Not claimed
 
 - That the rooms' outlines sit where Revit's do on 2026 and 2027. The samples prove the same verdict and area as 2025, and position only so far as the outline spans the record box. On the held-out house no outline is within 0.01 ft of Revit's before or after (§4), and the counts cannot show whether the reported room is among the 2 still off.
