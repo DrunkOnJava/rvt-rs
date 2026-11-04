@@ -7,7 +7,7 @@ This page is for the importer of an rvt-rs export: what an `IfcSpace` holds for 
 | Source | `IfcSpace` | Body |
 |---|---|---|
 | A Revit room | `Name` is the room's number, `LongName` its name, `PredefinedType` `SPACE`, in the storey of the Level its record names | the outline of the room's stored solid, or the record's bounding box (below) |
-| A Revit area (Revit 2024; Revit 2015 to 2023 only where the body is proven, RE-324) | the same naming | the region its area boundary lines enclose around its point, up to the Level above it (below); none where that is not proven: the space then has no `Representation` |
+| A Revit area (Revit 2024; Revit 2015 to 2023 only where the body is proven, RE-324) | the same naming | the region its area boundary lines enclose around its point, else the region of Revit's own plan topology for the Area (RE-330), up to the Level above it (below); none where neither is proven: the space then has no `Representation` |
 | A Revit Space (MEP), in a model that has one | `IfcSpace` without a predefined type; no measurement singles one out | its record's box (`record_box`) unless a carrier draws more (`family_body`) |
 | A family instance whose "Export to IFC As" names `IfcSpace` (#763) | named `Family:Type:ElementId` as Revit's export names other family instances | its record's box, turned with the instance (`record_box`), until a carrier draws its family. Where its family draws no model form, Revit's export leaves the instance out, and rvt-rs will too once PR #1279 (RE-312, for #1262, parking bays) lands |
 
@@ -47,7 +47,7 @@ The export also counts the spaces drawn as their record's box (rooms and family 
 | 2025 | stored solid | RE1 Architecture, six purpose-made R2025 models, held-out models (below) |
 | 2026, 2027 | stored solid, as on 2025 (RE-314, #1260) | 16 held-out rooms, all rectangles, and a held-out house (below) |
 
-Areas as spaces, with a body where their boundary lines prove one, are read on Revit 2024. On Revit 2015 to 2023 an Area is written only where its region and body are proven; the others are not written and are counted by reason in `skipped` (`area_without_proven_body`, RE-324). They are measured against the same project's 2024 save on Autodesk's samples, and against no Revit export: the first rule, writing every placed Area as 2024 does, wrote spaces Revit's export lacks on a held-out project (below).
+Areas as spaces, with a body where their boundary lines prove one, are read on Revit 2024. Where the lines give an Area no region, its region is the loop Revit's own plan topology keeps for it, where that is read and checked (RE-330): its area boundary lines moved by their area rule's offsets, arcs included, with the area Revit saves for the loop. On Revit 2015 to 2023 an Area is written only where its region and body are proven; the others are not written and are counted by reason in `skipped` (`area_without_proven_body`, RE-324). They are measured against the same project's 2024 save on Autodesk's samples, and against no Revit export: the first rule, writing every placed Area as 2024 does, wrote spaces Revit's export lacks on a held-out project (below).
 
 `ROOM_SOLID_SUPPORTED_REVIT_VERSIONS` in `src/research/partition_room_boundaries.rs` is the list of releases whose room solids are read.
 
@@ -93,13 +93,12 @@ What the misses are:
 ## What is not measured
 
 - **Areas** (RE-317, RE-324), measured against Revit's export on the BIM4LCA office only:
-  - Revit 2015 to 2023 against any Revit export: Autodesk's `rac_advanced` (2015 to 2023) and `rst_basic` (2016 to 2023) are read like the same project's 2024 save, and the held-out BIM Whale project is a regression check, quoted by counts only (RE-324). An Area there is written only where its body is proven, so 22 of `rac_advanced`'s 25 Areas (18 in groups with a line that is not along an axis, 4 bounded partly by walls) are not written, nor all 25 on its 2021 save (`skipped`, `area_without_proven_body`). Revit 2008 to 2014 are not read, and a 2015 Area that names a design option is left out;
+  - Revit 2015 to 2023 against any Revit export: Autodesk's `rac_advanced` (2015 to 2023) and `rst_basic` (2016 to 2023) are read like the same project's 2024 save, and the held-out BIM Whale project is a regression check, quoted by counts only (RE-324). An Area there is written only where its body is proven. Since RE-330 all 25 of `rac_advanced`'s Areas have a region on every save, each with the area Revit saves for its loop (Revit's figure in the file, not Revit's export), and all 25 are written but on the 2021 save, where 3 name lines whose two copies disagree and are not (`named_lines_not_in_scheme_and_level`). Revit 2008 to 2014 are not read, and a 2015 Area that names a design option is left out;
   - the top storey: an Area on the highest Level has no body, where Revit draws it one unit high;
   - Levels that are not building stories: an Area has a body only where its Level and the Level above are both read as building stories and no other Level lies between them or at either elevation. All ten of the office's Levels are storeys, so every Area there meets that, and a Level that breaks it is unmeasured;
   - the Level's "Story Above", which Revit's exporter takes first for an Area's height and rvt-rs never reads: the office's heights equal the distance to the next Level up, so a Level whose Story Above is another Level is unmeasured;
   - an Area's base offset, read as zero;
-  - Areas bounded partly by walls: the Area's point then lies in no region of its boundary lines (4 of the 7 Areas on one Level of Autodesk's `rac_advanced`, not examined further), and the Area keeps no body;
-  - boundary lines that are not straight along the plan axes (a slanted line or an arc): the group is not read, and the office has none;
+  - the four Areas on one Level of Autodesk's `rac_advanced` that RE-317 put down to walls are bounded by lines whose area is measured 0.497 ft from them, to the walls' faces (RE-330). Revit's plan topology gives their region; where it is not read, lines that are not straight along the plan axes or do not meet once offset leave the Area without a body, as before;
   - `Qto_SpaceBaseQuantities.Height`, which Revit writes on an Area and rvt-rs does not yet.
   The diagnostics count the Areas without a body by reason (`exported.area_body_refusals`).
 - Revit 2008 to 2020 and 2023 on any model Measure can run, beyond the held-out counts above: no reference model with a Revit room export exists for them in the corpus.
