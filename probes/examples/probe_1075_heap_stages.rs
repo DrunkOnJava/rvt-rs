@@ -45,15 +45,18 @@
 //!   cargo run --profile ci -p rvt-probes --example probe_1075_heap_stages -- MODEL.rvt [--large-model]
 
 use std::alloc::{GlobalAlloc, Layout, System};
+use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering::Relaxed};
 use std::time::{Duration, Instant};
 
 use rvt::RevitFile;
 use rvt::control::{Stage, WalkerControl};
+use rvt::ifc::entities::IfcEntity;
 use rvt::ifc::step_writer::{StepOptions, write_step_to};
-use rvt::ifc::{ExportDiagnosticsMode, ExportQualityMode, RvtDocExporter};
-use rvt::research::{native_document, native_segments, schema_registry};
+use rvt::ifc::{ExportDiagnosticsMode, ExportQualityMode, IfcModel, RvtDocExporter};
+use rvt::research::native_document::{self, Record};
+use rvt::research::{native_segments, schema_registry};
 
 const CLASSES: usize = 40;
 const BIG_STREAM_BYTES: usize = 8 << 20;
@@ -344,6 +347,116 @@ impl Totals {
     }
 }
 
+/// A saved identifier as `native_metadata::identifier` reads it.
+fn identifier(value: &serde_json::Value) -> Option<i64> {
+    if let Some(n) = value.as_i64() {
+        return Some(n);
+    }
+    ["m_id", "m_id64"]
+        .iter()
+        .find_map(|key| value.get(*key))
+        .and_then(identifier)
+}
+
+/// The symbols the records' `InstanceInfo` objects name, with how many
+/// references name them.
+fn symbol_references(records: &BTreeMap<u64, Record>) -> BTreeMap<u64, usize> {
+    let mut named = BTreeMap::new();
+    for graph in records.values().filter_map(|record| record.graph.as_ref()) {
+        for object in &graph.objects {
+            if object.class_name != "InstanceInfo" {
+                continue;
+            }
+            let id = identifier(&object.fields["m_symbolId"])
+                .and_then(|id| u64::try_from(id).ok())
+                .filter(|id| *id > 0);
+            if let Some(id) = id {
+                *named.entry(id).or_insert(0) += 1;
+            }
+        }
+    }
+    named
+}
+
+fn graph_objects(records: &BTreeMap<u64, Record>) -> usize {
+    records
+        .values()
+        .filter_map(|record| record.graph.as_ref())
+        .map(|graph| graph.objects.len())
+        .sum()
+}
+
+/// The saved-graphics pass's two reads, one at a time as it makes them:
+/// the doors' and windows' own graphs, then the symbols they name. What each
+/// holds says whether the instances or the shared symbols are the memory.
+fn saved_graphics_split(rf: &mut RevitFile, model: &IfcModel) -> anyhow::Result<()> {
+    let ids: BTreeSet<u64> = model
+        .entities
+        .iter()
+        .filter_map(|entity| match entity {
+            IfcEntity::BuildingElement {
+                ifc_type,
+                type_guid: Some(tag),
+                ..
+            } if matches!(ifc_type.as_str(), "IFCDOOR" | "IFCWINDOW") => tag.parse().ok(),
+            _ => None,
+        })
+        .collect();
+    let mut options = native_document::Options {
+        selected_ids: ids,
+        channels: BTreeSet::from([103]),
+        max_graph_values: 1_000_000,
+        max_graph_objects: 1_000_000,
+        record_extras: true,
+        ..Default::default()
+    };
+    let mark = begin();
+    let mut roots: BTreeMap<u64, Record> = BTreeMap::new();
+    native_document::extract_graphs(rf, &options, |record| {
+        roots.insert(record.identity.element_id, record);
+        Ok(())
+    })?;
+    let sample = mark.finish();
+    sample.print(
+        "stage saved_roots",
+        &format!(
+            "records {} graph_objects {}",
+            roots.len(),
+            graph_objects(&roots)
+        ),
+    );
+
+    let named = symbol_references(&roots);
+    options.selected_ids = named
+        .keys()
+        .copied()
+        .filter(|id| !roots.contains_key(id))
+        .collect();
+    let mark = begin();
+    let mut symbols: BTreeMap<u64, Record> = BTreeMap::new();
+    native_document::extract_graphs(rf, &options, |record| {
+        symbols.insert(record.identity.element_id, record);
+        Ok(())
+    })?;
+    let sample = mark.finish();
+    sample.print(
+        "stage saved_symbols",
+        &format!(
+            "named {} records {} graph_objects {} references {}",
+            named.len(),
+            symbols.len(),
+            graph_objects(&symbols),
+            named.values().sum::<usize>()
+        ),
+    );
+
+    let mark = begin();
+    drop(roots);
+    drop(symbols);
+    mark.finish().print("stage saved_split_drop", "");
+    Ok(())
+}
+
 fn main() -> anyhow::Result<()> {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let path = args.iter().find(|a| !a.starts_with("--")).ok_or_else(|| {
@@ -527,6 +640,8 @@ fn main() -> anyhow::Result<()> {
     mark.finish().print("stage diagnostics", "");
     drop(diagnostics);
 
+    saved_graphics_split(&mut rf, &model)?;
+
     let control = recording_control();
     let mark = begin();
     let detail = match rvt::ifc::saved_meshes::default_scope(&mut rf) {
@@ -545,6 +660,11 @@ fn main() -> anyhow::Result<()> {
     };
     mark.finish().print("stage saved_meshes", &detail);
     print_events();
+
+    // The pass frees its decoded graphs on a thread of its own.
+    let mark = begin();
+    std::thread::sleep(Duration::from_secs(3));
+    mark.finish().print("stage settle", "");
 
     let mark = begin();
     drop(rf);

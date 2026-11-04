@@ -845,6 +845,7 @@ version = "0.0.0"
 dependencies = [
  "anyhow",
  "cfb",
+ "dhat",
  "memchr",
  "rvt",
  "serde_json",
