@@ -247,15 +247,31 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           SHA: ${{ github.sha }}
+        # Each API call is retried with backoff: a GitHub 5xx (a 502 on
+        # 2026-11-04 failed the v0.14.0 deploy) is not a verdict on the
+        # commit. A call that still fails ends the step, so the deploy
+        # never goes ahead without CI's answer.
         run: |
-          if ! gh api "repos/${GH_REPO}/commits/${SHA}" --jq '.files[].filename' \
+          api() {
+            local try out
+            for try in 1 2 3 4 5 6; do
+              if out=$(gh api "$@"); then printf '%s\n' "$out"; return 0; fi
+              echo "gh api $1 failed (try ${try}); retrying" >&2
+              sleep $((try * 10))
+            done
+            return 1
+          }
+          files=$(api "repos/${GH_REPO}/commits/${SHA}" --jq '.files[].filename') || {
+            echo "::error::could not list the files of ${SHA}"; exit 1; }
+          if ! printf '%s\n' "$files" \
                | grep -qvE '(\.md$|^docs/|^LICENSE|^\.gitignore$|^\.github/ISSUE_TEMPLATE/|^CITATION\.cff$)'; then
             echo "CI's push filter skips this commit; deploying it"
             exit 0
           fi
           for _ in $(seq 1 80); do
-            conclusion=$(gh api "repos/${GH_REPO}/commits/${SHA}/check-runs?check_name=CI%20passed" \
-              --jq '[.check_runs[] | select(.status == "completed") | .conclusion] | first // ""')
+            conclusion=$(api "repos/${GH_REPO}/commits/${SHA}/check-runs?check_name=CI%20passed" \
+              --jq '[.check_runs[] | select(.status == "completed") | .conclusion] | first // ""') || {
+              echo "::error::could not read CI's check run on ${SHA}"; exit 1; }
             case "$conclusion" in
               success) echo "CI passed on ${SHA}"; exit 0 ;;
               "") sleep 60 ;;
